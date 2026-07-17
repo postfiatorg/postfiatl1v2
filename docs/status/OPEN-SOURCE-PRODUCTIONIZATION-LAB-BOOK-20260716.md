@@ -3969,3 +3969,19 @@ revocation/decommission action; that external P0 checkbox remains open.
   action plus its private evidence record open. This documentation-only
   reconciliation changes no runtime, protocol, dependency, test, key, money or
   deployment state. A new exact candidate and full battery are required.
+
+## 2026-07-17T17:43:44Z — provider closure and sanitized GitHub publication
+
+- The Post Fiat founder, acting as provider account owner, confirmed that the
+  affected Vast instances were destroyed. A private mode-0600 terminal-action
+  record outside Git contains only bounded attestation metadata and never the
+  historical token.
+- `scripts/verify-publication-candidate` passed on the RC10 export, its second
+  clone, and a fresh clone fetched from GitHub.
+- The previous multi-branch repository was renamed and retained as a private
+  archive. A fresh public `postfiatorg/postfiatl1v2` repository contains only
+  `main`, one root commit, exact reviewed tree
+  `42866efd2777002281439660bef790361ab703af`, and 1,624 tracked files.
+- The GitHub clone has zero tracked-tree or reachable-history secret findings.
+  `P0-SECRET-01` and the source-publication phase are closed; real-value launch
+  gates remain separately open and unchanged.

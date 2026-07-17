@@ -559,9 +559,9 @@ STEP 1 exit gate:
 ## Phase 18 — STEP 2 execution: remediate P0/P1 and prove closure
 
 - [x] Create a dedicated remediation branch or branch stack from an immutable audited baseline (`open-source-productionization-20260716` from `4b5af7bc6bb6e793ed8a60219d13d6d35be03058`).
-- [x] Close every internally actionable P0 in priority order. Automatic view
-  escalation, custody, monetary, privacy and public-evidence code are fixed;
-  `P0-SECRET-01` alone remains an external provider-owner publication action.
+- [x] Close every P0 in priority order. Automatic view escalation, custody,
+  monetary, privacy and public-evidence code are fixed; the provider owner
+  confirmed destruction and the private `P0-SECRET-01` record passes the gate.
 - [x] Close locally actionable P1s next, ordered by storage correctness/scale, network exposure, liveness/recovery, operations, supply chain, and test/release assurance; real-value-only capabilities remain explicitly disabled/unsupported.
 - [x] Keep each remediation traceable to exactly one blocker unless atomic cross-component changes are required for safety; the closure table records the deliberate cross-boundary cases.
 - [x] Add exploit/reproduction fixtures before or alongside each confirmed P0/P1 fix.
@@ -583,26 +583,24 @@ STEP 1 exit gate:
 - [x] Produce the 35-row closure table mapping reproduction, real fix commits,
   regression, integrated evidence, claim change and residual risk; finding
   sections retain owner/reviewer class.
-- [ ] **SOURCE-PUBLICATION BLOCKER:** obtain the private provider-owner record so
-  `P0-SECRET-01` is closed; all 34 other P0/P1 rows are closed with no waiver or
-  ownerless item.
+- [x] Obtain the private provider-owner record and close `P0-SECRET-01`; all 35
+  P0/P1 rows are closed with no waiver or ownerless item.
 - [x] Freeze the exact code/staging candidate after all internally actionable
-  STEP 2 gates; publication itself remains fail-closed on `P0-SECRET-01`.
+  STEP 2 gates; publish only the verified one-commit sanitized history.
 
 ## Exit criteria
 
 ### Safe to make the source public
 
 - [x] STEP 1 is complete and accepted as the comprehensive internal audit record.
-- [ ] **SOURCE-PUBLICATION BLOCKER:** STEP 2 has one unresolved, unwaived external
-  finding, `P0-SECRET-01`; every internally actionable P0/P1 is fixed.
+- [x] STEP 2 has zero unresolved P0/P1 findings; `P0-SECRET-01` is closed by the
+  private provider-owner record and verified sanitized-history publication.
 - [x] Every removed or contained unsafe feature is mechanically unreachable in
   its prohibited profile, tested, and absent from public claims; core FastPay,
   FastSwap, atomic swap, bridge and private-flow capabilities remain enabled in
   their documented controlled profiles.
-- [ ] **SOURCE-PUBLICATION BLOCKER:** the intended public refs/history scan clean,
-  but the provider owner must prove the historically captured credential was
-  revoked/decommissioned/destroyed before publication.
+- [x] The intended public refs/history scan clean, the provider owner confirmed
+  destruction, and the exact GitHub clone passes the strict publication gate.
 - [x] Licenses and third-party notices are complete.
 - [x] Internal infrastructure and operator-sensitive evidence are removed or
   deliberately documented at a safe abstraction boundary.

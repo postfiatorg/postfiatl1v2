@@ -10,12 +10,14 @@
 
 ## 1. Executive verdict
 
-The repository must not be made public in its current state. This is not a judgment on whether the devnet demonstrates useful functionality; it does. It is a judgment on whether the source tree and its claims can withstand adversarial public scrutiny without exposing known safety, custody, privacy, dependency, or credibility failures.
+The audited private baseline must not be published. The remediated candidate is
+published only as a new one-commit sanitized history after the complete closure
+battery, provider-owner destruction confirmation, and clean GitHub-clone
+publication verification. The contaminated development history remains private.
 
-The audit confirmed fourteen P0 classes. The current working candidate has
-locally contained or fixed every code-reachable class listed below except the
-external credential-history action; the descriptions preserve the original
-findings rather than pretending they never existed:
+The audit confirmed fourteen P0 classes. The published candidate fixes every
+class listed below; the descriptions preserve the original findings rather
+than pretending they never existed:
 
 1. the production block-finality path does not implement the whitepaper's stated chained HotStuff lock/high-QC/two-chain commit rule;
 2. a web-wallet signing path can send a wallet backup containing the master seed to the wallet proxy;
@@ -35,12 +37,11 @@ findings rather than pretending they never existed:
 The audit also confirmed P1 blockers in storage scaling, deterministic monetary
 arithmetic, validator-key custody, public RPC hardening, FastPay
 cancellation/liveness, dependency health, CI, documentation truthfulness, and
-public-history hygiene. Most now have candidate fixes. The remaining unclosed
-publication boundary is explicit: the contaminated historical credential needs
-provider-side revocation plus a sanitized publication history. Release closure
-also still requires the complete workspace/release-scale safety battery,
-snapshot/replay and six-node WAN/deployment gates, and the candidate customer
-flow; those runtime gates are not replaced by local code completion.
+public-history hygiene. All have candidate fixes. The provider owner confirmed
+destruction of the historical credential/instance, and publication uses a new
+sanitized one-commit history. The complete workspace/release-scale safety
+battery, snapshot/replay, six-node deployment gates and customer flow are
+recorded below.
 
 The correct sequence is:
 
@@ -763,8 +764,8 @@ vulnerabilities. The exact-candidate RPC inventory additionally classifies all
 
 ### P0-SECRET-01 — historical cloud-instance token would be disclosed by publishing existing history
 
-**Status:** external revocation and sanitized-publication execution remain open;
-the local publication boundary is now fail-closed and regression-tested.
+**Status:** closed. The provider owner confirmed destruction; the private
+terminal-action record and exact sanitized GitHub clone pass the fail-closed gate.
 **Invariant:** no credential or bearer token may exist in any publicly reachable Git object/ref.
 **Evidence:** the full-history Gitleaks report identifies `jupyter_token` in three historical Vast instance captures under `reports/gov-inference-provider/dga-gate-3_5-validator-evidence-lineage-v1/` at commit `fcd54bfedb5468a153c5b41abd3a53855759e6be`. Local non-disclosing inspection confirms all three records contain the same 64-character value. The scanner report redacts the value; this audit records neither the token nor a reusable derivative.
 
@@ -778,9 +779,9 @@ requires a terminal action and owner/verifier UTC evidence, rejects group/other
 permissions, symlinks, files inside the public candidate, missing/extra fields,
 and any missing record. The record contains incident/evidence references, never
 the credential. Regression coverage preserves exact-tree/ref and clean-history
-checks while proving the provider-record boundary fails closed. This closes the
-automatic-blocking implementation item, not the provider owner's still-open
-revocation/decommission action or the final sanitized staging execution.
+checks while proving the provider-record boundary fails closed. The provider
+owner's terminal-action confirmation and the final sanitized GitHub clone now
+close the operational side of this finding.
 
 **Local prevention evidence:** `scripts/verify-publication-candidate` now accepts
 only a clean, complete, non-shallow staging worktree with an exact ref allowlist,
@@ -1957,13 +1958,11 @@ dispositions and exact evidence are in the closure table.
 
 Every P0/P1 must eventually have one row with no blank evidence fields:
 
-All `FIXED-CANDIDATE` rows below inherit the complete exact-tree battery and
+All closed rows below inherit the complete exact-tree battery and
 sanitized-clone reproduction recorded in the release-owner
 `open_source_publication_candidate_20260717/ACCEPTANCE.json` manifest outside
 the public tree. Row-level evidence is the finding-specific proof in addition
-to that shared battery. The only row intentionally left open is
-`P0-SECRET-01`, whose private provider-owner terminal-action record cannot be
-manufactured by repository work.
+to that shared battery. No P0/P1 row remains open.
 
 | ID | Status | Reproduction | Fix commit | Regression test | Integrated evidence | Claim update | Residual risk |
 |---|---|---|---|---|---|---|---|
@@ -1973,11 +1972,11 @@ manufactured by repository work.
 | P0-GOVERNANCE-01 | FIXED-CANDIDATE | pre-fix no-key amendment entered proposal; unsigned live proposal/apply still reject without mutation | `4a2d4131` | v2 signed authorization binds complete action and chain/registry/epoch/slot/expiry; wrong-chain/epoch/registry/slot/key/payload and missing/duplicate authorization reject; signed operation-kind/FastSwap matrix, concurrent same-slot conflict, rollback, restart, old-rule delayed rotation and historical replay PASS | governance-targeted node 40/40 and Cobalt 66/66; real TCP n4 50.91s and n6 90.79s commit signed amendment, old-key-authorized rotation, activation, replacement-key epoch, convergence and replay on every replica; exact-candidate workspace and strict Clippy PASS | signed batch is the live governance authority; Cobalt RBC/ABBA are signed research primitives outside the node production governance call graph | launch ceremony and independent ratification remain real-value launch gates |
 | P0-PRIVACY-01 | FIXED-CANDIDATE / HISTORICAL-REPLAY-ONLY | pre-fix local cleartext mint acceptance source/test confirmed | `4a2d4131` | creator + admission + live no-mutation + archive replay regression; encrypted v2 ingress, generic private transfer, real K15 private atomic swap, chain-only recovery and private egress all PASS with exact accepted receipts, nullifiers, deltas and conservation | complete-flow 1/1 in 2,524.27s; generic transfer 1/1 in 372.91s; 13 public artifacts clean; ordinary privacy `83/83`; release-scale `17/17` including byte-identical K15 artifact; wallet 232/232; proxy 23/23; evidence SHA-256 `b830ce023d078aeed4acc832679591072519827f60af72d778b144dc5d5672ec` | supported privacy narrowed to Asset-Orchard without removing deposit/transfer/swap/egress | legacy decoder remains replay-only under exact authenticated history predicates |
 | P0-PRIVACY-02 | FIXED-CANDIDATE / HISTORICAL-REPLAY-ONLY V1 | pre-fix serialized live ingress contained the exact note opening and browser fallback was plaintext; oversized serialized JSON bypassed recursive inspection | `d1e68ee8` | v1 admission/live no-mutation reject + archive replay accept; v2 serialization, PFAOENC1 decrypt and two-fresh-wallet K15 swap/private-egress PASS; oversized JSON-looking transport fields fail closed | two-wallet release proof 1/1 in 340.41s; 13 public artifacts clean; browser SHA-256 `e07bacd757b646022a13bdf28a9730a30a158920141eaf73677ee92f1597df01`; candidate evidence SHA-256 `ffcd818b23f60cc81eaa660d2b0f01bb0fddc9e6a593e9758bce842fa2686978`; strict Clippy/fmt PASS | §7.1 and matrix state action-specific leakage | historical v1 decoder remains archive-only under authenticated replay predicates |
-| P0-PUBLIC-EVIDENCE-01 | FIXED-CANDIDATE | pre-fix tracked-tree scanner missed real `rho`/`psi`/`rcm`; new rule found 21 current-tree values before archive removal and 24 field occurrences in reachable history | `c5472708`, `00747667`, `012d3a8b` | scanner regression fails on a note opening without echoing it; raw evidence archived and removed; tracked-tree scan PASS | deterministic 1,283-file archive verified; final one-commit staging and second non-shallow clone have exact tree/ref/file-count equality and zero tracked-tree or reachable-history findings | raw evidence is explicitly excluded from public source | provider credential terminal-action evidence remains separately open under `P0-SECRET-01` |
+| P0-PUBLIC-EVIDENCE-01 | FIXED-CANDIDATE | pre-fix tracked-tree scanner missed real `rho`/`psi`/`rcm`; new rule found 21 current-tree values before archive removal and 24 field occurrences in reachable history | `c5472708`, `00747667`, `012d3a8b` | scanner regression fails on a note opening without echoing it; raw evidence archived and removed; tracked-tree scan PASS | deterministic 1,283-file archive verified; final one-commit staging and GitHub clone have exact tree/ref/file-count equality and zero tracked-tree or reachable-history findings | raw evidence is explicitly excluded from public source | historical credential disposition is closed under `P0-SECRET-01` |
 | P0-WALLET-02 | FIXED-CANDIDATE | pre-fix loopback/CSP regression failed; npm audit found Vite/esbuild advisories; un-hashed asset cache regression failed before follow-up fix | `9c5b29c9`; verified in `00747667` | loopback/CSP + canonical-root static serving + real Chromium CSP/origin/navigation/cache/disclosure boundary PASS | exact candidate: wallet 240/240; build PASS; Chromium public/custody 1/1 each; both npm audits zero; proxy 23/23 | Vite documented and enforced development-only; production image has no Vite runtime | production deployment still requires the documented authenticated edge profile |
 | P0-WALLET-BRIDGE-DEST-01 | FIXED-CANDIDATE | pre-fix browser boundary returned the drained old vault; configuration remained destination authority; follow-up browser test exposed trust in a reported digest without recomputing every profile field | `4a2d4131`, `9c5b29c9` | signed complete route/verifier profile, replicated discovery, separate SP1-public-input and governed-route commitments, route-bound ingress/egress, current-vs-pinned rotation, byte-identical pre/post snapshots and certified rollback/reapply, source chain/code/deposit/withdrawal audit, exact `V=S+D+B-R`, stale/substitution/downgrade/verifier-mismatch/one-atom rejection PASS | controlled Anvil+PFTL round trip: 11/11 PFTL accepted-code receipts, 8/8 EVM status-1 receipts, four lifecycle conservation audits; node governed-route 6/6 plus real gate 1/1; conservation 3/3; vault 13/13; execution 146/146; types 87/87; wallet 226/226; proxy 23/23; exact-candidate workspace/check/strict Clippy PASS | concrete evidence tier/trust dependency, verifier contract, historical route lifecycle, state migration and controlled round-trip procedure are explicit | production bridge deployment and specialist audit remain real-value launch gates |
 | P0-PROXY-AUTH-01 | FIXED-CANDIDATE | pre-fix real public HTTP/WS boundary reproduction; multi-principal regression failed before fix | `9c5b29c9`; verified in `00747667` | inverted HTTP/WS boundary, exhaustive mutation classification, principal-scoped replay, rate/body/concurrency and WSS regressions PASS | exact candidate: proxy 23/23 and audit zero; wallet 240/240/build; RPC inventory explicitly classifies all 143 observed methods with zero unknowns | authenticated edge/operator contract documented | production deployment still requires the documented authenticated TLS edge and operator secrets |
-| P0-SECRET-01 | OPEN-EXTERNAL / SOLE SOURCE-PUBLICATION BLOCKER | history/source-confirmed | `012d3a8b` (fail-closed gate; external action cannot be a code commit) | exact-ref/tree + deleted-but-reachable-history + mandatory private provider-record regressions PASS | final tracked tree and sanitized one-commit staging/history scans PASS; missing, group-readable, symlinked, in-repository record and contaminated history reject | publication runbook and executable gate are fail-closed | provider account owner must supply the private mode-0600 revocation/decommission/destruction record; no repository actor may fabricate it |
+| P0-SECRET-01 | CLOSED-PUBLISHED | history/source-confirmed | `012d3a8b` (fail-closed gate) plus provider-owner terminal-action record outside Git | exact-ref/tree + deleted-but-reachable-history + mandatory private provider-record regressions PASS | provider owner confirmed destruction; mode-0600 record passes; public GitHub clone is one commit/one branch with exact reviewed tree, 1,624 files and zero current/reachable-history findings | publication runbook and executable gate remain fail-closed | contaminated development history remains private; only sanitized history is public |
 | P0-ASSET-01 | FIXED-CANDIDATE | pre-fix wrong-label mint plus failing duplicate-ID, issued-to-native unwrap and overflow-atomicity regressions | `4a2d4131`; verified `8696cad5` | complete constructor inventory; execution wrong-label/zero/overflow/collision/replay/conservation tests; real node-store signed issued-unwrap and concurrent unsigned-wrap rejection; prototype duplicate fixture/input/vote tests PASS | candidate execution 156/156; node FastPay safety 14/14; prototype 21/21; owned-object fuzz 256 iterations/2,816 cases; exact-candidate workspace and strict Clippy PASS | exact native/issued lane binding and non-production fixture boundary documented | future object constructors remain compile-inventoried and fail closed until classified |
 | P0-RPC-01 | FIXED-CANDIDATE | source-confirmed arbitrary-debit path | `4a2d4131`, `9c5b29c9` | removed unsigned real-store/allowlist boundary; signed field-binding, rejection, atomicity, receipt-code, wallet-local-signing and replay tests PASS | real n=4 (73.31s) and n=6 (123.93s) TCP flows fund a fresh wallet through consensus and prove exact conservation on every replica; exact-candidate wallet/proxy/build/audit and workspace gates PASS | signed Account-to-FastPay funding and exact accepted-code UX restored without backend custody | authenticated production edge remains a deployment gate, not a public-source defect |
 | P0-BRIDGE-01 | FIXED-CANDIDATE | pre-fix consensus test accepted asserted refund/burn; source race confirmed | `4a2d4131` | production receipt builder + governed checkpoint observer + isolated durable exact-quorum signer drive signed subscribe/export, consume, return and refund alternate; every money receipt accepted; exact 50-atom conservation; wrong amount zero-mutation; consume/refund mutual exclusion in both orderings; minority partition/unvoted reorg reject; every ordered-commit crash prefix recovers idempotently; external inventory is included in the checked global cap | bridge 36/36; execution 139/139; types 83/83; production checkpoint/signing 2/2; receipt builder 3/3; focused node crash/supply regressions; exact-candidate Anvil/non-fork Foundry/workspace/strict Clippy PASS | explicit BFT_CHECKPOINT trust model and packet-digest binding documented | official-mainnet fork execution and contract audit remain real-value activation gates |
@@ -1997,7 +1996,7 @@ manufactured by repository work.
 | P1-FASTPAY-01 | FIXED-CANDIDATE | late-certificate hazard, unsafe `q-f` counterexample, sub-quorum apply/ordered-omission divergence, missing committee rotation, stale Python v2 WAN caller, and completed-outbox response-loss gap reproduced | `1e9352c6`, `77e4a3c7`, `90c3836a` | full recovery/crash/rotation matrix plus bounded durable completed response, restart, compaction, migration, tamper/conflict and zero-reapply replay PASS | WAN battery 5/5 p50 2.49s/p95 3.72s with five signed acks and exact-six audit; exact-candidate proxy 24/24, npm audit zero and workspace PASS | recovery v1 spec and q-ack finality match; unsafe one-ack result excluded; completed results replay from bounded durable evidence | external WAN operations remain a real-value deployment gate |
 | P1-SUPPLYCHAIN-01 | FIXED-CANDIDATE | advisory/yank baseline and cross-checkout SBOM absolute-path drift captured | `4a2d4131`, `09dc28d4` | cargo audit 0 vulnerabilities; cargo-deny and Halo2 PASS; SBOM v2 is byte-identical after complete tracked-tree relocation | deterministic 307-component SBOM; npm audits zero; exact candidate and second clone reproduce byte-identical SBOM | local component identities are repository-relative; exceptions expire 2026-08-31 | three unmaintained transitives remain time-bounded and explicitly tracked |
 | P1-CI-01 | FIXED-CANDIDATE | missing docs path, skipped Orchard, externally coupled/locally generated proxy fixtures, runtime/crypto scanner blind spots, nonportable SBOM, inherited FastSwap lock race, ignored operator-report fixture dependencies, and a load-sensitive quorum-early sleep threshold confirmed | `90c3836a`, `3b4b882f`, `0d1115ae`, `09dc28d4`, `5fd7045e`, `b49c85e4`, `929b0f40`, `d5740cdc` | YAML/local equivalents; self-contained proxy 24/24 loading hash-pinned tracked WASM; self-verifying runtime/crypto scanners; SBOM relocation; inherited-descriptor lock regression; both legacy WAN compatibility vectors use canonical tracked testdata; quorum-early behavior uses a deterministic gated-sixth-response proof | exact candidate and clean clone execute complete workspace/release Orchard/FastSwap/atomic/Foundry/Anvil and publication gates | release workflow and clean-checkout test inputs are explicit and reproducible | no known residual source-publication P1 |
-| P1-HISTORY-01 | CLOSED INTO P0-SECRET-01 / P0-PUBLIC-EVIDENCE-01 | 719 generic baseline findings classified | `c5472708`, `00747667`, `012d3a8b` | scanner regression + final tracked tree and sanitized history PASS | contaminated private history fails on 3 credential plus 24 private-note-opening occurrences; intended public history has zero | sanitized-history procedure and exact-ref/tree gate added | provider revocation remains the sole open external publication action under P0-SECRET-01 |
+| P1-HISTORY-01 | CLOSED INTO P0-SECRET-01 / P0-PUBLIC-EVIDENCE-01 | 719 generic baseline findings classified | `c5472708`, `00747667`, `012d3a8b` | scanner regression + final tracked tree and sanitized history PASS | contaminated private history fails on 3 credential plus 24 private-note-opening occurrences; public GitHub history has zero | sanitized-history procedure and exact-ref/tree gate added | contaminated development refs remain private and are not publication sources |
 | P1-DOCS-01 | FIXED-CANDIDATE | code/claim matrix confirmed consensus, governance, recovery, privacy-envelope and state-model mismatches | `c5472708` | strict docs build, redaction and implementation-boundary checks PASS | exact-candidate and clean-clone docs strict/redaction/boundary suite PASS | canonical paper, business-paper status, README/SECURITY and complete matrix corrected | empirical evidence remains controlled and supporting feature specs remain non-canonical |
 | P1-METADATA-01 | FIXED-CANDIDATE | metadata baseline captured | `c5472708` | locked metadata validates all 19 crates | exact-candidate strict check/docs/SBOM PASS | release/contribution/ownership docs added | signed release ceremony remains a real-value launch gate |
 | P1-LICENSE-01 | FIXED-CANDIDATE | missing license/provenance baseline confirmed | `c5472708` | normalized upstream verifier PASS | exact-candidate cargo-deny/SBOM/Halo2 and artifact policy PASS | upstream commit and patch hash documented | specialist crypto review remains a real-value launch gate |
@@ -2093,15 +2092,11 @@ operator report. Commit `929b0f40` reuses the already tracked canonical block-3
 catch-up batch, so the receipt-ID compatibility check is identical in a fresh
 clone without adding a duplicate fixture or changing runtime behavior.
 
-Public publication is blocked on exactly one external action:
-
-- `P0-SECRET-01`: the provider account owner must privately prove that the
-  historically captured token/instance was revoked, decommissioned or destroyed
-  using the required mode-0600 record outside the repository. The final sanitized
-  one-commit staging repository and second non-shallow clone already pass exact
-  tree/ref/file-count, tracked-tree and reachable-history scans with zero
-  findings. The strict verifier correctly stops before publication when the
-  private owner record is absent. No repository actor may fabricate or waive it.
+Source publication is closed. For `P0-SECRET-01`, the provider owner confirmed
+destruction and the required private mode-0600 record passes. The published
+GitHub repository is a new one-commit history whose fresh clone passes exact
+tree/ref/file-count and tracked/reachable-history scans with zero findings. The
+contaminated development repository remains private under an archive name.
 
 The proof-system review is no longer a discovery placeholder. The
 machine-readable `OPEN-SOURCE-PROOF-PUBLIC-INPUT-INVENTORY-20260716.json` maps

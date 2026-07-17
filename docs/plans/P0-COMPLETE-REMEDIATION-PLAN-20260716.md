@@ -73,8 +73,8 @@ documentation exercise.
 - [x] Pass the complete customer flow from a fresh wallet with accepted receipt codes,
   exact conservation, and no secret crossing the browser boundary.
 - [x] Produce a closure table tied to the exact public-candidate commit with zero
-  internally actionable open P0s; `P0-SECRET-01` may remain solely as the named
-  external provider-owner publication action.
+  open P0s. The provider owner confirmed destruction for `P0-SECRET-01`; the
+  private terminal-action record and sanitized public GitHub clone pass the gate.
 
 ## 3. P0 remediation burn-down
 
@@ -355,11 +355,11 @@ proof-verified entry and exit; any earlier tier remains explicit in state and UX
 
 - [x] Add fail-closed exact-ref/tree and reachable-history publication gates.
 - [x] Pass tracked-tree and local sanitized-history rehearsal scans.
-- [ ] Provider owner revokes/decommissions the captured credential and privately
+- [x] Provider owner revokes/decommissions the captured credential and privately
   records provider-side evidence without committing the secret.
 - [x] Search every candidate ref and tag; retain only the reviewed sanitized history.
 - [x] Pass the final staging current/history scan with zero credential findings.
-- [ ] Record owner, timestamp, provider action reference, scanner result, exact refs,
+- [x] Record owner, timestamp, provider action reference, scanner result, exact refs,
   commit, and tree in the private release evidence.
 - [x] Block publication automatically unless all preceding evidence is present.
 
