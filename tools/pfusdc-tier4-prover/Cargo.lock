@@ -4807,7 +4807,9 @@ dependencies = [
  "pfusdc-ingress-program",
  "postfiat-pfusdc-proofs",
  "postfiat-types",
+ "serde_cbor",
  "serde_json",
+ "sha2 0.10.9",
  "sha3 0.10.9",
  "sp1-sdk",
  "tokio",
@@ -4879,6 +4881,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "postfiat-consensus-cobalt"
+version = "0.1.0"
+dependencies = [
+ "postfiat-crypto-provider",
+ "postfiat-types",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "postfiat-crypto-provider"
 version = "0.1.0"
 dependencies = [
@@ -4912,9 +4924,11 @@ dependencies = [
 name = "postfiat-pfusdc-proofs"
 version = "0.1.0"
 dependencies = [
+ "postfiat-consensus-cobalt",
  "postfiat-crypto-provider",
  "postfiat-ordering-fast",
  "postfiat-types",
+ "serde_json",
 ]
 
 [[package]]
@@ -7218,9 +7232,9 @@ dependencies = [
 
 [[package]]
 name = "sp1-zkvm"
-version = "6.2.4"
+version = "6.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ecd04e9c2b82cb6621116e7aebad425f98cc2f9c51b349265caec447f7041a37"
+checksum = "f18fbc79e5a1cc499d3ae3904771104a854493ea12c317ff1407137d86153c26"
 dependencies = [
  "cfg-if",
  "critical-section",

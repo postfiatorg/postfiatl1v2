@@ -14,6 +14,8 @@ pfusdc-ingress-program = { path = "../../programs/pfusdc-ingress" }
 postfiat-pfusdc-proofs = { path = "../../crates/pfusdc_proofs" }
 postfiat-types = { path = "../../crates/types" }
 serde_json = "1.0"
+serde_cbor = "0.11.2"
+sha2 = "0.10"
 sha3 = "0.10"
 sp1-sdk = { version = "=6.3.1", features = ["network"] }
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }

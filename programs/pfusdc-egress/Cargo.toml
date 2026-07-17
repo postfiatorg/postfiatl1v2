@@ -8,6 +8,7 @@ publish = false
 [dependencies]
 postfiat-pfusdc-proofs = { path = "../../crates/pfusdc_proofs" }
 postfiat-types = { path = "../../crates/types" }
-sp1-zkvm = { version = "6.2.4" }
+serde_cbor = "0.11.2"
+sp1-zkvm = { version = "=6.3.1" }
 
 [workspace]

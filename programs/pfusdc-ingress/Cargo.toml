@@ -25,7 +25,7 @@ postfiat-types = { path = "../../crates/types" }
 serde = { version = "1.0", features = ["derive"] }
 serde_cbor = "0.11.2"
 sp1-helios-primitives = { git = "https://github.com/succinctlabs/sp1-helios", rev = "b9bdddf8221e31d41075d4a97f9a14ca6df13cf0" }
-sp1-zkvm = "=6.2.4"
+sp1-zkvm = "=6.3.1"
 sha3 = "0.10.8"
 tree_hash = "0.10.0"
 

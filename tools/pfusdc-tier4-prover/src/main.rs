@@ -5,6 +5,7 @@ use clap::{Parser, Subcommand};
 use pfusdc_ingress_program::{verify_ingress_witness_v1, PfUsdcIngressProofWitnessV1};
 use postfiat_pfusdc_proofs::verify_egress_witness_v1;
 use postfiat_types::PfUsdcEgressProofWitnessV1;
+use sha2::Sha256;
 use sha3::{Digest, Sha3_384};
 use sp1_sdk::{Elf, HashableKey, ProveRequest, Prover, ProverClient, ProvingKey, SP1Stdin};
 
@@ -25,6 +26,12 @@ struct Args {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Derive the immutable ELF hashes and SP1 program verifying keys.
+    ProgramInfo {
+        /// Optional JSON output path. The same document is always printed.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
     /// Execute or Groth16-prove a canonical Ethereum/Arbitrum ingress witness.
     Ingress {
         #[arg(long)]
@@ -50,6 +57,7 @@ async fn main() -> Result<()> {
     sp1_sdk::utils::setup_logger();
     let args = Args::parse();
     match args.command {
+        Command::ProgramInfo { output } => program_info(output).await,
         Command::Ingress {
             witness,
             output_dir,
@@ -61,6 +69,33 @@ async fn main() -> Result<()> {
             prove,
         } => prove_egress(witness, output_dir, prove).await,
     }
+}
+
+async fn program_info(output: Option<PathBuf>) -> Result<()> {
+    let client = ProverClient::from_env().await;
+    let ingress = client.setup(INGRESS_ELF).await?;
+    let egress = client.setup(EGRESS_ELF).await?;
+    let document = serde_json::json!({
+        "schema": "postfiat.pfusdc.tier4_program_info.v1",
+        "sp1_sdk_version": "6.3.1",
+        "ingress": {
+            "elf_sha256": hex::encode(Sha256::digest(&*INGRESS_ELF)),
+            "program_vkey": ingress.verifying_key().bytes32(),
+        },
+        "egress": {
+            "elf_sha256": hex::encode(Sha256::digest(&*EGRESS_ELF)),
+            "program_vkey": egress.verifying_key().bytes32(),
+        },
+    });
+    let bytes = serde_json::to_vec_pretty(&document)?;
+    if let Some(path) = output {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, &bytes)?;
+    }
+    println!("{}", String::from_utf8(bytes)?);
+    Ok(())
 }
 
 async fn prove_ingress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) -> Result<()> {
@@ -78,7 +113,7 @@ async fn prove_ingress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) 
         .canonical_bytes_without_commitment()
         .map_err(|error| anyhow::anyhow!("encode expected public values: {error}"))?;
     let mut stdin = SP1Stdin::new();
-    stdin.write(&witness);
+    stdin.write_vec(serde_cbor::to_vec(&witness).context("encode ingress witness as CBOR")?);
     let client = ProverClient::from_env().await;
     let started = Instant::now();
     let (executed_public_values, report) = client.execute(INGRESS_ELF, stdin.clone()).await?;
@@ -152,15 +187,30 @@ async fn prove_egress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) -
         .canonical_bytes_without_commitment()
         .map_err(|error| anyhow::anyhow!("encode expected public values: {error}"))?;
     let mut stdin = SP1Stdin::new();
-    stdin.write(&witness);
+    stdin.write_vec(serde_cbor::to_vec(&witness).context("encode egress witness as CBOR")?);
     let client = ProverClient::from_env().await;
     let started = Instant::now();
     let (executed_public_values, report) = client.execute(EGRESS_ELF, stdin.clone()).await?;
     let executed = executed_public_values.to_vec();
-    anyhow::ensure!(
-        executed == expected_public_values,
-        "SP1 egress output differs from native canonical public values"
-    );
+    if executed != expected_public_values {
+        fs::create_dir_all(&output_dir)?;
+        fs::write(output_dir.join("guest-public-values.mismatch.bin"), &executed)?;
+        fs::write(
+            output_dir.join("native-public-values.mismatch.bin"),
+            &expected_public_values,
+        )?;
+        let first_difference = executed
+            .iter()
+            .zip(&expected_public_values)
+            .position(|(guest, native)| guest != native)
+            .unwrap_or(executed.len().min(expected_public_values.len()));
+        anyhow::bail!(
+            "SP1 egress output differs from native canonical public values at byte {first_difference} (guest {} bytes, native {} bytes, cycles {})",
+            executed.len(),
+            expected_public_values.len(),
+            report.total_instruction_count()
+        );
+    }
     fs::create_dir_all(&output_dir)?;
     fs::write(output_dir.join("public-values.bin"), &executed)?;
     fs::write(
