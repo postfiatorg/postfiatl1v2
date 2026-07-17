@@ -19,6 +19,25 @@ interface IPFTLFinalityVerifierV1 {
         );
 }
 
+interface IArbSysPfUsdcV1 {
+    function sendTxToL1(address destination, bytes calldata data) external payable returns (uint256);
+}
+
+interface IPfUsdcIngressAnchorV1 {
+    function recordDepositV1(
+        bytes32 depositId,
+        address depositor,
+        bytes32 pftlRecipientHash,
+        string calldata pftlRecipient,
+        uint256 amount,
+        bytes32 nonce,
+        bytes32 routeBinding,
+        uint256 sourceChainId,
+        address vault,
+        address token
+    ) external;
+}
+
 /// @notice Proof-native pfUSDC vault. No signer committee or challenge window
 ///         participates in a Tier-4 withdrawal.
 contract ERC20BridgeVaultV2 {
@@ -29,6 +48,7 @@ contract ERC20BridgeVaultV2 {
     error RecipientTextEmpty();
     error RecipientTextTooLong(uint256 length);
     error RouteBindingRequired();
+    error IngressCommitmentFailed();
     error DuplicateDeposit(bytes32 depositId);
     error WithdrawalAlreadyConsumed(bytes32 withdrawalIdCommitment);
     error BurnAlreadyConsumed(bytes32 burnTxIdCommitment);
@@ -57,10 +77,13 @@ contract ERC20BridgeVaultV2 {
         address recipient,
         uint256 amount
     );
+    event Tier4IngressCommitment(bytes32 indexed depositId, uint256 indexed outputIndex, address indexed anchor);
 
     uint256 public constant MAX_PFTL_RECIPIENT_BYTES = 256;
 
     IERC20BridgeTokenV2 public immutable token;
+    IArbSysPfUsdcV1 public immutable arbSys;
+    address public immutable ingressAnchor;
     IPFTLFinalityVerifierV1 public finalityVerifier;
     bytes32 public immutable tokenRuntimeCodeHash;
     address public owner;
@@ -87,15 +110,21 @@ contract ERC20BridgeVaultV2 {
         IERC20BridgeTokenV2 token_,
         IPFTLFinalityVerifierV1 finalityVerifier_,
         bytes32 tokenRuntimeCodeHash_,
+        IArbSysPfUsdcV1 arbSys_,
+        address ingressAnchor_,
         address initialOwner
     ) {
         if (address(token_) == address(0)) revert ZeroAddress("token");
         if (address(finalityVerifier_) == address(0)) revert ZeroAddress("finality_verifier");
+        if (address(arbSys_) == address(0)) revert ZeroAddress("arb_sys");
+        if (ingressAnchor_ == address(0)) revert ZeroAddress("ingress_anchor");
         if (initialOwner == address(0)) revert ZeroAddress("owner");
         if (tokenRuntimeCodeHash_ == bytes32(0) || address(token_).codehash != tokenRuntimeCodeHash_) {
             revert ZeroAddress("token_code_hash");
         }
         token = token_;
+        arbSys = arbSys_;
+        ingressAnchor = ingressAnchor_;
         finalityVerifier = finalityVerifier_;
         tokenRuntimeCodeHash = tokenRuntimeCodeHash_;
         owner = initialOwner;
@@ -145,6 +174,39 @@ contract ERC20BridgeVaultV2 {
         uint256 received = token.balanceOf(address(this)) - beforeBalance;
         if (received != amount) revert UnexpectedTokenBalanceDelta(amount, received);
         _emitDeposit(depositId, recipientHash, pftlRecipient, amount, nonce, routeBinding);
+        _commitDeposit(depositId, recipientHash, pftlRecipient, amount, nonce, routeBinding);
+    }
+
+    function _commitDeposit(
+        bytes32 depositId,
+        bytes32 recipientHash,
+        string calldata pftlRecipient,
+        uint256 amount,
+        bytes32 nonce,
+        bytes32 routeBinding
+    ) private {
+        bytes memory commitment = abi.encodeCall(
+            IPfUsdcIngressAnchorV1.recordDepositV1,
+            (
+                depositId,
+                msg.sender,
+                recipientHash,
+                pftlRecipient,
+                amount,
+                nonce,
+                routeBinding,
+                block.chainid,
+                address(this),
+                address(token)
+            )
+        );
+        uint256 outputIndex;
+        try arbSys.sendTxToL1(ingressAnchor, commitment) returns (uint256 index) {
+            outputIndex = index;
+        } catch {
+            revert IngressCommitmentFailed();
+        }
+        emit Tier4IngressCommitment(depositId, outputIndex, ingressAnchor);
     }
 
     function withdrawWithProof(bytes calldata publicValues, bytes calldata proofBytes)

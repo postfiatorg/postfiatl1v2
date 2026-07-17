@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity ^0.8.24;
 
-import {ERC20BridgeVaultV2, IERC20BridgeTokenV2, IPFTLFinalityVerifierV1} from "../src/ERC20BridgeVaultV2.sol";
+import {
+    ERC20BridgeVaultV2,
+    IArbSysPfUsdcV1,
+    IERC20BridgeTokenV2,
+    IPFTLFinalityVerifierV1,
+    IPfUsdcIngressAnchorV1
+} from "../src/ERC20BridgeVaultV2.sol";
 import {PFTLFinalityVerifierV1, ISP1Verifier} from "../src/PFTLFinalityVerifierV1.sol";
 
 contract Tier4MockToken is IERC20BridgeTokenV2 {
@@ -53,6 +59,39 @@ contract Tier4TemporaryFinality is IPFTLFinalityVerifierV1 {
     }
 }
 
+contract Tier4MockArbSys is IArbSysPfUsdcV1 {
+    address public destination;
+    bytes public data;
+    uint256 public nextOutputIndex = 77;
+    bool public reject;
+
+    function setReject(bool reject_) external {
+        reject = reject_;
+    }
+
+    function sendTxToL1(address destination_, bytes calldata data_) external payable returns (uint256) {
+        require(!reject, "mock ArbSys rejection");
+        destination = destination_;
+        data = data_;
+        return nextOutputIndex++;
+    }
+}
+
+contract Tier4MockIngressAnchor is IPfUsdcIngressAnchorV1 {
+    function recordDepositV1(
+        bytes32,
+        address,
+        bytes32,
+        string calldata,
+        uint256,
+        bytes32,
+        bytes32,
+        uint256,
+        address,
+        address
+    ) external {}
+}
+
 contract PFUSDCTier4Test {
     bytes private constant SCHEMA = "postfiat.pfusdc.egress_public_values.v1";
     bytes private constant CHECKPOINT_SCHEMA = "postfiat.pfusdc.checkpoint_public_values.v1";
@@ -63,6 +102,8 @@ contract PFUSDCTier4Test {
     Tier4MockSP1Verifier private sp1;
     PFTLFinalityVerifierV1 private verifier;
     ERC20BridgeVaultV2 private vault;
+    Tier4MockArbSys private arbSys;
+    Tier4MockIngressAnchor private ingressAnchor;
     bytes private genesis48;
     bytes private route48;
     bytes private asset48;
@@ -72,6 +113,8 @@ contract PFUSDCTier4Test {
     function setUp() public {
         token = new Tier4MockToken();
         sp1 = new Tier4MockSP1Verifier();
+        arbSys = new Tier4MockArbSys();
+        ingressAnchor = new Tier4MockIngressAnchor();
         genesis48 = _h48(0x11);
         route48 = _h48(0x22);
         asset48 = _h48(0x33);
@@ -83,6 +126,8 @@ contract PFUSDCTier4Test {
             token,
             IPFTLFinalityVerifierV1(address(temporaryFinality)),
             address(token).codehash,
+            arbSys,
+            address(ingressAnchor),
             address(this)
         );
         bytes32 vaultCodeHash = address(temporaryVault).codehash;
@@ -110,10 +155,48 @@ contract PFUSDCTier4Test {
             token,
             IPFTLFinalityVerifierV1(address(verifier)),
             address(token).codehash,
+            arbSys,
+            address(ingressAnchor),
             address(this)
         );
         _assertEq(address(vault).codehash, vaultCodeHash, "vault code hash must be constructor-independent");
         token.mint(address(vault), 1_000_000);
+    }
+
+    function testDepositEmitsCanonicalTier4SendAndRevertsAtomicallyWhenSendFails() public {
+        token.mint(address(this), 1_000);
+        token.approve(address(vault), 1_000);
+        bytes32 nonce = keccak256("deposit-nonce");
+        bytes32 routeBinding = keccak256("route-binding");
+        bytes32 depositId = vault.depositV2(125, "pf-tier4-recipient", nonce, routeBinding);
+
+        _assertTrue(arbSys.destination() == address(ingressAnchor), "ingress anchor destination");
+        bytes memory expected = abi.encodeCall(
+            IPfUsdcIngressAnchorV1.recordDepositV1,
+            (
+                depositId,
+                address(this),
+                keccak256(bytes("pf-tier4-recipient")),
+                "pf-tier4-recipient",
+                125,
+                nonce,
+                routeBinding,
+                block.chainid,
+                address(vault),
+                address(token)
+            )
+        );
+        _assertTrue(keccak256(arbSys.data()) == keccak256(expected), "canonical send calldata");
+
+        arbSys.setReject(true);
+        uint256 walletBefore = token.balanceOf(address(this));
+        uint256 vaultBefore = token.balanceOf(address(vault));
+        (bool ok,) = address(vault).call(
+            abi.encodeCall(ERC20BridgeVaultV2.depositV2, (100, "pf-rejected", bytes32(uint256(2)), routeBinding))
+        );
+        _assertTrue(!ok, "failed commitment must revert deposit");
+        _assertEq(token.balanceOf(address(this)), walletBefore, "failed send refunds depositor");
+        _assertEq(token.balanceOf(address(vault)), vaultBefore, "failed send leaves vault unchanged");
     }
 
     function testProofNativeWithdrawalPaysExactlyAndConsumesReplayKeys() public {
