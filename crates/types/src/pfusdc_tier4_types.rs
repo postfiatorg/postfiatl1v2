@@ -627,6 +627,23 @@ pub struct PfUsdcEgressPublicValuesV1 {
 
 pub const PFUSDC_EGRESS_PROOF_WITNESS_SCHEMA_V1: &str =
     "postfiat.pfusdc.egress_proof_witness.v1";
+pub const PFUSDC_EGRESS_MAX_ANCESTRY_BLOCKS_V1: usize = 64;
+
+/// One finalized block between the contract's prior checkpoint and the exit
+/// block. Governance payload material is present only when this block proves
+/// the committee authorized for the following block.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PfUsdcEgressFinalityStepV1 {
+    pub block: BlockRecord,
+    pub committee_epoch: u64,
+    pub committee: Vec<ValidatorRegistryEntry>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub governance_payload_json: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub next_committee: Vec<ValidatorRegistryEntry>,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub next_committee_epoch: u64,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PfUsdcEgressProofWitnessV1 {
@@ -636,6 +653,8 @@ pub struct PfUsdcEgressProofWitnessV1 {
     pub protocol_version: u32,
     pub bridge_exit_root_activation_height: u64,
     pub prior_checkpoint_block_id: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub finality_ancestry: Vec<PfUsdcEgressFinalityStepV1>,
     pub route_profile: VaultBridgeRouteProfileRecordV1,
     pub block: BlockRecord,
     pub receipt: Receipt,
@@ -670,6 +689,25 @@ impl PfUsdcEgressProofWitnessV1 {
             || self.committee.len() > 64
         {
             return Err("pfUSDC egress proof witness bounds are invalid".to_string());
+        }
+        if self.finality_ancestry.len() > PFUSDC_EGRESS_MAX_ANCESTRY_BLOCKS_V1 {
+            return Err("pfUSDC egress finality ancestry exceeds the v1 bound".to_string());
+        }
+        for step in &self.finality_ancestry {
+            if step.committee_epoch == 0
+                || step.committee.is_empty()
+                || step.committee.len() > 64
+                || step.governance_payload_json.len() > 1_048_576
+                || (step.next_committee.is_empty() != (step.next_committee_epoch == 0))
+                || step.next_committee.len() > 64
+            {
+                return Err("pfUSDC egress finality step bounds are invalid".to_string());
+            }
+            if step.governance_payload_json.is_empty() && !step.next_committee.is_empty() {
+                return Err(
+                    "pfUSDC egress committee transition requires governance payload".to_string(),
+                );
+            }
         }
         self.route_profile.validate()?;
         self.withdrawal_packet.validate()?;

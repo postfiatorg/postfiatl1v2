@@ -12,6 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 postfiat-crypto-provider = { path = "../crypto_provider" }
+postfiat-consensus-cobalt = { path = "../consensus_cobalt" }
 postfiat-ordering-fast = { path = "../ordering_fast" }
 postfiat-types = { path = "../types" }
-
+serde_json = { workspace = true }

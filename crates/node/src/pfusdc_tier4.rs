@@ -4,6 +4,7 @@ use super::*;
 pub struct PfUsdcEgressWitnessOptions {
     pub data_dir: PathBuf,
     pub withdrawal_id: String,
+    pub prior_checkpoint_block_id: Option<String>,
 }
 
 pub fn pfusdc_egress_witness(
@@ -11,6 +12,10 @@ pub fn pfusdc_egress_witness(
 ) -> io::Result<PfUsdcEgressProofWitnessV1> {
     validate_lower_hex_len("withdrawal_id", &options.withdrawal_id, 96)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    if let Some(prior) = options.prior_checkpoint_block_id.as_deref() {
+        validate_lower_hex_len("prior_checkpoint_block_id", prior, 96)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    }
     let store = NodeStore::new(options.data_dir);
     let genesis = store.read_genesis()?;
     let governance = store.read_governance()?;
@@ -98,26 +103,137 @@ pub fn pfusdc_egress_witness(
             "consensus-v2 commit does not bind the block bridge-exit root",
         ));
     }
-    let committee_validators = active_validator_ids(&governance)?;
-    let validator_registry =
-        read_validator_registry_file(&store.data_dir().join(VALIDATOR_REGISTRY_FILE))?;
     let (consensus_committee, committee) =
-        pfusdc_consensus_committee(&validator_registry, &committee_validators)?;
+        pfusdc_committee_at_height(&store, &genesis, &governance, block.header.height)?;
     if consensus_committee.committee_root != commit.proposal.domain.committee_root {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "current validator registry does not reproduce the finalized committee root",
+            "historical validator registry does not reproduce the finalized committee root",
         ));
     }
     let committee_epoch = commit.proposal.domain.committee_epoch;
 
+    let prior_checkpoint_block_id = options
+        .prior_checkpoint_block_id
+        .unwrap_or_else(|| block.header.parent_hash.clone());
+    let ancestry_start = if prior_checkpoint_block_id == block.header.parent_hash {
+        block.header.height
+    } else {
+        let prior_index = blocks
+            .blocks
+            .iter()
+            .position(|candidate| candidate.header.block_hash == prior_checkpoint_block_id)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "prior Tier-4 checkpoint block is unavailable",
+                )
+            })?;
+        blocks.blocks[prior_index]
+            .header
+            .height
+            .checked_add(1)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "block height overflow"))?
+    };
+    let archive = store.read_batch_archive()?;
+    let ancestry_blocks = blocks
+        .blocks
+        .iter()
+        .filter(|candidate| {
+            candidate.header.height >= ancestry_start
+                && candidate.header.height < block.header.height
+        })
+        .collect::<Vec<_>>();
+    let finality_ancestry = ancestry_blocks
+        .iter()
+        .enumerate()
+        .map(|(index, candidate)| {
+            let candidate_commit =
+                candidate
+                    .header
+                    .consensus_v2_commit
+                    .as_ref()
+                    .ok_or_else(|| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "Tier-4 ancestry block has no consensus-v2 commit",
+                        )
+                    })?;
+            let (candidate_set, candidate_committee) =
+                pfusdc_committee_at_height(&store, &genesis, &governance, candidate.header.height)?;
+            if candidate_commit.proposal.domain.committee_root != candidate_set.committee_root {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "historical registry does not reproduce ancestry committee root",
+                ));
+            }
+            let next_block = ancestry_blocks.get(index + 1).copied().unwrap_or(&block);
+            let next_height = next_block.header.height;
+            let (next_set, next_committee) =
+                pfusdc_committee_at_height(&store, &genesis, &governance, next_height)?;
+            let transition = next_set.committee_root != candidate_set.committee_root;
+            let governance_payload_json = if transition {
+                if candidate.header.batch_kind != BATCH_KIND_GOVERNANCE {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "committee changes without a finalized governance block",
+                    ));
+                }
+                archive
+                    .batches
+                    .iter()
+                    .find(|entry| {
+                        entry.batch_kind == BATCH_KIND_GOVERNANCE
+                            && entry.batch_id == candidate.header.batch_id
+                    })
+                    .map(|entry| entry.payload_json.clone())
+                    .ok_or_else(|| {
+                        io::Error::new(
+                            io::ErrorKind::NotFound,
+                            "committee transition governance payload is unavailable",
+                        )
+                    })?
+            } else {
+                String::new()
+            };
+            Ok(PfUsdcEgressFinalityStepV1 {
+                block: (*candidate).clone(),
+                committee_epoch: candidate_commit.proposal.domain.committee_epoch,
+                committee: candidate_committee,
+                governance_payload_json,
+                next_committee: if transition {
+                    next_committee
+                } else {
+                    Vec::new()
+                },
+                next_committee_epoch: if transition {
+                    next_block
+                        .header
+                        .consensus_v2_commit
+                        .as_ref()
+                        .ok_or_else(|| {
+                            io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                "post-transition block has no consensus-v2 commit",
+                            )
+                        })?
+                        .proposal
+                        .domain
+                        .committee_epoch
+                } else {
+                    0
+                },
+            })
+        })
+        .collect::<io::Result<Vec<_>>>()?;
     let witness = PfUsdcEgressProofWitnessV1 {
         schema: PFUSDC_EGRESS_PROOF_WITNESS_SCHEMA_V1.to_string(),
         chain_id: genesis.chain_id.clone(),
         genesis_hash: genesis_hash(&genesis),
         protocol_version: genesis.protocol_version,
         bridge_exit_root_activation_height: activation_height,
-        prior_checkpoint_block_id: block.header.parent_hash.clone(),
+        prior_checkpoint_block_id,
+        finality_ancestry,
         route_profile,
         block,
         receipt,
@@ -132,6 +248,38 @@ pub fn pfusdc_egress_witness(
         .validate_bounds()
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     Ok(witness)
+}
+
+fn pfusdc_committee_at_height(
+    store: &NodeStore,
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    height: u64,
+) -> io::Result<(
+    postfiat_ordering_fast::ConsensusV2ValidatorSet,
+    Vec<ValidatorRegistryEntry>,
+)> {
+    let mut registry = read_validator_registry_replay_base(store)?;
+    let mut validator_ids = local_validator_ids(genesis.validator_count)?;
+    let mut updates = governance
+        .validator_registry_updates
+        .iter()
+        .filter(|update| update.activation_height < height)
+        .collect::<Vec<_>>();
+    // Governance history order is consensus-significant when multiple
+    // updates share an activation height. Stable sorting by height preserves
+    // that archived order rather than inventing an update-id ordering.
+    updates.sort_by_key(|update| update.activation_height);
+    for update in updates {
+        validator_ids = apply_historical_validator_registry_update_to_registry(
+            genesis,
+            &mut registry,
+            update,
+            height,
+            "pfUSDC Tier-4 egress historical committee",
+        )?;
+    }
+    pfusdc_consensus_committee(&registry, &validator_ids)
 }
 
 fn pfusdc_consensus_committee(

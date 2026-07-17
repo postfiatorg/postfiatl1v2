@@ -1268,6 +1268,8 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
             let witness = pfusdc_egress_witness(PfUsdcEgressWitnessOptions {
                 data_dir,
                 withdrawal_id: withdrawal_id.to_string(),
+                prior_checkpoint_block_id: flag_value(flags, "--prior-checkpoint")
+                    .map(str::to_string),
             })
             .map_err(|error| format!("rpc pfusdc_egress_witness failed: {error}"))?;
             print_rpc_success(

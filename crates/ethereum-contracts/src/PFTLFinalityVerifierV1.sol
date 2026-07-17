@@ -227,10 +227,13 @@ contract PFTLFinalityVerifierV1 {
             revert WrongBinding("route_profile_hash");
         }
         if (decoded.routeEpoch != routeEpoch) revert WrongBinding("route_epoch");
-        if (
-            decoded.committeeTransitionCommitment == bytes32(0)
-                && decoded.committeeRootCommitment != latestCommitteeRootCommitment
-        ) revert WrongBinding("committee_root");
+        if (decoded.committeeTransitionCommitment == bytes32(0)) {
+            if (decoded.committeeRootCommitment != latestCommitteeRootCommitment) {
+                revert WrongBinding("committee_root");
+            }
+        } else if (decoded.committeeTransitionCommitment != latestCommitteeRootCommitment) {
+            revert WrongBinding("committee_transition_start");
+        }
         if (decoded.assetIdCommitment != assetIdCommitment) revert WrongBinding("asset_id");
         if (decoded.arbitrumChainId != arbitrumChainId || decoded.arbitrumChainId != block.chainid) {
             revert WrongBinding("arbitrum_chain_id");

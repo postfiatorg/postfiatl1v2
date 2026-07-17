@@ -1708,9 +1708,11 @@ dependencies = [
 name = "postfiat-pfusdc-proofs"
 version = "0.1.0"
 dependencies = [
+ "postfiat-consensus-cobalt",
  "postfiat-crypto-provider",
  "postfiat-ordering-fast",
  "postfiat-types",
+ "serde_json",
 ]
 
 [[package]]

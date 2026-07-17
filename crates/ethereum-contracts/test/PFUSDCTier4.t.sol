@@ -150,10 +150,29 @@ contract PFUSDCTier4Test {
 
     function testUnprovedCommitteeChangeFailsBeforeMutation() public {
         bytes memory publicValues =
-            _publicValuesWithCommittee(address(vault), true, 11, _h48(0x44), _h32(0x99), _h48(0x42));
+            _publicValuesWithCommittee(
+                address(vault), true, 11, _h48(0x44), _h32(0x99), _h48(0x42), bytes("")
+            );
         _expectWithdrawRevert(publicValues, hex"01020304");
         _assertEq(verifier.latestFinalizedHeight(), 10, "committee mismatch checkpoint unchanged");
         _assertEq(token.balanceOf(RECIPIENT), 0, "committee mismatch recipient unchanged");
+    }
+
+    function testProvedCommitteeChangeMustStartAtStoredCommitteeRoot() public {
+        bytes memory wrongStart = _publicValuesWithCommittee(
+            address(vault), true, 11, _h48(0x44), _h32(0x98), _h48(0x42), _h48(0x40)
+        );
+        _expectWithdrawRevert(wrongStart, hex"01020304");
+
+        bytes memory provedTransition = _publicValuesWithCommittee(
+            address(vault), true, 11, _h48(0x44), _h32(0x99), _h48(0x42), _h48(0x41)
+        );
+        vault.withdrawWithProof(provedTransition, hex"01020304");
+        _assertEq(
+            verifier.latestCommitteeRootCommitment(),
+            keccak256(_h48(0x42)),
+            "proved transition advances committee root"
+        );
     }
 
     function testWrongProofProgramVersionFailsBeforeSP1AndMutation() public {
@@ -174,7 +193,13 @@ contract PFUSDCTier4Test {
         bytes memory nullifier
     ) private view returns (bytes memory out) {
         return _publicValuesWithCommittee(
-            vaultAddress, accepted, finalizedHeight, resultingCheckpoint, nullifier, _h48(0x41)
+            vaultAddress,
+            accepted,
+            finalizedHeight,
+            resultingCheckpoint,
+            nullifier,
+            _h48(0x41),
+            bytes("")
         );
     }
 
@@ -184,7 +209,8 @@ contract PFUSDCTier4Test {
         uint64 finalizedHeight,
         bytes memory resultingCheckpoint,
         bytes memory nullifier,
-        bytes memory committeeRoot
+        bytes memory committeeRoot,
+        bytes memory transitionStartRoot
     ) private view returns (bytes memory out) {
         out = abi.encodePacked("PFTL-PFUSDC-TIER4", uint32(SCHEMA.length), SCHEMA);
         out = bytes.concat(out, _field(1, SCHEMA));
@@ -198,7 +224,7 @@ contract PFUSDCTier4Test {
         out = bytes.concat(out, _field(9, resultingCheckpoint));
         out = bytes.concat(out, _field(10, abi.encodePacked(uint64(1))));
         out = bytes.concat(out, _field(11, committeeRoot));
-        out = bytes.concat(out, _field(12, bytes("")));
+        out = bytes.concat(out, _field(12, transitionStartRoot));
         out = bytes.concat(out, _field(13, abi.encodePacked(finalizedHeight)));
         out = bytes.concat(out, _field(14, abi.encodePacked(uint64(0))));
         out = bytes.concat(out, _field(15, resultingCheckpoint));

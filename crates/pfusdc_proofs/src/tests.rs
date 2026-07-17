@@ -1,15 +1,20 @@
+use postfiat_consensus_cobalt::{
+    certify_validator_registry_update, CobaltDomain, EssentialSubsetConfig,
+    ValidatorRegistryUpdateRequest, VALIDATOR_REGISTRY_OP_ROTATE_KEY,
+};
 use postfiat_crypto_provider::{
     bytes_to_hex, ml_dsa_65_keygen_from_seed, ml_dsa_65_sign_with_context, MlDsa65KeyPair,
 };
 use postfiat_ordering_fast::{
-    certify_consensus_v2_votes, consensus_v2_block_ref_with_bridge_exit_root, consensus_v2_domain,
+    certify_consensus_v2_votes, consensus_v2_block_ref,
+    consensus_v2_block_ref_with_bridge_exit_root, consensus_v2_domain,
     consensus_v2_proposal_signing_bytes, consensus_v2_vote_signing_bytes, leader_for_view,
     ConsensusV2Validator, ConsensusV2ValidatorSet, CONSENSUS_V2_PROPOSAL_CONTEXT,
     CONSENSUS_V2_VOTE_CONTEXT,
 };
 use postfiat_types::*;
 
-use super::verify_egress_witness_v1;
+use super::{registry_root, registry_update_authorization_signing_bytes, verify_egress_witness_v1};
 
 fn committee() -> (ConsensusV2ValidatorSet, Vec<MlDsa65KeyPair>) {
     let keys = (0..6)
@@ -105,6 +110,99 @@ fn signed_votes(
             vote
         })
         .collect()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn signed_block_record(
+    domain: &ConsensusV2Domain,
+    validators: &ConsensusV2ValidatorSet,
+    keys: &[MlDsa65KeyPair],
+    height: u64,
+    parent: String,
+    payload_hash: String,
+    state_root: String,
+    bridge_exit_root: Option<String>,
+    batch_kind: &str,
+    batch_id: String,
+    receipt_ids: Vec<String>,
+) -> BlockRecord {
+    let block_ref = match bridge_exit_root.clone() {
+        Some(root) => consensus_v2_block_ref_with_bridge_exit_root(
+            domain,
+            height,
+            parent,
+            payload_hash,
+            state_root,
+            root,
+        ),
+        None => consensus_v2_block_ref(domain, height, parent, payload_hash, state_root),
+    }
+    .expect("block ref");
+    let round = ConsensusV2Round { height, view: 0 };
+    let proposal = signed_proposal(domain, validators, keys, round, block_ref.clone());
+    let prepare_qc = certify_consensus_v2_votes(
+        domain,
+        validators,
+        round,
+        ConsensusV2Phase::Prepare,
+        Some(block_ref.clone()),
+        signed_votes(
+            domain,
+            validators,
+            keys,
+            round,
+            ConsensusV2Phase::Prepare,
+            &block_ref,
+        ),
+    )
+    .expect("prepare QC");
+    let precommit_qc = certify_consensus_v2_votes(
+        domain,
+        validators,
+        round,
+        ConsensusV2Phase::Precommit,
+        Some(block_ref.clone()),
+        signed_votes(
+            domain,
+            validators,
+            keys,
+            round,
+            ConsensusV2Phase::Precommit,
+            &block_ref,
+        ),
+    )
+    .expect("precommit QC");
+    BlockRecord {
+        header: BlockHeader {
+            height,
+            view: 0,
+            parent_hash: block_ref.parent_block_id.clone(),
+            proposer: proposal.proposer.clone(),
+            batch_kind: batch_kind.to_string(),
+            batch_id,
+            state_root: block_ref.state_root.clone(),
+            bridge_exit_root,
+            receipt_count: receipt_ids.len() as u64,
+            certificate_id: "dd".repeat(48),
+            certificate: BlockCertificate {
+                validators: Vec::new(),
+                quorum: 0,
+                registry_root: String::new(),
+                votes: Vec::new(),
+            },
+            consensus_v2_commit: Some(ConsensusV2Commit {
+                schema: CONSENSUS_V2_COMMIT_SCHEMA.to_string(),
+                proposal,
+                prior_qcs: Vec::new(),
+                timeout_certificate: None,
+                prepare_qc,
+                precommit_qc,
+            }),
+            block_hash: block_ref.block_id,
+        },
+        receipt_ids,
+        fastpay_pre_state_effects: Vec::new(),
+    }
 }
 
 fn route_profile() -> VaultBridgeRouteProfileRecordV1 {
@@ -289,6 +387,7 @@ fn fixture() -> PfUsdcEgressProofWitnessV1 {
         protocol_version,
         bridge_exit_root_activation_height: 1,
         prior_checkpoint_block_id: block_ref.parent_block_id,
+        finality_ancestry: Vec::new(),
         route_profile: route_profile(),
         block,
         receipt: Receipt::accepted(packet.burn_tx_id.clone(), "accepted burn"),
@@ -346,4 +445,263 @@ fn exact_finalized_egress_witness_accepts_and_binds_every_boundary() {
         .votes
         .pop();
     assert!(verify_egress_witness_v1(&under_quorum).is_err());
+}
+
+#[test]
+fn bounded_finality_ancestry_advances_over_unrelated_blocks() {
+    let mut witness = fixture();
+    let (validators, keys) = committee();
+    let domain = consensus_v2_domain(
+        witness.chain_id.clone(),
+        witness.genesis_hash.clone(),
+        witness.protocol_version,
+        witness.committee_epoch,
+        &validators,
+    );
+    let prior = "99".repeat(48);
+    let intermediate = signed_block_record(
+        &domain,
+        &validators,
+        &keys,
+        9,
+        prior.clone(),
+        "91".repeat(48),
+        "92".repeat(48),
+        None,
+        "transactions",
+        "93".repeat(48),
+        Vec::new(),
+    );
+    let old_commit = witness
+        .block
+        .header
+        .consensus_v2_commit
+        .as_ref()
+        .expect("target commit");
+    let target = signed_block_record(
+        &domain,
+        &validators,
+        &keys,
+        10,
+        intermediate.header.block_hash.clone(),
+        old_commit.proposal.block.payload_hash.clone(),
+        witness.block.header.state_root.clone(),
+        witness.block.header.bridge_exit_root.clone(),
+        &witness.block.header.batch_kind,
+        witness.block.header.batch_id.clone(),
+        witness.block.receipt_ids.clone(),
+    );
+    witness.prior_checkpoint_block_id = prior;
+    witness.finality_ancestry = vec![PfUsdcEgressFinalityStepV1 {
+        block: intermediate,
+        committee_epoch: witness.committee_epoch,
+        committee: witness.committee.clone(),
+        governance_payload_json: String::new(),
+        next_committee: Vec::new(),
+        next_committee_epoch: 0,
+    }];
+    witness.block = target;
+    verify_egress_witness_v1(&witness).expect("contiguous ancestry");
+
+    witness.finality_ancestry[0].block.header.parent_hash = "98".repeat(48);
+    assert!(verify_egress_witness_v1(&witness).is_err());
+}
+
+#[test]
+fn finalized_governance_block_proves_committee_rotation() {
+    let mut witness = fixture();
+    let (old_set, old_keys) = committee();
+    let mut new_keys = (0..6)
+        .map(|index| ml_dsa_65_keygen_from_seed(&[index as u8 + 1; 32]))
+        .collect::<Vec<_>>();
+    new_keys[5] = ml_dsa_65_keygen_from_seed(&[99; 32]);
+    let new_set = ConsensusV2ValidatorSet::try_new(
+        new_keys
+            .iter()
+            .enumerate()
+            .map(|(index, key)| ConsensusV2Validator {
+                validator_id: format!("validator-{index}"),
+                public_key_hex: bytes_to_hex(&key.public_key),
+            })
+            .collect(),
+    )
+    .expect("rotated committee");
+    let old_committee = old_set
+        .validators
+        .iter()
+        .map(|validator| ValidatorRegistryEntry {
+            node_id: validator.validator_id.clone(),
+            algorithm_id: postfiat_crypto_provider::ML_DSA_65_ALGORITHM.to_string(),
+            public_key_hex: validator.public_key_hex.clone(),
+            active: true,
+        })
+        .collect::<Vec<_>>();
+    let new_committee = new_set
+        .validators
+        .iter()
+        .map(|validator| ValidatorRegistryEntry {
+            node_id: validator.validator_id.clone(),
+            algorithm_id: postfiat_crypto_provider::ML_DSA_65_ALGORITHM.to_string(),
+            public_key_hex: validator.public_key_hex.clone(),
+            active: true,
+        })
+        .collect::<Vec<_>>();
+    let old_ids = old_set.validator_ids();
+    let new_ids = new_set.validator_ids();
+    let previous_root = registry_root(&old_committee, &old_ids).expect("old registry root");
+    let new_root = registry_root(&new_committee, &new_ids).expect("new registry root");
+    let cobalt_domain = CobaltDomain {
+        chain_id: witness.chain_id.clone(),
+        genesis_hash: witness.genesis_hash.clone(),
+        protocol_version: witness.protocol_version,
+    };
+    let mut update = certify_validator_registry_update(
+        &cobalt_domain,
+        &EssentialSubsetConfig {
+            validators: old_ids.clone(),
+            quorum: old_set.quorum,
+        },
+        ValidatorRegistryUpdateRequest {
+            activation_height: 9,
+            previous_registry_root: previous_root.clone(),
+            new_registry_root: new_root,
+            previous_trust_graph_root: None,
+            new_trust_graph_root: None,
+            trust_graph_transition_id: None,
+            previous_validators: old_ids.clone(),
+            new_validators: new_ids,
+            operation: VALIDATOR_REGISTRY_OP_ROTATE_KEY.to_string(),
+            subject_node_id: "validator-5".to_string(),
+            previous_record: Some(old_committee[5].clone()),
+            new_record: Some(new_committee[5].clone()),
+        },
+        old_ids.clone(),
+    )
+    .expect("certified registry update");
+    update.signed_authorizations = update
+        .votes
+        .iter()
+        .map(|vote| {
+            let index = old_set
+                .validators
+                .iter()
+                .position(|validator| validator.validator_id == vote.validator)
+                .expect("authorization signer");
+            let mut authorization = SignedGovernanceAuthorizationV2 {
+                schema: SIGNED_GOVERNANCE_AUTHORIZATION_SCHEMA_V2.to_string(),
+                validator: vote.validator.clone(),
+                vote_id: vote.vote_id.clone(),
+                old_registry_root: previous_root.clone(),
+                committee_epoch: 7,
+                proposal_slot: 9,
+                expires_at_height: 10,
+                algorithm_id: postfiat_crypto_provider::ML_DSA_65_ALGORITHM.to_string(),
+                signature_hex: String::new(),
+            };
+            let message = registry_update_authorization_signing_bytes(&update, &authorization)
+                .expect("authorization bytes");
+            authorization.signature_hex = bytes_to_hex(
+                &ml_dsa_65_sign_with_context(
+                    &old_keys[index].private_key,
+                    &message,
+                    b"postfiat-l1-v2/governance-authorization/v2",
+                )
+                .expect("authorization signature"),
+            );
+            authorization
+        })
+        .collect();
+    let batch = GovernanceActionBatch::with_registry_updates(
+        "tier4-committee-rotation",
+        Vec::new(),
+        vec![update],
+    );
+    let payload_json = serde_json::to_string(&batch).expect("governance payload");
+    let payload_preimage = serde_json::to_vec(&(
+        witness.chain_id.as_str(),
+        witness.genesis_hash.as_str(),
+        witness.protocol_version,
+        "governance",
+        batch.batch_id.as_str(),
+        payload_json.as_str(),
+    ))
+    .expect("payload preimage");
+    let payload_hash =
+        postfiat_crypto_provider::hash_hex("postfiat.batch_archive_payload.v1", &payload_preimage);
+    let old_domain = consensus_v2_domain(
+        witness.chain_id.clone(),
+        witness.genesis_hash.clone(),
+        witness.protocol_version,
+        7,
+        &old_set,
+    );
+    let prior = "99".repeat(48);
+    let governance_block = signed_block_record(
+        &old_domain,
+        &old_set,
+        &old_keys,
+        9,
+        prior.clone(),
+        payload_hash,
+        "92".repeat(48),
+        None,
+        "governance",
+        batch.batch_id,
+        Vec::new(),
+    );
+    let old_target_commit = witness
+        .block
+        .header
+        .consensus_v2_commit
+        .as_ref()
+        .expect("target commit");
+    let new_domain = consensus_v2_domain(
+        witness.chain_id.clone(),
+        witness.genesis_hash.clone(),
+        witness.protocol_version,
+        8,
+        &new_set,
+    );
+    witness.block = signed_block_record(
+        &new_domain,
+        &new_set,
+        &new_keys,
+        10,
+        governance_block.header.block_hash.clone(),
+        old_target_commit.proposal.block.payload_hash.clone(),
+        witness.block.header.state_root.clone(),
+        witness.block.header.bridge_exit_root.clone(),
+        &witness.block.header.batch_kind,
+        witness.block.header.batch_id.clone(),
+        witness.block.receipt_ids.clone(),
+    );
+    witness.prior_checkpoint_block_id = prior;
+    witness.committee_epoch = 8;
+    witness.committee = new_committee.clone();
+    witness.finality_ancestry = vec![PfUsdcEgressFinalityStepV1 {
+        block: governance_block,
+        committee_epoch: 7,
+        committee: old_committee,
+        governance_payload_json: payload_json,
+        next_committee: new_committee,
+        next_committee_epoch: 8,
+    }];
+    let values = verify_egress_witness_v1(&witness).expect("proved committee rotation");
+    assert_eq!(values.committee_root, new_set.committee_root);
+    assert_eq!(
+        values.committee_transition_commitment,
+        old_set.committee_root
+    );
+    if let Ok(path) = std::env::var("PFUSDC_EGRESS_FIXTURE_OUT") {
+        std::fs::write(
+            path,
+            serde_json::to_vec_pretty(&witness).expect("serialize rotation fixture"),
+        )
+        .expect("write rotation fixture");
+    }
+
+    witness.finality_ancestry[0]
+        .governance_payload_json
+        .push(' ');
+    assert!(verify_egress_witness_v1(&witness).is_err());
 }
