@@ -50,7 +50,7 @@ the repository, or reset the shared devnet.
 | P1 FastPay response replay | Closed in `77e4a3c7`; bounded durable replay survives loss/restart/compaction/conflict | None for source publication | complete |
 | Candidate freeze | Final closure tree is committed and identified in the external acceptance manifest | No source edits after freeze | complete |
 | Complete candidate battery | Exact-tree complete workspace, release Orchard, FastSwap, atomic swap, Anvil, wallet/proxy, Foundry, docs, dependency and scanner gates pass | Real-value-only gates remain separately classified | complete |
-| Publication staging | Exact one-commit public staging, second clone and GitHub clone have intended refs and zero current/history secret findings | None | complete |
+| Publication staging | Exact one-commit staging, second clone and initial GitHub clone have intended refs and zero current/history secret findings | None | complete |
 | Provider credential record | Provider owner confirmed destruction; private mode-0600 record passes the verifier | None | complete |
 | Closure reconciliation | All 35 rows name real commits/evidence/residual risk; every unchecked checklist item is classified | None internally actionable | complete |
 
@@ -241,7 +241,8 @@ The exact commit, tree, toolchains, command results, log hashes, SBOM hash,
 artifact hashes, intended refs, file count and both staging-clone locations are
 sealed in the release-owner
 `open_source_publication_candidate_20260717/ACCEPTANCE.json` manifest outside
-the public tree. The sanitized one-commit history is published at
+the public tree. The published history is rooted in that sanitized one-commit
+export and is available at
 `https://github.com/postfiatorg/postfiatl1v2`; the contaminated development
 history remains private under a separately named archive repository.
 

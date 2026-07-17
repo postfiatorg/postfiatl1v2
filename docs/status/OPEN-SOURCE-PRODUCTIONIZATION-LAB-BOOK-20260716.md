@@ -3979,9 +3979,12 @@ revocation/decommission action; that external P0 checkbox remains open.
 - `scripts/verify-publication-candidate` passed on the RC10 export, its second
   clone, and a fresh clone fetched from GitHub.
 - The previous multi-branch repository was renamed and retained as a private
-  archive. A fresh public `postfiatorg/postfiatl1v2` repository contains only
-  `main`, one root commit, exact reviewed tree
-  `42866efd2777002281439660bef790361ab703af`, and 1,624 tracked files.
-- The GitHub clone has zero tracked-tree or reachable-history secret findings.
-  `P0-SECRET-01` and the source-publication phase are closed; real-value launch
-  gates remain separately open and unchanged.
+  archive. Initial publication created `postfiatorg/postfiatl1v2` with only
+  `main`, one sanitized root commit, exact reviewed tree
+  `42866efd2777002281439660bef790361ab703af`, and 1,624 tracked files. Closure
+  documentation was then appended without importing private Git objects.
+- The initial GitHub clone had zero tracked-tree or reachable-history findings.
+  Dependabot subsequently created update branches from sanitized `main`; a new
+  all-reachable-history scan covering those refs also passed with zero findings.
+  `P0-SECRET-01` and source publication are closed; real-value launch gates are
+  separately open and unchanged.

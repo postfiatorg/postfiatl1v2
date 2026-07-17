@@ -586,7 +586,7 @@ STEP 1 exit gate:
 - [x] Obtain the private provider-owner record and close `P0-SECRET-01`; all 35
   P0/P1 rows are closed with no waiver or ownerless item.
 - [x] Freeze the exact code/staging candidate after all internally actionable
-  STEP 2 gates; publish only the verified one-commit sanitized history.
+  STEP 2 gates; publish only history rooted in the verified sanitized export.
 
 ## Exit criteria
 
