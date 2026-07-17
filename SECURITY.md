@@ -34,8 +34,8 @@ not be treated as externally audited production infrastructure.
 
 | Adversary | Capability | Mitigation |
 | --- | --- | --- |
-| Byzantine validator | Up to `f=floor((n-1)/3)` of the active set can equivocate, withhold proposals, or stop voting | Distinct-voter BFT certificates and a durable one-vote-per-height lock protect the current view-zero direct-commit path; nonzero views fail closed |
-| Network adversary | Can delay, reorder, replay, or drop messages between validators | Domain-bound signatures and replay checks protect safety; loss of the deterministic proposer or quorum halts progress because automated view change is not enabled |
+| Byzantine validator | Up to `f=floor((n-1)/3)` of the active set can equivocate, withhold proposals, or stop voting | Distinct-voter certificates and persist-before-sign safety state protect both versioned modes: legacy direct-certificate finality and activated consensus v2 prepare/precommit finality |
+| Network adversary | Can delay, reorder, replay, or drop messages between validators | Domain-bound signatures and replay checks protect safety; activated consensus v2 advances views only with signed timeout certificates, while loss of the normal quorum still halts progress |
 | Post-quantum adversary | Targets long-lived authorization signatures | ML-DSA-65 (FIPS 204) protects implemented account and validator authorization; no SLH-DSA recovery-key path is currently implemented |
 | Privacy adversary | Observes public chain data, mempool, and network metadata | Orchard/Halo2 shielded settlement with nullifier set; privacy floor calibration; RPC resource limits |
 
@@ -57,7 +57,13 @@ not be treated as externally audited production infrastructure.
 - The FastPay owned-object lane exposes only signed, state-validated mutation
   methods under normal RPC startup. Operators may disable it during an incident
   with `--disable-owned-lane`; unsafe unsigned wrap/unwrap methods remain absent.
-  Safe cancellation of abandoned locks remains an open protocol requirement.
+  Versioned ordered recovery confirms or cancels abandoned locks and permanently
+  fences the prior object version. External deployment/operations evidence for
+  that recovery path remains a real-value gate.
+- FastSwap's dual-owner Confirm-or-Cancel protocol is implemented and has local
+  six-process safety, conservation, catch-up, and restart evidence. Source
+  availability is not a claim that a public or real-value network has activated
+  the lane.
 - Public RPC requires an authenticated TLS edge; the node rejects public and
   wildcard plaintext binds.
 - This policy is not an external audit report or a mainnet-readiness claim.

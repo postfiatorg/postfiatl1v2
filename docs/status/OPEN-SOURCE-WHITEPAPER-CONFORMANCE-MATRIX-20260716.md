@@ -8,11 +8,12 @@
 > The detailed tables below preserve what the audit found at the discovery
 > baseline and the action each mismatch required. Phrases such as “pending” or
 > “implement” in those tables are historical finding text, not the current
-> blocker register. The authoritative final state is 34 fixed-candidate rows and
-> one external source-publication blocker: `P0-SECRET-01`'s private
-> provider-owner revocation/decommission record. Independent specialist review,
-> HSM deployment and multi-region production drills are real-value launch gates,
-> not prerequisites to make the source repository public.
+> blocker register. The authoritative final state is 34 fixed-candidate rows;
+> `P0-SECRET-01` closed after provider-owner destruction confirmation, a private
+> mode-0600 record, sanitized-history publication, and fresh-clone/full-ref
+> scanning. Independent specialist review, HSM deployment and multi-region
+> production drills are real-value launch gates, not prerequisites to make the
+> source repository public.
 
 The repository contains several older papers and business/research documents. For this review, only `docs/whitepaper.md` is treated as the candidate protocol whitepaper because it labels itself Version 3 and describes the current Rust system. That choice is not silent: all competing canonical-looking papers must receive an archived/superseded banner before publication.
 

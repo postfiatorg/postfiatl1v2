@@ -1,12 +1,15 @@
 # Validator Registry
 
-The validator registry is governed state. It is not an informal side channel.
+The validator registry is governed state. Live changes require distinct
+ML-DSA-65 authorizations from the active old-rule registry and consensus
+ordering; unsigned legacy support lists have historical-replay authority only.
 
 ## Responsibilities
 
 - bind validator identities to protocol keys;
 - track validator registry roots;
-- support registry transitions through Cobalt;
+- support old-rule-authorized registry transitions while keeping Cobalt
+  ratification as a separately bounded target;
 - reject stale membership artifacts after activation;
 - make governance history replayable.
 
@@ -15,10 +18,14 @@ The validator registry is governed state. It is not an informal side channel.
 Validator changes must be:
 
 1. proposed as governance state;
-2. checked against trust graph requirements;
-3. ratified through Cobalt mechanics;
-4. activated at a valid height;
+2. bound to the chain, current registry/epoch, operation, proposal slot,
+   activation height, expiry, and complete payload;
+3. authorized by the required distinct keys from the old registry;
+4. ordered by consensus and activated at a valid height;
 5. replayable from ordered lifecycle records.
+
+Cobalt trust-graph and transition checks describe the stronger target
+ratification path. They do not replace the implemented signature boundary.
 
 ## Validator Lifecycle
 
@@ -28,10 +35,8 @@ flowchart TD
   Launch --> Admission[Admission<br/>evidence packet<br/>deterministic selector<br/>admit, hold, or reject]
   Admission -->|admit| Active[Active operation<br/>propose blocks<br/>vote on certificates<br/>serve read RPC<br/>retain configured history]
   Admission -->|hold or reject| Pending[Pending or rejected<br/>no quorum weight]
-  Active --> Suspension[Availability suspension<br/>missed signing or health failure<br/>time-bounded and evidence-backed]
-  Suspension -->|auto-expire or remediate| Active
-  Suspension -->|permanent action| Removal[Removal<br/>Cobalt transition<br/>old rules validate new registry]
-  Active --> KeyRotation[Key rotation<br/>stage new key<br/>bind old and new key evidence<br/>Cobalt registry update]
+  Active --> Removal[Removal<br/>signed old-rule transition<br/>old rules validate new registry]
+  Active --> KeyRotation[Key rotation<br/>stage new key<br/>bind old and new key evidence<br/>signed registry update]
   KeyRotation --> Active
   Removal --> Removed[Removed from registry<br/>excluded from quorum arithmetic]
 ```
@@ -82,6 +87,9 @@ The controlled-testnet v1 floors are:
 Missing or stale required evidence holds. Conflicting required evidence holds.
 Values below floors or above caps reject. Unknown model-cited fields hold. Only
 a clean pass emits an `add` registry-delta candidate.
+
+That candidate is decision support, not authority. It changes registry state
+only after the old-rule authorization and consensus-admission checks above.
 
 The fixture report is generated with:
 

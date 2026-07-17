@@ -1,7 +1,8 @@
 # Public Launch Boundary
 
-The current network is a controlled-testnet implementation. That is the right
-engineering phase for proving protocol behavior and operator runbooks.
+The source repository is public. The current network posture remains a
+controlled-testnet implementation; publication does not promote the software to
+mainnet or authorize real-value custody.
 
 ## Controlled-Testnet Facts
 
@@ -22,6 +23,11 @@ Public launch adds:
 - external privacy and implementation review;
 - custodian/exchange workflows;
 - public benchmark packets for throughput claims.
+
+Production HSM/remote signing, transactional indexed storage, independent
+specialist review, and deployment-specific recovery/fault drills also remain
+real-value requirements. They are not reasons to conceal or disable the
+implemented source.
 
 ## How To Talk About It
 

@@ -107,6 +107,7 @@ nav:
   - Architecture:
       - Overview: architecture/overview.md
       - Transaction Lifecycle: architecture/transaction-lifecycle.md
+      - Settlement Lanes: architecture/settlement-lanes.md
       - State And Storage: architecture/state-and-storage.md
       - Finality: architecture/finality.md
       - Evidence Model: architecture/evidence-model.md
@@ -115,13 +116,11 @@ nav:
       - Cobalt Implementation: governance/cobalt-implementation.md
       - Cobalt Transition Safety Proof: governance/cobalt-transition-safety-proof.md
       - Verifiable Constitution: governance/verifiable-constitution.md
-      - Verifiable Constitution Plan: governance/verifiable-constitution-plan.md
       - Validator Registry: governance/validator-registry.md
       - Validator Admission Bin Policy: governance/validator-admission-bin-policy.md
       - Validator Evidence Packet Schema: governance/validator-evidence-packet-schema.md
       - Validator Evidence Field Registry: governance/validator-evidence-field-registry.md
       - Deterministic Governance Overview: governance/deterministic-governance-overview.md
-      - Deterministic Governance Agent Plan: governance/deterministic-governance-agent-plan.md
   - Privacy:
       - Overview: privacy/overview.md
       - Orchard/Halo2: privacy/orchard-halo2.md
@@ -136,10 +135,6 @@ nav:
       - Floor Calibration: privacy/floor-calibration.md
       - Longitudinal Linkage: privacy/longitudinal-linkage.md
       - RPC And Resource Policy: privacy/rpc-and-resource-policy.md
-  - Plans:
-      - Proper Private NAV Swap: plans/proper-private-nav-swap-plan.md
-      - Private Egress Consensus Performance: plans/private-egress-consensus-performance-plan.md
-      - Transaction Improvement Process: plans/transaction-improvement-process.md
   - Quantum Authorization:
       - Authorization: quantum/authorization.md
       - Signature Size And Certificates: quantum/signature-size-and-certificates.md

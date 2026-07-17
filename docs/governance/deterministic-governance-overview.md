@@ -1,15 +1,22 @@
 # Deterministic Governance Overview
 
-Status: plain-English overview of the Cobalt plus DGA governance lane.
+Status: target-design overview of the Cobalt plus DGA governance lane.
 Date: 2026-05-23
+
+> **Current authority boundary (July 2026):** model/DGA and Cobalt artifacts are
+> decision support and research. Live registry mutation requires distinct
+> ML-DSA-65 authorizations from the active old-rule registry over the complete
+> action, followed by consensus ordering. The target pipeline below cannot
+> bypass that boundary.
 
 PostFiat governance is trying to make qualitative validator judgment
 deterministic, reviewable, and replayable.
 
 The short version:
 
-- Cobalt is the protocol mechanism for changing validator trust and registry
-  state.
+- Cobalt is the target ratification mechanism for changing validator trust and
+  registry state; it is not the live authorization oracle in this source
+  candidate.
 - The Deterministic Governance Agent, or DGA, is the model-generated policy
   pipeline that can eventually propose bounded validator-governance actions.
 - Qwen/SGLang deterministic inference, currently `Qwen/Qwen3.6-27B-FP8`,
@@ -20,8 +27,8 @@ The short version:
 - The model never directly changes chain state.
 - Every important object is hashed, verified, and moved through Cobalt-facing
   gates before it can matter.
-- Foundation authority remains in place right now. Validator-side authority
-  transfer is not live.
+- Live authority is the active validator registry's signed old-rule governance
+  path. Model-assisted/Cobalt-ratified authority transfer is not live.
 
 The design assumption is adversarial. Validator metadata, operator manifests,
 public URLs, topology labels, provider outputs, automation state, and replay
@@ -79,7 +86,7 @@ There are two different systems being connected.
 
 | System | What It Does | What It Does Not Do |
 | --- | --- | --- |
-| Cobalt governance | Orders and ratifies trust graph and validator-registry transitions. | Decide qualitative validator policy by itself. |
+| Cobalt governance target | Orders and ratifies trust graph and validator-registry transitions after activation of that profile. | Supply current live authority or decide qualitative validator policy by itself. |
 | DGA | Generates and verifies deterministic governance policy from governed inputs. | Directly mutate the validator registry. |
 
 The important boundary is that DGA output is only evidence and policy until

@@ -19,6 +19,8 @@ accident.
 
 | Area | Report | What It Proves |
 | --- | --- | --- |
+| FastSwap local release | `docs/specs/fastswap-v1-local-release-manifest-20260715.json` | Hash-bound local six-validator release manifest; the accompanying implementation record labels local latency separately from WAN claims. |
+| FastPay recovery | `docs/specs/fastpay-payment-recovery-v1.md` | Ordered consume-or-cancel protocol, durable apply/replay boundary, and recovery verification contract. |
 | Controlled testnet | `reports/testnet-controlled-launch-evidence-pack/head-56db87a-optimized-latency/testnet-controlled-launch-evidence-pack.json` | Controlled transparent launch evidence pack for the optimized finality path. |
 | Performance methodology | `reports/performance-methodology-policy/20260529T024012Z/performance-methodology-policy-report.json` | Artifact-bound labels for whitepaper performance claims, including local-only latency boundaries and unsupported-throughput rejection. |
 | Finality | `reports/testnet-tx-finality-latency-benchmark/local-gate-20round-20260514T142731Z/testnet-tx-finality-latency-benchmark.json` | Local 5-validator finality p50/p95/p99 evidence after the latency work. |

@@ -1,12 +1,24 @@
 # PostFiat L1 Open-Source Productionization Review Checklist
 
-> **Execution status:** This is an active repository-wide code triage and remediation program, not a documentation-editing exercise. STEP 1 means inspecting the code, history, dependencies, runtime surfaces, and tests to complete the evidence-backed triage. STEP 2 means implementing and testing every required P0/P1 fix in the codebase. Editing this document is only recordkeeping for that work and is not progress by itself.
+> **Execution status (closed 2026-07-17):** This was the controlling
+> repository-wide code triage and remediation program, not a
+> documentation-editing exercise. STEP 1 and STEP 2 are complete, all internal
+> P0/P1 rows are closed with evidence, and the reviewed tree was published
+> through a sanitized Git history. The remaining production custody, storage,
+> external review, and multi-region gates apply to real-value launch, not source
+> publication.
 
 **Date:** 2026-07-16  
 **Repository:** `postfiatl1v2`  
-**Purpose:** define the complete, local-only review and remediation program required before this repository is made public or represented as production-ready.
+**Purpose:** preserve the complete review and remediation program applied before
+the repository was made public, while keeping production-readiness claims
+separate.
 
 ## Non-negotiable publication rule
+
+> **Completion outcome:** The rules below describe the gate that was applied.
+> They are not a statement that the current sanitized public repository remains
+> blocked. Source publication is complete; production/mainnet readiness is not.
 
 This repository is **not ready to be made public merely because the review is written**. The review and the remediation are two separate deliverables. Both must be completed against the same audited baseline before publication:
 

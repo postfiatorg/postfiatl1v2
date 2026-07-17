@@ -1,6 +1,7 @@
 # Cobalt Governance
 
-Cobalt is the governance layer for validator trust evolution.
+Cobalt supplies trust-graph checks and agreement research for validator trust
+evolution. It is not the current node's live governance authorization oracle.
 
 In XRP-style systems, the hard question is not only how validators order a
 payment. It is how the network changes who it trusts. PostFiat uses the Cobalt
@@ -11,9 +12,11 @@ and replayable.
 
 Validators can hold local trust views. A trust graph is acceptable only if the
 views overlap enough through essential subsets and thresholds. If a proposed
-graph is unsafe, it fails before activation. Valid governance amendments move
-through reliable broadcast, agreement, and democratic atomic broadcast mechanics
-so the network has an ordered governance history.
+graph is unsafe, it fails before activation. The target Cobalt design moves
+valid amendments through reliable broadcast, agreement, and democratic atomic
+broadcast mechanics. The implemented live boundary is narrower: a governance
+batch must carry distinct ML-DSA-65 authorizations from the active old-rule
+registry and then enter ordinary consensus ordering.
 
 ## Why This Exists
 
@@ -23,15 +26,16 @@ be part of the protocol evidence trail.
 
 ## What PostFiat Runs
 
-PostFiat separates ordinary transaction ordering from Cobalt governance:
+PostFiat separates live authority from Cobalt research:
 
-- ordinary transactions use the fast certified ordering path;
-- Cobalt ratifies validator registry updates, trust graph transitions,
-  amendments, and rollback/supersession records.
+- ordinary transactions and signed governance batches use certified ordering;
+- the active old-rule registry authorizes live amendments and validator updates;
+- Cobalt mechanics validate and exercise a stronger future trust-evolution
+  design without silently acquiring live authority.
 
 ## Current State
 
-The controlled-testnet Cobalt mechanics are built:
+The controlled Cobalt mechanics are built:
 
 - non-identical trust views;
 - essential subsets with `t_S` and `q_S`;
@@ -46,14 +50,14 @@ The controlled-testnet Cobalt mechanics are built:
 - adversarial packets;
 - controlled-readiness gate.
 
-Current controlled evidence uses seven logical validators under
-project-controlled infrastructure. Strict public topology evidence is a public
-launch requirement, not a controlled-testnet code blocker.
+The live signed-governance path separately covers complete action binding,
+distinct old-registry authorization, delayed activation, registry rotation,
+rollback, restart, and replay tests. It does not make the stronger Cobalt
+ratification claim. Current controlled Cobalt evidence uses project-controlled
+logical validators; strict public topology evidence is a public-launch
+requirement, not a source-publication blocker.
 
 ## Read Next
 
 - [Cobalt Implementation](cobalt-implementation.md)
-- Cobalt Adversarial Testing
 - [Validator Registry](validator-registry.md)
-- [Deterministic Governance Agent Plan](deterministic-governance-agent-plan.md)
-- Governance Agent Burndown

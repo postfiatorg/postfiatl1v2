@@ -1,7 +1,7 @@
 # RPC Methods
 
-This page is the hosted summary. The source inventory is
-`docs/runbooks/rpc-method-inventory.md`.
+This page is the hosted summary. The complete code-derived authorization
+inventory is [RPC Method Inventory](../runbooks/rpc-method-inventory.md).
 
 ## Core Read Methods
 
@@ -44,13 +44,13 @@ This page is the hosted summary. The source inventory is
 | `account_nfts` | NFTs by account. |
 | `issuer_nfts` | NFTs by issuer and optional collection. |
 | `offer_info` | DEX offer lookup. |
+| `account_offers` | Offers by owner. |
+| `book_offers` | Offers in a deterministic book pair. |
 
 `navcoin_bridge_routes` route rows expose the bridge `handoff_controller` and
 the `settlement_adapter` separately. Wallets must not treat either as the
 Uniswap router/path; those execution fields are bound by the route config and
 launch config digests.
-| `account_offers` | Offers by owner. |
-| `book_offers` | Offers in a deterministic book pair. |
 
 ## Controlled Write Methods
 
@@ -68,18 +68,58 @@ launch config digests.
 | `offer_fee_quote` | Quote DEX offer create or cancel. |
 | `mempool_submit_signed_offer_transaction` | Submit signed DEX offer transaction. |
 | `atomic_settlement_template` | Build reciprocal escrow-leg templates for atomic swaps. |
+| `atomic_swap_fee_quote` | Quote a W6 dual-authorized atomic swap against the exact parent state. |
+| `mempool_submit_signed_atomic_swap_transaction` | Submit a signed W6 atomic swap when the controlled signed-submit surface is enabled. |
+| `mempool_submit_signed_atomic_swap_transaction_finality` | Submit and return certificate/receipt finality for a signed W6 atomic swap. Success still requires an accepted receipt code. |
+| `mempool_submit_fastlane_primary` | Submit a source-signed, sequence-bound FastLane deposit or an ordered FastPay recovery action when the controlled signed-submit surface is enabled. |
+| `mempool_submit_fastlane_primary_finality` | Submit the same FastLane primary transaction through the finality-returning path. |
 
 ## FastPay Wallet Methods
 
 | Method | Purpose |
 | --- | --- |
 | `owned_objects` | Read FastPay owned objects for an owner public key. Wallet-owned-object lookups use a 2048 object limit so fragmented wallets can still build standard unwraps. |
-| `wrap_owned` | Move account-lane PFT into a FastPay owned object. |
-| `owned_sign` | Validator vote after owner-authenticated FastPay transfer admission; `order_json` is the complete signed envelope, not a bare order. |
-| `owned_apply` | Finalize a quorum-certified FastPay owned-transfer certificate. The wallet proxy durably journals the 5-of-6 certificate, requires one validator to cryptographically validate and durably apply it, then returns `certificate_final=true` while its recoverable outbox replicates to the remaining validators. This changes apply latency, not the certificate threshold. |
-| `owned_unwrap_sign` | Validator vote for a signed FastPay unwrap order. |
-| `owned_unwrap_apply` | Finalize a quorum-certified FastPay unwrap certificate through the same durable certificate/outbox path. Standard unwrap is amount-based, can consume multiple input objects up to the 2048 input cap, and returns change as a FastPay object. |
+| `owned_recovery_capabilities` | Read the active v3 recovery domain, committee, and bounded validity/reveal windows. |
+| `owned_certificate` | Retrieve a persisted complete certificate by digest or lock ID for permissionless recovery. |
+| `owned_recovery_status` | Read ordered recovery state for a lock ID. |
+| `owned_sign_v3` | Persist-before-sign validator vote for a v3 owner-authorized transfer envelope with a derived lock and recovery window. |
+| `owned_apply_v3` | Apply a v3 transfer certificate and return authenticated durable acknowledgements. The wallet requires a cryptographic quorum of acknowledgements before reporting product finality. |
+| `owned_unwrap_sign_v3` | Persist-before-sign validator vote for a v3 signed amount-based unwrap. |
+| `owned_unwrap_apply_v3` | Apply a v3 unwrap certificate with the same quorum-acknowledgement rule. Multiple inputs and one change object are supported up to the protocol cap. |
+| `owned_sign`, `owned_apply` | Versioned legacy signed/certified transfer compatibility below the governed v3 activation boundary. |
+| `owned_unwrap_sign`, `owned_unwrap_apply` | Versioned legacy signed/certified unwrap compatibility below the governed v3 activation boundary. |
+| `wrap_owned` | Disabled unsafe compatibility path. FastPay funding uses a source-signed `mempool_submit_fastlane_primary` deposit committed by consensus. |
 | `unwrap_owned` | Disabled compatibility path. Public wallet flows must use signed/certified unwrap instead. |
+
+## FastSwap Methods
+
+FastSwap mutations are public protocol messages, not general state-write RPCs.
+Each request is authorized by the signed intent, phase certificate, policy
+command, or committee vote that the method verifies.
+
+| Method | Purpose |
+| --- | --- |
+| `fastswap_capabilities` | Read supported FastSwap protocol/wire capabilities. |
+| `fastswap_preview` | Validate a signed intent without reserving or mutating objects. |
+| `fastswap_prepare` | Validate the dual-owner intent, atomically reserve all inputs, and return a persisted prepare vote. |
+| `fastswap_commit` | Verify a LockQC and return the validator's durable decision vote. |
+| `fastswap_apply` | Verify the confirmed DecisionQC and apply both conserved effects atomically. |
+| `fastswap_catch_up` | Idempotently repair a replica from verified intent/certificate evidence. |
+| `fastswap_status` | Read terminal or in-progress swap state. |
+| `fastswap_effects` | Read certified terminal effects. |
+| `fastswap_votes` | Retrieve persisted phase votes for recovery/relaying. |
+| `fastswap_new_round_vote` | Vote to advance a stuck decision round. |
+| `fastswap_propose_round` | Propose the Confirm-or-Cancel value for a recovery round. |
+| `fastswap_precommit` | Persist and vote for a valid recovery-round proposal. |
+| `fastswap_commit_round` | Commit a verified recovery-round precommit QC. |
+| `fastswap_cancel_apply` | Apply a certified terminal Cancel decision without moving either leg. |
+| `fastswap_checkpoint_status` | Read checkpoint/drain state. |
+| `fastswap_objects` | Read FastSwap objects by owner and optional asset/object key. |
+| `fastswap_policy` | Read active or selected policy snapshots. |
+
+FastLane primary deposit/exit/checkpoint/control methods connect owned-object
+reserves to the consensus ledger. Their exact posture is listed in the generated
+inventory rather than duplicated here.
 
 ## Method Classification
 
@@ -90,7 +130,7 @@ launch config digests.
 
 ## Source Anchors
 
-- `docs/runbooks/rpc-method-inventory.md`
+- [RPC Method Inventory](../runbooks/rpc-method-inventory.md)
 - `crates/rpc_sdk/src/lib.rs`
 - `crates/node/src/rpc_cli.rs`
 - `reports/testnet-rpc-method-inventory/`

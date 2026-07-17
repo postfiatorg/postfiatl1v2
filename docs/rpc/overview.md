@@ -12,6 +12,8 @@ operator-risk assumptions.
 | Controlled write path | Bounded operator-approved transaction submission for live evidence and wallet tests. |
 | Local request-file path | Local node command path for building batches from prepared request files. |
 | Privacy batch creation | Opt-in bounded Orchard batch creation with rate and concurrency limits. |
+| Owned lane | Opt-in FastPay sign/apply methods for owner-authorized payments and unwraps. |
+| Authenticated protocol mutation | FastSwap/FastLane messages that are remotely reachable by default but authorize themselves with owner signatures, policy commands, or quorum certificates. They are not unauthenticated writes. |
 
 ## Write And Read Paths
 
@@ -40,12 +42,31 @@ flowchart TD
   Apply --> Receipts
 ```
 
+FastPay and FastSwap do not travel through this exact block-critical path for
+every phase. Their prefunded object certificates and recovery boundaries are
+documented in [Settlement Lanes](../architecture/settlement-lanes.md).
+
+## Success and exposure rules
+
+- A block certificate proves ordering/finality; it does not prove transaction
+  success. Clients must check the matching receipt's accepted status and code.
+- FastPay success requires the signed envelope, valid distinct-validator
+  certificate, and the configured durable apply acknowledgements.
+- FastSwap success requires the dual-owner intent and terminal Confirm effects
+  certificate; read/status convergence is audit and catch-up evidence.
+- Public or wildcard plaintext binds are rejected. Browser-facing deployments
+  use a loopback node plus an authenticated TLS edge.
+- Gated signed-submission, Orchard, and owned-lane methods remain disabled unless
+  the operator enables their exact flag. The code-derived inventory fails when
+  a new method has no explicit posture.
+
 ## Current Tooling
 
 - `crates/node/src/rpc_cli.rs`
 - `crates/rpc_sdk/src/lib.rs`
 - `scripts/testnet-rpc-doctor`
 - `scripts/testnet-rpc-method-inventory`
+- `scripts/test-rpc-method-inventory`
 - `scripts/postfiat-rpc-account-tx`
 - `python/postfiat_rpc/client.py`
 

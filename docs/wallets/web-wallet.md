@@ -157,11 +157,15 @@ requires the finality submit capability.
 | `account_offers` | `account` | Read. |
 | `asset_info` | `asset_id` | Read. |
 | `owned_objects` | `owner_public_key_hex`, optional `asset`, `limit` | Read. |
-| `owned_sign` | `order_json`, `validator_id` | Write-style validator vote; `order_json` must be the complete owner-authorized envelope (`order`, `owner_pubkey_hex`, `owner_signature_hex`), never a bare order. |
-| `owned_apply` | `cert_json` | Write-style FastPay certificate apply. |
-| `owned_unwrap_sign` | `order_json`, `validator_id` | Write-style validator vote for signed FastPay unwrap orders. |
-| `owned_unwrap_apply` | `cert_json` | Write-style FastPay unwrap certificate apply. |
-| `wrap_owned` | `from_address`, `owner_pubkey_hex`, `amount`, `asset` | Write. |
+| `owned_recovery_capabilities` | none | Read active v3 FastPay committee/domain/windows. |
+| `owned_certificate` | `certificate_digest` or `lock_id` | Read persisted recovery evidence. |
+| `owned_recovery_status` | `lock_id` | Read ordered recovery state. |
+| `owned_sign_v3` | `order_json`, `validator_id` | Persist-before-sign vote for a complete v3 owner-authorized transfer envelope. |
+| `owned_apply_v3` | `cert_json` | Apply a v3 transfer certificate and return authenticated durable acknowledgements. |
+| `owned_unwrap_sign_v3` | `order_json`, `validator_id` | Persist-before-sign vote for a complete v3 signed unwrap envelope. |
+| `owned_unwrap_apply_v3` | `cert_json` | Apply a v3 unwrap certificate and return authenticated durable acknowledgements. |
+| `mempool_submit_fastlane_primary` | `fastlane_primary_json` | Controlled signed submit for source-signed FastPay deposits and ordered recovery actions. |
+| `wrap_owned` | legacy parameters | Disabled unsafe compatibility path; the wallet does not call it. |
 | `unwrap_owned` | `object_id`, `owner_pubkey_hex`, `to_address` | Disabled compatibility path; default wallet unwrap must not call this. |
 | `fee` | none | Read. |
 | `transfer_fee_quote` | `from`, `to`, `amount`, optional `sequence`, `memo_type`, `memo_format`, `memo_data` | Read quote. Memo params must be included before signing v2 payments so fees include memo bytes. |
@@ -200,7 +204,7 @@ The Send tab has three lanes:
 | Lane | Flow |
 | --- | --- |
 | Account PFT | Validate recipient and amount, encode optional memos, call `transfer_fee_quote`, show review, sign with WASM, submit, then poll `receipts`. Non-memo payments use v1 signing and finality submit; memo payments use payment v2. |
-| FastPay | Load `owned_objects`, select one object that covers amount plus fee, sign an owned-transfer order with WASM, submit the complete signed envelope to `owned_sign`, collect distinct validator votes, assemble a 5-of-6 certificate, and finalize it with `owned_apply`. The proxy durably records the certificate before reporting finality and continues exact-six apply in its recoverable background outbox. |
+| FastPay | Load `owned_objects` and `owned_recovery_capabilities`, select inputs, derive the v3 lock/recovery window, sign the complete order with WASM, collect distinct votes through `owned_sign_v3`, assemble the quorum certificate, and submit it through `owned_apply_v3`. The wallet verifies a cryptographic quorum of authenticated durable apply acknowledgements before reporting finality; unknown/sub-quorum outcomes enter ordered recovery instead of being shown as success. |
 | Issued asset | Build an `issued_payment` operation, quote with `asset_fee_quote`, sign with `wallet_sign_asset_transaction_fields`, submit with `mempool_submit_signed_asset_transaction`, then poll `receipts`. |
 
 The Swap tab supports three route modes. The transparent route builds an issued
@@ -209,22 +213,35 @@ The private route runs a 12-step companion-server flow through
 `SwapServer.action()` and `SwapServer.getNav()` for bridge, shielded, and NAV
 steps. The OTC route currently surfaces a quote request action in the UI.
 
-## FastPay Wrapping
+## FastPay Funding
 
-Wrapping moves account PFT into FastPay owned objects. Both Wallet and Send use
-the same recovery pattern:
+Funding moves account PFT into the FastPay reserve through an ordinary
+consensus transaction; the unsafe unsigned wrapping RPC is not used. Both
+Wallet and Send use the same source-signed flow:
 
-1. Fetch the pre-wrap owned-object snapshot with `owned_objects`.
-2. Call `wrap_owned(from_address, owner_pubkey_hex, amount, "PFT")`.
-3. Compute `pre_wrap_total + amount`.
-4. Poll `owned_objects` every 500 ms for up to 10 seconds.
-5. Treat the wrap as visible only when `total_value >= pre_wrap_total + amount`.
+1. Read `server_info`/`status` capabilities and the source account sequence.
+2. Build a chain/genesis/protocol-bound PFT deposit with source address/public
+   key, sequence, fee, destination owner key, expiry, and secure random nonce.
+3. Sign locally with `wallet_sign_owned_deposit`.
+4. Submit with `mempool_submit_fastlane_primary`.
+5. Require the matching consensus receipt to be accepted with code
+   `owned_deposit_applied`, then refresh `owned_objects`.
 
-The root cause fixed in Bug Set 2 is that `wrap_owned` can return before the
-validator read path has indexed the new owned object. The transaction may have
-succeeded while the immediate `owned_objects` read still shows the old balance.
-The post-wrap polling waits for the read path to catch up and avoids presenting
-a false zero or stale FastPay balance.
+This prevents a caller from debiting an arbitrary named account, makes the
+deposit deterministic across validators, and prevents a committed block with a
+rejected receipt from appearing as funded.
+
+## FastPay Address Activation
+
+FastPay orders address recipients by their published ML-DSA public key. A fresh
+account may have funds before its public key appears in account state. The
+wallet normally resolves this automatically after first funding by signing a
+one-atom self-transfer: the atom returns to the same account, only the quoted
+fee is burned, and the wallet requires an accepted receipt before reporting the
+key as published. The Wallet tab exposes a retry action if that automatic step
+was interrupted. No user is asked to paste private material; a sender may use a
+recipient's full public key directly only as an explicit alternative to address
+lookup.
 
 Owned-object snapshots and the live wallet feed request up to `2048` objects,
 matching the protocol input cap for standard unwrap. This prevents a
@@ -247,13 +264,16 @@ The current unwrap flow is:
 3. Build an `OwnedUnwrapOrder` containing input refs, account destination,
    requested amount, asset, fee, nonce, and memos.
 4. Sign the order with `wallet_sign_owned_unwrap` in WASM.
-5. Call `validators`, collect quorum votes with `owned_unwrap_sign`, assemble
-   an `OwnedUnwrapCertificate`, and submit it with `owned_unwrap_apply`.
-6. Certified apply credits exactly the requested amount to the account lane and
-   returns any remainder as one FastPay change object.
+5. Load v3 recovery capabilities, derive the lock ID/window, collect quorum
+   votes with `owned_unwrap_sign_v3`, assemble the certificate, and submit it
+   with `owned_unwrap_apply_v3`.
+6. Verify a cryptographic quorum of durable apply acknowledgements. Certified
+   apply credits exactly the requested amount to the account lane and returns
+   any remainder as one FastPay change object.
 
-On a six-validator devnet, FastPay unwrap succeeds at BFT quorum, `5/6`, not
-only at `6/6`.
+On a six-validator committee, product finality requires the configured BFT
+quorum (`5/6`) of valid acknowledgements; exact-six replication is an audit and
+repair target, not a reason to weaken the quorum proof.
 
 ## Memo Field Support
 
@@ -313,60 +333,3 @@ The payment v2 signing JSON uses chain fields from the quote plus a memo array:
   ]
 }
 ```
-
-## Root-Cause Findings And Deployment State
-
-Bug Set 1 fixed account balance error handling. The previous
-`setBalance(prev => prev ?? 0)` path could mask RPC failures as a real zero
-balance. The wallet now keeps explicit `rpcError` state, parses both
-`result.balance` and `result.account.balance`, and refetches when navigation
-makes Wallet or Send visible.
-
-Bug Set 2 fixed FastPay wrap refresh. `wrap_owned` can return before
-`owned_objects` exposes the newly created object, so the app now uses
-`pollOwnedObjectsTotal()` after wrap and waits for the expected total value.
-
-Bug Set 4 fixed standard FastPay unwrap and the fragmented-object UX. Public
-`unwrap_owned` fails closed; wallet and Python tooling use
-`owned_unwrap_sign` plus `owned_unwrap_apply`; unwrap is amount-based with
-automatic change; the wallet feed and owned-object refresh paths use the 2048
-object lookup cap.
-
-Bug Set 3 fixed missing memo support in the web wallet. The form now exposes
-memo fields, `transfer_fee_quote` forwards memo params, `TxBuilder` branches
-between v1 and payment v2 based on memo presence, and memo payments submit
-through `mempool_submit_signed_payment_v2`.
-
-The earlier live blocker evidence in
-`wallet-web/MEMO_E2E_BLOCKED_EVIDENCE.json` showed the web wallet building a
-valid memo payment v2 quote and signed payload, then receiving
-`rpc_method_not_allowed` for `mempool_submit_signed_payment_v2`. That evidence
-captures the pre-fix server-side gate, not the shipped deployment state.
-
-The historical WAN devnet evidence under
-`reports/testnet-provision-bundles/testnet-provision-bundle-20260617T014159Z/systemd/`
-used direct public RPC binds. That is archived evidence, not a supported
-production configuration. Current generated services bind `rpc-serve` to
-`127.0.0.1`; browsers reach it through an authenticated TLS edge. The edge may
-enable the narrowly scoped `--allow-mempool-submit-finality` service. The Rust RPC allowlist in
-`crates/node/src/rpc_cli.rs` also explicitly admits
-`mempool_submit_signed_payment_v2` when `allow_mempool_submit_finality` is true.
-That single flag unblocks both v1 non-memo sends through
-`mempool_submit_signed_transfer_finality` and v2 memo sends through
-`mempool_submit_signed_payment_v2`.
-
-Payment v2 remains classified as a generic signed method for parsing and
-routing, but `rpc_serve_method_allowed()` has a dedicated clause for
-`mempool_submit_signed_payment_v2` under `allow_mempool_submit_finality`. The
-finality flag alone is therefore sufficient for web-wallet native PFT sends
-with or without memos. The service files must not add broad
-`--allow-mempool-submit`, because that would expose arbitrary asset, escrow,
-NFT, and offer submission methods on the public RPC port.
-
-The 2026-06-29 WAN devnet redeploy installed node binary
-`4d124e34fa7549abd1042c1ec20166e125503a9017d4246d5404392afce0a6b0` on all
-six validators. That binary includes the signed `owned_unwrap_sign` /
-`owned_unwrap_apply` path, the 2048 owned-input protocol cap, and the matching
-`owned_objects` read cap needed by wallet refresh and the live feed. The strict
-post-deploy preflight is
-`reports/transaction-improvement/20260629T012710Z-fastpay-owned-objects-read-cap2048-deploy/post-deploy-preflight.json`.

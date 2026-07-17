@@ -1,10 +1,13 @@
 # Architecture Overview
 
-PostFiat has three protocol planes:
+PostFiat has four protocol planes:
 
-1. transaction ordering for ordinary transfers and batches;
-2. Cobalt governance for validator trust evolution and amendments;
-3. privacy execution for Orchard/Halo2 shielded value.
+1. consensus ordering for account, issued-asset, W6 atomic-swap, governance,
+   bridge, and shielded batches;
+2. prefunded object-certificate lanes for FastPay and FastSwap;
+3. signed old-rule governance for live validator and protocol mutation, with
+   Cobalt mechanics kept as a separate research/transition-validation layer;
+4. privacy execution for Orchard/Halo2 shielded value.
 
 ```mermaid
 flowchart LR
@@ -15,9 +18,14 @@ flowchart LR
   Execution --> Storage[State, blocks, receipts]
   Storage --> ReadRPC[Read RPC]
 
-  GovInput[Governance amendment] --> Cobalt[Cobalt governance]
-  Cobalt --> Registry[Validator registry and trust graph]
+  GovInput[Signed governance amendment] --> OldRule[Old-rule authorization check]
+  OldRule --> Registry[Validator registry and protocol state]
   Registry --> Ordering
+  Cobalt[Cobalt trust / agreement research] -. transition analysis .-> OldRule
+
+  FastWallet[FastPay / FastSwap wallet] --> ObjectLane[Prefunded object certificate lanes]
+  ObjectLane --> Primary[FastLane deposits, exits, checkpoints]
+  Primary --> Ordering
 
   PrivacyWallet[Orchard wallet] --> PrivacyBatch[Shielded batch]
   PrivacyBatch --> Ordering
@@ -32,7 +40,8 @@ flowchart LR
 | `crates/crypto_provider` | Signing and verification. |
 | `crates/execution` | State transition. |
 | `crates/ordering_fast` | Certified ordering path. |
-| `crates/consensus_cobalt` | Governance consensus mechanics. |
+| `crates/consensus_cobalt` | Cobalt trust-graph and agreement research mechanics. |
+| `crates/fastpay-prototype` | FastPay safety and recovery models. |
 | `crates/privacy_orchard` | Orchard/Halo2 proof adapter. |
 | `crates/storage` | Persistent state and snapshots. |
 | `crates/node` | Node orchestration, CLI, RPC, wallet flows. |
@@ -133,3 +142,8 @@ flowchart TD
 - Privacy claims must be tied to the real Orchard/Halo2 path, not debug proof
   scaffolding.
 - Operator evidence must be machine-readable.
+
+The lanes deliberately do not share one success rule. A consensus transaction
+needs a valid block certificate and an accepted receipt code. FastPay and
+FastSwap additionally require their lane-specific signed intent, certificate,
+and durability rules. See [Settlement Lanes](settlement-lanes.md).

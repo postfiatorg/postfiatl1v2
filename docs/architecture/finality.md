@@ -56,11 +56,33 @@ The production transport uses these same types and store calls from
 `crates/ordering_fast`; the ordering crate is no longer merely a disconnected
 reference model for activated consensus v2.
 
-Because existing network genesis is immutable and signed protocol governance is
-not yet enabled, an existing single-view network cannot silently activate v2.
-Its safe migration is a planned reset/new genesis, with the old history frozen
-and replayed independently. New v2 networks may choose an activation height at
-genesis and replay the legacy prefix followed by v2 blocks.
+An existing single-view network cannot silently rewrite genesis to activate v2.
+The current governance path can authorize typed future activation state only
+through distinct ML-DSA-65 authorizations from the active old-rule registry;
+every node must still run a release that understands the same irreversible
+boundary. A network without such a committed boundary requires a coordinated
+new genesis/reset, with the old history frozen and independently replayable.
+New networks may choose an activation height at genesis and replay the legacy
+prefix followed by v2 blocks.
+
+## Certificate lanes are not block consensus
+
+FastPay and FastSwap use quorum certificates over prefunded owned objects. They
+do not make an account transaction final without consensus and they do not
+change the block commit rule above:
+
+- FastPay is a single-owner payment/unwrap lane. Product finality requires the
+  owner-authorized order, a distinct-validator certificate, and the configured
+  durable apply-acknowledgement rule. Ordered recovery confirms or cancels an
+  expired lock and permanently fences the old object version.
+- FastSwap is a dual-owner DvP lane. It uses durable reservation plus separate
+  prepare/decision/effects certificates. Exactly one Confirm-or-Cancel decision
+  may become terminal; Confirm applies both conserved legs or neither.
+- Primary-ledger deposits, exits, checkpoints, governance controls, and recovery
+  decisions still enter the consensus-ordered ledger where the protocol calls
+  for them.
+
+The detailed boundary is in [Settlement Lanes](settlement-lanes.md).
 
 ## Client finality
 
@@ -77,4 +99,7 @@ out-of-band audit path.
 - `crates/node/src/consensus_v2_finality.rs`
 - `crates/node/src/consensus_v2_store.rs`
 - `crates/ordering_fast/src/consensus_v2.rs`
+- `crates/execution/src/owned_transfer_recovery.rs`
+- `crates/node/src/fastswap_service.rs`
+- `crates/storage/src/fastswap_store.rs`
 - `crates/node/src/tests/consensus_history.rs`

@@ -2,7 +2,7 @@
 
 ### Governed trust evolution, shielded settlement, replayable machine classification, and post-quantum authorization
 
-**Whitepaper, Version 3 — June 2026**
+**Whitepaper, Version 3 — June 2026; implementation boundary reconciled July 2026**
 
 **Canonical protocol-document candidate.** This is the only repository document
 intended to describe the protocol. It remains a controlled pre-testnet
@@ -15,20 +15,20 @@ implementation boundaries in this document and by `SECURITY.md`.
 
 PostFiat is a Layer 1 settlement-ledger design in the XRP category — known
 validators, deterministic certificate finality, fixed native supply, fee burn,
-and no native validator rewards — with a target architecture for signed Cobalt
-trust evolution, Asset-Orchard privacy, replayable governance evidence, and
-post-quantum account/validator authorization. The repository implements some of
-that target and deliberately disables other parts where the authorization or
-recovery story does not yet close.
+and no native validator rewards — with implemented old-rule-signed governance,
+Asset-Orchard privacy, post-quantum account/validator authorization, and a
+target architecture for Cobalt-ratified trust evolution and replayable machine
+classification. The repository implements multiple consensus and
+certificate-settlement lanes while keeping deployment and real-value claims
+separate from source availability.
 
-> **Current implementation boundary (July 2026):** Section 6 describes the
-> target signed Cobalt-governance protocol, not an enabled live transition
-> path. The repository's legacy amendment and validator-update evidence names
-> supporters but does not carry registry-verifiable signatures. The production
-> candidate therefore rejects those artifacts at live proposal admission and
-> direct apply, while retaining explicit historical replay and offline analysis.
-> The active registry is fixed at genesis until the signed authorization
-> protocol is implemented and its adversarial gates pass.
+> **Current implementation boundary (July 2026):** Live governance is enabled
+> only through distinct ML-DSA-65 authorizations from the active old-rule
+> registry over the complete chain/registry/epoch/slot/expiry-bound action.
+> Unsigned legacy amendment and validator-update artifacts remain
+> historical-replay-only. Section 6's full Cobalt-ratified transition protocol
+> is a stronger target: the Cobalt RBC/ABBA research types do not replace or
+> bypass the implemented old-rule signature boundary.
 
 > **Privacy boundary:** Asset-Orchard is the supported private settlement path.
 > The legacy cleartext note decoder is historical replay only, and transparent
@@ -111,18 +111,19 @@ operator artifacts are excluded and must be reproducibly rebuildable.
 
 The native unit has a fixed supply set at genesis. There is no issuance of any kind. All transaction fees are burned, so supply is monotonically non-increasing. Fee classes price bytes, signature verifications, shielded actions, and registry operations as distinct resources rather than through a single gas scalar, and fee burn is the only protocol-level economic flow: no validator rewards, no foundation tax, no fee redistribution.
 
-Live transactions include transparent payments, issued-asset operations,
-escrows, NFTs, offers, NAV and vault-bridge operations, dual-authorized atomic
-swaps, FastLane primary operations, and Asset-Orchard actions. Signed Cobalt
-registry/parameter transitions and receipt-aggregate ordering accountability are
-target protocols, not enabled live classes in this candidate. Asset-Orchard notes
-carry asset and value inside commitments so supported issued assets can settle
-under per-asset public turnstile accounting.
+Live transaction families include transparent payments, issued-asset
+operations, escrows, NFTs, offers, NAV and vault-bridge operations,
+dual-authorized atomic swaps, FastLane primary operations, Asset-Orchard
+actions, and old-rule-authorized governance batches. Full Cobalt-ratified
+registry transitions and receipt-aggregate ordering accountability remain
+target protocols rather than alternate live authority paths. Asset-Orchard
+notes carry asset and value inside commitments so supported issued assets can
+settle under per-asset public turnstile accounting.
 
 Every block is verified under exactly one active registry root and commits one
-ordered transition across all replicated domains. The current registry is fixed
-at genesis; any future signed transition must preserve the one-root-per-height
-property described in §6 and §7.
+ordered transition across all replicated domains. An authorized registry
+transition is validated by the old registry, commits at one ordered boundary,
+and preserves the one-root-per-height property described in §6 and §7.
 
 New networks activate the complete replicated-state-v2 commitment at genesis,
 including every FastLane reserve, receipt, authorization, policy, committee,
@@ -142,8 +143,11 @@ omits `consensus_v2_activation_height`, the legacy single-view direct-certificat
 rule remains in force and every nonzero view fails closed. A network configured
 with an activation height uses that legacy rule below the height and consensus
 v2 at and above it. Existing networks cannot silently rewrite genesis to enable
-v2; until signed protocol governance exists, that migration requires a new
-genesis/reset with the old chain retained as independently replayable history.
+v2. A typed future activation may be committed only through the signed old-rule
+governance path and still requires every node to run a release that understands
+the same irreversible boundary. A network without that committed boundary
+requires a new genesis/reset with the old chain retained as independently
+replayable history.
 
 In consensus v2, for $n$ active validators the fault bound is
 $f=\lfloor(n-1)/3\rfloor$ and the quorum is
@@ -199,10 +203,10 @@ to a proposer. No stronger accountability claim is made for this release.
 The live protocol has no automatic Negative-UNL-style missed-round suspension,
 expiry, or reduced-quorum state machine. If a validator is unavailable, the
 current committee either still forms the normal quorum or the chain halts.
-The current candidate cannot change validator status live: unsigned legacy
-registry transitions fail closed, and the active registry remains fixed at
-genesis. A future signed transition under §6 is not an automatic liveness
-shortcut and must not retroactively alter certificate thresholds.
+The current candidate can change validator state only through an authorized,
+ordered old-rule transition. It has no automatic Negative-UNL-style suspension
+shortcut: a signed registry change is an explicit governance action and must
+not retroactively alter certificate thresholds.
 
 ---
 
@@ -273,10 +277,12 @@ assumption explicit, auditable, and frozen.
 
 ---
 
-## 6. Target Cobalt-Governed Registry Evolution
+## 6. Cobalt-Governed Registry Evolution Target
 
-This section is a protocol specification, not a description of an enabled live
-mutation path. The current fail-closed boundary is stated in the Abstract.
+This section specifies the stronger Cobalt-ratified transition target. The live
+mutation path described in the Abstract uses old-rule ML-DSA authorization and
+ordinary consensus ordering; it does not claim that the Cobalt RBC/ABBA
+research pipeline is already its authority source.
 
 ### 6.1 From recommended lists to protocol state
 
@@ -465,14 +471,22 @@ After replay convergence, the deterministic selector computes
 
 $$\Gamma = S(policy_t, G_t, E, A),$$
 
-where $S$ is total, hash-bound code with no model calls and no network access. The Cobalt proposal carries the full commitment tuple
+where $S$ is total, hash-bound code with no model calls and no network access.
+In the target pipeline, the Cobalt proposal carries the full commitment tuple
 
 $$(h(P),\ h(E),\ h(Q),\ h(M),\ h(V_Q),\ h(A),\ h(S),\ h(\Gamma),\ C_R),$$
 
-and only a valid Cobalt transition changes protocol state. The live-effect boundary is therefore a one-way pipe:
+The implemented live path treats that output only as candidate evidence. It can
+change state only when a complete governance action receives the required
+old-rule ML-DSA authorizations and is ordered by consensus. The current and
+target authority paths are therefore explicit and must not be conflated:
 
 ```
-model classification -> replay certificate -> deterministic selector -> Cobalt transition
+current: model classification -> candidate evidence
+  -> old-rule-authorized governance action -> consensus ordering
+
+target: model classification -> replay certificate -> deterministic selector
+  -> Cobalt-ratified transition
 ```
 
 By the least-machinery principle, the model is justified only where it handles conflicts a score table would punt to a private committee; where a static rule is equally good, the static rule is mandatory. Schema validation, signature checks, root matching, unknown-field rejection, stale-evidence rejection, concentration caps, churn limits, and Cobalt certificate validation are all exact predicates in code and never depend on model judgment.
