@@ -920,16 +920,18 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
         ));
     }
     let proof_public_values = ensure_vault_bridge_deposit_source_proof(
-        Some(genesis),
-        profile,
-        &operation.evidence,
-        &expected_root,
-        &operation.policy_hash,
-        &operation.source_proof_kind,
-        &operation.source_proof_hash,
-        &operation.source_public_values_hash,
-        &operation.source_proof_bytes,
-        &operation.source_public_values,
+        VaultBridgeDepositSourceProof {
+            genesis: Some(genesis),
+            profile,
+            evidence: &operation.evidence,
+            evidence_root: &expected_root,
+            policy_hash: &operation.policy_hash,
+            source_proof_kind: &operation.source_proof_kind,
+            source_proof_hash: &operation.source_proof_hash,
+            source_public_values_hash: &operation.source_public_values_hash,
+            source_proof_bytes: &operation.source_proof_bytes,
+            source_public_values: &operation.source_public_values,
+        },
     )?;
     if let Some(public_values) = proof_public_values {
         let state = ledger
@@ -1547,18 +1549,18 @@ fn apply_vault_bridge_deposit_finalize_with_compatibility(
         &record.policy_hash,
     )?;
     ensure_vault_bridge_source_policy(profile, &record.evidence.source_domain(), &record.policy_hash)?;
-    ensure_vault_bridge_deposit_source_proof(
-        None,
+    ensure_vault_bridge_deposit_source_proof(VaultBridgeDepositSourceProof {
+        genesis: None,
         profile,
-        &record.evidence,
-        &record.evidence_root,
-        &record.policy_hash,
-        &record.source_proof_kind,
-        &record.source_proof_hash,
-        &record.source_public_values_hash,
-        &[],
-        &[],
-    )?;
+        evidence: &record.evidence,
+        evidence_root: &record.evidence_root,
+        policy_hash: &record.policy_hash,
+        source_proof_kind: &record.source_proof_kind,
+        source_proof_hash: &record.source_proof_hash,
+        source_public_values_hash: &record.source_public_values_hash,
+        source_proof_bytes: &[],
+        source_public_values: &[],
+    })?;
     match profile.verifier_kind.as_str() {
         NAV_PROFILE_VERIFIER_MULTI_FETCH => {
             let fail_count = record
@@ -4409,21 +4411,37 @@ fn apply_vault_bridge_bucket_impair(
     Ok(())
 }
 
+struct VaultBridgeDepositSourceProof<'a> {
+    genesis: Option<&'a Genesis>,
+    profile: &'a NavProofProfile,
+    evidence: &'a VaultBridgeDepositEvidence,
+    evidence_root: &'a str,
+    policy_hash: &'a str,
+    source_proof_kind: &'a str,
+    source_proof_hash: &'a str,
+    source_public_values_hash: &'a str,
+    source_proof_bytes: &'a [u8],
+    source_public_values: &'a [u8],
+}
+
 fn ensure_vault_bridge_deposit_source_proof(
-    genesis: Option<&Genesis>,
-    profile: &NavProofProfile,
-    evidence: &VaultBridgeDepositEvidence,
-    evidence_root: &str,
-    policy_hash: &str,
-    source_proof_kind: &str,
-    source_proof_hash: &str,
-    source_public_values_hash: &str,
-    source_proof_bytes: &[u8],
-    source_public_values: &[u8],
+    proof: VaultBridgeDepositSourceProof<'_>,
 ) -> Result<
     Option<postfiat_types::PfUsdcIngressPublicValuesV1>,
     (&'static str, String),
 > {
+    let VaultBridgeDepositSourceProof {
+        genesis,
+        profile,
+        evidence,
+        evidence_root,
+        policy_hash,
+        source_proof_kind,
+        source_proof_hash,
+        source_public_values_hash,
+        source_proof_bytes,
+        source_public_values,
+    } = proof;
     match profile.verifier_kind.as_str() {
         NAV_PROFILE_VERIFIER_MULTI_FETCH => {
             if !source_proof_kind.is_empty()
