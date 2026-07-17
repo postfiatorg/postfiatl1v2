@@ -15,7 +15,7 @@ default = []
 asset-orchard-vk-dev-env = []
 
 [dependencies]
-chacha20poly1305 = "0.10"
+chacha20poly1305 = "0.11"
 ff = "0.13"
 group = "0.13"
 halo2_poseidon = { package = "halo2_poseidon", version = "0.1" }
