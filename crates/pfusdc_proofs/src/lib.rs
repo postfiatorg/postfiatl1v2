@@ -73,6 +73,7 @@ pub fn verify_egress_witness_v1(
         || committed_block.parent_block_id != header.parent_hash
         || committed_block.state_root != header.state_root
         || committed_block.bridge_exit_root.as_ref() != Some(bridge_exit_root)
+        || committed_block.block_id != header.block_hash
         || committed_block.block_id != commit.proposal.block.block_id
         || commit.proposal.round.height != header.height
         || commit.proposal.round.view != header.view
@@ -200,3 +201,6 @@ pub fn verify_egress_witness_v1(
     public_values.validate()?;
     Ok(public_values)
 }
+
+#[cfg(test)]
+mod tests;
