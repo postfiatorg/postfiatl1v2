@@ -1662,7 +1662,7 @@ on the immutable candidate.
 - unmaintained `ansi_term 0.12.1`, `bincode 1.3.3`, and `proc-macro-error2 2.0.1`;
 - yanked `spin 0.9.8`.
 
-There is no root `deny.toml`, cargo-vet/supply-chain policy, SBOM gate, or immutable action pinning. The vendored `third_party/halo2_proofs` records upstream SHA `f6200adaa6ca064d8d2eaa6fcc5e2671232d7249`, but its local diff/provenance is not documented as a reviewed patch set.
+There is no root `deny.toml`, cargo-vet/supply-chain policy, SBOM gate, or immutable action pinning. The in-tree upstream `third_party/halo2_proofs` snapshot records SHA `f6200adaa6ca064d8d2eaa6fcc5e2671232d7249`, but at this audit baseline its local compatibility diff/provenance was not documented as a reviewed patch set.
 
 **Required closure:** upgrade/remove/replace each item or document a bounded non-reachable exception with expiry; add cargo-deny/vet and license/source policies; document and test the Halo2 patch; generate signed SBOM/provenance.
 
@@ -1693,7 +1693,7 @@ strict Clippy rather than a weaker unlocked subset.
 Docs CI uses `requirements-docs.txt`, regenerates the evidence index, runs
 redaction, verifies all local file/media/anchor targets across 256 Markdown
 documents, and builds strict. Product-security CI runs current-tree secret
-scanning, cargo-deny, vendored Halo2 verification, deterministic SBOM,
+scanning, cargo-deny, pinned upstream Halo2 source-and-patch verification, deterministic SBOM,
 wallet/proxy audits and tests, offline Forge, a negative missing-RPC fork test,
 and a separately secret-backed real fork test. It also installs the Python test
 toolchain from a hash-locked requirements file and runs all 139 SDK/operations
@@ -1792,17 +1792,20 @@ templates, CONTRIBUTING, SECURITY, and the release process are present. SBOM
 generation is deterministic; signed artifact reproduction remains a release
 ceremony gate rather than an absent policy.
 
-### P1-LICENSE-01 — vendored Halo2 source lacks a self-contained license/provenance package
+### P1-LICENSE-01 — in-tree upstream Halo2 source lacked a self-contained license/provenance package
 
 **Status:** fixed locally.
 
 The workspace overrides crates.io with `third_party/halo2_proofs` through the root
-`[patch.crates-io]` section. Its package metadata declares `MIT OR Apache-2.0` and
-records upstream commit `f6200adaa6ca064d8d2eaa6fcc5e2671232d7249`, but the
-vendored directory contains no `LICENSE-MIT`, `LICENSE-APACHE`, `LICENSE`, or
-`NOTICE` file. The root PostFiat license cannot silently substitute for the
-upstream copyright/license materials, and there is no checked-in patch manifest
-showing exactly how the vendored tree differs from upstream.
+`[patch.crates-io]` section. This is an in-tree snapshot of upstream Zcash
+`halo2_proofs 0.3.2` with a bounded compatibility patch, not a PostFiat
+reimplementation of Halo2. At the audit baseline its package metadata declared
+`MIT OR Apache-2.0` and recorded upstream commit
+`f6200adaa6ca064d8d2eaa6fcc5e2671232d7249`, but the directory contained no
+`LICENSE-MIT`, `LICENSE-APACHE`, `LICENSE`, or `NOTICE` file. The root PostFiat
+license could not substitute for upstream copyright/license materials, and the
+baseline had no checked-in patch manifest showing exactly how the retained tree
+differed from upstream.
 
 **Required closure:** add the exact upstream license and attribution files; record
 the upstream repository and commit; produce a reproducible normalized diff and
@@ -1817,6 +1820,12 @@ files are vendored with pinned hashes. `PROVENANCE.md` fixes upstream commit
 patch SHA-256 `d51e2e6e...`. `scripts/verify-vendored-halo2` clones or accepts an
 exact upstream checkout, fails on inventory/license/patch drift, and passes.
 Cargo-deny and the SBOM include the vendored component.
+
+The retained upstream implementation is not a new proof-system construction.
+The local compatibility patch is 361 normalized lines and does not intentionally
+change the proving algorithm, verifier equations, transcript, fields, curves, or
+proof encoding. PostFiat circuits, public-input bindings, and that compatibility
+boundary remain subject to specialist review before real-value use.
 
 ### P1-OPS-01 — production operations lack alerting, drills, and independent control planes
 

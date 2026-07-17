@@ -1,11 +1,13 @@
-# Vendored Halo2 provenance
+# Upstream Halo2 Source And Local Patch Provenance
 
-This directory vendors `halo2_proofs 0.3.2` from
+This directory retains the exact source of upstream `halo2_proofs 0.3.2` from
 <https://github.com/zcash/halo2> at immutable upstream commit
 `f6200adaa6ca064d8d2eaa6fcc5e2671232d7249` (`path_in_vcs`:
 `halo2_proofs`). The upstream license is `MIT OR Apache-2.0`; exact copies of
 the upstream `COPYING.md`, `LICENSE-MIT`, and `LICENSE-APACHE` are included in
-this directory.
+this directory. PostFiat does not reimplement the Halo2 proof system; Cargo uses
+this in-tree upstream snapshot so the bounded local compatibility patch below
+is explicit, reproducible, and reviewable.
 
 The local source patch is intentional and limited to:
 

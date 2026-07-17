@@ -1542,7 +1542,7 @@ private state filenames, without collapsing protocol rejection semantics.
   blobs); the largest is the 2,097,220-byte active Asset-Orchard parameter.
 - Wrote `OPEN-SOURCE-PUBLIC-ARTIFACT-DISPOSITION-20260716.md` with a keep/archive
   rationale for every class: SP1 verifier fixtures, active and replay-only
-  Orchard parameters/VKs, the sole retained Cobalt source PDF, vendored Halo2
+  Orchard parameters/VKs, the sole retained Cobalt source PDF, the in-tree upstream Halo2
   fixture, extension icons, and wallet WASM.
 - Added `scripts/test-public-artifact-policy`. It enumerates the exact tracked
   media set from Git, checks each SHA-256, rejects additions/removals, and proves

@@ -179,6 +179,7 @@ nav:
       - WAN Devnet Fleet Degradation: postmortems/wan-devnet-fleet-degradation-2026-06-25.md
   - Security:
       - Threat Model: security/threat-model.md
+      - Halo2 Dependency: security/halo2-dependency.md
       - Redaction Policy: security/redaction-policy.md
       - Public Launch Boundary: security/public-launch-boundary.md
       - Public History Publication: security/public-history-publication.md

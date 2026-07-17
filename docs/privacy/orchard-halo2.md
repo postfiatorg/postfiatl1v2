@@ -1,7 +1,14 @@
 # Orchard/Halo2
 
-The production privacy path uses Orchard/Halo2 verification through
-`crates/privacy_orchard`.
+The production privacy path uses the upstream Rust/Zcash Orchard and Halo2
+implementations through `crates/privacy_orchard`. PostFiat supplies the adapter,
+circuits, public-input bindings, state-transition checks, and wallet flow; it
+does not reimplement the Halo2 proof system.
+
+The workspace pins upstream `halo2_proofs 0.3.2` and retains its exact source
+in-tree with a narrow compatibility patch for release-pinned verifying-key
+assembly loading. See [Halo2 Dependency And Local Patch Boundary](../security/halo2-dependency.md)
+for the upstream commit, patch hash, changed boundary, and reproducible verifier.
 
 ## Adapter Role
 

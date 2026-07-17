@@ -382,7 +382,7 @@ This is the concrete improvement over recommended-list publication: the live que
 
 ### 7.1 Notes, not private balances
 
-Transparent ledgers reveal balances, counterparties, timing, inventory shifts, fund flows, liquidation levels, and strategy. For buy-side finance, market making, custody, treasury, and institutional settlement, that leakage has direct economic cost. The useful primitive is not a private account balance; it is a private spend of a note with public supply accounting, which is why PostFiat adopts Orchard/Halo2-style note semantics rather than account-level obfuscation.
+Transparent ledgers reveal balances, counterparties, timing, inventory shifts, fund flows, liquidation levels, and strategy. For buy-side finance, market making, custody, treasury, and institutional settlement, that leakage has direct economic cost. The useful primitive is not a private account balance; it is a private spend of a note with public supply accounting, which is why PostFiat adopts Orchard/Halo2-style note semantics rather than account-level obfuscation. The implementation uses the upstream Rust/Zcash Orchard and Halo2 libraries; PostFiat defines the chain adapter and application circuits rather than a new Halo2 proof system.
 
 A private Asset-Orchard spend exposes
 

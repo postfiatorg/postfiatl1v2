@@ -42,7 +42,7 @@ flowchart LR
 | `crates/ordering_fast` | Certified ordering path. |
 | `crates/consensus_cobalt` | Cobalt trust-graph and agreement research mechanics. |
 | `crates/fastpay-prototype` | FastPay safety and recovery models. |
-| `crates/privacy_orchard` | Orchard/Halo2 proof adapter. |
+| `crates/privacy_orchard` | PostFiat adapter over the upstream Rust/Zcash Orchard/Halo2 implementation. |
 | `crates/storage` | Persistent state and snapshots. |
 | `crates/node` | Node orchestration, CLI, RPC, wallet flows. |
 

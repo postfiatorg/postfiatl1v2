@@ -8,6 +8,14 @@ Repo: `postfiatl1v2`
 
 Do not migrate away from stock `halo2_proofs 0.3.2` in this sprint.
 
+**Current dependency note:** the proof-system backend selected by this decision
+has not changed. The repository now retains the exact upstream Zcash source at
+an immutable commit and carries a narrow compatibility patch for pinned
+verifying-key assembly loading. That patch does not intentionally change the
+proving algorithm, verifier equations, transcript, fields, curves, polynomial
+commitment scheme, or proof encoding. See
+[`Halo2 Dependency And Local Patch Boundary`](../security/halo2-dependency.md).
+
 The current dependency is already the Zcash/ECC Halo2 line used by Orchard:
 
 ```text

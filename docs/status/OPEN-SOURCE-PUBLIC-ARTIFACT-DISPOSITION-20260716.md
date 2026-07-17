@@ -17,7 +17,7 @@ are not accepted publication artifacts.
 | Active Asset-Orchard verifier keys | 2 | Keep because live verification loads these exact pinned assemblies and fails closed on drift. |
 | Historical Asset-Orchard verifier keys | 2 | Keep because authenticated archive replay needs the exact old circuit keys; they are explicitly under `artifacts/replay`, never selected for live actions. |
 | Cobalt research source PDF | 1 | Keep as the sole redistributed research PDF because its hash, source, license/retention rationale, and Markdown extraction are recorded. |
-| Vendored Halo2 upstream proof fixture | 1 | Keep as part of the hash-verified upstream test corpus and provenance package. |
+| In-tree upstream Halo2 proof fixture | 1 | Keep as part of the hash-verified upstream test corpus and provenance package; it accompanies the pinned upstream dependency and is not evidence of a PostFiat proof-system reimplementation. |
 | Extension icons | 3 | Keep as minimal public product assets. |
 | Wallet WASM | 2 paths / 1 blob | Keep in both package layouts so a source checkout builds the web wallet and extension without fetching opaque bytes. Both paths are byte-identical, Git stores one blob, the deterministic build command remaps builder paths, and two rebuilds reproduced SHA-256 `395576c1efa2fc5115e94df17645f1fb0f5584fd5ce4f7677e6e3539258ea5a2`. |
 

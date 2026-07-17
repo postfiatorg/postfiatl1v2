@@ -154,7 +154,7 @@ Severity meanings:
 ### Required disposition
 
 - [x] Assign every bloat class one disposition: **keep in source**, **move to evidence repository/object storage**, **publish as release asset**, **generate in CI**, **Git LFS**, **archive**, or **delete after approval**.
-- [x] Preserve hashes/manifests when moving evidence or cryptographic artifacts; the candidate now has a fail-closed 14-path binary/media manifest covering SP1 fixtures, active/replay Orchard artifacts, the retained Cobalt reference, vendored Halo2 fixture, public icons, and deterministic byte-identical wallet WASM.
+- [x] Preserve hashes/manifests when moving evidence or cryptographic artifacts; the candidate now has a fail-closed 14-path binary/media manifest covering SP1 fixtures, active/replay Orchard artifacts, the retained Cobalt reference, the in-tree upstream Halo2 fixture, public icons, and deterministic byte-identical wallet WASM.
 - [x] Estimate repository-size reduction and clone/build impact.
 - [x] Propose a supported public directory structure and archive boundary.
 

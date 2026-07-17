@@ -1,6 +1,10 @@
 # Privacy Overview
 
-PostFiat privacy is built around an Orchard/Halo2 shielded path.
+PostFiat privacy is built around an Orchard/Halo2 shielded path using the
+upstream Rust/Zcash Orchard and Halo2 implementations. PostFiat implements the
+chain adapter and application circuits; it does not implement a new Halo2 proof
+system. The exact dependency and narrow local compatibility patch are described
+in [Halo2 Dependency And Local Patch Boundary](../security/halo2-dependency.md).
 
 The goal is confidential settlement for workflows where transparent ledgers leak
 too much: balances, counterparties, timing, execution intent, treasury movement,
@@ -8,7 +12,7 @@ and position changes.
 
 ## What Exists
 
-- Orchard/Halo2 adapter using the Rust/Zcash Orchard stack.
+- Orchard/Halo2 adapter using the upstream Rust/Zcash Orchard stack.
 - Direct transparent-to-Orchard deposit envelopes.
 - One-note Orchard spend construction.
 - One-note Orchard withdraw construction.

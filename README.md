@@ -32,6 +32,12 @@ flowchart LR
 
 - Post-quantum from genesis: ML-DSA account and validator authorization.
 - Shielded settlement: Orchard/Halo2 proof verification with public nullifier and root checks.
+- Halo2 dependency boundary: PostFiat does not reimplement Halo2. The privacy
+  verifier uses Zcash's upstream `halo2_proofs 0.3.2` at an immutable commit,
+  retained in-tree with a reproducibly verified compatibility patch for pinned
+  verifying-key assembly loading. The patch does not intentionally change the
+  proof algorithm, verifier equations, transcript, fields, curves, or proof
+  encoding. See [Halo2 Dependency And Local Patch Boundary](docs/security/halo2-dependency.md).
 - Signed governance admission: live amendments and registry changes require a
   quorum of distinct ML-DSA-65 authorizations from the active old-rule registry;
   unsigned legacy artifacts are replay-only.
