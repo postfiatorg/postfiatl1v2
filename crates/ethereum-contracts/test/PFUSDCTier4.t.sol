@@ -56,7 +56,6 @@ contract Tier4TemporaryFinality is IPFTLFinalityVerifierV1 {
 contract PFUSDCTier4Test {
     bytes private constant SCHEMA = "postfiat.pfusdc.egress_public_values.v1";
     bytes32 private constant PROGRAM_VKEY = keccak256("program-vkey");
-    bytes32 private constant INITIAL_COMMITTEE = keccak256("initial-committee-48");
     address private constant RECIPIENT = address(0xBEEF);
 
     Tier4MockToken private token;
@@ -103,7 +102,7 @@ contract PFUSDCTier4Test {
             maxPublicValuesBytes: 16384,
             initialCheckpointCommitment: initialCheckpoint,
             initialFinalizedHeight: 10,
-            initialCommitteeRootCommitment: INITIAL_COMMITTEE
+            initialCommitteeRootCommitment: keccak256(_h48(0x41))
         });
         verifier = new PFTLFinalityVerifierV1(config);
         vault = new ERC20BridgeVaultV2(
@@ -149,12 +148,33 @@ contract PFUSDCTier4Test {
         _assertEq(token.balanceOf(RECIPIENT), 0, "invalid proof recipient unchanged");
     }
 
+    function testUnprovedCommitteeChangeFailsBeforeMutation() public {
+        bytes memory publicValues =
+            _publicValuesWithCommittee(address(vault), true, 11, _h48(0x44), _h32(0x99), _h48(0x42));
+        _expectWithdrawRevert(publicValues, hex"01020304");
+        _assertEq(verifier.latestFinalizedHeight(), 10, "committee mismatch checkpoint unchanged");
+        _assertEq(token.balanceOf(RECIPIENT), 0, "committee mismatch recipient unchanged");
+    }
+
     function _publicValues(
         address vaultAddress,
         bool accepted,
         uint64 finalizedHeight,
         bytes memory resultingCheckpoint,
         bytes memory nullifier
+    ) private view returns (bytes memory out) {
+        return _publicValuesWithCommittee(
+            vaultAddress, accepted, finalizedHeight, resultingCheckpoint, nullifier, _h48(0x41)
+        );
+    }
+
+    function _publicValuesWithCommittee(
+        address vaultAddress,
+        bool accepted,
+        uint64 finalizedHeight,
+        bytes memory resultingCheckpoint,
+        bytes memory nullifier,
+        bytes memory committeeRoot
     ) private view returns (bytes memory out) {
         out = abi.encodePacked("PFTL-PFUSDC-TIER4", uint32(SCHEMA.length), SCHEMA);
         out = bytes.concat(out, _field(1, SCHEMA));
@@ -167,7 +187,7 @@ contract PFUSDCTier4Test {
         out = bytes.concat(out, _field(8, initialCheckpoint48));
         out = bytes.concat(out, _field(9, resultingCheckpoint));
         out = bytes.concat(out, _field(10, abi.encodePacked(uint64(1))));
-        out = bytes.concat(out, _field(11, _h48(0x41)));
+        out = bytes.concat(out, _field(11, committeeRoot));
         out = bytes.concat(out, _field(12, bytes("")));
         out = bytes.concat(out, _field(13, abi.encodePacked(finalizedHeight)));
         out = bytes.concat(out, _field(14, abi.encodePacked(uint64(0))));

@@ -41,6 +41,7 @@ contract PFTLFinalityVerifierV1 {
         bytes32 priorCheckpointCommitment;
         bytes32 resultingCheckpointCommitment;
         bytes32 committeeRootCommitment;
+        bytes32 committeeTransitionCommitment;
         uint64 finalizedBlockHeight;
         bytes32 bridgeExitRootCommitment;
         bytes32 acceptedReceiptCommitment;
@@ -224,6 +225,10 @@ contract PFTLFinalityVerifierV1 {
             revert WrongBinding("route_profile_hash");
         }
         if (decoded.routeEpoch != routeEpoch) revert WrongBinding("route_epoch");
+        if (
+            decoded.committeeTransitionCommitment == bytes32(0)
+                && decoded.committeeRootCommitment != latestCommitteeRootCommitment
+        ) revert WrongBinding("committee_root");
         if (decoded.assetIdCommitment != assetIdCommitment) revert WrongBinding("asset_id");
         if (decoded.arbitrumChainId != arbitrumChainId || decoded.arbitrumChainId != block.chainid) {
             revert WrongBinding("arbitrum_chain_id");
@@ -284,6 +289,9 @@ contract PFTLFinalityVerifierV1 {
         out.committeeRootCommitment = keccak256(data[start:start + 48]);
         (start, cursor) = _fieldVariable(data, cursor, 12, 0, 48);
         if (cursor - start != 0 && cursor - start != 48) revert NonCanonicalPublicValues("committee_transition");
+        if (cursor - start == 48) {
+            out.committeeTransitionCommitment = keccak256(data[start:start + 48]);
+        }
         (start, cursor) = _field(data, cursor, 13, 8);
         out.finalizedBlockHeight = _u64(data, start);
         (, cursor) = _field(data, cursor, 14, 8);
