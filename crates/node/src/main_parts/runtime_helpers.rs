@@ -680,6 +680,7 @@ fn print_usage() {
   postfiat-node governance-amendment-assemble [--data-dir PATH] --amendment-file PATH --authorization-files CSV --proposal-slot H --output PATH
   postfiat-node ethereum-checkpoint-observe [--data-dir PATH] --route-id ID --ethereum-rpc http://HOST:PORT[/PATH] [--block-number N] --checkpoint-file PATH
   postfiat-node ethereum-receipt-proof-build [--data-dir PATH] --route-id ID --ethereum-rpc http://HOST:PORT[/PATH] --transaction-hash 0xHASH --proof-file PATH
+  postfiat-node pfusdc-egress-witness [--data-dir PATH] --withdrawal-id 96_HEX
   postfiat-node ethereum-checkpoint-vote-sign [--data-dir PATH] --checkpoint-file PATH --ethereum-rpc http://HOST:PORT[/PATH] --validator NODE_ID --validator-key-file PATH --vote-file PATH
   postfiat-node ethereum-checkpoint-certificate-assemble [--data-dir PATH] --checkpoint-file PATH --vote-files CSV --certificate-file PATH
   postfiat-node validator-registry-root [--data-dir PATH] [--registry-file PATH] --validators CSV

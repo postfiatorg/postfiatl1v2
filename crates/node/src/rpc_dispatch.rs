@@ -1262,6 +1262,24 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                 vec![RpcEvent::new("blocks", target, "blocks queried")],
             )
         }
+        "pfusdc_egress_witness" => {
+            let withdrawal_id =
+                flag_value(flags, "--withdrawal-id").ok_or("missing --withdrawal-id")?;
+            let witness = pfusdc_egress_witness(PfUsdcEgressWitnessOptions {
+                data_dir,
+                withdrawal_id: withdrawal_id.to_string(),
+            })
+            .map_err(|error| format!("rpc pfusdc_egress_witness failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &witness,
+                vec![RpcEvent::new(
+                    "pfusdc_egress_witness",
+                    withdrawal_id,
+                    "proof-ready pfUSDC egress witness exported",
+                )],
+            )
+        }
         "validators" => {
             let report = rpc_validators_alias(data_dir)?;
             let target = report

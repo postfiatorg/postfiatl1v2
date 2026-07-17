@@ -40,6 +40,11 @@ pub struct ConsensusV2BlockRef {
     pub parent_block_id: String,
     pub payload_hash: String,
     pub state_root: String,
+    /// Present only at and after the independently governed Tier-4 bridge-exit
+    /// commitment activation. Legacy blocks omit this field and retain their
+    /// original block-ID and signing encodings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bridge_exit_root: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -40,6 +40,13 @@ pub(super) fn build_block_proposal_from_state<T: Serialize>(
     let view = plan.view;
     let validators = active_validator_ids(plan.governance)?;
     let proposer = leader_for_view(&validators, block_height, view).map_err(invalid_data)?;
+    let bridge_exit_root = bridge_exit_root_for_block(
+        plan.genesis,
+        plan.governance,
+        plan.ledger,
+        plan.receipts,
+        block_height,
+    )?;
     Ok(BlockProposalFile {
         schema: BLOCK_PROPOSAL_FILE_SCHEMA.to_string(),
         chain_id: plan.genesis.chain_id.clone(),
@@ -53,11 +60,101 @@ pub(super) fn build_block_proposal_from_state<T: Serialize>(
         batch_id: plan.batch_id.to_string(),
         payload_hash,
         state_root,
+        bridge_exit_root,
         receipt_count: receipt_ids.len() as u64,
         receipt_ids,
         fastpay_pre_state_effects: plan.fastpay_pre_state_effects,
         signature: None,
     })
+}
+
+pub(super) fn bridge_exit_root_for_block(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    receipts: &[Receipt],
+    block_height: u64,
+) -> io::Result<Option<String>> {
+    let Some(activation_height) = bridge_exit_root_activation_height_for_chain(governance) else {
+        return Ok(None);
+    };
+    if block_height < activation_height {
+        return Ok(None);
+    }
+    if !consensus_v2_active_at(genesis, block_height) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "bridge-exit-root activation requires consensus v2 finality",
+        ));
+    }
+
+    let leaves = bridge_exit_leaves_for_block(governance, ledger, receipts, block_height)?;
+    bridge_exit_merkle_root_v1(&leaves)
+        .map(Some)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+}
+
+pub(super) fn bridge_exit_leaves_for_block(
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    receipts: &[Receipt],
+    block_height: u64,
+) -> io::Result<Vec<BridgeExitLeafV1>> {
+    let mut leaves = Vec::new();
+    for redemption in ledger
+        .vault_bridge_redemptions
+        .iter()
+        .filter(|redemption| redemption.created_at_height == block_height)
+    {
+        let burn_tx_id = redemption.withdrawal_packet.burn_tx_id.as_str();
+        let receipt = receipts
+            .iter()
+            .find(|receipt| receipt.tx_id == burn_tx_id)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "bridge exit redemption has no receipt in its finalized block",
+                )
+            })?;
+        if !receipt.accepted || receipt.code != BRIDGE_EXIT_ACCEPTED_RECEIPT_CODE {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "bridge exit redemption requires a literal accepted receipt",
+            ));
+        }
+        let bucket = ledger
+            .vault_bridge_bucket_states
+            .iter()
+            .find(|bucket| bucket.bucket_id == redemption.bucket_id)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "bridge exit redemption source bucket is missing",
+                )
+            })?;
+        let route = governance
+            .authorized_vault_bridge_route_profile(&redemption.asset_id, &bucket.policy_hash)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        leaves.push(
+            BridgeExitLeafV1::from_withdrawal_packet(
+                u64::from(route.profile.route_epoch),
+                receipt.tx_id.clone(),
+                receipt.code.clone(),
+                &redemption.withdrawal_packet,
+                redemption.withdrawal_packet_hash.clone(),
+                redemption.withdrawal_packet_evm_digest.clone(),
+            )
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?,
+        );
+    }
+
+    leaves.sort_by_key(|leaf| {
+        receipts
+            .iter()
+            .position(|receipt| receipt.tx_id == leaf.accepted_receipt_id)
+            .unwrap_or(usize::MAX)
+    });
+    Ok(leaves)
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

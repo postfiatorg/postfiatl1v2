@@ -5,7 +5,8 @@ use postfiat_crypto_provider::{
     bytes_to_hex, hex_to_bytes, ml_dsa_65_sign_with_context, ML_DSA_65_ALGORITHM,
 };
 use postfiat_ordering_fast::{
-    certify_consensus_v2_votes, consensus_v2_block_ref, consensus_v2_commit_from_precommit_qc,
+    certify_consensus_v2_votes, consensus_v2_block_ref,
+    consensus_v2_block_ref_with_bridge_exit_root, consensus_v2_commit_from_precommit_qc,
     consensus_v2_genesis_parent_id, consensus_v2_proposal_signing_bytes,
     consensus_v2_timeout_vote_signing_bytes, consensus_v2_vote_signing_bytes,
     verify_consensus_v2_commit, verify_consensus_v2_proposal, verify_consensus_v2_timeout_vote,
@@ -47,13 +48,23 @@ pub fn create_consensus_v2_proposal_for_block(
     let timeout_certificate_id =
         timeout_certificate.map(|certificate| certificate.certificate_id.clone());
     let parent_block_id = consensus_v2_parent_block_id(&domain, block_proposal)?;
-    let block = consensus_v2_block_ref(
-        &domain,
-        block_proposal.block_height,
-        parent_block_id,
-        block_proposal.payload_hash.clone(),
-        block_proposal.state_root.clone(),
-    )
+    let block = match block_proposal.bridge_exit_root.clone() {
+        Some(bridge_exit_root) => consensus_v2_block_ref_with_bridge_exit_root(
+            &domain,
+            block_proposal.block_height,
+            parent_block_id,
+            block_proposal.payload_hash.clone(),
+            block_proposal.state_root.clone(),
+            bridge_exit_root,
+        ),
+        None => consensus_v2_block_ref(
+            &domain,
+            block_proposal.block_height,
+            parent_block_id,
+            block_proposal.payload_hash.clone(),
+            block_proposal.state_root.clone(),
+        ),
+    }
     .map_err(ordering_error)?;
     let keys = read_validator_key_file(key_file)?;
     validate_validator_key_file(&keys)?;
@@ -314,6 +325,7 @@ pub fn verify_consensus_v2_proposal_matches_block(
         || proposal.block.parent_block_id != expected_parent
         || proposal.block.payload_hash != block.payload_hash
         || proposal.block.state_root != block.state_root
+        || proposal.block.bridge_exit_root != block.bridge_exit_root
     {
         return Err(invalid_data(
             "consensus v2 proposal does not match ordered block proposal",
@@ -432,6 +444,7 @@ mod tests {
             batch_id: "11".repeat(48),
             payload_hash: "22".repeat(48),
             state_root: "33".repeat(48),
+            bridge_exit_root: None,
             receipt_count: 0,
             receipt_ids: Vec::new(),
             fastpay_pre_state_effects: Vec::new(),

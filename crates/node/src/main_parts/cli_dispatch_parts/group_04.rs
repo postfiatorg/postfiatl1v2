@@ -1367,6 +1367,20 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "pfusdc-egress-witness" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let withdrawal_id = flag_value(flags, "--withdrawal-id")
+                .ok_or("missing --withdrawal-id")?;
+            let witness = pfusdc_egress_witness(PfUsdcEgressWitnessOptions {
+                data_dir: PathBuf::from(data_dir),
+                withdrawal_id: withdrawal_id.to_string(),
+            })
+            .map_err(|error| format!("pfusdc-egress-witness failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&witness)
+                .map_err(|error| format!("pfUSDC egress witness serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
         "block-vote" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let key_file = flag_value(flags, "--key-file")

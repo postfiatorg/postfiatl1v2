@@ -17,6 +17,8 @@ pub const GOVERNANCE_KIND_ATOMIC_SWAP_ACTIVATION_HEIGHT: &str =
     "atomic_swap_activation_height";
 pub const GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT: &str =
     "replicated_state_v2_activation_height";
+pub const GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT: &str =
+    "bridge_exit_root_activation_height";
 pub const GOVERNANCE_KIND_ATOMIC_SWAP_PAUSE: &str = "atomic_swap_pause";
 pub const GOVERNANCE_KIND_ORCHARD_POOL_PAUSE: &str = "orchard_pool_pause";
 pub const GOVERNANCE_AUTHORITY_MODE_FOUNDATION: u32 = 0;
@@ -995,6 +997,17 @@ impl GovernanceState {
             .iter()
             .filter(|amendment| {
                 amendment.kind == GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT
+            })
+            .map(|amendment| u64::from(amendment.value))
+            .min()
+    }
+
+    pub fn bridge_exit_root_activation_height(&self) -> Option<u64> {
+        self.amendments
+            .iter()
+            .filter(|amendment| {
+                amendment.kind == GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT
+                    && !amendment.paused
             })
             .map(|amendment| u64::from(amendment.value))
             .min()

@@ -3435,12 +3435,32 @@ pub struct BlockProposalFile {
     pub batch_id: String,
     pub payload_hash: String,
     pub state_root: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bridge_exit_root: Option<String>,
     pub receipt_count: u64,
     pub receipt_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fastpay_pre_state_effects: Vec<postfiat_types::FastPayVersionFenceV1>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature: Option<BlockProposalSignature>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PfUsdcEgressWitnessV1 {
+    pub schema: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub protocol_version: u32,
+    pub bridge_exit_root_activation_height: u64,
+    pub route_profile: VaultBridgeRouteProfileRecordV1,
+    pub block: BlockRecord,
+    pub receipt: Receipt,
+    pub merkle_proof: BridgeExitMerkleProofV1,
+    pub withdrawal_packet: VaultBridgeWithdrawalPacket,
+    pub withdrawal_packet_hash: String,
+    pub withdrawal_packet_evm_digest: String,
+    pub committee_validators: Vec<String>,
+    pub validator_registry: ValidatorRegistry,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

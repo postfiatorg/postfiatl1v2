@@ -2261,6 +2261,7 @@ mod history_tests {
                 batch_kind: BATCH_KIND_TRANSPARENT.to_string(),
                 batch_id: "batch-1".to_string(),
                 state_root: "state-root-1".to_string(),
+                bridge_exit_root: None,
                 receipt_count: 0,
                 certificate_id: "certificate-1".to_string(),
                 certificate: BlockCertificate {
