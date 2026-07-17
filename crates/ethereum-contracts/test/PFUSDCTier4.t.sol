@@ -156,6 +156,16 @@ contract PFUSDCTier4Test {
         _assertEq(token.balanceOf(RECIPIENT), 0, "committee mismatch recipient unchanged");
     }
 
+    function testWrongProofProgramVersionFailsBeforeSP1AndMutation() public {
+        bytes memory publicValues = _publicValues(address(vault), true, 11, _h48(0x44), _h32(0x99));
+        // Canonical tag 2 starts after magic, schema-length, schema, and field 1.
+        uint256 versionOffset = 17 + 4 + SCHEMA.length + 6 + SCHEMA.length + 6;
+        publicValues[versionOffset + 3] = 0x02;
+        _expectWithdrawRevert(publicValues, hex"01020304");
+        _assertEq(verifier.latestFinalizedHeight(), 10, "wrong program version checkpoint unchanged");
+        _assertEq(token.balanceOf(RECIPIENT), 0, "wrong program version recipient unchanged");
+    }
+
     function _publicValues(
         address vaultAddress,
         bool accepted,

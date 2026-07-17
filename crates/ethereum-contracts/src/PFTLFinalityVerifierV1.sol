@@ -33,6 +33,7 @@ contract PFTLFinalityVerifierV1 {
     }
 
     struct DecodedEgress {
+        uint32 proofProgramVersion;
         bytes32 pftlChainIdHash;
         bytes32 pftlGenesisHashCommitment;
         uint32 pftlProtocolVersion;
@@ -216,6 +217,7 @@ contract PFTLFinalityVerifierV1 {
     }
 
     function _requireBindings(DecodedEgress memory decoded) private view {
+        if (decoded.proofProgramVersion != 1) revert WrongBinding("proof_program_version");
         if (decoded.pftlChainIdHash != pftlChainIdHash) revert WrongBinding("pftl_chain_id");
         if (decoded.pftlGenesisHashCommitment != pftlGenesisHashCommitment) {
             revert WrongBinding("pftl_genesis_hash");
@@ -269,7 +271,8 @@ contract PFTLFinalityVerifierV1 {
         if (keccak256(data[start:start + EGRESS_SCHEMA.length]) != keccak256(EGRESS_SCHEMA)) {
             revert NonCanonicalPublicValues("schema");
         }
-        (, cursor) = _field(data, cursor, 2, 4);
+        (start, cursor) = _field(data, cursor, 2, 4);
+        out.proofProgramVersion = _u32(data, start);
         (start, cursor) = _fieldVariable(data, cursor, 3, 1, 256);
         out.pftlChainIdHash = keccak256(data[start:cursor]);
         (start, cursor) = _field(data, cursor, 4, 48);
