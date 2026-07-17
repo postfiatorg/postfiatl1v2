@@ -101,27 +101,15 @@ pub fn pfusdc_egress_witness(
     let committee_validators = active_validator_ids(&governance)?;
     let validator_registry =
         read_validator_registry_file(&store.data_dir().join(VALIDATOR_REGISTRY_FILE))?;
-    let committee_root = validator_registry_root(&validator_registry, &committee_validators)?;
-    if committee_root != commit.proposal.domain.committee_root {
+    let (consensus_committee, committee) =
+        pfusdc_consensus_committee(&validator_registry, &committee_validators)?;
+    if consensus_committee.committee_root != commit.proposal.domain.committee_root {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "current validator registry does not reproduce the finalized committee root",
         ));
     }
     let committee_epoch = commit.proposal.domain.committee_epoch;
-
-    let committee = committee_validators
-        .iter()
-        .map(|validator_id| {
-            let record = validator_registry_record(&validator_registry, validator_id)?;
-            Ok(ValidatorRegistryEntry {
-                node_id: record.node_id.clone(),
-                algorithm_id: record.algorithm_id.clone(),
-                public_key_hex: record.public_key_hex.clone(),
-                active: true,
-            })
-        })
-        .collect::<io::Result<Vec<_>>>()?;
 
     let witness = PfUsdcEgressProofWitnessV1 {
         schema: PFUSDC_EGRESS_PROOF_WITNESS_SCHEMA_V1.to_string(),
@@ -144,4 +132,76 @@ pub fn pfusdc_egress_witness(
         .validate_bounds()
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     Ok(witness)
+}
+
+fn pfusdc_consensus_committee(
+    registry: &ValidatorRegistry,
+    validator_ids: &[String],
+) -> io::Result<(
+    postfiat_ordering_fast::ConsensusV2ValidatorSet,
+    Vec<ValidatorRegistryEntry>,
+)> {
+    let committee = validator_ids
+        .iter()
+        .map(|validator_id| {
+            let record = validator_registry_record(registry, validator_id)?;
+            if record.algorithm_id != ML_DSA_65_ALGORITHM {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Tier-4 egress committee contains a non-ML-DSA-65 validator",
+                ));
+            }
+            Ok(ValidatorRegistryEntry {
+                node_id: record.node_id.clone(),
+                algorithm_id: record.algorithm_id.clone(),
+                public_key_hex: record.public_key_hex.clone(),
+                active: true,
+            })
+        })
+        .collect::<io::Result<Vec<_>>>()?;
+    let validators = committee
+        .iter()
+        .map(|record| postfiat_ordering_fast::ConsensusV2Validator {
+            validator_id: record.node_id.clone(),
+            public_key_hex: record.public_key_hex.clone(),
+        })
+        .collect();
+    let consensus = postfiat_ordering_fast::ConsensusV2ValidatorSet::try_new(validators)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
+    Ok((consensus, committee))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn egress_export_compares_the_consensus_committee_root_not_registry_root() {
+        let validators = (0..4)
+            .map(|index| {
+                let key = ml_dsa_65_keygen_from_seed(&[index as u8 + 1; 32]);
+                ValidatorRegistryRecord {
+                    node_id: format!("validator-{index}"),
+                    algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+                    public_key_hex: bytes_to_hex(&key.public_key),
+                }
+            })
+            .collect::<Vec<_>>();
+        let validator_ids = validators
+            .iter()
+            .map(|record| record.node_id.clone())
+            .collect::<Vec<_>>();
+        let registry = ValidatorRegistry { validators };
+        let registry_root =
+            validator_registry_root(&registry, &validator_ids).expect("registry root");
+        let (consensus, witness_committee) =
+            pfusdc_consensus_committee(&registry, &validator_ids).expect("consensus committee");
+
+        assert_ne!(
+            registry_root, consensus.committee_root,
+            "different root domains must never be compared as equivalent"
+        );
+        assert_eq!(witness_committee.len(), validator_ids.len());
+        assert!(witness_committee.iter().all(|record| record.active));
+    }
 }
