@@ -2,6 +2,8 @@ pub const PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V1: &str =
     "postfiat.pfusdc.ingress_public_values.v1";
 pub const PFUSDC_EGRESS_PUBLIC_VALUES_SCHEMA_V1: &str =
     "postfiat.pfusdc.egress_public_values.v1";
+pub const PFUSDC_CHECKPOINT_PUBLIC_VALUES_SCHEMA_V1: &str =
+    "postfiat.pfusdc.checkpoint_public_values.v1";
 pub const BRIDGE_EXIT_LEAF_SCHEMA_V1: &str = "postfiat.bridge_exit_leaf.v1";
 pub const BRIDGE_EXIT_ACCEPTED_RECEIPT_CODE: &str = "accepted";
 
@@ -13,6 +15,8 @@ const PFUSDC_INGRESS_PUBLIC_VALUES_HASH_DOMAIN_V1: &str =
     "postfiat.pfusdc.ingress_public_values.hash.v1";
 const PFUSDC_EGRESS_COMMITMENT_DOMAIN_V1: &str =
     "postfiat.pfusdc.egress_public_values.commitment.v1";
+const PFUSDC_CHECKPOINT_COMMITMENT_DOMAIN_V1: &str =
+    "postfiat.pfusdc.checkpoint_public_values.commitment.v1";
 const PFUSDC_EGRESS_NULLIFIER_DOMAIN_V1: &str = "postfiat.pfusdc.egress_proof.nullifier.v1";
 const BRIDGE_EXIT_LEAF_COMMITMENT_DOMAIN_V1: &str =
     "postfiat.bridge_exit_leaf.commitment.v1";
@@ -627,6 +631,8 @@ pub struct PfUsdcEgressPublicValuesV1 {
 
 pub const PFUSDC_EGRESS_PROOF_WITNESS_SCHEMA_V1: &str =
     "postfiat.pfusdc.egress_proof_witness.v1";
+pub const PFUSDC_CHECKPOINT_PROOF_WITNESS_SCHEMA_V1: &str =
+    "postfiat.pfusdc.checkpoint_proof_witness.v1";
 pub const PFUSDC_EGRESS_MAX_ANCESTRY_BLOCKS_V1: usize = 64;
 
 /// One finalized block between the contract's prior checkpoint and the exit
@@ -643,6 +649,96 @@ pub struct PfUsdcEgressFinalityStepV1 {
     pub next_committee: Vec<ValidatorRegistryEntry>,
     #[serde(default, skip_serializing_if = "is_zero_u64")]
     pub next_committee_epoch: u64,
+}
+
+/// A proof-only checkpoint segment. Relayers submit these when no withdrawal
+/// occurs within the bounded finality window, so a later withdrawal never
+/// depends on artificial traffic or an unbounded guest witness.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PfUsdcCheckpointProofWitnessV1 {
+    pub schema: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub protocol_version: u32,
+    pub prior_checkpoint_block_id: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub finality_ancestry: Vec<PfUsdcEgressFinalityStepV1>,
+    pub block: BlockRecord,
+    pub committee_epoch: u64,
+    pub committee: Vec<ValidatorRegistryEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "witness", rename_all = "snake_case")]
+pub enum PfUsdcEgressProgramInputV1 {
+    Withdrawal(PfUsdcEgressProofWitnessV1),
+    Checkpoint(PfUsdcCheckpointProofWitnessV1),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PfUsdcCheckpointPublicValuesV1 {
+    pub schema: String,
+    pub proof_program_version: u32,
+    pub pftl_chain_id: String,
+    pub pftl_genesis_hash: String,
+    pub pftl_protocol_version: u32,
+    pub prior_checkpoint_block_id: String,
+    pub resulting_checkpoint_block_id: String,
+    pub committee_epoch: u64,
+    pub committee_root: String,
+    pub committee_transition_commitment: String,
+    pub finalized_block_height: u64,
+    pub finalized_block_view: u64,
+    pub finalized_block_id: String,
+    pub finalized_parent_block_id: String,
+    pub finalized_state_root: String,
+    pub public_values_commitment: String,
+}
+
+impl PfUsdcCheckpointProofWitnessV1 {
+    pub fn validate_bounds(&self) -> Result<(), String> {
+        if self.schema != PFUSDC_CHECKPOINT_PROOF_WITNESS_SCHEMA_V1 {
+            return Err("pfUSDC checkpoint proof witness schema mismatch".to_string());
+        }
+        pfusdc_validate_text("pfusdc_checkpoint_witness.chain_id", &self.chain_id)?;
+        validate_lower_hex_len(
+            "pfusdc_checkpoint_witness.genesis_hash",
+            &self.genesis_hash,
+            96,
+        )?;
+        validate_lower_hex_len(
+            "pfusdc_checkpoint_witness.prior_checkpoint_block_id",
+            &self.prior_checkpoint_block_id,
+            96,
+        )?;
+        if self.protocol_version == 0
+            || self.committee_epoch == 0
+            || self.committee.is_empty()
+            || self.committee.len() > 64
+            || self.finality_ancestry.len() > PFUSDC_EGRESS_MAX_ANCESTRY_BLOCKS_V1
+        {
+            return Err("pfUSDC checkpoint proof witness bounds are invalid".to_string());
+        }
+        validate_finality_steps_v1(&self.finality_ancestry)
+    }
+}
+
+fn validate_finality_steps_v1(steps: &[PfUsdcEgressFinalityStepV1]) -> Result<(), String> {
+    for step in steps {
+        if step.committee_epoch == 0
+            || step.committee.is_empty()
+            || step.committee.len() > 64
+            || step.governance_payload_json.len() > 1_048_576
+            || (step.next_committee.is_empty() != (step.next_committee_epoch == 0))
+            || step.next_committee.len() > 64
+        {
+            return Err("pfUSDC finality step bounds are invalid".to_string());
+        }
+        if step.governance_payload_json.is_empty() && !step.next_committee.is_empty() {
+            return Err("pfUSDC committee transition requires governance payload".to_string());
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -693,22 +789,7 @@ impl PfUsdcEgressProofWitnessV1 {
         if self.finality_ancestry.len() > PFUSDC_EGRESS_MAX_ANCESTRY_BLOCKS_V1 {
             return Err("pfUSDC egress finality ancestry exceeds the v1 bound".to_string());
         }
-        for step in &self.finality_ancestry {
-            if step.committee_epoch == 0
-                || step.committee.is_empty()
-                || step.committee.len() > 64
-                || step.governance_payload_json.len() > 1_048_576
-                || (step.next_committee.is_empty() != (step.next_committee_epoch == 0))
-                || step.next_committee.len() > 64
-            {
-                return Err("pfUSDC egress finality step bounds are invalid".to_string());
-            }
-            if step.governance_payload_json.is_empty() && !step.next_committee.is_empty() {
-                return Err(
-                    "pfUSDC egress committee transition requires governance payload".to_string(),
-                );
-            }
-        }
+        validate_finality_steps_v1(&self.finality_ancestry)?;
         self.route_profile.validate()?;
         self.withdrawal_packet.validate()?;
         validate_lower_hex_len(
@@ -723,6 +804,89 @@ impl PfUsdcEgressProofWitnessV1 {
         )?;
         if self.merkle_proof.siblings.len() > 12 {
             return Err("pfUSDC egress Merkle proof exceeds bounded depth".to_string());
+        }
+        Ok(())
+    }
+}
+
+impl PfUsdcCheckpointPublicValuesV1 {
+    pub fn canonical_bytes_without_commitment(&self) -> Result<Vec<u8>, String> {
+        self.validate_fields(false)?;
+        let mut out = pfusdc_canonical_prefix(PFUSDC_CHECKPOINT_PUBLIC_VALUES_SCHEMA_V1);
+        pfusdc_append_text(&mut out, 1, &self.schema)?;
+        pfusdc_append_u32(&mut out, 2, self.proof_program_version);
+        pfusdc_append_text(&mut out, 3, &self.pftl_chain_id)?;
+        pfusdc_append_hex(&mut out, 4, &self.pftl_genesis_hash)?;
+        pfusdc_append_u32(&mut out, 5, self.pftl_protocol_version);
+        pfusdc_append_hex(&mut out, 6, &self.prior_checkpoint_block_id)?;
+        pfusdc_append_hex(&mut out, 7, &self.resulting_checkpoint_block_id)?;
+        pfusdc_append_u64(&mut out, 8, self.committee_epoch);
+        pfusdc_append_hex(&mut out, 9, &self.committee_root)?;
+        pfusdc_append_optional_hex(&mut out, 10, &self.committee_transition_commitment)?;
+        pfusdc_append_u64(&mut out, 11, self.finalized_block_height);
+        pfusdc_append_u64(&mut out, 12, self.finalized_block_view);
+        pfusdc_append_hex(&mut out, 13, &self.finalized_block_id)?;
+        pfusdc_append_hex(&mut out, 14, &self.finalized_parent_block_id)?;
+        pfusdc_append_hex(&mut out, 15, &self.finalized_state_root)?;
+        Ok(out)
+    }
+
+    pub fn expected_commitment(&self) -> Result<String, String> {
+        Ok(pfusdc_keccak_commitment(
+            PFUSDC_CHECKPOINT_COMMITMENT_DOMAIN_V1,
+            &self.canonical_bytes_without_commitment()?,
+        ))
+    }
+
+    pub fn seal(&mut self) -> Result<(), String> {
+        self.public_values_commitment = self.expected_commitment()?;
+        Ok(())
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        self.validate_fields(true)
+    }
+
+    fn validate_fields(&self, check_commitment: bool) -> Result<(), String> {
+        if self.schema != PFUSDC_CHECKPOINT_PUBLIC_VALUES_SCHEMA_V1 {
+            return Err("pfUSDC checkpoint public-values schema mismatch".to_string());
+        }
+        if self.proof_program_version == 0
+            || self.pftl_protocol_version == 0
+            || self.committee_epoch == 0
+            || self.finalized_block_height == 0
+        {
+            return Err("pfUSDC checkpoint versions/finality are invalid".to_string());
+        }
+        pfusdc_validate_text("pfusdc_checkpoint.pftl_chain_id", &self.pftl_chain_id)?;
+        pfusdc_validate_hex_fields(&[
+            ("pfusdc_checkpoint.pftl_genesis_hash", &self.pftl_genesis_hash, 96),
+            ("pfusdc_checkpoint.prior_checkpoint_block_id", &self.prior_checkpoint_block_id, 96),
+            ("pfusdc_checkpoint.resulting_checkpoint_block_id", &self.resulting_checkpoint_block_id, 96),
+            ("pfusdc_checkpoint.committee_root", &self.committee_root, 96),
+            ("pfusdc_checkpoint.finalized_block_id", &self.finalized_block_id, 96),
+            ("pfusdc_checkpoint.finalized_parent_block_id", &self.finalized_parent_block_id, 96),
+            ("pfusdc_checkpoint.finalized_state_root", &self.finalized_state_root, 96),
+        ])?;
+        if !self.committee_transition_commitment.is_empty() {
+            validate_lower_hex_len(
+                "pfusdc_checkpoint.committee_transition_commitment",
+                &self.committee_transition_commitment,
+                96,
+            )?;
+        }
+        if self.resulting_checkpoint_block_id != self.finalized_block_id {
+            return Err("pfUSDC checkpoint result must equal finalized block".to_string());
+        }
+        if check_commitment {
+            validate_lower_hex_len(
+                "pfusdc_checkpoint.public_values_commitment",
+                &self.public_values_commitment,
+                64,
+            )?;
+            if self.public_values_commitment != self.expected_commitment()? {
+                return Err("pfUSDC checkpoint public-values commitment mismatch".to_string());
+            }
         }
         Ok(())
     }

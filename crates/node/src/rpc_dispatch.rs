@@ -1282,6 +1282,27 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                 )],
             )
         }
+        "pfusdc_checkpoint_witness" => {
+            let prior_checkpoint_block_id =
+                flag_value(flags, "--prior-checkpoint").ok_or("missing --prior-checkpoint")?;
+            let target_block_id =
+                flag_value(flags, "--target-block").ok_or("missing --target-block")?;
+            let witness = pfusdc_checkpoint_witness(PfUsdcCheckpointWitnessOptions {
+                data_dir,
+                prior_checkpoint_block_id: prior_checkpoint_block_id.to_string(),
+                target_block_id: target_block_id.to_string(),
+            })
+            .map_err(|error| format!("rpc pfusdc_checkpoint_witness failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &witness,
+                vec![RpcEvent::new(
+                    "pfusdc_checkpoint_witness",
+                    target_block_id,
+                    "proof-ready bounded PFTL checkpoint witness exported",
+                )],
+            )
+        }
         "validators" => {
             let report = rpc_validators_alias(data_dir)?;
             let target = report

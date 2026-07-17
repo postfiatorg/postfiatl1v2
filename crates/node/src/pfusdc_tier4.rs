@@ -7,6 +7,20 @@ pub struct PfUsdcEgressWitnessOptions {
     pub prior_checkpoint_block_id: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PfUsdcCheckpointWitnessOptions {
+    pub data_dir: PathBuf,
+    pub prior_checkpoint_block_id: String,
+    pub target_block_id: String,
+}
+
+struct ExportedFinalitySegment {
+    prior_checkpoint_block_id: String,
+    finality_ancestry: Vec<PfUsdcEgressFinalityStepV1>,
+    committee_epoch: u64,
+    committee: Vec<ValidatorRegistryEntry>,
+}
+
 pub fn pfusdc_egress_witness(
     options: PfUsdcEgressWitnessOptions,
 ) -> io::Result<PfUsdcEgressProofWitnessV1> {
@@ -103,8 +117,103 @@ pub fn pfusdc_egress_witness(
             "consensus-v2 commit does not bind the block bridge-exit root",
         ));
     }
+    let prior_checkpoint_block_id = options
+        .prior_checkpoint_block_id
+        .unwrap_or_else(|| block.header.parent_hash.clone());
+    let segment = pfusdc_export_finality_segment(
+        &store,
+        &genesis,
+        &governance,
+        &blocks,
+        prior_checkpoint_block_id,
+        &block,
+    )?;
+    let witness = PfUsdcEgressProofWitnessV1 {
+        schema: PFUSDC_EGRESS_PROOF_WITNESS_SCHEMA_V1.to_string(),
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        protocol_version: genesis.protocol_version,
+        bridge_exit_root_activation_height: activation_height,
+        prior_checkpoint_block_id: segment.prior_checkpoint_block_id,
+        finality_ancestry: segment.finality_ancestry,
+        route_profile,
+        block,
+        receipt,
+        merkle_proof,
+        withdrawal_packet: redemption.withdrawal_packet,
+        withdrawal_packet_hash: redemption.withdrawal_packet_hash,
+        withdrawal_packet_evm_digest: redemption.withdrawal_packet_evm_digest,
+        committee_epoch: segment.committee_epoch,
+        committee: segment.committee,
+    };
+    witness
+        .validate_bounds()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    Ok(witness)
+}
+
+pub fn pfusdc_checkpoint_witness(
+    options: PfUsdcCheckpointWitnessOptions,
+) -> io::Result<PfUsdcCheckpointProofWitnessV1> {
+    validate_lower_hex_len(
+        "prior_checkpoint_block_id",
+        &options.prior_checkpoint_block_id,
+        96,
+    )
+    .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    validate_lower_hex_len("target_block_id", &options.target_block_id, 96)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    let store = NodeStore::new(options.data_dir);
+    let genesis = store.read_genesis()?;
+    let governance = store.read_governance()?;
+    let blocks = store.read_blocks()?;
+    let block = blocks
+        .blocks
+        .iter()
+        .find(|candidate| candidate.header.block_hash == options.target_block_id)
+        .cloned()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "target block is unavailable"))?;
+    let segment = pfusdc_export_finality_segment(
+        &store,
+        &genesis,
+        &governance,
+        &blocks,
+        options.prior_checkpoint_block_id,
+        &block,
+    )?;
+    let witness = PfUsdcCheckpointProofWitnessV1 {
+        schema: PFUSDC_CHECKPOINT_PROOF_WITNESS_SCHEMA_V1.to_string(),
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        protocol_version: genesis.protocol_version,
+        prior_checkpoint_block_id: segment.prior_checkpoint_block_id,
+        finality_ancestry: segment.finality_ancestry,
+        block,
+        committee_epoch: segment.committee_epoch,
+        committee: segment.committee,
+    };
+    witness
+        .validate_bounds()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    Ok(witness)
+}
+
+fn pfusdc_export_finality_segment(
+    store: &NodeStore,
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    blocks: &BlockLog,
+    prior_checkpoint_block_id: String,
+    block: &BlockRecord,
+) -> io::Result<ExportedFinalitySegment> {
+    let commit = block.header.consensus_v2_commit.as_ref().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Tier-4 finality target has no consensus-v2 commit",
+        )
+    })?;
     let (consensus_committee, committee) =
-        pfusdc_committee_at_height(&store, &genesis, &governance, block.header.height)?;
+        pfusdc_committee_at_height(store, genesis, governance, block.header.height)?;
     if consensus_committee.committee_root != commit.proposal.domain.committee_root {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -112,10 +221,6 @@ pub fn pfusdc_egress_witness(
         ));
     }
     let committee_epoch = commit.proposal.domain.committee_epoch;
-
-    let prior_checkpoint_block_id = options
-        .prior_checkpoint_block_id
-        .unwrap_or_else(|| block.header.parent_hash.clone());
     let ancestry_start = if prior_checkpoint_block_id == block.header.parent_hash {
         block.header.height
     } else {
@@ -129,9 +234,14 @@ pub fn pfusdc_egress_witness(
                     "prior Tier-4 checkpoint block is unavailable",
                 )
             })?;
-        blocks.blocks[prior_index]
-            .header
-            .height
+        let prior_height = blocks.blocks[prior_index].header.height;
+        if prior_height >= block.header.height {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "prior Tier-4 checkpoint must precede the target block",
+            ));
+        }
+        prior_height
             .checked_add(1)
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "block height overflow"))?
     };
@@ -160,7 +270,7 @@ pub fn pfusdc_egress_witness(
                         )
                     })?;
             let (candidate_set, candidate_committee) =
-                pfusdc_committee_at_height(&store, &genesis, &governance, candidate.header.height)?;
+                pfusdc_committee_at_height(store, genesis, governance, candidate.header.height)?;
             if candidate_commit.proposal.domain.committee_root != candidate_set.committee_root {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -170,7 +280,7 @@ pub fn pfusdc_egress_witness(
             let next_block = ancestry_blocks.get(index + 1).copied().unwrap_or(&block);
             let next_height = next_block.header.height;
             let (next_set, next_committee) =
-                pfusdc_committee_at_height(&store, &genesis, &governance, next_height)?;
+                pfusdc_committee_at_height(store, genesis, governance, next_height)?;
             let transition = next_set.committee_root != candidate_set.committee_root;
             let governance_payload_json = if transition {
                 if candidate.header.batch_kind != BATCH_KIND_GOVERNANCE {
@@ -226,28 +336,12 @@ pub fn pfusdc_egress_witness(
             })
         })
         .collect::<io::Result<Vec<_>>>()?;
-    let witness = PfUsdcEgressProofWitnessV1 {
-        schema: PFUSDC_EGRESS_PROOF_WITNESS_SCHEMA_V1.to_string(),
-        chain_id: genesis.chain_id.clone(),
-        genesis_hash: genesis_hash(&genesis),
-        protocol_version: genesis.protocol_version,
-        bridge_exit_root_activation_height: activation_height,
+    Ok(ExportedFinalitySegment {
         prior_checkpoint_block_id,
         finality_ancestry,
-        route_profile,
-        block,
-        receipt,
-        merkle_proof,
-        withdrawal_packet: redemption.withdrawal_packet,
-        withdrawal_packet_hash: redemption.withdrawal_packet_hash,
-        withdrawal_packet_evm_digest: redemption.withdrawal_packet_evm_digest,
         committee_epoch,
         committee,
-    };
-    witness
-        .validate_bounds()
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-    Ok(witness)
+    })
 }
 
 fn pfusdc_committee_at_height(

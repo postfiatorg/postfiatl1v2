@@ -185,8 +185,8 @@ use postfiat_types::{
     NftTransactionOperation, NodeState, Offer, OfferTransactionOperation, OrchardActionPayload,
     OrchardAssetCommitmentRecord, OrchardDepositActionPayload, OrchardEncryptedOutputRecord,
     OrchardFrontierCache, OrchardPoolState, OrchardRootRecord, OrchardWithdrawActionPayload,
-    OwnedObject, PaymentMemo, PfUsdcEgressFinalityStepV1, PfUsdcEgressProofWitnessV1,
-    PftlUniswapConsensusExportPacket, PftlUniswapConsensusReceipt,
+    OwnedObject, PaymentMemo, PfUsdcCheckpointProofWitnessV1, PfUsdcEgressFinalityStepV1,
+    PfUsdcEgressProofWitnessV1, PftlUniswapConsensusExportPacket, PftlUniswapConsensusReceipt,
     PftlUniswapConsensusReturnImport, PftlUniswapConsensusRouteState, Receipt, ShieldMigrateAction,
     ShieldedAction, ShieldedActionBatch, ShieldedDisclosure, ShieldedNote, ShieldedSpendResult,
     ShieldedState, ShieldedSwapActionPayload, SignedAssetTransaction, SignedAtomicSwapTransaction,
@@ -223,11 +223,11 @@ use postfiat_types::{
     OFFER_TX_ROLE_MAKER, OFFER_TX_ROLE_TAKER, PAYMENT_V2_TRANSACTION_KIND,
     PFTL_UNISWAP_EXPORT_STATUS_DESTINATION_CONSUMED, PFTL_UNISWAP_EXPORT_STATUS_SOURCE_DEBITED,
     PFTL_UNISWAP_EXPORT_STATUS_SOURCE_REFUNDED, PFTL_UNISWAP_RETURN_STATUS_IMPORTED,
-    PFUSDC_EGRESS_PROOF_WITNESS_SCHEMA_V1, SIGNED_GOVERNANCE_AUTHORIZATION_SCHEMA_V2,
-    SNAPSHOT_VERSION, TRANSFER_TRANSACTION_KIND, TURNSTILE_KIND_BOOTSTRAP_DEPOSIT,
-    TURNSTILE_KIND_ORCHARD_DEPOSIT, TURNSTILE_KIND_POOL_MIGRATION,
-    VAULT_BRIDGE_BUCKET_STATUS_ACTIVE, VAULT_BRIDGE_BUCKET_STATUS_IMPAIRED,
-    VAULT_BRIDGE_REDEMPTION_STATE_PENDING,
+    PFUSDC_CHECKPOINT_PROOF_WITNESS_SCHEMA_V1, PFUSDC_EGRESS_PROOF_WITNESS_SCHEMA_V1,
+    SIGNED_GOVERNANCE_AUTHORIZATION_SCHEMA_V2, SNAPSHOT_VERSION, TRANSFER_TRANSACTION_KIND,
+    TURNSTILE_KIND_BOOTSTRAP_DEPOSIT, TURNSTILE_KIND_ORCHARD_DEPOSIT,
+    TURNSTILE_KIND_POOL_MIGRATION, VAULT_BRIDGE_BUCKET_STATUS_ACTIVE,
+    VAULT_BRIDGE_BUCKET_STATUS_IMPAIRED, VAULT_BRIDGE_REDEMPTION_STATE_PENDING,
 };
 use postfiat_types::{AtomicSwapAuthorization, AtomicSwapLeg, UnsignedAtomicSwapTransaction};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};

@@ -14,7 +14,10 @@ use postfiat_ordering_fast::{
 };
 use postfiat_types::*;
 
-use super::{registry_root, registry_update_authorization_signing_bytes, verify_egress_witness_v1};
+use super::{
+    registry_root, registry_update_authorization_signing_bytes, verify_checkpoint_witness_v1,
+    verify_egress_witness_v1,
+};
 
 fn committee() -> (ConsensusV2ValidatorSet, Vec<MlDsa65KeyPair>) {
     let keys = (0..6)
@@ -445,6 +448,54 @@ fn exact_finalized_egress_witness_accepts_and_binds_every_boundary() {
         .votes
         .pop();
     assert!(verify_egress_witness_v1(&under_quorum).is_err());
+}
+
+#[test]
+fn checkpoint_only_proof_advances_without_a_withdrawal() {
+    let egress = fixture();
+    let witness = PfUsdcCheckpointProofWitnessV1 {
+        schema: PFUSDC_CHECKPOINT_PROOF_WITNESS_SCHEMA_V1.to_string(),
+        chain_id: egress.chain_id,
+        genesis_hash: egress.genesis_hash,
+        protocol_version: egress.protocol_version,
+        prior_checkpoint_block_id: egress.prior_checkpoint_block_id,
+        finality_ancestry: egress.finality_ancestry,
+        block: egress.block,
+        committee_epoch: egress.committee_epoch,
+        committee: egress.committee,
+    };
+    if let Ok(path) = std::env::var("PFUSDC_CHECKPOINT_FIXTURE_OUT") {
+        std::fs::write(
+            path,
+            serde_json::to_vec_pretty(&witness).expect("checkpoint fixture JSON"),
+        )
+        .expect("write checkpoint fixture");
+    }
+    let values = verify_checkpoint_witness_v1(&witness).expect("valid checkpoint-only proof");
+    assert_eq!(
+        values.resulting_checkpoint_block_id,
+        witness.block.header.block_hash
+    );
+    assert_eq!(
+        values.prior_checkpoint_block_id,
+        witness.block.header.parent_hash
+    );
+
+    let mut wrong_parent = witness.clone();
+    wrong_parent.prior_checkpoint_block_id = "ef".repeat(48);
+    assert!(verify_checkpoint_witness_v1(&wrong_parent).is_err());
+
+    let mut under_quorum = witness;
+    under_quorum
+        .block
+        .header
+        .consensus_v2_commit
+        .as_mut()
+        .expect("commit")
+        .precommit_qc
+        .votes
+        .pop();
+    assert!(verify_checkpoint_witness_v1(&under_quorum).is_err());
 }
 
 #[test]

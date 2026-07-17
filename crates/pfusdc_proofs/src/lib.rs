@@ -11,11 +11,12 @@ use postfiat_ordering_fast::{
 use postfiat_types::{
     pfusdc_egress_proof_nullifier_v1, vault_bridge_withdrawal_packet_evm_digest,
     vault_bridge_withdrawal_packet_hash, verify_bridge_exit_merkle_proof_v1, ConsensusV2BlockRef,
-    GovernanceActionBatch, PfUsdcEgressFinalityStepV1, PfUsdcEgressProofWitnessV1,
-    PfUsdcEgressPublicValuesV1, SignedGovernanceAuthorizationV2, ValidatorRegistryEntry,
-    ValidatorRegistryUpdateRecord, BRIDGE_EXIT_ACCEPTED_RECEIPT_CODE,
-    PFUSDC_EGRESS_PROOF_WITNESS_SCHEMA_V1, PFUSDC_EGRESS_PUBLIC_VALUES_SCHEMA_V1,
-    SIGNED_GOVERNANCE_AUTHORIZATION_SCHEMA_V2,
+    GovernanceActionBatch, PfUsdcCheckpointProofWitnessV1, PfUsdcCheckpointPublicValuesV1,
+    PfUsdcEgressFinalityStepV1, PfUsdcEgressProofWitnessV1, PfUsdcEgressPublicValuesV1,
+    SignedGovernanceAuthorizationV2, ValidatorRegistryEntry, ValidatorRegistryUpdateRecord,
+    BRIDGE_EXIT_ACCEPTED_RECEIPT_CODE, PFUSDC_CHECKPOINT_PROOF_WITNESS_SCHEMA_V1,
+    PFUSDC_CHECKPOINT_PUBLIC_VALUES_SCHEMA_V1, PFUSDC_EGRESS_PROOF_WITNESS_SCHEMA_V1,
+    PFUSDC_EGRESS_PUBLIC_VALUES_SCHEMA_V1, SIGNED_GOVERNANCE_AUTHORIZATION_SCHEMA_V2,
 };
 
 pub const PFUSDC_EGRESS_PROOF_PROGRAM_VERSION_V1: u32 = 1;
@@ -37,52 +38,18 @@ pub fn verify_egress_witness_v1(
         .bridge_exit_root
         .as_ref()
         .ok_or_else(|| "withdrawal block has no bridge-exit root".to_string())?;
-    let validator_set = consensus_committee(&witness.committee)?;
-    let mut cursor = witness.prior_checkpoint_block_id.clone();
-    let mut expected_committee: Option<(u64, ConsensusV2ValidatorSet)> = None;
-    let mut transition_start_root = String::new();
-    for step in &witness.finality_ancestry {
-        let step_committee = consensus_committee(&step.committee)?;
-        if let Some((expected_epoch, expected_set)) = &expected_committee {
-            if step.committee_epoch != *expected_epoch
-                || step_committee.committee_root != expected_set.committee_root
-            {
-                return Err("egress finality ancestry changes committee without proof".to_string());
-            }
-        } else {
-            expected_committee = Some((step.committee_epoch, step_committee.clone()));
-        }
-        let committed =
-            verify_finalized_block(witness, &step.block, step.committee_epoch, &step_committee)?;
-        if committed.parent_block_id != cursor {
-            return Err("egress finality ancestry is not contiguous".to_string());
-        }
-        cursor = committed.block_id;
-        if !step.next_committee.is_empty() {
-            let next = consensus_committee(&step.next_committee)?;
-            verify_committee_transition(witness, step, &step_committee, &next)?;
-            if transition_start_root.is_empty() {
-                transition_start_root = step_committee.committee_root.clone();
-            }
-            expected_committee = Some((step.next_committee_epoch, next));
-        }
-    }
-    if let Some((expected_epoch, expected_set)) = &expected_committee {
-        if witness.committee_epoch != *expected_epoch
-            || validator_set.committee_root != expected_set.committee_root
-        {
-            return Err("withdrawal block committee does not follow proved ancestry".to_string());
-        }
-    }
-    let committed_block = verify_finalized_block(
-        witness,
+    let segment = verify_finality_segment(
+        &witness.chain_id,
+        &witness.genesis_hash,
+        witness.protocol_version,
+        &witness.prior_checkpoint_block_id,
+        &witness.finality_ancestry,
         &witness.block,
         witness.committee_epoch,
-        &validator_set,
+        &witness.committee,
     )?;
-    if committed_block.parent_block_id != cursor {
-        return Err("egress finality segment does not start at the prior checkpoint".to_string());
-    }
+    let committed_block = segment.committed_block;
+    let validator_set = segment.validator_set;
 
     if !witness.receipt.accepted
         || witness.receipt.code != BRIDGE_EXIT_ACCEPTED_RECEIPT_CODE
@@ -168,7 +135,7 @@ pub fn verify_egress_witness_v1(
         // When a transition is proved this carries the starting committee
         // root. The EVM verifier binds it to its stored trust anchor; the SP1
         // proof binds every transition from that root to `committee_root`.
-        committee_transition_commitment: transition_start_root,
+        committee_transition_commitment: segment.transition_start_root,
         finalized_block_height: committed_block.height,
         finalized_block_view: header.view,
         finalized_block_id: committed_block.block_id.clone(),
@@ -203,6 +170,132 @@ pub fn verify_egress_witness_v1(
     Ok(public_values)
 }
 
+pub fn verify_checkpoint_witness_v1(
+    witness: &PfUsdcCheckpointProofWitnessV1,
+) -> Result<PfUsdcCheckpointPublicValuesV1, String> {
+    witness.validate_bounds()?;
+    if witness.schema != PFUSDC_CHECKPOINT_PROOF_WITNESS_SCHEMA_V1 {
+        return Err("wrong pfUSDC checkpoint witness schema".to_string());
+    }
+    let segment = verify_finality_segment(
+        &witness.chain_id,
+        &witness.genesis_hash,
+        witness.protocol_version,
+        &witness.prior_checkpoint_block_id,
+        &witness.finality_ancestry,
+        &witness.block,
+        witness.committee_epoch,
+        &witness.committee,
+    )?;
+    let committed = segment.committed_block;
+    let mut values = PfUsdcCheckpointPublicValuesV1 {
+        schema: PFUSDC_CHECKPOINT_PUBLIC_VALUES_SCHEMA_V1.to_string(),
+        proof_program_version: PFUSDC_EGRESS_PROOF_PROGRAM_VERSION_V1,
+        pftl_chain_id: witness.chain_id.clone(),
+        pftl_genesis_hash: witness.genesis_hash.clone(),
+        pftl_protocol_version: witness.protocol_version,
+        prior_checkpoint_block_id: witness.prior_checkpoint_block_id.clone(),
+        resulting_checkpoint_block_id: committed.block_id.clone(),
+        committee_epoch: witness.committee_epoch,
+        committee_root: segment.validator_set.committee_root,
+        committee_transition_commitment: segment.transition_start_root,
+        finalized_block_height: committed.height,
+        finalized_block_view: witness.block.header.view,
+        finalized_block_id: committed.block_id,
+        finalized_parent_block_id: committed.parent_block_id,
+        finalized_state_root: committed.state_root,
+        public_values_commitment: String::new(),
+    };
+    values.seal()?;
+    values.validate()?;
+    Ok(values)
+}
+
+struct VerifiedFinalitySegment {
+    committed_block: ConsensusV2BlockRef,
+    validator_set: ConsensusV2ValidatorSet,
+    transition_start_root: String,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn verify_finality_segment(
+    chain_id: &str,
+    genesis_hash: &str,
+    protocol_version: u32,
+    prior_checkpoint_block_id: &str,
+    ancestry: &[PfUsdcEgressFinalityStepV1],
+    target_block: &postfiat_types::BlockRecord,
+    target_committee_epoch: u64,
+    target_committee: &[ValidatorRegistryEntry],
+) -> Result<VerifiedFinalitySegment, String> {
+    let validator_set = consensus_committee(target_committee)?;
+    let mut cursor = prior_checkpoint_block_id.to_string();
+    let mut expected_committee: Option<(u64, ConsensusV2ValidatorSet)> = None;
+    let mut transition_start_root = String::new();
+    for step in ancestry {
+        let step_committee = consensus_committee(&step.committee)?;
+        if let Some((expected_epoch, expected_set)) = &expected_committee {
+            if step.committee_epoch != *expected_epoch
+                || step_committee.committee_root != expected_set.committee_root
+            {
+                return Err("finality ancestry changes committee without proof".to_string());
+            }
+        } else {
+            expected_committee = Some((step.committee_epoch, step_committee.clone()));
+        }
+        let committed = verify_finalized_block(
+            chain_id,
+            genesis_hash,
+            protocol_version,
+            &step.block,
+            step.committee_epoch,
+            &step_committee,
+        )?;
+        if committed.parent_block_id != cursor {
+            return Err("finality ancestry is not contiguous".to_string());
+        }
+        cursor = committed.block_id;
+        if !step.next_committee.is_empty() {
+            let next = consensus_committee(&step.next_committee)?;
+            verify_committee_transition(
+                chain_id,
+                genesis_hash,
+                protocol_version,
+                step,
+                &step_committee,
+                &next,
+            )?;
+            if transition_start_root.is_empty() {
+                transition_start_root = step_committee.committee_root.clone();
+            }
+            expected_committee = Some((step.next_committee_epoch, next));
+        }
+    }
+    if let Some((expected_epoch, expected_set)) = &expected_committee {
+        if target_committee_epoch != *expected_epoch
+            || validator_set.committee_root != expected_set.committee_root
+        {
+            return Err("target block committee does not follow proved ancestry".to_string());
+        }
+    }
+    let committed_block = verify_finalized_block(
+        chain_id,
+        genesis_hash,
+        protocol_version,
+        target_block,
+        target_committee_epoch,
+        &validator_set,
+    )?;
+    if committed_block.parent_block_id != cursor {
+        return Err("finality segment does not start at the prior checkpoint".to_string());
+    }
+    Ok(VerifiedFinalitySegment {
+        committed_block,
+        validator_set,
+        transition_start_root,
+    })
+}
+
 fn consensus_committee(
     records: &[ValidatorRegistryEntry],
 ) -> Result<ConsensusV2ValidatorSet, String> {
@@ -229,7 +322,9 @@ fn consensus_committee(
 }
 
 fn verify_finalized_block(
-    witness: &PfUsdcEgressProofWitnessV1,
+    chain_id: &str,
+    genesis_hash: &str,
+    protocol_version: u32,
     block: &postfiat_types::BlockRecord,
     committee_epoch: u64,
     validator_set: &ConsensusV2ValidatorSet,
@@ -240,9 +335,9 @@ fn verify_finalized_block(
         .as_ref()
         .ok_or_else(|| "egress finality block has no consensus-v2 commit".to_string())?;
     let domain = consensus_v2_domain(
-        witness.chain_id.clone(),
-        witness.genesis_hash.clone(),
-        witness.protocol_version,
+        chain_id.to_string(),
+        genesis_hash.to_string(),
+        protocol_version,
         committee_epoch,
         validator_set,
     );
@@ -268,7 +363,9 @@ fn verify_finalized_block(
 }
 
 fn verify_committee_transition(
-    witness: &PfUsdcEgressProofWitnessV1,
+    chain_id: &str,
+    genesis_hash: &str,
+    protocol_version: u32,
     step: &PfUsdcEgressFinalityStepV1,
     old_set: &ConsensusV2ValidatorSet,
     new_set: &ConsensusV2ValidatorSet,
@@ -297,9 +394,9 @@ fn verify_committee_transition(
         );
     }
     let encoded_payload = serde_json::to_vec(&(
-        witness.chain_id.as_str(),
-        witness.genesis_hash.as_str(),
-        witness.protocol_version,
+        chain_id,
+        genesis_hash,
+        protocol_version,
         "governance",
         batch.batch_id.as_str(),
         step.governance_payload_json.as_str(),
@@ -321,9 +418,9 @@ fn verify_committee_transition(
     }
     let update = &batch.validator_registry_updates[0];
     let domain = CobaltDomain {
-        chain_id: witness.chain_id.clone(),
-        genesis_hash: witness.genesis_hash.clone(),
-        protocol_version: witness.protocol_version,
+        chain_id: chain_id.to_string(),
+        genesis_hash: genesis_hash.to_string(),
+        protocol_version,
     };
     verify_validator_registry_update(&domain, update)
         .map_err(|error| format!("invalid committee registry update: {error}"))?;

@@ -55,6 +55,7 @@ contract Tier4TemporaryFinality is IPFTLFinalityVerifierV1 {
 
 contract PFUSDCTier4Test {
     bytes private constant SCHEMA = "postfiat.pfusdc.egress_public_values.v1";
+    bytes private constant CHECKPOINT_SCHEMA = "postfiat.pfusdc.checkpoint_public_values.v1";
     bytes32 private constant PROGRAM_VKEY = keccak256("program-vkey");
     address private constant RECIPIENT = address(0xBEEF);
 
@@ -185,6 +186,53 @@ contract PFUSDCTier4Test {
         _assertEq(token.balanceOf(RECIPIENT), 0, "wrong program version recipient unchanged");
     }
 
+    function testCheckpointOnlyProofKeepsFinalityWindowLive() public {
+        bytes memory checkpoint11 = _checkpointPublicValues(
+            initialCheckpoint48, _h48(0x44), 11, _h48(0x41), bytes("")
+        );
+        verifier.advanceCheckpoint(checkpoint11, hex"01020304");
+        _assertEq(verifier.latestFinalizedHeight(), 11, "checkpoint-only height");
+        _assertEq(verifier.latestCheckpointCommitment(), keccak256(_h48(0x44)), "checkpoint-only root");
+
+        bytes memory checkpoint12 =
+            _checkpointPublicValues(_h48(0x44), _h48(0x45), 12, _h48(0x41), bytes(""));
+        verifier.advanceCheckpoint(checkpoint12, hex"01020304");
+        _assertEq(verifier.latestFinalizedHeight(), 12, "second checkpoint height");
+
+        // Advancing the maintenance checkpoint must not strand an unclaimed
+        // withdrawal finalized at the earlier accepted checkpoint.
+        bytes memory historicalWithdrawal =
+            _publicValues(address(vault), true, 11, _h48(0x44), _h32(0x97));
+        vault.withdrawWithProof(historicalWithdrawal, hex"01020304");
+        _assertEq(token.balanceOf(RECIPIENT), 125, "historical withdrawal remains claimable");
+        _assertEq(verifier.latestFinalizedHeight(), 12, "historical claim cannot roll back tip");
+
+        (bool replayOk,) = address(verifier).call(
+            abi.encodeCall(PFTLFinalityVerifierV1.advanceCheckpoint, (checkpoint11, hex"01020304"))
+        );
+        _assertTrue(!replayOk, "stale checkpoint replay must fail");
+    }
+
+    function testCheckpointOnlyProofRejectsWrongCommitteeAndInvalidProof() public {
+        bytes memory wrongCommittee = _checkpointPublicValues(
+            initialCheckpoint48, _h48(0x44), 11, _h48(0x42), bytes("")
+        );
+        (bool committeeOk,) = address(verifier).call(
+            abi.encodeCall(PFTLFinalityVerifierV1.advanceCheckpoint, (wrongCommittee, hex"01020304"))
+        );
+        _assertTrue(!committeeOk, "unproved checkpoint committee change must fail");
+
+        sp1.setReject(true);
+        bytes memory valid = _checkpointPublicValues(
+            initialCheckpoint48, _h48(0x44), 11, _h48(0x41), bytes("")
+        );
+        (bool proofOk,) = address(verifier).call(
+            abi.encodeCall(PFTLFinalityVerifierV1.advanceCheckpoint, (valid, hex"01020304"))
+        );
+        _assertTrue(!proofOk, "invalid checkpoint proof must fail");
+        _assertEq(verifier.latestFinalizedHeight(), 10, "invalid checkpoint proof does not mutate");
+    }
+
     function _publicValues(
         address vaultAddress,
         bool accepted,
@@ -201,6 +249,31 @@ contract PFUSDCTier4Test {
             _h48(0x41),
             bytes("")
         );
+    }
+
+    function _checkpointPublicValues(
+        bytes memory priorCheckpoint,
+        bytes memory resultingCheckpoint,
+        uint64 finalizedHeight,
+        bytes memory committeeRoot,
+        bytes memory transitionStartRoot
+    ) private view returns (bytes memory out) {
+        out = abi.encodePacked("PFTL-PFUSDC-TIER4", uint32(CHECKPOINT_SCHEMA.length), CHECKPOINT_SCHEMA);
+        out = bytes.concat(out, _field(1, CHECKPOINT_SCHEMA));
+        out = bytes.concat(out, _field(2, abi.encodePacked(uint32(1))));
+        out = bytes.concat(out, _field(3, bytes("postfiat-tier4-test")));
+        out = bytes.concat(out, _field(4, genesis48));
+        out = bytes.concat(out, _field(5, abi.encodePacked(uint32(1))));
+        out = bytes.concat(out, _field(6, priorCheckpoint));
+        out = bytes.concat(out, _field(7, resultingCheckpoint));
+        out = bytes.concat(out, _field(8, abi.encodePacked(uint64(1))));
+        out = bytes.concat(out, _field(9, committeeRoot));
+        out = bytes.concat(out, _field(10, transitionStartRoot));
+        out = bytes.concat(out, _field(11, abi.encodePacked(finalizedHeight)));
+        out = bytes.concat(out, _field(12, abi.encodePacked(uint64(0))));
+        out = bytes.concat(out, _field(13, resultingCheckpoint));
+        out = bytes.concat(out, _field(14, priorCheckpoint));
+        out = bytes.concat(out, _field(15, _h48(0x66)));
     }
 
     function _publicValuesWithCommittee(

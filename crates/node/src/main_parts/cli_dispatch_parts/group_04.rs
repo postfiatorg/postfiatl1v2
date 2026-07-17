@@ -1392,6 +1392,24 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "pfusdc-checkpoint-witness" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let prior_checkpoint_block_id =
+                flag_value(flags, "--prior-checkpoint").ok_or("missing --prior-checkpoint")?;
+            let target_block_id =
+                flag_value(flags, "--target-block").ok_or("missing --target-block")?;
+            let witness = pfusdc_checkpoint_witness(PfUsdcCheckpointWitnessOptions {
+                data_dir: PathBuf::from(data_dir),
+                prior_checkpoint_block_id: prior_checkpoint_block_id.to_string(),
+                target_block_id: target_block_id.to_string(),
+            })
+            .map_err(|error| format!("pfusdc-checkpoint-witness failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&witness).map_err(|error| {
+                format!("pfUSDC checkpoint witness serialization failed: {error}")
+            })?;
+            println!("{json}");
+            Ok(())
+        }
         "block-vote" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let key_file = flag_value(flags, "--key-file")

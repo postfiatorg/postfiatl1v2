@@ -118,7 +118,8 @@ use postfiat_node::{
     vault_bridge_deposit_relay_rpc_bundle, vault_bridge_receipts, vault_bridge_route,
     vault_bridge_status,
     vault_bridge_withdrawal_plan, vault_bridge_withdrawal_relay_bundle,
-    vault_bridge_withdrawal_signature_bundle, pfusdc_egress_witness,
+    vault_bridge_withdrawal_signature_bundle, pfusdc_checkpoint_witness,
+    pfusdc_egress_witness,
     verify_block_proposal_equivocation,
     verify_block_timeout_certificate_file, verify_block_vote_equivocation, verify_blocks,
     verify_bridge, verify_consensus_v2_proposal_matches_block, verify_deployment_manifest,
@@ -179,7 +180,7 @@ use postfiat_node::{
     NavcoinBridgePacketOptions, NavcoinBridgePacketPreflightOptions,
     NavcoinBridgePrimarySubscribeOptions, NavcoinBridgeReceiptReplayOptions,
     NavcoinBridgeRecordForkRehearsalOptions, NavcoinBridgeRecordReturnBurnOptions,
-    PfUsdcEgressWitnessOptions,
+    PfUsdcCheckpointWitnessOptions, PfUsdcEgressWitnessOptions,
     NavcoinBridgeRefundSourceOptions, NavcoinBridgeReturnBurnRequestOptions,
     NavcoinBridgeRouteInitOptions, NavcoinBridgeRoutesOptions, NavcoinBridgeSupplyStatusOptions,
     NftFeeQuoteOptions, NftInfoOptions, NodeOptions, OfferFeeQuoteOptions, OfferFeeQuoteReport,
@@ -508,6 +509,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "receipts"
         | "blocks"
         | "pfusdc-egress-witness"
+        | "pfusdc-checkpoint-witness"
         | "block-vote"
         | "block-vote-equivocation"
         | "block-vote-equivocation-verify"
