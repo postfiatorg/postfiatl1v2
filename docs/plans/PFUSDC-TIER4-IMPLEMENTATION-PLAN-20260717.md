@@ -402,7 +402,7 @@ cargo fmt --all -- --check
 cargo check --workspace --all-targets
 cargo test --workspace
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-/home/postfiat/.foundry/bin/forge test --root crates/ethereum-contracts -vv
+forge test --root crates/ethereum-contracts -vv
 ```
 
 Additional required gates:
