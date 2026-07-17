@@ -1,0 +1,457 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-shielded-asset-predicate-registry-v1.json",
+  "title": "PostFiat Shielded Asset Predicate Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "packet_id",
+    "mode",
+    "statement",
+    "attestation",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-shielded-asset-predicate-registry-v1"
+    },
+    "packet_id": {
+      "$ref": "#/$defs/id"
+    },
+    "mode": {
+      "enum": [
+        "design_fixture_only",
+        "controlled_testnet_attestation"
+      ]
+    },
+    "statement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_boundary",
+        "registry",
+        "asset_profile",
+        "predicates",
+        "privacy_fixture",
+        "evidence_artifacts"
+      ],
+      "properties": {
+        "protocol_boundary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "pool_id",
+            "supply_mode_v0",
+            "programming_model_v0",
+            "deferred_modes"
+          ],
+          "properties": {
+            "pool_id": {
+              "const": "orchard-v1"
+            },
+            "supply_mode_v0": {
+              "const": "transparent_supply_private_flow"
+            },
+            "programming_model_v0": {
+              "const": "closed_cobalt_governed_predicate_library"
+            },
+            "deferred_modes": {
+              "type": "array",
+              "minItems": 3,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "private_supply",
+                  "bilateral_dvp",
+                  "amm_pool",
+                  "order_book",
+                  "arbitrary_zkvm",
+                  "recipient_identity_transfer_policy"
+                ]
+              }
+            }
+          }
+        },
+        "registry": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "registry_id",
+            "version",
+            "root_governance",
+            "registry_root_hash",
+            "predicate_id_derivation",
+            "cobalt_transition_required",
+            "allowed_state_scopes",
+            "forbidden_predicate_classes"
+          ],
+          "properties": {
+            "registry_id": {
+              "$ref": "#/$defs/id"
+            },
+            "version": {
+              "const": "v0"
+            },
+            "root_governance": {
+              "const": "cobalt_governed"
+            },
+            "registry_root_hash": {
+              "$ref": "#/$defs/hash96"
+            },
+            "predicate_id_derivation": {
+              "const": "pred-<sha3_384(circuit_content)[0:32]>"
+            },
+            "cobalt_transition_required": {
+              "const": true
+            },
+            "allowed_state_scopes": {
+              "type": "array",
+              "items": {
+                "const": "owner_scoped"
+              },
+              "minItems": 1,
+              "maxItems": 1
+            },
+            "forbidden_predicate_classes": {
+              "type": "array",
+              "minItems": 4,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "arbitrary_zkvm",
+                  "amm_pool",
+                  "order_book",
+                  "global_counter",
+                  "bilateral_dvp",
+                  "recipient_identity_transfer_policy"
+                ]
+              }
+            }
+          }
+        },
+        "asset_profile": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "asset_id",
+            "issuer_key_hash",
+            "supply_accounting",
+            "public_supply",
+            "private_flow",
+            "transfer_policy"
+          ],
+          "properties": {
+            "asset_id": {
+              "$ref": "#/$defs/id"
+            },
+            "issuer_key_hash": {
+              "$ref": "#/$defs/hash96"
+            },
+            "supply_accounting": {
+              "const": "transparent_supply_map"
+            },
+            "public_supply": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            "private_flow": {
+              "const": true
+            },
+            "transfer_policy": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "policy_class",
+                "recipient_identity_required",
+                "recipient_attribute_public_inputs",
+                "privacy_tier"
+              ],
+              "properties": {
+                "policy_class": {
+                  "const": "owner_scoped_static"
+                },
+                "recipient_identity_required": {
+                  "const": false
+                },
+                "recipient_attribute_public_inputs": {
+                  "type": "array",
+                  "maxItems": 0
+                },
+                "privacy_tier": {
+                  "const": "unified_pool_no_recipient_attribute_leakage"
+                }
+              }
+            }
+          }
+        },
+        "predicates": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/predicate"
+          }
+        },
+        "privacy_fixture": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "fixture_id",
+            "claim",
+            "anonymity_set_floor",
+            "public_artifact_allowed_fields",
+            "transfers"
+          ],
+          "properties": {
+            "fixture_id": {
+              "$ref": "#/$defs/id"
+            },
+            "claim": {
+              "const": "same_asset_same_policy_transfers_have_no_distinguishing_public_artifact"
+            },
+            "anonymity_set_floor": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "public_artifact_allowed_fields": {
+              "type": "array",
+              "minItems": 5,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "root",
+                  "nullifier",
+                  "output_commitments",
+                  "fee",
+                  "asset_commitment",
+                  "predicate_registry_root",
+                  "policy_root",
+                  "disclosure_hash"
+                ]
+              }
+            },
+            "transfers": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "evidence_artifacts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidence_artifact"
+          }
+        }
+      }
+    },
+    "attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attestor_key_hash",
+        "statement_hash",
+        "signature_hash",
+        "signature_scheme",
+        "attested_at"
+      ],
+      "properties": {
+        "attestor_key_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "statement_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "signature_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "signature_scheme": {
+          "enum": [
+            "mldsa44-placeholder",
+            "mldsa65-placeholder",
+            "ed25519-test-fixture"
+          ]
+        },
+        "attested_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transparent_supply_private_flow",
+        "no_private_supply_v0",
+        "closed_predicate_vocabulary",
+        "content_addressed_predicate_ids",
+        "cobalt_governed_registry_root",
+        "owner_scoped_only_v0",
+        "no_bilateral_dvp_v0",
+        "no_arbitrary_zkvm",
+        "no_shared_mutable_state",
+        "no_counterparty_identity_public_inputs",
+        "privacy_fixture_same_public_shape",
+        "no_full_viewing_key",
+        "live_registry_mutation",
+        "authority_transfer"
+      ],
+      "properties": {
+        "transparent_supply_private_flow": {
+          "const": true
+        },
+        "no_private_supply_v0": {
+          "const": true
+        },
+        "closed_predicate_vocabulary": {
+          "const": true
+        },
+        "content_addressed_predicate_ids": {
+          "const": true
+        },
+        "cobalt_governed_registry_root": {
+          "const": true
+        },
+        "owner_scoped_only_v0": {
+          "const": true
+        },
+        "no_bilateral_dvp_v0": {
+          "const": true
+        },
+        "no_arbitrary_zkvm": {
+          "const": true
+        },
+        "no_shared_mutable_state": {
+          "const": true
+        },
+        "no_counterparty_identity_public_inputs": {
+          "const": true
+        },
+        "privacy_fixture_same_public_shape": {
+          "const": true
+        },
+        "no_full_viewing_key": {
+          "const": true
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "predicate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "predicate_id",
+        "name",
+        "predicate_class",
+        "state_scope",
+        "shared_mutable_state",
+        "arbitrary_vm",
+        "circuit_content_hash",
+        "verifying_key_hash",
+        "public_inputs_schema_hash",
+        "trusted_setup",
+        "max_actions",
+        "public_inputs"
+      ],
+      "properties": {
+        "predicate_id": {
+          "$ref": "#/$defs/id"
+        },
+        "name": {
+          "$ref": "#/$defs/id"
+        },
+        "predicate_class": {
+          "enum": [
+            "asset_issuance",
+            "asset_transfer",
+            "asset_burn",
+            "assurance_non_inclusion",
+            "vesting_lock"
+          ]
+        },
+        "state_scope": {
+          "const": "owner_scoped"
+        },
+        "shared_mutable_state": {
+          "const": false
+        },
+        "arbitrary_vm": {
+          "const": false
+        },
+        "circuit_content_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "verifying_key_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "public_inputs_schema_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "trusted_setup": {
+          "const": "halo2_universal_no_per_circuit_setup"
+        },
+        "max_actions": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "public_inputs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "asset_commitment",
+              "asset_id",
+              "issuer_key_hash",
+              "public_supply_delta",
+              "nullifier",
+              "output_commitments",
+              "predicate_registry_root",
+              "policy_root",
+              "release_height",
+              "disclosure_hash"
+            ]
+          }
+        }
+      }
+    },
+    "evidence_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha3_384"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha3_384": {
+          "$ref": "#/$defs/hash96"
+        }
+      }
+    }
+  }
+}

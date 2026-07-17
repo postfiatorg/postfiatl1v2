@@ -1,0 +1,467 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BIN="${BIN:-$ROOT/target/release/postfiat-node}"
+DATA="${DATA:-$HOME/.local/share/postfiat/live-e2e-20260621T061254Z/runner-data-validator0}"
+TOPO="${TOPO:-$HOME/.local/share/postfiat/live-e2e-20260621T061254Z/all-vultr-remote-topology.json}"
+RUN_ROOT="${RUN_ROOT:-$HOME/.local/share/postfiat/private-a651-pfusdc-e2e-20260621T201931Z}"
+CERT_KEYS="${CERT_KEYS:-}"
+
+INPUT_NOTE_A="${INPUT_NOTE_A:-$RUN_ROOT/ingress-pfusdc/note.json}"
+INPUT_NOTE_B="${INPUT_NOTE_B:-$RUN_ROOT/ingress-a651/note.json}"
+RUN_ID="${RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
+SWAP_DIR="${SWAP_DIR:-$RUN_ROOT/swap-forward-optimized-$RUN_ID}"
+
+ACTION_FILE="${ACTION_FILE:-$SWAP_DIR/action.json}"
+BATCH_FILE="${BATCH_FILE:-$SWAP_DIR/batch.json}"
+OUTPUT_NOTE_A="${OUTPUT_NOTE_A:-$SWAP_DIR/output-note-a.json}"
+OUTPUT_NOTE_B="${OUTPUT_NOTE_B:-$SWAP_DIR/output-note-b.json}"
+ARTIFACT_DIR="${ARTIFACT_DIR:-$SWAP_DIR/round}"
+REPORT_FILE="${REPORT_FILE:-$SWAP_DIR/live-round-report.json}"
+TRANSPORT_REPORT_FILE="${TRANSPORT_REPORT_FILE:-$SWAP_DIR/transport-resume-report.json}"
+FINAL_STATUS_FILE="${FINAL_STATUS_FILE:-$SWAP_DIR/fleet-status-final.json}"
+LOCAL_APPLY_REPORT_FILE="${LOCAL_APPLY_REPORT_FILE:-$SWAP_DIR/local-apply-report.json}"
+PREWARM_READY_FILE="${PREWARM_READY_FILE:-}"
+START_SIGNAL_FILE="${START_SIGNAL_FILE:-}"
+START_SIGNAL_TIMEOUT_MS="${START_SIGNAL_TIMEOUT_MS:-0}"
+
+TIMEOUT_MS="${TIMEOUT_MS:-2400000}"
+SEND_RETRIES="${SEND_RETRIES:-3}"
+RETRY_BACKOFF_MS="${RETRY_BACKOFF_MS:-1000}"
+VIEW="${VIEW:-0}"
+APPLY_LOCAL_MIRROR="${APPLY_LOCAL_MIRROR:-0}"
+SEND_VALIDATOR0_CATCHUP="${SEND_VALIDATOR0_CATCHUP:-1}"
+
+DEFAULT_PFUSDC_ASSET_ID="8751c2d04b993eb54f751b0f130c420fdb089548ec2f2a53837d11d1c397a1252e74bcc24616527e9c79b968635fae90"
+DEFAULT_A651_ASSET_ID="dcddbf56e7e15f7893d0038e8e0e6089d5a41418dead75353aabb8c016cf626beeb93bc802929f29883c078d910f59d5"
+PFUSDC_ASSET_ID="${PFUSDC_ASSET_ID:-$DEFAULT_PFUSDC_ASSET_ID}"
+A651_ASSET_ID="${A651_ASSET_ID:-$DEFAULT_A651_ASSET_ID}"
+REQUIRE_PROFILE_ASSET_IDS="${REQUIRE_PROFILE_ASSET_IDS:-0}"
+
+log() {
+  printf '[%s] %s\n' "$(date -u +%H:%M:%S)" "$*" >&2
+}
+
+die() {
+  log "fatal: $*"
+  exit 1
+}
+
+need_cmd() {
+  command -v "$1" >/dev/null 2>&1 || die "missing command: $1"
+}
+
+need_file() {
+  [[ -f "$1" ]] || die "missing file: $1"
+}
+
+assert_note_asset_id() {
+  local label="$1"
+  local note_file="$2"
+  local expected="$3"
+  local actual
+  actual="$(jq -er '.asset_id' "$note_file")"
+  [[ "$actual" == "$expected" ]] || die "$label input note asset mismatch: expected $expected got $actual"
+}
+
+bool_true() {
+  case "${1:-}" in
+    1|true|TRUE|yes|YES|on|ON) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+sha_seed() {
+  printf '%s' "$1" | sha256sum | awk '{print $1}'
+}
+
+json_get() {
+  jq -er "$1"
+}
+
+status_height() {
+  jq -er '.block_height'
+}
+
+status_root() {
+  jq -er '.state_root'
+}
+
+status_tip() {
+  jq -er '.block_tip_hash'
+}
+
+validator_host() {
+  local validator="$1"
+  jq -er --arg validator "$validator" '.peers[] | select(.node_id == $validator) | .host' "$TOPO"
+}
+
+remote_status() {
+  local validator="$1"
+  local host
+  host="$(validator_host "$validator")"
+  ssh -n -i "${SSH_KEY:-$HOME/.ssh/id_ed25519}" \
+    -o BatchMode=yes \
+    -o StrictHostKeyChecking=accept-new \
+    -o ConnectTimeout=12 \
+    "root@$host" \
+    "sudo -n -u postfiat /usr/local/bin/postfiat-node status --data-dir /var/lib/postfiat/$validator"
+}
+
+collect_fleet_status() {
+  local output="$1"
+  local tmp="$output.tmp"
+  local first=1
+  local validators=()
+  local validator
+  mapfile -t validators < <(jq -r '.peers[].node_id' "$TOPO")
+  printf '[\n' >"$tmp"
+  for validator in "${validators[@]}"; do
+    [[ -n "$validator" ]] || continue
+    local status_file="$SWAP_DIR/status-$validator.json"
+    log "status $validator"
+    remote_status "$validator" >"$status_file"
+    if [[ "$first" -eq 0 ]]; then
+      printf ',\n' >>"$tmp"
+    fi
+    first=0
+    jq -c . "$status_file" >>"$tmp"
+  done
+  printf '\n]\n' >>"$tmp"
+  mv "$tmp" "$output"
+}
+
+fleet_majority_root() {
+  local status_file="$1"
+  local height="$2"
+  jq -er --argjson height "$height" '
+    [.[] | select(.block_height == $height) | .state_root]
+    | group_by(.)
+    | map({root: .[0], count: length})
+    | sort_by(.count)
+    | reverse
+    | .[0].root
+  ' "$status_file"
+}
+
+fleet_converged_at() {
+  local status_file="$1"
+  local height="$2"
+  local root="$3"
+  local expected
+  expected="$(jq -er '.peers | length' "$TOPO")"
+  jq -er --argjson height "$height" --arg root "$root" --argjson expected "$expected" '
+    length == $expected and all(.[]; .block_height == $height and .state_root == $root)
+  ' "$status_file" >/dev/null
+}
+
+select_certified_artifacts() {
+  if [[ -n "${CERT_FILE:-}" && -n "${CERT_BATCH_FILE:-}" ]]; then
+    need_file "$CERT_FILE"
+    need_file "$CERT_BATCH_FILE"
+    return 0
+  fi
+
+  if [[ -s "$ARTIFACT_DIR/block-certificate.json" && -s "$BATCH_FILE" ]]; then
+    CERT_FILE="$ARTIFACT_DIR/block-certificate.json"
+    CERT_BATCH_FILE="$BATCH_FILE"
+    return 0
+  fi
+
+  if [[ -s "$SWAP_DIR/cert-recovery/exact-block-certificate.json" ]]; then
+    CERT_FILE="$SWAP_DIR/cert-recovery/exact-block-certificate.json"
+    if [[ -s "$SWAP_DIR/cert-recovery/exact-batch.json" ]]; then
+      CERT_BATCH_FILE="$SWAP_DIR/cert-recovery/exact-batch.json"
+    elif [[ -s "$SWAP_DIR/cert-recovery/remote-batch.json" ]]; then
+      CERT_BATCH_FILE="$SWAP_DIR/cert-recovery/remote-batch.json"
+    else
+      CERT_BATCH_FILE="$BATCH_FILE"
+    fi
+    need_file "$CERT_BATCH_FILE"
+    return 0
+  fi
+
+  return 1
+}
+
+next_height() {
+  if [[ -n "${HEIGHT:-}" ]]; then
+    printf '%s\n' "$HEIGHT"
+    return 0
+  fi
+  if [[ -s "$ARTIFACT_DIR/block-certificate.json" ]]; then
+    jq -er '.block_height' "$ARTIFACT_DIR/block-certificate.json"
+    return 0
+  fi
+  if [[ -s "$ARTIFACT_DIR/block-proposal.json" ]]; then
+    jq -er '.block_height' "$ARTIFACT_DIR/block-proposal.json"
+    return 0
+  fi
+  "$BIN" status --data-dir "$DATA" | jq -er '.block_height + 1'
+}
+
+proposer_for_height() {
+  local height="$1"
+  "$BIN" block-proposer --data-dir "$DATA" --height "$height" --view "$VIEW" | jq -er '.proposer'
+}
+
+validator_key_from_data_dir() {
+  local validator="$1"
+  local candidate
+  candidate="$(dirname "$DATA")/$validator/validator_keys.json"
+  if [[ -f "$candidate" ]]; then
+    printf '%s\n' "$candidate"
+    return 0
+  fi
+  return 1
+}
+
+validator_key_from_cert_dir() {
+  local validator="$1"
+  local candidate
+  [[ -n "$CERT_KEYS" ]] || return 1
+  candidate="$CERT_KEYS/$validator.validator_keys.json"
+  if [[ -f "$candidate" ]]; then
+    printf '%s\n' "$candidate"
+    return 0
+  fi
+  return 1
+}
+
+path_names_validator() {
+  local path="$1"
+  local validator="$2"
+  case "$path" in
+    */"$validator"/validator_keys.json|*/"$validator".validator_keys.json) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+resolve_local_key_file() {
+  local local_node="$1"
+  if [[ -n "${KEY_FILE:-}" ]]; then
+    need_file "$KEY_FILE"
+    printf '%s\n' "$KEY_FILE"
+    return 0
+  fi
+  validator_key_from_data_dir "$local_node" && return 0
+  validator_key_from_cert_dir "$local_node" && return 0
+  die "no validator key file for local node $local_node; set KEY_FILE or provide $DATA/../$local_node/validator_keys.json"
+}
+
+resolve_proposal_key_file() {
+  local proposer="$1"
+  local local_node="$2"
+  if [[ -n "${PROPOSAL_KEY_FILE:-}" ]]; then
+    need_file "$PROPOSAL_KEY_FILE"
+    if [[ "$proposer" == "$local_node" ]] || path_names_validator "$PROPOSAL_KEY_FILE" "$proposer" || bool_true "${ALLOW_FIXED_PROPOSAL_KEY_FILE:-0}"; then
+      printf '%s\n' "$PROPOSAL_KEY_FILE"
+      return 0
+    fi
+    log "ignoring fixed PROPOSAL_KEY_FILE for nonlocal proposer $proposer: $PROPOSAL_KEY_FILE"
+  fi
+  validator_key_from_data_dir "$proposer" && return 0
+  validator_key_from_cert_dir "$proposer" && return 0
+  if [[ -n "${PROPOSAL_KEY_FILE:-}" ]]; then
+    die "PROPOSAL_KEY_FILE does not name proposer $proposer and no proposer key was found under the active data-dir mirror"
+  fi
+  die "no validator key file for proposer $proposer; provide $DATA/../$proposer/validator_keys.json or CERT_KEYS"
+}
+
+run_optimized_round() {
+  local height="$1"
+  local proposer="$2"
+  local local_node
+  local key_file
+  local proposal_key_file
+  local_node="$("$BIN" status --data-dir "$DATA" | jq -er '.node_id')"
+  key_file="$(resolve_local_key_file "$local_node")"
+  proposal_key_file="$(resolve_proposal_key_file "$proposer" "$local_node")"
+  local seed_a="${OUTPUT_SEED_A:-$(sha_seed "$SWAP_DIR:output-a")}"
+  local seed_b="${OUTPUT_SEED_B:-$(sha_seed "$SWAP_DIR:output-b")}"
+
+  need_file "$key_file"
+  need_file "$proposal_key_file"
+
+  if [[ -s "$BATCH_FILE" && -s "$ARTIFACT_DIR/block-certificate.json" ]]; then
+    log "resume: batch and round certificate already exist"
+    return 0
+  fi
+
+  if [[ -s "$BATCH_FILE" ]]; then
+    log "resume: batch exists, running certification only"
+    "$BIN" transport-peer-certified-batch-round \
+      --data-dir "$DATA" \
+      --topology "$TOPO" \
+      --batch-kind shielded \
+      --batch-file "$BATCH_FILE" \
+      --key-file "$key_file" \
+      --proposal-key-file "$proposal_key_file" \
+      --artifact-dir "$ARTIFACT_DIR" \
+      --height "$height" \
+      --view "$VIEW" \
+      --timeout-ms "$TIMEOUT_MS" \
+      --send-retries "$SEND_RETRIES" \
+      --retry-backoff-ms "$RETRY_BACKOFF_MS" \
+      >"$TRANSPORT_REPORT_FILE"
+    return 0
+  fi
+
+  [[ ! -e "$ACTION_FILE" ]] || die "action exists without batch; set SWAP_DIR to a clean directory or remove the partial artifact"
+
+  log "optimized live round: height=$height proposer=$proposer"
+  log "optimized live round keys: local=$local_node key_file=$key_file proposal_key_file=$proposal_key_file"
+  local live_args=(
+    asset-orchard-swap-live-round
+    --data-dir "$DATA" \
+    --topology "$TOPO" \
+    --input-note-file-a "$INPUT_NOTE_A" \
+    --input-note-file-b "$INPUT_NOTE_B" \
+    --output-note-seed-hex-a "$seed_a" \
+    --output-note-seed-hex-b "$seed_b" \
+    --action-file "$ACTION_FILE" \
+    --output-note-file-a "$OUTPUT_NOTE_A" \
+    --output-note-file-b "$OUTPUT_NOTE_B" \
+    --batch-file "$BATCH_FILE" \
+    --key-file "$key_file" \
+    --proposal-key-file "$proposal_key_file" \
+    --artifact-dir "$ARTIFACT_DIR" \
+    --height "$height" \
+    --view "$VIEW" \
+    --timeout-ms "$TIMEOUT_MS" \
+    --send-retries "$SEND_RETRIES" \
+    --retry-backoff-ms "$RETRY_BACKOFF_MS" \
+    --report-file "$REPORT_FILE"
+  )
+  if [[ -n "$PREWARM_READY_FILE" ]]; then
+    live_args+=(--prewarm-ready-file "$PREWARM_READY_FILE")
+  fi
+  if [[ -n "$START_SIGNAL_FILE" ]]; then
+    live_args+=(--start-signal-file "$START_SIGNAL_FILE")
+    live_args+=(--start-signal-timeout-ms "$START_SIGNAL_TIMEOUT_MS")
+  fi
+  "$BIN" "${live_args[@]}" >"$SWAP_DIR/live-round-stdout.json"
+}
+
+apply_local_mirror() {
+  local height="$1"
+  select_certified_artifacts || die "no certified batch artifacts found"
+
+  local local_status
+  local local_height
+  local_status="$("$BIN" status --data-dir "$DATA")"
+  local_height="$(printf '%s' "$local_status" | status_height)"
+  if (( local_height >= height )); then
+    log "local mirror already at height $local_height"
+    return 0
+  fi
+
+  log "applying certified shielded batch to local mirror"
+  "$BIN" apply-shield-batch \
+    --data-dir "$DATA" \
+    --batch-file "$CERT_BATCH_FILE" \
+    --certificate-file "$CERT_FILE" \
+    >"$LOCAL_APPLY_REPORT_FILE"
+}
+
+send_validator0_catchup() {
+  local height="$1"
+  local final_status="$2"
+  local majority_root
+  local v0_height
+  local v0_root
+
+  majority_root="$(fleet_majority_root "$final_status" "$height")"
+  v0_height="$(jq -er '.[] | select(.node_id == "validator-0") | .block_height' "$final_status")"
+  v0_root="$(jq -er '.[] | select(.node_id == "validator-0") | .state_root' "$final_status")"
+
+  if [[ "$v0_height" == "$height" && "$v0_root" == "$majority_root" ]]; then
+    log "validator-0 already converged at height $height"
+    return 0
+  fi
+
+  bool_true "$SEND_VALIDATOR0_CATCHUP" || return 0
+  select_certified_artifacts || die "no certified batch artifacts found for validator-0 catch-up"
+
+  log "sending certified batch to validator-0 for catch-up"
+  "$BIN" transport-batch-send \
+    --data-dir "$DATA" \
+    --topology "$TOPO" \
+    --to validator-0 \
+    --batch-kind shielded \
+    --batch-file "$CERT_BATCH_FILE" \
+    --certificate-file "$CERT_FILE" \
+    --timeout-ms "$TIMEOUT_MS" \
+    --send-retries "$SEND_RETRIES" \
+    --retry-backoff-ms "$RETRY_BACKOFF_MS" \
+    >"$SWAP_DIR/validator-0-catchup-send.json"
+}
+
+main() {
+  need_cmd jq
+  need_cmd sha256sum
+  need_cmd ssh
+  need_file "$BIN"
+  [[ -d "$DATA" ]] || die "missing data dir: $DATA"
+  need_file "$TOPO"
+  need_file "$INPUT_NOTE_A"
+  need_file "$INPUT_NOTE_B"
+  mkdir -p "$SWAP_DIR" "$ARTIFACT_DIR"
+
+  if bool_true "$REQUIRE_PROFILE_ASSET_IDS"; then
+    [[ "$PFUSDC_ASSET_ID" != "$DEFAULT_PFUSDC_ASSET_ID" ]] || die "strict profile asset mode refused legacy pfUSDC default"
+    [[ "$A651_ASSET_ID" != "$DEFAULT_A651_ASSET_ID" ]] || die "strict profile asset mode refused legacy a651 default"
+    assert_note_asset_id "pfUSDC" "$INPUT_NOTE_A" "$PFUSDC_ASSET_ID"
+    assert_note_asset_id "a651" "$INPUT_NOTE_B" "$A651_ASSET_ID"
+  fi
+
+  local height
+  local proposer
+  height="$(next_height)"
+  proposer="${PROPOSER:-$(proposer_for_height "$height")}"
+
+  log "pfUSDC asset: $PFUSDC_ASSET_ID"
+  log "a651 asset:   $A651_ASSET_ID"
+  log "swap dir:     $SWAP_DIR"
+
+  run_optimized_round "$height" "$proposer"
+
+  collect_fleet_status "$FINAL_STATUS_FILE"
+  send_validator0_catchup "$height" "$FINAL_STATUS_FILE"
+  collect_fleet_status "$FINAL_STATUS_FILE"
+
+  local root
+  root="$(fleet_majority_root "$FINAL_STATUS_FILE" "$height")"
+  fleet_converged_at "$FINAL_STATUS_FILE" "$height" "$root" || die "fleet did not converge at height=$height root=$root; see $FINAL_STATUS_FILE"
+
+  if bool_true "$APPLY_LOCAL_MIRROR"; then
+    apply_local_mirror "$height"
+  fi
+
+  local local_status
+  local_status="$("$BIN" status --data-dir "$DATA")"
+  printf '%s\n' "$local_status" >"$SWAP_DIR/local-status-final.json"
+
+  log "done"
+  jq -n \
+    --arg swap_dir "$SWAP_DIR" \
+    --arg batch_file "$BATCH_FILE" \
+    --arg cert_file "${CERT_FILE:-$ARTIFACT_DIR/block-certificate.json}" \
+    --arg final_status "$FINAL_STATUS_FILE" \
+    --arg local_status "$SWAP_DIR/local-status-final.json" \
+    --argjson height "$height" \
+    --arg root "$root" \
+    '{
+      schema: "postfiat-private-a651-pfusdc-optimized-swap-live-v1",
+      height: $height,
+      state_root: $root,
+      swap_dir: $swap_dir,
+      batch_file: $batch_file,
+      certificate_file: $cert_file,
+      final_fleet_status_file: $final_status,
+      local_status_file: $local_status
+    }'
+}
+
+main "$@"

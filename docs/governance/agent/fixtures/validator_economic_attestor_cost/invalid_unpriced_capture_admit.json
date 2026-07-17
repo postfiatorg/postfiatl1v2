@@ -1,0 +1,19 @@
+{
+  "base": "valid_attestor_cost.json",
+  "description": "Unpriced capture cost must hold rather than admit.",
+  "expected_error_contains": [
+    "case-04-unpriced-capture-hold: expected_route mismatch"
+  ],
+  "overrides": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        3,
+        "expected_route"
+      ],
+      "value": "admit"
+    }
+  ],
+  "schema": "postfiat-validator-economic-attestor-cost-delta-v1"
+}

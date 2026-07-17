@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "PostFiat Wallet",
+  "version": "0.1.0",
+  "description": "Post-quantum self-custody wallet for PostFiat L1 — ML-DSA-65 signing in your browser.",
+  "permissions": ["storage"],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "PostFiat Wallet"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["wasm/postfiat_wallet_wasm_bg.wasm", "wasm/postfiat_wallet_wasm.js"],
+      "matches": ["chrome-extension://*/*"]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

@@ -1,0 +1,264 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T00:00:00Z",
+    "attestor_key_hash": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+    "signature_hash": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+    "signature_scheme": "mldsa44-placeholder",
+    "statement_hash": "806fbb22ef07b55ee058956b0f6848ced03fbcf4376784dc998b6e9b16db3a83e77ad415f266ac7a2f7ff91c80f6752a"
+  },
+  "checks": {
+    "authority_transfer": false,
+    "bound_root_bound": true,
+    "disclosure_uniqueness_routes": true,
+    "external_side_info_downgrades": true,
+    "integer_bps_model": true,
+    "joint_candidate_bound_enforced": true,
+    "live_registry_mutation": false,
+    "single_channel_bound_enforced": true,
+    "stale_observation_holds": true,
+    "statement_hash_bound": true,
+    "third_party_rpc_routes": true,
+    "time_bucket_bound_enforced": true,
+    "ungoverned_policy_fails_closed": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "privacy-deanonymization-bound-v1-fixture",
+  "schema": "postfiat-privacy-deanonymization-bound-v1",
+  "statement": {
+    "baseline_observation": {
+      "action_window_count": 128,
+      "batch_size": 8,
+      "bound_policy_governed": true,
+      "disclosure_hash_reuse_count": 16,
+      "external_side_info_declared": false,
+      "joint_metadata_candidate_count": 16,
+      "observation_age_seconds": 600,
+      "rpc_submission_mode": "self_hosted_rpc",
+      "same_asset_policy_count": 16,
+      "same_fee_class_count": 32,
+      "same_time_bucket_count": 16,
+      "time_bucket_seconds": 300
+    },
+    "bound_policy": {
+      "max_joint_posterior_bps": 625,
+      "max_observation_age_seconds": 3600,
+      "max_single_channel_posterior_bps": 1250,
+      "min_action_window_count": 128,
+      "min_batch_size": 8,
+      "min_disclosure_hash_reuse_count": 16,
+      "min_joint_metadata_candidate_count": 16,
+      "min_same_asset_policy_count": 16,
+      "min_same_fee_class_count": 32,
+      "min_same_time_bucket_count": 16,
+      "min_time_bucket_seconds": 300,
+      "policy_units": "privacy-deanonymization-bound-v1"
+    },
+    "bound_root_hash": "0799e5536a40bb053f19d1d95c5e2cd0bca6c341610c23ca97b1181299762c3046f6e278fff81f219a395d3e57c8aec9",
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/fixtures/privacy_metadata_anonymity_bound/valid_metadata_bound.json",
+        "sha3_384": "32cf2f47607f4c957be9308eefd5a135f354ee84bcda78127ba7c5bfae3280a447a2b29eefa3c95b82f04a027914df4d"
+      },
+      {
+        "path": "reports/privacy-metadata-anonymity-bound/20260529T072015Z/privacy-metadata-anonymity-bound-report.json",
+        "sha3_384": "ba7c3def9aa74731f4a59d44b0655121f73551c502932ae7206bd8bc944dc8ca035d886725dceb33823a31ad0b935126"
+      },
+      {
+        "path": "docs/governance/agent/privacy_deanonymization_bound_schema.json",
+        "sha3_384": "6dd078fa337ee2c3295b3cfd7699774abd91d0b25bde35a965b54a3b524a85000af06c204b337daad45a47619564d548"
+      },
+      {
+        "path": "scripts/privacy-deanonymization-bound-verify",
+        "sha3_384": "d8cec591876a949ead7d67e106fee170884434ae6e4c41dfca6b0b44b0ee0fe58dd97329b05861fc69dcb0e9d9b0f935"
+      }
+    ],
+    "policy_id": "privacy-deanonymization-bound-v1",
+    "residual_model": {
+      "assumption": "uniform_no_side_info_with_declared_metadata_channels",
+      "model_units": "integer_basis_points",
+      "non_coverage": "off_chain_side_information_and_compromised_wallet_infrastructure"
+    },
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "privacy-deanonymization-bound-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-baseline-bound",
+        "expected_reason_codes": [
+          "residual_deanonymization_bound_passed"
+        ],
+        "expected_route": "baseline-private",
+        "overrides": []
+      },
+      {
+        "case_id": "case-02-joint-candidate-shortfall",
+        "expected_reason_codes": [
+          "joint_metadata_candidate_shortfall"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "joint_metadata_candidate_count"
+            ],
+            "value": 8
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-batch-shortfall",
+        "expected_reason_codes": [
+          "batch_size_posterior_above_bound",
+          "single_channel_posterior_above_bound"
+        ],
+        "expected_route": "hold-for-batching",
+        "overrides": [
+          {
+            "path": [
+              "batch_size"
+            ],
+            "value": 4
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-time-bucket-shortfall",
+        "expected_reason_codes": [
+          "time_bucket_posterior_above_bound"
+        ],
+        "expected_route": "hold-for-batching",
+        "overrides": [
+          {
+            "path": [
+              "time_bucket_seconds"
+            ],
+            "value": 120
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-disclosure-uniqueness",
+        "expected_reason_codes": [
+          "unique_disclosure_hash_collapses_cohort"
+        ],
+        "expected_route": "explicit-disclosure-required",
+        "overrides": [
+          {
+            "path": [
+              "disclosure_hash_reuse_count"
+            ],
+            "value": 1
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-third-party-rpc-observer",
+        "expected_reason_codes": [
+          "third_party_rpc_observer_can_singleton"
+        ],
+        "expected_route": "hold-for-private-relay",
+        "overrides": [
+          {
+            "path": [
+              "rpc_submission_mode"
+            ],
+            "value": "third_party_direct_rpc"
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-low-activity-window",
+        "expected_reason_codes": [
+          "activity_window_posterior_above_bound"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "action_window_count"
+            ],
+            "value": 64
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-fee-class-shortfall",
+        "expected_reason_codes": [
+          "fee_class_posterior_above_bound"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "same_fee_class_count"
+            ],
+            "value": 16
+          }
+        ]
+      },
+      {
+        "case_id": "case-09-asset-policy-shortfall",
+        "expected_reason_codes": [
+          "asset_policy_posterior_above_bound"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "same_asset_policy_count"
+            ],
+            "value": 8
+          }
+        ]
+      },
+      {
+        "case_id": "case-10-ungoverned-bound-policy",
+        "expected_reason_codes": [
+          "ungoverned_deanonymization_bound_policy"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "bound_policy_governed"
+            ],
+            "value": false
+          }
+        ]
+      },
+      {
+        "case_id": "case-11-stale-observation-window",
+        "expected_reason_codes": [
+          "stale_metadata_observation_window"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "observation_age_seconds"
+            ],
+            "value": 7200
+          }
+        ]
+      },
+      {
+        "case_id": "case-12-declared-external-side-info",
+        "expected_reason_codes": [
+          "external_side_info_outside_model"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "external_side_info_declared"
+            ],
+            "value": true
+          }
+        ]
+      }
+    ]
+  }
+}

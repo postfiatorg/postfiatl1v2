@@ -1,0 +1,255 @@
+{
+  "schema": "postfiat-protocol-architecture-live-effect-approval-gate-v1",
+  "approval_id": "vc-protocol-architecture-001-live-effect-approval-gate-001",
+  "approval_version": 1,
+  "status": "approved_for_guarded_apply_no_execution",
+  "approval_scope": "protocol_architecture",
+  "created_at": "2026-05-25T00:00:00Z",
+  "source_request_ref": {
+    "request_id": "vc-protocol-architecture-001-live-effect-authorization-request-001",
+    "packet_path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_live_effect_authorization_request.json",
+    "packet_file_sha3_384": "196bcbbbcc0dc95c1617ff4433a60a7895a7c18d556d0f92cac0431c38dec1747a03a42cfd41c72c2cd28609ad09a3d3",
+    "packet_canonical_hash": "b67f9ec5d8b57f01b818372a4eb53e9a8795ce72eddbb6895ab7bb08d824d2f6ab48c16c56bf35843128989b1d152b16",
+    "schema_path": "docs/governance/agent/protocol_architecture_live_effect_authorization_request_schema.json",
+    "schema_sha3_384": "a1f58d386395ea28609671d5404e4a05ab54c2496c4002416ffc3e16edf0ea727f819de180f736b74aab723ac7f6e04a",
+    "report_path": "reports/verifiable-constitution/vc-059-protocol-architecture-live-effect-authorization-request-report.json",
+    "report_file_sha3_384": "8a052b5882e1e2e893fbc0a8a5be2b0ca61a0dcfbc6605e8ecaf0078d9f8ba744ae30c6a303c011fe615262810ad75a1",
+    "report_canonical_hash": "b4599f89e512243c9530a8371f502febb7ff08b929749133a524c572d034d0b30f491dc9e541e412eedb83cd099b1245",
+    "report_verified": true,
+    "report_classification": "submitted_for_review_no_execution",
+    "selected_live_action": "protocol_architecture_release_or_cobalt_effect",
+    "source_approval_status": "not_approved",
+    "source_execution_status": "not_authorized",
+    "request_root": "e77a3c5500c9ceec34661f35c51c26c31e5d397ff2784f8e3ac8072add138d7e2e8b691f3678deb577d3fe002803741c",
+    "report_request_root": "e77a3c5500c9ceec34661f35c51c26c31e5d397ff2784f8e3ac8072add138d7e2e8b691f3678deb577d3fe002803741c"
+  },
+  "approval_decision": {
+    "selected_live_action": "protocol_architecture_release_or_cobalt_effect",
+    "decision": "approve_for_guarded_apply_only",
+    "approval_status": "approved_for_guarded_apply",
+    "execution_status": "not_authorized",
+    "guarded_apply_packet_id_required": "vc-protocol-architecture-001-live-effect-guarded-apply-001",
+    "apply_rehearsal_required": true,
+    "live_effect": false,
+    "rationale": "The request has matching operator-visible roots and reviewed rollback handling, so it may advance only to a future guarded-apply packet. This approval is not execution authority."
+  },
+  "root_bindings": {
+    "request_root": "e77a3c5500c9ceec34661f35c51c26c31e5d397ff2784f8e3ac8072add138d7e2e8b691f3678deb577d3fe002803741c",
+    "readiness_root": "589e2f9b8d654c1540098d6d76e3a496fb7af42b50717e1a90b21f5068fc267a39b9f71bdaa161ecc9b5e5caaaad33f4",
+    "conformance_review_root": "68e60989b5d4f46e671bb05c31cac1ff5d584723d5af7bdf8f52e2fd314e57a457d538a62264b5f8cb158d1811925e8f",
+    "conformance_root": "b48f64b2fe8a72ca85045aa0bb8bcd5dabc0435373824c0ad84993b2e01d022a6abd1c28584753eedf97655294367d5b",
+    "readiness_gate_root": "c64f08261c7f8cc44434f2cd9b197b6e324dbd5f3a75994c016a9befb9586c2394d7c0a57b6c6f6d40f7a99eef607be0",
+    "superseding_decision_root": "4b756a052813aa468f63004048aa7cc04b35b580eb7f56855f0060bfaa5209eec9b36732f867ac1f36682661f2809df0",
+    "challenge_disposition_root": "468826f7c6afeb1d9de4a92aa8b91edbdcbf5cec382ad3bf4b8c36d848f1f1eaf6a31654b7d505d2b12ecda060a1794e",
+    "full_vocab_vector_root": "0b3cf64b186ff9b8b130260d6a795fe56cf2a65bd6e324ea9ce92222ed1d7c23",
+    "evidence_packet_root": "d9f1d159b3be6b34376c937a8cce10a08b457c7e13dbf73758c95c80e8b5833249a162ab408d2eb717fa0f1203c77c40",
+    "selected_option": "preserve-rust-l1"
+  },
+  "operator_hash_verification": [
+    {
+      "hash_id": "readiness-root",
+      "label": "VC-058 readiness root",
+      "expected_hash": "589e2f9b8d654c1540098d6d76e3a496fb7af42b50717e1a90b21f5068fc267a39b9f71bdaa161ecc9b5e5caaaad33f4",
+      "observed_hash": "589e2f9b8d654c1540098d6d76e3a496fb7af42b50717e1a90b21f5068fc267a39b9f71bdaa161ecc9b5e5caaaad33f4",
+      "verified": true,
+      "operator_visible": true,
+      "live_effect": false
+    },
+    {
+      "hash_id": "conformance-review-root",
+      "label": "VC-057 conformance review root",
+      "expected_hash": "68e60989b5d4f46e671bb05c31cac1ff5d584723d5af7bdf8f52e2fd314e57a457d538a62264b5f8cb158d1811925e8f",
+      "observed_hash": "68e60989b5d4f46e671bb05c31cac1ff5d584723d5af7bdf8f52e2fd314e57a457d538a62264b5f8cb158d1811925e8f",
+      "verified": true,
+      "operator_visible": true,
+      "live_effect": false
+    },
+    {
+      "hash_id": "conformance-root",
+      "label": "VC-056 conformance root",
+      "expected_hash": "b48f64b2fe8a72ca85045aa0bb8bcd5dabc0435373824c0ad84993b2e01d022a6abd1c28584753eedf97655294367d5b",
+      "observed_hash": "b48f64b2fe8a72ca85045aa0bb8bcd5dabc0435373824c0ad84993b2e01d022a6abd1c28584753eedf97655294367d5b",
+      "verified": true,
+      "operator_visible": true,
+      "live_effect": false
+    },
+    {
+      "hash_id": "evidence-packet-root",
+      "label": "Protocol architecture evidence root",
+      "expected_hash": "d9f1d159b3be6b34376c937a8cce10a08b457c7e13dbf73758c95c80e8b5833249a162ab408d2eb717fa0f1203c77c40",
+      "observed_hash": "d9f1d159b3be6b34376c937a8cce10a08b457c7e13dbf73758c95c80e8b5833249a162ab408d2eb717fa0f1203c77c40",
+      "verified": true,
+      "operator_visible": true,
+      "live_effect": false
+    },
+    {
+      "hash_id": "full-vocab-vector-root",
+      "label": "Full-vocabulary replay vector root",
+      "expected_hash": "0b3cf64b186ff9b8b130260d6a795fe56cf2a65bd6e324ea9ce92222ed1d7c23",
+      "observed_hash": "0b3cf64b186ff9b8b130260d6a795fe56cf2a65bd6e324ea9ce92222ed1d7c23",
+      "verified": true,
+      "operator_visible": true,
+      "live_effect": false
+    }
+  ],
+  "authorization_evidence_review": [
+    {
+      "evidence_id": "vc058-readiness-report",
+      "evidence_kind": "readiness_report",
+      "source_evidence_hash": "8756196362a819b21a5b36e863d6469ca86d75ec145accb9ef945ebaea014ecf8d13be6409033fc6764c23245eac9a5b",
+      "reviewed": true,
+      "approved_for_guarded_apply": true,
+      "live_effect": false
+    },
+    {
+      "evidence_id": "vc057-review-report",
+      "evidence_kind": "conformance_review_report",
+      "source_evidence_hash": "f5aa4d25c51e433aad56d8b404da50c0234d65eec7362aca043ff5d9150619d8d108fe01e65f8bff0afb9f144a967539",
+      "reviewed": true,
+      "approved_for_guarded_apply": true,
+      "live_effect": false
+    },
+    {
+      "evidence_id": "vc056-conformance-report",
+      "evidence_kind": "conformance_packet_report",
+      "source_evidence_hash": "b9ae805a3811c618a394eb013db7517770d9b8c4cc4da035e73990a7a27d83bdce133b3b8b68916c30bfb7dea44de40a",
+      "reviewed": true,
+      "approved_for_guarded_apply": true,
+      "live_effect": false
+    },
+    {
+      "evidence_id": "operator-command-policy",
+      "evidence_kind": "operator_command_policy",
+      "source_evidence_hash": "43cf1385941f603456658aaaebebd856a0678cfc094ab79644a6aa21197a445c7e1e3a85ef040de68853bcbe73c2ea3a",
+      "reviewed": true,
+      "approved_for_guarded_apply": true,
+      "live_effect": false
+    },
+    {
+      "evidence_id": "rollback-policy",
+      "evidence_kind": "rollback_policy",
+      "source_evidence_hash": "00afb5a40f9b0ed12262e46074d09e1f8854164d51fd0888db194b2e4023eb99484a6f7be31d3036f8e6fce8d172e80c",
+      "reviewed": true,
+      "approved_for_guarded_apply": true,
+      "live_effect": false
+    }
+  ],
+  "rollback_and_stale_root_review": {
+    "rollback_commands_verified": true,
+    "stale_readiness_root_action": "reject_approval_and_require_supersession",
+    "stale_request_root_action": "reject_approval_and_require_supersession",
+    "missing_expected_hash_action": "hold_before_guarded_apply",
+    "challenge_action": "hold_approval_and_require_supersession",
+    "live_effect": false
+  },
+  "guarded_apply_requirement": {
+    "guarded_apply_packet_id_required": "vc-protocol-architecture-001-live-effect-guarded-apply-001",
+    "guarded_apply_rehearsal_required": true,
+    "rollback_proof_required": true,
+    "operator_signoff_required": true,
+    "fresh_root_revalidation_required": true,
+    "execution_authorized_by_this_packet": false,
+    "live_effect": false
+  },
+  "challenge_path": {
+    "challenge_packet_required": true,
+    "challenge_schema_path": "docs/governance/agent/constitutional_challenge_packet_schema.json",
+    "challenge_schema_sha3_384": "c6c53bb8e5b85b332cd72c96c98c44ec3d51ec9050df6ea54ebc84991ce856bb4cd754d2a6945818d72b56d9775002e0",
+    "challenge_action": "hold_approval_and_require_supersession",
+    "live_effect": false
+  },
+  "verification_commands": [
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-approval --verify-report",
+      "purpose": "Verify the VC-060 approval gate packet.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-authorization-request --verify-report",
+      "purpose": "Verify the VC-059 authorization request remains current.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-readiness --verify-report",
+      "purpose": "Verify the VC-058 readiness gate remains current.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-conformance-review --verify-report",
+      "purpose": "Verify the VC-057 planning review remains accepted.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-conformance-packet --verify-report",
+      "purpose": "Verify the VC-056 conformance packet remains bound.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/validator-evidence-fixtures-validate",
+      "purpose": "Keep the validator-evidence fixture suite passing.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/docs-site-build",
+      "purpose": "Build the docs site after adding the approval gate.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    }
+  ],
+  "authority_boundary": {
+    "provider_spend_authorized": false,
+    "live_model_request_authorized": false,
+    "model_output_generated_in_this_packet": false,
+    "approval_recorded": true,
+    "approval_is_execution": false,
+    "guarded_apply_required_next": true,
+    "execution_authorized": false,
+    "release_gate_execution_authorized": false,
+    "code_rewrite_authorized": false,
+    "rippled_code_import_authorized": false,
+    "consensus_rewrite_authorized": false,
+    "xrpl_compatibility_activation_authorized": false,
+    "protocol_migration_authorized": false,
+    "live_validator_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "mainnet_mutation_authorized": false,
+    "authority_transfer_authorized": false,
+    "default_live_effect_requires_guarded_apply": true
+  },
+  "checks": {
+    "schema_valid": true,
+    "source_request_verified": true,
+    "request_root_bound": true,
+    "operator_hashes_verified": true,
+    "authorization_evidence_verified": true,
+    "rollback_commands_verified": true,
+    "stale_root_handling_verified": true,
+    "challenge_path_verified": true,
+    "approval_decision_recorded": true,
+    "guarded_apply_required": true,
+    "execution_not_authorized": true,
+    "verification_command_coverage_verified": true,
+    "no_hidden_evidence": true,
+    "no_secret_dependency": true,
+    "no_code_rewrite": true,
+    "no_live_cobalt_amendment_submission": true,
+    "no_compatibility_activation": true,
+    "no_mainnet_mutation": true,
+    "authority_transfer": false,
+    "approval_root_verified": true
+  },
+  "approval_root": "fdbf2742663c9007b05c94973f55509173deeac00f40cca7cf050e37b3bcd6466e2056a6a3707104cd54bb9281acf22d"
+}

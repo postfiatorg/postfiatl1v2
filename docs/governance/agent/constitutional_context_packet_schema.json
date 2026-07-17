@@ -1,0 +1,330 @@
+{
+  "$id": "https://postfiat.org/schemas/postfiat-constitutional-context-packet-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "postfiat-constitutional-context-packet-v1",
+      "type": "string"
+    },
+    "packet_id": {
+      "$ref": "#/$defs/id"
+    },
+    "packet_version": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "active",
+        "superseded",
+        "rejected"
+      ],
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "context_scope": {
+      "const": "protocol_constitution",
+      "type": "string"
+    },
+    "purpose": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "core_context": {
+      "$ref": "#/$defs/core_context"
+    },
+    "source_refs": {
+      "items": {
+        "$ref": "#/$defs/ref"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "decision_queue": {
+      "items": {
+        "$ref": "#/$defs/decision_stub"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "context_boundaries": {
+      "$ref": "#/$defs/context_boundaries"
+    },
+    "checks": {
+      "$ref": "#/$defs/checks"
+    }
+  },
+  "required": [
+    "schema",
+    "packet_id",
+    "packet_version",
+    "status",
+    "created_at",
+    "context_scope",
+    "purpose",
+    "core_context",
+    "source_refs",
+    "decision_queue",
+    "context_boundaries",
+    "checks"
+  ],
+  "title": "PostFiat Constitutional Context Packet",
+  "type": "object",
+  "$defs": {
+    "checks": {
+      "additionalProperties": false,
+      "properties": {
+        "source_refs_present": {
+          "const": true
+        },
+        "source_hashes_verified": {
+          "const": true
+        },
+        "decision_queue_present": {
+          "const": true
+        },
+        "closed_options_present": {
+          "const": true
+        },
+        "evidence_requirements_present": {
+          "const": true
+        },
+        "fallback_options_present": {
+          "const": true
+        },
+        "no_live_mutation": {
+          "const": true
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      },
+      "required": [
+        "source_refs_present",
+        "source_hashes_verified",
+        "decision_queue_present",
+        "closed_options_present",
+        "evidence_requirements_present",
+        "fallback_options_present",
+        "no_live_mutation",
+        "authority_transfer"
+      ],
+      "type": "object"
+    },
+    "context_boundaries": {
+      "additionalProperties": false,
+      "properties": {
+        "qwen_may_use_as_context": {
+          "const": true
+        },
+        "qwen_may_modify_context": {
+          "const": false
+        },
+        "qwen_may_add_options": {
+          "const": false
+        },
+        "qwen_may_collect_evidence": {
+          "const": false
+        },
+        "qwen_may_authorize_live_action": {
+          "const": false
+        },
+        "qwen_may_request_secret_material": {
+          "const": false
+        },
+        "accepted_context_is_live_authority": {
+          "const": false
+        }
+      },
+      "required": [
+        "qwen_may_use_as_context",
+        "qwen_may_modify_context",
+        "qwen_may_add_options",
+        "qwen_may_collect_evidence",
+        "qwen_may_authorize_live_action",
+        "qwen_may_request_secret_material",
+        "accepted_context_is_live_authority"
+      ],
+      "type": "object"
+    },
+    "core_context": {
+      "additionalProperties": false,
+      "properties": {
+        "project_identity": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "current_status": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "current_architecture": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "non_goals": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "governance_principles": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "project_identity",
+        "current_status",
+        "current_architecture",
+        "non_goals",
+        "governance_principles"
+      ],
+      "type": "object"
+    },
+    "decision_stub": {
+      "additionalProperties": false,
+      "properties": {
+        "question_id": {
+          "$ref": "#/$defs/id"
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "title": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "question": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "status_quo_summary": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "closed_options": {
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "minItems": 2,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "evidence_required": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "source_ref_ids": {
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "fallback_option": {
+          "$ref": "#/$defs/id"
+        },
+        "live_authority": {
+          "const": false
+        }
+      },
+      "required": [
+        "question_id",
+        "scope",
+        "title",
+        "question",
+        "status_quo_summary",
+        "closed_options",
+        "evidence_required",
+        "source_ref_ids",
+        "fallback_option",
+        "live_authority"
+      ],
+      "type": "object"
+    },
+    "id": {
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$",
+      "type": "string"
+    },
+    "ref": {
+      "additionalProperties": false,
+      "properties": {
+        "ref_id": {
+          "$ref": "#/$defs/id"
+        },
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "role": {
+          "enum": [
+            "whitepaper",
+            "architecture",
+            "privacy",
+            "governance",
+            "post_quantum",
+            "plan"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref_id",
+        "path",
+        "sha3_384",
+        "role"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "enum": [
+        "protocol_architecture",
+        "model_governance",
+        "validator_governance",
+        "cobalt_governance",
+        "privacy",
+        "post_quantum_authorization",
+        "monetary_policy",
+        "storage_history",
+        "rpc_edge_policy",
+        "operator_security",
+        "release_authority"
+      ],
+      "type": "string"
+    },
+    "sha3_384": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    }
+  }
+}

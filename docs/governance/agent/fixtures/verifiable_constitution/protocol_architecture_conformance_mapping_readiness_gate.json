@@ -1,0 +1,146 @@
+{
+  "schema": "postfiat-protocol-architecture-conformance-mapping-readiness-gate-v1",
+  "gate_id": "vc-protocol-architecture-001-conformance-readiness-gate-001",
+  "gate_version": 1,
+  "status": "accepted",
+  "created_at": "2026-05-25T00:00:00Z",
+  "source_superseding_decision_ref": {
+    "report_path": "reports/verifiable-constitution/vc-053-protocol-architecture-superseding-replayed-decision-report.json",
+    "report_file_sha3_384": "528308474df6b4d9d1d0c9ae7e1235e6d4a970d9972afe9ccf1e30dd518f48d5a162a1038b382cc2c240a43646cac7f2",
+    "report_canonical_hash": "5142d924c61e25f8d9cb3bee93a89ed47f0c21c3b875af322e6fcd2ad5d3613f9c36d4b77ba4670a816f97f7feee0c07",
+    "report_schema": "postfiat-verifiable-constitution-vc-053-report-v1",
+    "verified": true,
+    "superseding_decision_id": "vc-protocol-architecture-001-superseding-replayed-decision-001",
+    "classification": "superseding_no_live_effect_governance_artifact",
+    "selected_option": "preserve-rust-l1",
+    "live_decision_hash": "36bb5c03f73701ae71811a7b86b3228f0f23a640b802b7562fd054fc7b4b5e21bb875e1b27d2756cf16e6c8668e0c9b3",
+    "superseding_decision_root": "4b756a052813aa468f63004048aa7cc04b35b580eb7f56855f0060bfaa5209eec9b36732f867ac1f36682661f2809df0",
+    "conformance_mapping_allowed_now": false
+  },
+  "source_challenge_disposition_ref": {
+    "report_path": "reports/verifiable-constitution/vc-054-protocol-architecture-challenge-disposition-report.json",
+    "report_file_sha3_384": "ab78856024dc7131d56379686cda32e6c911c501bfa054ab3044a75831e96bcefc2dc0013fab0a69695c0fed7f5455e3",
+    "report_canonical_hash": "dd96e5d79aadccc611cc115780ac0af373ddf69c8bbb331935a1782fcc1cc65435845a5f48a96900c0d97709b804586c",
+    "report_schema": "postfiat-verifiable-constitution-vc-054-report-v1",
+    "verified": true,
+    "classification": "resolve_by_supersession",
+    "challenge_status_after": "resolved_by_superseding_replayed_decision",
+    "target_hash_reproduced": false,
+    "semantic_equivalence_rule_used": false,
+    "conformance_mapping_allowed_now": false,
+    "challenge_disposition_root": "468826f7c6afeb1d9de4a92aa8b91edbdcbf5cec382ad3bf4b8c36d848f1f1eaf6a31654b7d505d2b12ecda060a1794e"
+  },
+  "evidence_packet_ref": {
+    "packet_id": "vc-protocol-architecture-001-evidence-001",
+    "packet_path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_constitutional_evidence_packet.json",
+    "packet_file_sha3_384": "46a4bbfcbc913e28a813211e1cf7437c8f9987e785bc334f0bd93cda53581e572527bb21b243bf71b1bab674680a808e",
+    "packet_canonical_hash": "d04d3f89694c0c6fed1c23d4d72252d1bc774423cff577fe476cad39f8a5e7fe846bf30f517514170b4bf48e6dd4f8ce",
+    "evidence_root": "d9f1d159b3be6b34376c937a8cce10a08b457c7e13dbf73758c95c80e8b5833249a162ab408d2eb717fa0f1203c77c40",
+    "packet_status": "approved",
+    "packet_scope": "release_authority",
+    "no_live_collection": true,
+    "no_live_mutation": true
+  },
+  "selected_option_ref": {
+    "option_id": "preserve-rust-l1",
+    "decision_payload_hash": "36bb5c03f73701ae71811a7b86b3228f0f23a640b802b7562fd054fc7b4b5e21bb875e1b27d2756cf16e6c8668e0c9b3",
+    "evidence_root": "d9f1d159b3be6b34376c937a8cce10a08b457c7e13dbf73758c95c80e8b5833249a162ab408d2eb717fa0f1203c77c40",
+    "implementation_effect": "no_code_change",
+    "requires_later_authorization_for_live_effect": true
+  },
+  "readiness_decision": {
+    "selected": "open_no_live_effect_conformance_mapping_lane",
+    "conformance_mapping_packet_required": true,
+    "conformance_mapping_allowed_next": true,
+    "conformance_mapping_live_effect": false,
+    "live_effect": false,
+    "rationale": "VC-054 resolves the replay challenge by supersession and VC-053 accepts the replayed preserve-rust-l1 decision, so the next packet may map that decision to no-live-effect docs, reports, tests, schemas, and gates. This gate does not authorize code rewrite or live governance."
+  },
+  "conformance_mapping_contract": {
+    "conformance_packet_id": "vc-protocol-architecture-001-conformance-001",
+    "conformance_packet_schema_path": "docs/governance/agent/protocol_architecture_conformance_packet_schema.json",
+    "conformance_packet_schema_sha3_384": "dc1f2443d792718bd503e7296a6b1c7f8fca79125b44a19ea3b1bbcf05fdd049307d4d1cbbb72fef71c7eb445bae715b",
+    "allowed_target_types": [
+      "docs",
+      "report",
+      "test",
+      "schema",
+      "governance_gate"
+    ],
+    "required_bindings": [
+      "superseding_decision_root",
+      "challenge_disposition_root",
+      "evidence_packet_root",
+      "selected_option",
+      "authority_boundary",
+      "verification_commands"
+    ],
+    "forbidden_effects": [
+      "code_rewrite",
+      "rippled_import",
+      "consensus_rewrite",
+      "xrpl_compatibility_activation",
+      "protocol_migration",
+      "live_cobalt_amendment_submission",
+      "mainnet_mutation",
+      "authority_transfer"
+    ],
+    "verification_commands": [
+      "scripts/verifiable-constitution-protocol-architecture-conformance-mapping-readiness --verify-report",
+      "scripts/verifiable-constitution-protocol-architecture-challenge-disposition --verify-report",
+      "scripts/verifiable-constitution-protocol-architecture-superseding-replayed-decision --verify-report",
+      "scripts/validator-evidence-fixtures-validate"
+    ]
+  },
+  "next_required_packets": [
+    {
+      "packet_id": "vc-protocol-architecture-001-conformance-001",
+      "packet_kind": "conformance_mapping_packet",
+      "required_before": "conformance_acceptance",
+      "rationale": "A separate conformance mapping packet must bind the accepted superseding decision to concrete no-live-effect targets."
+    },
+    {
+      "packet_id": "vc-protocol-architecture-001-conformance-review-001",
+      "packet_kind": "conformance_challenge_or_review_packet",
+      "required_before": "conformance_acceptance",
+      "rationale": "The conformance mapping must remain challengeable before it can be treated as the accepted implementation-planning baseline."
+    },
+    {
+      "packet_id": "vc-protocol-architecture-001-live-effect-gate-001",
+      "packet_kind": "cobalt_or_release_authorization_gate",
+      "required_before": "live_effect",
+      "rationale": "Any Cobalt submission, compatibility activation, migration, mainnet mutation, or authority transfer still requires a separate named gate."
+    }
+  ],
+  "authority_boundary": {
+    "provider_spend_authorized": false,
+    "live_model_request_authorized": false,
+    "model_output_generated_in_this_packet": false,
+    "no_live_effect_conformance_mapping_lane_authorized": true,
+    "conformance_mapping_live_effect_authorized": false,
+    "code_rewrite_authorized": false,
+    "rippled_code_import_authorized": false,
+    "consensus_rewrite_authorized": false,
+    "xrpl_compatibility_activation_authorized": false,
+    "protocol_migration_authorized": false,
+    "live_validator_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "mainnet_mutation_authorized": false,
+    "authority_transfer_authorized": false
+  },
+  "checks": {
+    "source_superseding_decision_verified": true,
+    "source_challenge_disposition_verified": true,
+    "challenge_resolved_before_conformance": true,
+    "evidence_packet_root_bound": true,
+    "selected_option_bound": true,
+    "readiness_opens_no_live_effect_conformance_lane": true,
+    "conformance_packet_still_required": true,
+    "conformance_mapping_live_effect_blocked": true,
+    "code_rewrite_blocked": true,
+    "cobalt_submission_blocked": true,
+    "compatibility_activation_blocked": true,
+    "mainnet_mutation_blocked": true,
+    "authority_transfer": false
+  }
+}

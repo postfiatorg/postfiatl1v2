@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+verifier="$repo_root/scripts/verify-publication-candidate"
+fixture_root="$(mktemp -d)"
+trap 'rm -rf "$fixture_root"' EXIT
+
+make_repo() {
+  local destination="$1"
+  git init -q -b main "$destination"
+  git -C "$destination" config user.name 'Publication Gate Test'
+  git -C "$destination" config user.email 'publication-gate@example.invalid'
+  mkdir -p "$destination/scripts"
+  cp "$repo_root/scripts/public-secret-scan" "$destination/scripts/public-secret-scan"
+  printf '%s\n' 'reviewed public candidate' > "$destination/README.md"
+  git -C "$destination" add README.md scripts/public-secret-scan
+  git -C "$destination" commit -q -m 'reviewed public candidate'
+}
+
+clean_repo="$fixture_root/clean"
+make_repo "$clean_repo"
+reviewed_tree="$(git -C "$clean_repo" rev-parse 'HEAD^{tree}')"
+provider_record="$fixture_root/provider-revocation.json"
+cat > "$provider_record" <<'EOF'
+{
+  "schema": "postfiat-provider-credential-revocation-v1",
+  "provider": "example-provider",
+  "incident_id": "INC-PUBLICATION-GATE-TEST",
+  "action": "revoked",
+  "occurred_utc": "2026-07-17T00:00:00Z",
+  "owner": "provider-account-owner",
+  "evidence_reference": "private-ticket-1234",
+  "verified_by": "release-security-owner",
+  "verified_utc": "2026-07-17T00:01:00Z"
+}
+EOF
+chmod 600 "$provider_record"
+
+if "$verifier" \
+  --repository "$clean_repo" \
+  --expected-tree "$reviewed_tree" \
+  --allow-ref refs/heads/main >/dev/null 2>&1; then
+  echo 'missing provider revocation record must fail publication verification' >&2
+  exit 1
+fi
+"$verifier" \
+  --repository "$clean_repo" \
+  --expected-tree "$reviewed_tree" \
+  --provider-revocation-record "$provider_record" \
+  --allow-ref refs/heads/main >/dev/null
+
+chmod 644 "$provider_record"
+if "$verifier" \
+  --repository "$clean_repo" \
+  --expected-tree "$reviewed_tree" \
+  --provider-revocation-record "$provider_record" \
+  --allow-ref refs/heads/main >/dev/null 2>&1; then
+  echo 'group-readable provider record must fail publication verification' >&2
+  exit 1
+fi
+chmod 600 "$provider_record"
+
+invalid_time_record="$fixture_root/provider-revocation-invalid-time.json"
+sed 's/2026-07-17T00:00:00Z/2026-99-17T00:00:00Z/' \
+  "$provider_record" > "$invalid_time_record"
+chmod 600 "$invalid_time_record"
+if "$verifier" \
+  --repository "$clean_repo" \
+  --expected-tree "$reviewed_tree" \
+  --provider-revocation-record "$invalid_time_record" \
+  --allow-ref refs/heads/main >/dev/null 2>&1; then
+  echo 'invalid provider record calendar timestamp must fail verification' >&2
+  exit 1
+fi
+
+provider_link="$fixture_root/provider-revocation-link.json"
+ln -s "$provider_record" "$provider_link"
+if "$verifier" \
+  --repository "$clean_repo" \
+  --expected-tree "$reviewed_tree" \
+  --provider-revocation-record "$provider_link" \
+  --allow-ref refs/heads/main >/dev/null 2>&1; then
+  echo 'symlinked provider record must fail publication verification' >&2
+  exit 1
+fi
+
+inside_record="$clean_repo/.git/provider-revocation.json"
+cp "$provider_record" "$inside_record"
+chmod 600 "$inside_record"
+if "$verifier" \
+  --repository "$clean_repo" \
+  --expected-tree "$reviewed_tree" \
+  --provider-revocation-record "$inside_record" \
+  --allow-ref refs/heads/main >/dev/null 2>&1; then
+  echo 'provider record inside the public repository must fail verification' >&2
+  exit 1
+fi
+
+git -C "$clean_repo" tag unexpected-public-tag
+if "$verifier" \
+  --repository "$clean_repo" \
+  --expected-tree "$reviewed_tree" \
+  --provider-revocation-record "$provider_record" \
+  --allow-ref refs/heads/main >/dev/null 2>&1; then
+  echo 'unexpected ref must fail publication verification' >&2
+  exit 1
+fi
+git -C "$clean_repo" tag -d unexpected-public-tag >/dev/null
+
+printf '%s\n' 'tree drift' >> "$clean_repo/README.md"
+git -C "$clean_repo" add README.md
+git -C "$clean_repo" commit -q -m 'unreviewed tree drift'
+if "$verifier" \
+  --repository "$clean_repo" \
+  --expected-tree "$reviewed_tree" \
+  --provider-revocation-record "$provider_record" \
+  --allow-ref refs/heads/main >/dev/null 2>&1; then
+  echo 'reviewed-tree drift must fail publication verification' >&2
+  exit 1
+fi
+
+history_repo="$fixture_root/dirty-history"
+make_repo "$history_repo"
+synthetic_token="$(printf 'A%.0s' {1..64})"
+printf 'jupyter_token=%s\n' "$synthetic_token" > "$history_repo/captured-provider-response.txt"
+git -C "$history_repo" add captured-provider-response.txt
+git -C "$history_repo" commit -q -m 'synthetic contaminated history'
+git -C "$history_repo" rm -q captured-provider-response.txt
+git -C "$history_repo" commit -q -m 'delete current-tree contamination'
+dirty_current_tree="$(git -C "$history_repo" rev-parse 'HEAD^{tree}')"
+if "$verifier" \
+  --repository "$history_repo" \
+  --expected-tree "$dirty_current_tree" \
+  --provider-revocation-record "$provider_record" \
+  --allow-ref refs/heads/main >/dev/null 2>&1; then
+  echo 'reachable historical credential must fail publication verification' >&2
+  exit 1
+fi
+
+echo 'publication_candidate_gate=ok clean=pass unexpected_ref=reject tree_drift=reject dirty_history=reject'

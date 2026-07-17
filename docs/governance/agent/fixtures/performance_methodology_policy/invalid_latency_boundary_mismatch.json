@@ -1,0 +1,19 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/performance_methodology_policy/valid_performance_methodology_policy.json",
+  "expected_error_contains": [
+    "latency methodology boundary mismatch"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "cards",
+        1,
+        "methodology",
+        "boundary"
+      ],
+      "value": "public-wan"
+    }
+  ],
+  "schema": "postfiat-performance-methodology-policy-invalid-case-v1"
+}

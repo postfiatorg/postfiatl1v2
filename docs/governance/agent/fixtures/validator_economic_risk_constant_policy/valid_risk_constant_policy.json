@@ -1,0 +1,258 @@
+{
+  "checks": {
+    "applicant_controlled_value_rejected": true,
+    "authority_transfer": false,
+    "capture_ratio_sensitivity_checked": true,
+    "live_registry_mutation": false,
+    "missing_or_unbounded_value_fails_closed": true,
+    "risk_root_bound": true,
+    "stale_value_source_held": true,
+    "underpriced_capture_held": true,
+    "ungoverned_policy_fails_closed": true,
+    "value_ceiling_derived_from_source_buckets": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "validator-economic-risk-constant-policy-controlled-v1",
+  "schema": "postfiat-validator-economic-risk-constant-policy-v1",
+  "statement": {
+    "base_model": {
+      "B": 2,
+      "capture_cost_floor_usd": 7500000,
+      "current_epoch": 42,
+      "risk_policy_governed": true,
+      "value_sources": [
+        {
+          "applicant_controlled": false,
+          "attestor_group": "attestor-chain-index",
+          "control_surface": "chain-derived-settlement-flow",
+          "expires_epoch": 44,
+          "observed_epoch": 41,
+          "risk_bucket": "settlement_flow",
+          "signature_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_class": "chain_derived",
+          "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "source_id": "src-settlement-flow-01",
+          "unbounded": false,
+          "value_usd": 1200000
+        },
+        {
+          "applicant_controlled": false,
+          "attestor_group": "attestor-registry-a",
+          "control_surface": "registry-governance-influence",
+          "expires_epoch": 44,
+          "observed_epoch": 41,
+          "risk_bucket": "governance_influence",
+          "signature_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "source_class": "registry_derived",
+          "source_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "source_id": "src-governance-influence-01",
+          "unbounded": false,
+          "value_usd": 800000
+        },
+        {
+          "applicant_controlled": false,
+          "attestor_group": "attestor-audit-c",
+          "control_surface": "auditor-external-position",
+          "expires_epoch": 44,
+          "observed_epoch": 41,
+          "risk_bucket": "external_position",
+          "signature_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "source_class": "auditor_attested",
+          "source_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "source_id": "src-external-position-01",
+          "unbounded": false,
+          "value_usd": 1500000
+        },
+        {
+          "applicant_controlled": false,
+          "attestor_group": "attestor-receipt-a",
+          "control_surface": "receipt-derived-omission-window",
+          "expires_epoch": 44,
+          "observed_epoch": 41,
+          "risk_bucket": "omission_window",
+          "signature_hash": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+          "source_class": "receipt_derived",
+          "source_hash": "222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
+          "source_id": "src-omission-window-01",
+          "unbounded": false,
+          "value_usd": 500000
+        }
+      ]
+    },
+    "evidence_artifacts": [
+      {
+        "path": "scripts/validator-economic-risk-constant-policy-verify",
+        "sha3_384": "92ede0c8c45d397fac700b0368749d28980cc0e7504ae7b673628bf86e70a38bf30674b560db898ea113b7ad522c49e4"
+      }
+    ],
+    "policy_id": "validator-economic-risk-constant-policy-v1",
+    "risk_policy": {
+      "active_capture_to_value_ratio_bps": 15000,
+      "allowed_value_source_classes": [
+        "auditor_attested",
+        "chain_derived",
+        "receipt_derived",
+        "registry_derived"
+      ],
+      "max_value_source_age_epochs": 2,
+      "policy_governed": true,
+      "policy_units": "validator-economic-risk-constant-policy-v1",
+      "required_risk_buckets": [
+        "settlement_flow",
+        "governance_influence",
+        "external_position",
+        "omission_window"
+      ],
+      "route_on_applicant_controlled_value": "reject",
+      "route_on_stale_value_source": "hold",
+      "route_on_underpriced_capture": "hold",
+      "route_on_unknown_or_unbounded_value": "fail-closed",
+      "sensitivity_ratios_bps": [
+        10000,
+        15000,
+        20000
+      ],
+      "value_bucket_aggregation": "sum_of_bucket_maxima"
+    },
+    "risk_root_hash": "f1951749926c4a5c70056ca5176061b433fe71ac3b30af35e2585e2ebd40148fdaa80caf31959175991b568397c0300f",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "authority-validation-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-clean-risk-constants-admit",
+        "expected_metrics": {
+          "capture_cost_floor_usd": 7500000,
+          "required_capture_cost_usd": 6000000,
+          "value_at_stake_ceiling_usd": 4000000
+        },
+        "expected_reason_codes": [
+          "all_risk_constant_checks_passed"
+        ],
+        "expected_route": "admit",
+        "overrides": []
+      },
+      {
+        "case_id": "case-02-stale-value-source-hold",
+        "expected_reason_codes": [
+          "stale_value_source:src-settlement-flow-01"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "value_sources",
+              0,
+              "observed_epoch"
+            ],
+            "value": 39
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-applicant-controlled-source-reject",
+        "expected_reason_codes": [
+          "applicant_controlled_value_source:src-external-position-01"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "value_sources",
+              2,
+              "applicant_controlled"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-missing-risk-bucket-fail-closed",
+        "expected_reason_codes": [
+          "missing_risk_bucket:omission_window"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "value_sources",
+              3,
+              "risk_bucket"
+            ],
+            "value": "external_position"
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-underpriced-capture-cost-hold",
+        "expected_reason_codes": [
+          "capture_cost_below_active_ratio"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "capture_cost_floor_usd"
+            ],
+            "value": 5500000
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-ungoverned-risk-policy-fail-closed",
+        "expected_reason_codes": [
+          "ungoverned_risk_policy"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "risk_policy_governed"
+            ],
+            "value": false
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-two-x-ratio-sensitivity-hold",
+        "expected_metrics": {
+          "capture_cost_floor_usd": 7500000,
+          "required_capture_cost_usd": 8000000,
+          "value_at_stake_ceiling_usd": 4000000
+        },
+        "expected_reason_codes": [
+          "capture_cost_below_active_ratio"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "override_capture_to_value_ratio_bps"
+            ],
+            "value": 20000
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-unbounded-value-source-fail-closed",
+        "expected_reason_codes": [
+          "unbounded_value_source:src-governance-influence-01"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "value_sources",
+              1,
+              "unbounded"
+            ],
+            "value": true
+          }
+        ]
+      }
+    ]
+  }
+}

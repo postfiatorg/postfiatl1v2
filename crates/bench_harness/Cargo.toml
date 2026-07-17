@@ -1,0 +1,25 @@
+[package]
+name = "postfiat-bench"
+version = "0.1.0"
+description = "Internal benchmark and acceptance harness for PostFiat L1"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "postfiat-bench"
+path = "src/main.rs"
+
+[dependencies]
+postfiat-bridge = { path = "../bridge" }
+postfiat-crypto-provider = { path = "../crypto_provider" }
+postfiat-execution = { path = "../execution" }
+postfiat-mempool-dag = { path = "../mempool_dag" }
+postfiat-ordering-fast = { path = "../ordering_fast" }
+postfiat-privacy = { path = "../privacy" }
+postfiat-proofs = { path = "../proofs" }
+postfiat-storage = { path = "../storage" }
+postfiat-types = { path = "../types" }
+serde = { workspace = true }
+serde_json = { workspace = true }

@@ -1,0 +1,320 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T00:00:00Z",
+    "attestor_key_hash": "777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+    "signature_hash": "888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888",
+    "signature_scheme": "mldsa44-placeholder",
+    "statement_hash": "decac0f679c5709b0b6ad53fcbb5e7dcf2bd133c8e1668cc416e55530fdac587e82ebc74e953cdec54039fa96a23e9f6"
+  },
+  "checks": {
+    "authority_transfer": false,
+    "author_chosen_stress_fails_closed": true,
+    "bft_margin_erosion_routes": true,
+    "decayed_margin_routes": true,
+    "hidden_correlated_collapse_fails_closed": true,
+    "liveness_margin_erosion_fail_closed": true,
+    "live_registry_mutation": false,
+    "registry_positive_margin_counted": true,
+    "stale_stress_window_held": true,
+    "statement_hash_bound": true,
+    "stress_root_bound": true,
+    "stressed_margins_recomputed": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "validator-economic-margin-stress-v1-fixture",
+  "schema": "postfiat-validator-economic-margin-stress-v1",
+  "statement": {
+    "base_stress": {
+      "hidden_correlated_decay_count": 0,
+      "stress_factors_author_chosen": false,
+      "stress_policy_governed": true,
+      "stress_source_class": "market_index",
+      "stress_window_age_epochs": 0,
+      "validator_buckets": [
+        {
+          "B_i_usd": 15000000,
+          "C_i_usd": 3200000,
+          "G_i_w_usd": 1200000,
+          "L_i_w_usd": 12500000,
+          "benefit_factor_bps": 8000,
+          "bucket_id": "healthy-stressed",
+          "cost_factor_bps": 10000,
+          "count": 35,
+          "gain_factor_bps": 10000,
+          "loss_factor_bps": 8000,
+          "source_bound": true
+        }
+      ]
+    },
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_input_misreporting/valid_input_misreporting.json",
+        "sha3_384": "57ca51b91adbea53e17dfb82d7ddbbfa2a2f0885c3c03a90002d3851c694af418a3add3cde0c29ea7a216fb6eccc291b"
+      },
+      {
+        "path": "reports/validator-economic-input-misreporting/20260529T092459Z/validator-economic-input-misreporting-report.json",
+        "sha3_384": "b6dfdb9cc76ba27f375b680e2c90ca0835fcbd072bffa8615ed260057241208b8fae5421c3d1849235b8a5b9fd24daea"
+      },
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_population_stability/valid_population_stability.json",
+        "sha3_384": "36a44ee0e068e00a52ecbbc553a42cfbe53155a4b1e15df9c27590cd288aa08cfdf21afb2bc4797520f193c583e9ecb8"
+      },
+      {
+        "path": "reports/validator-economic-population-stability/20260529T065847Z/validator-economic-population-stability-report.json",
+        "sha3_384": "750e675586d71e9effd0cf482b35c5199e2f84d0def2e9c4debd5ab6e46ffeae60b141a07a9022d4de1de4f55e36a123"
+      },
+      {
+        "path": "docs/governance/agent/validator_economic_margin_stress_schema.json",
+        "sha3_384": "f4f7669c99f8926f95b1469789757947efef786b4c976a1dfaa76cfcfd546043877a3595b0e75eb355d3f27367ade67d"
+      },
+      {
+        "path": "scripts/validator-economic-margin-stress-verify",
+        "sha3_384": "0c0023cb3c0af633f386c5afa4752dec12824f61412a258ed35248a9ee8f1a1f6a891d717743a709ac713f1416dd7179"
+      }
+    ],
+    "policy_id": "validator-economic-margin-stress-v1",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "validator-economic-margin-stress-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-clean-stress-continue",
+        "expected_reason_codes": [
+          "margin_stress_bounds_passed"
+        ],
+        "expected_route": "continue",
+        "overrides": []
+      },
+      {
+        "case_id": "case-02-one-decayed-validator-removal-window",
+        "expected_reason_codes": [
+          "validator_margin_decay_removal_window"
+        ],
+        "expected_route": "removal-and-recruitment-window",
+        "overrides": [
+          {
+            "path": [
+              "validator_buckets"
+            ],
+            "value": [
+              {
+                "B_i_usd": 15000000,
+                "C_i_usd": 3200000,
+                "G_i_w_usd": 1200000,
+                "L_i_w_usd": 12500000,
+                "benefit_factor_bps": 8000,
+                "bucket_id": "healthy-stressed",
+                "cost_factor_bps": 10000,
+                "count": 34,
+                "gain_factor_bps": 10000,
+                "loss_factor_bps": 8000,
+                "source_bound": true
+              },
+              {
+                "B_i_usd": 15000000,
+                "C_i_usd": 3200000,
+                "G_i_w_usd": 1200000,
+                "L_i_w_usd": 12500000,
+                "benefit_factor_bps": 1000,
+                "bucket_id": "decayed-single",
+                "cost_factor_bps": 10000,
+                "count": 1,
+                "gain_factor_bps": 10000,
+                "loss_factor_bps": 1000,
+                "source_bound": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-bft-margin-eroded-recruitment-window",
+        "expected_reason_codes": [
+          "positive_margin_count_below_bft_safe"
+        ],
+        "expected_route": "recruitment-window",
+        "overrides": [
+          {
+            "path": [
+              "validator_buckets"
+            ],
+            "value": [
+              {
+                "B_i_usd": 15000000,
+                "C_i_usd": 3200000,
+                "G_i_w_usd": 1200000,
+                "L_i_w_usd": 12500000,
+                "benefit_factor_bps": 8000,
+                "bucket_id": "healthy-stressed",
+                "cost_factor_bps": 10000,
+                "count": 33,
+                "gain_factor_bps": 10000,
+                "loss_factor_bps": 8000,
+                "source_bound": true
+              },
+              {
+                "B_i_usd": 15000000,
+                "C_i_usd": 3200000,
+                "G_i_w_usd": 1200000,
+                "L_i_w_usd": 12500000,
+                "benefit_factor_bps": 1000,
+                "bucket_id": "decayed-pair",
+                "cost_factor_bps": 10000,
+                "count": 2,
+                "gain_factor_bps": 10000,
+                "loss_factor_bps": 1000,
+                "source_bound": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-liveness-margin-eroded-fail-closed",
+        "expected_reason_codes": [
+          "positive_margin_count_below_liveness"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "validator_buckets"
+            ],
+            "value": [
+              {
+                "B_i_usd": 15000000,
+                "C_i_usd": 3200000,
+                "G_i_w_usd": 1200000,
+                "L_i_w_usd": 12500000,
+                "benefit_factor_bps": 8000,
+                "bucket_id": "healthy-stressed",
+                "cost_factor_bps": 10000,
+                "count": 23,
+                "gain_factor_bps": 10000,
+                "loss_factor_bps": 8000,
+                "source_bound": true
+              },
+              {
+                "B_i_usd": 15000000,
+                "C_i_usd": 3200000,
+                "G_i_w_usd": 1200000,
+                "L_i_w_usd": 12500000,
+                "benefit_factor_bps": 1000,
+                "bucket_id": "decayed-liveness",
+                "cost_factor_bps": 10000,
+                "count": 12,
+                "gain_factor_bps": 10000,
+                "loss_factor_bps": 1000,
+                "source_bound": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-stale-market-window-hold",
+        "expected_reason_codes": [
+          "stale_market_stress_window"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "stress_window_age_epochs"
+            ],
+            "value": 3
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-author-chosen-stress-fail-closed",
+        "expected_reason_codes": [
+          "author_chosen_stress_factor"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "stress_source_class"
+            ],
+            "value": "author_chosen"
+          },
+          {
+            "path": [
+              "stress_factors_author_chosen"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-hidden-correlated-collapse-fail-closed",
+        "expected_reason_codes": [
+          "hidden_correlated_volume_collapse"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "hidden_correlated_decay_count"
+            ],
+            "value": 4
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-non-source-bound-bucket-hold",
+        "expected_reason_codes": [
+          "stress_bucket_not_source_bound"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "validator_buckets",
+              0,
+              "source_bound"
+            ],
+            "value": false
+          }
+        ]
+      },
+      {
+        "case_id": "case-09-ungoverned-stress-policy-fail-closed",
+        "expected_reason_codes": [
+          "ungoverned_stress_policy"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "stress_policy_governed"
+            ],
+            "value": false
+          }
+        ]
+      }
+    ],
+    "stress_policy": {
+      "f_tolerated": 11,
+      "loss_over_gain_margin_usd": 1000000,
+      "max_hidden_correlated_decay_count": 0,
+      "max_stress_window_age_epochs": 2,
+      "min_bft_safe_count": 34,
+      "min_liveness_count": 24,
+      "n_active": 35,
+      "participation_margin_usd": 0,
+      "policy_units": "validator-economic-margin-stress-v1",
+      "q_cert": 24,
+      "route_on_bft_margin_eroded": "recruitment-window",
+      "route_on_decayed_margin": "removal-and-recruitment-window",
+      "route_on_liveness_margin_eroded": "fail-closed",
+      "route_on_stale_stress_window": "hold",
+      "route_on_ungoverned_stress_policy": "fail-closed"
+    },
+    "stress_root_hash": "bb4384b9b7f9df805643ddf0f14ac2a2c7a61373dfb50e4e2bfdb8b473a3bdb3941ffaa42afac3c2825269d41f6f5e63"
+  }
+}

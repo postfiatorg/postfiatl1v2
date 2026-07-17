@@ -1,0 +1,41 @@
+{
+  "schema": "postfiat-constitutional-full-distribution-reproduction-lane-matrix-v1",
+  "fixture_id": "vc-034-full-distribution-reproduction-lane-matrix",
+  "matrix_targets": [
+    {
+      "target_id": "non_validator_constitutional_prompt",
+      "required": true,
+      "minimum_status": "green",
+      "description": "The reproduced prompt must be a constitutional protocol prompt, not a validator scoring prompt."
+    },
+    {
+      "target_id": "different_datacenter_gpu_classes",
+      "required": true,
+      "minimum_status": "green",
+      "description": "At least two datacenter GPU classes must produce matching parsed output and matching full-vocabulary fixed-point roots."
+    },
+    {
+      "target_id": "provider_host_boundary",
+      "required": true,
+      "minimum_status": "green",
+      "description": "The successful receipts must come from distinct provider run IDs, with redaction-safe cleanup proof."
+    },
+    {
+      "target_id": "local_verifier_recomputation",
+      "required": true,
+      "minimum_status": "green",
+      "description": "The verifier must recompute stored vector file hashes and the full-vocabulary root locally."
+    },
+    {
+      "target_id": "same_class_different_hosts",
+      "required": false,
+      "minimum_status": "yellow",
+      "description": "Same-class different-host coverage is tracked separately. It is not claimed unless two distinct hosts for the same hardware class are present."
+    }
+  ],
+  "classification_scale": {
+    "green": "The target is directly proven by the current report set.",
+    "yellow": "The target is not contradicted but is only partially covered or not yet sampled.",
+    "red": "The target diverged or failed closed."
+  }
+}

@@ -1,0 +1,489 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T00:00:00Z",
+    "attestor_key_hash": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+    "signature_hash": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+    "signature_scheme": "mldsa44-placeholder",
+    "statement_hash": "10f6392afd78a9c63c8cfbea3b26777dbdbf5fddd3716e4d3f21119bc31b41d5557edf96f60c8ca38e402ddddf8b177d"
+  },
+  "checks": {
+    "all_invariants_mapped": true,
+    "all_terms_mapped": true,
+    "authority_transfer": false,
+    "forbidden_source_class_rejected": true,
+    "live_registry_mutation": false,
+    "missing_coverage_held": true,
+    "missing_scalar_fail_closed": true,
+    "scalar_root_bound": true,
+    "statement_hash_bound": true,
+    "ungoverned_scalar_policy_fail_closed": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "validator-economic-scalar-reduction-v1-fixture",
+  "schema": "postfiat-validator-economic-scalar-reduction-v1",
+  "statement": {
+    "base_map": {
+      "economic_invariants": {
+        "loss_over_gain_margin": {
+          "operator": "minus_ge",
+          "terms": [
+            "L_i_w",
+            "G_i_w"
+          ],
+          "threshold_usd": 1000000
+        },
+        "participation_margin": {
+          "operator": "minus_ge",
+          "terms": [
+            "B_i",
+            "C_i"
+          ],
+          "threshold_usd": 0
+        }
+      },
+      "scalar_policy_governed": true,
+      "scalar_terms": {
+        "B_i": {
+          "attestor_roles": [
+            "exposure_attestor",
+            "independence_attestor"
+          ],
+          "covered_adversarial_cases": [
+            "candidate_owned_flow_reject",
+            "self_declared_flow_reject",
+            "stale_or_missing_flow_hold",
+            "under_threshold_flow_reject",
+            "wash_routed_flow_reject"
+          ],
+          "direction": "floor",
+          "formula": "sum(current_verified_exogenous_exposure_floors)",
+          "linked_verifiers": [
+            "validator-economic-bound-calibration-v1",
+            "validator-economic-synthetic-flow-v1"
+          ],
+          "source_classes": [
+            "auditor_attested",
+            "chain_derived",
+            "counterparty_signed",
+            "regulated_statement"
+          ],
+          "source_fields": [
+            "custody_assets_floor",
+            "customer_settlement_flow_floor",
+            "exchange_volume_floor",
+            "gateway_route_flow_floor"
+          ],
+          "units": "usd"
+        },
+        "C_i": {
+          "attestor_roles": [
+            "operator_finance_attestor",
+            "auditor_cost_attestor"
+          ],
+          "covered_adversarial_cases": [
+            "favorable_attestor_inflation_reject",
+            "participation_margin_below_floor_hold",
+            "source_class_mismatch_hold"
+          ],
+          "direction": "ceiling",
+          "formula": "max(current_verified_operating_cost_ceilings)",
+          "linked_verifiers": [
+            "validator-economic-bound-calibration-v1"
+          ],
+          "source_classes": [
+            "auditor_attested",
+            "operator_signed"
+          ],
+          "source_fields": [
+            "auditor_attested_operating_cost_ceiling",
+            "operator_monthly_cost_ceiling"
+          ],
+          "units": "usd"
+        },
+        "G_i_w": {
+          "attestor_roles": [
+            "chain_window_attestor",
+            "receipt_window_attestor",
+            "registry_window_attestor",
+            "external_position_cap_attestor"
+          ],
+          "covered_adversarial_cases": [
+            "candidate_affiliated_external_cap_reject",
+            "missing_external_cap_reject",
+            "stale_component_hold",
+            "unbounded_external_position_reject",
+            "unbounded_omission_window_reject"
+          ],
+          "direction": "ceiling",
+          "formula": "min(sum(current_verified_short_window_gain_caps), external_position_cap)",
+          "linked_verifiers": [
+            "validator-economic-attestor-capture-v1",
+            "validator-economic-deviation-gain-v1"
+          ],
+          "source_classes": [
+            "auditor_attested",
+            "chain_derived",
+            "receipt_derived",
+            "registry_derived"
+          ],
+          "source_fields": [
+            "external_position_cap",
+            "fee_class_spread_gain_ceiling",
+            "omission_window_gain_ceiling",
+            "proposer_slot_gain_ceiling",
+            "registry_delay_gain_ceiling"
+          ],
+          "units": "usd"
+        },
+        "L_i_w": {
+          "attestor_roles": [
+            "liability_attestor",
+            "registry_exclusion_attestor",
+            "route_loss_attestor",
+            "public_incident_attestor",
+            "governance_consequence_attestor"
+          ],
+          "covered_adversarial_cases": [
+            "candidate_affiliated_reputation_reject",
+            "loss_below_gain_reject",
+            "missing_exclusion_hold",
+            "self_declared_reputation_reject",
+            "stale_exclusion_hold",
+            "ungoverned_loss_policy_fail_closed"
+          ],
+          "direction": "floor",
+          "formula": "sum(current_verified_loss_floors)",
+          "linked_verifiers": [
+            "validator-economic-bound-calibration-v1",
+            "validator-economic-loss-measurement-v1"
+          ],
+          "source_classes": [
+            "auditor_attested",
+            "chain_derived",
+            "contract_signed",
+            "counterparty_signed",
+            "governance_derived",
+            "public_incident_index",
+            "registry_derived"
+          ],
+          "source_fields": [
+            "contractual_liability_floor",
+            "governed_challenge_exclusion_floor",
+            "public_incident_reputation_floor",
+            "registry_exclusion_flow_floor",
+            "route_customer_loss_floor"
+          ],
+          "units": "usd"
+        }
+      }
+    },
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_synthetic_flow/valid_synthetic_flow.json",
+        "sha3_384": "c25fccff514acd1778f38c75acce73f78ee6fdea3dab79a63126701d5f672bf1fc176098417deda2d1e4bbb186a6bf6c"
+      },
+      {
+        "path": "scripts/validator-economic-synthetic-flow-verify",
+        "sha3_384": "4a0a6cdc15d15d92c2137147fd0ef27547a6fe9dd4cd1e44615ff10e37fec4e86b9de1c4a7c369d767d24c73e7833353"
+      },
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_bound_calibration/valid_economic_bound_calibration.json",
+        "sha3_384": "6e6aa55af46a1a98ba0830c54ca5ac5ab71990339d735fde1a2e63b52a973971c4e5afb40a0d8d85ec1ad2fe519930b1"
+      },
+      {
+        "path": "scripts/validator-economic-bound-calibration-verify",
+        "sha3_384": "dcaa9b66ade6958d5f21f62359f9ff130395e69494eb0f94bc9ac5b62b2b636176cf3e22323444327c6000985c6f2cff"
+      },
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_deviation_gain/valid_deviation_gain.json",
+        "sha3_384": "a4f908b9fff86b77911a4bd59a7623c0ab9fa0962689978d8aa507b783d9718f1e2c95efb0d83fd51a8dbcb93f81c944"
+      },
+      {
+        "path": "scripts/validator-economic-deviation-gain-verify",
+        "sha3_384": "e10749a70101cbdbe74aa4507224d7ba69eb34f67c243c83bf0ac22ce9cbe907de1dffd7dd76b1a39e1c9d9d44df1bdd"
+      },
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_loss_measurement/valid_loss_measurement.json",
+        "sha3_384": "e9ef22dc363f6079a38a1fe0b95c466396396ed617e640268a9c59704e65417cdb7eebf020b4c4f56c48a30ec71ac2f8"
+      },
+      {
+        "path": "scripts/validator-economic-loss-measurement-verify",
+        "sha3_384": "ff246f85f7ef1ccec830ca23472f6a9cb0b59343dadb8d6295d0c15b92969263242da463d02a68dad8618e10fb46e61c"
+      },
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_attestor_capture/valid_attestor_capture.json",
+        "sha3_384": "8e1c14d6bba86ecae29fba49cee99759add9c7cc46af353570d32614b0339560356acf8a9e363b622b5c8d1ef489bbcc"
+      },
+      {
+        "path": "scripts/validator-economic-attestor-capture-verify",
+        "sha3_384": "17ae50fd24588de2a067f29abc193ffa1d3544a5b8452372a2667562e0ec13d2f1894d2a89d41d360614dd562c665b1b"
+      }
+    ],
+    "policy_id": "validator-economic-scalar-reduction-v1",
+    "scalar_policy": {
+      "policy_units": "validator-economic-scalar-reduction-v1",
+      "route_on_forbidden_source_class": "reject",
+      "route_on_missing_coverage": "hold",
+      "route_on_missing_scalar": "fail-closed",
+      "route_on_ungoverned_scalar_policy": "fail-closed"
+    },
+    "scalar_root_hash": "ce09ad70c56f44544f937a254843415003fcced04603e7626541c3481af925477f10a706878b0016f7be060b82be2054",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "validator-economic-scalar-reduction-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-complete-map-admit",
+        "expected_measurement": {
+          "covered_adversarial_case_count": 19,
+          "linked_verifier_count": 5,
+          "mapped_invariants": 2,
+          "mapped_scalar_terms": 4,
+          "required_invariants": 2,
+          "required_scalar_terms": 4,
+          "scalar_policy_governed": true
+        },
+        "expected_reason_codes": [
+          "all_scalar_reduction_checks_passed"
+        ],
+        "expected_route": "admit",
+        "overrides": []
+      },
+      {
+        "case_id": "case-02-missing-b-term-fail-closed",
+        "expected_measurement": {
+          "covered_adversarial_case_count": 14,
+          "linked_verifier_count": 4,
+          "mapped_invariants": 2,
+          "mapped_scalar_terms": 4,
+          "required_invariants": 2,
+          "required_scalar_terms": 4,
+          "scalar_policy_governed": true
+        },
+        "expected_reason_codes": [
+          "missing_scalar_term_B_i"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "scalar_terms",
+              "B_i"
+            ],
+            "value": null
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-b-allows-self-declared-reject",
+        "expected_measurement": {
+          "covered_adversarial_case_count": 19,
+          "linked_verifier_count": 5,
+          "mapped_invariants": 2,
+          "mapped_scalar_terms": 4,
+          "required_invariants": 2,
+          "required_scalar_terms": 4,
+          "scalar_policy_governed": true
+        },
+        "expected_reason_codes": [
+          "forbidden_source_class_B_i_self_declared"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "scalar_terms",
+              "B_i",
+              "source_classes"
+            ],
+            "value": [
+              "auditor_attested",
+              "chain_derived",
+              "counterparty_signed",
+              "regulated_statement",
+              "self_declared"
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-c-direction-floor-fail-closed",
+        "expected_measurement": {
+          "covered_adversarial_case_count": 19,
+          "linked_verifier_count": 5,
+          "mapped_invariants": 2,
+          "mapped_scalar_terms": 4,
+          "required_invariants": 2,
+          "required_scalar_terms": 4,
+          "scalar_policy_governed": true
+        },
+        "expected_reason_codes": [
+          "direction_mismatch_C_i"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "scalar_terms",
+              "C_i",
+              "direction"
+            ],
+            "value": "floor"
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-g-missing-external-cap-reject",
+        "expected_measurement": {
+          "covered_adversarial_case_count": 19,
+          "linked_verifier_count": 5,
+          "mapped_invariants": 2,
+          "mapped_scalar_terms": 4,
+          "required_invariants": 2,
+          "required_scalar_terms": 4,
+          "scalar_policy_governed": true
+        },
+        "expected_reason_codes": [
+          "missing_source_fields_G_i_w"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "scalar_terms",
+              "G_i_w",
+              "source_fields"
+            ],
+            "value": [
+              "fee_class_spread_gain_ceiling",
+              "omission_window_gain_ceiling",
+              "proposer_slot_gain_ceiling",
+              "registry_delay_gain_ceiling"
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-l-allows-self-declared-reputation-reject",
+        "expected_measurement": {
+          "covered_adversarial_case_count": 19,
+          "linked_verifier_count": 5,
+          "mapped_invariants": 2,
+          "mapped_scalar_terms": 4,
+          "required_invariants": 2,
+          "required_scalar_terms": 4,
+          "scalar_policy_governed": true
+        },
+        "expected_reason_codes": [
+          "forbidden_source_class_L_i_w_self_declared"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "scalar_terms",
+              "L_i_w",
+              "source_classes"
+            ],
+            "value": [
+              "auditor_attested",
+              "chain_derived",
+              "contract_signed",
+              "counterparty_signed",
+              "governance_derived",
+              "public_incident_index",
+              "registry_derived",
+              "self_declared"
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-missing-linked-verifier-hold",
+        "expected_measurement": {
+          "covered_adversarial_case_count": 19,
+          "linked_verifier_count": 4,
+          "mapped_invariants": 2,
+          "mapped_scalar_terms": 4,
+          "required_invariants": 2,
+          "required_scalar_terms": 4,
+          "scalar_policy_governed": true
+        },
+        "expected_reason_codes": [
+          "missing_linked_verifier_B_i"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "scalar_terms",
+              "B_i",
+              "linked_verifiers"
+            ],
+            "value": [
+              "validator-economic-bound-calibration-v1"
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-ungoverned-scalar-policy-fail-closed",
+        "expected_measurement": {
+          "covered_adversarial_case_count": 19,
+          "linked_verifier_count": 5,
+          "mapped_invariants": 2,
+          "mapped_scalar_terms": 4,
+          "required_invariants": 2,
+          "required_scalar_terms": 4,
+          "scalar_policy_governed": false
+        },
+        "expected_reason_codes": [
+          "ungoverned_scalar_policy"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "scalar_policy_governed"
+            ],
+            "value": false
+          }
+        ]
+      },
+      {
+        "case_id": "case-09-missing-adversarial-coverage-hold",
+        "expected_measurement": {
+          "covered_adversarial_case_count": 18,
+          "linked_verifier_count": 5,
+          "mapped_invariants": 2,
+          "mapped_scalar_terms": 4,
+          "required_invariants": 2,
+          "required_scalar_terms": 4,
+          "scalar_policy_governed": true
+        },
+        "expected_reason_codes": [
+          "missing_adversarial_coverage_B_i"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "scalar_terms",
+              "B_i",
+              "covered_adversarial_cases"
+            ],
+            "value": [
+              "candidate_owned_flow_reject",
+              "self_declared_flow_reject",
+              "stale_or_missing_flow_hold",
+              "under_threshold_flow_reject"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

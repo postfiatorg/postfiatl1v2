@@ -1,0 +1,71 @@
+{
+  "schema": "postfiat-validator-evidence-public-url-domain-gate-v1",
+  "gate_id": "validator-evidence-public-url-domain-gate-2026-05-23-example",
+  "scope": {
+    "context": "controlled_testnet_admission",
+    "applies_to_controlled_testnet": true,
+    "public_claim_required": true,
+    "live_registry_mutation": false,
+    "authority_transfer": false
+  },
+  "packet_id": "validator-evidence-2026-05-23-example",
+  "validator_evidence_packet_root": "7f146e261443b04f443764468e94343f81a1dd87ec30a122b267b3d2050d43321ea6b122cb2b19efbe57b1728a6e4cea",
+  "packet_schema_hash": "92544968ea283754c5cd3cfba85194afff80f9366f07063b5cd228ea58a6f9efbeb74ad416f9f118595f8c6719d4f0c3",
+  "field_registry_hash": "a4d0ad75fcf706432e2d44bfd75486139a69116249ffb47bbc786fcb67ab939b25f99834d5cb5aa7bb93cfed8901200f",
+  "collection_window": {
+    "from_height": 1000,
+    "to_height": 2000,
+    "from_time": "2026-05-23T00:00:00Z",
+    "to_time": "2026-05-23T06:00:00Z"
+  },
+  "required_packet_fields": [
+    "validator.identity.declared_domain",
+    "validator.identity.declared_url",
+    "validator.identity.url_fetch.status",
+    "validator.identity.url_fetch.content_hash",
+    "validator.identity.key_domain_binding.status"
+  ],
+  "validator_order": [
+    "validator-alpha"
+  ],
+  "validators": {
+    "validator-alpha": {
+      "validator_id": "validator-alpha",
+      "declared_domain": "validator.example",
+      "declared_url": "https://validator.example/postfiat.json",
+      "url_fetch_status": "ok",
+      "url_fetch_content_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "key_domain_binding_status": "proved",
+      "freshness": {
+        "url_fetch": "recent_24h",
+        "operator_manifest": "recent_30d",
+        "key_domain_binding": "recent_30d"
+      },
+      "conflict_status": "none",
+      "gate_decision": "eligible_for_public_claim",
+      "dga_treatment": "public_claim_allowed",
+      "source_hashes": [
+        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      ]
+    }
+  },
+  "summary": {
+    "total_validator_count": 1,
+    "eligible_validator_count": 1,
+    "ineligible_validator_count": 0,
+    "controlled_testnet_blocker_count": 1
+  },
+  "checks": {
+    "packet_root_verified": true,
+    "field_paths_registered": true,
+    "packet_fields_matched": true,
+    "https_required": true,
+    "fetch_ok_required": true,
+    "key_domain_binding_proved_required": true,
+    "non_conflicting_required": true,
+    "controlled_testnet_not_blocked": false,
+    "registry_mutation": false,
+    "live_authority_transfer": false
+  }
+}

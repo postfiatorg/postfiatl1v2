@@ -1,0 +1,18 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_bound_policy/valid_economic_bound_policy.json",
+  "expected_error_contains": [
+    "case-05-missing-liability-hold: expected_route mismatch"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        4,
+        "expected_route"
+      ],
+      "value": "admit"
+    }
+  ],
+  "schema": "postfiat-validator-economic-bound-policy-invalid-case-v1"
+}

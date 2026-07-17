@@ -1,0 +1,25 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_longitudinal_linkage/valid_longitudinal_linkage.json",
+  "expected_error_contains": [
+    "selector_cases missing required longitudinal-linkage cases"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases"
+      ],
+      "value": [
+        {
+          "case_id": "case-01-baseline-longitudinal",
+          "expected_reason_codes": [
+            "privacy_longitudinal_linkage_passed"
+          ],
+          "expected_route": "baseline-private",
+          "overrides": []
+        }
+      ]
+    }
+  ],
+  "schema": "postfiat-privacy-longitudinal-linkage-invalid-case-v1"
+}

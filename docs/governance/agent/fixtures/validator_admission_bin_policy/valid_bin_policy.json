@@ -1,0 +1,617 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T00:00:00Z",
+    "attestor_key_hash": "222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
+    "signature_hash": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+    "signature_scheme": "mldsa44-placeholder",
+    "statement_hash": "8133e640794fe9885a7bb77d727c61659d343e175e1732eede81ca3900db89aeca4d53e145448e174b0f77482efc1b21"
+  },
+  "checks": {
+    "attack_cap_enforced": true,
+    "authority_transfer": false,
+    "contradictory_evidence_held": true,
+    "hidden_shared_control_rejected": true,
+    "live_registry_mutation": false,
+    "policy_root_bound": true,
+    "rho_cap_enforced": true,
+    "rolling_decay_challenge_enforced": true,
+    "self_attestation_only_rejected": true,
+    "source_independence_enforced": true,
+    "stale_evidence_held": true,
+    "statement_hash_bound": true,
+    "wash_or_rented_exposure_rejected": true
+  },
+  "mode": "design_fixture_only",
+  "packet_id": "validator-admission-bin-policy-v1-fixture",
+  "schema": "postfiat-validator-admission-bin-policy-v1",
+  "statement": {
+    "bin_policy": {
+      "accountability_min_bin": 2,
+      "admitted_source_classes": [
+        "auditor_attested",
+        "chain_derived",
+        "counterparty_signed",
+        "network_observed",
+        "operator_signed",
+        "private_infra_attested",
+        "public_domain_control",
+        "registry_derived"
+      ],
+      "attack_max_bin": 1,
+      "bin_rules": {
+        "accountability": "bin 2 requires at least three current accountability proofs among operator manifest, domain control, jurisdiction contact, and incident response contact.",
+        "attack": "bin 2 is a hard reject when two or more attack-surface flags are present; bin 1 may enter challenge if all other gates pass.",
+        "exposure": "bin 2 requires at least two current independent exposure sources across distinct control surfaces and distinct attestor groups; self-attestation does not count.",
+        "rho": "bin 0 is required for admission; hidden shared release management, KMS, or funding control is a hard reject.",
+        "staleness": "required evidence older than the rolling window or under decay routes to hold until refreshed."
+      },
+      "decay_challenge_epochs": 2,
+      "exposure_min_bin": 2,
+      "reliability_min_bps": 9950,
+      "rho_max_bin": 0,
+      "rolling_window_epochs": 3
+    },
+    "evidence_artifacts": [
+      {
+        "path": "reports/validator-admission-policy-v1-report.json",
+        "sha3_384": "7421cfe25d3e1c3058a8893b6a9bd64be213e62485e478104692577314295b378385b3ea2acfdfeba39923ec9980c1dd"
+      },
+      {
+        "path": "docs/governance/validator_admission_benchmark/packets.json",
+        "sha3_384": "78fe267c1423f378d2af6eaee89136cbc1dfc4a51f8a4b9c92a336d7015f6c08178809acdc51db3894b1751e20f20e79"
+      },
+      {
+        "path": "reports/validator-admission-benchmark/score/20260528T210501Z/summary.json",
+        "sha3_384": "fb1ed97a70f7f16e87fe70c55ce42fc98115142779232cea4adc5cbc2a5519b1b2646bbf6348e65d942c09332601ac34"
+      }
+    ],
+    "policy_id": "validator-admission-bin-policy-v1",
+    "policy_root_hash": "a9421b3d49e06d95c6a4ebef23cb6d8830d20efe2f1b375896e2e80d25d6bde16fd7fa63b8c22bcbe166d09078b82d81",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "validator-admission-bin-policy-v1"
+    },
+    "selector_cases": [
+      {
+        "candidate_id": "validator-clean-independent",
+        "case_id": "case-01-clean-admit",
+        "evidence": {
+          "accountability": {
+            "domain_control_verified": true,
+            "incident_response_contact_verified": true,
+            "jurisdiction_contact_verified": true,
+            "operator_manifest_signed": true
+          },
+          "attack_surface": {
+            "can_profit_from_decision_class": false,
+            "conflicting_flow": false,
+            "governance_power_concentrated": false
+          },
+          "correlation": {
+            "hidden_control_evidence": false,
+            "shared_asn": false,
+            "shared_cloud": false,
+            "shared_funding_controller": false,
+            "shared_kms": false,
+            "shared_monitoring": false,
+            "shared_release_manager": false
+          },
+          "exposure_sources": [
+            {
+              "age_epochs": 0,
+              "attestor_group": "settlement-counterparty-a",
+              "control_surface": "counterparty-receipt",
+              "exposure_class": "counterparty_receipt",
+              "source_class": "counterparty_signed",
+              "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "status": "verified"
+            },
+            {
+              "age_epochs": 1,
+              "attestor_group": "chain-indexer-a",
+              "control_surface": "on-chain-usage",
+              "exposure_class": "on_chain_usage",
+              "source_class": "chain_derived",
+              "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "status": "verified"
+            }
+          ],
+          "flags": {
+            "contradictory_required_evidence": false,
+            "rolling_exposure_decay": false,
+            "stale_required_evidence": false,
+            "unknown_field": false,
+            "wash_or_rented_exposure": false
+          },
+          "reliability": {
+            "sample_epochs": 12,
+            "uptime_bps": 9988
+          }
+        },
+        "expected_bins": {
+          "accountability": 2,
+          "attack": 0,
+          "exposure": 2,
+          "reliability": 2,
+          "rho": 0
+        },
+        "expected_reason_codes": [
+          "all_bins_passed"
+        ],
+        "expected_route": "admit"
+      },
+      {
+        "candidate_id": "validator-self-described",
+        "case_id": "case-02-self-only-exposure-hold",
+        "evidence": {
+          "accountability": {
+            "domain_control_verified": true,
+            "incident_response_contact_verified": true,
+            "jurisdiction_contact_verified": true,
+            "operator_manifest_signed": true
+          },
+          "attack_surface": {
+            "can_profit_from_decision_class": false,
+            "conflicting_flow": false,
+            "governance_power_concentrated": false
+          },
+          "correlation": {
+            "hidden_control_evidence": false,
+            "shared_asn": false,
+            "shared_cloud": false,
+            "shared_funding_controller": false,
+            "shared_kms": false,
+            "shared_monitoring": false,
+            "shared_release_manager": false
+          },
+          "exposure_sources": [
+            {
+              "age_epochs": 0,
+              "attestor_group": "candidate",
+              "control_surface": "self_only",
+              "exposure_class": "self_description",
+              "source_class": "operator_signed",
+              "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "status": "verified"
+            }
+          ],
+          "flags": {
+            "contradictory_required_evidence": false,
+            "rolling_exposure_decay": false,
+            "stale_required_evidence": false,
+            "unknown_field": false,
+            "wash_or_rented_exposure": false
+          },
+          "reliability": {
+            "sample_epochs": 12,
+            "uptime_bps": 9991
+          }
+        },
+        "expected_bins": {
+          "accountability": 2,
+          "attack": 0,
+          "exposure": 0,
+          "reliability": 2,
+          "rho": 0
+        },
+        "expected_reason_codes": [
+          "exposure_not_independently_verified",
+          "self_only_exposure"
+        ],
+        "expected_route": "hold"
+      },
+      {
+        "candidate_id": "validator-rented-flow",
+        "case_id": "case-03-rented-wash-exposure-challenge",
+        "evidence": {
+          "accountability": {
+            "domain_control_verified": true,
+            "incident_response_contact_verified": true,
+            "jurisdiction_contact_verified": true,
+            "operator_manifest_signed": true
+          },
+          "attack_surface": {
+            "can_profit_from_decision_class": false,
+            "conflicting_flow": false,
+            "governance_power_concentrated": false
+          },
+          "correlation": {
+            "hidden_control_evidence": false,
+            "shared_asn": false,
+            "shared_cloud": false,
+            "shared_funding_controller": false,
+            "shared_kms": false,
+            "shared_monitoring": false,
+            "shared_release_manager": false
+          },
+          "exposure_sources": [
+            {
+              "age_epochs": 0,
+              "attestor_group": "exchange-a",
+              "control_surface": "settlement-volume",
+              "exposure_class": "settlement_volume",
+              "source_class": "auditor_attested",
+              "source_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "status": "verified"
+            },
+            {
+              "age_epochs": 1,
+              "attestor_group": "gateway-b",
+              "control_surface": "gateway-flow",
+              "exposure_class": "gateway_flow",
+              "source_class": "counterparty_signed",
+              "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "status": "verified"
+            }
+          ],
+          "flags": {
+            "contradictory_required_evidence": false,
+            "rolling_exposure_decay": false,
+            "stale_required_evidence": false,
+            "unknown_field": false,
+            "wash_or_rented_exposure": true
+          },
+          "reliability": {
+            "sample_epochs": 12,
+            "uptime_bps": 9974
+          }
+        },
+        "expected_bins": {
+          "accountability": 2,
+          "attack": 0,
+          "exposure": 2,
+          "reliability": 2,
+          "rho": 0
+        },
+        "expected_reason_codes": [
+          "wash_or_rented_exposure"
+        ],
+        "expected_route": "hold-for-challenge"
+      },
+      {
+        "candidate_id": "validator-hidden-shared-control",
+        "case_id": "case-04-hidden-shared-control-reject",
+        "evidence": {
+          "accountability": {
+            "domain_control_verified": true,
+            "incident_response_contact_verified": true,
+            "jurisdiction_contact_verified": true,
+            "operator_manifest_signed": true
+          },
+          "attack_surface": {
+            "can_profit_from_decision_class": false,
+            "conflicting_flow": false,
+            "governance_power_concentrated": false
+          },
+          "correlation": {
+            "hidden_control_evidence": true,
+            "shared_asn": false,
+            "shared_cloud": false,
+            "shared_funding_controller": true,
+            "shared_kms": true,
+            "shared_monitoring": false,
+            "shared_release_manager": true
+          },
+          "exposure_sources": [
+            {
+              "age_epochs": 0,
+              "attestor_group": "settlement-counterparty-c",
+              "control_surface": "counterparty-receipt",
+              "exposure_class": "counterparty_receipt",
+              "source_class": "counterparty_signed",
+              "source_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+              "status": "verified"
+            },
+            {
+              "age_epochs": 0,
+              "attestor_group": "network-observer-a",
+              "control_surface": "private-rpc-scanner",
+              "exposure_class": "private_rpc_scanner",
+              "source_class": "network_observed",
+              "source_hash": "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+              "status": "verified"
+            }
+          ],
+          "flags": {
+            "contradictory_required_evidence": false,
+            "rolling_exposure_decay": false,
+            "stale_required_evidence": false,
+            "unknown_field": false,
+            "wash_or_rented_exposure": false
+          },
+          "reliability": {
+            "sample_epochs": 12,
+            "uptime_bps": 9990
+          }
+        },
+        "expected_bins": {
+          "accountability": 2,
+          "attack": 0,
+          "exposure": 2,
+          "reliability": 2,
+          "rho": 2
+        },
+        "expected_reason_codes": [
+          "hidden_shared_control",
+          "rho_cap_exceeded"
+        ],
+        "expected_route": "reject"
+      },
+      {
+        "candidate_id": "validator-stale-attestation",
+        "case_id": "case-05-stale-attestation-hold",
+        "evidence": {
+          "accountability": {
+            "domain_control_verified": true,
+            "incident_response_contact_verified": true,
+            "jurisdiction_contact_verified": true,
+            "operator_manifest_signed": true
+          },
+          "attack_surface": {
+            "can_profit_from_decision_class": false,
+            "conflicting_flow": false,
+            "governance_power_concentrated": false
+          },
+          "correlation": {
+            "hidden_control_evidence": false,
+            "shared_asn": false,
+            "shared_cloud": false,
+            "shared_funding_controller": false,
+            "shared_kms": false,
+            "shared_monitoring": false,
+            "shared_release_manager": false
+          },
+          "exposure_sources": [
+            {
+              "age_epochs": 5,
+              "attestor_group": "settlement-counterparty-d",
+              "control_surface": "counterparty-receipt",
+              "exposure_class": "counterparty_receipt",
+              "source_class": "counterparty_signed",
+              "source_hash": "888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888",
+              "status": "verified"
+            },
+            {
+              "age_epochs": 4,
+              "attestor_group": "chain-indexer-d",
+              "control_surface": "on-chain-usage",
+              "exposure_class": "on_chain_usage",
+              "source_class": "chain_derived",
+              "source_hash": "777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+              "status": "verified"
+            }
+          ],
+          "flags": {
+            "contradictory_required_evidence": false,
+            "rolling_exposure_decay": false,
+            "stale_required_evidence": true,
+            "unknown_field": false,
+            "wash_or_rented_exposure": false
+          },
+          "reliability": {
+            "sample_epochs": 12,
+            "uptime_bps": 9965
+          }
+        },
+        "expected_bins": {
+          "accountability": 2,
+          "attack": 0,
+          "exposure": 0,
+          "reliability": 2,
+          "rho": 0
+        },
+        "expected_reason_codes": [
+          "exposure_not_independently_verified",
+          "stale_required_evidence"
+        ],
+        "expected_route": "hold"
+      },
+      {
+        "candidate_id": "validator-contradictory-receipts",
+        "case_id": "case-06-contradictory-receipts-hold",
+        "evidence": {
+          "accountability": {
+            "domain_control_verified": true,
+            "incident_response_contact_verified": true,
+            "jurisdiction_contact_verified": true,
+            "operator_manifest_signed": true
+          },
+          "attack_surface": {
+            "can_profit_from_decision_class": false,
+            "conflicting_flow": false,
+            "governance_power_concentrated": false
+          },
+          "correlation": {
+            "hidden_control_evidence": false,
+            "shared_asn": false,
+            "shared_cloud": false,
+            "shared_funding_controller": false,
+            "shared_kms": false,
+            "shared_monitoring": false,
+            "shared_release_manager": false
+          },
+          "exposure_sources": [
+            {
+              "age_epochs": 0,
+              "attestor_group": "custodian-a",
+              "control_surface": "custody-value",
+              "exposure_class": "custody_value",
+              "source_class": "auditor_attested",
+              "source_hash": "666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666",
+              "status": "verified"
+            },
+            {
+              "age_epochs": 1,
+              "attestor_group": "settlement-counterparty-e",
+              "control_surface": "counterparty-receipt",
+              "exposure_class": "counterparty_receipt",
+              "source_class": "counterparty_signed",
+              "source_hash": "555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555",
+              "status": "verified"
+            }
+          ],
+          "flags": {
+            "contradictory_required_evidence": true,
+            "rolling_exposure_decay": false,
+            "stale_required_evidence": false,
+            "unknown_field": false,
+            "wash_or_rented_exposure": false
+          },
+          "reliability": {
+            "sample_epochs": 12,
+            "uptime_bps": 9981
+          }
+        },
+        "expected_bins": {
+          "accountability": 2,
+          "attack": 0,
+          "exposure": 2,
+          "reliability": 2,
+          "rho": 0
+        },
+        "expected_reason_codes": [
+          "contradictory_required_evidence"
+        ],
+        "expected_route": "hold"
+      },
+      {
+        "candidate_id": "validator-high-attack-surface",
+        "case_id": "case-07-high-attack-reject",
+        "evidence": {
+          "accountability": {
+            "domain_control_verified": true,
+            "incident_response_contact_verified": true,
+            "jurisdiction_contact_verified": true,
+            "operator_manifest_signed": true
+          },
+          "attack_surface": {
+            "can_profit_from_decision_class": true,
+            "conflicting_flow": true,
+            "governance_power_concentrated": false
+          },
+          "correlation": {
+            "hidden_control_evidence": false,
+            "shared_asn": false,
+            "shared_cloud": false,
+            "shared_funding_controller": false,
+            "shared_kms": false,
+            "shared_monitoring": false,
+            "shared_release_manager": false
+          },
+          "exposure_sources": [
+            {
+              "age_epochs": 0,
+              "attestor_group": "exchange-f",
+              "control_surface": "settlement-volume",
+              "exposure_class": "settlement_volume",
+              "source_class": "auditor_attested",
+              "source_hash": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+              "status": "verified"
+            },
+            {
+              "age_epochs": 0,
+              "attestor_group": "network-observer-f",
+              "control_surface": "policy-verifier",
+              "exposure_class": "policy_verifier",
+              "source_class": "network_observed",
+              "source_hash": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+              "status": "verified"
+            }
+          ],
+          "flags": {
+            "contradictory_required_evidence": false,
+            "rolling_exposure_decay": false,
+            "stale_required_evidence": false,
+            "unknown_field": false,
+            "wash_or_rented_exposure": false
+          },
+          "reliability": {
+            "sample_epochs": 12,
+            "uptime_bps": 9978
+          }
+        },
+        "expected_bins": {
+          "accountability": 2,
+          "attack": 2,
+          "exposure": 2,
+          "reliability": 2,
+          "rho": 0
+        },
+        "expected_reason_codes": [
+          "attack_cap_exceeded"
+        ],
+        "expected_route": "reject"
+      },
+      {
+        "candidate_id": "validator-decayed-exposure",
+        "case_id": "case-08-rolling-decay-hold",
+        "evidence": {
+          "accountability": {
+            "domain_control_verified": true,
+            "incident_response_contact_verified": true,
+            "jurisdiction_contact_verified": true,
+            "operator_manifest_signed": true
+          },
+          "attack_surface": {
+            "can_profit_from_decision_class": false,
+            "conflicting_flow": false,
+            "governance_power_concentrated": false
+          },
+          "correlation": {
+            "hidden_control_evidence": false,
+            "shared_asn": false,
+            "shared_cloud": false,
+            "shared_funding_controller": false,
+            "shared_kms": false,
+            "shared_monitoring": false,
+            "shared_release_manager": false
+          },
+          "exposure_sources": [
+            {
+              "age_epochs": 2,
+              "attestor_group": "gateway-h",
+              "control_surface": "gateway-flow",
+              "exposure_class": "gateway_flow",
+              "source_class": "counterparty_signed",
+              "source_hash": "121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212",
+              "status": "verified"
+            },
+            {
+              "age_epochs": 2,
+              "attestor_group": "chain-indexer-h",
+              "control_surface": "on-chain-usage",
+              "exposure_class": "on_chain_usage",
+              "source_class": "chain_derived",
+              "source_hash": "232323232323232323232323232323232323232323232323232323232323232323232323232323232323232323232323",
+              "status": "verified"
+            }
+          ],
+          "flags": {
+            "contradictory_required_evidence": false,
+            "rolling_exposure_decay": true,
+            "stale_required_evidence": false,
+            "unknown_field": false,
+            "wash_or_rented_exposure": false
+          },
+          "reliability": {
+            "sample_epochs": 12,
+            "uptime_bps": 9969
+          }
+        },
+        "expected_bins": {
+          "accountability": 2,
+          "attack": 0,
+          "exposure": 2,
+          "reliability": 2,
+          "rho": 0
+        },
+        "expected_reason_codes": [
+          "rolling_exposure_decay"
+        ],
+        "expected_route": "hold"
+      }
+    ]
+  }
+}

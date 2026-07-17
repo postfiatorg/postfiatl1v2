@@ -1,0 +1,60 @@
+{
+  "schema": "postfiat-testnet-placement-manifest-v1",
+  "placement_targets": [
+    {
+      "machine_index": 1,
+      "host_group": "host-a",
+      "operator_group": "operator-a",
+      "operator_host_group": "operator-a@host-a",
+      "cloud_provider_group": "cloud-a",
+      "region_group": "region-a",
+      "jurisdiction_group": "jurisdiction-a",
+      "legal_domain_group": "legal-a",
+      "funding_source_group": "funding-a"
+    },
+    {
+      "machine_index": 2,
+      "host_group": "host-b",
+      "operator_group": "operator-b",
+      "operator_host_group": "operator-b@host-b",
+      "cloud_provider_group": "cloud-b",
+      "region_group": "region-b",
+      "jurisdiction_group": "jurisdiction-b",
+      "legal_domain_group": "legal-b",
+      "funding_source_group": "funding-b"
+    },
+    {
+      "machine_index": 3,
+      "host_group": "host-c",
+      "operator_group": "operator-c",
+      "operator_host_group": "operator-c@host-c",
+      "cloud_provider_group": "cloud-c",
+      "region_group": "region-c",
+      "jurisdiction_group": "jurisdiction-c",
+      "legal_domain_group": "legal-c",
+      "funding_source_group": "funding-c"
+    },
+    {
+      "machine_index": 4,
+      "host_group": "host-d",
+      "operator_group": "operator-d",
+      "operator_host_group": "operator-d@host-d",
+      "cloud_provider_group": "cloud-d",
+      "region_group": "region-d",
+      "jurisdiction_group": "jurisdiction-d",
+      "legal_domain_group": "legal-d",
+      "funding_source_group": "funding-d"
+    },
+    {
+      "machine_index": 5,
+      "host_group": "host-e",
+      "operator_group": "operator-e",
+      "operator_host_group": "operator-e@host-e",
+      "cloud_provider_group": "cloud-e",
+      "region_group": "region-e",
+      "jurisdiction_group": "jurisdiction-e",
+      "legal_domain_group": "legal-e",
+      "funding_source_group": "funding-e"
+    }
+  ]
+}

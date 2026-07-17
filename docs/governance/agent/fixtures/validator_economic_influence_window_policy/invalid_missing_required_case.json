@@ -1,0 +1,40 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_influence_window_policy/valid_influence_window_policy.json",
+  "expected_error_contains": [
+    "selector_cases missing required influence-window cases"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases"
+      ],
+      "value": [
+        {
+          "case_id": "case-01-governed-policy-admit",
+          "expected_derivation": {
+            "bft_safe_count": 34,
+            "component_gain_sum_usd": 1200000,
+            "derived_G_i_w_usd": 1200000,
+            "derived_bft_safe_count": 34,
+            "derived_q_cert": 24,
+            "external_position_cap_usd": 2000000,
+            "f_tolerated": 11,
+            "liveness_count": 24,
+            "loss_floor_usd": 10000000,
+            "loss_over_gain_margin_usd": 8800000,
+            "n_active": 35,
+            "q_cert": 24,
+            "required_margin_usd": 1000000
+          },
+          "expected_reason_codes": [
+            "all_influence_window_bounds_passed"
+          ],
+          "expected_route": "admit",
+          "overrides": []
+        }
+      ]
+    }
+  ],
+  "schema": "postfiat-validator-economic-influence-window-policy-invalid-case-v1"
+}

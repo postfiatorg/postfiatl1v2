@@ -1,0 +1,525 @@
+{
+  "schema": "postfiat-governance-agent-model-request-v1",
+  "request_id": "dga-gate-3_6-timelocked-dry-run-request-v1",
+  "request_hash": "d61af8b64755a39dbebc0c888f78d8993720020071cc886d3ecb6d410fa5eee5cda2b514f34cfbf03fe15ece1f9e3405",
+  "bundle_hash": "249f3fee35093cf3cfda28456e9c522b8b34ab70d05ea9f38730676235afb379f6bc51b0add056d36e1c3f88a7212198",
+  "evidence_root": "postfiat-local-gate-1_5-no-external-evidence",
+  "round_seed_input": {
+    "schema": "postfiat-governance-agent-round-seed-v1",
+    "cobalt_certificate_hash": "853532ba51cf65b2bca3802a0af925230d9f33cd75e9467ddfbe75874c82eba0844dae4e22d5a1c0b9c1460a0ef8ec86",
+    "round_id": "dga-gate-3_6-local-round-v1",
+    "domain": "postfiat.governance_agent.gate_3_6.local"
+  },
+  "round_seed": "e9dada8adb3551519a23145c5bd988524eb025bad2353b49386b786228a95769a5a79801c7fe5d2fe245b4c98bcbfb0d",
+  "runtime_manifest": {
+    "model_id": "Qwen/Qwen3.6-27B-FP8",
+    "runtime": "SGLang",
+    "runtime_profile": "Modal/SGLang H100 deterministic profile",
+    "provider_profile": "RunPod H100 primary; Vast fallback",
+    "image": "lmsysorg/sglang:nightly-dev-cu13-20260523-c112f762",
+    "tensor_parallelism": 1,
+    "context_length": 32768,
+    "chunked_prefill_size": 4096,
+    "max_running_requests": 1,
+    "deterministic_flags": [
+      "--enable-deterministic-inference",
+      "--max-running-requests=1",
+      "--tp=1",
+      "chat_template_kwargs.enable_thinking=false",
+      "--temperature=0",
+      "--top-p=1"
+    ]
+  },
+  "output_contract": {
+    "schema": "postfiat-governance-ruleset-v1",
+    "json_only": true,
+    "markdown_allowed": false,
+    "prose_allowed": false,
+    "unknown_fields_allowed": false,
+    "fallback_decision": "no_op"
+  },
+  "governed_inputs": {
+    "bundle_hash": "249f3fee35093cf3cfda28456e9c522b8b34ab70d05ea9f38730676235afb379f6bc51b0add056d36e1c3f88a7212198",
+    "statement_hashes": [
+      {
+        "name": "architecture_statement",
+        "path": "docs/governance/agent/architecture_statement.md",
+        "hash": "4e8b1d27e57e625bdff9d46f1ab0e81f43c857fc657128f34a2bdbdc6beb0190ad61d9b47c5ab8ac1152769ff984729d",
+        "byte_len": 1768
+      },
+      {
+        "name": "objective_statement",
+        "path": "docs/governance/agent/objective_statement.md",
+        "hash": "25c615f113c3b0b8dc829ee08dc7e48b292dae46aec05148abb0aa7e6a69e4f0ffceb4032bf741ce9cda61c445d1f0fb",
+        "byte_len": 1200
+      },
+      {
+        "name": "constitutional_constraints",
+        "path": "docs/governance/agent/constitutional_constraints.md",
+        "hash": "c405405565bb0680990eb82fd24b4ef3bafeea4ea4d708f895630bdb9127cbaf1c64051a148c4780eae961d3f0413762",
+        "byte_len": 1797
+      }
+    ],
+    "statements": [
+      {
+        "name": "architecture_statement",
+        "path": "docs/governance/agent/architecture_statement.md",
+        "hash": "4e8b1d27e57e625bdff9d46f1ab0e81f43c857fc657128f34a2bdbdc6beb0190ad61d9b47c5ab8ac1152769ff984729d",
+        "content": "# PostFiat Governance Agent Architecture Statement\n\nStatus: governed input for local Gate 1.5\nVersion: 1\n\nThe governance agent is an offline proposal generator for PostFiat L1\ngovernance policy. It does not own validator authority, validator keys,\nregistry state, Cobalt ratification, or chain state. Its output is an input to\nthe existing governance review, Cobalt dry-run, and guarded-apply pipeline.\n\nThe live chain remains the source of truth for validator registry state,\ngovernance amendments, ordered batches, receipts, and rollback evidence. Any\nmodel-generated ruleset must be converted into typed PostFiat policy objects and\nvalidated by deterministic local code before it can influence a Cobalt dry run.\n\nThe agent input bundle is made from stable bytes:\n\n- this architecture statement;\n- the objective statement;\n- the constitutional constraints;\n- the ruleset schema;\n- the model/runtime profile;\n- deterministic inference flags;\n- rollback policy;\n- frozen evidence roots supplied by later gates.\n\nGate 1.5 is a pre-model gate. It proves the bytes that a future model request\nwill consume are reproducible and constrained. It does not run GPU inference, it\ndoes not submit transactions, and it does not mutate validator registry state.\n\nAll consensus-relevant hashes are domain separated and computed over canonical\nencodings. Object key order in JSON is not a source of entropy. Wall-clock time,\nrandom process state, network reads, provider inventory, or live chain reads are\nnot allowed in Gate 1.5 hash construction.\n\nThe initial deployment target is dry-run governance analysis. Authority transfer\nfrom foundation-operated publication to model-assisted or verifier-assisted\npolicy remains a later governance decision, not a property of this bundle.\n"
+      },
+      {
+        "name": "objective_statement",
+        "path": "docs/governance/agent/objective_statement.md",
+        "hash": "25c615f113c3b0b8dc829ee08dc7e48b292dae46aec05148abb0aa7e6a69e4f0ffceb4032bf741ce9cda61c445d1f0fb",
+        "content": "# PostFiat Governance Agent Objective Statement\n\nStatus: governed input for local Gate 1.5\nVersion: 1\n\nThe governance agent objective is to generate typed, reviewable\n`GovernanceRuleset` JSON that helps PostFiat evaluate validator-registry policy\nchanges without bypassing Cobalt governance or operator review.\n\nThe optimization target is:\n\n1. Preserve L1 safety and deterministic replay before any availability or\n   operator-convenience preference.\n2. Produce policy candidates that can be checked from frozen evidence and stable\n   hashes.\n3. Prefer no-op output when evidence is incomplete, ambiguous, stale, or outside\n   the declared scope.\n4. Cite only registered validator evidence fields, provenance levels, freshness\n   classes, missing-evidence behavior, conflict behavior, and action bounds\n   defined by the reviewed evidence schema.\n5. Minimize proposed registry changes and require rollback evidence for every\n   guarded apply.\n6. Emit only machine-typed JSON conforming to the ruleset schema.\n\nThe objective does not include direct chain mutation, secret handling, dynamic\nscope expansion, provider resource management, validator key operation, or\nreplacement of Cobalt ratification.\n"
+      },
+      {
+        "name": "constitutional_constraints",
+        "path": "docs/governance/agent/constitutional_constraints.md",
+        "hash": "c405405565bb0680990eb82fd24b4ef3bafeea4ea4d708f895630bdb9127cbaf1c64051a148c4780eae961d3f0413762",
+        "content": "# PostFiat Governance Agent Constitutional Constraints\n\nStatus: governed input for local Gate 1.5\nVersion: 1\n\nThe governance agent is constrained by the following hard rules.\n\n1. No direct mutation: model output must never write validator registry state,\n   governance state, chain state, files under a node data directory, or live\n   service configuration.\n2. No self-upgrade: model output must never alter this architecture statement,\n   objective statement, constitutional constraints, ruleset schema, deterministic\n   runtime flags, or rollback policy.\n3. No scope expansion: model output must stay within the declared\n   validator-registry policy scope unless a future governed bundle explicitly\n   changes scope.\n4. No secret dependency: model output must not require private keys, mnemonic\n   material, provider API keys, SSH credentials, node secrets, or hidden\n   operator data.\n5. No hidden evidence: model output must be justified only by frozen public or\n   operator-approved evidence roots listed in the request manifest.\n6. No invented evidence: every generated decision must cite a registered\n   evidence field path and closed evidence semantics from the ruleset schema.\n7. No implicit authority transfer: generated policy is advisory until Cobalt\n   dry-run, governance review, and a later guarded-apply gate accept it.\n8. No ambiguity as success: missing, malformed, prose-only, conflicting, or\n   schema-invalid output fails closed.\n9. No registry churn without rollback: every future non-no-op candidate must\n   include bounded mutation metadata and rollback evidence before guarded apply.\n\nGate 1.5 accepts only dry-run/no-op ruleset fixtures. Later gates may introduce\nbounded registry-delta candidates only after deterministic replay and policy\ncompiler checks are complete.\n"
+      }
+    ],
+    "ruleset_schema_hash": "ed28ebc732fe68a78fe655b8a9cef5b4f455043935e7bf2051a93655fc6375c98e95e236dfdf8980acbeb8c77608100c",
+    "ruleset_schema": {
+      "$defs": {
+        "action_bound": {
+          "enum": [
+            "informational_only",
+            "score_adjustment",
+            "admission_gate",
+            "hold_only",
+            "suspend_candidate",
+            "remove_candidate",
+            "no_action"
+          ],
+          "type": "string"
+        },
+        "conflict_behavior": {
+          "enum": [
+            "reject_packet",
+            "reject_validator_entry",
+            "hold"
+          ],
+          "type": "string"
+        },
+        "evidence_field_path": {
+          "enum": [
+            "packet.schema",
+            "packet.packet_id",
+            "packet.collection_window.from_height",
+            "packet.collection_window.to_height",
+            "packet.collection_window.from_time",
+            "packet.collection_window.to_time",
+            "packet.collector.name",
+            "packet.collector.version",
+            "packet.collector.config_hash",
+            "packet.raw_observation_root",
+            "packet.redaction.private_fields_removed",
+            "packet.redaction.secret_scan_passed",
+            "validator.registry.validator_id",
+            "validator.registry.public_key_hash",
+            "validator.registry.active_status",
+            "validator.registry.registry_root",
+            "validator.registry.governance_epoch",
+            "validator.registry.activation_height",
+            "validator.registry.suspension_height",
+            "validator.registry.removal_height",
+            "validator.registry.key_rotation_count",
+            "validator.operator_manifest.manifest_hash",
+            "validator.operator_manifest.signing_key_hash",
+            "validator.operator_manifest.signature_valid",
+            "validator.operator_manifest.signed_at",
+            "validator.operator_manifest.expires_at",
+            "validator.operator_manifest.claims_hash",
+            "validator.identity.declared_domain",
+            "validator.identity.declared_url",
+            "validator.identity.url_fetch.status",
+            "validator.identity.url_fetch.http_status",
+            "validator.identity.url_fetch.content_hash",
+            "validator.identity.url_fetch.observed_at",
+            "validator.identity.url_fetch.failure_reason",
+            "validator.identity.key_domain_binding.status",
+            "validator.identity.key_domain_binding.method",
+            "validator.identity.key_domain_binding.proof_hash",
+            "validator.performance.uptime_window_bps",
+            "validator.performance.rpc_reachable_bps",
+            "validator.performance.peer_reachable_bps",
+            "validator.performance.missed_vote_count",
+            "validator.performance.missed_proposal_count",
+            "validator.performance.late_vote_count",
+            "validator.performance.malformed_message_count",
+            "validator.performance.equivocation_event_count",
+            "validator.performance.restart_event_count",
+            "validator.performance.p95_latency_ms",
+            "validator.cobalt.amendment_vote_count",
+            "validator.cobalt.missed_amendment_vote_count",
+            "validator.cobalt.dabc_participation_count",
+            "validator.cobalt.stale_evidence_rejection_count",
+            "validator.cobalt.rollback_event_count",
+            "validator.cobalt.supersession_event_count",
+            "validator.cobalt.trust_view_mismatch_count",
+            "validator.cobalt.last_participation_height",
+            "validator.governance.admit_event_count",
+            "validator.governance.hold_event_count",
+            "validator.governance.suspend_event_count",
+            "validator.governance.reactivate_event_count",
+            "validator.governance.remove_event_count",
+            "validator.governance.key_rotation_event_count",
+            "validator.governance.last_lifecycle_event_height",
+            "validator.governance.open_remediation_hold",
+            "validator.topology.host_group",
+            "validator.topology.operator_group",
+            "validator.topology.operator_host_group",
+            "validator.topology.cloud_provider_group",
+            "validator.topology.region_group",
+            "validator.topology.jurisdiction_group",
+            "validator.topology.legal_domain_group",
+            "validator.topology.funding_source_group",
+            "cohort.topology.host_group_count",
+            "cohort.topology.operator_group_count",
+            "cohort.topology.operator_host_group_count",
+            "cohort.topology.cloud_provider_group_count",
+            "cohort.topology.region_group_count",
+            "cohort.topology.jurisdiction_group_count",
+            "cohort.registry.active_validator_count",
+            "cohort.registry.pending_validator_count",
+            "validator.evidence_quality.field_conflict_count",
+            "validator.evidence_quality.stale_field_count",
+            "validator.evidence_quality.missing_required_field_count",
+            "validator.evidence_quality.redacted_field_count",
+            "validator.evidence_quality.private_field_rejected_count",
+            "validator.evidence_quality.raw_observation_hash_count"
+          ],
+          "type": "string"
+        },
+        "freshness_requirement": {
+          "enum": [
+            "same_packet",
+            "recent_24h",
+            "recent_7d",
+            "recent_30d",
+            "epoch_bound",
+            "historical"
+          ],
+          "type": "string"
+        },
+        "missing_evidence_behavior": {
+          "enum": [
+            "reject_packet",
+            "reject_validator_entry",
+            "hold",
+            "neutral",
+            "stale"
+          ],
+          "type": "string"
+        },
+        "required_provenance": {
+          "enum": [
+            "chain_derived",
+            "registry_derived",
+            "operator_signed",
+            "collector_observed",
+            "network_observed",
+            "self_asserted",
+            "third_party_attested"
+          ],
+          "type": "string"
+        }
+      },
+      "$id": "https://postfiat.org/schemas/postfiat-governance-ruleset-v1.json",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "authority": {
+          "additionalProperties": false,
+          "properties": {
+            "direct_state_mutation": {
+              "const": false,
+              "type": "boolean"
+            },
+            "mode": {
+              "enum": [
+                "dry_run_only",
+                "guarded_apply"
+              ],
+              "type": "string"
+            },
+            "scope_expansion": {
+              "const": false,
+              "type": "boolean"
+            },
+            "self_upgrade": {
+              "const": false,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "mode",
+            "direct_state_mutation",
+            "self_upgrade",
+            "scope_expansion"
+          ],
+          "type": "object"
+        },
+        "decisions": {
+          "contains": {
+            "additionalProperties": true,
+            "properties": {
+              "kind": {
+                "const": "no_op",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "action_bound": {
+                "$ref": "#/$defs/action_bound"
+              },
+              "condition": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "conflict_behavior": {
+                "$ref": "#/$defs/conflict_behavior"
+              },
+              "decision_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "evidence_field_path": {
+                "$ref": "#/$defs/evidence_field_path"
+              },
+              "freshness_requirement": {
+                "$ref": "#/$defs/freshness_requirement"
+              },
+              "kind": {
+                "enum": [
+                  "no_op",
+                  "registry_delta_candidate"
+                ],
+                "type": "string"
+              },
+              "missing_evidence_behavior": {
+                "$ref": "#/$defs/missing_evidence_behavior"
+              },
+              "rationale": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "required_provenance": {
+                "$ref": "#/$defs/required_provenance"
+              }
+            },
+            "required": [
+              "decision_id",
+              "kind",
+              "condition",
+              "evidence_field_path",
+              "required_provenance",
+              "freshness_requirement",
+              "missing_evidence_behavior",
+              "conflict_behavior",
+              "action_bound",
+              "rationale"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "inputs": {
+          "contains": {
+            "additionalProperties": true,
+            "properties": {
+              "kind": {
+                "const": "validator_evidence_packet",
+                "type": "string"
+              },
+              "required": {
+                "const": true,
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "kind",
+              "required"
+            ],
+            "type": "object"
+          },
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "enum": [
+                  "validator_evidence_packet",
+                  "validator_registry_snapshot",
+                  "cobalt_evidence_packet",
+                  "operator_manifest_set"
+                ],
+                "type": "string"
+              },
+              "required": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "kind",
+              "required"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "rollback": {
+          "additionalProperties": false,
+          "properties": {
+            "max_mutations": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "operator_confirmation_required": {
+              "type": "boolean"
+            },
+            "required": {
+              "const": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "required",
+            "max_mutations",
+            "operator_confirmation_required"
+          ],
+          "type": "object"
+        },
+        "ruleset_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "schema": {
+          "const": "postfiat-governance-ruleset-v1",
+          "type": "string"
+        },
+        "scope": {
+          "const": "validator_registry_policy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema",
+        "ruleset_id",
+        "scope",
+        "authority",
+        "inputs",
+        "decisions",
+        "rollback"
+      ],
+      "title": "PostFiat Governance Ruleset",
+      "type": "object"
+    },
+    "validator_evidence_packet_schema_path": "docs/governance/agent/validator_evidence_packet_schema.json",
+    "validator_evidence_packet_schema_hash": "92544968ea283754c5cd3cfba85194afff80f9366f07063b5cd228ea58a6f9efbeb74ad416f9f118595f8c6719d4f0c3",
+    "validator_evidence_field_registry_path": "docs/governance/validator-evidence-field-registry.md",
+    "validator_evidence_field_registry_hash": "a4d0ad75fcf706432e2d44bfd75486139a69116249ffb47bbc786fcb67ab939b25f99834d5cb5aa7bb93cfed8901200f",
+    "valid_fixture_hash": "5a16ae8a05d38c5673d4653e199ed70a0cc93097afc343416b50e707bd66fc4bad47a67e67687adfe193f5caef5ac3ae",
+    "valid_fixture": {
+      "authority": {
+        "direct_state_mutation": false,
+        "mode": "dry_run_only",
+        "scope_expansion": false,
+        "self_upgrade": false
+      },
+      "decisions": [
+        {
+          "action_bound": "no_action",
+          "condition": "local_gate_1_5_fixture",
+          "conflict_behavior": "reject_packet",
+          "decision_id": "no-op-preserve-registry",
+          "evidence_field_path": "packet.schema",
+          "freshness_requirement": "same_packet",
+          "kind": "no_op",
+          "missing_evidence_behavior": "reject_packet",
+          "rationale": "Gate 1.5 validates governed bytes only and cannot alter validator registry state.",
+          "required_provenance": "collector_observed"
+        }
+      ],
+      "inputs": [
+        {
+          "kind": "validator_evidence_packet",
+          "required": true
+        },
+        {
+          "kind": "validator_registry_snapshot",
+          "required": true
+        },
+        {
+          "kind": "cobalt_evidence_packet",
+          "required": true
+        },
+        {
+          "kind": "operator_manifest_set",
+          "required": false
+        }
+      ],
+      "rollback": {
+        "max_mutations": 0,
+        "operator_confirmation_required": true,
+        "required": true
+      },
+      "ruleset_id": "gate-1_5-valid-noop",
+      "schema": "postfiat-governance-ruleset-v1",
+      "scope": "validator_registry_policy"
+    }
+  },
+  "openai_chat_request": {
+    "chat_template_kwargs": {
+      "enable_thinking": false
+    },
+    "max_tokens": 4096,
+    "messages": [
+      {
+        "content": "You are the PostFiat deterministic governance-agent ruleset generator. Return exactly one JSON object conforming to schema postfiat-governance-ruleset-v1. Every decision must cite a registered evidence_field_path and closed evidence semantics. Do not include Markdown, prose, comments, code fences, tool calls, unregistered evidence fields, private knowledge, live browsing instructions, or fields outside the schema.",
+        "role": "system"
+      },
+      {
+        "content": "Generate a GovernanceRuleset for the governed PostFiat validator-registry policy bundle. Each decision must declare evidence_field_path, required_provenance, freshness_requirement, missing_evidence_behavior, conflict_behavior, and action_bound from the schema. Generated rules that cite validator evidence fields must explicitly require the validator_evidence_packet input and may not depend on hidden or live evidence. If evidence is incomplete, ambiguous, stale, conflicting, unregistered, or outside scope, emit an explicit no_op decision. Gate 3.5 must remain dry-run only.\n\nBundle hash: 249f3fee35093cf3cfda28456e9c522b8b34ab70d05ea9f38730676235afb379f6bc51b0add056d36e1c3f88a7212198\nRuleset schema hash: ed28ebc732fe68a78fe655b8a9cef5b4f455043935e7bf2051a93655fc6375c98e95e236dfdf8980acbeb8c77608100c\nValidator evidence packet schema hash: 92544968ea283754c5cd3cfba85194afff80f9366f07063b5cd228ea58a6f9efbeb74ad416f9f118595f8c6719d4f0c3\nValidator evidence field registry hash: a4d0ad75fcf706432e2d44bfd75486139a69116249ffb47bbc786fcb67ab939b25f99834d5cb5aa7bb93cfed8901200f\nValid no-op fixture hash: 5a16ae8a05d38c5673d4653e199ed70a0cc93097afc343416b50e707bd66fc4bad47a67e67687adfe193f5caef5ac3ae\nEvidence root: postfiat-local-gate-1_5-no-external-evidence\nCobalt certificate hash: 853532ba51cf65b2bca3802a0af925230d9f33cd75e9467ddfbe75874c82eba0844dae4e22d5a1c0b9c1460a0ef8ec86\nCobalt round id: dga-gate-3_6-local-round-v1\nRound seed domain: postfiat.governance_agent.gate_3_6.local\nRound seed: e9dada8adb3551519a23145c5bd988524eb025bad2353b49386b786228a95769a5a79801c7fe5d2fe245b4c98bcbfb0d\n\nGate 3.6 binds this request to the Cobalt certificate hash, round id, and domain. Gate 3.6 has no external evidence beyond the governed source bundle; it defines the packet input contract and the reviewed evidence-universe hashes, but it does not expose live packet contents to the model. The safe output is the explicit no-op ruleset with validator_evidence_packet declared as a required input for later deterministic evidence execution. Return this exact JSON object shape and field names:\n{\n  \"authority\": {\n    \"direct_state_mutation\": false,\n    \"mode\": \"dry_run_only\",\n    \"scope_expansion\": false,\n    \"self_upgrade\": false\n  },\n  \"decisions\": [\n    {\n      \"action_bound\": \"no_action\",\n      \"condition\": \"local_gate_1_5_fixture\",\n      \"conflict_behavior\": \"reject_packet\",\n      \"decision_id\": \"no-op-preserve-registry\",\n      \"evidence_field_path\": \"packet.schema\",\n      \"freshness_requirement\": \"same_packet\",\n      \"kind\": \"no_op\",\n      \"missing_evidence_behavior\": \"reject_packet\",\n      \"rationale\": \"Gate 1.5 validates governed bytes only and cannot alter validator registry state.\",\n      \"required_provenance\": \"collector_observed\"\n    }\n  ],\n  \"inputs\": [\n    {\n      \"kind\": \"validator_evidence_packet\",\n      \"required\": true\n    },\n    {\n      \"kind\": \"validator_registry_snapshot\",\n      \"required\": true\n    },\n    {\n      \"kind\": \"cobalt_evidence_packet\",\n      \"required\": true\n    },\n    {\n      \"kind\": \"operator_manifest_set\",\n      \"required\": false\n    }\n  ],\n  \"rollback\": {\n    \"max_mutations\": 0,\n    \"operator_confirmation_required\": true,\n    \"required\": true\n  },\n  \"ruleset_id\": \"gate-1_5-valid-noop\",\n  \"schema\": \"postfiat-governance-ruleset-v1\",\n  \"scope\": \"validator_registry_policy\"\n}\n\nGoverned statement summary:\narchitecture_statement hash=4e8b1d27e57e625bdff9d46f1ab0e81f43c857fc657128f34a2bdbdc6beb0190ad61d9b47c5ab8ac1152769ff984729d path=docs/governance/agent/architecture_statement.md\nobjective_statement hash=25c615f113c3b0b8dc829ee08dc7e48b292dae46aec05148abb0aa7e6a69e4f0ffceb4032bf741ce9cda61c445d1f0fb path=docs/governance/agent/objective_statement.md\nconstitutional_constraints hash=c405405565bb0680990eb82fd24b4ef3bafeea4ea4d708f895630bdb9127cbaf1c64051a148c4780eae961d3f0413762 path=docs/governance/agent/constitutional_constraints.md\n\nGoverned statement text:\n## architecture_statement\npath: docs/governance/agent/architecture_statement.md\nhash: 4e8b1d27e57e625bdff9d46f1ab0e81f43c857fc657128f34a2bdbdc6beb0190ad61d9b47c5ab8ac1152769ff984729d\n\n# PostFiat Governance Agent Architecture Statement\n\nStatus: governed input for local Gate 1.5\nVersion: 1\n\nThe governance agent is an offline proposal generator for PostFiat L1\ngovernance policy. It does not own validator authority, validator keys,\nregistry state, Cobalt ratification, or chain state. Its output is an input to\nthe existing governance review, Cobalt dry-run, and guarded-apply pipeline.\n\nThe live chain remains the source of truth for validator registry state,\ngovernance amendments, ordered batches, receipts, and rollback evidence. Any\nmodel-generated ruleset must be converted into typed PostFiat policy objects and\nvalidated by deterministic local code before it can influence a Cobalt dry run.\n\nThe agent input bundle is made from stable bytes:\n\n- this architecture statement;\n- the objective statement;\n- the constitutional constraints;\n- the ruleset schema;\n- the model/runtime profile;\n- deterministic inference flags;\n- rollback policy;\n- frozen evidence roots supplied by later gates.\n\nGate 1.5 is a pre-model gate. It proves the bytes that a future model request\nwill consume are reproducible and constrained. It does not run GPU inference, it\ndoes not submit transactions, and it does not mutate validator registry state.\n\nAll consensus-relevant hashes are domain separated and computed over canonical\nencodings. Object key order in JSON is not a source of entropy. Wall-clock time,\nrandom process state, network reads, provider inventory, or live chain reads are\nnot allowed in Gate 1.5 hash construction.\n\nThe initial deployment target is dry-run governance analysis. Authority transfer\nfrom foundation-operated publication to model-assisted or verifier-assisted\npolicy remains a later governance decision, not a property of this bundle.\n\n\n## objective_statement\npath: docs/governance/agent/objective_statement.md\nhash: 25c615f113c3b0b8dc829ee08dc7e48b292dae46aec05148abb0aa7e6a69e4f0ffceb4032bf741ce9cda61c445d1f0fb\n\n# PostFiat Governance Agent Objective Statement\n\nStatus: governed input for local Gate 1.5\nVersion: 1\n\nThe governance agent objective is to generate typed, reviewable\n`GovernanceRuleset` JSON that helps PostFiat evaluate validator-registry policy\nchanges without bypassing Cobalt governance or operator review.\n\nThe optimization target is:\n\n1. Preserve L1 safety and deterministic replay before any availability or\n   operator-convenience preference.\n2. Produce policy candidates that can be checked from frozen evidence and stable\n   hashes.\n3. Prefer no-op output when evidence is incomplete, ambiguous, stale, or outside\n   the declared scope.\n4. Cite only registered validator evidence fields, provenance levels, freshness\n   classes, missing-evidence behavior, conflict behavior, and action bounds\n   defined by the reviewed evidence schema.\n5. Minimize proposed registry changes and require rollback evidence for every\n   guarded apply.\n6. Emit only machine-typed JSON conforming to the ruleset schema.\n\nThe objective does not include direct chain mutation, secret handling, dynamic\nscope expansion, provider resource management, validator key operation, or\nreplacement of Cobalt ratification.\n\n\n## constitutional_constraints\npath: docs/governance/agent/constitutional_constraints.md\nhash: c405405565bb0680990eb82fd24b4ef3bafeea4ea4d708f895630bdb9127cbaf1c64051a148c4780eae961d3f0413762\n\n# PostFiat Governance Agent Constitutional Constraints\n\nStatus: governed input for local Gate 1.5\nVersion: 1\n\nThe governance agent is constrained by the following hard rules.\n\n1. No direct mutation: model output must never write validator registry state,\n   governance state, chain state, files under a node data directory, or live\n   service configuration.\n2. No self-upgrade: model output must never alter this architecture statement,\n   objective statement, constitutional constraints, ruleset schema, deterministic\n   runtime flags, or rollback policy.\n3. No scope expansion: model output must stay within the declared\n   validator-registry policy scope unless a future governed bundle explicitly\n   changes scope.\n4. No secret dependency: model output must not require private keys, mnemonic\n   material, provider API keys, SSH credentials, node secrets, or hidden\n   operator data.\n5. No hidden evidence: model output must be justified only by frozen public or\n   operator-approved evidence roots listed in the request manifest.\n6. No invented evidence: every generated decision must cite a registered\n   evidence field path and closed evidence semantics from the ruleset schema.\n7. No implicit authority transfer: generated policy is advisory until Cobalt\n   dry-run, governance review, and a later guarded-apply gate accept it.\n8. No ambiguity as success: missing, malformed, prose-only, conflicting, or\n   schema-invalid output fails closed.\n9. No registry churn without rollback: every future non-no-op candidate must\n   include bounded mutation metadata and rollback evidence before guarded apply.\n\nGate 1.5 accepts only dry-run/no-op ruleset fixtures. Later gates may introduce\nbounded registry-delta candidates only after deterministic replay and policy\ncompiler checks are complete.\n\n\nReturn only a GovernanceRuleset JSON object. The response must parse as one JSON object with schema `postfiat-governance-ruleset-v1`.",
+        "role": "user"
+      }
+    ],
+    "model": "Qwen/Qwen3.6-27B-FP8",
+    "postfiat_output_contract": {
+      "fallback_decision": "no_op",
+      "json_only": true,
+      "markdown_allowed": false,
+      "prose_allowed": false,
+      "schema": "postfiat-governance-ruleset-v1",
+      "unknown_fields_allowed": false
+    },
+    "response_format": {
+      "type": "json_object"
+    },
+    "stream": false,
+    "temperature": 0,
+    "top_p": 1
+  },
+  "request_hash_includes": [
+    "bundle_hash",
+    "evidence_root",
+    "round_seed_input",
+    "round_seed",
+    "runtime_manifest",
+    "output_contract",
+    "governed_inputs",
+    "openai_chat_request"
+  ],
+  "redaction_checked": true
+}

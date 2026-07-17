@@ -1,0 +1,18 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_margin_stress/valid_margin_stress.json",
+  "expected_error_contains": [
+    "case-07-hidden-correlated-collapse-fail-closed: expected_route mismatch"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        6,
+        "expected_route"
+      ],
+      "value": "continue"
+    }
+  ],
+  "schema": "postfiat-validator-economic-margin-stress-invalid-case-v1"
+}

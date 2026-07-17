@@ -1,0 +1,17 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_longitudinal_linkage/valid_longitudinal_linkage.json",
+  "expected_error_contains": [
+    "min_multi_target_candidate_count does not derive from union-bound target count"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "linkage_policy",
+        "min_multi_target_candidate_count"
+      ],
+      "value": 48
+    }
+  ],
+  "schema": "postfiat-privacy-longitudinal-linkage-invalid-case-v1"
+}

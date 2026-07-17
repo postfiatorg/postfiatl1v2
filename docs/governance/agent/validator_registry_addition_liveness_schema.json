@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "Controlled-testnet packet for bounded registry-addition liveness and griefing behavior.",
+  "properties": {
+    "checks": {
+      "type": "object"
+    },
+    "mode": {
+      "const": "controlled_testnet_fixture"
+    },
+    "packet_id": {
+      "type": "string"
+    },
+    "schema": {
+      "const": "postfiat-validator-registry-addition-liveness-v1"
+    },
+    "statement": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema",
+    "packet_id",
+    "mode",
+    "statement",
+    "checks"
+  ],
+  "title": "PostFiat Validator Registry Addition Liveness Packet",
+  "type": "object"
+}

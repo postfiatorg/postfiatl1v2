@@ -1,0 +1,775 @@
+#!/usr/bin/env python3
+import argparse
+import hashlib
+import json
+import pathlib
+import re
+import subprocess
+import sys
+import tempfile
+from typing import Any
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+DEFAULT_MODEL_REQUEST = pathlib.Path("docs/governance/agent/fixtures/dry_run_model_request.json")
+DEFAULT_LANE_ID = "dga-gate-3_5-validator-evidence-lineage-v1"
+DEFAULT_COUNT = 50
+DEFAULT_GATE_ROOT = pathlib.Path("reports/gov-inference-gate-3_5") / DEFAULT_LANE_ID
+DEFAULT_PROVIDER_ROOT = pathlib.Path("reports/gov-inference-provider") / DEFAULT_LANE_ID
+DEFAULT_OUTPUTS_DIR = DEFAULT_GATE_ROOT / "responses"
+DEFAULT_GATE_REPORT = DEFAULT_GATE_ROOT / (
+    "gov-inference-gate-3_5-deterministic-ruleset-generation.json"
+)
+SENSITIVE_MARKERS = [
+    "private_key_hex",
+    "seed_hex",
+    '"mnemonic"',
+    "mnemonic=",
+    "ssh_cred",
+    "begin private key",
+    "runpod_api_key",
+    "vast_api_key",
+]
+CREDENTIAL_URL_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9+.-]*://[^/\s:@]+:[^/\s@]+@")
+SECRET_ASSIGNMENT_RE = re.compile(
+    r"(?i)(api[_-]?key|secret|token)\s*[:=]\s*['\"]?(?!<redacted>|redacted|null|none\b)[A-Za-z0-9_./+=-]{12,}"
+)
+
+
+def repo_path(path: pathlib.Path) -> pathlib.Path:
+    return path if path.is_absolute() else ROOT / path
+
+
+def rel(path: pathlib.Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def no_sensitive_markers(text: str) -> bool:
+    lowered = text.lower()
+    return (
+        not any(marker in lowered for marker in SENSITIVE_MARKERS)
+        and not CREDENTIAL_URL_RE.search(text)
+        and not SECRET_ASSIGNMENT_RE.search(text)
+    )
+
+
+def hash_well_formed(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 96
+        and all(char in "0123456789abcdef" for char in value)
+    )
+
+
+def sha3_384_file(path: pathlib.Path) -> str:
+    digest = hashlib.sha3_384()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def read_text(path: pathlib.Path) -> str:
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+def scan_file(path: pathlib.Path) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "path": rel(path),
+        "present": path.is_file(),
+        "nonempty": False,
+        "size_bytes": 0,
+        "sha3_384": None,
+        "redaction_scan_ok": False,
+    }
+    if not path.is_file():
+        summary["error"] = "missing file"
+        return summary
+    summary["size_bytes"] = path.stat().st_size
+    summary["nonempty"] = summary["size_bytes"] > 0
+    summary["sha3_384"] = sha3_384_file(path)
+    summary["redaction_scan_ok"] = no_sensitive_markers(read_text(path))
+    return summary
+
+
+def read_json(path: pathlib.Path, label: str) -> tuple[dict[str, Any], Any]:
+    summary = scan_file(path)
+    summary["json_valid"] = False
+    if not summary["present"]:
+        return summary, None
+    try:
+        data = json.loads(read_text(path))
+    except json.JSONDecodeError as error:
+        summary["error"] = f"invalid {label} JSON: {error}"
+        return summary, None
+    summary["json_valid"] = True
+    return summary, data
+
+
+def extract_json_values(text: str) -> list[Any]:
+    decoder = json.JSONDecoder()
+    values: list[Any] = []
+    index = 0
+    while index < len(text):
+        object_index = text.find("{", index)
+        array_index = text.find("[", index)
+        starts = [candidate for candidate in (object_index, array_index) if candidate >= 0]
+        if not starts:
+            break
+        start = min(starts)
+        try:
+            value, end = decoder.raw_decode(text[start:])
+        except json.JSONDecodeError:
+            index = start + 1
+            continue
+        values.append(value)
+        index = start + end
+    return values
+
+
+def inventory_summary(path: pathlib.Path) -> dict[str, Any]:
+    summary = scan_file(path)
+    summary.update(
+        {
+            "json_blocks": 0,
+            "runpod_inventory_present": False,
+            "vast_inventory_present": False,
+            "running_pod_count": None,
+            "vast_instances_found": None,
+            "zero_running_runpod_resources": False,
+            "zero_vast_resources": False,
+            "zero_paid_resources": False,
+        }
+    )
+    if not summary["present"]:
+        return summary
+    values = extract_json_values(read_text(path))
+    summary["json_blocks"] = len(values)
+    running_counts: list[int] = []
+    running_lists: list[list[Any]] = []
+    vast_counts: list[int] = []
+    vast_lists: list[list[Any]] = []
+    for value in values:
+        if not isinstance(value, dict):
+            continue
+        if "running_pod_count" in value or "running_pods" in value:
+            summary["runpod_inventory_present"] = True
+            if isinstance(value.get("running_pod_count"), int):
+                running_counts.append(value["running_pod_count"])
+            if isinstance(value.get("running_pods"), list):
+                running_lists.append(value["running_pods"])
+        if "instances_found" in value or "instances" in value:
+            summary["vast_inventory_present"] = True
+            if isinstance(value.get("instances_found"), int):
+                vast_counts.append(value["instances_found"])
+            if isinstance(value.get("instances"), list):
+                vast_lists.append(value["instances"])
+    if running_counts:
+        summary["running_pod_count"] = sum(running_counts)
+    if vast_counts:
+        summary["vast_instances_found"] = sum(vast_counts)
+    runpod_zero = summary["runpod_inventory_present"] and all(count == 0 for count in running_counts)
+    if running_lists:
+        runpod_zero = runpod_zero and all(len(items) == 0 for items in running_lists)
+    vast_zero = summary["vast_inventory_present"] and all(count == 0 for count in vast_counts)
+    if vast_lists:
+        vast_zero = vast_zero and all(len(items) == 0 for items in vast_lists)
+    summary["zero_running_runpod_resources"] = runpod_zero
+    summary["zero_vast_resources"] = vast_zero
+    summary["zero_paid_resources"] = (
+        summary["redaction_scan_ok"] and summary["nonempty"] and runpod_zero and vast_zero
+    )
+    return summary
+
+
+def collect_provider_resource_ids(value: Any) -> set[str]:
+    ids: set[str] = set()
+    if isinstance(value, dict):
+        for key in ("resource_id", "pod_id", "instance_id", "new_contract"):
+            item = value.get(key)
+            if isinstance(item, (str, int)):
+                ids.add(str(item))
+        pod = value.get("pod")
+        if isinstance(pod, dict) and isinstance(pod.get("id"), str):
+            ids.add(pod["id"])
+        if isinstance(value.get("id"), str) and (
+            "gpuCount" in value or "desiredStatus" in value or "imageName" in value
+        ):
+            ids.add(value["id"])
+        for item in value.values():
+            ids.update(collect_provider_resource_ids(item))
+    elif isinstance(value, list):
+        for item in value:
+            ids.update(collect_provider_resource_ids(item))
+    return ids
+
+
+def provider_metadata_summary(path: pathlib.Path, label: str) -> dict[str, Any]:
+    summary = scan_file(path)
+    summary.update({"json_valid": False, "resource_ids": [], "resource_id_count": 0})
+    if not summary["present"]:
+        return summary
+    text = read_text(path)
+    values = extract_json_values(text)
+    summary["json_valid"] = len(values) > 0
+    resource_ids: set[str] = set()
+    for value in values:
+        resource_ids.update(collect_provider_resource_ids(value))
+    if not resource_ids:
+        # Vast text output can carry the instance id outside strict JSON.
+        for match in re.finditer(r"\b(?:new_contract|instance|pod|resource)[^0-9a-zA-Z]+([a-zA-Z0-9_-]{6,})", text):
+            resource_ids.add(match.group(1))
+    summary["resource_ids"] = sorted(resource_ids)
+    summary["resource_id_count"] = len(resource_ids)
+    summary["label"] = label
+    return summary
+
+
+def read_model_request_lineage(path: pathlib.Path) -> dict[str, Any]:
+    summary, data = read_json(path, "model request")
+    summary.update(
+        {
+            "request_hash": None,
+            "bundle_hash": None,
+            "validator_evidence_packet_schema_hash": None,
+            "validator_evidence_field_registry_hash": None,
+            "hashes_well_formed": False,
+        }
+    )
+    if not isinstance(data, dict):
+        return summary
+    governed_inputs = data.get("governed_inputs", {})
+    if not isinstance(governed_inputs, dict):
+        governed_inputs = {}
+    packet_hash = governed_inputs.get("validator_evidence_packet_schema_hash")
+    registry_hash = governed_inputs.get("validator_evidence_field_registry_hash")
+    summary.update(
+        {
+            "request_hash": data.get("request_hash"),
+            "bundle_hash": data.get("bundle_hash"),
+            "validator_evidence_packet_schema_hash": packet_hash,
+            "validator_evidence_field_registry_hash": registry_hash,
+            "hashes_well_formed": (
+                hash_well_formed(data.get("request_hash"))
+                and hash_well_formed(data.get("bundle_hash"))
+                and hash_well_formed(packet_hash)
+                and hash_well_formed(registry_hash)
+            ),
+        }
+    )
+    return summary
+
+
+def gate_report_summary(path: pathlib.Path, model_request: dict[str, Any], expected_count: int) -> dict[str, Any]:
+    summary, data = read_json(path, "Gate 3.5 report")
+    summary.update(
+        {
+            "schema_ok": False,
+            "gate_ok": False,
+            "verified_field": False,
+            "redaction_checked_field": False,
+            "expected_count_ok": False,
+            "observed_count_ok": False,
+            "valid_count_ok": False,
+            "one_ruleset_hash": False,
+            "one_compiled_policy_hash": False,
+            "model_request_hash_matches": False,
+            "lineage_fields_present": False,
+            "lineage_hashes_well_formed": False,
+            "lineage_matches_model_request": False,
+            "runtime_deterministic": False,
+        }
+    )
+    if not isinstance(data, dict):
+        return summary
+    packet_hash = data.get("validator_evidence_packet_schema_hash")
+    registry_hash = data.get("validator_evidence_field_registry_hash")
+    runtime = data.get("runtime_manifest", {})
+    deterministic_flags = runtime.get("deterministic_flags", []) if isinstance(runtime, dict) else []
+    summary.update(
+        {
+            "schema_ok": data.get("schema") == "postfiat-governance-agent-gate-3_5-v1",
+            "gate_ok": data.get("gate") == "3.5-deterministic-ruleset-generation",
+            "verified_field": data.get("verified") is True,
+            "redaction_checked_field": data.get("redaction_checked") is True,
+            "expected_count_ok": data.get("expected_count") == expected_count,
+            "observed_count_ok": data.get("observed_count") == expected_count,
+            "valid_count_ok": data.get("valid_count") == expected_count,
+            "one_ruleset_hash": len(data.get("distinct_ruleset_hashes", [])) == 1,
+            "one_compiled_policy_hash": len(data.get("distinct_compiled_policy_hashes", [])) == 1,
+            "model_request_hash_matches": data.get("model_request_hash")
+            == model_request.get("request_hash"),
+            "lineage_fields_present": all(
+                key in data
+                for key in (
+                    "validator_evidence_packet_schema_hash",
+                    "validator_evidence_field_registry_hash",
+                )
+            ),
+            "lineage_hashes_well_formed": hash_well_formed(packet_hash)
+            and hash_well_formed(registry_hash),
+            "lineage_matches_model_request": (
+                packet_hash == model_request.get("validator_evidence_packet_schema_hash")
+                and registry_hash == model_request.get("validator_evidence_field_registry_hash")
+            ),
+            "runtime_deterministic": (
+                isinstance(runtime, dict)
+                and runtime.get("tensor_parallelism") == 1
+                and runtime.get("max_running_requests") == 1
+                and "--enable-deterministic-inference" in deterministic_flags
+            ),
+        }
+    )
+    return summary
+
+
+def outputs_summary(outputs_dir: pathlib.Path, expected_count: int) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "path": rel(outputs_dir),
+        "present": outputs_dir.is_dir(),
+        "expected_count": expected_count,
+        "model_output_json_count": 0,
+        "model_output_raw_count": 0,
+        "raw_response_count": 0,
+        "all_expected_files_present": False,
+        "all_model_outputs_json_valid": False,
+        "all_raw_responses_json_valid": False,
+        "redaction_scan_ok": False,
+    }
+    if not outputs_dir.is_dir():
+        summary["error"] = "missing outputs dir"
+        return summary
+    model_json_files = sorted(outputs_dir.glob("model_output_*.json"))
+    raw_text_files = sorted(outputs_dir.glob("model_output_raw_*.txt"))
+    raw_response_files = sorted(outputs_dir.glob("raw_response_*.json"))
+    summary["model_output_json_count"] = len(model_json_files)
+    summary["model_output_raw_count"] = len(raw_text_files)
+    summary["raw_response_count"] = len(raw_response_files)
+    expected_model_json = [outputs_dir / f"model_output_{index:04}.json" for index in range(1, expected_count + 1)]
+    expected_raw_text = [
+        outputs_dir / f"model_output_raw_{index:04}.txt" for index in range(1, expected_count + 1)
+    ]
+    expected_raw_response = [
+        outputs_dir / f"raw_response_{index:04}.json" for index in range(1, expected_count + 1)
+    ]
+    expected_files = expected_model_json + expected_raw_text + expected_raw_response
+    summary["all_expected_files_present"] = all(path.is_file() for path in expected_files)
+    json_valid = True
+    for path in expected_model_json:
+        file_summary, data = read_json(path, "model output")
+        json_valid = json_valid and file_summary["json_valid"] and isinstance(data, dict)
+    raw_json_valid = True
+    for path in expected_raw_response:
+        file_summary, data = read_json(path, "raw response")
+        raw_json_valid = raw_json_valid and file_summary["json_valid"] and isinstance(data, dict)
+    redaction_ok = True
+    for path in expected_files:
+        if path.is_file():
+            redaction_ok = redaction_ok and scan_file(path)["redaction_scan_ok"]
+        else:
+            redaction_ok = False
+    summary["all_model_outputs_json_valid"] = json_valid
+    summary["all_raw_responses_json_valid"] = raw_json_valid
+    summary["redaction_scan_ok"] = redaction_ok
+    return summary
+
+
+def run_operator_pack_check(gate_report: pathlib.Path, model_request: pathlib.Path) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "command": [
+            "scripts/gov-inference-operator-gate-pack",
+            "--no-refresh-local",
+            "--model-request",
+            rel(model_request),
+            "--gate-3_5-report",
+            rel(gate_report),
+            "--output",
+            "<temp>/operator-pack.json",
+        ],
+        "ran": False,
+        "exit_code": None,
+        "json_valid": False,
+        "verified": False,
+        "allow_missing_paid_replay": False,
+        "no_refresh_local": True,
+        "no_provider_or_paid_replay_commands": False,
+        "validator_evidence_lineage_audit_verified": False,
+    }
+    with tempfile.TemporaryDirectory(prefix="postfiat-gate-3_5-lineaged-operator-pack-") as temp_name:
+        output = pathlib.Path(temp_name) / "operator-pack.json"
+        command = [
+            str(ROOT / "scripts/gov-inference-operator-gate-pack"),
+            "--no-refresh-local",
+            "--model-request",
+            str(model_request),
+            "--gate-3_5-report",
+            str(gate_report),
+            "--output",
+            str(output),
+        ]
+        completed = subprocess.run(
+            command,
+            cwd=ROOT,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        summary["ran"] = True
+        summary["exit_code"] = completed.returncode
+        if completed.stderr:
+            summary["stderr_tail"] = completed.stderr[-1000:]
+        if output.is_file():
+            try:
+                data = json.loads(output.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as error:
+                summary["error"] = f"operator pack output JSON invalid: {error}"
+                return summary
+            summary["json_valid"] = True
+            checks = data.get("checks", {}) if isinstance(data, dict) else {}
+            summary["verified"] = data.get("verified") is True and completed.returncode == 0
+            summary["allow_missing_paid_replay"] = data.get("allow_missing_paid_replay") is True
+            summary["no_provider_or_paid_replay_commands"] = (
+                checks.get("no_provider_or_paid_replay_commands") is True
+            )
+            summary["validator_evidence_lineage_audit_verified"] = (
+                checks.get("validator_evidence_lineage_audit_verified") is True
+            )
+            summary["report_sha3_384"] = sha3_384_file(output)
+        return summary
+
+
+def build_report(args: argparse.Namespace) -> dict[str, Any]:
+    model_request_path = repo_path(pathlib.Path(args.model_request))
+    gate_report_path = repo_path(pathlib.Path(args.gate_report))
+    outputs_dir = repo_path(pathlib.Path(args.outputs_dir))
+    provider_root = repo_path(pathlib.Path(args.provider_root))
+    expected_count = args.expected_count
+
+    model_request = read_model_request_lineage(model_request_path)
+    gate_report = gate_report_summary(gate_report_path, model_request, expected_count)
+    outputs = outputs_summary(outputs_dir, expected_count)
+    provider_files = {
+        "provider_check": scan_file(repo_path(pathlib.Path(args.provider_check))),
+        "pre_inventory": inventory_summary(repo_path(pathlib.Path(args.pre_inventory))),
+        "provider_create_metadata": provider_metadata_summary(
+            repo_path(pathlib.Path(args.provider_create_metadata)), "provider create metadata"
+        ),
+        "provider_status_after_replay": provider_metadata_summary(
+            repo_path(pathlib.Path(args.provider_status_after_replay)),
+            "provider status after replay",
+        ),
+        "provider_cleanup": provider_metadata_summary(
+            repo_path(pathlib.Path(args.provider_cleanup)), "provider cleanup"
+        ),
+        "final_inventory": inventory_summary(repo_path(pathlib.Path(args.final_inventory))),
+    }
+    create_ids = set(provider_files["provider_create_metadata"].get("resource_ids", []))
+    status_ids = set(provider_files["provider_status_after_replay"].get("resource_ids", []))
+    cleanup_ids = set(provider_files["provider_cleanup"].get("resource_ids", []))
+    retained_artifacts = [model_request, gate_report, outputs] + list(provider_files.values())
+    retained_artifacts_redaction_scanned = all(
+        artifact.get("redaction_scan_ok") is True for artifact in retained_artifacts if isinstance(artifact, dict)
+    )
+    operator_pack = run_operator_pack_check(gate_report_path, model_request_path)
+    checks = {
+        "model_request_lineage_valid": (
+            model_request["present"]
+            and model_request["json_valid"]
+            and model_request["hashes_well_formed"]
+            and model_request["redaction_scan_ok"]
+        ),
+        "gate_report_verified": (
+            gate_report["present"]
+            and gate_report["json_valid"]
+            and gate_report["schema_ok"]
+            and gate_report["gate_ok"]
+            and gate_report["verified_field"]
+            and gate_report["redaction_checked_field"]
+            and gate_report["redaction_scan_ok"]
+        ),
+        "gate_report_counts_ok": (
+            gate_report["expected_count_ok"]
+            and gate_report["observed_count_ok"]
+            and gate_report["valid_count_ok"]
+            and gate_report["one_ruleset_hash"]
+            and gate_report["one_compiled_policy_hash"]
+        ),
+        "gate_report_lineage_ok": (
+            gate_report["model_request_hash_matches"]
+            and gate_report["lineage_fields_present"]
+            and gate_report["lineage_hashes_well_formed"]
+            and gate_report["lineage_matches_model_request"]
+        ),
+        "runtime_deterministic": gate_report["runtime_deterministic"],
+        "outputs_complete": (
+            outputs["present"]
+            and outputs["all_expected_files_present"]
+            and outputs["model_output_json_count"] == expected_count
+            and outputs["model_output_raw_count"] == expected_count
+            and outputs["raw_response_count"] == expected_count
+            and outputs["all_model_outputs_json_valid"]
+            and outputs["all_raw_responses_json_valid"]
+        ),
+        "provider_pre_inventory_zero": provider_files["pre_inventory"]["zero_paid_resources"],
+        "provider_final_inventory_zero": provider_files["final_inventory"]["zero_paid_resources"],
+        "provider_check_retained": (
+            provider_files["provider_check"]["present"]
+            and provider_files["provider_check"]["nonempty"]
+            and provider_files["provider_check"]["redaction_scan_ok"]
+        ),
+        "provider_create_metadata_retained": (
+            provider_files["provider_create_metadata"]["present"]
+            and provider_files["provider_create_metadata"]["nonempty"]
+            and provider_files["provider_create_metadata"]["redaction_scan_ok"]
+        ),
+        "exactly_one_provider_resource_created": len(create_ids) == 1,
+        "provider_status_evidence_present": (
+            provider_files["provider_status_after_replay"]["present"]
+            and provider_files["provider_status_after_replay"]["nonempty"]
+            and provider_files["provider_status_after_replay"]["redaction_scan_ok"]
+        ),
+        "provider_status_binds_created_resource": len(create_ids) == 1
+        and status_ids == create_ids,
+        "provider_cleanup_binds_created_resource": len(create_ids) == 1
+        and bool(cleanup_ids & create_ids),
+        "provider_cleanup_evidence_present": (
+            provider_files["provider_cleanup"]["present"]
+            and provider_files["provider_cleanup"]["nonempty"]
+            and provider_files["provider_cleanup"]["redaction_scan_ok"]
+        ),
+        "retained_artifacts_redaction_scanned": retained_artifacts_redaction_scanned
+        and outputs["redaction_scan_ok"],
+        "operator_pack_release_ready": operator_pack["verified"],
+        "operator_pack_without_missing_paid_replay": operator_pack["allow_missing_paid_replay"] is False,
+        "operator_pack_no_provider_or_paid_replay_commands": operator_pack[
+            "no_provider_or_paid_replay_commands"
+        ],
+        "operator_pack_lineage_audit_verified": operator_pack[
+            "validator_evidence_lineage_audit_verified"
+        ],
+        "no_live_network": True,
+        "no_model_request_executed": True,
+        "no_provider_command_executed": True,
+        "no_repo_filesystem_mutation": True,
+        "no_direct_state_mutation": True,
+        "zero_cobalt_registry_mutation": True,
+        "authority_transfer_false": True,
+    }
+    report = {
+        "schema": "postfiat-governance-agent-gate-3_5-lineaged-replay-verifier-v1",
+        "gate": "3.5-lineaged-replay-evidence-verifier",
+        "verified": all(checks.values()),
+        "lane_id": args.lane_id,
+        "no_spend": True,
+        "provider_commands_executed": False,
+        "model_requests_executed": False,
+        "repo_filesystem_mutation": False,
+        "cobalt_registry_mutation_count": 0,
+        "authority_transfer": False,
+        "inputs": {
+            "model_request": model_request,
+            "gate_report": gate_report,
+            "outputs": outputs,
+            "provider_root": rel(provider_root),
+            "provider_files": provider_files,
+            "operator_pack": operator_pack,
+        },
+        "checks": checks,
+    }
+    if not no_sensitive_markers(json.dumps(report, sort_keys=True)):
+        raise SystemExit("lineaged replay verification report contains sensitive marker")
+    return report
+
+
+def write_or_print(report: dict[str, Any], output: str | None) -> None:
+    payload = json.dumps(report, indent=2, sort_keys=True) + "\n"
+    if output:
+        path = repo_path(pathlib.Path(output))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(payload, encoding="utf-8")
+    else:
+        print(payload, end="")
+
+
+def self_test() -> int:
+    model_request = read_model_request_lineage(repo_path(DEFAULT_MODEL_REQUEST))
+    if not model_request["hashes_well_formed"]:
+        print("self-test expected valid model request lineage", file=sys.stderr)
+        return 1
+    with tempfile.TemporaryDirectory(prefix="postfiat-gate-3_5-lineaged-verify-") as temp_name:
+        temp = pathlib.Path(temp_name)
+        provider_root = temp / "provider"
+        outputs_dir = temp / "responses"
+        gate_report = temp / "gate-3_5.json"
+        provider_root.mkdir()
+        outputs_dir.mkdir()
+        inventory = (
+            "== runpod running pods ==\n"
+            + json.dumps({"running_pod_count": 0, "running_pods": []}, indent=2)
+            + "\n== vast instances ==\n"
+            + json.dumps({"instances": [], "instances_found": 0, "success": True}, indent=2)
+            + "\n"
+        )
+        (provider_root / "provider-check.txt").write_text(
+            "repo=/tmp/postfiat\nrunpod_key=file\nvast_key=file\nrunpod_cli=ready\nvast_cli=ready\n",
+            encoding="utf-8",
+        )
+        (provider_root / "pre-inventory.txt").write_text(inventory, encoding="utf-8")
+        (provider_root / "final-inventory.txt").write_text(inventory, encoding="utf-8")
+        (provider_root / "provider-create.json").write_text(
+            json.dumps(
+                {
+                    "provider": "runpod",
+                    "pod": {"id": "lineaged001", "desiredStatus": "RUNNING"},
+                    "proxy_url": "https://lineaged001-8000.proxy.runpod.net",
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (provider_root / "status-after-replay.json").write_text(
+            json.dumps({"id": "lineaged001", "desiredStatus": "RUNNING"}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        (provider_root / "provider-stop-delete.txt").write_text(
+            json.dumps({"id": "lineaged001", "desiredStatus": "EXITED"}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        for index in range(1, DEFAULT_COUNT + 1):
+            output = {
+                "schema": "postfiat-governance-ruleset-v1",
+                "decision": "no_op",
+                "index": index,
+            }
+            raw = {"choices": [{"message": {"content": json.dumps(output)}}]}
+            (outputs_dir / f"model_output_{index:04}.json").write_text(
+                json.dumps(output, indent=2) + "\n", encoding="utf-8"
+            )
+            (outputs_dir / f"model_output_raw_{index:04}.txt").write_text(
+                json.dumps(output), encoding="utf-8"
+            )
+            (outputs_dir / f"raw_response_{index:04}.json").write_text(
+                json.dumps(raw, indent=2) + "\n", encoding="utf-8"
+            )
+        gate_report.write_text(
+            json.dumps(
+                {
+                    "schema": "postfiat-governance-agent-gate-3_5-v1",
+                    "gate": "3.5-deterministic-ruleset-generation",
+                    "verified": True,
+                    "redaction_checked": True,
+                    "expected_count": DEFAULT_COUNT,
+                    "observed_count": DEFAULT_COUNT,
+                    "valid_count": DEFAULT_COUNT,
+                    "distinct_ruleset_hashes": ["1" * 96],
+                    "distinct_compiled_policy_hashes": ["2" * 96],
+                    "model_request_hash": model_request["request_hash"],
+                    "bundle_hash": model_request["bundle_hash"],
+                    "validator_evidence_packet_schema_hash": model_request[
+                        "validator_evidence_packet_schema_hash"
+                    ],
+                    "validator_evidence_field_registry_hash": model_request[
+                        "validator_evidence_field_registry_hash"
+                    ],
+                    "runtime_manifest": {
+                        "model_id": "Qwen/Qwen3.6-27B-FP8",
+                        "tensor_parallelism": 1,
+                        "max_running_requests": 1,
+                        "deterministic_flags": ["--enable-deterministic-inference"],
+                    },
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        args = argparse.Namespace(
+            lane_id=DEFAULT_LANE_ID,
+            model_request=str(DEFAULT_MODEL_REQUEST),
+            gate_report=str(gate_report),
+            outputs_dir=str(outputs_dir),
+            provider_root=str(provider_root),
+            provider_check=str(provider_root / "provider-check.txt"),
+            pre_inventory=str(provider_root / "pre-inventory.txt"),
+            provider_create_metadata=str(provider_root / "provider-create.json"),
+            provider_status_after_replay=str(provider_root / "status-after-replay.json"),
+            provider_cleanup=str(provider_root / "provider-stop-delete.txt"),
+            final_inventory=str(provider_root / "final-inventory.txt"),
+            expected_count=DEFAULT_COUNT,
+            output=None,
+            self_test=False,
+        )
+        good = build_report(args)
+        if not good["verified"]:
+            print("self-test expected complete evidence to verify", file=sys.stderr)
+            return 1
+        bad_data = json.loads(gate_report.read_text(encoding="utf-8"))
+        bad_data["validator_evidence_field_registry_hash"] = "0" * 96
+        gate_report.write_text(json.dumps(bad_data, indent=2) + "\n", encoding="utf-8")
+        bad = build_report(args)
+        if bad["verified"] or bad["checks"]["gate_report_lineage_ok"]:
+            print("self-test expected lineage drift to fail", file=sys.stderr)
+            return 1
+    print(
+        json.dumps(
+            {
+                "schema": "postfiat-governance-agent-gate-3_5-lineaged-replay-verifier-self-test-v1",
+                "verified": True,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Verify completed lineaged Gate 3.5 replay evidence without provider spend."
+    )
+    parser.add_argument("--lane-id", default=DEFAULT_LANE_ID)
+    parser.add_argument("--model-request", default=str(DEFAULT_MODEL_REQUEST))
+    parser.add_argument("--gate-report", default=str(DEFAULT_GATE_REPORT))
+    parser.add_argument("--outputs-dir", default=str(DEFAULT_OUTPUTS_DIR))
+    parser.add_argument("--provider-root", default=str(DEFAULT_PROVIDER_ROOT))
+    parser.add_argument("--provider-check")
+    parser.add_argument("--pre-inventory")
+    parser.add_argument("--provider-create-metadata")
+    parser.add_argument("--provider-status-after-replay")
+    parser.add_argument("--provider-cleanup")
+    parser.add_argument("--final-inventory")
+    parser.add_argument("--expected-count", type=int, default=DEFAULT_COUNT)
+    parser.add_argument("--output", help="optional path to write the verification JSON")
+    parser.add_argument("--self-test", action="store_true")
+    args = parser.parse_args()
+    provider_root = pathlib.Path(args.provider_root)
+    args.provider_check = args.provider_check or str(provider_root / "provider-check.txt")
+    args.pre_inventory = args.pre_inventory or str(provider_root / "pre-inventory.txt")
+    args.provider_create_metadata = args.provider_create_metadata or str(
+        provider_root / "provider-create.json"
+    )
+    args.provider_status_after_replay = args.provider_status_after_replay or str(
+        provider_root / "status-after-replay.json"
+    )
+    args.provider_cleanup = args.provider_cleanup or str(provider_root / "provider-stop-delete.txt")
+    args.final_inventory = args.final_inventory or str(provider_root / "final-inventory.txt")
+    return args
+
+
+def main() -> int:
+    args = parse_args()
+    if args.self_test:
+        return self_test()
+    if args.expected_count <= 0:
+        raise SystemExit("--expected-count must be positive")
+    report = build_report(args)
+    write_or_print(report, args.output)
+    return 0 if report["verified"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

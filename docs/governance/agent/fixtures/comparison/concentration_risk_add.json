@@ -1,0 +1,36 @@
+{
+  "schema": "postfiat-governance-agent-comparison-fixture-v1",
+  "case_id": "concentration-risk-add",
+  "case_class": "concentration_risk",
+  "evidence": {
+    "schema": "postfiat-governance-agent-frozen-evidence-v1",
+    "snapshot_id": "gate-7_6-concentration-risk-add",
+    "validator_registry_root": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "cobalt_evidence_root": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "operator_manifest_root": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "validator_evidence_packet_root": "7f146e261443b04f443764468e94343f81a1dd87ec30a122b267b3d2050d43321ea6b122cb2b19efbe57b1728a6e4cea",
+    "available_inputs": [
+      "cobalt_evidence_packet",
+      "operator_manifest_set",
+      "validator_evidence_packet",
+      "validator_registry_snapshot"
+    ],
+    "network_access_allowed": false,
+    "model_access_allowed": false,
+    "filesystem_access_allowed": false,
+    "direct_state_mutation_allowed": false
+  },
+  "direct_baseline": {
+    "source": "offline-direct-judgment-fixture-v1",
+    "authoritative": false,
+    "action": "admit",
+    "confidence_bps": 8800,
+    "mutations": [
+      {
+        "operation": "admit",
+        "subject_node_id": "validator-correlated-candidate"
+      }
+    ],
+    "rationale": "Direct baseline admits a strong candidate but concentration risk makes the generated policy reject the delta."
+  }
+}

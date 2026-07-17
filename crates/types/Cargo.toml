@@ -1,0 +1,18 @@
+[package]
+name = "postfiat-types"
+version = "0.1.0"
+description = "Canonical protocol and state types for PostFiat L1"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha3 = { workspace = true }
+
+[dev-dependencies]

@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_longitudinal_linkage/valid_longitudinal_linkage.json",
+  "expected_error_contains": [
+    "statement.linkage_root_hash does not match linkage material"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "linkage_root_hash"
+      ],
+      "value": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    }
+  ],
+  "schema": "postfiat-privacy-longitudinal-linkage-invalid-case-v1"
+}

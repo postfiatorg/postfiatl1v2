@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+"""Reject publication-candidate runtime defaults that target live infrastructure."""
+
+from __future__ import annotations
+
+import ipaddress
+import os
+import pathlib
+import re
+import subprocess
+import sys
+
+ROOT = pathlib.Path(
+    os.environ.get("POSTFIAT_RUNTIME_SCAN_ROOT", pathlib.Path(__file__).resolve().parents[1])
+).resolve()
+
+RUNTIME_PREFIXES = (
+    "python/postfiat_rpc/",
+    "scripts/",
+    "wallet-extension/",
+    "wallet-proxy/",
+    "wallet-web/src/",
+)
+RUNTIME_ROOT_FILES = {"docker-compose.wallet.yml"}
+SCANNER_FIXTURES = {
+    "scripts/public-runtime-default-scan",
+    "scripts/test-public-runtime-default-scan",
+}
+IPV4 = re.compile(rb"(?<![0-9])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9])")
+UNSAFE_TLS = re.compile(rb"NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*['\"]0['\"]")
+SECRET_MOUNT = re.compile(rb"(?i)(?:issuer|holder|validator)[-_\w]*\.key\.json")
+RETIRED_MONEY_DESTINATIONS = {
+    b"0x1a15e6103d6af4e88924f748e13b829d3948dea9",
+}
+
+
+def tracked_files() -> list[pathlib.Path]:
+    raw = subprocess.check_output(["git", "ls-files", "-z"], cwd=ROOT)
+    return [ROOT / value.decode() for value in raw.split(b"\0") if value]
+
+
+def in_runtime_scope(relative: str) -> bool:
+    return relative in RUNTIME_ROOT_FILES or relative.startswith(RUNTIME_PREFIXES)
+
+
+def main() -> int:
+    findings: list[tuple[str, str, int]] = []
+    for path in tracked_files():
+        relative = path.relative_to(ROOT).as_posix()
+        if (
+            not in_runtime_scope(relative)
+            or relative in SCANNER_FIXTURES
+            or not path.is_file()
+        ):
+            continue
+        try:
+            data = path.read_bytes()
+        except OSError:
+            continue
+        if b"\0" in data[:8192]:
+            continue
+        for line_number, line in enumerate(data.splitlines(), 1):
+            for match in IPV4.finditer(line):
+                try:
+                    address = ipaddress.ip_address(match.group().decode())
+                except ValueError:
+                    continue
+                if address.is_global:
+                    findings.append(("global-ip-runtime-default", relative, line_number))
+            if UNSAFE_TLS.search(line):
+                findings.append(("global-tls-verification-disable", relative, line_number))
+            if relative == "docker-compose.wallet.yml" and SECRET_MOUNT.search(line):
+                findings.append(("custody-key-in-public-compose", relative, line_number))
+            if (
+                not relative.endswith((".test.js", ".test.jsx"))
+                and b"RETIRED_" not in line
+                and b"OLD_" not in line
+                and any(destination in line.lower() for destination in RETIRED_MONEY_DESTINATIONS)
+            ):
+                findings.append(("retired-money-destination", relative, line_number))
+    for rule, path, line in findings:
+        print(f"RUNTIME_DEFAULT_SCAN finding rule={rule} location={path}:{line}", file=sys.stderr)
+    if findings:
+        print(f"public runtime default scan FAILED findings={len(findings)}", file=sys.stderr)
+        return 1
+    print("public runtime default scan passed")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

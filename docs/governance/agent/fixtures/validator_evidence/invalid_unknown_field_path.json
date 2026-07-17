@@ -1,0 +1,89 @@
+{
+  "schema": "postfiat-validator-evidence-packet-v1",
+  "packet_id": "validator-evidence-2026-05-23-invalid-field-path",
+  "collection_window": {
+    "from_height": 1000,
+    "to_height": 2000,
+    "from_time": "2026-05-23T00:00:00Z",
+    "to_time": "2026-05-23T06:00:00Z"
+  },
+  "collector": {
+    "name": "postfiat-validator-evidence-collector",
+    "version": "0.1.0",
+    "config_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "field_registry": {
+    "registry_id": "validator-evidence-field-registry-v1",
+    "registry_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "registered_field_paths": [
+      "validator.identity.reputation_score"
+    ],
+    "provenance_levels": [
+      "collector_observed"
+    ],
+    "freshness_classes": [
+      "recent_30d"
+    ],
+    "missing_evidence_behaviors": [
+      "neutral"
+    ],
+    "conflict_behaviors": [
+      "hold"
+    ],
+    "action_bounds": [
+      "score_adjustment"
+    ]
+  },
+  "validator_order": [
+    "validator-alpha"
+  ],
+  "validators": {
+    "validator-alpha": {
+      "validator_id": "validator-alpha",
+      "fields": [
+        {
+          "field_path": "validator.identity.reputation_score",
+          "value_type": "integer",
+          "value": 100,
+          "provenance": [
+            "collector_observed"
+          ],
+          "freshness": "recent_30d",
+          "missing_evidence_behavior": "neutral",
+          "conflict_behavior": "hold",
+          "action_bound": "score_adjustment",
+          "observed_at": "2026-05-23T06:00:00Z",
+          "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "redacted": false
+        }
+      ]
+    }
+  },
+  "cohort": {
+    "fields": [
+      {
+        "field_path": "cohort.registry.active_validator_count",
+        "value_type": "integer",
+        "value": 1,
+        "provenance": [
+          "registry_derived"
+        ],
+        "freshness": "epoch_bound",
+        "missing_evidence_behavior": "reject_packet",
+        "conflict_behavior": "reject_packet",
+        "action_bound": "no_action",
+        "observed_at": "2026-05-23T06:00:00Z",
+        "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "redacted": false
+      }
+    ]
+  },
+  "raw_observation_root": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "raw_observation_hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  ],
+  "redaction": {
+    "private_fields_removed": true,
+    "secret_scan_passed": true
+  }
+}

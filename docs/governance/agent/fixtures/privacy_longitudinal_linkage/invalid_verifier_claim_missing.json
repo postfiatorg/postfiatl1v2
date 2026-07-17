@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_longitudinal_linkage/valid_longitudinal_linkage.json",
+  "expected_error_contains": [
+    "checks.no_probability_multiplication_across_windows must be True"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "checks",
+        "no_probability_multiplication_across_windows"
+      ],
+      "value": false
+    }
+  ],
+  "schema": "postfiat-privacy-longitudinal-linkage-invalid-case-v1"
+}

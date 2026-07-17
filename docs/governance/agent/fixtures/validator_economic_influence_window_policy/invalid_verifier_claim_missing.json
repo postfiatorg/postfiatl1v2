@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_influence_window_policy/valid_influence_window_policy.json",
+  "expected_error_contains": [
+    "checks.thresholds_derived must be True"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "checks",
+        "thresholds_derived"
+      ],
+      "value": false
+    }
+  ],
+  "schema": "postfiat-validator-economic-influence-window-policy-invalid-case-v1"
+}

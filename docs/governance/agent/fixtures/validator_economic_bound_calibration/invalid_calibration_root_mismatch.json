@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_bound_calibration/valid_economic_bound_calibration.json",
+  "expected_error_contains": [
+    "statement.calibration_root_hash does not match calibration material"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "calibration_root_hash"
+      ],
+      "value": "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+    }
+  ],
+  "schema": "postfiat-validator-economic-bound-calibration-invalid-case-v1"
+}

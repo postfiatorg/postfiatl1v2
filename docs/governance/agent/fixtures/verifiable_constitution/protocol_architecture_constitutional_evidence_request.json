@@ -1,0 +1,255 @@
+{
+  "schema": "postfiat-constitutional-evidence-request-v1",
+  "request_id": "vc-protocol-architecture-001-request-001",
+  "request_version": 1,
+  "status": "candidate",
+  "request_scope": "release_authority",
+  "created_at": "2026-05-25T00:00:00Z",
+  "question_ref": {
+    "question_id": "vc-protocol-architecture-001",
+    "question_path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_constitutional_question.json",
+    "question_file_sha3_384": "2f667c57807478582e6b2dfd4146a5ec60ec3f07354adae1200b2ebd746b1316cd11168ac06df421b61ed17fc08e7000",
+    "question_canonical_hash": "06b88b7e0b91d65be9e8b168bd730de40369434f68ca9d80ed9fb8c71196a5a02e2ca1c31b6d711b944885d1fb8c18ce",
+    "question_schema_path": "docs/governance/agent/constitutional_question_schema.json",
+    "question_schema_sha3_384": "47c2b2f27bdc745615f4d0d893333c12825b8b935358efbf4f53bdb9ad7b72e03d46d5264812d2cd9066d3c11813bd7f"
+  },
+  "requested_fields": [
+    {
+      "field_path": "protocol_architecture.status_quo_hash",
+      "value_type": "hash",
+      "required": true,
+      "required_provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "privacy_class": "public",
+      "collection_methods": [
+        "governance_doc",
+        "repo_file_hash"
+      ],
+      "rationale": "The Rust L1 status quo must be hash-bound before Qwen may compare it against a full XRPL/rippled fork or compatibility-layer path."
+    },
+    {
+      "field_path": "protocol_architecture.rust_l1_surface_hash",
+      "value_type": "hash",
+      "required": true,
+      "required_provenance": [
+        "source_code",
+        "artifact_hash",
+        "test_report"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "privacy_class": "public",
+      "collection_methods": [
+        "repo_file_hash",
+        "test_command"
+      ],
+      "rationale": "The current Rust implementation surface, tests, and protocol modules define what would be preserved by the status-quo option."
+    },
+    {
+      "field_path": "protocol_architecture.xrpl_fork_delta_hash",
+      "value_type": "hash",
+      "required": true,
+      "required_provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "privacy_class": "public",
+      "collection_methods": [
+        "governance_doc",
+        "local_artifact"
+      ],
+      "rationale": "A full XRPL/rippled fork cannot be selected without a public delta describing what PostFiat would lose, inherit, rewrite, or abandon."
+    },
+    {
+      "field_path": "protocol_architecture.xrpl_compatibility_requirements_hash",
+      "value_type": "hash",
+      "required": true,
+      "required_provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "privacy_class": "public",
+      "collection_methods": [
+        "governance_doc",
+        "repo_file_hash"
+      ],
+      "rationale": "The compatibility-layer option must be judged against typed wallet, RPC, transaction, address, and migration requirements rather than an implicit desire to resemble XRPL."
+    },
+    {
+      "field_path": "protocol_architecture.pq_privacy_integration_cost_hash",
+      "value_type": "hash",
+      "required": true,
+      "required_provenance": [
+        "governance_documented",
+        "test_report",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "privacy_class": "public",
+      "collection_methods": [
+        "governance_doc",
+        "test_command",
+        "repo_file_hash"
+      ],
+      "rationale": "The architecture choice must account for ML-DSA authorization and Orchard/Halo2 privacy integration cost instead of treating XRPL compatibility as the only design axis."
+    },
+    {
+      "field_path": "protocol_architecture.cobalt_governance_fit_hash",
+      "value_type": "hash",
+      "required": true,
+      "required_provenance": [
+        "governance_documented",
+        "replay_derived",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "privacy_class": "public",
+      "collection_methods": [
+        "governance_doc",
+        "replay_report",
+        "repo_file_hash"
+      ],
+      "rationale": "The selected architecture must preserve or explicitly re-prove Cobalt governance, replay, challenge, and deviation-detection properties."
+    },
+    {
+      "field_path": "protocol_architecture.operator_migration_impact_hash",
+      "value_type": "hash",
+      "required": true,
+      "required_provenance": [
+        "governance_documented",
+        "operator_signed",
+        "artifact_hash"
+      ],
+      "freshness": "release_bound",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "conformance_input",
+      "privacy_class": "redacted_public",
+      "collection_methods": [
+        "governance_doc",
+        "local_artifact"
+      ],
+      "rationale": "Any fork or compatibility-layer path must include redaction-safe operator migration, tooling, and rollback impact before implementation can claim constitutional support."
+    },
+    {
+      "field_path": "protocol_architecture.release_gate_readiness_hash",
+      "value_type": "hash",
+      "required": true,
+      "required_provenance": [
+        "test_report",
+        "replay_derived",
+        "artifact_hash"
+      ],
+      "freshness": "release_bound",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "hold",
+      "action_bound": "admission_gate",
+      "privacy_class": "public",
+      "collection_methods": [
+        "test_command",
+        "replay_report",
+        "local_artifact"
+      ],
+      "rationale": "No architecture option can affect code, migration, Cobalt submission, or release until a named release gate and rollback path are hash-bound."
+    }
+  ],
+  "forbidden_fields": [
+    {
+      "field_path": "provider.private_api_key",
+      "reason": "Provider credentials are never constitutional evidence.",
+      "severity": "reject_packet"
+    },
+    {
+      "field_path": "operator.private_notes",
+      "reason": "Private operator notes are hidden evidence and cannot decide architecture.",
+      "severity": "reject_packet"
+    },
+    {
+      "field_path": "unregistered.reputation_claim",
+      "reason": "Untyped reputation claims recreate opaque governance instead of a replayable protocol decision.",
+      "severity": "reject_request"
+    },
+    {
+      "field_path": "live.registry_mutation_authorization",
+      "reason": "An architecture evidence request cannot authorize live validator-registry mutation.",
+      "severity": "reject_request"
+    },
+    {
+      "field_path": "live.cobalt_amendment_submission",
+      "reason": "An architecture evidence request cannot submit or authorize a live Cobalt amendment.",
+      "severity": "reject_request"
+    },
+    {
+      "field_path": "live.authority_transfer_claim",
+      "reason": "Authority transfer is outside this packet boundary.",
+      "severity": "reject_request"
+    },
+    {
+      "field_path": "protocol_architecture.hidden_migration_plan",
+      "reason": "Migration plans must be public or redacted-public artifacts with hashes, not hidden inputs.",
+      "severity": "reject_packet"
+    },
+    {
+      "field_path": "protocol_architecture.rippled_private_patchset",
+      "reason": "A private rippled patchset cannot justify a full fork or compatibility layer.",
+      "severity": "reject_packet"
+    }
+  ],
+  "minimum_packet_checks": {
+    "schema_valid": true,
+    "question_hash_matches": true,
+    "field_registry_bound": true,
+    "source_hashes_verified": true,
+    "all_required_fields_present_or_noop": true,
+    "missing_and_conflict_behaviors_applied": true,
+    "redaction_passed": true,
+    "secret_scan_passed": true,
+    "no_hidden_evidence": true,
+    "no_live_mutation": true,
+    "provenance_validated": true
+  },
+  "request_boundaries": {
+    "qwen_may_request_fields": true,
+    "qwen_may_collect_evidence": false,
+    "qwen_may_change_question": false,
+    "qwen_may_expand_options": false,
+    "qwen_may_authorize_live_action": false,
+    "qwen_may_request_secret_material": false,
+    "accepted_request_is_live_authority": false
+  },
+  "fallback": "hold_until_packet_approved",
+  "checks": {
+    "requested_fields_present": true,
+    "provenance_declared": true,
+    "freshness_declared": true,
+    "missing_behavior_declared": true,
+    "conflict_behavior_declared": true,
+    "action_bounds_declared": true,
+    "forbidden_fields_present": true,
+    "minimum_packet_checks_present": true,
+    "live_mutation_authorized": false,
+    "authority_transfer": false
+  }
+}

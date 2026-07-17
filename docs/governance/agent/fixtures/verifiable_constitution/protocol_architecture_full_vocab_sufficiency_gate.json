@@ -1,0 +1,118 @@
+{
+  "schema": "postfiat-protocol-architecture-full-vocab-sufficiency-gate-v1",
+  "gate_id": "vc-protocol-architecture-001-full-vocab-sufficiency-gate-001",
+  "gate_version": 1,
+  "status": "accepted",
+  "created_at": "2026-05-25T00:00:00Z",
+  "source_disposition_ref": {
+    "report_path": "reports/verifiable-constitution/vc-049-protocol-architecture-replay-disposition-report.json",
+    "report_file_sha3_384": "7e49df838f299f95de1a4e0b25a66963bcf8a6b4a80da51fab7a65cddac71e5c6f919e808e260da262cad924b9a1f959",
+    "report_canonical_hash": "5547ca4063b02669c6bf366c03a2347f3a040a143f93e1be91289ecaf5f22ff210e42b49008c5ab6fda7c755c6d63004",
+    "report_schema": "postfiat-verifiable-constitution-vc-049-report-v1",
+    "classification": "request_additional_replay_before_conformance",
+    "challenge_route": "hold",
+    "conformance_allowed_now": false,
+    "full_distribution_available": false,
+    "unique_live_decision_hash_count": 1
+  },
+  "live_replay_evidence": {
+    "machine_count": 2,
+    "hardware_classes": [
+      "H100 NVL",
+      "H200 141GB"
+    ],
+    "target_decision_hash": "24333d8ba08daa332e078586b4b5de0bf9720d176f758d852465ac1ae6b86a20a766ff06b86b445d29a5caf7149440ab",
+    "target_reproduced": false,
+    "parsed_output_hash": "36bb5c03f73701ae71811a7b86b3228f0f23a640b802b7562fd054fc7b4b5e21bb875e1b27d2756cf16e6c8668e0c9b3",
+    "unique_parsed_output_hash_count": 1,
+    "top_logprob_root": "101dff18a4354fd29ae851c1efd595aaaa69d6961e54482b47abceaae1b3499a5d25116822dec3343024b3054a2a7529",
+    "unique_top_logprob_root_count": 1,
+    "full_vocab_root_present": false,
+    "full_vocab_root": null
+  },
+  "gate_options": {
+    "require_full_vocab_replay": {
+      "allowed_now": true,
+      "reason": "VC-049 showed useful parsed-output and top-logprob convergence, but the protocol-architecture challenge cannot be superseded on chat-completions evidence alone because no full-vocabulary distribution root was captured."
+    },
+    "accept_chat_sufficiency_for_supersede": {
+      "allowed_now": false,
+      "reason": "Accepting chat-completions sufficiency now would turn top-logprob convergence into a substitute for the full-output receipt standard used elsewhere in the Verifiable Constitution lane."
+    },
+    "hold_no_op": {
+      "allowed_now": true,
+      "reason": "Holding remains valid until a later authorized full-vocabulary replay packet exists and is verified."
+    }
+  },
+  "selected_gate": {
+    "selected": "require_full_vocab_replay",
+    "challenge_route": "hold",
+    "conformance_allowed_now": false,
+    "superseding_decision_allowed_now": false,
+    "live_effect": false,
+    "rationale": "The next architecture replay must use the SGLang /generate full-vocabulary receipt lane. Parsed JSON convergence and a shared top-logprob root are strong enough to keep investigating the replayed decision, but not strong enough to supersede the target decision or map conformance."
+  },
+  "required_next_execution": {
+    "packet_id": "vc-protocol-architecture-001-full-vocab-live-replay-execution-001",
+    "packet_kind": "protocol_architecture_full_vocab_live_replay_execution",
+    "required_endpoint": "/generate",
+    "minimum_machine_count": 2,
+    "required_runtime_profile": "Qwen/Qwen3.6-27B-FP8 SGLang TP=1 deterministic /generate",
+    "must_capture": [
+      "prompt_manifest_hash",
+      "generate_request_hash",
+      "raw_generate_response_hash",
+      "parsed_decision_hash",
+      "top_logprob_root",
+      "full_vocab_vector_root",
+      "full_vocab_vector_file_hash",
+      "hardware_class",
+      "provider_cleanup_proof"
+    ],
+    "pass_conditions": [
+      "each machine validates the same VC-046 prompt hash and prompt payload hash",
+      "each machine produces schema-valid protocol-architecture decision JSON",
+      "the full-vocabulary vector root is present for every machine",
+      "cross-machine parsed-output and full-vocabulary roots are classified before any superseding decision packet",
+      "provider cleanup proves every created resource was removed"
+    ],
+    "fail_closed_conditions": [
+      "missing full-vocabulary root",
+      "schema-invalid parsed decision",
+      "runtime profile drift",
+      "prompt hash drift",
+      "same-class root divergence",
+      "provider cleanup failure"
+    ]
+  },
+  "authority_boundary": {
+    "provider_spend_authorized": false,
+    "live_model_request_authorized": false,
+    "model_output_generated_in_this_packet": false,
+    "full_vocab_replay_executed_in_this_packet": false,
+    "rippled_code_import_authorized": false,
+    "consensus_rewrite_authorized": false,
+    "xrpl_compatibility_activation_authorized": false,
+    "protocol_migration_authorized": false,
+    "live_validator_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "mainnet_mutation_authorized": false,
+    "authority_transfer_authorized": false,
+    "conformance_mapping_authorized": false,
+    "superseding_decision_authorized": false
+  },
+  "checks": {
+    "source_disposition_verified": true,
+    "source_requested_full_vocab_or_sufficiency_gate": true,
+    "live_parsed_outputs_converged": true,
+    "live_top_logprob_roots_converged": true,
+    "full_distribution_missing": true,
+    "chat_sufficiency_rejected_for_supersede": true,
+    "full_vocab_replay_required_before_supersede": true,
+    "challenge_remains_hold": true,
+    "conformance_mapping_blocked": true,
+    "no_provider_spend_in_this_packet": true,
+    "no_live_mutation": true,
+    "authority_transfer": false
+  }
+}

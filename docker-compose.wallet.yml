@@ -1,0 +1,34 @@
+# Local, self-custody wallet composition. This file intentionally contains no
+# validator IPs, custody keys, operator accounts, bridge contracts, or enabled
+# funding routes. Select a target explicitly in a private .env file.
+services:
+  wallet-proxy:
+    build: ./wallet-proxy
+    restart: unless-stopped
+    environment:
+      LISTEN_HOST: "0.0.0.0"
+      LISTEN_PORT: "8080"
+      ALLOWED_ORIGINS: "http://127.0.0.1:8080"
+      WALLET_PROXY_API_TOKEN: "${WALLET_PROXY_API_TOKEN:?set a random token of at least 32 bytes}"
+      RPC_HOST: "${RPC_HOST:?set an explicit validator or authenticated RPC-edge host}"
+      RPC_PORT: "${RPC_PORT:-27650}"
+      RPC_FLEET: "${RPC_FLEET:?set the exact validator-id=host:port fleet topology}"
+      ENABLE_NATIVE_WALLET_SIGNER: "false"
+      FASTPAY_OWNED_LANE_ENABLED: "false"
+      NAVSWAP_ENABLE_DEVNET_PFUSDC_FUNDING: "false"
+      NAVSWAP_ENABLE_UNISWAP_BETA_ROUTE: "false"
+      NAVSWAP_ENABLE_UNISWAP_BETA_RUNS: "false"
+      NAVSWAP_ENABLE_SHIELDED_INGRESS: "false"
+      NAVSWAP_ENABLE_SHIELDED_QUOTES: "false"
+      NAVSWAP_ENABLE_SHIELDED_SWAPS: "false"
+      NAVSWAP_ENABLE_SHIELDED_EGRESS: "false"
+      WALLET_STATIC_DIR: "/wallet/dist"
+    volumes:
+      - ./wallet-web/dist:/wallet/dist:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-o", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

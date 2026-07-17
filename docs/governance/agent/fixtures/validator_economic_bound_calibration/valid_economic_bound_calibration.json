@@ -1,0 +1,666 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T00:00:00Z",
+    "attestor_key_hash": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+    "signature_hash": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+    "signature_scheme": "mldsa44-placeholder",
+    "statement_hash": "d9634de299313c4ecc3f1a9dc9f9afe96bb19599e21d46f9706a0a85a9286ce310e93435db09b6bb30b653727c7be9bd"
+  },
+  "checks": {
+    "authority_transfer": false,
+    "calibration_root_bound": true,
+    "derived_units_only": true,
+    "favorable_attestor_inflation_rejected": true,
+    "live_registry_mutation": false,
+    "missing_exclusion_loss_held": true,
+    "raw_measurements_required": true,
+    "self_declared_loss_held": true,
+    "source_class_mismatch_held": true,
+    "stale_liability_held": true,
+    "statement_hash_bound": true,
+    "unbounded_external_gain_rejected": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "validator-economic-bound-calibration-v1-fixture",
+  "schema": "postfiat-validator-economic-bound-calibration-v1",
+  "statement": {
+    "base_evidence": {
+      "cobalt_subset": {
+        "q_s": 5,
+        "safe_count_after": 6,
+        "subset_id": "subset-a"
+      },
+      "source_measurements": {
+        "contractual_liability_floor": [
+          {
+            "age_epochs": 0,
+            "attestor_group": "legal-counsel-a",
+            "attestor_independence": "independent",
+            "measurement_type": "contract_liability_usd_window",
+            "source_class": "contract_signed",
+            "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "status": "verified",
+            "usd_value": 5000000
+          }
+        ],
+        "deviation_gain_ceiling": [
+          {
+            "age_epochs": 0,
+            "attestor_group": "risk-desk-a",
+            "attestor_independence": "independent",
+            "measurement_type": "external_position_usd_window",
+            "source_class": "auditor_attested",
+            "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "status": "verified",
+            "unbounded": false,
+            "usd_value": 1000000
+          }
+        ],
+        "exclusion_loss_floor": [
+          {
+            "age_epochs": 0,
+            "attestor_group": "registry-a",
+            "attestor_independence": "independent",
+            "measurement_type": "registry_exclusion_flow_usd_30d",
+            "source_class": "registry_derived",
+            "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "status": "verified",
+            "usd_value": 5000000
+          }
+        ],
+        "operating_cost_ceiling": [
+          {
+            "age_epochs": 0,
+            "attestor_group": "operator-finance-a",
+            "attestor_independence": "independent",
+            "measurement_type": "operating_cost_usd_monthly",
+            "source_class": "operator_signed",
+            "source_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "status": "verified",
+            "usd_value": 500000
+          },
+          {
+            "age_epochs": 0,
+            "attestor_group": "auditor-cost-a",
+            "attestor_independence": "independent",
+            "measurement_type": "operating_cost_usd_monthly",
+            "source_class": "auditor_attested",
+            "source_hash": "121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212",
+            "status": "verified",
+            "usd_value": 400000
+          }
+        ],
+        "participation_benefit_floor": [
+          {
+            "age_epochs": 0,
+            "attestor_group": "settlement-counterparty-a",
+            "attestor_independence": "independent",
+            "measurement_type": "settlement_flow_usd_30d",
+            "source_class": "counterparty_signed",
+            "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "status": "verified",
+            "usd_value": 25000000
+          },
+          {
+            "age_epochs": 0,
+            "attestor_group": "chain-index-a",
+            "attestor_independence": "independent",
+            "measurement_type": "settlement_flow_usd_30d",
+            "source_class": "chain_derived",
+            "source_hash": "abababababababababababababababababababababababababababababababababababababababababababababababab",
+            "status": "verified",
+            "usd_value": 5000000
+          }
+        ],
+        "reputation_loss_floor": [
+          {
+            "age_epochs": 0,
+            "attestor_group": "auditor-reputation-a",
+            "attestor_independence": "independent",
+            "measurement_type": "reputation_loss_usd_floor",
+            "source_class": "auditor_attested",
+            "source_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "status": "verified",
+            "usd_value": 1000000
+          }
+        ]
+      }
+    },
+    "calibration_policy": {
+      "max_evidence_age_epochs": 3,
+      "min_loss_over_gain_margin_units": 1,
+      "min_participation_margin_units": 1,
+      "policy_units": "source-measurement-usd-threshold-units-v1",
+      "term_rules": [
+        {
+          "aggregation": "max_verified_units",
+          "allowed_source_classes": [
+            "contract_signed"
+          ],
+          "measurement_types": [
+            "contract_liability_usd_window"
+          ],
+          "term": "contractual_liability_floor",
+          "thresholds": [
+            {
+              "min_usd": 0,
+              "units": 0
+            },
+            {
+              "min_usd": 1000000,
+              "units": 2
+            },
+            {
+              "min_usd": 5000000,
+              "units": 4
+            },
+            {
+              "min_usd": 10000000,
+              "units": 6
+            }
+          ]
+        },
+        {
+          "aggregation": "max_verified_units",
+          "allowed_source_classes": [
+            "auditor_attested"
+          ],
+          "measurement_types": [
+            "external_position_usd_window"
+          ],
+          "term": "deviation_gain_ceiling",
+          "thresholds": [
+            {
+              "min_usd": 0,
+              "units": 0
+            },
+            {
+              "min_usd": 100000,
+              "units": 1
+            },
+            {
+              "min_usd": 1000000,
+              "units": 4
+            },
+            {
+              "min_usd": 5000000,
+              "units": 8
+            },
+            {
+              "min_usd": 25000000,
+              "units": 12
+            }
+          ]
+        },
+        {
+          "aggregation": "max_verified_units",
+          "allowed_source_classes": [
+            "registry_derived"
+          ],
+          "measurement_types": [
+            "registry_exclusion_flow_usd_30d"
+          ],
+          "term": "exclusion_loss_floor",
+          "thresholds": [
+            {
+              "min_usd": 0,
+              "units": 0
+            },
+            {
+              "min_usd": 1000000,
+              "units": 1
+            },
+            {
+              "min_usd": 5000000,
+              "units": 3
+            },
+            {
+              "min_usd": 25000000,
+              "units": 6
+            }
+          ]
+        },
+        {
+          "aggregation": "max_verified_units",
+          "allowed_source_classes": [
+            "operator_signed",
+            "auditor_attested"
+          ],
+          "measurement_types": [
+            "operating_cost_usd_monthly"
+          ],
+          "term": "operating_cost_ceiling",
+          "thresholds": [
+            {
+              "min_usd": 0,
+              "units": 0
+            },
+            {
+              "min_usd": 100000,
+              "units": 1
+            },
+            {
+              "min_usd": 500000,
+              "units": 3
+            },
+            {
+              "min_usd": 1000000,
+              "units": 5
+            },
+            {
+              "min_usd": 5000000,
+              "units": 8
+            }
+          ]
+        },
+        {
+          "aggregation": "max_verified_units",
+          "allowed_source_classes": [
+            "counterparty_signed",
+            "chain_derived"
+          ],
+          "measurement_types": [
+            "settlement_flow_usd_30d"
+          ],
+          "term": "participation_benefit_floor",
+          "thresholds": [
+            {
+              "min_usd": 0,
+              "units": 0
+            },
+            {
+              "min_usd": 250000,
+              "units": 1
+            },
+            {
+              "min_usd": 1000000,
+              "units": 3
+            },
+            {
+              "min_usd": 5000000,
+              "units": 6
+            },
+            {
+              "min_usd": 25000000,
+              "units": 10
+            }
+          ]
+        },
+        {
+          "aggregation": "max_verified_units",
+          "allowed_source_classes": [
+            "auditor_attested"
+          ],
+          "measurement_types": [
+            "reputation_loss_usd_floor"
+          ],
+          "term": "reputation_loss_floor",
+          "thresholds": [
+            {
+              "min_usd": 0,
+              "units": 0
+            },
+            {
+              "min_usd": 500000,
+              "units": 1
+            },
+            {
+              "min_usd": 1000000,
+              "units": 2
+            },
+            {
+              "min_usd": 5000000,
+              "units": 4
+            }
+          ]
+        }
+      ]
+    },
+    "calibration_root_hash": "cae0fb5c237b71eb2f040f3df760a2e9de88f0f7f684715327bd067acf7047dd73ea14b0fc00a37253a067db625ac92c",
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_bound_policy/valid_economic_bound_policy.json",
+        "sha3_384": "c658fda79f51a8da0736440cf4cde57a9a76ec9acefb60130f13d04b4156705003235d9510a0a947671ef109fbf66a24"
+      },
+      {
+        "path": "scripts/validator-economic-bound-policy-verify",
+        "sha3_384": "4c39bb1932be2e39bd4f8f565612cc2f812d0dfce6ca1a769437ed130a8fdb43be47d27ee099c8c50eb1bd58bcb950e0"
+      }
+    ],
+    "policy_id": "validator-economic-bound-calibration-v1",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "validator-economic-bound-calibration-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-source-calibrated-admit",
+        "expected_reason_codes": [
+          "all_calibrated_bounds_passed"
+        ],
+        "expected_route": "admit",
+        "expected_terms": {
+          "attributable_loss": 9,
+          "contractual_liability_floor": 4,
+          "deviation_gain_ceiling": 4,
+          "exclusion_loss_floor": 3,
+          "loss_margin": 5,
+          "operating_cost_ceiling": 3,
+          "participation_benefit_floor": 10,
+          "participation_margin": 7,
+          "q_s": 5,
+          "reputation_loss_floor": 2,
+          "safe_count_after": 6
+        },
+        "overrides": []
+      },
+      {
+        "case_id": "case-02-unbounded-external-gain-reject",
+        "expected_reason_codes": [
+          "no_current_deviation_gain_ceiling_source",
+          "unbounded_deviation_gain_ceiling"
+        ],
+        "expected_route": "reject",
+        "expected_terms": {
+          "attributable_loss": 9,
+          "contractual_liability_floor": 4,
+          "deviation_gain_ceiling": null,
+          "exclusion_loss_floor": 3,
+          "loss_margin": null,
+          "operating_cost_ceiling": 3,
+          "participation_benefit_floor": 10,
+          "participation_margin": 7,
+          "q_s": 5,
+          "reputation_loss_floor": 2,
+          "safe_count_after": 6
+        },
+        "overrides": [
+          {
+            "path": [
+              "source_measurements",
+              "deviation_gain_ceiling",
+              0,
+              "unbounded"
+            ],
+            "value": true
+          },
+          {
+            "path": [
+              "source_measurements",
+              "deviation_gain_ceiling",
+              0,
+              "usd_value"
+            ],
+            "value": null
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-stale-liability-hold",
+        "expected_reason_codes": [
+          "no_current_contractual_liability_floor_source",
+          "stale_economic_evidence"
+        ],
+        "expected_route": "hold",
+        "expected_terms": {
+          "attributable_loss": null,
+          "contractual_liability_floor": null,
+          "deviation_gain_ceiling": 4,
+          "exclusion_loss_floor": 3,
+          "loss_margin": null,
+          "operating_cost_ceiling": 3,
+          "participation_benefit_floor": 10,
+          "participation_margin": 7,
+          "q_s": 5,
+          "reputation_loss_floor": 2,
+          "safe_count_after": 6
+        },
+        "overrides": [
+          {
+            "path": [
+              "source_measurements",
+              "contractual_liability_floor",
+              0,
+              "age_epochs"
+            ],
+            "value": 9
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-self-declared-reputation-loss-hold",
+        "expected_reason_codes": [
+          "no_current_reputation_loss_floor_source",
+          "self_declared_magnitude_source"
+        ],
+        "expected_route": "hold",
+        "expected_terms": {
+          "attributable_loss": null,
+          "contractual_liability_floor": 4,
+          "deviation_gain_ceiling": 4,
+          "exclusion_loss_floor": 3,
+          "loss_margin": null,
+          "operating_cost_ceiling": 3,
+          "participation_benefit_floor": 10,
+          "participation_margin": 7,
+          "q_s": 5,
+          "reputation_loss_floor": null,
+          "safe_count_after": 6
+        },
+        "overrides": [
+          {
+            "path": [
+              "source_measurements",
+              "reputation_loss_floor",
+              0,
+              "attestor_group"
+            ],
+            "value": "candidate"
+          },
+          {
+            "path": [
+              "source_measurements",
+              "reputation_loss_floor",
+              0,
+              "attestor_independence"
+            ],
+            "value": "self"
+          },
+          {
+            "path": [
+              "source_measurements",
+              "reputation_loss_floor",
+              0,
+              "source_class"
+            ],
+            "value": "operator_signed"
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-missing-exclusion-loss-hold",
+        "expected_reason_codes": [
+          "missing_exclusion_loss_floor_measurement"
+        ],
+        "expected_route": "hold",
+        "expected_terms": {
+          "attributable_loss": null,
+          "contractual_liability_floor": 4,
+          "deviation_gain_ceiling": 4,
+          "exclusion_loss_floor": null,
+          "loss_margin": null,
+          "operating_cost_ceiling": 3,
+          "participation_benefit_floor": 10,
+          "participation_margin": 7,
+          "q_s": 5,
+          "reputation_loss_floor": 2,
+          "safe_count_after": 6
+        },
+        "overrides": [
+          {
+            "path": [
+              "source_measurements",
+              "exclusion_loss_floor"
+            ],
+            "value": []
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-favorable-attestor-inflation-reject",
+        "expected_reason_codes": [
+          "favorable_attestor_inflation",
+          "no_current_participation_benefit_floor_source"
+        ],
+        "expected_route": "reject",
+        "expected_terms": {
+          "attributable_loss": 9,
+          "contractual_liability_floor": 4,
+          "deviation_gain_ceiling": 4,
+          "exclusion_loss_floor": 3,
+          "loss_margin": 5,
+          "operating_cost_ceiling": 3,
+          "participation_benefit_floor": null,
+          "participation_margin": null,
+          "q_s": 5,
+          "reputation_loss_floor": 2,
+          "safe_count_after": 6
+        },
+        "overrides": [
+          {
+            "path": [
+              "source_measurements",
+              "participation_benefit_floor"
+            ],
+            "value": [
+              {
+                "age_epochs": 0,
+                "attestor_group": "candidate-affiliate",
+                "attestor_independence": "candidate_affiliate",
+                "measurement_type": "settlement_flow_usd_30d",
+                "source_class": "counterparty_signed",
+                "source_hash": "565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656",
+                "status": "verified",
+                "usd_value": 100000000
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-source-class-mismatch-hold",
+        "expected_reason_codes": [
+          "no_current_participation_benefit_floor_source",
+          "source_class_mismatch_participation_benefit_floor"
+        ],
+        "expected_route": "hold",
+        "expected_terms": {
+          "attributable_loss": 9,
+          "contractual_liability_floor": 4,
+          "deviation_gain_ceiling": 4,
+          "exclusion_loss_floor": 3,
+          "loss_margin": 5,
+          "operating_cost_ceiling": 3,
+          "participation_benefit_floor": null,
+          "participation_margin": null,
+          "q_s": 5,
+          "reputation_loss_floor": 2,
+          "safe_count_after": 6
+        },
+        "overrides": [
+          {
+            "path": [
+              "source_measurements",
+              "participation_benefit_floor"
+            ],
+            "value": [
+              {
+                "age_epochs": 0,
+                "attestor_group": "operator-finance-a",
+                "attestor_independence": "independent",
+                "measurement_type": "settlement_flow_usd_30d",
+                "source_class": "operator_signed",
+                "source_hash": "676767676767676767676767676767676767676767676767676767676767676767676767676767676767676767676767",
+                "status": "verified",
+                "usd_value": 25000000
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-participation-margin-hold",
+        "expected_reason_codes": [
+          "participation_margin_below_floor"
+        ],
+        "expected_route": "hold",
+        "expected_terms": {
+          "attributable_loss": 9,
+          "contractual_liability_floor": 4,
+          "deviation_gain_ceiling": 4,
+          "exclusion_loss_floor": 3,
+          "loss_margin": 5,
+          "operating_cost_ceiling": 3,
+          "participation_benefit_floor": 1,
+          "participation_margin": -2,
+          "q_s": 5,
+          "reputation_loss_floor": 2,
+          "safe_count_after": 6
+        },
+        "overrides": [
+          {
+            "path": [
+              "source_measurements",
+              "participation_benefit_floor",
+              0,
+              "usd_value"
+            ],
+            "value": 250000
+          },
+          {
+            "path": [
+              "source_measurements",
+              "participation_benefit_floor",
+              1,
+              "usd_value"
+            ],
+            "value": 250000
+          }
+        ]
+      },
+      {
+        "case_id": "case-09-loss-below-deviation-reject",
+        "expected_reason_codes": [
+          "loss_margin_not_above_deviation_gain"
+        ],
+        "expected_route": "reject",
+        "expected_terms": {
+          "attributable_loss": 9,
+          "contractual_liability_floor": 4,
+          "deviation_gain_ceiling": 12,
+          "exclusion_loss_floor": 3,
+          "loss_margin": -3,
+          "operating_cost_ceiling": 3,
+          "participation_benefit_floor": 10,
+          "participation_margin": 7,
+          "q_s": 5,
+          "reputation_loss_floor": 2,
+          "safe_count_after": 6
+        },
+        "overrides": [
+          {
+            "path": [
+              "source_measurements",
+              "deviation_gain_ceiling",
+              0,
+              "usd_value"
+            ],
+            "value": 25000000
+          }
+        ]
+      }
+    ]
+  }
+}

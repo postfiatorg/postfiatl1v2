@@ -1,0 +1,19 @@
+{
+  "base": "valid_attestor_cost.json",
+  "description": "Detected capture must reject rather than admit.",
+  "expected_error_contains": [
+    "case-06-detected-capture-reject: expected_route mismatch"
+  ],
+  "overrides": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        5,
+        "expected_route"
+      ],
+      "value": "admit"
+    }
+  ],
+  "schema": "postfiat-validator-economic-attestor-cost-delta-v1"
+}

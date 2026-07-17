@@ -1,0 +1,345 @@
+{
+  "$id": "https://postfiat.org/schemas/postfiat-governance-ruleset-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority": {
+      "additionalProperties": false,
+      "properties": {
+        "direct_state_mutation": {
+          "const": false,
+          "type": "boolean"
+        },
+        "mode": {
+          "enum": [
+            "dry_run_only",
+            "guarded_apply"
+          ],
+          "type": "string"
+        },
+        "scope_expansion": {
+          "const": false,
+          "type": "boolean"
+        },
+        "self_upgrade": {
+          "const": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "mode",
+        "direct_state_mutation",
+        "self_upgrade",
+        "scope_expansion"
+      ],
+      "type": "object"
+    },
+    "decisions": {
+      "contains": {
+        "additionalProperties": true,
+        "properties": {
+          "kind": {
+            "const": "no_op",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "action_bound": {
+            "$ref": "#/$defs/action_bound"
+          },
+          "condition": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "conflict_behavior": {
+            "$ref": "#/$defs/conflict_behavior"
+          },
+          "decision_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "evidence_field_path": {
+            "$ref": "#/$defs/evidence_field_path"
+          },
+          "freshness_requirement": {
+            "$ref": "#/$defs/freshness_requirement"
+          },
+          "kind": {
+            "enum": [
+              "no_op",
+              "registry_delta_candidate"
+            ],
+            "type": "string"
+          },
+          "missing_evidence_behavior": {
+            "$ref": "#/$defs/missing_evidence_behavior"
+          },
+          "rationale": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "required_provenance": {
+            "$ref": "#/$defs/required_provenance"
+          }
+        },
+        "required": [
+          "decision_id",
+          "kind",
+          "condition",
+          "evidence_field_path",
+          "required_provenance",
+          "freshness_requirement",
+          "missing_evidence_behavior",
+          "conflict_behavior",
+          "action_bound",
+          "rationale"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "inputs": {
+      "contains": {
+        "additionalProperties": true,
+        "properties": {
+          "kind": {
+            "const": "validator_evidence_packet",
+            "type": "string"
+          },
+          "required": {
+            "const": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "required"
+        ],
+        "type": "object"
+      },
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "validator_evidence_packet",
+              "validator_registry_snapshot",
+              "cobalt_evidence_packet",
+              "operator_manifest_set"
+            ],
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "required"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "rollback": {
+      "additionalProperties": false,
+      "properties": {
+        "max_mutations": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "operator_confirmation_required": {
+          "type": "boolean"
+        },
+        "required": {
+          "const": true,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "required",
+        "max_mutations",
+        "operator_confirmation_required"
+      ],
+      "type": "object"
+    },
+    "ruleset_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "schema": {
+      "const": "postfiat-governance-ruleset-v1",
+      "type": "string"
+    },
+    "scope": {
+      "const": "validator_registry_policy",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "ruleset_id",
+    "scope",
+    "authority",
+    "inputs",
+    "decisions",
+    "rollback"
+  ],
+  "title": "PostFiat Governance Ruleset",
+  "type": "object",
+  "$defs": {
+    "action_bound": {
+      "enum": [
+        "informational_only",
+        "score_adjustment",
+        "admission_gate",
+        "hold_only",
+        "suspend_candidate",
+        "remove_candidate",
+        "no_action"
+      ],
+      "type": "string"
+    },
+    "conflict_behavior": {
+      "enum": [
+        "reject_packet",
+        "reject_validator_entry",
+        "hold"
+      ],
+      "type": "string"
+    },
+    "evidence_field_path": {
+      "enum": [
+        "packet.schema",
+        "packet.packet_id",
+        "packet.collection_window.from_height",
+        "packet.collection_window.to_height",
+        "packet.collection_window.from_time",
+        "packet.collection_window.to_time",
+        "packet.collector.name",
+        "packet.collector.version",
+        "packet.collector.config_hash",
+        "packet.raw_observation_root",
+        "packet.redaction.private_fields_removed",
+        "packet.redaction.secret_scan_passed",
+        "validator.registry.validator_id",
+        "validator.registry.public_key_hash",
+        "validator.registry.active_status",
+        "validator.registry.registry_root",
+        "validator.registry.governance_epoch",
+        "validator.registry.activation_height",
+        "validator.registry.suspension_height",
+        "validator.registry.removal_height",
+        "validator.registry.key_rotation_count",
+        "validator.operator_manifest.manifest_hash",
+        "validator.operator_manifest.signing_key_hash",
+        "validator.operator_manifest.signature_valid",
+        "validator.operator_manifest.signed_at",
+        "validator.operator_manifest.expires_at",
+        "validator.operator_manifest.claims_hash",
+        "validator.identity.declared_domain",
+        "validator.identity.declared_url",
+        "validator.identity.url_fetch.status",
+        "validator.identity.url_fetch.http_status",
+        "validator.identity.url_fetch.content_hash",
+        "validator.identity.url_fetch.observed_at",
+        "validator.identity.url_fetch.failure_reason",
+        "validator.identity.key_domain_binding.status",
+        "validator.identity.key_domain_binding.method",
+        "validator.identity.key_domain_binding.proof_hash",
+        "validator.performance.uptime_window_bps",
+        "validator.performance.rpc_reachable_bps",
+        "validator.performance.peer_reachable_bps",
+        "validator.performance.missed_vote_count",
+        "validator.performance.missed_proposal_count",
+        "validator.performance.late_vote_count",
+        "validator.performance.malformed_message_count",
+        "validator.performance.equivocation_event_count",
+        "validator.performance.restart_event_count",
+        "validator.performance.p95_latency_ms",
+        "validator.cobalt.amendment_vote_count",
+        "validator.cobalt.missed_amendment_vote_count",
+        "validator.cobalt.dabc_participation_count",
+        "validator.cobalt.stale_evidence_rejection_count",
+        "validator.cobalt.rollback_event_count",
+        "validator.cobalt.supersession_event_count",
+        "validator.cobalt.trust_view_mismatch_count",
+        "validator.cobalt.last_participation_height",
+        "validator.governance.admit_event_count",
+        "validator.governance.hold_event_count",
+        "validator.governance.suspend_event_count",
+        "validator.governance.reactivate_event_count",
+        "validator.governance.remove_event_count",
+        "validator.governance.key_rotation_event_count",
+        "validator.governance.last_lifecycle_event_height",
+        "validator.governance.open_remediation_hold",
+        "validator.topology.host_group",
+        "validator.topology.operator_group",
+        "validator.topology.operator_host_group",
+        "validator.topology.cloud_provider_group",
+        "validator.topology.region_group",
+        "validator.topology.jurisdiction_group",
+        "validator.topology.legal_domain_group",
+        "validator.topology.funding_source_group",
+        "cohort.topology.host_group_count",
+        "cohort.topology.operator_group_count",
+        "cohort.topology.operator_host_group_count",
+        "cohort.topology.cloud_provider_group_count",
+        "cohort.topology.region_group_count",
+        "cohort.topology.jurisdiction_group_count",
+        "cohort.registry.active_validator_count",
+        "cohort.registry.pending_validator_count",
+        "validator.evidence_quality.field_conflict_count",
+        "validator.evidence_quality.stale_field_count",
+        "validator.evidence_quality.missing_required_field_count",
+        "validator.evidence_quality.redacted_field_count",
+        "validator.evidence_quality.private_field_rejected_count",
+        "validator.evidence_quality.raw_observation_hash_count"
+      ],
+      "type": "string"
+    },
+    "freshness_requirement": {
+      "enum": [
+        "same_packet",
+        "recent_24h",
+        "recent_7d",
+        "recent_30d",
+        "epoch_bound",
+        "historical"
+      ],
+      "type": "string"
+    },
+    "missing_evidence_behavior": {
+      "enum": [
+        "reject_packet",
+        "reject_validator_entry",
+        "hold",
+        "neutral",
+        "stale"
+      ],
+      "type": "string"
+    },
+    "required_provenance": {
+      "enum": [
+        "chain_derived",
+        "registry_derived",
+        "operator_signed",
+        "collector_observed",
+        "network_observed",
+        "self_asserted",
+        "third_party_attested"
+      ],
+      "type": "string"
+    }
+  }
+}

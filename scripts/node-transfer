@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DATA_DIR="${DATA_DIR:-.postfiat/node0}"
+TO="${TO:-pfrecipient000000000000000000000000000000}"
+AMOUNT="${AMOUNT:-100}"
+
+cargo run -p postfiat-node -- transfer \
+  --data-dir "$DATA_DIR" \
+  --to "$TO" \
+  --amount "$AMOUNT"
+

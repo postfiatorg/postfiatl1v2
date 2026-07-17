@@ -1,0 +1,19 @@
+{
+  "base": "valid_attestor_cost.json",
+  "description": "Stale cost evidence must hold rather than admit.",
+  "expected_error_contains": [
+    "case-05-stale-cost-evidence-hold: expected_route mismatch"
+  ],
+  "overrides": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        4,
+        "expected_route"
+      ],
+      "value": "admit"
+    }
+  ],
+  "schema": "postfiat-validator-economic-attestor-cost-delta-v1"
+}

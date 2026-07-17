@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_observer_inference_model/valid_observer_inference_model.json",
+  "expected_error_contains": [
+    "statement.observer_model_root_hash does not match model material"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "observer_model_root_hash"
+      ],
+      "value": "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+    }
+  ],
+  "schema": "postfiat-privacy-observer-inference-model-invalid-case-v1"
+}

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "postfiat-cobalt-transition-safety-proof-v1",
+  "type": "object",
+  "required": [
+    "schema_id",
+    "statement",
+    "profile",
+    "byzantine_validators",
+    "key_continuity_validators",
+    "old_cover",
+    "new_cover",
+    "cases",
+    "attestation"
+  ],
+  "properties": {
+    "schema_id": {
+      "const": "postfiat-cobalt-transition-safety-proof-v1"
+    },
+    "statement": {
+      "type": "object",
+      "required": ["claim", "material_root_hash", "cases_root_hash"]
+    },
+    "profile": {
+      "type": "object",
+      "required": [
+        "byzantine_budget",
+        "max_cover",
+        "parent_validation",
+        "challenge_state"
+      ]
+    },
+    "byzantine_validators": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "key_continuity_validators": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "old_cover": {
+      "type": "array"
+    },
+    "new_cover": {
+      "type": "array"
+    },
+    "cases": {
+      "type": "array"
+    },
+    "attestation": {
+      "type": "object",
+      "required": ["statement_hash"]
+    }
+  }
+}

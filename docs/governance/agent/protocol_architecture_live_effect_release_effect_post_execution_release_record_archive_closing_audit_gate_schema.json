@@ -1,0 +1,80 @@
+{
+  "$id": "postfiat-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-closing-audit-gate-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority_boundary": {
+      "type": "object"
+    },
+    "challenge_and_rollback_route": {
+      "type": "object"
+    },
+    "checks": {
+      "type": "object"
+    },
+    "closing_audit_contract": {
+      "type": "object"
+    },
+    "closing_audit_input_requirements": {
+      "type": "object"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "current_closing_audit_state": {
+      "type": "object"
+    },
+    "gate_scope": {
+      "const": "protocol_architecture"
+    },
+    "release_effect_post_execution_release_record_archive_closing_audit_id": {
+      "const": "vc-protocol-architecture-001-live-effect-release-effect-post-execution-release-record-archive-closing-audit-001"
+    },
+    "release_effect_post_execution_release_record_archive_closing_audit_root": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "release_effect_post_execution_release_record_archive_closing_audit_version": {
+      "const": 1
+    },
+    "root_bindings": {
+      "type": "object"
+    },
+    "schema": {
+      "const": "postfiat-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-closing-audit-gate-v1"
+    },
+    "source_release_effect_post_execution_release_record_archive_publication_gate_ref": {
+      "type": "object"
+    },
+    "stale_root_policy": {
+      "type": "object"
+    },
+    "status": {
+      "const": "release_effect_post_execution_release_record_archive_closing_audit_gate_defined_no_closing_audit"
+    },
+    "verification_commands": {
+      "minItems": 5,
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "release_effect_post_execution_release_record_archive_closing_audit_id",
+    "release_effect_post_execution_release_record_archive_closing_audit_version",
+    "status",
+    "gate_scope",
+    "created_at",
+    "source_release_effect_post_execution_release_record_archive_publication_gate_ref",
+    "root_bindings",
+    "closing_audit_contract",
+    "closing_audit_input_requirements",
+    "current_closing_audit_state",
+    "stale_root_policy",
+    "challenge_and_rollback_route",
+    "verification_commands",
+    "authority_boundary",
+    "checks",
+    "release_effect_post_execution_release_record_archive_closing_audit_root"
+  ],
+  "type": "object"
+}

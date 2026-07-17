@@ -1,0 +1,370 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-validator-evidence-qwen-replay-output-validation-receipt-v1.json",
+  "title": "PostFiat Validator Evidence Qwen Replay Output Validation Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "receipt_id",
+    "mode",
+    "qwen_replay_output_manifest_hash",
+    "qwen_replay_authorization_hash",
+    "qwen_replay_preflight_hash",
+    "qwen_prompt_redaction_audit_hash",
+    "qwen_prompt_input_manifest_hash",
+    "qwen_public_summary_projection_hash",
+    "model_request_hash",
+    "packet_schema_hash",
+    "field_registry_hash",
+    "collection_window",
+    "validation_scope",
+    "validation_gates",
+    "execution_boundary",
+    "failure_policy",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-evidence-qwen-replay-output-validation-receipt-v1"
+    },
+    "receipt_id": {
+      "$ref": "#/$defs/id"
+    },
+    "mode": {
+      "const": "design_fixture_only"
+    },
+    "qwen_replay_output_manifest_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_authorization_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_preflight_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_prompt_redaction_audit_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_prompt_input_manifest_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_public_summary_projection_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "model_request_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "packet_schema_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "field_registry_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "collection_window": {
+      "$ref": "#/$defs/collection_window"
+    },
+    "validation_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorization_status",
+        "validation_status",
+        "replay_outputs_accepted",
+        "generated_output_count",
+        "validated_output_count",
+        "rejected_output_count",
+        "candidate_rulesets_validated",
+        "accepted_ruleset_candidate_hash",
+        "accepted_compiled_policy_hash",
+        "future_authorized_replay_required"
+      ],
+      "properties": {
+        "authorization_status": {
+          "const": "not_authorized"
+        },
+        "validation_status": {
+          "const": "no_outputs_to_validate"
+        },
+        "replay_outputs_accepted": {
+          "const": false
+        },
+        "generated_output_count": {
+          "const": 0
+        },
+        "validated_output_count": {
+          "const": 0
+        },
+        "rejected_output_count": {
+          "const": 0
+        },
+        "candidate_rulesets_validated": {
+          "const": 0
+        },
+        "accepted_ruleset_candidate_hash": {
+          "type": "null"
+        },
+        "accepted_compiled_policy_hash": {
+          "type": "null"
+        },
+        "future_authorized_replay_required": {
+          "const": true
+        }
+      }
+    },
+    "validation_gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "output_manifest_required",
+        "output_schema_validation_required",
+        "ruleset_schema_validation_required",
+        "compiled_policy_validation_required",
+        "deterministic_replay_consistency_required",
+        "retained_artifact_redaction_required",
+        "operator_review_required",
+        "release_decision_required"
+      ],
+      "properties": {
+        "output_manifest_required": {
+          "const": true
+        },
+        "output_schema_validation_required": {
+          "const": true
+        },
+        "ruleset_schema_validation_required": {
+          "const": true
+        },
+        "compiled_policy_validation_required": {
+          "const": true
+        },
+        "deterministic_replay_consistency_required": {
+          "const": true
+        },
+        "retained_artifact_redaction_required": {
+          "const": true
+        },
+        "operator_review_required": {
+          "const": true
+        },
+        "release_decision_required": {
+          "const": true
+        }
+      }
+    },
+    "execution_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_spend_executed",
+        "provider_resource_created",
+        "provider_resource_destroyed",
+        "live_model_request_executed",
+        "model_output_generated",
+        "live_network_access",
+        "live_registry_mutation",
+        "authority_transfer"
+      ],
+      "properties": {
+        "provider_spend_executed": {
+          "const": false
+        },
+        "provider_resource_created": {
+          "const": false
+        },
+        "provider_resource_destroyed": {
+          "const": false
+        },
+        "live_model_request_executed": {
+          "const": false
+        },
+        "model_output_generated": {
+          "const": false
+        },
+        "live_network_access": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    },
+    "failure_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "output_without_authorization",
+        "output_manifest_lineage_drift",
+        "generated_output_without_manifest",
+        "ruleset_schema_invalid",
+        "compiled_policy_invalid",
+        "deterministic_replay_inconsistent",
+        "fallback_decision"
+      ],
+      "properties": {
+        "output_without_authorization": {
+          "const": "reject_future_replay"
+        },
+        "output_manifest_lineage_drift": {
+          "const": "reject_future_replay"
+        },
+        "generated_output_without_manifest": {
+          "const": "reject_future_replay"
+        },
+        "ruleset_schema_invalid": {
+          "const": "reject_future_replay"
+        },
+        "compiled_policy_invalid": {
+          "const": "reject_future_replay"
+        },
+        "deterministic_replay_inconsistent": {
+          "const": "reject_future_replay"
+        },
+        "fallback_decision": {
+          "const": "no_op"
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "qwen_replay_output_manifest_hash_bound",
+        "qwen_replay_authorization_hash_bound",
+        "qwen_replay_preflight_hash_bound",
+        "qwen_prompt_redaction_audit_hash_bound",
+        "qwen_prompt_input_manifest_hash_bound",
+        "qwen_public_summary_projection_hash_bound",
+        "model_request_hash_bound",
+        "packet_schema_hash_bound",
+        "field_registry_hash_bound",
+        "collection_window_bound",
+        "validation_status_no_outputs_to_validate",
+        "zero_outputs_bound",
+        "no_ruleset_candidate_accepted",
+        "no_compiled_policy_accepted",
+        "validation_gates_bound",
+        "replay_outputs_accepted",
+        "provider_spend_executed",
+        "provider_resource_created",
+        "live_model_request_executed",
+        "model_output_generated",
+        "live_network_access",
+        "live_registry_mutation",
+        "authority_transfer"
+      ],
+      "properties": {
+        "qwen_replay_output_manifest_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_authorization_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_preflight_hash_bound": {
+          "const": true
+        },
+        "qwen_prompt_redaction_audit_hash_bound": {
+          "const": true
+        },
+        "qwen_prompt_input_manifest_hash_bound": {
+          "const": true
+        },
+        "qwen_public_summary_projection_hash_bound": {
+          "const": true
+        },
+        "model_request_hash_bound": {
+          "const": true
+        },
+        "packet_schema_hash_bound": {
+          "const": true
+        },
+        "field_registry_hash_bound": {
+          "const": true
+        },
+        "collection_window_bound": {
+          "const": true
+        },
+        "validation_status_no_outputs_to_validate": {
+          "const": true
+        },
+        "zero_outputs_bound": {
+          "const": true
+        },
+        "no_ruleset_candidate_accepted": {
+          "const": true
+        },
+        "no_compiled_policy_accepted": {
+          "const": true
+        },
+        "validation_gates_bound": {
+          "const": true
+        },
+        "replay_outputs_accepted": {
+          "const": false
+        },
+        "provider_spend_executed": {
+          "const": false
+        },
+        "provider_resource_created": {
+          "const": false
+        },
+        "live_model_request_executed": {
+          "const": false
+        },
+        "model_output_generated": {
+          "const": false
+        },
+        "live_network_access": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "collection_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_height",
+        "to_height",
+        "from_time",
+        "to_time"
+      ],
+      "properties": {
+        "from_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "from_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to_time": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    }
+  }
+}

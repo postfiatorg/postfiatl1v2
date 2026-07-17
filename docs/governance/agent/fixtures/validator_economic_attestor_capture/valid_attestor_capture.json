@@ -1,0 +1,444 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T00:00:00Z",
+    "attestor_key_hash": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+    "signature_hash": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+    "signature_scheme": "mldsa44-placeholder",
+    "statement_hash": "acaafdefdbc5d5ab39f9e54755268c7ab980fd016ff056112d7dd4aa542594e1fe5eb5e730249427b038414145e63160"
+  },
+  "checks": {
+    "attestor_group_separation_required": true,
+    "authority_transfer": false,
+    "capture_root_bound": true,
+    "detected_capture_rejected": true,
+    "live_registry_mutation": false,
+    "missing_required_attestor_held": true,
+    "source_class_roles_required": true,
+    "statement_hash_bound": true,
+    "undetected_capture_budget_bound": true,
+    "ungoverned_separation_fail_closed": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "validator-economic-attestor-capture-v1-fixture",
+  "schema": "postfiat-validator-economic-attestor-capture-v1",
+  "statement": {
+    "base_assessment": {
+      "B": 2,
+      "min_t_s": 2,
+      "separation_policy_governed": true,
+      "source_attestors": {
+        "conflict_attestor": {
+          "age_epochs": 0,
+          "attestor_group": "risk-desk-a",
+          "attestor_independence": "independent",
+          "can_forge": [
+            "absence_of_conflict"
+          ],
+          "can_suppress": [
+            "short_window_external_position"
+          ],
+          "capture_state": "clean",
+          "source_class": "auditor_attested",
+          "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "status": "verified"
+        },
+        "exposure_attestor": {
+          "age_epochs": 0,
+          "attestor_group": "settlement-counterparty-a",
+          "attestor_independence": "independent",
+          "can_forge": [
+            "participation_benefit_floor"
+          ],
+          "can_suppress": [],
+          "capture_state": "clean",
+          "source_class": "counterparty_signed",
+          "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "status": "verified"
+        },
+        "external_position_cap_attestor": {
+          "age_epochs": 0,
+          "attestor_group": "auditor-external-a",
+          "attestor_independence": "independent",
+          "can_forge": [
+            "external_position_cap"
+          ],
+          "can_suppress": [
+            "off_ledger_exposure"
+          ],
+          "capture_state": "clean",
+          "source_class": "auditor_attested",
+          "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "status": "verified"
+        },
+        "independence_attestor": {
+          "age_epochs": 0,
+          "attestor_group": "registry-a",
+          "attestor_independence": "independent",
+          "can_forge": [
+            "control_graph_absence"
+          ],
+          "can_suppress": [
+            "shared_control_edge"
+          ],
+          "capture_state": "clean",
+          "source_class": "registry_derived",
+          "source_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "status": "verified"
+        },
+        "liability_attestor": {
+          "age_epochs": 0,
+          "attestor_group": "legal-counsel-a",
+          "attestor_independence": "independent",
+          "can_forge": [
+            "liability_floor"
+          ],
+          "can_suppress": [
+            "contractual_liability_gap"
+          ],
+          "capture_state": "clean",
+          "source_class": "contract_signed",
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "status": "verified"
+        }
+      },
+      "undetected_captured_attestor_groups": 0
+    },
+    "capture_policy": {
+      "max_evidence_age_epochs": 3,
+      "max_roles_per_attestor_group": 1,
+      "policy_units": "attestor-capture-to-source-class-budget-v1",
+      "route_on_capture_above_budget": "fail-closed",
+      "route_on_detected_capture": "reject",
+      "route_on_group_overlap": "hold"
+    },
+    "capture_root_hash": "d72af6ed2d0153c0ce252145de5d9d31c3f2f01003ec61c2753fd2cabceb52f75261fbec0a74a5851f35a1c08ad1e220",
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_deviation_gain/valid_deviation_gain.json",
+        "sha3_384": "a4f908b9fff86b77911a4bd59a7623c0ab9fa0962689978d8aa507b783d9718f1e2c95efb0d83fd51a8dbcb93f81c944"
+      },
+      {
+        "path": "scripts/validator-economic-deviation-gain-verify",
+        "sha3_384": "e10749a70101cbdbe74aa4507224d7ba69eb34f67c243c83bf0ac22ce9cbe907de1dffd7dd76b1a39e1c9d9d44df1bdd"
+      },
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_bound_adversary_pricing/valid_adversary_pricing.json",
+        "sha3_384": "18a3cda6cd90cb4c22358d17788afc358ddb3c7e4f5b1f03fb3be633f3eba8cb58f064e2ac7f0b0a357639a6db01e1e4"
+      },
+      {
+        "path": "scripts/validator-economic-bound-adversary-pricing-verify",
+        "sha3_384": "d78c4054899d128ad0761e14917afefa61c0c082fca0fa3334c98d58c08ff26cc465faaa68e510ee25e011bfc397b529"
+      }
+    ],
+    "policy_id": "validator-economic-attestor-capture-v1",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "validator-economic-attestor-capture-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-separated-clean-admit",
+        "expected_capture_pricing": {
+          "B": 2,
+          "detected_captured_roles": 0,
+          "distinct_attestor_groups": 5,
+          "min_t_s": 2,
+          "overlapping_attestor_groups": 0,
+          "required_attestor_roles": 5,
+          "separation_policy_governed": true,
+          "undetected_capture_within_B": true,
+          "undetected_capture_within_min_t_s": true,
+          "undetected_captured_attestor_groups": 0
+        },
+        "expected_reason_codes": [
+          "all_attestor_capture_bounds_passed"
+        ],
+        "expected_route": "admit",
+        "overrides": []
+      },
+      {
+        "case_id": "case-02-one-undetected-capture-priced-admit",
+        "expected_capture_pricing": {
+          "B": 2,
+          "detected_captured_roles": 0,
+          "distinct_attestor_groups": 5,
+          "min_t_s": 2,
+          "overlapping_attestor_groups": 0,
+          "required_attestor_roles": 5,
+          "separation_policy_governed": true,
+          "undetected_capture_within_B": true,
+          "undetected_capture_within_min_t_s": true,
+          "undetected_captured_attestor_groups": 1
+        },
+        "expected_reason_codes": [
+          "priced_undetected_capture_within_cobalt_budget"
+        ],
+        "expected_route": "admit",
+        "overrides": [
+          {
+            "path": [
+              "undetected_captured_attestor_groups"
+            ],
+            "value": 1
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-undetected-capture-above-b-fail-closed",
+        "expected_capture_pricing": {
+          "B": 2,
+          "detected_captured_roles": 0,
+          "distinct_attestor_groups": 5,
+          "min_t_s": 2,
+          "overlapping_attestor_groups": 0,
+          "required_attestor_roles": 5,
+          "separation_policy_governed": true,
+          "undetected_capture_within_B": false,
+          "undetected_capture_within_min_t_s": false,
+          "undetected_captured_attestor_groups": 3
+        },
+        "expected_reason_codes": [
+          "undetected_attestor_capture_exceeds_cobalt_budget"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "undetected_captured_attestor_groups"
+            ],
+            "value": 3
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-detected-external-cap-attestor-reject",
+        "expected_capture_pricing": {
+          "B": 2,
+          "detected_captured_roles": 1,
+          "distinct_attestor_groups": 5,
+          "min_t_s": 2,
+          "overlapping_attestor_groups": 0,
+          "required_attestor_roles": 5,
+          "separation_policy_governed": true,
+          "undetected_capture_within_B": true,
+          "undetected_capture_within_min_t_s": true,
+          "undetected_captured_attestor_groups": 0
+        },
+        "expected_reason_codes": [
+          "detected_captured_attestor_external_position_cap_attestor"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "source_attestors",
+              "external_position_cap_attestor",
+              "capture_state"
+            ],
+            "value": "detected_captured"
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-missing-external-cap-attestor-hold",
+        "expected_capture_pricing": {
+          "B": 2,
+          "detected_captured_roles": 0,
+          "distinct_attestor_groups": 4,
+          "min_t_s": 2,
+          "overlapping_attestor_groups": 0,
+          "required_attestor_roles": 5,
+          "separation_policy_governed": true,
+          "undetected_capture_within_B": true,
+          "undetected_capture_within_min_t_s": true,
+          "undetected_captured_attestor_groups": 0
+        },
+        "expected_reason_codes": [
+          "missing_required_attestor_external_position_cap_attestor"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "source_attestors",
+              "external_position_cap_attestor"
+            ],
+            "value": null
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-attestor-group-overlap-hold",
+        "expected_capture_pricing": {
+          "B": 2,
+          "detected_captured_roles": 0,
+          "distinct_attestor_groups": 4,
+          "min_t_s": 2,
+          "overlapping_attestor_groups": 1,
+          "required_attestor_roles": 5,
+          "separation_policy_governed": true,
+          "undetected_capture_within_B": true,
+          "undetected_capture_within_min_t_s": true,
+          "undetected_captured_attestor_groups": 0
+        },
+        "expected_reason_codes": [
+          "attestor_group_overlap"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "source_attestors",
+              "exposure_attestor",
+              "attestor_group"
+            ],
+            "value": "auditor-external-a"
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-stale-independence-attestor-hold",
+        "expected_capture_pricing": {
+          "B": 2,
+          "detected_captured_roles": 0,
+          "distinct_attestor_groups": 5,
+          "min_t_s": 2,
+          "overlapping_attestor_groups": 0,
+          "required_attestor_roles": 5,
+          "separation_policy_governed": true,
+          "undetected_capture_within_B": true,
+          "undetected_capture_within_min_t_s": true,
+          "undetected_captured_attestor_groups": 0
+        },
+        "expected_reason_codes": [
+          "stale_attestor_independence_attestor"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "source_attestors",
+              "independence_attestor",
+              "age_epochs"
+            ],
+            "value": 9
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-source-class-mismatch-hold",
+        "expected_capture_pricing": {
+          "B": 2,
+          "detected_captured_roles": 0,
+          "distinct_attestor_groups": 5,
+          "min_t_s": 2,
+          "overlapping_attestor_groups": 0,
+          "required_attestor_roles": 5,
+          "separation_policy_governed": true,
+          "undetected_capture_within_B": true,
+          "undetected_capture_within_min_t_s": true,
+          "undetected_captured_attestor_groups": 0
+        },
+        "expected_reason_codes": [
+          "source_class_mismatch_conflict_attestor"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "source_attestors",
+              "conflict_attestor",
+              "source_class"
+            ],
+            "value": "registry_derived"
+          }
+        ]
+      },
+      {
+        "case_id": "case-09-ungoverned-separation-policy-fail-closed",
+        "expected_capture_pricing": {
+          "B": 2,
+          "detected_captured_roles": 0,
+          "distinct_attestor_groups": 5,
+          "min_t_s": 2,
+          "overlapping_attestor_groups": 0,
+          "required_attestor_roles": 5,
+          "separation_policy_governed": false,
+          "undetected_capture_within_B": true,
+          "undetected_capture_within_min_t_s": true,
+          "undetected_captured_attestor_groups": 0
+        },
+        "expected_reason_codes": [
+          "ungoverned_attestor_separation_policy"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "separation_policy_governed"
+            ],
+            "value": false
+          }
+        ]
+      },
+      {
+        "case_id": "case-10-b-exceeds-min-ts-fail-closed",
+        "expected_capture_pricing": {
+          "B": 3,
+          "detected_captured_roles": 0,
+          "distinct_attestor_groups": 5,
+          "min_t_s": 2,
+          "overlapping_attestor_groups": 0,
+          "required_attestor_roles": 5,
+          "separation_policy_governed": true,
+          "undetected_capture_within_B": true,
+          "undetected_capture_within_min_t_s": true,
+          "undetected_captured_attestor_groups": 0
+        },
+        "expected_reason_codes": [
+          "global_b_exceeds_weakest_t_s"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "B"
+            ],
+            "value": 3
+          }
+        ]
+      },
+      {
+        "case_id": "case-11-candidate-affiliate-conflict-attestor-reject",
+        "expected_capture_pricing": {
+          "B": 2,
+          "detected_captured_roles": 1,
+          "distinct_attestor_groups": 5,
+          "min_t_s": 2,
+          "overlapping_attestor_groups": 0,
+          "required_attestor_roles": 5,
+          "separation_policy_governed": true,
+          "undetected_capture_within_B": true,
+          "undetected_capture_within_min_t_s": true,
+          "undetected_captured_attestor_groups": 0
+        },
+        "expected_reason_codes": [
+          "detected_captured_attestor_conflict_attestor"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "source_attestors",
+              "conflict_attestor",
+              "attestor_independence"
+            ],
+            "value": "candidate_affiliate"
+          }
+        ]
+      }
+    ]
+  }
+}

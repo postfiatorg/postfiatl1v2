@@ -1,0 +1,196 @@
+site_name: PostFiat L1 Engineering Docs
+site_description: Engineering documentation for the PostFiat L1 controlled-testnet implementation.
+site_url: !ENV [POSTFIAT_DOCS_SITE_URL, "http://127.0.0.1:8088/"]
+repo_url: https://github.com/postfiatorg/postfiatl1v2
+repo_name: postfiatl1v2
+docs_dir: docs
+site_dir: site
+use_directory_urls: true
+exclude_docs: |
+  archive/**
+  examples/**
+  references/**
+  research-requests/**
+  review/**
+  specs/**
+  status/**
+  ai-handoff.md
+  cut.md
+  navcoin-sp1-verifier.md
+  whip-harness.md
+  whitepaper1_update.md
+  governance/*/**
+  governance/*.json
+  governance/ai_governance_red_team_plan.md
+  governance/cobalt-amendment-lifecycle.md
+  governance/cobalt-canonical-mode.md
+  governance/cobalt-controlled-testnet-plan.md
+  governance/full-cobalt-shipping-plan.md
+not_in_nav: |
+  governance/deterministic-governance-agent-bounded-*.md
+  governance/deterministic-governance-agent-gate-*.md
+  governance/deterministic-governance-agent-governance-queue-handoff.md
+  governance/deterministic-governance-agent-implementation-*.md
+  governance/deterministic-governance-agent-post-review-decision.md
+  governance/deterministic-governance-agent-queue-decision.md
+  governance/deterministic-governance-agent-release-handoff.md
+  governance/deterministic-governance-agent-review-signoff.md
+  governance/model-selection-governance-requirement.md
+  governance/qwen-cobalt-live-collector-readiness-summary.md
+  governance/qwen-cobalt-operator-readiness-summary.md
+  governance/validator-evidence-collector-writer.md
+  governance/validator-evidence-conflict-set.md
+  governance/validator-evidence-field-weight-policy.md
+  governance/validator-evidence-open-question-disposition.md
+  governance/validator-evidence-operator-*.md
+  governance/validator-evidence-public-url-domain-gate.md
+  governance/validator-evidence-qwen-*.md
+  governance/validator-evidence-source-authorization.md
+
+theme:
+  name: material
+  language: en
+  font: false
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - search.share
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: black
+      accent: teal
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+extra_javascript:
+  - assets/javascripts/copy-whitepaper-markdown.js
+
+extra_css:
+  - assets/stylesheets/copy-whitepaper-markdown.css
+
+nav:
+  - Home: index.md
+  - Whitepaper: whitepaper.md
+  - NAVCoins:
+      - Overview: navcoins/index.md
+      - a651 Uniswap Pool: navcoins/uniswap-pool.md
+      - Proof-of-Reserve Primitives: navcoins/reserve-primitives.md
+      - Assets And Venues: navcoins/assets-and-venues.md
+      - PFTL Tools: navcoins/pftl-tools.md
+      - Reference Posts: navcoins/references.md
+      - Detailed Proof Of Reserves: business/navcoin-proof-of-reserves.md
+      - Current Infrastructure: business/navcoin-current-infra.md
+      - Python Example: business/navcoin-python-example.md
+      - Archive Summary: evidence/navcoin-archive-summary.md
+  - Business:
+      - Business Whitepaper: business/whitepaper.md
+  - Start Here:
+      - First Day: start/first-day.md
+      - Glossary: start/glossary.md
+      - Repo Map: start/repo-map.md
+      - Release Process: release-process.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - Transaction Lifecycle: architecture/transaction-lifecycle.md
+      - State And Storage: architecture/state-and-storage.md
+      - Finality: architecture/finality.md
+      - Evidence Model: architecture/evidence-model.md
+  - Governance:
+      - Cobalt: governance/cobalt.md
+      - Cobalt Implementation: governance/cobalt-implementation.md
+      - Cobalt Transition Safety Proof: governance/cobalt-transition-safety-proof.md
+      - Verifiable Constitution: governance/verifiable-constitution.md
+      - Verifiable Constitution Plan: governance/verifiable-constitution-plan.md
+      - Validator Registry: governance/validator-registry.md
+      - Validator Admission Bin Policy: governance/validator-admission-bin-policy.md
+      - Validator Evidence Packet Schema: governance/validator-evidence-packet-schema.md
+      - Validator Evidence Field Registry: governance/validator-evidence-field-registry.md
+      - Deterministic Governance Overview: governance/deterministic-governance-overview.md
+      - Deterministic Governance Agent Plan: governance/deterministic-governance-agent-plan.md
+  - Privacy:
+      - Overview: privacy/overview.md
+      - Orchard/Halo2: privacy/orchard-halo2.md
+      - Deposit, Spend, Withdraw: privacy/deposit-spend-withdraw.md
+      - Disclosure: privacy/disclosure.md
+      - Assurance Receipts: privacy/assurance-receipts.md
+      - Shielded Asset Predicate Registry: privacy/shielded-asset-predicates.md
+      - Metadata And Anonymity Bounds: privacy/metadata-anonymity-bounds.md
+      - Deanonymization Bounds: privacy/deanonymization-bounds.md
+      - Correlation Bounds: privacy/correlation-bounds.md
+      - Observer Inference Model: privacy/observer-inference-model.md
+      - Floor Calibration: privacy/floor-calibration.md
+      - Longitudinal Linkage: privacy/longitudinal-linkage.md
+      - RPC And Resource Policy: privacy/rpc-and-resource-policy.md
+  - Plans:
+      - Proper Private NAV Swap: plans/proper-private-nav-swap-plan.md
+      - Private Egress Consensus Performance: plans/private-egress-consensus-performance-plan.md
+      - Transaction Improvement Process: plans/transaction-improvement-process.md
+  - Quantum Authorization:
+      - Authorization: quantum/authorization.md
+      - Signature Size And Certificates: quantum/signature-size-and-certificates.md
+      - Wallet Implications: quantum/wallet-implications.md
+  - RPC:
+      - Overview: rpc/overview.md
+      - Methods: rpc/methods.md
+      - Account History: rpc/account-history.md
+      - Write Policy: rpc/write-policy.md
+      - Examples: rpc/examples.md
+  - Python Client:
+      - Quickstart: python/quickstart.md
+      - Client API: python/client-api.md
+      - Wallet Functions: python/wallet-functions.md
+      - XRP-Style Transactions: python/xrp-style-transactions.md
+      - Examples: python/examples.md
+  - Wallets:
+      - Transparent Wallet: wallets/transparent-wallet.md
+      - Web Wallet: wallets/web-wallet.md
+      - Recovery Phrase Design: wallets/recovery-phrase-design.md
+      - Shielded Wallet: wallets/shielded-wallet.md
+      - Custody And Exchange: wallets/custody-and-exchange.md
+  - Validators:
+      - Overview: validators/overview.md
+      - Launch: validators/launch.md
+      - Operations: validators/operations.md
+      - History Retention: validators/history-retention.md
+      - Monitors: validators/monitors.md
+      - Emergency Key Rotation: validators/emergency-key-rotation.md
+  - Evidence:
+      - Index: evidence/index.md
+      - Controlled Testnet: evidence/controlled-testnet.md
+      - Performance Methodology: evidence/performance-methodology.md
+      - Cobalt: evidence/cobalt.md
+      - XRPL UNL Coordination: evidence/xrpl-unl-coordination.md
+      - SGLang Determinism: evidence/sglang-determinism.md
+      - Privacy: evidence/privacy.md
+      - Latency: evidence/latency.md
+      - RPC And Wallets: evidence/rpc-and-wallets.md
+  - Postmortems:
+      - WAN Devnet Fleet Degradation: postmortems/wan-devnet-fleet-degradation-2026-06-25.md
+  - Security:
+      - Threat Model: security/threat-model.md
+      - Redaction Policy: security/redaction-policy.md
+      - Public Launch Boundary: security/public-launch-boundary.md
+      - Public History Publication: security/public-history-publication.md
+  - Runbooks:
+      - Faucet Testnet Transactions: runbooks/faucet-testnet-transactions.md
+      - Operator Day Two: runbooks/operator-day-two.md
+      - Python RPC Client: runbooks/python-rpc-client.md
+      - RPC Method Inventory: runbooks/rpc-method-inventory.md
+
+plugins:
+  - search

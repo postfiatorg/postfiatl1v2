@@ -1,0 +1,51 @@
+{
+  "schema": "postfiat-shielded-asset-predicate-registry-invalid-case-v1",
+  "case_id": "invalid-recipient-identity-transfer-policy",
+  "base_packet": "docs/governance/agent/fixtures/shielded_asset_predicate_registry/valid_predicate_registry.json",
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "asset_profile",
+        "transfer_policy",
+        "policy_class"
+      ],
+      "value": "recipient_identity_transfer_policy"
+    },
+    {
+      "path": [
+        "statement",
+        "asset_profile",
+        "transfer_policy",
+        "recipient_identity_required"
+      ],
+      "value": true
+    },
+    {
+      "path": [
+        "statement",
+        "asset_profile",
+        "transfer_policy",
+        "recipient_attribute_public_inputs"
+      ],
+      "value": [
+        "jurisdiction"
+      ]
+    },
+    {
+      "path": [
+        "statement",
+        "asset_profile",
+        "transfer_policy",
+        "privacy_tier"
+      ],
+      "value": "identity_gated_weaker_privacy"
+    }
+  ],
+  "expected_error_contains": [
+    "transfer_policy.policy_class must be owner_scoped_static in v0",
+    "transfer_policy.recipient_identity_required must be false in v0",
+    "transfer_policy.recipient_attribute_public_inputs must be empty in v0",
+    "transfer_policy.privacy_tier mismatch"
+  ]
+}

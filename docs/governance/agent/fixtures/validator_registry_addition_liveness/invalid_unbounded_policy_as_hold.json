@@ -1,0 +1,17 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_registry_addition_liveness/valid_registry_addition_liveness.json",
+  "expected_error_contains": [
+    "case-01-clean-add-activates: expected_route mismatch"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "liveness_policy",
+        "max_pending_addition_epochs"
+      ],
+      "value": 0
+    }
+  ],
+  "schema": "postfiat-validator-registry-addition-liveness-invalid-case-v1"
+}

@@ -1,0 +1,25 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_observer_inference_model/valid_observer_inference_model.json",
+  "expected_error_contains": [
+    "selector_cases missing required observer-inference cases"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases"
+      ],
+      "value": [
+        {
+          "case_id": "case-01-baseline-observer-inference",
+          "expected_reason_codes": [
+            "observer_inference_bound_passed"
+          ],
+          "expected_route": "baseline-private",
+          "overrides": []
+        }
+      ]
+    }
+  ],
+  "schema": "postfiat-privacy-observer-inference-model-invalid-case-v1"
+}

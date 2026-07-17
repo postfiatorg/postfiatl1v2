@@ -1,0 +1,11 @@
+{
+  "base_fixture": "valid_key_continuity_receipt.json",
+  "overrides": {
+    "continuity_receipts": [
+      {"validator_id": "C", "operator_id": "op-c", "operator_manifest_hash": "manifest-c", "old_consensus_key": "old-key-c", "new_consensus_key": "new-key-c", "parent_registry_root": "registry-root-old-001", "next_registry_root": "registry-root-new-001", "transition_root": "transition-root-key-continuity-001", "old_checker_root": "checker-root-old-001", "checker_root": "checker-root-old-001", "signed_by_old_key": false, "signed_by_new_key": true, "issued_epoch": 41, "expires_epoch": 42}
+    ]
+  },
+  "expected_error_contains": [
+    "receipt[C]: missing old-key signature"
+  ]
+}

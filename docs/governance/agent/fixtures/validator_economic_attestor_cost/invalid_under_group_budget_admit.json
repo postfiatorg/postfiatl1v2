@@ -1,0 +1,19 @@
+{
+  "base": "valid_attestor_cost.json",
+  "description": "Under-budget attestor groups must fail closed rather than admit.",
+  "expected_error_contains": [
+    "case-07-under-group-budget-fail-closed: expected_route mismatch"
+  ],
+  "overrides": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        6,
+        "expected_route"
+      ],
+      "value": "admit"
+    }
+  ],
+  "schema": "postfiat-validator-economic-attestor-cost-delta-v1"
+}

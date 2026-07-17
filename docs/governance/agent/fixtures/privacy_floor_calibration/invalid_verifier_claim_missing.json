@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_floor_calibration/valid_floor_calibration.json",
+  "expected_error_contains": [
+    "checks.joint_floor_derived_from_posterior must be True"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "checks",
+        "joint_floor_derived_from_posterior"
+      ],
+      "value": false
+    }
+  ],
+  "schema": "postfiat-privacy-floor-calibration-invalid-case-v1"
+}

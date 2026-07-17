@@ -1,0 +1,17 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_risk_constant_policy/valid_risk_constant_policy.json",
+  "expected_error_contains": [
+    "risk_policy.policy_governed must be true"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "risk_policy",
+        "policy_governed"
+      ],
+      "value": false
+    }
+  ],
+  "schema": "postfiat-validator-economic-risk-constant-policy-invalid-case-v1"
+}

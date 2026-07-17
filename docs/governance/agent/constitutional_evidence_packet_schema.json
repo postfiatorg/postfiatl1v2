@@ -1,0 +1,493 @@
+{
+  "$id": "https://postfiat.org/schemas/postfiat-constitutional-evidence-packet-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "postfiat-constitutional-evidence-packet-v1",
+      "type": "string"
+    },
+    "packet_id": {
+      "$ref": "#/$defs/id"
+    },
+    "packet_version": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "candidate",
+        "approved",
+        "superseded",
+        "rejected"
+      ],
+      "type": "string"
+    },
+    "packet_scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "request_ref": {
+      "$ref": "#/$defs/request_ref"
+    },
+    "collection_manifest": {
+      "$ref": "#/$defs/collection_manifest"
+    },
+    "evidence_root": {
+      "$ref": "#/$defs/sha3_384"
+    },
+    "evidence_items": {
+      "items": {
+        "$ref": "#/$defs/evidence_item"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "missing_evidence": {
+      "items": {
+        "$ref": "#/$defs/missing_evidence"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "redaction": {
+      "$ref": "#/$defs/redaction"
+    },
+    "checks": {
+      "$ref": "#/$defs/checks"
+    }
+  },
+  "required": [
+    "schema",
+    "packet_id",
+    "packet_version",
+    "status",
+    "packet_scope",
+    "created_at",
+    "request_ref",
+    "collection_manifest",
+    "evidence_root",
+    "evidence_items",
+    "missing_evidence",
+    "redaction",
+    "checks"
+  ],
+  "title": "PostFiat Constitutional Evidence Packet",
+  "type": "object",
+  "$defs": {
+    "action_bound": {
+      "enum": [
+        "question_input",
+        "evidence_packet_input",
+        "decision_input",
+        "admission_gate",
+        "conformance_input",
+        "hold_only"
+      ],
+      "type": "string"
+    },
+    "checks": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_valid": {
+          "const": true
+        },
+        "request_hash_matches": {
+          "const": true
+        },
+        "requested_fields_bound": {
+          "const": true
+        },
+        "source_hashes_verified": {
+          "const": true
+        },
+        "missing_behaviors_applied": {
+          "const": true
+        },
+        "redaction_passed": {
+          "const": true
+        },
+        "secret_scan_passed": {
+          "const": true
+        },
+        "no_hidden_evidence": {
+          "const": true
+        },
+        "no_live_collection": {
+          "const": true
+        },
+        "no_live_mutation": {
+          "const": true
+        },
+        "packet_root_verified": {
+          "const": true
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      },
+      "required": [
+        "schema_valid",
+        "request_hash_matches",
+        "requested_fields_bound",
+        "source_hashes_verified",
+        "missing_behaviors_applied",
+        "redaction_passed",
+        "secret_scan_passed",
+        "no_hidden_evidence",
+        "no_live_collection",
+        "no_live_mutation",
+        "packet_root_verified",
+        "authority_transfer"
+      ],
+      "type": "object"
+    },
+    "collection_manifest": {
+      "additionalProperties": false,
+      "properties": {
+        "collector_id": {
+          "$ref": "#/$defs/id"
+        },
+        "collection_mode": {
+          "enum": [
+            "repo_snapshot_only",
+            "local_artifact_only",
+            "operator_supplied_packet",
+            "chain_state_snapshot"
+          ],
+          "type": "string"
+        },
+        "collected_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "source_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "live_collection_executed": {
+          "const": false
+        },
+        "network_reads": {
+          "const": false
+        },
+        "provider_spend": {
+          "const": false
+        },
+        "secret_material_seen": {
+          "const": false
+        },
+        "live_mutation_executed": {
+          "const": false
+        }
+      },
+      "required": [
+        "collector_id",
+        "collection_mode",
+        "collected_at",
+        "source_commit",
+        "live_collection_executed",
+        "network_reads",
+        "provider_spend",
+        "secret_material_seen",
+        "live_mutation_executed"
+      ],
+      "type": "object"
+    },
+    "conflict_behavior": {
+      "enum": [
+        "hold",
+        "reject_conflicted_field",
+        "preserve_status_quo",
+        "require_challenge_packet"
+      ],
+      "type": "string"
+    },
+    "evidence_item": {
+      "additionalProperties": false,
+      "properties": {
+        "field_path": {
+          "$ref": "#/$defs/field_path"
+        },
+        "requested_value_type": {
+          "enum": [
+            "string",
+            "integer",
+            "boolean",
+            "decimal_string",
+            "object",
+            "array",
+            "hash",
+            "timestamp",
+            "enum"
+          ],
+          "type": "string"
+        },
+        "request_required": {
+          "type": "boolean"
+        },
+        "evidence_status": {
+          "enum": [
+            "present",
+            "missing",
+            "conflicted",
+            "prohibited"
+          ],
+          "type": "string"
+        },
+        "canonical_value": {
+          "type": [
+            "string",
+            "integer",
+            "boolean",
+            "object",
+            "array",
+            "null"
+          ]
+        },
+        "source_refs": {
+          "items": {
+            "$ref": "#/$defs/source_ref"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "provenance": {
+          "items": {
+            "$ref": "#/$defs/provenance"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "freshness": {
+          "$ref": "#/$defs/freshness"
+        },
+        "missing_evidence_behavior": {
+          "$ref": "#/$defs/missing_evidence_behavior"
+        },
+        "conflict_behavior": {
+          "$ref": "#/$defs/conflict_behavior"
+        },
+        "action_bound": {
+          "$ref": "#/$defs/action_bound"
+        },
+        "redaction_status": {
+          "enum": [
+            "public",
+            "redacted",
+            "hash_only",
+            "not_applicable"
+          ],
+          "type": "string"
+        },
+        "collector_note": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "field_path",
+        "requested_value_type",
+        "request_required",
+        "evidence_status",
+        "canonical_value",
+        "source_refs",
+        "provenance",
+        "freshness",
+        "missing_evidence_behavior",
+        "conflict_behavior",
+        "action_bound",
+        "redaction_status",
+        "collector_note"
+      ],
+      "type": "object"
+    },
+    "field_path": {
+      "pattern": "^[a-z0-9][a-z0-9_]*(\\.[a-z0-9][a-z0-9_]*){1,9}$",
+      "type": "string"
+    },
+    "freshness": {
+      "enum": [
+        "same_packet",
+        "current_commit",
+        "candidate_epoch_bound",
+        "epoch_bound",
+        "release_bound",
+        "recent_7d",
+        "recent_30d",
+        "immutable"
+      ],
+      "type": "string"
+    },
+    "id": {
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$",
+      "type": "string"
+    },
+    "missing_evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "field_path": {
+          "$ref": "#/$defs/field_path"
+        },
+        "missing_evidence_behavior": {
+          "$ref": "#/$defs/missing_evidence_behavior"
+        },
+        "no_op_or_hold_applied": {
+          "const": true
+        },
+        "rationale": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "field_path",
+        "missing_evidence_behavior",
+        "no_op_or_hold_applied",
+        "rationale"
+      ],
+      "type": "object"
+    },
+    "missing_evidence_behavior": {
+      "enum": [
+        "no_op",
+        "hold",
+        "reject_candidate",
+        "preserve_status_quo",
+        "require_challenge_packet"
+      ],
+      "type": "string"
+    },
+    "provenance": {
+      "enum": [
+        "governance_documented",
+        "source_code",
+        "config_derived",
+        "artifact_hash",
+        "model_manifest",
+        "replay_derived",
+        "test_report",
+        "operator_signed",
+        "chain_derived",
+        "collector_observed",
+        "provider_manifest"
+      ],
+      "type": "string"
+    },
+    "redaction": {
+      "additionalProperties": false,
+      "properties": {
+        "redaction_passed": {
+          "const": true
+        },
+        "secret_scan_passed": {
+          "const": true
+        },
+        "hidden_evidence_absent": {
+          "const": true
+        },
+        "prohibited_fields_absent": {
+          "const": true
+        },
+        "raw_secret_material_retained": {
+          "const": false
+        },
+        "public_packet_only": {
+          "const": true
+        }
+      },
+      "required": [
+        "redaction_passed",
+        "secret_scan_passed",
+        "hidden_evidence_absent",
+        "prohibited_fields_absent",
+        "raw_secret_material_retained",
+        "public_packet_only"
+      ],
+      "type": "object"
+    },
+    "request_ref": {
+      "additionalProperties": false,
+      "properties": {
+        "request_id": {
+          "$ref": "#/$defs/id"
+        },
+        "request_path": {
+          "pattern": "^docs/governance/agent/fixtures/verifiable_constitution/[a-z0-9_]+constitutional_evidence_request\\.json$",
+          "type": "string"
+        },
+        "request_file_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "request_canonical_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "request_schema_path": {
+          "const": "docs/governance/agent/constitutional_evidence_request_schema.json",
+          "type": "string"
+        },
+        "request_schema_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        }
+      },
+      "required": [
+        "request_id",
+        "request_path",
+        "request_file_sha3_384",
+        "request_canonical_hash",
+        "request_schema_path",
+        "request_schema_sha3_384"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "enum": [
+        "model_governance",
+        "validator_governance",
+        "cobalt_governance",
+        "privacy",
+        "post_quantum_authorization",
+        "monetary_policy",
+        "storage_history",
+        "rpc_edge_policy",
+        "operator_security",
+        "release_authority"
+      ],
+      "type": "string"
+    },
+    "sha3_384": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "source_ref": {
+      "additionalProperties": false,
+      "properties": {
+        "ref_id": {
+          "$ref": "#/$defs/id"
+        },
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        }
+      },
+      "required": [
+        "ref_id",
+        "path",
+        "sha3_384",
+        "provenance"
+      ],
+      "type": "object"
+    }
+  }
+}

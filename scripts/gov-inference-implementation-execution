@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+WORK_ITEM="${WORK_ITEM:-docs/governance/agent/implementation_work_item_dga_200.json}"
+REPORT="${REPORT:-reports/gov-inference-implementation-execution.json}"
+
+require_command() {
+  local command="$1"
+  if ! command -v "$command" >/dev/null 2>&1; then
+    echo "missing required command: $command" >&2
+    exit 1
+  fi
+}
+
+require_command cargo
+require_command mkdir
+require_command rm
+
+cargo build -p postfiat-node >/dev/null
+
+mkdir -p "$(dirname "$REPORT")"
+rm -f "$REPORT"
+
+target/debug/postfiat-node governance-agent-implementation-execution \
+  --work-item "$WORK_ITEM" \
+  --output "$REPORT" \
+  --overwrite

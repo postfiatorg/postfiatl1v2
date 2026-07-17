@@ -1,0 +1,341 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-validator-evidence-qwen-public-summary-projection-v1.json",
+  "title": "PostFiat Validator Evidence Qwen Public Summary Projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "projection_id",
+    "mode",
+    "source_authorization_hash",
+    "operator_consent_receipt_hash",
+    "operator_consent_revocation_index_hash",
+    "operator_consent_publication_manifest_hash",
+    "packet_schema_hash",
+    "field_registry_hash",
+    "collection_window",
+    "prompt_boundary",
+    "projection_entries_order",
+    "projection_entries",
+    "summary",
+    "redaction",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-evidence-qwen-public-summary-projection-v1"
+    },
+    "projection_id": {
+      "$ref": "#/$defs/id"
+    },
+    "mode": {
+      "const": "design_fixture_only"
+    },
+    "source_authorization_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "operator_consent_receipt_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "operator_consent_revocation_index_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "operator_consent_publication_manifest_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "packet_schema_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "field_registry_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "collection_window": {
+      "$ref": "#/$defs/collection_window"
+    },
+    "prompt_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projection_target",
+        "publication_manifest_required",
+        "qwen_visible_public_summary",
+        "raw_values_included",
+        "qwen_raw_access",
+        "provider_spend_executed",
+        "live_model_request_executed"
+      ],
+      "properties": {
+        "projection_target": {
+          "const": "qwen_prompt_public_summary"
+        },
+        "publication_manifest_required": {
+          "const": true
+        },
+        "qwen_visible_public_summary": {
+          "const": true
+        },
+        "raw_values_included": {
+          "const": false
+        },
+        "qwen_raw_access": {
+          "const": false
+        },
+        "provider_spend_executed": {
+          "const": false
+        },
+        "live_model_request_executed": {
+          "const": false
+        }
+      }
+    },
+    "projection_entries_order": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/id"
+      }
+    },
+    "projection_entries": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9._:-]{2,127}$": {
+          "$ref": "#/$defs/projection_entry"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projection_entry_count",
+        "source_count",
+        "operator_opt_in_entry_count",
+        "hash_only_entry_count"
+      ],
+      "properties": {
+        "projection_entry_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "source_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "operator_opt_in_entry_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "hash_only_entry_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_values_retained",
+        "private_fields_removed",
+        "secret_scan_required",
+        "public_artifact_safe"
+      ],
+      "properties": {
+        "raw_values_retained": {
+          "const": false
+        },
+        "private_fields_removed": {
+          "const": true
+        },
+        "secret_scan_required": {
+          "const": true
+        },
+        "public_artifact_safe": {
+          "const": true
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_authorization_bound",
+        "operator_consent_receipt_hash_bound",
+        "operator_consent_revocation_index_hash_bound",
+        "operator_consent_publication_manifest_hash_bound",
+        "packet_schema_hash_bound",
+        "field_registry_hash_bound",
+        "collection_window_bound",
+        "publication_manifest_entries_bound",
+        "field_paths_registered",
+        "raw_values_included",
+        "qwen_raw_access",
+        "provider_spend_executed",
+        "live_model_request_executed",
+        "live_registry_mutation",
+        "authority_transfer"
+      ],
+      "properties": {
+        "source_authorization_bound": {
+          "const": true
+        },
+        "operator_consent_receipt_hash_bound": {
+          "const": true
+        },
+        "operator_consent_revocation_index_hash_bound": {
+          "const": true
+        },
+        "operator_consent_publication_manifest_hash_bound": {
+          "const": true
+        },
+        "packet_schema_hash_bound": {
+          "const": true
+        },
+        "field_registry_hash_bound": {
+          "const": true
+        },
+        "collection_window_bound": {
+          "const": true
+        },
+        "publication_manifest_entries_bound": {
+          "const": true
+        },
+        "field_paths_registered": {
+          "const": true
+        },
+        "raw_values_included": {
+          "const": false
+        },
+        "qwen_raw_access": {
+          "const": false
+        },
+        "provider_spend_executed": {
+          "const": false
+        },
+        "live_model_request_executed": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "collection_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_height",
+        "to_height",
+        "from_time",
+        "to_time"
+      ],
+      "properties": {
+        "from_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "from_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to_time": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    },
+    "projection_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entry_id",
+        "publication_entry_id",
+        "source_id",
+        "field_path",
+        "consent_basis",
+        "visibility",
+        "summary_value_mode",
+        "prompt_value_mode",
+        "summary_hash",
+        "qwen_visible",
+        "raw_value_included",
+        "live_value_fetch_authorized"
+      ],
+      "properties": {
+        "entry_id": {
+          "$ref": "#/$defs/id"
+        },
+        "publication_entry_id": {
+          "$ref": "#/$defs/id"
+        },
+        "source_id": {
+          "$ref": "#/$defs/id"
+        },
+        "field_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "consent_basis": {
+          "enum": [
+            "operator_manifest_signed",
+            "operator_opt_in_required"
+          ],
+          "type": "string"
+        },
+        "visibility": {
+          "enum": [
+            "operator_approved_public_summary",
+            "collector_observed_public_summary"
+          ],
+          "type": "string"
+        },
+        "summary_value_mode": {
+          "const": "public_summary_or_hash_only"
+        },
+        "prompt_value_mode": {
+          "enum": [
+            "hash_only",
+            "status_summary",
+            "boolean_summary",
+            "bucketed_numeric_summary"
+          ],
+          "type": "string"
+        },
+        "summary_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "qwen_visible": {
+          "const": true
+        },
+        "raw_value_included": {
+          "const": false
+        },
+        "live_value_fetch_authorized": {
+          "const": false
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,138 @@
+{
+  "schema": "postfiat-validator-evidence-collector-run-manifest-v1",
+  "manifest_id": "validator-evidence-collector-run-2026-05-23-example",
+  "collector": {
+    "name": "postfiat-validator-evidence-collector",
+    "version": "0.1.0",
+    "config_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "collection_window": {
+    "from_height": 1000,
+    "to_height": 2000,
+    "from_time": "2026-05-23T00:00:00Z",
+    "to_time": "2026-05-23T06:00:00Z"
+  },
+  "packet_path": "docs/governance/agent/fixtures/validator_evidence/valid_packet.json",
+  "validator_evidence_packet_root": "7f146e261443b04f443764468e94343f81a1dd87ec30a122b267b3d2050d43321ea6b122cb2b19efbe57b1728a6e4cea",
+  "packet_schema_path": "docs/governance/agent/validator_evidence_packet_schema.json",
+  "packet_schema_hash": "92544968ea283754c5cd3cfba85194afff80f9366f07063b5cd228ea58a6f9efbeb74ad416f9f118595f8c6719d4f0c3",
+  "field_registry_path": "docs/governance/validator-evidence-field-registry.md",
+  "field_registry_hash": "a4d0ad75fcf706432e2d44bfd75486139a69116249ffb47bbc786fcb67ab939b25f99834d5cb5aa7bb93cfed8901200f",
+  "source_roots": {
+    "registry_snapshot_root": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "operator_manifest_root": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "url_observation_root": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "network_observation_root": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+    "chain_performance_root": "222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
+    "cobalt_history_root": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+    "governance_lifecycle_root": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+    "evidence_quality_root": "555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555",
+    "raw_observation_root": "666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666"
+  },
+  "collection_inputs": [
+    {
+      "kind": "registry_snapshot",
+      "source_root": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "provenance": [
+        "registry_derived",
+        "chain_derived"
+      ],
+      "freshness": "epoch_bound",
+      "required": true
+    },
+    {
+      "kind": "operator_manifest_set",
+      "source_root": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "provenance": [
+        "operator_signed"
+      ],
+      "freshness": "recent_30d",
+      "required": false
+    },
+    {
+      "kind": "url_domain_observation",
+      "source_root": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "provenance": [
+        "collector_observed",
+        "operator_signed"
+      ],
+      "freshness": "recent_24h",
+      "required": false
+    },
+    {
+      "kind": "network_performance_observation",
+      "source_root": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+      "provenance": [
+        "network_observed"
+      ],
+      "freshness": "recent_7d",
+      "required": false
+    },
+    {
+      "kind": "chain_performance_history",
+      "source_root": "222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
+      "provenance": [
+        "chain_derived"
+      ],
+      "freshness": "recent_7d",
+      "required": false
+    },
+    {
+      "kind": "cobalt_governance_history",
+      "source_root": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+      "provenance": [
+        "chain_derived"
+      ],
+      "freshness": "epoch_bound",
+      "required": true
+    },
+    {
+      "kind": "governance_lifecycle_history",
+      "source_root": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+      "provenance": [
+        "chain_derived"
+      ],
+      "freshness": "historical",
+      "required": false
+    },
+    {
+      "kind": "topology_claims",
+      "source_root": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "provenance": [
+        "operator_signed",
+        "self_asserted"
+      ],
+      "freshness": "recent_30d",
+      "required": false
+    },
+    {
+      "kind": "evidence_quality_summary",
+      "source_root": "555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555",
+      "provenance": [
+        "collector_observed"
+      ],
+      "freshness": "same_packet",
+      "required": true
+    }
+  ],
+  "checks": {
+    "packet_schema_valid": true,
+    "packet_root_verified": true,
+    "redaction_checked": true,
+    "private_fields_removed": true,
+    "secret_scan_passed": true,
+    "policy_network_access_allowed": false,
+    "policy_model_access_allowed": false,
+    "policy_filesystem_mutation_allowed": false,
+    "direct_state_mutation_allowed": false,
+    "live_registry_mutation_allowed": false
+  },
+  "artifacts": {
+    "packet": {
+      "path": "docs/governance/agent/fixtures/validator_evidence/valid_packet.json",
+      "canonical_sha384": "7f146e261443b04f443764468e94343f81a1dd87ec30a122b267b3d2050d43321ea6b122cb2b19efbe57b1728a6e4cea",
+      "public": true
+    },
+    "raw_observation_root": "666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666"
+  }
+}

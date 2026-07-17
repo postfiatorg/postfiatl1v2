@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VALIDATORS="${VALIDATORS:-4}"
+BASE_DIR="${BASE_DIR:-devnet/local}"
+LOG_DIR="${LOG_DIR:-devnet/logs}"
+AMENDMENT_DIR="${AMENDMENT_DIR:-devnet/local/amendments}"
+NEW_VALIDATOR_COUNT="${NEW_VALIDATOR_COUNT:-$VALIDATORS}"
+CRYPTO_POLICY_VERSION="${CRYPTO_POLICY_VERSION:-2}"
+BRIDGE_WITNESS_EPOCH="${BRIDGE_WITNESS_EPOCH:-2}"
+
+cargo build -p postfiat-node >/dev/null
+mkdir -p "$AMENDMENT_DIR" "$LOG_DIR"
+
+validators=""
+for ((i = 0; i < VALIDATORS; i++)); do
+  if [ "$i" -gt 0 ]; then
+    validators="$validators,"
+  fi
+  validators="${validators}validator-$i"
+done
+
+amendment_file="$AMENDMENT_DIR/validator-set-$NEW_VALIDATOR_COUNT.json"
+batch_file="$AMENDMENT_DIR/validator-set-$NEW_VALIDATOR_COUNT.batch.json"
+
+apply_governance_batch() {
+  local batch_file="$1"
+  local label="$2"
+  for ((i = 0; i < VALIDATORS; i++)); do
+    target/debug/postfiat-node apply-governance-batch \
+      --data-dir "$BASE_DIR/node$i" \
+      --batch-file "$batch_file" >"$LOG_DIR/validator-$i.apply-$label-governance-batch.log"
+  done
+}
+
+target/debug/postfiat-node ratify-validator-set \
+  --data-dir "$BASE_DIR/node0" \
+  --validators "$validators" \
+  --support "$validators" \
+  --validator-count "$NEW_VALIDATOR_COUNT" \
+  --amendment-file "$amendment_file" >"$LOG_DIR/cobalt-ratify-validator-set.log"
+
+target/debug/postfiat-node governance-batch \
+  --data-dir "$BASE_DIR/node0" \
+  --amendment-file "$amendment_file" \
+  --batch-file "$batch_file" >"$LOG_DIR/cobalt-governance-batch.log"
+
+apply_governance_batch "$batch_file" "validator-set"
+
+crypto_policy_file="$AMENDMENT_DIR/crypto-policy-$CRYPTO_POLICY_VERSION.json"
+crypto_policy_batch_file="$AMENDMENT_DIR/crypto-policy-$CRYPTO_POLICY_VERSION.batch.json"
+target/debug/postfiat-node ratify-crypto-policy \
+  --data-dir "$BASE_DIR/node0" \
+  --validators "$validators" \
+  --support "$validators" \
+  --version "$CRYPTO_POLICY_VERSION" \
+  --amendment-file "$crypto_policy_file" >"$LOG_DIR/cobalt-ratify-crypto-policy.log"
+
+target/debug/postfiat-node governance-batch \
+  --data-dir "$BASE_DIR/node0" \
+  --amendment-file "$crypto_policy_file" \
+  --batch-file "$crypto_policy_batch_file" >"$LOG_DIR/cobalt-crypto-policy-governance-batch.log"
+
+apply_governance_batch "$crypto_policy_batch_file" "crypto-policy"
+
+bridge_witness_file="$AMENDMENT_DIR/bridge-witness-epoch-$BRIDGE_WITNESS_EPOCH.json"
+bridge_witness_batch_file="$AMENDMENT_DIR/bridge-witness-epoch-$BRIDGE_WITNESS_EPOCH.batch.json"
+target/debug/postfiat-node ratify-bridge-witness-epoch \
+  --data-dir "$BASE_DIR/node0" \
+  --validators "$validators" \
+  --support "$validators" \
+  --witness-epoch "$BRIDGE_WITNESS_EPOCH" \
+  --amendment-file "$bridge_witness_file" >"$LOG_DIR/cobalt-ratify-bridge-witness-epoch.log"
+
+target/debug/postfiat-node governance-batch \
+  --data-dir "$BASE_DIR/node0" \
+  --amendment-file "$bridge_witness_file" \
+  --batch-file "$bridge_witness_batch_file" >"$LOG_DIR/cobalt-bridge-witness-governance-batch.log"
+
+apply_governance_batch "$bridge_witness_batch_file" "bridge-witness"
+
+scripts/devnet-status

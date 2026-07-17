@@ -1,0 +1,102 @@
+{
+  "schema": "postfiat-constitutional-foundation-override-simulation-cases-v1",
+  "fixture_id": "vc-033-foundation-override-simulation-cases",
+  "cases": [
+    {
+      "case_id": "publish-nonconforming-validator-list",
+      "description": "A foundation publisher attempts to publish a validator-list effect that does not match the accepted decision and Cobalt dry-run gate.",
+      "attempt_kind": "silent_publication",
+      "mutations": [
+        {
+          "operation": "replace",
+          "field": "decision_output_hash",
+          "value": "666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666"
+        },
+        {
+          "operation": "set",
+          "field": "registry_mutation_count",
+          "value": 1
+        },
+        {
+          "operation": "set",
+          "field": "live_effect",
+          "value": true
+        }
+      ],
+      "expected_disposition": "detectable_mismatch",
+      "expected_mismatches": [
+        "decision_output_hash_mismatch",
+        "registry_mutation_count_nonzero",
+        "live_effect_open"
+      ]
+    },
+    {
+      "case_id": "publish-parameter-change-as-current-process",
+      "description": "A foundation publisher attempts to treat a changed prompt and model profile as if they were the current accepted process.",
+      "attempt_kind": "silent_publication",
+      "mutations": [
+        {
+          "operation": "replace",
+          "field": "prompt_hash_root",
+          "value": "777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777"
+        },
+        {
+          "operation": "replace",
+          "field": "model_profile_hash",
+          "value": "888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888"
+        }
+      ],
+      "expected_disposition": "detectable_mismatch",
+      "expected_mismatches": [
+        "prompt_hash_mismatch",
+        "model_profile_hash_mismatch"
+      ]
+    },
+    {
+      "case_id": "publish-implementation-decision-bypass",
+      "description": "A foundation publisher attempts to implement a governance decision without the accepted conformance binding and Cobalt/release gate.",
+      "attempt_kind": "silent_publication",
+      "mutations": [
+        {
+          "operation": "delete",
+          "field": "selector_or_conformance_hash"
+        },
+        {
+          "operation": "delete",
+          "field": "cobalt_release_gate_root"
+        }
+      ],
+      "expected_disposition": "detectable_mismatch",
+      "expected_mismatches": [
+        "missing_selector_or_conformance_hash",
+        "missing_cobalt_release_gate"
+      ]
+    },
+    {
+      "case_id": "submit-governed-parameter-amendment",
+      "description": "A foundation actor proposes a parameter change as a new governed activation/amendment event instead of pretending it is the accepted process.",
+      "attempt_kind": "governed_amendment_event",
+      "required_event_markers": [
+        "new_activation_packet_required",
+        "cobalt_or_release_gate_required",
+        "silent_override_detector_required",
+        "operator_review_required"
+      ],
+      "expected_disposition": "new_amendment_event",
+      "expected_mismatches": []
+    },
+    {
+      "case_id": "submit-challenge-against-bad-decision",
+      "description": "A foundation actor or reviewer challenges a replay-converged but unsupported decision through the explicit challenge route.",
+      "attempt_kind": "challenge_event",
+      "required_event_markers": [
+        "challenge_packet_required",
+        "hold_supersede_or_rollback_required",
+        "bad_decision_challenge_drill_required",
+        "no_live_effect_until_disposition"
+      ],
+      "expected_disposition": "challenge_event",
+      "expected_mismatches": []
+    }
+  ]
+}

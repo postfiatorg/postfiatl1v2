@@ -1,0 +1,934 @@
+#!/usr/bin/env python3
+"""Emit a cron-friendly PostFiat RPC monitor snapshot."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import stat
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+
+ROOT = Path(__file__).resolve().parents[1]
+NONLOCAL_IPV4_RE = re.compile(
+    r"(?<![0-9.])(?!127\.0\.0\.1\b)(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9.])"
+)
+
+
+def utc_stamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def utc_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def rel(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def redact_network(text: str) -> str:
+    return NONLOCAL_IPV4_RE.sub("<ip>", text)
+
+
+def run_local(args: list[str]) -> subprocess.CompletedProcess[str]:
+    completed = subprocess.run(
+        args,
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"command failed ({' '.join(args)}):\n{completed.stdout}\n{completed.stderr}"
+        )
+    return completed
+
+
+def run_account_tx_history(args: argparse.Namespace) -> dict[str, Any]:
+    report_path = args.log_dir / "account-tx-history.json"
+    stdout_path = args.log_dir / "account-tx-history.stdout.log"
+    stderr_path = args.log_dir / "account-tx-history.stderr.log"
+    command = [
+        "scripts/postfiat-rpc-account-tx",
+        "--address",
+        args.account_address,
+        "--from-height",
+        str(args.account_tx_from_height),
+        "--window-size",
+        str(args.account_tx_history_window_size),
+        "--limit-per-window",
+        str(args.account_tx_history_limit_per_window),
+        "--max-windows",
+        str(args.account_tx_history_max_windows),
+        "--max-output-rows",
+        str(args.account_tx_history_max_output_rows),
+        "--timeout-seconds",
+        str(args.timeout_seconds),
+        "--require-convergence",
+        "--output",
+        str(report_path),
+    ]
+    if args.account_tx_to_height is not None:
+        command.extend(["--to-height", str(args.account_tx_to_height)])
+    if args.account_tx_history_require_row:
+        command.append("--require-row")
+    for endpoint in args.endpoint or []:
+        command.extend(["--endpoint", endpoint])
+    for endpoint_file in args.endpoint_file or []:
+        command.extend(["--endpoint-file", endpoint_file])
+
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    stdout_path.write_text(redact_network(completed.stdout), encoding="utf-8")
+    stderr_path.write_text(redact_network(completed.stderr), encoding="utf-8")
+    summary = account_tx_history_summary(report_path)
+    summary.update(
+        {
+            "enabled": True,
+            "report": rel(report_path),
+            "returncode": completed.returncode,
+            "stdout_log": rel(stdout_path),
+            "stderr_log": rel(stderr_path),
+        }
+    )
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout).strip()
+        summary["error_excerpt"] = redact_network(
+            detail[-1200:] if detail else "command failed"
+        )
+    return summary
+
+
+def percentile(values: list[float], quantile: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return ordered[0]
+    position = quantile * (len(ordered) - 1)
+    lower = int(position)
+    upper = min(lower + 1, len(ordered) - 1)
+    weight = position - lower
+    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
+
+
+def latency_summary(values: list[float]) -> dict[str, Any]:
+    return {
+        "count": len(values),
+        "min_ms": min(values) if values else None,
+        "p50_ms": percentile(values, 0.50),
+        "p95_ms": percentile(values, 0.95),
+        "p99_ms": percentile(values, 0.99),
+        "max_ms": max(values) if values else None,
+    }
+
+
+def bft_quorum(n: int | None) -> int | None:
+    if n is None or n <= 0:
+        return None
+    return (2 * n) // 3 + 1
+
+
+def load_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def write_alert_event(report: dict[str, Any], spool_dir: Path) -> Path:
+    """Durably spool one private, idempotent alert envelope for external delivery."""
+    checks = report.get("checks", {})
+    if not isinstance(checks, dict):
+        raise ValueError("monitor report checks must be an object")
+    severity = checks.get("status")
+    if severity not in {"warning", "critical"}:
+        raise ValueError("only warning or critical monitor reports may emit alerts")
+    warnings = checks.get("warnings", [])
+    criticals = checks.get("criticals", [])
+    if not isinstance(warnings, list) or not all(isinstance(item, str) for item in warnings):
+        raise ValueError("monitor warning list is invalid")
+    if not isinstance(criticals, list) or not all(isinstance(item, str) for item in criticals):
+        raise ValueError("monitor critical list is invalid")
+    generated_utc = report.get("generated_utc")
+    if not isinstance(generated_utc, str) or not generated_utc:
+        raise ValueError("monitor generated_utc is required for alert emission")
+
+    identity = {
+        "generated_utc": generated_utc,
+        "severity": severity,
+        "warnings": warnings,
+        "criticals": criticals,
+    }
+    event_id = hashlib.sha256(
+        json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    event = {
+        "schema": "postfiat.monitor-alert.v1",
+        "event_id": event_id,
+        **identity,
+        "source_schema": report.get("schema"),
+        "incident": incident_policy(severity),
+    }
+    encoded = (json.dumps(event, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+    if spool_dir.exists() or spool_dir.is_symlink():
+        spool_metadata = spool_dir.lstat()
+        if not stat.S_ISDIR(spool_metadata.st_mode) or spool_metadata.st_uid != os.geteuid():
+            raise RuntimeError("alert spool must be an owned private directory, not a symlink")
+    else:
+        spool_dir.mkdir(parents=True, mode=0o700)
+    os.chmod(spool_dir, 0o700)
+    target = spool_dir / f"{event_id}.json"
+    if target.exists():
+        metadata = target.lstat()
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_mode & 0o077:
+            raise RuntimeError("existing alert event is not a private regular file")
+        if target.read_bytes() != encoded:
+            raise RuntimeError("existing alert event does not match its content identity")
+        return target
+
+    temporary = spool_dir / f".{event_id}.{os.getpid()}.tmp"
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+        directory_fd = os.open(spool_dir, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+    return target
+
+
+def incident_policy(severity: str) -> dict[str, Any]:
+    if severity == "critical":
+        return {
+            "severity": "SEV-1",
+            "acknowledge_within_minutes": 5,
+            "incident_commander_within_minutes": 10,
+            "public_update_within_minutes": 30,
+            "escalation": ["primary_on_call", "backup_on_call", "incident_commander"],
+            "runbook": "docs/runbooks/incident-response.md",
+        }
+    if severity == "warning":
+        return {
+            "severity": "SEV-2",
+            "acknowledge_within_minutes": 15,
+            "incident_commander_within_minutes": 30,
+            "public_update_within_minutes": 120,
+            "escalation": ["primary_on_call", "backup_on_call"],
+            "runbook": "docs/runbooks/incident-response.md",
+        }
+    raise ValueError("incident policy requires warning or critical severity")
+
+
+def account_tx_history_summary(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        return {
+            "passed": False,
+            "report_exists": False,
+            "endpoint_count": None,
+            "height_min": None,
+            "height_max": None,
+            "checks": {},
+            "first_endpoint": {},
+            "endpoints": [],
+        }
+    try:
+        data = load_json(path)
+    except Exception as error:
+        return {
+            "passed": False,
+            "report_exists": True,
+            "parse_error": redact_network(str(error)),
+            "endpoint_count": None,
+            "height_min": None,
+            "height_max": None,
+            "checks": {},
+            "first_endpoint": {},
+            "endpoints": [],
+        }
+
+    endpoint_summaries = []
+    for endpoint in data.get("endpoints", []):
+        if not isinstance(endpoint, dict):
+            continue
+        checks = endpoint.get("checks", {})
+        if not isinstance(checks, dict):
+            checks = {}
+        status = endpoint.get("status", {})
+        if not isinstance(status, dict):
+            status = {}
+        endpoint_summaries.append(
+            {
+                "label": endpoint.get("label"),
+                "ok": endpoint.get("ok") is True,
+                "height": status.get("block_height"),
+                "row_count": endpoint.get("row_count"),
+                "window_count": endpoint.get("window_count"),
+                "max_windows_exceeded": endpoint.get("max_windows_exceeded"),
+                "truncated_window_count": endpoint.get("truncated_window_count"),
+                "all_index_used": endpoint.get("all_index_used"),
+                "total_archive_lookup_count": endpoint.get("total_archive_lookup_count"),
+                "total_scanned_block_count": endpoint.get("total_scanned_block_count"),
+                "required_row_present": checks.get("required_row_present"),
+            }
+        )
+    first_endpoint = endpoint_summaries[0] if endpoint_summaries else {}
+    return {
+        "passed": data.get("passed") is True,
+        "report_exists": True,
+        "endpoint_count": data.get("endpoint_count"),
+        "height_min": data.get("height_min"),
+        "height_max": data.get("height_max"),
+        "checks": data.get("checks", {}),
+        "first_endpoint": first_endpoint,
+        "endpoints": endpoint_summaries,
+    }
+
+
+def method_result(result: dict[str, Any]) -> Any:
+    response_file = result.get("response_file")
+    if not response_file:
+        return None
+    path = ROOT / response_file
+    if not path.is_file():
+        return None
+    response = load_json(path)
+    return response.get("result")
+
+
+def method_response(result: dict[str, Any]) -> dict[str, Any]:
+    payload = method_result(result)
+    return payload if isinstance(payload, dict) else {}
+
+
+def method_by_name(endpoint: dict[str, Any], method: str) -> dict[str, Any]:
+    for result in endpoint.get("methods", []):
+        if result.get("method") == method:
+            return result
+    return {}
+
+
+def endpoint_monitor(endpoint: dict[str, Any]) -> dict[str, Any]:
+    summary = endpoint.get("summary", {})
+    methods = endpoint.get("methods", [])
+    latencies = [
+        result.get("latency_ms")
+        for result in methods
+        if isinstance(result.get("latency_ms"), (int, float))
+    ]
+    metrics = method_response(method_by_name(endpoint, "metrics"))
+    receipts_result = method_result(method_by_name(endpoint, "receipts"))
+    account = method_response(method_by_name(endpoint, "account"))
+    account_tx = method_response(method_by_name(endpoint, "account_tx"))
+    account_tx_index = method_response(method_by_name(endpoint, "account_tx_index_status"))
+    mempool = method_response(method_by_name(endpoint, "mempool_status"))
+    orchard = method_response(method_by_name(endpoint, "orchard_pool_report"))
+    ordering_metrics = (
+        metrics.get("ordering", {}) if isinstance(metrics.get("ordering"), dict) else {}
+    )
+    execution_metrics = (
+        metrics.get("execution", {})
+        if isinstance(metrics.get("execution"), dict)
+        else {}
+    )
+    storage_metrics = (
+        metrics.get("storage", {}) if isinstance(metrics.get("storage"), dict) else {}
+    )
+    mempool_metrics = (
+        metrics.get("mempool", {}) if isinstance(metrics.get("mempool"), dict) else {}
+    )
+    asset_metrics = metrics.get("assets", {}) if isinstance(metrics.get("assets"), dict) else {}
+    consensus_metrics = (
+        metrics.get("consensus", {})
+        if isinstance(metrics.get("consensus"), dict)
+        else {}
+    )
+    proof_metrics = metrics.get("proofs", {}) if isinstance(metrics.get("proofs"), dict) else {}
+    rpc_metrics = metrics.get("rpc", {}) if isinstance(metrics.get("rpc"), dict) else {}
+    orchard_counters = (
+        orchard.get("counters", {}) if isinstance(orchard.get("counters"), dict) else {}
+    )
+    aggregate_index_usable = account_tx_index.get("index_usable") is True
+    disk_index_usable = account_tx_index.get("disk_index_usable") is True
+    effective_index_usable = aggregate_index_usable or disk_index_usable
+    recent_receipts = receipts_result if isinstance(receipts_result, list) else []
+    recent_accepted_receipts = sum(
+        1
+        for receipt in recent_receipts
+        if isinstance(receipt, dict) and receipt.get("accepted") is True
+    )
+    recent_rejected_receipts = sum(
+        1
+        for receipt in recent_receipts
+        if isinstance(receipt, dict) and receipt.get("accepted") is False
+    )
+    recent_unknown_receipts = len(recent_receipts) - (
+        recent_accepted_receipts + recent_rejected_receipts
+    )
+    return {
+        "label": summary.get("label"),
+        "ok": summary.get("ok") is True,
+        "node_id": summary.get("node_id"),
+        "node_status": summary.get("node_status"),
+        "chain_id": summary.get("chain_id"),
+        "block_height": summary.get("block_height"),
+        "block_tip_hash": summary.get("block_tip_hash"),
+        "registry_root": summary.get("registry_root"),
+        "validator_count": summary.get("validator_count"),
+        "write_posture": summary.get("write_posture"),
+        "observed_unix_ms": metrics.get("observed_unix_ms"),
+        "consensus": {
+            "block_certificate_count": consensus_metrics.get("block_certificate_count"),
+            "block_certificate_vote_count": consensus_metrics.get(
+                "block_certificate_vote_count"
+            ),
+            "recent_certificate_window_blocks": consensus_metrics.get(
+                "recent_certificate_window_blocks"
+            ),
+            "recent_certificate_vote_count": consensus_metrics.get(
+                "recent_certificate_vote_count"
+            ),
+            "local_recent_certificate_vote_count": consensus_metrics.get(
+                "local_recent_certificate_vote_count"
+            ),
+            "local_recent_certificate_participation_ppm": consensus_metrics.get(
+                "local_recent_certificate_participation_ppm"
+            ),
+        },
+        "rpc_latency": latency_summary(latencies),
+        "proofs": {
+            "last_verify_micros": proof_metrics.get("last_verify_micros"),
+            "last_observed_unix_ms": proof_metrics.get("last_observed_unix_ms"),
+        },
+        "rpc": {
+            "active_connections": rpc_metrics.get("active_connections"),
+            "active_connection_limit": rpc_metrics.get("active_connection_limit"),
+            "active_connection_utilization_ppm": rpc_metrics.get(
+                "active_connection_utilization_ppm"
+            ),
+            "peak_active_connections": rpc_metrics.get("peak_active_connections"),
+            "accepted_connection_count": rpc_metrics.get("accepted_connection_count"),
+        },
+        "mempool": {
+            "pending_count": mempool_metrics.get(
+                "pending",
+                len(mempool.get("pending", []))
+                if isinstance(mempool.get("pending"), list)
+                else summary.get("mempool_pending"),
+            ),
+        },
+        "recent_receipts": {
+            "sample_count": len(recent_receipts),
+            "accepted_count": recent_accepted_receipts,
+            "rejected_count": recent_rejected_receipts,
+            "unknown_count": recent_unknown_receipts,
+        },
+        "assets": {
+            "asset_count": asset_metrics.get("asset_count"),
+            "trustline_count": asset_metrics.get("trustline_count"),
+            "holder_count": asset_metrics.get("holder_count"),
+            "total_outstanding_supply": asset_metrics.get("total_outstanding_supply"),
+            "open_issued_escrow_count": asset_metrics.get("open_issued_escrow_count"),
+            "open_issued_escrow_amount": asset_metrics.get("open_issued_escrow_amount"),
+            "open_issued_offer_count": asset_metrics.get("open_issued_offer_count"),
+            "open_issued_offer_amount": asset_metrics.get("open_issued_offer_amount"),
+            "authorization_required_asset_count": asset_metrics.get(
+                "authorization_required_asset_count"
+            ),
+            "freeze_enabled_asset_count": asset_metrics.get("freeze_enabled_asset_count"),
+            "clawback_enabled_asset_count": asset_metrics.get("clawback_enabled_asset_count"),
+            "unauthorized_trustline_count": asset_metrics.get("unauthorized_trustline_count"),
+            "frozen_trustline_count": asset_metrics.get("frozen_trustline_count"),
+        },
+        "account_canary": {
+            "enabled": bool(account or account_tx),
+            "address": account.get("address") or account_tx.get("address"),
+            "balance": account.get("balance"),
+            "sequence": account.get("sequence"),
+            "account_tx_row_count": account_tx.get("row_count"),
+            "account_tx_index_used": account_tx.get("index_used"),
+            "account_tx_scan_limit": account_tx.get("scan_limit"),
+            "account_tx_scanned_block_count": account_tx.get("scanned_block_count"),
+            "account_tx_truncated": account_tx.get("truncated"),
+        },
+        "account_tx_index": {
+            "present": account_tx_index.get("index_present"),
+            "usable": account_tx_index.get("index_usable"),
+            "reason": account_tx_index.get("reason"),
+            "index_path": account_tx_index.get("index_path"),
+            "disk_present": account_tx_index.get("disk_index_present"),
+            "disk_usable": account_tx_index.get("disk_index_usable"),
+            "disk_reason": account_tx_index.get("disk_index_reason"),
+            "disk_index_path": account_tx_index.get("disk_index_path"),
+            "effective_usable": effective_index_usable,
+            "indexed_from_height": account_tx_index.get("indexed_from_height"),
+            "indexed_to_height": account_tx_index.get("indexed_to_height"),
+            "indexed_block_count": account_tx_index.get("indexed_block_count"),
+            "indexed_row_count": account_tx_index.get("indexed_row_count"),
+            "account_count": account_tx_index.get("account_count"),
+            "disk_account_shard_count": account_tx_index.get("disk_account_shard_count"),
+        },
+        "storage": {
+            "block_height": ordering_metrics.get("block_height"),
+            "ordered_batch_count": ordering_metrics.get("ordered_batch_count"),
+            "archived_batch_count": ordering_metrics.get("archived_batch_count"),
+            "receipt_count": execution_metrics.get("receipt_count"),
+            "replicated_state_file_count": storage_metrics.get(
+                "replicated_state_file_count"
+            ),
+            "filesystem_total_bytes": storage_metrics.get("filesystem_total_bytes"),
+            "filesystem_available_bytes": storage_metrics.get(
+                "filesystem_available_bytes"
+            ),
+            "filesystem_available_ppm": storage_metrics.get(
+                "filesystem_available_ppm"
+            ),
+        },
+        "orchard_pool": {
+            "ok": summary.get("orchard_pool", {}).get("ok"),
+            "pool_id": summary.get("orchard_pool", {}).get("pool_id"),
+            "output_count": orchard_counters.get("output_count"),
+            "nullifier_count": orchard_counters.get("nullifier_count"),
+            "retained_root_count": orchard_counters.get("retained_root_count"),
+            "direct_deposit_total": orchard_counters.get("direct_deposit_total"),
+            "withdraw_total": orchard_counters.get("withdraw_total"),
+            "fee_burn_total": orchard_counters.get("fee_burn_total"),
+        },
+    }
+
+
+def monitor_checks(
+    monitors: list[dict[str, Any]],
+    doctor: dict[str, Any],
+    account_tx_history: dict[str, Any],
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    heights = [
+        monitor.get("block_height")
+        for monitor in monitors
+        if isinstance(monitor.get("block_height"), int)
+    ]
+    online = sum(1 for monitor in monitors if monitor.get("ok") is True)
+    validator_count = next(
+        (
+            monitor.get("validator_count")
+            for monitor in monitors
+            if isinstance(monitor.get("validator_count"), int)
+        ),
+        None,
+    )
+    quorum = bft_quorum(validator_count)
+    endpoint_p95_latencies = []
+    for monitor in monitors:
+        p95 = monitor.get("rpc_latency", {}).get("p95_ms")
+        if isinstance(p95, (int, float)):
+            endpoint_p95_latencies.append(float(p95))
+    rpc_latency = {
+        "endpoint_count": len(endpoint_p95_latencies),
+        "endpoint_p95_ms": latency_summary(endpoint_p95_latencies),
+        "p95_max_ms": max(endpoint_p95_latencies) if endpoint_p95_latencies else None,
+    }
+    height_lag = (max(heights) - min(heights)) if heights else None
+    observed_clocks = [
+        monitor.get("observed_unix_ms")
+        for monitor in monitors
+        if isinstance(monitor.get("observed_unix_ms"), int)
+    ]
+    validator_clock_skew_ms = (
+        max(observed_clocks) - min(observed_clocks)
+        if len(observed_clocks) >= 2
+        else None
+    )
+    warnings = []
+    criticals = []
+    if doctor.get("doctor_ok") is not True:
+        criticals.append("rpc_doctor_failed")
+    if height_lag is None:
+        criticals.append("height_unavailable")
+    elif height_lag > args.critical_height_lag:
+        criticals.append("height_lag_critical")
+    elif height_lag > args.warn_height_lag:
+        warnings.append("height_lag_warn")
+    quorum_observable = (
+        quorum is not None
+        and validator_count is not None
+        and len(monitors) >= validator_count
+    )
+    if quorum_observable and online < quorum:
+        criticals.append("online_rpc_below_bft_quorum")
+    if rpc_latency.get("p95_max_ms") is not None and rpc_latency["p95_max_ms"] > args.warn_rpc_p95_ms:
+        warnings.append("rpc_latency_p95_warn")
+    if (
+        rpc_latency.get("p95_max_ms") is not None
+        and rpc_latency["p95_max_ms"] > args.critical_rpc_p95_ms
+    ):
+        warnings = [warning for warning in warnings if warning != "rpc_latency_p95_warn"]
+        criticals.append("rpc_latency_p95_critical")
+    rpc_active_ppm = [
+        monitor.get("rpc", {}).get("active_connection_utilization_ppm")
+        for monitor in monitors
+    ]
+    if any(not isinstance(value, int) for value in rpc_active_ppm):
+        criticals.append("rpc_saturation_unavailable")
+    elif any(value >= args.critical_rpc_active_connection_ppm for value in rpc_active_ppm):
+        criticals.append("rpc_active_connections_critical")
+    elif any(value >= args.warn_rpc_active_connection_ppm for value in rpc_active_ppm):
+        warnings.append("rpc_active_connections_warn")
+    pending_counts = [
+        monitor.get("mempool", {}).get("pending_count") for monitor in monitors
+    ]
+    if any(
+        isinstance(pending, int) and pending > args.critical_mempool_pending
+        for pending in pending_counts
+    ):
+        criticals.append("mempool_pending_critical")
+    elif any(
+        isinstance(pending, int) and pending > args.warn_mempool_pending
+        for pending in pending_counts
+    ):
+        warnings.append("mempool_pending_warn")
+    disk_available_ppm = [
+        monitor.get("storage", {}).get("filesystem_available_ppm")
+        for monitor in monitors
+    ]
+    if any(not isinstance(available, int) for available in disk_available_ppm):
+        criticals.append("disk_capacity_unavailable")
+    elif any(available <= args.critical_disk_available_ppm for available in disk_available_ppm):
+        criticals.append("disk_available_critical")
+    elif any(available <= args.warn_disk_available_ppm for available in disk_available_ppm):
+        warnings.append("disk_available_warn")
+    proof_samples = [
+        monitor.get("proofs", {}).get("last_verify_micros")
+        for monitor in monitors
+        if isinstance(monitor.get("proofs", {}).get("last_verify_micros"), int)
+        and monitor["proofs"]["last_verify_micros"] > 0
+    ]
+    if not proof_samples:
+        warnings.append("proof_latency_unavailable")
+    elif any(sample / 1_000.0 > args.critical_proof_verify_ms for sample in proof_samples):
+        criticals.append("proof_verify_latency_critical")
+    elif any(sample / 1_000.0 > args.warn_proof_verify_ms for sample in proof_samples):
+        warnings.append("proof_verify_latency_warn")
+    for monitor in monitors:
+        observed = monitor.get("observed_unix_ms")
+        proof_observed = monitor.get("proofs", {}).get("last_observed_unix_ms")
+        proof_micros = monitor.get("proofs", {}).get("last_verify_micros")
+        if (
+            isinstance(observed, int)
+            and isinstance(proof_observed, int)
+            and isinstance(proof_micros, int)
+            and proof_micros > 0
+            and observed >= proof_observed
+            and observed - proof_observed > args.critical_proof_metric_stale_ms
+        ):
+            criticals.append("proof_latency_metric_stale")
+            break
+    if any(
+        monitor.get("recent_receipts", {}).get("unknown_count", 0) > 0
+        for monitor in monitors
+    ):
+        criticals.append("recent_receipt_semantics_unknown")
+    if any(
+        monitor.get("recent_receipts", {}).get("rejected_count", 0)
+        > args.warn_recent_rejected_receipts
+        for monitor in monitors
+    ):
+        warnings.append("recent_rejected_receipts_warn")
+    if any(monitor.get("write_posture") != "read_only" for monitor in monitors):
+        warnings.append("write_capable_endpoint_observed")
+    if validator_clock_skew_ms is not None:
+        if validator_clock_skew_ms > args.critical_clock_skew_ms:
+            criticals.append("validator_clock_skew_critical")
+        elif validator_clock_skew_ms > args.warn_clock_skew_ms:
+            warnings.append("validator_clock_skew_warn")
+    if any(
+        isinstance(
+            monitor.get("consensus", {}).get("recent_certificate_window_blocks"), int
+        )
+        and monitor["consensus"]["recent_certificate_window_blocks"] > 0
+        and isinstance(
+            monitor["consensus"].get("local_recent_certificate_participation_ppm"), int
+        )
+        and monitor["consensus"]["local_recent_certificate_participation_ppm"]
+        < args.warn_certificate_participation_ppm
+        for monitor in monitors
+    ):
+        warnings.append("local_certificate_participation_warn")
+    if any(
+        monitor.get("account_tx_index", {}).get("effective_usable") is False
+        for monitor in monitors
+    ):
+        warnings.append("account_tx_index_unusable")
+    if any(monitor.get("account_tx_index", {}).get("disk_usable") is False for monitor in monitors):
+        warnings.append("account_tx_disk_index_unusable")
+    if any(
+        monitor.get("account_canary", {}).get("enabled") is True
+        and monitor.get("account_canary", {}).get("account_tx_index_used") is False
+        for monitor in monitors
+    ):
+        warnings.append("account_tx_canary_not_indexed")
+    if args.include_account_tx_history:
+        if account_tx_history.get("passed") is not True:
+            warnings.append("account_tx_history_failed")
+        endpoints = account_tx_history.get("endpoints", [])
+        if any(endpoint.get("all_index_used") is not True for endpoint in endpoints):
+            warnings.append("account_tx_history_not_indexed")
+        if any(
+            (endpoint.get("total_archive_lookup_count") or 0) > 0
+            for endpoint in endpoints
+        ):
+            warnings.append("account_tx_history_archive_lookup")
+        if any(
+            (endpoint.get("total_scanned_block_count") or 0) > 0
+            for endpoint in endpoints
+        ):
+            warnings.append("account_tx_history_retained_history_scan")
+        if args.account_tx_history_require_row and any(
+            endpoint.get("required_row_present") is not True for endpoint in endpoints
+        ):
+            warnings.append("account_tx_history_missing_required_row")
+    doctor_checks = doctor.get("checks", {})
+    if doctor_checks.get("chain_consistent") is not True:
+        criticals.append("chain_inconsistent")
+    if doctor_checks.get("registry_root_consistent") is not True:
+        criticals.append("registry_root_inconsistent")
+    return {
+        "endpoint_count": len(monitors),
+        "online_endpoint_count": online,
+        "validator_count": validator_count,
+        "bft_quorum": quorum,
+        "quorum_observable": quorum_observable,
+        "height_lag": height_lag,
+        "validator_clock_skew_ms": validator_clock_skew_ms,
+        "rpc_latency": rpc_latency,
+        "warnings": warnings,
+        "criticals": criticals,
+        "status": "critical" if criticals else ("warning" if warnings else "ok"),
+        "monitor_ok": not criticals,
+    }
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--endpoint", action="append", help="RPC endpoint as label=host:port")
+    parser.add_argument("--endpoint-file", action="append")
+    parser.add_argument("--warn-height-lag", type=int, default=0)
+    parser.add_argument("--critical-height-lag", type=int, default=1)
+    parser.add_argument("--warn-rpc-p95-ms", type=float, default=1000.0)
+    parser.add_argument("--critical-rpc-p95-ms", type=float, default=5000.0)
+    parser.add_argument("--warn-rpc-active-connection-ppm", type=int, default=750000)
+    parser.add_argument("--critical-rpc-active-connection-ppm", type=int, default=950000)
+    parser.add_argument("--warn-mempool-pending", type=int, default=100)
+    parser.add_argument("--critical-mempool-pending", type=int, default=1000)
+    parser.add_argument("--warn-recent-rejected-receipts", type=int, default=0)
+    parser.add_argument("--warn-clock-skew-ms", type=int, default=1000)
+    parser.add_argument("--critical-clock-skew-ms", type=int, default=5000)
+    parser.add_argument(
+        "--warn-certificate-participation-ppm", type=int, default=800000
+    )
+    parser.add_argument("--warn-disk-available-ppm", type=int, default=150000)
+    parser.add_argument("--critical-disk-available-ppm", type=int, default=50000)
+    parser.add_argument("--warn-proof-verify-ms", type=float, default=5000.0)
+    parser.add_argument("--critical-proof-verify-ms", type=float, default=15000.0)
+    parser.add_argument("--critical-proof-metric-stale-ms", type=int, default=300000)
+    parser.add_argument("--account-address")
+    parser.add_argument("--account-tx-from-height", type=int, default=0)
+    parser.add_argument("--account-tx-to-height", type=int)
+    parser.add_argument("--account-tx-limit", type=int, default=8)
+    parser.add_argument("--include-account-tx-history", action="store_true")
+    parser.add_argument("--account-tx-history-window-size", type=int, default=25)
+    parser.add_argument("--account-tx-history-limit-per-window", type=int, default=64)
+    parser.add_argument("--account-tx-history-max-windows", type=int, default=1000)
+    parser.add_argument("--account-tx-history-max-output-rows", type=int, default=5000)
+    parser.add_argument("--account-tx-history-require-row", action="store_true")
+    parser.add_argument("--timeout-seconds", type=float, default=8.0)
+    parser.add_argument("--no-build", action="store_true")
+    parser.add_argument(
+        "--log-dir",
+        type=Path,
+        default=ROOT / f"reports/testnet-monitor-snapshot/logs-{utc_stamp()}",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=ROOT / f"reports/testnet-monitor-snapshot/testnet-monitor-snapshot-{utc_stamp()}.json",
+    )
+    parser.add_argument(
+        "--alert-spool-dir",
+        type=Path,
+        help="durably emit private warning/critical alert envelopes for an external delivery agent",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str]) -> int:
+    args = parse_args(argv)
+    if args.include_account_tx_history and not args.account_address:
+        raise SystemExit("--include-account-tx-history requires --account-address")
+    if args.account_tx_from_height < 0:
+        raise SystemExit("--account-tx-from-height must be non-negative")
+    if args.warn_height_lag < 0 or args.critical_height_lag < args.warn_height_lag:
+        raise SystemExit("height-lag thresholds must be non-negative and ordered")
+    if args.warn_rpc_p95_ms < 0 or args.critical_rpc_p95_ms < args.warn_rpc_p95_ms:
+        raise SystemExit("RPC latency thresholds must be non-negative and ordered")
+    if not (
+        0
+        <= args.warn_rpc_active_connection_ppm
+        <= args.critical_rpc_active_connection_ppm
+        <= 1_000_000
+    ):
+        raise SystemExit(
+            "RPC active-connection thresholds must satisfy 0 <= warn <= critical <= 1000000 ppm"
+        )
+    if (
+        args.warn_mempool_pending < 0
+        or args.critical_mempool_pending < args.warn_mempool_pending
+    ):
+        raise SystemExit("mempool thresholds must be non-negative and ordered")
+    if args.warn_recent_rejected_receipts < 0:
+        raise SystemExit("receipt threshold must be non-negative")
+    if args.warn_clock_skew_ms < 0 or args.critical_clock_skew_ms < args.warn_clock_skew_ms:
+        raise SystemExit("clock-skew thresholds must be non-negative and ordered")
+    if not 0 <= args.warn_certificate_participation_ppm <= 1_000_000:
+        raise SystemExit("certificate participation threshold must be 0..1000000 ppm")
+    if not (
+        0
+        <= args.critical_disk_available_ppm
+        <= args.warn_disk_available_ppm
+        <= 1_000_000
+    ):
+        raise SystemExit(
+            "disk available thresholds must satisfy 0 <= critical <= warn <= 1000000 ppm"
+        )
+    if (
+        args.warn_proof_verify_ms < 0
+        or args.critical_proof_verify_ms < args.warn_proof_verify_ms
+    ):
+        raise SystemExit("proof verify thresholds must be non-negative and ordered")
+    if args.critical_proof_metric_stale_ms < 1:
+        raise SystemExit("proof metric stale threshold must be positive")
+    if args.account_tx_to_height is not None and args.account_tx_to_height < 0:
+        raise SystemExit("--account-tx-to-height must be non-negative")
+    if (
+        args.account_tx_to_height is not None
+        and args.account_tx_from_height > args.account_tx_to_height
+    ):
+        raise SystemExit("--account-tx-from-height cannot exceed --account-tx-to-height")
+    for name in (
+        "account_tx_limit",
+        "account_tx_history_window_size",
+        "account_tx_history_limit_per_window",
+        "account_tx_history_max_windows",
+        "account_tx_history_max_output_rows",
+    ):
+        if getattr(args, name) < 1:
+            raise SystemExit(f"--{name.replace('_', '-')} must be positive")
+    args.log_dir.mkdir(parents=True, exist_ok=True)
+    doctor_report = args.log_dir / "rpc-doctor.json"
+    doctor_log_dir = args.log_dir / "rpc-doctor"
+    command = [
+        "scripts/testnet-rpc-doctor",
+        "--output",
+        str(doctor_report),
+        "--log-dir",
+        str(doctor_log_dir),
+        "--timeout-seconds",
+        str(args.timeout_seconds),
+    ]
+    for endpoint in args.endpoint or []:
+        command.extend(["--endpoint", endpoint])
+    for endpoint_file in args.endpoint_file or []:
+        command.extend(["--endpoint-file", endpoint_file])
+    if args.account_address:
+        command.extend(["--account-address", args.account_address])
+        command.extend(["--account-tx-from-height", str(args.account_tx_from_height)])
+        command.extend(["--account-tx-limit", str(args.account_tx_limit)])
+        if args.account_tx_to_height is not None:
+            command.extend(["--account-tx-to-height", str(args.account_tx_to_height)])
+    if args.no_build:
+        command.append("--no-build")
+    run_local(command)
+    doctor = load_json(doctor_report)
+    account_tx_history = (
+        run_account_tx_history(args)
+        if args.include_account_tx_history
+        else {
+            "enabled": False,
+            "passed": None,
+            "report": None,
+            "endpoint_count": None,
+            "height_min": None,
+            "height_max": None,
+            "checks": {},
+            "first_endpoint": {},
+            "endpoints": [],
+        }
+    )
+    monitors = [endpoint_monitor(endpoint) for endpoint in doctor.get("endpoints", [])]
+    checks = monitor_checks(monitors, doctor, account_tx_history, args)
+    report = {
+        "schema": "postfiat-testnet-monitor-snapshot-v1",
+        "generated_utc": utc_iso(),
+        "doctor_report": rel(doctor_report),
+        "doctor_ok": doctor.get("doctor_ok"),
+        "thresholds": {
+            "warn_height_lag": args.warn_height_lag,
+            "critical_height_lag": args.critical_height_lag,
+            "warn_rpc_p95_ms": args.warn_rpc_p95_ms,
+            "critical_rpc_p95_ms": args.critical_rpc_p95_ms,
+            "warn_rpc_active_connection_ppm": args.warn_rpc_active_connection_ppm,
+            "critical_rpc_active_connection_ppm": args.critical_rpc_active_connection_ppm,
+            "warn_mempool_pending": args.warn_mempool_pending,
+            "critical_mempool_pending": args.critical_mempool_pending,
+            "warn_recent_rejected_receipts": args.warn_recent_rejected_receipts,
+            "warn_clock_skew_ms": args.warn_clock_skew_ms,
+            "critical_clock_skew_ms": args.critical_clock_skew_ms,
+            "warn_certificate_participation_ppm": args.warn_certificate_participation_ppm,
+            "warn_disk_available_ppm": args.warn_disk_available_ppm,
+            "critical_disk_available_ppm": args.critical_disk_available_ppm,
+            "warn_proof_verify_ms": args.warn_proof_verify_ms,
+            "critical_proof_verify_ms": args.critical_proof_verify_ms,
+            "critical_proof_metric_stale_ms": args.critical_proof_metric_stale_ms,
+        },
+        "account_canary_enabled": bool(args.account_address),
+        "account_tx_history": account_tx_history,
+        "endpoints": monitors,
+        "checks": checks,
+        "monitor_ok": checks["monitor_ok"],
+    }
+    if args.alert_spool_dir is not None and checks["status"] != "ok":
+        report["alert_event"] = rel(write_alert_event(report, args.alert_spool_dir))
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    print(f"testnet_monitor_snapshot={rel(args.output)}")
+    print(f"testnet_monitor_snapshot_status={checks['status']}")
+    return 0 if report["monitor_ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

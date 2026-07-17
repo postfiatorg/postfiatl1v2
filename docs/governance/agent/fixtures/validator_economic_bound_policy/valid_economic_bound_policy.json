@@ -1,0 +1,881 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T00:00:00Z",
+    "attestor_key_hash": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+    "signature_hash": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+    "signature_scheme": "mldsa44-placeholder",
+    "statement_hash": "6b7ac347a03deac40fb80ed47fba39c259319e8a153755e1658d7ac05f6b2c6376545a651ec5a6354b554e547f139ead"
+  },
+  "checks": {
+    "authority_transfer": false,
+    "cobalt_safe_count_fail_closed": true,
+    "hidden_affiliate_rejected": true,
+    "live_registry_mutation": false,
+    "loss_over_gain_margin_enforced": true,
+    "missing_liability_evidence_held": true,
+    "participation_margin_enforced": true,
+    "policy_root_bound": true,
+    "stale_liability_evidence_held": true,
+    "statement_hash_bound": true,
+    "unbounded_short_window_gain_rejected": true
+  },
+  "mode": "design_fixture_only",
+  "packet_id": "validator-economic-bound-policy-v1-fixture",
+  "schema": "postfiat-validator-economic-bound-policy-v1",
+  "statement": {
+    "economic_policy": {
+      "admitted_source_classes": [
+        "auditor_attested",
+        "chain_derived",
+        "contract_signed",
+        "counterparty_signed",
+        "operator_signed",
+        "registry_derived"
+      ],
+      "bound_rules": {
+        "attributable_loss": "L_i(w) is the sum of current contractual liability, registry exclusion loss, and reputation loss floors.",
+        "cobalt_safe_count": "Admission fails closed when safe_count_after is not strictly greater than q_s for the affected essential subset.",
+        "deviation_gain": "G_i(w) must be bounded by current external-position and control-surface evidence; unbounded short-window conflict is a reject.",
+        "participation": "B_i - C_i must remain at or above the participation margin or the candidate is held for refreshed exposure evidence."
+      },
+      "cobalt_safe_count_rule": "safe_count_after > q_s",
+      "max_evidence_age_epochs": 3,
+      "min_loss_over_gain_margin_units": 1,
+      "min_participation_margin_units": 1,
+      "policy_units": "ordinal-risk-units-v1"
+    },
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/fixtures/validator_admission_bin_policy/valid_bin_policy.json",
+        "sha3_384": "ce84c6b5fcbd94ae38961feb8e9f03a42518fae8b1a83bf37fbcf91c2faad4f1b872a5634e742a21f0adef701e8e66d5"
+      },
+      {
+        "path": "scripts/validator-admission-bin-policy-verify",
+        "sha3_384": "a2bdfe63a5c8aca8f169a56612e1fcc3ef52173d41464818f26f9dcee30c2c18643016fea80c41ce1aab448b70cd4a9c"
+      }
+    ],
+    "policy_id": "validator-economic-bound-policy-v1",
+    "policy_root_hash": "e231e0ad85945ab3ac4f96e0e6f3366be4bffdee84514ed71c37b070e695a820b0a2523a05e39b7c8e2e4fcfb89173e2",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "validator-economic-bound-policy-v1"
+    },
+    "selector_cases": [
+      {
+        "candidate_id": "validator-clean-economic-bound",
+        "case_id": "case-01-clean-admit",
+        "evidence": {
+          "cobalt_subset": {
+            "q_s": 5,
+            "safe_count_after": 6,
+            "subset_id": "subset-a"
+          },
+          "conflict": {
+            "conflicting_external_position": false,
+            "hidden_affiliate_or_control": false,
+            "unbounded_short_window_position": false
+          },
+          "economic_terms": {
+            "contractual_liability_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "legal-counsel-a",
+                  "source_class": "contract_signed",
+                  "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "verified"
+                }
+              ],
+              "units": 4
+            },
+            "deviation_gain_ceiling": {
+              "bounded": true,
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "risk-desk-a",
+                  "source_class": "auditor_attested",
+                  "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                  "status": "verified"
+                }
+              ],
+              "units": 4
+            },
+            "exclusion_loss_floor": {
+              "sources": [
+                {
+                  "age_epochs": 1,
+                  "attestor_group": "registry-a",
+                  "source_class": "registry_derived",
+                  "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                  "status": "verified"
+                }
+              ],
+              "units": 3
+            },
+            "operating_cost_ceiling": {
+              "sources": [
+                {
+                  "age_epochs": 1,
+                  "attestor_group": "operator-finance-a",
+                  "source_class": "operator_signed",
+                  "source_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                  "status": "verified"
+                }
+              ],
+              "units": 3
+            },
+            "participation_benefit_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "settlement-counterparty-a",
+                  "source_class": "counterparty_signed",
+                  "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                  "status": "verified"
+                }
+              ],
+              "units": 10
+            },
+            "reputation_loss_floor": {
+              "sources": [
+                {
+                  "age_epochs": 1,
+                  "attestor_group": "auditor-a",
+                  "source_class": "auditor_attested",
+                  "source_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                  "status": "verified"
+                }
+              ],
+              "units": 2
+            }
+          }
+        },
+        "expected_reason_codes": [
+          "all_economic_bounds_passed"
+        ],
+        "expected_route": "admit",
+        "expected_terms": {
+          "attributable_loss": 9,
+          "deviation_gain": 4,
+          "loss_margin": 5,
+          "participation_margin": 7,
+          "q_s": 5,
+          "safe_count_after": 6
+        }
+      },
+      {
+        "candidate_id": "validator-unbounded-conflict",
+        "case_id": "case-02-unbounded-short-window-conflict-reject",
+        "evidence": {
+          "cobalt_subset": {
+            "q_s": 5,
+            "safe_count_after": 6,
+            "subset_id": "subset-a"
+          },
+          "conflict": {
+            "conflicting_external_position": true,
+            "hidden_affiliate_or_control": false,
+            "unbounded_short_window_position": true
+          },
+          "economic_terms": {
+            "contractual_liability_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "legal-counsel-b",
+                  "source_class": "contract_signed",
+                  "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "verified"
+                }
+              ],
+              "units": 7
+            },
+            "deviation_gain_ceiling": {
+              "bounded": false,
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "risk-desk-b",
+                  "source_class": "auditor_attested",
+                  "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                  "status": "verified"
+                }
+              ],
+              "units": 12
+            },
+            "exclusion_loss_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "registry-b",
+                  "source_class": "registry_derived",
+                  "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                  "status": "verified"
+                }
+              ],
+              "units": 5
+            },
+            "operating_cost_ceiling": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "operator-finance-b",
+                  "source_class": "operator_signed",
+                  "source_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                  "status": "verified"
+                }
+              ],
+              "units": 3
+            },
+            "participation_benefit_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "settlement-counterparty-b",
+                  "source_class": "counterparty_signed",
+                  "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                  "status": "verified"
+                }
+              ],
+              "units": 12
+            },
+            "reputation_loss_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "auditor-b",
+                  "source_class": "auditor_attested",
+                  "source_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                  "status": "verified"
+                }
+              ],
+              "units": 4
+            }
+          }
+        },
+        "expected_reason_codes": [
+          "short_window_deviation_gain_unbounded"
+        ],
+        "expected_route": "reject",
+        "expected_terms": {
+          "attributable_loss": 16,
+          "deviation_gain": 12,
+          "loss_margin": 4,
+          "participation_margin": 9,
+          "q_s": 5,
+          "safe_count_after": 6
+        }
+      },
+      {
+        "candidate_id": "validator-stale-liability",
+        "case_id": "case-03-stale-liability-hold",
+        "evidence": {
+          "cobalt_subset": {
+            "q_s": 5,
+            "safe_count_after": 6,
+            "subset_id": "subset-a"
+          },
+          "conflict": {
+            "conflicting_external_position": false,
+            "hidden_affiliate_or_control": false,
+            "unbounded_short_window_position": false
+          },
+          "economic_terms": {
+            "contractual_liability_floor": {
+              "sources": [
+                {
+                  "age_epochs": 6,
+                  "attestor_group": "legal-counsel-c",
+                  "source_class": "contract_signed",
+                  "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "verified"
+                }
+              ],
+              "units": 4
+            },
+            "deviation_gain_ceiling": {
+              "bounded": true,
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "risk-desk-c",
+                  "source_class": "auditor_attested",
+                  "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                  "status": "verified"
+                }
+              ],
+              "units": 3
+            },
+            "exclusion_loss_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "registry-c",
+                  "source_class": "registry_derived",
+                  "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                  "status": "verified"
+                }
+              ],
+              "units": 3
+            },
+            "operating_cost_ceiling": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "operator-finance-c",
+                  "source_class": "operator_signed",
+                  "source_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                  "status": "verified"
+                }
+              ],
+              "units": 3
+            },
+            "participation_benefit_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "settlement-counterparty-c",
+                  "source_class": "counterparty_signed",
+                  "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                  "status": "verified"
+                }
+              ],
+              "units": 10
+            },
+            "reputation_loss_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "auditor-c",
+                  "source_class": "auditor_attested",
+                  "source_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                  "status": "verified"
+                }
+              ],
+              "units": 2
+            }
+          }
+        },
+        "expected_reason_codes": [
+          "no_current_contractual_liability_floor_source",
+          "stale_economic_evidence"
+        ],
+        "expected_route": "hold",
+        "expected_terms": {
+          "attributable_loss": 9,
+          "deviation_gain": 3,
+          "loss_margin": 6,
+          "participation_margin": 7,
+          "q_s": 5,
+          "safe_count_after": 6
+        }
+      },
+      {
+        "candidate_id": "validator-hidden-affiliate",
+        "case_id": "case-04-hidden-affiliate-reject",
+        "evidence": {
+          "cobalt_subset": {
+            "q_s": 5,
+            "safe_count_after": 6,
+            "subset_id": "subset-a"
+          },
+          "conflict": {
+            "conflicting_external_position": false,
+            "hidden_affiliate_or_control": true,
+            "unbounded_short_window_position": false
+          },
+          "economic_terms": {
+            "contractual_liability_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "legal-counsel-d",
+                  "source_class": "contract_signed",
+                  "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "verified"
+                }
+              ],
+              "units": 5
+            },
+            "deviation_gain_ceiling": {
+              "bounded": true,
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "risk-desk-d",
+                  "source_class": "auditor_attested",
+                  "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                  "status": "verified"
+                }
+              ],
+              "units": 4
+            },
+            "exclusion_loss_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "registry-d",
+                  "source_class": "registry_derived",
+                  "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                  "status": "verified"
+                }
+              ],
+              "units": 3
+            },
+            "operating_cost_ceiling": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "operator-finance-d",
+                  "source_class": "operator_signed",
+                  "source_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                  "status": "verified"
+                }
+              ],
+              "units": 3
+            },
+            "participation_benefit_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "settlement-counterparty-d",
+                  "source_class": "counterparty_signed",
+                  "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                  "status": "verified"
+                }
+              ],
+              "units": 10
+            },
+            "reputation_loss_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "auditor-d",
+                  "source_class": "auditor_attested",
+                  "source_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                  "status": "verified"
+                }
+              ],
+              "units": 2
+            }
+          }
+        },
+        "expected_reason_codes": [
+          "hidden_affiliate_or_control"
+        ],
+        "expected_route": "reject",
+        "expected_terms": {
+          "attributable_loss": 10,
+          "deviation_gain": 4,
+          "loss_margin": 6,
+          "participation_margin": 7,
+          "q_s": 5,
+          "safe_count_after": 6
+        }
+      },
+      {
+        "candidate_id": "validator-missing-liability",
+        "case_id": "case-05-missing-liability-hold",
+        "evidence": {
+          "cobalt_subset": {
+            "q_s": 5,
+            "safe_count_after": 6,
+            "subset_id": "subset-a"
+          },
+          "conflict": {
+            "conflicting_external_position": false,
+            "hidden_affiliate_or_control": false,
+            "unbounded_short_window_position": false
+          },
+          "economic_terms": {
+            "deviation_gain_ceiling": {
+              "bounded": true,
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "risk-desk-e",
+                  "source_class": "auditor_attested",
+                  "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                  "status": "verified"
+                }
+              ],
+              "units": 3
+            },
+            "exclusion_loss_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "registry-e",
+                  "source_class": "registry_derived",
+                  "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                  "status": "verified"
+                }
+              ],
+              "units": 3
+            },
+            "operating_cost_ceiling": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "operator-finance-e",
+                  "source_class": "operator_signed",
+                  "source_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                  "status": "verified"
+                }
+              ],
+              "units": 3
+            },
+            "participation_benefit_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "settlement-counterparty-e",
+                  "source_class": "counterparty_signed",
+                  "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                  "status": "verified"
+                }
+              ],
+              "units": 10
+            },
+            "reputation_loss_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "auditor-e",
+                  "source_class": "auditor_attested",
+                  "source_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                  "status": "verified"
+                }
+              ],
+              "units": 2
+            }
+          }
+        },
+        "expected_reason_codes": [
+          "missing_contractual_liability_floor"
+        ],
+        "expected_route": "hold",
+        "expected_terms": {
+          "attributable_loss": null,
+          "deviation_gain": 3,
+          "loss_margin": null,
+          "participation_margin": 7,
+          "q_s": 5,
+          "safe_count_after": 6
+        }
+      },
+      {
+        "candidate_id": "validator-thins-essential-subset",
+        "case_id": "case-06-essential-subset-thinning-fail-closed",
+        "evidence": {
+          "cobalt_subset": {
+            "q_s": 5,
+            "safe_count_after": 5,
+            "subset_id": "subset-b"
+          },
+          "conflict": {
+            "conflicting_external_position": false,
+            "hidden_affiliate_or_control": false,
+            "unbounded_short_window_position": false
+          },
+          "economic_terms": {
+            "contractual_liability_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "legal-counsel-f",
+                  "source_class": "contract_signed",
+                  "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "verified"
+                }
+              ],
+              "units": 5
+            },
+            "deviation_gain_ceiling": {
+              "bounded": true,
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "risk-desk-f",
+                  "source_class": "auditor_attested",
+                  "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                  "status": "verified"
+                }
+              ],
+              "units": 4
+            },
+            "exclusion_loss_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "registry-f",
+                  "source_class": "registry_derived",
+                  "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                  "status": "verified"
+                }
+              ],
+              "units": 3
+            },
+            "operating_cost_ceiling": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "operator-finance-f",
+                  "source_class": "operator_signed",
+                  "source_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                  "status": "verified"
+                }
+              ],
+              "units": 3
+            },
+            "participation_benefit_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "settlement-counterparty-f",
+                  "source_class": "counterparty_signed",
+                  "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                  "status": "verified"
+                }
+              ],
+              "units": 10
+            },
+            "reputation_loss_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "auditor-f",
+                  "source_class": "auditor_attested",
+                  "source_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                  "status": "verified"
+                }
+              ],
+              "units": 2
+            }
+          }
+        },
+        "expected_reason_codes": [
+          "essential_subset_safe_count_not_above_q_s"
+        ],
+        "expected_route": "fail-closed",
+        "expected_terms": {
+          "attributable_loss": 10,
+          "deviation_gain": 4,
+          "loss_margin": 6,
+          "participation_margin": 7,
+          "q_s": 5,
+          "safe_count_after": 5
+        }
+      },
+      {
+        "candidate_id": "validator-loss-below-gain",
+        "case_id": "case-07-loss-below-deviation-reject",
+        "evidence": {
+          "cobalt_subset": {
+            "q_s": 5,
+            "safe_count_after": 6,
+            "subset_id": "subset-a"
+          },
+          "conflict": {
+            "conflicting_external_position": true,
+            "hidden_affiliate_or_control": false,
+            "unbounded_short_window_position": false
+          },
+          "economic_terms": {
+            "contractual_liability_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "legal-counsel-g",
+                  "source_class": "contract_signed",
+                  "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "verified"
+                }
+              ],
+              "units": 2
+            },
+            "deviation_gain_ceiling": {
+              "bounded": true,
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "risk-desk-g",
+                  "source_class": "auditor_attested",
+                  "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                  "status": "verified"
+                }
+              ],
+              "units": 5
+            },
+            "exclusion_loss_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "registry-g",
+                  "source_class": "registry_derived",
+                  "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                  "status": "verified"
+                }
+              ],
+              "units": 1
+            },
+            "operating_cost_ceiling": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "operator-finance-g",
+                  "source_class": "operator_signed",
+                  "source_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                  "status": "verified"
+                }
+              ],
+              "units": 3
+            },
+            "participation_benefit_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "settlement-counterparty-g",
+                  "source_class": "counterparty_signed",
+                  "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                  "status": "verified"
+                }
+              ],
+              "units": 10
+            },
+            "reputation_loss_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "auditor-g",
+                  "source_class": "auditor_attested",
+                  "source_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                  "status": "verified"
+                }
+              ],
+              "units": 1
+            }
+          }
+        },
+        "expected_reason_codes": [
+          "loss_margin_not_above_deviation_gain"
+        ],
+        "expected_route": "reject",
+        "expected_terms": {
+          "attributable_loss": 4,
+          "deviation_gain": 5,
+          "loss_margin": -1,
+          "participation_margin": 7,
+          "q_s": 5,
+          "safe_count_after": 6
+        }
+      },
+      {
+        "candidate_id": "validator-participation-margin-decayed",
+        "case_id": "case-08-participation-margin-hold",
+        "evidence": {
+          "cobalt_subset": {
+            "q_s": 5,
+            "safe_count_after": 6,
+            "subset_id": "subset-a"
+          },
+          "conflict": {
+            "conflicting_external_position": false,
+            "hidden_affiliate_or_control": false,
+            "unbounded_short_window_position": false
+          },
+          "economic_terms": {
+            "contractual_liability_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "legal-counsel-h",
+                  "source_class": "contract_signed",
+                  "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "verified"
+                }
+              ],
+              "units": 5
+            },
+            "deviation_gain_ceiling": {
+              "bounded": true,
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "risk-desk-h",
+                  "source_class": "auditor_attested",
+                  "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                  "status": "verified"
+                }
+              ],
+              "units": 3
+            },
+            "exclusion_loss_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "registry-h",
+                  "source_class": "registry_derived",
+                  "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                  "status": "verified"
+                }
+              ],
+              "units": 3
+            },
+            "operating_cost_ceiling": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "operator-finance-h",
+                  "source_class": "operator_signed",
+                  "source_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                  "status": "verified"
+                }
+              ],
+              "units": 4
+            },
+            "participation_benefit_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "settlement-counterparty-h",
+                  "source_class": "counterparty_signed",
+                  "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                  "status": "verified"
+                }
+              ],
+              "units": 4
+            },
+            "reputation_loss_floor": {
+              "sources": [
+                {
+                  "age_epochs": 0,
+                  "attestor_group": "auditor-h",
+                  "source_class": "auditor_attested",
+                  "source_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                  "status": "verified"
+                }
+              ],
+              "units": 2
+            }
+          }
+        },
+        "expected_reason_codes": [
+          "participation_margin_below_floor"
+        ],
+        "expected_route": "hold",
+        "expected_terms": {
+          "attributable_loss": 10,
+          "deviation_gain": 3,
+          "loss_margin": 7,
+          "participation_margin": 0,
+          "q_s": 5,
+          "safe_count_after": 6
+        }
+      }
+    ]
+  }
+}

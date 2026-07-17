@@ -1,0 +1,460 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T00:00:00Z",
+    "attestor_key_hash": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+    "signature_hash": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+    "signature_scheme": "mldsa44-placeholder",
+    "statement_hash": "76ff662366ef426ade0c990852bda626cd15bb139898dc700cc44282bd1ea63b54700b313cf27f33c65562587de70ba5"
+  },
+  "checks": {
+    "authority_transfer": false,
+    "live_registry_mutation": false,
+    "loss_margin_enforced": true,
+    "measurement_root_bound": true,
+    "missing_exclusion_held": true,
+    "self_declared_reputation_rejected": true,
+    "source_bound_loss_floors": true,
+    "stale_exclusion_held": true,
+    "statement_hash_bound": true,
+    "ungoverned_loss_policy_fail_closed": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "validator-economic-loss-measurement-v1-fixture",
+  "schema": "postfiat-validator-economic-loss-measurement-v1",
+  "statement": {
+    "base_evidence": {
+      "derived_G_i_w_usd": 1200000,
+      "loss_policy_governed": true,
+      "loss_sources": {
+        "contractual_liability_floor": {
+          "age_epochs": 0,
+          "attestor_group": "legal-counsel-a",
+          "attestor_independence": "independent",
+          "measurement_type": "contract_liability_usd_window",
+          "source_class": "contract_signed",
+          "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "status": "verified",
+          "usd_value": 5000000,
+          "window_bounded": true
+        },
+        "governed_challenge_exclusion_floor": {
+          "age_epochs": 0,
+          "attestor_group": "governance-index-a",
+          "attestor_independence": "independent",
+          "measurement_type": "governed_challenge_exclusion_usd_floor",
+          "source_class": "governance_derived",
+          "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "status": "verified",
+          "usd_value": 1000000,
+          "window_bounded": true
+        },
+        "public_incident_reputation_floor": {
+          "age_epochs": 0,
+          "attestor_group": "public-incident-index-a",
+          "attestor_independence": "independent",
+          "measurement_type": "public_incident_reputation_usd_floor",
+          "source_class": "public_incident_index",
+          "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "status": "verified",
+          "usd_value": 1500000,
+          "window_bounded": true
+        },
+        "registry_exclusion_flow_floor": {
+          "age_epochs": 0,
+          "attestor_group": "registry-a",
+          "attestor_independence": "independent",
+          "measurement_type": "registry_exclusion_flow_usd_window",
+          "source_class": "registry_derived",
+          "source_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "status": "verified",
+          "usd_value": 3000000,
+          "window_bounded": true
+        },
+        "route_customer_loss_floor": {
+          "age_epochs": 0,
+          "attestor_group": "settlement-counterparty-a",
+          "attestor_independence": "independent",
+          "measurement_type": "route_customer_loss_usd_window",
+          "source_class": "counterparty_signed",
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "status": "verified",
+          "usd_value": 2000000,
+          "window_bounded": true
+        }
+      }
+    },
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_deviation_gain/valid_deviation_gain.json",
+        "sha3_384": "a4f908b9fff86b77911a4bd59a7623c0ab9fa0962689978d8aa507b783d9718f1e2c95efb0d83fd51a8dbcb93f81c944"
+      },
+      {
+        "path": "scripts/validator-economic-deviation-gain-verify",
+        "sha3_384": "e10749a70101cbdbe74aa4507224d7ba69eb34f67c243c83bf0ac22ce9cbe907de1dffd7dd76b1a39e1c9d9d44df1bdd"
+      },
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_attestor_capture/valid_attestor_capture.json",
+        "sha3_384": "8e1c14d6bba86ecae29fba49cee99759add9c7cc46af353570d32614b0339560356acf8a9e363b622b5c8d1ef489bbcc"
+      },
+      {
+        "path": "scripts/validator-economic-attestor-capture-verify",
+        "sha3_384": "17ae50fd24588de2a067f29abc193ffa1d3544a5b8452372a2667562e0ec13d2f1894d2a89d41d360614dd562c665b1b"
+      }
+    ],
+    "loss_policy": {
+      "loss_formula": "sum(current_verified_loss_floors)",
+      "max_evidence_age_epochs": 3,
+      "min_loss_over_gain_margin_usd": 1000000,
+      "policy_units": "usd-loss-floor-v1",
+      "route_on_ungoverned_loss_policy": "fail-closed"
+    },
+    "measurement_root_hash": "c4c5dead01def1c7b8533e337669bcb6b8960be203f7bb6d4483e30b00aab336b7908b2f9c5388d65709528e388d1c5f",
+    "policy_id": "validator-economic-loss-measurement-v1",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "validator-economic-loss-measurement-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-source-derived-admit",
+        "expected_measurement": {
+          "contractual_liability_floor_usd": 5000000,
+          "derived_G_i_w_usd": 1200000,
+          "derived_L_i_w_usd": 12500000,
+          "governed_challenge_exclusion_floor_usd": 1000000,
+          "loss_over_gain_margin_usd": 11300000,
+          "loss_policy_governed": true,
+          "public_incident_reputation_floor_usd": 1500000,
+          "registry_exclusion_flow_floor_usd": 3000000,
+          "required_margin_usd": 1000000,
+          "route_customer_loss_floor_usd": 2000000
+        },
+        "expected_reason_codes": [
+          "all_loss_measurements_passed"
+        ],
+        "expected_route": "admit",
+        "overrides": []
+      },
+      {
+        "case_id": "case-02-loss-flips-below-gain-reject",
+        "expected_measurement": {
+          "contractual_liability_floor_usd": 200000,
+          "derived_G_i_w_usd": 1200000,
+          "derived_L_i_w_usd": 700000,
+          "governed_challenge_exclusion_floor_usd": 100000,
+          "loss_over_gain_margin_usd": -500000,
+          "loss_policy_governed": true,
+          "public_incident_reputation_floor_usd": 100000,
+          "registry_exclusion_flow_floor_usd": 200000,
+          "required_margin_usd": 1000000,
+          "route_customer_loss_floor_usd": 100000
+        },
+        "expected_reason_codes": [
+          "loss_margin_below_required"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "loss_sources",
+              "contractual_liability_floor",
+              "usd_value"
+            ],
+            "value": 200000
+          },
+          {
+            "path": [
+              "loss_sources",
+              "registry_exclusion_flow_floor",
+              "usd_value"
+            ],
+            "value": 200000
+          },
+          {
+            "path": [
+              "loss_sources",
+              "route_customer_loss_floor",
+              "usd_value"
+            ],
+            "value": 100000
+          },
+          {
+            "path": [
+              "loss_sources",
+              "public_incident_reputation_floor",
+              "usd_value"
+            ],
+            "value": 100000
+          },
+          {
+            "path": [
+              "loss_sources",
+              "governed_challenge_exclusion_floor",
+              "usd_value"
+            ],
+            "value": 100000
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-self-declared-reputation-reject",
+        "expected_measurement": {
+          "contractual_liability_floor_usd": 5000000,
+          "derived_G_i_w_usd": 1200000,
+          "derived_L_i_w_usd": 12500000,
+          "governed_challenge_exclusion_floor_usd": 1000000,
+          "loss_over_gain_margin_usd": 11300000,
+          "loss_policy_governed": true,
+          "public_incident_reputation_floor_usd": 1500000,
+          "registry_exclusion_flow_floor_usd": 3000000,
+          "required_margin_usd": 1000000,
+          "route_customer_loss_floor_usd": 2000000
+        },
+        "expected_reason_codes": [
+          "self_declared_reputation_floor"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "loss_sources",
+              "public_incident_reputation_floor",
+              "source_class"
+            ],
+            "value": "self_declared"
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-stale-exclusion-hold",
+        "expected_measurement": {
+          "contractual_liability_floor_usd": 5000000,
+          "derived_G_i_w_usd": 1200000,
+          "derived_L_i_w_usd": 12500000,
+          "governed_challenge_exclusion_floor_usd": 1000000,
+          "loss_over_gain_margin_usd": 11300000,
+          "loss_policy_governed": true,
+          "public_incident_reputation_floor_usd": 1500000,
+          "registry_exclusion_flow_floor_usd": 3000000,
+          "required_margin_usd": 1000000,
+          "route_customer_loss_floor_usd": 2000000
+        },
+        "expected_reason_codes": [
+          "stale_loss_source_registry_exclusion_flow_floor"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "loss_sources",
+              "registry_exclusion_flow_floor",
+              "age_epochs"
+            ],
+            "value": 9
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-missing-exclusion-hold",
+        "expected_measurement": {
+          "contractual_liability_floor_usd": 5000000,
+          "derived_G_i_w_usd": 1200000,
+          "derived_L_i_w_usd": 9500000,
+          "governed_challenge_exclusion_floor_usd": 1000000,
+          "loss_over_gain_margin_usd": 8300000,
+          "loss_policy_governed": true,
+          "public_incident_reputation_floor_usd": 1500000,
+          "registry_exclusion_flow_floor_usd": 0,
+          "required_margin_usd": 1000000,
+          "route_customer_loss_floor_usd": 2000000
+        },
+        "expected_reason_codes": [
+          "missing_loss_source_registry_exclusion_flow_floor"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "loss_sources",
+              "registry_exclusion_flow_floor"
+            ],
+            "value": null
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-route-customer-source-mismatch-hold",
+        "expected_measurement": {
+          "contractual_liability_floor_usd": 5000000,
+          "derived_G_i_w_usd": 1200000,
+          "derived_L_i_w_usd": 12500000,
+          "governed_challenge_exclusion_floor_usd": 1000000,
+          "loss_over_gain_margin_usd": 11300000,
+          "loss_policy_governed": true,
+          "public_incident_reputation_floor_usd": 1500000,
+          "registry_exclusion_flow_floor_usd": 3000000,
+          "required_margin_usd": 1000000,
+          "route_customer_loss_floor_usd": 2000000
+        },
+        "expected_reason_codes": [
+          "source_class_mismatch_route_customer_loss_floor"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "loss_sources",
+              "route_customer_loss_floor",
+              "source_class"
+            ],
+            "value": "auditor_attested"
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-ungoverned-loss-policy-fail-closed",
+        "expected_measurement": {
+          "contractual_liability_floor_usd": 5000000,
+          "derived_G_i_w_usd": 1200000,
+          "derived_L_i_w_usd": 12500000,
+          "governed_challenge_exclusion_floor_usd": 1000000,
+          "loss_over_gain_margin_usd": 11300000,
+          "loss_policy_governed": false,
+          "public_incident_reputation_floor_usd": 1500000,
+          "registry_exclusion_flow_floor_usd": 3000000,
+          "required_margin_usd": 1000000,
+          "route_customer_loss_floor_usd": 2000000
+        },
+        "expected_reason_codes": [
+          "ungoverned_loss_policy"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "loss_policy_governed"
+            ],
+            "value": false
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-missing-governed-consequence-hold",
+        "expected_measurement": {
+          "contractual_liability_floor_usd": 5000000,
+          "derived_G_i_w_usd": 1200000,
+          "derived_L_i_w_usd": 11500000,
+          "governed_challenge_exclusion_floor_usd": 0,
+          "loss_over_gain_margin_usd": 10300000,
+          "loss_policy_governed": true,
+          "public_incident_reputation_floor_usd": 1500000,
+          "registry_exclusion_flow_floor_usd": 3000000,
+          "required_margin_usd": 1000000,
+          "route_customer_loss_floor_usd": 2000000
+        },
+        "expected_reason_codes": [
+          "missing_loss_source_governed_challenge_exclusion_floor"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "loss_sources",
+              "governed_challenge_exclusion_floor"
+            ],
+            "value": null
+          }
+        ]
+      },
+      {
+        "case_id": "case-09-affiliated-reputation-attestor-reject",
+        "expected_measurement": {
+          "contractual_liability_floor_usd": 5000000,
+          "derived_G_i_w_usd": 1200000,
+          "derived_L_i_w_usd": 12500000,
+          "governed_challenge_exclusion_floor_usd": 1000000,
+          "loss_over_gain_margin_usd": 11300000,
+          "loss_policy_governed": true,
+          "public_incident_reputation_floor_usd": 1500000,
+          "registry_exclusion_flow_floor_usd": 3000000,
+          "required_margin_usd": 1000000,
+          "route_customer_loss_floor_usd": 2000000
+        },
+        "expected_reason_codes": [
+          "affiliated_loss_attestor_public_incident_reputation_floor"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "loss_sources",
+              "public_incident_reputation_floor",
+              "attestor_independence"
+            ],
+            "value": "candidate_affiliate"
+          }
+        ]
+      },
+      {
+        "case_id": "case-10-unverified-contract-hold",
+        "expected_measurement": {
+          "contractual_liability_floor_usd": 5000000,
+          "derived_G_i_w_usd": 1200000,
+          "derived_L_i_w_usd": 12500000,
+          "governed_challenge_exclusion_floor_usd": 1000000,
+          "loss_over_gain_margin_usd": 11300000,
+          "loss_policy_governed": true,
+          "public_incident_reputation_floor_usd": 1500000,
+          "registry_exclusion_flow_floor_usd": 3000000,
+          "required_margin_usd": 1000000,
+          "route_customer_loss_floor_usd": 2000000
+        },
+        "expected_reason_codes": [
+          "source_not_verified_contractual_liability_floor"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "loss_sources",
+              "contractual_liability_floor",
+              "status"
+            ],
+            "value": "unverified"
+          }
+        ]
+      },
+      {
+        "case_id": "case-11-unbounded-loss-window-hold",
+        "expected_measurement": {
+          "contractual_liability_floor_usd": 5000000,
+          "derived_G_i_w_usd": 1200000,
+          "derived_L_i_w_usd": 12500000,
+          "governed_challenge_exclusion_floor_usd": 1000000,
+          "loss_over_gain_margin_usd": 11300000,
+          "loss_policy_governed": true,
+          "public_incident_reputation_floor_usd": 1500000,
+          "registry_exclusion_flow_floor_usd": 3000000,
+          "required_margin_usd": 1000000,
+          "route_customer_loss_floor_usd": 2000000
+        },
+        "expected_reason_codes": [
+          "unbounded_loss_window_route_customer_loss_floor"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "loss_sources",
+              "route_customer_loss_floor",
+              "window_bounded"
+            ],
+            "value": false
+          }
+        ]
+      }
+    ]
+  }
+}

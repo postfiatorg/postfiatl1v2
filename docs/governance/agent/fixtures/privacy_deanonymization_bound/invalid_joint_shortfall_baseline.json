@@ -1,0 +1,18 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_deanonymization_bound/valid_deanonymization_bound.json",
+  "expected_error_contains": [
+    "case-02-joint-candidate-shortfall: expected_route mismatch"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        1,
+        "expected_route"
+      ],
+      "value": "baseline-private"
+    }
+  ],
+  "schema": "postfiat-privacy-deanonymization-bound-invalid-case-v1"
+}

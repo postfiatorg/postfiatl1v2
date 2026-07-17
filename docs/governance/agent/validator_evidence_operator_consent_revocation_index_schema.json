@@ -1,0 +1,319 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-validator-evidence-operator-consent-revocation-index-v1.json",
+  "title": "PostFiat Validator Evidence Operator Consent Revocation Index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "index_id",
+    "mode",
+    "source_authorization_hash",
+    "operator_consent_receipt_hash",
+    "packet_schema_hash",
+    "field_registry_hash",
+    "collection_window",
+    "revocation_feed",
+    "receipt_statuses_order",
+    "receipt_statuses",
+    "summary",
+    "redaction",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-evidence-operator-consent-revocation-index-v1"
+    },
+    "index_id": {
+      "$ref": "#/$defs/id"
+    },
+    "mode": {
+      "const": "design_fixture_only"
+    },
+    "source_authorization_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "operator_consent_receipt_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "packet_schema_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "field_registry_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "collection_window": {
+      "$ref": "#/$defs/collection_window"
+    },
+    "revocation_feed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_kind",
+        "feed_root",
+        "checked_at",
+        "live_fetch_authorized",
+        "raw_values_retained",
+        "qwen_raw_access"
+      ],
+      "properties": {
+        "source_kind": {
+          "const": "operator_consent_revocation_index"
+        },
+        "feed_root": {
+          "$ref": "#/$defs/hash96"
+        },
+        "checked_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "live_fetch_authorized": {
+          "const": false
+        },
+        "raw_values_retained": {
+          "const": false
+        },
+        "qwen_raw_access": {
+          "const": false
+        }
+      }
+    },
+    "receipt_statuses_order": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/id"
+      }
+    },
+    "receipt_statuses": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9._:-]{2,127}$": {
+          "$ref": "#/$defs/receipt_status"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checked_receipt_count",
+        "not_revoked_count",
+        "revoked_count"
+      ],
+      "properties": {
+        "checked_receipt_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "not_revoked_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "revoked_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_values_retained",
+        "private_fields_removed",
+        "secret_scan_required",
+        "public_artifact_safe"
+      ],
+      "properties": {
+        "raw_values_retained": {
+          "const": false
+        },
+        "private_fields_removed": {
+          "const": true
+        },
+        "secret_scan_required": {
+          "const": true
+        },
+        "public_artifact_safe": {
+          "const": true
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_authorization_bound",
+        "operator_consent_receipt_hash_bound",
+        "packet_schema_hash_bound",
+        "field_registry_hash_bound",
+        "collection_window_bound",
+        "revocation_feed_checked",
+        "receipt_not_revoked",
+        "raw_values_retained",
+        "live_fetch_authorized",
+        "qwen_raw_access",
+        "live_registry_mutation",
+        "authority_transfer"
+      ],
+      "properties": {
+        "source_authorization_bound": {
+          "const": true
+        },
+        "operator_consent_receipt_hash_bound": {
+          "const": true
+        },
+        "packet_schema_hash_bound": {
+          "const": true
+        },
+        "field_registry_hash_bound": {
+          "const": true
+        },
+        "collection_window_bound": {
+          "const": true
+        },
+        "revocation_feed_checked": {
+          "const": true
+        },
+        "receipt_not_revoked": {
+          "const": true
+        },
+        "raw_values_retained": {
+          "const": false
+        },
+        "live_fetch_authorized": {
+          "const": false
+        },
+        "qwen_raw_access": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "collection_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_height",
+        "to_height",
+        "from_time",
+        "to_time"
+      ],
+      "properties": {
+        "from_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "from_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to_time": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    },
+    "nullable_hash96": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/hash96"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nullable_datetime": {
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "date-time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "receipt_status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "receipt_id",
+        "validator_id",
+        "receipt_hash",
+        "operator_accountability_key_hash",
+        "status",
+        "revocation_statement_hash",
+        "revoked_at",
+        "checked_at",
+        "proof_hash",
+        "raw_revocation_material_retained",
+        "qwen_visible_summary"
+      ],
+      "properties": {
+        "receipt_id": {
+          "$ref": "#/$defs/id"
+        },
+        "validator_id": {
+          "$ref": "#/$defs/id"
+        },
+        "receipt_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "operator_accountability_key_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "status": {
+          "enum": [
+            "not_revoked",
+            "revoked"
+          ],
+          "type": "string"
+        },
+        "revocation_statement_hash": {
+          "$ref": "#/$defs/nullable_hash96"
+        },
+        "revoked_at": {
+          "$ref": "#/$defs/nullable_datetime"
+        },
+        "checked_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "proof_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "raw_revocation_material_retained": {
+          "const": false
+        },
+        "qwen_visible_summary": {
+          "const": true
+        }
+      }
+    }
+  }
+}

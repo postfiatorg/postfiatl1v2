@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+"""Regression checks for the code-derived public RPC exposure inventory."""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import tempfile
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+GENERATOR = ROOT / "scripts/testnet-rpc-method-inventory"
+
+
+def main() -> int:
+    with tempfile.TemporaryDirectory(prefix="postfiat-rpc-inventory-") as directory:
+        output = Path(directory) / "inventory.json"
+        subprocess.run(
+            [str(GENERATOR), "--output", str(output)],
+            cwd=ROOT,
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+        )
+        inventory = json.loads(output.read_text(encoding="utf-8"))
+
+    methods = {item["method"]: item for item in inventory["methods"]}
+    expected = {
+        "status": "read_only_public",
+        "fastswap_status": "read_only_public",
+        "fastswap_preview": "read_only_public",
+        "fastswap_prepare": "authorized_protocol_mutation_public",
+        "fastswap_apply": "authorized_protocol_mutation_public",
+        "fastswap_cancel_apply": "authorized_protocol_mutation_public",
+        "fastlane_asset_control_prepare": "authorized_protocol_mutation_public",
+        "mempool_submit_signed_atomic_swap_transaction": "controlled_write_gated",
+        "mempool_submit_signed_atomic_swap_transaction_finality": "controlled_write_gated",
+        "shield_batch_finality": "controlled_write_gated",
+        "shield_batch_swap": "privacy_alpha_gated",
+        "owned_sign": "owned_lane_gated",
+        "owned_apply": "owned_lane_gated",
+        "owned_recovery_capabilities": "read_only_public",
+        "owned_certificate": "read_only_public",
+        "owned_recovery_status": "read_only_public",
+        "owned_sign_v3": "owned_lane_gated",
+        "owned_apply_v3": "owned_lane_gated",
+        "owned_unwrap_sign_v3": "owned_lane_gated",
+        "owned_unwrap_apply_v3": "owned_lane_gated",
+        "vault_bridge_route": "read_only_public",
+        "apply_batch": "operator_or_local_only",
+    }
+    for method, posture in expected.items():
+        actual = methods.get(method, {}).get("posture")
+        assert actual == posture, f"{method}: expected {posture}, got {actual}"
+
+    unknown = [
+        item["method"]
+        for item in inventory["methods"]
+        if item["posture"] == "sdk_only_or_unknown"
+    ]
+    assert not unknown, f"unclassified RPC methods: {unknown}"
+    assert inventory["verified"] is True
+    assert all(inventory["checks"].values()), inventory["checks"]
+    print(
+        "rpc_method_inventory_regression=ok "
+        f"methods={inventory['counts']['total_methods']}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

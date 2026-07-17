@@ -1,0 +1,39 @@
+{
+  "schema": "postfiat-shielded-asset-predicate-registry-invalid-case-v1",
+  "case_id": "invalid-shared-mutable-amm-predicate",
+  "base_packet": "docs/governance/agent/fixtures/shielded_asset_predicate_registry/valid_predicate_registry.json",
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "predicates",
+        1,
+        "predicate_class"
+      ],
+      "value": "amm_pool"
+    },
+    {
+      "path": [
+        "statement",
+        "predicates",
+        1,
+        "state_scope"
+      ],
+      "value": "shared_mutable"
+    },
+    {
+      "path": [
+        "statement",
+        "predicates",
+        1,
+        "shared_mutable_state"
+      ],
+      "value": true
+    }
+  ],
+  "expected_error_contains": [
+    "predicate_class is not v0-admitted",
+    "state_scope must be owner_scoped",
+    "shared_mutable_state must be false"
+  ]
+}

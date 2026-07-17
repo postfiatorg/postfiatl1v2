@@ -1,0 +1,160 @@
+{
+  "$id": "https://postfiat.org/schemas/postfiat-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-gate-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PostFiat Protocol Architecture Live-Effect Release Effect Post-Execution Release Record Archive Gate",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "postfiat-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-gate-v1",
+      "type": "string"
+    },
+    "release_effect_post_execution_release_record_archive_id": {
+      "const": "vc-protocol-architecture-001-live-effect-release-effect-post-execution-release-record-archive-001",
+      "type": "string"
+    },
+    "release_effect_post_execution_release_record_archive_version": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "status": {
+      "const": "release_effect_post_execution_release_record_archive_gate_defined_no_archive",
+      "type": "string"
+    },
+    "gate_scope": {
+      "const": "protocol_architecture",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "source_release_effect_post_execution_release_record_closing_audit_gate_ref": {
+      "$ref": "#/$defs/source_ref"
+    },
+    "root_bindings": {
+      "$ref": "#/$defs/typed_object"
+    },
+    "archive_contract": {
+      "$ref": "#/$defs/typed_object"
+    },
+    "archive_input_requirements": {
+      "$ref": "#/$defs/typed_object"
+    },
+    "current_archive_state": {
+      "$ref": "#/$defs/typed_object"
+    },
+    "stale_root_policy": {
+      "$ref": "#/$defs/typed_object"
+    },
+    "challenge_and_rollback_route": {
+      "$ref": "#/$defs/typed_object"
+    },
+    "verification_commands": {
+      "items": {
+        "$ref": "#/$defs/verification_command"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "authority_boundary": {
+      "$ref": "#/$defs/typed_object"
+    },
+    "checks": {
+      "$ref": "#/$defs/typed_object"
+    },
+    "release_effect_post_execution_release_record_archive_root": {
+      "$ref": "#/$defs/sha3_384"
+    }
+  },
+  "required": [
+    "schema",
+    "release_effect_post_execution_release_record_archive_id",
+    "release_effect_post_execution_release_record_archive_version",
+    "status",
+    "gate_scope",
+    "created_at",
+    "source_release_effect_post_execution_release_record_closing_audit_gate_ref",
+    "root_bindings",
+    "archive_contract",
+    "archive_input_requirements",
+    "current_archive_state",
+    "stale_root_policy",
+    "challenge_and_rollback_route",
+    "verification_commands",
+    "authority_boundary",
+    "checks",
+    "release_effect_post_execution_release_record_archive_root"
+  ],
+  "$defs": {
+    "sha3_384": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "source_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fixture_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "report_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "report_verified": {
+          "const": true
+        },
+        "report_classification": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "source_id",
+        "fixture_root",
+        "report_root",
+        "report_verified",
+        "report_classification"
+      ]
+    },
+    "typed_object": {
+      "type": "object",
+      "minProperties": 1
+    },
+    "verification_command": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expected_result": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required": {
+          "const": true
+        },
+        "live_effect": {
+          "const": false
+        }
+      },
+      "required": [
+        "command",
+        "purpose",
+        "expected_result",
+        "required",
+        "live_effect"
+      ]
+    }
+  }
+}

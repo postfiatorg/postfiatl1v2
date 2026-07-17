@@ -1,0 +1,38 @@
+[package]
+name = "postfiat-privacy-orchard"
+version = "0.1.0"
+description = "Asset-Orchard circuits and note handling for PostFiat L1"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = []
+asset-orchard-vk-dev-env = []
+
+[dependencies]
+chacha20poly1305 = "0.10"
+ff = "0.13"
+group = "0.13"
+halo2_poseidon = { package = "halo2_poseidon", version = "0.1" }
+halo2_gadgets = "0.5"
+halo2_proofs = { version = "0.3", features = ["multicore"] }
+incrementalmerkletree = { workspace = true }
+nonempty = { workspace = true }
+orchard = { workspace = true }
+pasta_curves = "0.5"
+postfiat-crypto-provider = { path = "../crypto_provider" }
+rand = "0.8.6"
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha3 = { workspace = true }
+sinsemilla = "0.1"
+zcash_note_encryption = { workspace = true }
+zeroize = { workspace = true }
+zip32 = { workspace = true }
+
+[dev-dependencies]

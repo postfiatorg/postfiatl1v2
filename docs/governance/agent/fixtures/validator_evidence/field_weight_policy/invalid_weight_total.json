@@ -1,0 +1,66 @@
+{
+  "schema": "postfiat-validator-evidence-field-weight-policy-v1",
+  "policy_id": "validator-evidence-field-weight-policy-2026-05-23-weight-total",
+  "scope": {
+    "context": "model_selection_governance",
+    "design_only": true,
+    "qwen_may_change_weights": false,
+    "live_registry_mutation": false,
+    "authority_transfer": false
+  },
+  "packet_id": "validator-evidence-2026-05-23-example",
+  "validator_evidence_packet_root": "7f146e261443b04f443764468e94343f81a1dd87ec30a122b267b3d2050d43321ea6b122cb2b19efbe57b1728a6e4cea",
+  "packet_schema_hash": "92544968ea283754c5cd3cfba85194afff80f9366f07063b5cd228ea58a6f9efbeb74ad416f9f118595f8c6719d4f0c3",
+  "field_registry_hash": "a4d0ad75fcf706432e2d44bfd75486139a69116249ffb47bbc786fcb67ab939b25f99834d5cb5aa7bb93cfed8901200f",
+  "collection_window": {
+    "from_height": 1000,
+    "to_height": 2000,
+    "from_time": "2026-05-23T00:00:00Z",
+    "to_time": "2026-05-23T06:00:00Z"
+  },
+  "model_selection": {
+    "decision_id": "model-selection-field-weights-2026-05-23-example",
+    "model_id": "Qwen/Qwen3.6-27B-FP8",
+    "runtime_profile_hash": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+    "prompt_hash": "222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
+    "accepted_replay_report_hash": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+    "reviewer_signoff_hash": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "weight_profile": {
+    "profile_id": "validator-evidence-field-weight-profile-2026-05-23-weight-total",
+    "total_weight_bps": 10000,
+    "entries_order": [
+      "performance-uptime-window"
+    ],
+    "entries": {
+      "performance-uptime-window": {
+        "entry_id": "performance-uptime-window",
+        "field_path": "validator.performance.uptime_window_bps",
+        "weight_bps": 9000,
+        "action_bound": "score_adjustment",
+        "required_provenance": "network_observed",
+        "freshness_requirement": "recent_7d",
+        "missing_evidence_behavior": "neutral",
+        "conflict_behavior": "hold",
+        "qwen_editable": false,
+        "rationale_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    },
+    "summary": {
+      "entry_count": 1,
+      "total_weight_bps": 10000,
+      "max_single_weight_bps": 9000
+    }
+  },
+  "checks": {
+    "packet_root_verified": true,
+    "packet_schema_hash_bound": true,
+    "field_registry_hash_bound": true,
+    "field_paths_registered": true,
+    "total_weight_bps_verified": true,
+    "qwen_weight_editing_disabled": true,
+    "model_selection_lane_required": true,
+    "registry_mutation": false,
+    "live_authority_transfer": false
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_influence_window_policy/valid_influence_window_policy.json",
+  "expected_error_contains": [
+    "statement.policy_root_hash does not match influence-window material"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "policy_root_hash"
+      ],
+      "value": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    }
+  ],
+  "schema": "postfiat-validator-economic-influence-window-policy-invalid-case-v1"
+}

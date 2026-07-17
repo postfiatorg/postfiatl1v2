@@ -1,0 +1,40 @@
+[Unit]
+Description=PostFiat validator RPC
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=postfiat
+Group=postfiat
+ExecStart=/opt/postfiat/bin/postfiat-node rpc-serve --unsafe-devnet-json-storage --data-dir /var/lib/postfiat/validator-0 --spool-dir /run/postfiat-rpc/spool --ready-file /run/postfiat-rpc/ready.json --bind-host 127.0.0.1 --port 27650 --event-log /var/log/postfiat/rpc-events.jsonl --max-requests 10000 --keep-alive
+RuntimeDirectory=postfiat-rpc
+RuntimeDirectoryMode=0700
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+KillMode=control-group
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/lib/postfiat/validator-0 /var/log/postfiat /run/postfiat-rpc
+UMask=0077
+LimitNOFILE=65536
+LimitCORE=0
+TasksMax=1024
+
+[Install]
+WantedBy=multi-user.target

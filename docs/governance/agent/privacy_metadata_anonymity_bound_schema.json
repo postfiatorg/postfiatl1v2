@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-privacy-metadata-anonymity-bound-v1.json",
+  "title": "PostFiat Privacy Metadata Anonymity Bound",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "packet_id",
+    "mode",
+    "statement",
+    "attestation",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-privacy-metadata-anonymity-bound-v1"
+    },
+    "packet_id": {
+      "$ref": "#/$defs/id"
+    },
+    "mode": {
+      "const": "controlled_testnet_fixture"
+    },
+    "statement": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "policy_id",
+        "metadata_root_hash",
+        "scope",
+        "metadata_policy",
+        "base_assessment",
+        "selector_cases",
+        "evidence_artifacts"
+      ],
+      "properties": {
+        "policy_id": {
+          "$ref": "#/$defs/id"
+        },
+        "metadata_root_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "chain_id",
+            "profile_id",
+            "live_registry_mutation",
+            "authority_transfer"
+          ],
+          "properties": {
+            "chain_id": {
+              "$ref": "#/$defs/id"
+            },
+            "profile_id": {
+              "$ref": "#/$defs/id"
+            },
+            "live_registry_mutation": {
+              "const": false
+            },
+            "authority_transfer": {
+              "const": false
+            }
+          }
+        },
+        "metadata_policy": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "policy_units",
+            "min_action_window_count",
+            "min_same_fee_class_count",
+            "min_same_asset_policy_count",
+            "min_batch_size",
+            "min_time_bucket_seconds",
+            "route_on_low_volume",
+            "route_on_bursty_timing",
+            "route_on_thin_asset",
+            "route_on_unique_disclosure",
+            "route_on_direct_third_party_rpc",
+            "route_on_private_field_public",
+            "route_on_ungoverned_policy"
+          ]
+        },
+        "base_assessment": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "public_fields",
+            "inferable_fields",
+            "wallet_infrastructure_discipline",
+            "action_window_count",
+            "same_fee_class_count",
+            "same_asset_policy_count",
+            "batch_size",
+            "time_bucket_seconds",
+            "disclosure_hash_reuse_count",
+            "rpc_submission_mode",
+            "asset_liquidity_tier",
+            "metadata_policy_governed"
+          ]
+        },
+        "selector_cases": {
+          "type": "array",
+          "minItems": 10
+        },
+        "evidence_artifacts": {
+          "type": "array",
+          "minItems": 1
+        }
+      }
+    },
+    "attestation": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "attestor_key_hash",
+        "statement_hash",
+        "signature_hash",
+        "signature_scheme",
+        "attested_at"
+      ]
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    }
+  }
+}

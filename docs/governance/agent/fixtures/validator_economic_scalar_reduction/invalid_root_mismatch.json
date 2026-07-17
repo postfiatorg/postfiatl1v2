@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_scalar_reduction/valid_scalar_reduction.json",
+  "expected_error_contains": [
+    "statement.scalar_root_hash does not match scalar material"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "scalar_root_hash"
+      ],
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "schema": "postfiat-validator-economic-scalar-reduction-invalid-case-v1"
+}

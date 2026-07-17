@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_correlation_bound/valid_correlation_bound.json",
+  "expected_error_contains": [
+    "statement.correlation_root_hash does not match correlation material"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "correlation_root_hash"
+      ],
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "schema": "postfiat-privacy-correlation-bound-invalid-case-v1"
+}

@@ -1,0 +1,17 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_floor_calibration/valid_floor_calibration.json",
+  "expected_error_contains": [
+    "min_activity_window_count must be 128"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "calibration_policy",
+        "min_activity_window_count"
+      ],
+      "value": 112
+    }
+  ],
+  "schema": "postfiat-privacy-floor-calibration-invalid-case-v1"
+}

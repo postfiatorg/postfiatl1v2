@@ -1,0 +1,212 @@
+#!/usr/bin/env python3
+"""Verify that a sanitized Git checkout is the exact reviewed public candidate.
+
+This gate is intentionally strict: it accepts a clean, non-shallow worktree
+with an exact reviewed tree, an exact ref allowlist, and zero current-tree or
+reachable-history findings from the candidate's own secret scanner.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import pathlib
+import re
+import stat
+import subprocess
+import sys
+from datetime import datetime, timezone
+
+
+PROVIDER_RECORD_SCHEMA = "postfiat-provider-credential-revocation-v1"
+PROVIDER_RECORD_FIELDS = {
+    "schema",
+    "provider",
+    "incident_id",
+    "action",
+    "occurred_utc",
+    "owner",
+    "evidence_reference",
+    "verified_by",
+    "verified_utc",
+}
+UTC_SECONDS = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+
+
+def git(repository: pathlib.Path, *args: str) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(repository), *args],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if completed.returncode:
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        raise RuntimeError(f"git {' '.join(args)} failed: {detail}")
+    return completed.stdout
+
+
+def run_secret_scan(repository: pathlib.Path, history: bool) -> None:
+    scanner = repository / "scripts" / "public-secret-scan"
+    if not scanner.is_file():
+        raise RuntimeError("candidate does not contain scripts/public-secret-scan")
+    command = [sys.executable, str(scanner)]
+    if history:
+        command.append("--history")
+    environment = os.environ.copy()
+    environment["POSTFIAT_SECRET_SCAN_ROOT"] = str(repository)
+    completed = subprocess.run(
+        command,
+        cwd=repository,
+        env=environment,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if completed.returncode:
+        mode = "history" if history else "tracked tree"
+        # The scanner itself emits metadata only, never candidate values.
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        raise RuntimeError(f"public secret scan failed for {mode}:\n{detail}")
+
+
+def verify_provider_revocation_record(
+    record_path: pathlib.Path,
+    repository: pathlib.Path,
+) -> None:
+    raw_record_path = record_path.expanduser().absolute()
+    if raw_record_path.is_symlink():
+        raise RuntimeError("provider revocation record must not be a symlink")
+    record_path = raw_record_path.resolve()
+    repository = repository.resolve()
+    try:
+        record_path.relative_to(repository)
+    except ValueError:
+        pass
+    else:
+        raise RuntimeError("provider revocation record must remain outside the public repository")
+    if not record_path.is_file():
+        raise RuntimeError("provider revocation record must be a regular private file")
+    file_mode = stat.S_IMODE(record_path.stat().st_mode)
+    if file_mode & 0o077:
+        raise RuntimeError("provider revocation record must not grant group/other access")
+    if record_path.stat().st_size > 16 * 1024:
+        raise RuntimeError("provider revocation record exceeds the 16 KiB bound")
+    try:
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError("provider revocation record is not valid UTF-8 JSON") from error
+    if not isinstance(record, dict) or set(record) != PROVIDER_RECORD_FIELDS:
+        raise RuntimeError("provider revocation record has missing or unexpected fields")
+    if record["schema"] != PROVIDER_RECORD_SCHEMA:
+        raise RuntimeError("provider revocation record schema mismatch")
+    for field in PROVIDER_RECORD_FIELDS - {"schema", "action", "occurred_utc", "verified_utc"}:
+        value = record[field]
+        if not isinstance(value, str) or not value.strip() or len(value) > 256:
+            raise RuntimeError(f"provider revocation record field {field} is invalid")
+    if record["action"] not in {"revoked", "decommissioned", "destroyed"}:
+        raise RuntimeError("provider revocation record action is not terminal")
+    timestamps: dict[str, datetime] = {}
+    for field in ("occurred_utc", "verified_utc"):
+        value = record[field]
+        if not isinstance(value, str) or UTC_SECONDS.fullmatch(value) is None:
+            raise RuntimeError(f"provider revocation record field {field} is not UTC seconds")
+        try:
+            timestamps[field] = datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(
+                tzinfo=timezone.utc
+            )
+        except ValueError as error:
+            raise RuntimeError(
+                f"provider revocation record field {field} is not a real UTC timestamp"
+            ) from error
+    if timestamps["verified_utc"] < timestamps["occurred_utc"]:
+        raise RuntimeError("provider revocation verification predates the terminal action")
+
+
+def verify(
+    repository: pathlib.Path,
+    expected_tree: str,
+    allowed_refs: set[str],
+    provider_revocation_record: pathlib.Path,
+) -> None:
+    repository = repository.resolve()
+    if not repository.is_dir():
+        raise RuntimeError(f"repository is not a directory: {repository}")
+    verify_provider_revocation_record(provider_revocation_record, repository)
+    if git(repository, "rev-parse", "--is-bare-repository").strip() != "false":
+        raise RuntimeError("publication candidate must be a checked-out worktree")
+    if git(repository, "rev-parse", "--is-shallow-repository").strip() != "false":
+        raise RuntimeError("publication candidate must be a complete, non-shallow clone")
+    status = git(repository, "status", "--porcelain=v1", "--untracked-files=all")
+    if status:
+        raise RuntimeError("publication candidate worktree is not clean")
+
+    actual_refs = {
+        line
+        for line in git(repository, "for-each-ref", "--format=%(refname)").splitlines()
+        if line
+    }
+    missing = sorted(allowed_refs - actual_refs)
+    unexpected = sorted(actual_refs - allowed_refs)
+    if missing or unexpected:
+        raise RuntimeError(
+            "publication ref set mismatch: "
+            f"missing={missing or 'none'} unexpected={unexpected or 'none'}"
+        )
+
+    head_ref = git(repository, "symbolic-ref", "-q", "HEAD").strip()
+    if head_ref not in allowed_refs:
+        raise RuntimeError(f"HEAD targets non-public ref {head_ref or '<detached>'}")
+    head_tree = git(repository, "rev-parse", "HEAD^{tree}").strip()
+    if head_tree != expected_tree:
+        raise RuntimeError(
+            f"reviewed tree mismatch: expected={expected_tree} actual={head_tree}"
+        )
+
+    run_secret_scan(repository, history=False)
+    run_secret_scan(repository, history=True)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--repository", required=True, type=pathlib.Path)
+    parser.add_argument(
+        "--expected-tree",
+        required=True,
+        help="exact Git tree object ID of the reviewed release commit",
+    )
+    parser.add_argument(
+        "--allow-ref",
+        action="append",
+        required=True,
+        help="exact ref permitted in the public clone (repeat as needed)",
+    )
+    parser.add_argument(
+        "--provider-revocation-record",
+        required=True,
+        type=pathlib.Path,
+        help="private mode-0600 provider revocation/decommission record outside the candidate",
+    )
+    args = parser.parse_args()
+    try:
+        verify(
+            args.repository,
+            args.expected_tree,
+            set(args.allow_ref),
+            args.provider_revocation_record,
+        )
+    except RuntimeError as error:
+        print(f"publication candidate verification FAILED: {error}", file=sys.stderr)
+        return 1
+    print(
+        "publication candidate verification passed "
+        f"tree={args.expected_tree} refs={len(set(args.allow_ref))}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_admission_bin_policy/valid_bin_policy.json",
+  "expected_error_contains": [
+    "statement.policy_root_hash does not match policy material"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "policy_root_hash"
+      ],
+      "value": "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+    }
+  ],
+  "schema": "postfiat-validator-admission-bin-policy-invalid-case-v1"
+}

@@ -1,0 +1,35 @@
+{
+  "schema": "postfiat-shielded-asset-predicate-registry-invalid-case-v1",
+  "case_id": "invalid-ungoverned-issuer-rule",
+  "base_packet": "docs/governance/agent/fixtures/shielded_asset_predicate_registry/valid_predicate_registry.json",
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "registry",
+        "root_governance"
+      ],
+      "value": "issuer_local"
+    },
+    {
+      "path": [
+        "statement",
+        "registry",
+        "cobalt_transition_required"
+      ],
+      "value": false
+    },
+    {
+      "path": [
+        "checks",
+        "cobalt_governed_registry_root"
+      ],
+      "value": false
+    }
+  ],
+  "expected_error_contains": [
+    "registry.root_governance must be Cobalt-governed",
+    "registry.cobalt_transition_required must be true",
+    "checks.cobalt_governed_registry_root must be True"
+  ]
+}

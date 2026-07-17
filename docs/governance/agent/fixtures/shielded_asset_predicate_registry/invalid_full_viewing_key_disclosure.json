@@ -1,0 +1,22 @@
+{
+  "schema": "postfiat-shielded-asset-predicate-registry-invalid-case-v1",
+  "case_id": "invalid-full-viewing-key-disclosure",
+  "base_packet": "docs/governance/agent/fixtures/shielded_asset_predicate_registry/valid_predicate_registry.json",
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "privacy_fixture",
+        "transfers",
+        0,
+        "public_artifact",
+        "full_viewing_key"
+      ],
+      "value": "full_viewing_key_test_marker"
+    }
+  ],
+  "expected_error_contains": [
+    "unadmitted public artifact fields",
+    "sensitive value marker"
+  ]
+}

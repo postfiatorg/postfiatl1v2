@@ -1,0 +1,186 @@
+#!/usr/bin/env python3
+"""Freeze audited ML-DSA default-context and deterministic-seed call sites."""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+EXCLUDED = (
+    "crates/fuzz_harness/",
+    "crates/bench_harness/",
+    "crates/fastpay-prototype/",
+    "/tests/",
+    "/examples/",
+)
+TEST_MODULE = re.compile(r"(?m)^\s*#\[cfg\(test\)\]\s*\n\s*mod\s+\w+\s*\{")
+RAW_STRING = re.compile(r'(?:br|rb|r)(?P<hashes>#{0,255})"')
+CHAR_LITERAL = re.compile(r"'(?:\\.|[^'\\])'")
+
+# The default context is the account-transaction context. Every production use
+# is an account-family signer/verifier, transaction replay/builder, or the
+# transaction-bound vault observation verifier. New purposes must use an
+# explicit context and therefore must not extend this table silently.
+EXPECTED = {
+    "ml_dsa_65_sign": {
+        "crates/node/src/block_replay_wallet.rs": 4,
+        "crates/node/src/storage_commit.rs": 1,
+        "crates/rpc_sdk/src/atomic_swap_wallet.rs": 2,
+        "crates/rpc_sdk/src/wallet_sdk.rs": 6,
+    },
+    "ml_dsa_65_verify": {
+        "crates/execution/src/entrypoints.rs": 7,
+        "crates/execution/src/nav_vault_asset_execution.rs": 1,
+        "crates/node/src/block_replay_wallet.rs": 6,
+        "crates/rpc_sdk/src/atomic_swap_wallet.rs": 2,
+        "crates/rpc_sdk/src/wallet_sdk.rs": 6,
+    },
+    # Seeded ML-DSA signatures derive their 32-byte seed from the complete
+    # domain-separated signed message. They are used only for reproducible
+    # validator/artifact signatures; expansion requires cryptographic review.
+    "ml_dsa_65_sign_with_context_seed": {
+        "crates/node/src/batch_snapshot.rs": 1,
+        "crates/node/src/block_finality.rs": 3,
+        "crates/node/src/block_replay_wallet.rs": 1,
+        "crates/node/src/consensus_artifacts.rs": 1,
+        "crates/node/src/storage_commit.rs": 2,
+    },
+    # Deterministic key generation is limited to wallet derivation and a
+    # non-live governance evidence fixture that builds a local synthetic chain.
+    "ml_dsa_65_keygen_from_seed": {
+        "crates/node/src/governance_agent_parts/implementation_guarded_apply.rs": 1,
+        "crates/node/src/storage_commit.rs": 1,
+        "crates/rpc_sdk/src/wallet_sdk.rs": 1,
+    },
+}
+
+
+def mask_rust_non_code(text: str) -> str:
+    """Mask comments and literals so braces delimit real Rust modules."""
+    masked = list(text)
+
+    def blank(start: int, end: int) -> None:
+        masked[start:end] = (
+            " " if character not in "\r\n" else character
+            for character in masked[start:end]
+        )
+
+    cursor = 0
+    while cursor < len(text):
+        if text.startswith("//", cursor):
+            end = text.find("\n", cursor + 2)
+            end = len(text) if end < 0 else end
+            blank(cursor, end)
+            cursor = end
+            continue
+        if text.startswith("/*", cursor):
+            start = cursor
+            cursor += 2
+            depth = 1
+            while cursor < len(text) and depth:
+                if text.startswith("/*", cursor):
+                    depth += 1
+                    cursor += 2
+                elif text.startswith("*/", cursor):
+                    depth -= 1
+                    cursor += 2
+                else:
+                    cursor += 1
+            assert depth == 0, "unterminated Rust block comment"
+            blank(start, cursor)
+            continue
+        raw_string = RAW_STRING.match(text, cursor)
+        if raw_string:
+            start = cursor
+            delimiter = '"' + raw_string.group("hashes")
+            cursor = raw_string.end()
+            end = text.find(delimiter, cursor)
+            assert end >= 0, "unterminated Rust raw string"
+            cursor = end + len(delimiter)
+            blank(start, cursor)
+            continue
+        if text[cursor] == '"':
+            start = cursor
+            cursor += 1
+            while cursor < len(text):
+                if text[cursor] == "\\":
+                    cursor += 2
+                elif text[cursor] == '"':
+                    cursor += 1
+                    break
+                else:
+                    cursor += 1
+            else:
+                raise AssertionError("unterminated Rust string")
+            blank(start, cursor)
+            continue
+        char_literal = CHAR_LITERAL.match(text, cursor)
+        if char_literal:
+            blank(cursor, char_literal.end())
+            cursor = char_literal.end()
+            continue
+        cursor += 1
+    return "".join(masked)
+
+
+def strip_cfg_test_modules(text: str) -> str:
+    """Remove inline test modules without discarding production code after them."""
+    masked = mask_rust_non_code(text)
+    spans: list[tuple[int, int]] = []
+    for match in TEST_MODULE.finditer(masked):
+        open_brace = masked.find("{", match.start(), match.end())
+        depth = 0
+        for cursor in range(open_brace, len(masked)):
+            if masked[cursor] == "{":
+                depth += 1
+            elif masked[cursor] == "}":
+                depth -= 1
+                if depth == 0:
+                    spans.append((match.start(), cursor + 1))
+                    break
+        else:
+            raise AssertionError("unterminated #[cfg(test)] Rust module")
+    for start, end in reversed(spans):
+        text = text[:start] + text[end:]
+    return text
+
+
+def production_sources() -> dict[str, str]:
+    result: dict[str, str] = {}
+    for path in sorted((ROOT / "crates").rglob("*.rs")):
+        relative = path.relative_to(ROOT).as_posix()
+        if (
+            any(part in relative for part in EXCLUDED)
+            or path.name == "tests.rs"
+            or path.name.endswith("_tests.rs")
+        ):
+            continue
+        text = path.read_text(encoding="utf-8")
+        result[relative] = strip_cfg_test_modules(text)
+    return result
+
+
+def main() -> int:
+    sources = production_sources()
+    for api, expected in EXPECTED.items():
+        pattern = re.compile(rf"(?<!fn )\b{api}\s*\(")
+        actual = {
+            path: count
+            for path, text in sources.items()
+            if (count := len(pattern.findall(text)))
+        }
+        assert actual == expected, (
+            f"audited crypto call-site drift for {api}: "
+            f"expected={expected}, actual={actual}"
+        )
+    print(
+        "crypto_callsite_policy=ok "
+        f"apis={len(EXPECTED)} calls={sum(sum(v.values()) for v in EXPECTED.values())}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

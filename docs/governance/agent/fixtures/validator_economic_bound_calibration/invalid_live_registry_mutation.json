@@ -1,0 +1,17 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_bound_calibration/valid_economic_bound_calibration.json",
+  "expected_error_contains": [
+    "live_registry_mutation must be false"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "scope",
+        "live_registry_mutation"
+      ],
+      "value": true
+    }
+  ],
+  "schema": "postfiat-validator-economic-bound-calibration-invalid-case-v1"
+}

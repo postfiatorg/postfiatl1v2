@@ -1,0 +1,25 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_margin_stress/valid_margin_stress.json",
+  "expected_error_contains": [
+    "selector_cases missing required margin-stress cases"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases"
+      ],
+      "value": [
+        {
+          "case_id": "case-01-clean-stress-continue",
+          "expected_reason_codes": [
+            "margin_stress_bounds_passed"
+          ],
+          "expected_route": "continue",
+          "overrides": []
+        }
+      ]
+    }
+  ],
+  "schema": "postfiat-validator-economic-margin-stress-invalid-case-v1"
+}

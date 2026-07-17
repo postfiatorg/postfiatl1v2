@@ -1,0 +1,316 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T00:00:00Z",
+    "attestor_key_hash": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+    "signature_hash": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+    "signature_scheme": "mldsa44-placeholder",
+    "statement_hash": "5332e6946d782a796e1b8ed451bc2605abaad1cd48f21bb8103589f15250a9165e211189e00ca376f4f335300b99cf11"
+  },
+  "checks": {
+    "authority_transfer": false,
+    "compromised_wallet_fails_closed": true,
+    "correlation_root_bound": true,
+    "cross_window_link_enforced": true,
+    "joint_tuple_correlation_enforced": true,
+    "live_registry_mutation": false,
+    "observed_joint_partition_model": true,
+    "pairwise_correlation_enforced": true,
+    "repeated_disclosure_enforced": true,
+    "required_channels_present": true,
+    "rpc_cohort_enforced": true,
+    "side_info_downgrades": true,
+    "statement_hash_bound": true,
+    "temporal_link_enforced": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "privacy-correlation-bound-v1-fixture",
+  "schema": "postfiat-privacy-correlation-bound-v1",
+  "statement": {
+    "baseline_observation": {
+      "correlation_policy_governed": true,
+      "cross_window_candidate_count": 32,
+      "declared_offchain_side_info": false,
+      "direct_rpc_observer": false,
+      "joint_metadata_tuple_count": 32,
+      "metadata_channels": [
+        "admission_bucket",
+        "asset_policy_partition",
+        "disclosure_hash",
+        "fee_class",
+        "rpc_observation",
+        "timing"
+      ],
+      "observation_age_seconds": 600,
+      "pairwise_intersections": [
+        {
+          "candidate_count": 32,
+          "pair_id": "timing_fee"
+        },
+        {
+          "candidate_count": 24,
+          "pair_id": "timing_asset_policy"
+        },
+        {
+          "candidate_count": 24,
+          "pair_id": "fee_asset_policy"
+        },
+        {
+          "candidate_count": 32,
+          "pair_id": "admission_rpc"
+        },
+        {
+          "candidate_count": 24,
+          "pair_id": "disclosure_rpc"
+        }
+      ],
+      "repeated_disclosure_candidate_count": 32,
+      "rpc_cohort_count": 32,
+      "temporal_link_candidate_count": 32,
+      "wallet_infrastructure_compromised": false
+    },
+    "correlation_model": {
+      "assumption": "observed_joint_partitions_not_independent_products",
+      "model_units": "integer_basis_points",
+      "non_coverage": "undisclosed_side_information_and_compromised_wallet_infrastructure"
+    },
+    "correlation_policy": {
+      "max_cross_window_posterior_bps": 625,
+      "max_joint_posterior_bps": 625,
+      "max_observation_age_seconds": 3600,
+      "max_pairwise_posterior_bps": 625,
+      "max_rpc_posterior_bps": 625,
+      "max_temporal_posterior_bps": 625,
+      "min_cross_window_candidate_count": 16,
+      "min_joint_metadata_tuple_count": 16,
+      "min_pairwise_intersection_count": 16,
+      "min_repeated_disclosure_candidate_count": 16,
+      "min_rpc_cohort_count": 16,
+      "min_temporal_link_candidate_count": 16,
+      "policy_units": "privacy-correlation-bound-v1"
+    },
+    "correlation_root_hash": "7f43b236c713dfbdda050e8348b1b284bed82264c54389a2c6fc8066531ecc81eb61f54365a88eddc35d0c2a3ce9bea3",
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/fixtures/privacy_deanonymization_bound/valid_deanonymization_bound.json",
+        "sha3_384": "2ea3b4d4d82f60bb685eddad90eb74386158f56ed4108d8994586c6d5c8dffeea13918c95269e4149eebeab72cb078be"
+      },
+      {
+        "path": "reports/privacy-deanonymization-bound/20260529T073724Z/privacy-deanonymization-bound-report.json",
+        "sha3_384": "1802931c744f121bc2fc392c07be3b461e72dc723113fdc772ea6dc59122c77406ddbf233bbceda2d14caa4dc8a70d39"
+      },
+      {
+        "path": "docs/governance/agent/privacy_correlation_bound_schema.json",
+        "sha3_384": "170bec17dd5ba446d3c36e1db0c6a943763debab3f7d3803e86265db297ec4baad6b7a9c9b694fb6a3313553fb118e85"
+      },
+      {
+        "path": "scripts/privacy-correlation-bound-verify",
+        "sha3_384": "9da554fbe5f88689e2ea8ac0561ade1a1fc477a1a1518a3c29c2226dc5091ed2b250208d42f561a8e230bcb49bee6f0b"
+      }
+    ],
+    "policy_id": "privacy-correlation-bound-v1",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "privacy-correlation-bound-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-baseline-correlation",
+        "expected_reason_codes": [
+          "inter_channel_correlation_bound_passed"
+        ],
+        "expected_route": "baseline-private",
+        "overrides": []
+      },
+      {
+        "case_id": "case-02-joint-tuple-correlation-shortfall",
+        "expected_reason_codes": [
+          "joint_metadata_tuple_shortfall"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "joint_metadata_tuple_count"
+            ],
+            "value": 8
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-pairwise-correlation-shortfall",
+        "expected_reason_codes": [
+          "pairwise_metadata_correlation_shortfall"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "pairwise_intersections",
+              1,
+              "candidate_count"
+            ],
+            "value": 8
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-temporal-link-shortfall",
+        "expected_reason_codes": [
+          "temporal_link_candidate_shortfall"
+        ],
+        "expected_route": "hold-for-batching",
+        "overrides": [
+          {
+            "path": [
+              "temporal_link_candidate_count"
+            ],
+            "value": 8
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-cross-window-link-shortfall",
+        "expected_reason_codes": [
+          "cross_window_candidate_shortfall"
+        ],
+        "expected_route": "hold-for-batching",
+        "overrides": [
+          {
+            "path": [
+              "cross_window_candidate_count"
+            ],
+            "value": 8
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-direct-rpc-observer",
+        "expected_reason_codes": [
+          "direct_rpc_observer_can_link_submission"
+        ],
+        "expected_route": "hold-for-private-relay",
+        "overrides": [
+          {
+            "path": [
+              "direct_rpc_observer"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-rpc-cohort-shortfall",
+        "expected_reason_codes": [
+          "rpc_cohort_correlation_shortfall"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "rpc_cohort_count"
+            ],
+            "value": 8
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-repeated-disclosure-shortfall",
+        "expected_reason_codes": [
+          "repeated_disclosure_correlation_shortfall"
+        ],
+        "expected_route": "explicit-disclosure-required",
+        "overrides": [
+          {
+            "path": [
+              "repeated_disclosure_candidate_count"
+            ],
+            "value": 1
+          }
+        ]
+      },
+      {
+        "case_id": "case-09-declared-offchain-side-info",
+        "expected_reason_codes": [
+          "declared_offchain_side_info_outside_model"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "declared_offchain_side_info"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-10-compromised-wallet-infrastructure",
+        "expected_reason_codes": [
+          "compromised_wallet_infrastructure"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "wallet_infrastructure_compromised"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-11-missing-correlation-channel",
+        "expected_reason_codes": [
+          "correlation_channels_incomplete"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "metadata_channels"
+            ],
+            "value": [
+              "admission_bucket",
+              "asset_policy_partition",
+              "disclosure_hash",
+              "fee_class",
+              "timing"
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-12-stale-correlation-observation",
+        "expected_reason_codes": [
+          "stale_correlation_observation"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "observation_age_seconds"
+            ],
+            "value": 7200
+          }
+        ]
+      },
+      {
+        "case_id": "case-13-ungoverned-policy",
+        "expected_reason_codes": [
+          "ungoverned_correlation_policy"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "correlation_policy_governed"
+            ],
+            "value": false
+          }
+        ]
+      }
+    ]
+  }
+}

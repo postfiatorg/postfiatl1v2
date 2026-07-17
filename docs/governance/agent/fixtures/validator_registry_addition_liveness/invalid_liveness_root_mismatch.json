@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_registry_addition_liveness/valid_registry_addition_liveness.json",
+  "expected_error_contains": [
+    "statement.liveness_root_hash does not match liveness material"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "liveness_root_hash"
+      ],
+      "value": "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+    }
+  ],
+  "schema": "postfiat-validator-registry-addition-liveness-invalid-case-v1"
+}

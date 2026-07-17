@@ -1,0 +1,161 @@
+{
+  "schema": "postfiat-constitutional-evidence-request-v1",
+  "request_id": "vc-privacy-architecture-001-request-001",
+  "request_version": 1,
+  "status": "approved",
+  "request_scope": "privacy",
+  "created_at": "2026-05-25T00:00:00Z",
+  "question_ref": {
+    "question_id": "vc-privacy-architecture-001",
+    "question_path": "docs/governance/agent/fixtures/verifiable_constitution/privacy_constitutional_question.json",
+    "question_file_sha3_384": "61ca07f1a36e8fe8c91127fb6f51ccd0d54861e083a171646d7a050d50c200113498dc34811c771b5d9bf850a3172abb",
+    "question_canonical_hash": "1cad272115f55f6fdb0dd378c4910881f29e8fd33cfd8cc3caa41ba004476a1c9a0ec8ad556c8daac3a7e087fa04bab0",
+    "question_schema_path": "docs/governance/agent/constitutional_question_schema.json",
+    "question_schema_sha3_384": "47c2b2f27bdc745615f4d0d893333c12825b8b935358efbf4f53bdb9ad7b72e03d46d5264812d2cd9066d3c11813bd7f"
+  },
+  "requested_fields": [
+    {
+      "field_path": "privacy.status_quo_hash",
+      "value_type": "hash",
+      "required": true,
+      "required_provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "privacy_class": "public",
+      "collection_methods": [
+        "governance_doc",
+        "repo_file_hash"
+      ],
+      "rationale": "Status quo must be hash-bound before the model may decide."
+    },
+    {
+      "field_path": "privacy.implementation_refs_hash",
+      "value_type": "hash",
+      "required": true,
+      "required_provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "privacy_class": "public",
+      "collection_methods": [
+        "governance_doc",
+        "repo_file_hash"
+      ],
+      "rationale": "Implementation references define the current protocol surface."
+    },
+    {
+      "field_path": "privacy.evidence_refs_hash",
+      "value_type": "hash",
+      "required": true,
+      "required_provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "privacy_class": "public",
+      "collection_methods": [
+        "governance_doc",
+        "repo_file_hash"
+      ],
+      "rationale": "Evidence references define the non-validator inputs allowed into the decision."
+    },
+    {
+      "field_path": "privacy.closed_option_set_hash",
+      "value_type": "hash",
+      "required": true,
+      "required_provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "privacy_class": "public",
+      "collection_methods": [
+        "governance_doc",
+        "repo_file_hash"
+      ],
+      "rationale": "The closed option set prevents Qwen from silently expanding scope."
+    }
+  ],
+  "forbidden_fields": [
+    {
+      "field_path": "provider.private_api_key",
+      "reason": "Provider credentials are never constitutional evidence.",
+      "severity": "reject_packet"
+    },
+    {
+      "field_path": "operator.private_notes",
+      "reason": "Private notes are hidden evidence.",
+      "severity": "reject_packet"
+    },
+    {
+      "field_path": "unregistered.reputation_claim",
+      "reason": "Untyped reputation claims recreate opaque discretionary governance.",
+      "severity": "reject_request"
+    },
+    {
+      "field_path": "live.registry_mutation_authorization",
+      "reason": "An evidence request cannot authorize live registry mutation.",
+      "severity": "reject_request"
+    },
+    {
+      "field_path": "live.cobalt_amendment_submission",
+      "reason": "An evidence request cannot submit or authorize a live Cobalt amendment.",
+      "severity": "reject_request"
+    },
+    {
+      "field_path": "live.authority_transfer_claim",
+      "reason": "Authority transfer is outside this packet boundary.",
+      "severity": "reject_request"
+    }
+  ],
+  "minimum_packet_checks": {
+    "schema_valid": true,
+    "question_hash_matches": true,
+    "field_registry_bound": true,
+    "source_hashes_verified": true,
+    "all_required_fields_present_or_noop": true,
+    "missing_and_conflict_behaviors_applied": true,
+    "redaction_passed": true,
+    "secret_scan_passed": true,
+    "no_hidden_evidence": true,
+    "no_live_mutation": true,
+    "provenance_validated": true
+  },
+  "request_boundaries": {
+    "qwen_may_request_fields": true,
+    "qwen_may_collect_evidence": false,
+    "qwen_may_change_question": false,
+    "qwen_may_expand_options": false,
+    "qwen_may_authorize_live_action": false,
+    "qwen_may_request_secret_material": false,
+    "accepted_request_is_live_authority": false
+  },
+  "fallback": "hold_until_packet_approved",
+  "checks": {
+    "requested_fields_present": true,
+    "provenance_declared": true,
+    "freshness_declared": true,
+    "missing_behavior_declared": true,
+    "conflict_behavior_declared": true,
+    "action_bounds_declared": true,
+    "forbidden_fields_present": true,
+    "minimum_packet_checks_present": true,
+    "live_mutation_authorized": false,
+    "authority_transfer": false
+  }
+}

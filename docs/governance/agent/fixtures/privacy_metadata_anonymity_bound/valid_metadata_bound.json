@@ -1,0 +1,281 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T00:00:00Z",
+    "attestor_key_hash": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+    "signature_hash": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+    "signature_scheme": "mldsa44-placeholder",
+    "statement_hash": "42d924d4c704e86c528ce42a5820ecd2d89ee63583ee9ccc60fd20bea0bb8ce99e1e568e8d3c2293cb4cea04c2ab66b4"
+  },
+  "checks": {
+    "authority_transfer": false,
+    "bursty_timing_holds": true,
+    "inferable_fields_declared": true,
+    "live_registry_mutation": false,
+    "low_volume_downgrades": true,
+    "metadata_root_bound": true,
+    "private_field_public_fails_closed": true,
+    "public_fields_limited": true,
+    "statement_hash_bound": true,
+    "thin_asset_downgrades": true,
+    "third_party_rpc_holds": true,
+    "unique_disclosure_explicit": true,
+    "wallet_infrastructure_discipline_declared": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "privacy-metadata-anonymity-bound-v1-fixture",
+  "schema": "postfiat-privacy-metadata-anonymity-bound-v1",
+  "statement": {
+    "base_assessment": {
+      "action_window_count": 512,
+      "asset_liquidity_tier": "standard_asset",
+      "batch_size": 16,
+      "disclosure_hash_reuse_count": 8,
+      "inferable_fields": [
+        "admission_bucket",
+        "asset_policy_partition",
+        "disclosure_hash_uniqueness",
+        "fee_class",
+        "rpc_observer_metadata",
+        "timing"
+      ],
+      "metadata_policy_governed": true,
+      "public_fields": [
+        "burn",
+        "disclosure_hash",
+        "fee",
+        "nullifier",
+        "output_commitments",
+        "policy_hash",
+        "root"
+      ],
+      "rpc_submission_mode": "self_hosted_rpc",
+      "same_asset_policy_count": 64,
+      "same_fee_class_count": 64,
+      "time_bucket_seconds": 900,
+      "wallet_infrastructure_discipline": [
+        "batching",
+        "delay_window",
+        "disclosure_reuse_avoidance",
+        "relay_or_self_hosted_rpc",
+        "withdrawal_timing"
+      ]
+    },
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/fixtures/privacy_assurance_receipt/valid_assurance_receipt.json",
+        "sha3_384": "6a3639d62da2978ba9a08091ae263b464ebf5ce0dfdac4e6fd66fe727a7d1ce705590e2bf7fb78398b08eedb848f286e"
+      },
+      {
+        "path": "docs/governance/agent/fixtures/shielded_asset_predicate_registry/valid_predicate_registry.json",
+        "sha3_384": "b875d5020985ba3b3ab359c6df9b17beae56d28c7f6c0ff6643f7375dc38b08375da123b17c61bea0312c6c7af2a7d5c"
+      },
+      {
+        "path": "reports/testnet-orchard-privacy-audit-packet/orchard-privacy-audit-packet-20260515T185212Z/orchard-privacy-audit-packet.json",
+        "sha3_384": "9ae94ad1539e41da4f2bb3e6cc88201e18948d3d9ee4a7c14ec31133b0f71fc7132603c476a3b6b335482c2d6df1f023"
+      },
+      {
+        "path": "docs/governance/agent/privacy_metadata_anonymity_bound_schema.json",
+        "sha3_384": "6a235b95b9a559159e0de95de7605c44953746dbaf12b2288ad6ee224fe9b275bc4811f7830445e34e7aff753458c32c"
+      },
+      {
+        "path": "scripts/privacy-metadata-anonymity-bound-verify",
+        "sha3_384": "af92f65aec0600a7a7c47b2eaa0403775eb384af29d4b612e0b9749dd2276310d09f5260b407f5d11aa7fe66bb490b7d"
+      }
+    ],
+    "metadata_policy": {
+      "min_action_window_count": 128,
+      "min_batch_size": 8,
+      "min_same_asset_policy_count": 16,
+      "min_same_fee_class_count": 32,
+      "min_time_bucket_seconds": 300,
+      "policy_units": "privacy-metadata-anonymity-bound-v1",
+      "route_on_bursty_timing": "hold-for-batching",
+      "route_on_direct_third_party_rpc": "hold-for-private-relay",
+      "route_on_low_volume": "downgrade-privacy-claim",
+      "route_on_private_field_public": "fail-closed",
+      "route_on_thin_asset": "downgrade-privacy-claim",
+      "route_on_ungoverned_policy": "fail-closed",
+      "route_on_unique_disclosure": "explicit-disclosure-required"
+    },
+    "metadata_root_hash": "7af983eec4861bd846e58929a028a00cae8c5c3b2dc3ba119fb5d084234cc7b8c488f20c96fbbca115d341685ab0b081",
+    "policy_id": "privacy-metadata-anonymity-bound-v1",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "privacy-metadata-anonymity-bound-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-baseline-private",
+        "expected_reason_codes": [
+          "metadata_anonymity_bounds_passed"
+        ],
+        "expected_route": "baseline-private",
+        "overrides": []
+      },
+      {
+        "case_id": "case-02-low-volume-downgrade",
+        "expected_reason_codes": [
+          "low_activity_window_downgrades_privacy_claim"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "action_window_count"
+            ],
+            "value": 64
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-bursty-timing-hold-for-batching",
+        "expected_reason_codes": [
+          "bursty_timing_requires_batching"
+        ],
+        "expected_route": "hold-for-batching",
+        "overrides": [
+          {
+            "path": [
+              "batch_size"
+            ],
+            "value": 4
+          },
+          {
+            "path": [
+              "time_bucket_seconds"
+            ],
+            "value": 120
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-thin-asset-policy-downgrade",
+        "expected_reason_codes": [
+          "thin_asset_policy_partition_downgrades_privacy_claim"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "asset_liquidity_tier"
+            ],
+            "value": "thin_asset"
+          },
+          {
+            "path": [
+              "same_asset_policy_count"
+            ],
+            "value": 8
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-unique-disclosure-explicit",
+        "expected_reason_codes": [
+          "unique_disclosure_hash_requires_explicit_disclosure"
+        ],
+        "expected_route": "explicit-disclosure-required",
+        "overrides": [
+          {
+            "path": [
+              "disclosure_hash_reuse_count"
+            ],
+            "value": 1
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-third-party-rpc-hold-for-relay",
+        "expected_reason_codes": [
+          "third_party_rpc_observer_requires_relay_or_self_host"
+        ],
+        "expected_route": "hold-for-private-relay",
+        "overrides": [
+          {
+            "path": [
+              "rpc_submission_mode"
+            ],
+            "value": "third_party_direct_rpc"
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-private-field-public-fail-closed",
+        "expected_reason_codes": [
+          "public_fields_include_private_or_partitioning_data"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "public_fields"
+            ],
+            "value": [
+              "asset",
+              "burn",
+              "disclosure_hash",
+              "fee",
+              "nullifier",
+              "output_commitments",
+              "policy_hash",
+              "root"
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-ungoverned-policy-fail-closed",
+        "expected_reason_codes": [
+          "ungoverned_metadata_policy"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "metadata_policy_governed"
+            ],
+            "value": false
+          }
+        ]
+      },
+      {
+        "case_id": "case-09-missing-threat-model-hold",
+        "expected_reason_codes": [
+          "privacy_threat_model_incomplete"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "inferable_fields"
+            ],
+            "value": [
+              "admission_bucket",
+              "asset_policy_partition",
+              "disclosure_hash_uniqueness",
+              "fee_class",
+              "timing"
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-10-fee-class-singleton-downgrade",
+        "expected_reason_codes": [
+          "fee_class_singleton_downgrades_privacy_claim"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "same_fee_class_count"
+            ],
+            "value": 1
+          }
+        ]
+      }
+    ]
+  }
+}

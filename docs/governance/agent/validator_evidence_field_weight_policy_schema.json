@@ -1,0 +1,355 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-validator-evidence-field-weight-policy-v1.json",
+  "title": "PostFiat Validator Evidence Field Weight Policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "policy_id",
+    "scope",
+    "packet_id",
+    "validator_evidence_packet_root",
+    "packet_schema_hash",
+    "field_registry_hash",
+    "collection_window",
+    "model_selection",
+    "weight_profile",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-evidence-field-weight-policy-v1"
+    },
+    "policy_id": {
+      "$ref": "#/$defs/id"
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "context",
+        "design_only",
+        "qwen_may_change_weights",
+        "live_registry_mutation",
+        "authority_transfer"
+      ],
+      "properties": {
+        "context": {
+          "enum": [
+            "model_selection_governance",
+            "field_weight_update"
+          ]
+        },
+        "design_only": {
+          "const": true
+        },
+        "qwen_may_change_weights": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    },
+    "packet_id": {
+      "$ref": "#/$defs/id"
+    },
+    "validator_evidence_packet_root": {
+      "$ref": "#/$defs/hash96"
+    },
+    "packet_schema_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "field_registry_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "collection_window": {
+      "$ref": "#/$defs/collection_window"
+    },
+    "model_selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision_id",
+        "model_id",
+        "runtime_profile_hash",
+        "prompt_hash",
+        "accepted_replay_report_hash",
+        "reviewer_signoff_hash"
+      ],
+      "properties": {
+        "decision_id": {
+          "$ref": "#/$defs/id"
+        },
+        "model_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runtime_profile_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "prompt_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "accepted_replay_report_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "reviewer_signoff_hash": {
+          "$ref": "#/$defs/hash96"
+        }
+      }
+    },
+    "weight_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_id",
+        "total_weight_bps",
+        "entries_order",
+        "entries",
+        "summary"
+      ],
+      "properties": {
+        "profile_id": {
+          "$ref": "#/$defs/id"
+        },
+        "total_weight_bps": {
+          "const": 10000
+        },
+        "entries_order": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "entries": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "patternProperties": {
+            "^[a-z0-9][a-z0-9._:-]{2,127}$": {
+              "$ref": "#/$defs/weight_entry"
+            }
+          }
+        },
+        "summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "entry_count",
+            "total_weight_bps",
+            "max_single_weight_bps"
+          ],
+          "properties": {
+            "entry_count": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "total_weight_bps": {
+              "const": 10000
+            },
+            "max_single_weight_bps": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            }
+          }
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packet_root_verified",
+        "packet_schema_hash_bound",
+        "field_registry_hash_bound",
+        "field_paths_registered",
+        "total_weight_bps_verified",
+        "qwen_weight_editing_disabled",
+        "model_selection_lane_required",
+        "registry_mutation",
+        "live_authority_transfer"
+      ],
+      "properties": {
+        "packet_root_verified": {
+          "const": true
+        },
+        "packet_schema_hash_bound": {
+          "const": true
+        },
+        "field_registry_hash_bound": {
+          "const": true
+        },
+        "field_paths_registered": {
+          "const": true
+        },
+        "total_weight_bps_verified": {
+          "const": true
+        },
+        "qwen_weight_editing_disabled": {
+          "const": true
+        },
+        "model_selection_lane_required": {
+          "const": true
+        },
+        "registry_mutation": {
+          "const": false
+        },
+        "live_authority_transfer": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "action_bound": {
+      "enum": [
+        "informational_only",
+        "score_adjustment",
+        "admission_gate",
+        "hold_only",
+        "suspend_candidate",
+        "remove_candidate",
+        "no_action"
+      ],
+      "type": "string"
+    },
+    "collection_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_height",
+        "to_height",
+        "from_time",
+        "to_time"
+      ],
+      "properties": {
+        "from_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "from_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to_time": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "conflict_behavior": {
+      "enum": [
+        "reject_packet",
+        "reject_validator_entry",
+        "hold"
+      ],
+      "type": "string"
+    },
+    "freshness_requirement": {
+      "enum": [
+        "same_packet",
+        "recent_24h",
+        "recent_7d",
+        "recent_30d",
+        "epoch_bound",
+        "historical"
+      ],
+      "type": "string"
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    },
+    "missing_evidence_behavior": {
+      "enum": [
+        "reject_packet",
+        "reject_validator_entry",
+        "hold",
+        "neutral",
+        "stale"
+      ],
+      "type": "string"
+    },
+    "required_provenance": {
+      "enum": [
+        "chain_derived",
+        "registry_derived",
+        "operator_signed",
+        "collector_observed",
+        "network_observed",
+        "self_asserted",
+        "third_party_attested"
+      ],
+      "type": "string"
+    },
+    "weight_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entry_id",
+        "field_path",
+        "weight_bps",
+        "action_bound",
+        "required_provenance",
+        "freshness_requirement",
+        "missing_evidence_behavior",
+        "conflict_behavior",
+        "qwen_editable",
+        "rationale_hash"
+      ],
+      "properties": {
+        "entry_id": {
+          "$ref": "#/$defs/id"
+        },
+        "field_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "weight_bps": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "action_bound": {
+          "$ref": "#/$defs/action_bound"
+        },
+        "required_provenance": {
+          "$ref": "#/$defs/required_provenance"
+        },
+        "freshness_requirement": {
+          "$ref": "#/$defs/freshness_requirement"
+        },
+        "missing_evidence_behavior": {
+          "$ref": "#/$defs/missing_evidence_behavior"
+        },
+        "conflict_behavior": {
+          "$ref": "#/$defs/conflict_behavior"
+        },
+        "qwen_editable": {
+          "const": false
+        },
+        "rationale_hash": {
+          "$ref": "#/$defs/hash96"
+        }
+      }
+    }
+  }
+}

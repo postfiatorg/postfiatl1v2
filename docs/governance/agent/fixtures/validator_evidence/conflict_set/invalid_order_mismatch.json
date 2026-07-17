@@ -1,0 +1,63 @@
+{
+  "schema": "postfiat-validator-evidence-conflict-set-v1",
+  "conflict_set_id": "validator-evidence-conflict-set-2026-05-23-example",
+  "packet_id": "validator-evidence-2026-05-23-example",
+  "validator_evidence_packet_root": "7f146e261443b04f443764468e94343f81a1dd87ec30a122b267b3d2050d43321ea6b122cb2b19efbe57b1728a6e4cea",
+  "packet_schema_hash": "92544968ea283754c5cd3cfba85194afff80f9366f07063b5cd228ea58a6f9efbeb74ad416f9f118595f8c6719d4f0c3",
+  "field_registry_hash": "a4d0ad75fcf706432e2d44bfd75486139a69116249ffb47bbc786fcb67ab939b25f99834d5cb5aa7bb93cfed8901200f",
+  "collection_window": {
+    "from_height": 1000,
+    "to_height": 2000,
+    "from_time": "2026-05-23T00:00:00Z",
+    "to_time": "2026-05-23T06:00:00Z"
+  },
+  "conflict_order": [
+    "conflict-missing-from-map"
+  ],
+  "conflicts": {
+    "conflict-url-content-alpha": {
+      "conflict_id": "conflict-url-content-alpha",
+      "scope": "validator_field",
+      "validator_id": "validator-alpha",
+      "field_path": "validator.identity.url_fetch.content_hash",
+      "value_type": "hash",
+      "conflict_type": "unexpected_url_content_change",
+      "source_hashes": [
+        "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "abababababababababababababababababababababababababababababababababababababababababababababababab"
+      ],
+      "value_hashes": [
+        "121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212",
+        "343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434"
+      ],
+      "observed_at": "2026-05-23T05:55:00Z",
+      "freshness": "recent_24h",
+      "conflict_behavior": "hold",
+      "affected_action_bound": "admission_gate",
+      "dga_treatment": "hold_or_noop",
+      "resolution_status": "unresolved",
+      "resolution_hash": null
+    }
+  },
+  "summary": {
+    "total_conflict_count": 1,
+    "validator_conflict_count": 1,
+    "cohort_conflict_count": 0,
+    "packet_conflict_count": 0,
+    "unresolved_conflict_count": 1
+  },
+  "redaction": {
+    "private_values_redacted": true,
+    "source_values_hashed": true,
+    "secret_scan_passed": true,
+    "public_artifact_safe": true
+  },
+  "checks": {
+    "packet_root_verified": true,
+    "field_paths_registered": true,
+    "source_hashes_retained": true,
+    "unresolved_conflicts_hold_or_noop": true,
+    "registry_mutation": false,
+    "live_authority_transfer": false
+  }
+}

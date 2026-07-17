@@ -1,0 +1,18 @@
+{
+  "schema": "postfiat-shielded-asset-predicate-registry-invalid-case-v1",
+  "case_id": "invalid-registry-root-mismatch",
+  "base_packet": "docs/governance/agent/fixtures/shielded_asset_predicate_registry/valid_predicate_registry.json",
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "registry",
+        "registry_root_hash"
+      ],
+      "value": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "expected_error_contains": [
+    "registry.registry_root_hash does not match predicate registry material"
+  ]
+}

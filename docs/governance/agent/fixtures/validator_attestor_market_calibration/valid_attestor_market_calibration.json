@@ -1,0 +1,269 @@
+{
+  "schema": "postfiat-validator-attestor-market-calibration-packet-v1",
+  "statement": {
+    "packet_id": "validator-attestor-market-calibration-v1",
+    "policy_id": "postfiat-attestor-market-calibration-policy-v1",
+    "created_at": "2026-05-29T13:30:00Z",
+    "calibration_policy": {
+      "policy_units": "validator-attestor-market-calibration-policy-v1",
+      "policy_governed": true,
+      "active_byzantine_budget_B": 2,
+      "min_independent_attestor_groups": 3,
+      "min_control_surfaces": 3,
+      "max_market_evidence_age_epochs": 3,
+      "min_safety_discount_bps": 8000,
+      "max_safety_discount_bps": 10000,
+      "max_value_at_stake_ceiling_usd": 4000000
+    },
+    "base_model": {
+      "current_epoch": 24,
+      "B": 2,
+      "calibration_policy_governed": true,
+      "value_at_stake_ceiling_usd": 4000000,
+      "value_at_stake_ceiling_unbounded": false,
+      "active_capture_to_value_ratio_bps": 15000,
+      "safety_discount_bps": 8000,
+      "attestor_market_paths": {
+        "conflict_erasure": {
+          "independent_attestor_groups": [
+            "attestor.group.a",
+            "attestor.group.b",
+            "attestor.group.c"
+          ],
+          "control_surfaces": [
+            "contract-liability",
+            "challenge-bond",
+            "registry-exclusion"
+          ],
+          "cost_components": [
+            {
+              "attestor_group": "attestor.group.a",
+              "observed_epoch": 24,
+              "expires_epoch": 27,
+              "direct_capture_cost_usd": 1000000,
+              "false_attestation_liability_usd": 900000,
+              "challenge_bond_usd": 250000,
+              "registry_exclusion_consequence_usd": 350000
+            },
+            {
+              "attestor_group": "attestor.group.b",
+              "observed_epoch": 24,
+              "expires_epoch": 27,
+              "direct_capture_cost_usd": 1000000,
+              "false_attestation_liability_usd": 900000,
+              "challenge_bond_usd": 250000,
+              "registry_exclusion_consequence_usd": 350000
+            },
+            {
+              "attestor_group": "attestor.group.c",
+              "observed_epoch": 24,
+              "expires_epoch": 27,
+              "direct_capture_cost_usd": 1000000,
+              "false_attestation_liability_usd": 900000,
+              "challenge_bond_usd": 250000,
+              "registry_exclusion_consequence_usd": 350000
+            }
+          ]
+        },
+        "manufacture_bi": {
+          "independent_attestor_groups": [
+            "attestor.group.a",
+            "attestor.group.b",
+            "attestor.group.c"
+          ],
+          "control_surfaces": [
+            "contract-liability",
+            "challenge-bond",
+            "registry-exclusion"
+          ],
+          "cost_components": [
+            {
+              "attestor_group": "attestor.group.a",
+              "observed_epoch": 24,
+              "expires_epoch": 27,
+              "direct_capture_cost_usd": 1000000,
+              "false_attestation_liability_usd": 900000,
+              "challenge_bond_usd": 250000,
+              "registry_exclusion_consequence_usd": 350000
+            },
+            {
+              "attestor_group": "attestor.group.b",
+              "observed_epoch": 24,
+              "expires_epoch": 27,
+              "direct_capture_cost_usd": 1000000,
+              "false_attestation_liability_usd": 900000,
+              "challenge_bond_usd": 250000,
+              "registry_exclusion_consequence_usd": 350000
+            },
+            {
+              "attestor_group": "attestor.group.c",
+              "observed_epoch": 24,
+              "expires_epoch": 27,
+              "direct_capture_cost_usd": 1000000,
+              "false_attestation_liability_usd": 900000,
+              "challenge_bond_usd": 250000,
+              "registry_exclusion_consequence_usd": 350000
+            }
+          ]
+        }
+      }
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-clean-calibration-admit",
+        "overrides": [],
+        "expected_route": "admit",
+        "expected_reason_codes": [
+          "attestor_market_calibration_passed"
+        ]
+      },
+      {
+        "case_id": "case-02-underpriced-market-holds",
+        "overrides": [
+          {
+            "path": [
+              "attestor_market_paths",
+              "manufacture_bi",
+              "cost_components",
+              0,
+              "direct_capture_cost_usd"
+            ],
+            "value": 0
+          },
+          {
+            "path": [
+              "attestor_market_paths",
+              "manufacture_bi",
+              "cost_components",
+              0,
+              "false_attestation_liability_usd"
+            ],
+            "value": 0
+          }
+        ],
+        "expected_route": "hold",
+        "expected_reason_codes": [
+          "manufacture_bi_derived_ratio_below_active_ratio"
+        ]
+      },
+      {
+        "case_id": "case-03-stale-market-evidence-holds",
+        "overrides": [
+          {
+            "path": [
+              "attestor_market_paths",
+              "manufacture_bi",
+              "cost_components",
+              0,
+              "observed_epoch"
+            ],
+            "value": 18
+          }
+        ],
+        "expected_route": "hold",
+        "expected_reason_codes": [
+          "manufacture_bi_stale_market_evidence"
+        ]
+      },
+      {
+        "case_id": "case-04-under-group-budget-fails-closed",
+        "overrides": [
+          {
+            "path": [
+              "attestor_market_paths",
+              "manufacture_bi",
+              "independent_attestor_groups"
+            ],
+            "value": [
+              "attestor.group.a",
+              "attestor.group.b"
+            ]
+          }
+        ],
+        "expected_route": "fail-closed",
+        "expected_reason_codes": [
+          "manufacture_bi_attestor_group_budget_below_floor"
+        ]
+      },
+      {
+        "case_id": "case-05-ungoverned-policy-fails-closed",
+        "overrides": [
+          {
+            "path": [
+              "calibration_policy_governed"
+            ],
+            "value": false
+          }
+        ],
+        "expected_route": "fail-closed",
+        "expected_reason_codes": [
+          "ungoverned_calibration_policy"
+        ]
+      },
+      {
+        "case_id": "case-06-unbounded-value-ceiling-fails-closed",
+        "overrides": [
+          {
+            "path": [
+              "value_at_stake_ceiling_unbounded"
+            ],
+            "value": true
+          }
+        ],
+        "expected_route": "fail-closed",
+        "expected_reason_codes": [
+          "unbounded_value_at_stake_ceiling"
+        ]
+      },
+      {
+        "case_id": "case-07-unsafe-discount-fails-closed",
+        "overrides": [
+          {
+            "path": [
+              "safety_discount_bps"
+            ],
+            "value": 7000
+          },
+          {
+            "path": [
+              "active_capture_to_value_ratio_bps"
+            ],
+            "value": 10000
+          }
+        ],
+        "expected_route": "fail-closed",
+        "expected_reason_codes": [
+          "safety_discount_below_floor"
+        ]
+      },
+      {
+        "case_id": "case-08-active-ratio-above-derived-support-holds",
+        "overrides": [
+          {
+            "path": [
+              "active_capture_to_value_ratio_bps"
+            ],
+            "value": 16000
+          }
+        ],
+        "expected_route": "hold",
+        "expected_reason_codes": [
+          "conflict_erasure_derived_ratio_below_active_ratio",
+          "manufacture_bi_derived_ratio_below_active_ratio"
+        ]
+      }
+    ],
+    "calibration_root_hash": "06fb02a9d8decb77a64ac00e735dfa4946b305008af2543f81ddfeec46331b4890d75d00e122534d5d9cc04f4dafe8b6",
+    "statement_hash": "ba078ad4fddcb7ae3c7a46e96a0cb34d25ad7283940bf3daf8c7db4316a559d43020292d6cc70b677a8b6551b406b59e",
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/validator_attestor_market_calibration_schema.json",
+        "sha3_384": "83c509205c701a4df12960afbd217c10c2bab2f927bbc9c97124ced6fd6e9738f3a1831be8ab088161c3345ebd05bf1e"
+      },
+      {
+        "path": "scripts/validator-attestor-market-calibration-verify",
+        "sha3_384": "58b07e977a4ab4db5cc7cffcad0a4aaf4e176f4a09a5bd06241980163023154a2ee7605a83d8a894334ecb9188b48b8a"
+      }
+    ]
+  }
+}

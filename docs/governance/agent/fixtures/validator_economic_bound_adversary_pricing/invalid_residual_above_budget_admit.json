@@ -1,0 +1,18 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_bound_adversary_pricing/valid_adversary_pricing.json",
+  "expected_error_contains": [
+    "case-03-residual-above-b-fail-closed: expected_route mismatch"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        2,
+        "expected_route"
+      ],
+      "value": "admit"
+    }
+  ],
+  "schema": "postfiat-validator-economic-bound-adversary-pricing-invalid-case-v1"
+}

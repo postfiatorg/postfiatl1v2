@@ -1,0 +1,252 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VALIDATORS="${VALIDATORS:-4}"
+RUN_ID="${RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
+if [ -z "${BASE_DIR+x}" ]; then
+  BASE_DIR="/tmp/postfiat-testnet-rpc-doctor-smoke/nodes-$RUN_ID"
+  BASE_DIR_IS_TEMP=1
+else
+  BASE_DIR_IS_TEMP=0
+fi
+LOG_DIR="${LOG_DIR:-reports/testnet-rpc-doctor-smoke/logs-$RUN_ID}"
+REPORT="${REPORT:-reports/testnet-rpc-doctor-smoke/testnet-rpc-doctor-smoke-$RUN_ID.json}"
+DOCTOR_REPORT="${DOCTOR_REPORT:-reports/testnet-rpc-doctor/testnet-rpc-doctor-smoke-$RUN_ID.json}"
+HARNESS_REPORT="${HARNESS_REPORT:-$LOG_DIR/local-harness.json}"
+TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-25}"
+RPC_TIMEOUT_MS="${RPC_TIMEOUT_MS:-5000}"
+ACCOUNT_TX_AMOUNT="${ACCOUNT_TX_AMOUNT:-100}"
+ACCOUNT_TX_RECIPIENT="${ACCOUNT_TX_RECIPIENT:-pfrpcdoctoraccounttxrecipient00000001}"
+
+require_command() {
+  local command="$1"
+  if ! command -v "$command" >/dev/null 2>&1; then
+    echo "missing required command: $command" >&2
+    exit 1
+  fi
+}
+
+require_positive_integer() {
+  local name="$1"
+  local value="$2"
+  if ! [[ "$value" =~ ^[0-9]+$ ]] || [ "$value" -lt 1 ]; then
+    echo "$name must be a positive integer" >&2
+    exit 2
+  fi
+}
+
+require_command cargo
+require_command date
+require_command jq
+require_command timeout
+
+require_positive_integer VALIDATORS "$VALIDATORS"
+require_positive_integer TIMEOUT_SECONDS "$TIMEOUT_SECONDS"
+require_positive_integer RPC_TIMEOUT_MS "$RPC_TIMEOUT_MS"
+require_positive_integer ACCOUNT_TX_AMOUNT "$ACCOUNT_TX_AMOUNT"
+
+rm -rf "$LOG_DIR"
+cargo build -p postfiat-node -p postfiat-rpc-sdk >/dev/null
+mkdir -p "$LOG_DIR" "$(dirname "$REPORT")" "$(dirname "$DOCTOR_REPORT")"
+
+VALIDATORS="$VALIDATORS" \
+  BASE_DIR="$BASE_DIR" \
+  LOG_DIR="$LOG_DIR/harness" \
+  REPORT="$HARNESS_REPORT" \
+  scripts/testnet-local-harness >"$LOG_DIR/local-harness.out"
+
+jq -e '.schema == "postfiat-testnet-local-harness-v1" and .harness_ok == true' \
+  "$HARNESS_REPORT" >/dev/null
+
+bundle_dir="$(jq -r '.bundle.path' "$HARNESS_REPORT")"
+topology="$bundle_dir/remote-topology.json"
+node_id="validator-0"
+rpc_port="$(jq -r --arg node_id "$node_id" '.peers[] | select(.node_id == $node_id) | .rpc_port' "$topology")"
+faucet_address="$(jq -r '.address' "$BASE_DIR/$node_id/faucet_account.json")"
+if [ -z "$rpc_port" ] || [ "$rpc_port" = "null" ]; then
+  echo "missing rpc port for $node_id" >&2
+  exit 1
+fi
+if [ -z "$faucet_address" ] || [ "$faucet_address" = "null" ]; then
+  echo "missing faucet address" >&2
+  exit 1
+fi
+
+account_tx_batch_file="$LOG_DIR/account-tx-funding.batch.json"
+target/debug/postfiat-node batch-transfer \
+  --data-dir "$BASE_DIR/$node_id" \
+  --to "$ACCOUNT_TX_RECIPIENT" \
+  --amount "$ACCOUNT_TX_AMOUNT" \
+  --batch-file "$account_tx_batch_file" >"$LOG_DIR/account-tx-funding.batch.out"
+for ((i = 0; i < VALIDATORS; i++)); do
+  target/debug/postfiat-node apply-batch \
+    --data-dir "$BASE_DIR/validator-$i" \
+    --batch-file "$account_tx_batch_file" >"$LOG_DIR/account-tx-funding.validator-$i.receipts.json"
+done
+account_tx_funding_tx_id="$(
+  jq -r '.[0].tx_id' "$LOG_DIR/account-tx-funding.$node_id.receipts.json"
+)"
+if [ -z "$account_tx_funding_tx_id" ] || [ "$account_tx_funding_tx_id" = "null" ]; then
+  echo "missing account_tx funding tx id" >&2
+  exit 1
+fi
+target/debug/postfiat-node account-tx-index-build \
+  --data-dir "$BASE_DIR/$node_id" >"$LOG_DIR/account-tx-index-build.json"
+target/debug/postfiat-node account-tx-index-status \
+  --data-dir "$BASE_DIR/$node_id" >"$LOG_DIR/account-tx-index-status.json"
+jq -e \
+  '.schema == "postfiat-account-tx-index-status-v1" and .index_present == true and .index_usable == true and .indexed_row_count >= 1 and .account_count >= 1' \
+  "$LOG_DIR/account-tx-index-status.json" >/dev/null
+
+server_report="$LOG_DIR/rpc-serve.json"
+server_err="$LOG_DIR/rpc-serve.err"
+server_event_log="$LOG_DIR/rpc-serve-events.ndjson"
+max_requests=17
+timeout "$TIMEOUT_SECONDS" target/debug/postfiat-node rpc-serve --unsafe-devnet-json-storage \
+  --data-dir "$BASE_DIR/$node_id" \
+  --bind-host 127.0.0.1 \
+  --port "$rpc_port" \
+  --max-requests "$max_requests" \
+  --timeout-ms "$RPC_TIMEOUT_MS" \
+  --event-log "$server_event_log" >"$server_report" 2>"$server_err" &
+server_pid="$!"
+server_running=1
+
+cleanup() {
+  if [ "$server_running" = "1" ] && kill -0 "$server_pid" >/dev/null 2>&1; then
+    kill "$server_pid" >/dev/null 2>&1 || true
+    wait "$server_pid" >/dev/null 2>&1 || true
+  fi
+  if [ "$BASE_DIR_IS_TEMP" = "1" ]; then
+    rm -rf "$BASE_DIR"
+  fi
+}
+trap cleanup EXIT
+sleep 1
+
+scripts/testnet-rpc-doctor \
+  --endpoint "$node_id=127.0.0.1:$rpc_port" \
+  --output "$DOCTOR_REPORT" \
+  --log-dir "$LOG_DIR/doctor" \
+  --account-address "$faucet_address" \
+  --timeout-seconds 5 \
+  --no-build
+
+wait "$server_pid"
+server_running=0
+
+jq -e \
+  '.schema == "postfiat-rpc-serve-v1" and .verified == true and .read_only == true and .request_count == 17 and .ok_count == 16 and .error_count == 1' \
+  "$server_report" >/dev/null
+
+jq -e \
+  '.schema == "postfiat-testnet-rpc-doctor-v1" and .doctor_ok == true and .checks.all_read_only == true and .checks.height_lag == 0 and .endpoint_count == 1' \
+  "$DOCTOR_REPORT" >/dev/null
+account_tx_response="$(
+  jq -r '.endpoints[0].methods[] | select(.method == "account_tx") | .response_file' \
+    "$DOCTOR_REPORT"
+)"
+if [ -z "$account_tx_response" ] || [ "$account_tx_response" = "null" ]; then
+  echo "missing RPC doctor account_tx response file" >&2
+  exit 1
+fi
+jq -e \
+  --arg tx_id "$account_tx_funding_tx_id" \
+  --arg recipient "$ACCOUNT_TX_RECIPIENT" \
+  --argjson amount "$ACCOUNT_TX_AMOUNT" \
+  '.ok == true
+    and .result.index_used == true
+    and .result.row_count >= 1
+    and any(.result.rows[];
+      .tx_id == $tx_id
+      and .to == $recipient
+      and .amount == $amount
+      and .accepted == true)' \
+  "$account_tx_response" >/dev/null
+
+events_bundle="$LOG_DIR/rpc-serve-events.json"
+jq -s '.' "$server_event_log" >"$events_bundle"
+
+generated_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+jq -n \
+  --arg schema "postfiat-testnet-rpc-doctor-smoke-v1" \
+  --arg generated_utc "$generated_utc" \
+  --arg harness_report "$HARNESS_REPORT" \
+  --arg doctor_report "$DOCTOR_REPORT" \
+  --arg server_report "$server_report" \
+  --arg server_event_log "$server_event_log" \
+  --arg topology "$topology" \
+  --arg node_id "$node_id" \
+  --arg account_tx_funding_tx_id "$account_tx_funding_tx_id" \
+  --arg account_tx_recipient "$ACCOUNT_TX_RECIPIENT" \
+  --argjson validators "$VALIDATORS" \
+  --argjson rpc_port "$rpc_port" \
+  --argjson account_tx_amount "$ACCOUNT_TX_AMOUNT" \
+  --slurpfile doctor "$DOCTOR_REPORT" \
+  --slurpfile account_tx_response "$account_tx_response" \
+  --slurpfile server "$server_report" \
+  --slurpfile events "$events_bundle" \
+  '{
+    schema: $schema,
+    generated_utc: $generated_utc,
+    validators: $validators,
+    node_id: $node_id,
+    rpc_port: $rpc_port,
+    topology: {path: $topology},
+    harness_report: $harness_report,
+    doctor_report: $doctor_report,
+    server_report: $server_report,
+    server_event_log: $server_event_log,
+    doctor: {
+      doctor_ok: $doctor[0].doctor_ok,
+      method_count: $doctor[0].method_count,
+      endpoint_count: $doctor[0].endpoint_count,
+      checks: $doctor[0].checks
+    },
+    account_tx_canary: {
+      tx_id: $account_tx_funding_tx_id,
+      to: $account_tx_recipient,
+      amount: $account_tx_amount,
+      index_used: $account_tx_response[0].result.index_used,
+      row_count: $account_tx_response[0].result.row_count,
+      matched_row_count: ([
+        $account_tx_response[0].result.rows[]
+        | select(.tx_id == $account_tx_funding_tx_id
+          and .to == $account_tx_recipient
+          and .amount == $account_tx_amount
+          and .accepted == true)
+      ] | length)
+    },
+    server: {
+      verified: $server[0].verified,
+      read_only: $server[0].read_only,
+      request_count: $server[0].request_count,
+      ok_count: $server[0].ok_count,
+      error_count: $server[0].error_count
+    },
+    event_count: ($events[0] | length)
+  } | .rpc_doctor_smoke_ok = (
+    .doctor.doctor_ok == true
+    and .doctor.method_count == 16
+    and .doctor.endpoint_count == 1
+    and .server.verified == true
+    and .server.read_only == true
+    and .server.request_count == 17
+    and .server.ok_count == 16
+    and .server.error_count == 1
+    and .event_count == 17
+    and .account_tx_canary.index_used == true
+    and .account_tx_canary.row_count >= 1
+    and .account_tx_canary.matched_row_count == 1
+  )' >"$REPORT"
+
+jq -e '.rpc_doctor_smoke_ok == true' "$REPORT" >/dev/null
+
+if grep -R -E '"private_key_hex"|"spending_key_hex"|"full_viewing_key_hex"|"master_seed_hex"|"rseed"' \
+  "$REPORT" "$DOCTOR_REPORT" "$LOG_DIR/doctor" >/dev/null; then
+  echo "rpc doctor smoke leaked private key material" >&2
+  exit 1
+fi
+
+printf 'testnet_rpc_doctor_smoke=ok validators=%s report=%s doctor_report=%s\n' \
+  "$VALIDATORS" "$REPORT" "$DOCTOR_REPORT"

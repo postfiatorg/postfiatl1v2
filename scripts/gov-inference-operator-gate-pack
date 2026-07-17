@@ -1,0 +1,846 @@
+#!/usr/bin/env python3
+import argparse
+import json
+import pathlib
+import subprocess
+import sys
+import tempfile
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+DEFAULT_OUTPUT = pathlib.Path("reports/gov-inference-operator-gate-pack.json")
+DEFAULT_MODEL_REQUEST = pathlib.Path("docs/governance/agent/fixtures/dry_run_model_request.json")
+DEFAULT_GATE_3_5_REPORT = pathlib.Path(
+    "reports/gov-inference-gate-3_5/dga-053-20260523T025955Z/"
+    "gov-inference-gate-3_5-deterministic-ruleset-generation.json"
+)
+LINEAGE_AUDIT_REPORT_IDS = {"3.5", "3.6", "10.1", "10.5", "14", "15"}
+SENSITIVE_MARKERS = [
+    "private_key_hex",
+    "seed_hex",
+    '"mnemonic"',
+    "mnemonic=",
+    "ssh_cred",
+    "begin private key",
+    "runpod_api_key",
+    "vast_api_key",
+]
+
+
+REPORT_SPECS = [
+    {
+        "gate_id": "1.5",
+        "schema": "postfiat-governance-agent-gate-1_5-v1",
+        "gate": "1.5-constitutional-prompt-bundle",
+        "path": pathlib.Path("reports/gov-inference-gate-1_5-constitutional-prompt-bundle.json"),
+        "refresh": ["scripts/gov-inference-gate-1_5"],
+        "promotion_scope": "governed input evidence",
+        "authority_effect": "evidence only; no model or registry authority",
+    },
+    {
+        "gate_id": "3.5",
+        "schema": "postfiat-governance-agent-gate-3_5-v1",
+        "gate": "3.5-deterministic-ruleset-generation",
+        "path": DEFAULT_GATE_3_5_REPORT,
+        "refresh": None,
+        "promotion_scope": "paid deterministic replay evidence",
+        "authority_effect": "existing evidence only; this pack never starts a provider",
+    },
+    {
+        "gate_id": "3.6",
+        "schema": "postfiat-governance-agent-gate-3_6-v1",
+        "gate": "3.6-timelocked-governance-agent",
+        "path": pathlib.Path("reports/gov-inference-gate-3_6-timelocked-governance-agent.json"),
+        "refresh": ["scripts/gov-inference-gate-3_6"],
+        "promotion_scope": "time-locked request evidence",
+        "authority_effect": "evidence only; no registry authority",
+    },
+    {
+        "gate_id": "7.5",
+        "schema": "postfiat-governance-agent-gate-7_5-v1",
+        "gate": "7.5-ruleset-compiler",
+        "path": pathlib.Path("reports/gov-inference-gate-7_5-ruleset-compiler.json"),
+        "refresh": ["scripts/gov-inference-gate-7_5"],
+        "promotion_scope": "ruleset compiler evidence",
+        "authority_effect": "deterministic policy evidence only",
+    },
+    {
+        "gate_id": "7.6",
+        "schema": "postfiat-governance-agent-gate-7_6-v1",
+        "gate": "7.6-ruleset-vs-llm-judgment",
+        "path": pathlib.Path("reports/gov-inference-gate-7_6-ruleset-vs-llm-judgment.json"),
+        "refresh": ["scripts/gov-inference-gate-7_6"],
+        "promotion_scope": "ruleset comparison evidence",
+        "authority_effect": "non-authoritative baseline comparison only",
+    },
+    {
+        "gate_id": "8.5",
+        "schema": "postfiat-governance-agent-gate-8_5-v1",
+        "gate": "8.5-cobalt-ruleset-dry-run",
+        "path": pathlib.Path("reports/gov-inference-gate-8_5-cobalt-ruleset-dry-run.json"),
+        "refresh": ["scripts/gov-inference-gate-8_5"],
+        "promotion_scope": "Cobalt dry-run evidence",
+        "authority_effect": "records lineage without registry mutation",
+    },
+    {
+        "gate_id": "9.5",
+        "schema": "postfiat-governance-agent-gate-9_5-v1",
+        "gate": "9.5-generated-ruleset-guarded-apply",
+        "path": pathlib.Path("reports/gov-inference-gate-9_5-generated-ruleset-guarded-apply.json"),
+        "refresh": ["scripts/gov-inference-gate-9_5"],
+        "promotion_scope": "guarded apply drill evidence",
+        "authority_effect": "bounded local drill with Cobalt acceptance and rollback evidence",
+    },
+    {
+        "gate_id": "10.1",
+        "schema": "postfiat-governance-agent-gate-10_1-v1",
+        "gate": "10.1-verillm-postfiat-benchmark",
+        "path": pathlib.Path("reports/gov-inference-gate-10_1-verillm-postfiat-benchmark.json"),
+        "refresh": ["scripts/gov-inference-gate-10_1"],
+        "promotion_scope": "verifier-cost evidence",
+        "authority_effect": "measurement only; no authority transfer",
+    },
+    {
+        "gate_id": "10.5",
+        "schema": "postfiat-governance-agent-gate-10_5-v1",
+        "gate": "10.5-toploc-receipt-prototype",
+        "path": pathlib.Path("reports/gov-inference-gate-10_5-toploc-receipt-prototype.json"),
+        "refresh": ["scripts/gov-inference-gate-10_5"],
+        "promotion_scope": "receipt prototype evidence",
+        "authority_effect": "shadow verifier evidence only",
+    },
+    {
+        "gate_id": "14",
+        "schema": "postfiat-governance-agent-gate-14-v1",
+        "gate": "14-tp-invariant-verifier-admission",
+        "path": pathlib.Path("reports/gov-inference-gate-14-tp-invariant-verifier-admission.json"),
+        "refresh": ["scripts/gov-inference-gate-14"],
+        "promotion_scope": "TP admission and shadow path evidence",
+        "authority_effect": "keeps TP>1 and authority transfer disabled",
+    },
+    {
+        "gate_id": "15",
+        "schema": "postfiat-governance-agent-gate-15-v1",
+        "gate": "15-adversarial-governance-probes",
+        "path": pathlib.Path("reports/gov-inference-gate-15-adversarial-governance-probes.json"),
+        "refresh": ["scripts/gov-inference-gate-15"],
+        "promotion_scope": "adversarial fail-closed evidence",
+        "authority_effect": "rejects tamper and authority escalation probes",
+    },
+    {
+        "gate_id": "implementation-execution",
+        "schema": "postfiat-governance-agent-implementation-execution-v1",
+        "gate": "implementation-package-execution",
+        "path": pathlib.Path("reports/gov-inference-implementation-execution.json"),
+        "refresh": ["scripts/gov-inference-implementation-execution"],
+        "promotion_scope": "implementation execution evidence",
+        "authority_effect": "local work-item verifier only; no live authority change",
+    },
+]
+
+
+def rel(path: pathlib.Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def no_sensitive_markers(text: str) -> bool:
+    lowered = text.lower()
+    return not any(marker in lowered for marker in SENSITIVE_MARKERS)
+
+
+def hash_well_formed(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 96
+        and all(char in "0123456789abcdef" for char in value)
+    )
+
+
+def bool_at(data: dict, path: tuple[str, ...], expected: bool) -> bool:
+    cursor = data
+    for key in path:
+        if not isinstance(cursor, dict) or key not in cursor:
+            return False
+        cursor = cursor[key]
+    return cursor is expected
+
+
+def extra_checks(gate_id: str, data: dict) -> dict:
+    if gate_id == "3.5":
+        return {
+            "expected_50_generations": data.get("expected_count") == 50,
+            "observed_50_generations": data.get("observed_count") == 50,
+            "valid_50_generations": data.get("valid_count") == 50,
+            "one_ruleset_hash": len(data.get("distinct_ruleset_hashes", [])) == 1,
+            "one_compiled_policy_hash": len(data.get("distinct_compiled_policy_hashes", [])) == 1,
+        }
+    if gate_id == "3.6":
+        return {"same_seed_replays": data.get("same_seed_replays") is True}
+    if gate_id == "7.5":
+        return {
+            "network_access_disabled": bool_at(data, ("sandbox", "network_access"), False),
+            "model_access_disabled": bool_at(data, ("sandbox", "model_access"), False),
+            "direct_state_mutation_disabled": bool_at(
+                data, ("sandbox", "direct_state_mutation"), False
+            ),
+        }
+    if gate_id == "7.6":
+        return {
+            "direct_baseline_non_authoritative": data.get("direct_baseline_authoritative") is False,
+            "no_false_adds": data.get("false_add_count") == 0,
+            "no_false_removes": data.get("false_remove_count") == 0,
+        }
+    if gate_id == "8.5":
+        return {
+            "registry_unchanged": data.get("registry_unchanged") is True,
+            "registry_mutation_count_zero": data.get("registry_mutation_count") == 0,
+            "stale_ruleset_rejected": data.get("stale_ruleset_rejected") is True,
+            "wrong_bundle_rejected": data.get("wrong_bundle_rejected") is True,
+            "missing_replay_root_rejected": data.get("missing_replay_root_rejected") is True,
+        }
+    if gate_id == "9.5":
+        return {
+            "max_one_add": data.get("max_one_add") is True,
+            "zero_routine_removals": data.get("zero_routine_removals") is True,
+            "cobalt_acceptance_verified": data.get("cobalt_acceptance_verified") is True,
+            "rollback_available": data.get("rollback_available") is True,
+            "rollback_restored_registry": data.get("rollback_restored_registry") is True,
+            "registry_changes_only_after_cobalt_acceptance": (
+                data.get("registry_changes_only_after_cobalt_acceptance") is True
+            ),
+        }
+    if gate_id == "10.1":
+        return {
+            "cost_measured_not_assumed": data.get("cost_measured_not_assumed") is True,
+            "generic_one_percent_claim_not_assumed": (
+                data.get("benchmark", {}).get("generic_one_percent_claim_assumed") is False
+            ),
+            "gate_9_5_report_verified": data.get("gate_9_5_report_verified") is True,
+        }
+    if gate_id == "10.5":
+        return {
+            "prototype_only": data.get("prototype_only") is True,
+            "not_consensus_critical": data.get("consensus_critical") is False,
+            "incorrect_receipt_rejected": data.get("incorrect_receipt_rejected") is True,
+            "verifier_disagreement_recorded": data.get("verifier_disagreement_recorded") is True,
+        }
+    if gate_id == "14":
+        return {
+            "validator_shadow_path_defined": data.get("validator_side_shadow_path_defined") is True,
+            "tp_greater_than_one_not_admitted": data.get("tp_greater_than_one_admitted") is False,
+            "authority_transfer_not_live": data.get("authority_transfer_live") is False,
+            "tp_invariant_admission_not_ready": data.get("tp_invariant_admission_ready") is False,
+        }
+    if gate_id == "15":
+        return {
+            "tampered_receipts_rejected": data.get("tampered_receipts_rejected") is True,
+            "stale_or_missing_evidence_rejected": (
+                data.get("stale_or_missing_evidence_rejected") is True
+            ),
+            "verifier_disagreement_shadow_only": (
+                data.get("verifier_disagreement_shadow_only") is True
+            ),
+            "authority_transfer_guarded": data.get("authority_transfer_guarded") is True,
+            "sidecars_not_live": data.get("sidecars_live") is False,
+            "commit_reveal_not_live": data.get("commit_reveal_live") is False,
+            "authority_transfer_not_live": data.get("authority_transfer_live") is False,
+        }
+    if gate_id == "implementation-execution":
+        return {
+            "touched_surfaces_authorized": data.get("touched_surfaces_authorized") is True,
+            "forbidden_actions_bound": data.get("forbidden_actions_bound") is True,
+            "live_actions_forbidden": data.get("live_actions_forbidden") is True,
+            "required_gates_bound": data.get("required_gates_bound") is True,
+            "rollback_or_noop_fallback_defined": (
+                data.get("rollback_or_noop_fallback_defined") is True
+            ),
+            "provider_spend_command_not_executed": (
+                data.get("provider_spend_command_executed") is False
+            ),
+            "paid_replay_not_regenerated": data.get("paid_replay_regenerated") is False,
+            "live_authority_not_changed": data.get("live_authority_change") is False,
+            "no_spend": data.get("no_spend") is True,
+        }
+    return {}
+
+
+def read_summary(spec: dict, path: pathlib.Path) -> tuple[dict, dict | None]:
+    summary = {
+        "gate_id": spec["gate_id"],
+        "path": rel(path),
+        "schema": spec["schema"],
+        "gate": spec["gate"],
+        "present": path.is_file(),
+        "json_valid": False,
+        "schema_ok": False,
+        "gate_ok": False,
+        "verified": False,
+        "redaction_checked_field": False,
+        "redaction_scan_ok": False,
+        "checks": {},
+        "promotion_scope": spec["promotion_scope"],
+        "authority_effect": spec["authority_effect"],
+    }
+    if not path.is_file():
+        summary["error"] = "missing report"
+        return summary, None
+    raw = path.read_text(encoding="utf-8")
+    summary["redaction_scan_ok"] = no_sensitive_markers(raw)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as error:
+        summary["error"] = f"invalid JSON: {error}"
+        return summary, None
+    summary["json_valid"] = True
+    summary["schema_ok"] = data.get("schema") == spec["schema"]
+    summary["gate_ok"] = data.get("gate") == spec["gate"]
+    summary["verified"] = data.get("verified") is True
+    summary["redaction_checked_field"] = data.get("redaction_checked") is True
+    summary["checks"] = extra_checks(spec["gate_id"], data)
+    return summary, data
+
+
+def summary_verified(summary: dict) -> bool:
+    return (
+        summary["schema_ok"]
+        and summary["gate_ok"]
+        and summary["verified"]
+        and summary["redaction_checked_field"]
+        and summary["redaction_scan_ok"]
+        and all(summary["checks"].values())
+    )
+
+
+def read_model_request_lineage(model_request_path: pathlib.Path) -> dict:
+    summary = {
+        "path": rel(model_request_path),
+        "present": model_request_path.is_file(),
+        "json_valid": False,
+        "request_hash": None,
+        "validator_evidence_packet_schema_hash": None,
+        "validator_evidence_field_registry_hash": None,
+        "hashes_well_formed": False,
+        "redaction_scan_ok": False,
+    }
+    if not model_request_path.is_file():
+        summary["error"] = "missing model request"
+        return summary
+    raw = model_request_path.read_text(encoding="utf-8")
+    summary["redaction_scan_ok"] = no_sensitive_markers(raw)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as error:
+        summary["error"] = f"invalid JSON: {error}"
+        return summary
+    summary["json_valid"] = isinstance(data, dict)
+    governed_inputs = data.get("governed_inputs", {}) if isinstance(data, dict) else {}
+    packet_hash = governed_inputs.get("validator_evidence_packet_schema_hash")
+    registry_hash = governed_inputs.get("validator_evidence_field_registry_hash")
+    summary["request_hash"] = data.get("request_hash") if isinstance(data, dict) else None
+    summary["validator_evidence_packet_schema_hash"] = packet_hash
+    summary["validator_evidence_field_registry_hash"] = registry_hash
+    summary["hashes_well_formed"] = hash_well_formed(packet_hash) and hash_well_formed(
+        registry_hash
+    )
+    return summary
+
+
+def build_lineage_audit(
+    model_request_path: pathlib.Path,
+    specs: list[dict],
+    summaries_by_gate: dict[str, dict],
+    data_by_gate: dict[str, dict | None],
+    allow_missing_paid_replay: bool,
+) -> dict:
+    model_request = read_model_request_lineage(model_request_path)
+    packet_hash = model_request.get("validator_evidence_packet_schema_hash")
+    registry_hash = model_request.get("validator_evidence_field_registry_hash")
+    items = []
+    for spec in specs:
+        gate_id = spec["gate_id"]
+        if gate_id not in LINEAGE_AUDIT_REPORT_IDS:
+            continue
+        summary = summaries_by_gate[gate_id]
+        data = data_by_gate.get(gate_id)
+        report_packet_hash = data.get("validator_evidence_packet_schema_hash") if data else None
+        report_registry_hash = (
+            data.get("validator_evidence_field_registry_hash") if data else None
+        )
+        lineage_fields_present = isinstance(data, dict) and all(
+            key in data
+            for key in (
+                "validator_evidence_packet_schema_hash",
+                "validator_evidence_field_registry_hash",
+            )
+        )
+        hashes_well_formed = hash_well_formed(report_packet_hash) and hash_well_formed(
+            report_registry_hash
+        )
+        matches_model_request = (
+            model_request["hashes_well_formed"]
+            and hashes_well_formed
+            and report_packet_hash == packet_hash
+            and report_registry_hash == registry_hash
+        )
+        excluded_for_no_spend_check = (
+            gate_id == "3.5"
+            and allow_missing_paid_replay
+            and not (
+                summary["present"]
+                and summary["json_valid"]
+                and lineage_fields_present
+                and hashes_well_formed
+                and matches_model_request
+            )
+        )
+        audit_required = not excluded_for_no_spend_check
+        item = {
+            "gate_id": gate_id,
+            "path": summary["path"],
+            "present": summary["present"],
+            "json_valid": summary["json_valid"],
+            "report_verified": summary["verified"],
+            "lineage_fields_present": lineage_fields_present,
+            "hashes_well_formed": hashes_well_formed,
+            "matches_model_request": matches_model_request,
+            "audit_required": audit_required,
+            "excluded_for_no_spend_check": excluded_for_no_spend_check,
+        }
+        if report_packet_hash is not None:
+            item["validator_evidence_packet_schema_hash"] = report_packet_hash
+        if report_registry_hash is not None:
+            item["validator_evidence_field_registry_hash"] = report_registry_hash
+        items.append(item)
+
+    required_items = [item for item in items if item["audit_required"]]
+    missing_or_malformed_count = sum(
+        1
+        for item in required_items
+        if not (
+            item["present"]
+            and item["json_valid"]
+            and item["lineage_fields_present"]
+            and item["hashes_well_formed"]
+        )
+    )
+    drift_count = sum(
+        1
+        for item in required_items
+        if item["present"]
+        and item["json_valid"]
+        and item["lineage_fields_present"]
+        and item["hashes_well_formed"]
+        and not item["matches_model_request"]
+    )
+    unverified_report_count = sum(
+        1 for item in required_items if item["report_verified"] is not True
+    )
+    verified = (
+        model_request["present"]
+        and model_request["json_valid"]
+        and model_request["hashes_well_formed"]
+        and model_request["redaction_scan_ok"]
+        and len(required_items) > 0
+        and missing_or_malformed_count == 0
+        and drift_count == 0
+        and unverified_report_count == 0
+    )
+    return {
+        "schema": "postfiat-governance-agent-validator-evidence-lineage-audit-pack-summary-v1",
+        "mode": "operator-pack-summary",
+        "reference_command": "postfiat-node governance-agent-evidence-lineage-audit",
+        "verified": verified,
+        "model_request": model_request,
+        "report_count": len(items),
+        "required_report_count": len(required_items),
+        "excluded_report_count": len(items) - len(required_items),
+        "missing_or_malformed_count": missing_or_malformed_count,
+        "drift_count": drift_count,
+        "unverified_report_count": unverified_report_count,
+        "reports": items,
+        "no_network_access": True,
+        "no_model_access": True,
+        "no_direct_state_mutation": True,
+        "zero_cobalt_registry_mutation": True,
+    }
+
+
+def run_refresh_commands(specs: list[dict]) -> list[dict]:
+    commands = []
+    seen = set()
+    for spec in specs:
+        command = spec.get("refresh")
+        if not command:
+            continue
+        command_key = tuple(command)
+        if command_key in seen:
+            continue
+        seen.add(command_key)
+        if "gov-inference-provider" in command[0] or "gov-inference-gate-3_5" in command[0]:
+            raise SystemExit(f"refusing paid/provider command in no-spend pack: {' '.join(command)}")
+        commands.append(command)
+    for command in commands:
+        print(f"running no-spend DGA verifier: {' '.join(command)}", file=sys.stderr)
+        subprocess.run(command, cwd=ROOT, stdout=subprocess.DEVNULL, check=True)
+    return [{"command": command, "provider_or_paid_replay": False} for command in commands]
+
+
+def build_pack(
+    specs: list[dict],
+    model_request: pathlib.Path,
+    output: pathlib.Path,
+    refresh_local: bool,
+    allow_missing_paid_replay: bool,
+) -> dict:
+    refresh_commands = run_refresh_commands(specs) if refresh_local else []
+    summaries = []
+    summaries_by_gate = {}
+    data_by_gate = {}
+    paid_replay_missing_allowed = False
+    for spec in specs:
+        path = ROOT / spec["path"]
+        summary, data = read_summary(spec, path)
+        if spec["gate_id"] == "3.5" and allow_missing_paid_replay and not summary["present"]:
+            paid_replay_missing_allowed = True
+            summary["missing_allowed_for_no_spend_check"] = True
+        summaries_by_gate[spec["gate_id"]] = summary
+        data_by_gate[spec["gate_id"]] = data
+        summaries.append(summary)
+
+    lineage_audit = build_lineage_audit(
+        ROOT / model_request,
+        specs,
+        summaries_by_gate,
+        data_by_gate,
+        allow_missing_paid_replay,
+    )
+    gate3_5_lineage = next(
+        item for item in lineage_audit["reports"] if item["gate_id"] == "3.5"
+    )
+    if gate3_5_lineage["excluded_for_no_spend_check"]:
+        paid_replay_missing_allowed = True
+        summaries_by_gate["3.5"]["missing_allowed_for_no_spend_check"] = True
+        summaries_by_gate["3.5"]["lineage_missing_allowed_for_no_spend_check"] = True
+
+    required_summaries = [
+        summary
+        for summary in summaries
+        if not summary.get("missing_allowed_for_no_spend_check")
+    ]
+    all_required_reports_present = all(summary["present"] for summary in required_summaries)
+    all_reports_json_valid = all(summary["json_valid"] for summary in required_summaries)
+    all_reports_verified = all(summary_verified(summary) for summary in required_summaries)
+    gate3_5 = next(summary for summary in summaries if summary["gate_id"] == "3.5")
+    gate14 = next(summary for summary in summaries if summary["gate_id"] == "14")
+    gate15 = next(summary for summary in summaries if summary["gate_id"] == "15")
+    implementation_execution = next(
+        summary for summary in summaries if summary["gate_id"] == "implementation-execution"
+    )
+    no_provider_commands = all(
+        not command["provider_or_paid_replay"] for command in refresh_commands
+    )
+    checks = {
+        "all_required_reports_present": all_required_reports_present,
+        "all_reports_json_valid": all_reports_json_valid,
+        "all_reports_verified": all_reports_verified,
+        "all_reports_redaction_scanned": all(
+            summary["redaction_scan_ok"] for summary in required_summaries
+        ),
+        "provider_spend_command_executed": False,
+        "paid_replay_regenerated": False,
+        "no_provider_or_paid_replay_commands": no_provider_commands,
+        "paid_replay_report_verified_existing_only": (
+            paid_replay_missing_allowed or summary_verified(gate3_5)
+        ),
+        "authority_transfer_not_live": gate14["checks"].get("authority_transfer_not_live")
+        is True
+        and gate15["checks"].get("authority_transfer_not_live") is True,
+        "sidecars_not_live": gate15["checks"].get("sidecars_not_live") is True,
+        "commit_reveal_not_live": gate15["checks"].get("commit_reveal_not_live") is True,
+        "tp_greater_than_one_not_admitted": (
+            gate14["checks"].get("tp_greater_than_one_not_admitted") is True
+        ),
+        "adversarial_probes_rejected": (
+            gate15["checks"].get("tampered_receipts_rejected") is True
+            and gate15["checks"].get("stale_or_missing_evidence_rejected") is True
+            and gate15["checks"].get("verifier_disagreement_shadow_only") is True
+            and gate15["checks"].get("authority_transfer_guarded") is True
+        ),
+        "validator_evidence_lineage_audit_verified": lineage_audit["verified"] is True,
+        "validator_evidence_lineage_no_missing_or_malformed": (
+            lineage_audit["missing_or_malformed_count"] == 0
+        ),
+        "validator_evidence_lineage_no_drift": lineage_audit["drift_count"] == 0,
+        "implementation_execution_report_verified": summary_verified(implementation_execution),
+        "implementation_execution_no_spend": (
+            implementation_execution["checks"].get("provider_spend_command_not_executed") is True
+            and implementation_execution["checks"].get("paid_replay_not_regenerated") is True
+            and implementation_execution["checks"].get("live_authority_not_changed") is True
+            and implementation_execution["checks"].get("no_spend") is True
+        ),
+    }
+    checks["operator_gate_pack_no_spend_safe"] = (
+        checks["no_provider_or_paid_replay_commands"]
+        and checks["provider_spend_command_executed"] is False
+        and checks["paid_replay_regenerated"] is False
+    )
+    expected_false_checks = {"provider_spend_command_executed", "paid_replay_regenerated"}
+    verified = True
+    for key, value in checks.items():
+        expected = False if key in expected_false_checks else True
+        verified = verified and value is expected
+
+    report = {
+        "schema": "postfiat-governance-agent-operator-gate-pack-v1",
+        "gate": "operator-gate-pack",
+        "verified": verified,
+        "report_count": len(summaries),
+        "required_report_count": len(required_summaries),
+        "output_file": rel(output),
+        "refresh_local": refresh_local,
+        "allow_missing_paid_replay": allow_missing_paid_replay,
+        "paid_replay_missing_allowed": paid_replay_missing_allowed,
+        "no_spend": True,
+        "provider_spend_command_executed": False,
+        "paid_replay_regenerated": False,
+        "refresh_commands": refresh_commands,
+        "checks": checks,
+        "validator_evidence_lineage_audit": lineage_audit,
+        "reports": summaries,
+        "promotion_semantics": {
+            "evidence_only_until_later_governance": True,
+            "implementation_execution_promoted": True,
+            "sidecars_live": False,
+            "commit_reveal_live": False,
+            "authority_transfer_live": False,
+            "tp_greater_than_one_admitted": False,
+            "provider_spend_required": False,
+        },
+    }
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if not no_sensitive_markers(json.dumps(report)):
+        raise SystemExit("operator gate pack report contains sensitive marker")
+    return report
+
+
+def self_test() -> int:
+    with tempfile.TemporaryDirectory(prefix="postfiat-dga-operator-pack-") as temp_name:
+        temp = pathlib.Path(temp_name)
+        model_lineage = read_model_request_lineage(ROOT / DEFAULT_MODEL_REQUEST)
+        if not model_lineage["hashes_well_formed"]:
+            print("self-test expected model request lineage hashes", file=sys.stderr)
+            return 1
+        specs = []
+        for spec in REPORT_SPECS:
+            local_spec = dict(spec)
+            local_spec["path"] = temp / f"gate-{spec['gate_id'].replace('.', '_')}.json"
+            local_spec["refresh"] = None
+            report = {
+                "schema": spec["schema"],
+                "gate": spec["gate"],
+                "verified": True,
+                "redaction_checked": True,
+            }
+            report.update(self_test_extras(spec["gate_id"]))
+            if spec["gate_id"] in LINEAGE_AUDIT_REPORT_IDS:
+                report["validator_evidence_packet_schema_hash"] = model_lineage[
+                    "validator_evidence_packet_schema_hash"
+                ]
+                report["validator_evidence_field_registry_hash"] = model_lineage[
+                    "validator_evidence_field_registry_hash"
+                ]
+            local_spec["path"].write_text(json.dumps(report) + "\n", encoding="utf-8")
+            specs.append(local_spec)
+        output = temp / "operator-pack.json"
+        good = build_pack(
+            specs,
+            DEFAULT_MODEL_REQUEST,
+            output,
+            refresh_local=False,
+            allow_missing_paid_replay=False,
+        )
+        if not good["verified"]:
+            print("self-test expected good pack to verify", file=sys.stderr)
+            return 1
+        if not good["checks"]["validator_evidence_lineage_audit_verified"]:
+            print("self-test expected lineage audit to verify", file=sys.stderr)
+            return 1
+        bad_gate14 = temp / "gate-14.json"
+        bad_gate14_data = json.loads(bad_gate14.read_text(encoding="utf-8"))
+        bad_gate14_data["validator_evidence_field_registry_hash"] = (
+            "0" * 95 + "1"
+            if model_lineage["validator_evidence_field_registry_hash"] != "0" * 95 + "1"
+            else "0" * 95 + "2"
+        )
+        bad_gate14.write_text(json.dumps(bad_gate14_data) + "\n", encoding="utf-8")
+        bad_lineage = build_pack(
+            specs,
+            DEFAULT_MODEL_REQUEST,
+            temp / "operator-pack-bad-lineage.json",
+            False,
+            False,
+        )
+        if bad_lineage["verified"]:
+            print("self-test expected lineage drift to fail", file=sys.stderr)
+            return 1
+        if bad_lineage["validator_evidence_lineage_audit"]["drift_count"] != 1:
+            print("self-test expected one lineage drift", file=sys.stderr)
+            return 1
+        bad_gate14_data["validator_evidence_field_registry_hash"] = model_lineage[
+            "validator_evidence_field_registry_hash"
+        ]
+        bad_gate14.write_text(json.dumps(bad_gate14_data) + "\n", encoding="utf-8")
+        bad_gate15 = temp / "gate-15.json"
+        bad_data = json.loads(bad_gate15.read_text(encoding="utf-8"))
+        bad_data["authority_transfer_live"] = True
+        bad_gate15.write_text(json.dumps(bad_data) + "\n", encoding="utf-8")
+        bad = build_pack(specs, DEFAULT_MODEL_REQUEST, temp / "operator-pack-bad.json", False, False)
+        if bad["verified"]:
+            print("self-test expected authority-transfer tamper to fail", file=sys.stderr)
+            return 1
+    print(
+        json.dumps(
+            {
+                "schema": "postfiat-governance-agent-operator-gate-pack-self-test-v1",
+                "verified": True,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def self_test_extras(gate_id: str) -> dict:
+    extras = {
+        "3.5": {
+            "expected_count": 50,
+            "observed_count": 50,
+            "valid_count": 50,
+            "distinct_ruleset_hashes": ["ruleset"],
+            "distinct_compiled_policy_hashes": ["policy"],
+        },
+        "3.6": {"same_seed_replays": True},
+        "7.5": {
+            "sandbox": {
+                "network_access": False,
+                "model_access": False,
+                "direct_state_mutation": False,
+            }
+        },
+        "7.6": {
+            "direct_baseline_authoritative": False,
+            "false_add_count": 0,
+            "false_remove_count": 0,
+        },
+        "8.5": {
+            "registry_unchanged": True,
+            "registry_mutation_count": 0,
+            "stale_ruleset_rejected": True,
+            "wrong_bundle_rejected": True,
+            "missing_replay_root_rejected": True,
+        },
+        "9.5": {
+            "max_one_add": True,
+            "zero_routine_removals": True,
+            "cobalt_acceptance_verified": True,
+            "rollback_available": True,
+            "rollback_restored_registry": True,
+            "registry_changes_only_after_cobalt_acceptance": True,
+        },
+        "10.1": {
+            "cost_measured_not_assumed": True,
+            "gate_9_5_report_verified": True,
+            "benchmark": {"generic_one_percent_claim_assumed": False},
+        },
+        "10.5": {
+            "prototype_only": True,
+            "consensus_critical": False,
+            "incorrect_receipt_rejected": True,
+            "verifier_disagreement_recorded": True,
+        },
+        "14": {
+            "validator_side_shadow_path_defined": True,
+            "tp_greater_than_one_admitted": False,
+            "authority_transfer_live": False,
+            "tp_invariant_admission_ready": False,
+        },
+        "15": {
+            "tampered_receipts_rejected": True,
+            "stale_or_missing_evidence_rejected": True,
+            "verifier_disagreement_shadow_only": True,
+            "authority_transfer_guarded": True,
+            "sidecars_live": False,
+            "commit_reveal_live": False,
+            "authority_transfer_live": False,
+        },
+        "implementation-execution": {
+            "touched_surfaces_authorized": True,
+            "forbidden_actions_bound": True,
+            "live_actions_forbidden": True,
+            "required_gates_bound": True,
+            "rollback_or_noop_fallback_defined": True,
+            "provider_spend_command_executed": False,
+            "paid_replay_regenerated": False,
+            "live_authority_change": False,
+            "no_spend": True,
+        },
+    }
+    return extras.get(gate_id, {})
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Build a no-spend deterministic governance-agent operator gate pack."
+    )
+    parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="output report path")
+    parser.add_argument(
+        "--model-request",
+        default=str(DEFAULT_MODEL_REQUEST),
+        help="prompt-facing model request used for validator-evidence lineage audit",
+    )
+    parser.add_argument(
+        "--gate-3_5-report",
+        default=str(DEFAULT_GATE_3_5_REPORT),
+        help="existing paid replay Gate 3.5 report to verify",
+    )
+    parser.add_argument(
+        "--no-refresh-local",
+        action="store_true",
+        help="only verify existing reports; do not regenerate local no-spend reports",
+    )
+    parser.add_argument(
+        "--allow-missing-paid-replay",
+        action="store_true",
+        help="allow missing Gate 3.5 report for local check environments",
+    )
+    parser.add_argument("--self-test", action="store_true", help="run script self-test")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    if args.self_test:
+        return self_test()
+    specs = [dict(spec) for spec in REPORT_SPECS]
+    for spec in specs:
+        if spec["gate_id"] == "3.5":
+            spec["path"] = pathlib.Path(args.gate_3_5_report)
+    output = ROOT / args.output
+    report = build_pack(
+        specs,
+        pathlib.Path(args.model_request),
+        output,
+        refresh_local=not args.no_refresh_local,
+        allow_missing_paid_replay=args.allow_missing_paid_replay,
+    )
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0 if report["verified"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

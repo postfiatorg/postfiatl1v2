@@ -1,0 +1,203 @@
+{
+  "schema": "postfiat-protocol-architecture-live-effect-readiness-gate-v1",
+  "gate_id": "vc-protocol-architecture-001-live-effect-readiness-gate-001",
+  "gate_version": 1,
+  "status": "defined_not_authorized",
+  "gate_scope": "protocol_architecture",
+  "created_at": "2026-05-25T00:00:00Z",
+  "source_conformance_review_ref": {
+    "review_id": "vc-protocol-architecture-001-conformance-review-001",
+    "packet_path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_conformance_review_packet.json",
+    "packet_file_sha3_384": "bd853aa387a2eba2389fe60dde882ff3f2edc755ce0a07031491690b03f1c5b76ebbef8f05edc803e7eb7cc0e4179ed0",
+    "packet_canonical_hash": "157b4db3dcd5441990b57ba864f36c7ab44f14de1112876a6377c67f4967e49c74032fedd8ce563d81716f0f8db2b1df",
+    "schema_path": "docs/governance/agent/protocol_architecture_conformance_review_packet_schema.json",
+    "schema_sha3_384": "d0bbcf965e31de646a4c2754a5e9429075496ed9ad5cc07c3f123757f113118cb3544007e6c027b0c260cf7d99b70ffb",
+    "report_path": "reports/verifiable-constitution/vc-057-protocol-architecture-conformance-review-report.json",
+    "report_file_sha3_384": "f5aa4d25c51e433aad56d8b404da50c0234d65eec7362aca043ff5d9150619d8d108fe01e65f8bff0afb9f144a967539",
+    "report_canonical_hash": "c4065ae61d0d973a830e2fe0c65553c9b319091e7c3f86d21218c69db7a15df97d3759df7dc3314975c4c9b46fc5758b",
+    "report_verified": true,
+    "report_classification": "accept_conformance_for_no_live_effect_planning",
+    "review_root": "68e60989b5d4f46e671bb05c31cac1ff5d584723d5af7bdf8f52e2fd314e57a457d538a62264b5f8cb158d1811925e8f",
+    "report_review_root": "68e60989b5d4f46e671bb05c31cac1ff5d584723d5af7bdf8f52e2fd314e57a457d538a62264b5f8cb158d1811925e8f"
+  },
+  "live_effect_gate": {
+    "named_live_action": "protocol_architecture_release_or_cobalt_effect",
+    "gate_status": "authorization_required",
+    "planning_source_status": "accepted_for_planning",
+    "allowed_next_packet_id": "vc-protocol-architecture-001-live-effect-authorization-request-001",
+    "live_effect": false,
+    "authorization_required": true,
+    "rationale": "The VC-057 planning acceptance can be used only to request a later named live-effect authorization packet; it does not execute release, Cobalt, compatibility, mainnet, or authority-transfer actions."
+  },
+  "root_bindings": {
+    "conformance_review_root": "68e60989b5d4f46e671bb05c31cac1ff5d584723d5af7bdf8f52e2fd314e57a457d538a62264b5f8cb158d1811925e8f",
+    "conformance_root": "b48f64b2fe8a72ca85045aa0bb8bcd5dabc0435373824c0ad84993b2e01d022a6abd1c28584753eedf97655294367d5b",
+    "readiness_gate_root": "c64f08261c7f8cc44434f2cd9b197b6e324dbd5f3a75994c016a9befb9586c2394d7c0a57b6c6f6d40f7a99eef607be0",
+    "superseding_decision_root": "4b756a052813aa468f63004048aa7cc04b35b580eb7f56855f0060bfaa5209eec9b36732f867ac1f36682661f2809df0",
+    "challenge_disposition_root": "468826f7c6afeb1d9de4a92aa8b91edbdcbf5cec382ad3bf4b8c36d848f1f1eaf6a31654b7d505d2b12ecda060a1794e",
+    "full_vocab_vector_root": "0b3cf64b186ff9b8b130260d6a795fe56cf2a65bd6e324ea9ce92222ed1d7c23",
+    "evidence_packet_root": "d9f1d159b3be6b34376c937a8cce10a08b457c7e13dbf73758c95c80e8b5833249a162ab408d2eb717fa0f1203c77c40",
+    "selected_option": "preserve-rust-l1"
+  },
+  "readiness_requirements": [
+    {
+      "requirement_id": "named-live-action",
+      "dimension": "named_live_action",
+      "status": "specified",
+      "required_for_authorization": true,
+      "satisfied_for_live_effect": false,
+      "description": "A later packet must name the exact release, Cobalt, compatibility, or migration action before any planning artifact can have live effect.",
+      "required_evidence_refs": [
+        "live_effect_gate.named_live_action",
+        "source_conformance_review_ref.review_root"
+      ],
+      "verification_method": "Reject any authorization request without a closed named action."
+    },
+    {
+      "requirement_id": "reviewed-rollback-path",
+      "dimension": "reviewed_rollback_path",
+      "status": "specified",
+      "required_for_authorization": true,
+      "satisfied_for_live_effect": false,
+      "description": "A later packet must include a reviewed rollback path and prove whether the proposed live effect can be reversed or must fail closed before apply.",
+      "required_evidence_refs": [
+        "challenge_and_rollback_review",
+        "failure_policy.failed_verification_action"
+      ],
+      "verification_method": "Reject if rollback, hold, and challenge behavior are absent."
+    },
+    {
+      "requirement_id": "operator-visible-commands",
+      "dimension": "operator_visible_commands",
+      "status": "specified",
+      "required_for_authorization": true,
+      "satisfied_for_live_effect": false,
+      "description": "A later packet must give operators redaction-safe commands, expected hashes, and rollback commands before requesting release or Cobalt effect.",
+      "required_evidence_refs": [
+        "operator_visible_command_policy",
+        "verification_commands"
+      ],
+      "verification_method": "Reject if operator commands are hidden, ambiguous, or lack hashes."
+    },
+    {
+      "requirement_id": "authorization-evidence",
+      "dimension": "authorization_evidence",
+      "status": "specified",
+      "required_for_authorization": true,
+      "satisfied_for_live_effect": false,
+      "description": "A later packet must attach release-gate or Cobalt authorization evidence that binds the accepted planning root and the exact live action.",
+      "required_evidence_refs": [
+        "root_bindings.conformance_review_root",
+        "root_bindings.conformance_root",
+        "live_effect_gate.allowed_next_packet_id"
+      ],
+      "verification_method": "Reject if authorization evidence is absent or root-detached."
+    },
+    {
+      "requirement_id": "closed-failure-behavior",
+      "dimension": "closed_failure_behavior",
+      "status": "specified",
+      "required_for_authorization": true,
+      "satisfied_for_live_effect": false,
+      "description": "A later packet must define closed failure behavior for stale roots, failed verification, missing requirements, and unauthorized live action.",
+      "required_evidence_refs": [
+        "failure_policy.missing_requirement_action",
+        "failure_policy.stale_root_action",
+        "failure_policy.unauthorized_live_action_action"
+      ],
+      "verification_method": "Reject any packet whose failure path mutates live state."
+    }
+  ],
+  "operator_visible_command_policy": {
+    "operator_commands_required_before_live_effect": true,
+    "commands_must_be_redaction_safe": true,
+    "commands_must_include_expected_hashes": true,
+    "commands_must_include_rollback": true,
+    "live_effect": false
+  },
+  "failure_policy": {
+    "missing_requirement_action": "hold_before_authorization",
+    "failed_verification_action": "hold_and_open_challenge",
+    "stale_root_action": "require_superseding_readiness_gate",
+    "unauthorized_live_action_action": "reject_as_mismatch",
+    "live_effect": false,
+    "rationale": "The readiness gate is fail-closed: missing evidence, stale roots, failed verification, or an attempted unauthorized live action must hold before authorization rather than mutate live state."
+  },
+  "verification_commands": [
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-readiness --verify-report",
+      "purpose": "Verify the VC-058 live-effect readiness gate.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-conformance-review --verify-report",
+      "purpose": "Verify the VC-057 planning-only conformance review.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-conformance-packet --verify-report",
+      "purpose": "Verify the VC-056 conformance packet remains bound.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/validator-evidence-fixtures-validate",
+      "purpose": "Keep the validator-evidence fixture suite passing.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/docs-site-build",
+      "purpose": "Build the docs site after adding the live-effect readiness gate.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    }
+  ],
+  "authority_boundary": {
+    "provider_spend_authorized": false,
+    "live_model_request_authorized": false,
+    "model_output_generated_in_this_packet": false,
+    "live_effect_readiness_defined": true,
+    "readiness_is_live_authority": false,
+    "authorization_request_allowed_next": true,
+    "release_gate_execution_authorized": false,
+    "code_rewrite_authorized": false,
+    "rippled_code_import_authorized": false,
+    "consensus_rewrite_authorized": false,
+    "xrpl_compatibility_activation_authorized": false,
+    "protocol_migration_authorized": false,
+    "live_validator_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "mainnet_mutation_authorized": false,
+    "authority_transfer_authorized": false,
+    "default_live_effect_requires_later_authorization": true
+  },
+  "checks": {
+    "schema_valid": true,
+    "source_conformance_review_verified": true,
+    "planning_review_accepted": true,
+    "named_live_action_required": true,
+    "rollback_requirement_defined": true,
+    "operator_visible_commands_required": true,
+    "authorization_evidence_required": true,
+    "closed_failure_behavior_required": true,
+    "verification_command_coverage_verified": true,
+    "no_live_effect_authorized": true,
+    "no_hidden_evidence": true,
+    "no_secret_dependency": true,
+    "no_code_rewrite": true,
+    "no_live_cobalt_amendment_submission": true,
+    "no_compatibility_activation": true,
+    "no_mainnet_mutation": true,
+    "authority_transfer": false,
+    "readiness_root_verified": true
+  },
+  "readiness_root": "589e2f9b8d654c1540098d6d76e3a496fb7af42b50717e1a90b21f5068fc267a39b9f71bdaa161ecc9b5e5caaaad33f4"
+}

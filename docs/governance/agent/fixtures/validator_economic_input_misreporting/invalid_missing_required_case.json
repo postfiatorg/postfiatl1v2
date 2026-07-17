@@ -1,0 +1,25 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_input_misreporting/valid_input_misreporting.json",
+  "expected_error_contains": [
+    "selector_cases missing required input-misreporting cases"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases"
+      ],
+      "value": [
+        {
+          "case_id": "case-01-clean-input-admit",
+          "expected_reason_codes": [
+            "all_input_misreporting_checks_passed"
+          ],
+          "expected_route": "admit",
+          "overrides": []
+        }
+      ]
+    }
+  ],
+  "schema": "postfiat-validator-economic-input-misreporting-invalid-case-v1"
+}

@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_deviation_gain/valid_deviation_gain.json",
+  "expected_error_contains": [
+    "statement.derivation_root_hash does not match derivation material"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "derivation_root_hash"
+      ],
+      "value": "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+    }
+  ],
+  "schema": "postfiat-validator-economic-deviation-gain-invalid-case-v1"
+}

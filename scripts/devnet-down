@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BASE_DIR="${BASE_DIR:-devnet/local}"
+
+rm -rf "$BASE_DIR"
+echo "local devnet data removed: $BASE_DIR"
+

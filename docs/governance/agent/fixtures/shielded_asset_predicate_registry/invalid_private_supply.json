@@ -1,0 +1,35 @@
+{
+  "schema": "postfiat-shielded-asset-predicate-registry-invalid-case-v1",
+  "case_id": "invalid-private-supply",
+  "base_packet": "docs/governance/agent/fixtures/shielded_asset_predicate_registry/valid_predicate_registry.json",
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "protocol_boundary",
+        "supply_mode_v0"
+      ],
+      "value": "private_supply_private_flow"
+    },
+    {
+      "path": [
+        "statement",
+        "asset_profile",
+        "supply_accounting"
+      ],
+      "value": "private_supply_commitment"
+    },
+    {
+      "path": [
+        "checks",
+        "no_private_supply_v0"
+      ],
+      "value": false
+    }
+  ],
+  "expected_error_contains": [
+    "v0 supply mode must be transparent supply / private flow",
+    "asset_profile.supply_accounting must be transparent_supply_map",
+    "checks.no_private_supply_v0 must be True"
+  ]
+}

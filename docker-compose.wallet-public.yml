@@ -1,0 +1,80 @@
+# Supported authenticated public wallet edge. Secrets and deployment authority
+# are supplied through a private environment file; none are committed here.
+services:
+  wallet-proxy:
+    build: ./wallet-proxy
+    restart: unless-stopped
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      LISTEN_HOST: "0.0.0.0"
+      LISTEN_PORT: "8080"
+      ALLOWED_ORIGINS: "${WALLET_PUBLIC_ORIGIN:?set the exact https wallet origin}"
+      WALLET_PROXY_API_TOKENS_FILE: "/run/secrets/wallet_proxy_tokens"
+      WALLET_PROXY_MAX_HTTP_BODY_BYTES: "16777216"
+      WALLET_PROXY_MUTATION_RATE_LIMIT: "${WALLET_PROXY_MUTATION_RATE_LIMIT:-120}"
+      WALLET_PROXY_MUTATION_RATE_WINDOW_MS: "${WALLET_PROXY_MUTATION_RATE_WINDOW_MS:-60000}"
+      WALLET_PROXY_MUTATION_CONCURRENCY: "${WALLET_PROXY_MUTATION_CONCURRENCY:-16}"
+      RPC_HOST: "${RPC_HOST:?set an explicit private validator or RPC-edge host}"
+      RPC_PORT: "${RPC_PORT:-27650}"
+      RPC_FLEET: "${RPC_FLEET:?set the exact validator-id=host:port fleet topology}"
+      ENABLE_NATIVE_WALLET_SIGNER: "false"
+      NAVSWAP_IDEMPOTENCY_STORE_PATH: "/state/navswap-idempotency.jsonl"
+      NAVSWAP_RUN_STORE_PATH: "/state/navswap-runs.jsonl"
+      WALLET_STATIC_DIR: "/wallet/dist"
+    expose: ["8080"]
+    volumes:
+      - ./wallet-web/dist:/wallet/dist:ro
+      - wallet-proxy-state:/state
+    secrets: ["wallet_proxy_tokens"]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    networks: ["wallet-backend"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-o", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  wallet-edge:
+    image: "caddy:2.8.4-alpine@sha256:af32e97399febea808609119bb21544d0265c58a02836576e32a2d082c262c17"
+    restart: unless-stopped
+    # Run as the owner of the host TLS key. A restrictive 0600 key remains
+    # unreadable to every other container identity. These values are required
+    # rather than guessed because certificate ownership is operator-controlled.
+    user: "${WALLET_EDGE_UID:?set to the TLS key owner uid}:${WALLET_EDGE_GID:?set to the TLS key owner gid}"
+    read_only: true
+    cap_drop: ["ALL"]
+    cap_add: ["NET_BIND_SERVICE"]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      wallet-proxy:
+        condition: service_healthy
+    environment:
+      WALLET_PUBLIC_HOST: "${WALLET_PUBLIC_HOST:?set the public wallet DNS name}"
+      WALLET_TLS_CERT: "/certs/wallet.crt"
+      WALLET_TLS_KEY: "/certs/wallet.key"
+      XDG_DATA_HOME: "/tmp/caddy/data"
+      XDG_CONFIG_HOME: "/tmp/caddy/config"
+    ports:
+      - "${WALLET_HTTPS_BIND:-0.0.0.0:443}:443"
+    volumes:
+      - ./wallet-caddy/Caddyfile.production:/etc/caddy/Caddyfile:ro
+      - "${WALLET_TLS_CERT_HOST:?set the host TLS certificate path}:/certs/wallet.crt:ro"
+      - "${WALLET_TLS_KEY_HOST:?set the host TLS private-key path}:/certs/wallet.key:ro"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    networks: ["wallet-backend", "wallet-public"]
+
+networks:
+  wallet-backend:
+    internal: true
+  wallet-public:
+
+volumes:
+  wallet-proxy-state:
+
+secrets:
+  wallet_proxy_tokens:
+    file: "${WALLET_PROXY_API_TOKENS_FILE_HOST:?set the host principal-token JSON file}"

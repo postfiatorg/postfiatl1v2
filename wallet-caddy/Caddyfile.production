@@ -1,0 +1,36 @@
+{
+	admin off
+	servers {
+		protocols h1 h2
+	}
+}
+
+{$WALLET_PUBLIC_HOST} {
+	tls {$WALLET_TLS_CERT} {$WALLET_TLS_KEY}
+
+	request_body {
+		max_size 16MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>headers>Authorization delete
+				request>headers>Cookie delete
+			}
+		}
+	}
+
+	reverse_proxy wallet-proxy:8080 {
+		header_up X-Forwarded-Proto https
+	}
+}

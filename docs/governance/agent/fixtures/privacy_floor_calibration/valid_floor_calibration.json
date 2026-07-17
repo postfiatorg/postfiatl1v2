@@ -1,0 +1,259 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T00:00:00Z",
+    "attestor_key_hash": "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+    "signature_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "signature_scheme": "mldsa44-placeholder",
+    "statement_hash": "e5471cb78414c28ac72c1905f809eb0de3a090e7a98a90cf998afebdb86c93d0220589143859b1385dbf265710a33808"
+  },
+  "checks": {
+    "activity_floor_derived_from_timing_buckets": true,
+    "authority_transfer": false,
+    "batch_floor_derived_from_single_channel_posterior": true,
+    "calibration_root_bound": true,
+    "correlated_channels_get_no_independence_credit": true,
+    "direct_rpc_routes": true,
+    "joint_floor_derived_from_posterior": true,
+    "live_registry_mutation": false,
+    "side_information_downgrades": true,
+    "statement_hash_bound": true,
+    "ungoverned_policy_fails_closed": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "privacy-floor-calibration-v1-fixture",
+  "schema": "postfiat-privacy-floor-calibration-v1",
+  "statement": {
+    "adversary_model": {
+      "adversary": "public_observer_attempting_single_target_deanonymization",
+      "correlation_assumption": "perfect_correlation_gets_no_independence_credit",
+      "model_id": "single-target-deanonymization-declared-observer-v1",
+      "success_metric": "posterior_basis_points_for_one_target_after_declared_public_and_inferable_metadata"
+    },
+    "baseline_observation": {
+      "activity_window_count": 128,
+      "asset_policy_candidate_count": 16,
+      "batch_size": 8,
+      "calibration_policy_governed": true,
+      "declared_side_information": false,
+      "direct_rpc_observer": false,
+      "disclosure_candidate_count": 16,
+      "exchange_side_batching_observer": false,
+      "fee_class_candidate_count": 32,
+      "joint_candidate_count": 16,
+      "perfect_channel_correlation": false,
+      "timing_bucket_candidate_count": 16,
+      "timing_bucket_seconds": 300
+    },
+    "calibration_policy": {
+      "activity_window_seconds": 2400,
+      "max_joint_posterior_bps": 625,
+      "max_single_channel_posterior_bps": 1250,
+      "min_activity_timing_bucket_count": 8,
+      "min_activity_window_count": 128,
+      "min_asset_policy_candidate_count": 16,
+      "min_batch_size": 8,
+      "min_disclosure_candidate_count": 16,
+      "min_fee_class_candidate_count": 32,
+      "min_joint_candidate_count": 16,
+      "min_timing_bucket_candidate_count": 16,
+      "policy_units": "privacy-floor-calibration-v1",
+      "timing_bucket_seconds": 300
+    },
+    "calibration_root_hash": "d408a11538ab35570934763542f0f0fe40e3b24ba6c13d66e4c3d5d3061be99ced2abdb587370126a84c9e72ec6a1297",
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/fixtures/privacy_observer_inference_model/valid_observer_inference_model.json",
+        "sha3_384": "f58a9f212ed1e28b35a7680609ee28d3fb2528f5da28da254e994867fa1b9c2de798fb6d237147047eb81cf84d57246f"
+      },
+      {
+        "path": "reports/privacy-observer-inference-model/20260529T083924Z/privacy-observer-inference-model-report.json",
+        "sha3_384": "4a4e7442651a4ae4ea9123f80aae8dc222e7687a26021a294f3d1068b072018dd658725aadec8ec2485713413b814cf7"
+      },
+      {
+        "path": "docs/governance/agent/privacy_floor_calibration_schema.json",
+        "sha3_384": "7cd7b59cbfb9a6ee711392286e6a000d1f6fcc15ff62fde32644b4f4f84577cc363ae18f5c7c8ad9c31e8df73602c567"
+      },
+      {
+        "path": "scripts/privacy-floor-calibration-verify",
+        "sha3_384": "aaa9b117f67491217f0995f19e5f92b065e0e55653af59d831b43fa8c10532cde60483f59509ebd3979165a967f050dc"
+      }
+    ],
+    "policy_id": "privacy-floor-calibration-v1",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "privacy-floor-calibration-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-baseline-calibration",
+        "expected_reason_codes": [
+          "privacy_floor_calibration_passed"
+        ],
+        "expected_route": "baseline-private",
+        "overrides": []
+      },
+      {
+        "case_id": "case-02-joint-candidate-shortfall",
+        "expected_reason_codes": [
+          "joint_candidate_shortfall"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "joint_candidate_count"
+            ],
+            "value": 15
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-perfect-correlation-shortfall",
+        "expected_reason_codes": [
+          "correlated_channels_collapse_joint_k",
+          "joint_candidate_shortfall"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "joint_candidate_count"
+            ],
+            "value": 8
+          },
+          {
+            "path": [
+              "perfect_channel_correlation"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-timing-bucket-shortfall",
+        "expected_reason_codes": [
+          "single_channel_posterior_above_bound",
+          "timing_bucket_shortfall"
+        ],
+        "expected_route": "hold-for-batching",
+        "overrides": [
+          {
+            "path": [
+              "timing_bucket_candidate_count"
+            ],
+            "value": 7
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-activity-window-shortfall",
+        "expected_reason_codes": [
+          "activity_window_shortfall"
+        ],
+        "expected_route": "hold-for-batching",
+        "overrides": [
+          {
+            "path": [
+              "activity_window_count"
+            ],
+            "value": 96
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-batch-size-shortfall",
+        "expected_reason_codes": [
+          "batch_size_shortfall",
+          "single_channel_posterior_above_bound"
+        ],
+        "expected_route": "hold-for-batching",
+        "overrides": [
+          {
+            "path": [
+              "batch_size"
+            ],
+            "value": 4
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-thin-asset-policy",
+        "expected_reason_codes": [
+          "asset_policy_shortfall",
+          "single_channel_posterior_above_bound"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "asset_policy_candidate_count"
+            ],
+            "value": 7
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-exchange-side-batching-observer",
+        "expected_reason_codes": [
+          "exchange_side_batching_observer"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "exchange_side_batching_observer"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-09-direct-rpc-observer",
+        "expected_reason_codes": [
+          "direct_rpc_observer_can_singleton"
+        ],
+        "expected_route": "hold-for-private-relay",
+        "overrides": [
+          {
+            "path": [
+              "direct_rpc_observer"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-10-declared-side-information",
+        "expected_reason_codes": [
+          "side_information_outside_model"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "declared_side_information"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-11-ungoverned-calibration-policy",
+        "expected_reason_codes": [
+          "ungoverned_calibration_policy"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "calibration_policy_governed"
+            ],
+            "value": false
+          }
+        ]
+      }
+    ]
+  }
+}

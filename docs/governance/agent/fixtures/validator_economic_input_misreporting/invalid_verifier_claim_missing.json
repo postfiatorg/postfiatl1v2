@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_input_misreporting/valid_input_misreporting.json",
+  "expected_error_contains": [
+    "checks.favorable_misreport_rejected must be True"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "checks",
+        "favorable_misreport_rejected"
+      ],
+      "value": false
+    }
+  ],
+  "schema": "postfiat-validator-economic-input-misreporting-invalid-case-v1"
+}

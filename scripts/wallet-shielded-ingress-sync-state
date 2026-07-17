@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Refresh the wallet Step-5 relay mirror from the controlled WAN devnet.
+#
+# This is not a chain mutation. It keeps the local proxy data-dir aligned with a
+# majority-agreed validator state so the wallet proxy can propose a live shielded
+# ingress batch without asking remote validators to vote on a stale parent.
+
+: "${VALIDATOR_HOSTS:?VALIDATOR_HOSTS must be supplied by the typed fleet configuration}"
+: "${VALIDATOR_RPC_PORTS:?VALIDATOR_RPC_PORTS must be supplied by the typed fleet configuration}"
+SOURCE_VALIDATOR="${SOURCE_VALIDATOR:-auto}"
+QUORUM_MIN="${QUORUM_MIN:-5}"
+SSH_USER="${SSH_USER:-root}"
+SSH_OPTS="${SSH_OPTS:--o BatchMode=yes -o ConnectTimeout=6 -o StrictHostKeyChecking=no}"
+XDG_DATA_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}"
+LOCAL_DATA_DIR="${LOCAL_DATA_DIR:-${XDG_DATA_HOME}/postfiat/wallet-private-step5-live-current/data}"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(dirname -- "$SCRIPT_DIR")"
+NODE_BIN="${NODE_BIN:-${REPO_ROOT}/target/release/postfiat-node}"
+LOCAL_NODE_ID="${LOCAL_NODE_ID:-validator-0}"
+WORK_ROOT="${WORK_ROOT:-/tmp}"
+STAMP="${STAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
+WORK_DIR="${WORK_DIR:-$WORK_ROOT/postfiat-wallet-shielded-ingress-sync-$STAMP}"
+REPORT_FILE="${REPORT_FILE:-$WORK_DIR/sync-report.json}"
+
+STATE_FILES="${STATE_FILES:-genesis.json node_state.json governance.json ledger.json blocks.json blocks.append.jsonl batch_archive.json batch_archive.append.jsonl ordered_batches.json ordered_batches.append.jsonl receipts.json receipts.append.jsonl mempool.json shielded.json bridge.json faucet_account.json validator_registry_genesis.json validator_registry.json chain_tip.json owned_locks.json}"
+PRESERVE_FILES="${PRESERVE_FILES:-validator_keys.json proposal_validator_keys.json remote-topology.json}"
+
+IFS=',' read -r -a HOSTS <<<"$VALIDATOR_HOSTS"
+IFS=',' read -r -a PORTS <<<"$VALIDATOR_RPC_PORTS"
+
+if [ "${#HOSTS[@]}" -ne "${#PORTS[@]}" ]; then
+  echo "VALIDATOR_HOSTS and VALIDATOR_RPC_PORTS length mismatch" >&2
+  exit 2
+fi
+if [ "$SOURCE_VALIDATOR" != "auto" ]; then
+  if ! [[ "$SOURCE_VALIDATOR" =~ ^[0-9]+$ ]] || [ "$SOURCE_VALIDATOR" -ge "${#HOSTS[@]}" ]; then
+    echo "SOURCE_VALIDATOR must be auto or an index into VALIDATOR_HOSTS" >&2
+    exit 2
+  fi
+fi
+if [ ! -d "$LOCAL_DATA_DIR" ]; then
+  echo "LOCAL_DATA_DIR does not exist: $LOCAL_DATA_DIR" >&2
+  exit 2
+fi
+
+ARCHIVE="$WORK_DIR/state-from-validator.tgz"
+BACKUP_DIR="$WORK_DIR/local-backup"
+
+mkdir -p "$WORK_DIR" "$(dirname "$REPORT_FILE")"
+
+LOCAL_STATUS="$("$NODE_BIN" status --data-dir "$LOCAL_DATA_DIR")"
+
+FLEET_STATUS="$(python3 - "$VALIDATOR_HOSTS" "$VALIDATOR_RPC_PORTS" "$SOURCE_VALIDATOR" "$QUORUM_MIN" <<'PY'
+import collections
+import json
+import socket
+import sys
+
+hosts = sys.argv[1].split(",")
+ports = [int(port) for port in sys.argv[2].split(",")]
+requested_source = sys.argv[3]
+quorum_min = int(sys.argv[4])
+
+statuses = []
+for idx, (host, port) in enumerate(zip(hosts, ports)):
+    req = {
+        "version": "postfiat-local-rpc-v1",
+        "id": f"wallet-shielded-ingress-sync-status-{idx}",
+        "method": "status",
+        "params": {},
+    }
+    with socket.create_connection((host, port), timeout=5) as sock:
+        sock.settimeout(8)
+        sock.sendall((json.dumps(req) + "\n").encode("utf-8"))
+        raw = b""
+        while b"\n" not in raw:
+            chunk = sock.recv(65536)
+            if not chunk:
+                break
+            raw += chunk
+    response = json.loads(raw.decode("utf-8").strip())
+    if not response.get("ok"):
+        raise SystemExit(f"validator-{idx} status failed: {response.get('error')}")
+    result = response["result"]
+    statuses.append({
+        "idx": idx,
+        "height": result["block_height"],
+        "tip": result["block_tip_hash"],
+        "root": result["state_root"],
+        "mempool": result.get("mempool_pending"),
+    })
+
+groups = collections.Counter((s["height"], s["tip"], s["root"]) for s in statuses)
+majority_key, majority_count = groups.most_common(1)[0]
+if majority_count < quorum_min:
+    raise SystemExit(f"refusing sync: largest matching group has {majority_count}, need {quorum_min}")
+majority_statuses = [
+    s for s in statuses
+    if (s["height"], s["tip"], s["root"]) == majority_key
+]
+if requested_source == "auto":
+    source_status = majority_statuses[0]
+else:
+    requested_idx = int(requested_source)
+    requested = statuses[requested_idx]
+    requested_key = (requested["height"], requested["tip"], requested["root"])
+    source_status = requested if requested_key == majority_key else majority_statuses[0]
+print(json.dumps({
+    "statuses": statuses,
+    "source": source_status,
+    "majority": {
+        "count": majority_count,
+        "height": majority_key[0],
+        "tip": majority_key[1],
+        "root": majority_key[2],
+    },
+}))
+PY
+)"
+
+SOURCE_VALIDATOR="$(echo "$FLEET_STATUS" | jq -r '.source.idx')"
+SOURCE_HOST="${HOSTS[$SOURCE_VALIDATOR]}"
+SOURCE_PORT="${PORTS[$SOURCE_VALIDATOR]}"
+ARCHIVE="$WORK_DIR/state-from-validator-$SOURCE_VALIDATOR.tgz"
+
+echo "source validator-$SOURCE_VALIDATOR: $SOURCE_HOST:$SOURCE_PORT"
+echo "$FLEET_STATUS" | jq -r '"majority height=\(.majority.height) count=\(.majority.count) root=\(.majority.root)"'
+echo "$LOCAL_STATUS" | jq -r '"local before height=\(.block_height) root=\(.state_root)"'
+
+mkdir -p "$BACKUP_DIR"
+for file in $STATE_FILES $PRESERVE_FILES; do
+  if [ -e "$LOCAL_DATA_DIR/$file" ]; then
+    cp -a "$LOCAL_DATA_DIR/$file" "$BACKUP_DIR/"
+  fi
+done
+
+ssh $SSH_OPTS "$SSH_USER@$SOURCE_HOST" \
+  "cd /var/lib/postfiat/validator-$SOURCE_VALIDATOR && tar -czf - $STATE_FILES" >"$ARCHIVE"
+tar --no-same-owner -xzf "$ARCHIVE" -C "$LOCAL_DATA_DIR"
+
+python3 - "$LOCAL_DATA_DIR/node_state.json" "$LOCAL_NODE_ID" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+node_id = sys.argv[2]
+state = json.loads(path.read_text())
+state["node_id"] = node_id
+path.write_text(json.dumps(state, indent=2) + "\n")
+PY
+
+chmod 600 "$LOCAL_DATA_DIR"/*.json "$LOCAL_DATA_DIR"/*.append.jsonl 2>/dev/null || true
+
+AFTER_STATUS="$("$NODE_BIN" status --data-dir "$LOCAL_DATA_DIR")"
+echo "$AFTER_STATUS" | jq -r '"local after height=\(.block_height) root=\(.state_root)"'
+
+python3 - "$REPORT_FILE" "$LOCAL_STATUS" "$FLEET_STATUS" "$AFTER_STATUS" "$WORK_DIR" "$BACKUP_DIR" "$SOURCE_VALIDATOR" <<'PY'
+import json
+import sys
+
+report_file, local_before, fleet, local_after, work_dir, backup_dir, source = sys.argv[1:]
+report = {
+    "schema": "postfiat-wallet-shielded-ingress-state-sync-v1",
+    "source_validator": f"validator-{source}",
+    "local_before": json.loads(local_before),
+    "fleet": json.loads(fleet),
+    "local_after": json.loads(local_after),
+    "work_dir": work_dir,
+    "backup_dir": backup_dir,
+}
+with open(report_file, "w", encoding="utf-8") as handle:
+    json.dump(report, handle, indent=2)
+    handle.write("\n")
+print(json.dumps(report, indent=2))
+PY

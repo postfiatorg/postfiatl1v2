@@ -1,0 +1,411 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T00:00:00Z",
+    "attestor_key_hash": "666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666",
+    "signature_hash": "777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+    "signature_scheme": "mldsa44-placeholder",
+    "statement_hash": "dabec86ff0680b8c26c04a98f6cb99d3d6d8ffa8d8a9895f8868fa30bd73e60d4d233dbd70b8d54af83aac684bfa1e5e"
+  },
+  "checks": {
+    "authority_transfer": false,
+    "direct_rpc_routes": true,
+    "integer_bps_model": true,
+    "k_derived_from_partition_intersection": true,
+    "live_registry_mutation": false,
+    "low_partition_downgrades": true,
+    "observer_model_root_bound": true,
+    "offchain_side_info_downgrades": true,
+    "policy_root_mismatch_fails_closed": true,
+    "stale_observation_holds": true,
+    "statement_hash_bound": true,
+    "unique_disclosure_routes": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "privacy-observer-inference-model-v1-fixture",
+  "schema": "postfiat-privacy-observer-inference-model-v1",
+  "statement": {
+    "baseline_observation": {
+      "active_policy_root_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "channels": [
+        {
+          "candidate_ids": [
+            "sa-001",
+            "sa-002",
+            "sa-003",
+            "sa-004",
+            "sa-005",
+            "sa-006",
+            "sa-007",
+            "sa-008",
+            "sa-009",
+            "sa-010",
+            "sa-011",
+            "sa-012",
+            "sa-013",
+            "sa-014",
+            "sa-015",
+            "sa-016",
+            "sa-017",
+            "sa-018"
+          ],
+          "channel": "asset_policy_partition",
+          "partition_id": "asset-policy-pft-public-supply-private-flow"
+        },
+        {
+          "candidate_ids": [
+            "sa-001",
+            "sa-002",
+            "sa-003",
+            "sa-004",
+            "sa-005",
+            "sa-006",
+            "sa-007",
+            "sa-008",
+            "sa-009",
+            "sa-010",
+            "sa-011",
+            "sa-012",
+            "sa-013",
+            "sa-014",
+            "sa-015",
+            "sa-016",
+            "sa-019",
+            "sa-020",
+            "sa-021"
+          ],
+          "channel": "disclosure_hash",
+          "partition_id": "nonunique-disclosure-hash-window"
+        },
+        {
+          "candidate_ids": [
+            "sa-001",
+            "sa-002",
+            "sa-003",
+            "sa-004",
+            "sa-005",
+            "sa-006",
+            "sa-007",
+            "sa-008",
+            "sa-009",
+            "sa-010",
+            "sa-011",
+            "sa-012",
+            "sa-013",
+            "sa-014",
+            "sa-015",
+            "sa-016",
+            "sa-022",
+            "sa-023",
+            "sa-024",
+            "sa-025"
+          ],
+          "channel": "fee_class",
+          "partition_id": "standard-fee-class"
+        },
+        {
+          "candidate_ids": [
+            "sa-001",
+            "sa-002",
+            "sa-003",
+            "sa-004",
+            "sa-005",
+            "sa-006",
+            "sa-007",
+            "sa-008",
+            "sa-009",
+            "sa-010",
+            "sa-011",
+            "sa-012",
+            "sa-013",
+            "sa-014",
+            "sa-015",
+            "sa-016",
+            "sa-026"
+          ],
+          "channel": "offchain_side_information",
+          "partition_id": "no-declared-side-info"
+        },
+        {
+          "candidate_ids": [
+            "sa-001",
+            "sa-002",
+            "sa-003",
+            "sa-004",
+            "sa-005",
+            "sa-006",
+            "sa-007",
+            "sa-008",
+            "sa-009",
+            "sa-010",
+            "sa-011",
+            "sa-012",
+            "sa-013",
+            "sa-014",
+            "sa-015",
+            "sa-016",
+            "sa-027",
+            "sa-028"
+          ],
+          "channel": "rpc_observer",
+          "partition_id": "self-hosted-or-private-relay"
+        },
+        {
+          "candidate_ids": [
+            "sa-001",
+            "sa-002",
+            "sa-003",
+            "sa-004",
+            "sa-005",
+            "sa-006",
+            "sa-007",
+            "sa-008",
+            "sa-009",
+            "sa-010",
+            "sa-011",
+            "sa-012",
+            "sa-013",
+            "sa-014",
+            "sa-015",
+            "sa-016",
+            "sa-029",
+            "sa-030"
+          ],
+          "channel": "timing_bucket",
+          "partition_id": "five-minute-batched-window"
+        }
+      ],
+      "declared_offchain_side_info": false,
+      "declared_policy_root_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "direct_rpc_observer": false,
+      "observation_age_seconds": 600,
+      "policy_root_governed": true,
+      "unique_disclosure_hash": false
+    },
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/fixtures/privacy_correlation_bound/valid_correlation_bound.json",
+        "sha3_384": "297bb43b24ba7ed94dacf58334aee10f19a9ade612c5572d1b4a0fc8e3d57cd02231980b59f75fc5b39811e9983f574a"
+      },
+      {
+        "path": "reports/privacy-correlation-bound/20260529T075414Z/privacy-correlation-bound-report.json",
+        "sha3_384": "eb2028bba2e5f8cdf1488e8582a855fab720773f1ce50c4da7dcc246575637955cc9a38ab04819d91bef6ceaf178e854"
+      },
+      {
+        "path": "docs/governance/agent/privacy_observer_inference_model_schema.json",
+        "sha3_384": "062bbcff11fe3e18b1f81e4e0ec3041b5e7073a58c8d663422b10c19c8de5f5ad67dfb3a38254e0ac492e4817b63854e"
+      },
+      {
+        "path": "scripts/privacy-observer-inference-model-verify",
+        "sha3_384": "096db8466593043fa8d604ebee5b1e89686dbbb800d1d670a082fefa92701f7a104460f95b72ff020eee4feae1afbf46"
+      }
+    ],
+    "inference_model": {
+      "candidate_derivation": "intersection_of_declared_observer_channel_partitions",
+      "model_units": "integer_basis_points",
+      "non_coverage": "undeclared_offchain_side_information_and_compromised_endpoints"
+    },
+    "observer_model_root_hash": "424cda0de92d9c148d032fb1e1f8771d6a4e1b79bd6e6d6724da837a6df1b0468046ec2bb4b7ddd4fbc4e47904fd1c00",
+    "observer_policy": {
+      "max_joint_posterior_bps": 625,
+      "max_observation_age_seconds": 3600,
+      "min_disclosure_candidate_count": 16,
+      "min_joint_candidate_count": 16,
+      "min_single_channel_candidate_count": 8,
+      "min_timing_bucket_candidate_count": 16,
+      "policy_units": "privacy-observer-inference-model-v1",
+      "required_channels": [
+        "asset_policy_partition",
+        "disclosure_hash",
+        "fee_class",
+        "offchain_side_information",
+        "rpc_observer",
+        "timing_bucket"
+      ]
+    },
+    "policy_id": "privacy-observer-inference-model-v1",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "privacy-observer-inference-model-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-baseline-observer-inference",
+        "expected_reason_codes": [
+          "observer_inference_bound_passed"
+        ],
+        "expected_route": "baseline-private",
+        "overrides": []
+      },
+      {
+        "case_id": "case-02-low-joint-partition",
+        "expected_reason_codes": [
+          "joint_observer_candidate_shortfall"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "channels",
+              2,
+              "candidate_ids"
+            ],
+            "value": [
+              "sa-001",
+              "sa-002",
+              "sa-003",
+              "sa-004",
+              "sa-005",
+              "sa-006",
+              "sa-007",
+              "sa-008"
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-stale-observation-window",
+        "expected_reason_codes": [
+          "stale_observation_window"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "observation_age_seconds"
+            ],
+            "value": 7200
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-direct-rpc-observer",
+        "expected_reason_codes": [
+          "direct_rpc_observer_can_singleton"
+        ],
+        "expected_route": "hold-for-private-relay",
+        "overrides": [
+          {
+            "path": [
+              "direct_rpc_observer"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-policy-root-mismatch",
+        "expected_reason_codes": [
+          "policy_root_mismatch"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "declared_policy_root_hash"
+            ],
+            "value": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-offchain-side-information",
+        "expected_reason_codes": [
+          "offchain_side_information_outside_model"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "declared_offchain_side_info"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-unique-disclosure-partition",
+        "expected_reason_codes": [
+          "unique_disclosure_or_low_disclosure_partition"
+        ],
+        "expected_route": "explicit-disclosure-required",
+        "overrides": [
+          {
+            "path": [
+              "unique_disclosure_hash"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-timing-partition-shortfall",
+        "expected_reason_codes": [
+          "joint_observer_candidate_shortfall",
+          "timing_partition_shortfall"
+        ],
+        "expected_route": "hold-for-batching",
+        "overrides": [
+          {
+            "path": [
+              "channels",
+              5,
+              "candidate_ids"
+            ],
+            "value": [
+              "sa-001",
+              "sa-002",
+              "sa-003",
+              "sa-004",
+              "sa-005",
+              "sa-006",
+              "sa-007",
+              "sa-008"
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-09-missing-channel",
+        "expected_reason_codes": [
+          "missing_observer_channel",
+          "single_channel_partition_shortfall",
+          "unique_disclosure_or_low_disclosure_partition"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "channels"
+            ],
+            "value": [
+              {
+                "candidate_ids": [
+                  "sa-001",
+                  "sa-002",
+                  "sa-003",
+                  "sa-004",
+                  "sa-005",
+                  "sa-006",
+                  "sa-007",
+                  "sa-008",
+                  "sa-009",
+                  "sa-010",
+                  "sa-011",
+                  "sa-012",
+                  "sa-013",
+                  "sa-014",
+                  "sa-015",
+                  "sa-016"
+                ],
+                "channel": "timing_bucket",
+                "partition_id": "missing-channel-control"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

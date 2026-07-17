@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CONFIG="$ROOT/systemd/postfiat-logrotate.example"
+STATE_FILE="$(mktemp)"
+trap 'rm -f "$STATE_FILE"' EXIT
+
+command -v logrotate >/dev/null 2>&1 || {
+  echo "logrotate is required" >&2
+  exit 1
+}
+command -v rg >/dev/null 2>&1 || {
+  echo "ripgrep is required" >&2
+  exit 1
+}
+
+required=(
+  daily
+  'rotate 14'
+  'maxsize 100M'
+  missingok
+  notifempty
+  compress
+  delaycompress
+  dateext
+  'create 0640 postfiat postfiat'
+  'su postfiat postfiat'
+  copytruncate
+)
+for setting in "${required[@]}"; do
+  rg --fixed-strings --quiet "$setting" "$CONFIG" || {
+    echo "missing log-retention setting: $setting" >&2
+    exit 1
+  }
+done
+
+logrotate --debug --state "$STATE_FILE" "$CONFIG" >/dev/null
+echo "postfiat_logrotate_config=ok"

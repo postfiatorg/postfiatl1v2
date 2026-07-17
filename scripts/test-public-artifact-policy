@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""Fail closed on unclassified or drifted binary/media publication artifacts."""
+
+from __future__ import annotations
+
+import hashlib
+import subprocess
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+MEDIA_SUFFIXES = {
+    ".bin",
+    ".wasm",
+    ".pdf",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".zip",
+    ".tar",
+    ".gz",
+}
+EXPECTED = {
+    "crates/execution/tests/fixtures/sp1-aggregate-regen-monero-crypto/aggregate-proof-calldata.bin": "1ae6004199e7567b3f89f6423d6faf9d44bcda23703243bef0eec7e45b9cbf0e",
+    "crates/execution/tests/fixtures/sp1-aggregate-regen-monero-crypto/aggregate-public-values.bin": "9c3d5d0afc5d6eefc56ded32ad21330cfa594803b69c86275cdf09873ec7b97e",
+    "crates/privacy_orchard/artifacts/asset_orchard_k15_params.v1.bin": "e1fb29749c7bd0870768044d5329b4e293cb2d44dae24db2554605427b19d0dd",
+    "crates/privacy_orchard/artifacts/asset_orchard_private_egress_vk_pinned_assembly.v1.bin": "fafd12307e9672d4db653601b8a141fb20757e1a801266a2f65b641010f780e3",
+    "crates/privacy_orchard/artifacts/asset_orchard_swap_vk_pinned_assembly.v1.bin": "3c33db46f118434d53bb08f96a911038832be2b3a7ccecd0a6ceb5ffa1e45d3a",
+    "crates/privacy_orchard/artifacts/replay/asset_orchard_private_egress_vk_pinned_assembly.custom_poseidon_v1.pre_3218ec53.bin": "ca34d126c2107fa35180e7a4e7699fc49d8feb3a36cf5609d2e3b4850c2fb395",
+    "crates/privacy_orchard/artifacts/replay/asset_orchard_swap_vk_pinned_assembly.custom_poseidon_v3.pre_3218ec53.bin": "e0f734e3a68459c83f47adbac1caa07c9813ec87cccc4a24657d83eed8059f26",
+    "docs/references/cobalt-bft-governance-in-open-networks.pdf": "d22cc32bb561bc1ce9ce8fa4fbdf59def12a3ed89ff44add47fcd74f9eb9b625",
+    "third_party/halo2_proofs/tests/plonk_api_proof.bin": "22abccd530cd2d96e2d4d024dc63764fb5ce7c3874bfc212ade8dbc9d01515c6",
+    "wallet-extension/icons/icon128.png": "4e05b9a7cc8d83b110b6d0ce7dc98702a705f8c8427d98e8a6284cc6cbfd0c39",
+    "wallet-extension/icons/icon16.png": "3caf5822b89ea2d234e250e4445dc63b854be6ed4b20681e27ed84196d847e8b",
+    "wallet-extension/icons/icon48.png": "b2a4f3d0e8204e866c5e05d157ae734b3e84467087620b5920e1ffe32ea886a2",
+    "wallet-extension/wasm/postfiat_wallet_wasm_bg.wasm": "213fcc6062a8107bb11e25fda18309cda9926a0e6c6ff898eb18102f51751aa2",
+    "wallet-web/src/wasm/postfiat_wallet_wasm_bg.wasm": "213fcc6062a8107bb11e25fda18309cda9926a0e6c6ff898eb18102f51751aa2",
+}
+
+
+def tracked_files() -> set[str]:
+    output = subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+    ).stdout
+    return {
+        item.decode("utf-8")
+        for item in output.split(b"\0")
+        if item and (ROOT / item.decode("utf-8")).is_file()
+    }
+
+
+def digest(path: Path) -> str:
+    hasher = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def main() -> int:
+    tracked = tracked_files()
+    media = {
+        path
+        for path in tracked
+        if any(path.lower().endswith(suffix) for suffix in MEDIA_SUFFIXES)
+    }
+    assert media == set(EXPECTED), (
+        f"unclassified={sorted(media - set(EXPECTED))} "
+        f"missing={sorted(set(EXPECTED) - media)}"
+    )
+    for relative, expected in EXPECTED.items():
+        actual = digest(ROOT / relative)
+        assert actual == expected, f"artifact hash drift: {relative}: {actual}"
+    wasm_paths = [
+        ROOT / "wallet-web/src/wasm/postfiat_wallet_wasm_bg.wasm",
+        ROOT / "wallet-extension/wasm/postfiat_wallet_wasm_bg.wasm",
+    ]
+    assert wasm_paths[0].read_bytes() == wasm_paths[1].read_bytes(), (
+        "web and extension wallet WASM artifacts differ"
+    )
+    print(
+        "public_artifact_policy=ok "
+        f"classified={len(media)} max_bytes={max((ROOT / item).stat().st_size for item in media)}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

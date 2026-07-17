@@ -1,0 +1,1039 @@
+#!/usr/bin/env python3
+"""Diagnose local PostFiat validator operator posture."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import shutil
+import stat
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SECRET_FIELD_RE = re.compile(
+    r'"(?:private_key_hex|privatekey|spending_key_hex|full_viewing_key_hex|'
+    r'master_seed_hex|seed_phrase|mnemonic|rseed|secret|password|token)"\s*:\s*"[^"]*"',
+    re.IGNORECASE,
+)
+PUBLIC_KEY_FIELD_RE = re.compile(r'"public_key_hex"\s*:\s*"[^"]*"', re.IGNORECASE)
+NONLOCAL_IPV4_RE = re.compile(
+    r"(?<![0-9.])(?!127\.0\.0\.1\b)(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9.])"
+)
+PUBLIC_STATE_FILES = [
+    "genesis.json",
+    "governance.json",
+    "ledger.json",
+    "blocks.json",
+    "batch_archive.json",
+    "mempool.json",
+    "ordered_batches.json",
+    "receipts.json",
+    "shielded.json",
+    "bridge.json",
+    "faucet_account.json",
+    "validator_registry.json",
+    "validator_registry_genesis.json",
+    "remote-topology.json",
+    "node_state.json",
+]
+PRIVATE_KEY_FILES = ["validator_keys.json", "faucet_key.json"]
+
+
+def utc_stamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def utc_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def rel(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def redact_text(text: str) -> str:
+    text = SECRET_FIELD_RE.sub('"<redacted-secret-field>": "<redacted>"', text)
+    text = PUBLIC_KEY_FIELD_RE.sub('"public_key_fingerprint": "<redacted>"', text)
+    return NONLOCAL_IPV4_RE.sub("<ip>", text)
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def fingerprint(value: str | None) -> str | None:
+    if not value:
+        return None
+    return hashlib.sha384(value.encode("utf-8")).hexdigest()[:24]
+
+
+def load_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(redact_text(text), encoding="utf-8")
+
+
+def run_command(
+    command: list[str],
+    *,
+    log_prefix: Path | None = None,
+    timeout_seconds: float = 20.0,
+) -> dict[str, Any]:
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout_seconds,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as error:
+        stdout = error.stdout if isinstance(error.stdout, str) else ""
+        stderr = error.stderr if isinstance(error.stderr, str) else ""
+        if log_prefix is not None:
+            write_text(log_prefix.with_suffix(".stdout.log"), stdout)
+            write_text(log_prefix.with_suffix(".stderr.log"), stderr)
+        return {
+            "ok": False,
+            "returncode": None,
+            "timed_out": True,
+            "error": f"command timed out after {timeout_seconds:.1f}s",
+        }
+    if log_prefix is not None:
+        write_text(log_prefix.with_suffix(".stdout.log"), completed.stdout)
+        write_text(log_prefix.with_suffix(".stderr.log"), completed.stderr)
+    result = {
+        "ok": completed.returncode == 0,
+        "returncode": completed.returncode,
+        "timed_out": False,
+    }
+    if completed.returncode != 0:
+        message = (completed.stderr or completed.stdout).strip()
+        result["error"] = redact_text(message[-1000:] if message else "command failed")
+    return result
+
+
+def run_json_command(
+    command: list[str],
+    *,
+    log_prefix: Path,
+    timeout_seconds: float,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    run = run_command(command, log_prefix=log_prefix, timeout_seconds=timeout_seconds)
+    if not run["ok"]:
+        return run, None
+    stdout_path = log_prefix.with_suffix(".stdout.log")
+    try:
+        parsed = json.loads(stdout_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        run["ok"] = False
+        run["error"] = f"invalid JSON output: {error}"
+        return run, None
+    return run, parsed if isinstance(parsed, dict) else {"value": parsed}
+
+
+def git_metadata() -> dict[str, Any]:
+    revision = run_command(["git", "rev-parse", "HEAD"], timeout_seconds=5.0)
+    status = run_command(["git", "status", "--short"], timeout_seconds=5.0)
+    result: dict[str, Any] = {"revision": None, "dirty": None}
+    if revision["ok"]:
+        completed = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        result["revision"] = completed.stdout.strip() if completed.returncode == 0 else None
+    if status["ok"]:
+        completed = subprocess.run(
+            ["git", "status", "--short"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        result["dirty"] = bool(completed.stdout.strip()) if completed.returncode == 0 else None
+    return result
+
+
+def bft_quorum(count: int | None) -> int | None:
+    if count is None or count <= 0:
+        return None
+    return (2 * count) // 3 + 1
+
+
+def natural_key(path: Path) -> list[Any]:
+    parts: list[Any] = []
+    for piece in re.split(r"([0-9]+)", path.name):
+        parts.append(int(piece) if piece.isdigit() else piece)
+    return parts
+
+
+def discover_data_dirs(args: argparse.Namespace) -> list[Path]:
+    data_dirs = [Path(item) for item in args.data_dir or []]
+    if args.data_root is not None:
+        root = Path(args.data_root)
+        if args.validator_count:
+            for index in range(args.validator_count):
+                for candidate in (root / f"validator-{index}", root / f"node{index}"):
+                    if candidate.is_dir():
+                        data_dirs.append(candidate)
+                        break
+                else:
+                    data_dirs.append(root / f"validator-{index}")
+        else:
+            discovered = [
+                path
+                for path in root.iterdir()
+                if path.is_dir() and (path.name.startswith("validator-") or path.name.startswith("node"))
+            ]
+            data_dirs.extend(sorted(discovered, key=natural_key))
+    seen: set[Path] = set()
+    unique: list[Path] = []
+    for data_dir in data_dirs:
+        resolved = data_dir.resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            unique.append(data_dir)
+    if not unique:
+        raise SystemExit("provide --data-dir or --data-root")
+    return unique
+
+
+def parse_unit_map(values: list[str] | None) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for value in values or []:
+        if "=" not in value:
+            raise SystemExit(f"unit mapping must be node_id=unit: {value}")
+        node_id, unit = value.split("=", 1)
+        mapping[node_id.strip()] = unit.strip()
+    return mapping
+
+
+def format_template(template: str | None, node_id: str | None, index: int) -> str | None:
+    if not template or not node_id:
+        return None
+    return template.format(node_id=node_id, index=index)
+
+
+def unit_for(
+    explicit: dict[str, str],
+    template: str | None,
+    node_id: str | None,
+    index: int,
+) -> str | None:
+    if node_id and node_id in explicit:
+        return explicit[node_id]
+    return format_template(template, node_id, index)
+
+
+def systemd_status(unit: str | None) -> dict[str, Any]:
+    if not unit:
+        return {"configured": False, "unit": None, "active": None, "state": "not_configured"}
+    if shutil.which("systemctl") is None:
+        return {
+            "configured": True,
+            "unit": unit,
+            "active": None,
+            "state": "systemctl_unavailable",
+        }
+    completed = subprocess.run(
+        ["systemctl", "is-active", unit],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=5,
+        check=False,
+    )
+    state = (completed.stdout or completed.stderr).strip() or "unknown"
+    return {
+        "configured": True,
+        "unit": unit,
+        "active": completed.returncode == 0 and state == "active",
+        "state": redact_text(state),
+    }
+
+
+def journal_tail(unit: str | None, tail_lines: int) -> dict[str, Any]:
+    if not unit:
+        return {"available": False, "reason": "not_configured", "lines": []}
+    if shutil.which("journalctl") is None:
+        return {"available": False, "reason": "journalctl_unavailable", "lines": []}
+    completed = subprocess.run(
+        ["journalctl", "-u", unit, "-n", str(tail_lines), "--no-pager"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=5,
+        check=False,
+    )
+    if completed.returncode != 0:
+        return {
+            "available": False,
+            "reason": redact_text((completed.stderr or completed.stdout).strip()[-500:]),
+            "lines": [],
+        }
+    return {
+        "available": True,
+        "reason": None,
+        "lines": [redact_text(line) for line in completed.stdout.splitlines()[-tail_lines:]],
+    }
+
+
+def log_file_tail(path: Path | None, tail_lines: int) -> dict[str, Any]:
+    if path is None:
+        return {"available": False, "reason": "not_configured", "lines": []}
+    if not path.is_file():
+        return {"available": False, "reason": "missing", "path": rel(path), "lines": []}
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()[-tail_lines:]
+    return {
+        "available": True,
+        "reason": None,
+        "path": rel(path),
+        "lines": [redact_text(line) for line in lines],
+    }
+
+
+def parse_log_files(values: list[str] | None) -> dict[str, Path]:
+    mapping: dict[str, Path] = {}
+    for value in values or []:
+        if "=" not in value:
+            raise SystemExit(f"log file mapping must be node_id=path: {value}")
+        node_id, path = value.split("=", 1)
+        mapping[node_id.strip()] = Path(path.strip())
+    return mapping
+
+
+def file_mode(path: Path) -> str | None:
+    try:
+        return stat.filemode(path.stat().st_mode)
+    except FileNotFoundError:
+        return None
+
+
+def path_size_bytes(path: Path) -> int:
+    if path.is_file():
+        return path.stat().st_size
+    total = 0
+    if path.is_dir():
+        for child in path.rglob("*"):
+            if child.is_file():
+                try:
+                    total += child.stat().st_size
+                except OSError:
+                    pass
+    return total
+
+
+def path_permissions(path: Path) -> dict[str, Any]:
+    exists = path.exists()
+    if not exists:
+        return {"exists": False, "mode": None, "world_writable": None, "owner_uid_matches_process": None}
+    mode = path.stat().st_mode
+    return {
+        "exists": True,
+        "mode": stat.filemode(mode),
+        "world_writable": bool(mode & stat.S_IWOTH),
+        "owner_uid_matches_process": path.stat().st_uid == os.getuid(),
+    }
+
+
+def private_file_permissions(path: Path) -> dict[str, Any]:
+    exists = path.exists()
+    if not exists:
+        return {"exists": False, "mode": None, "not_group_or_world_accessible": None}
+    mode = path.stat().st_mode
+    return {
+        "exists": True,
+        "mode": stat.filemode(mode),
+        "not_group_or_world_accessible": (mode & 0o077) == 0,
+    }
+
+
+def registry_records(registry: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not isinstance(registry, dict):
+        return []
+    records = registry.get("validators") or registry.get("records") or []
+    return [record for record in records if isinstance(record, dict)]
+
+
+def latest_block(data_dir: Path) -> dict[str, Any]:
+    path = data_dir / "blocks.json"
+    if not path.is_file():
+        return {"available": False, "reason": "missing"}
+    try:
+        parsed = load_json(path)
+    except Exception as error:
+        return {"available": False, "reason": f"invalid_json: {error}"}
+    blocks = parsed.get("blocks") if isinstance(parsed, dict) else parsed
+    if not isinstance(blocks, list) or not blocks:
+        return {
+            "available": True,
+            "height": 0,
+            "block_id": "genesis",
+            "certificate_id": None,
+            "certificate_vote_count": None,
+        }
+    block = blocks[-1] if isinstance(blocks[-1], dict) else {}
+    header = block.get("header") if isinstance(block.get("header"), dict) else {}
+    certificate = block.get("certificate") if isinstance(block.get("certificate"), dict) else {}
+    header_certificate = (
+        header.get("certificate") if isinstance(header.get("certificate"), dict) else {}
+    )
+    certificate = certificate or header_certificate
+    signatures = certificate.get("signatures") or certificate.get("votes") or []
+    return {
+        "available": True,
+        "height": header.get("height", block.get("height")),
+        "block_id": header.get("block_id", block.get("block_id", block.get("id"))),
+        "certificate_id": certificate.get("certificate_id", block.get("certificate_id")),
+        "certificate_vote_count": len(signatures) if isinstance(signatures, list) else None,
+    }
+
+
+def first_actionable(reasons: list[str]) -> str | None:
+    return reasons[0] if reasons else None
+
+
+def validator_record_summary(registry: dict[str, Any] | None, node_id: str | None) -> dict[str, Any]:
+    records = registry_records(registry)
+    record = next((item for item in records if item.get("node_id") == node_id), None)
+    return {
+        "member": record is not None,
+        "registry_validator_count": len(records),
+        "algorithm_id": record.get("algorithm_id") if record else None,
+        "public_key_fingerprint": fingerprint(record.get("public_key_hex") if record else None),
+    }
+
+
+def account_tx_index_subset(
+    report: dict[str, Any] | None,
+    run: dict[str, Any],
+    *,
+    current_height: int | None,
+) -> dict[str, Any]:
+    if not isinstance(report, dict):
+        return {
+            "available": False,
+            "ready": False,
+            "reason": run.get("error") or "account_tx_index_status_unavailable",
+        }
+    index_present = report.get("index_present") is True
+    index_usable = report.get("index_usable") is True
+    disk_index_present = report.get("disk_index_present") is True
+    disk_index_usable = report.get("disk_index_usable") is True
+    effective_usable = index_usable or disk_index_usable
+    empty_chain_without_index = current_height == 0 and not index_present
+    return {
+        "available": True,
+        "schema": report.get("schema"),
+        "index_path": report.get("index_path"),
+        "disk_index_path": report.get("disk_index_path"),
+        "index_present": index_present,
+        "index_usable": index_usable,
+        "disk_index_present": disk_index_present,
+        "disk_index_usable": disk_index_usable,
+        "effective_usable": effective_usable,
+        "ready": effective_usable or empty_chain_without_index,
+        "reason": report.get("reason"),
+        "disk_index_reason": report.get("disk_index_reason"),
+        "indexed_from_height": report.get("indexed_from_height"),
+        "indexed_to_height": report.get("indexed_to_height"),
+        "indexed_block_count": report.get("indexed_block_count"),
+        "indexed_row_count": report.get("indexed_row_count"),
+        "account_count": report.get("account_count"),
+        "disk_account_shard_count": report.get("disk_account_shard_count"),
+        "tip_matches_current": report.get("tip_hash") == report.get("current_tip_hash"),
+    }
+
+
+def collect_validator(
+    *,
+    index: int,
+    data_dir: Path,
+    args: argparse.Namespace,
+    validator_unit_map: dict[str, str],
+    rpc_unit_map: dict[str, str],
+    log_files: dict[str, Path],
+) -> dict[str, Any]:
+    validator_log_dir = args.log_dir / f"validator-{index}"
+    validator_log_dir.mkdir(parents=True, exist_ok=True)
+    summary: dict[str, Any] = {
+        "index": index,
+        "data_dir": rel(data_dir),
+        "checks": {},
+        "warnings": [],
+        "criticals": [],
+    }
+    data_permissions = path_permissions(data_dir)
+    summary["data_dir_permissions"] = data_permissions
+    if not data_permissions["exists"]:
+        summary["criticals"].append("data_dir_missing")
+        summary["node_id"] = None
+        summary["validator_ok"] = False
+        summary["actionable_reason"] = "data_dir_missing"
+        return summary
+    if data_permissions["world_writable"]:
+        summary["criticals"].append("data_dir_world_writable")
+
+    public_files = {
+        name: {"exists": (data_dir / name).is_file(), "mode": file_mode(data_dir / name)}
+        for name in PUBLIC_STATE_FILES
+    }
+    private_files = {name: private_file_permissions(data_dir / name) for name in PRIVATE_KEY_FILES}
+    missing_public = [name for name, report in public_files.items() if not report["exists"]]
+    unsafe_private = [
+        name
+        for name, report in private_files.items()
+        if report["exists"] and report["not_group_or_world_accessible"] is not True
+    ]
+    if missing_public:
+        summary["criticals"].append("required_state_file_missing")
+    if unsafe_private:
+        summary["criticals"].append("private_key_file_permissions_unsafe")
+    summary["files"] = {
+        "required_public": public_files,
+        "private_key_file_permissions": private_files,
+    }
+
+    node = str(args.node_bin)
+    command_timeout = args.command_timeout_seconds
+    status_run, status_report = run_json_command(
+        [node, "status", "--data-dir", str(data_dir)],
+        log_prefix=validator_log_dir / "status",
+        timeout_seconds=command_timeout,
+    )
+    state_run, state_report = run_json_command(
+        [node, "verify-state", "--data-dir", str(data_dir)],
+        log_prefix=validator_log_dir / "verify-state",
+        timeout_seconds=command_timeout,
+    )
+    metrics_run, metrics_report = run_json_command(
+        [node, "metrics", "--data-dir", str(data_dir)],
+        log_prefix=validator_log_dir / "metrics",
+        timeout_seconds=command_timeout,
+    )
+    history_run, history_report = run_json_command(
+        [node, "history-status", "--data-dir", str(data_dir)],
+        log_prefix=validator_log_dir / "history-status",
+        timeout_seconds=command_timeout,
+    )
+    account_index_run, account_index_report = run_json_command(
+        [node, "account-tx-index-status", "--data-dir", str(data_dir)],
+        log_prefix=validator_log_dir / "account-tx-index-status",
+        timeout_seconds=command_timeout,
+    )
+
+    summary["commands"] = {
+        "status": status_run,
+        "verify_state": state_run,
+        "metrics": metrics_run,
+        "history_status": history_run,
+        "account_tx_index_status": account_index_run,
+    }
+    if not status_report:
+        summary["criticals"].append("status_unavailable")
+    if not state_report or state_report.get("verified") is not True:
+        summary["criticals"].append("state_not_verified")
+    if not metrics_report:
+        summary["criticals"].append("metrics_unavailable")
+    if not history_report or history_report.get("partial_history_ready") is not True:
+        summary["criticals"].append("history_retention_not_ready")
+
+    node_id = (
+        status_report.get("node_id")
+        if isinstance(status_report, dict)
+        else None
+    )
+    if not node_id:
+        try:
+            node_id = load_json(data_dir / "node_state.json").get("node_id")
+        except Exception:
+            node_id = None
+    summary["node_id"] = node_id
+
+    validator_unit = unit_for(
+        validator_unit_map,
+        args.validator_service_template,
+        node_id,
+        index,
+    )
+    rpc_unit = unit_for(rpc_unit_map, args.rpc_service_template, node_id, index)
+    validator_service = systemd_status(validator_unit)
+    rpc_service = systemd_status(rpc_unit)
+    summary["services"] = {"validator": validator_service, "rpc": rpc_service}
+    if validator_service["configured"] and validator_service["active"] is not True:
+        summary["criticals"].append("validator_service_not_active")
+    if rpc_service["configured"] and rpc_service["active"] is not True:
+        summary["warnings"].append("rpc_service_not_active")
+
+    status_subset = {}
+    if isinstance(status_report, dict):
+        status_subset = {
+            "chain_id": status_report.get("chain_id"),
+            "genesis_hash": status_report.get("genesis_hash"),
+            "protocol_version": status_report.get("protocol_version"),
+            "status": status_report.get("status"),
+            "last_run_unix": status_report.get("last_run_unix"),
+            "state_root": status_report.get("state_root"),
+            "block_height": status_report.get("block_height"),
+            "block_tip_hash": status_report.get("block_tip_hash"),
+            "mempool_pending": status_report.get("mempool_pending"),
+            "validator_count": status_report.get("validator_count"),
+        }
+        if status_report.get("status") != "running":
+            summary["criticals"].append("node_not_running")
+    summary["status"] = status_subset
+
+    state_subset = {}
+    if isinstance(state_report, dict):
+        governance = state_report.get("governance", {})
+        state_subset = {
+            "verified": state_report.get("verified"),
+            "block_log_verified": state_report.get("block_log", {}).get("verified"),
+            "block_log_block_count": state_report.get("block_log", {}).get("block_count"),
+            "governance_verified": governance.get("verified") if isinstance(governance, dict) else None,
+            "active_validators": governance.get("active_validators") if isinstance(governance, dict) else None,
+            "active_validator_count": governance.get("active_validator_count") if isinstance(governance, dict) else None,
+            "validator_registry_update_count": governance.get("validator_registry_update_count") if isinstance(governance, dict) else None,
+            "mempool_verified": state_report.get("mempool", {}).get("verified"),
+            "shielded_verified": state_report.get("shielded", {}).get("verified"),
+            "bridge_verified": state_report.get("bridge", {}).get("verified"),
+        }
+        if state_subset["block_log_verified"] is not True:
+            summary["criticals"].append("block_log_not_verified")
+        if state_subset["governance_verified"] is not True:
+            summary["criticals"].append("governance_not_verified")
+    summary["state"] = state_subset
+
+    metrics_subset = {}
+    if isinstance(metrics_report, dict):
+        metrics_subset = {
+            "active_validator_count": metrics_report.get("consensus", {}).get("active_validator_count"),
+            "block_height": metrics_report.get("ordering", {}).get("block_height"),
+            "block_tip_hash": metrics_report.get("ordering", {}).get("block_tip_hash"),
+            "ordered_batch_count": metrics_report.get("ordering", {}).get("ordered_batch_count"),
+            "archived_batch_count": metrics_report.get("ordering", {}).get("archived_batch_count"),
+            "replicated_state_file_count": metrics_report.get("storage", {}).get("replicated_state_file_count"),
+        }
+    summary["metrics"] = metrics_subset
+
+    history_subset = {}
+    if isinstance(history_report, dict):
+        history_subset = {
+            "mode": history_report.get("policy", {}).get("mode"),
+            "current_height": history_report.get("current_height"),
+            "block_tip_hash": history_report.get("block_tip_hash"),
+            "partial_history_ready": history_report.get("partial_history_ready"),
+            "block_log_verified": history_report.get("block_log_verified"),
+            "local_block_range": history_report.get("local_block_range"),
+            "receipt_count": history_report.get("receipt_count"),
+            "archived_batch_count": history_report.get("archived_batch_count"),
+            "ordered_batch_count": history_report.get("ordered_batch_count"),
+            "archive_handoff_required": history_report.get("policy", {}).get("archive_handoff_required"),
+            "retain_recent_blocks": history_report.get("policy", {}).get("retain_recent_blocks"),
+            "minimum_replay_window_blocks": history_report.get("policy", {}).get("minimum_replay_window_blocks"),
+        }
+    summary["history_retention"] = history_subset
+    current_height = status_subset.get("block_height")
+    if not isinstance(current_height, int):
+        current_height = history_subset.get("current_height")
+    if not isinstance(current_height, int):
+        current_height = None
+    account_index_subset = account_tx_index_subset(
+        account_index_report,
+        account_index_run,
+        current_height=current_height,
+    )
+    if account_index_subset["ready"] is not True:
+        summary["warnings"].append("account_tx_index_not_ready")
+    summary["account_tx_index"] = account_index_subset
+    summary["latest_committed_block"] = latest_block(data_dir)
+
+    registry = None
+    registry_path = data_dir / "validator_registry.json"
+    if registry_path.is_file():
+        try:
+            registry = load_json(registry_path)
+        except Exception as error:
+            summary["criticals"].append("validator_registry_invalid")
+            summary["registry_error"] = str(error)
+    else:
+        summary["criticals"].append("validator_registry_missing")
+
+    active_validators = state_subset.get("active_validators") or [
+        str(record.get("node_id")) for record in registry_records(registry) if record.get("node_id")
+    ]
+    active_validators = [item for item in active_validators if isinstance(item, str)]
+    registry_summary = validator_record_summary(registry, node_id)
+    registry_summary["expected_quorum"] = bft_quorum(len(active_validators))
+    registry_summary["active_validator_count"] = len(active_validators)
+    registry_summary["active_validator_ids"] = active_validators
+
+    root_report = None
+    if active_validators:
+        root_run, root_report = run_json_command(
+            [
+                node,
+                "validator-registry-root",
+                "--data-dir",
+                str(data_dir),
+                "--validators",
+                ",".join(active_validators),
+            ],
+            log_prefix=validator_log_dir / "validator-registry-root",
+            timeout_seconds=command_timeout,
+        )
+        summary["commands"]["validator_registry_root"] = root_run
+        if not root_report:
+            summary["criticals"].append("validator_registry_root_unavailable")
+    registry_summary["registry_root"] = (
+        root_report.get("registry_root") if isinstance(root_report, dict) else None
+    )
+    if registry_summary["member"] is not True:
+        summary["criticals"].append("local_validator_not_in_active_registry")
+    summary["validator_identity"] = registry_summary
+
+    if (data_dir / "validator_keys.json").is_file():
+        validators_for_keys = args.validator_count or len(active_validators) or status_subset.get("validator_count") or 1
+        keys_run, keys_report = run_json_command(
+            [
+                node,
+                "validate-local-keys",
+                "--data-dir",
+                str(data_dir),
+                "--validators",
+                str(validators_for_keys),
+            ],
+            log_prefix=validator_log_dir / "validate-local-keys",
+            timeout_seconds=command_timeout,
+        )
+        summary["commands"]["validate_local_keys"] = keys_run
+        key_summary = {}
+        if isinstance(keys_report, dict):
+            key_summary = {
+                "schema": keys_report.get("schema"),
+                "node_id": keys_report.get("node_id"),
+                "faucet_key_valid": keys_report.get("faucet_key_valid"),
+                "faucet_key_permissions_valid": keys_report.get("faucet_key_permissions_valid"),
+                "validator_keys_valid": keys_report.get("validator_keys_valid"),
+                "validator_key_permissions_valid": keys_report.get("validator_key_permissions_valid"),
+                "validator_key_count": keys_report.get("validator_key_count"),
+                "required_validator_count": keys_report.get("required_validator_count"),
+            }
+            if keys_report.get("validator_keys_valid") is not True:
+                summary["criticals"].append("validator_keys_invalid")
+            if keys_report.get("validator_key_permissions_valid") is not True:
+                summary["criticals"].append("validator_key_permissions_invalid")
+        else:
+            summary["criticals"].append("local_key_validation_unavailable")
+        summary["local_keys"] = key_summary
+    else:
+        summary["local_keys"] = {
+            "available": False,
+            "reason": "validator key file absent; public bundle or read-only audit mode",
+        }
+        summary["warnings"].append("local_validator_key_file_absent")
+
+    disk = shutil.disk_usage(data_dir)
+    summary["disk"] = {
+        "total_bytes": disk.total,
+        "used_bytes": disk.used,
+        "free_bytes": disk.free,
+        "data_dir_bytes": path_size_bytes(data_dir),
+    }
+    if args.min_free_bytes and disk.free < args.min_free_bytes:
+        summary["criticals"].append("disk_free_below_threshold")
+
+    configured_log_file = log_files.get(node_id or "")
+    summary["recent_logs"] = {
+        "file": log_file_tail(configured_log_file, args.tail_lines),
+        "validator_service": journal_tail(validator_unit, args.tail_lines),
+        "rpc_service": journal_tail(rpc_unit, args.tail_lines),
+    }
+
+    summary["checks"] = {
+        "data_dir_present": data_permissions["exists"] is True,
+        "data_dir_not_world_writable": data_permissions["world_writable"] is False,
+        "required_public_files_present": not missing_public,
+        "private_key_files_not_group_or_world_accessible": not unsafe_private,
+        "status_running": status_subset.get("status") == "running",
+        "state_verified": state_subset.get("verified") is True,
+        "block_log_verified": state_subset.get("block_log_verified") is True,
+        "governance_verified": state_subset.get("governance_verified") is True,
+        "history_retention_ready": history_subset.get("partial_history_ready") is True,
+        "account_tx_index_ready": account_index_subset.get("ready") is True,
+        "active_registry_member": registry_summary["member"] is True,
+        "registry_root_available": bool(registry_summary["registry_root"]),
+        "local_keys_valid_or_absent": (
+            summary["local_keys"].get("validator_keys_valid") is True
+            if summary["local_keys"].get("available", True) is not False
+            else True
+        ),
+        "validator_service_active_if_configured": (
+            not validator_service["configured"] or validator_service["active"] is True
+        ),
+        "rpc_service_active_if_configured": (
+            not rpc_service["configured"] or rpc_service["active"] is True
+        ),
+    }
+    summary["validator_ok"] = not summary["criticals"]
+    summary["actionable_reason"] = first_actionable(summary["criticals"] + summary["warnings"])
+    return summary
+
+
+def binary_report(args: argparse.Namespace) -> dict[str, Any]:
+    node_bin = Path(args.node_bin)
+    report = {
+        "path": rel(node_bin),
+        "exists": node_bin.is_file(),
+        "sha256": sha256_file(node_bin) if node_bin.is_file() else None,
+        "executable": os.access(node_bin, os.X_OK) if node_bin.exists() else False,
+    }
+    if node_bin.is_file():
+        help_run = run_command([str(node_bin), "--help"], timeout_seconds=5.0)
+        report["help_available"] = help_run["ok"]
+    else:
+        report["help_available"] = False
+    return report
+
+
+def aggregate(validators: list[dict[str, Any]]) -> dict[str, Any]:
+    heights = [
+        validator.get("status", {}).get("block_height")
+        for validator in validators
+        if isinstance(validator.get("status", {}).get("block_height"), int)
+    ]
+    chain_ids = {
+        validator.get("status", {}).get("chain_id")
+        for validator in validators
+        if validator.get("status", {}).get("chain_id")
+    }
+    genesis_hashes = {
+        validator.get("status", {}).get("genesis_hash")
+        for validator in validators
+        if validator.get("status", {}).get("genesis_hash")
+    }
+    protocol_versions = {
+        validator.get("status", {}).get("protocol_version")
+        for validator in validators
+        if validator.get("status", {}).get("protocol_version") is not None
+    }
+    state_roots = {
+        validator.get("status", {}).get("state_root")
+        for validator in validators
+        if validator.get("status", {}).get("state_root")
+    }
+    block_tips = {
+        validator.get("status", {}).get("block_tip_hash")
+        for validator in validators
+        if validator.get("status", {}).get("block_tip_hash")
+    }
+    registry_roots = {
+        validator.get("validator_identity", {}).get("registry_root")
+        for validator in validators
+        if validator.get("validator_identity", {}).get("registry_root")
+    }
+    validator_count = max(
+        [
+            validator.get("validator_identity", {}).get("active_validator_count") or 0
+            for validator in validators
+        ]
+        or [0]
+    )
+    online = sum(1 for validator in validators if validator.get("validator_ok") is True)
+    quorum = bft_quorum(validator_count)
+    quorum_observable = validator_count > 0 and len(validators) >= validator_count
+    height_lag = max(heights) - min(heights) if heights else None
+    criticals: list[str] = []
+    warnings: list[str] = []
+    if len(chain_ids) > 1 or len(genesis_hashes) > 1 or len(protocol_versions) > 1:
+        criticals.append("chain_context_diverged")
+    if len(state_roots) > 1:
+        criticals.append("state_root_diverged")
+    if len(block_tips) > 1:
+        criticals.append("block_tip_diverged")
+    if len(registry_roots) > 1:
+        criticals.append("registry_root_diverged")
+    if height_lag is None:
+        criticals.append("height_unavailable")
+    elif height_lag > 0:
+        criticals.append("height_lag_nonzero")
+    if quorum_observable and quorum is not None and online < quorum:
+        criticals.append("healthy_validators_below_quorum")
+    elif not quorum_observable:
+        warnings.append("quorum_not_fully_observed")
+    if online < len(validators):
+        warnings.append("one_or_more_validators_need_attention")
+    account_tx_index_ready_count = sum(
+        1 for validator in validators if validator.get("account_tx_index", {}).get("ready") is True
+    )
+    account_tx_index_present_count = sum(
+        1 for validator in validators if validator.get("account_tx_index", {}).get("index_present") is True
+    )
+    account_tx_index_usable_count = sum(
+        1 for validator in validators if validator.get("account_tx_index", {}).get("index_usable") is True
+    )
+    account_tx_disk_index_usable_count = sum(
+        1
+        for validator in validators
+        if validator.get("account_tx_index", {}).get("disk_index_usable") is True
+    )
+    account_tx_effective_index_usable_count = sum(
+        1
+        for validator in validators
+        if validator.get("account_tx_index", {}).get("effective_usable") is True
+    )
+    if validators and account_tx_index_ready_count < len(validators):
+        warnings.append("account_tx_index_not_ready_on_one_or_more_validators")
+    one_validator_mode = len(validators) == 1
+    all_observed_validators_ok = online == len(validators)
+    return {
+        "validator_count_observed": len(validators),
+        "active_validator_count": validator_count or None,
+        "healthy_validator_count": online,
+        "expected_quorum": quorum,
+        "quorum_observable": quorum_observable,
+        "quorum_healthy": (quorum is not None and online >= quorum) if quorum_observable else None,
+        "height_lag": height_lag,
+        "chain_context_consistent": len(chain_ids) <= 1 and len(genesis_hashes) <= 1 and len(protocol_versions) <= 1,
+        "state_root_consistent": len(state_roots) <= 1,
+        "block_tip_consistent": len(block_tips) <= 1,
+        "registry_root_consistent": len(registry_roots) <= 1,
+        "account_tx_index_ready_count": account_tx_index_ready_count,
+        "account_tx_index_present_count": account_tx_index_present_count,
+        "account_tx_index_usable_count": account_tx_index_usable_count,
+        "account_tx_disk_index_usable_count": account_tx_disk_index_usable_count,
+        "account_tx_effective_index_usable_count": account_tx_effective_index_usable_count,
+        "account_tx_index_all_ready": (
+            account_tx_index_ready_count == len(validators) if validators else None
+        ),
+        "criticals": criticals,
+        "warnings": warnings,
+        "all_validators_ok": not criticals and all_observed_validators_ok,
+        "one_validator_mode_ok": one_validator_mode and not criticals and all_observed_validators_ok,
+    }
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--data-dir", action="append", help="Validator data dir; repeatable")
+    parser.add_argument("--data-root", type=Path, help="Root containing validator-N or nodeN dirs")
+    parser.add_argument("--validator-count", type=int)
+    parser.add_argument("--node-bin", type=Path, default=ROOT / "target/debug/postfiat-node")
+    parser.add_argument("--no-build", action="store_true")
+    parser.add_argument("--validator-service-template")
+    parser.add_argument("--rpc-service-template")
+    parser.add_argument("--validator-service", action="append", help="Explicit node_id=systemd-unit")
+    parser.add_argument("--rpc-service", action="append", help="Explicit node_id=systemd-unit")
+    parser.add_argument("--log-file", action="append", help="Explicit node_id=log-file")
+    parser.add_argument("--tail-lines", type=int, default=60)
+    parser.add_argument("--min-free-bytes", type=int, default=0)
+    parser.add_argument("--command-timeout-seconds", type=float, default=30.0)
+    parser.add_argument(
+        "--log-dir",
+        type=Path,
+        default=ROOT / f"reports/testnet-validator-doctor/logs-{utc_stamp()}",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=ROOT / f"reports/testnet-validator-doctor/testnet-validator-doctor-{utc_stamp()}.json",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str]) -> int:
+    args = parse_args(argv)
+    if args.tail_lines < 0:
+        raise SystemExit("--tail-lines must be nonnegative")
+    args.log_dir.mkdir(parents=True, exist_ok=True)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    if not args.no_build:
+        build = run_command(
+            ["cargo", "build", "-p", "postfiat-node"],
+            log_prefix=args.log_dir / "cargo-build",
+            timeout_seconds=max(args.command_timeout_seconds, 120.0),
+        )
+        if not build["ok"]:
+            report = {
+                "schema": "postfiat-testnet-validator-doctor-v1",
+                "generated_utc": utc_iso(),
+                "git": git_metadata(),
+                "binary": binary_report(args),
+                "validators": [],
+                "aggregate": {"criticals": ["node_build_failed"], "warnings": []},
+                "validator_doctor_ok": False,
+                "actionable_reason": "node_build_failed",
+            }
+            args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            print(f"testnet_validator_doctor=failed report={rel(args.output)} reason=node_build_failed")
+            return 1
+
+    data_dirs = discover_data_dirs(args)
+    validator_unit_map = parse_unit_map(args.validator_service)
+    rpc_unit_map = parse_unit_map(args.rpc_service)
+    log_files = parse_log_files(args.log_file)
+    validators = [
+        collect_validator(
+            index=index,
+            data_dir=data_dir,
+            args=args,
+            validator_unit_map=validator_unit_map,
+            rpc_unit_map=rpc_unit_map,
+            log_files=log_files,
+        )
+        for index, data_dir in enumerate(data_dirs)
+    ]
+    aggregate_report = aggregate(validators)
+    actionable_reason = first_actionable(
+        aggregate_report["criticals"]
+        + [validator.get("actionable_reason") for validator in validators if validator.get("actionable_reason")]
+    )
+    report = {
+        "schema": "postfiat-testnet-validator-doctor-v1",
+        "generated_utc": utc_iso(),
+        "git": git_metadata(),
+        "binary": binary_report(args),
+        "mode": "all_validators" if len(validators) > 1 else "one_validator",
+        "log_dir": rel(args.log_dir),
+        "validators": validators,
+        "aggregate": aggregate_report,
+        "validator_doctor_ok": aggregate_report["all_validators_ok"],
+        "actionable_reason": actionable_reason,
+    }
+    serialized = json.dumps(report, indent=2, sort_keys=True) + "\n"
+    if re.search(r"private_key_hex|spending_key_hex|full_viewing_key_hex|master_seed_hex|rseed", serialized, re.IGNORECASE):
+        raise SystemExit("validator doctor report contains private key-shaped field names")
+    args.output.write_text(serialized, encoding="utf-8")
+    status = "ok" if report["validator_doctor_ok"] else "attention"
+    reason = report["actionable_reason"] or "none"
+    print(f"testnet_validator_doctor={status} report={rel(args.output)} reason={reason}")
+    return 0 if report["validator_doctor_ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

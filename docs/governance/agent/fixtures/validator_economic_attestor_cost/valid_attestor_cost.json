@@ -1,0 +1,384 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T11:20:00Z",
+    "attestor_key_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "signature_hash": "4d9b1d1b236dab30d3d08b999e8f7410c02da6b2ada3e578eb04dc7a807e6caafb12f7ff09e813d7fc3be8165d993c73",
+    "signature_scheme": "fixture-ml-dsa-87",
+    "statement_hash": "5bacc9600015d3019791fbe8aacf39302340250a86240bb0db26b25cc13453d7a11bf986a3d0e9f697d1580f8a5481a7"
+  },
+  "checks": {
+    "authority_transfer": false,
+    "capture_cost_compared_to_value_at_stake": true,
+    "cost_root_bound": true,
+    "detected_capture_rejected": true,
+    "live_registry_mutation": false,
+    "stale_cost_evidence_held": true,
+    "statement_hash_bound": true,
+    "under_budget_fails_closed": true,
+    "underpriced_capture_held": true,
+    "ungoverned_cost_policy_fails_closed": true,
+    "unpriced_capture_held": true,
+    "value_at_stake_unbounded_fails_closed": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "validator-economic-attestor-cost-valid-v1",
+  "schema": "postfiat-validator-economic-attestor-cost-v1",
+  "statement": {
+    "base_model": {
+      "B": 2,
+      "attack_paths": {
+        "erase_conflict": {
+          "cost_components": [
+            {
+              "attestor_group": "auditor-external-a",
+              "challenge_bond_usd": 500000,
+              "control_surface": "off-ledger-position-control",
+              "detected_capture": false,
+              "direct_capture_cost_usd": 1000000,
+              "evidence_age_epochs": 0,
+              "exclusion_consequence_usd": 500000,
+              "false_attestation_liability_usd": 500000,
+              "unpriced": false
+            },
+            {
+              "attestor_group": "conflict-auditor-a",
+              "challenge_bond_usd": 500000,
+              "control_surface": "risk-desk-control",
+              "detected_capture": false,
+              "direct_capture_cost_usd": 1000000,
+              "evidence_age_epochs": 0,
+              "exclusion_consequence_usd": 500000,
+              "false_attestation_liability_usd": 500000,
+              "unpriced": false
+            },
+            {
+              "attestor_group": "registry-a",
+              "challenge_bond_usd": 500000,
+              "control_surface": "registry-control",
+              "detected_capture": false,
+              "direct_capture_cost_usd": 1000000,
+              "evidence_age_epochs": 0,
+              "exclusion_consequence_usd": 500000,
+              "false_attestation_liability_usd": 500000,
+              "unpriced": false
+            }
+          ],
+          "description": "Erase a short-window conflict or external-position signal.",
+          "detected_capture": false,
+          "required_control_surfaces": [
+            "off-ledger-position-control",
+            "risk-desk-control",
+            "registry-control"
+          ],
+          "required_independent_groups": [
+            "auditor-external-a",
+            "conflict-auditor-a",
+            "registry-a"
+          ],
+          "unpriced_capture": false
+        },
+        "manufacture_B_i": {
+          "cost_components": [
+            {
+              "attestor_group": "custody-auditor-a",
+              "challenge_bond_usd": 500000,
+              "control_surface": "beneficial-owner-record",
+              "detected_capture": false,
+              "direct_capture_cost_usd": 1000000,
+              "evidence_age_epochs": 0,
+              "exclusion_consequence_usd": 500000,
+              "false_attestation_liability_usd": 500000,
+              "unpriced": false
+            },
+            {
+              "attestor_group": "settlement-counterparty-a",
+              "challenge_bond_usd": 500000,
+              "control_surface": "settlement-flow-control",
+              "detected_capture": false,
+              "direct_capture_cost_usd": 1000000,
+              "evidence_age_epochs": 0,
+              "exclusion_consequence_usd": 500000,
+              "false_attestation_liability_usd": 500000,
+              "unpriced": false
+            },
+            {
+              "attestor_group": "registry-a",
+              "challenge_bond_usd": 500000,
+              "control_surface": "taxonomy-registry-control",
+              "detected_capture": false,
+              "direct_capture_cost_usd": 1000000,
+              "evidence_age_epochs": 0,
+              "exclusion_consequence_usd": 500000,
+              "false_attestation_liability_usd": 500000,
+              "unpriced": false
+            }
+          ],
+          "description": "Manufacture current exogenous settlement exposure sufficient to pass the B_i floor.",
+          "detected_capture": false,
+          "required_control_surfaces": [
+            "beneficial-owner-record",
+            "settlement-flow-control",
+            "taxonomy-registry-control"
+          ],
+          "required_independent_groups": [
+            "custody-auditor-a",
+            "settlement-counterparty-a",
+            "registry-a"
+          ],
+          "unpriced_capture": false
+        }
+      },
+      "cost_policy_governed": true,
+      "max_short_window_value_at_stake_usd": 4000000,
+      "min_t_s": 2,
+      "value_at_stake_bounded": true
+    },
+    "cost_policy": {
+      "max_cost_evidence_age_epochs": 3,
+      "min_capture_to_value_ratio_bps": 15000,
+      "min_control_surfaces": 3,
+      "min_independent_groups": 3,
+      "policy_units": "validator-economic-attestor-cost-v1",
+      "route_on_detected_capture": "reject",
+      "route_on_stale_cost_evidence": "hold",
+      "route_on_unbounded_value": "fail-closed",
+      "route_on_under_budget": "fail-closed",
+      "route_on_underpriced_capture": "hold",
+      "route_on_ungoverned_cost_policy": "fail-closed",
+      "route_on_unpriced_capture": "hold"
+    },
+    "cost_root_hash": "5380d82ab8bf149c165c2c279dffeecc14f4480a4811d8e470c98872995b32df6d1d6a092a46056206a43cde1dcfc372",
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_attestor_budget/valid_attestor_budget.json",
+        "sha3_384": "f66ec0b1185c53bcc514ac00a0009b50e89d3c2189ce04d42affb8329fc6066a986a054d77fd477914bc23202470f4b3"
+      },
+      {
+        "path": "scripts/validator-economic-attestor-cost-verify",
+        "sha3_384": "9c3d61021ff123e171d2f7f103a8dbee712a152e18efc5d2c510e26b628628f343b8b7c0e29be6b5671235c5f00e23c6"
+      },
+      {
+        "path": "docs/governance/agent/validator_economic_attestor_cost_schema.json",
+        "sha3_384": "deadc859822e21fae9f154160ea778276b6f2c30f251b19aa0bd0e61dfce94d7ca0625f7dbb0ffefd87c13114bdaa8eb"
+      }
+    ],
+    "policy_id": "validator-economic-attestor-cost-v1",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "validator-economic-attestor-cost-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-clean-cost-admit",
+        "expected_reason_codes": [
+          "all_attestor_cost_bounds_passed"
+        ],
+        "expected_route": "admit",
+        "overrides": []
+      },
+      {
+        "case_id": "case-02-manufacture-b-underpriced-hold",
+        "expected_reason_codes": [
+          "manufacture_B_i_capture_cost_below_value_at_stake"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "attack_paths",
+              "manufacture_B_i",
+              "cost_components",
+              0,
+              "direct_capture_cost_usd"
+            ],
+            "value": 0
+          },
+          {
+            "path": [
+              "attack_paths",
+              "manufacture_B_i",
+              "cost_components",
+              0,
+              "false_attestation_liability_usd"
+            ],
+            "value": 0
+          },
+          {
+            "path": [
+              "attack_paths",
+              "manufacture_B_i",
+              "cost_components",
+              0,
+              "challenge_bond_usd"
+            ],
+            "value": 0
+          },
+          {
+            "path": [
+              "attack_paths",
+              "manufacture_B_i",
+              "cost_components",
+              0,
+              "exclusion_consequence_usd"
+            ],
+            "value": 0
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-conflict-erasure-underpriced-hold",
+        "expected_reason_codes": [
+          "erase_conflict_capture_cost_below_value_at_stake"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "attack_paths",
+              "erase_conflict",
+              "cost_components",
+              0,
+              "direct_capture_cost_usd"
+            ],
+            "value": 0
+          },
+          {
+            "path": [
+              "attack_paths",
+              "erase_conflict",
+              "cost_components",
+              0,
+              "false_attestation_liability_usd"
+            ],
+            "value": 0
+          },
+          {
+            "path": [
+              "attack_paths",
+              "erase_conflict",
+              "cost_components",
+              0,
+              "challenge_bond_usd"
+            ],
+            "value": 0
+          },
+          {
+            "path": [
+              "attack_paths",
+              "erase_conflict",
+              "cost_components",
+              0,
+              "exclusion_consequence_usd"
+            ],
+            "value": 0
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-unpriced-capture-hold",
+        "expected_reason_codes": [
+          "manufacture_B_i_unpriced_capture_cost"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "attack_paths",
+              "manufacture_B_i",
+              "unpriced_capture"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-stale-cost-evidence-hold",
+        "expected_reason_codes": [
+          "erase_conflict_stale_cost_evidence"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "attack_paths",
+              "erase_conflict",
+              "cost_components",
+              1,
+              "evidence_age_epochs"
+            ],
+            "value": 4
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-detected-capture-reject",
+        "expected_reason_codes": [
+          "manufacture_B_i_detected_capture"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "attack_paths",
+              "manufacture_B_i",
+              "detected_capture"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-under-group-budget-fail-closed",
+        "expected_reason_codes": [
+          "manufacture_B_i_attestor_group_budget_below_floor"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "attack_paths",
+              "manufacture_B_i",
+              "required_independent_groups"
+            ],
+            "value": [
+              "custody-auditor-a",
+              "registry-a"
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-unbounded-value-fail-closed",
+        "expected_reason_codes": [
+          "unbounded_short_window_value_at_stake"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "value_at_stake_bounded"
+            ],
+            "value": false
+          }
+        ]
+      },
+      {
+        "case_id": "case-09-ungoverned-cost-policy-fail-closed",
+        "expected_reason_codes": [
+          "ungoverned_cost_policy"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "cost_policy_governed"
+            ],
+            "value": false
+          }
+        ]
+      }
+    ]
+  }
+}

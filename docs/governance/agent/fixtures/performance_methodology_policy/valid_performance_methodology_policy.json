@@ -1,0 +1,140 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T02:45:00Z",
+    "attestor_key_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "signature_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "signature_scheme": "mldsa65-placeholder",
+    "statement_hash": "df4ab9bcd201baa30b57df078aa476158d78264333f3009c4555943c285b4016ad903ee70528794e313fb9b3fec9a36e"
+  },
+  "checks": {
+    "certificate_size_artifact_bound": true,
+    "latency_number_loopback_scoped": true,
+    "live_fee_constants": false,
+    "mldsa_6000_per_second_not_presented_as_measured": true,
+    "mldsa_large_set_bytes_derived": true,
+    "orchard_number_artifact_bound": true,
+    "production_sufficiency": false
+  },
+  "mode": "controlled_testnet_methodology",
+  "packet_id": "performance-methodology-policy-v1",
+  "schema": "postfiat-performance-methodology-policy-v1",
+  "statement": {
+    "cards": [
+      {
+        "artifact": {
+          "path": "reports/testnet-readiness-gate/logs/certificate-size-metrics.json",
+          "sha3_384": "757d09dd764c697ff8da097082da756d16feed25d2f0aa1030de2faaae7301d718524a6c61fe75b28694970bf4a1103a"
+        },
+        "card_id": "compact-certificate-size-metrics",
+        "claim_kind": "measured_testnet_artifact_size",
+        "methodology": {
+          "boundary": "controlled-testnet-readiness-artifacts",
+          "production_claim": false
+        },
+        "status": "supported",
+        "values": {
+          "artifact_count": 18,
+          "compact_votes": true,
+          "max_bytes": 28851,
+          "registry_root_bound": true,
+          "vote_count": 68
+        }
+      },
+      {
+        "artifact": {
+          "path": "reports/testnet-tx-finality-latency-benchmark/fast-tx-5round-20260514T142635Z/testnet-tx-finality-latency-benchmark.json",
+          "sha3_384": "d0e774076f373f1b5821c4b096fcd29b70d5a3ac2adbf86c65cb22be5ca3c2e5e610d5870b45c8e137aa383f95bb9058"
+        },
+        "card_id": "local-loopback-submit-to-finality",
+        "claim_kind": "measured_local_loopback_latency",
+        "methodology": {
+          "boundary": "local-peer-certified-loopback",
+          "not_measured": [
+            "long-running production block scheduler latency",
+            "privacy proof generation",
+            "public WAN RPC latency",
+            "remote machine network jitter"
+          ],
+          "production_claim": false
+        },
+        "status": "supported",
+        "values": {
+          "rounds": 5,
+          "submit_to_finality_p50_ms": 1545.305443
+        }
+      },
+      {
+        "card_id": "mldsa65-certificate-byte-budget",
+        "claim_kind": "derived_sizing_budget",
+        "formula": {
+          "certificate_bytes": "q * (mldsa65_signature_bytes + validator_id_bytes)",
+          "throughput_claim": "not_measured_by_this_card"
+        },
+        "status": "derived_budget",
+        "values": {
+          "certificate_bytes_100q67": 223847,
+          "certificate_bytes_35q24": 80184,
+          "mldsa65_public_key_bytes": 1952,
+          "mldsa65_signature_bytes": 3309,
+          "validator_id_bytes": 32,
+          "validators_100_quorum": 67,
+          "validators_35_quorum": 24
+        }
+      },
+      {
+        "card_id": "mldsa65-throughput-claim-boundary",
+        "claim_kind": "unsupported_stale_claim_rejected",
+        "status": "unsupported_rejected",
+        "values": {
+          "current_artifact": null,
+          "required_disposition": "downgrade_to_release_budget_target_or_rebenchmark",
+          "unsupported_claim": "6000_mldsa65_verifications_per_second"
+        },
+        "whitepaper_rule": "do_not_present_as_measured_without_current_artifact"
+      },
+      {
+        "artifact": {
+          "path": "reports/orchard-verification-budget-v1-report.json",
+          "sha3_384": "0b3af474fe246b27cf7f167d13f52523ac25f3e3245518fa197f5b61e5d54e2c901f0b0bb9ab50ad078f9e28bfa9f2aa"
+        },
+        "card_id": "orchard-two-action-halo2-budget",
+        "claim_kind": "measured_local_release_budget",
+        "methodology": {
+          "boundary": "local-release-build-budget",
+          "not_measured": [
+            "privacy traffic analysis",
+            "production WAN latency",
+            "production validator throughput"
+          ],
+          "production_claim": false
+        },
+        "status": "supported",
+        "values": {
+          "action_count": 2,
+          "max_actions": 8,
+          "median_verify_ms": 80,
+          "proof_bytes": 7264,
+          "verify_ms": [
+            91,
+            80,
+            78
+          ]
+        }
+      }
+    ],
+    "methodology_root_hash": "bf8e6acbe48383d566bf4c7d9cde7650aadec78eb0dcaadddbbe07442c649be412469eb8a48e5eca8bb1e078fd9faadc",
+    "methodology_rules": {
+      "derived_budget_must_be_labeled": true,
+      "local_loopback_must_not_be_wan_claim": true,
+      "measured_claim_requires_artifact": true,
+      "unsupported_throughput_must_not_be_measured_claim": true
+    },
+    "policy_id": "performance-methodology-policy-v1",
+    "scope": {
+      "chain_id": "postfiat-l1-controlled-testnet",
+      "live_fee_constants": false,
+      "production_sufficiency": false,
+      "profile_id": "whitepaper-performance-methodology-v1"
+    }
+  }
+}

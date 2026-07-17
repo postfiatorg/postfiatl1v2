@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VALIDATORS="${VALIDATORS:-4}"
+BASE_DIR="${BASE_DIR:-devnet/local}"
+LOG_DIR="${LOG_DIR:-devnet/logs}"
+CONFIG_DIR="${CONFIG_DIR:-devnet/configs}"
+CHAIN_ID="${CHAIN_ID:-postfiat-local}"
+BASE_PORT="${BASE_PORT:-26650}"
+
+if ! [[ "$VALIDATORS" =~ ^[0-9]+$ ]] || [ "$VALIDATORS" -lt 1 ]; then
+  echo "VALIDATORS must be a positive integer" >&2
+  exit 2
+fi
+
+copy_private_file() {
+  local source="$1"
+  local destination="$2"
+  cp "$source" "$destination"
+  chmod 600 "$destination"
+}
+
+cargo build -p postfiat-node >/dev/null
+
+rm -rf "$BASE_DIR"
+mkdir -p "$BASE_DIR" "$LOG_DIR" "$CONFIG_DIR"
+
+target/debug/postfiat-node topology \
+  --chain-id "$CHAIN_ID" \
+  --validators "$VALIDATORS" \
+  --base-port "$BASE_PORT" \
+  --output "$CONFIG_DIR/topology.json" >"$LOG_DIR/topology.log"
+
+target/debug/postfiat-node init \
+  --data-dir "$BASE_DIR/node0" \
+  --chain-id "$CHAIN_ID" \
+  --node-id "validator-0" \
+  --validators "$VALIDATORS" >"$LOG_DIR/validator-0.init.log"
+
+target/debug/postfiat-node validator-keys \
+  --data-dir "$BASE_DIR/node0" \
+  --validators "$VALIDATORS" >"$LOG_DIR/validator-keys.log"
+
+for ((i = 1; i < VALIDATORS; i++)); do
+  node_dir="$BASE_DIR/node$i"
+  mkdir -p "$node_dir"
+  cp "$BASE_DIR/node0/genesis.json" "$node_dir/genesis.json"
+  cp "$BASE_DIR/node0/governance.json" "$node_dir/governance.json"
+  cp "$BASE_DIR/node0/ledger.json" "$node_dir/ledger.json"
+  cp "$BASE_DIR/node0/blocks.json" "$node_dir/blocks.json"
+  cp "$BASE_DIR/node0/batch_archive.json" "$node_dir/batch_archive.json"
+  cp "$BASE_DIR/node0/mempool.json" "$node_dir/mempool.json"
+  cp "$BASE_DIR/node0/ordered_batches.json" "$node_dir/ordered_batches.json"
+  cp "$BASE_DIR/node0/receipts.json" "$node_dir/receipts.json"
+  cp "$BASE_DIR/node0/shielded.json" "$node_dir/shielded.json"
+  cp "$BASE_DIR/node0/bridge.json" "$node_dir/bridge.json"
+  cp "$BASE_DIR/node0/faucet_account.json" "$node_dir/faucet_account.json"
+  copy_private_file "$BASE_DIR/node0/faucet_key.json" "$node_dir/faucet_key.json"
+  copy_private_file "$BASE_DIR/node0/validator_keys.json" "$node_dir/validator_keys.json"
+  cp "$BASE_DIR/node0/validator_registry.json" "$node_dir/validator_registry.json"
+  cat >"$node_dir/node_state.json" <<EOF
+{
+  "node_id": "validator-$i",
+  "status": "initialized",
+  "last_run_unix": 0
+}
+EOF
+done
+
+for ((i = 0; i < VALIDATORS; i++)); do
+  target/debug/postfiat-node run --unsafe-devnet-json-storage \
+    --data-dir "$BASE_DIR/node$i" >"$LOG_DIR/validator-$i.run.log"
+done
+
+scripts/devnet-status

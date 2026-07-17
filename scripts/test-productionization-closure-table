@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+"""Verify one complete closure row per P0/P1; optionally require zero open rows."""
+
+from __future__ import annotations
+
+import argparse
+import pathlib
+import re
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+AUDIT = ROOT / "docs/status/OPEN-SOURCE-PRODUCTIONIZATION-AUDIT-20260716.md"
+FINDING = re.compile(r"^### (P[01]-[A-Z0-9-]+)\s+—", re.MULTILINE)
+ROW = re.compile(r"^\| (P[01]-[A-Z0-9-]+) \|(.+)\|$", re.MULTILINE)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--require-closed", action="store_true")
+    args = parser.parse_args()
+    text = AUDIT.read_text(encoding="utf-8")
+    headings = FINDING.findall(text)
+    if len(headings) != len(set(headings)):
+        raise SystemExit("duplicate P0/P1 finding heading")
+
+    table_start = text.index("## 10. Closure table schema")
+    table_end = text.index("## 11. Commands captured for this audit")
+    table_text = text[table_start:table_end]
+    rows: dict[str, list[str]] = {}
+    for match in ROW.finditer(table_text):
+        finding_id = match.group(1)
+        if finding_id in rows:
+            raise SystemExit(f"duplicate closure row: {finding_id}")
+        fields = [finding_id, *[field.strip() for field in match.group(2).split("|")]]
+        if len(fields) != 8:
+            raise SystemExit(
+                f"{finding_id}: expected 8 closure columns, found {len(fields)}"
+            )
+        if any(not field or field == "—" for field in fields):
+            raise SystemExit(f"{finding_id}: blank closure evidence column")
+        rows[finding_id] = fields
+
+    heading_set = set(headings)
+    row_set = set(rows)
+    if heading_set != row_set:
+        raise SystemExit(
+            f"closure coverage mismatch missing={sorted(heading_set-row_set)} "
+            f"unexpected={sorted(row_set-heading_set)}"
+        )
+
+    open_rows = sorted(
+        finding_id
+        for finding_id, fields in rows.items()
+        if re.search(r"\b(?:OPEN|PENDING|WAIVED)\b", fields[1], re.IGNORECASE)
+    )
+    if args.require_closed and open_rows:
+        raise SystemExit(f"open P0/P1 closure rows: {', '.join(open_rows)}")
+    print(
+        "productionization_closure_table=ok "
+        f"findings={len(headings)} p0={sum(x.startswith('P0-') for x in headings)} "
+        f"p1={sum(x.startswith('P1-') for x in headings)} open={len(open_rows)}"
+    )
+
+
+if __name__ == "__main__":
+    main()

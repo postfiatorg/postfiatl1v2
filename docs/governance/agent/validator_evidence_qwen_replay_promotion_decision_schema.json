@@ -1,0 +1,390 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-validator-evidence-qwen-replay-promotion-decision-v1.json",
+  "title": "PostFiat Validator Evidence Qwen Replay Promotion Decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "decision_id",
+    "mode",
+    "qwen_replay_output_validation_receipt_hash",
+    "qwen_replay_output_manifest_hash",
+    "qwen_replay_authorization_hash",
+    "qwen_replay_preflight_hash",
+    "qwen_prompt_redaction_audit_hash",
+    "qwen_prompt_input_manifest_hash",
+    "qwen_public_summary_projection_hash",
+    "model_request_hash",
+    "packet_schema_hash",
+    "field_registry_hash",
+    "collection_window",
+    "promotion_scope",
+    "operator_gate_requirements",
+    "execution_boundary",
+    "failure_policy",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-evidence-qwen-replay-promotion-decision-v1"
+    },
+    "decision_id": {
+      "$ref": "#/$defs/id"
+    },
+    "mode": {
+      "const": "design_fixture_only"
+    },
+    "qwen_replay_output_validation_receipt_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_output_manifest_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_authorization_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_preflight_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_prompt_redaction_audit_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_prompt_input_manifest_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_public_summary_projection_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "model_request_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "packet_schema_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "field_registry_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "collection_window": {
+      "$ref": "#/$defs/collection_window"
+    },
+    "promotion_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorization_status",
+        "validation_status",
+        "promotion_status",
+        "replay_outputs_accepted",
+        "candidate_rulesets_validated",
+        "release_candidate_created",
+        "promoted_ruleset_hash",
+        "promoted_compiled_policy_hash",
+        "operator_pack_update_authorized",
+        "cobalt_submission_authorized",
+        "registry_mutation_authorized",
+        "authority_transfer_authorized",
+        "future_authorized_replay_required"
+      ],
+      "properties": {
+        "authorization_status": {
+          "const": "not_authorized"
+        },
+        "validation_status": {
+          "const": "no_outputs_to_validate"
+        },
+        "promotion_status": {
+          "const": "not_promoted"
+        },
+        "replay_outputs_accepted": {
+          "const": false
+        },
+        "candidate_rulesets_validated": {
+          "const": 0
+        },
+        "release_candidate_created": {
+          "const": false
+        },
+        "promoted_ruleset_hash": {
+          "type": "null"
+        },
+        "promoted_compiled_policy_hash": {
+          "type": "null"
+        },
+        "operator_pack_update_authorized": {
+          "const": false
+        },
+        "cobalt_submission_authorized": {
+          "const": false
+        },
+        "registry_mutation_authorized": {
+          "const": false
+        },
+        "authority_transfer_authorized": {
+          "const": false
+        },
+        "future_authorized_replay_required": {
+          "const": true
+        }
+      }
+    },
+    "operator_gate_requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "validation_receipt_required",
+        "output_manifest_required",
+        "operator_review_required",
+        "release_decision_required",
+        "governance_queue_decision_required",
+        "rollback_plan_required"
+      ],
+      "properties": {
+        "validation_receipt_required": {
+          "const": true
+        },
+        "output_manifest_required": {
+          "const": true
+        },
+        "operator_review_required": {
+          "const": true
+        },
+        "release_decision_required": {
+          "const": true
+        },
+        "governance_queue_decision_required": {
+          "const": true
+        },
+        "rollback_plan_required": {
+          "const": true
+        }
+      }
+    },
+    "execution_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_spend_executed",
+        "provider_resource_created",
+        "provider_resource_destroyed",
+        "live_model_request_executed",
+        "model_output_generated",
+        "live_network_access",
+        "live_registry_mutation",
+        "cobalt_amendment_submitted",
+        "authority_transfer"
+      ],
+      "properties": {
+        "provider_spend_executed": {
+          "const": false
+        },
+        "provider_resource_created": {
+          "const": false
+        },
+        "provider_resource_destroyed": {
+          "const": false
+        },
+        "live_model_request_executed": {
+          "const": false
+        },
+        "model_output_generated": {
+          "const": false
+        },
+        "live_network_access": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "cobalt_amendment_submitted": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    },
+    "failure_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "promotion_without_validated_output",
+        "promotion_without_authorization",
+        "validation_receipt_lineage_drift",
+        "release_candidate_without_ruleset",
+        "cobalt_submission_without_decision",
+        "fallback_decision"
+      ],
+      "properties": {
+        "promotion_without_validated_output": {
+          "const": "reject_future_promotion"
+        },
+        "promotion_without_authorization": {
+          "const": "reject_future_promotion"
+        },
+        "validation_receipt_lineage_drift": {
+          "const": "reject_future_promotion"
+        },
+        "release_candidate_without_ruleset": {
+          "const": "reject_future_promotion"
+        },
+        "cobalt_submission_without_decision": {
+          "const": "reject_future_promotion"
+        },
+        "fallback_decision": {
+          "const": "no_op"
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "qwen_replay_output_validation_receipt_hash_bound",
+        "qwen_replay_output_manifest_hash_bound",
+        "qwen_replay_authorization_hash_bound",
+        "qwen_replay_preflight_hash_bound",
+        "qwen_prompt_redaction_audit_hash_bound",
+        "qwen_prompt_input_manifest_hash_bound",
+        "qwen_public_summary_projection_hash_bound",
+        "model_request_hash_bound",
+        "packet_schema_hash_bound",
+        "field_registry_hash_bound",
+        "collection_window_bound",
+        "promotion_status_not_promoted",
+        "no_release_candidate_created",
+        "no_promoted_ruleset",
+        "no_promoted_compiled_policy",
+        "operator_gate_requirements_bound",
+        "operator_pack_update_authorized",
+        "cobalt_submission_authorized",
+        "registry_mutation_authorized",
+        "authority_transfer_authorized",
+        "provider_spend_executed",
+        "live_model_request_executed",
+        "model_output_generated",
+        "live_registry_mutation",
+        "cobalt_amendment_submitted",
+        "authority_transfer"
+      ],
+      "properties": {
+        "qwen_replay_output_validation_receipt_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_output_manifest_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_authorization_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_preflight_hash_bound": {
+          "const": true
+        },
+        "qwen_prompt_redaction_audit_hash_bound": {
+          "const": true
+        },
+        "qwen_prompt_input_manifest_hash_bound": {
+          "const": true
+        },
+        "qwen_public_summary_projection_hash_bound": {
+          "const": true
+        },
+        "model_request_hash_bound": {
+          "const": true
+        },
+        "packet_schema_hash_bound": {
+          "const": true
+        },
+        "field_registry_hash_bound": {
+          "const": true
+        },
+        "collection_window_bound": {
+          "const": true
+        },
+        "promotion_status_not_promoted": {
+          "const": true
+        },
+        "no_release_candidate_created": {
+          "const": true
+        },
+        "no_promoted_ruleset": {
+          "const": true
+        },
+        "no_promoted_compiled_policy": {
+          "const": true
+        },
+        "operator_gate_requirements_bound": {
+          "const": true
+        },
+        "operator_pack_update_authorized": {
+          "const": false
+        },
+        "cobalt_submission_authorized": {
+          "const": false
+        },
+        "registry_mutation_authorized": {
+          "const": false
+        },
+        "authority_transfer_authorized": {
+          "const": false
+        },
+        "provider_spend_executed": {
+          "const": false
+        },
+        "live_model_request_executed": {
+          "const": false
+        },
+        "model_output_generated": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "cobalt_amendment_submitted": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "collection_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_height",
+        "to_height",
+        "from_time",
+        "to_time"
+      ],
+      "properties": {
+        "from_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "from_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to_time": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    }
+  }
+}

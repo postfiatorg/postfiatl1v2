@@ -1,0 +1,15 @@
+[package]
+name = "postfiat-fastswap-model"
+version = "0.1.0"
+description = "Executable safety model for the experimental PostFiat FastSwap protocol"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "fastswap-model-check"
+path = "src/main.rs"

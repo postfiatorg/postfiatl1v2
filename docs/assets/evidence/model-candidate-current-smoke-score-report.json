@@ -1,0 +1,172 @@
+{
+  "schema": "postfiat.replay_profile.model_candidate_score_report.v1",
+  "created_at": "20260530T000000Z",
+  "min_packets_for_ranking": 80,
+  "latency_target_ms": 2000.0,
+  "bootstrap_iterations": 2000,
+  "bootstrap_seed": 20260530,
+  "score_formula": {
+    "hard_gate": [
+      "100% parse/schema valid",
+      "positive_authority false on every row",
+      "zero false-positive live admits",
+      "deterministic parsed output for every packet"
+    ],
+    "quality_score": {
+      "route_accuracy": 0.4,
+      "challenge_capture": 0.25,
+      "classification_accuracy": 0.15,
+      "clean_admit_retention": 0.1,
+      "citation_validity": 0.05,
+      "determinism": 0.05
+    },
+    "selection_score": {
+      "route_accuracy": 0.35,
+      "challenge_capture": 0.2,
+      "classification_accuracy": 0.15,
+      "clean_admit_retention": 0.1,
+      "citation_validity": 0.1,
+      "determinism": 0.05,
+      "latency_efficiency": 0.05
+    }
+  },
+  "ranked": [
+    {
+      "hard_gate_pass": true,
+      "total_rows": 9,
+      "total_weight": 9.0,
+      "packet_count": 3,
+      "parse_schema_ok": 9,
+      "positive_authority_absent": 9,
+      "false_positive_live_admits": 0,
+      "false_positive_live_admit_weight": 0.0,
+      "route_accuracy": 1.0,
+      "challenge_capture": 1.0,
+      "classification_accuracy": 1.0,
+      "clean_admit_retention": 1.0,
+      "citation_validity": 1.0,
+      "determinism": 1.0,
+      "mean_latency_ms": 1733.0,
+      "p95_latency_ms": 1864.6,
+      "latency_efficiency": 1.0,
+      "quality_score": 100.0,
+      "selection_score": 100.0,
+      "tag_breakdown": {},
+      "quality_score_ci95": [
+        100.0,
+        100.0
+      ],
+      "selection_score_ci95": [
+        100.0,
+        100.0
+      ],
+      "candidate_id": "qwen36-existing-control",
+      "model": "Qwen/Qwen3.6-27B-FP8",
+      "report_root": "sha256:cc13e08f33c7a50f2d784460c8414d7626f922773be938caedef857fe2204c32",
+      "statistical_status": "screen_only_packet_count_below_threshold"
+    },
+    {
+      "hard_gate_pass": true,
+      "total_rows": 9,
+      "total_weight": 9.0,
+      "packet_count": 3,
+      "parse_schema_ok": 9,
+      "positive_authority_absent": 9,
+      "false_positive_live_admits": 0,
+      "false_positive_live_admit_weight": 0.0,
+      "route_accuracy": 1.0,
+      "challenge_capture": 1.0,
+      "classification_accuracy": 1.0,
+      "clean_admit_retention": 1.0,
+      "citation_validity": 1.0,
+      "determinism": 1.0,
+      "mean_latency_ms": 1771.2222222222222,
+      "p95_latency_ms": 3939.3999999999987,
+      "latency_efficiency": 1.0,
+      "quality_score": 100.0,
+      "selection_score": 100.0,
+      "tag_breakdown": {},
+      "quality_score_ci95": [
+        100.0,
+        100.0
+      ],
+      "selection_score_ci95": [
+        98.6448,
+        100.0
+      ],
+      "candidate_id": "granite-4-1-8b",
+      "model": "ibm-granite/granite-4.1-8b",
+      "report_root": "sha256:8f8462f346b73241bd973b74457dd5971e5db5bc102a5e768d866fc2d30c6314",
+      "statistical_status": "screen_only_packet_count_below_threshold"
+    },
+    {
+      "hard_gate_pass": true,
+      "total_rows": 9,
+      "total_weight": 9.0,
+      "packet_count": 3,
+      "parse_schema_ok": 9,
+      "positive_authority_absent": 9,
+      "false_positive_live_admits": 0,
+      "false_positive_live_admit_weight": 0.0,
+      "route_accuracy": 1.0,
+      "challenge_capture": 1.0,
+      "classification_accuracy": 1.0,
+      "clean_admit_retention": 1.0,
+      "citation_validity": 1.0,
+      "determinism": 1.0,
+      "mean_latency_ms": 3442.5555555555557,
+      "p95_latency_ms": 10701.399999999994,
+      "latency_efficiency": 0.5809637543168834,
+      "quality_score": 100.0,
+      "selection_score": 97.90481877158442,
+      "tag_breakdown": {},
+      "quality_score_ci95": [
+        100.0,
+        100.0
+      ],
+      "selection_score_ci95": [
+        96.505,
+        100.0
+      ],
+      "candidate_id": "qwen3-6-35b-a3b",
+      "model": "Qwen/Qwen3.6-35B-A3B",
+      "report_root": "sha256:e3a7435752f799854e9ad02f352c585957e4268a0c435e1dda554afd41990843",
+      "statistical_status": "screen_only_packet_count_below_threshold"
+    },
+    {
+      "hard_gate_pass": true,
+      "total_rows": 9,
+      "total_weight": 9.0,
+      "packet_count": 3,
+      "parse_schema_ok": 9,
+      "positive_authority_absent": 9,
+      "false_positive_live_admits": 0,
+      "false_positive_live_admit_weight": 0.0,
+      "route_accuracy": 1.0,
+      "challenge_capture": 1.0,
+      "classification_accuracy": 1.0,
+      "clean_admit_retention": 1.0,
+      "citation_validity": 1.0,
+      "determinism": 1.0,
+      "mean_latency_ms": 4019.6666666666665,
+      "p95_latency_ms": 6373.799999999999,
+      "latency_efficiency": 0.49755369433618046,
+      "quality_score": 100.0,
+      "selection_score": 97.48776847168091,
+      "tag_breakdown": {},
+      "quality_score_ci95": [
+        100.0,
+        100.0
+      ],
+      "selection_score_ci95": [
+        97.2017,
+        97.896
+      ],
+      "candidate_id": "gemma-4-31b-it",
+      "model": "google/gemma-4-31b-it",
+      "report_root": "sha256:0595a1b564cd252a9ed8924821bf81a25be90882fdd446e9d4c081e2832bb089",
+      "statistical_status": "screen_only_packet_count_below_threshold"
+    }
+  ],
+  "report_root": "sha256:97f6f7ba4356d074dcb5914d6d670ce49112fa22ee41b0e443cf0192d55a1b26"
+}

@@ -1,0 +1,19 @@
+{
+  "base": "valid_attestor_cost.json",
+  "description": "Ungoverned attestor-cost policy must fail closed rather than admit.",
+  "expected_error_contains": [
+    "case-09-ungoverned-cost-policy-fail-closed: expected_route mismatch"
+  ],
+  "overrides": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        8,
+        "expected_route"
+      ],
+      "value": "admit"
+    }
+  ],
+  "schema": "postfiat-validator-economic-attestor-cost-delta-v1"
+}

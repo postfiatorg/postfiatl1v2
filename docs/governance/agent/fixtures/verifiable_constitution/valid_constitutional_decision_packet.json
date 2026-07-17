@@ -1,0 +1,235 @@
+{
+  "schema": "postfiat-constitutional-decision-packet-v1",
+  "decision_id": "vc-model-governance-001-decision-001",
+  "decision_version": 1,
+  "status": "candidate",
+  "decision_scope": "model_governance",
+  "created_at": "2026-05-24T00:00:00Z",
+  "evidence_packet_ref": {
+    "packet_id": "vc-model-governance-001-evidence-001",
+    "packet_path": "docs/governance/agent/fixtures/verifiable_constitution/valid_constitutional_evidence_packet.json",
+    "packet_file_sha3_384": "2440fd9d257cad3e10e4068899ad2f6f3f270583f1a42e25a884e3199c96697c7267fc6508980bc5f3c2f3845d0d88e3",
+    "packet_canonical_hash": "4b076bba37226c3bcce5233285468e24023ca8b6da93934cb22343873d101843a7e77f17236ceb186b884b99ed9836a0",
+    "evidence_root": "094c5836c049e6394b1981d3e119f599af5f1a6af3429cb8f060d021b514c06b7aa1e515e07a7ffda54aadfa06097e51",
+    "packet_schema_path": "docs/governance/agent/constitutional_evidence_packet_schema.json",
+    "packet_schema_sha3_384": "5019bce76ede61a24de4c617f1b6f1275d701907c733267541ae95999aa1540ca97d00403fb65389703f5f0ea44837f2"
+  },
+  "decision_generation": {
+    "authoring_mode": "schema_fixture",
+    "model_output_generated": false,
+    "model_profile_id": null,
+    "model_request_hash": null,
+    "raw_output_hash": null,
+    "parsed_output_hash": null,
+    "replay_required_before_authority": true
+  },
+  "selected_option": {
+    "option_id": "preserve-current-profile",
+    "decision_kind": "preserve_status_quo",
+    "confidence": "high",
+    "rationale": "The packet proves the active Qwen/SGLang profile identity and deterministic controls, while every candidate-model admission field is missing and bound to preserve, reject, or hold behavior.",
+    "evidence_ref_paths": [
+      "model.active.model_id",
+      "model.active.runtime_profile_hash",
+      "model.active.prompt_template_hash",
+      "model.active.deterministic_flags",
+      "model.candidate.model_id",
+      "model.candidate.replay_convergence_count",
+      "model.candidate.adversarial_failure_count",
+      "model.candidate.cross_machine_receipt_root",
+      "model.candidate.rollback_plan_hash"
+    ]
+  },
+  "rejected_options": [
+    {
+      "option_id": "admit-candidate-now",
+      "rejection_kind": "missing_evidence",
+      "reason": "Candidate model id, replay convergence, adversarial comparison, cross-machine receipt, and rollback evidence are absent.",
+      "evidence_ref_paths": [
+        "model.candidate.model_id",
+        "model.candidate.replay_convergence_count",
+        "model.candidate.adversarial_failure_count",
+        "model.candidate.cross_machine_receipt_root",
+        "model.candidate.rollback_plan_hash"
+      ]
+    },
+    {
+      "option_id": "freeze-model-profile",
+      "rejection_kind": "less_preferred",
+      "reason": "The active profile is already preserved by status quo, and this fixture does not introduce a new freeze gate beyond existing no-promotion boundaries.",
+      "evidence_ref_paths": [
+        "model.active.model_id",
+        "model.candidate.cross_machine_receipt_root"
+      ]
+    },
+    {
+      "option_id": "hold-no-op",
+      "rejection_kind": "less_preferred",
+      "reason": "A complete active-profile evidence set exists, so preserving the current profile is more precise than a full no-op while candidate promotion remains rejected.",
+      "evidence_ref_paths": [
+        "model.active.model_id",
+        "model.active.runtime_profile_hash",
+        "model.candidate.replay_convergence_count"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    {
+      "field_path": "model.active.model_id",
+      "evidence_status": "present",
+      "evidence_root": "094c5836c049e6394b1981d3e119f599af5f1a6af3429cb8f060d021b514c06b7aa1e515e07a7ffda54aadfa06097e51",
+      "supports": "selected_option"
+    },
+    {
+      "field_path": "model.active.runtime_profile_hash",
+      "evidence_status": "present",
+      "evidence_root": "094c5836c049e6394b1981d3e119f599af5f1a6af3429cb8f060d021b514c06b7aa1e515e07a7ffda54aadfa06097e51",
+      "supports": "selected_option"
+    },
+    {
+      "field_path": "model.active.prompt_template_hash",
+      "evidence_status": "present",
+      "evidence_root": "094c5836c049e6394b1981d3e119f599af5f1a6af3429cb8f060d021b514c06b7aa1e515e07a7ffda54aadfa06097e51",
+      "supports": "selected_option"
+    },
+    {
+      "field_path": "model.active.deterministic_flags",
+      "evidence_status": "present",
+      "evidence_root": "094c5836c049e6394b1981d3e119f599af5f1a6af3429cb8f060d021b514c06b7aa1e515e07a7ffda54aadfa06097e51",
+      "supports": "selected_option"
+    },
+    {
+      "field_path": "model.candidate.model_id",
+      "evidence_status": "missing",
+      "evidence_root": "094c5836c049e6394b1981d3e119f599af5f1a6af3429cb8f060d021b514c06b7aa1e515e07a7ffda54aadfa06097e51",
+      "supports": "rejected_option"
+    },
+    {
+      "field_path": "model.candidate.replay_convergence_count",
+      "evidence_status": "missing",
+      "evidence_root": "094c5836c049e6394b1981d3e119f599af5f1a6af3429cb8f060d021b514c06b7aa1e515e07a7ffda54aadfa06097e51",
+      "supports": "rejected_option"
+    },
+    {
+      "field_path": "model.candidate.adversarial_failure_count",
+      "evidence_status": "missing",
+      "evidence_root": "094c5836c049e6394b1981d3e119f599af5f1a6af3429cb8f060d021b514c06b7aa1e515e07a7ffda54aadfa06097e51",
+      "supports": "rejected_option"
+    },
+    {
+      "field_path": "model.candidate.cross_machine_receipt_root",
+      "evidence_status": "missing",
+      "evidence_root": "094c5836c049e6394b1981d3e119f599af5f1a6af3429cb8f060d021b514c06b7aa1e515e07a7ffda54aadfa06097e51",
+      "supports": "invalidation_criterion"
+    },
+    {
+      "field_path": "model.candidate.rollback_plan_hash",
+      "evidence_status": "missing",
+      "evidence_root": "094c5836c049e6394b1981d3e119f599af5f1a6af3429cb8f060d021b514c06b7aa1e515e07a7ffda54aadfa06097e51",
+      "supports": "fallback"
+    }
+  ],
+  "implementation_consequences": [
+    {
+      "consequence_id": "keep-current-model-profile",
+      "effect": "no_code_change",
+      "description": "Keep the current Qwen/SGLang deterministic profile as the only admissible internal constitutional governance profile.",
+      "evidence_ref_paths": [
+        "model.active.model_id",
+        "model.active.runtime_profile_hash",
+        "model.active.deterministic_flags"
+      ],
+      "requires_later_authorization": false
+    },
+    {
+      "consequence_id": "reject-candidate-promotion-without-packet",
+      "effect": "future_authorization_required",
+      "description": "A candidate model cannot be promoted until a later evidence packet supplies model id, replay convergence, adversarial comparison, cross-machine receipt, and rollback evidence.",
+      "evidence_ref_paths": [
+        "model.candidate.model_id",
+        "model.candidate.replay_convergence_count",
+        "model.candidate.adversarial_failure_count",
+        "model.candidate.cross_machine_receipt_root",
+        "model.candidate.rollback_plan_hash"
+      ],
+      "requires_later_authorization": true
+    },
+    {
+      "consequence_id": "no-live-governance-effect",
+      "effect": "test_or_gate_change",
+      "description": "This decision fixture does not mutate validator registry state, submit Cobalt amendments, activate sidecars, promote a model, or transfer authority.",
+      "evidence_ref_paths": [
+        "model.active.prompt_template_hash",
+        "model.candidate.rollback_plan_hash"
+      ],
+      "requires_later_authorization": true
+    }
+  ],
+  "invalidation_criteria": [
+    {
+      "criterion_id": "active-profile-drift",
+      "description": "If the active model id, runtime profile hash, prompt template hash, or deterministic flags change without a new governed packet, this decision is invalidated.",
+      "evidence_ref_paths": [
+        "model.active.model_id",
+        "model.active.runtime_profile_hash",
+        "model.active.prompt_template_hash",
+        "model.active.deterministic_flags"
+      ],
+      "effect": "reject_decision"
+    },
+    {
+      "criterion_id": "candidate-evidence-arrives",
+      "description": "If a candidate model evidence packet supplies replay convergence, adversarial comparison, cross-machine receipt, and rollback evidence, this decision should be superseded by a fresh decision over that packet.",
+      "evidence_ref_paths": [
+        "model.candidate.model_id",
+        "model.candidate.replay_convergence_count",
+        "model.candidate.adversarial_failure_count",
+        "model.candidate.cross_machine_receipt_root",
+        "model.candidate.rollback_plan_hash"
+      ],
+      "effect": "supersede"
+    },
+    {
+      "criterion_id": "hidden-or-secret-evidence",
+      "description": "If the decision is found to depend on hidden evidence, private notes, provider secrets, or unregistered reputation claims, reject it and require a challenge packet.",
+      "evidence_ref_paths": [
+        "model.active.model_id",
+        "model.candidate.model_id"
+      ],
+      "effect": "hold"
+    }
+  ],
+  "fallback": {
+    "decision": "no_op",
+    "trigger_conditions": [
+      "missing_evidence",
+      "ambiguous_evidence",
+      "schema_invalid",
+      "replay_drift",
+      "hidden_evidence_attempt",
+      "scope_expansion_attempt",
+      "unsafe_live_action_attempt"
+    ],
+    "rationale": "If the evidence packet, decision packet, or later Qwen replay is malformed or ambiguous, the safe result is no-op with no model promotion or live governance effect."
+  },
+  "authority_boundary": {
+    "live_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "model_promotion_authorized": false,
+    "authority_transfer_authorized": false,
+    "sidecar_activation_authorized": false,
+    "default_conformance_requires_later_gate": true
+  },
+  "checks": {
+    "selected_option_in_question": true,
+    "selected_option_evidence_bound": true,
+    "rejected_options_evidence_bound": true,
+    "implementation_consequences_present": true,
+    "invalidation_criteria_present": true,
+    "fallback_present": true,
+    "no_hidden_evidence": true,
+    "no_secret_dependency": true,
+    "no_live_mutation": true,
+    "authority_transfer": false
+  }
+}

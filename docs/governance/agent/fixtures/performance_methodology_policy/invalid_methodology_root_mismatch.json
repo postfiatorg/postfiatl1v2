@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/performance_methodology_policy/valid_performance_methodology_policy.json",
+  "expected_error_contains": [
+    "statement.methodology_root_hash does not match methodology material"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "methodology_root_hash"
+      ],
+      "value": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    }
+  ],
+  "schema": "postfiat-performance-methodology-policy-invalid-case-v1"
+}

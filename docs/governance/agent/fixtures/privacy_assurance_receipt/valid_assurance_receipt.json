@@ -1,0 +1,96 @@
+{
+  "schema": "postfiat-privacy-assurance-receipt-v1",
+  "receipt_id": "privacy-assurance-receipt-demo-2026-05-28",
+  "mode": "design_fixture_only",
+  "statement": {
+    "chain": {
+      "chain_id": "postfiat-controlled-testnet",
+      "pool_id": "orchard-v1",
+      "registry_root_hash": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "subject": {
+      "subject_kind": "blinded_note_commitment",
+      "blinded_subject_tag": "222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
+      "action_class": "withdraw",
+      "public_chain_fields": [
+        "root",
+        "nullifier",
+        "output_commitments",
+        "fee",
+        "policy_hash",
+        "disclosure_hash"
+      ]
+    },
+    "policy": {
+      "policy_root_hash": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+      "policy_root_governance": "cobalt_governed",
+      "list_provider_root_hash": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+      "list_provider_order": [
+        "ofac-public-sdn-root",
+        "exchange-risk-list-root",
+        "custodian-internal-risk-root"
+      ],
+      "proof_statement": "non_inclusion_against_policy_root",
+      "standby_period_seconds": 3600,
+      "staleness_limit_seconds": 86400
+    },
+    "disclosure": {
+      "scope": "single_action",
+      "recipient_class": "custodian",
+      "full_viewing_key_disclosed": false,
+      "future_history_access": false,
+      "full_wallet_history_access": false,
+      "raw_private_values_disclosed": false,
+      "allowed_reveals": [
+        "policy_membership",
+        "transaction_binding",
+        "counterparty_receipt"
+      ]
+    },
+    "validity": {
+      "not_before": "2026-05-28T00:00:00Z",
+      "expires_at": "2026-06-27T00:00:00Z",
+      "ledger_from": 1000,
+      "ledger_to": 2000
+    },
+    "evidence_artifacts": [
+      {
+        "path": "reports/orchard-verification-budget-v1-report.json",
+        "sha3_384": "0b3af474fe246b27cf7f167d13f52523ac25f3e3245518fa197f5b61e5d54e2c901f0b0bb9ab50ad078f9e28bfa9f2aa"
+      },
+      {
+        "path": "reports/testnet-orchard-privacy-audit-packet/orchard-privacy-audit-packet-20260515T185212Z/orchard-privacy-audit-packet.json",
+        "sha3_384": "9ae94ad1539e41da4f2bb3e6cc88201e18948d3d9ee4a7c14ec31133b0f71fc7132603c476a3b6b335482c2d6df1f023"
+      },
+      {
+        "path": "reports/testnet-live-orchard-full-flow/live-orchard-full-flow-20260515T183724Z/testnet-live-orchard-full-flow.json",
+        "sha3_384": "49faeeaf000b83fa3c133b4aae7df10e6a719d59a53f03c9a1c419d4b646aa8b031bc60b5ccb0d69bdd9c89c9d77e352"
+      },
+      {
+        "path": "reports/testnet-live-orchard-direct-deposit/current-write-gates-20260517T153630Z-orchard-direct-deposit/testnet-live-orchard-direct-deposit.json",
+        "sha3_384": "701d506a449c835adf672c270fbd96209ead25deb1a876ea1463446f4b0c5cb910d473cca4c091521cc42d6c141afc6f"
+      }
+    ]
+  },
+  "attestation": {
+    "attestor_key_hash": "555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555",
+    "statement_hash": "d2bd9b7a77ae6a0f27d872ec2df7b58d7bbb41a172b5108b80011dade394885b163c6c8e30680a6241610eb471ed35c7",
+    "signature_hash": "666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666",
+    "signature_scheme": "mldsa44-placeholder",
+    "attested_at": "2026-05-28T00:00:00Z"
+  },
+  "checks": {
+    "orchard_pool_bound": true,
+    "policy_root_bound": true,
+    "list_provider_root_bound": true,
+    "proof_root_bound": true,
+    "scoped_disclosure_only": true,
+    "no_full_viewing_key": true,
+    "no_future_history_access": true,
+    "no_raw_private_values": true,
+    "expiry_enforced": true,
+    "cobalt_policy_transition_required": true,
+    "live_registry_mutation": false,
+    "authority_transfer": false
+  }
+}

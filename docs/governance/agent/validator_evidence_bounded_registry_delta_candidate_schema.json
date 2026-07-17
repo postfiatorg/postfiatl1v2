@@ -1,0 +1,653 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-validator-evidence-bounded-registry-delta-candidate-v1.json",
+  "title": "PostFiat Validator Evidence Bounded Registry Delta Candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "action_mode": {
+            "const": "GuardedApplyRehearsal"
+          }
+        },
+        "required": [
+          "action_mode"
+        ]
+      },
+      "then": {
+        "required": [
+          "guarded_apply_reference"
+        ]
+      }
+    }
+  ],
+  "required": [
+    "schema",
+    "candidate_id",
+    "candidate_version",
+    "candidate_kind",
+    "candidate_scope",
+    "qclc010_report_path",
+    "qclc010_report_hash",
+    "validator_evidence_packet_root",
+    "raw_observation_root",
+    "ruleset_hash",
+    "compiled_policy_hash",
+    "registry_root_before",
+    "action_mode",
+    "proposed_delta",
+    "hard_caps",
+    "economic_bound_reference",
+    "rollback_reference",
+    "cobalt_replay_reference",
+    "authority_boundary",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-evidence-bounded-registry-delta-candidate-v1"
+    },
+    "candidate_id": {
+      "$ref": "#/$defs/hash96"
+    },
+    "candidate_version": {
+      "const": 1
+    },
+    "candidate_kind": {
+      "const": "bounded_registry_delta"
+    },
+    "candidate_scope": {
+      "const": "qwen_cobalt_internal_validation"
+    },
+    "qclc010_report_path": {
+      "$ref": "#/$defs/repo_path"
+    },
+    "qclc010_report_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "validator_evidence_packet_root": {
+      "$ref": "#/$defs/hash96"
+    },
+    "raw_observation_root": {
+      "$ref": "#/$defs/hash96"
+    },
+    "ruleset_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "compiled_policy_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "registry_root_before": {
+      "$ref": "#/$defs/hash96"
+    },
+    "action_mode": {
+      "enum": [
+        "NoOp",
+        "DryRunOnly",
+        "GuardedApplyRehearsal"
+      ]
+    },
+    "proposed_delta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "delta_id",
+        "delta_kind",
+        "rationale",
+        "mutation_count",
+        "routine_removal",
+        "additions",
+        "holds",
+        "suspensions",
+        "rotations",
+        "removals",
+        "evidence_refs"
+      ],
+      "properties": {
+        "delta_id": {
+          "$ref": "#/$defs/id"
+        },
+        "delta_kind": {
+          "enum": [
+            "no_op",
+            "add",
+            "hold",
+            "suspend",
+            "rotate",
+            "remove"
+          ]
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 512
+        },
+        "mutation_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "routine_removal": {
+          "const": false
+        },
+        "additions": {
+          "$ref": "#/$defs/bounded_delta_list"
+        },
+        "holds": {
+          "$ref": "#/$defs/bounded_delta_list"
+        },
+        "suspensions": {
+          "$ref": "#/$defs/bounded_delta_list"
+        },
+        "rotations": {
+          "$ref": "#/$defs/bounded_delta_list"
+        },
+        "removals": {
+          "$ref": "#/$defs/bounded_delta_list"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/evidence_ref"
+          }
+        }
+      }
+    },
+    "hard_caps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_adds_per_round",
+        "max_registry_mutations",
+        "routine_removals_allowed",
+        "evidence_refs_required",
+        "concentration_caps_required",
+        "linkedness_required",
+        "rollback_required",
+        "cobalt_acceptance_required",
+        "human_approval_after_activation_allowed",
+        "live_apply_allowed"
+      ],
+      "properties": {
+        "max_adds_per_round": {
+          "const": 1
+        },
+        "max_registry_mutations": {
+          "const": 1
+        },
+        "routine_removals_allowed": {
+          "const": 0
+        },
+        "evidence_refs_required": {
+          "const": true
+        },
+        "concentration_caps_required": {
+          "const": true
+        },
+        "linkedness_required": {
+          "const": true
+        },
+        "rollback_required": {
+          "const": true
+        },
+        "cobalt_acceptance_required": {
+          "const": true
+        },
+        "human_approval_after_activation_allowed": {
+          "const": false
+        },
+        "live_apply_allowed": {
+          "const": false
+        }
+      }
+    },
+    "economic_bound_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_id",
+        "packet_path",
+        "packet_file_hash",
+        "packet_canonical_hash",
+        "statement_hash",
+        "policy_root_hash",
+        "schema_path",
+        "schema_file_hash",
+        "verifier_path",
+        "verifier_file_hash",
+        "accepted_routes_for_mutation",
+        "non_mutating_routes",
+        "required_delta_kinds",
+        "preflight_required"
+      ],
+      "properties": {
+        "policy_id": {
+          "const": "validator-economic-bound-policy-v1"
+        },
+        "packet_path": {
+          "$ref": "#/$defs/repo_path"
+        },
+        "packet_file_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "packet_canonical_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "statement_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "policy_root_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "schema_path": {
+          "$ref": "#/$defs/repo_path"
+        },
+        "schema_file_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "verifier_path": {
+          "$ref": "#/$defs/repo_path"
+        },
+        "verifier_file_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "accepted_routes_for_mutation": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "const": "admit"
+          }
+        },
+        "non_mutating_routes": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "fail-closed",
+              "hold",
+              "reject"
+            ]
+          }
+        },
+        "required_delta_kinds": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "add",
+              "hold",
+              "suspend",
+              "rotate",
+              "remove"
+            ]
+          }
+        },
+        "preflight_required": {
+          "const": true
+        }
+      }
+    },
+    "guarded_apply_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_report_path",
+        "source_report_file_hash",
+        "source_report_verified",
+        "source_gate",
+        "candidate_hash",
+        "action",
+        "subject_node_id",
+        "dry_run_mutation_count",
+        "initial_registry_root",
+        "guarded_apply_registry_root",
+        "post_apply_registry_root",
+        "rollback_registry_root",
+        "cobalt_acceptance_verified",
+        "rollback_restored_registry",
+        "max_one_add",
+        "zero_routine_removals",
+        "evidence_refs_valid",
+        "concentration_caps_passed",
+        "trust_graph_linkedness_passed",
+        "registry_changes_only_after_cobalt_acceptance",
+        "vc061_report_path",
+        "vc061_report_file_hash",
+        "vc061_report_verified",
+        "vc061_rehearsal_root",
+        "vc061_live_effect",
+        "preflight_only"
+      ],
+      "properties": {
+        "source_report_path": {
+          "$ref": "#/$defs/repo_path"
+        },
+        "source_report_file_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "source_report_verified": {
+          "const": true
+        },
+        "source_gate": {
+          "const": "9.5-generated-ruleset-guarded-apply"
+        },
+        "candidate_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "action": {
+          "const": "admit"
+        },
+        "subject_node_id": {
+          "$ref": "#/$defs/id"
+        },
+        "dry_run_mutation_count": {
+          "const": 1
+        },
+        "initial_registry_root": {
+          "$ref": "#/$defs/hash96"
+        },
+        "guarded_apply_registry_root": {
+          "$ref": "#/$defs/hash96"
+        },
+        "post_apply_registry_root": {
+          "$ref": "#/$defs/hash96"
+        },
+        "rollback_registry_root": {
+          "$ref": "#/$defs/hash96"
+        },
+        "cobalt_acceptance_verified": {
+          "const": true
+        },
+        "rollback_restored_registry": {
+          "const": true
+        },
+        "max_one_add": {
+          "const": true
+        },
+        "zero_routine_removals": {
+          "const": true
+        },
+        "evidence_refs_valid": {
+          "const": true
+        },
+        "concentration_caps_passed": {
+          "const": true
+        },
+        "trust_graph_linkedness_passed": {
+          "const": true
+        },
+        "registry_changes_only_after_cobalt_acceptance": {
+          "const": true
+        },
+        "vc061_report_path": {
+          "$ref": "#/$defs/repo_path"
+        },
+        "vc061_report_file_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "vc061_report_verified": {
+          "const": true
+        },
+        "vc061_rehearsal_root": {
+          "$ref": "#/$defs/hash96"
+        },
+        "vc061_live_effect": {
+          "const": false
+        },
+        "preflight_only": {
+          "const": true
+        }
+      }
+    },
+    "rollback_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rollback_mode",
+        "rollback_artifact_path",
+        "rollback_artifact_hash",
+        "rollback_recovery_report_path",
+        "rollback_recovery_report_hash",
+        "registry_root_after_rollback",
+        "rollback_required"
+      ],
+      "properties": {
+        "rollback_mode": {
+          "enum": [
+            "noop_restore",
+            "guarded_rehearsal_restore"
+          ]
+        },
+        "rollback_artifact_path": {
+          "$ref": "#/$defs/repo_path"
+        },
+        "rollback_artifact_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "rollback_recovery_report_path": {
+          "$ref": "#/$defs/repo_path"
+        },
+        "rollback_recovery_report_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "registry_root_after_rollback": {
+          "$ref": "#/$defs/hash96"
+        },
+        "rollback_required": {
+          "const": true
+        }
+      }
+    },
+    "cobalt_replay_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "qclc005_report_path",
+        "qclc005_report_hash",
+        "replay_bundle_path",
+        "replay_bundle_root",
+        "registry_mutation_count",
+        "registry_unchanged"
+      ],
+      "properties": {
+        "qclc005_report_path": {
+          "$ref": "#/$defs/repo_path"
+        },
+        "qclc005_report_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "replay_bundle_path": {
+          "$ref": "#/$defs/repo_path"
+        },
+        "replay_bundle_root": {
+          "$ref": "#/$defs/hash96"
+        },
+        "registry_mutation_count": {
+          "const": 0
+        },
+        "registry_unchanged": {
+          "const": true
+        }
+      }
+    },
+    "authority_boundary": {
+      "$ref": "#/$defs/authority_boundary"
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "qclc010_report_hash_bound",
+        "packet_root_bound",
+        "ruleset_hash_bound",
+        "compiled_policy_hash_bound",
+        "registry_root_bound",
+        "hard_caps_bound",
+        "rollback_reference_bound",
+        "economic_bound_preflight_bound",
+        "non_live_action_mode",
+        "live_registry_mutation",
+        "live_cobalt_amendment_submission",
+        "authority_transfer"
+      ],
+      "properties": {
+        "qclc010_report_hash_bound": {
+          "const": true
+        },
+        "packet_root_bound": {
+          "const": true
+        },
+        "ruleset_hash_bound": {
+          "const": true
+        },
+        "compiled_policy_hash_bound": {
+          "const": true
+        },
+        "registry_root_bound": {
+          "const": true
+        },
+        "hard_caps_bound": {
+          "const": true
+        },
+        "rollback_reference_bound": {
+          "const": true
+        },
+        "economic_bound_preflight_bound": {
+          "const": true
+        },
+        "non_live_action_mode": {
+          "const": true
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "live_cobalt_amendment_submission": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "authority_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mainnet_mutation",
+        "live_validator_registry_mutation",
+        "live_cobalt_amendment_submission",
+        "sidecar_activation",
+        "commit_reveal_activation",
+        "tp_gt_one_admission",
+        "validator_enforced_scoring_activation",
+        "model_promotion",
+        "guarded_apply",
+        "authority_transfer"
+      ],
+      "properties": {
+        "mainnet_mutation": {
+          "const": false
+        },
+        "live_validator_registry_mutation": {
+          "const": false
+        },
+        "live_cobalt_amendment_submission": {
+          "const": false
+        },
+        "sidecar_activation": {
+          "const": false
+        },
+        "commit_reveal_activation": {
+          "const": false
+        },
+        "tp_gt_one_admission": {
+          "const": false
+        },
+        "validator_enforced_scoring_activation": {
+          "const": false
+        },
+        "model_promotion": {
+          "const": false
+        },
+        "guarded_apply": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    },
+    "bounded_delta_list": {
+      "type": "array",
+      "maxItems": 1,
+      "items": {
+        "$ref": "#/$defs/validator_delta"
+      }
+    },
+    "validator_delta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "validator_id",
+        "evidence_refs"
+      ],
+      "properties": {
+        "validator_id": {
+          "$ref": "#/$defs/id"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/evidence_ref"
+          }
+        }
+      }
+    },
+    "evidence_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref_id",
+        "path",
+        "sha3_384"
+      ],
+      "properties": {
+        "ref_id": {
+          "$ref": "#/$defs/id"
+        },
+        "path": {
+          "$ref": "#/$defs/repo_path"
+        },
+        "sha3_384": {
+          "$ref": "#/$defs/hash96"
+        }
+      }
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{2,127}$"
+    },
+    "repo_path": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/-]+$"
+    }
+  }
+}

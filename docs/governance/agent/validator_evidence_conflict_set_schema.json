@@ -1,0 +1,341 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-validator-evidence-conflict-set-v1.json",
+  "title": "PostFiat Validator Evidence Conflict Set",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "conflict_set_id",
+    "packet_id",
+    "validator_evidence_packet_root",
+    "packet_schema_hash",
+    "field_registry_hash",
+    "collection_window",
+    "conflict_order",
+    "conflicts",
+    "summary",
+    "redaction",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-evidence-conflict-set-v1"
+    },
+    "conflict_set_id": {
+      "$ref": "#/$defs/id"
+    },
+    "packet_id": {
+      "$ref": "#/$defs/id"
+    },
+    "validator_evidence_packet_root": {
+      "$ref": "#/$defs/hash96"
+    },
+    "packet_schema_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "field_registry_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "collection_window": {
+      "$ref": "#/$defs/collection_window"
+    },
+    "conflict_order": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/id"
+      }
+    },
+    "conflicts": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9._:-]{2,127}$": {
+          "$ref": "#/$defs/conflict_entry"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total_conflict_count",
+        "validator_conflict_count",
+        "cohort_conflict_count",
+        "packet_conflict_count",
+        "unresolved_conflict_count"
+      ],
+      "properties": {
+        "total_conflict_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "validator_conflict_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cohort_conflict_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "packet_conflict_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unresolved_conflict_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "private_values_redacted",
+        "source_values_hashed",
+        "secret_scan_passed",
+        "public_artifact_safe"
+      ],
+      "properties": {
+        "private_values_redacted": {
+          "const": true
+        },
+        "source_values_hashed": {
+          "const": true
+        },
+        "secret_scan_passed": {
+          "const": true
+        },
+        "public_artifact_safe": {
+          "const": true
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packet_root_verified",
+        "field_paths_registered",
+        "source_hashes_retained",
+        "unresolved_conflicts_hold_or_noop",
+        "registry_mutation",
+        "live_authority_transfer"
+      ],
+      "properties": {
+        "packet_root_verified": {
+          "const": true
+        },
+        "field_paths_registered": {
+          "const": true
+        },
+        "source_hashes_retained": {
+          "const": true
+        },
+        "unresolved_conflicts_hold_or_noop": {
+          "const": true
+        },
+        "registry_mutation": {
+          "const": false
+        },
+        "live_authority_transfer": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "action_bound": {
+      "enum": [
+        "informational_only",
+        "score_adjustment",
+        "admission_gate",
+        "hold_only",
+        "suspend_candidate",
+        "remove_candidate",
+        "no_action"
+      ]
+    },
+    "collection_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_height",
+        "to_height",
+        "from_time",
+        "to_time"
+      ],
+      "properties": {
+        "from_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "from_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to_time": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "conflict_behavior": {
+      "enum": [
+        "reject_packet",
+        "reject_validator_entry",
+        "hold"
+      ]
+    },
+    "conflict_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "conflict_id",
+        "scope",
+        "validator_id",
+        "field_path",
+        "value_type",
+        "conflict_type",
+        "source_hashes",
+        "value_hashes",
+        "observed_at",
+        "freshness",
+        "conflict_behavior",
+        "affected_action_bound",
+        "dga_treatment",
+        "resolution_status",
+        "resolution_hash"
+      ],
+      "properties": {
+        "conflict_id": {
+          "$ref": "#/$defs/id"
+        },
+        "scope": {
+          "enum": [
+            "validator_field",
+            "cohort_field",
+            "packet_field"
+          ]
+        },
+        "validator_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "field_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value_type": {
+          "enum": [
+            "string",
+            "enum",
+            "integer",
+            "boolean",
+            "hash",
+            "url",
+            "domain"
+          ]
+        },
+        "conflict_type": {
+          "enum": [
+            "same_source_inconsistent",
+            "collector_disagreement",
+            "operator_chain_disagreement",
+            "unexpected_url_content_change",
+            "topology_disagreement"
+          ]
+        },
+        "source_hashes": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/hash96"
+          }
+        },
+        "value_hashes": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/hash96"
+          }
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "freshness": {
+          "$ref": "#/$defs/freshness"
+        },
+        "conflict_behavior": {
+          "$ref": "#/$defs/conflict_behavior"
+        },
+        "affected_action_bound": {
+          "$ref": "#/$defs/action_bound"
+        },
+        "dga_treatment": {
+          "enum": [
+            "hold_or_noop",
+            "reject_packet",
+            "reject_validator_entry"
+          ]
+        },
+        "resolution_status": {
+          "enum": [
+            "unresolved",
+            "resolved_by_chain",
+            "resolved_by_operator_update",
+            "resolved_by_governance_decision"
+          ]
+        },
+        "resolution_hash": {
+          "$ref": "#/$defs/maybe_hash96"
+        }
+      }
+    },
+    "freshness": {
+      "enum": [
+        "same_packet",
+        "recent_24h",
+        "recent_7d",
+        "recent_30d",
+        "epoch_bound",
+        "historical"
+      ]
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    },
+    "maybe_hash96": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/hash96"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+"""Fail when proof source or its reviewed public-input inventory drifts."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import pathlib
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+INVENTORY = ROOT / "docs/status/OPEN-SOURCE-PROOF-PUBLIC-INPUT-INVENTORY-20260716.json"
+
+
+def main() -> None:
+    document = json.loads(INVENTORY.read_text(encoding="utf-8"))
+    if document.get("schema") != "postfiat-open-source-proof-public-input-inventory-v1":
+        raise SystemExit("proof inventory schema mismatch")
+    for relative, expected in document["source_hashes"].items():
+        actual = hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
+        if actual != expected:
+            raise SystemExit(
+                f"proof inventory source drift: {relative} expected={expected} actual={actual}"
+            )
+
+    systems = {item["name"]: item for item in document["systems"]}
+    expected_layouts = {
+        "AssetOrchard swap": (28, "ASSET_ORCHARD_PUBLIC_INSTANCE_LEN: usize = 28"),
+        "AssetOrchard private egress": (
+            13,
+            "ASSET_ORCHARD_PRIVATE_EGRESS_PUBLIC_INSTANCE_LEN: usize = 13",
+        ),
+    }
+    orchard_source = (ROOT / "crates/privacy_orchard/src/asset_orchard.rs").read_text(
+        encoding="utf-8"
+    )
+    for name, (length, source_marker) in expected_layouts.items():
+        system = systems[name]
+        fields = system["public_instances"]
+        if system["public_instance_length"] != length:
+            raise SystemExit(f"{name}: public instance length mismatch")
+        if [field["index"] for field in fields] != list(range(length)):
+            raise SystemExit(f"{name}: indices must cover exactly 0..{length - 1}")
+        if any(not field.get("name") or not field.get("binding") for field in fields):
+            raise SystemExit(f"{name}: every public field needs a name and binding")
+        if source_marker not in orchard_source:
+            raise SystemExit(f"{name}: source length marker missing")
+
+    if "Groth16Verifier::verify(" not in (
+        ROOT / "crates/execution/src/nav_sp1_verifier.rs"
+    ).read_text(encoding="utf-8"):
+        raise SystemExit("SP1 Groth16 verification call missing")
+    print("proof_public_input_inventory=ok systems=4 public_fields=41 source_hashes=5")
+
+
+if __name__ == "__main__":
+    main()

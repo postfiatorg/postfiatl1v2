@@ -1,0 +1,579 @@
+{
+  "$id": "https://postfiat.org/schemas/postfiat-protocol-architecture-live-effect-execution-authorization-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PostFiat Protocol Architecture Live-Effect Execution Authorization",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "postfiat-protocol-architecture-live-effect-execution-authorization-v1",
+      "type": "string"
+    },
+    "authorization_id": {
+      "$ref": "#/$defs/id"
+    },
+    "authorization_version": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "status": {
+      "const": "guarded_execution_authorized_no_live_effect",
+      "type": "string"
+    },
+    "authorization_scope": {
+      "const": "protocol_architecture",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "source_signoff_ref": {
+      "$ref": "#/$defs/source_signoff_ref"
+    },
+    "root_bindings": {
+      "$ref": "#/$defs/root_bindings"
+    },
+    "fresh_root_revalidation": {
+      "items": {
+        "$ref": "#/$defs/fresh_root_revalidation"
+      },
+      "minItems": 9,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "execution_target": {
+      "$ref": "#/$defs/execution_target"
+    },
+    "rollback_preconditions": {
+      "$ref": "#/$defs/rollback_preconditions"
+    },
+    "challenge_path": {
+      "$ref": "#/$defs/challenge_path"
+    },
+    "verification_commands": {
+      "items": {
+        "$ref": "#/$defs/verification_command"
+      },
+      "minItems": 8,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "authority_boundary": {
+      "$ref": "#/$defs/authority_boundary"
+    },
+    "checks": {
+      "$ref": "#/$defs/checks"
+    },
+    "authorization_root": {
+      "$ref": "#/$defs/sha3_384"
+    }
+  },
+  "required": [
+    "schema",
+    "authorization_id",
+    "authorization_version",
+    "status",
+    "authorization_scope",
+    "created_at",
+    "source_signoff_ref",
+    "root_bindings",
+    "fresh_root_revalidation",
+    "execution_target",
+    "rollback_preconditions",
+    "challenge_path",
+    "verification_commands",
+    "authority_boundary",
+    "checks",
+    "authorization_root"
+  ],
+  "$defs": {
+    "authority_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider_spend_authorized": {
+          "const": false
+        },
+        "live_model_request_authorized": {
+          "const": false
+        },
+        "model_output_generated_in_this_packet": {
+          "const": false
+        },
+        "operator_signoff_root_bound": {
+          "const": true
+        },
+        "execution_authorization_recorded": {
+          "const": true
+        },
+        "guarded_execution_packet_required_next": {
+          "const": true
+        },
+        "guarded_execution_packet_authorized": {
+          "const": true
+        },
+        "execution_authorized_by_this_packet": {
+          "const": false
+        },
+        "release_gate_execution_authorized": {
+          "const": false
+        },
+        "code_rewrite_authorized": {
+          "const": false
+        },
+        "rippled_code_import_authorized": {
+          "const": false
+        },
+        "consensus_rewrite_authorized": {
+          "const": false
+        },
+        "xrpl_compatibility_activation_authorized": {
+          "const": false
+        },
+        "protocol_migration_authorized": {
+          "const": false
+        },
+        "live_validator_registry_mutation_authorized": {
+          "const": false
+        },
+        "live_cobalt_amendment_submission_authorized": {
+          "const": false
+        },
+        "mainnet_mutation_authorized": {
+          "const": false
+        },
+        "authority_transfer_authorized": {
+          "const": false
+        },
+        "default_live_effect_requires_guarded_execution_packet": {
+          "const": true
+        }
+      },
+      "required": [
+        "provider_spend_authorized",
+        "live_model_request_authorized",
+        "model_output_generated_in_this_packet",
+        "operator_signoff_root_bound",
+        "execution_authorization_recorded",
+        "guarded_execution_packet_required_next",
+        "guarded_execution_packet_authorized",
+        "execution_authorized_by_this_packet",
+        "release_gate_execution_authorized",
+        "code_rewrite_authorized",
+        "rippled_code_import_authorized",
+        "consensus_rewrite_authorized",
+        "xrpl_compatibility_activation_authorized",
+        "protocol_migration_authorized",
+        "live_validator_registry_mutation_authorized",
+        "live_cobalt_amendment_submission_authorized",
+        "mainnet_mutation_authorized",
+        "authority_transfer_authorized",
+        "default_live_effect_requires_guarded_execution_packet"
+      ]
+    },
+    "challenge_path": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "challenge_packet_required": {
+          "const": true
+        },
+        "challenge_schema_path": {
+          "const": "docs/governance/agent/constitutional_challenge_packet_schema.json",
+          "type": "string"
+        },
+        "challenge_schema_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "challenge_action": {
+          "const": "hold_execution_authorization_and_require_supersession",
+          "type": "string"
+        },
+        "live_effect": {
+          "const": false
+        }
+      },
+      "required": [
+        "challenge_packet_required",
+        "challenge_schema_path",
+        "challenge_schema_sha3_384",
+        "challenge_action",
+        "live_effect"
+      ]
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_valid": {
+          "const": true
+        },
+        "source_signoff_verified": {
+          "const": true
+        },
+        "signoff_root_bound": {
+          "const": true
+        },
+        "fresh_roots_verified": {
+          "const": true
+        },
+        "execution_target_bound": {
+          "const": true
+        },
+        "rollback_preconditions_verified": {
+          "const": true
+        },
+        "challenge_path_verified": {
+          "const": true
+        },
+        "guarded_execution_packet_required_next": {
+          "const": true
+        },
+        "guarded_execution_packet_authorized": {
+          "const": true
+        },
+        "execution_not_performed": {
+          "const": true
+        },
+        "verification_command_coverage_verified": {
+          "const": true
+        },
+        "no_hidden_evidence": {
+          "const": true
+        },
+        "no_secret_dependency": {
+          "const": true
+        },
+        "no_code_rewrite": {
+          "const": true
+        },
+        "no_live_cobalt_amendment_submission": {
+          "const": true
+        },
+        "no_compatibility_activation": {
+          "const": true
+        },
+        "no_mainnet_mutation": {
+          "const": true
+        },
+        "authority_transfer": {
+          "const": false
+        },
+        "authorization_root_verified": {
+          "const": true
+        }
+      },
+      "required": [
+        "schema_valid",
+        "source_signoff_verified",
+        "signoff_root_bound",
+        "fresh_roots_verified",
+        "execution_target_bound",
+        "rollback_preconditions_verified",
+        "challenge_path_verified",
+        "guarded_execution_packet_required_next",
+        "guarded_execution_packet_authorized",
+        "execution_not_performed",
+        "verification_command_coverage_verified",
+        "no_hidden_evidence",
+        "no_secret_dependency",
+        "no_code_rewrite",
+        "no_live_cobalt_amendment_submission",
+        "no_compatibility_activation",
+        "no_mainnet_mutation",
+        "authority_transfer",
+        "authorization_root_verified"
+      ]
+    },
+    "execution_target": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "selected_live_action": {
+          "const": "protocol_architecture_release_or_cobalt_effect",
+          "type": "string"
+        },
+        "target_id": {
+          "const": "protocol-architecture-release-or-cobalt-effect-guarded-execution",
+          "type": "string"
+        },
+        "target_kind": {
+          "const": "guarded_release_or_cobalt_action",
+          "type": "string"
+        },
+        "target_scope": {
+          "const": "protocol_architecture",
+          "type": "string"
+        },
+        "guarded_execution_packet_id_required": {
+          "const": "vc-protocol-architecture-001-live-effect-guarded-execution-001",
+          "type": "string"
+        },
+        "guarded_execution_packet_required": {
+          "const": true
+        },
+        "live_effect_by_this_packet": {
+          "const": false
+        }
+      },
+      "required": [
+        "selected_live_action",
+        "target_id",
+        "target_kind",
+        "target_scope",
+        "guarded_execution_packet_id_required",
+        "guarded_execution_packet_required",
+        "live_effect_by_this_packet"
+      ]
+    },
+    "fresh_root_revalidation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "root_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expected_root": {
+          "type": "string",
+          "minLength": 32
+        },
+        "observed_root": {
+          "type": "string",
+          "minLength": 32
+        },
+        "stale_action": {
+          "const": "hold_execution_authorization_and_require_supersession",
+          "type": "string"
+        },
+        "verified": {
+          "const": true
+        },
+        "live_effect": {
+          "const": false
+        }
+      },
+      "required": [
+        "root_id",
+        "label",
+        "expected_root",
+        "observed_root",
+        "stale_action",
+        "verified",
+        "live_effect"
+      ]
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.:-]*[a-z0-9]$"
+    },
+    "root_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "signoff_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "rehearsal_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "approval_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "request_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "readiness_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "conformance_review_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "conformance_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "guarded_apply_candidate_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "guarded_apply_registry_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "rollback_registry_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "full_vocab_vector_root": {
+          "type": "string",
+          "minLength": 64
+        },
+        "evidence_packet_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "selected_option": {
+          "const": "preserve-rust-l1",
+          "type": "string"
+        }
+      },
+      "required": [
+        "signoff_root",
+        "rehearsal_root",
+        "approval_root",
+        "request_root",
+        "readiness_root",
+        "conformance_review_root",
+        "conformance_root",
+        "guarded_apply_candidate_hash",
+        "guarded_apply_registry_root",
+        "rollback_registry_root",
+        "full_vocab_vector_root",
+        "evidence_packet_root",
+        "selected_option"
+      ]
+    },
+    "rollback_preconditions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "initial_registry_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "post_apply_registry_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "rollback_registry_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "rollback_restores_initial_root": {
+          "const": true
+        },
+        "rollback_command_required": {
+          "const": true
+        },
+        "challenge_before_execution": {
+          "const": true
+        },
+        "rollback_verified_before_guarded_execution": {
+          "const": true
+        },
+        "live_effect": {
+          "const": false
+        }
+      },
+      "required": [
+        "initial_registry_root",
+        "post_apply_registry_root",
+        "rollback_registry_root",
+        "rollback_restores_initial_root",
+        "rollback_command_required",
+        "challenge_before_execution",
+        "rollback_verified_before_guarded_execution",
+        "live_effect"
+      ]
+    },
+    "sha3_384": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "source_signoff_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "signoff_id": {
+          "$ref": "#/$defs/id"
+        },
+        "packet_path": {
+          "type": "string"
+        },
+        "packet_file_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "packet_canonical_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "schema_path": {
+          "type": "string"
+        },
+        "schema_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "report_path": {
+          "type": "string"
+        },
+        "report_file_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "report_canonical_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "report_verified": {
+          "const": true
+        },
+        "report_classification": {
+          "const": "operator_signoff_ready_no_execution",
+          "type": "string"
+        },
+        "selected_live_action": {
+          "const": "protocol_architecture_release_or_cobalt_effect",
+          "type": "string"
+        },
+        "signoff_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "report_signoff_root": {
+          "$ref": "#/$defs/sha3_384"
+        }
+      },
+      "required": [
+        "signoff_id",
+        "packet_path",
+        "packet_file_sha3_384",
+        "packet_canonical_hash",
+        "schema_path",
+        "schema_sha3_384",
+        "report_path",
+        "report_file_sha3_384",
+        "report_canonical_hash",
+        "report_verified",
+        "report_classification",
+        "selected_live_action",
+        "signoff_root",
+        "report_signoff_root"
+      ]
+    },
+    "verification_command": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expected_result": {
+          "const": "pass",
+          "type": "string"
+        },
+        "required": {
+          "const": true
+        },
+        "live_effect": {
+          "const": false
+        }
+      },
+      "required": [
+        "command",
+        "purpose",
+        "expected_result",
+        "required",
+        "live_effect"
+      ]
+    }
+  }
+}

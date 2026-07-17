@@ -1,0 +1,327 @@
+{
+  "checks": {
+    "authority_transfer": false,
+    "clean_addition_activates": true,
+    "credible_challenge_holds": true,
+    "expired_or_overbound_addition_noops": true,
+    "liveness_root_bound": true,
+    "live_registry_mutation": false,
+    "settlement_halt_fails_closed": true,
+    "settlement_liveness_preserved_on_hold": true,
+    "thin_attestor_market_holds": true,
+    "underbonded_challenge_ignored": true,
+    "ungoverned_policy_fails_closed": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "validator-registry-addition-liveness-controlled-v1",
+  "schema": "postfiat-validator-registry-addition-liveness-v1",
+  "statement": {
+    "base_model": {
+      "active_registry_root_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "attestor_group_count": 3,
+      "candidate_packet_root_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "challenge_bond_usd": 100000,
+      "challenge_window_end_epoch": 103,
+      "control_surface_count": 3,
+      "credible_open_challenges": 0,
+      "current_epoch": 100,
+      "last_retry_epoch": 98,
+      "liveness_policy_governed": true,
+      "parent_registry_root_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "proposal_epoch": 100,
+      "proposal_expiry_epoch": 112,
+      "registry_delta_kind": "add_validator",
+      "resolved_challenges": 0,
+      "retries_used": 0,
+      "settlement_continues_under_active_registry": true,
+      "underbonded_challenges": 0
+    },
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/validator_registry_addition_liveness_schema.json",
+        "sha3_384": "f32cde96adea400bcf50bb5fc928893878473bd31f11ea20d35c7d6ee0fb7af1ee2d348ac4a5d357f6d33cd1bf692183"
+      },
+      {
+        "path": "scripts/validator-registry-addition-liveness-verify",
+        "sha3_384": "c2465db1d1aada0625c860f69fe23ea458e3c42beb89cadd69abeb0f0169eb66f06f10dacbff4c59f6c131e733530765"
+      }
+    ],
+    "liveness_policy": {
+      "challenge_window_epochs": 3,
+      "max_pending_addition_epochs": 12,
+      "max_retries": 3,
+      "min_attestor_groups": 3,
+      "min_challenge_bond_usd": 100000,
+      "min_control_surfaces": 3,
+      "policy_governed": true,
+      "policy_units": "validator-registry-addition-liveness-policy-v1",
+      "proposal_expiry_epochs": 12,
+      "retry_cooldown_epochs": 1,
+      "route_on_credible_challenge": "hold",
+      "route_on_expired_or_over_grief_bound": "expire-no-op",
+      "route_on_thin_attestor_market": "hold",
+      "route_on_underbonded_challenge": "ignore-challenge",
+      "settlement_liveness_on_registry_hold": "continue-last-registry"
+    },
+    "liveness_root_hash": "6c1d48c71e099930fe779b4311adde4a191ccb2dce9ca321c3bd7e4ee39e5e6ea91a243f35d2f6f29713ca6cb6d68d8e",
+    "policy_id": "validator-registry-addition-liveness-policy-v1",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "controlled-registry-addition-liveness-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-clean-add-activates",
+        "expected_metrics": {
+          "settlement_route": "continue-last-registry"
+        },
+        "expected_reason_codes": [
+          "all_registry_addition_liveness_checks_passed"
+        ],
+        "expected_route": "activate"
+      },
+      {
+        "case_id": "case-02-thin-attestor-market-holds",
+        "expected_metrics": {
+          "settlement_route": "continue-last-registry"
+        },
+        "expected_reason_codes": [
+          "thin_attestor_market"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "attestor_group_count"
+            ],
+            "value": 2
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-thin-control-surface-holds",
+        "expected_metrics": {
+          "settlement_route": "continue-last-registry"
+        },
+        "expected_reason_codes": [
+          "thin_control_surface_market"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "control_surface_count"
+            ],
+            "value": 2
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-credible-open-challenge-holds",
+        "expected_metrics": {
+          "settlement_route": "continue-last-registry"
+        },
+        "expected_reason_codes": [
+          "credible_open_challenge"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "credible_open_challenges"
+            ],
+            "value": 1
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-underbonded-challenge-ignored",
+        "expected_metrics": {
+          "settlement_route": "continue-last-registry"
+        },
+        "expected_reason_codes": [
+          "underbonded_challenge_ignored"
+        ],
+        "expected_route": "activate",
+        "overrides": [
+          {
+            "path": [
+              "challenge_bond_usd"
+            ],
+            "value": 99999
+          },
+          {
+            "path": [
+              "credible_open_challenges"
+            ],
+            "value": 1
+          },
+          {
+            "path": [
+              "underbonded_challenges"
+            ],
+            "value": 1
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-expired-proposal-noops",
+        "expected_metrics": {
+          "settlement_route": "continue-last-registry"
+        },
+        "expected_reason_codes": [
+          "proposal_expired"
+        ],
+        "expected_route": "expire-no-op",
+        "overrides": [
+          {
+            "path": [
+              "current_epoch"
+            ],
+            "value": 113
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-retry-ceiling-noops",
+        "expected_metrics": {
+          "settlement_route": "continue-last-registry"
+        },
+        "expected_reason_codes": [
+          "retry_ceiling_exceeded"
+        ],
+        "expected_route": "expire-no-op",
+        "overrides": [
+          {
+            "path": [
+              "retries_used"
+            ],
+            "value": 4
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-settlement-halt-fails-closed",
+        "expected_metrics": {
+          "settlement_route": "halt"
+        },
+        "expected_reason_codes": [
+          "settlement_liveness_not_preserved"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "settlement_continues_under_active_registry"
+            ],
+            "value": false
+          }
+        ]
+      },
+      {
+        "case_id": "case-09-ungoverned-policy-fails-closed",
+        "expected_metrics": {
+          "settlement_route": "continue-last-registry"
+        },
+        "expected_reason_codes": [
+          "ungoverned_liveness_policy"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "liveness_policy_governed"
+            ],
+            "value": false
+          }
+        ]
+      },
+      {
+        "case_id": "case-10-root-mismatch-fails-closed",
+        "expected_metrics": {
+          "settlement_route": "continue-last-registry"
+        },
+        "expected_reason_codes": [
+          "active_registry_root_hash_invalid"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "active_registry_root_hash"
+            ],
+            "value": "bad-root"
+          }
+        ]
+      },
+      {
+        "case_id": "case-11-challenge-window-elapsed-noops",
+        "expected_metrics": {
+          "settlement_route": "continue-last-registry"
+        },
+        "expected_reason_codes": [
+          "challenge_window_elapsed"
+        ],
+        "expected_route": "expire-no-op",
+        "overrides": [
+          {
+            "path": [
+              "credible_open_challenges"
+            ],
+            "value": 1
+          },
+          {
+            "path": [
+              "current_epoch"
+            ],
+            "value": 104
+          }
+        ]
+      },
+      {
+        "case_id": "case-12-retry-cooldown-holds",
+        "expected_metrics": {
+          "settlement_route": "continue-last-registry"
+        },
+        "expected_reason_codes": [
+          "retry_cooldown_active"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "last_retry_epoch"
+            ],
+            "value": 100
+          }
+        ]
+      },
+      {
+        "case_id": "case-13-pending-window-exceeded-noops",
+        "expected_metrics": {
+          "settlement_route": "continue-last-registry"
+        },
+        "expected_reason_codes": [
+          "max_pending_addition_epochs_exceeded"
+        ],
+        "expected_route": "expire-no-op",
+        "overrides": [
+          {
+            "path": [
+              "current_epoch"
+            ],
+            "value": 113
+          },
+          {
+            "path": [
+              "proposal_expiry_epoch"
+            ],
+            "value": 120
+          }
+        ]
+      }
+    ]
+  }
+}

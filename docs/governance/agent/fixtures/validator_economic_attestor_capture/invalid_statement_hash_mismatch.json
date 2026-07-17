@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_attestor_capture/valid_attestor_capture.json",
+  "expected_error_contains": [
+    "attestation.statement_hash does not match canonical statement hash"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "attestation",
+        "statement_hash"
+      ],
+      "value": "888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888"
+    }
+  ],
+  "schema": "postfiat-validator-economic-attestor-capture-invalid-case-v1"
+}

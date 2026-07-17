@@ -1,0 +1,2 @@
+{"tx_id":"6b5c9a2f049058d6f09f46517461c67a2484dcce69f001e490efaebddec007ed4111e9a68b99b5a959199675b7b3a0e2","accepted":true,"code":"accepted","message":"transfer applied; fee burned","fee_charged":32,"fee_burned":32,"minimum_fee":32,"account_reserve":10,"state_expansion_fee":10}
+{"tx_id":"e4fce75334e804f5100b149404b2c5f02e2dcbb0e147f1d3b8fb79f207212850840340386ddb3e0c1406724d9548947b","accepted":true,"code":"accepted","message":"transfer applied; fee burned","fee_charged":22,"fee_burned":22,"minimum_fee":22,"account_reserve":10,"state_expansion_fee":0}

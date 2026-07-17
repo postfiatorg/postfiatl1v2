@@ -1,0 +1,60 @@
+{
+  "authority": {
+    "direct_state_mutation": false,
+    "mode": "guarded_apply",
+    "scope_expansion": false,
+    "self_upgrade": false
+  },
+  "decisions": [
+    {
+      "condition": "missing_or_ambiguous_guarded_apply_evidence",
+      "decision_id": "guarded-apply-no-op-fallback",
+      "kind": "no_op",
+      "evidence_field_path": "validator.evidence_quality.missing_required_field_count",
+      "required_provenance": "collector_observed",
+      "freshness_requirement": "same_packet",
+      "missing_evidence_behavior": "neutral",
+      "conflict_behavior": "hold",
+      "action_bound": "no_action",
+      "rationale": "The guarded-apply interpreter must preserve registry state whenever evidence, linkedness, concentration, or rollback checks fail."
+    },
+    {
+      "condition": "single_bounded_admit_with_hash_bound_evidence_and_rollback",
+      "decision_id": "guarded-apply-one-admit",
+      "kind": "registry_delta_candidate",
+      "evidence_field_path": "validator.identity.key_domain_binding.status",
+      "required_provenance": "operator_signed",
+      "freshness_requirement": "recent_30d",
+      "missing_evidence_behavior": "neutral",
+      "conflict_behavior": "hold",
+      "action_bound": "admission_gate",
+      "rationale": "When frozen evidence, concentration caps, trust graph linkedness, Cobalt acceptance, and rollback evidence all pass, the guarded-apply path may admit exactly one validator."
+    }
+  ],
+  "inputs": [
+    {
+      "kind": "validator_evidence_packet",
+      "required": true
+    },
+    {
+      "kind": "validator_registry_snapshot",
+      "required": true
+    },
+    {
+      "kind": "cobalt_evidence_packet",
+      "required": true
+    },
+    {
+      "kind": "operator_manifest_set",
+      "required": true
+    }
+  ],
+  "rollback": {
+    "max_mutations": 1,
+    "operator_confirmation_required": false,
+    "required": true
+  },
+  "ruleset_id": "gate-9_5-guarded-apply-one-admit",
+  "schema": "postfiat-governance-ruleset-v1",
+  "scope": "validator_registry_policy"
+}

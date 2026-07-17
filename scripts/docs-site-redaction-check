@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+if [[ ! -d docs_site ]]; then
+  echo "docs_site/ is missing" >&2
+  exit 1
+fi
+
+tmp_files="$(mktemp)"
+trap 'rm -f "$tmp_files"' EXIT
+
+rg --files docs_site \
+  | rg -v '^docs_site/security/redaction-policy\.md$' \
+  | sort > "$tmp_files"
+
+deny_regex='(BEGIN [A-Z ]*PRIVATE KEY|master_seed_hex|spending_key_hex|full_viewing_key_hex|rseed|testnet-private-key-material|validator-private|private-key-material|mnemonic)'
+
+if [[ -s "$tmp_files" ]] && xargs -r rg -n --pcre2 "$deny_regex" < "$tmp_files"; then
+  echo "docs_site redaction check failed" >&2
+  exit 1
+fi
+
+echo "docs_site redaction check passed"

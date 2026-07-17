@@ -1,0 +1,9 @@
+{
+  "base_fixture": "valid_transition_safety_proof.json",
+  "overrides": {
+    "key_continuity_validators": ["A", "B"]
+  },
+  "expected_error_contains": [
+    "old/new quorum intersection has no guaranteed correct continuity signer"
+  ]
+}

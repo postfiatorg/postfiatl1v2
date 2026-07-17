@@ -1,0 +1,486 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VALIDATORS="${VALIDATORS:-4}"
+ROUNDS="${ROUNDS:-3}"
+BASE_DIR="${BASE_DIR:-reports/testnet-node-run-peer-certified/nodes}"
+LOG_DIR="${LOG_DIR:-reports/testnet-node-run-peer-certified/logs}"
+REPORT="${REPORT:-reports/testnet-node-run-peer-certified/testnet-node-run-peer-certified-$(date -u +%Y%m%dT%H%M%SZ).json}"
+HARNESS_REPORT="${HARNESS_REPORT:-$LOG_DIR/local-harness.json}"
+TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-30}"
+TRANSPORT_TIMEOUT_MS="${TRANSPORT_TIMEOUT_MS:-5000}"
+POLL_MS="${POLL_MS:-50}"
+SEND_RETRIES="${SEND_RETRIES:-1}"
+RETRY_BACKOFF_MS="${RETRY_BACKOFF_MS:-100}"
+TO="${TO:-pfnodepeerloop000000000000000000}"
+AMOUNT="${AMOUNT:-31}"
+
+service_pids=()
+
+cleanup() {
+  for pid in "${service_pids[@]:-}"; do
+    if kill -0 "$pid" >/dev/null 2>&1; then
+      kill "$pid" >/dev/null 2>&1 || true
+    fi
+  done
+}
+trap cleanup EXIT
+
+require_command() {
+  local command="$1"
+  if ! command -v "$command" >/dev/null 2>&1; then
+    echo "missing required command: $command" >&2
+    exit 1
+  fi
+}
+
+require_nonnegative_integer() {
+  local name="$1"
+  local value="$2"
+  if ! [[ "$value" =~ ^[0-9]+$ ]]; then
+    echo "$name must be a nonnegative integer" >&2
+    exit 2
+  fi
+}
+
+require_positive_integer() {
+  local name="$1"
+  local value="$2"
+  if ! [[ "$value" =~ ^[0-9]+$ ]] || [ "$value" -lt 1 ]; then
+    echo "$name must be a positive integer" >&2
+    exit 2
+  fi
+}
+
+wait_for_node_height() {
+  local node_id="$1"
+  local expected="$2"
+  local status_file="$3"
+  local deadline
+  deadline=$(($(date +%s) + TIMEOUT_SECONDS))
+  while [ "$(date +%s)" -le "$deadline" ]; do
+    target/debug/postfiat-node status \
+      --data-dir "$BASE_DIR/$node_id" >"$status_file"
+    if jq -e --argjson expected "$expected" '.block_height == $expected' \
+      "$status_file" >/dev/null; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "$node_id did not reach height $expected before timeout" >&2
+  cat "$status_file" >&2
+  exit 1
+}
+
+wait_for_ready_file() {
+  local label="$1"
+  local ready_file="$2"
+  local deadline
+  deadline=$(($(date +%s) + TIMEOUT_SECONDS))
+  while [ "$(date +%s)" -le "$deadline" ]; do
+    if [ -s "$ready_file" ]; then
+      return 0
+    fi
+    sleep 0.1
+  done
+  echo "$label did not write ready file before timeout: $ready_file" >&2
+  exit 1
+}
+
+require_command jq
+require_command cargo
+require_command timeout
+require_command date
+require_command grep
+
+require_positive_integer VALIDATORS "$VALIDATORS"
+require_positive_integer ROUNDS "$ROUNDS"
+require_positive_integer TIMEOUT_SECONDS "$TIMEOUT_SECONDS"
+require_positive_integer TRANSPORT_TIMEOUT_MS "$TRANSPORT_TIMEOUT_MS"
+require_positive_integer POLL_MS "$POLL_MS"
+require_nonnegative_integer SEND_RETRIES "$SEND_RETRIES"
+require_nonnegative_integer RETRY_BACKOFF_MS "$RETRY_BACKOFF_MS"
+require_positive_integer AMOUNT "$AMOUNT"
+if [ "$VALIDATORS" -lt 2 ]; then
+  echo "VALIDATORS must be at least 2 for node peer-certified smoke" >&2
+  exit 2
+fi
+if [ "$SEND_RETRIES" -gt 16 ]; then
+  echo "SEND_RETRIES must be <= 16" >&2
+  exit 2
+fi
+
+cargo build -p postfiat-node >/dev/null
+rm -rf "$LOG_DIR"
+mkdir -p "$LOG_DIR" "$(dirname "$REPORT")"
+
+VALIDATORS="$VALIDATORS" \
+  BASE_DIR="$BASE_DIR" \
+  LOG_DIR="$LOG_DIR/harness" \
+  REPORT="$HARNESS_REPORT" \
+  scripts/testnet-local-harness >"$LOG_DIR/local-harness.out"
+
+jq -e '.schema == "postfiat-testnet-local-harness-v1" and .harness_ok == true' \
+  "$HARNESS_REPORT" >/dev/null
+
+bundle_dir="$(jq -r '.bundle.path' "$HARNESS_REPORT")"
+topology="$bundle_dir/remote-topology.json"
+private_dir="$BASE_DIR/private-validator-keys"
+route_dir="$LOG_DIR/proposer-routing"
+mkdir -p "$private_dir" "$route_dir"
+chmod 700 "$private_dir"
+
+combined_key_file="$BASE_DIR/validator-0/validator_keys.json"
+combined_source_key_file="$private_dir/combined-validator-keys.source.json"
+cp "$combined_key_file" "$combined_source_key_file"
+chmod 600 "$combined_source_key_file"
+for ((i = 0; i < VALIDATORS; i++)); do
+  node_id="validator-$i"
+  split_key_file="$private_dir/$node_id.validator_keys.json"
+  jq --arg node_id "$node_id" \
+    '{validators: [.validators[] | select(.node_id == $node_id)]}' \
+    "$combined_source_key_file" >"$split_key_file"
+  chmod 600 "$split_key_file"
+  jq -e '.validators | length == 1' "$split_key_file" >/dev/null
+  cp "$split_key_file" "$BASE_DIR/$node_id/validator_keys.json"
+  chmod 600 "$BASE_DIR/$node_id/validator_keys.json"
+done
+
+declare -a target_counts
+route_report_files=()
+source_nodes=()
+for ((round = 1; round <= ROUNDS; round++)); do
+  route_report="$route_dir/height-$round.view-0.json"
+  target/debug/postfiat-node block-proposer \
+    --data-dir "$BASE_DIR/validator-0" \
+    --height "$round" \
+    --view 0 >"$route_report"
+  source_node="$(jq -r '.proposer' "$route_report")"
+  jq -e \
+    --arg source_node "$source_node" \
+    --argjson round "$round" \
+    '.schema == "postfiat-block-proposer-v1"
+      and .block_height == $round
+      and .view == 0
+      and .proposer == $source_node
+      and (.proposer | test("^validator-[0-9]+$"))' \
+    "$route_report" >/dev/null
+  route_report_files+=("$route_report")
+  source_nodes+=("$source_node")
+  for ((i = 0; i < VALIDATORS; i++)); do
+    node_id="validator-$i"
+    if [ "$node_id" != "$source_node" ]; then
+      target_counts[$i]="$(( ${target_counts[$i]:-0} + 1 ))"
+    fi
+  done
+done
+
+service_files=()
+event_logs=()
+ready_files=()
+service_targets_file="$LOG_DIR/validator-service-targets.jsonl"
+: >"$service_targets_file"
+for ((i = 0; i < VALIDATORS; i++)); do
+  node_id="validator-$i"
+  target_rounds="${target_counts[$i]:-0}"
+  if [ "$target_rounds" -eq 0 ]; then
+    continue
+  fi
+  max_connections="$((target_rounds * 2))"
+  service_file="$LOG_DIR/$node_id.validator-serve.json"
+  service_err="$LOG_DIR/$node_id.validator-serve.err"
+  event_log="$LOG_DIR/$node_id.validator-serve.events.jsonl"
+  ready_file="$LOG_DIR/$node_id.validator-serve.ready.json"
+  jq -n \
+    --arg node_id "$node_id" \
+    --arg ready_file "$ready_file" \
+    --argjson target_rounds "$target_rounds" \
+    --argjson max_connections "$max_connections" \
+    '{node_id: $node_id, target_rounds: $target_rounds, max_connections: $max_connections, ready_file: $ready_file}' \
+    >>"$service_targets_file"
+  POSTFIAT_TRANSPORT_VALIDATOR_READY_FILE="$ready_file" \
+    timeout "$TIMEOUT_SECONDS" target/debug/postfiat-node transport-validator-serve --unsafe-devnet-json-storage \
+    --unsafe-devnet-file-signer \
+    --data-dir "$BASE_DIR/$node_id" \
+    --topology "$topology" \
+    --key-file "$BASE_DIR/$node_id/validator_keys.json" \
+    --vote-dir "$LOG_DIR/$node_id-votes" \
+    --max-connections "$max_connections" \
+    --timeout-ms "$TRANSPORT_TIMEOUT_MS" \
+    --require-signed-proposal \
+    --event-log "$event_log" >"$service_file" 2>"$service_err" &
+  service_pids+=("$!")
+  service_files+=("$service_file")
+  event_logs+=("$event_log")
+  ready_files+=("$ready_file")
+done
+
+for ready_file in "${ready_files[@]}"; do
+  wait_for_ready_file "transport-validator-serve" "$ready_file"
+done
+
+loop_report_files=()
+loop_report_paths_file="$LOG_DIR/node-run-peer-certified-loop-report-paths.jsonl"
+: >"$loop_report_paths_file"
+for ((round = 1; round <= ROUNDS; round++)); do
+  source_node="${source_nodes[$((round - 1))]}"
+  source_data_dir="$BASE_DIR/$source_node"
+  batch_dir="$source_data_dir/transparent-batches"
+  artifact_root="$source_data_dir/peer-certified-artifacts"
+  processed_dir="$source_data_dir/processed-batches"
+  loop_report="$LOG_DIR/node-run-peer-certified-loop-round-$round.json"
+  loop_err="$LOG_DIR/node-run-peer-certified-loop-round-$round.err"
+  batch_file="$batch_dir/round-$round.transparent.batch.json"
+  mkdir -p "$batch_dir"
+
+  wait_for_node_height \
+    "$source_node" \
+    "$((round - 1))" \
+    "$LOG_DIR/$source_node-before-node-run-round-$round.status.json"
+
+  target/debug/postfiat-node batch-transfer \
+    --data-dir "$source_data_dir" \
+    --to "$TO" \
+    --amount "$((AMOUNT + round - 1))" \
+    --batch-file "$batch_file" >"$LOG_DIR/batch-transfer-round-$round.json"
+
+  POSTFIAT_NODE_BIN=target/debug/postfiat-node \
+    DATA_DIR="$source_data_dir" \
+    TOPOLOGY="$topology" \
+    MAX_ROUNDS=1 \
+    POLL_MS="$POLL_MS" \
+    TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+    SEND_RETRIES="$SEND_RETRIES" \
+    RETRY_BACKOFF_MS="$RETRY_BACKOFF_MS" \
+    scripts/node-run-peer-certified >"$loop_report" 2>"$loop_err"
+
+  jq -e \
+    --arg source_node "$source_node" \
+    --arg processed_dir "$processed_dir" \
+    --argjson validators "$VALIDATORS" \
+    --argjson round "$round" \
+    '.schema == "postfiat-transport-peer-certified-batch-loop-v1"
+      and .loop_ok == true
+      and .require_local_proposer == true
+      and .require_signed_proposal == true
+      and .allow_peer_failures == false
+      and .processed_round_count == 1
+      and .start_height == $round
+      and .processed_dir == $processed_dir
+      and (.archived_batch_files | length) == 1
+      and (.rounds | length) == 1
+      and .rounds[0].round_ok == true
+      and .rounds[0].from == $source_node
+      and .rounds[0].proposal_proposer == $source_node
+      and .rounds[0].proposal_signed == true
+      and .rounds[0].proposal_signature_signer == $source_node
+      and .rounds[0].require_local_proposer == true
+      and .rounds[0].require_signed_proposal == true
+      and .rounds[0].certification.block_height == $round
+      and .rounds[0].certification.vote_count == $validators
+      and .rounds[0].all_vote_requests_verified == true
+      and .rounds[0].all_sends_verified == true
+      and .rounds[0].local_apply_verified == true' \
+    "$loop_report" >/dev/null
+
+  jq -n --arg path "$loop_report" '{path: $path}' >>"$loop_report_paths_file"
+  loop_report_files+=("$loop_report")
+done
+
+for pid in "${service_pids[@]}"; do
+  wait "$pid"
+done
+service_pids=()
+
+services_bundle="$LOG_DIR/validator-services.json"
+service_targets_bundle="$LOG_DIR/validator-service-targets.json"
+events_bundle="$LOG_DIR/validator-events.json"
+ready_bundle="$LOG_DIR/validator-service-ready.json"
+routes_bundle="$LOG_DIR/proposer-routing.json"
+loops_bundle="$LOG_DIR/node-run-peer-certified-loops.json"
+loop_report_paths_bundle="$LOG_DIR/node-run-peer-certified-loop-report-paths.json"
+jq -s '.' "${service_files[@]}" >"$services_bundle"
+jq -s '.' "$service_targets_file" >"$service_targets_bundle"
+jq -s '.' "${event_logs[@]}" >"$events_bundle"
+jq -s '.' "${ready_files[@]}" >"$ready_bundle"
+jq -s '.' "${route_report_files[@]}" >"$routes_bundle"
+jq -s '.' "${loop_report_files[@]}" >"$loops_bundle"
+jq -s '.' "$loop_report_paths_file" >"$loop_report_paths_bundle"
+
+for ((i = 0; i < VALIDATORS; i++)); do
+  node_id="validator-$i"
+  target_rounds="${target_counts[$i]:-0}"
+  if [ "$target_rounds" -eq 0 ]; then
+    continue
+  fi
+  max_connections="$((target_rounds * 2))"
+  service_file="$LOG_DIR/$node_id.validator-serve.json"
+  ready_file="$LOG_DIR/$node_id.validator-serve.ready.json"
+  jq -e \
+    --arg node_id "$node_id" \
+    --arg vote_dir "$LOG_DIR/$node_id-votes" \
+    --argjson max_connections "$max_connections" \
+    '.schema == "postfiat-transport-validator-serve-ready-v1"
+      and .node_id == $node_id
+      and .vote_dir == $vote_dir
+      and .max_connections == $max_connections
+      and .require_signed_proposal == true
+      and (.shielded_verifier_prewarm.requested | type == "boolean")' \
+    "$ready_file" >/dev/null
+  jq -e \
+    --arg node_id "$node_id" \
+    --argjson max_connections "$max_connections" \
+    --argjson target_rounds "$target_rounds" \
+    '.schema == "postfiat-transport-validator-serve-v1"
+      and .verified == true
+      and .node_id == $node_id
+      and .require_signed_proposal == true
+      and .connection_count == $max_connections
+      and .accepted_block_vote_count == $target_rounds
+      and .accepted_batch_count == $target_rounds
+      and .rejected_count == 0
+      and (.block_vote_responses | length) == $target_rounds
+      and (.batch_acks | length) == $target_rounds
+      and all(.block_vote_responses[]; .verified == true)
+      and all(.batch_acks[]; .applied == true and .certificate_attached == true and .rejected_count == 0)' \
+    "$service_file" >/dev/null
+done
+
+status_files=()
+state_files=()
+for ((i = 0; i < VALIDATORS; i++)); do
+  node_id="validator-$i"
+  status_file="$LOG_DIR/$node_id.status-after-node-peer-certified.json"
+  state_file="$LOG_DIR/$node_id.state-after-node-peer-certified.json"
+  target/debug/postfiat-node status \
+    --data-dir "$BASE_DIR/$node_id" >"$status_file"
+  target/debug/postfiat-node verify-state \
+    --data-dir "$BASE_DIR/$node_id" >"$state_file"
+  jq -e \
+    --argjson rounds "$ROUNDS" \
+    '.status == "running" and .block_height == $rounds and (.block_tip_hash != "genesis")' \
+    "$status_file" >/dev/null
+  jq -e '.schema == "postfiat-state-verification-v1" and .verified == true and .block_log.verified == true' \
+    "$state_file" >/dev/null
+  status_files+=("$status_file")
+  state_files+=("$state_file")
+done
+
+statuses_bundle="$LOG_DIR/statuses-after-node-peer-certified.json"
+states_bundle="$LOG_DIR/states-after-node-peer-certified.json"
+jq -s '.' "${status_files[@]}" >"$statuses_bundle"
+jq -s '.' "${state_files[@]}" >"$states_bundle"
+
+generated_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+jq -n \
+  --arg schema "postfiat-testnet-node-run-peer-certified-smoke-v1" \
+  --arg generated_utc "$generated_utc" \
+  --arg harness_report "$HARNESS_REPORT" \
+  --arg topology "$topology" \
+  --argjson validators "$VALIDATORS" \
+  --argjson rounds "$ROUNDS" \
+  --slurpfile harness "$HARNESS_REPORT" \
+  --slurpfile routing "$routes_bundle" \
+  --slurpfile loop_reports "$loop_report_paths_bundle" \
+  --slurpfile loops "$loops_bundle" \
+  --slurpfile services "$services_bundle" \
+  --slurpfile service_targets "$service_targets_bundle" \
+  --slurpfile events "$events_bundle" \
+  --slurpfile statuses "$statuses_bundle" \
+  --slurpfile states "$states_bundle" \
+  '{
+    schema: $schema,
+    generated_utc: $generated_utc,
+    validators: $validators,
+    rounds: $rounds,
+    harness_report: $harness_report,
+    topology: {
+      path: $topology,
+      topology_id: $harness[0].bundle.topology_id,
+      chain: $harness[0].bundle.chain
+    },
+    source_node: "routed-proposer-set",
+    source_nodes: [$routing[0][].proposer],
+    proposer_routing: $routing[0],
+    loop_reports: [$loop_reports[0][].path],
+    loops: $loops[0],
+    validator_service_targets: $service_targets[0],
+    validator_services: $services[0],
+    validator_events: $events[0],
+    statuses: $statuses[0],
+    states: $states[0],
+    loop_verified: (
+      ($loops[0] | length) == $rounds
+      and all($loops[0][]; .loop_ok == true
+        and .require_local_proposer == true
+        and .require_signed_proposal == true
+        and .allow_peer_failures == false
+        and .processed_round_count == 1
+        and (.rounds | length) == 1
+        and .rounds[0].proposal_signed == true
+        and .rounds[0].proposal_signature_signer == .rounds[0].proposal_proposer
+        and .rounds[0].certification.vote_count == $validators)
+      and ([range(0; $rounds) as $i
+        | ($loops[0][$i].start_height == ($i + 1)
+          and $loops[0][$i].rounds[0].certification.block_height == ($i + 1)
+          and $loops[0][$i].rounds[0].proposal_proposer == $routing[0][$i].proposer)]
+        | all(. == true))
+    ),
+    proposer_rotation_verified: (
+      ([$routing[0][].proposer] | unique | length) > 1
+      and ([range(0; $rounds) as $i
+        | $loops[0][$i].rounds[0].from == $routing[0][$i].proposer]
+        | all(. == true))
+    ),
+    validator_services_verified: all($services[0][];
+      .verified == true
+      and .require_signed_proposal == true
+      and .accepted_block_vote_count > 0
+      and .accepted_block_vote_count == .accepted_batch_count
+      and .rejected_count == 0
+    ),
+    state_verified_all: all($states[0][]; .schema == "postfiat-state-verification-v1" and .verified == true),
+    converged: (
+      ([$statuses[0][].state_root] | unique | length) == 1
+      and ([$statuses[0][].block_height] | unique) == [$rounds]
+      and ([$statuses[0][].block_tip_hash] | unique | length) == 1
+    ),
+    final_block_height: ($statuses[0][0].block_height),
+    final_block_tip_hash: ($statuses[0][0].block_tip_hash),
+    final_state_root: ($statuses[0][0].state_root),
+    private_key_policy: {
+      sources_have_only_local_validator_key: true,
+      peers_sign_with_local_validator_key: true,
+      private_key_material_redacted: true
+    },
+    network_boundary_mode: "node-run-peer-certified-routed-loopback"
+  } | .node_run_peer_certified_ok = (
+    .loop_verified == true
+    and .proposer_rotation_verified == true
+    and .validator_services_verified == true
+    and .state_verified_all == true
+    and .converged == true
+    and .final_block_height == $rounds
+  )' >"$REPORT"
+
+jq -e \
+  --argjson validators "$VALIDATORS" \
+  --argjson rounds "$ROUNDS" \
+  '.schema == "postfiat-testnet-node-run-peer-certified-smoke-v1"
+    and .node_run_peer_certified_ok == true
+    and .validators == $validators
+    and .rounds == $rounds
+    and .final_block_height == $rounds
+    and .loop_verified == true
+    and .proposer_rotation_verified == true
+    and .validator_services_verified == true
+    and .converged == true' \
+  "$REPORT" >/dev/null
+
+if grep -R -E '"private_key_hex"' "$REPORT" "$LOG_DIR" >/dev/null; then
+  echo "node peer-certified smoke leaked private key material" >&2
+  exit 1
+fi
+
+printf 'testnet_node_run_peer_certified_smoke=ok validators=%s rounds=%s sources=%s report=%s final_height=%s\n' \
+  "$VALIDATORS" "$ROUNDS" "$(jq -r '.source_nodes | join(",")' "$REPORT")" "$REPORT" "$ROUNDS"

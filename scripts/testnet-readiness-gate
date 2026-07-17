@@ -1,0 +1,1043 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VALIDATORS="${VALIDATORS:-4}"
+ROUNDS="${ROUNDS:-3}"
+ROOT_DIR="${ROOT_DIR:-reports/testnet-readiness-gate}"
+LOG_DIR="${LOG_DIR:-$ROOT_DIR/logs}"
+NODE_DIR="${NODE_DIR:-$ROOT_DIR/nodes}"
+REPORT="${REPORT:-$ROOT_DIR/testnet-readiness-gate-$(date -u +%Y%m%dT%H%M%SZ).json}"
+TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-20}"
+TRANSPORT_TIMEOUT_MS="${TRANSPORT_TIMEOUT_MS:-10000}"
+PROVISION_PRIVATE_OUT_DIR="${PROVISION_PRIVATE_OUT_DIR:-$ROOT_DIR/private-key-material}"
+WALLET_SIGNER_MODE="${WALLET_SIGNER_MODE:-sdk}"
+
+require_command() {
+  local command="$1"
+  if ! command -v "$command" >/dev/null 2>&1; then
+    echo "missing required command: $command" >&2
+    exit 1
+  fi
+}
+
+require_positive_integer() {
+  local name="$1"
+  local value="$2"
+  if ! [[ "$value" =~ ^[0-9]+$ ]] || [ "$value" -lt 1 ]; then
+    echo "$name must be a positive integer" >&2
+    exit 2
+  fi
+}
+
+write_certificate_metrics() {
+  local scan_dir="$1"
+  local output="$2"
+  local generated_utc="$3"
+  local tmp
+  tmp="$(mktemp)"
+  while IFS= read -r -d '' certificate_file; do
+    local bytes
+    bytes="$(wc -c <"$certificate_file" | tr -d ' ')"
+    jq -c \
+      --arg path "$certificate_file" \
+      --argjson bytes "$bytes" \
+      '(.certificate // {}) as $certificate
+        | ($certificate.votes // []) as $votes
+        | {
+          path: $path,
+          bytes: $bytes,
+          block_height: (.block_height // null),
+          certificate_id: (.certificate_id // ""),
+          registry_root: ($certificate.registry_root // ""),
+          vote_count: ($votes | length),
+          votes_with_registry_root: (
+            $votes | map(select((.registry_root // "") != "")) | length
+          ),
+          votes_with_public_key_hex: (
+            $votes
+            | map(select(has("public_key_hex") and (.public_key_hex // "") != ""))
+            | length
+          )
+        }' "$certificate_file" >>"$tmp"
+  done < <(find "$scan_dir" -type f -name 'block-certificate.json' -print0)
+
+  jq -s \
+    --arg schema "postfiat-testnet-certificate-size-metrics-v1" \
+    --arg generated_utc "$generated_utc" \
+    '{
+      schema: $schema,
+      generated_utc: $generated_utc,
+      artifact_count: length,
+      total_bytes: (map(.bytes) | add // 0),
+      max_bytes: (map(.bytes) | max // 0),
+      vote_count: (map(.vote_count) | add // 0),
+      votes_with_registry_root: (map(.votes_with_registry_root) | add // 0),
+      votes_with_public_key_hex: (map(.votes_with_public_key_hex) | add // 0),
+      registry_root_bound: (
+        length > 0
+        and all(.[]; (.registry_root // "") != "")
+        and all(.[]; .vote_count == .votes_with_registry_root)
+      ),
+      compact_votes: (
+        length > 0
+        and all(.[]; .votes_with_public_key_hex == 0)
+      ),
+      artifacts: .
+    }
+    | .ok = (
+      .artifact_count > 0
+      and .registry_root_bound == true
+      and .compact_votes == true
+    )' "$tmp" >"$output"
+  rm -f "$tmp"
+}
+
+require_command jq
+require_command date
+require_command grep
+require_command awk
+require_command find
+require_command mktemp
+require_command wc
+
+require_positive_integer VALIDATORS "$VALIDATORS"
+require_positive_integer ROUNDS "$ROUNDS"
+require_positive_integer TIMEOUT_SECONDS "$TIMEOUT_SECONDS"
+require_positive_integer TRANSPORT_TIMEOUT_MS "$TRANSPORT_TIMEOUT_MS"
+case "$WALLET_SIGNER_MODE" in
+  node|sdk) ;;
+  *)
+    echo "WALLET_SIGNER_MODE must be node or sdk" >&2
+    exit 2
+    ;;
+esac
+if [ "$VALIDATORS" -lt 2 ]; then
+  echo "VALIDATORS must be at least 2 for testnet readiness gate" >&2
+  exit 2
+fi
+
+rm -rf "$LOG_DIR" "$NODE_DIR"
+mkdir -p "$LOG_DIR" "$NODE_DIR" "$(dirname "$REPORT")"
+
+provision_out="$LOG_DIR/provision.out"
+PROVISION_OUT_DIR="$LOG_DIR/provision-bundles"
+CONFIG_OUT_DIR="$LOG_DIR/config-bundles"
+VALIDATORS="$VALIDATORS" \
+  OUT_DIR="$PROVISION_OUT_DIR" \
+  CONFIG_OUT_DIR="$CONFIG_OUT_DIR" \
+  PRIVATE_OUT_DIR="$PROVISION_PRIVATE_OUT_DIR" \
+  scripts/testnet-provision-bundle >"$provision_out"
+provision_manifest="$(awk -F= '/^manifest=/{print $2}' "$provision_out")"
+if [ -z "$provision_manifest" ] || [ ! -f "$provision_manifest" ]; then
+  echo "testnet readiness provision step did not emit a manifest" >&2
+  cat "$provision_out" >&2
+  exit 1
+fi
+jq -e '.schema == "postfiat-testnet-provision-bundle-v1" and .status == "ready" and .service_defaults.max_connections > 0 and .service_defaults.rpc_child_timeout_ms >= 0 and .service_identity.user == "postfiat" and .service_identity.private_key_mode == "600" and (.systemd_hardening | index("ProtectSystem=strict"))' \
+  "$provision_manifest" >/dev/null
+
+remote_deploy_plan_out="$LOG_DIR/remote-deploy-plan.out"
+REMOTE_DEPLOY_PLAN_OUT_DIR="$LOG_DIR/remote-deploy-plans"
+REMOTE_DEPLOY_CONFIG_OUT_DIR="$LOG_DIR/remote-deploy-config-bundles"
+REMOTE_DEPLOY_PROVISION_OUT_DIR="$LOG_DIR/remote-deploy-provision-bundles"
+REMOTE_DEPLOY_PRIVATE_OUT_DIR="$ROOT_DIR/remote-deploy-private-key-material"
+VALIDATORS="$VALIDATORS" \
+  OUT_DIR="$REMOTE_DEPLOY_PLAN_OUT_DIR" \
+  CONFIG_OUT_DIR="$REMOTE_DEPLOY_CONFIG_OUT_DIR" \
+  PRIVATE_OUT_DIR="$REMOTE_DEPLOY_PRIVATE_OUT_DIR" \
+  PROVISION_OUT_DIR="$REMOTE_DEPLOY_PROVISION_OUT_DIR" \
+  scripts/testnet-remote-deploy-plan >"$remote_deploy_plan_out"
+remote_deploy_plan="$(awk -F= '/^plan=/{print $2}' "$remote_deploy_plan_out")"
+if [ -z "$remote_deploy_plan" ] || [ ! -f "$remote_deploy_plan" ]; then
+  echo "testnet readiness remote deploy plan step did not emit a plan" >&2
+  cat "$remote_deploy_plan_out" >&2
+  exit 1
+fi
+jq -e \
+  --argjson validators "$VALIDATORS" \
+  '.schema == "postfiat-testnet-remote-deploy-plan-v1" and .status == "ready" and .validators == $validators and (.validator_plan | length) == $validators and .private_key_policy.private_keys_in_public_bundle == false and .private_key_policy.private_keys_in_provision_bundle == false' \
+  "$remote_deploy_plan" >/dev/null
+
+local_harness_report="$LOG_DIR/local-harness.json"
+VALIDATORS="$VALIDATORS" \
+  BASE_DIR="$NODE_DIR/local-harness" \
+  LOG_DIR="$LOG_DIR/local-harness-logs" \
+  REPORT="$local_harness_report" \
+  scripts/testnet-local-harness >"$LOG_DIR/local-harness.out"
+jq -e '.schema == "postfiat-testnet-local-harness-v1" and .harness_ok == true' \
+  "$local_harness_report" >/dev/null
+
+observability_report="$LOG_DIR/observability-pack.json"
+VALIDATORS="$VALIDATORS" \
+  BASE_DIR="$NODE_DIR/observability-pack" \
+  LOG_DIR="$LOG_DIR/observability-pack-logs" \
+  REPORT="$observability_report" \
+  scripts/testnet-observability-pack >"$LOG_DIR/observability-pack.out"
+jq -e '.schema == "postfiat-testnet-observability-pack-v1" and .observability_ok == true' \
+  "$observability_report" >/dev/null
+
+rpc_serve_report="$LOG_DIR/rpc-serve-smoke.json"
+VALIDATORS="$VALIDATORS" \
+  BASE_DIR="$NODE_DIR/rpc-serve-smoke" \
+  LOG_DIR="$LOG_DIR/rpc-serve-smoke-logs" \
+  REPORT="$rpc_serve_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  RPC_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-rpc-serve-smoke >"$LOG_DIR/rpc-serve-smoke.out"
+jq -e '.schema == "postfiat-testnet-rpc-serve-smoke-v1" and .rpc_serve_ok == true' \
+  "$rpc_serve_report" >/dev/null
+
+rpc_serve_tamper_report="$LOG_DIR/rpc-serve-tamper.json"
+VALIDATORS="$VALIDATORS" \
+  BASE_DIR="$NODE_DIR/rpc-serve-tamper" \
+  LOG_DIR="$LOG_DIR/rpc-serve-tamper-logs" \
+  REPORT="$rpc_serve_tamper_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  RPC_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-rpc-serve-tamper >"$LOG_DIR/rpc-serve-tamper.out"
+jq -e '.schema == "postfiat-testnet-rpc-serve-tamper-v1" and .tamper_ok == true' \
+  "$rpc_serve_tamper_report" >/dev/null
+
+rpc_serve_matrix_report="$LOG_DIR/rpc-serve-matrix.json"
+VALIDATORS="$VALIDATORS" \
+  BASE_DIR="$NODE_DIR/rpc-serve-matrix" \
+  LOG_DIR="$LOG_DIR/rpc-serve-matrix-logs" \
+  REPORT="$rpc_serve_matrix_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  RPC_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-rpc-serve-matrix >"$LOG_DIR/rpc-serve-matrix.out"
+jq -e '.schema == "postfiat-testnet-rpc-serve-matrix-v1" and .rpc_matrix_ok == true' \
+  "$rpc_serve_matrix_report" >/dev/null
+
+signed_mempool_ingress_report="$LOG_DIR/signed-mempool-ingress.json"
+BASE_DIR="$NODE_DIR/signed-mempool-ingress" \
+  LOG_DIR="$LOG_DIR/signed-mempool-ingress-logs" \
+  REPORT="$signed_mempool_ingress_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  scripts/devnet-signed-mempool-ingress >"$LOG_DIR/signed-mempool-ingress.out"
+jq -e '.schema == "postfiat-devnet-signed-mempool-ingress-v1" and .signed_mempool_ingress_ok == true' \
+  "$signed_mempool_ingress_report" >/dev/null
+
+wallet_minimum_report="$LOG_DIR/wallet-minimum-smoke.json"
+BASE_DIR="$NODE_DIR/wallet-minimum-smoke" \
+  LOG_DIR="$LOG_DIR/wallet-minimum-smoke-logs" \
+  PRIVATE_DIR="$ROOT_DIR/wallet-minimum-private-key-material" \
+  REPORT="$wallet_minimum_report" \
+  scripts/testnet-wallet-minimum-smoke >"$LOG_DIR/wallet-minimum-smoke.out"
+jq -e '.schema == "postfiat-testnet-wallet-minimum-smoke-v1" and .wallet_minimum_ok == true' \
+  "$wallet_minimum_report" >/dev/null
+
+wallet_sign_transfer_report="$LOG_DIR/wallet-sign-transfer-smoke.json"
+SIGNER_MODE="$WALLET_SIGNER_MODE" \
+  BASE_DIR="$NODE_DIR/wallet-sign-transfer-smoke" \
+  LOG_DIR="$LOG_DIR/wallet-sign-transfer-smoke-logs" \
+  PRIVATE_DIR="$ROOT_DIR/wallet-sign-transfer-private-key-material" \
+  REPORT="$wallet_sign_transfer_report" \
+  scripts/testnet-wallet-sign-transfer-smoke >"$LOG_DIR/wallet-sign-transfer-smoke.out"
+jq -e \
+  --arg wallet_signer_mode "$WALLET_SIGNER_MODE" \
+  '.schema == "postfiat-testnet-wallet-sign-transfer-smoke-v1"
+    and .wallet_sign_transfer_ok == true
+    and .signer_mode == $wallet_signer_mode
+    and .checks.signer_mode_ok == true' \
+  "$wallet_sign_transfer_report" >/dev/null
+
+wallet_test_vectors_report="$LOG_DIR/wallet-test-vectors-smoke.json"
+BASE_DIR="$NODE_DIR/wallet-test-vectors-smoke" \
+  LOG_DIR="$LOG_DIR/wallet-test-vectors-smoke-logs" \
+  REPORT="$wallet_test_vectors_report" \
+  scripts/testnet-wallet-test-vectors-smoke >"$LOG_DIR/wallet-test-vectors-smoke.out"
+jq -e '.schema == "postfiat-testnet-wallet-test-vectors-smoke-v1" and .wallet_test_vectors_ok == true' \
+  "$wallet_test_vectors_report" >/dev/null
+
+rpc_write_edge_load_report="$LOG_DIR/rpc-write-edge-load-smoke.json"
+BASE_DIR="$NODE_DIR/rpc-write-edge-load-smoke" \
+  LOG_DIR="$LOG_DIR/rpc-write-edge-load-smoke-logs" \
+  REPORT="$rpc_write_edge_load_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  RPC_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-rpc-write-edge-load-smoke >"$LOG_DIR/rpc-write-edge-load-smoke.out"
+jq -e '.schema == "postfiat-testnet-rpc-write-edge-load-smoke-v1" and .write_edge_load_ok == true' \
+  "$rpc_write_edge_load_report" >/dev/null
+
+rpc_read_alias_report="$LOG_DIR/rpc-read-alias-smoke.json"
+BASE_DIR="$NODE_DIR/rpc-read-alias-smoke" \
+  LOG_DIR="$LOG_DIR/rpc-read-alias-smoke-logs" \
+  REPORT="$rpc_read_alias_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  RPC_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-rpc-read-alias-smoke >"$LOG_DIR/rpc-read-alias-smoke.out"
+jq -e '.schema == "postfiat-testnet-rpc-read-alias-smoke-v1" and .rpc_read_alias_smoke_ok == true' \
+  "$rpc_read_alias_report" >/dev/null
+
+fee_reserve_policy_report="$LOG_DIR/fee-reserve-policy-smoke.json"
+BASE_DIR="$NODE_DIR/fee-reserve-policy-smoke" \
+  LOG_DIR="$LOG_DIR/fee-reserve-policy-smoke-logs" \
+  REPORT="$fee_reserve_policy_report" \
+  scripts/testnet-fee-reserve-policy-smoke >"$LOG_DIR/fee-reserve-policy-smoke.out"
+jq -e '.schema == "postfiat-testnet-fee-reserve-policy-smoke-v1" and .fee_reserve_policy_ok == true' \
+  "$fee_reserve_policy_report" >/dev/null
+
+transfer_fee_quote_report="$LOG_DIR/transfer-fee-quote-smoke.json"
+BASE_DIR="$NODE_DIR/transfer-fee-quote-smoke" \
+  LOG_DIR="$LOG_DIR/transfer-fee-quote-smoke-logs" \
+  REPORT="$transfer_fee_quote_report" \
+  scripts/testnet-transfer-fee-quote-smoke >"$LOG_DIR/transfer-fee-quote-smoke.out"
+jq -e '.schema == "postfiat-testnet-transfer-fee-quote-smoke-v1" and .transfer_fee_quote_ok == true' \
+  "$transfer_fee_quote_report" >/dev/null
+
+history_retention_report="$LOG_DIR/history-retention-smoke.json"
+ROOT_DIR="$NODE_DIR/history-retention-smoke" \
+  LOG_DIR="$LOG_DIR/history-retention-smoke-logs" \
+  REPORT="$history_retention_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  scripts/testnet-history-retention-smoke >"$LOG_DIR/history-retention-smoke.out"
+jq -e \
+  '.schema == "postfiat-testnet-history-retention-smoke-v1"
+    and .history_retention_smoke_ok == true
+    and .archive_window_backfilled == true
+    and .archive_window_sdk_verified == true
+    and .archive_window_source_rpc_ok_count == 2' \
+  "$history_retention_report" >/dev/null
+
+history_role_policy_report="$LOG_DIR/history-role-policy-smoke.json"
+HISTORY_RETENTION_REPORT="$history_retention_report" \
+  REPORT="$history_role_policy_report" \
+  LOG_DIR="$LOG_DIR/history-role-policy-smoke-logs" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  scripts/testnet-history-role-policy-smoke >"$LOG_DIR/history-role-policy-smoke.out"
+jq -e \
+  '.schema == "postfiat-testnet-history-role-policy-smoke-v1"
+    and .history_role_policy_smoke_ok == true
+    and .policy_ok == true
+    and .history_retention_ok == true' \
+  "$history_role_policy_report" >/dev/null
+
+validator_registry_update_report="$LOG_DIR/validator-registry-update-smoke.json"
+VALIDATORS="$VALIDATORS" \
+  BASE_DIR="$NODE_DIR/validator-registry-update-smoke" \
+  LOG_DIR="$LOG_DIR/validator-registry-update-smoke-logs" \
+  REPORT="$validator_registry_update_report" \
+  scripts/testnet-validator-registry-update-smoke >"$LOG_DIR/validator-registry-update-smoke.out"
+jq -e '.schema == "postfiat-testnet-validator-registry-update-smoke-v1"
+  and .validator_registry_update_ok == true
+  and .previous_registry_root_verified == true
+  and .new_registry_root_verified == true
+  and .apply_ok == true
+  and .governance_apply_ok == true
+  and .duplicate_registry_update_rejected == true
+  and .lifecycle_operations_ok == true
+  and .live_contiguous_admission.governance_apply_ok == true
+  and .live_contiguous_admission.live_registry_root_verified == true
+  and .live_key_staging_ok == true
+  and .emergency_key_rotation_ok == true
+  and .emergency_key_rotation.stale_key_stage_rejected == true
+  and .emergency_key_rotation.stale_key_vote_rejected == true
+  and .emergency_key_rotation.replacement_key_vote_ok == true
+  and .live_non_contiguous_suspend.governance_apply_ok == true
+  and .live_non_contiguous_suspend.transfer_apply_ok == true
+  and .live_non_contiguous_suspend.signed_proposal_verified == true
+  and .live_non_contiguous_suspend.split_certificate_verified == true
+  and .live_non_contiguous_suspend.active_validator_list_verified == true
+  and .live_non_contiguous_suspend.latest_block_validator_list_verified == true
+  and .multi_process_post_suspend.loop_verified == true
+  and .multi_process_post_suspend.proposer_rotation_verified == true
+  and .multi_process_post_suspend.signed_proposal_verified == true
+  and .multi_process_post_suspend.certificate_validator_list_verified == true
+  and .multi_process_post_suspend.split_key_services_verified == true
+  and .multi_process_post_suspend.partial_outage_verified == true
+  and .multi_process_post_suspend.partial_outage.skipped == false
+  and .multi_process_post_suspend.partial_outage.recovery_replay_verified == true
+  and .multi_process_post_suspend.partial_outage.recovered_converged == true
+  and .multi_process_post_suspend.f_plus_one_halt_verified == true
+  and .multi_process_post_suspend.f_plus_one_halt.skipped == false
+  and .multi_process_post_suspend.f_plus_one_halt.halt_threshold_verified == true
+  and .multi_process_post_suspend.f_plus_one_halt.command_failed_below_quorum == true
+  and .multi_process_post_suspend.f_plus_one_halt.no_state_advance == true
+  and .multi_process_post_suspend.restart_verified == true
+  and .multi_process_post_suspend.restart.skipped == false
+  and .multi_process_post_suspend.restart.derived_start_height_verified == true
+  and .multi_process_post_suspend.restart.recovered_converged_after_restart == true
+  and .multi_process_post_suspend.rpc_catchup_verified == true
+  and .multi_process_post_suspend.rpc_catchup.skipped == false
+  and .multi_process_post_suspend.rpc_catchup.catchup_verified == true
+  and .multi_process_post_suspend.rpc_catchup.converged_after_catchup == true
+  and .multi_process_post_suspend.failed_leader_verified == true
+  and .multi_process_post_suspend.failed_leader.skipped == false
+  and .multi_process_post_suspend.failed_leader.timeout_certificate_verified == true
+  and .multi_process_post_suspend.failed_leader.view_change_round_verified == true
+  and .multi_process_post_suspend.failed_leader.recovery_replay_verified == true
+  and .multi_process_post_suspend.failed_leader.recovered_converged == true
+  and .multi_process_post_suspend.partition_verified == true
+  and .multi_process_post_suspend.partition.skipped == false
+  and .multi_process_post_suspend.partition.partition_threshold_verified == true
+  and .multi_process_post_suspend.partition.command_failed_below_quorum == true
+  and .multi_process_post_suspend.partition.certificate_not_written == true
+  and .multi_process_post_suspend.partition.no_state_advance == true
+  and .multi_process_post_suspend.stale_vote_verified == true
+  and .multi_process_post_suspend.stale_vote.skipped == false
+  and .multi_process_post_suspend.stale_vote.stale_vote_rejected == true
+  and .multi_process_post_suspend.stale_vote.certificate_not_written == true
+  and .multi_process_post_suspend.stale_vote.no_state_advance == true
+  and .multi_process_post_suspend.state_verified_all == true
+  and .multi_process_post_suspend.converged == true
+  and .early_activation_rejected == true
+  and .stale_root_rejected == true
+  and .tampered_subject_rejected == true
+  and .tamper_rejected == true' \
+  "$validator_registry_update_report" >/dev/null
+
+governance_replay_package_report="$LOG_DIR/governance-replay-package-smoke.json"
+BASE_DIR="$NODE_DIR/governance-replay-package-smoke" \
+  LOG_DIR="$LOG_DIR/governance-replay-package-smoke-logs" \
+  REPORT="$governance_replay_package_report" \
+  scripts/testnet-governance-replay-package-smoke >"$LOG_DIR/governance-replay-package-smoke.out"
+jq -e '.schema == "postfiat-testnet-governance-replay-package-smoke-v1"
+  and .governance_replay_package_ok == true
+  and .previous_registry_root_verified == true
+  and .new_registry_root_verified == true
+  and .governance_batch_verified == true
+  and .governance_batch_contains_update == true
+  and .post_change_certificate_verified == true
+  and .post_change_block_height == 2
+  and .post_change_certificate_registry_root == .new_registry_root
+  and .tampered_replay_rejected == true' \
+  "$governance_replay_package_report" >/dev/null
+
+governance_genesis_bundle_report="$LOG_DIR/governance-genesis-bundle-smoke.json"
+BASE_DIR="$NODE_DIR/governance-genesis-bundle-smoke" \
+  LOG_DIR="$LOG_DIR/governance-genesis-bundle-smoke-logs" \
+  MANIFEST_DIR="$LOG_DIR/governance-genesis-bundle-manifests" \
+  REPORT="$governance_genesis_bundle_report" \
+  BUNDLE_FILE="$LOG_DIR/governance-genesis-bundle.json" \
+  VALIDATORS="$VALIDATORS" \
+  scripts/testnet-governance-genesis-bundle-smoke >"$LOG_DIR/governance-genesis-bundle-smoke.out"
+jq -e \
+  --argjson validators "$VALIDATORS" \
+  '.schema == "postfiat-testnet-governance-genesis-bundle-smoke-v1"
+    and .governance_genesis_bundle_smoke_ok == true
+    and .validators == $validators
+    and .metrics.manifest_count == $validators
+    and .checks.operator_manifests_ok == true
+    and .checks.genesis_bundle_ok == true
+    and .checks.tampered_manifest_rejected == true
+    and .checks.private_material_removed == true
+    and .checks.node_private_keys_removed == true
+    and .checks.public_redaction_ok == true' \
+  "$governance_genesis_bundle_report" >/dev/null
+
+split_certificate_report="$LOG_DIR/split-block-certificate-smoke.json"
+VALIDATORS="$VALIDATORS" \
+  BASE_DIR="$NODE_DIR/split-block-certificate-smoke" \
+  LOG_DIR="$LOG_DIR/split-block-certificate-smoke-logs" \
+  REPORT="$split_certificate_report" \
+  scripts/testnet-split-block-certificate-smoke >"$LOG_DIR/split-block-certificate-smoke.out"
+jq -e '.schema == "postfiat-testnet-split-block-certificate-smoke-v1" and .split_certificate_ok == true' \
+  "$split_certificate_report" >/dev/null
+
+transport_block_vote_report="$LOG_DIR/transport-block-vote-smoke.json"
+VALIDATORS="$VALIDATORS" \
+  BASE_DIR="$NODE_DIR/transport-block-vote-smoke" \
+  LOG_DIR="$LOG_DIR/transport-block-vote-smoke-logs" \
+  REPORT="$transport_block_vote_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  TRANSPORT_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-transport-block-vote-smoke >"$LOG_DIR/transport-block-vote-smoke.out"
+jq -e '.schema == "postfiat-testnet-transport-block-vote-smoke-v1" and .transport_block_vote_ok == true' \
+  "$transport_block_vote_report" >/dev/null
+
+transport_peer_certified_round_report="$LOG_DIR/transport-peer-certified-round-smoke.json"
+VALIDATORS="$VALIDATORS" \
+  BASE_DIR="$NODE_DIR/transport-peer-certified-round-smoke" \
+  LOG_DIR="$LOG_DIR/transport-peer-certified-round-smoke-logs" \
+  REPORT="$transport_peer_certified_round_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  TRANSPORT_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-transport-peer-certified-round-smoke >"$LOG_DIR/transport-peer-certified-round-smoke.out"
+jq -e '.schema == "postfiat-testnet-transport-peer-certified-round-smoke-v1" and .transport_peer_certified_round_ok == true' \
+  "$transport_peer_certified_round_report" >/dev/null
+
+transport_peer_certified_loop_report="$LOG_DIR/transport-peer-certified-batch-loop.json"
+VALIDATORS="$VALIDATORS" \
+  ROUNDS="$ROUNDS" \
+  BASE_DIR="$NODE_DIR/transport-peer-certified-batch-loop" \
+  LOG_DIR="$LOG_DIR/transport-peer-certified-batch-loop-logs" \
+  REPORT="$transport_peer_certified_loop_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  TRANSPORT_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-transport-peer-certified-batch-loop >"$LOG_DIR/transport-peer-certified-batch-loop.out"
+jq -e '.schema == "postfiat-testnet-transport-peer-certified-batch-loop-v1" and .peer_certified_loop_ok == true' \
+  "$transport_peer_certified_loop_report" >/dev/null
+
+transport_peer_certified_loop_idle_report="$LOG_DIR/transport-peer-certified-batch-loop-idle.json"
+VALIDATORS="$VALIDATORS" \
+  BASE_DIR="$NODE_DIR/transport-peer-certified-batch-loop-idle" \
+  LOG_DIR="$LOG_DIR/transport-peer-certified-batch-loop-idle-logs" \
+  REPORT="$transport_peer_certified_loop_idle_report" \
+  TRANSPORT_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-transport-peer-certified-batch-loop-idle-smoke >"$LOG_DIR/transport-peer-certified-batch-loop-idle.out"
+jq -e '.schema == "postfiat-testnet-transport-peer-certified-batch-loop-idle-v1" and .idle_shutdown_ok == true' \
+  "$transport_peer_certified_loop_idle_report" >/dev/null
+
+node_run_peer_certified_report="$LOG_DIR/node-run-peer-certified-smoke.json"
+VALIDATORS="$VALIDATORS" \
+  ROUNDS="$ROUNDS" \
+  BASE_DIR="$NODE_DIR/node-run-peer-certified-smoke" \
+  LOG_DIR="$LOG_DIR/node-run-peer-certified-smoke-logs" \
+  REPORT="$node_run_peer_certified_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  TRANSPORT_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-node-run-peer-certified-smoke >"$LOG_DIR/node-run-peer-certified-smoke.out"
+jq -e \
+  --argjson rounds "$ROUNDS" \
+  '.schema == "postfiat-testnet-node-run-peer-certified-smoke-v1"
+    and .node_run_peer_certified_ok == true
+    and .rounds == $rounds
+    and .final_block_height == $rounds
+    and .proposer_rotation_verified == true' \
+  "$node_run_peer_certified_report" >/dev/null
+
+node_run_peer_certified_restart_report="$LOG_DIR/node-run-peer-certified-restart-smoke.json"
+VALIDATORS="$VALIDATORS" \
+  ROUNDS=2 \
+  BASE_DIR="$NODE_DIR/node-run-peer-certified-restart-smoke" \
+  LOG_DIR="$LOG_DIR/node-run-peer-certified-restart-smoke-logs" \
+  REPORT="$node_run_peer_certified_restart_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  TRANSPORT_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-node-run-peer-certified-restart-smoke >"$LOG_DIR/node-run-peer-certified-restart-smoke.out"
+jq -e \
+  '.schema == "postfiat-testnet-node-run-peer-certified-restart-smoke-v1"
+    and .node_run_peer_certified_restart_ok == true
+    and .rounds == 2
+    and .final_block_height == 2
+    and .derived_start_height_verified == true
+    and .loop_verified == true
+    and .proposer_rotation_verified == true
+    and .service_restart_verified == true
+    and .converged == true' \
+  "$node_run_peer_certified_restart_report" >/dev/null
+
+node_run_peer_certified_partial_outage_report="$LOG_DIR/node-run-peer-certified-partial-outage-smoke.json"
+VALIDATORS="$VALIDATORS" \
+  BASE_DIR="$NODE_DIR/node-run-peer-certified-partial-outage-smoke" \
+  LOG_DIR="$LOG_DIR/node-run-peer-certified-partial-outage-smoke-logs" \
+  REPORT="$node_run_peer_certified_partial_outage_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  TRANSPORT_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-node-run-peer-certified-partial-outage-smoke >"$LOG_DIR/node-run-peer-certified-partial-outage-smoke.out"
+jq -e \
+  '.schema == "postfiat-testnet-node-run-peer-certified-partial-outage-smoke-v1"
+    and .node_run_peer_certified_partial_outage_ok == true
+    and .loop_verified == true
+    and .online_converged == true
+    and .offline_unchanged == true
+    and .recovery_service_verified == true
+    and .recovery_replay_verified == true
+    and .recovered_converged == true
+    and .vote_count >= .quorum
+    and .failed_vote_request_count == 1
+    and .failed_send_count == 1' \
+  "$node_run_peer_certified_partial_outage_report" >/dev/null
+
+rpc_catchup_report="$LOG_DIR/rpc-catchup-smoke.json"
+VALIDATORS="$VALIDATORS" \
+  BASE_DIR="$NODE_DIR/rpc-catchup-smoke" \
+  LOG_DIR="$LOG_DIR/rpc-catchup-smoke-logs" \
+  REPORT="$rpc_catchup_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  RPC_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-rpc-catchup-smoke >"$LOG_DIR/rpc-catchup-smoke.out"
+jq -e \
+  '.schema == "postfiat-testnet-rpc-catchup-smoke-v1"
+    and .rpc_catchup_ok == true
+    and .normal_run_lag_verified == true
+    and .online_converged_before_catchup == true
+    and .lagging_unchanged_before_catchup == true
+    and .catchup_verified == true
+    and .converged_after_catchup == true' \
+  "$rpc_catchup_report" >/dev/null
+
+transport_smoke_report="$LOG_DIR/transport-smoke.json"
+VALIDATORS="$VALIDATORS" \
+  BASE_DIR="$NODE_DIR/transport-smoke" \
+  LOG_DIR="$LOG_DIR/transport-smoke-logs" \
+  REPORT="$transport_smoke_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  TRANSPORT_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-transport-smoke >"$LOG_DIR/transport-smoke.out"
+jq -e '.schema == "postfiat-testnet-transport-smoke-v1" and .transport_ok == true' \
+  "$transport_smoke_report" >/dev/null
+
+transport_tamper_report="$LOG_DIR/transport-tamper.json"
+VALIDATORS="$VALIDATORS" \
+  BASE_DIR="$NODE_DIR/transport-tamper" \
+  LOG_DIR="$LOG_DIR/transport-tamper-logs" \
+  REPORT="$transport_tamper_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  TRANSPORT_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-transport-tamper >"$LOG_DIR/transport-tamper.out"
+jq -e '.schema == "postfiat-testnet-transport-tamper-v1" and .tamper_ok == true' \
+  "$transport_tamper_report" >/dev/null
+
+batch_smoke_report="$LOG_DIR/transport-batch-smoke.json"
+VALIDATORS="$VALIDATORS" \
+  BASE_DIR="$NODE_DIR/transport-batch-smoke" \
+  LOG_DIR="$LOG_DIR/transport-batch-smoke-logs" \
+  REPORT="$batch_smoke_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  TRANSPORT_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-transport-batch-smoke >"$LOG_DIR/transport-batch-smoke.out"
+jq -e '.schema == "postfiat-testnet-transport-batch-smoke-v1" and .transport_batch_ok == true' \
+  "$batch_smoke_report" >/dev/null
+
+certified_batch_smoke_report="$LOG_DIR/transport-certified-batch-smoke.json"
+VALIDATORS="$VALIDATORS" \
+  BASE_DIR="$NODE_DIR/transport-certified-batch-smoke" \
+  LOG_DIR="$LOG_DIR/transport-certified-batch-smoke-logs" \
+  REPORT="$certified_batch_smoke_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  TRANSPORT_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-transport-certified-batch-smoke >"$LOG_DIR/transport-certified-batch-smoke.out"
+jq -e '.schema == "postfiat-testnet-transport-certified-batch-smoke-v1" and .transport_certified_batch_ok == true' \
+  "$certified_batch_smoke_report" >/dev/null
+
+batch_tamper_report="$LOG_DIR/transport-batch-tamper.json"
+VALIDATORS="$VALIDATORS" \
+  BASE_DIR="$NODE_DIR/transport-batch-tamper" \
+  LOG_DIR="$LOG_DIR/transport-batch-tamper-logs" \
+  REPORT="$batch_tamper_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  TRANSPORT_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-transport-batch-tamper >"$LOG_DIR/transport-batch-tamper.out"
+jq -e '.schema == "postfiat-testnet-transport-batch-tamper-v1" and .tamper_ok == true' \
+  "$batch_tamper_report" >/dev/null
+
+certified_batch_tamper_report="$LOG_DIR/transport-certified-batch-tamper.json"
+VALIDATORS="$VALIDATORS" \
+  BASE_DIR="$NODE_DIR/transport-certified-batch-tamper" \
+  LOG_DIR="$LOG_DIR/transport-certified-batch-tamper-logs" \
+  REPORT="$certified_batch_tamper_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  TRANSPORT_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-transport-certified-batch-tamper >"$LOG_DIR/transport-certified-batch-tamper.out"
+jq -e '.schema == "postfiat-testnet-transport-certified-batch-tamper-v1" and .tamper_ok == true' \
+  "$certified_batch_tamper_report" >/dev/null
+
+batch_longrun_report="$LOG_DIR/transport-batch-longrun.json"
+VALIDATORS="$VALIDATORS" \
+  ROUNDS="$ROUNDS" \
+  BASE_DIR="$NODE_DIR/transport-batch-longrun" \
+  LOG_DIR="$LOG_DIR/transport-batch-longrun-logs" \
+  REPORT="$batch_longrun_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  TRANSPORT_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-transport-batch-longrun >"$LOG_DIR/transport-batch-longrun.out"
+jq -e \
+  --argjson rounds "$ROUNDS" \
+  '.schema == "postfiat-testnet-transport-batch-longrun-v1" and .longrun_ok == true and .final_block_height == $rounds' \
+  "$batch_longrun_report" >/dev/null
+
+batch_supervisor_report="$LOG_DIR/transport-batch-supervisor.json"
+VALIDATORS="$VALIDATORS" \
+  ROUNDS="$ROUNDS" \
+  BASE_DIR="$NODE_DIR/transport-batch-supervisor" \
+  LOG_DIR="$LOG_DIR/transport-batch-supervisor-logs" \
+  REPORT="$batch_supervisor_report" \
+  SUPERVISOR_TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  TRANSPORT_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-transport-batch-supervisor >"$LOG_DIR/transport-batch-supervisor.out"
+jq -e \
+  --argjson rounds "$ROUNDS" \
+  '.schema == "postfiat-testnet-transport-batch-supervisor-v1" and .supervisor_ok == true and .event_logs_verified == true and .final_block_height == $rounds' \
+  "$batch_supervisor_report" >/dev/null
+
+certified_batch_supervisor_report="$LOG_DIR/transport-certified-batch-supervisor.json"
+VALIDATORS="$VALIDATORS" \
+  ROUNDS="$ROUNDS" \
+  BASE_DIR="$NODE_DIR/transport-certified-batch-supervisor" \
+  LOG_DIR="$LOG_DIR/transport-certified-batch-supervisor-logs" \
+  REPORT="$certified_batch_supervisor_report" \
+  SUPERVISOR_TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  TRANSPORT_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-transport-certified-batch-supervisor >"$LOG_DIR/transport-certified-batch-supervisor.out"
+jq -e \
+  --argjson rounds "$ROUNDS" \
+  '.schema == "postfiat-testnet-transport-certified-batch-supervisor-v1" and .certified_supervisor_ok == true and .event_logs_verified == true and .final_block_height == $rounds' \
+  "$certified_batch_supervisor_report" >/dev/null
+
+certified_batch_loop_report="$LOG_DIR/transport-certified-batch-loop.json"
+VALIDATORS="$VALIDATORS" \
+  ROUNDS="$ROUNDS" \
+  BASE_DIR="$NODE_DIR/transport-certified-batch-loop" \
+  LOG_DIR="$LOG_DIR/transport-certified-batch-loop-logs" \
+  REPORT="$certified_batch_loop_report" \
+  SUPERVISOR_TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  TRANSPORT_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  scripts/testnet-transport-certified-batch-loop >"$LOG_DIR/transport-certified-batch-loop.out"
+jq -e \
+  --argjson rounds "$ROUNDS" \
+  '.schema == "postfiat-testnet-transport-certified-batch-loop-v1" and .certified_loop_ok == true and .event_logs_verified == true and .final_block_height == $rounds' \
+  "$certified_batch_loop_report" >/dev/null
+
+generated_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+certificate_metrics_report="$LOG_DIR/certificate-size-metrics.json"
+write_certificate_metrics "$LOG_DIR" "$certificate_metrics_report" "$generated_utc"
+jq -e \
+  '.schema == "postfiat-testnet-certificate-size-metrics-v1"
+    and .ok == true
+    and .registry_root_bound == true
+    and .compact_votes == true
+    and .artifact_count > 0
+    and .vote_count == .votes_with_registry_root
+    and .votes_with_public_key_hex == 0' \
+  "$certificate_metrics_report" >/dev/null
+
+jq -n \
+  --arg schema "postfiat-testnet-readiness-gate-v1" \
+  --arg generated_utc "$generated_utc" \
+  --arg provision_manifest "$provision_manifest" \
+  --arg remote_deploy_plan "$remote_deploy_plan" \
+  --arg local_harness_report "$local_harness_report" \
+  --arg observability_report "$observability_report" \
+  --arg rpc_serve_report "$rpc_serve_report" \
+  --arg rpc_serve_tamper_report "$rpc_serve_tamper_report" \
+  --arg rpc_serve_matrix_report "$rpc_serve_matrix_report" \
+  --arg signed_mempool_ingress_report "$signed_mempool_ingress_report" \
+  --arg wallet_minimum_report "$wallet_minimum_report" \
+  --arg wallet_sign_transfer_report "$wallet_sign_transfer_report" \
+  --arg wallet_signer_mode "$WALLET_SIGNER_MODE" \
+  --arg wallet_test_vectors_report "$wallet_test_vectors_report" \
+  --arg rpc_write_edge_load_report "$rpc_write_edge_load_report" \
+  --arg rpc_read_alias_report "$rpc_read_alias_report" \
+  --arg fee_reserve_policy_report "$fee_reserve_policy_report" \
+  --arg transfer_fee_quote_report "$transfer_fee_quote_report" \
+  --arg history_retention_report "$history_retention_report" \
+  --arg history_role_policy_report "$history_role_policy_report" \
+  --arg validator_registry_update_report "$validator_registry_update_report" \
+  --arg governance_replay_package_report "$governance_replay_package_report" \
+  --arg governance_genesis_bundle_report "$governance_genesis_bundle_report" \
+  --arg split_certificate_report "$split_certificate_report" \
+  --arg transport_block_vote_report "$transport_block_vote_report" \
+  --arg transport_peer_certified_round_report "$transport_peer_certified_round_report" \
+  --arg transport_peer_certified_loop_report "$transport_peer_certified_loop_report" \
+  --arg transport_peer_certified_loop_idle_report "$transport_peer_certified_loop_idle_report" \
+  --arg node_run_peer_certified_report "$node_run_peer_certified_report" \
+  --arg node_run_peer_certified_restart_report "$node_run_peer_certified_restart_report" \
+  --arg node_run_peer_certified_partial_outage_report "$node_run_peer_certified_partial_outage_report" \
+  --arg rpc_catchup_report "$rpc_catchup_report" \
+  --arg transport_smoke_report "$transport_smoke_report" \
+  --arg transport_tamper_report "$transport_tamper_report" \
+  --arg batch_smoke_report "$batch_smoke_report" \
+  --arg certified_batch_smoke_report "$certified_batch_smoke_report" \
+  --arg batch_tamper_report "$batch_tamper_report" \
+  --arg certified_batch_tamper_report "$certified_batch_tamper_report" \
+  --arg batch_longrun_report "$batch_longrun_report" \
+  --arg batch_supervisor_report "$batch_supervisor_report" \
+  --arg certified_batch_supervisor_report "$certified_batch_supervisor_report" \
+  --arg certified_batch_loop_report "$certified_batch_loop_report" \
+  --arg certificate_metrics_report "$certificate_metrics_report" \
+  --argjson validators "$VALIDATORS" \
+  --argjson rounds "$ROUNDS" \
+  --slurpfile provision "$provision_manifest" \
+  --slurpfile remote_plan "$remote_deploy_plan" \
+  --slurpfile harness "$local_harness_report" \
+  --slurpfile observability "$observability_report" \
+  --slurpfile rpc_serve "$rpc_serve_report" \
+  --slurpfile rpc_serve_tamper "$rpc_serve_tamper_report" \
+  --slurpfile rpc_serve_matrix "$rpc_serve_matrix_report" \
+  --slurpfile signed_mempool_ingress "$signed_mempool_ingress_report" \
+  --slurpfile wallet_minimum "$wallet_minimum_report" \
+  --slurpfile wallet_sign_transfer "$wallet_sign_transfer_report" \
+  --slurpfile wallet_test_vectors "$wallet_test_vectors_report" \
+  --slurpfile rpc_write_edge_load "$rpc_write_edge_load_report" \
+  --slurpfile rpc_read_alias "$rpc_read_alias_report" \
+  --slurpfile fee_reserve_policy "$fee_reserve_policy_report" \
+  --slurpfile transfer_fee_quote "$transfer_fee_quote_report" \
+  --slurpfile history_retention "$history_retention_report" \
+  --slurpfile history_role_policy "$history_role_policy_report" \
+  --slurpfile validator_registry_update "$validator_registry_update_report" \
+  --slurpfile governance_replay_package "$governance_replay_package_report" \
+  --slurpfile governance_genesis_bundle "$governance_genesis_bundle_report" \
+  --slurpfile split_certificate "$split_certificate_report" \
+  --slurpfile transport_block_vote "$transport_block_vote_report" \
+  --slurpfile transport_peer_certified_round "$transport_peer_certified_round_report" \
+  --slurpfile transport_peer_certified_loop "$transport_peer_certified_loop_report" \
+  --slurpfile transport_peer_certified_loop_idle "$transport_peer_certified_loop_idle_report" \
+  --slurpfile node_run_peer_certified "$node_run_peer_certified_report" \
+  --slurpfile node_run_peer_certified_restart "$node_run_peer_certified_restart_report" \
+  --slurpfile node_run_peer_certified_partial_outage "$node_run_peer_certified_partial_outage_report" \
+  --slurpfile rpc_catchup "$rpc_catchup_report" \
+  --slurpfile transport_smoke "$transport_smoke_report" \
+  --slurpfile transport_tamper "$transport_tamper_report" \
+  --slurpfile batch_smoke "$batch_smoke_report" \
+  --slurpfile certified_batch_smoke "$certified_batch_smoke_report" \
+  --slurpfile batch_tamper "$batch_tamper_report" \
+  --slurpfile certified_batch_tamper "$certified_batch_tamper_report" \
+  --slurpfile batch_longrun "$batch_longrun_report" \
+  --slurpfile batch_supervisor "$batch_supervisor_report" \
+  --slurpfile certified_batch_supervisor "$certified_batch_supervisor_report" \
+  --slurpfile certified_batch_loop "$certified_batch_loop_report" \
+  --slurpfile certificate_metrics "$certificate_metrics_report" \
+  '{
+    schema: $schema,
+    generated_utc: $generated_utc,
+    validators: $validators,
+    rounds: $rounds,
+    wallet_signer_mode: $wallet_signer_mode,
+    reports: {
+      provision_manifest: $provision_manifest,
+      remote_deploy_plan: $remote_deploy_plan,
+      local_harness: $local_harness_report,
+      observability_pack: $observability_report,
+      rpc_serve_smoke: $rpc_serve_report,
+      rpc_serve_tamper: $rpc_serve_tamper_report,
+      rpc_serve_matrix: $rpc_serve_matrix_report,
+      signed_mempool_ingress: $signed_mempool_ingress_report,
+      wallet_minimum_smoke: $wallet_minimum_report,
+      wallet_sign_transfer_smoke: $wallet_sign_transfer_report,
+      wallet_test_vectors_smoke: $wallet_test_vectors_report,
+      rpc_write_edge_load_smoke: $rpc_write_edge_load_report,
+      rpc_read_alias_smoke: $rpc_read_alias_report,
+      fee_reserve_policy_smoke: $fee_reserve_policy_report,
+      transfer_fee_quote_smoke: $transfer_fee_quote_report,
+      history_retention_smoke: $history_retention_report,
+      history_role_policy_smoke: $history_role_policy_report,
+      validator_registry_update_smoke: $validator_registry_update_report,
+      governance_replay_package_smoke: $governance_replay_package_report,
+      governance_genesis_bundle_smoke: $governance_genesis_bundle_report,
+      split_block_certificate_smoke: $split_certificate_report,
+      transport_block_vote_smoke: $transport_block_vote_report,
+      transport_peer_certified_round_smoke: $transport_peer_certified_round_report,
+      transport_peer_certified_batch_loop: $transport_peer_certified_loop_report,
+      transport_peer_certified_batch_loop_idle: $transport_peer_certified_loop_idle_report,
+      node_run_peer_certified_smoke: $node_run_peer_certified_report,
+      node_run_peer_certified_restart_smoke: $node_run_peer_certified_restart_report,
+      node_run_peer_certified_partial_outage_smoke: $node_run_peer_certified_partial_outage_report,
+      rpc_catchup_smoke: $rpc_catchup_report,
+      transport_smoke: $transport_smoke_report,
+      transport_tamper: $transport_tamper_report,
+      transport_batch_smoke: $batch_smoke_report,
+      transport_certified_batch_smoke: $certified_batch_smoke_report,
+      transport_batch_tamper: $batch_tamper_report,
+      transport_certified_batch_tamper: $certified_batch_tamper_report,
+      transport_batch_longrun: $batch_longrun_report,
+      transport_batch_supervisor: $batch_supervisor_report,
+      transport_certified_batch_supervisor: $certified_batch_supervisor_report,
+      transport_certified_batch_loop: $certified_batch_loop_report,
+      certificate_size_metrics: $certificate_metrics_report
+    },
+    provision_ready: ($provision[0].status == "ready"),
+    remote_deploy_plan_ready: ($remote_plan[0].status == "ready" and $remote_plan[0].validators == $validators),
+    local_harness_ok: ($harness[0].harness_ok == true),
+    observability_pack_ok: ($observability[0].observability_ok == true),
+    rpc_serve_ok: ($rpc_serve[0].rpc_serve_ok == true),
+    rpc_serve_tamper_ok: ($rpc_serve_tamper[0].tamper_ok == true),
+    rpc_edge_exhaustion_ok: (
+      $rpc_serve_tamper[0].edge_exhaustion_ok == true
+      and $rpc_serve_tamper[0].oversized_request_wave.all_rejected_before_parse == true
+      and $rpc_serve_tamper[0].valid_after_tamper_ok == true
+    ),
+    rpc_serve_matrix_ok: ($rpc_serve_matrix[0].rpc_matrix_ok == true),
+    signed_mempool_ingress_ok: ($signed_mempool_ingress[0].signed_mempool_ingress_ok == true),
+    wallet_minimum_ok: ($wallet_minimum[0].wallet_minimum_ok == true),
+    wallet_sign_transfer_ok: (
+      $wallet_sign_transfer[0].wallet_sign_transfer_ok == true
+      and $wallet_sign_transfer[0].signer_mode == $wallet_signer_mode
+      and $wallet_sign_transfer[0].checks.signer_mode_ok == true
+    ),
+    wallet_sign_transfer_signer_mode: ($wallet_sign_transfer[0].signer_mode // null),
+    wallet_test_vectors_ok: ($wallet_test_vectors[0].wallet_test_vectors_ok == true),
+    rpc_write_edge_load_ok: ($rpc_write_edge_load[0].write_edge_load_ok == true),
+    rpc_read_alias_ok: ($rpc_read_alias[0].rpc_read_alias_smoke_ok == true),
+    fee_reserve_policy_ok: ($fee_reserve_policy[0].fee_reserve_policy_ok == true),
+    transfer_fee_quote_ok: ($transfer_fee_quote[0].transfer_fee_quote_ok == true),
+    history_retention_ok: (
+      $history_retention[0].history_retention_smoke_ok == true
+      and $history_retention[0].archive_window_backfilled == true
+      and $history_retention[0].archive_window_sdk_verified == true
+      and $history_retention[0].archive_window_source_rpc_ok_count == 2
+    ),
+    history_role_policy_ok: (
+      $history_role_policy[0].history_role_policy_smoke_ok == true
+      and $history_role_policy[0].policy_ok == true
+      and $history_role_policy[0].history_retention_ok == true
+    ),
+    validator_registry_update_ok: (
+      $validator_registry_update[0].validator_registry_update_ok == true
+      and $validator_registry_update[0].previous_registry_root_verified == true
+      and $validator_registry_update[0].new_registry_root_verified == true
+      and $validator_registry_update[0].apply_ok == true
+      and $validator_registry_update[0].governance_apply_ok == true
+      and $validator_registry_update[0].duplicate_registry_update_rejected == true
+      and $validator_registry_update[0].lifecycle_operations_ok == true
+      and $validator_registry_update[0].emergency_key_rotation_ok == true
+      and $validator_registry_update[0].emergency_key_rotation.stale_key_stage_rejected == true
+      and $validator_registry_update[0].emergency_key_rotation.stale_key_vote_rejected == true
+      and $validator_registry_update[0].emergency_key_rotation.replacement_key_vote_ok == true
+      and $validator_registry_update[0].multi_process_post_suspend.f_plus_one_halt_verified == true
+      and $validator_registry_update[0].multi_process_post_suspend.f_plus_one_halt.skipped == false
+      and $validator_registry_update[0].multi_process_post_suspend.f_plus_one_halt.halt_threshold_verified == true
+      and $validator_registry_update[0].multi_process_post_suspend.f_plus_one_halt.command_failed_below_quorum == true
+      and $validator_registry_update[0].multi_process_post_suspend.f_plus_one_halt.no_state_advance == true
+      and $validator_registry_update[0].multi_process_post_suspend.failed_leader_verified == true
+      and $validator_registry_update[0].multi_process_post_suspend.failed_leader.skipped == false
+      and $validator_registry_update[0].multi_process_post_suspend.failed_leader.timeout_certificate_verified == true
+      and $validator_registry_update[0].multi_process_post_suspend.failed_leader.view_change_round_verified == true
+      and $validator_registry_update[0].multi_process_post_suspend.failed_leader.recovery_replay_verified == true
+      and $validator_registry_update[0].multi_process_post_suspend.failed_leader.recovered_converged == true
+      and $validator_registry_update[0].multi_process_post_suspend.partition_verified == true
+      and $validator_registry_update[0].multi_process_post_suspend.partition.skipped == false
+      and $validator_registry_update[0].multi_process_post_suspend.partition.partition_threshold_verified == true
+      and $validator_registry_update[0].multi_process_post_suspend.partition.command_failed_below_quorum == true
+      and $validator_registry_update[0].multi_process_post_suspend.partition.certificate_not_written == true
+      and $validator_registry_update[0].multi_process_post_suspend.partition.no_state_advance == true
+      and $validator_registry_update[0].multi_process_post_suspend.stale_vote_verified == true
+      and $validator_registry_update[0].multi_process_post_suspend.stale_vote.skipped == false
+      and $validator_registry_update[0].multi_process_post_suspend.stale_vote.stale_vote_rejected == true
+      and $validator_registry_update[0].multi_process_post_suspend.stale_vote.certificate_not_written == true
+      and $validator_registry_update[0].multi_process_post_suspend.stale_vote.no_state_advance == true
+      and $validator_registry_update[0].early_activation_rejected == true
+      and $validator_registry_update[0].stale_root_rejected == true
+      and $validator_registry_update[0].tampered_subject_rejected == true
+      and $validator_registry_update[0].tamper_rejected == true
+    ),
+    governance_replay_package_ok: (
+      $governance_replay_package[0].governance_replay_package_ok == true
+      and $governance_replay_package[0].previous_registry_root_verified == true
+      and $governance_replay_package[0].new_registry_root_verified == true
+      and $governance_replay_package[0].governance_batch_verified == true
+      and $governance_replay_package[0].governance_batch_contains_update == true
+      and $governance_replay_package[0].post_change_certificate_verified == true
+      and $governance_replay_package[0].post_change_block_height == 2
+      and $governance_replay_package[0].post_change_certificate_registry_root == $governance_replay_package[0].new_registry_root
+      and $governance_replay_package[0].tampered_replay_rejected == true
+    ),
+    governance_genesis_bundle_ok: (
+      $governance_genesis_bundle[0].governance_genesis_bundle_smoke_ok == true
+      and $governance_genesis_bundle[0].validators == $validators
+      and $governance_genesis_bundle[0].metrics.manifest_count == $validators
+      and $governance_genesis_bundle[0].checks.operator_manifests_ok == true
+      and $governance_genesis_bundle[0].checks.genesis_bundle_ok == true
+      and $governance_genesis_bundle[0].checks.tampered_manifest_rejected == true
+      and $governance_genesis_bundle[0].checks.private_material_removed == true
+      and $governance_genesis_bundle[0].checks.node_private_keys_removed == true
+      and $governance_genesis_bundle[0].checks.public_redaction_ok == true
+    ),
+    split_block_certificate_ok: ($split_certificate[0].split_certificate_ok == true),
+    transport_block_vote_ok: ($transport_block_vote[0].transport_block_vote_ok == true),
+    transport_peer_certified_round_ok: ($transport_peer_certified_round[0].transport_peer_certified_round_ok == true),
+    transport_peer_certified_loop_ok: ($transport_peer_certified_loop[0].peer_certified_loop_ok == true),
+    transport_peer_certified_loop_idle_ok: ($transport_peer_certified_loop_idle[0].idle_shutdown_ok == true),
+    node_run_peer_certified_ok: ($node_run_peer_certified[0].node_run_peer_certified_ok == true),
+    node_run_peer_certified_restart_ok: (
+      $node_run_peer_certified_restart[0].node_run_peer_certified_restart_ok == true
+      and $node_run_peer_certified_restart[0].derived_start_height_verified == true
+      and $node_run_peer_certified_restart[0].service_restart_verified == true
+    ),
+    node_run_peer_certified_partial_outage_ok: ($node_run_peer_certified_partial_outage[0].node_run_peer_certified_partial_outage_ok == true),
+    node_run_peer_certified_partial_outage_recovery_ok: (
+      $node_run_peer_certified_partial_outage[0].recovery_service_verified == true
+      and $node_run_peer_certified_partial_outage[0].recovery_replay_verified == true
+      and $node_run_peer_certified_partial_outage[0].recovered_converged == true
+    ),
+    rpc_catchup_ok: (
+      $rpc_catchup[0].rpc_catchup_ok == true
+      and $rpc_catchup[0].normal_run_lag_verified == true
+      and $rpc_catchup[0].catchup_verified == true
+      and $rpc_catchup[0].converged_after_catchup == true
+    ),
+    transport_smoke_ok: ($transport_smoke[0].transport_ok == true),
+    transport_tamper_ok: ($transport_tamper[0].tamper_ok == true),
+    transport_batch_smoke_ok: ($batch_smoke[0].transport_batch_ok == true),
+    transport_certified_batch_smoke_ok: ($certified_batch_smoke[0].transport_certified_batch_ok == true),
+    transport_batch_tamper_ok: ($batch_tamper[0].tamper_ok == true),
+    transport_certified_batch_tamper_ok: ($certified_batch_tamper[0].tamper_ok == true),
+    transport_batch_longrun_ok: ($batch_longrun[0].longrun_ok == true),
+    transport_batch_supervisor_ok: ($batch_supervisor[0].supervisor_ok == true),
+    transport_certified_batch_supervisor_ok: ($certified_batch_supervisor[0].certified_supervisor_ok == true),
+    transport_certified_batch_loop_ok: ($certified_batch_loop[0].certified_loop_ok == true),
+    certificate_size_metrics_ok: ($certificate_metrics[0].ok == true),
+    certificate_artifact_metrics: $certificate_metrics[0],
+    final_block_height: $certified_batch_loop[0].final_block_height,
+    final_state_root: $certified_batch_loop[0].final_state_root,
+    final_block_tip_hash: $certified_batch_loop[0].final_block_tip_hash,
+    network_boundary_mode: $certified_batch_loop[0].network_boundary_mode,
+    remaining_external_gate: "separated network namespace, local VM, or remote-machine execution"
+  } | .readiness_ok = (
+    .provision_ready == true
+    and .remote_deploy_plan_ready == true
+    and .local_harness_ok == true
+    and .observability_pack_ok == true
+    and .rpc_serve_ok == true
+    and .rpc_serve_tamper_ok == true
+    and .rpc_edge_exhaustion_ok == true
+    and .rpc_serve_matrix_ok == true
+    and .signed_mempool_ingress_ok == true
+    and .wallet_minimum_ok == true
+    and .wallet_sign_transfer_ok == true
+    and .wallet_test_vectors_ok == true
+    and .rpc_write_edge_load_ok == true
+    and .rpc_read_alias_ok == true
+    and .fee_reserve_policy_ok == true
+    and .transfer_fee_quote_ok == true
+    and .history_retention_ok == true
+    and .history_role_policy_ok == true
+    and .validator_registry_update_ok == true
+    and .governance_replay_package_ok == true
+    and .governance_genesis_bundle_ok == true
+    and .split_block_certificate_ok == true
+    and .transport_block_vote_ok == true
+    and .transport_peer_certified_round_ok == true
+    and .transport_peer_certified_loop_ok == true
+    and .transport_peer_certified_loop_idle_ok == true
+    and .node_run_peer_certified_ok == true
+    and .node_run_peer_certified_restart_ok == true
+    and .node_run_peer_certified_partial_outage_ok == true
+    and .node_run_peer_certified_partial_outage_recovery_ok == true
+    and .rpc_catchup_ok == true
+    and .transport_smoke_ok == true
+    and .transport_tamper_ok == true
+    and .transport_batch_smoke_ok == true
+    and .transport_certified_batch_smoke_ok == true
+    and .transport_batch_tamper_ok == true
+    and .transport_certified_batch_tamper_ok == true
+    and .transport_batch_longrun_ok == true
+    and .transport_batch_supervisor_ok == true
+    and .transport_certified_batch_supervisor_ok == true
+    and .transport_certified_batch_loop_ok == true
+    and .certificate_size_metrics_ok == true
+    and .final_block_height == $rounds
+  )' >"$REPORT"
+
+jq -e \
+  --arg wallet_signer_mode "$WALLET_SIGNER_MODE" \
+  --argjson validators "$VALIDATORS" \
+  --argjson rounds "$ROUNDS" \
+  '.schema == "postfiat-testnet-readiness-gate-v1"
+    and .readiness_ok == true
+    and .validators == $validators
+    and .rounds == $rounds
+    and .wallet_signer_mode == $wallet_signer_mode
+    and .final_block_height == $rounds
+    and .wallet_minimum_ok == true
+    and .wallet_sign_transfer_ok == true
+    and .wallet_test_vectors_ok == true
+    and .rpc_edge_exhaustion_ok == true
+    and .history_retention_ok == true
+    and .history_role_policy_ok == true
+    and .certificate_size_metrics_ok == true
+    and .certificate_artifact_metrics.registry_root_bound == true
+    and .certificate_artifact_metrics.compact_votes == true
+    and .governance_replay_package_ok == true
+    and .governance_genesis_bundle_ok == true
+    and .certificate_artifact_metrics.votes_with_public_key_hex == 0' \
+  "$REPORT" >/dev/null
+
+if grep -R -E '"private_key_hex"' "$REPORT" "$LOG_DIR" >/dev/null; then
+  echo "testnet readiness gate leaked private key material" >&2
+  exit 1
+fi
+
+printf 'testnet_readiness_gate=ok validators=%s rounds=%s report=%s final_height=%s\n' \
+  "$VALIDATORS" "$ROUNDS" "$REPORT" "$ROUNDS"

@@ -1,0 +1,11 @@
+{
+  "base_fixture": "valid_transition_safety_proof.json",
+  "overrides": {
+    "profile": {
+      "max_cover": 1
+    }
+  },
+  "expected_error_contains": [
+    "cover exceeds max_cover"
+  ]
+}

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+scripts/gov-inference-gate-9_5 >/dev/null
+scripts/gov-inference-gate-10_1 >/dev/null
+scripts/gov-inference-gate-10_5 >/dev/null
+scripts/gov-inference-gate-14

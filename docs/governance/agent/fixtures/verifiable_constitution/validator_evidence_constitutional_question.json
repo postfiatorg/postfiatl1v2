@@ -1,0 +1,171 @@
+{
+  "schema": "postfiat-constitutional-question-v1",
+  "question_id": "vc-validator-evidence-unl-selection-001",
+  "question_version": 1,
+  "status": "active",
+  "scope": "validator_governance",
+  "created_at": "2026-05-25T00:00:00Z",
+  "situation": {
+    "summary": "Decide what evidence-request lane should govern AI-assisted UNL selection fields and deterministic selector constraints.",
+    "problem_statement": "PostFiat needs a replayable validator-governance question that lets Qwen propose the evidence request for UNL selection without allowing invented fields, private reputation, hidden browsing, field-weight edits, selector self-upgrades, live validator-registry mutation, or Cobalt submission.",
+    "decision_boundary": "This question may preserve the current validator-evidence contract, ask Qwen to author an evidence request over the existing field registry and selector constraints, require a future field-registry revision before UNL selection, or hold/no-op. It may not admit, suspend, remove, score, or reorder any live validator.",
+    "out_of_scope": [
+      "mainnet mutation",
+      "live validator-registry mutation",
+      "live UNL publication",
+      "live Cobalt amendment submission",
+      "field-weight activation",
+      "sidecar activation",
+      "commit-reveal activation",
+      "authority transfer"
+    ]
+  },
+  "status_quo": {
+    "current_position": "The current validator-governance baseline has a typed validator-evidence packet schema, a reviewed field registry, field-weight policy sidecar, ruleset binding, open-question disposition, and Qwen/Cobalt internal validation plan. UNL selection must cite registered public or redaction-safe fields, preserve closed provenance/freshness/missing/conflict/action semantics, keep URL/domain proof optional for controlled testnet unless a later governed lane requires it, and route any selector or registry effect through deterministic conformance and Cobalt or release gates.",
+    "implementation_refs": [
+      {
+        "ref_id": "constitutional-question-schema",
+        "path": "docs/governance/agent/constitutional_question_schema.json",
+        "sha3_384": "47c2b2f27bdc745615f4d0d893333c12825b8b935358efbf4f53bdb9ad7b72e03d46d5264812d2cd9066d3c11813bd7f"
+      },
+      {
+        "ref_id": "validator-evidence-packet-schema",
+        "path": "docs_site/governance/validator-evidence-packet-schema.md",
+        "sha3_384": "9c4b061bf020f265bdaf6720cdba0591464c8f7888ec4f30e5a745cd850ecf8036ad4cd491c3a73a56b228ef28c86d62"
+      },
+      {
+        "ref_id": "validator-evidence-ruleset-binding",
+        "path": "docs_site/governance/validator-evidence-ruleset-binding.md",
+        "sha3_384": "d974f966ffb64db356386c89b19b30ae1609a969fc79b6ad917024a9d48563c71a0c5fd9de20cb0cd8f8fb9f0c7e1525"
+      }
+    ],
+    "evidence_refs": [
+      {
+        "ref_id": "validator-evidence-field-registry",
+        "path": "docs/governance/validator-evidence-field-registry.md",
+        "sha3_384": "1ca6a1db89d6d34da5e9be908e984f76df567f6acb6d6c4c2b1fb2369a7244a06565dfed471d4ba8b10c5ec8ec0ac3a6"
+      },
+      {
+        "ref_id": "validator-evidence-field-weight-policy",
+        "path": "docs_site/governance/validator-evidence-field-weight-policy.md",
+        "sha3_384": "11223ce153fb50dd0ebf4564de0ae4793c372cbaffc759b43962649f88ffac6307c39077a5c01fe3772fc4760505de71"
+      },
+      {
+        "ref_id": "validator-evidence-open-question-disposition",
+        "path": "docs_site/governance/validator-evidence-open-question-disposition.md",
+        "sha3_384": "cbf1028ea35d94234a1e0ce3a7a74f2d8579d3381abfacd437c112cef913b8351984097290db1e53c33076337746991a"
+      },
+      {
+        "ref_id": "qwen-cobalt-internal-validation-plan",
+        "path": "docs_site/governance/qwen-cobalt-internal-validation-plan.md",
+        "sha3_384": "3ef666d69c3ad28e999b8051749aac63296100ffcf9c528ae7d5c19deb0ad44a50f7e17ed4396596305ed10334147bb5"
+      },
+      {
+        "ref_id": "validator-evidence-packet-json-schema",
+        "path": "docs/governance/agent/validator_evidence_packet_schema.json",
+        "sha3_384": "cb89491cfd5629f4f0b953f019883505185e94c345fe408826e46b0e93c5b2341e55763c8cb1a2412adef0bb9cda1a1c"
+      },
+      {
+        "ref_id": "validator-evidence-field-weight-policy-schema",
+        "path": "docs/governance/agent/validator_evidence_field_weight_policy_schema.json",
+        "sha3_384": "f1b2999da8dedd925689bd69dfa14527463aaa46f31afbc7120d2140fa19662dffd8017257c75037865da54fc0a09c85"
+      }
+    ]
+  },
+  "option_order": [
+    "preserve-current-validator-evidence-contract",
+    "author-qwen-evidence-request-over-registered-fields",
+    "require-field-registry-revision-first",
+    "hold-no-op"
+  ],
+  "options": {
+    "preserve-current-validator-evidence-contract": {
+      "option_id": "preserve-current-validator-evidence-contract",
+      "title": "Preserve current validator evidence contract",
+      "kind": "preserve_status_quo",
+      "description": "Keep the current field registry, packet schema, field-weight sidecar boundary, and ruleset evidence-binding rules unchanged until a replayed evidence request is accepted.",
+      "implementation_effect": "no_code_change",
+      "requires_new_evidence": false
+    },
+    "author-qwen-evidence-request-over-registered-fields": {
+      "option_id": "author-qwen-evidence-request-over-registered-fields",
+      "title": "Ask Qwen to author the UNL evidence request",
+      "kind": "adopt_change",
+      "description": "Generate a replayable ConstitutionalEvidenceRequest that names which registered validator, packet, cohort, evidence-quality, and selector-constraint fields should decide AI-assisted UNL selection.",
+      "implementation_effect": "test_or_gate_change",
+      "requires_new_evidence": true
+    },
+    "require-field-registry-revision-first": {
+      "option_id": "require-field-registry-revision-first",
+      "title": "Require field-registry revision first",
+      "kind": "adopt_change",
+      "description": "Open a separate governed field-registry revision before any Qwen-authored UNL evidence request can be accepted.",
+      "implementation_effect": "future_authorization_required",
+      "requires_new_evidence": true
+    },
+    "hold-no-op": {
+      "option_id": "hold-no-op",
+      "title": "Hold and no-op",
+      "kind": "defer_no_op",
+      "description": "Take no validator-governance action because the evidence request, selector constraints, or challenge path are missing, ambiguous, or not replayed.",
+      "implementation_effect": "no_code_change",
+      "requires_new_evidence": true
+    }
+  },
+  "hard_constraints": [
+    "json_only",
+    "closed_option_set",
+    "cite_status_quo_refs",
+    "cite_evidence_refs_only",
+    "no_hidden_evidence",
+    "no_secret_material",
+    "no_live_mutation",
+    "no_authority_transfer",
+    "prefer_no_op_when_uncertain",
+    "challenge_path_required",
+    "conformance_packet_required"
+  ],
+  "forbidden_outputs": [
+    "live_registry_mutation",
+    "live_cobalt_amendment_submission",
+    "authority_transfer",
+    "hidden_evidence",
+    "secret_dependency",
+    "unregistered_reputation_claim",
+    "scope_expansion",
+    "model_self_upgrade",
+    "selector_self_upgrade",
+    "prompt_self_upgrade",
+    "prose_only_output",
+    "option_outside_closed_set"
+  ],
+  "fallback": {
+    "decision": "no_op",
+    "trigger_conditions": [
+      "missing_evidence",
+      "ambiguous_evidence",
+      "schema_invalid",
+      "replay_drift",
+      "hidden_evidence_attempt",
+      "scope_expansion_attempt",
+      "unsafe_live_action_attempt"
+    ]
+  },
+  "prompt_contract": {
+    "qwen_may_propose_evidence_request": true,
+    "qwen_may_add_options": false,
+    "qwen_may_change_constraints": false,
+    "qwen_may_authorize_live_action": false,
+    "output_json_only": true,
+    "decision_must_select_option_id": true
+  },
+  "checks": {
+    "status_quo_present": true,
+    "option_set_closed": true,
+    "hard_constraints_present": true,
+    "forbidden_outputs_present": true,
+    "no_op_fallback_present": true,
+    "live_mutation_authorized": false,
+    "authority_transfer": false
+  }
+}

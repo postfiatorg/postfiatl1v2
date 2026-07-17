@@ -1,0 +1,388 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-validator-evidence-qwen-replay-authorization-v1.json",
+  "title": "PostFiat Validator Evidence Qwen Replay Authorization",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "authorization_id",
+    "mode",
+    "qwen_replay_preflight_hash",
+    "qwen_prompt_redaction_audit_hash",
+    "qwen_prompt_input_manifest_hash",
+    "qwen_public_summary_projection_hash",
+    "model_request_hash",
+    "packet_schema_hash",
+    "field_registry_hash",
+    "collection_window",
+    "authorization_scope",
+    "provider_budget",
+    "operator_gate_requirements",
+    "execution_boundary",
+    "failure_policy",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-evidence-qwen-replay-authorization-v1"
+    },
+    "authorization_id": {
+      "$ref": "#/$defs/id"
+    },
+    "mode": {
+      "const": "design_fixture_only"
+    },
+    "qwen_replay_preflight_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_prompt_redaction_audit_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_prompt_input_manifest_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_public_summary_projection_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "model_request_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "packet_schema_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "field_registry_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "collection_window": {
+      "$ref": "#/$defs/collection_window"
+    },
+    "authorization_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorization_status",
+        "execution_authorized",
+        "provider_spend_authorized",
+        "provider_resource_creation_authorized",
+        "live_model_request_authorized",
+        "model_output_generation_authorized",
+        "authorized_replay_count",
+        "future_planned_replay_count",
+        "explicit_operator_authorization_required",
+        "future_authorization_packet_required"
+      ],
+      "properties": {
+        "authorization_status": {
+          "const": "not_authorized"
+        },
+        "execution_authorized": {
+          "const": false
+        },
+        "provider_spend_authorized": {
+          "const": false
+        },
+        "provider_resource_creation_authorized": {
+          "const": false
+        },
+        "live_model_request_authorized": {
+          "const": false
+        },
+        "model_output_generation_authorized": {
+          "const": false
+        },
+        "authorized_replay_count": {
+          "const": 0
+        },
+        "future_planned_replay_count": {
+          "type": "integer",
+          "minimum": 50
+        },
+        "explicit_operator_authorization_required": {
+          "const": true
+        },
+        "future_authorization_packet_required": {
+          "const": true
+        }
+      }
+    },
+    "provider_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "currency",
+        "authorized_amount",
+        "provider_inventory_required",
+        "provider_cleanup_required",
+        "paid_resource_retention_allowed"
+      ],
+      "properties": {
+        "currency": {
+          "const": "USD"
+        },
+        "authorized_amount": {
+          "const": 0
+        },
+        "provider_inventory_required": {
+          "const": true
+        },
+        "provider_cleanup_required": {
+          "const": true
+        },
+        "paid_resource_retention_allowed": {
+          "const": false
+        }
+      }
+    },
+    "operator_gate_requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preflight_required",
+        "redaction_audit_required",
+        "provider_inventory_required",
+        "provider_cleanup_required",
+        "retained_artifact_redaction_scan_required",
+        "operator_pack_update_required",
+        "release_decision_required"
+      ],
+      "properties": {
+        "preflight_required": {
+          "const": true
+        },
+        "redaction_audit_required": {
+          "const": true
+        },
+        "provider_inventory_required": {
+          "const": true
+        },
+        "provider_cleanup_required": {
+          "const": true
+        },
+        "retained_artifact_redaction_scan_required": {
+          "const": true
+        },
+        "operator_pack_update_required": {
+          "const": true
+        },
+        "release_decision_required": {
+          "const": true
+        }
+      }
+    },
+    "execution_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_spend_executed",
+        "provider_resource_created",
+        "provider_resource_destroyed",
+        "live_model_request_executed",
+        "model_output_generated",
+        "live_network_access",
+        "live_registry_mutation",
+        "authority_transfer"
+      ],
+      "properties": {
+        "provider_spend_executed": {
+          "const": false
+        },
+        "provider_resource_created": {
+          "const": false
+        },
+        "provider_resource_destroyed": {
+          "const": false
+        },
+        "live_model_request_executed": {
+          "const": false
+        },
+        "model_output_generated": {
+          "const": false
+        },
+        "live_network_access": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    },
+    "failure_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorization_missing",
+        "authorization_not_explicit",
+        "lineage_drift",
+        "provider_inventory_missing",
+        "provider_cleanup_missing",
+        "output_schema_invalid",
+        "fallback_decision"
+      ],
+      "properties": {
+        "authorization_missing": {
+          "const": "reject_future_replay"
+        },
+        "authorization_not_explicit": {
+          "const": "reject_future_replay"
+        },
+        "lineage_drift": {
+          "const": "reject_future_replay"
+        },
+        "provider_inventory_missing": {
+          "const": "reject_future_replay"
+        },
+        "provider_cleanup_missing": {
+          "const": "reject_future_replay"
+        },
+        "output_schema_invalid": {
+          "const": "reject_future_replay"
+        },
+        "fallback_decision": {
+          "const": "no_op"
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "qwen_replay_preflight_hash_bound",
+        "qwen_prompt_redaction_audit_hash_bound",
+        "qwen_prompt_input_manifest_hash_bound",
+        "qwen_public_summary_projection_hash_bound",
+        "model_request_hash_bound",
+        "packet_schema_hash_bound",
+        "field_registry_hash_bound",
+        "collection_window_bound",
+        "explicit_operator_authorization_required",
+        "future_authorization_packet_required",
+        "operator_gate_requirements_bound",
+        "execution_authorized",
+        "provider_spend_authorized",
+        "provider_resource_creation_authorized",
+        "live_model_request_authorized",
+        "model_output_generation_authorized",
+        "provider_spend_executed",
+        "provider_resource_created",
+        "live_model_request_executed",
+        "model_output_generated",
+        "live_network_access",
+        "live_registry_mutation",
+        "authority_transfer"
+      ],
+      "properties": {
+        "qwen_replay_preflight_hash_bound": {
+          "const": true
+        },
+        "qwen_prompt_redaction_audit_hash_bound": {
+          "const": true
+        },
+        "qwen_prompt_input_manifest_hash_bound": {
+          "const": true
+        },
+        "qwen_public_summary_projection_hash_bound": {
+          "const": true
+        },
+        "model_request_hash_bound": {
+          "const": true
+        },
+        "packet_schema_hash_bound": {
+          "const": true
+        },
+        "field_registry_hash_bound": {
+          "const": true
+        },
+        "collection_window_bound": {
+          "const": true
+        },
+        "explicit_operator_authorization_required": {
+          "const": true
+        },
+        "future_authorization_packet_required": {
+          "const": true
+        },
+        "operator_gate_requirements_bound": {
+          "const": true
+        },
+        "execution_authorized": {
+          "const": false
+        },
+        "provider_spend_authorized": {
+          "const": false
+        },
+        "provider_resource_creation_authorized": {
+          "const": false
+        },
+        "live_model_request_authorized": {
+          "const": false
+        },
+        "model_output_generation_authorized": {
+          "const": false
+        },
+        "provider_spend_executed": {
+          "const": false
+        },
+        "provider_resource_created": {
+          "const": false
+        },
+        "live_model_request_executed": {
+          "const": false
+        },
+        "model_output_generated": {
+          "const": false
+        },
+        "live_network_access": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "collection_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_height",
+        "to_height",
+        "from_time",
+        "to_time"
+      ],
+      "properties": {
+        "from_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "from_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to_time": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    }
+  }
+}

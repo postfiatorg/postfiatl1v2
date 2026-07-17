@@ -1,0 +1,125 @@
+{
+  "schema": "postfiat-protocol-architecture-replay-disposition-packet-v1",
+  "disposition_id": "vc-protocol-architecture-001-replay-disposition-001",
+  "disposition_version": 1,
+  "status": "accepted",
+  "created_at": "2026-05-25T00:00:00Z",
+  "source_replay_ref": {
+    "report_path": "reports/verifiable-constitution/vc-048-protocol-architecture-live-replay-execution-report.json",
+    "report_file_sha3_384": "927622fee46018cdce17f1e4b59d66dc4f44d87c28a5c08b5c8d720a459c0344a171f962a2567ed8750ddc60eef61aff",
+    "report_canonical_hash": "ff8cff7189d556ef6dd7155338293433cf08616eea8ec7b4b2f08165b63b96b74896308ac0f7398781a6731883bda502",
+    "report_schema": "postfiat-verifiable-constitution-vc-048-report-v1",
+    "outcome": "challenge_opened",
+    "parsed_outputs_converged": true,
+    "all_parsed_schema_valid": true,
+    "unique_top_logprob_root_count": 1,
+    "provider_cleanup_verified": true
+  },
+  "target_decision_ref": {
+    "decision_id": "vc-protocol-architecture-001-decision-001",
+    "decision_path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_constitutional_decision_packet.json",
+    "decision_file_sha3_384": "bdc071b5fd154b5036a50eb8818917ded6eef1b18ebe830ca3163c5c98da153b291eac7f10d874b0adb4997037bc7bed",
+    "decision_canonical_hash": "24333d8ba08daa332e078586b4b5de0bf9720d176f758d852465ac1ae6b86a20a766ff06b86b445d29a5caf7149440ab",
+    "selected_option": "preserve-rust-l1"
+  },
+  "live_decision_refs": [
+    {
+      "machine_id": "vast-h100-nvl-37711146",
+      "hardware_class": "H100 NVL",
+      "decision_path": "reports/verifiable-constitution/protocol-architecture-live-replay/model_output_vast-h100-nvl-37711146-01.json",
+      "decision_file_sha3_384": "7b7b29269a45ce8fc9e0394de33fe7612611be182fbe8950a2131d7fcbf85f9291707d964999fb2230a4f5b7b4ad0f8e",
+      "decision_canonical_hash": "36bb5c03f73701ae71811a7b86b3228f0f23a640b802b7562fd054fc7b4b5e21bb875e1b27d2756cf16e6c8668e0c9b3",
+      "selected_option": "preserve-rust-l1",
+      "top_logprob_root": "101dff18a4354fd29ae851c1efd595aaaa69d6961e54482b47abceaae1b3499a5d25116822dec3343024b3054a2a7529"
+    },
+    {
+      "machine_id": "vast-h200-37711150",
+      "hardware_class": "H200 141GB",
+      "decision_path": "reports/verifiable-constitution/protocol-architecture-live-replay/model_output_vast-h200-37711150-01.json",
+      "decision_file_sha3_384": "7b7b29269a45ce8fc9e0394de33fe7612611be182fbe8950a2131d7fcbf85f9291707d964999fb2230a4f5b7b4ad0f8e",
+      "decision_canonical_hash": "36bb5c03f73701ae71811a7b86b3228f0f23a640b802b7562fd054fc7b4b5e21bb875e1b27d2756cf16e6c8668e0c9b3",
+      "selected_option": "preserve-rust-l1",
+      "top_logprob_root": "101dff18a4354fd29ae851c1efd595aaaa69d6961e54482b47abceaae1b3499a5d25116822dec3343024b3054a2a7529"
+    }
+  ],
+  "challenge_ref": {
+    "challenge_path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_live_replay_challenge_packet.json",
+    "challenge_file_sha3_384": "9a2f95259d1d641c34d88b4e01c464278f6ec9fdff4cbe7fb36bf446ad5c2e90fa9bfbdeaea7d0da67d18368f924b541",
+    "challenge_canonical_hash": "4742cd20fe01f79d1c218a77536260b7e693a95c57cf456c4cc2cd9a4d0ea55fcc7854ff79b576c8293dd03e9a552348",
+    "challenge_status": "candidate",
+    "challenge_disposition": "hold"
+  },
+  "classification": "request_additional_replay_before_conformance",
+  "selected_disposition": {
+    "selected": "request_additional_replay_before_conformance",
+    "challenge_route": "hold",
+    "conformance_allowed_now": false,
+    "live_effect": false,
+    "rationale": "VC-048 produced a useful live result: H100 and H200 emitted the same schema-valid replayed decision, selected preserve-rust-l1, and matched on top-logprob root. However, the live parsed decision hash did not reproduce the prior VC-045 fixture hash and the VC-048 chat-completions lane did not claim full-vocabulary roots. The safe disposition is to hold the challenge open and require either a full-vocabulary replay or an explicit sufficiency gate before any conformance mapping."
+  },
+  "decision_matrix": {
+    "accept_target_reproduction": {
+      "allowed_now": false,
+      "reason": "VC-048 outcome is challenge_opened because the live parsed decision hash does not equal the VC-045 target decision hash."
+    },
+    "hold_on_challenge": {
+      "allowed_now": true,
+      "reason": "A challenge packet exists and must remain open until the replay mismatch is resolved or superseded."
+    },
+    "supersede_with_replayed_decision_packet": {
+      "allowed_now": false,
+      "reason": "The live outputs converged and are schema-valid, but a superseding replayed decision packet should be created as a separate governed artifact after the disposition gate."
+    },
+    "request_additional_replay_before_conformance": {
+      "allowed_now": true,
+      "reason": "The chat-completions lane captured parsed output and top-logprob roots, but not a full-vocabulary root. Any conformance mapping should wait for full-vocabulary replay or a governed sufficiency decision."
+    }
+  },
+  "next_required_packets": [
+    {
+      "packet_id": "vc-protocol-architecture-001-full-vocab-or-sufficiency-gate-001",
+      "packet_kind": "full_vocab_replay_or_sufficiency_gate",
+      "required_before": "conformance_mapping",
+      "rationale": "Conformance mapping should not rely only on chat-completions replay when the current evidence records no full-vocabulary distribution root."
+    },
+    {
+      "packet_id": "vc-protocol-architecture-001-superseding-replayed-decision-001",
+      "packet_kind": "superseding_replayed_decision_packet",
+      "required_before": "supersede_decision",
+      "rationale": "The live Qwen decision should become a new typed decision packet before it can supersede the VC-045 fixture."
+    },
+    {
+      "packet_id": "vc-protocol-architecture-001-challenge-disposition-001",
+      "packet_kind": "challenge_disposition_packet",
+      "required_before": "challenge_rejection",
+      "rationale": "The open challenge must be accepted, rejected, or superseded by a later packet before the decision can be treated as resolved."
+    }
+  ],
+  "authority_boundary": {
+    "provider_spend_authorized": false,
+    "live_model_request_authorized": false,
+    "model_output_generated_in_this_packet": false,
+    "rippled_code_import_authorized": false,
+    "consensus_rewrite_authorized": false,
+    "xrpl_compatibility_activation_authorized": false,
+    "protocol_migration_authorized": false,
+    "live_validator_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "mainnet_mutation_authorized": false,
+    "authority_transfer_authorized": false,
+    "conformance_mapping_authorized": false
+  },
+  "checks": {
+    "source_replay_verified": true,
+    "target_decision_not_reproduced": true,
+    "live_outputs_converged": true,
+    "live_outputs_schema_valid": true,
+    "live_outputs_select_same_option": true,
+    "challenge_packet_opened": true,
+    "full_distribution_not_claimed": true,
+    "conformance_mapping_blocked": true,
+    "no_provider_spend_in_this_packet": true,
+    "no_live_mutation": true,
+    "authority_transfer": false
+  }
+}

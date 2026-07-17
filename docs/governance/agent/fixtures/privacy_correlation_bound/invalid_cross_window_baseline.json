@@ -1,0 +1,18 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_correlation_bound/valid_correlation_bound.json",
+  "expected_error_contains": [
+    "case-05-cross-window-link-shortfall: expected_route mismatch"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        4,
+        "expected_route"
+      ],
+      "value": "baseline-private"
+    }
+  ],
+  "schema": "postfiat-privacy-correlation-bound-invalid-case-v1"
+}

@@ -1,0 +1,213 @@
+{
+  "schema": "postfiat-protocol-architecture-live-effect-exact-authorization-intake-v1",
+  "exact_authorization_intake_id": "vc-protocol-architecture-001-live-effect-exact-authorization-intake-001",
+  "exact_authorization_intake_version": 1,
+  "status": "exact_authorization_intake_defined_no_authorization",
+  "gate_scope": "protocol_architecture",
+  "created_at": "2026-05-25T00:00:00Z",
+  "source_execution_receipt_gate_ref": {
+    "execution_receipt_gate_id": "vc-protocol-architecture-001-live-effect-execution-receipt-gate-001",
+    "fixture_path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_live_effect_execution_receipt_gate.json",
+    "fixture_file_sha3_384": "1a71f22157503747a3f73b6a1d080acdf6d12835df9b33da9061f126881dce547e90540476ea8febfb90b75b2e082520",
+    "fixture_canonical_hash": "7a073e079a0f2430fa6e89d317342153f7de99d83bdf3c2fa68488db2b2e8ef3835ddecfb06498b8a46de3abcd9657f7",
+    "schema_path": "docs/governance/agent/protocol_architecture_live_effect_execution_receipt_gate_schema.json",
+    "schema_sha3_384": "33af6949fa3b7ec2e26e95ca36f8006c7dd5efdb476b80d1059efabf03c15523414bc9d26da799e6dda25ee1f43a70e1",
+    "report_path": "reports/verifiable-constitution/vc-067-protocol-architecture-live-effect-execution-receipt-gate-report.json",
+    "report_file_sha3_384": "a781493e23cd4ed71bd75b7e4e6ace72279b1a21a2b0de6328c64bf684568fb0c6af16640879e8a6d46dfceb6cdbcd56",
+    "report_canonical_hash": "487bc494f04eb8fe9311eb3dbde45e3d5cd9aa836d17dbbfab21692f8d2677cae993c08f37f0dac888c7b88b13a96a83",
+    "report_verified": true,
+    "report_classification": "execution_receipt_gate_defined_no_execution",
+    "execution_receipt_gate_root": "47c1bbe3b166cea1ff3fbceaf23fcb82f56c2e671501b704cb04a2801ebbdb516bd6d29750e03ad25e5daa51e41e3abb",
+    "report_execution_receipt_gate_root": "47c1bbe3b166cea1ff3fbceaf23fcb82f56c2e671501b704cb04a2801ebbdb516bd6d29750e03ad25e5daa51e41e3abb"
+  },
+  "source_live_action_packet_ref": {
+    "live_action_packet_id": "vc-protocol-architecture-001-live-effect-live-action-001",
+    "fixture_path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_live_effect_live_action_packet.json",
+    "fixture_file_sha3_384": "d2ff2c42d7a75137d20ab8bcf82bb5850bcdd503ef25c0ddf3314468ad1e64d9f8e73a0b576c50c9d07b2de17c03bb73",
+    "fixture_canonical_hash": "dd0b1f681c30c82047a800473a9b89b873f295530f096fb13bbd133061a8a5d687d5ec326dd9d0de5a2179d275cac15a",
+    "schema_path": "docs/governance/agent/protocol_architecture_live_effect_live_action_packet_schema.json",
+    "schema_sha3_384": "d24a1fa6015f5092a6e98304ca3b18706d7475e3b3d8220f5358c5c6b1949ab7d2fd38cde71ac245fb05725dfdd4653a",
+    "report_path": "reports/verifiable-constitution/vc-066-protocol-architecture-live-effect-live-action-packet-report.json",
+    "report_file_sha3_384": "79f2dfe7906efe856e5aee2fd1705bbb9215da6c6b4c8251e24fcbb9aea45aac5b1c79c530e269d1598ea29cdce2585b",
+    "report_canonical_hash": "040ae443d38a591c3f0fcae707122d6843420b5e32d97a77f3f52fc6c93e9cc25b7cb20043d656f574077e06b2681be2",
+    "report_verified": true,
+    "report_classification": "explicit_live_action_packet_bound_no_execution",
+    "live_action_packet_root": "e05c3f1049b4dc7fb9a7f256e05059c0b8ec99af9768affb23611b030d100304e0c32f9e8dc466380ca2a2dd35a567e2",
+    "report_live_action_packet_root": "e05c3f1049b4dc7fb9a7f256e05059c0b8ec99af9768affb23611b030d100304e0c32f9e8dc466380ca2a2dd35a567e2"
+  },
+  "root_bindings": {
+    "exact_authorization_intake_id": "vc-protocol-architecture-001-live-effect-exact-authorization-intake-001",
+    "execution_receipt_gate_root": "47c1bbe3b166cea1ff3fbceaf23fcb82f56c2e671501b704cb04a2801ebbdb516bd6d29750e03ad25e5daa51e41e3abb",
+    "execution_receipt_gate_id": "vc-protocol-architecture-001-live-effect-execution-receipt-gate-001",
+    "execution_receipt_id_required": "vc-protocol-architecture-001-live-effect-execution-receipt-001",
+    "live_action_packet_root": "e05c3f1049b4dc7fb9a7f256e05059c0b8ec99af9768affb23611b030d100304e0c32f9e8dc466380ca2a2dd35a567e2",
+    "live_action_packet_id": "vc-protocol-architecture-001-live-effect-live-action-001",
+    "candidate_live_command_hash": "840f9cb61720522baacc4cc2152d2ed5aca5e1ead9045acbd60907ded709babb6109cc5c6d3f8ee94584c2a81523b810",
+    "rollback_command_hash": "d5ecd60166e57d39cfd5a24e408b9645b887c7347958b1d0023f58cec39628fd4482e5332a806a754a6efb9aa51d3de3",
+    "preflight_command_root": "233e8dc9e5468119b39170a328bc4c883d3518e45f1119847b4a055d57170fbab5d552385ac71366baf3653ce256428a",
+    "receipt_contract_root": "3ec993b723df552d319d3e228f12a67739bd51e89aac1a2d677bb0ada7cb486df641db36d159157734d99bbff328652f",
+    "challenge_schema_hash": "c6c53bb8e5b85b332cd72c96c98c44ec3d51ec9050df6ea54ebc84991ce856bb4cd754d2a6945818d72b56d9775002e0",
+    "selected_live_action": "protocol_architecture_release_or_cobalt_effect",
+    "selected_option": "preserve-rust-l1"
+  },
+  "authorization_text_contract": {
+    "exact_authorization_text_required": true,
+    "required_authorization_text": "AUTHORIZE_POSTFIAT_PROTOCOL_ARCHITECTURE_LIVE_ACTION selected_live_action=protocol_architecture_release_or_cobalt_effect exact_authorization_intake_id=vc-protocol-architecture-001-live-effect-exact-authorization-intake-001 execution_receipt_gate_root=47c1bbe3b166cea1ff3fbceaf23fcb82f56c2e671501b704cb04a2801ebbdb516bd6d29750e03ad25e5daa51e41e3abb live_action_packet_root=e05c3f1049b4dc7fb9a7f256e05059c0b8ec99af9768affb23611b030d100304e0c32f9e8dc466380ca2a2dd35a567e2 execution_receipt_id_required=vc-protocol-architecture-001-live-effect-execution-receipt-001 candidate_live_command_hash=840f9cb61720522baacc4cc2152d2ed5aca5e1ead9045acbd60907ded709babb6109cc5c6d3f8ee94584c2a81523b810 rollback_command_hash=d5ecd60166e57d39cfd5a24e408b9645b887c7347958b1d0023f58cec39628fd4482e5332a806a754a6efb9aa51d3de3 preflight_command_root=233e8dc9e5468119b39170a328bc4c883d3518e45f1119847b4a055d57170fbab5d552385ac71366baf3653ce256428a no_xrpl_compatibility_activation no_mainnet_mutation no_validator_registry_mutation no_authority_transfer",
+    "required_authorization_text_sha3_384": "48a061be1fe1adaa4e72cf7a7c940f70bd3066374bec99fb6c42abaf2fcfb31993540b550724b21a00177dbec93b67fd",
+    "raw_authorization_must_equal_required_text": true,
+    "normalization_allowed": false,
+    "natural_language_paraphrase_rejected": true,
+    "ambiguous_scope_rejected": true,
+    "missing_root_or_hash_rejected": true,
+    "authorization_not_observed_in_this_packet": true,
+    "authorization_not_accepted_in_this_packet": true,
+    "live_effect": false
+  },
+  "current_intake_state": {
+    "exact_authorization_text_present": false,
+    "accepted_authorization_text_sha3_384": null,
+    "preflight_output_root": null,
+    "executed_command_hash": null,
+    "post_action_registry_or_release_root": null,
+    "authorization_acceptance_receipt_hash": null,
+    "observed_live_effect": false,
+    "live_effect": false
+  },
+  "fresh_preflight_requirements": {
+    "preflight_required_after_exact_authorization": true,
+    "preflight_command_ids": [
+      "verify-live-action-packet",
+      "verify-final-gate",
+      "verify-guarded-execution",
+      "rerun-gate-9_5",
+      "validate-fixtures",
+      "build-docs"
+    ],
+    "preflight_command_hashes": [
+      "1dfa00b940faee8df55fad2f6c8444f822cda7e58407c0af7e335bd0ce471dd335844ff5c5aaaf41a232235e699e06dc",
+      "3737d84ce8bf48c7b8c44b77f31de31e4b7c04f26d92be2caab8f1a320b439107f0badbd8607341dab5f00ac1e173b04",
+      "0109341e3b97f9818233f925a00aa713f35aba841f03d454d91690a3c010ef9b6a96929645aa7559c0776a8c3f5e0c1f",
+      "294b16586afe08a95e73c163a9626e15080c3f22ce055a2a3922587a1f2d7989129f3fe4d68b2742120c483c0d6c60eb",
+      "dc7c3925f5aaa9b437893c1a33175d40be7f419fe66d7246f1e1ed08351aff0e5b1f9daa61ce2826870602a0b9444c04",
+      "5884d5467b8ee207e77094a483c5cf29d8622c8b9eb4001022c0145939d23bda1d68aa228218ec769f6a974744eee78a"
+    ],
+    "preflight_command_root": "233e8dc9e5468119b39170a328bc4c883d3518e45f1119847b4a055d57170fbab5d552385ac71366baf3653ce256428a",
+    "preflight_output_root_required": true,
+    "stale_preflight_rejected": true,
+    "preflight_executed_in_this_packet": false,
+    "preflight_failure_action": "hold_live_action_and_require_new_preflight_output_receipt",
+    "live_effect": false
+  },
+  "ambiguous_authorization_rejection": {
+    "exact_byte_match_required": true,
+    "normalization_allowed": false,
+    "partial_authorization_rejected": true,
+    "paraphrase_authorization_rejected": true,
+    "missing_bound_root_rejected": true,
+    "missing_command_hash_rejected": true,
+    "extra_live_effect_rejected": true,
+    "ambiguous_authorization_failure_action": "hold_authorization_intake_and_require_exact_text",
+    "live_effect": false
+  },
+  "verification_commands": [
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-exact-authorization-intake --verify-report",
+      "purpose": "Verify the VC-068 exact authorization intake gate.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-execution-receipt-gate --verify-report",
+      "purpose": "Verify the VC-067 execution receipt gate remains current.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-live-action-packet --verify-report",
+      "purpose": "Verify the VC-066 explicit live-action packet remains current.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-final-execution-gate --verify-report",
+      "purpose": "Verify the VC-065 final execution gate remains current.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-guarded-execution --verify-report",
+      "purpose": "Verify the VC-064 guarded execution remains current.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/gov-inference-gate-9_5",
+      "purpose": "Regenerate the local guarded-apply and rollback drill report.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/validator-evidence-fixtures-validate",
+      "purpose": "Keep the validator-evidence fixture suite passing.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/docs-site-build",
+      "purpose": "Build the docs site after adding the exact authorization intake.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    }
+  ],
+  "authority_boundary": {
+    "provider_spend_authorized": false,
+    "live_model_request_authorized": false,
+    "model_output_generated_in_this_packet": false,
+    "exact_authorization_intake_recorded": true,
+    "exact_authorization_observed_in_this_packet": false,
+    "authorization_accepted_in_this_packet": false,
+    "preflight_executed_in_this_packet": false,
+    "live_action_executed_in_this_packet": false,
+    "execution_receipt_issued_in_this_packet": false,
+    "code_rewrite_authorized": false,
+    "rippled_code_import_authorized": false,
+    "consensus_rewrite_authorized": false,
+    "xrpl_compatibility_activation_authorized": false,
+    "protocol_migration_authorized": false,
+    "live_validator_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "mainnet_mutation_authorized": false,
+    "authority_transfer_authorized": false
+  },
+  "checks": {
+    "schema_valid": true,
+    "source_execution_receipt_gate_verified": true,
+    "source_live_action_packet_verified": true,
+    "root_bindings_verified": true,
+    "authorization_text_contract_verified": true,
+    "current_intake_state_verified": true,
+    "fresh_preflight_requirements_verified": true,
+    "ambiguous_authorization_rejection_verified": true,
+    "verification_command_coverage_verified": true,
+    "closed_authority_boundary_verified": true,
+    "no_hidden_evidence": true,
+    "no_secret_dependency": true,
+    "no_authorization_accepted": true,
+    "no_preflight_execution": true,
+    "no_live_action_execution": true,
+    "no_live_cobalt_amendment_submission": true,
+    "no_compatibility_activation": true,
+    "no_mainnet_mutation": true,
+    "authority_transfer": false,
+    "exact_authorization_intake_root_verified": true
+  },
+  "exact_authorization_intake_root": "5eb1fecedee66186f5ced7d2e1bca9a5c1a8a789fb3a93967047e3fe38b604005e7ad4dbcad33bcff2688ae3ff68614f"
+}

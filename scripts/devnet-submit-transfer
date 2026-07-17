@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VALIDATORS="${VALIDATORS:-4}"
+BASE_DIR="${BASE_DIR:-devnet/local}"
+LOG_DIR="${LOG_DIR:-devnet/logs}"
+BATCH_DIR="${BATCH_DIR:-devnet/local/batches}"
+TO="${TO:-pfrecipient000000000000000000000000000000}"
+AMOUNT="${AMOUNT:-100}"
+
+cargo build -p postfiat-node >/dev/null
+mkdir -p "$BATCH_DIR" "$LOG_DIR"
+
+batch_file="$BATCH_DIR/batch-$(date +%s%N).json"
+
+target/debug/postfiat-node batch-transfer \
+  --data-dir "$BASE_DIR/node0" \
+  --to "$TO" \
+  --amount "$AMOUNT" \
+  --batch-file "$batch_file" >"$LOG_DIR/batch-create.log"
+
+for ((i = 0; i < VALIDATORS; i++)); do
+  target/debug/postfiat-node apply-batch \
+    --data-dir "$BASE_DIR/node$i" \
+    --batch-file "$batch_file" >"$LOG_DIR/validator-$i.apply-batch.log"
+done
+
+scripts/devnet-status
+

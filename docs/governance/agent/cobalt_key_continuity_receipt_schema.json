@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "postfiat-cobalt-key-continuity-receipt-v1",
+  "type": "object",
+  "required": [
+    "schema_id",
+    "statement",
+    "profile",
+    "old_registry",
+    "new_registry",
+    "continuity_receipts",
+    "cases",
+    "attestation"
+  ],
+  "properties": {
+    "schema_id": {
+      "const": "postfiat-cobalt-key-continuity-receipt-v1"
+    },
+    "statement": {
+      "type": "object",
+      "required": ["claim", "material_root_hash", "cases_root_hash"]
+    },
+    "profile": {
+      "type": "object",
+      "required": [
+        "parent_registry_root",
+        "next_registry_root",
+        "transition_root",
+        "old_checker_root",
+        "activation_epoch",
+        "current_epoch",
+        "max_receipt_age_epochs",
+        "byzantine_budget",
+        "parent_validation"
+      ]
+    },
+    "old_registry": {"type": "array"},
+    "new_registry": {"type": "array"},
+    "continuity_receipts": {"type": "array"},
+    "cases": {"type": "array"},
+    "attestation": {
+      "type": "object",
+      "required": ["statement_hash"]
+    }
+  }
+}

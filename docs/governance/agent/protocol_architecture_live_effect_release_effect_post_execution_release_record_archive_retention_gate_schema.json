@@ -1,0 +1,80 @@
+{
+  "$id": "postfiat-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-retention-gate-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority_boundary": {
+      "type": "object"
+    },
+    "challenge_and_rollback_route": {
+      "type": "object"
+    },
+    "checks": {
+      "type": "object"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "current_retention_state": {
+      "type": "object"
+    },
+    "gate_scope": {
+      "const": "protocol_architecture"
+    },
+    "release_effect_post_execution_release_record_archive_retention_id": {
+      "const": "vc-protocol-architecture-001-live-effect-release-effect-post-execution-release-record-archive-retention-001"
+    },
+    "release_effect_post_execution_release_record_archive_retention_root": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "release_effect_post_execution_release_record_archive_retention_version": {
+      "const": 1
+    },
+    "retention_contract": {
+      "type": "object"
+    },
+    "retention_input_requirements": {
+      "type": "object"
+    },
+    "root_bindings": {
+      "type": "object"
+    },
+    "schema": {
+      "const": "postfiat-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-retention-gate-v1"
+    },
+    "source_release_effect_post_execution_release_record_archive_availability_gate_ref": {
+      "type": "object"
+    },
+    "stale_root_policy": {
+      "type": "object"
+    },
+    "status": {
+      "const": "release_effect_post_execution_release_record_archive_retention_gate_defined_no_retention"
+    },
+    "verification_commands": {
+      "minItems": 5,
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "release_effect_post_execution_release_record_archive_retention_id",
+    "release_effect_post_execution_release_record_archive_retention_version",
+    "status",
+    "gate_scope",
+    "created_at",
+    "source_release_effect_post_execution_release_record_archive_availability_gate_ref",
+    "root_bindings",
+    "retention_contract",
+    "retention_input_requirements",
+    "current_retention_state",
+    "stale_root_policy",
+    "challenge_and_rollback_route",
+    "verification_commands",
+    "authority_boundary",
+    "checks",
+    "release_effect_post_execution_release_record_archive_retention_root"
+  ],
+  "type": "object"
+}

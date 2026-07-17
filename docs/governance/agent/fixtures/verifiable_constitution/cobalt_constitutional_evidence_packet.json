@@ -1,0 +1,270 @@
+{
+  "schema": "postfiat-constitutional-evidence-packet-v1",
+  "packet_id": "vc-cobalt-governance-001-evidence-001",
+  "packet_version": 1,
+  "status": "approved",
+  "packet_scope": "cobalt_governance",
+  "created_at": "2026-05-24T00:00:00Z",
+  "request_ref": {
+    "request_id": "vc-cobalt-governance-001-request-001",
+    "request_path": "docs/governance/agent/fixtures/verifiable_constitution/cobalt_constitutional_evidence_request.json",
+    "request_file_sha3_384": "9880de615d5ec4fe5784e2814cf8a0b0ce6df851d2b617ccd05f9fd33dca7a3f4a454275d32b8703032131a78c949725",
+    "request_canonical_hash": "611fcaf58498d13c432132d1d71ea12d409d64607984cf41808620ba3b25abba05947725685f670e914e9bd50f51a95d",
+    "request_schema_path": "docs/governance/agent/constitutional_evidence_request_schema.json",
+    "request_schema_sha3_384": "f278cce70a5c668424bac14d94719c0371b994fef98dbbd53f01b3f15e557ba8823aa363f7b407079f776c4cdf9d39d3"
+  },
+  "collection_manifest": {
+    "collector_id": "vc-local-cobalt-snapshot-collector",
+    "collection_mode": "repo_snapshot_only",
+    "collected_at": "2026-05-24T00:00:00Z",
+    "source_commit": "578e7e067b1e91ef3c314af841d6cd9c1513e268",
+    "live_collection_executed": false,
+    "network_reads": false,
+    "provider_spend": false,
+    "secret_material_seen": false,
+    "live_mutation_executed": false
+  },
+  "evidence_root": "e9a54bd3bd6219341478578057e64c0903cf7c27145a90e6e6f57ec35e61ad71867a525b2d119dab79b8a06e944e6b22",
+  "evidence_items": [
+    {
+      "field_path": "cobalt.trust_graph_linkedness_report_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "acf0e856b93180f8a5bd6bf5957f85db070d96f4bbc46adca2ddfc078f875ad845e18fb7e34acf2a9e4ddde384f74e52",
+      "source_refs": [
+        {
+          "ref_id": "cobalt-overview",
+          "path": "docs_site/governance/cobalt.md",
+          "sha3_384": "acf0e856b93180f8a5bd6bf5957f85db070d96f4bbc46adca2ddfc078f875ad845e18fb7e34acf2a9e4ddde384f74e52",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "vc-014-cobalt-question-report",
+          "path": "reports/verifiable-constitution/vc-014-cobalt-question-report.json",
+          "sha3_384": "63bb657b0d4fc489700785693409232d3ba946efb016a85527302a5e2c6f17e0b7f1de41fd787fffac74e9f6729d2f4d",
+          "provenance": "test_report"
+        }
+      ],
+      "provenance": [
+        "test_report",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "admission_gate",
+      "redaction_status": "public",
+      "collector_note": "The linkedness gate is represented by the current Cobalt overview and verified VC-014 Cobalt question report."
+    },
+    {
+      "field_path": "cobalt.essential_subset_thresholds",
+      "requested_value_type": "object",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": {
+        "essential_subset_checks_required": true,
+        "linkedness_required": true,
+        "threshold_change_requires_future_authorization": true,
+        "trust_view_change_requires_cobalt_gate": true
+      },
+      "source_refs": [
+        {
+          "ref_id": "cobalt-implementation",
+          "path": "docs_site/governance/cobalt-implementation.md",
+          "sha3_384": "8fccab3a620958c6bef72b57515ceb7472b3f250bd8cc075877be25307f10676e4d0457562386d17d8e7890588afa756",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "governance_documented",
+        "source_code"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "redaction_status": "public",
+      "collector_note": "The packet records the current hard-threshold posture without changing any live trust threshold."
+    },
+    {
+      "field_path": "cobalt.registry_transition_rules_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "509ca09608c926a604e4eef1700ba77358b44fcd060066d9f17ec4974f740b5fe27c9e2f3eea5e0d22a67df93afe66d7",
+      "source_refs": [
+        {
+          "ref_id": "validator-registry",
+          "path": "docs_site/governance/validator-registry.md",
+          "sha3_384": "509ca09608c926a604e4eef1700ba77358b44fcd060066d9f17ec4974f740b5fe27c9e2f3eea5e0d22a67df93afe66d7",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "admission_gate",
+      "redaction_status": "public",
+      "collector_note": "Registry-transition rules are hash-bound through the current validator-registry governance document."
+    },
+    {
+      "field_path": "cobalt.dry_run_no_mutation_report_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "c68aa331ca0ad8dd8fcbe0800ae8d828da61a9c858507bfd55bd23be0435fe50a54a48f4279e4b5d878df480b59adbe2",
+      "source_refs": [
+        {
+          "ref_id": "vc-014-cobalt-question-report",
+          "path": "reports/verifiable-constitution/vc-014-cobalt-question-report.json",
+          "sha3_384": "63bb657b0d4fc489700785693409232d3ba946efb016a85527302a5e2c6f17e0b7f1de41fd787fffac74e9f6729d2f4d",
+          "provenance": "test_report"
+        }
+      ],
+      "provenance": [
+        "test_report",
+        "replay_derived"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "hold",
+      "action_bound": "admission_gate",
+      "redaction_status": "public",
+      "collector_note": "VC-014 proves the Cobalt question is no-mutation and closes registry, Cobalt submission, and authority-transfer boundaries."
+    },
+    {
+      "field_path": "cobalt.replay_bundle_root",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "9c3cb9c8022fe7b0611067d0714b727aae215cedbdfed720bd3fffb38faa5ba5e310b92a6612f81590218663b529df81",
+      "source_refs": [
+        {
+          "ref_id": "vc-015-internal-evidence-request-replay-report",
+          "path": "reports/verifiable-constitution/vc-015-internal-evidence-request-replay-report.json",
+          "sha3_384": "28937b9c3f3f1a0b7d2daac1154a858c1edb3d68f01a8389cf87e02ab734af88934f794a29d881d992ed7556d1c5896e",
+          "provenance": "replay_derived"
+        }
+      ],
+      "provenance": [
+        "replay_derived",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "redaction_status": "public",
+      "collector_note": "The replay root is the prior 50-run internal evidence-request replay report for this Cobalt vector."
+    },
+    {
+      "field_path": "cobalt.adversarial_packet_coverage",
+      "requested_value_type": "object",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": {
+        "hash_substitution_covered": true,
+        "hidden_evidence_covered": true,
+        "stale_replay_covered": true,
+        "topology_gaming_covered": true,
+        "unsafe_live_action_covered": true
+      },
+      "source_refs": [
+        {
+          "ref_id": "cobalt-adversarial-testing",
+          "path": "docs_site/governance/cobalt-adversarial-testing.md",
+          "sha3_384": "371c1234edd0bd53305f3e1a421e3ae2f20b41e6380088424a6fed431302395a1a7e801cae126fa07d8173699c28104b",
+          "provenance": "test_report"
+        }
+      ],
+      "provenance": [
+        "test_report",
+        "collector_observed"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "reject_conflicted_field",
+      "action_bound": "decision_input",
+      "redaction_status": "public",
+      "collector_note": "The packet records the current adversarial Cobalt coverage classes as public, repo-bound evidence."
+    },
+    {
+      "field_path": "cobalt.rollback_supersession_evidence_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "3ef666d69c3ad28e999b8051749aac63296100ffcf9c528ae7d5c19deb0ad44a50f7e17ed4396596305ed10334147bb5",
+      "source_refs": [
+        {
+          "ref_id": "qwen-cobalt-internal-validation-plan",
+          "path": "docs_site/governance/qwen-cobalt-internal-validation-plan.md",
+          "sha3_384": "3ef666d69c3ad28e999b8051749aac63296100ffcf9c528ae7d5c19deb0ad44a50f7e17ed4396596305ed10334147bb5",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "hold",
+      "action_bound": "conformance_input",
+      "redaction_status": "public",
+      "collector_note": "Rollback and supersession remain future gate requirements; this packet does not authorize a transition."
+    },
+    {
+      "field_path": "cobalt.override_detection_report_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "9c3cb9c8022fe7b0611067d0714b727aae215cedbdfed720bd3fffb38faa5ba5e310b92a6612f81590218663b529df81",
+      "source_refs": [
+        {
+          "ref_id": "vc-015-internal-evidence-request-replay-report",
+          "path": "reports/verifiable-constitution/vc-015-internal-evidence-request-replay-report.json",
+          "sha3_384": "28937b9c3f3f1a0b7d2daac1154a858c1edb3d68f01a8389cf87e02ab734af88934f794a29d881d992ed7556d1c5896e",
+          "provenance": "replay_derived"
+        }
+      ],
+      "provenance": [
+        "test_report",
+        "replay_derived"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "admission_gate",
+      "redaction_status": "public",
+      "collector_note": "VC-015 records hash-bound prompt, output, and authority-boundary checks that make selected-question drift visible."
+    }
+  ],
+  "missing_evidence": [],
+  "redaction": {
+    "redaction_passed": true,
+    "secret_scan_passed": true,
+    "hidden_evidence_absent": true,
+    "prohibited_fields_absent": true,
+    "raw_secret_material_retained": false,
+    "public_packet_only": true
+  },
+  "checks": {
+    "schema_valid": true,
+    "request_hash_matches": true,
+    "requested_fields_bound": true,
+    "source_hashes_verified": true,
+    "missing_behaviors_applied": true,
+    "redaction_passed": true,
+    "secret_scan_passed": true,
+    "no_hidden_evidence": true,
+    "no_live_collection": true,
+    "no_live_mutation": true,
+    "packet_root_verified": true,
+    "authority_transfer": false
+  }
+}

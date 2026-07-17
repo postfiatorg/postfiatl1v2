@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DATA_DIR="${DATA_DIR:-.postfiat/node0}"
+CHAIN_ID="${CHAIN_ID:-postfiat-local}"
+NODE_ID="${NODE_ID:-validator-0}"
+
+cargo run -p postfiat-node -- init \
+  --data-dir "$DATA_DIR" \
+  --chain-id "$CHAIN_ID" \
+  --node-id "$NODE_ID"
+

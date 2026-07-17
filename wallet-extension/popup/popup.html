@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { width: 360px; font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0a0a; color: #e0e0e0; }
+    .header { background: #1a1a2e; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
+    .header h1 { font-size: 14px; color: #8b5cf6; }
+    .header .status { font-size: 10px; padding: 2px 8px; border-radius: 8px; background: #22c55e; color: #000; }
+    .header .status.offline { background: #ef4444; }
+    .section { padding: 12px 16px; border-bottom: 1px solid #1a1a1a; }
+    .label { font-size: 10px; color: #888; text-transform: uppercase; margin-bottom: 4px; }
+    .value { font-size: 14px; color: #e0e0e0; word-break: break-all; }
+    .address { font-family: monospace; font-size: 12px; cursor: pointer; }
+    .balance { font-size: 22px; font-weight: bold; color: #8b5cf6; }
+    .balance .unit { font-size: 12px; color: #888; font-weight: normal; }
+    .actions { display: flex; gap: 8px; padding: 12px 16px; }
+    .btn { flex: 1; padding: 8px; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    .btn-primary { background: #8b5cf6; color: #fff; }
+    .btn-secondary { background: #1a1a1a; color: #ccc; border: 1px solid #333; }
+    .btn-danger { background: #dc2626; color: #fff; }
+    .input { width: 100%; padding: 8px; background: #1a1a1a; border: 1px solid #333; border-radius: 6px; color: #e0e0e0; font-size: 13px; margin-bottom: 8px; }
+    .input:focus { outline: none; border-color: #8b5cf6; }
+    .confirm-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .confirm-row .v { color: #8b5cf6; }
+    .hidden { display: none; }
+    .error { color: #ef4444; font-size: 12px; padding: 4px 0; }
+    .success { color: #22c55e; font-size: 12px; padding: 4px 0; }
+    .tx-list { max-height: 200px; overflow-y: auto; }
+    .tx-item { padding: 6px 0; border-bottom: 1px solid #1a1a1a; font-size: 11px; }
+    .tx-item .from { color: #888; }
+    .tx-item .amt { float: right; }
+    .tx-item .amt.in { color: #22c55e; }
+    .tx-item .amt.out { color: #ef4444; }
+    .copy-toast { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); background: #8b5cf6; color: #fff; padding: 4px 12px; border-radius: 4px; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>PostFiat Wallet</h1>
+    <span class="status" id="chainStatus">...</span>
+  </div>
+
+  <div id="noWalletView">
+    <div class="section">
+      <p style="font-size:13px;margin-bottom:12px;">No wallet found. Create a new one or import an existing seed.</p>
+      <input class="input" id="importSeed" placeholder="Import: paste 64-char hex seed (optional)" />
+      <input class="input" id="createPassphrase" type="password" placeholder="Encryption passphrase" />
+      <label style="font-size:11px;display:flex;align-items:center;gap:4px;margin-bottom:8px;cursor:pointer;">
+        <input type="checkbox" id="seedSavedCheck" />
+        <span>I have saved my seed (if creating)</span>
+      </label>
+      <button class="btn btn-primary" id="createBtn">Create Wallet</button>
+      <button class="btn btn-secondary" id="importBtn" style="margin-top:4px;">Import Wallet</button>
+      <div id="seedDisplay" class="hidden" style="margin-top:12px;padding:8px;background:#1a1a1a;border:1px solid #333;border-radius:6px;">
+        <div class="label">Your Master Seed (SAVE THIS!)</div>
+        <div class="value" id="seedText" style="font-family:monospace;font-size:10px;word-break:break-all;color:#fbbf24;"></div>
+        <div class="label" id="newAddressLabel" style="margin-top:4px;">Address</div>
+        <div class="value address" id="newWalletAddress"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="lockedView" class="hidden">
+    <div class="section">
+      <p style="font-size:13px;margin-bottom:8px;">Wallet locked. Enter passphrase to unlock.</p>
+      <div class="label">Address</div>
+      <div class="value address" id="lockedAddress">...</div>
+      <input class="input" id="unlockPass" type="password" placeholder="Passphrase" style="margin-top:8px;" />
+      <button class="btn btn-primary" id="unlockBtn">Unlock</button>
+      <p class="error" id="unlockError"></p>
+    </div>
+  </div>
+
+  <div id="walletView" class="hidden">
+    <div class="section">
+      <div class="label">Address</div>
+      <div class="value address" id="walletAddress" title="Click to copy">...</div>
+      <div class="label" style="margin-top:8px;">Balance</div>
+      <div class="balance"><span id="walletBalance">0</span> <span class="unit">PFT</span></div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="sendBtn">Send</button>
+      <button class="btn btn-secondary" id="historyBtn">History</button>
+      <button class="btn btn-secondary" id="settingsBtn">Settings</button>
+      <button class="btn btn-secondary" id="lockBtn">Lock</button>
+    </div>
+
+    <div id="sendView" class="section hidden">
+      <div class="label">Recipient Address</div>
+      <input class="input" id="sendTo" placeholder="pf..." />
+      <div class="label">Amount</div>
+      <input class="input" id="sendAmount" type="number" placeholder="0" />
+      <button class="btn btn-primary" id="quoteBtn">Get Quote</button>
+      <div id="quoteView" class="hidden">
+        <div class="confirm-row"><span>Fee:</span><span class="v" id="quoteFee">-</span></div>
+        <div class="confirm-row"><span>Total:</span><span class="v" id="quoteTotal">-</span></div>
+        <div class="confirm-row"><span>Sequence:</span><span class="v" id="quoteSeq">-</span></div>
+        <div class="confirm-row"><span>Balance after:</span><span class="v" id="quoteAfter">-</span></div>
+        <button class="btn btn-primary" id="confirmSendBtn" style="margin-top:8px;">Confirm & Sign</button>
+      </div>
+      <p class="error" id="sendError"></p>
+      <p class="success" id="sendSuccess"></p>
+    </div>
+
+    <div id="historyView" class="section hidden">
+      <div class="label">Recent Transactions</div>
+      <div class="tx-list" id="txList">Loading...</div>
+    </div>
+
+    <div id="settingsView" class="section hidden">
+      <div class="label">RPC Endpoint</div>
+      <select class="input" id="rpcEndpointSelect">
+        <option value="ws://127.0.0.1:8080">Local Proxy (127.0.0.1:8080)</option>
+        <option value="custom">Custom...</option>
+      </select>
+      <input class="input" id="rpcEndpointCustom" placeholder="ws://your-host:port" style="display:none;margin-top:4px;" />
+      <div class="label" style="margin-top:8px;">Auto-Lock (minutes)</div>
+      <select class="input" id="autoLockSelect">
+        <option value="5">5</option>
+        <option value="15" selected>15</option>
+        <option value="30">30</option>
+        <option value="60">60</option>
+      </select>
+      <button class="btn btn-primary" id="saveSettingsBtn" style="margin-top:8px;">Save Settings</button>
+      <hr style="border-color:#1a1a1a;margin:12px 0;" />
+      <button class="btn btn-secondary" id="exportBackupBtn">Export Backup</button>
+      <button class="btn btn-secondary" id="importBackupBtn" style="margin-top:4px;">Import Backup</button>
+      <button class="btn btn-danger" id="removeWalletBtn" style="margin-top:4px;">Remove Wallet</button>
+      <input type="file" id="importBackupFile" accept=".json" class="hidden" />
+      <p class="error" id="settingsError"></p>
+      <p class="success" id="settingsSuccess"></p>
+    </div>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

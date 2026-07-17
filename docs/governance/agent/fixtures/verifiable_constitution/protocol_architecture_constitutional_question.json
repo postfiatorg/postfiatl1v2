@@ -1,0 +1,180 @@
+{
+  "schema": "postfiat-constitutional-question-v1",
+  "question_id": "vc-protocol-architecture-001",
+  "question_version": 1,
+  "status": "active",
+  "scope": "release_authority",
+  "created_at": "2026-05-25T00:00:00Z",
+  "situation": {
+    "summary": "Decide whether PostFiat should preserve the new Rust L1 architecture, fully fork XRPL/rippled, add an XRPL compatibility layer, or hold/no-op.",
+    "problem_statement": "PostFiat needs a replayable protocol-architecture question whose answer cannot silently replace the Rust L1, rewrite the chain into rippled, weaken Cobalt governance, or bypass the controlled-testnet release gates.",
+    "decision_boundary": "This question may preserve the current Rust L1 architecture, require future evidence for a full XRPL/rippled fork, require future evidence for an XRPL compatibility layer, or hold/no-op. It may not rewrite consensus code, mutate chain state, activate a migration, submit a live Cobalt amendment, or authorize mainnet release.",
+    "out_of_scope": [
+      "mainnet mutation",
+      "live validator-registry mutation",
+      "live Cobalt amendment submission",
+      "rippled code import",
+      "consensus rewrite activation",
+      "protocol migration activation",
+      "authority transfer"
+    ]
+  },
+  "status_quo": {
+    "current_position": "PostFiat is currently a Rust L1 rather than a rippled binary fork. The architecture combines fast deterministic ordering, Cobalt validator governance, ML-DSA-style post-quantum authorization, Orchard/Halo2-style private settlement, fixed supply, fee burn, no native validator rewards, and replayable model-assisted governance. XRP-like compatibility is a product and protocol-surface requirement, not a requirement to mechanically clone XRPL LCP or inherit rippled's C++ implementation.",
+    "implementation_refs": [
+      {
+        "ref_id": "constitutional-question-schema",
+        "path": "docs/governance/agent/constitutional_question_schema.json",
+        "sha3_384": "47c2b2f27bdc745615f4d0d893333c12825b8b935358efbf4f53bdb9ad7b72e03d46d5264812d2cd9066d3c11813bd7f"
+      },
+      {
+        "ref_id": "constitutional-context-schema",
+        "path": "docs/governance/agent/constitutional_context_packet_schema.json",
+        "sha3_384": "56f9ae9a71461ba8c8e78466ad3bf85fe92d621aec1e7c131b14fe3509a040b80dbaacbe985d0c446dc5bc07c5e171ca"
+      },
+      {
+        "ref_id": "initial-context-packet",
+        "path": "docs/governance/agent/fixtures/verifiable_constitution/initial_context_packet.json",
+        "sha3_384": "b370232a7544900f82c21268d1a08dea911835f670a52d2c5a229ab4ac8c878e66cd858cb23ac06c36d425a9ddf50e3a"
+      },
+      {
+        "ref_id": "architecture-overview",
+        "path": "docs_site/architecture/overview.md",
+        "sha3_384": "e91fbea1e3e41e89607ccaa11933cdb1693367332404dfe72e138e9658a7a2964cafdf833020644117466b926ee4fa22"
+      }
+    ],
+    "evidence_refs": [
+      {
+        "ref_id": "implementation-whitepaper",
+        "path": "docs_site/whitepaper.md",
+        "sha3_384": "ea4f650da64ae54aa291f2fe5a3ca14189bb6492972681a4f247d5baa6b252d8d3935c24411c90b22003587d53415e45"
+      },
+      {
+        "ref_id": "deterministic-governance-overview",
+        "path": "docs_site/governance/deterministic-governance-overview.md",
+        "sha3_384": "745e88fb09d6e0b661dea288cd8c6ecb7a321a97665b9ea0edaddbe7ecfb8f2e4e25c8ca2b8445396e6c40b87ecaf5fd"
+      },
+      {
+        "ref_id": "cobalt-overview",
+        "path": "docs_site/governance/cobalt.md",
+        "sha3_384": "acf0e856b93180f8a5bd6bf5957f85db070d96f4bbc46adca2ddfc078f875ad845e18fb7e34acf2a9e4ddde384f74e52"
+      },
+      {
+        "ref_id": "privacy-orchard-halo2",
+        "path": "docs_site/privacy/orchard-halo2.md",
+        "sha3_384": "1dca6715b03d77c10d6d63272a4bdb91e64fb2de744a3eb735ebd566c900311fed3748015045a3aeabc63ac6ab206a3a"
+      },
+      {
+        "ref_id": "quantum-authorization",
+        "path": "docs_site/quantum/authorization.md",
+        "sha3_384": "451fe29194691fbae1454d06d9220f89cd0ccedeb82b6153d541e87f42d2579abd8f453830882a249eead4d0034a2d31"
+      },
+      {
+        "ref_id": "research-response-synthesis",
+        "path": "docs/status/research-response-synthesis.md",
+        "sha3_384": "5d9fafe5d4a2b1660db0dbc6308d02060146663be94e3b916e20008ef669501c1ceda149a2cb01946993f1937837b9e1"
+      },
+      {
+        "ref_id": "heavy-redesign",
+        "path": "docs/research-requests/heavy_redesign.md",
+        "sha3_384": "a1f86856fe4c48448ebce212f9cb7a766072342b3aa8b802bed92bb0afa15be137fddb95ff74d6445a83873b806be734"
+      }
+    ]
+  },
+  "option_order": [
+    "preserve-rust-l1",
+    "fully-fork-xrpl",
+    "hybrid-xrpl-compatibility-layer",
+    "hold-no-op"
+  ],
+  "options": {
+    "preserve-rust-l1": {
+      "option_id": "preserve-rust-l1",
+      "title": "Preserve Rust L1 architecture",
+      "kind": "preserve_status_quo",
+      "description": "Keep PostFiat as a Rust L1 with Cobalt governance, ML-DSA authorization, Orchard/Halo2 privacy, fixed supply, fee burn, and XRP-like wallet/RPC compatibility work.",
+      "implementation_effect": "no_code_change",
+      "requires_new_evidence": false
+    },
+    "fully-fork-xrpl": {
+      "option_id": "fully-fork-xrpl",
+      "title": "Fully fork XRPL/rippled",
+      "kind": "adopt_change",
+      "description": "Replace the current Rust L1 direction with a direct rippled/XRPL fork only if a future evidence packet proves this is safer and better for PostFiat's PQ, privacy, Cobalt, and governance requirements.",
+      "implementation_effect": "future_authorization_required",
+      "requires_new_evidence": true
+    },
+    "hybrid-xrpl-compatibility-layer": {
+      "option_id": "hybrid-xrpl-compatibility-layer",
+      "title": "Add XRPL compatibility layer",
+      "kind": "adopt_change",
+      "description": "Preserve the Rust L1 while adding bounded XRPL-style transaction, wallet, RPC, or migration compatibility surfaces if future evidence proves the layer is safe and useful.",
+      "implementation_effect": "future_authorization_required",
+      "requires_new_evidence": true
+    },
+    "hold-no-op": {
+      "option_id": "hold-no-op",
+      "title": "Hold and no-op",
+      "kind": "defer_no_op",
+      "description": "Take no protocol-architecture action because comparative evidence is missing, ambiguous, or not replayed.",
+      "implementation_effect": "no_code_change",
+      "requires_new_evidence": true
+    }
+  },
+  "hard_constraints": [
+    "json_only",
+    "closed_option_set",
+    "cite_status_quo_refs",
+    "cite_evidence_refs_only",
+    "no_hidden_evidence",
+    "no_secret_material",
+    "no_live_mutation",
+    "no_authority_transfer",
+    "prefer_no_op_when_uncertain",
+    "challenge_path_required",
+    "conformance_packet_required"
+  ],
+  "forbidden_outputs": [
+    "live_registry_mutation",
+    "live_cobalt_amendment_submission",
+    "authority_transfer",
+    "hidden_evidence",
+    "secret_dependency",
+    "unregistered_reputation_claim",
+    "scope_expansion",
+    "model_self_upgrade",
+    "selector_self_upgrade",
+    "prompt_self_upgrade",
+    "prose_only_output",
+    "option_outside_closed_set"
+  ],
+  "fallback": {
+    "decision": "no_op",
+    "trigger_conditions": [
+      "missing_evidence",
+      "ambiguous_evidence",
+      "schema_invalid",
+      "replay_drift",
+      "hidden_evidence_attempt",
+      "scope_expansion_attempt",
+      "unsafe_live_action_attempt"
+    ]
+  },
+  "prompt_contract": {
+    "qwen_may_propose_evidence_request": true,
+    "qwen_may_add_options": false,
+    "qwen_may_change_constraints": false,
+    "qwen_may_authorize_live_action": false,
+    "output_json_only": true,
+    "decision_must_select_option_id": true
+  },
+  "checks": {
+    "status_quo_present": true,
+    "option_set_closed": true,
+    "hard_constraints_present": true,
+    "forbidden_outputs_present": true,
+    "no_op_fallback_present": true,
+    "live_mutation_authorized": false,
+    "authority_transfer": false
+  }
+}

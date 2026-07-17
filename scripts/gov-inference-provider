@@ -1,0 +1,378 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPOS_ROOT="${REPOS_ROOT:-${HOME}/repos}"
+AAO_REPO="${AAO_REPO:-$REPOS_ROOT/autonomous_ai_org}"
+AAO_VENV="${AAO_VENV:-$AAO_REPO/.venv}"
+SECRETS_FILE="${POSTFIAT_PROVIDER_SECRETS:-$REPOS_ROOT/aicr.txt}"
+DEFAULT_RUNPOD_GPU="${POSTFIAT_RUNPOD_GPU:-h100}"
+DEFAULT_MODEL="${POSTFIAT_INFERENCE_MODEL:-Qwen/Qwen3.6-27B-FP8}"
+DEFAULT_SGLANG_IMAGE="${POSTFIAT_SGLANG_IMAGE:-lmsysorg/sglang:nightly-dev-cu13-20260523-c112f762}"
+DEFAULT_VAST_QUERY="${POSTFIAT_VAST_QUERY:-rentable=true verified=true num_gpus=1 gpu_ram>=80 direct_port_count>=2}"
+
+usage() {
+  cat <<'USAGE'
+usage:
+  scripts/gov-inference-provider check
+  scripts/gov-inference-provider bootstrap
+  scripts/gov-inference-provider inventory
+
+  scripts/gov-inference-provider runpod-list [--only-running] [--require-zero-running]
+  scripts/gov-inference-provider runpod-gpus
+  scripts/gov-inference-provider runpod-create-sglang [--gpu GPU] [--name NAME] [--model MODEL] [--execute]
+  scripts/gov-inference-provider runpod-status POD_ID
+  scripts/gov-inference-provider runpod-wait POD_ID [--port PORT] [--timeout SECONDS]
+  scripts/gov-inference-provider runpod-stop POD_ID
+  scripts/gov-inference-provider runpod-delete POD_ID
+
+  scripts/gov-inference-provider vast-instances
+  scripts/gov-inference-provider vast-search [--query QUERY] [--limit N] [--output PATH]
+  scripts/gov-inference-provider vast-create-sglang OFFER_ID [--label LABEL] [--disk GB] [--execute]
+  scripts/gov-inference-provider vast-destroy INSTANCE_ID --execute
+
+Provider keys are read from RUNPOD_API_KEY/VAST_API_KEY first, then from
+\$REPOS_ROOT/aicr.txt by default. Secrets are never printed by this
+script. Paid creates and destroys require an explicit --execute.
+USAGE
+}
+
+die() {
+  echo "error: $*" >&2
+  exit 1
+}
+
+have() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+secret_value() {
+  local name="$1"
+  local env_name="$2"
+  local current="${!env_name-}"
+  if [ -n "$current" ]; then
+    printf '%s' "$current"
+    return 0
+  fi
+  [ -f "$SECRETS_FILE" ] || return 1
+  awk -v wanted="$name" -v env_name="$env_name" '
+    function trim(s) {
+      gsub(/^[ \t\r\n]+/, "", s)
+      gsub(/[ \t\r\n]+$/, "", s)
+      return s
+    }
+    /^[[:space:]]*(#|$)/ { next }
+    {
+      line = $0
+      eq = index(line, "=")
+      col = index(line, ":")
+      if (eq == 0 || (col != 0 && col < eq)) {
+        sep = col
+      } else {
+        sep = eq
+      }
+      if (sep > 0) {
+        key = trim(substr(line, 1, sep - 1))
+        val = trim(substr(line, sep + 1))
+      } else {
+        n = split(line, parts, /[[:space:]]+/)
+        key = trim(parts[1])
+        val = trim(substr(line, length(parts[1]) + 1))
+      }
+      key_l = tolower(key)
+      gsub(/[^a-z0-9_]/, "", key_l)
+      wanted_l = tolower(wanted)
+      env_l = tolower(env_name)
+      if (key_l == wanted_l || key_l == env_l || key_l == wanted_l "_api_key") {
+        print val
+        exit
+      }
+    }
+  ' "$SECRETS_FILE"
+}
+
+require_secret() {
+  local name="$1"
+  local env_name="$2"
+  local value
+  value="$(secret_value "$name" "$env_name" || true)"
+  [ -n "$value" ] || die "missing $env_name; set env var or add '$name=<secret>' to $SECRETS_FILE"
+  printf '%s' "$value"
+}
+
+secret_source() {
+  local name="$1"
+  local env_name="$2"
+  if [ -n "${!env_name-}" ]; then
+    printf 'env'
+    return 0
+  fi
+  if [ -n "$(secret_value "$name" "$env_name" || true)" ]; then
+    printf 'file'
+    return 0
+  fi
+  printf 'missing'
+}
+
+secure_secret_file() {
+  [ -e "$SECRETS_FILE" ] || return 0
+  local mode
+  mode="$(stat -c '%a' "$SECRETS_FILE")"
+  if [ $((8#$mode & 077)) -ne 0 ]; then
+    chmod 600 "$SECRETS_FILE"
+  fi
+}
+
+require_aao_repo() {
+  [ -f "$AAO_REPO/pyproject.toml" ] || die "autonomous_ai_org repo not found at $AAO_REPO"
+}
+
+ensure_aao_venv() {
+  require_aao_repo
+  if [ ! -x "$AAO_VENV/bin/python" ]; then
+    python3 -m venv "$AAO_VENV"
+  fi
+  if [ ! -x "$AAO_VENV/bin/tensorcash-runpod" ]; then
+    "$AAO_VENV/bin/python" -m pip install -q --upgrade pip
+    "$AAO_VENV/bin/python" -m pip install -q -e "$AAO_REPO"
+  fi
+}
+
+ensure_vast_cli() {
+  ensure_aao_venv
+  if [ ! -x "$AAO_VENV/bin/vastai" ]; then
+    "$AAO_VENV/bin/python" -m pip install -q vastai
+  fi
+}
+
+runpod_cmd() {
+  ensure_aao_venv
+  local key
+  key="$(require_secret runpod RUNPOD_API_KEY)"
+  RUNPOD_API_KEY="$key" "$AAO_VENV/bin/tensorcash-runpod" "$@"
+}
+
+vast_cmd() {
+  ensure_vast_cli
+  local key
+  key="$(require_secret vast VAST_API_KEY)"
+  VAST_API_KEY="$key" "$AAO_VENV/bin/vastai" "$@"
+}
+
+cmd_check() {
+  secure_secret_file
+  local secrets_mode="missing"
+  if [ -e "$SECRETS_FILE" ]; then
+    secrets_mode="$(stat -c '%a' "$SECRETS_FILE")"
+  fi
+  printf 'repo=%s\n' "$ROOT"
+  printf 'autonomous_ai_org=%s\n' "$AAO_REPO"
+  printf 'autonomous_ai_org_present=%s\n' "$([ -f "$AAO_REPO/pyproject.toml" ] && echo yes || echo no)"
+  printf 'venv=%s\n' "$AAO_VENV"
+  printf 'venv_present=%s\n' "$([ -x "$AAO_VENV/bin/python" ] && echo yes || echo no)"
+  printf 'secrets_file=%s\n' "$SECRETS_FILE"
+  printf 'secrets_file_mode=%s\n' "$secrets_mode"
+  printf 'runpod_key=%s\n' "$(secret_source runpod RUNPOD_API_KEY)"
+  printf 'vast_key=%s\n' "$(secret_source vast VAST_API_KEY)"
+  printf 'runpod_cli=%s\n' "$([ -x "$AAO_VENV/bin/tensorcash-runpod" ] && echo ready || echo missing)"
+  printf 'vast_cli=%s\n' "$([ -x "$AAO_VENV/bin/vastai" ] && echo ready || echo missing)"
+}
+
+cmd_bootstrap() {
+  secure_secret_file
+  ensure_aao_venv
+  ensure_vast_cli
+  cmd_check
+}
+
+cmd_inventory() {
+  secure_secret_file
+  echo "== runpod running pods =="
+  runpod_cmd list --only-running
+  echo "== vast instances =="
+  vast_cmd show instances-v1 --raw
+}
+
+cmd_runpod_create_sglang() {
+  local gpu="$DEFAULT_RUNPOD_GPU"
+  local name="postfiat-gov-agent-qwen36-sglang"
+  local model="$DEFAULT_MODEL"
+  local execute=0
+  local context_length=32768
+  local chunked_prefill=4096
+  local max_requests=1
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --gpu) gpu="${2:?missing --gpu value}"; shift 2 ;;
+      --name) name="${2:?missing --name value}"; shift 2 ;;
+      --model) model="${2:?missing --model value}"; shift 2 ;;
+      --context-length) context_length="${2:?missing --context-length value}"; shift 2 ;;
+      --chunked-prefill-size) chunked_prefill="${2:?missing --chunked-prefill-size value}"; shift 2 ;;
+      --max-running-requests) max_requests="${2:?missing --max-running-requests value}"; shift 2 ;;
+      --execute) execute=1; shift ;;
+      --help|-h) usage; return 0 ;;
+      *) die "unknown runpod-create-sglang arg: $1" ;;
+    esac
+  done
+  local args=(
+    create
+    --gpu "$gpu"
+    --name "$name"
+    --model "$model"
+    --context-length "$context_length"
+    --chunked-prefill-size "$chunked_prefill"
+    --max-running-requests "$max_requests"
+  )
+  if [ "$execute" -eq 1 ]; then
+    args+=(--execute)
+  else
+    args+=(--dry-run)
+  fi
+  runpod_cmd "${args[@]}"
+}
+
+vast_sglang_onstart() {
+  cat <<'SCRIPT'
+set -euo pipefail
+mkdir -p /workspace/postfiat-gov-sglang
+cd /workspace/postfiat-gov-sglang
+cat > index.html <<'HTML'
+<html><body><h1>PostFiat governance SGLang logs</h1><pre id="log"></pre><script>
+async function refresh(){try{document.getElementById('log').textContent=await (await fetch('/sglang.log?ts='+Date.now())).text();}catch(e){document.getElementById('log').textContent=String(e);}}
+setInterval(refresh, 3000); refresh();
+</script></body></html>
+HTML
+python3 -m http.server 8080 --bind ${AAO_LOG_HOST:-127.0.0.1} > /workspace/postfiat-gov-sglang/log-server.log 2>&1 &
+echo "startup $(date -u)" | tee /workspace/postfiat-gov-sglang/sglang.log
+nvidia-smi 2>&1 | tee -a /workspace/postfiat-gov-sglang/sglang.log || true
+python3 -m sglang.launch_server \
+  --model-path ${AAO_MODEL_ID:-Qwen/Qwen3.6-27B-FP8} \
+  --served-model-name ${AAO_MODEL_ID:-Qwen/Qwen3.6-27B-FP8} \
+  --host ${AAO_SGLANG_HOST:-127.0.0.1} \
+  --port 8000 \
+  --tp ${AAO_TP:-1} \
+  --mem-fraction-static ${AAO_MEM_FRACTION:-0.75} \
+  --chunked-prefill-size ${AAO_CHUNKED_PREFILL:-4096} \
+  --max-running-requests ${AAO_MAX_REQS:-1} \
+  --context-length ${AAO_CONTEXT_LENGTH:-32768} \
+  --enable-deterministic-inference \
+  --enable-metrics \
+  --trust-remote-code \
+  --reasoning-parser ${AAO_REASONING_PARSER:-qwen3} \
+  ${AAO_EXTRA_SGLANG_ARGS:-} \
+  >> /workspace/postfiat-gov-sglang/sglang.log 2>&1 &
+wait $!
+SCRIPT
+}
+
+cmd_vast_search() {
+  local query="$DEFAULT_VAST_QUERY"
+  local limit=100
+  local output=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --query) query="${2:?missing --query value}"; shift 2 ;;
+      --limit) limit="${2:?missing --limit value}"; shift 2 ;;
+      --output) output="${2:?missing --output value}"; shift 2 ;;
+      --help|-h) usage; return 0 ;;
+      *) die "unknown vast-search arg: $1" ;;
+    esac
+  done
+  if [ -n "$output" ]; then
+    mkdir -p "$(dirname "$output")"
+    vast_cmd search offers "$query" --raw --limit "$limit" >"$output"
+    printf 'wrote %s\n' "$output"
+  else
+    vast_cmd search offers "$query" --raw --limit "$limit"
+  fi
+}
+
+cmd_vast_create_sglang() {
+  local offer_id="${1:-}"
+  [ -n "$offer_id" ] || die "missing Vast offer id"
+  shift || true
+  local label="postfiat-gov-agent-qwen36-sglang"
+  local disk=200
+  local execute=0
+  local image="$DEFAULT_SGLANG_IMAGE"
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --label) label="${2:?missing --label value}"; shift 2 ;;
+      --disk) disk="${2:?missing --disk value}"; shift 2 ;;
+      --image) image="${2:?missing --image value}"; shift 2 ;;
+      --execute) execute=1; shift ;;
+      --help|-h) usage; return 0 ;;
+      *) die "unknown vast-create-sglang arg: $1" ;;
+    esac
+  done
+  if [ "$execute" -ne 1 ]; then
+    cat <<PLAN
+dry_run=true
+provider=vast
+offer_id=$offer_id
+image=$image
+disk_gb=$disk
+label=$label
+ports=8000,8080
+paid_action=false
+rerun_with=--execute
+PLAN
+    return 0
+  fi
+  AAO_MODEL_ID="$DEFAULT_MODEL" vast_cmd \
+    create instance "$offer_id" \
+    --image "$image" \
+    --disk "$disk" \
+    --ssh \
+    --direct \
+    --cancel-unavail \
+    --label "$label" \
+    --env "-p 8000:8000 -p 8080:8080 -e AAO_MODEL_ID=$DEFAULT_MODEL -e AAO_CONTEXT_LENGTH=${AAO_CONTEXT_LENGTH:-32768} -e AAO_CHUNKED_PREFILL=${AAO_CHUNKED_PREFILL:-4096} -e AAO_MAX_REQS=${AAO_MAX_REQS:-1} -e AAO_MEM_FRACTION=${AAO_MEM_FRACTION:-0.75} -e AAO_TP=${AAO_TP:-1} -e AAO_REASONING_PARSER=${AAO_REASONING_PARSER:-qwen3}" \
+    --onstart-cmd "$(vast_sglang_onstart)" |
+    sed -E "s/('instance_api_key': ')[^']+(')/\\1<redacted>\\2/g; s/(\"instance_api_key\": \")[^\"]+(\")/\\1<redacted>\\2/g"
+}
+
+cmd_vast_destroy() {
+  local instance_id="${1:-}"
+  [ -n "$instance_id" ] || die "missing Vast instance id"
+  shift || true
+  local execute=0
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --execute) execute=1; shift ;;
+      --help|-h) usage; return 0 ;;
+      *) die "unknown vast-destroy arg: $1" ;;
+    esac
+  done
+  [ "$execute" -eq 1 ] || die "vast-destroy is a paid-resource cleanup mutation; pass --execute"
+  vast_cmd destroy instance "$instance_id" --yes
+}
+
+main() {
+  local command="${1:-}"
+  if [ -z "$command" ]; then
+    usage
+    exit 2
+  fi
+  shift || true
+  case "$command" in
+    check) cmd_check "$@" ;;
+    bootstrap) cmd_bootstrap "$@" ;;
+    inventory) cmd_inventory "$@" ;;
+    runpod-list) runpod_cmd list "$@" ;;
+    runpod-gpus) runpod_cmd gpus "$@" ;;
+    runpod-create-sglang) cmd_runpod_create_sglang "$@" ;;
+    runpod-status) runpod_cmd status "$@" ;;
+    runpod-wait) runpod_cmd wait "$@" ;;
+    runpod-stop) runpod_cmd stop "$@" ;;
+    runpod-delete) runpod_cmd delete "$@" ;;
+    vast-instances) vast_cmd show instances-v1 --raw "$@" ;;
+    vast-search) cmd_vast_search "$@" ;;
+    vast-create-sglang) cmd_vast_create_sglang "$@" ;;
+    vast-destroy) cmd_vast_destroy "$@" ;;
+    --help|-h|help) usage ;;
+    *) usage >&2; die "unknown command: $command" ;;
+  esac
+}
+
+main "$@"

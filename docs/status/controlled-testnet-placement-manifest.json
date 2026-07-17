@@ -1,0 +1,78 @@
+{
+  "schema": "postfiat-testnet-placement-manifest-v1",
+  "generated_utc": "2026-05-13T04:35:00Z",
+  "scope": "self-operated-controlled-testnet",
+  "source_evidence": {
+    "p0_report": "reports/testnet-p0-network-gate-remote-jqless-full/testnet-p0-network-gate-20260513T040355Z.json",
+    "placement_capacity_profile": "reports/testnet-p0-network-gate-remote-jqless-full/logs/remote-placement-capacity.json",
+    "topology_capture_profile": "reports/testnet-p0-network-gate-remote-jqless-full/logs/remote/topology-capture/testnet-remote-topology-capture-profile.json"
+  },
+  "claims": {
+    "controlled_testnet_no_single_host_can_block_quorum": true,
+    "controlled_testnet_no_single_operator_can_block_quorum": true,
+    "controlled_testnet_no_single_operator_host_can_block_quorum": true,
+    "public_expansion_diversity_claimed": false
+  },
+  "placement_targets": [
+    {
+      "machine_index": 1,
+      "validator_id": "validator-0",
+      "host_group": "host-3",
+      "operator_group": "operator-2",
+      "operator_host_group": "operator-host-2",
+      "cloud_provider_group": null,
+      "region_group": null,
+      "jurisdiction_group": null,
+      "legal_domain_group": null,
+      "funding_source_group": null
+    },
+    {
+      "machine_index": 2,
+      "validator_id": "validator-1",
+      "host_group": "host-2",
+      "operator_group": "operator-3",
+      "operator_host_group": "operator-host-3",
+      "cloud_provider_group": null,
+      "region_group": null,
+      "jurisdiction_group": null,
+      "legal_domain_group": null,
+      "funding_source_group": null
+    },
+    {
+      "machine_index": 3,
+      "validator_id": "validator-2",
+      "host_group": "host-1",
+      "operator_group": "operator-0",
+      "operator_host_group": "operator-host-0",
+      "cloud_provider_group": null,
+      "region_group": null,
+      "jurisdiction_group": null,
+      "legal_domain_group": null,
+      "funding_source_group": null
+    },
+    {
+      "machine_index": 4,
+      "validator_id": "validator-3",
+      "host_group": "host-4",
+      "operator_group": "operator-1",
+      "operator_host_group": "operator-host-1",
+      "cloud_provider_group": null,
+      "region_group": null,
+      "jurisdiction_group": null,
+      "legal_domain_group": null,
+      "funding_source_group": null
+    },
+    {
+      "machine_index": 5,
+      "validator_id": "validator-4",
+      "host_group": "host-0",
+      "operator_group": "operator-4",
+      "operator_host_group": "operator-host-4",
+      "cloud_provider_group": null,
+      "region_group": null,
+      "jurisdiction_group": null,
+      "legal_domain_group": null,
+      "funding_source_group": null
+    }
+  ]
+}

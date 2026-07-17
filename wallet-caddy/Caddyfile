@@ -1,0 +1,51 @@
+{
+    servers {
+        protocols h1
+    }
+}
+
+:5173 {
+    tls /certs/postfiat-wallet-dev.crt /certs/postfiat-wallet-dev.key
+
+    reverse_proxy /rpc wallet-proxy:8080 {
+        header_up Upgrade {http.request.header.Upgrade}
+        header_up Connection {http.request.header.Connection}
+    }
+
+    reverse_proxy /api/navswap/* wallet-proxy:8080
+    @shieldedNavSwap path /api/shielded-nav-swap /api/shielded-nav-swap/*
+    reverse_proxy @shieldedNavSwap wallet-proxy:8080
+    reverse_proxy /api/bridge/* wallet-proxy:8080
+
+    @arbRpc path /arb-rpc /arb-rpc/*
+    handle @arbRpc {
+        rewrite * /rpc
+        reverse_proxy https://arb1.arbitrum.io {
+            header_up Host arb1.arbitrum.io
+        }
+    }
+
+    @ethRpc path /eth-rpc /eth-rpc/*
+    handle @ethRpc {
+        uri strip_prefix /eth-rpc
+        reverse_proxy https://ethereum-rpc.publicnode.com {
+            header_up Host ethereum-rpc.publicnode.com
+        }
+    }
+
+    handle_path /cctp-attestation/* {
+        rewrite * /attestations{path}
+        reverse_proxy https://iris-api.circle.com {
+            header_up Host iris-api.circle.com
+        }
+    }
+
+    handle_path /circle/* {
+        reverse_proxy https://iris-api.circle.com {
+            header_up Host iris-api.circle.com
+        }
+    }
+
+    root * /wallet/dist
+    file_server
+}

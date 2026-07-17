@@ -1,0 +1,341 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-validator-evidence-qwen-replay-output-manifest-v1.json",
+  "title": "PostFiat Validator Evidence Qwen Replay Output Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "manifest_id",
+    "mode",
+    "qwen_replay_authorization_hash",
+    "qwen_replay_preflight_hash",
+    "qwen_prompt_redaction_audit_hash",
+    "qwen_prompt_input_manifest_hash",
+    "qwen_public_summary_projection_hash",
+    "model_request_hash",
+    "packet_schema_hash",
+    "field_registry_hash",
+    "collection_window",
+    "output_scope",
+    "output_artifacts",
+    "execution_boundary",
+    "failure_policy",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-evidence-qwen-replay-output-manifest-v1"
+    },
+    "manifest_id": {
+      "$ref": "#/$defs/id"
+    },
+    "mode": {
+      "const": "design_fixture_only"
+    },
+    "qwen_replay_authorization_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_preflight_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_prompt_redaction_audit_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_prompt_input_manifest_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_public_summary_projection_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "model_request_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "packet_schema_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "field_registry_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "collection_window": {
+      "$ref": "#/$defs/collection_window"
+    },
+    "output_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorization_status",
+        "replay_outputs_accepted",
+        "authorized_replay_count",
+        "future_planned_replay_count",
+        "generated_output_count",
+        "valid_output_count",
+        "invalid_output_count",
+        "output_hashes",
+        "future_authorized_replay_required"
+      ],
+      "properties": {
+        "authorization_status": {
+          "const": "not_authorized"
+        },
+        "replay_outputs_accepted": {
+          "const": false
+        },
+        "authorized_replay_count": {
+          "const": 0
+        },
+        "future_planned_replay_count": {
+          "type": "integer",
+          "minimum": 50
+        },
+        "generated_output_count": {
+          "const": 0
+        },
+        "valid_output_count": {
+          "const": 0
+        },
+        "invalid_output_count": {
+          "const": 0
+        },
+        "output_hashes": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "future_authorized_replay_required": {
+          "const": true
+        }
+      }
+    },
+    "output_artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_response_manifest_hash",
+        "ruleset_candidate_hash",
+        "compiled_policy_hash",
+        "output_bundle_cid",
+        "retained_output_paths"
+      ],
+      "properties": {
+        "model_response_manifest_hash": {
+          "type": "null"
+        },
+        "ruleset_candidate_hash": {
+          "type": "null"
+        },
+        "compiled_policy_hash": {
+          "type": "null"
+        },
+        "output_bundle_cid": {
+          "type": "null"
+        },
+        "retained_output_paths": {
+          "type": "array",
+          "maxItems": 0
+        }
+      }
+    },
+    "execution_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_spend_executed",
+        "provider_resource_created",
+        "provider_resource_destroyed",
+        "live_model_request_executed",
+        "model_output_generated",
+        "live_network_access",
+        "live_registry_mutation",
+        "authority_transfer"
+      ],
+      "properties": {
+        "provider_spend_executed": {
+          "const": false
+        },
+        "provider_resource_created": {
+          "const": false
+        },
+        "provider_resource_destroyed": {
+          "const": false
+        },
+        "live_model_request_executed": {
+          "const": false
+        },
+        "model_output_generated": {
+          "const": false
+        },
+        "live_network_access": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    },
+    "failure_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "output_without_authorization",
+        "authorization_not_explicit",
+        "lineage_drift",
+        "retained_output_without_authorization",
+        "output_schema_invalid",
+        "fallback_decision"
+      ],
+      "properties": {
+        "output_without_authorization": {
+          "const": "reject_future_replay"
+        },
+        "authorization_not_explicit": {
+          "const": "reject_future_replay"
+        },
+        "lineage_drift": {
+          "const": "reject_future_replay"
+        },
+        "retained_output_without_authorization": {
+          "const": "reject_future_replay"
+        },
+        "output_schema_invalid": {
+          "const": "reject_future_replay"
+        },
+        "fallback_decision": {
+          "const": "no_op"
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "qwen_replay_authorization_hash_bound",
+        "qwen_replay_preflight_hash_bound",
+        "qwen_prompt_redaction_audit_hash_bound",
+        "qwen_prompt_input_manifest_hash_bound",
+        "qwen_public_summary_projection_hash_bound",
+        "model_request_hash_bound",
+        "packet_schema_hash_bound",
+        "field_registry_hash_bound",
+        "collection_window_bound",
+        "authorization_status_not_authorized",
+        "future_authorized_replay_required",
+        "replay_outputs_accepted",
+        "generated_output_count_zero",
+        "retained_output_artifacts_empty",
+        "provider_spend_executed",
+        "provider_resource_created",
+        "live_model_request_executed",
+        "model_output_generated",
+        "live_network_access",
+        "live_registry_mutation",
+        "authority_transfer"
+      ],
+      "properties": {
+        "qwen_replay_authorization_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_preflight_hash_bound": {
+          "const": true
+        },
+        "qwen_prompt_redaction_audit_hash_bound": {
+          "const": true
+        },
+        "qwen_prompt_input_manifest_hash_bound": {
+          "const": true
+        },
+        "qwen_public_summary_projection_hash_bound": {
+          "const": true
+        },
+        "model_request_hash_bound": {
+          "const": true
+        },
+        "packet_schema_hash_bound": {
+          "const": true
+        },
+        "field_registry_hash_bound": {
+          "const": true
+        },
+        "collection_window_bound": {
+          "const": true
+        },
+        "authorization_status_not_authorized": {
+          "const": true
+        },
+        "future_authorized_replay_required": {
+          "const": true
+        },
+        "replay_outputs_accepted": {
+          "const": false
+        },
+        "generated_output_count_zero": {
+          "const": true
+        },
+        "retained_output_artifacts_empty": {
+          "const": true
+        },
+        "provider_spend_executed": {
+          "const": false
+        },
+        "provider_resource_created": {
+          "const": false
+        },
+        "live_model_request_executed": {
+          "const": false
+        },
+        "model_output_generated": {
+          "const": false
+        },
+        "live_network_access": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "collection_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_height",
+        "to_height",
+        "from_time",
+        "to_time"
+      ],
+      "properties": {
+        "from_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "from_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to_time": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    }
+  }
+}

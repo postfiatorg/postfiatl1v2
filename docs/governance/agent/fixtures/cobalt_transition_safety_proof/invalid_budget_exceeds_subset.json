@@ -1,0 +1,12 @@
+{
+  "base_fixture": "valid_transition_safety_proof.json",
+  "overrides": {
+    "profile": {
+      "byzantine_budget": 3
+    },
+    "byzantine_validators": ["A", "B", "C"]
+  },
+  "expected_error_contains": [
+    "byzantine_budget exceeds weakest t_s"
+  ]
+}

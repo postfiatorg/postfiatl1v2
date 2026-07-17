@@ -1,0 +1,19 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/performance_methodology_policy/valid_performance_methodology_policy.json",
+  "expected_error_contains": [
+    "artifact missing"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "cards",
+        4,
+        "artifact",
+        "path"
+      ],
+      "value": "reports/missing-orchard-verification-budget-v1-report.json"
+    }
+  ],
+  "schema": "postfiat-performance-methodology-policy-invalid-case-v1"
+}

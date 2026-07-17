@@ -1,0 +1,24 @@
+[package]
+name = "postfiat-fastpay-prototype"
+version = "0.1.0"
+description = "Research prototype for PostFiat owned-object payment settlement"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "fastpay-m1-bench"
+path = "src/main.rs"
+
+[[bin]]
+name = "fastpay-flow"
+path = "src/flow.rs"
+
+[dependencies]
+postfiat-crypto-provider = { path = "../crypto_provider" }
+postfiat-types = { path = "../types" }
+postfiat-execution = { path = "../execution" }

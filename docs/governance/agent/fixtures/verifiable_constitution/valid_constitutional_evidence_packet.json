@@ -1,0 +1,334 @@
+{
+  "schema": "postfiat-constitutional-evidence-packet-v1",
+  "packet_id": "vc-model-governance-001-evidence-001",
+  "packet_version": 1,
+  "status": "candidate",
+  "packet_scope": "model_governance",
+  "created_at": "2026-05-24T00:00:00Z",
+  "request_ref": {
+    "request_id": "vc-model-governance-001-request-001",
+    "request_path": "docs/governance/agent/fixtures/verifiable_constitution/valid_constitutional_evidence_request.json",
+    "request_file_sha3_384": "0b7162b4f8060a49bbba255c7388849c38e2fea0f932b9435750e6225dd3a4d8da3ac5e2db4f471cb5414db2e6d5871a",
+    "request_canonical_hash": "e7c99779309ee933b5204b29f429b5e0699e1e89f56bb03183051efbfa17fbde5d5b6133b87ff22172c6dddcfdbcacb3",
+    "request_schema_path": "docs/governance/agent/constitutional_evidence_request_schema.json",
+    "request_schema_sha3_384": "f278cce70a5c668424bac14d94719c0371b994fef98dbbd53f01b3f15e557ba8823aa363f7b407079f776c4cdf9d39d3"
+  },
+  "collection_manifest": {
+    "collector_id": "vc-local-repo-snapshot-collector",
+    "collection_mode": "repo_snapshot_only",
+    "collected_at": "2026-05-24T00:00:00Z",
+    "source_commit": "8e5563597785b42c5812d8689dfedd303f76f7de",
+    "live_collection_executed": false,
+    "network_reads": false,
+    "provider_spend": false,
+    "secret_material_seen": false,
+    "live_mutation_executed": false
+  },
+  "evidence_root": "094c5836c049e6394b1981d3e119f599af5f1a6af3429cb8f060d021b514c06b7aa1e515e07a7ffda54aadfa06097e51",
+  "evidence_items": [
+    {
+      "field_path": "model.active.model_id",
+      "requested_value_type": "string",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "Qwen/Qwen3.6-27B-FP8",
+      "source_refs": [
+        {
+          "ref_id": "dry-run-model-request",
+          "path": "docs/governance/agent/fixtures/dry_run_model_request.json",
+          "sha3_384": "3bf271143efe07552f588dcdcc61b60910d698d4b5b1164c9e2301fffd52e96dd1fb0be10775b7c93f3a27f79224ab08",
+          "provenance": "config_derived"
+        },
+        {
+          "ref_id": "model-selection-requirement",
+          "path": "docs_site/governance/model-selection-governance-requirement.md",
+          "sha3_384": "5ecc42acc51559329ede55769dc925de379f7aff3b87beb646cd886b73d9f528c2289d27550af2a4b4312fac484f04ed",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "config_derived",
+        "governance_documented"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "preserve_status_quo",
+      "conflict_behavior": "hold",
+      "action_bound": "decision_input",
+      "redaction_status": "public",
+      "collector_note": "The active model id is collected from the governed dry-run model request and model-selection requirement."
+    },
+    {
+      "field_path": "model.active.runtime_profile_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "3bf271143efe07552f588dcdcc61b60910d698d4b5b1164c9e2301fffd52e96dd1fb0be10775b7c93f3a27f79224ab08",
+      "source_refs": [
+        {
+          "ref_id": "dry-run-model-request",
+          "path": "docs/governance/agent/fixtures/dry_run_model_request.json",
+          "sha3_384": "3bf271143efe07552f588dcdcc61b60910d698d4b5b1164c9e2301fffd52e96dd1fb0be10775b7c93f3a27f79224ab08",
+          "provenance": "artifact_hash"
+        }
+      ],
+      "provenance": [
+        "artifact_hash",
+        "source_code"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "admission_gate",
+      "redaction_status": "public",
+      "collector_note": "The runtime profile is represented by the current dry-run model request hash until a later packet splits runtime image, tokenizer, and scheduler hashes."
+    },
+    {
+      "field_path": "model.active.prompt_template_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "3bf271143efe07552f588dcdcc61b60910d698d4b5b1164c9e2301fffd52e96dd1fb0be10775b7c93f3a27f79224ab08",
+      "source_refs": [
+        {
+          "ref_id": "dry-run-model-request",
+          "path": "docs/governance/agent/fixtures/dry_run_model_request.json",
+          "sha3_384": "3bf271143efe07552f588dcdcc61b60910d698d4b5b1164c9e2301fffd52e96dd1fb0be10775b7c93f3a27f79224ab08",
+          "provenance": "artifact_hash"
+        },
+        {
+          "ref_id": "qwen-cobalt-internal-validation-plan",
+          "path": "docs_site/governance/qwen-cobalt-internal-validation-plan.md",
+          "sha3_384": "3ef666d69c3ad28e999b8051749aac63296100ffcf9c528ae7d5c19deb0ad44a50f7e17ed4396596305ed10334147bb5",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "artifact_hash",
+        "governance_documented"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "redaction_status": "public",
+      "collector_note": "The active prompt template is bound through the current governed dry-run model request."
+    },
+    {
+      "field_path": "model.active.deterministic_flags",
+      "requested_value_type": "object",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": {
+        "batch_policy": "single_request_or_batch_invariant_required",
+        "deterministic_inference": true,
+        "sampling": "greedy",
+        "temperature": "0",
+        "tensor_parallelism": 1
+      },
+      "source_refs": [
+        {
+          "ref_id": "dry-run-model-request",
+          "path": "docs/governance/agent/fixtures/dry_run_model_request.json",
+          "sha3_384": "3bf271143efe07552f588dcdcc61b60910d698d4b5b1164c9e2301fffd52e96dd1fb0be10775b7c93f3a27f79224ab08",
+          "provenance": "config_derived"
+        },
+        {
+          "ref_id": "qwen-cobalt-internal-validation-plan",
+          "path": "docs_site/governance/qwen-cobalt-internal-validation-plan.md",
+          "sha3_384": "3ef666d69c3ad28e999b8051749aac63296100ffcf9c528ae7d5c19deb0ad44a50f7e17ed4396596305ed10334147bb5",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "config_derived",
+        "source_code"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "hold",
+      "action_bound": "admission_gate",
+      "redaction_status": "public",
+      "collector_note": "The packet records only deterministic controls that are already public governance inputs."
+    },
+    {
+      "field_path": "model.candidate.model_id",
+      "requested_value_type": "string",
+      "request_required": false,
+      "evidence_status": "missing",
+      "canonical_value": null,
+      "source_refs": [
+        {
+          "ref_id": "model-selection-requirement",
+          "path": "docs_site/governance/model-selection-governance-requirement.md",
+          "sha3_384": "5ecc42acc51559329ede55769dc925de379f7aff3b87beb646cd886b73d9f528c2289d27550af2a4b4312fac484f04ed",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "governance_documented",
+        "model_manifest"
+      ],
+      "freshness": "candidate_epoch_bound",
+      "missing_evidence_behavior": "preserve_status_quo",
+      "conflict_behavior": "reject_conflicted_field",
+      "action_bound": "decision_input",
+      "redaction_status": "not_applicable",
+      "collector_note": "No candidate model manifest is present in this packet, so the status quo is preserved."
+    },
+    {
+      "field_path": "model.candidate.replay_convergence_count",
+      "requested_value_type": "integer",
+      "request_required": false,
+      "evidence_status": "missing",
+      "canonical_value": null,
+      "source_refs": [
+        {
+          "ref_id": "model-selection-requirement",
+          "path": "docs_site/governance/model-selection-governance-requirement.md",
+          "sha3_384": "5ecc42acc51559329ede55769dc925de379f7aff3b87beb646cd886b73d9f528c2289d27550af2a4b4312fac484f04ed",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "replay_derived",
+        "test_report"
+      ],
+      "freshness": "candidate_epoch_bound",
+      "missing_evidence_behavior": "reject_candidate",
+      "conflict_behavior": "hold",
+      "action_bound": "admission_gate",
+      "redaction_status": "not_applicable",
+      "collector_note": "No candidate replay convergence report exists in this packet, so candidate promotion fails closed."
+    },
+    {
+      "field_path": "model.candidate.adversarial_failure_count",
+      "requested_value_type": "integer",
+      "request_required": false,
+      "evidence_status": "missing",
+      "canonical_value": null,
+      "source_refs": [
+        {
+          "ref_id": "model-selection-requirement",
+          "path": "docs_site/governance/model-selection-governance-requirement.md",
+          "sha3_384": "5ecc42acc51559329ede55769dc925de379f7aff3b87beb646cd886b73d9f528c2289d27550af2a4b4312fac484f04ed",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "test_report",
+        "replay_derived"
+      ],
+      "freshness": "candidate_epoch_bound",
+      "missing_evidence_behavior": "reject_candidate",
+      "conflict_behavior": "hold",
+      "action_bound": "admission_gate",
+      "redaction_status": "not_applicable",
+      "collector_note": "No candidate adversarial comparison report exists in this packet, so candidate promotion fails closed."
+    },
+    {
+      "field_path": "model.candidate.cross_machine_receipt_root",
+      "requested_value_type": "hash",
+      "request_required": false,
+      "evidence_status": "missing",
+      "canonical_value": null,
+      "source_refs": [
+        {
+          "ref_id": "model-selection-requirement",
+          "path": "docs_site/governance/model-selection-governance-requirement.md",
+          "sha3_384": "5ecc42acc51559329ede55769dc925de379f7aff3b87beb646cd886b73d9f528c2289d27550af2a4b4312fac484f04ed",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "replay_derived",
+        "artifact_hash",
+        "provider_manifest"
+      ],
+      "freshness": "candidate_epoch_bound",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "admission_gate",
+      "redaction_status": "not_applicable",
+      "collector_note": "No candidate cross-machine receipt root exists in this packet; the decision lane must hold or preserve status quo."
+    },
+    {
+      "field_path": "model.candidate.rollback_plan_hash",
+      "requested_value_type": "hash",
+      "request_required": false,
+      "evidence_status": "missing",
+      "canonical_value": null,
+      "source_refs": [
+        {
+          "ref_id": "model-selection-requirement",
+          "path": "docs_site/governance/model-selection-governance-requirement.md",
+          "sha3_384": "5ecc42acc51559329ede55769dc925de379f7aff3b87beb646cd886b73d9f528c2289d27550af2a4b4312fac484f04ed",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "candidate_epoch_bound",
+      "missing_evidence_behavior": "reject_candidate",
+      "conflict_behavior": "hold",
+      "action_bound": "conformance_input",
+      "redaction_status": "not_applicable",
+      "collector_note": "No candidate rollback plan exists in this packet, so candidate promotion fails closed."
+    }
+  ],
+  "missing_evidence": [
+    {
+      "field_path": "model.candidate.model_id",
+      "missing_evidence_behavior": "preserve_status_quo",
+      "no_op_or_hold_applied": true,
+      "rationale": "Candidate model id is absent, so the current model profile remains the only admissible profile."
+    },
+    {
+      "field_path": "model.candidate.replay_convergence_count",
+      "missing_evidence_behavior": "reject_candidate",
+      "no_op_or_hold_applied": true,
+      "rationale": "Candidate replay convergence evidence is absent."
+    },
+    {
+      "field_path": "model.candidate.adversarial_failure_count",
+      "missing_evidence_behavior": "reject_candidate",
+      "no_op_or_hold_applied": true,
+      "rationale": "Candidate adversarial comparison evidence is absent."
+    },
+    {
+      "field_path": "model.candidate.cross_machine_receipt_root",
+      "missing_evidence_behavior": "hold",
+      "no_op_or_hold_applied": true,
+      "rationale": "Candidate cross-machine replay receipt is absent."
+    },
+    {
+      "field_path": "model.candidate.rollback_plan_hash",
+      "missing_evidence_behavior": "reject_candidate",
+      "no_op_or_hold_applied": true,
+      "rationale": "Candidate rollback plan is absent."
+    }
+  ],
+  "redaction": {
+    "redaction_passed": true,
+    "secret_scan_passed": true,
+    "hidden_evidence_absent": true,
+    "prohibited_fields_absent": true,
+    "raw_secret_material_retained": false,
+    "public_packet_only": true
+  },
+  "checks": {
+    "schema_valid": true,
+    "request_hash_matches": true,
+    "requested_fields_bound": true,
+    "source_hashes_verified": true,
+    "missing_behaviors_applied": true,
+    "redaction_passed": true,
+    "secret_scan_passed": true,
+    "no_hidden_evidence": true,
+    "no_live_collection": true,
+    "no_live_mutation": true,
+    "packet_root_verified": true,
+    "authority_transfer": false
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_bound_adversary_pricing/valid_adversary_pricing.json",
+  "expected_error_contains": [
+    "statement.pricing_root_hash does not match pricing material"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "pricing_root_hash"
+      ],
+      "value": "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+    }
+  ],
+  "schema": "postfiat-validator-economic-bound-adversary-pricing-invalid-case-v1"
+}

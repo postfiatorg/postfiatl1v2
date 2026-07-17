@@ -1,0 +1,239 @@
+{
+  "schema": "postfiat-validator-evidence-source-authorization-v1",
+  "authorization_id": "validator-evidence-source-authorization-2026-05-23-example",
+  "mode": "design_fixture_only",
+  "collector_manifest_hash": "d740ead49ba422d8571d0b724e5b87285f946e63a1804086b2cd1f13d1053f053059a821197f4441965400bdc0e9d2ee",
+  "packet_schema_hash": "92544968ea283754c5cd3cfba85194afff80f9366f07063b5cd228ea58a6f9efbeb74ad416f9f118595f8c6719d4f0c3",
+  "field_registry_hash": "a4d0ad75fcf706432e2d44bfd75486139a69116249ffb47bbc786fcb67ab939b25f99834d5cb5aa7bb93cfed8901200f",
+  "collection_window": {
+    "from_height": 1000,
+    "to_height": 2000,
+    "from_time": "2026-05-23T00:00:00Z",
+    "to_time": "2026-05-23T06:00:00Z"
+  },
+  "sources_order": [
+    "registry-snapshot",
+    "operator-manifest-set",
+    "url-domain-observation",
+    "network-performance-observation",
+    "chain-performance-history",
+    "cobalt-governance-history",
+    "governance-lifecycle-history",
+    "topology-claims",
+    "evidence-quality-summary"
+  ],
+  "sources": {
+    "registry-snapshot": {
+      "source_id": "registry-snapshot",
+      "kind": "registry_snapshot",
+      "source_root": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "provenance": [
+        "registry_derived",
+        "chain_derived"
+      ],
+      "freshness": "epoch_bound",
+      "required": true,
+      "operator_consent": "not_required_chain_or_public",
+      "visibility": "public_chain",
+      "live_fetch_authorized": false,
+      "raw_values_retained": false,
+      "emitted_field_paths": [
+        "validator.registry.validator_id",
+        "validator.registry.public_key_hash",
+        "validator.registry.active_status",
+        "validator.registry.registry_root",
+        "validator.registry.governance_epoch",
+        "cohort.registry.active_validator_count"
+      ]
+    },
+    "operator-manifest-set": {
+      "source_id": "operator-manifest-set",
+      "kind": "operator_manifest_set",
+      "source_root": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "provenance": [
+        "operator_signed"
+      ],
+      "freshness": "recent_30d",
+      "required": false,
+      "operator_consent": "operator_manifest_signed",
+      "visibility": "operator_approved_public_summary",
+      "live_fetch_authorized": false,
+      "raw_values_retained": false,
+      "emitted_field_paths": [
+        "validator.operator_manifest.manifest_hash",
+        "validator.operator_manifest.signature_valid",
+        "validator.operator_manifest.expires_at",
+        "validator.identity.declared_domain",
+        "validator.identity.declared_url"
+      ]
+    },
+    "url-domain-observation": {
+      "source_id": "url-domain-observation",
+      "kind": "url_domain_observation",
+      "source_root": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "provenance": [
+        "collector_observed",
+        "operator_signed"
+      ],
+      "freshness": "recent_24h",
+      "required": false,
+      "operator_consent": "operator_manifest_signed",
+      "visibility": "collector_observed_public_summary",
+      "live_fetch_authorized": false,
+      "raw_values_retained": false,
+      "emitted_field_paths": [
+        "validator.identity.url_fetch.status",
+        "validator.identity.url_fetch.http_status",
+        "validator.identity.url_fetch.content_hash",
+        "validator.identity.url_fetch.failure_reason",
+        "validator.identity.key_domain_binding.status",
+        "validator.identity.key_domain_binding.proof_hash"
+      ]
+    },
+    "network-performance-observation": {
+      "source_id": "network-performance-observation",
+      "kind": "network_performance_observation",
+      "source_root": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+      "provenance": [
+        "network_observed"
+      ],
+      "freshness": "recent_7d",
+      "required": false,
+      "operator_consent": "operator_opt_in_required",
+      "visibility": "collector_observed_public_summary",
+      "live_fetch_authorized": false,
+      "raw_values_retained": false,
+      "emitted_field_paths": [
+        "validator.performance.uptime_window_bps",
+        "validator.performance.rpc_reachable_bps",
+        "validator.performance.peer_reachable_bps",
+        "validator.performance.p95_latency_ms"
+      ]
+    },
+    "chain-performance-history": {
+      "source_id": "chain-performance-history",
+      "kind": "chain_performance_history",
+      "source_root": "222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
+      "provenance": [
+        "chain_derived"
+      ],
+      "freshness": "recent_7d",
+      "required": false,
+      "operator_consent": "not_required_chain_or_public",
+      "visibility": "public_chain",
+      "live_fetch_authorized": false,
+      "raw_values_retained": false,
+      "emitted_field_paths": [
+        "validator.performance.missed_vote_count",
+        "validator.performance.missed_proposal_count",
+        "validator.performance.equivocation_event_count"
+      ]
+    },
+    "cobalt-governance-history": {
+      "source_id": "cobalt-governance-history",
+      "kind": "cobalt_governance_history",
+      "source_root": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+      "provenance": [
+        "chain_derived"
+      ],
+      "freshness": "epoch_bound",
+      "required": true,
+      "operator_consent": "not_required_chain_or_public",
+      "visibility": "public_chain",
+      "live_fetch_authorized": false,
+      "raw_values_retained": false,
+      "emitted_field_paths": [
+        "validator.cobalt.amendment_vote_count",
+        "validator.cobalt.missed_amendment_vote_count",
+        "validator.cobalt.rollback_event_count",
+        "validator.cobalt.trust_view_mismatch_count"
+      ]
+    },
+    "governance-lifecycle-history": {
+      "source_id": "governance-lifecycle-history",
+      "kind": "governance_lifecycle_history",
+      "source_root": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+      "provenance": [
+        "chain_derived"
+      ],
+      "freshness": "historical",
+      "required": false,
+      "operator_consent": "not_required_chain_or_public",
+      "visibility": "public_chain",
+      "live_fetch_authorized": false,
+      "raw_values_retained": false,
+      "emitted_field_paths": [
+        "validator.governance.open_remediation_hold",
+        "validator.governance.last_lifecycle_event_height"
+      ]
+    },
+    "topology-claims": {
+      "source_id": "topology-claims",
+      "kind": "topology_claims",
+      "source_root": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "provenance": [
+        "operator_signed",
+        "self_asserted"
+      ],
+      "freshness": "recent_30d",
+      "required": false,
+      "operator_consent": "operator_manifest_signed",
+      "visibility": "operator_approved_public_summary",
+      "live_fetch_authorized": false,
+      "raw_values_retained": false,
+      "emitted_field_paths": [
+        "validator.topology.host_group",
+        "validator.topology.operator_group",
+        "validator.topology.jurisdiction_group",
+        "cohort.topology.host_group_count",
+        "cohort.topology.operator_group_count"
+      ]
+    },
+    "evidence-quality-summary": {
+      "source_id": "evidence-quality-summary",
+      "kind": "evidence_quality_summary",
+      "source_root": "555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555",
+      "provenance": [
+        "collector_observed"
+      ],
+      "freshness": "same_packet",
+      "required": true,
+      "operator_consent": "not_required_chain_or_public",
+      "visibility": "redacted_summary_only",
+      "live_fetch_authorized": false,
+      "raw_values_retained": false,
+      "emitted_field_paths": [
+        "packet.raw_observation_root",
+        "packet.redaction.private_fields_removed",
+        "packet.redaction.secret_scan_passed",
+        "validator.evidence_quality.missing_required_field_count",
+        "validator.evidence_quality.raw_observation_hash_count"
+      ]
+    }
+  },
+  "summary": {
+    "source_count": 9,
+    "required_source_count": 3,
+    "emitted_field_count": 40
+  },
+  "redaction": {
+    "raw_values_retained": false,
+    "private_fields_removed": true,
+    "secret_scan_required": true,
+    "operator_approved_summaries_only": true
+  },
+  "checks": {
+    "collector_manifest_bound": true,
+    "packet_schema_hash_bound": true,
+    "field_registry_hash_bound": true,
+    "source_kinds_match_manifest": true,
+    "source_roots_match_manifest": true,
+    "field_paths_registered": true,
+    "operator_consent_recorded": true,
+    "live_fetch_authorized": false,
+    "raw_values_retained": false,
+    "qwen_live_browsing_allowed": false,
+    "live_registry_mutation": false,
+    "authority_transfer": false
+  }
+}

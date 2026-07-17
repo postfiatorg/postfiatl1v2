@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_population_stability/valid_population_stability.json",
+  "expected_error_contains": [
+    "statement.stability_root_hash does not match stability material"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "stability_root_hash"
+      ],
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "schema": "postfiat-validator-economic-population-stability-invalid-case-v1"
+}

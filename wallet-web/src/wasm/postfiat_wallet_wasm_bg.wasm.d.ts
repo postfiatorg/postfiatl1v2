@@ -1,0 +1,35 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const make_rpc_request: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+export const parse_rpc_response: (a: number, b: number) => [number, number, number];
+export const random_master_seed: () => [number, number, number, number];
+export const wallet_address_from_seed: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
+export const wallet_fastpay_transfer_certificate_digest: (a: number, b: number) => [number, number, number, number];
+export const wallet_fastpay_transfer_lock_id: (a: number, b: number) => [number, number, number, number];
+export const wallet_fastpay_unwrap_certificate_digest: (a: number, b: number) => [number, number, number, number];
+export const wallet_fastpay_unwrap_lock_id: (a: number, b: number) => [number, number, number, number];
+export const wallet_keygen: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+export const wallet_sign_asset_transaction: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const wallet_sign_asset_transaction_fields: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const wallet_sign_escrow_transaction: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const wallet_sign_escrow_transaction_fields: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const wallet_sign_offer_transaction: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const wallet_sign_offer_transaction_fields: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const wallet_sign_owned_deposit: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const wallet_sign_owned_transfer: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const wallet_sign_owned_transfer_v3: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+export const wallet_sign_owned_unwrap: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const wallet_sign_owned_unwrap_v3: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+export const wallet_sign_payment_v2: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const wallet_sign_transfer: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const wallet_sign_transfer_fields: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const wallet_verify_fastpay_apply_ack: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const __wbindgen_malloc: (a: number, b: number) => number;
+export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+export const __wbindgen_exn_store: (a: number) => void;
+export const __externref_table_alloc: () => number;
+export const __wbindgen_externrefs: WebAssembly.Table;
+export const __externref_table_dealloc: (a: number) => void;
+export const __wbindgen_free: (a: number, b: number, c: number) => void;
+export const __wbindgen_start: () => void;

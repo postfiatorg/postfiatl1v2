@@ -1,0 +1,401 @@
+#!/usr/bin/env python3
+import argparse
+import hashlib
+import json
+import pathlib
+import sys
+import tempfile
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+DEFAULT_MODEL_REQUEST = pathlib.Path("docs/governance/agent/fixtures/dry_run_model_request.json")
+DEFAULT_LANE_ID = "dga-gate-3_5-validator-evidence-lineage-v1"
+DEFAULT_COUNT = 50
+SENSITIVE_MARKERS = [
+    "private_key_hex",
+    "seed_hex",
+    '"mnemonic"',
+    "mnemonic=",
+    "ssh_cred",
+    "begin private key",
+    "runpod_api_key",
+    "vast_api_key",
+]
+
+
+def rel(path: pathlib.Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def repo_path(path: pathlib.Path) -> pathlib.Path:
+    return path if path.is_absolute() else ROOT / path
+
+
+def no_sensitive_markers(text: str) -> bool:
+    lowered = text.lower()
+    return not any(marker in lowered for marker in SENSITIVE_MARKERS)
+
+
+def hash_well_formed(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 96
+        and all(char in "0123456789abcdef" for char in value)
+    )
+
+
+def sha3_384_file(path: pathlib.Path) -> str:
+    digest = hashlib.sha3_384()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def load_model_request(path: pathlib.Path) -> tuple[dict, dict]:
+    summary = {
+        "path": rel(path),
+        "present": path.is_file(),
+        "json_valid": False,
+        "sha3_384": None,
+        "request_hash": None,
+        "bundle_hash": None,
+        "validator_evidence_packet_schema_hash": None,
+        "validator_evidence_field_registry_hash": None,
+        "runtime_model": None,
+        "runtime_image": None,
+        "runtime_tensor_parallelism": None,
+        "runtime_max_running_requests": None,
+        "hashes_well_formed": False,
+        "redaction_scan_ok": False,
+    }
+    if not path.is_file():
+        summary["error"] = "missing model request"
+        return summary, {}
+    raw = path.read_text(encoding="utf-8")
+    summary["sha3_384"] = sha3_384_file(path)
+    summary["redaction_scan_ok"] = no_sensitive_markers(raw)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as error:
+        summary["error"] = f"invalid JSON: {error}"
+        return summary, {}
+    if not isinstance(data, dict):
+        summary["error"] = "model request is not an object"
+        return summary, {}
+    summary["json_valid"] = True
+    governed_inputs = data.get("governed_inputs", {})
+    runtime = data.get("runtime_manifest", {})
+    packet_hash = governed_inputs.get("validator_evidence_packet_schema_hash")
+    registry_hash = governed_inputs.get("validator_evidence_field_registry_hash")
+    summary.update(
+        {
+            "request_hash": data.get("request_hash"),
+            "bundle_hash": data.get("bundle_hash"),
+            "validator_evidence_packet_schema_hash": packet_hash,
+            "validator_evidence_field_registry_hash": registry_hash,
+            "runtime_model": runtime.get("model_id"),
+            "runtime_image": runtime.get("image"),
+            "runtime_tensor_parallelism": runtime.get("tensor_parallelism"),
+            "runtime_max_running_requests": runtime.get("max_running_requests"),
+            "hashes_well_formed": (
+                hash_well_formed(data.get("request_hash"))
+                and hash_well_formed(data.get("bundle_hash"))
+                and hash_well_formed(packet_hash)
+                and hash_well_formed(registry_hash)
+            ),
+        }
+    )
+    return summary, data
+
+
+def command_join(parts: list[str]) -> str:
+    return " ".join(parts)
+
+
+def build_plan(args: argparse.Namespace) -> dict:
+    model_request_path = repo_path(pathlib.Path(args.model_request))
+    model_request_summary, model_request = load_model_request(model_request_path)
+    lane_id = args.lane_id
+    gate_root = pathlib.Path(args.gate_root) if args.gate_root else pathlib.Path(
+        "reports/gov-inference-gate-3_5"
+    ) / lane_id
+    provider_root = pathlib.Path(args.provider_root) if args.provider_root else pathlib.Path(
+        "reports/gov-inference-provider"
+    ) / lane_id
+    outputs_dir = pathlib.Path(args.outputs_dir) if args.outputs_dir else gate_root / "responses"
+    report_file = pathlib.Path(args.report) if args.report else gate_root / (
+        "gov-inference-gate-3_5-deterministic-ruleset-generation.json"
+    )
+    count = args.count
+    runtime = model_request.get("runtime_manifest", {}) if isinstance(model_request, dict) else {}
+    model_id = runtime.get("model_id", "Qwen/Qwen3.6-27B-FP8")
+    image = runtime.get("image", "lmsysorg/sglang:nightly-dev-cu13-20260523-c112f762")
+    context_length = runtime.get("context_length", 32768)
+    chunked_prefill = runtime.get("chunked_prefill_size", 4096)
+    max_requests = runtime.get("max_running_requests", 1)
+    paths_under_reports = all(
+        not path.is_absolute() and path.parts and path.parts[0] == "reports"
+        for path in (gate_root, provider_root, outputs_dir, report_file)
+    )
+
+    commands = {
+        "provider_preflight": command_join(
+            [
+                "scripts/gov-inference-provider",
+                "check",
+                ">",
+                str(provider_root / "provider-check.txt"),
+            ]
+        ),
+        "inventory_before": command_join(
+            [
+                "scripts/gov-inference-provider",
+                "inventory",
+                ">",
+                str(provider_root / "pre-inventory.txt"),
+            ]
+        ),
+        "runpod_create_preview": command_join(
+            [
+                "scripts/gov-inference-provider",
+                "runpod-create-sglang",
+                "--gpu",
+                "h100",
+                "--name",
+                lane_id,
+                "--model",
+                str(model_id),
+                "--context-length",
+                str(context_length),
+                "--chunked-prefill-size",
+                str(chunked_prefill),
+                "--max-running-requests",
+                str(max_requests),
+                ">",
+                str(provider_root / "runpod-create-preview.json"),
+            ]
+        ),
+        "authorized_create_rule": (
+            "add --execute to exactly one provider create command only inside an approved "
+            "provider window; record provider metadata under the provider evidence path"
+        ),
+        "gate_3_5_replay": command_join(
+            [
+                "POSTFIAT_GOV_ENDPOINT_URL=<provider-endpoint-url>",
+                "scripts/gov-inference-gate-3_5",
+                "--count",
+                str(count),
+                "--request",
+                str(pathlib.Path(args.model_request)),
+                "--outputs-dir",
+                str(outputs_dir),
+                "--report",
+                str(report_file),
+            ]
+        ),
+        "lineage_audit": command_join(
+            [
+                "target/debug/postfiat-node",
+                "governance-agent-evidence-lineage-audit",
+                "--model-request",
+                str(pathlib.Path(args.model_request)),
+                "--gate-3_5-report",
+                str(report_file),
+            ]
+        ),
+        "operator_pack_release_check": command_join(
+            [
+                "scripts/gov-inference-operator-gate-pack",
+                "--gate-3_5-report",
+                str(report_file),
+            ]
+        ),
+        "inventory_after": command_join(
+            [
+                "scripts/gov-inference-provider",
+                "inventory",
+                ">",
+                str(provider_root / "final-inventory.txt"),
+            ]
+        ),
+    }
+
+    plan = {
+        "schema": "postfiat-governance-agent-gate-3_5-lineaged-replay-plan-v1",
+        "lane_id": lane_id,
+        "verified": False,
+        "plan_only": True,
+        "provider_commands_executed": False,
+        "model_requests_executed": False,
+        "cobalt_mutation": False,
+        "validator_authority_change": False,
+        "inputs": {
+            "model_request": model_request_summary,
+            "expected_generation_count": count,
+            "runtime_profile": {
+                "model_id": model_id,
+                "image": image,
+                "tensor_parallelism": runtime.get("tensor_parallelism", 1),
+                "context_length": context_length,
+                "chunked_prefill_size": chunked_prefill,
+                "max_running_requests": max_requests,
+                "deterministic_flags": runtime.get("deterministic_flags", []),
+            },
+        },
+        "output_paths": {
+            "gate_root": str(gate_root),
+            "provider_evidence_root": str(provider_root),
+            "responses_dir": str(outputs_dir),
+            "raw_response_pattern": str(outputs_dir / "raw_response_0001.json"),
+            "model_output_raw_pattern": str(outputs_dir / "model_output_raw_0001.txt"),
+            "model_output_json_pattern": str(outputs_dir / "model_output_0001.json"),
+            "gate_report": str(report_file),
+            "provider_preflight": str(provider_root / "provider-check.txt"),
+            "provider_pre_inventory": str(provider_root / "pre-inventory.txt"),
+            "provider_create_metadata": str(provider_root / "provider-create.json"),
+            "provider_status_after_replay": str(provider_root / "status-after-replay.json"),
+            "provider_stop_delete_log": str(provider_root / "provider-stop-delete.txt"),
+            "provider_final_inventory": str(provider_root / "final-inventory.txt"),
+        },
+        "commands": commands,
+        "retention_policy": {
+            "keep": [
+                "provider check and inventory summaries with key sources redacted by wrapper",
+                "provider create and status metadata without credentials",
+                "raw OpenAI-compatible responses from the model endpoint",
+                "parsed model_output JSON files",
+                "Gate 3.5 report with validator-evidence lineage fields",
+                "operator pack and lineage-audit outputs that reference the new report",
+            ],
+            "reject": [
+                "provider key material",
+                "SSH credentials",
+                "wallet or validator key material",
+                "wallet recovery phrases",
+                "endpoint URLs carrying credentials",
+                "unredacted shell history",
+            ],
+            "redaction_scan_required_before_commit": True,
+        },
+        "operator_acceptance_criteria": [
+            "provider pre-inventory and final inventory show zero unexpected paid resources",
+            "exactly one authorized endpoint is used for the replay window",
+            "Gate 3.5 report has verified=true",
+            "expected_count, observed_count, and valid_count all equal 50",
+            "distinct_ruleset_hashes and distinct_compiled_policy_hashes each contain one value",
+            "validator_evidence_packet_schema_hash matches the prompt-facing request",
+            "validator_evidence_field_registry_hash matches the prompt-facing request",
+            "report redaction_checked=true and no sensitive marker scan failure",
+            "operator gate pack verifies without --allow-missing-paid-replay using the new report",
+            "provider resource is stopped or destroyed and final inventory is recorded",
+            "no Cobalt amendment, validator-registry mutation, sidecar activation, commit-reveal activation, TP>1 admission, or authority transfer occurs",
+        ],
+    }
+    checks = {
+        "model_request_present": model_request_summary["present"],
+        "model_request_json_valid": model_request_summary["json_valid"],
+        "model_request_hashes_well_formed": model_request_summary["hashes_well_formed"],
+        "model_request_redaction_scan_ok": model_request_summary["redaction_scan_ok"],
+        "expected_count_is_50": count == 50,
+        "paths_under_reports": paths_under_reports,
+        "provider_commands_not_executed": plan["provider_commands_executed"] is False,
+        "model_requests_not_executed": plan["model_requests_executed"] is False,
+        "cobalt_mutation_false": plan["cobalt_mutation"] is False,
+        "validator_authority_change_false": plan["validator_authority_change"] is False,
+        "operator_acceptance_criteria_defined": len(plan["operator_acceptance_criteria"]) >= 10,
+    }
+    plan["checks"] = checks
+    plan["verified"] = all(checks.values()) and no_sensitive_markers(
+        json.dumps(plan, sort_keys=True)
+    )
+    plan["checks"]["plan_redaction_scan_ok"] = plan["verified"]
+    return plan
+
+
+def write_or_print(plan: dict, output: str | None) -> None:
+    payload = json.dumps(plan, indent=2, sort_keys=True) + "\n"
+    if not no_sensitive_markers(payload):
+        raise SystemExit("lineaged replay plan contains sensitive marker")
+    if output:
+        path = repo_path(pathlib.Path(output))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(payload, encoding="utf-8")
+    else:
+        print(payload, end="")
+
+
+def self_test() -> int:
+    with tempfile.TemporaryDirectory(prefix="postfiat-gate-3_5-lineaged-plan-") as temp_name:
+        output = pathlib.Path(temp_name) / "plan.json"
+        args = argparse.Namespace(
+            model_request=str(DEFAULT_MODEL_REQUEST),
+            lane_id=DEFAULT_LANE_ID,
+            count=DEFAULT_COUNT,
+            gate_root=None,
+            provider_root=None,
+            outputs_dir=None,
+            report=None,
+            output=str(output),
+            self_test=False,
+        )
+        plan = build_plan(args)
+        if not plan["verified"]:
+            print("self-test expected plan to verify", file=sys.stderr)
+            return 1
+        if plan["provider_commands_executed"] or plan["model_requests_executed"]:
+            print("self-test expected plan-only mode", file=sys.stderr)
+            return 1
+        if "validator_evidence_packet_schema_hash" not in plan["inputs"]["model_request"]:
+            print("self-test expected validator evidence lineage", file=sys.stderr)
+            return 1
+        write_or_print(plan, str(output))
+        parsed = json.loads(output.read_text(encoding="utf-8"))
+        if parsed["output_paths"]["gate_report"] != plan["output_paths"]["gate_report"]:
+            print("self-test expected stable output path", file=sys.stderr)
+            return 1
+    print(
+        json.dumps(
+            {
+                "schema": "postfiat-governance-agent-gate-3_5-lineaged-replay-plan-self-test-v1",
+                "verified": True,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Prepare the no-spend plan for a lineaged Gate 3.5 provider replay."
+    )
+    parser.add_argument("--model-request", default=str(DEFAULT_MODEL_REQUEST))
+    parser.add_argument("--lane-id", default=DEFAULT_LANE_ID)
+    parser.add_argument("--count", type=int, default=DEFAULT_COUNT)
+    parser.add_argument("--gate-root")
+    parser.add_argument("--provider-root")
+    parser.add_argument("--outputs-dir")
+    parser.add_argument("--report")
+    parser.add_argument("--output", help="optional path to write the plan JSON")
+    parser.add_argument("--self-test", action="store_true")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    if args.self_test:
+        return self_test()
+    if args.count <= 0:
+        raise SystemExit("--count must be positive")
+    plan = build_plan(args)
+    write_or_print(plan, args.output)
+    return 0 if plan["verified"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,132 @@
+{
+  "schema": "postfiat-open-source-proof-public-input-inventory-v1",
+  "audit_date": "2026-07-16",
+  "baseline_commit": "4b5af7bc6bb6e793ed8a60219d13d6d35be03058",
+  "source_hashes": {
+    "crates/privacy_orchard/src/asset_orchard.rs": "0e311ffca9c97096d270124ccdcb8a8010b4d4fad0c053ec10f2fc1dd06d158e",
+    "crates/privacy_orchard/src/asset_orchard_circuit.rs": "806d3ce4d6c8cf34c2d99813093683ca38ecf6578992b9096219c0aefe779748",
+    "crates/privacy_orchard/src/verify.rs": "7b1bdf76dd5093aa8a938c597c9516c1a956571b214b04db6cf4cb7b234a64b1",
+    "crates/execution/src/nav_sp1_verifier.rs": "77e2227b87aece1a0197ee13dbe6b4e4012c19b2282d874761d804e8ae53622d",
+    "crates/proofs/src/lib.rs": "6ad08dd265fc25958daf6e0ae3d55bbecaa13cdebdcafc9739c2d682d0eb4527"
+  },
+  "systems": [
+    {
+      "name": "AssetOrchard swap",
+      "status": "live",
+      "proof_system_id": "postfiat.privacy.asset-orchard-halo2.v1",
+      "live_circuit_id": "asset_orchard.swap.pricing_bound.v4",
+      "replay_only_circuit_id": "asset_orchard.swap.pricing_bound.v3",
+      "public_instance_length": 28,
+      "public_instance_layout_hash": "4a97e6254fe6ce1416723ebc0908f6a2a617a8d223f902905a91d7f006a8d1e8cee4cb2ccd81decd29c85b4a2c0f7ed1",
+      "public_instances": [
+        {"index": 0, "name": "pool_domain", "binding": "host recomputes from chain_id, genesis_hash, protocol_version, pool_id and note_version"},
+        {"index": 1, "name": "anchor", "binding": "both input Merkle paths terminate at this root"},
+        {"index": 2, "name": "input_0_nullifier", "binding": "derived in circuit from input note opening and nullifier key"},
+        {"index": 3, "name": "input_1_nullifier", "binding": "derived in circuit from input note opening and nullifier key"},
+        {"index": 4, "name": "input_0_rk_x", "binding": "randomized spend verification key constrained from ak and alpha"},
+        {"index": 5, "name": "input_0_rk_y", "binding": "randomized spend verification key constrained from ak and alpha"},
+        {"index": 6, "name": "input_1_rk_x", "binding": "randomized spend verification key constrained from ak and alpha"},
+        {"index": 7, "name": "input_1_rk_y", "binding": "randomized spend verification key constrained from ak and alpha"},
+        {"index": 8, "name": "output_0_commitment", "binding": "recomputed from complete output note opening"},
+        {"index": 9, "name": "output_1_commitment", "binding": "recomputed from complete output note opening"},
+        {"index": 10, "name": "encrypted_output_0_hash_limb_0", "binding": "H_action commitment"},
+        {"index": 11, "name": "encrypted_output_0_hash_limb_1", "binding": "H_action commitment"},
+        {"index": 12, "name": "encrypted_output_0_hash_limb_2", "binding": "H_action commitment"},
+        {"index": 13, "name": "encrypted_output_1_hash_limb_0", "binding": "H_action commitment"},
+        {"index": 14, "name": "encrypted_output_1_hash_limb_1", "binding": "H_action commitment"},
+        {"index": 15, "name": "encrypted_output_1_hash_limb_2", "binding": "H_action commitment"},
+        {"index": 16, "name": "fee", "binding": "v1 requires zero and circuit binds it"},
+        {"index": 17, "name": "base_asset_tag_lo", "binding": "pricing and private-leg permutation constraints"},
+        {"index": 18, "name": "base_asset_tag_hi", "binding": "pricing and private-leg permutation constraints"},
+        {"index": 19, "name": "quote_asset_tag_lo", "binding": "pricing and private-leg permutation constraints"},
+        {"index": 20, "name": "quote_asset_tag_hi", "binding": "pricing and private-leg permutation constraints"},
+        {"index": 21, "name": "ratio_numerator", "binding": "exact integer pricing equation with bounded rounding witness"},
+        {"index": 22, "name": "ratio_denominator", "binding": "exact integer pricing equation with bounded rounding witness"},
+        {"index": 23, "name": "pricing_commitment_limb_0", "binding": "SHA3-384 commitment to epoch, reserve packet, ratio, mode, band and asset tags"},
+        {"index": 24, "name": "pricing_commitment_limb_1", "binding": "SHA3-384 commitment to epoch, reserve packet, ratio, mode, band and asset tags"},
+        {"index": 25, "name": "pricing_commitment_limb_2", "binding": "SHA3-384 commitment to epoch, reserve packet, ratio, mode, band and asset tags"},
+        {"index": 26, "name": "h_action_limb_0", "binding": "in-circuit Poseidon over domain constants and public indices 0 through 25"},
+        {"index": 27, "name": "h_action_limb_1", "binding": "in-circuit Poseidon over domain constants and public indices 0 through 25"}
+      ],
+      "private_witnesses": [
+        "four complete note openings: diversifier, g_d, pk_d, asset tag, value, rho, psi and rcm",
+        "two input nullifier keys",
+        "two input Merkle positions and 32-level authentication paths",
+        "two input spend authorities: ak, alpha and rivk",
+        "one boolean whole-leg permutation selector",
+        "bounded pricing quotient/remainder witnesses"
+      ],
+      "host_only_checks": [
+        "live circuit ID and VK selection",
+        "pool-domain recomputation from local chain/genesis/protocol",
+        "pricing commitment interpretation and certified reserve-policy freshness",
+        "RedPallas spend signatures over the action sighash",
+        "nullifier uniqueness and replicated-state availability"
+      ],
+      "compatibility_note": "H_action retains the v3 proof-binding constant while live proof verification requires the v4 VK; replay v3 is reachable only through the archive policy. Circuit selection, not H_action alone, prevents cross-version acceptance."
+    },
+    {
+      "name": "AssetOrchard private egress",
+      "status": "live",
+      "proof_system_id": "postfiat.privacy.asset-orchard-halo2.v1",
+      "live_circuit_id": "asset_orchard.private_egress.v2",
+      "replay_only_circuit_id": "asset_orchard.private_egress.v1",
+      "public_instance_length": 13,
+      "public_instance_layout_hash": "21e4ba88556d23e3d1c53d3f309ee90bc6321a9f6f8e7b1662083e2d712c9d576020248dd1727b2ca154e8203d09dc44",
+      "public_instances": [
+        {"index": 0, "name": "pool_domain", "binding": "host recomputes chain/genesis/protocol/pool domain"},
+        {"index": 1, "name": "anchor", "binding": "input Merkle path terminates at this root"},
+        {"index": 2, "name": "nullifier", "binding": "derived in circuit from the input note"},
+        {"index": 3, "name": "rk_x", "binding": "randomized spend verification key"},
+        {"index": 4, "name": "rk_y", "binding": "randomized spend verification key"},
+        {"index": 5, "name": "asset_tag_lo", "binding": "must equal the spent note asset tag"},
+        {"index": 6, "name": "asset_tag_hi", "binding": "must equal the spent note asset tag"},
+        {"index": 7, "name": "amount", "binding": "nonzero and must equal the spent note value"},
+        {"index": 8, "name": "fee", "binding": "v1 action requires zero"},
+        {"index": 9, "name": "exit_binding_hash_limb_0", "binding": "recipient, public asset ID, amount, fee, policy, disclosure, chain/genesis/protocol and pool"},
+        {"index": 10, "name": "exit_binding_hash_limb_1", "binding": "recipient, public asset ID, amount, fee, policy, disclosure, chain/genesis/protocol and pool"},
+        {"index": 11, "name": "h_action_limb_0", "binding": "in-circuit Poseidon over domain constants and public indices 0 through 10"},
+        {"index": 12, "name": "h_action_limb_1", "binding": "in-circuit Poseidon over domain constants and public indices 0 through 10"}
+      ],
+      "private_witnesses": [
+        "one complete note opening",
+        "nullifier key",
+        "32-level Merkle position/path",
+        "spend authority ak, alpha and rivk"
+      ],
+      "host_only_checks": [
+        "live circuit ID and VK selection",
+        "exact exit-binding recomputation from public credit fields",
+        "RedPallas spend signature",
+        "nullifier uniqueness and public-credit state transition"
+      ],
+      "compatibility_note": "H_action retains the v1 proof-binding constant while live proof verification requires the v2 VK; v1 is archive-replay-only."
+    },
+    {
+      "name": "NAV SP1 Groth16 aggregate",
+      "status": "profile-gated consensus verifier; real-value provenance incomplete",
+      "proof_system_id": "sp1-groth16",
+      "proof_binding": "Groth16Verifier verifies the entire public-values byte string against the profile-bound 32-byte SP1 program vkey and the pinned sp1-verifier Groth16 VK",
+      "host_decoded_fields": [
+        {"abi_offset": 32, "name": "schema_version", "constraint": "must equal AggregatePublicValuesV2 (2)"},
+        {"abi_offset": 96, "name": "valuation_policy_hash", "constraint": "must equal profile valuation_policy_hash"},
+        {"abi_offset": 128, "name": "spot_total", "constraint": "included in checked net-assets arithmetic"},
+        {"abi_offset": 224, "name": "cash_total", "constraint": "included in checked net-assets arithmetic"},
+        {"abi_offset": 352, "name": "liability", "constraint": "subtracted with checked arithmetic"}
+      ],
+      "packet_binding": "decoded spot_total + cash_total - liability must equal reserve_packet.verified_net_assets",
+      "residual_gate": "The aggregate guest source, build recipe and program-vkey reproduction are not present in this repository. The host decodes only the fields above and accepts a minimum ABI length; production activation requires exact guest provenance, a canonical ABI/vector package and governed program/VK activation evidence."
+    },
+    {
+      "name": "Debug shielded proof adapter",
+      "status": "test/benchmark and legacy replay support only",
+      "proof_system_id": "postfiat.debug-proof.v1",
+      "reachability": "used by bench_harness and the legacy privacy crate; live legacy Mint/Spend creation and admission are disabled, so it is not a supported production privacy proof",
+      "residual_gate": "remove from a production binary profile or keep compile-time unreachable from every live mutation endpoint"
+    }
+  ],
+  "verdict": {
+    "source_publication": "AssetOrchard live public-instance and witness bindings are fully inventoried; SP1 and debug-system limitations are explicitly contained and cannot be marketed as independently reproducible production proof systems.",
+    "real_value": "blocked pending independent circuit review, SP1 guest/program reproduction, production activation/rollback ceremony and exact candidate-run evidence"
+  }
+}

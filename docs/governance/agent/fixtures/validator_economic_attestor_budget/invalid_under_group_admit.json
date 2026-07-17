@@ -1,0 +1,18 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_attestor_budget/valid_attestor_budget.json",
+  "expected_error_contains": [
+    "case-03-manufacture-b-under-group-budget-fail-closed: expected_route mismatch"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        2,
+        "expected_route"
+      ],
+      "value": "admit"
+    }
+  ],
+  "schema": "postfiat-validator-economic-attestor-budget-invalid-case-v1"
+}

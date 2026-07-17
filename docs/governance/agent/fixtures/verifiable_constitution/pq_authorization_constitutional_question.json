@@ -1,0 +1,158 @@
+{
+  "schema": "postfiat-constitutional-question-v1",
+  "question_id": "vc-pq-authorization-001",
+  "question_version": 1,
+  "status": "active",
+  "scope": "post_quantum_authorization",
+  "created_at": "2026-05-24T00:00:00Z",
+  "situation": {
+    "summary": "Decide whether PostFiat should preserve the current ML-DSA-style post-quantum authorization baseline, alter certificate and key-rotation policy, or defer post-quantum authorization.",
+    "problem_statement": "PostFiat needs a replayable authorization question whose answer cannot silently weaken account or validator signature requirements, change certificate shape, or authorize live key-policy changes.",
+    "decision_boundary": "This question may preserve, hold, or request future evidence for post-quantum authorization. It may not mutate live account authorization, validator authorization, key-rotation gates, or Cobalt governance state.",
+    "out_of_scope": [
+      "mainnet mutation",
+      "live account-authorization mutation",
+      "live validator-authorization mutation",
+      "live Cobalt amendment submission",
+      "authority transfer"
+    ]
+  },
+  "status_quo": {
+    "current_position": "The current authorization baseline is ML-DSA-style post-quantum account and validator authorization from genesis, with larger signatures and certificates accepted as a design cost and mitigated through bounded certificates, resource pricing, and explicit wallet/custody/key-rotation design.",
+    "implementation_refs": [
+      {
+        "ref_id": "constitutional-question-schema",
+        "path": "docs/governance/agent/constitutional_question_schema.json",
+        "sha3_384": "47c2b2f27bdc745615f4d0d893333c12825b8b935358efbf4f53bdb9ad7b72e03d46d5264812d2cd9066d3c11813bd7f"
+      },
+      {
+        "ref_id": "initial-context-packet",
+        "path": "docs/governance/agent/fixtures/verifiable_constitution/initial_context_packet.json",
+        "sha3_384": "b370232a7544900f82c21268d1a08dea911835f670a52d2c5a229ab4ac8c878e66cd858cb23ac06c36d425a9ddf50e3a"
+      },
+      {
+        "ref_id": "quantum-authorization",
+        "path": "docs_site/quantum/authorization.md",
+        "sha3_384": "451fe29194691fbae1454d06d9220f89cd0ccedeb82b6153d541e87f42d2579abd8f453830882a249eead4d0034a2d31"
+      }
+    ],
+    "evidence_refs": [
+      {
+        "ref_id": "signature-size-and-certificates",
+        "path": "docs_site/quantum/signature-size-and-certificates.md",
+        "sha3_384": "52e46acfb9c4f035f75096458d1d388a276cd8f1a6cad3e5114b0e57cf3de71b27b08df0a8fa739f83aa7483859cd351"
+      },
+      {
+        "ref_id": "wallet-implications",
+        "path": "docs_site/quantum/wallet-implications.md",
+        "sha3_384": "1fbf4feca8208a7a64d77ec257909fb6c734ab7202ca39841bcaf17e03ea325d8bd7140d66f49765872022e7c2683d96"
+      },
+      {
+        "ref_id": "security-threat-model",
+        "path": "docs_site/security/threat-model.md",
+        "sha3_384": "2f12329630e51f7d4099d4288183aae17a24e24a640bc1d0f74a25a0b08e0c8b801c48e66b45fd58dad65de456b7bb50"
+      },
+      {
+        "ref_id": "implementation-whitepaper",
+        "path": "docs_site/whitepaper.md",
+        "sha3_384": "ea4f650da64ae54aa291f2fe5a3ca14189bb6492972681a4f247d5baa6b252d8d3935c24411c90b22003587d53415e45"
+      }
+    ]
+  },
+  "option_order": [
+    "preserve-ml-dsa-baseline",
+    "alter-certificate-and-rotation-policy",
+    "defer-pq-authorization",
+    "hold-no-op"
+  ],
+  "options": {
+    "preserve-ml-dsa-baseline": {
+      "option_id": "preserve-ml-dsa-baseline",
+      "title": "Preserve ML-DSA baseline",
+      "kind": "preserve_status_quo",
+      "description": "Keep ML-DSA-style post-quantum account and validator authorization as the active internal authorization baseline.",
+      "implementation_effect": "no_code_change",
+      "requires_new_evidence": false
+    },
+    "alter-certificate-and-rotation-policy": {
+      "option_id": "alter-certificate-and-rotation-policy",
+      "title": "Alter certificate and rotation policy",
+      "kind": "adopt_change",
+      "description": "Change certificate shape, key-rotation gates, or wallet/custody policy after a future evidence packet proves the alternative is safer and operationally viable.",
+      "implementation_effect": "future_authorization_required",
+      "requires_new_evidence": true
+    },
+    "defer-pq-authorization": {
+      "option_id": "defer-pq-authorization",
+      "title": "Defer post-quantum authorization",
+      "kind": "adopt_change",
+      "description": "Defer ML-DSA-style post-quantum authorization and use a different authorization baseline only after future evidence proves the deferral is safer than the current posture.",
+      "implementation_effect": "future_authorization_required",
+      "requires_new_evidence": true
+    },
+    "hold-no-op": {
+      "option_id": "hold-no-op",
+      "title": "Hold and no-op",
+      "kind": "defer_no_op",
+      "description": "Take no authorization action because required comparative evidence is missing, ambiguous, or not yet replayed.",
+      "implementation_effect": "no_code_change",
+      "requires_new_evidence": true
+    }
+  },
+  "hard_constraints": [
+    "json_only",
+    "closed_option_set",
+    "cite_status_quo_refs",
+    "cite_evidence_refs_only",
+    "no_hidden_evidence",
+    "no_secret_material",
+    "no_live_mutation",
+    "no_authority_transfer",
+    "prefer_no_op_when_uncertain",
+    "challenge_path_required",
+    "conformance_packet_required"
+  ],
+  "forbidden_outputs": [
+    "live_registry_mutation",
+    "live_cobalt_amendment_submission",
+    "authority_transfer",
+    "hidden_evidence",
+    "secret_dependency",
+    "unregistered_reputation_claim",
+    "scope_expansion",
+    "model_self_upgrade",
+    "selector_self_upgrade",
+    "prompt_self_upgrade",
+    "prose_only_output",
+    "option_outside_closed_set"
+  ],
+  "fallback": {
+    "decision": "no_op",
+    "trigger_conditions": [
+      "missing_evidence",
+      "ambiguous_evidence",
+      "schema_invalid",
+      "replay_drift",
+      "hidden_evidence_attempt",
+      "scope_expansion_attempt",
+      "unsafe_live_action_attempt"
+    ]
+  },
+  "prompt_contract": {
+    "qwen_may_propose_evidence_request": true,
+    "qwen_may_add_options": false,
+    "qwen_may_change_constraints": false,
+    "qwen_may_authorize_live_action": false,
+    "output_json_only": true,
+    "decision_must_select_option_id": true
+  },
+  "checks": {
+    "status_quo_present": true,
+    "option_set_closed": true,
+    "hard_constraints_present": true,
+    "forbidden_outputs_present": true,
+    "no_op_fallback_present": true,
+    "live_mutation_authorized": false,
+    "authority_transfer": false
+  }
+}

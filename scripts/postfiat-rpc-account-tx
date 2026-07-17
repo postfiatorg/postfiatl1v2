@@ -1,0 +1,411 @@
+#!/usr/bin/env python3
+"""Pull bounded transparent account history from PostFiat read RPC endpoints."""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import hashlib
+import json
+import re
+import sys
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "python"))
+
+from postfiat_rpc import Endpoint, PostFiatRpcClient, RpcClientError  # noqa: E402
+
+
+NONLOCAL_IPV4_RE = re.compile(
+    r"(?<![0-9.])(?!127\.0\.0\.1\b)(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9.])"
+)
+
+
+@dataclass(frozen=True)
+class EndpointRef:
+    label: str
+    endpoint: Endpoint
+
+    @property
+    def endpoint_hash(self) -> str:
+        return hashlib.sha256(
+            f"{self.endpoint.host}:{self.endpoint.port}".encode("utf-8")
+        ).hexdigest()[:16]
+
+
+def utc_stamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def utc_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def rel(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def redact_network(text: str) -> str:
+    return NONLOCAL_IPV4_RE.sub("<ip>", text)
+
+
+def parse_endpoint(raw: str, index: int) -> EndpointRef:
+    label = f"endpoint-{index}"
+    value = raw.strip()
+    if not value:
+        raise ValueError("empty endpoint")
+    if "=" in value:
+        label, value = value.split("=", 1)
+        label = label.strip() or f"endpoint-{index}"
+        value = value.strip()
+    return EndpointRef(label=label, endpoint=Endpoint.parse(value))
+
+
+def parse_endpoint_record(record: Any, index: int) -> EndpointRef:
+    if isinstance(record, str):
+        return parse_endpoint(record, index)
+    if not isinstance(record, dict):
+        raise ValueError("endpoint record must be a string or object")
+    label = str(record.get("label") or record.get("node_id") or f"endpoint-{index}")
+    host = str(record.get("host") or record.get("rpc_host") or "")
+    port = record.get("port", record.get("rpc_port"))
+    if not host or port is None:
+        raise ValueError(f"endpoint object missing host/rpc_port: {record}")
+    return parse_endpoint(f"{label}={host}:{port}", index)
+
+
+def endpoints_from_file(path: Path) -> list[EndpointRef]:
+    text = path.read_text(encoding="utf-8")
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        endpoints: list[EndpointRef] = []
+        for line in text.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            endpoints.append(parse_endpoint(stripped, len(endpoints)))
+        return endpoints
+    if isinstance(parsed, list):
+        records = parsed
+    elif isinstance(parsed, dict) and isinstance(parsed.get("peers"), list):
+        records = parsed["peers"]
+    elif isinstance(parsed, dict) and isinstance(parsed.get("endpoints"), list):
+        records = parsed["endpoints"]
+    elif isinstance(parsed, dict):
+        records = [parsed]
+    else:
+        raise ValueError(f"unsupported endpoint file shape: {path}")
+    return [parse_endpoint_record(record, index) for index, record in enumerate(records)]
+
+
+def collect_endpoints(args: argparse.Namespace) -> list[EndpointRef]:
+    endpoints: list[EndpointRef] = []
+    for raw in args.endpoint or []:
+        endpoints.append(parse_endpoint(raw, len(endpoints)))
+    for endpoint_file in args.endpoint_file or []:
+        endpoints.extend(endpoints_from_file(Path(endpoint_file)))
+    if not endpoints:
+        raise SystemExit("at least one --endpoint or --endpoint-file is required")
+    seen: set[str] = set()
+    for endpoint in endpoints:
+        if endpoint.label in seen:
+            raise SystemExit(f"duplicate endpoint label: {endpoint.label}")
+        seen.add(endpoint.label)
+    return endpoints
+
+
+def rows_fingerprint(rows: list[dict[str, Any]]) -> str:
+    payload = json.dumps(rows, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def compact_status(status: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "node_id": status.get("node_id"),
+        "chain_id": status.get("chain_id"),
+        "genesis_hash": status.get("genesis_hash"),
+        "protocol_version": status.get("protocol_version"),
+        "block_height": status.get("block_height"),
+        "block_tip_hash": status.get("block_tip_hash"),
+        "state_root": status.get("state_root"),
+        "status": status.get("status"),
+    }
+
+
+def pull_endpoint(endpoint_ref: EndpointRef, args: argparse.Namespace) -> dict[str, Any]:
+    client = PostFiatRpcClient(
+        endpoint_ref.endpoint,
+        timeout_seconds=args.timeout_seconds,
+        response_byte_cap=args.response_byte_cap,
+    )
+    report: dict[str, Any] = {
+        "label": endpoint_ref.label,
+        "endpoint_hash": endpoint_ref.endpoint_hash,
+        "address": args.address,
+        "ok": False,
+        "error": None,
+    }
+    try:
+        status = client.status()
+        current_height = status.get("block_height")
+        if not isinstance(current_height, int):
+            raise RuntimeError("status.block_height is unavailable")
+        to_height = args.to_height if args.to_height is not None else current_height
+        if args.from_height > to_height:
+            raise RuntimeError("from_height cannot exceed resolved to_height")
+
+        history = client.account_tx_history(
+            args.address,
+            from_height=args.from_height,
+            to_height=to_height,
+            window_size=args.window_size,
+            limit_per_window=args.limit_per_window,
+            max_windows=args.max_windows,
+            allow_truncated=args.allow_truncated,
+        )
+        rows = [row.to_dict() for row in history.rows]
+        output_rows = rows[: args.max_output_rows]
+        rows_output_truncated = len(rows) > len(output_rows)
+        no_truncated_windows = history.truncated_window_count == 0
+        ok = (
+            not history.max_windows_exceeded
+            and (no_truncated_windows or args.allow_truncated)
+            and (not args.require_row or len(rows) > 0)
+        )
+        report.update(
+            {
+                "ok": ok,
+                "status": compact_status(status),
+                "from_height": args.from_height,
+                "to_height": to_height,
+                "window_size": history.window_size,
+                "limit_per_window": history.limit_per_window,
+                "window_count": history.window_count,
+                "max_windows_exceeded": history.max_windows_exceeded,
+                "truncated_window_count": history.truncated_window_count,
+                "all_index_used": history.all_index_used,
+                "total_scanned_block_count": history.total_scanned_block_count,
+                "total_archive_lookup_count": history.total_archive_lookup_count,
+                "row_count": len(rows),
+                "rows_output_truncated": rows_output_truncated,
+                "row_fingerprint": rows_fingerprint(rows),
+                "windows": list(history.windows),
+                "rows": output_rows,
+                "checks": {
+                    "height_range_valid": args.from_height <= to_height,
+                    "max_windows_not_exceeded": not history.max_windows_exceeded,
+                    "no_truncated_windows": no_truncated_windows,
+                    "require_row": bool(args.require_row),
+                    "required_row_present": (len(rows) > 0 if args.require_row else True),
+                    "all_index_used": history.all_index_used,
+                    "no_archive_lookups": history.total_archive_lookup_count == 0,
+                    "no_retained_history_scans": history.total_scanned_block_count == 0,
+                },
+            }
+        )
+    except (RpcClientError, OSError, ValueError, RuntimeError) as error:
+        report["error"] = redact_network(str(error))
+    return report
+
+
+def report_has_sensitive_text(report: dict[str, Any]) -> bool:
+    text = json.dumps(report, sort_keys=True)
+    if NONLOCAL_IPV4_RE.search(text):
+        return True
+    sensitive_keys = re.compile(
+        r"(private[-_ ]?key|secret|password|mnemonic|spending_key|full_viewing_key|master_seed|rseed)",
+        re.IGNORECASE,
+    )
+
+    def walk(value: Any) -> bool:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if sensitive_keys.search(str(key)):
+                    return True
+                if walk(child):
+                    return True
+        elif isinstance(value, list):
+            return any(walk(child) for child in value)
+        return False
+
+    return walk(report)
+
+
+def output_path(raw: str) -> Path:
+    path = Path(raw).expanduser()
+    return path if path.is_absolute() else ROOT / path
+
+
+def write_csv_output(path: Path, endpoint_reports: list[dict[str, Any]]) -> dict[str, Any]:
+    source = next((item for item in endpoint_reports if item.get("ok") is True), None)
+    if source is None:
+        return {
+            "csv_output": rel(path),
+            "csv_written": False,
+            "csv_row_count": 0,
+            "csv_source_endpoint_label": None,
+            "csv_error": "no successful endpoint report",
+        }
+    rows = source.get("rows")
+    if not isinstance(rows, list):
+        rows = []
+    columns = [
+        "endpoint_label",
+        "endpoint_hash",
+        "address",
+        "tx_id",
+        "block_height",
+        "batch_kind",
+        "batch_id",
+        "transaction_index",
+        "from",
+        "to",
+        "amount",
+        "fee",
+        "sequence",
+        "accepted",
+        "receipt_code",
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns)
+        writer.writeheader()
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            writer.writerow(
+                {
+                    "endpoint_label": source.get("label"),
+                    "endpoint_hash": source.get("endpoint_hash"),
+                    "address": source.get("address"),
+                    "tx_id": row.get("tx_id"),
+                    "block_height": row.get("block_height"),
+                    "batch_kind": row.get("batch_kind"),
+                    "batch_id": row.get("batch_id"),
+                    "transaction_index": row.get("transaction_index"),
+                    "from": row.get("from"),
+                    "to": row.get("to"),
+                    "amount": row.get("amount"),
+                    "fee": row.get("fee"),
+                    "sequence": row.get("sequence"),
+                    "accepted": row.get("accepted"),
+                    "receipt_code": row.get("receipt_code"),
+                }
+            )
+    return {
+        "csv_output": rel(path),
+        "csv_written": True,
+        "csv_row_count": len(rows),
+        "csv_source_endpoint_label": source.get("label"),
+        "csv_error": None,
+    }
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--endpoint", action="append", help="Endpoint as label=host:port")
+    parser.add_argument("--endpoint-file", action="append", help="JSON/text endpoint file")
+    parser.add_argument("--address", required=True, help="Transparent account address")
+    parser.add_argument("--from-height", type=int, default=0)
+    parser.add_argument("--to-height", type=int)
+    parser.add_argument("--window-size", type=int, default=100)
+    parser.add_argument("--limit-per-window", type=int, default=512)
+    parser.add_argument("--max-windows", type=int, default=1000)
+    parser.add_argument("--max-output-rows", type=int, default=5000)
+    parser.add_argument("--timeout-seconds", type=float, default=8.0)
+    parser.add_argument("--response-byte-cap", type=int, default=1_048_576)
+    parser.add_argument("--allow-truncated", action="store_true")
+    parser.add_argument("--require-row", action="store_true")
+    parser.add_argument("--require-convergence", action="store_true")
+    parser.add_argument(
+        "--csv-output",
+        help="Optional CSV export path using the first successful endpoint's rows.",
+    )
+    parser.add_argument(
+        "--output",
+        default=f"reports/postfiat-rpc-account-tx/postfiat-rpc-account-tx-{utc_stamp()}.json",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str]) -> int:
+    args = parse_args(argv)
+    if args.from_height < 0:
+        raise SystemExit("--from-height must be non-negative")
+    if args.to_height is not None and args.to_height < 0:
+        raise SystemExit("--to-height must be non-negative")
+    if args.to_height is not None and args.from_height > args.to_height:
+        raise SystemExit("--from-height cannot exceed --to-height")
+    for name in ("window_size", "limit_per_window", "max_windows", "max_output_rows"):
+        if getattr(args, name) < 1:
+            raise SystemExit(f"--{name.replace('_', '-')} must be positive")
+
+    endpoints = collect_endpoints(args)
+    endpoint_reports = [pull_endpoint(endpoint, args) for endpoint in endpoints]
+    row_fingerprints = sorted(
+        {
+            report.get("row_fingerprint")
+            for report in endpoint_reports
+            if report.get("ok") is True and isinstance(report.get("row_fingerprint"), str)
+        }
+    )
+    heights = [
+        report.get("status", {}).get("block_height")
+        for report in endpoint_reports
+        if isinstance(report.get("status", {}).get("block_height"), int)
+    ]
+    row_converged = len(row_fingerprints) <= 1 and bool(row_fingerprints)
+    checks = {
+        "all_endpoints_ok": all(report.get("ok") is True for report in endpoint_reports),
+        "row_fingerprints_converged": row_converged,
+        "require_convergence": bool(args.require_convergence),
+        "height_lag": (max(heights) - min(heights)) if heights else None,
+        "sensitive_material_redacted": True,
+    }
+    report: dict[str, Any] = {
+        "schema": "postfiat-rpc-account-tx-pull-v1",
+        "generated_utc": utc_iso(),
+        "address": args.address,
+        "from_height": args.from_height,
+        "to_height": args.to_height,
+        "window_size": args.window_size,
+        "limit_per_window": args.limit_per_window,
+        "max_windows": args.max_windows,
+        "max_output_rows": args.max_output_rows,
+        "endpoint_count": len(endpoint_reports),
+        "height_min": min(heights) if heights else None,
+        "height_max": max(heights) if heights else None,
+        "checks": checks,
+        "endpoints": endpoint_reports,
+    }
+    if args.csv_output:
+        csv_result = write_csv_output(output_path(args.csv_output), endpoint_reports)
+        report.update(csv_result)
+    checks["sensitive_material_redacted"] = not report_has_sensitive_text(report)
+    report["passed"] = (
+        checks["all_endpoints_ok"]
+        and checks["sensitive_material_redacted"]
+        and (checks["row_fingerprints_converged"] or not args.require_convergence)
+        and (not args.csv_output or report.get("csv_written") is True)
+    )
+    report["blocked_reason"] = None if report["passed"] else "one or more account_tx pulls failed"
+
+    output = output_path(args.output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"postfiat_rpc_account_tx={rel(output)}")
+    print(f"postfiat_rpc_account_tx_passed={str(report['passed']).lower()}")
+    return 0 if report["passed"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

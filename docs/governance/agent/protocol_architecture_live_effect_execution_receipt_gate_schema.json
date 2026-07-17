@@ -1,0 +1,785 @@
+{
+  "$id": "https://postfiat.org/schemas/postfiat-protocol-architecture-live-effect-execution-receipt-gate-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PostFiat Protocol Architecture Live-Effect Execution Receipt Gate",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "postfiat-protocol-architecture-live-effect-execution-receipt-gate-v1",
+      "type": "string"
+    },
+    "execution_receipt_gate_id": {
+      "$ref": "#/$defs/id"
+    },
+    "execution_receipt_gate_version": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "status": {
+      "const": "execution_receipt_gate_defined_no_execution",
+      "type": "string"
+    },
+    "gate_scope": {
+      "const": "protocol_architecture",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "source_live_action_packet_ref": {
+      "$ref": "#/$defs/source_live_action_packet_ref"
+    },
+    "root_bindings": {
+      "$ref": "#/$defs/root_bindings"
+    },
+    "fresh_root_revalidation": {
+      "items": {
+        "$ref": "#/$defs/fresh_root_revalidation"
+      },
+      "minItems": 13,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "receipt_contract": {
+      "$ref": "#/$defs/receipt_contract"
+    },
+    "current_receipt_state": {
+      "$ref": "#/$defs/current_receipt_state"
+    },
+    "preflight_output_requirements": {
+      "$ref": "#/$defs/preflight_output_requirements"
+    },
+    "execution_output_requirements": {
+      "$ref": "#/$defs/execution_output_requirements"
+    },
+    "rollback_availability": {
+      "$ref": "#/$defs/rollback_availability"
+    },
+    "challenge_route": {
+      "$ref": "#/$defs/challenge_route"
+    },
+    "forbidden_effect_guards": {
+      "$ref": "#/$defs/forbidden_effect_guards"
+    },
+    "verification_commands": {
+      "items": {
+        "$ref": "#/$defs/verification_command"
+      },
+      "minItems": 10,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "authority_boundary": {
+      "$ref": "#/$defs/authority_boundary"
+    },
+    "checks": {
+      "$ref": "#/$defs/checks"
+    },
+    "execution_receipt_gate_root": {
+      "$ref": "#/$defs/sha3_384"
+    }
+  },
+  "required": [
+    "schema",
+    "execution_receipt_gate_id",
+    "execution_receipt_gate_version",
+    "status",
+    "gate_scope",
+    "created_at",
+    "source_live_action_packet_ref",
+    "root_bindings",
+    "fresh_root_revalidation",
+    "receipt_contract",
+    "current_receipt_state",
+    "preflight_output_requirements",
+    "execution_output_requirements",
+    "rollback_availability",
+    "challenge_route",
+    "forbidden_effect_guards",
+    "verification_commands",
+    "authority_boundary",
+    "checks",
+    "execution_receipt_gate_root"
+  ],
+  "$defs": {
+    "authority_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider_spend_authorized": {
+          "const": false
+        },
+        "live_model_request_authorized": {
+          "const": false
+        },
+        "model_output_generated_in_this_packet": {
+          "const": false
+        },
+        "live_action_packet_root_bound": {
+          "const": true
+        },
+        "execution_receipt_gate_recorded": {
+          "const": true
+        },
+        "execution_receipt_issued_in_this_packet": {
+          "const": false
+        },
+        "live_action_executed_in_this_packet": {
+          "const": false
+        },
+        "separate_exact_user_authorization_required": {
+          "const": true
+        },
+        "code_rewrite_authorized": {
+          "const": false
+        },
+        "rippled_code_import_authorized": {
+          "const": false
+        },
+        "consensus_rewrite_authorized": {
+          "const": false
+        },
+        "xrpl_compatibility_activation_authorized": {
+          "const": false
+        },
+        "protocol_migration_authorized": {
+          "const": false
+        },
+        "live_validator_registry_mutation_authorized": {
+          "const": false
+        },
+        "live_cobalt_amendment_submission_authorized": {
+          "const": false
+        },
+        "mainnet_mutation_authorized": {
+          "const": false
+        },
+        "authority_transfer_authorized": {
+          "const": false
+        }
+      },
+      "required": [
+        "provider_spend_authorized",
+        "live_model_request_authorized",
+        "model_output_generated_in_this_packet",
+        "live_action_packet_root_bound",
+        "execution_receipt_gate_recorded",
+        "execution_receipt_issued_in_this_packet",
+        "live_action_executed_in_this_packet",
+        "separate_exact_user_authorization_required",
+        "code_rewrite_authorized",
+        "rippled_code_import_authorized",
+        "consensus_rewrite_authorized",
+        "xrpl_compatibility_activation_authorized",
+        "protocol_migration_authorized",
+        "live_validator_registry_mutation_authorized",
+        "live_cobalt_amendment_submission_authorized",
+        "mainnet_mutation_authorized",
+        "authority_transfer_authorized"
+      ]
+    },
+    "challenge_route": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "challenge_packet_required": {
+          "const": true
+        },
+        "challenge_schema_path": {
+          "const": "docs/governance/agent/constitutional_challenge_packet_schema.json",
+          "type": "string"
+        },
+        "challenge_schema_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "receipt_challenge_window_required": {
+          "const": true
+        },
+        "challenge_failure_action": {
+          "const": "hold_execution_receipt_and_require_supersession",
+          "type": "string"
+        },
+        "live_effect": {
+          "const": false
+        }
+      },
+      "required": [
+        "challenge_packet_required",
+        "challenge_schema_path",
+        "challenge_schema_sha3_384",
+        "receipt_challenge_window_required",
+        "challenge_failure_action",
+        "live_effect"
+      ]
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_valid": {
+          "const": true
+        },
+        "source_live_action_packet_verified": {
+          "const": true
+        },
+        "live_action_packet_root_bound": {
+          "const": true
+        },
+        "fresh_roots_verified": {
+          "const": true
+        },
+        "receipt_contract_verified": {
+          "const": true
+        },
+        "current_receipt_state_verified": {
+          "const": true
+        },
+        "preflight_output_requirements_verified": {
+          "const": true
+        },
+        "execution_output_requirements_verified": {
+          "const": true
+        },
+        "rollback_availability_verified": {
+          "const": true
+        },
+        "challenge_route_verified": {
+          "const": true
+        },
+        "forbidden_effect_guards_verified": {
+          "const": true
+        },
+        "verification_command_coverage_verified": {
+          "const": true
+        },
+        "no_hidden_evidence": {
+          "const": true
+        },
+        "no_secret_dependency": {
+          "const": true
+        },
+        "no_code_rewrite": {
+          "const": true
+        },
+        "no_live_cobalt_amendment_submission": {
+          "const": true
+        },
+        "no_compatibility_activation": {
+          "const": true
+        },
+        "no_mainnet_mutation": {
+          "const": true
+        },
+        "authority_transfer": {
+          "const": false
+        },
+        "execution_receipt_gate_root_verified": {
+          "const": true
+        }
+      },
+      "required": [
+        "schema_valid",
+        "source_live_action_packet_verified",
+        "live_action_packet_root_bound",
+        "fresh_roots_verified",
+        "receipt_contract_verified",
+        "current_receipt_state_verified",
+        "preflight_output_requirements_verified",
+        "execution_output_requirements_verified",
+        "rollback_availability_verified",
+        "challenge_route_verified",
+        "forbidden_effect_guards_verified",
+        "verification_command_coverage_verified",
+        "no_hidden_evidence",
+        "no_secret_dependency",
+        "no_code_rewrite",
+        "no_live_cobalt_amendment_submission",
+        "no_compatibility_activation",
+        "no_mainnet_mutation",
+        "authority_transfer",
+        "execution_receipt_gate_root_verified"
+      ]
+    },
+    "current_receipt_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "execution_receipt_present": {
+          "const": false
+        },
+        "execution_receipt_hash": {
+          "type": "null"
+        },
+        "exact_authorization_text_present": {
+          "const": false
+        },
+        "exact_authorization_text_hash": {
+          "type": "null"
+        },
+        "preflight_output_root": {
+          "type": "null"
+        },
+        "executed_command_hash": {
+          "type": "null"
+        },
+        "post_action_registry_or_release_root": {
+          "type": "null"
+        },
+        "rollback_receipt_hash": {
+          "type": "null"
+        },
+        "observed_live_effect": {
+          "const": false
+        },
+        "live_effect": {
+          "const": false
+        }
+      },
+      "required": [
+        "execution_receipt_present",
+        "execution_receipt_hash",
+        "exact_authorization_text_present",
+        "exact_authorization_text_hash",
+        "preflight_output_root",
+        "executed_command_hash",
+        "post_action_registry_or_release_root",
+        "rollback_receipt_hash",
+        "observed_live_effect",
+        "live_effect"
+      ]
+    },
+    "execution_output_requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "executed_command_hash_required": {
+          "const": true
+        },
+        "executed_command_stdout_hash_required": {
+          "const": true
+        },
+        "executed_command_stderr_hash_required": {
+          "const": true
+        },
+        "exit_code_required": {
+          "const": true
+        },
+        "post_action_registry_or_release_root_required": {
+          "const": true
+        },
+        "observed_effects_required": {
+          "const": true
+        },
+        "unexpected_effect_policy": {
+          "const": "hold_and_require_challenge_or_rollback",
+          "type": "string"
+        },
+        "live_effect": {
+          "const": false
+        }
+      },
+      "required": [
+        "executed_command_hash_required",
+        "executed_command_stdout_hash_required",
+        "executed_command_stderr_hash_required",
+        "exit_code_required",
+        "post_action_registry_or_release_root_required",
+        "observed_effects_required",
+        "unexpected_effect_policy",
+        "live_effect"
+      ]
+    },
+    "forbidden_effect_guards": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "compatibility_activation_requires_exact_authorization": {
+          "const": true
+        },
+        "mainnet_mutation_requires_exact_authorization": {
+          "const": true
+        },
+        "validator_registry_mutation_requires_exact_authorization": {
+          "const": true
+        },
+        "authority_transfer_requires_exact_authorization": {
+          "const": true
+        },
+        "compatibility_activation_observed": {
+          "const": false
+        },
+        "mainnet_mutation_observed": {
+          "const": false
+        },
+        "validator_registry_mutation_observed": {
+          "const": false
+        },
+        "authority_transfer_observed": {
+          "const": false
+        },
+        "unauthorized_effect_policy": {
+          "const": "reject_receipt_and_require_rollback_or_challenge",
+          "type": "string"
+        },
+        "live_effect": {
+          "const": false
+        }
+      },
+      "required": [
+        "compatibility_activation_requires_exact_authorization",
+        "mainnet_mutation_requires_exact_authorization",
+        "validator_registry_mutation_requires_exact_authorization",
+        "authority_transfer_requires_exact_authorization",
+        "compatibility_activation_observed",
+        "mainnet_mutation_observed",
+        "validator_registry_mutation_observed",
+        "authority_transfer_observed",
+        "unauthorized_effect_policy",
+        "live_effect"
+      ]
+    },
+    "fresh_root_revalidation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "root_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expected_root": {
+          "type": "string",
+          "minLength": 32
+        },
+        "observed_root": {
+          "type": "string",
+          "minLength": 32
+        },
+        "stale_action": {
+          "const": "hold_execution_receipt_gate_and_require_supersession",
+          "type": "string"
+        },
+        "verified": {
+          "const": true
+        },
+        "live_effect": {
+          "const": false
+        }
+      },
+      "required": [
+        "root_id",
+        "label",
+        "expected_root",
+        "observed_root",
+        "stale_action",
+        "verified",
+        "live_effect"
+      ]
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.:-]*[a-z0-9]$"
+    },
+    "preflight_output_requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "preflight_command_ids": {
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "minItems": 5,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "preflight_command_hashes": {
+          "items": {
+            "$ref": "#/$defs/sha3_384"
+          },
+          "minItems": 5,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "preflight_output_root_required": {
+          "const": true
+        },
+        "preflight_must_be_after_exact_authorization": {
+          "const": true
+        },
+        "preflight_stale_action": {
+          "const": "hold_execution_and_rerun_preflight",
+          "type": "string"
+        },
+        "live_effect": {
+          "const": false
+        }
+      },
+      "required": [
+        "preflight_command_ids",
+        "preflight_command_hashes",
+        "preflight_output_root_required",
+        "preflight_must_be_after_exact_authorization",
+        "preflight_stale_action",
+        "live_effect"
+      ]
+    },
+    "receipt_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "execution_receipt_id_required": {
+          "const": "vc-protocol-architecture-001-live-effect-execution-receipt-001",
+          "type": "string"
+        },
+        "exact_authorization_text_required": {
+          "const": true
+        },
+        "exact_authorization_text_hash_required": {
+          "const": true
+        },
+        "live_action_packet_root_required": {
+          "const": true
+        },
+        "preflight_output_root_required": {
+          "const": true
+        },
+        "executed_command_hash_required": {
+          "const": true
+        },
+        "post_action_registry_or_release_root_required": {
+          "const": true
+        },
+        "rollback_availability_required": {
+          "const": true
+        },
+        "challenge_route_required": {
+          "const": true
+        },
+        "receipt_not_issued_in_this_packet": {
+          "const": true
+        },
+        "live_effect": {
+          "const": false
+        }
+      },
+      "required": [
+        "execution_receipt_id_required",
+        "exact_authorization_text_required",
+        "exact_authorization_text_hash_required",
+        "live_action_packet_root_required",
+        "preflight_output_root_required",
+        "executed_command_hash_required",
+        "post_action_registry_or_release_root_required",
+        "rollback_availability_required",
+        "challenge_route_required",
+        "receipt_not_issued_in_this_packet",
+        "live_effect"
+      ]
+    },
+    "rollback_availability": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rollback_command_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "rollback_update_id": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "rollback_governance_batch_id": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "rollback_registry_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "rollback_receipt_required_if_executed": {
+          "const": true
+        },
+        "rollback_must_remain_available_after_execution": {
+          "const": true
+        },
+        "live_effect": {
+          "const": false
+        }
+      },
+      "required": [
+        "rollback_command_hash",
+        "rollback_update_id",
+        "rollback_governance_batch_id",
+        "rollback_registry_root",
+        "rollback_receipt_required_if_executed",
+        "rollback_must_remain_available_after_execution",
+        "live_effect"
+      ]
+    },
+    "root_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "execution_receipt_gate_id": {
+          "const": "vc-protocol-architecture-001-live-effect-execution-receipt-gate-001"
+        },
+        "execution_receipt_id_required": {
+          "const": "vc-protocol-architecture-001-live-effect-execution-receipt-001"
+        },
+        "live_action_packet_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "live_action_packet_id": {
+          "const": "vc-protocol-architecture-001-live-effect-live-action-001"
+        },
+        "final_gate_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "guarded_execution_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "guarded_apply_candidate_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "guarded_apply_registry_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "rollback_registry_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "candidate_live_command_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "rollback_command_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "selected_live_action": {
+          "const": "protocol_architecture_release_or_cobalt_effect"
+        },
+        "selected_option": {
+          "const": "preserve-rust-l1"
+        }
+      },
+      "required": [
+        "execution_receipt_gate_id",
+        "execution_receipt_id_required",
+        "live_action_packet_root",
+        "live_action_packet_id",
+        "final_gate_root",
+        "guarded_execution_root",
+        "guarded_apply_candidate_hash",
+        "guarded_apply_registry_root",
+        "rollback_registry_root",
+        "candidate_live_command_hash",
+        "rollback_command_hash",
+        "selected_live_action",
+        "selected_option"
+      ]
+    },
+    "sha3_384": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "source_live_action_packet_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "live_action_packet_id": {
+          "$ref": "#/$defs/id"
+        },
+        "packet_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "packet_file_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "packet_canonical_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "schema_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "schema_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "report_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "report_file_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "report_canonical_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "report_verified": {
+          "const": true
+        },
+        "report_classification": {
+          "const": "explicit_live_action_packet_bound_no_execution",
+          "type": "string"
+        },
+        "selected_live_action": {
+          "const": "protocol_architecture_release_or_cobalt_effect",
+          "type": "string"
+        },
+        "live_action_packet_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "report_live_action_packet_root": {
+          "$ref": "#/$defs/sha3_384"
+        }
+      },
+      "required": [
+        "live_action_packet_id",
+        "packet_path",
+        "packet_file_sha3_384",
+        "packet_canonical_hash",
+        "schema_path",
+        "schema_sha3_384",
+        "report_path",
+        "report_file_sha3_384",
+        "report_canonical_hash",
+        "report_verified",
+        "report_classification",
+        "selected_live_action",
+        "live_action_packet_root",
+        "report_live_action_packet_root"
+      ]
+    },
+    "verification_command": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expected_result": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required": {
+          "const": true
+        },
+        "live_effect": {
+          "const": false
+        }
+      },
+      "required": [
+        "command",
+        "purpose",
+        "expected_result",
+        "required",
+        "live_effect"
+      ]
+    }
+  }
+}

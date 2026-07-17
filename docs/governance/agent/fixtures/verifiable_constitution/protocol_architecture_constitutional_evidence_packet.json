@@ -1,0 +1,426 @@
+{
+  "schema": "postfiat-constitutional-evidence-packet-v1",
+  "packet_id": "vc-protocol-architecture-001-evidence-001",
+  "packet_version": 1,
+  "status": "approved",
+  "packet_scope": "release_authority",
+  "created_at": "2026-05-25T00:00:00Z",
+  "request_ref": {
+    "request_id": "vc-protocol-architecture-001-request-001",
+    "request_path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_constitutional_evidence_request.json",
+    "request_file_sha3_384": "5fdee24fa1e48cef8b727961250707bd8f04e0c5a32fdaf5d7a1b6f387e953f74106e1b6f4f08e9f91794a001032a6bd",
+    "request_canonical_hash": "7ee98be56d28eadcb58a6e484553f16d4e8676c52a930594998fded6e13387bd7b087b67d525776041a0c71cc4a58f2a",
+    "request_schema_path": "docs/governance/agent/constitutional_evidence_request_schema.json",
+    "request_schema_sha3_384": "f278cce70a5c668424bac14d94719c0371b994fef98dbbd53f01b3f15e557ba8823aa363f7b407079f776c4cdf9d39d3"
+  },
+  "collection_manifest": {
+    "collector_id": "vc-protocol-architecture-repo-snapshot-collector",
+    "collection_mode": "repo_snapshot_only",
+    "collected_at": "2026-05-25T00:00:00Z",
+    "source_commit": "046741d63cf775c0459cc076919e67a8a78cbad4",
+    "live_collection_executed": false,
+    "network_reads": false,
+    "provider_spend": false,
+    "secret_material_seen": false,
+    "live_mutation_executed": false
+  },
+  "evidence_root": "d9f1d159b3be6b34376c937a8cce10a08b457c7e13dbf73758c95c80e8b5833249a162ab408d2eb717fa0f1203c77c40",
+  "evidence_items": [
+    {
+      "field_path": "protocol_architecture.cobalt_governance_fit_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "b3e9e05fe4fb8afdd92046258b8e7bec753cb312f0923c6495b20e25e9a98e283fa1055fa64a95daf9c1303297171af4",
+      "source_refs": [
+        {
+          "ref_id": "cobalt-overview",
+          "path": "docs_site/governance/cobalt.md",
+          "sha3_384": "acf0e856b93180f8a5bd6bf5957f85db070d96f4bbc46adca2ddfc078f875ad845e18fb7e34acf2a9e4ddde384f74e52",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "cobalt-implementation",
+          "path": "docs_site/governance/cobalt-implementation.md",
+          "sha3_384": "8fccab3a620958c6bef72b57515ceb7472b3f250bd8cc075877be25307f10676e4d0457562386d17d8e7890588afa756",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "deterministic-governance-overview",
+          "path": "docs_site/governance/deterministic-governance-overview.md",
+          "sha3_384": "745e88fb09d6e0b661dea288cd8c6ecb7a321a97665b9ea0edaddbe7ecfb8f2e4e25c8ca2b8445396e6c40b87ecaf5fd",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "consensus-cobalt-cargo",
+          "path": "crates/consensus_cobalt/Cargo.toml",
+          "sha3_384": "148ab76064b1b254bea2618d83ca25fa8f3f1c35b30ae6f73739ce53d93a90ea39f96c65ab5e034eedd340977027ad82",
+          "provenance": "source_code"
+        },
+        {
+          "ref_id": "cobalt-dry-run-report",
+          "path": "reports/verifiable-constitution/vc-019-cobalt-dry-run-binding-report.json",
+          "sha3_384": "41dcd6c8c2f276d50fa8e49bd9f3b2790c7e5890700170225ecadb31a3b4e9eb3cf1c9f5ce9e20412292ebbb25feb4d3",
+          "provenance": "replay_derived"
+        }
+      ],
+      "provenance": [
+        "governance_documented",
+        "replay_derived",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "redaction_status": "public",
+      "collector_note": "Binds Cobalt governance, replay, challenge, and dry-run evidence that a selected architecture must preserve or re-prove."
+    },
+    {
+      "field_path": "protocol_architecture.operator_migration_impact_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "9f5d100961aa47e636528e8d57ab90dda022fae060f519e325a44f558c47c288e87b2e3fd195879e46b360c712a45372",
+      "source_refs": [
+        {
+          "ref_id": "qwen-cobalt-operator-readiness-summary",
+          "path": "docs_site/governance/qwen-cobalt-operator-readiness-summary.md",
+          "sha3_384": "6d92a5c8e893a4ad4f983070dffb4b9bddc0b468961f3e7270fdef748e3b0b67c5cd2714ebce8901dcb489852de9da48",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "validator-evidence-operator-consent-receipt",
+          "path": "docs_site/governance/validator-evidence-operator-consent-receipt.md",
+          "sha3_384": "3977a06caf5c3b01845b7908deadb04dbea1340e058b9a773d12acf3cbc178f114d61fa6e22ed40b8abee918ecf57593",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "validator-evidence-source-authorization",
+          "path": "docs_site/governance/validator-evidence-source-authorization.md",
+          "sha3_384": "eb61c147c75f8002db68b72335376917b67ede30a138d447db0d8bad0b0974abb5073005c0f856b5db82ce7cbf5c45f0",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "governance_documented",
+        "operator_signed",
+        "artifact_hash"
+      ],
+      "freshness": "release_bound",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "conformance_input",
+      "redaction_status": "redacted",
+      "collector_note": "Binds redaction-safe operator migration, consent, and source-authorization evidence for any future architecture change."
+    },
+    {
+      "field_path": "protocol_architecture.pq_privacy_integration_cost_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "3b18eb99b732214041724a8264ad296c608b2a8dc03d76f5cf71e5abf8724874a61e0f87a3fe3eb0211d8a88411a93df",
+      "source_refs": [
+        {
+          "ref_id": "quantum-authorization",
+          "path": "docs_site/quantum/authorization.md",
+          "sha3_384": "451fe29194691fbae1454d06d9220f89cd0ccedeb82b6153d541e87f42d2579abd8f453830882a249eead4d0034a2d31",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "privacy-orchard-halo2",
+          "path": "docs_site/privacy/orchard-halo2.md",
+          "sha3_384": "1dca6715b03d77c10d6d63272a4bdb91e64fb2de744a3eb735ebd566c900311fed3748015045a3aeabc63ac6ab206a3a",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "crypto-provider-cargo",
+          "path": "crates/crypto_provider/Cargo.toml",
+          "sha3_384": "56b25260999bfb8eed3ee80f4299eda1024c876f0ba5d55cf0b33965b55239f36663d2719d6ef83359a11a485165b347",
+          "provenance": "source_code"
+        },
+        {
+          "ref_id": "privacy-orchard-cargo",
+          "path": "crates/privacy_orchard/Cargo.toml",
+          "sha3_384": "ae347aac784fd4609d0c75176b09f330dbdbda0dcfd52bb2945c516252e03157909c5ecea89c8fdabb479f1f92a1076e",
+          "provenance": "source_code"
+        },
+        {
+          "ref_id": "proofs-cargo",
+          "path": "crates/proofs/Cargo.toml",
+          "sha3_384": "63aa69cb1df315a8cbf50190793cd5079e3973f6df2969b415c06462aa05e1be084179c0ac34f8a1bd1a70d0236ef296",
+          "provenance": "source_code"
+        },
+        {
+          "ref_id": "cobalt-dry-run-test-report",
+          "path": "reports/verifiable-constitution/vc-019-cobalt-dry-run-binding-report.json",
+          "sha3_384": "41dcd6c8c2f276d50fa8e49bd9f3b2790c7e5890700170225ecadb31a3b4e9eb3cf1c9f5ce9e20412292ebbb25feb4d3",
+          "provenance": "test_report"
+        }
+      ],
+      "provenance": [
+        "governance_documented",
+        "test_report",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "redaction_status": "public",
+      "collector_note": "Binds post-quantum authorization and Orchard/Halo2 privacy evidence so architecture selection accounts for those integration costs."
+    },
+    {
+      "field_path": "protocol_architecture.release_gate_readiness_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "b4f5bc94baf2332c5c75914a90d5bb6723d2ecf0cdbe4cb5f0f2c649dca31c73640d123e13406e3c6a48ae2d4efb46c3",
+      "source_refs": [
+        {
+          "ref_id": "qwen-cobalt-internal-validation-plan",
+          "path": "docs_site/governance/qwen-cobalt-internal-validation-plan.md",
+          "sha3_384": "3ef666d69c3ad28e999b8051749aac63296100ffcf9c528ae7d5c19deb0ad44a50f7e17ed4396596305ed10334147bb5",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "model-selection-governance-requirement",
+          "path": "docs_site/governance/model-selection-governance-requirement.md",
+          "sha3_384": "5ecc42acc51559329ede55769dc925de379f7aff3b87beb646cd886b73d9f528c2289d27550af2a4b4312fac484f04ed",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "qwen-cobalt-process-integrity",
+          "path": "docs_site/governance/qwen-cobalt-process-integrity.md",
+          "sha3_384": "ee403cacb041a1097c23fedec94b5ce65d87cceb793194feeb5c051ca65de6cb9a831fef25702f33ddf5a204125d07be",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "cobalt-dry-run-report",
+          "path": "reports/verifiable-constitution/vc-019-cobalt-dry-run-binding-report.json",
+          "sha3_384": "41dcd6c8c2f276d50fa8e49bd9f3b2790c7e5890700170225ecadb31a3b4e9eb3cf1c9f5ce9e20412292ebbb25feb4d3",
+          "provenance": "replay_derived"
+        },
+        {
+          "ref_id": "cobalt-dry-run-test-report",
+          "path": "reports/verifiable-constitution/vc-019-cobalt-dry-run-binding-report.json",
+          "sha3_384": "41dcd6c8c2f276d50fa8e49bd9f3b2790c7e5890700170225ecadb31a3b4e9eb3cf1c9f5ce9e20412292ebbb25feb4d3",
+          "provenance": "test_report"
+        }
+      ],
+      "provenance": [
+        "test_report",
+        "replay_derived",
+        "artifact_hash"
+      ],
+      "freshness": "release_bound",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "hold",
+      "action_bound": "admission_gate",
+      "redaction_status": "public",
+      "collector_note": "Binds the release-gate evidence showing no architecture option can mutate code, Cobalt, validators, or mainnet without a later named gate."
+    },
+    {
+      "field_path": "protocol_architecture.rust_l1_surface_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "b01963e50725aaeb704199220962fcee84da1d0500aa9cc837eaedca6fb398d57074608c2641b033ac24322c5d982f8d",
+      "source_refs": [
+        {
+          "ref_id": "workspace-cargo",
+          "path": "Cargo.toml",
+          "sha3_384": "5ed09865ebe6bae242bc27fee2786f86fe9ddb0493ddc5c46fd03d7b3646fd5d5b8877779398898d10c53f5cd7258406",
+          "provenance": "source_code"
+        },
+        {
+          "ref_id": "node-cargo",
+          "path": "crates/node/Cargo.toml",
+          "sha3_384": "e7a89f1a8aea6d11249f98e3226c33a898118b181bc6cac9a920338e78ffb4eeaa9830eb6a77f4c5694a201c9f2cf84f",
+          "provenance": "source_code"
+        },
+        {
+          "ref_id": "consensus-cobalt-cargo",
+          "path": "crates/consensus_cobalt/Cargo.toml",
+          "sha3_384": "148ab76064b1b254bea2618d83ca25fa8f3f1c35b30ae6f73739ce53d93a90ea39f96c65ab5e034eedd340977027ad82",
+          "provenance": "source_code"
+        },
+        {
+          "ref_id": "crypto-provider-cargo",
+          "path": "crates/crypto_provider/Cargo.toml",
+          "sha3_384": "56b25260999bfb8eed3ee80f4299eda1024c876f0ba5d55cf0b33965b55239f36663d2719d6ef83359a11a485165b347",
+          "provenance": "source_code"
+        },
+        {
+          "ref_id": "rpc-sdk-cargo",
+          "path": "crates/rpc_sdk/Cargo.toml",
+          "sha3_384": "c7ebdafc70589574f467552fae5e947b9ffa96070498c43d6aa9c9bb927b6200fe7cd4633e5c2a17348cfb1339db795f",
+          "provenance": "source_code"
+        },
+        {
+          "ref_id": "cobalt-dry-run-test-report",
+          "path": "reports/verifiable-constitution/vc-019-cobalt-dry-run-binding-report.json",
+          "sha3_384": "41dcd6c8c2f276d50fa8e49bd9f3b2790c7e5890700170225ecadb31a3b4e9eb3cf1c9f5ce9e20412292ebbb25feb4d3",
+          "provenance": "test_report"
+        }
+      ],
+      "provenance": [
+        "source_code",
+        "artifact_hash",
+        "test_report"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "redaction_status": "public",
+      "collector_note": "Binds the current Rust workspace and core protocol crates that would be preserved by the status-quo architecture option."
+    },
+    {
+      "field_path": "protocol_architecture.status_quo_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "4fd301f613c3f5b4281b26509f03b14dc5d42a7ea801318227306e2eabe1ca67176cb21d72d75d6804396818f44fff51",
+      "source_refs": [
+        {
+          "ref_id": "protocol-architecture-question",
+          "path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_constitutional_question.json",
+          "sha3_384": "2f667c57807478582e6b2dfd4146a5ec60ec3f07354adae1200b2ebd746b1316cd11168ac06df421b61ed17fc08e7000",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "architecture-overview",
+          "path": "docs_site/architecture/overview.md",
+          "sha3_384": "e91fbea1e3e41e89607ccaa11933cdb1693367332404dfe72e138e9658a7a2964cafdf833020644117466b926ee4fa22",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "implementation-whitepaper",
+          "path": "docs_site/whitepaper.md",
+          "sha3_384": "ea4f650da64ae54aa291f2fe5a3ca14189bb6492972681a4f247d5baa6b252d8d3935c24411c90b22003587d53415e45",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "deterministic-governance-overview",
+          "path": "docs_site/governance/deterministic-governance-overview.md",
+          "sha3_384": "745e88fb09d6e0b661dea288cd8c6ecb7a321a97665b9ea0edaddbe7ecfb8f2e4e25c8ca2b8445396e6c40b87ecaf5fd",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "redaction_status": "public",
+      "collector_note": "Binds the current Rust L1 status quo and the fact that a full rippled fork is not the current architecture."
+    },
+    {
+      "field_path": "protocol_architecture.xrpl_compatibility_requirements_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "d2826fe44f91126a160ddc8719877333c84bbc35cf665704519ca16d835ea45c856b40c78c856fa0c4e7c4f2692854b4",
+      "source_refs": [
+        {
+          "ref_id": "architecture-overview",
+          "path": "docs_site/architecture/overview.md",
+          "sha3_384": "e91fbea1e3e41e89607ccaa11933cdb1693367332404dfe72e138e9658a7a2964cafdf833020644117466b926ee4fa22",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "transaction-lifecycle",
+          "path": "docs_site/architecture/transaction-lifecycle.md",
+          "sha3_384": "766fdf6d6e740df2872df745c50ed1a25d590e6741080c17a5020a7d0435a198a9f147e4b6e2877a4d2b753f9409c55c",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "evidence-model",
+          "path": "docs_site/architecture/evidence-model.md",
+          "sha3_384": "0026e3a7e9fa693ea350f4ecbe658dc32b69752243d66834d5609d626aa18460bb43cdd80155d30a07bf91fcf6c6cf4c",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "rpc-sdk-cargo",
+          "path": "crates/rpc_sdk/Cargo.toml",
+          "sha3_384": "c7ebdafc70589574f467552fae5e947b9ffa96070498c43d6aa9c9bb927b6200fe7cd4633e5c2a17348cfb1339db795f",
+          "provenance": "source_code"
+        }
+      ],
+      "provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "redaction_status": "public",
+      "collector_note": "Binds public architecture and RPC evidence for bounded XRPL-style compatibility without treating compatibility as a rippled fork requirement."
+    },
+    {
+      "field_path": "protocol_architecture.xrpl_fork_delta_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "fa20cbf3147bdb9073a4e89c45076386f2c904878a3c888ab264256f7503228b6dd403f71330790c749a6f622016e459",
+      "source_refs": [
+        {
+          "ref_id": "research-response-synthesis",
+          "path": "docs/status/research-response-synthesis.md",
+          "sha3_384": "5d9fafe5d4a2b1660db0dbc6308d02060146663be94e3b916e20008ef669501c1ceda149a2cb01946993f1937837b9e1",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "heavy-redesign",
+          "path": "docs/research-requests/heavy_redesign.md",
+          "sha3_384": "a1f86856fe4c48448ebce212f9cb7a766072342b3aa8b802bed92bb0afa15be137fddb95ff74d6445a83873b806be734",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "implementation-whitepaper",
+          "path": "docs_site/whitepaper.md",
+          "sha3_384": "ea4f650da64ae54aa291f2fe5a3ca14189bb6492972681a4f247d5baa6b252d8d3935c24411c90b22003587d53415e45",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "redaction_status": "public",
+      "collector_note": "Binds existing design research describing the delta between the current Rust L1 and a direct XRPL/rippled fork path."
+    }
+  ],
+  "missing_evidence": [],
+  "redaction": {
+    "redaction_passed": true,
+    "secret_scan_passed": true,
+    "hidden_evidence_absent": true,
+    "prohibited_fields_absent": true,
+    "raw_secret_material_retained": false,
+    "public_packet_only": true
+  },
+  "checks": {
+    "schema_valid": true,
+    "request_hash_matches": true,
+    "requested_fields_bound": true,
+    "source_hashes_verified": true,
+    "missing_behaviors_applied": true,
+    "redaction_passed": true,
+    "secret_scan_passed": true,
+    "no_hidden_evidence": true,
+    "no_live_collection": true,
+    "no_live_mutation": true,
+    "packet_root_verified": true,
+    "authority_transfer": false
+  }
+}

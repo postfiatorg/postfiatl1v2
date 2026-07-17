@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_correlation_bound/valid_correlation_bound.json",
+  "expected_error_contains": [
+    "attestation.statement_hash does not match canonical statement hash"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "attestation",
+        "statement_hash"
+      ],
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "schema": "postfiat-privacy-correlation-bound-invalid-case-v1"
+}

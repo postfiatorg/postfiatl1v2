@@ -1,0 +1,16 @@
+{
+  "redemption_id": "341ec2f2c5122c0026021be374b4c79a20e63a748038fe5c76b355d05c7440b8414a0ccfb87cc59e76054c149e6d9d69",
+  "owner": "pf323cfe884291b17844024b43ac44962c468b51b4",
+  "owner_sequence": 25,
+  "issuer": "pf312d5b1f518fe71395e946d110bbfb20f7b930d9",
+  "asset_id": "8584aa713209eb8253293c891f7269e35841f004080e06414db019f868610e9cb57dfb7aca3d51427fbe369b6ebde127",
+  "amount": 3,
+  "epoch": 3,
+  "nav_per_unit": 820102173,
+  "unit_scale": 1000000,
+  "reserve_packet_hash": "0580a5096b7b5f79136b442ef1f8e35ea4c69f6b18b1b45d28de222fb6b8111877bcb2486c3d987177dc04c7ede5fe52",
+  "redemption_claim": 2461,
+  "state": "settled",
+  "created_at_height": 103,
+  "settlement_receipt_hash": "b57bc2c442a1bf00e25391311d85eee4a752b7f925765edfb85f1af0f840491e0090d444ff8039ef48ca2bb97a424f8b"
+}

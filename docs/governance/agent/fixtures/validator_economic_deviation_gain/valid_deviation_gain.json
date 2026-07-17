@@ -1,0 +1,459 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T00:00:00Z",
+    "attestor_key_hash": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+    "signature_hash": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+    "signature_scheme": "mldsa44-placeholder",
+    "statement_hash": "2c3ef873b8c8bc556f05fe5933678588dd5c67c7a0ac72f1c135def35a38cf502c195edf1e16c5f49ab46dc7148df61c"
+  },
+  "checks": {
+    "authority_transfer": false,
+    "derivation_root_bound": true,
+    "external_position_cap_required": true,
+    "live_registry_mutation": false,
+    "loss_margin_enforced": true,
+    "source_bound_component_caps": true,
+    "source_class_mismatch_held": true,
+    "stale_source_held": true,
+    "statement_hash_bound": true,
+    "unbounded_window_rejected": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "validator-economic-deviation-gain-v1-fixture",
+  "schema": "postfiat-validator-economic-deviation-gain-v1",
+  "statement": {
+    "base_evidence": {
+      "gain_caps": {
+        "external_position_cap": {
+          "age_epochs": 0,
+          "attestor_group": "risk-desk-a",
+          "attestor_independence": "independent",
+          "measurement_type": "external_position_cap_usd_window",
+          "source_class": "auditor_attested",
+          "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "status": "verified",
+          "unbounded": false,
+          "usd_value": 2000000,
+          "window_bounded": true
+        },
+        "fee_class_spread_ceiling": {
+          "age_epochs": 0,
+          "attestor_group": "chain-index-a",
+          "attestor_independence": "independent",
+          "measurement_type": "fee_class_spread_usd_window",
+          "source_class": "chain_derived",
+          "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "status": "verified",
+          "unbounded": false,
+          "usd_value": 150000,
+          "window_bounded": true
+        },
+        "omission_window_gain_ceiling": {
+          "age_epochs": 0,
+          "attestor_group": "receipt-collector-a",
+          "attestor_independence": "independent",
+          "measurement_type": "omission_window_gain_usd_window",
+          "source_class": "receipt_derived",
+          "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "status": "verified",
+          "unbounded": false,
+          "usd_value": 500000,
+          "window_bounded": true
+        },
+        "proposer_slot_gain_ceiling": {
+          "age_epochs": 0,
+          "attestor_group": "chain-index-a",
+          "attestor_independence": "independent",
+          "measurement_type": "proposer_slot_gain_usd_window",
+          "source_class": "chain_derived",
+          "source_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "status": "verified",
+          "unbounded": false,
+          "usd_value": 250000,
+          "window_bounded": true
+        },
+        "registry_delay_gain_ceiling": {
+          "age_epochs": 0,
+          "attestor_group": "registry-a",
+          "attestor_independence": "independent",
+          "measurement_type": "registry_delay_gain_usd_window",
+          "source_class": "registry_derived",
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "status": "verified",
+          "unbounded": false,
+          "usd_value": 300000,
+          "window_bounded": true
+        }
+      },
+      "loss_floors": {
+        "contractual_liability_floor": {
+          "age_epochs": 0,
+          "attestor_group": "legal-counsel-a",
+          "attestor_independence": "independent",
+          "measurement_type": "contract_liability_usd_window",
+          "source_class": "contract_signed",
+          "source_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "status": "verified",
+          "unbounded": false,
+          "usd_value": 5000000,
+          "window_bounded": true
+        },
+        "exclusion_loss_floor": {
+          "age_epochs": 0,
+          "attestor_group": "registry-a",
+          "attestor_independence": "independent",
+          "measurement_type": "registry_exclusion_flow_usd_30d",
+          "source_class": "registry_derived",
+          "source_hash": "121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212",
+          "status": "verified",
+          "unbounded": false,
+          "usd_value": 3000000,
+          "window_bounded": true
+        },
+        "reputation_loss_floor": {
+          "age_epochs": 0,
+          "attestor_group": "auditor-reputation-a",
+          "attestor_independence": "independent",
+          "measurement_type": "reputation_loss_usd_floor",
+          "source_class": "auditor_attested",
+          "source_hash": "343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434",
+          "status": "verified",
+          "unbounded": false,
+          "usd_value": 2000000,
+          "window_bounded": true
+        }
+      }
+    },
+    "derivation_policy": {
+      "gain_formula": "min(sum(component_gain_caps), external_position_cap)",
+      "max_evidence_age_epochs": 3,
+      "min_loss_over_gain_margin_usd": 1000000,
+      "policy_units": "usd-window-caps-v1",
+      "route_on_missing_external_position_cap": "reject",
+      "route_on_unbounded_influence_window": "reject"
+    },
+    "derivation_root_hash": "d9bcb6a3a261e6cd12da4ff89a592d63bc4598cd79980ad0187751aa5466a89ccd8c7c266b725bec753708f24dcd3451",
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_bound_calibration/valid_economic_bound_calibration.json",
+        "sha3_384": "6e6aa55af46a1a98ba0830c54ca5ac5ab71990339d735fde1a2e63b52a973971c4e5afb40a0d8d85ec1ad2fe519930b1"
+      },
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_bound_adversary_pricing/valid_adversary_pricing.json",
+        "sha3_384": "18a3cda6cd90cb4c22358d17788afc358ddb3c7e4f5b1f03fb3be633f3eba8cb58f064e2ac7f0b0a357639a6db01e1e4"
+      },
+      {
+        "path": "scripts/validator-economic-bound-calibration-verify",
+        "sha3_384": "dcaa9b66ade6958d5f21f62359f9ff130395e69494eb0f94bc9ac5b62b2b636176cf3e22323444327c6000985c6f2cff"
+      },
+      {
+        "path": "scripts/validator-economic-bound-adversary-pricing-verify",
+        "sha3_384": "d78c4054899d128ad0761e14917afefa61c0c082fca0fa3334c98d58c08ff26cc465faaa68e510ee25e011bfc397b529"
+      }
+    ],
+    "policy_id": "validator-economic-deviation-gain-v1",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "validator-economic-deviation-gain-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-source-derived-admit",
+        "expected_derivation": {
+          "component_gain_sum_usd": 1200000,
+          "derived_G_i_w_usd": 1200000,
+          "external_position_cap_usd": 2000000,
+          "fee_class_spread_gain_usd": 150000,
+          "loss_floor_usd": 10000000,
+          "loss_over_gain_margin_usd": 8800000,
+          "omission_window_gain_usd": 500000,
+          "proposer_slot_gain_usd": 250000,
+          "registry_delay_gain_usd": 300000,
+          "required_margin_usd": 1000000
+        },
+        "expected_reason_codes": [
+          "all_deviation_gain_bounds_passed"
+        ],
+        "expected_route": "admit",
+        "overrides": []
+      },
+      {
+        "case_id": "case-02-external-position-cap-binds-admit",
+        "expected_derivation": {
+          "component_gain_sum_usd": 1200000,
+          "derived_G_i_w_usd": 700000,
+          "external_position_cap_usd": 700000,
+          "fee_class_spread_gain_usd": 150000,
+          "loss_floor_usd": 10000000,
+          "loss_over_gain_margin_usd": 9300000,
+          "omission_window_gain_usd": 500000,
+          "proposer_slot_gain_usd": 250000,
+          "registry_delay_gain_usd": 300000,
+          "required_margin_usd": 1000000
+        },
+        "expected_reason_codes": [
+          "external_position_cap_binds"
+        ],
+        "expected_route": "admit",
+        "overrides": [
+          {
+            "path": [
+              "gain_caps",
+              "external_position_cap",
+              "usd_value"
+            ],
+            "value": 700000
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-loss-margin-below-gain-reject",
+        "expected_derivation": {
+          "component_gain_sum_usd": 1200000,
+          "derived_G_i_w_usd": 1200000,
+          "external_position_cap_usd": 2000000,
+          "fee_class_spread_gain_usd": 150000,
+          "loss_floor_usd": 1000000,
+          "loss_over_gain_margin_usd": -200000,
+          "omission_window_gain_usd": 500000,
+          "proposer_slot_gain_usd": 250000,
+          "registry_delay_gain_usd": 300000,
+          "required_margin_usd": 1000000
+        },
+        "expected_reason_codes": [
+          "loss_margin_below_required"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "loss_floors",
+              "contractual_liability_floor",
+              "usd_value"
+            ],
+            "value": 600000
+          },
+          {
+            "path": [
+              "loss_floors",
+              "exclusion_loss_floor",
+              "usd_value"
+            ],
+            "value": 300000
+          },
+          {
+            "path": [
+              "loss_floors",
+              "reputation_loss_floor",
+              "usd_value"
+            ],
+            "value": 100000
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-missing-external-position-cap-reject",
+        "expected_derivation": {
+          "component_gain_sum_usd": 1200000,
+          "derived_G_i_w_usd": 1200000,
+          "external_position_cap_usd": 0,
+          "fee_class_spread_gain_usd": 150000,
+          "loss_floor_usd": 10000000,
+          "loss_over_gain_margin_usd": 8800000,
+          "omission_window_gain_usd": 500000,
+          "proposer_slot_gain_usd": 250000,
+          "registry_delay_gain_usd": 300000,
+          "required_margin_usd": 1000000
+        },
+        "expected_reason_codes": [
+          "missing_external_position_cap"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "gain_caps",
+              "external_position_cap"
+            ],
+            "value": null
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-unbounded-omission-window-reject",
+        "expected_derivation": {
+          "component_gain_sum_usd": 1200000,
+          "derived_G_i_w_usd": 1200000,
+          "external_position_cap_usd": 2000000,
+          "fee_class_spread_gain_usd": 150000,
+          "loss_floor_usd": 10000000,
+          "loss_over_gain_margin_usd": 8800000,
+          "omission_window_gain_usd": 500000,
+          "proposer_slot_gain_usd": 250000,
+          "registry_delay_gain_usd": 300000,
+          "required_margin_usd": 1000000
+        },
+        "expected_reason_codes": [
+          "unbounded_influence_window_omission_window_gain_ceiling"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "gain_caps",
+              "omission_window_gain_ceiling",
+              "window_bounded"
+            ],
+            "value": false
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-stale-proposer-slot-hold",
+        "expected_derivation": {
+          "component_gain_sum_usd": 1200000,
+          "derived_G_i_w_usd": 1200000,
+          "external_position_cap_usd": 2000000,
+          "fee_class_spread_gain_usd": 150000,
+          "loss_floor_usd": 10000000,
+          "loss_over_gain_margin_usd": 8800000,
+          "omission_window_gain_usd": 500000,
+          "proposer_slot_gain_usd": 250000,
+          "registry_delay_gain_usd": 300000,
+          "required_margin_usd": 1000000
+        },
+        "expected_reason_codes": [
+          "stale_source_proposer_slot_gain_ceiling"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "gain_caps",
+              "proposer_slot_gain_ceiling",
+              "age_epochs"
+            ],
+            "value": 9
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-fee-spread-source-class-mismatch-hold",
+        "expected_derivation": {
+          "component_gain_sum_usd": 1200000,
+          "derived_G_i_w_usd": 1200000,
+          "external_position_cap_usd": 2000000,
+          "fee_class_spread_gain_usd": 150000,
+          "loss_floor_usd": 10000000,
+          "loss_over_gain_margin_usd": 8800000,
+          "omission_window_gain_usd": 500000,
+          "proposer_slot_gain_usd": 250000,
+          "registry_delay_gain_usd": 300000,
+          "required_margin_usd": 1000000
+        },
+        "expected_reason_codes": [
+          "source_class_mismatch_fee_class_spread_ceiling"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "gain_caps",
+              "fee_class_spread_ceiling",
+              "source_class"
+            ],
+            "value": "auditor_attested"
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-missing-registry-delay-cap-hold",
+        "expected_derivation": {
+          "component_gain_sum_usd": 900000,
+          "derived_G_i_w_usd": 900000,
+          "external_position_cap_usd": 2000000,
+          "fee_class_spread_gain_usd": 150000,
+          "loss_floor_usd": 10000000,
+          "loss_over_gain_margin_usd": 9100000,
+          "omission_window_gain_usd": 500000,
+          "proposer_slot_gain_usd": 250000,
+          "registry_delay_gain_usd": 0,
+          "required_margin_usd": 1000000
+        },
+        "expected_reason_codes": [
+          "missing_gain_component_registry_delay_gain_ceiling"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "gain_caps",
+              "registry_delay_gain_ceiling"
+            ],
+            "value": null
+          }
+        ]
+      },
+      {
+        "case_id": "case-09-unbounded-external-position-cap-reject",
+        "expected_derivation": {
+          "component_gain_sum_usd": 1200000,
+          "derived_G_i_w_usd": 1200000,
+          "external_position_cap_usd": 2000000,
+          "fee_class_spread_gain_usd": 150000,
+          "loss_floor_usd": 10000000,
+          "loss_over_gain_margin_usd": 8800000,
+          "omission_window_gain_usd": 500000,
+          "proposer_slot_gain_usd": 250000,
+          "registry_delay_gain_usd": 300000,
+          "required_margin_usd": 1000000
+        },
+        "expected_reason_codes": [
+          "unbounded_external_position_cap"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "gain_caps",
+              "external_position_cap",
+              "unbounded"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-10-favorable-external-cap-attestor-reject",
+        "expected_derivation": {
+          "component_gain_sum_usd": 1200000,
+          "derived_G_i_w_usd": 1200000,
+          "external_position_cap_usd": 2000000,
+          "fee_class_spread_gain_usd": 150000,
+          "loss_floor_usd": 10000000,
+          "loss_over_gain_margin_usd": 8800000,
+          "omission_window_gain_usd": 500000,
+          "proposer_slot_gain_usd": 250000,
+          "registry_delay_gain_usd": 300000,
+          "required_margin_usd": 1000000
+        },
+        "expected_reason_codes": [
+          "favorable_attestor_inflation_external_position_cap"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "gain_caps",
+              "external_position_cap",
+              "attestor_independence"
+            ],
+            "value": "candidate_affiliate"
+          }
+        ]
+      }
+    ]
+  }
+}

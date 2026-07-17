@@ -1,0 +1,32 @@
+{
+  "schema": "postfiat-validator-attestor-market-calibration-schema-v1",
+  "description": "Controlled-testnet schema for deriving capture/value admission ratios from attestor-market cost floors, governed safety discounts, and value-at-stake ceilings.",
+  "required_statement_fields": [
+    "packet_id",
+    "policy_id",
+    "created_at",
+    "calibration_policy",
+    "base_model",
+    "selector_cases",
+    "calibration_root_hash",
+    "statement_hash",
+    "evidence_artifacts"
+  ],
+  "required_policy_fields": [
+    "policy_units",
+    "policy_governed",
+    "active_byzantine_budget_B",
+    "min_independent_attestor_groups",
+    "min_control_surfaces",
+    "max_market_evidence_age_epochs",
+    "min_safety_discount_bps",
+    "max_safety_discount_bps",
+    "max_value_at_stake_ceiling_usd"
+  ],
+  "route_set": [
+    "admit",
+    "hold",
+    "reject",
+    "fail-closed"
+  ]
+}

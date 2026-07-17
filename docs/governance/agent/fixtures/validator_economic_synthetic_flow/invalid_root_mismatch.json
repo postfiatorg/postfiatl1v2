@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_synthetic_flow/valid_synthetic_flow.json",
+  "expected_error_contains": [
+    "statement.synthetic_flow_root_hash does not match synthetic-flow material"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "synthetic_flow_root_hash"
+      ],
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "schema": "postfiat-validator-economic-synthetic-flow-invalid-case-v1"
+}

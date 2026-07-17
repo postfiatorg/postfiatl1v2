@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+"""Regression tests for the public documentation link boundary."""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+CHECKER = Path(__file__).with_name("public-doc-links")
+
+
+def run(repository: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(CHECKER), "--repository", str(repository)],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def write_fixture(root: Path, readme: str) -> None:
+    (root / "docs").mkdir()
+    (root / "README.md").write_text(readme, encoding="utf-8")
+    (root / "docs" / "target.md").write_text("# Existing anchor\n", encoding="utf-8")
+
+
+def main() -> int:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        write_fixture(
+            root,
+            "[valid](docs/target.md#existing-anchor)\n\n"
+            "```text\n[fenced-not-a-link](missing.md)\n```\n",
+        )
+        if run(root).returncode:
+            raise SystemExit("valid link fixture did not pass")
+
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        write_fixture(root, "[missing](docs/missing.md)\n")
+        result = run(root)
+        if result.returncode == 0 or "missing target" not in result.stdout:
+            raise SystemExit("missing-file fixture did not fail closed")
+
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        write_fixture(root, "[missing anchor](docs/target.md#not-there)\n")
+        result = run(root)
+        if result.returncode == 0 or "missing anchor" not in result.stdout:
+            raise SystemExit("missing-anchor fixture did not fail closed")
+
+    print("public documentation link regression passed")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

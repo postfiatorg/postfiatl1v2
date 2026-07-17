@@ -1,0 +1,18 @@
+{
+  "schema": "postfiat-validator-attestor-market-calibration-delta-v1",
+  "base": "valid_attestor_market_calibration.json",
+  "overrides": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        4,
+        "expected_route"
+      ],
+      "value": "admit"
+    }
+  ],
+  "expected_error_contains": [
+    "case-05-ungoverned-policy-fails-closed: expected_route mismatch"
+  ]
+}

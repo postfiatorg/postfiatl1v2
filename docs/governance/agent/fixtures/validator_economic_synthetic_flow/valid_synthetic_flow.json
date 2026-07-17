@@ -1,0 +1,487 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T00:00:00Z",
+    "attestor_key_hash": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+    "signature_hash": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+    "signature_scheme": "mldsa44-placeholder",
+    "statement_hash": "85e9fd174f2ed24e2bbb248098b755d0b748199318adc51dbaf54f2ae7ad793bd1a1481f8c9f82f807d713a225ad5022"
+  },
+  "checks": {
+    "affiliated_flow_rejected": true,
+    "authority_transfer": false,
+    "live_registry_mutation": false,
+    "self_declared_flow_rejected": true,
+    "source_control_groups_required": true,
+    "stale_or_missing_flow_held": true,
+    "statement_hash_bound": true,
+    "synthetic_flow_root_bound": true,
+    "under_threshold_flow_rejected": true,
+    "ungoverned_policy_fail_closed": true,
+    "wash_flow_rejected": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "validator-economic-synthetic-flow-v1-fixture",
+  "schema": "postfiat-validator-economic-synthetic-flow-v1",
+  "statement": {
+    "base_evidence": {
+      "candidate_control_groups": [
+        "candidate-holdco-a",
+        "candidate-affiliate-network-a"
+      ],
+      "exposure_sources": {
+        "custody_assets_floor": {
+          "age_epochs": 0,
+          "attestor_group": "custody-auditor-a",
+          "attestor_independence": "independent",
+          "candidate_affiliated": false,
+          "counterparty_count": 8,
+          "measurement_type": "custody_assets_under_service_usd_floor",
+          "source_class": "regulated_statement",
+          "source_control_group": "custody-source-a",
+          "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "status": "verified",
+          "synthetic_flow_flags": [],
+          "usd_value": 6000000,
+          "window_bounded": true
+        },
+        "customer_settlement_flow_floor": {
+          "age_epochs": 0,
+          "attestor_group": "customer-counterparty-a",
+          "attestor_independence": "independent",
+          "candidate_affiliated": false,
+          "counterparty_count": 11,
+          "measurement_type": "customer_settlement_flow_usd_window",
+          "source_class": "counterparty_signed",
+          "source_control_group": "customer-source-a",
+          "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "status": "verified",
+          "synthetic_flow_flags": [],
+          "usd_value": 2000000,
+          "window_bounded": true
+        },
+        "exchange_volume_floor": {
+          "age_epochs": 0,
+          "attestor_group": "exchange-index-a",
+          "attestor_independence": "independent",
+          "candidate_affiliated": false,
+          "counterparty_count": 19,
+          "measurement_type": "exchange_settlement_flow_usd_window",
+          "source_class": "chain_derived",
+          "source_control_group": "exchange-source-a",
+          "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "status": "verified",
+          "synthetic_flow_flags": [],
+          "usd_value": 4000000,
+          "window_bounded": true
+        },
+        "gateway_route_flow_floor": {
+          "age_epochs": 0,
+          "attestor_group": "gateway-counterparty-a",
+          "attestor_independence": "independent",
+          "candidate_affiliated": false,
+          "counterparty_count": 9,
+          "measurement_type": "gateway_route_flow_usd_window",
+          "source_class": "counterparty_signed",
+          "source_control_group": "gateway-source-a",
+          "source_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "status": "verified",
+          "synthetic_flow_flags": [],
+          "usd_value": 3000000,
+          "window_bounded": true
+        }
+      },
+      "source_policy_governed": true
+    },
+    "candidate": {
+      "candidate_id": "validator-candidate-synthetic-flow-probe",
+      "declared_control_groups": [
+        "candidate-holdco-a",
+        "candidate-affiliate-network-a"
+      ]
+    },
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_attestor_capture/valid_attestor_capture.json",
+        "sha3_384": "8e1c14d6bba86ecae29fba49cee99759add9c7cc46af353570d32614b0339560356acf8a9e363b622b5c8d1ef489bbcc"
+      },
+      {
+        "path": "scripts/validator-economic-attestor-capture-verify",
+        "sha3_384": "17ae50fd24588de2a067f29abc193ffa1d3544a5b8452372a2667562e0ec13d2f1894d2a89d41d360614dd562c665b1b"
+      },
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_loss_measurement/valid_loss_measurement.json",
+        "sha3_384": "e9ef22dc363f6079a38a1fe0b95c466396396ed617e640268a9c59704e65417cdb7eebf020b4c4f56c48a30ec71ac2f8"
+      },
+      {
+        "path": "scripts/validator-economic-loss-measurement-verify",
+        "sha3_384": "ff246f85f7ef1ccec830ca23472f6a9cb0b59343dadb8d6295d0c15b92969263242da463d02a68dad8618e10fb46e61c"
+      }
+    ],
+    "policy_id": "validator-economic-synthetic-flow-v1",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "validator-economic-synthetic-flow-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-independent-exposure-admit",
+        "expected_measurement": {
+          "custody_assets_floor_usd": 6000000,
+          "customer_settlement_flow_floor_usd": 2000000,
+          "derived_B_i_floor_usd": 15000000,
+          "distinct_attestor_groups": 4,
+          "distinct_source_control_groups": 4,
+          "exchange_volume_floor_usd": 4000000,
+          "gateway_route_flow_floor_usd": 3000000,
+          "min_distinct_source_control_groups": 3,
+          "min_exogenous_benefit_usd": 10000000,
+          "overlapping_attestor_groups": 0,
+          "source_policy_governed": true
+        },
+        "expected_reason_codes": [
+          "all_synthetic_flow_checks_passed"
+        ],
+        "expected_route": "admit",
+        "overrides": []
+      },
+      {
+        "case_id": "case-02-affiliated-exchange-flow-reject",
+        "expected_measurement": {
+          "custody_assets_floor_usd": 6000000,
+          "customer_settlement_flow_floor_usd": 2000000,
+          "derived_B_i_floor_usd": 11000000,
+          "distinct_attestor_groups": 3,
+          "distinct_source_control_groups": 3,
+          "exchange_volume_floor_usd": 0,
+          "gateway_route_flow_floor_usd": 3000000,
+          "min_distinct_source_control_groups": 3,
+          "min_exogenous_benefit_usd": 10000000,
+          "overlapping_attestor_groups": 0,
+          "source_policy_governed": true
+        },
+        "expected_reason_codes": [
+          "candidate_affiliated_exposure_source_exchange_volume_floor"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "exposure_sources",
+              "exchange_volume_floor",
+              "source_control_group"
+            ],
+            "value": "candidate-holdco-a"
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-self-declared-flow-reject",
+        "expected_measurement": {
+          "custody_assets_floor_usd": 6000000,
+          "customer_settlement_flow_floor_usd": 2000000,
+          "derived_B_i_floor_usd": 11000000,
+          "distinct_attestor_groups": 3,
+          "distinct_source_control_groups": 3,
+          "exchange_volume_floor_usd": 0,
+          "gateway_route_flow_floor_usd": 3000000,
+          "min_distinct_source_control_groups": 3,
+          "min_exogenous_benefit_usd": 10000000,
+          "overlapping_attestor_groups": 0,
+          "source_policy_governed": true
+        },
+        "expected_reason_codes": [
+          "self_declared_exposure_source_exchange_volume_floor"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "exposure_sources",
+              "exchange_volume_floor",
+              "source_class"
+            ],
+            "value": "self_declared"
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-under-threshold-flow-reject",
+        "expected_measurement": {
+          "custody_assets_floor_usd": 2000000,
+          "customer_settlement_flow_floor_usd": 1000000,
+          "derived_B_i_floor_usd": 5000000,
+          "distinct_attestor_groups": 4,
+          "distinct_source_control_groups": 4,
+          "exchange_volume_floor_usd": 1000000,
+          "gateway_route_flow_floor_usd": 1000000,
+          "min_distinct_source_control_groups": 3,
+          "min_exogenous_benefit_usd": 10000000,
+          "overlapping_attestor_groups": 0,
+          "source_policy_governed": true
+        },
+        "expected_reason_codes": [
+          "exogenous_benefit_below_floor"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "exposure_sources",
+              "exchange_volume_floor",
+              "usd_value"
+            ],
+            "value": 1000000
+          },
+          {
+            "path": [
+              "exposure_sources",
+              "custody_assets_floor",
+              "usd_value"
+            ],
+            "value": 2000000
+          },
+          {
+            "path": [
+              "exposure_sources",
+              "gateway_route_flow_floor",
+              "usd_value"
+            ],
+            "value": 1000000
+          },
+          {
+            "path": [
+              "exposure_sources",
+              "customer_settlement_flow_floor",
+              "usd_value"
+            ],
+            "value": 1000000
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-stale-custody-statement-hold",
+        "expected_measurement": {
+          "custody_assets_floor_usd": 0,
+          "customer_settlement_flow_floor_usd": 2000000,
+          "derived_B_i_floor_usd": 9000000,
+          "distinct_attestor_groups": 3,
+          "distinct_source_control_groups": 3,
+          "exchange_volume_floor_usd": 4000000,
+          "gateway_route_flow_floor_usd": 3000000,
+          "min_distinct_source_control_groups": 3,
+          "min_exogenous_benefit_usd": 10000000,
+          "overlapping_attestor_groups": 0,
+          "source_policy_governed": true
+        },
+        "expected_reason_codes": [
+          "exogenous_benefit_below_floor",
+          "stale_exposure_source_custody_assets_floor"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "exposure_sources",
+              "custody_assets_floor",
+              "age_epochs"
+            ],
+            "value": 4
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-missing-gateway-route-hold",
+        "expected_measurement": {
+          "custody_assets_floor_usd": 6000000,
+          "customer_settlement_flow_floor_usd": 2000000,
+          "derived_B_i_floor_usd": 12000000,
+          "distinct_attestor_groups": 3,
+          "distinct_source_control_groups": 3,
+          "exchange_volume_floor_usd": 4000000,
+          "gateway_route_flow_floor_usd": 0,
+          "min_distinct_source_control_groups": 3,
+          "min_exogenous_benefit_usd": 10000000,
+          "overlapping_attestor_groups": 0,
+          "source_policy_governed": true
+        },
+        "expected_reason_codes": [
+          "missing_exposure_source_gateway_route_flow_floor"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "exposure_sources",
+              "gateway_route_flow_floor"
+            ],
+            "value": null
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-attestor-group-overlap-hold",
+        "expected_measurement": {
+          "custody_assets_floor_usd": 6000000,
+          "customer_settlement_flow_floor_usd": 2000000,
+          "derived_B_i_floor_usd": 15000000,
+          "distinct_attestor_groups": 3,
+          "distinct_source_control_groups": 4,
+          "exchange_volume_floor_usd": 4000000,
+          "gateway_route_flow_floor_usd": 3000000,
+          "min_distinct_source_control_groups": 3,
+          "min_exogenous_benefit_usd": 10000000,
+          "overlapping_attestor_groups": 1,
+          "source_policy_governed": true
+        },
+        "expected_reason_codes": [
+          "attestor_group_overlap"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "exposure_sources",
+              "gateway_route_flow_floor",
+              "attestor_group"
+            ],
+            "value": "custody-auditor-a"
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-ungoverned-source-policy-fail-closed",
+        "expected_measurement": {
+          "custody_assets_floor_usd": 6000000,
+          "customer_settlement_flow_floor_usd": 2000000,
+          "derived_B_i_floor_usd": 15000000,
+          "distinct_attestor_groups": 4,
+          "distinct_source_control_groups": 4,
+          "exchange_volume_floor_usd": 4000000,
+          "gateway_route_flow_floor_usd": 3000000,
+          "min_distinct_source_control_groups": 3,
+          "min_exogenous_benefit_usd": 10000000,
+          "overlapping_attestor_groups": 0,
+          "source_policy_governed": false
+        },
+        "expected_reason_codes": [
+          "ungoverned_source_policy"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "source_policy_governed"
+            ],
+            "value": false
+          }
+        ]
+      },
+      {
+        "case_id": "case-09-source-class-mismatch-hold",
+        "expected_measurement": {
+          "custody_assets_floor_usd": 6000000,
+          "customer_settlement_flow_floor_usd": 2000000,
+          "derived_B_i_floor_usd": 12000000,
+          "distinct_attestor_groups": 3,
+          "distinct_source_control_groups": 3,
+          "exchange_volume_floor_usd": 4000000,
+          "gateway_route_flow_floor_usd": 0,
+          "min_distinct_source_control_groups": 3,
+          "min_exogenous_benefit_usd": 10000000,
+          "overlapping_attestor_groups": 0,
+          "source_policy_governed": true
+        },
+        "expected_reason_codes": [
+          "source_class_mismatch_gateway_route_flow_floor"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "exposure_sources",
+              "gateway_route_flow_floor",
+              "source_class"
+            ],
+            "value": "auditor_attested"
+          }
+        ]
+      },
+      {
+        "case_id": "case-10-low-counterparty-diversity-hold",
+        "expected_measurement": {
+          "custody_assets_floor_usd": 6000000,
+          "customer_settlement_flow_floor_usd": 2000000,
+          "derived_B_i_floor_usd": 11000000,
+          "distinct_attestor_groups": 3,
+          "distinct_source_control_groups": 3,
+          "exchange_volume_floor_usd": 0,
+          "gateway_route_flow_floor_usd": 3000000,
+          "min_distinct_source_control_groups": 3,
+          "min_exogenous_benefit_usd": 10000000,
+          "overlapping_attestor_groups": 0,
+          "source_policy_governed": true
+        },
+        "expected_reason_codes": [
+          "counterparty_diversity_below_floor_exchange_volume_floor"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "exposure_sources",
+              "exchange_volume_floor",
+              "counterparty_count"
+            ],
+            "value": 1
+          }
+        ]
+      },
+      {
+        "case_id": "case-11-wash-routed-flow-reject",
+        "expected_measurement": {
+          "custody_assets_floor_usd": 6000000,
+          "customer_settlement_flow_floor_usd": 2000000,
+          "derived_B_i_floor_usd": 12000000,
+          "distinct_attestor_groups": 3,
+          "distinct_source_control_groups": 3,
+          "exchange_volume_floor_usd": 4000000,
+          "gateway_route_flow_floor_usd": 0,
+          "min_distinct_source_control_groups": 3,
+          "min_exogenous_benefit_usd": 10000000,
+          "overlapping_attestor_groups": 0,
+          "source_policy_governed": true
+        },
+        "expected_reason_codes": [
+          "synthetic_flow_flag_gateway_route_flow_floor_wash_routed"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "exposure_sources",
+              "gateway_route_flow_floor",
+              "synthetic_flow_flags"
+            ],
+            "value": [
+              "wash_routed"
+            ]
+          }
+        ]
+      }
+    ],
+    "source_policy": {
+      "max_evidence_age_epochs": 3,
+      "max_roles_per_attestor_group": 1,
+      "min_counterparties_per_flow_source": 3,
+      "min_distinct_source_control_groups": 3,
+      "min_exogenous_benefit_usd": 10000000,
+      "policy_units": "synthetic-flow-source-control-v1",
+      "route_on_affiliated_flow": "reject",
+      "route_on_stale_or_missing_source": "hold",
+      "route_on_ungoverned_source_policy": "fail-closed"
+    },
+    "synthetic_flow_root_hash": "568698a6f9c49fb97e4b50fb8ea7ef53d9f1811673ca0f53882eb001c371712be1fd1460b5b85b2ed97510529187af16"
+  }
+}

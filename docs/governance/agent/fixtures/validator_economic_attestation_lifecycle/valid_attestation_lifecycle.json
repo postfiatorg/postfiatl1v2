@@ -1,0 +1,436 @@
+{
+  "checks": {
+    "current_epoch_bound": true,
+    "freshness_checked": true,
+    "live_registry_mutation": false,
+    "proved_false_attestor_rejected": true,
+    "refresh_due_held": true,
+    "silent_collusion_not_claimed_solved": true,
+    "source_registry_root_bound": true,
+    "authority_transfer": false,
+    "ungoverned_policy_fails_closed": true,
+    "unresolved_challenge_held": true,
+    "wrong_root_fails_closed": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "validator-economic-attestation-lifecycle-controlled-v1",
+  "schema": "postfiat-validator-economic-attestation-lifecycle-v1",
+  "statement": {
+    "base_record": {
+      "source_registry_root_hash": "46a9f803631b60d18efe77bd0d3af90b15f470ab4b89e54d91dd378f927fe7a373693481401e31f26f889ef55b568b08",
+      "sources": {
+        "B_i": [
+          {
+            "attestor_group": "attestor-chain-index",
+            "challenge_bond_usd": 0,
+            "challenge_status": "none",
+            "control_surface": "chain-derived-ledger-flow",
+            "expires_epoch": 44,
+            "false_attestor_loss_usd": 0,
+            "observed_epoch": 41,
+            "refresh_due_epoch": 43,
+            "signature_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "source_class": "chain_derived",
+            "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "source_id": "src-b-chain-01",
+            "value_usd": 3000000
+          },
+          {
+            "attestor_group": "attestor-audit-a",
+            "challenge_bond_usd": 0,
+            "challenge_status": "none",
+            "control_surface": "auditor-a-volume",
+            "expires_epoch": 44,
+            "false_attestor_loss_usd": 0,
+            "observed_epoch": 41,
+            "refresh_due_epoch": 43,
+            "signature_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "source_class": "auditor_attested",
+            "source_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "source_id": "src-b-audit-01",
+            "value_usd": 2000000
+          },
+          {
+            "attestor_group": "attestor-counterparty-a",
+            "challenge_bond_usd": 0,
+            "challenge_status": "none",
+            "control_surface": "counterparty-settlement-flow",
+            "expires_epoch": 44,
+            "false_attestor_loss_usd": 0,
+            "observed_epoch": 41,
+            "refresh_due_epoch": 43,
+            "signature_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "source_class": "counterparty_signed",
+            "source_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "source_id": "src-b-counterparty-01",
+            "value_usd": 1000000
+          }
+        ],
+        "C_i": [
+          {
+            "attestor_group": "attestor-operator-manifest",
+            "challenge_bond_usd": 0,
+            "challenge_status": "none",
+            "control_surface": "operator-cost-manifest",
+            "expires_epoch": 44,
+            "false_attestor_loss_usd": 0,
+            "observed_epoch": 41,
+            "refresh_due_epoch": 43,
+            "signature_hash": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+            "source_class": "operator_signed",
+            "source_hash": "222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
+            "source_id": "src-c-operator-01",
+            "value_usd": 750000
+          },
+          {
+            "attestor_group": "attestor-audit-b",
+            "challenge_bond_usd": 0,
+            "challenge_status": "none",
+            "control_surface": "auditor-b-cost",
+            "expires_epoch": 44,
+            "false_attestor_loss_usd": 0,
+            "observed_epoch": 41,
+            "refresh_due_epoch": 43,
+            "signature_hash": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+            "source_class": "auditor_attested",
+            "source_hash": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+            "source_id": "src-c-audit-01",
+            "value_usd": 900000
+          }
+        ],
+        "G_i_w": [
+          {
+            "attestor_group": "attestor-chain-index",
+            "challenge_bond_usd": 0,
+            "challenge_status": "none",
+            "control_surface": "chain-derived-short-window-value",
+            "expires_epoch": 44,
+            "false_attestor_loss_usd": 0,
+            "observed_epoch": 41,
+            "refresh_due_epoch": 43,
+            "signature_hash": "555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555",
+            "source_class": "chain_derived",
+            "source_hash": "666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666",
+            "source_id": "src-g-chain-01",
+            "value_usd": 2000000
+          },
+          {
+            "attestor_group": "attestor-audit-c",
+            "challenge_bond_usd": 0,
+            "challenge_status": "none",
+            "control_surface": "auditor-c-external-position",
+            "expires_epoch": 44,
+            "false_attestor_loss_usd": 0,
+            "observed_epoch": 41,
+            "refresh_due_epoch": 43,
+            "signature_hash": "777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+            "source_class": "auditor_attested",
+            "source_hash": "888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888",
+            "source_id": "src-g-audit-01",
+            "value_usd": 1500000
+          }
+        ],
+        "L_i_w": [
+          {
+            "attestor_group": "attestor-contract-a",
+            "challenge_bond_usd": 0,
+            "challenge_status": "none",
+            "control_surface": "contract-liability",
+            "expires_epoch": 44,
+            "false_attestor_loss_usd": 0,
+            "observed_epoch": 41,
+            "refresh_due_epoch": 43,
+            "signature_hash": "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+            "source_class": "contract_signed",
+            "source_hash": "abababababababababababababababababababababababababababababababababababababababababababababababab",
+            "source_id": "src-l-contract-01",
+            "value_usd": 3500000
+          },
+          {
+            "attestor_group": "attestor-registry-a",
+            "challenge_bond_usd": 0,
+            "challenge_status": "none",
+            "control_surface": "registry-exclusion-flow",
+            "expires_epoch": 44,
+            "false_attestor_loss_usd": 0,
+            "observed_epoch": 41,
+            "refresh_due_epoch": 43,
+            "signature_hash": "bcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbc",
+            "source_class": "registry_derived",
+            "source_hash": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+            "source_id": "src-l-registry-01",
+            "value_usd": 1500000
+          },
+          {
+            "attestor_group": "attestor-governance-a",
+            "challenge_bond_usd": 0,
+            "challenge_status": "none",
+            "control_surface": "governed-challenge-consequence",
+            "expires_epoch": 44,
+            "false_attestor_loss_usd": 0,
+            "observed_epoch": 41,
+            "refresh_due_epoch": 43,
+            "signature_hash": "dededededededededededededededededededededededededededededededededededededededededededededededede",
+            "source_class": "governance_derived",
+            "source_hash": "efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef",
+            "source_id": "src-l-governance-01",
+            "value_usd": 1250000
+          }
+        ]
+      },
+      "subject_validator": "validator-17"
+    },
+    "current_epoch": 42,
+    "lifecycle_policy": {
+      "max_source_age_epochs": 2,
+      "max_terms_per_attestor_group": 2,
+      "min_attestor_groups_per_term": 1,
+      "min_challenge_bond_usd": 250000,
+      "min_control_surfaces_per_term": 1,
+      "min_false_attestor_loss_usd": 1000000,
+      "min_loss_over_gain_margin_usd": 1000000,
+      "min_participation_margin_usd": 0,
+      "policy_governed": true,
+      "policy_units": "validator-economic-attestation-lifecycle-v1",
+      "route_on_proved_false_attestor": "reject",
+      "route_on_stale_or_missing_refresh": "hold",
+      "route_on_unresolved_challenge": "hold",
+      "route_on_wrong_root_or_ungoverned_policy": "fail-closed"
+    },
+    "policy_id": "validator-economic-attestation-lifecycle-policy-v1",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "authority-validation-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-clean-lifecycle-admit",
+        "expected_reason_codes": [
+          "all_attestation_lifecycle_checks_passed"
+        ],
+        "expected_route": "admit",
+        "overrides": []
+      },
+      {
+        "case_id": "case-02-expired-source-hold",
+        "expected_reason_codes": [
+          "source_expired:B_i:src-b-chain-01"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "sources",
+              "B_i",
+              0,
+              "expires_epoch"
+            ],
+            "value": 41
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-open-challenge-hold",
+        "expected_reason_codes": [
+          "loss_over_gain_margin_below_floor",
+          "unresolved_challenge:L_i_w:src-l-contract-01"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "sources",
+              "L_i_w",
+              0,
+              "challenge_status"
+            ],
+            "value": "open"
+          },
+          {
+            "path": [
+              "sources",
+              "L_i_w",
+              0,
+              "challenge_bond_usd"
+            ],
+            "value": 250000
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-proved-false-attestor-reject",
+        "expected_reason_codes": [
+          "proved_false_attestor:B_i:src-b-audit-01"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "sources",
+              "B_i",
+              1,
+              "challenge_status"
+            ],
+            "value": "proved_false"
+          },
+          {
+            "path": [
+              "sources",
+              "B_i",
+              1,
+              "false_attestor_loss_usd"
+            ],
+            "value": 1000000
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-source-root-mismatch-fail-closed",
+        "expected_reason_codes": [
+          "source_registry_root_mismatch"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "source_registry_root_hash"
+            ],
+            "value": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-ungoverned-lifecycle-policy-fail-closed",
+        "expected_reason_codes": [
+          "ungoverned_lifecycle_policy"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "lifecycle_policy_governed"
+            ],
+            "value": false
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-refresh-due-hold",
+        "expected_reason_codes": [
+          "refresh_due:G_i_w:src-g-chain-01"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "sources",
+              "G_i_w",
+              0,
+              "refresh_due_epoch"
+            ],
+            "value": 42
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-attestor-overconcentration-hold",
+        "expected_reason_codes": [
+          "attestor_group_overconcentration:attestor-chain-index"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "sources",
+              "B_i",
+              1,
+              "attestor_group"
+            ],
+            "value": "attestor-chain-index"
+          },
+          {
+            "path": [
+              "sources",
+              "L_i_w",
+              0,
+              "attestor_group"
+            ],
+            "value": "attestor-chain-index"
+          }
+        ]
+      },
+      {
+        "case_id": "case-09-self-declared-source-hold",
+        "expected_reason_codes": [
+          "self_declared_source:B_i:src-b-chain-01"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "sources",
+              "B_i",
+              0,
+              "source_class"
+            ],
+            "value": "self_declared"
+          }
+        ]
+      },
+      {
+        "case_id": "case-10-missing-signature-hold",
+        "expected_reason_codes": [
+          "missing_signature:C_i:src-c-operator-01"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "sources",
+              "C_i",
+              0,
+              "signature_hash"
+            ],
+            "value": ""
+          }
+        ]
+      }
+    ],
+    "source_registry": {
+      "registered_attestor_groups": [
+        "attestor-audit-a",
+        "attestor-audit-b",
+        "attestor-audit-c",
+        "attestor-chain-index",
+        "attestor-contract-a",
+        "attestor-counterparty-a",
+        "attestor-governance-a",
+        "attestor-operator-manifest",
+        "attestor-registry-a"
+      ],
+      "registered_control_surfaces": [
+        "auditor-a-volume",
+        "auditor-b-cost",
+        "auditor-c-external-position",
+        "chain-derived-ledger-flow",
+        "chain-derived-short-window-value",
+        "contract-liability",
+        "counterparty-settlement-flow",
+        "governed-challenge-consequence",
+        "operator-cost-manifest",
+        "registry-exclusion-flow"
+      ],
+      "registered_source_classes": [
+        "auditor_attested",
+        "chain_derived",
+        "contract_signed",
+        "counterparty_signed",
+        "governance_derived",
+        "operator_signed",
+        "registry_derived"
+      ]
+    }
+  }
+}

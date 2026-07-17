@@ -1,0 +1,10 @@
+{
+  "schema": "postfiat.block_proposal_vote_lock.v1",
+  "chain_id": "postfiat-wan-devnet",
+  "genesis_hash": "231b1cfb63439c23bdcc3f7ea2f7f3ce7a53f9abffef8f720f47421b575f16e7f2d9ad5e61298207be2e9ce08743f870",
+  "protocol_version": 1,
+  "block_height": 3,
+  "view": 0,
+  "validator": "validator-4",
+  "proposal_hash": "8afcef45eeeb5b26974261caefe76b680d003000e54ea0233c23910f67568ce1651f2d5deb59989310af4ce6bfe6997e"
+}

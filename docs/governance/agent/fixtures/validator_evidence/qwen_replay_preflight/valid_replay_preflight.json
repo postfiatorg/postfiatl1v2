@@ -1,0 +1,88 @@
+{
+  "schema": "postfiat-validator-evidence-qwen-replay-preflight-v1",
+  "preflight_id": "validator-evidence-qwen-replay-preflight-2026-05-23-example",
+  "mode": "design_fixture_only",
+  "qwen_prompt_redaction_audit_hash": "8a8f8dba3c0a39976774c3d7d3d22ca870416c0439a66320aa7517089d08fed8f93080ffe2f9ef3faa10668a5f80591c",
+  "qwen_prompt_input_manifest_hash": "3fbef662f11c1eb0a5ebe6fb1e179f1442595a432c8be2dcc0e330c064835ad0e6a7a6506bc38773127a71a2fac30310",
+  "qwen_public_summary_projection_hash": "0655f52f349f25be91688730073dec47737647efe9a4c07c020dd347ae8fa450476c1a4fe1d20efa440dbeaabe64f347",
+  "model_request_hash": "16e0536cdaf31cac4400dbbe0d8cda5a8c5b06cfdf59c1a399277658ca50af1f1d586898703148491b8e4e2a040d1a5b",
+  "packet_schema_hash": "92544968ea283754c5cd3cfba85194afff80f9366f07063b5cd228ea58a6f9efbeb74ad416f9f118595f8c6719d4f0c3",
+  "field_registry_hash": "a4d0ad75fcf706432e2d44bfd75486139a69116249ffb47bbc786fcb67ab939b25f99834d5cb5aa7bb93cfed8901200f",
+  "collection_window": {
+    "from_height": 1000,
+    "to_height": 2000,
+    "from_time": "2026-05-23T00:00:00Z",
+    "to_time": "2026-05-23T06:00:00Z"
+  },
+  "runtime_binding": {
+    "model_id": "Qwen/Qwen3.6-27B-FP8",
+    "runtime": "SGLang",
+    "runtime_profile": "Modal/SGLang H100 deterministic profile",
+    "provider_profile": "RunPod H100 primary; Vast fallback",
+    "tensor_parallelism": 1,
+    "context_length": 32768,
+    "chunked_prefill_size": 4096,
+    "max_running_requests": 1,
+    "deterministic_flags": [
+      "--enable-deterministic-inference",
+      "--max-running-requests=1",
+      "--tp=1",
+      "chat_template_kwargs.enable_thinking=false",
+      "--temperature=0",
+      "--top-p=1"
+    ]
+  },
+  "replay_plan": {
+    "lane": "future_explicit_operator_authorized_replay",
+    "planned_replay_count": 50,
+    "executed_replay_count": 0,
+    "preflight_authorizes_execution": false,
+    "explicit_operator_authorization_required": true,
+    "provider_inventory_required": true,
+    "provider_cleanup_required": true,
+    "retained_artifact_redaction_scan_required": true,
+    "operator_pack_update_required": true
+  },
+  "provider_boundary": {
+    "provider_spend_executed": false,
+    "provider_resource_created": false,
+    "provider_resource_destroyed": false,
+    "live_model_request_executed": false,
+    "model_output_generated": false,
+    "live_network_access": false,
+    "live_registry_mutation": false,
+    "authority_transfer": false
+  },
+  "failure_policy": {
+    "lineage_drift": "reject_future_replay",
+    "missing_redaction_audit": "reject_future_replay",
+    "missing_provider_inventory": "reject_future_replay",
+    "provider_cleanup_missing": "reject_future_replay",
+    "output_schema_invalid": "reject_future_replay",
+    "fallback_decision": "no_op"
+  },
+  "checks": {
+    "qwen_prompt_redaction_audit_hash_bound": true,
+    "qwen_prompt_input_manifest_hash_bound": true,
+    "qwen_public_summary_projection_hash_bound": true,
+    "model_request_hash_bound": true,
+    "packet_schema_hash_bound": true,
+    "field_registry_hash_bound": true,
+    "collection_window_bound": true,
+    "runtime_matches_model_request": true,
+    "deterministic_flags_bound": true,
+    "explicit_operator_authorization_required": true,
+    "provider_inventory_required": true,
+    "provider_cleanup_required": true,
+    "retained_artifact_redaction_scan_required": true,
+    "operator_pack_update_required": true,
+    "preflight_authorizes_execution": false,
+    "provider_spend_executed": false,
+    "provider_resource_created": false,
+    "live_model_request_executed": false,
+    "model_output_generated": false,
+    "live_network_access": false,
+    "live_registry_mutation": false,
+    "authority_transfer": false
+  }
+}

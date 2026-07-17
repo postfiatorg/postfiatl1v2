@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_observer_inference_model/valid_observer_inference_model.json",
+  "expected_error_contains": [
+    "attestation.statement_hash does not match canonical statement hash"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "attestation",
+        "statement_hash"
+      ],
+      "value": "888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888"
+    }
+  ],
+  "schema": "postfiat-privacy-observer-inference-model-invalid-case-v1"
+}

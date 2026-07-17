@@ -1,0 +1,36 @@
+{
+  "schema": "postfiat-governance-agent-comparison-fixture-v1",
+  "case_id": "stale-evidence-remove",
+  "case_class": "stale_evidence",
+  "evidence": {
+    "schema": "postfiat-governance-agent-frozen-evidence-v1",
+    "snapshot_id": "gate-7_6-stale-evidence-remove",
+    "validator_registry_root": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "cobalt_evidence_root": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "operator_manifest_root": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "validator_evidence_packet_root": "7f146e261443b04f443764468e94343f81a1dd87ec30a122b267b3d2050d43321ea6b122cb2b19efbe57b1728a6e4cea",
+    "available_inputs": [
+      "cobalt_evidence_packet",
+      "operator_manifest_set",
+      "validator_evidence_packet",
+      "validator_registry_snapshot"
+    ],
+    "network_access_allowed": false,
+    "model_access_allowed": false,
+    "filesystem_access_allowed": false,
+    "direct_state_mutation_allowed": false
+  },
+  "direct_baseline": {
+    "source": "offline-direct-judgment-fixture-v1",
+    "authoritative": false,
+    "action": "remove",
+    "confidence_bps": 7000,
+    "mutations": [
+      {
+        "operation": "remove",
+        "subject_node_id": "validator-stale-negative-signal"
+      }
+    ],
+    "rationale": "Direct baseline removes a validator from stale negative evidence; generated policy should no-op."
+  }
+}

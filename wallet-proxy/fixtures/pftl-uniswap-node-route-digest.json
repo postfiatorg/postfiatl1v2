@@ -1,0 +1,7 @@
+{
+  "schema": "postfiat-wallet-proxy-node-route-digest-fixture-v1",
+  "source": "docs/evidence/pftl-uniswap-gate3-2026-07-01 node-generated route config digest",
+  "route_id": "pftl-a666-ethereum-wA666-usdc-gate3-v1",
+  "route_config_digest": "23c4522e0f65c728e555418e486bbf09ad85f335df2b99b58c17415ed3836ff78c31ce271244ad0d66cc78aa35c57e71",
+  "digest_authority": "node"
+}

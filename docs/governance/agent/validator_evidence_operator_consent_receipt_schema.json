@@ -1,0 +1,365 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-validator-evidence-operator-consent-receipt-v1.json",
+  "title": "PostFiat Validator Evidence Operator Consent Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "receipt_id",
+    "mode",
+    "validator_id",
+    "source_authorization_hash",
+    "packet_schema_hash",
+    "field_registry_hash",
+    "collection_window",
+    "operator_identity",
+    "consent",
+    "permitted_sources_order",
+    "permitted_sources",
+    "summary",
+    "redaction",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-evidence-operator-consent-receipt-v1"
+    },
+    "receipt_id": {
+      "$ref": "#/$defs/id"
+    },
+    "mode": {
+      "const": "design_fixture_only"
+    },
+    "validator_id": {
+      "$ref": "#/$defs/id"
+    },
+    "source_authorization_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "packet_schema_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "field_registry_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "collection_window": {
+      "$ref": "#/$defs/collection_window"
+    },
+    "operator_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operator_accountability_key_hash",
+        "delegation_hash",
+        "manifest_hash",
+        "signing_key_hash"
+      ],
+      "properties": {
+        "operator_accountability_key_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "delegation_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "manifest_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "signing_key_hash": {
+          "$ref": "#/$defs/hash96"
+        }
+      }
+    },
+    "consent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "signed_at",
+        "expires_at",
+        "statement_hash",
+        "signature_hash",
+        "revocation_status",
+        "collection_scope"
+      ],
+      "properties": {
+        "status": {
+          "const": "granted"
+        },
+        "signed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "statement_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "signature_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "revocation_status": {
+          "const": "not_revoked"
+        },
+        "collection_scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "public_summary_publication",
+            "operator_approved_summary_only",
+            "raw_private_retention",
+            "live_collection_authorized",
+            "qwen_raw_access"
+          ],
+          "properties": {
+            "public_summary_publication": {
+              "const": true
+            },
+            "operator_approved_summary_only": {
+              "const": true
+            },
+            "raw_private_retention": {
+              "const": false
+            },
+            "live_collection_authorized": {
+              "const": false
+            },
+            "qwen_raw_access": {
+              "const": false
+            }
+          }
+        }
+      }
+    },
+    "permitted_sources_order": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/id"
+      }
+    },
+    "permitted_sources": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9._:-]{2,127}$": {
+          "$ref": "#/$defs/permitted_source"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "permitted_source_count",
+        "permitted_field_count",
+        "operator_opt_in_source_count"
+      ],
+      "properties": {
+        "permitted_source_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "permitted_field_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "operator_opt_in_source_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_values_retained",
+        "private_fields_removed",
+        "secret_scan_required",
+        "public_artifact_safe"
+      ],
+      "properties": {
+        "raw_values_retained": {
+          "const": false
+        },
+        "private_fields_removed": {
+          "const": true
+        },
+        "secret_scan_required": {
+          "const": true
+        },
+        "public_artifact_safe": {
+          "const": true
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_authorization_bound",
+        "packet_schema_hash_bound",
+        "field_registry_hash_bound",
+        "operator_signature_bound",
+        "delegation_bound",
+        "revocation_checked",
+        "permitted_sources_authorized",
+        "permitted_fields_subset_of_authorized_fields",
+        "field_paths_registered",
+        "raw_values_retained",
+        "live_collection_authorized",
+        "qwen_raw_access",
+        "live_registry_mutation",
+        "authority_transfer"
+      ],
+      "properties": {
+        "source_authorization_bound": {
+          "const": true
+        },
+        "packet_schema_hash_bound": {
+          "const": true
+        },
+        "field_registry_hash_bound": {
+          "const": true
+        },
+        "operator_signature_bound": {
+          "const": true
+        },
+        "delegation_bound": {
+          "const": true
+        },
+        "revocation_checked": {
+          "const": true
+        },
+        "permitted_sources_authorized": {
+          "const": true
+        },
+        "permitted_fields_subset_of_authorized_fields": {
+          "const": true
+        },
+        "field_paths_registered": {
+          "const": true
+        },
+        "raw_values_retained": {
+          "const": false
+        },
+        "live_collection_authorized": {
+          "const": false
+        },
+        "qwen_raw_access": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "collection_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_height",
+        "to_height",
+        "from_time",
+        "to_time"
+      ],
+      "properties": {
+        "from_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "from_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to_time": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    },
+    "permitted_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "kind",
+        "consent_basis",
+        "operator_scope",
+        "permitted_field_paths",
+        "raw_values_retained",
+        "live_collection_authorized",
+        "qwen_raw_access"
+      ],
+      "properties": {
+        "source_id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "operator_manifest_set",
+            "url_domain_observation",
+            "network_performance_observation",
+            "topology_claims"
+          ],
+          "type": "string"
+        },
+        "consent_basis": {
+          "enum": [
+            "operator_manifest_signed",
+            "operator_opt_in_required"
+          ],
+          "type": "string"
+        },
+        "operator_scope": {
+          "enum": [
+            "operator_approved_public_summary",
+            "collector_observed_public_summary"
+          ],
+          "type": "string"
+        },
+        "permitted_field_paths": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "raw_values_retained": {
+          "const": false
+        },
+        "live_collection_authorized": {
+          "const": false
+        },
+        "qwen_raw_access": {
+          "const": false
+        }
+      }
+    }
+  }
+}

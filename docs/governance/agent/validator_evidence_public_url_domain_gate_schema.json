@@ -1,0 +1,322 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-validator-evidence-public-url-domain-gate-v1.json",
+  "title": "PostFiat Validator Evidence Public URL Domain Gate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "gate_id",
+    "scope",
+    "packet_id",
+    "validator_evidence_packet_root",
+    "packet_schema_hash",
+    "field_registry_hash",
+    "collection_window",
+    "required_packet_fields",
+    "validator_order",
+    "validators",
+    "summary",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-evidence-public-url-domain-gate-v1"
+    },
+    "gate_id": {
+      "$ref": "#/$defs/id"
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "context",
+        "applies_to_controlled_testnet",
+        "public_claim_required",
+        "live_registry_mutation",
+        "authority_transfer"
+      ],
+      "properties": {
+        "context": {
+          "enum": [
+            "public_launch_credibility_claim",
+            "public_admission_gate",
+            "controlled_testnet_admission"
+          ]
+        },
+        "applies_to_controlled_testnet": {
+          "const": false
+        },
+        "public_claim_required": {
+          "const": true
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    },
+    "packet_id": {
+      "$ref": "#/$defs/id"
+    },
+    "validator_evidence_packet_root": {
+      "$ref": "#/$defs/hash96"
+    },
+    "packet_schema_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "field_registry_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "collection_window": {
+      "$ref": "#/$defs/collection_window"
+    },
+    "required_packet_fields": {
+      "type": "array",
+      "minItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "validator.identity.declared_domain",
+          "validator.identity.declared_url",
+          "validator.identity.url_fetch.status",
+          "validator.identity.url_fetch.content_hash",
+          "validator.identity.key_domain_binding.status"
+        ]
+      }
+    },
+    "validator_order": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/id"
+      }
+    },
+    "validators": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9._:-]{2,127}$": {
+          "$ref": "#/$defs/validator_gate_result"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total_validator_count",
+        "eligible_validator_count",
+        "ineligible_validator_count",
+        "controlled_testnet_blocker_count"
+      ],
+      "properties": {
+        "total_validator_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "eligible_validator_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ineligible_validator_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "controlled_testnet_blocker_count": {
+          "const": 0
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packet_root_verified",
+        "field_paths_registered",
+        "packet_fields_matched",
+        "https_required",
+        "fetch_ok_required",
+        "key_domain_binding_proved_required",
+        "non_conflicting_required",
+        "controlled_testnet_not_blocked",
+        "registry_mutation",
+        "live_authority_transfer"
+      ],
+      "properties": {
+        "packet_root_verified": {
+          "const": true
+        },
+        "field_paths_registered": {
+          "const": true
+        },
+        "packet_fields_matched": {
+          "const": true
+        },
+        "https_required": {
+          "const": true
+        },
+        "fetch_ok_required": {
+          "const": true
+        },
+        "key_domain_binding_proved_required": {
+          "const": true
+        },
+        "non_conflicting_required": {
+          "const": true
+        },
+        "controlled_testnet_not_blocked": {
+          "const": true
+        },
+        "registry_mutation": {
+          "const": false
+        },
+        "live_authority_transfer": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "collection_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_height",
+        "to_height",
+        "from_time",
+        "to_time"
+      ],
+      "properties": {
+        "from_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "from_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to_time": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "domain": {
+      "type": "string",
+      "maxLength": 253,
+      "pattern": "^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$"
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    },
+    "validator_gate_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "validator_id",
+        "declared_domain",
+        "declared_url",
+        "url_fetch_status",
+        "url_fetch_content_hash",
+        "key_domain_binding_status",
+        "freshness",
+        "conflict_status",
+        "gate_decision",
+        "dga_treatment",
+        "source_hashes"
+      ],
+      "properties": {
+        "validator_id": {
+          "$ref": "#/$defs/id"
+        },
+        "declared_domain": {
+          "$ref": "#/$defs/domain"
+        },
+        "declared_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "url_fetch_status": {
+          "enum": [
+            "ok",
+            "failed",
+            "missing",
+            "conflicting"
+          ]
+        },
+        "url_fetch_content_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "key_domain_binding_status": {
+          "enum": [
+            "proved",
+            "missing",
+            "failed",
+            "conflicting"
+          ]
+        },
+        "freshness": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "url_fetch",
+            "operator_manifest",
+            "key_domain_binding"
+          ],
+          "properties": {
+            "url_fetch": {
+              "const": "recent_24h"
+            },
+            "operator_manifest": {
+              "const": "recent_30d"
+            },
+            "key_domain_binding": {
+              "const": "recent_30d"
+            }
+          }
+        },
+        "conflict_status": {
+          "enum": [
+            "none",
+            "conflicting"
+          ]
+        },
+        "gate_decision": {
+          "enum": [
+            "eligible_for_public_claim",
+            "ineligible_hold_or_noop"
+          ]
+        },
+        "dga_treatment": {
+          "enum": [
+            "public_claim_allowed",
+            "hold_or_noop"
+          ]
+        },
+        "source_hashes": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/hash96"
+          }
+        }
+      }
+    }
+  }
+}

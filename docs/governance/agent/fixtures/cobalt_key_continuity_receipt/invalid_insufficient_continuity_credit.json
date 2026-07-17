@@ -1,0 +1,14 @@
+{
+  "base_fixture": "valid_key_continuity_receipt.json",
+  "overrides": {
+    "continuity_receipts": [
+      {"validator_id": "A", "operator_id": "op-a", "operator_manifest_hash": "manifest-a", "old_consensus_key": "old-key-a", "new_consensus_key": "new-key-a", "parent_registry_root": "registry-root-old-001", "next_registry_root": "registry-root-new-001", "transition_root": "transition-root-key-continuity-001", "old_checker_root": "checker-root-old-001", "checker_root": "checker-root-old-001", "signed_by_old_key": true, "signed_by_new_key": true, "issued_epoch": 41, "expires_epoch": 42},
+      {"validator_id": "B", "operator_id": "op-b", "operator_manifest_hash": "manifest-b", "old_consensus_key": "old-key-b", "new_consensus_key": "new-key-b", "parent_registry_root": "registry-root-old-001", "next_registry_root": "registry-root-new-001", "transition_root": "transition-root-key-continuity-001", "old_checker_root": "checker-root-old-001", "checker_root": "checker-root-old-001", "signed_by_old_key": true, "signed_by_new_key": true, "issued_epoch": 41, "expires_epoch": 42},
+      {"validator_id": "C", "operator_id": "op-c", "operator_manifest_hash": "manifest-c", "old_consensus_key": "old-key-c", "new_consensus_key": "new-key-c", "parent_registry_root": "registry-root-old-001", "next_registry_root": "registry-root-new-001", "transition_root": "transition-root-key-continuity-001", "old_checker_root": "checker-root-old-001", "checker_root": "checker-root-old-001", "signed_by_old_key": true, "signed_by_new_key": true, "issued_epoch": 41, "expires_epoch": 42},
+      {"validator_id": "D", "operator_id": "op-d", "operator_manifest_hash": "manifest-d", "old_consensus_key": "old-key-d", "new_consensus_key": "new-key-d", "parent_registry_root": "registry-root-old-001", "next_registry_root": "registry-root-new-001", "transition_root": "transition-root-key-continuity-001", "old_checker_root": "checker-root-old-001", "checker_root": "checker-root-old-001", "signed_by_old_key": true, "signed_by_new_key": true, "issued_epoch": 41, "expires_epoch": 42}
+    ]
+  },
+  "expected_error_contains": [
+    "expected_route mismatch"
+  ]
+}

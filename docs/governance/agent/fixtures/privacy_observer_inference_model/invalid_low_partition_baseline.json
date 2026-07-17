@@ -1,0 +1,18 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_observer_inference_model/valid_observer_inference_model.json",
+  "expected_error_contains": [
+    "case-02-low-joint-partition: expected_route mismatch"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        1,
+        "expected_route"
+      ],
+      "value": "baseline-private"
+    }
+  ],
+  "schema": "postfiat-privacy-observer-inference-model-invalid-case-v1"
+}

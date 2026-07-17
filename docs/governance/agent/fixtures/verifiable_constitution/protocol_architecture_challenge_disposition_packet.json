@@ -1,0 +1,139 @@
+{
+  "schema": "postfiat-protocol-architecture-challenge-disposition-packet-v1",
+  "challenge_disposition_id": "vc-protocol-architecture-001-challenge-disposition-002",
+  "challenge_disposition_version": 1,
+  "status": "accepted",
+  "created_at": "2026-05-25T00:00:00Z",
+  "target_decision_ref": {
+    "decision_id": "vc-protocol-architecture-001-decision-001",
+    "decision_path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_constitutional_decision_packet.json",
+    "decision_file_sha3_384": "bdc071b5fd154b5036a50eb8818917ded6eef1b18ebe830ca3163c5c98da153b291eac7f10d874b0adb4997037bc7bed",
+    "decision_canonical_hash": "24333d8ba08daa332e078586b4b5de0bf9720d176f758d852465ac1ae6b86a20a766ff06b86b445d29a5caf7149440ab",
+    "selected_option": "preserve-rust-l1",
+    "superseded_by": "vc-protocol-architecture-001-superseding-replayed-decision-001",
+    "target_artifact_overwritten": false
+  },
+  "challenge_ref": {
+    "challenge_id": "vc-protocol-architecture-001-live-replay-challenge-001",
+    "challenge_path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_live_replay_challenge_packet.json",
+    "challenge_file_sha3_384": "9a2f95259d1d641c34d88b4e01c464278f6ec9fdff4cbe7fb36bf446ad5c2e90fa9bfbdeaea7d0da67d18368f924b541",
+    "challenge_canonical_hash": "4742cd20fe01f79d1c218a77536260b7e693a95c57cf456c4cc2cd9a4d0ea55fcc7854ff79b576c8293dd03e9a552348",
+    "challenge_status_before": "candidate",
+    "challenge_selected_before": "hold",
+    "challenge_kind": "replay_drift",
+    "defect_claim_ids": [
+      "live-replay-target-hash-mismatch"
+    ]
+  },
+  "source_full_vocab_ref": {
+    "report_path": "reports/verifiable-constitution/vc-051-protocol-architecture-full-vocab-replay-execution-report.json",
+    "report_file_sha3_384": "670c930444d321dce383d286528eeb130313263a9fc3375ddbe6eb92cab79d2306d2dac35545dec1f6150d0ada80e3be",
+    "report_canonical_hash": "62273155312f7d43f24a2e20a046517aa2cd832253450d8d2e7779a4e4eb75dcb3801231f5400d1cdabc4cb6a08d51e4",
+    "report_schema": "postfiat-verifiable-constitution-vc-051-report-v1",
+    "verified": true,
+    "classification": "live_outputs_converged_target_not_reproduced",
+    "live_decision_hash": "36bb5c03f73701ae71811a7b86b3228f0f23a640b802b7562fd054fc7b4b5e21bb875e1b27d2756cf16e6c8668e0c9b3",
+    "top_logprob_root": "101dff18a4354fd29ae851c1efd595aaaa69d6961e54482b47abceaae1b3499a5d25116822dec3343024b3054a2a7529",
+    "full_vocab_vector_root": "0b3cf64b186ff9b8b130260d6a795fe56cf2a65bd6e324ea9ce92222ed1d7c23",
+    "machine_count": 2,
+    "cleanup_verified": true
+  },
+  "source_full_vocab_disposition_ref": {
+    "report_path": "reports/verifiable-constitution/vc-052-protocol-architecture-full-vocab-disposition-report.json",
+    "report_file_sha3_384": "11b3576a24906901ae33d518efe8a738777b745d53019b96f8e158ba5081a39abd5d2b0c55351a9b6f2001835b0730c3",
+    "report_canonical_hash": "7fe215621af9bec1852d73cebafc7cae60ebbcbdf71b9dde65ccac5baf10f53dcd50120be86dbda0413b43c48b406e8b",
+    "report_schema": "postfiat-verifiable-constitution-vc-052-report-v1",
+    "verified": true,
+    "classification": "accept_superseding_replayed_decision_packet",
+    "challenge_route": "supersede_target",
+    "equivalence_rule_used": false,
+    "conformance_allowed_now": false
+  },
+  "source_superseding_decision_ref": {
+    "report_path": "reports/verifiable-constitution/vc-053-protocol-architecture-superseding-replayed-decision-report.json",
+    "report_file_sha3_384": "528308474df6b4d9d1d0c9ae7e1235e6d4a970d9972afe9ccf1e30dd518f48d5a162a1038b382cc2c240a43646cac7f2",
+    "report_canonical_hash": "5142d924c61e25f8d9cb3bee93a89ed47f0c21c3b875af322e6fcd2ad5d3613f9c36d4b77ba4670a816f97f7feee0c07",
+    "report_schema": "postfiat-verifiable-constitution-vc-053-report-v1",
+    "verified": true,
+    "superseding_decision_id": "vc-protocol-architecture-001-superseding-replayed-decision-001",
+    "classification": "superseding_no_live_effect_governance_artifact",
+    "selected_option": "preserve-rust-l1",
+    "live_decision_hash": "36bb5c03f73701ae71811a7b86b3228f0f23a640b802b7562fd054fc7b4b5e21bb875e1b27d2756cf16e6c8668e0c9b3",
+    "superseding_decision_root": "4b756a052813aa468f63004048aa7cc04b35b580eb7f56855f0060bfaa5209eec9b36732f867ac1f36682661f2809df0",
+    "challenge_disposition_still_required": true,
+    "conformance_mapping_allowed_now": false
+  },
+  "resolution": {
+    "selected": "resolve_by_supersession",
+    "challenge_status_after": "resolved_by_superseding_replayed_decision",
+    "target_hash_reproduced": false,
+    "semantic_equivalence_rule_used": false,
+    "superseding_decision_accepted": true,
+    "target_decision_superseded": true,
+    "target_artifact_overwritten": false,
+    "challenge_artifact_overwritten": false,
+    "live_effect": false,
+    "conformance_mapping_allowed_now": false,
+    "rationale": "The original replay challenge is resolved because the challenged VC-045 target was superseded by the VC-053 typed replayed decision packet. This is not exact target reproduction and not an informal semantic-equivalence dismissal; the old target and challenge artifacts remain intact."
+  },
+  "resolved_claims": [
+    {
+      "claim_id": "live-replay-target-hash-mismatch",
+      "original_claim_kind": "replay_drift",
+      "resolution": "accepted_as_superseded_not_reproduced",
+      "evidence_refs": [
+        "vc051_full_vocab_replay",
+        "vc052_full_vocab_disposition",
+        "vc053_superseding_replayed_decision"
+      ],
+      "live_effect": false
+    }
+  ],
+  "next_required_packets": [
+    {
+      "packet_id": "vc-protocol-architecture-001-conformance-001",
+      "packet_kind": "conformance_mapping_packet",
+      "required_before": "conformance_mapping",
+      "rationale": "Conformance mapping remains a separate no-live-effect packet after the challenge is resolved by supersession."
+    },
+    {
+      "packet_id": "vc-protocol-architecture-001-live-effect-gate-001",
+      "packet_kind": "cobalt_or_release_authorization_gate",
+      "required_before": "live_effect",
+      "rationale": "Any Cobalt submission, compatibility activation, migration, mainnet mutation, or authority transfer still requires a separate named gate."
+    }
+  ],
+  "authority_boundary": {
+    "provider_spend_authorized": false,
+    "live_model_request_authorized": false,
+    "model_output_generated_in_this_packet": false,
+    "target_artifact_overwrite_authorized": false,
+    "challenge_artifact_overwrite_authorized": false,
+    "rippled_code_import_authorized": false,
+    "consensus_rewrite_authorized": false,
+    "xrpl_compatibility_activation_authorized": false,
+    "protocol_migration_authorized": false,
+    "live_validator_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "mainnet_mutation_authorized": false,
+    "authority_transfer_authorized": false,
+    "conformance_mapping_authorized": false
+  },
+  "checks": {
+    "target_decision_bound": true,
+    "challenge_bound": true,
+    "source_full_vocab_verified": true,
+    "source_disposition_verified": true,
+    "source_superseding_decision_verified": true,
+    "target_hash_not_reproduced": true,
+    "semantic_equivalence_not_used": true,
+    "challenge_resolved_by_supersession": true,
+    "superseding_root_bound": true,
+    "target_artifact_not_overwritten": true,
+    "challenge_artifact_not_overwritten": true,
+    "conformance_mapping_blocked": true,
+    "no_provider_spend_in_this_packet": true,
+    "no_live_mutation": true,
+    "authority_transfer": false
+  }
+}

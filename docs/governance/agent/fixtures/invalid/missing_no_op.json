@@ -1,0 +1,36 @@
+{
+  "authority": {
+    "direct_state_mutation": false,
+    "mode": "dry_run_only",
+    "scope_expansion": false,
+    "self_upgrade": false
+  },
+  "decisions": [
+    {
+      "condition": "local_gate_1_5_fixture",
+      "decision_id": "candidate-without-no-op",
+      "kind": "registry_delta_candidate",
+      "evidence_field_path": "validator.registry.active_status",
+      "required_provenance": "registry_derived",
+      "freshness_requirement": "epoch_bound",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "hold",
+      "action_bound": "admission_gate",
+      "rationale": "Gate 1.5 requires an explicit no-op fallback."
+    }
+  ],
+  "inputs": [
+    {
+      "kind": "validator_registry_snapshot",
+      "required": true
+    }
+  ],
+  "rollback": {
+    "max_mutations": 0,
+    "operator_confirmation_required": true,
+    "required": true
+  },
+  "ruleset_id": "gate-1_5-missing-no-op",
+  "schema": "postfiat-governance-ruleset-v1",
+  "scope": "validator_registry_policy"
+}

@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "PostFiat privacy observer-inference model packet. The verifier is normative for route computation; this schema documents the packet envelope.",
+  "properties": {
+    "attestation": {
+      "type": "object"
+    },
+    "checks": {
+      "type": "object"
+    },
+    "mode": {
+      "const": "controlled_testnet_fixture"
+    },
+    "packet_id": {
+      "type": "string"
+    },
+    "schema": {
+      "const": "postfiat-privacy-observer-inference-model-v1"
+    },
+    "statement": {
+      "properties": {
+        "baseline_observation": {
+          "properties": {
+            "channels": {
+              "items": {
+                "properties": {
+                  "candidate_ids": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "channel": {
+                    "type": "string"
+                  },
+                  "partition_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "channel",
+                  "partition_id",
+                  "candidate_ids"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "observer_model_root_hash": {
+          "pattern": "^[0-9a-f]{96}$",
+          "type": "string"
+        },
+        "observer_policy": {
+          "type": "object"
+        },
+        "selector_cases": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "policy_id",
+        "scope",
+        "inference_model",
+        "observer_policy",
+        "baseline_observation",
+        "selector_cases",
+        "observer_model_root_hash"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema",
+    "packet_id",
+    "mode",
+    "statement",
+    "attestation",
+    "checks"
+  ],
+  "title": "PostFiat Privacy Observer Inference Model v1",
+  "type": "object"
+}

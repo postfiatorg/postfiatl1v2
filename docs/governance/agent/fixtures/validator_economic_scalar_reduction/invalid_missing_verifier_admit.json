@@ -1,0 +1,18 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_scalar_reduction/valid_scalar_reduction.json",
+  "expected_error_contains": [
+    "case-07-missing-linked-verifier-hold: expected_route mismatch"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        6,
+        "expected_route"
+      ],
+      "value": "admit"
+    }
+  ],
+  "schema": "postfiat-validator-economic-scalar-reduction-invalid-case-v1"
+}

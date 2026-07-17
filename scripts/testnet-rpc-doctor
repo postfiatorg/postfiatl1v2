@@ -1,0 +1,804 @@
+#!/usr/bin/env python3
+"""Diagnose PostFiat read RPC endpoint health and public-safety posture."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import socket
+import subprocess
+import sys
+import time
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+
+ROOT = Path(__file__).resolve().parents[1]
+RPC_VERSION = "postfiat-local-rpc-v1"
+DEFAULT_METHODS = [
+    "status",
+    "server_info",
+    "metrics",
+    "ledger",
+    "fee",
+    "validators",
+    "manifests",
+    "blocks",
+    "receipts",
+    "mempool_status",
+    "bridge_status",
+    "shield_turnstile",
+    "orchard_pool_report",
+    "account_tx_index_status",
+]
+SDK_VALIDATED_METHODS = {
+    "status",
+    "server_info",
+    "metrics",
+    "ledger",
+    "fee",
+    "account",
+    "account_tx",
+    "validators",
+    "manifests",
+    "blocks",
+    "receipts",
+    "mempool_status",
+    "bridge_status",
+    "shield_turnstile",
+}
+OPTIONAL_LIMIT_METHODS = {"ledger", "blocks", "receipts", "account_tx"}
+SECRET_FIELD_RE = re.compile(
+    r"(private_key|privatekey|spending_key|full_viewing_key|master_seed|"
+    r"seed_phrase|mnemonic|rseed|secret|password)",
+    re.IGNORECASE,
+)
+NONLOCAL_IPV4_RE = re.compile(
+    r"(?<![0-9.])(?!127\.0\.0\.1\b)(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9.])"
+)
+
+
+@dataclass(frozen=True)
+class Endpoint:
+    label: str
+    host: str
+    port: int
+
+    @property
+    def redacted_host(self) -> str:
+        if self.host in {"127.0.0.1", "localhost", "::1"}:
+            return self.host
+        return "<redacted-host>"
+
+
+def utc_stamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def utc_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def rel(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def run_local(args: list[str]) -> subprocess.CompletedProcess[str]:
+    completed = subprocess.run(
+        args,
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"command failed ({' '.join(args)}):\n"
+            f"{redact_network(completed.stdout)}\n{redact_network(completed.stderr)}"
+        )
+    return completed
+
+
+def git_metadata() -> dict[str, Any]:
+    try:
+        revision = run_local(["git", "rev-parse", "HEAD"]).stdout.strip()
+        status = run_local(["git", "status", "--short"]).stdout
+        return {
+            "revision": revision,
+            "dirty": bool(status.strip()),
+        }
+    except Exception as error:  # pragma: no cover - diagnostic fallback
+        return {"revision": None, "dirty": None, "error": str(error)}
+
+
+def redact_network(text: str) -> str:
+    return NONLOCAL_IPV4_RE.sub("<ip>", text)
+
+
+def parse_endpoint(raw: str, index: int) -> Endpoint:
+    label = f"endpoint-{index}"
+    value = raw.strip()
+    if not value:
+        raise ValueError("empty endpoint")
+    if "=" in value:
+        label, value = value.split("=", 1)
+        label = label.strip() or f"endpoint-{index}"
+        value = value.strip()
+    if value.startswith("tcp://"):
+        value = value.removeprefix("tcp://")
+    if value.startswith("["):
+        closing = value.find("]")
+        if closing < 0 or closing + 2 > len(value) or value[closing + 1] != ":":
+            raise ValueError(f"unsupported endpoint syntax: {raw}")
+        host = value[1:closing]
+        port_text = value[closing + 2 :]
+    else:
+        if ":" not in value:
+            raise ValueError(f"endpoint must be host:port: {raw}")
+        host, port_text = value.rsplit(":", 1)
+    try:
+        port = int(port_text)
+    except ValueError as error:
+        raise ValueError(f"endpoint port must be an integer: {raw}") from error
+    if not (0 < port < 65536):
+        raise ValueError(f"endpoint port out of range: {raw}")
+    return Endpoint(label=label, host=host.strip(), port=port)
+
+
+def parse_endpoint_record(record: Any, index: int) -> Endpoint:
+    if isinstance(record, str):
+        return parse_endpoint(record, index)
+    if not isinstance(record, dict):
+        raise ValueError("endpoint record must be a string or object")
+    label = str(record.get("label") or record.get("node_id") or f"endpoint-{index}")
+    host = str(record.get("host") or record.get("rpc_host") or "")
+    port = record.get("port", record.get("rpc_port"))
+    if not host or port is None:
+        raise ValueError(f"endpoint object missing host/rpc_port: {record}")
+    return parse_endpoint(f"{label}={host}:{port}", index)
+
+
+def endpoints_from_file(path: Path) -> list[Endpoint]:
+    text = path.read_text(encoding="utf-8")
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        endpoints: list[Endpoint] = []
+        for index, line in enumerate(text.splitlines()):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            endpoints.append(parse_endpoint(stripped, index))
+        return endpoints
+    records: list[Any]
+    if isinstance(parsed, list):
+        records = parsed
+    elif isinstance(parsed, dict) and isinstance(parsed.get("peers"), list):
+        records = parsed["peers"]
+    elif isinstance(parsed, dict) and isinstance(parsed.get("endpoints"), list):
+        records = parsed["endpoints"]
+    elif isinstance(parsed, dict):
+        records = [parsed]
+    else:
+        raise ValueError(f"unsupported endpoint file shape: {path}")
+    return [parse_endpoint_record(record, index) for index, record in enumerate(records)]
+
+
+def collect_endpoints(args: argparse.Namespace) -> list[Endpoint]:
+    endpoints: list[Endpoint] = []
+    for raw in args.endpoint or []:
+        endpoints.append(parse_endpoint(raw, len(endpoints)))
+    for endpoint_file in args.endpoint_file or []:
+        endpoints.extend(endpoints_from_file(Path(endpoint_file)))
+    if not endpoints:
+        raise SystemExit("at least one --endpoint or --endpoint-file is required")
+    labels: set[str] = set()
+    for endpoint in endpoints:
+        if endpoint.label in labels:
+            raise SystemExit(f"duplicate endpoint label: {endpoint.label}")
+        labels.add(endpoint.label)
+    return endpoints
+
+
+def request_args(method: str, args: argparse.Namespace) -> list[str]:
+    if method == "account":
+        return ["--address", args.account_address]
+    if method == "account_tx":
+        request = [
+            "--address",
+            args.account_address,
+            "--from-height",
+            str(args.account_tx_from_height),
+            "--limit",
+            str(args.account_tx_limit),
+        ]
+        if args.account_tx_to_height is not None:
+            request.extend(["--to-height", str(args.account_tx_to_height)])
+        return request
+    if method == "ledger":
+        return ["--limit", str(args.ledger_limit)]
+    if method == "blocks":
+        return ["--limit", str(args.block_limit)]
+    if method == "receipts":
+        return ["--limit", str(args.receipts_limit)]
+    return []
+
+
+def raw_request(method: str, request_id: str, args: argparse.Namespace) -> dict[str, Any]:
+    params: dict[str, Any] = {}
+    if method in OPTIONAL_LIMIT_METHODS:
+        params["limit"] = {
+            "ledger": args.ledger_limit,
+            "blocks": args.block_limit,
+            "receipts": args.receipts_limit,
+            "account_tx": args.account_tx_limit,
+        }[method]
+    if method == "account":
+        params["address"] = args.account_address
+    if method == "account_tx":
+        params["address"] = args.account_address
+        params["from_height"] = args.account_tx_from_height
+        if args.account_tx_to_height is not None:
+            params["to_height"] = args.account_tx_to_height
+    return {
+        "version": RPC_VERSION,
+        "id": request_id,
+        "method": method,
+        "params": params,
+    }
+
+
+def build_request(
+    *,
+    method: str,
+    request_id: str,
+    request_path: Path,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    if method in SDK_VALIDATED_METHODS:
+        run_local(
+            [
+                str(args.sdk_bin),
+                "request",
+                "--method",
+                method,
+                "--id",
+                request_id,
+                "--output",
+                str(request_path),
+                *request_args(method, args),
+            ]
+        )
+        return json.loads(request_path.read_text(encoding="utf-8"))
+    request = raw_request(method, request_id, args)
+    request_path.write_text(json.dumps(request, indent=2, sort_keys=True) + "\n")
+    return request
+
+
+def send_rpc(
+    *,
+    endpoint: Endpoint,
+    request: dict[str, Any],
+    timeout_seconds: float,
+    response_byte_cap: int,
+) -> tuple[bytes, float]:
+    wire = json.dumps(request, separators=(",", ":")).encode("utf-8") + b"\n"
+    started = time.perf_counter()
+    with socket.create_connection((endpoint.host, endpoint.port), timeout=timeout_seconds) as stream:
+        stream.settimeout(timeout_seconds)
+        stream.sendall(wire)
+        stream.shutdown(socket.SHUT_WR)
+        chunks: list[bytes] = []
+        received = 0
+        while True:
+            chunk = stream.recv(65536)
+            if not chunk:
+                break
+            received += len(chunk)
+            if received > response_byte_cap:
+                raise RuntimeError(
+                    f"response exceeded byte cap {response_byte_cap} for {endpoint.label}"
+                )
+            chunks.append(chunk)
+    return b"".join(chunks), (time.perf_counter() - started) * 1000.0
+
+
+def validate_sdk_response(
+    *,
+    method: str,
+    request_id: str,
+    response_path: Path,
+    args: argparse.Namespace,
+) -> None:
+    run_local(
+        [
+            str(args.sdk_bin),
+            "validate-response",
+            "--input",
+            str(response_path),
+            "--expect-id",
+            request_id,
+            "--expect-kind",
+            method,
+            "--require-ok",
+        ]
+    )
+
+
+def validate_basic_response(
+    *,
+    method: str,
+    request_id: str,
+    response: dict[str, Any],
+) -> None:
+    if response.get("version") != RPC_VERSION:
+        raise ValueError(f"{method} response has wrong version")
+    if response.get("id") != request_id:
+        raise ValueError(f"{method} response has wrong id")
+    if response.get("ok") is not True:
+        error = response.get("error", {})
+        raise ValueError(f"{method} response failed: {error}")
+    result = response.get("result")
+    if not isinstance(result, dict):
+        raise ValueError(f"{method} response result must be object")
+    if method == "orchard_pool_report":
+        if result.get("schema") != "postfiat-orchard-pool-report-v1":
+            raise ValueError("orchard_pool_report response has wrong schema")
+        if result.get("passed") is not True:
+            raise ValueError("orchard_pool_report did not pass node checks")
+    if method == "account_tx_index_status":
+        if result.get("schema") != "postfiat-account-tx-index-status-v1":
+            raise ValueError("account_tx_index_status response has wrong schema")
+        for field in ("index_path", "disk_index_path"):
+            index_path = result.get(field)
+            if index_path is None:
+                continue
+            if not isinstance(index_path, str) or "/" in index_path or "\\" in index_path:
+                raise ValueError(f"account_tx_index_status leaked a filesystem path in {field}")
+
+
+def secret_paths(value: Any, path: str = "$") -> list[str]:
+    paths: list[str] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = f"{path}.{key}"
+            if SECRET_FIELD_RE.search(str(key)):
+                paths.append(child_path)
+            paths.extend(secret_paths(child, child_path))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            paths.extend(secret_paths(child, f"{path}[{index}]"))
+    return paths
+
+
+def method_result_summary(result: dict[str, Any]) -> dict[str, Any]:
+    status = result.get("result")
+    if not isinstance(status, dict):
+        return {}
+    return {
+        key: status.get(key)
+        for key in (
+            "schema",
+            "chain_id",
+            "genesis_hash",
+            "protocol_version",
+            "node_id",
+            "status",
+            "block_height",
+            "block_tip_hash",
+            "validator_count",
+            "registry_root",
+            "ledger_index",
+            "ledger_hash",
+            "mempool_pending",
+            "pool_id",
+            "passed",
+            "address",
+            "balance",
+            "sequence",
+            "index_used",
+            "index_present",
+            "index_usable",
+            "index_path",
+            "disk_index_path",
+            "disk_index_present",
+            "disk_index_usable",
+            "disk_account_shard_count",
+            "scan_limit",
+            "scanned_block_count",
+            "archive_lookup_count",
+            "indexed_block_count",
+            "indexed_row_count",
+            "account_count",
+            "assets",
+            "row_count",
+            "truncated",
+        )
+        if key in status
+    }
+
+
+def first_present(*values: Any) -> Any:
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
+def run_method(
+    *,
+    endpoint: Endpoint,
+    method: str,
+    endpoint_dir: Path,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    safe_method = method.replace("_", "-")
+    request_id = f"rpc-doctor-{endpoint.label}-{safe_method}"
+    request_path = endpoint_dir / f"{safe_method}.request.json"
+    response_path = endpoint_dir / f"{safe_method}.response.json"
+    request = build_request(
+        method=method,
+        request_id=request_id,
+        request_path=request_path,
+        args=args,
+    )
+    try:
+        response_bytes, latency_ms = send_rpc(
+            endpoint=endpoint,
+            request=request,
+            timeout_seconds=args.timeout_seconds,
+            response_byte_cap=args.response_byte_cap,
+        )
+        response_path.write_bytes(response_bytes)
+        response = json.loads(response_bytes.decode("utf-8"))
+        leaks = secret_paths(response)
+        if leaks:
+            raise ValueError(f"{method} response leaked key material at {', '.join(leaks)}")
+        if method in SDK_VALIDATED_METHODS:
+            validate_sdk_response(
+                method=method,
+                request_id=request_id,
+                response_path=response_path,
+                args=args,
+            )
+        else:
+            validate_basic_response(method=method, request_id=request_id, response=response)
+        return {
+            "method": method,
+            "ok": True,
+            "latency_ms": latency_ms,
+            "response_bytes": len(response_bytes),
+            "request_file": rel(request_path),
+            "response_file": rel(response_path),
+            "summary": method_result_summary(response),
+        }
+    except Exception as error:
+        return {
+            "method": method,
+            "ok": False,
+            "error": redact_network(str(error)),
+            "request_file": rel(request_path),
+            "response_file": rel(response_path),
+        }
+
+
+def run_write_probe(
+    *,
+    endpoint: Endpoint,
+    endpoint_dir: Path,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    request_id = f"rpc-doctor-{endpoint.label}-write-probe"
+    request = {
+        "version": RPC_VERSION,
+        "id": request_id,
+        "method": "mempool_submit_signed_transfer",
+        "params": {"signed_transfer_json": "{}"},
+    }
+    request_path = endpoint_dir / "write-posture.request.json"
+    response_path = endpoint_dir / "write-posture.response.json"
+    request_path.write_text(json.dumps(request, indent=2, sort_keys=True) + "\n")
+    try:
+        response_bytes, latency_ms = send_rpc(
+            endpoint=endpoint,
+            request=request,
+            timeout_seconds=args.timeout_seconds,
+            response_byte_cap=args.response_byte_cap,
+        )
+        response_path.write_bytes(response_bytes)
+        response = json.loads(response_bytes.decode("utf-8"))
+        leaks = secret_paths(response)
+        if leaks:
+            raise ValueError(f"write probe response leaked key material at {', '.join(leaks)}")
+        error_code = None
+        if isinstance(response.get("error"), dict):
+            error_code = response["error"].get("code")
+        if response.get("ok") is True:
+            posture = "write_probe_unexpected_ok"
+            ok = False
+        elif error_code == "rpc_method_not_allowed":
+            posture = "read_only"
+            ok = True
+        else:
+            posture = "write_method_reached"
+            ok = bool(args.allow_write_capable)
+        return {
+            "ok": ok,
+            "posture": posture,
+            "error_code": error_code,
+            "latency_ms": latency_ms,
+            "response_bytes": len(response_bytes),
+            "request_file": rel(request_path),
+            "response_file": rel(response_path),
+        }
+    except Exception as error:
+        return {
+            "ok": False,
+            "posture": "unknown",
+            "error": redact_network(str(error)),
+            "request_file": rel(request_path),
+            "response_file": rel(response_path),
+        }
+
+
+def endpoint_summary(endpoint: Endpoint, method_results: list[dict[str, Any]], write_probe: dict[str, Any]) -> dict[str, Any]:
+    by_method = {result["method"]: result for result in method_results}
+    status = by_method.get("status", {}).get("summary", {})
+    server_info = by_method.get("server_info", {}).get("summary", {})
+    validators = by_method.get("validators", {}).get("summary", {})
+    metrics = by_method.get("metrics", {}).get("summary", {})
+    orchard = by_method.get("orchard_pool_report", {}).get("summary", {})
+    return {
+        "label": endpoint.label,
+        "host": endpoint.redacted_host,
+        "port": endpoint.port,
+        "ok": all(result.get("ok") is True for result in method_results)
+        and write_probe.get("ok") is True,
+        "chain_id": first_present(
+            status.get("chain_id"), server_info.get("chain_id"), metrics.get("chain_id")
+        ),
+        "genesis_hash": first_present(
+            status.get("genesis_hash"),
+            server_info.get("genesis_hash"),
+            metrics.get("genesis_hash"),
+        ),
+        "protocol_version": first_present(
+            status.get("protocol_version"),
+            server_info.get("protocol_version"),
+            metrics.get("protocol_version"),
+        ),
+        "node_id": first_present(status.get("node_id"), server_info.get("node_id")),
+        "node_status": first_present(status.get("status"), server_info.get("status")),
+        "block_height": first_present(status.get("block_height"), server_info.get("ledger_index")),
+        "block_tip_hash": first_present(
+            status.get("block_tip_hash"), server_info.get("ledger_hash")
+        ),
+        "validator_count": first_present(
+            validators.get("validator_count"),
+            status.get("validator_count"),
+            server_info.get("validator_count"),
+        ),
+        "registry_root": validators.get("registry_root"),
+        "mempool_pending": status.get("mempool_pending"),
+        "assets": metrics.get("assets") if isinstance(metrics.get("assets"), dict) else {},
+        "write_posture": write_probe.get("posture"),
+        "orchard_pool": {
+            "available": "orchard_pool_report" in by_method,
+            "ok": by_method.get("orchard_pool_report", {}).get("ok"),
+            "pool_id": orchard.get("pool_id"),
+            "passed": orchard.get("passed"),
+        },
+    }
+
+
+def consistency_checks(summaries: list[dict[str, Any]], args: argparse.Namespace) -> dict[str, Any]:
+    heights = [
+        summary.get("block_height")
+        for summary in summaries
+        if isinstance(summary.get("block_height"), int)
+    ]
+    height_lag = (max(heights) - min(heights)) if heights else None
+    chain_ids = sorted({summary.get("chain_id") for summary in summaries if summary.get("chain_id")})
+    genesis_hashes = sorted(
+        {summary.get("genesis_hash") for summary in summaries if summary.get("genesis_hash")}
+    )
+    protocol_versions = sorted(
+        {
+            summary.get("protocol_version")
+            for summary in summaries
+            if summary.get("protocol_version") is not None
+        }
+    )
+    registry_roots = sorted(
+        {summary.get("registry_root") for summary in summaries if summary.get("registry_root")}
+    )
+    node_statuses = [summary.get("node_status") for summary in summaries]
+    write_postures = [summary.get("write_posture") for summary in summaries]
+    checks = {
+        "endpoint_count": len(summaries),
+        "all_endpoints_ok": all(summary.get("ok") is True for summary in summaries),
+        "all_nodes_running": all(status == "running" for status in node_statuses if status),
+        "chain_consistent": len(chain_ids) <= 1,
+        "genesis_consistent": len(genesis_hashes) <= 1,
+        "protocol_version_consistent": len(protocol_versions) <= 1,
+        "registry_root_consistent": len(registry_roots) <= 1,
+        "height_lag": height_lag,
+        "height_lag_within_threshold": (
+            height_lag is not None and height_lag <= args.height_lag_threshold
+        ),
+        "all_read_only": all(posture == "read_only" for posture in write_postures),
+        "write_capable_allowed": bool(args.allow_write_capable),
+    }
+    checks["doctor_ok"] = (
+        checks["all_endpoints_ok"]
+        and checks["all_nodes_running"]
+        and checks["chain_consistent"]
+        and checks["genesis_consistent"]
+        and checks["protocol_version_consistent"]
+        and checks["registry_root_consistent"]
+        and checks["height_lag_within_threshold"]
+        and (checks["all_read_only"] or checks["write_capable_allowed"])
+    )
+    return checks
+
+
+def validate_report_redaction(report: dict[str, Any]) -> None:
+    text = json.dumps(report, sort_keys=True)
+    if NONLOCAL_IPV4_RE.search(text):
+        raise RuntimeError("RPC doctor report would leak non-local IP material")
+    leaks = secret_paths(report)
+    if leaks:
+        raise RuntimeError(f"RPC doctor report would leak key material at {', '.join(leaks)}")
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--endpoint", action="append", help="RPC endpoint as label=host:port")
+    parser.add_argument(
+        "--endpoint-file",
+        action="append",
+        help="endpoint file: remote-topology JSON, endpoint JSON, or line-based host:port list",
+    )
+    parser.add_argument(
+        "--method",
+        action="append",
+        help="override default read methods; may be passed multiple times",
+    )
+    parser.add_argument("--include-verify-state", action="store_true")
+    parser.add_argument("--ledger-limit", type=int, default=2)
+    parser.add_argument("--block-limit", type=int, default=2)
+    parser.add_argument("--receipts-limit", type=int, default=2)
+    parser.add_argument(
+        "--account-address",
+        help="optional transparent account address; enables account and account_tx checks",
+    )
+    parser.add_argument("--account-tx-from-height", type=int, default=0)
+    parser.add_argument("--account-tx-to-height", type=int)
+    parser.add_argument("--account-tx-limit", type=int, default=8)
+    parser.add_argument("--timeout-seconds", type=float, default=8.0)
+    parser.add_argument("--response-byte-cap", type=int, default=1_048_576)
+    parser.add_argument("--height-lag-threshold", type=int, default=0)
+    parser.add_argument("--allow-write-capable", action="store_true")
+    parser.add_argument("--no-build", action="store_true", help="do not build postfiat-rpc-sdk")
+    parser.add_argument(
+        "--sdk-bin",
+        type=Path,
+        default=ROOT / "target/debug/postfiat-rpc-sdk",
+        help="path to postfiat-rpc-sdk binary",
+    )
+    parser.add_argument(
+        "--log-dir",
+        type=Path,
+        default=ROOT / f"reports/testnet-rpc-doctor/logs-{utc_stamp()}",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=ROOT / f"reports/testnet-rpc-doctor/testnet-rpc-doctor-{utc_stamp()}.json",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str]) -> int:
+    args = parse_args(argv)
+    if (
+        args.ledger_limit < 1
+        or args.block_limit < 1
+        or args.receipts_limit < 1
+        or args.account_tx_limit < 1
+    ):
+        raise SystemExit("limits must be positive")
+    if args.account_tx_from_height < 0:
+        raise SystemExit("--account-tx-from-height must be non-negative")
+    if args.account_tx_to_height is not None and args.account_tx_to_height < 0:
+        raise SystemExit("--account-tx-to-height must be non-negative")
+    if (
+        args.account_tx_to_height is not None
+        and args.account_tx_from_height > args.account_tx_to_height
+    ):
+        raise SystemExit("--account-tx-from-height must be <= --account-tx-to-height")
+    if args.timeout_seconds <= 0:
+        raise SystemExit("--timeout-seconds must be positive")
+    if args.response_byte_cap < 1024:
+        raise SystemExit("--response-byte-cap must be at least 1024")
+    endpoints = collect_endpoints(args)
+    methods = list(args.method or DEFAULT_METHODS)
+    if args.account_address:
+        for method in ("account", "account_tx"):
+            if method not in methods:
+                methods.append(method)
+    if args.include_verify_state and "verify_state" not in methods:
+        methods.append("verify_state")
+    unsupported = sorted(
+        set(methods)
+        - (
+            SDK_VALIDATED_METHODS
+            | {"account_tx_index_status", "orchard_pool_report", "verify_state"}
+        )
+    )
+    if unsupported:
+        raise SystemExit(f"unsupported RPC doctor methods: {', '.join(unsupported)}")
+    if not args.account_address and any(method in {"account", "account_tx"} for method in methods):
+        raise SystemExit("account and account_tx checks require --account-address")
+    if "verify_state" in methods:
+        SDK_VALIDATED_METHODS.add("verify_state")
+    if not args.no_build:
+        run_local(["cargo", "build", "-p", "postfiat-rpc-sdk"])
+    if not args.sdk_bin.is_file():
+        raise SystemExit(f"postfiat-rpc-sdk binary missing: {args.sdk_bin}")
+    args.log_dir.mkdir(parents=True, exist_ok=True)
+    endpoint_reports: list[dict[str, Any]] = []
+    summaries: list[dict[str, Any]] = []
+    for endpoint in endpoints:
+        endpoint_dir = args.log_dir / endpoint.label
+        endpoint_dir.mkdir(parents=True, exist_ok=True)
+        method_results = [
+            run_method(endpoint=endpoint, method=method, endpoint_dir=endpoint_dir, args=args)
+            for method in methods
+        ]
+        write_probe = run_write_probe(endpoint=endpoint, endpoint_dir=endpoint_dir, args=args)
+        summary = endpoint_summary(endpoint, method_results, write_probe)
+        summaries.append(summary)
+        endpoint_reports.append(
+            {
+                "summary": summary,
+                "methods": method_results,
+                "write_probe": write_probe,
+            }
+        )
+    checks = consistency_checks(summaries, args)
+    report = {
+        "schema": "postfiat-testnet-rpc-doctor-v1",
+        "generated_utc": utc_iso(),
+        "git": git_metadata(),
+        "method_count": len(methods),
+        "methods": methods,
+        "endpoint_count": len(endpoints),
+        "height_lag_threshold": args.height_lag_threshold,
+        "response_byte_cap": args.response_byte_cap,
+        "timeout_seconds": args.timeout_seconds,
+        "log_dir": rel(args.log_dir),
+        "endpoints": endpoint_reports,
+        "checks": checks,
+        "doctor_ok": checks["doctor_ok"],
+    }
+    validate_report_redaction(report)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"testnet_rpc_doctor={rel(args.output)}")
+    print(f"testnet_rpc_doctor_status={'passed' if report['doctor_ok'] else 'failed'}")
+    return 0 if report["doctor_ok"] else 1
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main(sys.argv[1:]))
+    except BrokenPipeError:
+        raise SystemExit(1)

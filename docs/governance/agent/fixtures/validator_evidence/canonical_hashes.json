@@ -1,0 +1,17 @@
+{
+  "schema": "postfiat-validator-evidence-packet-hash-v1",
+  "algorithm": "sha384",
+  "canonicalization": "json.dumps(sort_keys=True,separators=(',',':'),ensure_ascii=True) over UTF-8 bytes",
+  "fixtures": [
+    {
+      "path": "docs/governance/agent/fixtures/validator_evidence/valid_packet.json",
+      "canonical_sha384": "7f146e261443b04f443764468e94343f81a1dd87ec30a122b267b3d2050d43321ea6b122cb2b19efbe57b1728a6e4cea",
+      "canonical_byte_len": 14288
+    },
+    {
+      "path": "docs/governance/agent/fixtures/validator_evidence/changed_packet.json",
+      "canonical_sha384": "86e0ec43c20eec4199e40ff8aa9a933f829d9f1858f9a96e889a134a4cecc30d95f22fa8d92e8161e9b22127b8762ffc",
+      "canonical_byte_len": 14317
+    }
+  ]
+}

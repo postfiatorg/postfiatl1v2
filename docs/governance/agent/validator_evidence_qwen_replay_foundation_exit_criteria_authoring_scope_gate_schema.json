@@ -1,0 +1,1078 @@
+{
+  "$id": "https://postfiat.org/schemas/validator_evidence_qwen_replay_foundation_exit_criteria_authoring_scope_gate_schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "checks": {
+      "additionalProperties": false,
+      "properties": {
+        "authority_transfer": {
+          "type": "boolean"
+        },
+        "authority_transfer_not_authorized": {
+          "type": "boolean"
+        },
+        "cobalt_amendment_submitted": {
+          "type": "boolean"
+        },
+        "collection_window_bound": {
+          "type": "boolean"
+        },
+        "commit_reveal_activation": {
+          "type": "boolean"
+        },
+        "criteria_authoring_scope_result_none": {
+          "type": "boolean"
+        },
+        "criteria_authorization_approval_result_none": {
+          "type": "boolean"
+        },
+        "criteria_authorization_decision_result_none": {
+          "type": "boolean"
+        },
+        "criteria_authorization_grant_result_none": {
+          "type": "boolean"
+        },
+        "criteria_item_count_zero": {
+          "type": "boolean"
+        },
+        "field_registry_hash_bound": {
+          "type": "boolean"
+        },
+        "foundation_authority_retained": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authoring_scope_defined": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authoring_scope_not_defined": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_approval_not_approved": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_approval_not_recorded": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_approval_recorded": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_decision_not_decided": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_decision_recorded": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_grant_not_recorded": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_granted": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_not_complete": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_not_requested": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_receipt_issued": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_receipt_not_issued": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_request_not_submitted": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_request_submitted": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_document_accepted": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_document_not_authored": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_not_defined": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_satisfied": {
+          "type": "boolean"
+        },
+        "live_model_request_executed": {
+          "type": "boolean"
+        },
+        "live_registry_mutation": {
+          "type": "boolean"
+        },
+        "model_output_generated": {
+          "type": "boolean"
+        },
+        "model_request_hash_bound": {
+          "type": "boolean"
+        },
+        "no_authoring_scope": {
+          "type": "boolean"
+        },
+        "no_authorized_authoring_principal": {
+          "type": "boolean"
+        },
+        "no_authorized_cobalt_ratification_path": {
+          "type": "boolean"
+        },
+        "no_authorized_review_path": {
+          "type": "boolean"
+        },
+        "no_criteria_authorization_approval_hash": {
+          "type": "boolean"
+        },
+        "no_criteria_authorization_approval_reason": {
+          "type": "boolean"
+        },
+        "no_criteria_authorization_approval_scope": {
+          "type": "boolean"
+        },
+        "no_criteria_authorization_approver": {
+          "type": "boolean"
+        },
+        "no_criteria_authorization_decision_hash": {
+          "type": "boolean"
+        },
+        "no_criteria_authorization_decision_issuer": {
+          "type": "boolean"
+        },
+        "no_criteria_authorization_decision_reason": {
+          "type": "boolean"
+        },
+        "no_criteria_authorization_decision_scope": {
+          "type": "boolean"
+        },
+        "no_criteria_authorization_grant_hash": {
+          "type": "boolean"
+        },
+        "no_criteria_authorization_grant_reason": {
+          "type": "boolean"
+        },
+        "no_criteria_authorization_grant_scope": {
+          "type": "boolean"
+        },
+        "no_criteria_authorization_grantee": {
+          "type": "boolean"
+        },
+        "no_criteria_authorization_hash": {
+          "type": "boolean"
+        },
+        "no_criteria_authorization_receipt_hash": {
+          "type": "boolean"
+        },
+        "no_criteria_authorization_receipt_issuer": {
+          "type": "boolean"
+        },
+        "no_criteria_authorization_receipt_scope": {
+          "type": "boolean"
+        },
+        "no_criteria_authorization_request_hash": {
+          "type": "boolean"
+        },
+        "no_criteria_authorization_requester": {
+          "type": "boolean"
+        },
+        "no_criteria_document_hash": {
+          "type": "boolean"
+        },
+        "no_foundation_exit_criteria_authoring_scope_hash": {
+          "type": "boolean"
+        },
+        "no_foundation_exit_criteria_authoring_scope_reason": {
+          "type": "boolean"
+        },
+        "no_requested_authoring_principal": {
+          "type": "boolean"
+        },
+        "no_requested_cobalt_ratification_path": {
+          "type": "boolean"
+        },
+        "no_requested_review_path": {
+          "type": "boolean"
+        },
+        "packet_schema_hash_bound": {
+          "type": "boolean"
+        },
+        "provider_spend_executed": {
+          "type": "boolean"
+        },
+        "qwen_prompt_input_manifest_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_prompt_redaction_audit_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_public_summary_projection_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_replay_authority_transfer_decision_gate_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_replay_authorization_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_replay_cobalt_submission_decision_gate_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_replay_foundation_exit_criteria_authorization_approval_gate_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_replay_foundation_exit_criteria_authorization_decision_gate_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_replay_foundation_exit_criteria_authorization_gate_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_replay_foundation_exit_criteria_authorization_grant_gate_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_replay_foundation_exit_criteria_authorization_receipt_gate_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_replay_foundation_exit_criteria_authorization_request_gate_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_replay_foundation_exit_criteria_document_gate_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_replay_foundation_exit_criteria_gate_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_replay_governance_queue_decision_gate_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_replay_governance_queue_gate_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_replay_operator_review_gate_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_replay_output_manifest_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_replay_output_validation_receipt_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_replay_preflight_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_replay_promotion_decision_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_replay_registry_mutation_decision_gate_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_replay_release_candidate_gate_hash_bound": {
+          "type": "boolean"
+        },
+        "qwen_replay_release_decision_gate_hash_bound": {
+          "type": "boolean"
+        },
+        "required_future_inputs_bound": {
+          "type": "boolean"
+        },
+        "sidecar_activation": {
+          "type": "boolean"
+        },
+        "tp1_admission": {
+          "type": "boolean"
+        },
+        "validator_enforced_scoring": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "qwen_replay_foundation_exit_criteria_authorization_request_gate_hash_bound",
+        "qwen_replay_foundation_exit_criteria_authorization_receipt_gate_hash_bound",
+        "qwen_replay_foundation_exit_criteria_authorization_decision_gate_hash_bound",
+        "qwen_replay_foundation_exit_criteria_authorization_gate_hash_bound",
+        "qwen_replay_foundation_exit_criteria_document_gate_hash_bound",
+        "qwen_replay_foundation_exit_criteria_gate_hash_bound",
+        "qwen_replay_authority_transfer_decision_gate_hash_bound",
+        "qwen_replay_registry_mutation_decision_gate_hash_bound",
+        "qwen_replay_cobalt_submission_decision_gate_hash_bound",
+        "qwen_replay_governance_queue_decision_gate_hash_bound",
+        "qwen_replay_governance_queue_gate_hash_bound",
+        "qwen_replay_release_decision_gate_hash_bound",
+        "qwen_replay_operator_review_gate_hash_bound",
+        "qwen_replay_release_candidate_gate_hash_bound",
+        "qwen_replay_promotion_decision_hash_bound",
+        "qwen_replay_output_validation_receipt_hash_bound",
+        "qwen_replay_output_manifest_hash_bound",
+        "qwen_replay_authorization_hash_bound",
+        "qwen_replay_preflight_hash_bound",
+        "qwen_prompt_redaction_audit_hash_bound",
+        "qwen_prompt_input_manifest_hash_bound",
+        "qwen_public_summary_projection_hash_bound",
+        "model_request_hash_bound",
+        "packet_schema_hash_bound",
+        "field_registry_hash_bound",
+        "collection_window_bound",
+        "foundation_exit_criteria_not_defined",
+        "foundation_exit_criteria_document_not_authored",
+        "foundation_exit_criteria_authorization_not_requested",
+        "foundation_exit_criteria_authorization_not_complete",
+        "foundation_exit_criteria_authorization_request_not_submitted",
+        "foundation_exit_criteria_authorization_receipt_not_issued",
+        "foundation_exit_criteria_authorization_decision_not_decided",
+        "foundation_exit_criteria_authorization_approval_not_recorded",
+        "criteria_item_count_zero",
+        "no_criteria_document_hash",
+        "no_criteria_authorization_hash",
+        "no_criteria_authorization_request_hash",
+        "no_criteria_authorization_requester",
+        "no_criteria_authorization_receipt_hash",
+        "no_criteria_authorization_decision_hash",
+        "no_criteria_authorization_decision_issuer",
+        "no_criteria_authorization_decision_scope",
+        "criteria_authorization_decision_result_none",
+        "no_criteria_authorization_decision_reason",
+        "no_criteria_authorization_approval_hash",
+        "no_criteria_authorization_approver",
+        "no_criteria_authorization_approval_scope",
+        "criteria_authorization_approval_result_none",
+        "no_criteria_authorization_approval_reason",
+        "no_criteria_authorization_receipt_issuer",
+        "no_criteria_authorization_receipt_scope",
+        "no_authoring_scope",
+        "no_requested_authoring_principal",
+        "no_requested_review_path",
+        "no_requested_cobalt_ratification_path",
+        "no_authorized_authoring_principal",
+        "no_authorized_review_path",
+        "no_authorized_cobalt_ratification_path",
+        "foundation_authority_retained",
+        "authority_transfer_not_authorized",
+        "required_future_inputs_bound",
+        "provider_spend_executed",
+        "live_model_request_executed",
+        "model_output_generated",
+        "live_registry_mutation",
+        "cobalt_amendment_submitted",
+        "foundation_exit_criteria_authorization_request_submitted",
+        "foundation_exit_criteria_authorization_receipt_issued",
+        "foundation_exit_criteria_authorization_decision_recorded",
+        "foundation_exit_criteria_authorization_approval_recorded",
+        "foundation_exit_criteria_authorization_granted",
+        "foundation_exit_criteria_document_accepted",
+        "foundation_exit_criteria_satisfied",
+        "sidecar_activation",
+        "commit_reveal_activation",
+        "validator_enforced_scoring",
+        "tp1_admission",
+        "authority_transfer",
+        "qwen_replay_foundation_exit_criteria_authorization_approval_gate_hash_bound",
+        "foundation_exit_criteria_authorization_approval_not_approved",
+        "foundation_exit_criteria_authorization_grant_not_recorded",
+        "criteria_authorization_grant_result_none",
+        "no_criteria_authorization_grant_hash",
+        "no_criteria_authorization_grantee",
+        "no_criteria_authorization_grant_scope",
+        "no_criteria_authorization_grant_reason",
+        "qwen_replay_foundation_exit_criteria_authorization_grant_gate_hash_bound",
+        "foundation_exit_criteria_authoring_scope_not_defined",
+        "foundation_exit_criteria_authoring_scope_defined",
+        "criteria_authoring_scope_result_none",
+        "no_foundation_exit_criteria_authoring_scope_hash",
+        "no_foundation_exit_criteria_authoring_scope_reason"
+      ],
+      "type": "object"
+    },
+    "collection_window": {
+      "additionalProperties": false,
+      "properties": {
+        "from_height": {
+          "type": "integer"
+        },
+        "from_time": {
+          "type": "string"
+        },
+        "to_height": {
+          "type": "integer"
+        },
+        "to_time": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "from_height",
+        "to_height",
+        "from_time",
+        "to_time"
+      ],
+      "type": "object"
+    },
+    "execution_boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "authority_transfer": {
+          "type": "boolean"
+        },
+        "cobalt_amendment_submitted": {
+          "type": "boolean"
+        },
+        "commit_reveal_activation": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authoring_scope_defined": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_approval_recorded": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_decision_recorded": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_grant_recorded": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_granted": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_receipt_issued": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_request_submitted": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_document_accepted": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_satisfied": {
+          "type": "boolean"
+        },
+        "live_model_request_executed": {
+          "type": "boolean"
+        },
+        "live_network_access": {
+          "type": "boolean"
+        },
+        "live_registry_mutation": {
+          "type": "boolean"
+        },
+        "model_output_generated": {
+          "type": "boolean"
+        },
+        "provider_resource_created": {
+          "type": "boolean"
+        },
+        "provider_resource_destroyed": {
+          "type": "boolean"
+        },
+        "provider_spend_executed": {
+          "type": "boolean"
+        },
+        "sidecar_activation": {
+          "type": "boolean"
+        },
+        "tp1_admission": {
+          "type": "boolean"
+        },
+        "validator_enforced_scoring": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "provider_spend_executed",
+        "provider_resource_created",
+        "provider_resource_destroyed",
+        "live_model_request_executed",
+        "model_output_generated",
+        "live_network_access",
+        "live_registry_mutation",
+        "cobalt_amendment_submitted",
+        "foundation_exit_criteria_authorization_request_submitted",
+        "foundation_exit_criteria_authorization_receipt_issued",
+        "foundation_exit_criteria_authorization_decision_recorded",
+        "foundation_exit_criteria_authorization_approval_recorded",
+        "foundation_exit_criteria_authorization_granted",
+        "foundation_exit_criteria_authoring_scope_defined",
+        "foundation_exit_criteria_document_accepted",
+        "foundation_exit_criteria_satisfied",
+        "sidecar_activation",
+        "commit_reveal_activation",
+        "validator_enforced_scoring",
+        "tp1_admission",
+        "authority_transfer",
+        "foundation_exit_criteria_authorization_grant_recorded"
+      ],
+      "type": "object"
+    },
+    "failure_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "authoring_lane_without_scope": {
+          "type": "string"
+        },
+        "authority_transfer_without_scope": {
+          "type": "string"
+        },
+        "criteria_document_without_scope": {
+          "type": "string"
+        },
+        "fallback_decision": {
+          "enum": [
+            "no_op"
+          ]
+        },
+        "principal_without_scope": {
+          "type": "string"
+        },
+        "scope_without_grant": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope_without_grant",
+        "principal_without_scope",
+        "authoring_lane_without_scope",
+        "criteria_document_without_scope",
+        "authority_transfer_without_scope",
+        "fallback_decision"
+      ],
+      "type": "object"
+    },
+    "field_registry_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "foundation_exit_criteria_authoring_scope_gate": {
+      "additionalProperties": false,
+      "properties": {
+        "authoring_lane_opened": {
+          "type": "boolean"
+        },
+        "authority_transfer_authorized": {
+          "type": "boolean"
+        },
+        "authority_transfer_decision_status": {
+          "type": "string"
+        },
+        "authorized_authoring_principal_hash": {
+          "type": "null"
+        },
+        "authorized_cobalt_ratification_path_hash": {
+          "type": "null"
+        },
+        "authorized_review_path_hash": {
+          "type": "null"
+        },
+        "criteria_item_count": {
+          "type": "integer"
+        },
+        "foundation_authority_retained": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authoring_scope_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_authoring_scope_reason_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_authoring_scope_result": {
+          "enum": [
+            "none"
+          ]
+        },
+        "foundation_exit_criteria_authoring_scope_status": {
+          "enum": [
+            "not_defined"
+          ]
+        },
+        "foundation_exit_criteria_authorization_approval_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_authorization_approval_reason_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_authorization_approval_result": {
+          "type": "string"
+        },
+        "foundation_exit_criteria_authorization_approval_scope_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_authorization_approval_status": {
+          "type": "string"
+        },
+        "foundation_exit_criteria_authorization_approver_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_authorization_complete": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_decision_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_authorization_decision_issuer_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_authorization_decision_reason_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_authorization_decision_result": {
+          "type": "string"
+        },
+        "foundation_exit_criteria_authorization_decision_scope_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_authorization_decision_status": {
+          "type": "string"
+        },
+        "foundation_exit_criteria_authorization_grant_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_authorization_grant_reason_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_authorization_grant_result": {
+          "enum": [
+            "none"
+          ]
+        },
+        "foundation_exit_criteria_authorization_grant_scope_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_authorization_grant_status": {
+          "enum": [
+            "not_granted"
+          ]
+        },
+        "foundation_exit_criteria_authorization_grantee_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_authorization_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_authorization_receipt_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_authorization_receipt_issuer_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_authorization_receipt_scope_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_authorization_receipt_status": {
+          "type": "string"
+        },
+        "foundation_exit_criteria_authorization_request_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_authorization_request_status": {
+          "type": "string"
+        },
+        "foundation_exit_criteria_authorization_requester_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_authorization_scope_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_authorization_status": {
+          "type": "string"
+        },
+        "foundation_exit_criteria_cobalt_ratification_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_document_complete": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_document_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_document_status": {
+          "type": "string"
+        },
+        "foundation_exit_criteria_review_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_satisfaction_receipt_hash": {
+          "type": "null"
+        },
+        "foundation_exit_criteria_satisfied": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_status": {
+          "type": "string"
+        },
+        "future_authoring_scope_required": {
+          "type": "boolean"
+        },
+        "future_authorization_approval_required": {
+          "type": "boolean"
+        },
+        "future_authorization_decision_required": {
+          "type": "boolean"
+        },
+        "future_authorization_grant_required": {
+          "type": "boolean"
+        },
+        "future_cobalt_ratification_required": {
+          "type": "boolean"
+        },
+        "future_explicit_authoring_scope_required": {
+          "type": "boolean"
+        },
+        "future_explicit_authorization_approval_required": {
+          "type": "boolean"
+        },
+        "future_explicit_authorization_decision_required": {
+          "type": "boolean"
+        },
+        "future_explicit_authorization_grant_required": {
+          "type": "boolean"
+        },
+        "future_explicit_authorization_receipt_required": {
+          "type": "boolean"
+        },
+        "future_foundation_exit_criteria_authorization_decision_gate_required": {
+          "type": "boolean"
+        },
+        "future_foundation_exit_criteria_authorization_receipt_gate_required": {
+          "type": "boolean"
+        },
+        "future_foundation_exit_criteria_authorization_request_gate_required": {
+          "type": "boolean"
+        },
+        "future_operator_signoff_required": {
+          "type": "boolean"
+        },
+        "future_rollback_plan_required": {
+          "type": "boolean"
+        },
+        "requested_authoring_principal_hash": {
+          "type": "null"
+        },
+        "requested_cobalt_ratification_path_hash": {
+          "type": "null"
+        },
+        "requested_review_path_hash": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "authority_transfer_decision_status",
+        "authority_transfer_authorized",
+        "foundation_authority_retained",
+        "foundation_exit_criteria_status",
+        "foundation_exit_criteria_satisfied",
+        "foundation_exit_criteria_document_status",
+        "foundation_exit_criteria_document_complete",
+        "foundation_exit_criteria_document_hash",
+        "foundation_exit_criteria_authorization_status",
+        "foundation_exit_criteria_authorization_complete",
+        "foundation_exit_criteria_authorization_hash",
+        "foundation_exit_criteria_authorization_request_status",
+        "foundation_exit_criteria_authorization_request_hash",
+        "foundation_exit_criteria_authorization_requester_hash",
+        "foundation_exit_criteria_authorization_receipt_status",
+        "foundation_exit_criteria_authorization_receipt_hash",
+        "foundation_exit_criteria_authorization_decision_status",
+        "foundation_exit_criteria_authorization_decision_hash",
+        "foundation_exit_criteria_authorization_decision_issuer_hash",
+        "foundation_exit_criteria_authorization_decision_scope_hash",
+        "foundation_exit_criteria_authorization_decision_result",
+        "foundation_exit_criteria_authorization_decision_reason_hash",
+        "foundation_exit_criteria_authorization_approval_status",
+        "foundation_exit_criteria_authorization_approval_hash",
+        "foundation_exit_criteria_authorization_approver_hash",
+        "foundation_exit_criteria_authorization_approval_scope_hash",
+        "foundation_exit_criteria_authorization_approval_result",
+        "foundation_exit_criteria_authorization_approval_reason_hash",
+        "foundation_exit_criteria_authorization_receipt_issuer_hash",
+        "foundation_exit_criteria_authorization_receipt_scope_hash",
+        "foundation_exit_criteria_authorization_scope_hash",
+        "requested_authoring_principal_hash",
+        "requested_review_path_hash",
+        "requested_cobalt_ratification_path_hash",
+        "authorized_authoring_principal_hash",
+        "authorized_review_path_hash",
+        "authorized_cobalt_ratification_path_hash",
+        "foundation_exit_criteria_review_hash",
+        "foundation_exit_criteria_cobalt_ratification_hash",
+        "foundation_exit_criteria_satisfaction_receipt_hash",
+        "criteria_item_count",
+        "authoring_lane_opened",
+        "future_foundation_exit_criteria_authorization_decision_gate_required",
+        "future_foundation_exit_criteria_authorization_receipt_gate_required",
+        "future_foundation_exit_criteria_authorization_request_gate_required",
+        "future_explicit_authorization_receipt_required",
+        "future_explicit_authorization_decision_required",
+        "future_authorization_approval_required",
+        "future_explicit_authorization_approval_required",
+        "future_authorization_grant_required",
+        "future_authorization_decision_required",
+        "future_authoring_scope_required",
+        "future_operator_signoff_required",
+        "future_cobalt_ratification_required",
+        "future_rollback_plan_required",
+        "foundation_exit_criteria_authorization_grant_status",
+        "foundation_exit_criteria_authorization_grant_hash",
+        "foundation_exit_criteria_authorization_grantee_hash",
+        "foundation_exit_criteria_authorization_grant_scope_hash",
+        "foundation_exit_criteria_authorization_grant_result",
+        "foundation_exit_criteria_authorization_grant_reason_hash",
+        "future_explicit_authorization_grant_required",
+        "foundation_exit_criteria_authoring_scope_status",
+        "foundation_exit_criteria_authoring_scope_hash",
+        "foundation_exit_criteria_authoring_scope_result",
+        "foundation_exit_criteria_authoring_scope_reason_hash",
+        "future_explicit_authoring_scope_required"
+      ],
+      "type": "object"
+    },
+    "gate_id": {
+      "type": "string"
+    },
+    "mode": {
+      "const": "design_fixture_only"
+    },
+    "model_request_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "packet_schema_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_prompt_input_manifest_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_prompt_redaction_audit_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_public_summary_projection_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_replay_authority_transfer_decision_gate_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_replay_authorization_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_replay_cobalt_submission_decision_gate_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_replay_foundation_exit_criteria_authorization_approval_gate_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_replay_foundation_exit_criteria_authorization_decision_gate_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_replay_foundation_exit_criteria_authorization_gate_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_replay_foundation_exit_criteria_authorization_grant_gate_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_replay_foundation_exit_criteria_authorization_receipt_gate_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_replay_foundation_exit_criteria_authorization_request_gate_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_replay_foundation_exit_criteria_document_gate_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_replay_foundation_exit_criteria_gate_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_replay_governance_queue_decision_gate_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_replay_governance_queue_gate_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_replay_operator_review_gate_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_replay_output_manifest_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_replay_output_validation_receipt_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_replay_preflight_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_replay_promotion_decision_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_replay_registry_mutation_decision_gate_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_replay_release_candidate_gate_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "qwen_replay_release_decision_gate_hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "required_future_inputs": {
+      "additionalProperties": false,
+      "properties": {
+        "authority_transfer_plan_required": {
+          "type": "boolean"
+        },
+        "criteria_authoring_principal_gate_required": {
+          "type": "boolean"
+        },
+        "criteria_authoring_principal_required": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authoring_scope_gate_required": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authoring_scope_required": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_approval_gate_required": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_approval_required": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_decision_gate_required": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_decision_required": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_grant_gate_required": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_grant_required": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_receipt_gate_required": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_receipt_required": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_request_gate_required": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_authorization_request_required": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_cobalt_ratification_required": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_document_required": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_review_required": {
+          "type": "boolean"
+        },
+        "foundation_exit_criteria_satisfaction_receipt_required": {
+          "type": "boolean"
+        },
+        "operator_signoff_required": {
+          "type": "boolean"
+        },
+        "rollback_plan_required": {
+          "type": "boolean"
+        },
+        "shadow_verification_convergence_report_required": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "foundation_exit_criteria_authorization_request_gate_required",
+        "foundation_exit_criteria_authorization_receipt_gate_required",
+        "foundation_exit_criteria_authorization_decision_gate_required",
+        "foundation_exit_criteria_authorization_request_required",
+        "foundation_exit_criteria_authorization_receipt_required",
+        "foundation_exit_criteria_authorization_decision_required",
+        "foundation_exit_criteria_authorization_approval_required",
+        "foundation_exit_criteria_authorization_grant_required",
+        "foundation_exit_criteria_authoring_scope_required",
+        "criteria_authoring_principal_required",
+        "foundation_exit_criteria_document_required",
+        "foundation_exit_criteria_review_required",
+        "foundation_exit_criteria_cobalt_ratification_required",
+        "foundation_exit_criteria_satisfaction_receipt_required",
+        "shadow_verification_convergence_report_required",
+        "operator_signoff_required",
+        "rollback_plan_required",
+        "authority_transfer_plan_required",
+        "foundation_exit_criteria_authorization_approval_gate_required",
+        "foundation_exit_criteria_authorization_grant_gate_required",
+        "foundation_exit_criteria_authoring_scope_gate_required",
+        "criteria_authoring_principal_gate_required"
+      ],
+      "type": "object"
+    },
+    "schema": {
+      "const": "postfiat-validator-evidence-qwen-replay-foundation-exit-criteria-authoring-scope-gate-v1"
+    }
+  },
+  "required": [
+    "schema",
+    "gate_id",
+    "mode",
+    "qwen_replay_foundation_exit_criteria_authorization_grant_gate_hash",
+    "qwen_replay_foundation_exit_criteria_authorization_approval_gate_hash",
+    "qwen_replay_foundation_exit_criteria_authorization_decision_gate_hash",
+    "qwen_replay_foundation_exit_criteria_authorization_receipt_gate_hash",
+    "qwen_replay_foundation_exit_criteria_authorization_request_gate_hash",
+    "qwen_replay_foundation_exit_criteria_authorization_gate_hash",
+    "qwen_replay_foundation_exit_criteria_document_gate_hash",
+    "qwen_replay_foundation_exit_criteria_gate_hash",
+    "qwen_replay_authority_transfer_decision_gate_hash",
+    "qwen_replay_registry_mutation_decision_gate_hash",
+    "qwen_replay_cobalt_submission_decision_gate_hash",
+    "qwen_replay_governance_queue_decision_gate_hash",
+    "qwen_replay_governance_queue_gate_hash",
+    "qwen_replay_release_decision_gate_hash",
+    "qwen_replay_operator_review_gate_hash",
+    "qwen_replay_release_candidate_gate_hash",
+    "qwen_replay_promotion_decision_hash",
+    "qwen_replay_output_validation_receipt_hash",
+    "qwen_replay_output_manifest_hash",
+    "qwen_replay_authorization_hash",
+    "qwen_replay_preflight_hash",
+    "qwen_prompt_redaction_audit_hash",
+    "qwen_prompt_input_manifest_hash",
+    "qwen_public_summary_projection_hash",
+    "model_request_hash",
+    "packet_schema_hash",
+    "field_registry_hash",
+    "collection_window",
+    "foundation_exit_criteria_authoring_scope_gate",
+    "required_future_inputs",
+    "execution_boundary",
+    "failure_policy",
+    "checks"
+  ],
+  "title": "PostFiat Validator Evidence Qwen Replay Foundation Exit Criteria Authoring Scope Gate",
+  "type": "object"
+}

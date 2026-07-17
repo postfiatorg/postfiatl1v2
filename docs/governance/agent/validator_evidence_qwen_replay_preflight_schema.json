@@ -1,0 +1,368 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-validator-evidence-qwen-replay-preflight-v1.json",
+  "title": "PostFiat Validator Evidence Qwen Replay Preflight",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "preflight_id",
+    "mode",
+    "qwen_prompt_redaction_audit_hash",
+    "qwen_prompt_input_manifest_hash",
+    "qwen_public_summary_projection_hash",
+    "model_request_hash",
+    "packet_schema_hash",
+    "field_registry_hash",
+    "collection_window",
+    "runtime_binding",
+    "replay_plan",
+    "provider_boundary",
+    "failure_policy",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-evidence-qwen-replay-preflight-v1"
+    },
+    "preflight_id": {
+      "$ref": "#/$defs/id"
+    },
+    "mode": {
+      "const": "design_fixture_only"
+    },
+    "qwen_prompt_redaction_audit_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_prompt_input_manifest_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_public_summary_projection_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "model_request_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "packet_schema_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "field_registry_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "collection_window": {
+      "$ref": "#/$defs/collection_window"
+    },
+    "runtime_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_id",
+        "runtime",
+        "runtime_profile",
+        "provider_profile",
+        "tensor_parallelism",
+        "context_length",
+        "chunked_prefill_size",
+        "max_running_requests",
+        "deterministic_flags"
+      ],
+      "properties": {
+        "model_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runtime": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "runtime_profile": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "provider_profile": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "tensor_parallelism": {
+          "const": 1
+        },
+        "context_length": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "chunked_prefill_size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_running_requests": {
+          "const": 1
+        },
+        "deterministic_flags": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        }
+      }
+    },
+    "replay_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lane",
+        "planned_replay_count",
+        "executed_replay_count",
+        "preflight_authorizes_execution",
+        "explicit_operator_authorization_required",
+        "provider_inventory_required",
+        "provider_cleanup_required",
+        "retained_artifact_redaction_scan_required",
+        "operator_pack_update_required"
+      ],
+      "properties": {
+        "lane": {
+          "const": "future_explicit_operator_authorized_replay"
+        },
+        "planned_replay_count": {
+          "type": "integer",
+          "minimum": 50
+        },
+        "executed_replay_count": {
+          "const": 0
+        },
+        "preflight_authorizes_execution": {
+          "const": false
+        },
+        "explicit_operator_authorization_required": {
+          "const": true
+        },
+        "provider_inventory_required": {
+          "const": true
+        },
+        "provider_cleanup_required": {
+          "const": true
+        },
+        "retained_artifact_redaction_scan_required": {
+          "const": true
+        },
+        "operator_pack_update_required": {
+          "const": true
+        }
+      }
+    },
+    "provider_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_spend_executed",
+        "provider_resource_created",
+        "provider_resource_destroyed",
+        "live_model_request_executed",
+        "model_output_generated",
+        "live_network_access",
+        "live_registry_mutation",
+        "authority_transfer"
+      ],
+      "properties": {
+        "provider_spend_executed": {
+          "const": false
+        },
+        "provider_resource_created": {
+          "const": false
+        },
+        "provider_resource_destroyed": {
+          "const": false
+        },
+        "live_model_request_executed": {
+          "const": false
+        },
+        "model_output_generated": {
+          "const": false
+        },
+        "live_network_access": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    },
+    "failure_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lineage_drift",
+        "missing_redaction_audit",
+        "missing_provider_inventory",
+        "provider_cleanup_missing",
+        "output_schema_invalid",
+        "fallback_decision"
+      ],
+      "properties": {
+        "lineage_drift": {
+          "const": "reject_future_replay"
+        },
+        "missing_redaction_audit": {
+          "const": "reject_future_replay"
+        },
+        "missing_provider_inventory": {
+          "const": "reject_future_replay"
+        },
+        "provider_cleanup_missing": {
+          "const": "reject_future_replay"
+        },
+        "output_schema_invalid": {
+          "const": "reject_future_replay"
+        },
+        "fallback_decision": {
+          "const": "no_op"
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "qwen_prompt_redaction_audit_hash_bound",
+        "qwen_prompt_input_manifest_hash_bound",
+        "qwen_public_summary_projection_hash_bound",
+        "model_request_hash_bound",
+        "packet_schema_hash_bound",
+        "field_registry_hash_bound",
+        "collection_window_bound",
+        "runtime_matches_model_request",
+        "deterministic_flags_bound",
+        "explicit_operator_authorization_required",
+        "provider_inventory_required",
+        "provider_cleanup_required",
+        "retained_artifact_redaction_scan_required",
+        "operator_pack_update_required",
+        "preflight_authorizes_execution",
+        "provider_spend_executed",
+        "provider_resource_created",
+        "live_model_request_executed",
+        "model_output_generated",
+        "live_network_access",
+        "live_registry_mutation",
+        "authority_transfer"
+      ],
+      "properties": {
+        "qwen_prompt_redaction_audit_hash_bound": {
+          "const": true
+        },
+        "qwen_prompt_input_manifest_hash_bound": {
+          "const": true
+        },
+        "qwen_public_summary_projection_hash_bound": {
+          "const": true
+        },
+        "model_request_hash_bound": {
+          "const": true
+        },
+        "packet_schema_hash_bound": {
+          "const": true
+        },
+        "field_registry_hash_bound": {
+          "const": true
+        },
+        "collection_window_bound": {
+          "const": true
+        },
+        "runtime_matches_model_request": {
+          "const": true
+        },
+        "deterministic_flags_bound": {
+          "const": true
+        },
+        "explicit_operator_authorization_required": {
+          "const": true
+        },
+        "provider_inventory_required": {
+          "const": true
+        },
+        "provider_cleanup_required": {
+          "const": true
+        },
+        "retained_artifact_redaction_scan_required": {
+          "const": true
+        },
+        "operator_pack_update_required": {
+          "const": true
+        },
+        "preflight_authorizes_execution": {
+          "const": false
+        },
+        "provider_spend_executed": {
+          "const": false
+        },
+        "provider_resource_created": {
+          "const": false
+        },
+        "live_model_request_executed": {
+          "const": false
+        },
+        "model_output_generated": {
+          "const": false
+        },
+        "live_network_access": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "collection_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_height",
+        "to_height",
+        "from_time",
+        "to_time"
+      ],
+      "properties": {
+        "from_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "from_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to_time": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    }
+  }
+}

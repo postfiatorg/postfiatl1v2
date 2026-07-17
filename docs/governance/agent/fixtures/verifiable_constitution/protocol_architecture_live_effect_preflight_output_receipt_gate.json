@@ -1,0 +1,271 @@
+{
+  "schema": "postfiat-protocol-architecture-live-effect-preflight-output-receipt-gate-v1",
+  "preflight_output_receipt_gate_id": "vc-protocol-architecture-001-live-effect-preflight-output-receipt-gate-001",
+  "preflight_output_receipt_gate_version": 1,
+  "status": "preflight_output_receipt_gate_defined_no_preflight_execution",
+  "gate_scope": "protocol_architecture",
+  "created_at": "2026-05-25T00:00:00Z",
+  "source_exact_authorization_intake_ref": {
+    "exact_authorization_intake_id": "vc-protocol-architecture-001-live-effect-exact-authorization-intake-001",
+    "fixture_path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_live_effect_exact_authorization_intake.json",
+    "fixture_file_sha3_384": "5468aaffd9b0384b02a3d4f57606ace0fdc86d5cc6f5fd6e7ea5f151fc6f6b0e48c106c47ae6c7115d219aa41f8d03df",
+    "fixture_canonical_hash": "b4a6b4d075a6190f6c4c07a761d719dce87b0d59cdab8b3b28ffdd5b7860cbeb1a0980b8e82a33fec07bc1407e4d1faf",
+    "schema_path": "docs/governance/agent/protocol_architecture_live_effect_exact_authorization_intake_schema.json",
+    "schema_sha3_384": "fdd7f030a022088231b9df31b457e79d2fae1da6b7bcfa6a1ed79ed00e551f718b2462cc5365322f1f3d456721b8c6b8",
+    "report_path": "reports/verifiable-constitution/vc-068-protocol-architecture-live-effect-exact-authorization-intake-report.json",
+    "report_file_sha3_384": "44d2934cb28133852c9b5ef91ff1144e7bc0a3a3310a5b82eccda63c94037a8a1235302a9cd1adb2301f1efbd61fce21",
+    "report_canonical_hash": "ef44c68c6fabd32e6f3e333d1b36ead074264a42d7fde128fe33fd3e4e4b95977eb31586f3eca6908fee472c72c9012b",
+    "report_verified": true,
+    "report_classification": "exact_authorization_intake_defined_no_authorization",
+    "exact_authorization_intake_root": "5eb1fecedee66186f5ced7d2e1bca9a5c1a8a789fb3a93967047e3fe38b604005e7ad4dbcad33bcff2688ae3ff68614f",
+    "report_exact_authorization_intake_root": "5eb1fecedee66186f5ced7d2e1bca9a5c1a8a789fb3a93967047e3fe38b604005e7ad4dbcad33bcff2688ae3ff68614f"
+  },
+  "source_execution_receipt_gate_ref": {
+    "execution_receipt_gate_id": "vc-protocol-architecture-001-live-effect-execution-receipt-gate-001",
+    "execution_receipt_gate_root": "47c1bbe3b166cea1ff3fbceaf23fcb82f56c2e671501b704cb04a2801ebbdb516bd6d29750e03ad25e5daa51e41e3abb",
+    "report_verified": true,
+    "report_classification": "execution_receipt_gate_defined_no_execution"
+  },
+  "source_live_action_packet_ref": {
+    "live_action_packet_id": "vc-protocol-architecture-001-live-effect-live-action-001",
+    "live_action_packet_root": "e05c3f1049b4dc7fb9a7f256e05059c0b8ec99af9768affb23611b030d100304e0c32f9e8dc466380ca2a2dd35a567e2",
+    "report_verified": true,
+    "report_classification": "explicit_live_action_packet_bound_no_execution"
+  },
+  "root_bindings": {
+    "preflight_output_receipt_gate_id": "vc-protocol-architecture-001-live-effect-preflight-output-receipt-gate-001",
+    "preflight_output_receipt_id_required": "vc-protocol-architecture-001-live-effect-preflight-output-receipt-001",
+    "exact_authorization_intake_root": "5eb1fecedee66186f5ced7d2e1bca9a5c1a8a789fb3a93967047e3fe38b604005e7ad4dbcad33bcff2688ae3ff68614f",
+    "exact_authorization_intake_id": "vc-protocol-architecture-001-live-effect-exact-authorization-intake-001",
+    "required_authorization_text_sha3_384": "48a061be1fe1adaa4e72cf7a7c940f70bd3066374bec99fb6c42abaf2fcfb31993540b550724b21a00177dbec93b67fd",
+    "execution_receipt_gate_root": "47c1bbe3b166cea1ff3fbceaf23fcb82f56c2e671501b704cb04a2801ebbdb516bd6d29750e03ad25e5daa51e41e3abb",
+    "execution_receipt_gate_id": "vc-protocol-architecture-001-live-effect-execution-receipt-gate-001",
+    "execution_receipt_id_required": "vc-protocol-architecture-001-live-effect-execution-receipt-001",
+    "live_action_packet_root": "e05c3f1049b4dc7fb9a7f256e05059c0b8ec99af9768affb23611b030d100304e0c32f9e8dc466380ca2a2dd35a567e2",
+    "live_action_packet_id": "vc-protocol-architecture-001-live-effect-live-action-001",
+    "candidate_live_command_hash": "840f9cb61720522baacc4cc2152d2ed5aca5e1ead9045acbd60907ded709babb6109cc5c6d3f8ee94584c2a81523b810",
+    "rollback_command_hash": "d5ecd60166e57d39cfd5a24e408b9645b887c7347958b1d0023f58cec39628fd4482e5332a806a754a6efb9aa51d3de3",
+    "preflight_command_root": "233e8dc9e5468119b39170a328bc4c883d3518e45f1119847b4a055d57170fbab5d552385ac71366baf3653ce256428a",
+    "selected_live_action": "protocol_architecture_release_or_cobalt_effect",
+    "selected_option": "preserve-rust-l1"
+  },
+  "preflight_output_receipt_contract": {
+    "preflight_output_receipt_id_required": "vc-protocol-architecture-001-live-effect-preflight-output-receipt-001",
+    "exact_authorization_hash_required": true,
+    "exact_authorization_intake_root_required": true,
+    "execution_receipt_gate_root_required": true,
+    "live_action_packet_root_required": true,
+    "command_stdout_hashes_required": true,
+    "command_stderr_hashes_required": true,
+    "command_exit_codes_required": true,
+    "preflight_output_root_required": true,
+    "post_authorization_preflight_required": true,
+    "receipt_not_issued_in_this_packet": true,
+    "live_effect": false
+  },
+  "preflight_command_output_requirements": [
+    {
+      "command_id": "verify-live-action-packet",
+      "command_hash": "1dfa00b940faee8df55fad2f6c8444f822cda7e58407c0af7e335bd0ce471dd335844ff5c5aaaf41a232235e699e06dc",
+      "stdout_sha3_384_required": true,
+      "stderr_sha3_384_required": true,
+      "exit_code_required": true,
+      "current_stdout_sha3_384": null,
+      "current_stderr_sha3_384": null,
+      "current_exit_code": null,
+      "executed_in_this_packet": false,
+      "live_effect": false
+    },
+    {
+      "command_id": "verify-final-gate",
+      "command_hash": "3737d84ce8bf48c7b8c44b77f31de31e4b7c04f26d92be2caab8f1a320b439107f0badbd8607341dab5f00ac1e173b04",
+      "stdout_sha3_384_required": true,
+      "stderr_sha3_384_required": true,
+      "exit_code_required": true,
+      "current_stdout_sha3_384": null,
+      "current_stderr_sha3_384": null,
+      "current_exit_code": null,
+      "executed_in_this_packet": false,
+      "live_effect": false
+    },
+    {
+      "command_id": "verify-guarded-execution",
+      "command_hash": "0109341e3b97f9818233f925a00aa713f35aba841f03d454d91690a3c010ef9b6a96929645aa7559c0776a8c3f5e0c1f",
+      "stdout_sha3_384_required": true,
+      "stderr_sha3_384_required": true,
+      "exit_code_required": true,
+      "current_stdout_sha3_384": null,
+      "current_stderr_sha3_384": null,
+      "current_exit_code": null,
+      "executed_in_this_packet": false,
+      "live_effect": false
+    },
+    {
+      "command_id": "rerun-gate-9_5",
+      "command_hash": "294b16586afe08a95e73c163a9626e15080c3f22ce055a2a3922587a1f2d7989129f3fe4d68b2742120c483c0d6c60eb",
+      "stdout_sha3_384_required": true,
+      "stderr_sha3_384_required": true,
+      "exit_code_required": true,
+      "current_stdout_sha3_384": null,
+      "current_stderr_sha3_384": null,
+      "current_exit_code": null,
+      "executed_in_this_packet": false,
+      "live_effect": false
+    },
+    {
+      "command_id": "validate-fixtures",
+      "command_hash": "dc7c3925f5aaa9b437893c1a33175d40be7f419fe66d7246f1e1ed08351aff0e5b1f9daa61ce2826870602a0b9444c04",
+      "stdout_sha3_384_required": true,
+      "stderr_sha3_384_required": true,
+      "exit_code_required": true,
+      "current_stdout_sha3_384": null,
+      "current_stderr_sha3_384": null,
+      "current_exit_code": null,
+      "executed_in_this_packet": false,
+      "live_effect": false
+    },
+    {
+      "command_id": "build-docs",
+      "command_hash": "5884d5467b8ee207e77094a483c5cf29d8622c8b9eb4001022c0145939d23bda1d68aa228218ec769f6a974744eee78a",
+      "stdout_sha3_384_required": true,
+      "stderr_sha3_384_required": true,
+      "exit_code_required": true,
+      "current_stdout_sha3_384": null,
+      "current_stderr_sha3_384": null,
+      "current_exit_code": null,
+      "executed_in_this_packet": false,
+      "live_effect": false
+    }
+  ],
+  "current_preflight_state": {
+    "exact_authorization_hash_observed": null,
+    "preflight_executed": false,
+    "preflight_output_receipt_present": false,
+    "preflight_output_receipt_hash": null,
+    "preflight_output_root": null,
+    "command_output_receipts_present": false,
+    "observed_live_effect": false,
+    "live_effect": false
+  },
+  "stale_output_rejection_policy": {
+    "preflight_must_run_after_exact_authorization": true,
+    "authorization_hash_must_match_root_binding": true,
+    "preflight_command_root_must_match_root_binding": true,
+    "stale_authorization_rejected": true,
+    "stale_preflight_output_rejected": true,
+    "missing_stdout_hash_rejected": true,
+    "missing_stderr_hash_rejected": true,
+    "missing_exit_code_rejected": true,
+    "unexpected_live_effect_failure_action": "hold_preflight_output_receipt_and_require_challenge_or_rollback",
+    "live_effect": false
+  },
+  "verification_commands": [
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-preflight-output-receipt-gate --verify-report",
+      "purpose": "Verify the VC-069 preflight output receipt gate.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-exact-authorization-intake --verify-report",
+      "purpose": "Verify the VC-068 exact authorization intake remains current.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-execution-receipt-gate --verify-report",
+      "purpose": "Verify the VC-067 execution receipt gate remains current.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-live-action-packet --verify-report",
+      "purpose": "Verify the VC-066 live-action packet remains current.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-final-execution-gate --verify-report",
+      "purpose": "Verify the VC-065 final execution gate remains current.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-guarded-execution --verify-report",
+      "purpose": "Verify the VC-064 guarded execution remains current.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/gov-inference-gate-9_5",
+      "purpose": "Regenerate the local guarded-apply and rollback drill report.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/validator-evidence-fixtures-validate",
+      "purpose": "Keep the validator-evidence fixture suite passing.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/docs-site-build",
+      "purpose": "Build the docs site after adding the preflight output receipt gate.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    }
+  ],
+  "authority_boundary": {
+    "provider_spend_authorized": false,
+    "live_model_request_authorized": false,
+    "model_output_generated_in_this_packet": false,
+    "preflight_output_receipt_gate_recorded": true,
+    "exact_authorization_accepted_in_this_packet": false,
+    "preflight_executed_in_this_packet": false,
+    "preflight_output_receipt_issued_in_this_packet": false,
+    "live_action_executed_in_this_packet": false,
+    "execution_receipt_issued_in_this_packet": false,
+    "code_rewrite_authorized": false,
+    "rippled_code_import_authorized": false,
+    "consensus_rewrite_authorized": false,
+    "xrpl_compatibility_activation_authorized": false,
+    "protocol_migration_authorized": false,
+    "live_validator_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "mainnet_mutation_authorized": false,
+    "authority_transfer_authorized": false
+  },
+  "checks": {
+    "schema_valid": true,
+    "source_exact_authorization_intake_verified": true,
+    "source_execution_receipt_gate_verified": true,
+    "source_live_action_packet_verified": true,
+    "root_bindings_verified": true,
+    "preflight_output_receipt_contract_verified": true,
+    "preflight_command_output_requirements_verified": true,
+    "current_preflight_state_verified": true,
+    "stale_output_rejection_policy_verified": true,
+    "verification_command_coverage_verified": true,
+    "closed_authority_boundary_verified": true,
+    "no_hidden_evidence": true,
+    "no_secret_dependency": true,
+    "no_preflight_execution": true,
+    "no_preflight_output_receipt_issued": true,
+    "no_live_action_execution": true,
+    "no_live_cobalt_amendment_submission": true,
+    "no_compatibility_activation": true,
+    "no_mainnet_mutation": true,
+    "authority_transfer": false,
+    "preflight_output_receipt_gate_root_verified": true
+  },
+  "preflight_output_receipt_gate_root": "6e48dfb53255db056c0536fee9d399efc38c2026ca7601804822bbd527f8597fb93ca72b82e511ed5dede01eedae4a20"
+}

@@ -1,0 +1,17 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_attestation_lifecycle/valid_attestation_lifecycle.json",
+  "expected_error_contains": [
+    "lifecycle_policy.policy_governed must be true"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "lifecycle_policy",
+        "policy_governed"
+      ],
+      "value": false
+    }
+  ],
+  "schema": "postfiat-validator-economic-attestation-lifecycle-invalid-case-v1"
+}

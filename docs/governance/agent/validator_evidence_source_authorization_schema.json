@@ -1,0 +1,312 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-validator-evidence-source-authorization-v1.json",
+  "title": "PostFiat Validator Evidence Source Authorization",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "authorization_id",
+    "mode",
+    "collector_manifest_hash",
+    "packet_schema_hash",
+    "field_registry_hash",
+    "collection_window",
+    "sources_order",
+    "sources",
+    "summary",
+    "redaction",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-evidence-source-authorization-v1"
+    },
+    "authorization_id": {
+      "$ref": "#/$defs/id"
+    },
+    "mode": {
+      "const": "design_fixture_only"
+    },
+    "collector_manifest_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "packet_schema_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "field_registry_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "collection_window": {
+      "$ref": "#/$defs/collection_window"
+    },
+    "sources_order": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/id"
+      }
+    },
+    "sources": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9._:-]{2,127}$": {
+          "$ref": "#/$defs/source"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_count",
+        "required_source_count",
+        "emitted_field_count"
+      ],
+      "properties": {
+        "source_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "required_source_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "emitted_field_count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_values_retained",
+        "private_fields_removed",
+        "secret_scan_required",
+        "operator_approved_summaries_only"
+      ],
+      "properties": {
+        "raw_values_retained": {
+          "const": false
+        },
+        "private_fields_removed": {
+          "const": true
+        },
+        "secret_scan_required": {
+          "const": true
+        },
+        "operator_approved_summaries_only": {
+          "const": true
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "collector_manifest_bound",
+        "packet_schema_hash_bound",
+        "field_registry_hash_bound",
+        "source_kinds_match_manifest",
+        "source_roots_match_manifest",
+        "field_paths_registered",
+        "operator_consent_recorded",
+        "live_fetch_authorized",
+        "raw_values_retained",
+        "qwen_live_browsing_allowed",
+        "live_registry_mutation",
+        "authority_transfer"
+      ],
+      "properties": {
+        "collector_manifest_bound": {
+          "const": true
+        },
+        "packet_schema_hash_bound": {
+          "const": true
+        },
+        "field_registry_hash_bound": {
+          "const": true
+        },
+        "source_kinds_match_manifest": {
+          "const": true
+        },
+        "source_roots_match_manifest": {
+          "const": true
+        },
+        "field_paths_registered": {
+          "const": true
+        },
+        "operator_consent_recorded": {
+          "const": true
+        },
+        "live_fetch_authorized": {
+          "const": false
+        },
+        "raw_values_retained": {
+          "const": false
+        },
+        "qwen_live_browsing_allowed": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "collection_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_height",
+        "to_height",
+        "from_time",
+        "to_time"
+      ],
+      "properties": {
+        "from_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "from_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to_time": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "freshness": {
+      "enum": [
+        "same_packet",
+        "recent_24h",
+        "recent_7d",
+        "recent_30d",
+        "epoch_bound",
+        "historical"
+      ],
+      "type": "string"
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    },
+    "provenance": {
+      "enum": [
+        "chain_derived",
+        "registry_derived",
+        "operator_signed",
+        "collector_observed",
+        "network_observed",
+        "self_asserted",
+        "third_party_attested"
+      ],
+      "type": "string"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "kind",
+        "source_root",
+        "provenance",
+        "freshness",
+        "required",
+        "operator_consent",
+        "visibility",
+        "live_fetch_authorized",
+        "raw_values_retained",
+        "emitted_field_paths"
+      ],
+      "properties": {
+        "source_id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "registry_snapshot",
+            "operator_manifest_set",
+            "url_domain_observation",
+            "network_performance_observation",
+            "chain_performance_history",
+            "cobalt_governance_history",
+            "governance_lifecycle_history",
+            "topology_claims",
+            "evidence_quality_summary"
+          ],
+          "type": "string"
+        },
+        "source_root": {
+          "$ref": "#/$defs/hash96"
+        },
+        "provenance": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/provenance"
+          }
+        },
+        "freshness": {
+          "$ref": "#/$defs/freshness"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "operator_consent": {
+          "enum": [
+            "not_required_chain_or_public",
+            "operator_manifest_signed",
+            "operator_opt_in_required"
+          ],
+          "type": "string"
+        },
+        "visibility": {
+          "enum": [
+            "public_chain",
+            "collector_observed_public_summary",
+            "operator_approved_public_summary",
+            "redacted_summary_only"
+          ],
+          "type": "string"
+        },
+        "live_fetch_authorized": {
+          "const": false
+        },
+        "raw_values_retained": {
+          "const": false
+        },
+        "emitted_field_paths": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        }
+      }
+    }
+  }
+}

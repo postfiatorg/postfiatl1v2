@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_risk_constant_policy/valid_risk_constant_policy.json",
+  "expected_error_contains": [
+    "statement.risk_root_hash does not match risk material"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "risk_root_hash"
+      ],
+      "value": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "schema": "postfiat-validator-economic-risk-constant-policy-invalid-case-v1"
+}

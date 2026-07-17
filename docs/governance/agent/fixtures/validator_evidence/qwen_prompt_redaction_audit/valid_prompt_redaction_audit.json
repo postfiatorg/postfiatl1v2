@@ -1,0 +1,87 @@
+{
+  "schema": "postfiat-validator-evidence-qwen-prompt-redaction-audit-v1",
+  "audit_id": "validator-evidence-qwen-prompt-redaction-audit-2026-05-23-example",
+  "mode": "design_fixture_only",
+  "qwen_prompt_input_manifest_hash": "3fbef662f11c1eb0a5ebe6fb1e179f1442595a432c8be2dcc0e330c064835ad0e6a7a6506bc38773127a71a2fac30310",
+  "qwen_public_summary_projection_hash": "0655f52f349f25be91688730073dec47737647efe9a4c07c020dd347ae8fa450476c1a4fe1d20efa440dbeaabe64f347",
+  "model_request_hash": "16e0536cdaf31cac4400dbbe0d8cda5a8c5b06cfdf59c1a399277658ca50af1f1d586898703148491b8e4e2a040d1a5b",
+  "packet_schema_hash": "92544968ea283754c5cd3cfba85194afff80f9366f07063b5cd228ea58a6f9efbeb74ad416f9f118595f8c6719d4f0c3",
+  "field_registry_hash": "a4d0ad75fcf706432e2d44bfd75486139a69116249ffb47bbc786fcb67ab939b25f99834d5cb5aa7bb93cfed8901200f",
+  "collection_window": {
+    "from_height": 1000,
+    "to_height": 2000,
+    "from_time": "2026-05-23T00:00:00Z",
+    "to_time": "2026-05-23T06:00:00Z"
+  },
+  "scanned_artifacts_order": [
+    "qwen_prompt_input_manifest",
+    "qwen_public_summary_projection",
+    "dry_run_model_request"
+  ],
+  "scanned_artifacts": {
+    "qwen_prompt_input_manifest": {
+      "artifact_id": "qwen_prompt_input_manifest",
+      "artifact_kind": "qwen_prompt_input_manifest",
+      "path": "docs/governance/agent/fixtures/validator_evidence/qwen_prompt_input_manifest/valid_prompt_input_manifest.json",
+      "canonical_sha384": "3fbef662f11c1eb0a5ebe6fb1e179f1442595a432c8be2dcc0e330c064835ad0e6a7a6506bc38773127a71a2fac30310",
+      "public_artifact_safe": true,
+      "forbidden_key_hits": [],
+      "sensitive_value_hits": []
+    },
+    "qwen_public_summary_projection": {
+      "artifact_id": "qwen_public_summary_projection",
+      "artifact_kind": "qwen_public_summary_projection",
+      "path": "docs/governance/agent/fixtures/validator_evidence/qwen_public_summary_projection/valid_qwen_projection.json",
+      "canonical_sha384": "0655f52f349f25be91688730073dec47737647efe9a4c07c020dd347ae8fa450476c1a4fe1d20efa440dbeaabe64f347",
+      "public_artifact_safe": true,
+      "forbidden_key_hits": [],
+      "sensitive_value_hits": []
+    },
+    "dry_run_model_request": {
+      "artifact_id": "dry_run_model_request",
+      "artifact_kind": "dry_run_model_request",
+      "path": "docs/governance/agent/fixtures/dry_run_model_request.json",
+      "canonical_sha384": "16e0536cdaf31cac4400dbbe0d8cda5a8c5b06cfdf59c1a399277658ca50af1f1d586898703148491b8e4e2a040d1a5b",
+      "public_artifact_safe": true,
+      "forbidden_key_hits": [],
+      "sensitive_value_hits": []
+    }
+  },
+  "redaction_summary": {
+    "scanned_artifact_count": 3,
+    "forbidden_key_hit_count": 0,
+    "sensitive_value_hit_count": 0,
+    "raw_values_retained": false,
+    "private_fields_removed": true,
+    "secret_scan_passed": true,
+    "public_artifact_safe": true
+  },
+  "execution_boundary": {
+    "provider_spend_executed": false,
+    "live_model_request_executed": false,
+    "model_output_generated": false,
+    "live_network_access": false,
+    "live_registry_mutation": false,
+    "authority_transfer": false
+  },
+  "checks": {
+    "qwen_prompt_input_manifest_hash_bound": true,
+    "qwen_public_summary_projection_hash_bound": true,
+    "model_request_hash_bound": true,
+    "packet_schema_hash_bound": true,
+    "field_registry_hash_bound": true,
+    "collection_window_bound": true,
+    "scanned_artifacts_bound": true,
+    "artifact_paths_repo_relative": true,
+    "secret_scan_passed": true,
+    "raw_values_retained": false,
+    "forbidden_key_hits": false,
+    "sensitive_value_hits": false,
+    "provider_spend_executed": false,
+    "live_model_request_executed": false,
+    "model_output_generated": false,
+    "live_network_access": false,
+    "live_registry_mutation": false,
+    "authority_transfer": false
+  }
+}

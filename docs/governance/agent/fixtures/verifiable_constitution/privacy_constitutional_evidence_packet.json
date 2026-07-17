@@ -1,0 +1,297 @@
+{
+  "schema": "postfiat-constitutional-evidence-packet-v1",
+  "packet_id": "vc-privacy-architecture-001-evidence-001",
+  "packet_version": 1,
+  "status": "approved",
+  "packet_scope": "privacy",
+  "created_at": "2026-05-25T00:00:00Z",
+  "request_ref": {
+    "request_id": "vc-privacy-architecture-001-request-001",
+    "request_path": "docs/governance/agent/fixtures/verifiable_constitution/privacy_constitutional_evidence_request.json",
+    "request_file_sha3_384": "1cc9092989711008b8a67f72d7cd6cd1648224e01807927474c5a38655796f1e07babdaaa75eb40799d7ab35a832dbd9",
+    "request_canonical_hash": "3c282812f8e7cebcad98981ea1fa46fa796096792307b828ed749328ae2be084529591b5ae363f1aef54df850df389f0",
+    "request_schema_path": "docs/governance/agent/constitutional_evidence_request_schema.json",
+    "request_schema_sha3_384": "f278cce70a5c668424bac14d94719c0371b994fef98dbbd53f01b3f15e557ba8823aa363f7b407079f776c4cdf9d39d3"
+  },
+  "collection_manifest": {
+    "collector_id": "vc-non-validator-repo-snapshot-collector",
+    "collection_mode": "repo_snapshot_only",
+    "collected_at": "2026-05-25T00:00:00Z",
+    "source_commit": "f8eae038918507b94e570f9472f61a4a21088d6b",
+    "live_collection_executed": false,
+    "network_reads": false,
+    "provider_spend": false,
+    "secret_material_seen": false,
+    "live_mutation_executed": false
+  },
+  "evidence_root": "b79321ac0df5cebd3fef5828e6994e1699dac86886e52f247e452a3cb92916c83a044fb9c897516ef019c41edc80634e",
+  "evidence_items": [
+    {
+      "field_path": "privacy.status_quo_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "e17e90a069c61eb65861ab6f37ae20ae270e8cea9d2b2484a04d967b692cafc4bbc11d9f673b476f39941274dde1621e",
+      "source_refs": [
+        {
+          "ref_id": "constitutional-question-schema",
+          "path": "docs/governance/agent/constitutional_question_schema.json",
+          "sha3_384": "47c2b2f27bdc745615f4d0d893333c12825b8b935358efbf4f53bdb9ad7b72e03d46d5264812d2cd9066d3c11813bd7f",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "initial-context-packet",
+          "path": "docs/governance/agent/fixtures/verifiable_constitution/initial_context_packet.json",
+          "sha3_384": "b370232a7544900f82c21268d1a08dea911835f670a52d2c5a229ab4ac8c878e66cd858cb23ac06c36d425a9ddf50e3a",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "privacy-overview",
+          "path": "docs_site/privacy/overview.md",
+          "sha3_384": "7d46bce393b544d16bd149512fd9bc5adc797cf1fc13a0ee00f6fbdc50f93514783b15267ec3d00b3dee6c19a2d733b9",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "privacy-orchard-halo2",
+          "path": "docs_site/privacy/orchard-halo2.md",
+          "sha3_384": "1dca6715b03d77c10d6d63272a4bdb91e64fb2de744a3eb735ebd566c900311fed3748015045a3aeabc63ac6ab206a3a",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "privacy-disclosure",
+          "path": "docs_site/privacy/disclosure.md",
+          "sha3_384": "3f14282b1964ca75caa1c9c4d1f81815a76e45f3252d433134329934c452546be06ad2a6d03246733dec2d0bd2ad94e7",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "privacy-rpc-resource-policy",
+          "path": "docs_site/privacy/rpc-and-resource-policy.md",
+          "sha3_384": "0f858dd6babae2ecb6064e81ef7c5e3a51295f76addc6f8c59f4ff1464e82e658274cf0da725d8075122eeb314fb73b9",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "security-threat-model",
+          "path": "docs_site/security/threat-model.md",
+          "sha3_384": "2f12329630e51f7d4099d4288183aae17a24e24a640bc1d0f74a25a0b08e0c8b801c48e66b45fd58dad65de456b7bb50",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "redaction_status": "public",
+      "collector_note": "privacy evidence field collected from existing repo-bound constitutional question references."
+    },
+    {
+      "field_path": "privacy.implementation_refs_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "ef5a005e84c38f9eef3e81a28a8b93a38c6c065f215a3b0bce1b1fcba29062afadd59c0a35533930711a460ecc9bc6be",
+      "source_refs": [
+        {
+          "ref_id": "constitutional-question-schema",
+          "path": "docs/governance/agent/constitutional_question_schema.json",
+          "sha3_384": "47c2b2f27bdc745615f4d0d893333c12825b8b935358efbf4f53bdb9ad7b72e03d46d5264812d2cd9066d3c11813bd7f",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "initial-context-packet",
+          "path": "docs/governance/agent/fixtures/verifiable_constitution/initial_context_packet.json",
+          "sha3_384": "b370232a7544900f82c21268d1a08dea911835f670a52d2c5a229ab4ac8c878e66cd858cb23ac06c36d425a9ddf50e3a",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "privacy-overview",
+          "path": "docs_site/privacy/overview.md",
+          "sha3_384": "7d46bce393b544d16bd149512fd9bc5adc797cf1fc13a0ee00f6fbdc50f93514783b15267ec3d00b3dee6c19a2d733b9",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "privacy-orchard-halo2",
+          "path": "docs_site/privacy/orchard-halo2.md",
+          "sha3_384": "1dca6715b03d77c10d6d63272a4bdb91e64fb2de744a3eb735ebd566c900311fed3748015045a3aeabc63ac6ab206a3a",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "privacy-disclosure",
+          "path": "docs_site/privacy/disclosure.md",
+          "sha3_384": "3f14282b1964ca75caa1c9c4d1f81815a76e45f3252d433134329934c452546be06ad2a6d03246733dec2d0bd2ad94e7",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "privacy-rpc-resource-policy",
+          "path": "docs_site/privacy/rpc-and-resource-policy.md",
+          "sha3_384": "0f858dd6babae2ecb6064e81ef7c5e3a51295f76addc6f8c59f4ff1464e82e658274cf0da725d8075122eeb314fb73b9",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "security-threat-model",
+          "path": "docs_site/security/threat-model.md",
+          "sha3_384": "2f12329630e51f7d4099d4288183aae17a24e24a640bc1d0f74a25a0b08e0c8b801c48e66b45fd58dad65de456b7bb50",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "redaction_status": "public",
+      "collector_note": "privacy evidence field collected from existing repo-bound constitutional question references."
+    },
+    {
+      "field_path": "privacy.evidence_refs_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "320e57cf465b5625f29671cb0d929f0927eef54e1cb76a257cf3c409afcbb677a8507c4b0df4fd46f710642e1daeedfe",
+      "source_refs": [
+        {
+          "ref_id": "constitutional-question-schema",
+          "path": "docs/governance/agent/constitutional_question_schema.json",
+          "sha3_384": "47c2b2f27bdc745615f4d0d893333c12825b8b935358efbf4f53bdb9ad7b72e03d46d5264812d2cd9066d3c11813bd7f",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "initial-context-packet",
+          "path": "docs/governance/agent/fixtures/verifiable_constitution/initial_context_packet.json",
+          "sha3_384": "b370232a7544900f82c21268d1a08dea911835f670a52d2c5a229ab4ac8c878e66cd858cb23ac06c36d425a9ddf50e3a",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "privacy-overview",
+          "path": "docs_site/privacy/overview.md",
+          "sha3_384": "7d46bce393b544d16bd149512fd9bc5adc797cf1fc13a0ee00f6fbdc50f93514783b15267ec3d00b3dee6c19a2d733b9",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "privacy-orchard-halo2",
+          "path": "docs_site/privacy/orchard-halo2.md",
+          "sha3_384": "1dca6715b03d77c10d6d63272a4bdb91e64fb2de744a3eb735ebd566c900311fed3748015045a3aeabc63ac6ab206a3a",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "privacy-disclosure",
+          "path": "docs_site/privacy/disclosure.md",
+          "sha3_384": "3f14282b1964ca75caa1c9c4d1f81815a76e45f3252d433134329934c452546be06ad2a6d03246733dec2d0bd2ad94e7",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "privacy-rpc-resource-policy",
+          "path": "docs_site/privacy/rpc-and-resource-policy.md",
+          "sha3_384": "0f858dd6babae2ecb6064e81ef7c5e3a51295f76addc6f8c59f4ff1464e82e658274cf0da725d8075122eeb314fb73b9",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "security-threat-model",
+          "path": "docs_site/security/threat-model.md",
+          "sha3_384": "2f12329630e51f7d4099d4288183aae17a24e24a640bc1d0f74a25a0b08e0c8b801c48e66b45fd58dad65de456b7bb50",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "redaction_status": "public",
+      "collector_note": "privacy evidence field collected from existing repo-bound constitutional question references."
+    },
+    {
+      "field_path": "privacy.closed_option_set_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "19b56846bb6c0b179fe3665522a7e76489483cec7f485467cd3bca86bdc2709b591afbaeeb2bfd769143c2633f318bfe",
+      "source_refs": [
+        {
+          "ref_id": "constitutional-question-schema",
+          "path": "docs/governance/agent/constitutional_question_schema.json",
+          "sha3_384": "47c2b2f27bdc745615f4d0d893333c12825b8b935358efbf4f53bdb9ad7b72e03d46d5264812d2cd9066d3c11813bd7f",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "initial-context-packet",
+          "path": "docs/governance/agent/fixtures/verifiable_constitution/initial_context_packet.json",
+          "sha3_384": "b370232a7544900f82c21268d1a08dea911835f670a52d2c5a229ab4ac8c878e66cd858cb23ac06c36d425a9ddf50e3a",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "privacy-overview",
+          "path": "docs_site/privacy/overview.md",
+          "sha3_384": "7d46bce393b544d16bd149512fd9bc5adc797cf1fc13a0ee00f6fbdc50f93514783b15267ec3d00b3dee6c19a2d733b9",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "privacy-orchard-halo2",
+          "path": "docs_site/privacy/orchard-halo2.md",
+          "sha3_384": "1dca6715b03d77c10d6d63272a4bdb91e64fb2de744a3eb735ebd566c900311fed3748015045a3aeabc63ac6ab206a3a",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "privacy-disclosure",
+          "path": "docs_site/privacy/disclosure.md",
+          "sha3_384": "3f14282b1964ca75caa1c9c4d1f81815a76e45f3252d433134329934c452546be06ad2a6d03246733dec2d0bd2ad94e7",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "privacy-rpc-resource-policy",
+          "path": "docs_site/privacy/rpc-and-resource-policy.md",
+          "sha3_384": "0f858dd6babae2ecb6064e81ef7c5e3a51295f76addc6f8c59f4ff1464e82e658274cf0da725d8075122eeb314fb73b9",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "security-threat-model",
+          "path": "docs_site/security/threat-model.md",
+          "sha3_384": "2f12329630e51f7d4099d4288183aae17a24e24a640bc1d0f74a25a0b08e0c8b801c48e66b45fd58dad65de456b7bb50",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "redaction_status": "public",
+      "collector_note": "privacy evidence field collected from existing repo-bound constitutional question references."
+    }
+  ],
+  "missing_evidence": [],
+  "redaction": {
+    "redaction_passed": true,
+    "secret_scan_passed": true,
+    "hidden_evidence_absent": true,
+    "prohibited_fields_absent": true,
+    "raw_secret_material_retained": false,
+    "public_packet_only": true
+  },
+  "checks": {
+    "schema_valid": true,
+    "request_hash_matches": true,
+    "requested_fields_bound": true,
+    "source_hashes_verified": true,
+    "missing_behaviors_applied": true,
+    "redaction_passed": true,
+    "secret_scan_passed": true,
+    "no_hidden_evidence": true,
+    "no_live_collection": true,
+    "no_live_mutation": true,
+    "packet_root_verified": true,
+    "authority_transfer": false
+  }
+}

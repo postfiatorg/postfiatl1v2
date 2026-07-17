@@ -1,0 +1,45 @@
+[package]
+name = "postfiat-node"
+version = "0.1.0"
+description = "PostFiat L1 validator node and command-line service"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "postfiat-node"
+path = "src/main.rs"
+
+[[bin]]
+name = "asset-orchard-local-service"
+path = "src/bin/asset_orchard_local_service.rs"
+
+[dependencies]
+base64 = { workspace = true }
+flate2 = { workspace = true }
+postfiat-bridge = { path = "../bridge" }
+postfiat-crypto-provider = { path = "../crypto_provider" }
+postfiat-consensus-cobalt = { path = "../consensus_cobalt" }
+postfiat-execution = { path = "../execution" }
+postfiat-mempool-dag = { path = "../mempool_dag" }
+postfiat-network = { path = "../network" }
+postfiat-ordering-fast = { path = "../ordering_fast" }
+postfiat-privacy = { path = "../privacy" }
+postfiat-privacy-orchard = { path = "../privacy_orchard" }
+postfiat-rpc-sdk = { path = "../rpc_sdk" }
+postfiat-storage = { path = "../storage" }
+postfiat-types = { path = "../types" }
+k256 = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+sha3 = { workspace = true }
+zeroize = { workspace = true }
+
+[dev-dependencies]
+orchard = { workspace = true }
+rand = "0.8.6"

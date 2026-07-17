@@ -1,0 +1,448 @@
+{
+  "$id": "https://postfiat.org/schemas/postfiat-protocol-architecture-full-vocab-sufficiency-gate-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PostFiat Protocol Architecture Full-Vocabulary Sufficiency Gate",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "postfiat-protocol-architecture-full-vocab-sufficiency-gate-v1",
+      "type": "string"
+    },
+    "gate_id": {
+      "$ref": "#/$defs/id"
+    },
+    "gate_version": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "candidate",
+        "accepted",
+        "rejected",
+        "superseded"
+      ],
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "source_disposition_ref": {
+      "$ref": "#/$defs/source_disposition_ref"
+    },
+    "live_replay_evidence": {
+      "$ref": "#/$defs/live_replay_evidence"
+    },
+    "gate_options": {
+      "$ref": "#/$defs/gate_options"
+    },
+    "selected_gate": {
+      "$ref": "#/$defs/selected_gate"
+    },
+    "required_next_execution": {
+      "$ref": "#/$defs/required_next_execution"
+    },
+    "authority_boundary": {
+      "$ref": "#/$defs/authority_boundary"
+    },
+    "checks": {
+      "$ref": "#/$defs/checks"
+    }
+  },
+  "required": [
+    "schema",
+    "gate_id",
+    "gate_version",
+    "status",
+    "created_at",
+    "source_disposition_ref",
+    "live_replay_evidence",
+    "gate_options",
+    "selected_gate",
+    "required_next_execution",
+    "authority_boundary",
+    "checks"
+  ],
+  "$defs": {
+    "authority_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider_spend_authorized": {
+          "const": false
+        },
+        "live_model_request_authorized": {
+          "const": false
+        },
+        "model_output_generated_in_this_packet": {
+          "const": false
+        },
+        "full_vocab_replay_executed_in_this_packet": {
+          "const": false
+        },
+        "rippled_code_import_authorized": {
+          "const": false
+        },
+        "consensus_rewrite_authorized": {
+          "const": false
+        },
+        "xrpl_compatibility_activation_authorized": {
+          "const": false
+        },
+        "protocol_migration_authorized": {
+          "const": false
+        },
+        "live_validator_registry_mutation_authorized": {
+          "const": false
+        },
+        "live_cobalt_amendment_submission_authorized": {
+          "const": false
+        },
+        "mainnet_mutation_authorized": {
+          "const": false
+        },
+        "authority_transfer_authorized": {
+          "const": false
+        },
+        "conformance_mapping_authorized": {
+          "const": false
+        },
+        "superseding_decision_authorized": {
+          "const": false
+        }
+      },
+      "required": [
+        "provider_spend_authorized",
+        "live_model_request_authorized",
+        "model_output_generated_in_this_packet",
+        "full_vocab_replay_executed_in_this_packet",
+        "rippled_code_import_authorized",
+        "consensus_rewrite_authorized",
+        "xrpl_compatibility_activation_authorized",
+        "protocol_migration_authorized",
+        "live_validator_registry_mutation_authorized",
+        "live_cobalt_amendment_submission_authorized",
+        "mainnet_mutation_authorized",
+        "authority_transfer_authorized",
+        "conformance_mapping_authorized",
+        "superseding_decision_authorized"
+      ]
+    },
+    "capture_item": {
+      "enum": [
+        "prompt_manifest_hash",
+        "generate_request_hash",
+        "raw_generate_response_hash",
+        "parsed_decision_hash",
+        "top_logprob_root",
+        "full_vocab_vector_root",
+        "full_vocab_vector_file_hash",
+        "hardware_class",
+        "provider_cleanup_proof"
+      ],
+      "type": "string"
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_disposition_verified": {
+          "const": true
+        },
+        "source_requested_full_vocab_or_sufficiency_gate": {
+          "const": true
+        },
+        "live_parsed_outputs_converged": {
+          "const": true
+        },
+        "live_top_logprob_roots_converged": {
+          "const": true
+        },
+        "full_distribution_missing": {
+          "const": true
+        },
+        "chat_sufficiency_rejected_for_supersede": {
+          "const": true
+        },
+        "full_vocab_replay_required_before_supersede": {
+          "const": true
+        },
+        "challenge_remains_hold": {
+          "const": true
+        },
+        "conformance_mapping_blocked": {
+          "const": true
+        },
+        "no_provider_spend_in_this_packet": {
+          "const": true
+        },
+        "no_live_mutation": {
+          "const": true
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      },
+      "required": [
+        "source_disposition_verified",
+        "source_requested_full_vocab_or_sufficiency_gate",
+        "live_parsed_outputs_converged",
+        "live_top_logprob_roots_converged",
+        "full_distribution_missing",
+        "chat_sufficiency_rejected_for_supersede",
+        "full_vocab_replay_required_before_supersede",
+        "challenge_remains_hold",
+        "conformance_mapping_blocked",
+        "no_provider_spend_in_this_packet",
+        "no_live_mutation",
+        "authority_transfer"
+      ]
+    },
+    "gate_option": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allowed_now": {
+          "type": "boolean"
+        },
+        "reason": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "allowed_now",
+        "reason"
+      ]
+    },
+    "gate_options": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "require_full_vocab_replay": {
+          "$ref": "#/$defs/gate_option"
+        },
+        "accept_chat_sufficiency_for_supersede": {
+          "$ref": "#/$defs/gate_option"
+        },
+        "hold_no_op": {
+          "$ref": "#/$defs/gate_option"
+        }
+      },
+      "required": [
+        "require_full_vocab_replay",
+        "accept_chat_sufficiency_for_supersede",
+        "hold_no_op"
+      ]
+    },
+    "id": {
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$",
+      "type": "string"
+    },
+    "live_replay_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "machine_count": {
+          "minimum": 2,
+          "type": "integer"
+        },
+        "hardware_classes": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 2,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "target_decision_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "target_reproduced": {
+          "const": false
+        },
+        "parsed_output_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "unique_parsed_output_hash_count": {
+          "const": 1
+        },
+        "top_logprob_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "unique_top_logprob_root_count": {
+          "const": 1
+        },
+        "full_vocab_root_present": {
+          "const": false
+        },
+        "full_vocab_root": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "machine_count",
+        "hardware_classes",
+        "target_decision_hash",
+        "target_reproduced",
+        "parsed_output_hash",
+        "unique_parsed_output_hash_count",
+        "top_logprob_root",
+        "unique_top_logprob_root_count",
+        "full_vocab_root_present",
+        "full_vocab_root"
+      ]
+    },
+    "required_next_execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "packet_id": {
+          "$ref": "#/$defs/id"
+        },
+        "packet_kind": {
+          "const": "protocol_architecture_full_vocab_live_replay_execution",
+          "type": "string"
+        },
+        "required_endpoint": {
+          "const": "/generate",
+          "type": "string"
+        },
+        "minimum_machine_count": {
+          "minimum": 2,
+          "type": "integer"
+        },
+        "required_runtime_profile": {
+          "const": "Qwen/Qwen3.6-27B-FP8 SGLang TP=1 deterministic /generate",
+          "type": "string"
+        },
+        "must_capture": {
+          "items": {
+            "$ref": "#/$defs/capture_item"
+          },
+          "minItems": 6,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "pass_conditions": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "fail_closed_conditions": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "packet_id",
+        "packet_kind",
+        "required_endpoint",
+        "minimum_machine_count",
+        "required_runtime_profile",
+        "must_capture",
+        "pass_conditions",
+        "fail_closed_conditions"
+      ]
+    },
+    "selected_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "selected": {
+          "const": "require_full_vocab_replay",
+          "type": "string"
+        },
+        "challenge_route": {
+          "const": "hold",
+          "type": "string"
+        },
+        "conformance_allowed_now": {
+          "const": false
+        },
+        "superseding_decision_allowed_now": {
+          "const": false
+        },
+        "live_effect": {
+          "const": false
+        },
+        "rationale": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "selected",
+        "challenge_route",
+        "conformance_allowed_now",
+        "superseding_decision_allowed_now",
+        "live_effect",
+        "rationale"
+      ]
+    },
+    "sha3_384": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "source_disposition_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "report_path": {
+          "const": "reports/verifiable-constitution/vc-049-protocol-architecture-replay-disposition-report.json",
+          "type": "string"
+        },
+        "report_file_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "report_canonical_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "report_schema": {
+          "const": "postfiat-verifiable-constitution-vc-049-report-v1",
+          "type": "string"
+        },
+        "classification": {
+          "const": "request_additional_replay_before_conformance",
+          "type": "string"
+        },
+        "challenge_route": {
+          "const": "hold",
+          "type": "string"
+        },
+        "conformance_allowed_now": {
+          "const": false
+        },
+        "full_distribution_available": {
+          "const": false
+        },
+        "unique_live_decision_hash_count": {
+          "const": 1
+        }
+      },
+      "required": [
+        "report_path",
+        "report_file_sha3_384",
+        "report_canonical_hash",
+        "report_schema",
+        "classification",
+        "challenge_route",
+        "conformance_allowed_now",
+        "full_distribution_available",
+        "unique_live_decision_hash_count"
+      ]
+    }
+  }
+}

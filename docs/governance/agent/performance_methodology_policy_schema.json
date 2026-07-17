@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "PostFiat performance-methodology policy packet. This schema captures the public shape; scripts/performance-methodology-policy-verify enforces artifact-bound semantics.",
+  "properties": {
+    "attestation": {
+      "additionalProperties": true,
+      "properties": {
+        "attested_at": {
+          "type": "string"
+        },
+        "attestor_key_hash": {
+          "pattern": "^[0-9a-f]{96}$",
+          "type": "string"
+        },
+        "signature_hash": {
+          "pattern": "^[0-9a-f]{96}$",
+          "type": "string"
+        },
+        "signature_scheme": {
+          "enum": [
+            "mldsa44-placeholder",
+            "mldsa65-placeholder"
+          ],
+          "type": "string"
+        },
+        "statement_hash": {
+          "pattern": "^[0-9a-f]{96}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "attested_at",
+        "attestor_key_hash",
+        "signature_hash",
+        "signature_scheme",
+        "statement_hash"
+      ],
+      "type": "object"
+    },
+    "checks": {
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "type": "object"
+    },
+    "mode": {
+      "const": "controlled_testnet_methodology"
+    },
+    "packet_id": {
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$",
+      "type": "string"
+    },
+    "schema": {
+      "const": "postfiat-performance-methodology-policy-v1"
+    },
+    "statement": {
+      "additionalProperties": true,
+      "properties": {
+        "cards": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "card_id": {
+                "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$",
+                "type": "string"
+              },
+              "claim_kind": {
+                "enum": [
+                  "measured_local_release_budget",
+                  "measured_local_loopback_latency",
+                  "measured_testnet_artifact_size",
+                  "derived_sizing_budget",
+                  "unsupported_stale_claim_rejected"
+                ],
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "supported",
+                  "derived_budget",
+                  "unsupported_rejected"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "card_id",
+              "claim_kind",
+              "status"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "methodology_root_hash": {
+          "pattern": "^[0-9a-f]{96}$",
+          "type": "string"
+        },
+        "methodology_rules": {
+          "type": "object"
+        },
+        "policy_id": {
+          "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$",
+          "type": "string"
+        },
+        "scope": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "cards",
+        "methodology_root_hash",
+        "methodology_rules",
+        "policy_id",
+        "scope"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "attestation",
+    "checks",
+    "mode",
+    "packet_id",
+    "schema",
+    "statement"
+  ],
+  "title": "PostFiat Performance Methodology Policy v1",
+  "type": "object"
+}

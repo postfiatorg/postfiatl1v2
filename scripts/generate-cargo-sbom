@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+"""Generate a deterministic CycloneDX 1.5 SBOM from locked Cargo metadata."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import pathlib
+import subprocess
+import sys
+import tomllib
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+def main() -> int:
+    if len(sys.argv) != 2:
+        print(f"usage: {sys.argv[0]} OUTPUT.json", file=sys.stderr)
+        return 2
+    output = pathlib.Path(sys.argv[1])
+    metadata = json.loads(
+        subprocess.check_output(
+            ["cargo", "metadata", "--locked", "--format-version", "1"],
+            cwd=ROOT,
+            text=True,
+        )
+    )
+    lock_bytes = (ROOT / "Cargo.lock").read_bytes()
+    lock = tomllib.loads(lock_bytes.decode())
+    checksums = {
+        (entry["name"], entry["version"]): entry.get("checksum")
+        for entry in lock["package"]
+    }
+
+    packages = {package["id"]: package for package in metadata["packages"]}
+    stable_refs = {}
+    for package_id, package in packages.items():
+        if package.get("source") is None:
+            manifest = pathlib.Path(package["manifest_path"]).resolve()
+            try:
+                package_path = manifest.parent.relative_to(ROOT.resolve()).as_posix()
+            except ValueError as error:
+                raise RuntimeError(
+                    f"local package manifest is outside the repository: {manifest}"
+                ) from error
+            stable_refs[package_id] = (
+                f"path:./{package_path}#{package['name']}@{package['version']}"
+            )
+        else:
+            stable_refs[package_id] = package_id
+    components = []
+    for package in sorted(packages.values(), key=lambda item: (item["name"], item["version"], item["id"])):
+        name = package["name"]
+        version = package["version"]
+        source = package.get("source")
+        if source and source.startswith("registry+"):
+            purl = f"pkg:cargo/{name}@{version}"
+        else:
+            purl = f"pkg:cargo/{name}@{version}?repository_url=https://github.com/postfiatorg/postfiatl1v2"
+        component = {
+            "type": "library",
+            "bom-ref": stable_refs[package["id"]],
+            "name": name,
+            "version": version,
+            "purl": purl,
+        }
+        if package.get("license"):
+            component["licenses"] = [{"expression": package["license"]}]
+        if source:
+            component["externalReferences"] = [{"type": "distribution", "url": source}]
+        checksum = checksums.get((name, version))
+        if checksum:
+            component["hashes"] = [{"alg": "SHA-256", "content": checksum}]
+        components.append(component)
+
+    resolve_nodes = {node["id"]: node for node in metadata["resolve"]["nodes"]}
+    dependencies = []
+    for package_id in sorted(packages):
+        node = resolve_nodes.get(package_id)
+        depends_on = (
+            sorted({stable_refs[dependency["pkg"]] for dependency in node.get("deps", [])})
+            if node
+            else []
+        )
+        dependencies.append({"ref": stable_refs[package_id], "dependsOn": depends_on})
+
+    lock_hash = hashlib.sha256(lock_bytes).hexdigest()
+    bom = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "serialNumber": f"urn:uuid:{lock_hash[:8]}-{lock_hash[8:12]}-{lock_hash[12:16]}-{lock_hash[16:20]}-{lock_hash[20:32]}",
+        "version": 1,
+        "metadata": {
+            "component": {
+                "type": "application",
+                "bom-ref": "pkg:github/postfiatorg/postfiatl1v2",
+                "name": "postfiatl1v2",
+                "version": lock_hash[:16],
+            },
+            "properties": [
+                {"name": "postfiat:cargo-lock-sha256", "value": lock_hash},
+                {"name": "postfiat:generator", "value": "scripts/generate-cargo-sbom-v2"},
+            ],
+        },
+        "components": components,
+        "dependencies": dependencies,
+    }
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(bom, indent=2, sort_keys=True) + "\n")
+    print(f"wrote {output} ({len(components)} components, Cargo.lock {lock_hash})")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

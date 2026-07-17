@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-privacy-correlation-bound-v1.json",
+  "title": "PostFiat Privacy Correlation Bound",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "packet_id",
+    "mode",
+    "statement",
+    "attestation",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-privacy-correlation-bound-v1"
+    },
+    "packet_id": {
+      "$ref": "#/$defs/id"
+    },
+    "mode": {
+      "const": "controlled_testnet_fixture"
+    },
+    "statement": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "policy_id",
+        "correlation_root_hash",
+        "scope",
+        "correlation_model",
+        "correlation_policy",
+        "baseline_observation",
+        "selector_cases",
+        "evidence_artifacts"
+      ]
+    },
+    "attestation": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "attestor_key_hash",
+        "statement_hash",
+        "signature_hash",
+        "signature_scheme",
+        "attested_at"
+      ]
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    }
+  }
+}

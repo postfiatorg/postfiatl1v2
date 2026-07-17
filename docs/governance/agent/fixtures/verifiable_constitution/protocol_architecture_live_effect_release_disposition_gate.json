@@ -1,0 +1,221 @@
+{
+  "schema": "postfiat-protocol-architecture-live-effect-release-disposition-gate-v1",
+  "release_disposition_id": "vc-protocol-architecture-001-live-effect-release-disposition-001",
+  "release_disposition_version": 1,
+  "status": "release_disposition_gate_defined_no_disposition",
+  "gate_scope": "protocol_architecture",
+  "created_at": "2026-05-25T00:00:00Z",
+  "source_post_action_execution_receipt_gate_ref": {
+    "source_id": "vc-protocol-architecture-001-live-effect-post-action-execution-receipt-gate-001",
+    "fixture_root": "099101554a170bb263406edf05a1c41c241b3b221b3d325b6679cfda80b648af52825d285b9c197c609aedc982454170",
+    "report_root": "099101554a170bb263406edf05a1c41c241b3b221b3d325b6679cfda80b648af52825d285b9c197c609aedc982454170",
+    "report_verified": true,
+    "report_classification": "post_action_execution_receipt_gate_defined_no_receipt"
+  },
+  "root_bindings": {
+    "release_disposition_id": "vc-protocol-architecture-001-live-effect-release-disposition-001",
+    "post_action_execution_receipt_gate_root": "099101554a170bb263406edf05a1c41c241b3b221b3d325b6679cfda80b648af52825d285b9c197c609aedc982454170",
+    "post_action_execution_receipt_gate_id": "vc-protocol-architecture-001-live-effect-post-action-execution-receipt-gate-001",
+    "post_action_execution_receipt_id_required": "vc-protocol-architecture-001-live-effect-post-action-execution-receipt-001",
+    "live_action_execution_packet_gate_root": "c548e7e73ccf3702c631b2125b4bf5ba477c2cb44fba2a64bffb400eb50bf691cdc7641649976312b227cf231cda8455",
+    "exact_authorization_hash": "48a061be1fe1adaa4e72cf7a7c940f70bd3066374bec99fb6c42abaf2fcfb31993540b550724b21a00177dbec93b67fd",
+    "accepted_preflight_output_receipt_hash_required": true,
+    "executed_command_hash": "840f9cb61720522baacc4cc2152d2ed5aca5e1ead9045acbd60907ded709babb6109cc5c6d3f8ee94584c2a81523b810",
+    "execution_stdout_hash_required": true,
+    "execution_stderr_hash_required": true,
+    "execution_exit_code_required": true,
+    "observed_post_action_registry_or_release_root_required": true,
+    "expected_post_action_registry_or_release_root": "2a30649283caeb4e444fc6ead3f942190d5a130c2f7e71afb2c8de911b2f16b50b2b36757b31b29efc3fd67a463c0c10",
+    "rollback_command_hash": "d5ecd60166e57d39cfd5a24e408b9645b887c7347958b1d0023f58cec39628fd4482e5332a806a754a6efb9aa51d3de3",
+    "rollback_registry_root": "c794a9ccab78a48ea302b5ce07f03c55e284881622b0b51919e9470ac886303672d8dc65957b34367433b8e6cfea6673",
+    "challenge_schema_hash": "c6c53bb8e5b85b332cd72c96c98c44ec3d51ec9050df6ea54ebc84991ce856bb4cd754d2a6945818d72b56d9775002e0",
+    "release_cobalt_effect_scope": "protocol_architecture_release_or_cobalt_effect",
+    "selected_option": "preserve-rust-l1",
+    "allowed_dispositions": [
+      "accepted",
+      "challenged",
+      "rollback_required",
+      "superseded"
+    ],
+    "next_release_disposition_signoff_id_required": "vc-protocol-architecture-001-live-effect-release-disposition-signoff-001"
+  },
+  "disposition_contract": {
+    "allowed_dispositions": [
+      "accepted",
+      "challenged",
+      "rollback_required",
+      "superseded"
+    ],
+    "accepted_requires_observed_root_equals_expected": true,
+    "accepted_requires_exit_code_zero": true,
+    "accepted_requires_command_and_output_hashes": true,
+    "challenged_requires_challenge_packet": true,
+    "challenged_blocks_release_handoff": true,
+    "rollback_required_requires_rollback_command_hash": true,
+    "rollback_required_requires_rollback_registry_root": true,
+    "rollback_required_blocks_release_handoff": true,
+    "superseded_requires_superseding_release_disposition_root": true,
+    "superseded_blocks_current_disposition": true,
+    "release_cobalt_effect_scope_required": true,
+    "disposition_not_issued_in_this_packet": true,
+    "live_action_execution_forbidden_in_this_packet": true,
+    "registry_mutation_forbidden_in_this_packet": true,
+    "mainnet_mutation_forbidden_in_this_packet": true,
+    "live_effect": false
+  },
+  "disposition_input_requirements": {
+    "post_action_execution_receipt_hash_required": true,
+    "post_action_execution_receipt_id_required": "vc-protocol-architecture-001-live-effect-post-action-execution-receipt-001",
+    "live_action_execution_packet_gate_root_required": true,
+    "exact_authorization_hash_required": true,
+    "accepted_preflight_output_receipt_hash_required": true,
+    "executed_command_hash_required": true,
+    "expected_executed_command_hash": "840f9cb61720522baacc4cc2152d2ed5aca5e1ead9045acbd60907ded709babb6109cc5c6d3f8ee94584c2a81523b810",
+    "execution_stdout_sha3_384_required": true,
+    "execution_stderr_sha3_384_required": true,
+    "execution_exit_code_required": true,
+    "observed_post_action_registry_or_release_root_required": true,
+    "expected_post_action_registry_or_release_root": "2a30649283caeb4e444fc6ead3f942190d5a130c2f7e71afb2c8de911b2f16b50b2b36757b31b29efc3fd67a463c0c10",
+    "rollback_route_required": true,
+    "challenge_route_required": true,
+    "release_cobalt_effect_scope": "protocol_architecture_release_or_cobalt_effect",
+    "current_inputs_absent": true,
+    "live_effect": false
+  },
+  "current_disposition_state": {
+    "post_action_execution_receipt_hash": null,
+    "observed_post_action_registry_or_release_root": null,
+    "execution_exit_code": null,
+    "selected_disposition": null,
+    "release_disposition_packet_present": false,
+    "accepted": false,
+    "challenged": false,
+    "rollback_required": false,
+    "superseded": false,
+    "live_effect": false
+  },
+  "disposition_matrix": [
+    {
+      "disposition": "accepted",
+      "condition": "receipt_hashes_match_and_observed_root_equals_expected",
+      "expected_post_action_registry_or_release_root": "2a30649283caeb4e444fc6ead3f942190d5a130c2f7e71afb2c8de911b2f16b50b2b36757b31b29efc3fd67a463c0c10",
+      "requires_exit_code_zero": true,
+      "requires_stdout_hash": true,
+      "requires_stderr_hash": true,
+      "next_action": "eligible_for_release_disposition_signoff",
+      "live_effect": false
+    },
+    {
+      "disposition": "challenged",
+      "condition": "receipt_missing_or_hashes_mismatch_or_challenge_packet_present",
+      "requires_challenge_packet": true,
+      "next_action": "hold_release_disposition",
+      "live_effect": false
+    },
+    {
+      "disposition": "rollback_required",
+      "condition": "observed_root_differs_from_expected_after_live_effect",
+      "rollback_command_hash": "d5ecd60166e57d39cfd5a24e408b9645b887c7347958b1d0023f58cec39628fd4482e5332a806a754a6efb9aa51d3de3",
+      "rollback_registry_root": "c794a9ccab78a48ea302b5ce07f03c55e284881622b0b51919e9470ac886303672d8dc65957b34367433b8e6cfea6673",
+      "requires_rollback_receipt": true,
+      "next_action": "run_separately_authorized_rollback_or_hold",
+      "live_effect": false
+    },
+    {
+      "disposition": "superseded",
+      "condition": "newer_governed_disposition_root_replaces_this_packet",
+      "requires_superseding_release_disposition_root": true,
+      "next_action": "defer_to_superseding_disposition",
+      "live_effect": false
+    }
+  ],
+  "rollback_and_challenge_route": {
+    "challenge_schema_sha3_384": "c6c53bb8e5b85b332cd72c96c98c44ec3d51ec9050df6ea54ebc84991ce856bb4cd754d2a6945818d72b56d9775002e0",
+    "challenge_packet_required_for_challenged_disposition": true,
+    "rollback_command_hash": "d5ecd60166e57d39cfd5a24e408b9645b887c7347958b1d0023f58cec39628fd4482e5332a806a754a6efb9aa51d3de3",
+    "rollback_registry_root": "c794a9ccab78a48ea302b5ce07f03c55e284881622b0b51919e9470ac886303672d8dc65957b34367433b8e6cfea6673",
+    "rollback_receipt_required_for_rollback_required_disposition": true,
+    "mismatched_post_action_root_failure_action": "classify_rollback_required_or_challenged",
+    "supersession_failure_action": "hold_current_disposition_until_superseding_root_verifies",
+    "live_effect": false
+  },
+  "verification_commands": [
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-disposition-gate --verify-report",
+      "purpose": "Verify the VC-072 release disposition gate.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-post-action-execution-receipt-gate --verify-report",
+      "purpose": "Verify the VC-071 post-action execution receipt gate remains current.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/gov-inference-gate-9_5",
+      "purpose": "Regenerate the local guarded-apply and rollback drill report.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/validator-evidence-fixtures-validate",
+      "purpose": "Keep the validator-evidence fixture suite passing.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/docs-site-build",
+      "purpose": "Build the docs site after adding the release disposition gate.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    }
+  ],
+  "authority_boundary": {
+    "provider_spend_authorized": false,
+    "live_model_request_authorized": false,
+    "model_output_generated_in_this_packet": false,
+    "release_disposition_gate_recorded": true,
+    "release_disposition_packet_issued_in_this_packet": false,
+    "live_action_executed_in_this_packet": false,
+    "post_action_receipt_accepted_in_this_packet": false,
+    "rollback_executed_in_this_packet": false,
+    "code_rewrite_authorized": false,
+    "rippled_code_import_authorized": false,
+    "consensus_rewrite_authorized": false,
+    "xrpl_compatibility_activation_authorized": false,
+    "protocol_migration_authorized": false,
+    "live_validator_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "mainnet_mutation_authorized": false,
+    "authority_transfer_authorized": false
+  },
+  "checks": {
+    "schema_valid": true,
+    "source_post_action_execution_receipt_gate_verified": true,
+    "root_bindings_verified": true,
+    "disposition_contract_verified": true,
+    "disposition_input_requirements_verified": true,
+    "current_disposition_state_verified": true,
+    "disposition_matrix_verified": true,
+    "rollback_and_challenge_route_verified": true,
+    "verification_command_coverage_verified": true,
+    "closed_authority_boundary_verified": true,
+    "no_hidden_evidence": true,
+    "no_secret_dependency": true,
+    "no_live_action_execution": true,
+    "no_release_disposition_packet_issued": true,
+    "no_live_cobalt_amendment_submission": true,
+    "no_compatibility_activation": true,
+    "no_registry_mutation": true,
+    "no_mainnet_mutation": true,
+    "authority_transfer": false,
+    "release_disposition_root_verified": true
+  },
+  "release_disposition_root": "1f0f9fdcc4e036ac3e71d3fb544464795c78ed24541f429b31e792738061a89ad6699c8ba5f44d1ce940a7d28ef5ea70"
+}

@@ -1,0 +1,18 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_loss_measurement/valid_loss_measurement.json",
+  "expected_error_contains": [
+    "case-02-loss-flips-below-gain-reject: expected_route mismatch"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        1,
+        "expected_route"
+      ],
+      "value": "admit"
+    }
+  ],
+  "schema": "postfiat-validator-economic-loss-measurement-invalid-case-v1"
+}

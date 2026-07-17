@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(dirname -- "$SCRIPT_DIR")"
+WASM_PACK="${WASM_PACK:-wasm-pack}"
+
+command -v "$WASM_PACK" >/dev/null 2>&1 || {
+  echo "wasm-pack is required" >&2
+  exit 2
+}
+
+# Rust dependency panic strings otherwise embed the builder's home directory.
+# A stable virtual prefix makes the checked artifacts portable and reproducible.
+export RUSTFLAGS="${RUSTFLAGS:+${RUSTFLAGS} }--remap-path-prefix=${HOME}=/build/home"
+
+cd "$REPO_ROOT"
+"$WASM_PACK" build crates/wallet_wasm --target web --out-dir pkg --release
+
+for destination in wallet-web/src/wasm wallet-extension/wasm; do
+  install -m 0644 crates/wallet_wasm/pkg/postfiat_wallet_wasm.js "$destination/"
+  install -m 0644 crates/wallet_wasm/pkg/postfiat_wallet_wasm.d.ts "$destination/"
+  install -m 0644 crates/wallet_wasm/pkg/postfiat_wallet_wasm_bg.wasm "$destination/"
+  install -m 0644 crates/wallet_wasm/pkg/postfiat_wallet_wasm_bg.wasm.d.ts "$destination/"
+done
+
+cmp wallet-web/src/wasm/postfiat_wallet_wasm_bg.wasm \
+  wallet-extension/wasm/postfiat_wallet_wasm_bg.wasm
+if strings wallet-web/src/wasm/postfiat_wallet_wasm_bg.wasm | grep -Fq "$HOME"; then
+  echo "wallet WASM embeds the builder home directory" >&2
+  exit 1
+fi
+
+sha256sum wallet-web/src/wasm/postfiat_wallet_wasm_bg.wasm

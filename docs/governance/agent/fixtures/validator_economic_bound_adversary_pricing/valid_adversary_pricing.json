@@ -1,0 +1,349 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T00:00:00Z",
+    "attestor_key_hash": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+    "signature_hash": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+    "signature_scheme": "mldsa44-placeholder",
+    "statement_hash": "24fba3880b0dd2eb213ac6c82edd9b7a708a05b2fde15e5d0b98a52f97414996351ba298b3cf29346aed1ade2724ef66"
+  },
+  "checks": {
+    "B_le_min_t_s_enforced": true,
+    "authority_transfer": false,
+    "favorable_attestor_inflation_rejected": true,
+    "live_registry_mutation": false,
+    "pricing_root_bound": true,
+    "residual_above_B_fail_closed": true,
+    "residual_attestor_budget_bound": true,
+    "stale_liability_held": true,
+    "statement_hash_bound": true,
+    "ungoverned_threshold_capture_fail_closed": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "validator-economic-bound-adversary-pricing-v1-fixture",
+  "schema": "postfiat-validator-economic-bound-adversary-pricing-v1",
+  "statement": {
+    "base_attack": {
+      "B": 2,
+      "detected_colluding_attestor_groups": 0,
+      "favorable_attestor_inflation": false,
+      "min_t_s": 2,
+      "source_class_mismatch": false,
+      "stale_liability_epochs": 0,
+      "threshold_governance_capture": {
+        "attempted": false,
+        "governed_transition_certificate": true,
+        "old_new_intersection_gt_b": true
+      },
+      "unbounded_external_gain": false,
+      "undetected_attestor_cartels": 0
+    },
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_bound_calibration/valid_economic_bound_calibration.json",
+        "sha3_384": "6e6aa55af46a1a98ba0830c54ca5ac5ab71990339d735fde1a2e63b52a973971c4e5afb40a0d8d85ec1ad2fe519930b1"
+      },
+      {
+        "path": "scripts/validator-economic-bound-calibration-verify",
+        "sha3_384": "dcaa9b66ade6958d5f21f62359f9ff130395e69494eb0f94bc9ac5b62b2b636176cf3e22323444327c6000985c6f2cff"
+      },
+      {
+        "path": "docs/governance/agent/validator_economic_bound_calibration_schema.json",
+        "sha3_384": "a914c85f0b9a765d9d5ac7a8295033d57726354a5e41e52d4c9d25fa1c7e01f4eca063a05ef194ed3f8260f8d9685b9e"
+      }
+    ],
+    "policy_id": "validator-economic-bound-adversary-pricing-v1",
+    "pricing_policy": {
+      "max_evidence_age_epochs": 3,
+      "policy_units": "attestor-residual-to-cobalt-budget-v1",
+      "route_on_residual_above_budget": "fail-closed",
+      "route_on_ungoverned_threshold_capture": "fail-closed"
+    },
+    "pricing_root_hash": "6868a071e1c46c19642ec8410ef63a7d3545874b65c8c9639afd50254c64b063e0b596a8969932cf389952a81d3d89d0",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "validator-economic-bound-adversary-pricing-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-clean-no-residual-admit",
+        "expected_pricing": {
+          "B": 2,
+          "detected_colluding_attestor_groups": 0,
+          "min_t_s": 2,
+          "residual_within_B": true,
+          "residual_within_min_t_s": true,
+          "stale_liability_epochs": 0,
+          "threshold_capture_attempted": false,
+          "threshold_governed": true,
+          "threshold_old_new_intersection_gt_b": true,
+          "undetected_attestor_cartels": 0
+        },
+        "expected_reason_codes": [
+          "all_adversarial_pricing_bounds_passed"
+        ],
+        "expected_route": "admit",
+        "overrides": []
+      },
+      {
+        "case_id": "case-02-one-undetected-cartel-priced-admit",
+        "expected_pricing": {
+          "B": 2,
+          "detected_colluding_attestor_groups": 0,
+          "min_t_s": 2,
+          "residual_within_B": true,
+          "residual_within_min_t_s": true,
+          "stale_liability_epochs": 0,
+          "threshold_capture_attempted": false,
+          "threshold_governed": true,
+          "threshold_old_new_intersection_gt_b": true,
+          "undetected_attestor_cartels": 1
+        },
+        "expected_reason_codes": [
+          "priced_residual_within_cobalt_budget"
+        ],
+        "expected_route": "admit",
+        "overrides": [
+          {
+            "path": [
+              "undetected_attestor_cartels"
+            ],
+            "value": 1
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-residual-above-b-fail-closed",
+        "expected_pricing": {
+          "B": 2,
+          "detected_colluding_attestor_groups": 0,
+          "min_t_s": 2,
+          "residual_within_B": false,
+          "residual_within_min_t_s": false,
+          "stale_liability_epochs": 0,
+          "threshold_capture_attempted": false,
+          "threshold_governed": true,
+          "threshold_old_new_intersection_gt_b": true,
+          "undetected_attestor_cartels": 3
+        },
+        "expected_reason_codes": [
+          "undetected_residual_exceeds_cobalt_budget"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "undetected_attestor_cartels"
+            ],
+            "value": 3
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-stale-liability-game-hold",
+        "expected_pricing": {
+          "B": 2,
+          "detected_colluding_attestor_groups": 0,
+          "min_t_s": 2,
+          "residual_within_B": true,
+          "residual_within_min_t_s": true,
+          "stale_liability_epochs": 9,
+          "threshold_capture_attempted": false,
+          "threshold_governed": true,
+          "threshold_old_new_intersection_gt_b": true,
+          "undetected_attestor_cartels": 0
+        },
+        "expected_reason_codes": [
+          "stale_liability_evidence"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "stale_liability_epochs"
+            ],
+            "value": 9
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-unbounded-external-gain-reject",
+        "expected_pricing": {
+          "B": 2,
+          "detected_colluding_attestor_groups": 0,
+          "min_t_s": 2,
+          "residual_within_B": true,
+          "residual_within_min_t_s": true,
+          "stale_liability_epochs": 0,
+          "threshold_capture_attempted": false,
+          "threshold_governed": true,
+          "threshold_old_new_intersection_gt_b": true,
+          "undetected_attestor_cartels": 0
+        },
+        "expected_reason_codes": [
+          "unbounded_external_gain"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "unbounded_external_gain"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-favorable-attestor-inflation-reject",
+        "expected_pricing": {
+          "B": 2,
+          "detected_colluding_attestor_groups": 0,
+          "min_t_s": 2,
+          "residual_within_B": true,
+          "residual_within_min_t_s": true,
+          "stale_liability_epochs": 0,
+          "threshold_capture_attempted": false,
+          "threshold_governed": true,
+          "threshold_old_new_intersection_gt_b": true,
+          "undetected_attestor_cartels": 0
+        },
+        "expected_reason_codes": [
+          "favorable_attestor_inflation"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "favorable_attestor_inflation"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-source-class-mismatch-hold",
+        "expected_pricing": {
+          "B": 2,
+          "detected_colluding_attestor_groups": 0,
+          "min_t_s": 2,
+          "residual_within_B": true,
+          "residual_within_min_t_s": true,
+          "stale_liability_epochs": 0,
+          "threshold_capture_attempted": false,
+          "threshold_governed": true,
+          "threshold_old_new_intersection_gt_b": true,
+          "undetected_attestor_cartels": 0
+        },
+        "expected_reason_codes": [
+          "source_class_mismatch"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "source_class_mismatch"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-ungoverned-threshold-capture-fail-closed",
+        "expected_pricing": {
+          "B": 2,
+          "detected_colluding_attestor_groups": 0,
+          "min_t_s": 2,
+          "residual_within_B": true,
+          "residual_within_min_t_s": true,
+          "stale_liability_epochs": 0,
+          "threshold_capture_attempted": true,
+          "threshold_governed": false,
+          "threshold_old_new_intersection_gt_b": false,
+          "undetected_attestor_cartels": 0
+        },
+        "expected_reason_codes": [
+          "threshold_capture_without_valid_cobalt_transition"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "threshold_governance_capture",
+              "attempted"
+            ],
+            "value": true
+          },
+          {
+            "path": [
+              "threshold_governance_capture",
+              "governed_transition_certificate"
+            ],
+            "value": false
+          },
+          {
+            "path": [
+              "threshold_governance_capture",
+              "old_new_intersection_gt_b"
+            ],
+            "value": false
+          }
+        ]
+      },
+      {
+        "case_id": "case-09-b-exceeds-min-ts-fail-closed",
+        "expected_pricing": {
+          "B": 3,
+          "detected_colluding_attestor_groups": 0,
+          "min_t_s": 2,
+          "residual_within_B": true,
+          "residual_within_min_t_s": true,
+          "stale_liability_epochs": 0,
+          "threshold_capture_attempted": false,
+          "threshold_governed": true,
+          "threshold_old_new_intersection_gt_b": true,
+          "undetected_attestor_cartels": 0
+        },
+        "expected_reason_codes": [
+          "global_b_exceeds_weakest_t_s"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "B"
+            ],
+            "value": 3
+          }
+        ]
+      },
+      {
+        "case_id": "case-10-detected-colluding-attestors-reject",
+        "expected_pricing": {
+          "B": 2,
+          "detected_colluding_attestor_groups": 1,
+          "min_t_s": 2,
+          "residual_within_B": true,
+          "residual_within_min_t_s": true,
+          "stale_liability_epochs": 0,
+          "threshold_capture_attempted": false,
+          "threshold_governed": true,
+          "threshold_old_new_intersection_gt_b": true,
+          "undetected_attestor_cartels": 0
+        },
+        "expected_reason_codes": [
+          "detected_colluding_attestor_groups"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "detected_colluding_attestor_groups"
+            ],
+            "value": 1
+          }
+        ]
+      }
+    ]
+  }
+}

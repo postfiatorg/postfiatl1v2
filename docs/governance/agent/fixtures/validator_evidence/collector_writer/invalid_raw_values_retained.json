@@ -1,0 +1,58 @@
+{
+  "schema": "postfiat-validator-evidence-collector-writer-report-v1",
+  "run_id": "validator-evidence-collector-writer-2026-05-23-raw-values",
+  "mode": "local_fixture_only",
+  "verified": true,
+  "packet_path": "docs/governance/agent/fixtures/validator_evidence/valid_packet.json",
+  "collector_manifest_path": "docs/governance/agent/fixtures/validator_evidence/collector_run_manifest.json",
+  "packet_id": "validator-evidence-2026-05-23-example",
+  "validator_evidence_packet_root": "7f146e261443b04f443764468e94343f81a1dd87ec30a122b267b3d2050d43321ea6b122cb2b19efbe57b1728a6e4cea",
+  "packet_schema_hash": "92544968ea283754c5cd3cfba85194afff80f9366f07063b5cd228ea58a6f9efbeb74ad416f9f118595f8c6719d4f0c3",
+  "field_registry_hash": "a4d0ad75fcf706432e2d44bfd75486139a69116249ffb47bbc786fcb67ab939b25f99834d5cb5aa7bb93cfed8901200f",
+  "collection_window": {
+    "from_height": 1000,
+    "to_height": 2000,
+    "from_time": "2026-05-23T00:00:00Z",
+    "to_time": "2026-05-23T06:00:00Z"
+  },
+  "raw_observation_root": "666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666",
+  "raw_observation_hash_count": 8,
+  "output_artifacts": {
+    "packet": {
+      "path": "generated/validator-evidence-packet.json",
+      "canonical_sha384": "7f146e261443b04f443764468e94343f81a1dd87ec30a122b267b3d2050d43321ea6b122cb2b19efbe57b1728a6e4cea",
+      "public": true
+    },
+    "collector_manifest": {
+      "path": "generated/collector-run-manifest.json",
+      "canonical_sha384": "d740ead49ba422d8571d0b724e5b87285f946e63a1804086b2cd1f13d1053f053059a821197f4441965400bdc0e9d2ee",
+      "public": true
+    },
+    "writer_report": {
+      "path": "generated/collector-writer-report.json",
+      "public": true
+    }
+  },
+  "redaction": {
+    "private_fields_removed": true,
+    "secret_scan_passed": true,
+    "raw_values_retained": true,
+    "forbidden_key_hits": [],
+    "forbidden_value_hits": [],
+    "public_artifact_safe": true
+  },
+  "checks": {
+    "packet_schema_valid": true,
+    "collector_manifest_schema_valid": true,
+    "packet_root_verified": true,
+    "manifest_binds_packet": true,
+    "source_hashes_retained": true,
+    "raw_observation_hashes_only": true,
+    "output_directory_outside_repo": true,
+    "live_network_access": false,
+    "model_access": false,
+    "direct_state_mutation": false,
+    "live_registry_mutation": false,
+    "authority_transfer": false
+  }
+}

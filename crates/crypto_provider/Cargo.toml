@@ -1,0 +1,16 @@
+[package]
+name = "postfiat-crypto-provider"
+version = "0.1.0"
+description = "Cryptographic provider interfaces and implementations for PostFiat L1"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+fips204 = { workspace = true }
+sha3 = { workspace = true }
+zeroize = { workspace = true }

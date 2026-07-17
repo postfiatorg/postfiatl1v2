@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""Reject maintainer-machine paths in supported source/config surfaces."""
+
+from __future__ import annotations
+
+import pathlib
+import ipaddress
+import re
+import subprocess
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+SURFACES = (
+    ROOT / "systemd",
+    ROOT / "python" / "postfiat_rpc",
+    ROOT / "wallet-proxy",
+)
+FORBIDDEN = b"/home/" + b"postfiat"
+IPV4 = re.compile(rb"(?<![0-9.])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9.])")
+
+
+def main() -> int:
+    findings: list[str] = []
+    for surface in SURFACES:
+        for path in sorted(item for item in surface.rglob("*") if item.is_file()):
+            if "__pycache__" in path.parts:
+                continue
+            data = path.read_bytes()
+            if FORBIDDEN in data:
+                findings.append(path.relative_to(ROOT).as_posix())
+    tracked = subprocess.check_output(["git", "ls-files", "-z"], cwd=ROOT)
+    for raw_path in tracked.split(b"\0"):
+        if not raw_path:
+            continue
+        relative = raw_path.decode("utf-8")
+        path = ROOT / relative
+        if not path.is_file():
+            continue
+        data = path.read_bytes()
+        if FORBIDDEN in data:
+            findings.append(f"{relative} (embedded maintainer path)")
+        if b"\0" in data[:8192]:
+            continue
+        for match in IPV4.findall(data):
+            try:
+                address = ipaddress.ip_address(match.decode("ascii"))
+            except ValueError:
+                continue
+            if address.is_global:
+                findings.append(f"{relative} (public IPv4 literal)")
+                break
+    if findings:
+        raise SystemExit(
+            "nonportable or live-infrastructure literal in public source: "
+            + ", ".join(findings)
+        )
+    print("public source portability regression passed")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,299 @@
+{
+  "schema": "postfiat-constitutional-context-packet-v1",
+  "packet_id": "vc-initial-protocol-context-001",
+  "packet_version": 1,
+  "status": "active",
+  "created_at": "2026-05-24T00:00:00Z",
+  "context_scope": "protocol_constitution",
+  "purpose": "Freeze the initial PostFiat protocol premises before asking Qwen to answer high-level architecture, privacy, Cobalt, model-governance, monetary-policy, storage, RPC, and validator-governance questions.",
+  "core_context": {
+    "project_identity": "PostFiat is a Rust Layer 1 inspired by XRP's settlement and validator-list lessons, but it is not a rippled binary fork. It is intended to combine XRPL-style settlement ergonomics with Cobalt governance, post-quantum authorization, shielded privacy, and replayable model-assisted governance.",
+    "current_status": "The current state is controlled pre-testnet engineering. Internal project-controlled validators, local harnesses, provider machines, replay packets, and docs are valid engineering evidence. No packet in this lane authorizes mainnet mutation, live validator-registry mutation, live Cobalt amendment submission, sidecar activation, or authority transfer.",
+    "current_architecture": [
+      "Rust L1 implementation rather than a direct rippled fork.",
+      "Cobalt-style governance machinery for trust-graph and validator-registry transitions.",
+      "Qwen/SGLang TP=1 deterministic profile for internal constitutional replay, with governed model replacement required before mainnet authority.",
+      "Orchard/Halo2-style shielded flow currently implemented as the privacy baseline.",
+      "ML-DSA-style post-quantum authorization is the current authorization direction.",
+      "Fixed supply, fee burn, and no native validator rewards are current monetary-policy premises.",
+      "Validator evidence and UNL selection must be typed, hash-bound, replayable, challengeable, and Cobalt-gated before live authority."
+    ],
+    "non_goals": [
+      "Do not treat Qwen prose as live authority.",
+      "Do not use hidden private reputation or unregistered social claims as constitutional evidence.",
+      "Do not let a model self-upgrade, expand its options, request secrets, or authorize live actions.",
+      "Do not claim public decentralization from project-controlled internal validation.",
+      "Do not silently substitute a prompt, model profile, evidence packet, selector, implementation mapping, or gate result after acceptance."
+    ],
+    "governance_principles": [
+      "Every protocol question must use a closed option set.",
+      "Every answer must cite approved evidence fields or preserve, hold, or no-op.",
+      "Every accepted context, question, request, evidence packet, decision, and conformance mapping must be hash-bound.",
+      "Replay proves accountability and substitution resistance; it is not correctness by itself.",
+      "A bad replay-converged decision must remain challengeable through a typed challenge packet.",
+      "Cobalt or an explicit release gate must stand between model output and live protocol effect.",
+      "The founder or foundation can propose changes, but cannot silently override an accepted process without producing a detectable mismatch or a new governed amendment."
+    ]
+  },
+  "source_refs": [
+    {
+      "ref_id": "implementation-whitepaper",
+      "path": "docs_site/whitepaper.md",
+      "sha3_384": "ea4f650da64ae54aa291f2fe5a3ca14189bb6492972681a4f247d5baa6b252d8d3935c24411c90b22003587d53415e45",
+      "role": "whitepaper"
+    },
+    {
+      "ref_id": "architecture-overview",
+      "path": "docs_site/architecture/overview.md",
+      "sha3_384": "e91fbea1e3e41e89607ccaa11933cdb1693367332404dfe72e138e9658a7a2964cafdf833020644117466b926ee4fa22",
+      "role": "architecture"
+    },
+    {
+      "ref_id": "privacy-orchard-halo2",
+      "path": "docs_site/privacy/orchard-halo2.md",
+      "sha3_384": "1dca6715b03d77c10d6d63272a4bdb91e64fb2de744a3eb735ebd566c900311fed3748015045a3aeabc63ac6ab206a3a",
+      "role": "privacy"
+    },
+    {
+      "ref_id": "deterministic-governance-overview",
+      "path": "docs_site/governance/deterministic-governance-overview.md",
+      "sha3_384": "6cc2ae0ea4afce4d96a8ad3bc537ee5d2854623fc0190bbef1be69adf85f7d53132c39ce80b850b4694ce1cefda295f3",
+      "role": "governance"
+    },
+    {
+      "ref_id": "model-selection-requirement",
+      "path": "docs_site/governance/model-selection-governance-requirement.md",
+      "sha3_384": "5ecc42acc51559329ede55769dc925de379f7aff3b87beb646cd886b73d9f528c2289d27550af2a4b4312fac484f04ed",
+      "role": "governance"
+    },
+    {
+      "ref_id": "cobalt-overview",
+      "path": "docs_site/governance/cobalt.md",
+      "sha3_384": "acf0e856b93180f8a5bd6bf5957f85db070d96f4bbc46adca2ddfc078f875ad845e18fb7e34acf2a9e4ddde384f74e52",
+      "role": "governance"
+    },
+    {
+      "ref_id": "cobalt-implementation",
+      "path": "docs_site/governance/cobalt-implementation.md",
+      "sha3_384": "8fccab3a620958c6bef72b57515ceb7472b3f250bd8cc075877be25307f10676e4d0457562386d17d8e7890588afa756",
+      "role": "governance"
+    },
+    {
+      "ref_id": "cobalt-adversarial-testing",
+      "path": "docs_site/governance/cobalt-adversarial-testing.md",
+      "sha3_384": "371c1234edd0bd53305f3e1a421e3ae2f20b41e6380088424a6fed431302395a1a7e801cae126fa07d8173699c28104b",
+      "role": "governance"
+    },
+    {
+      "ref_id": "validator-registry",
+      "path": "docs_site/governance/validator-registry.md",
+      "sha3_384": "509ca09608c926a604e4eef1700ba77358b44fcd060066d9f17ec4974f740b5fe27c9e2f3eea5e0d22a67df93afe66d7",
+      "role": "governance"
+    },
+    {
+      "ref_id": "qwen-cobalt-internal-validation-plan",
+      "path": "docs_site/governance/qwen-cobalt-internal-validation-plan.md",
+      "sha3_384": "3ef666d69c3ad28e999b8051749aac63296100ffcf9c528ae7d5c19deb0ad44a50f7e17ed4396596305ed10334147bb5",
+      "role": "governance"
+    },
+    {
+      "ref_id": "quantum-authorization",
+      "path": "docs_site/quantum/authorization.md",
+      "sha3_384": "451fe29194691fbae1454d06d9220f89cd0ccedeb82b6153d541e87f42d2579abd8f453830882a249eead4d0034a2d31",
+      "role": "post_quantum"
+    },
+    {
+      "ref_id": "verifiable-constitution-plan",
+      "path": "docs_site/governance/verifiable-constitution-plan.md",
+      "sha3_384": "5b9611b482a6735410a841cd7558226e5ce0262ba4247f53dc10bdc95ee12ecd719e7a093cb69d5169f62408bf6f9c55",
+      "role": "plan"
+    }
+  ],
+  "decision_queue": [
+    {
+      "question_id": "vc-protocol-architecture-001",
+      "scope": "protocol_architecture",
+      "title": "New Rust L1 versus full XRPL fork",
+      "question": "Should PostFiat continue as a new Rust L1 rather than fully forking rippled/XRPL?",
+      "status_quo_summary": "PostFiat is currently implemented as a Rust L1 with XRP-inspired transaction ergonomics, Cobalt governance, ML-DSA authorization, and Orchard/Halo2 privacy rather than as a direct rippled fork.",
+      "closed_options": [
+        "preserve-rust-l1",
+        "fully-fork-xrpl",
+        "hybrid-xrpl-compatibility-layer",
+        "hold-no-op"
+      ],
+      "evidence_required": [
+        "whitepaper architecture claims",
+        "Rust implementation surface",
+        "XRPL compatibility requirements",
+        "PQC and privacy integration cost",
+        "Cobalt implementation evidence",
+        "operator migration and tooling impact"
+      ],
+      "source_ref_ids": [
+        "implementation-whitepaper",
+        "architecture-overview",
+        "deterministic-governance-overview",
+        "cobalt-overview"
+      ],
+      "fallback_option": "hold-no-op",
+      "live_authority": false
+    },
+    {
+      "question_id": "vc-privacy-architecture-001",
+      "scope": "privacy",
+      "title": "Orchard/Halo2 privacy versus attestation privacy",
+      "question": "Should PostFiat preserve the Orchard/Halo2 shielded-flow baseline, replace it with Railgun-style attestation privacy, or adopt a hybrid disclosure layer?",
+      "status_quo_summary": "The current privacy baseline is Orchard/Halo2-style shielded flow with deposit, spend, withdraw, scanning, and disclosure docs and tests.",
+      "closed_options": [
+        "preserve-orchard-halo2",
+        "adopt-attestation-privacy",
+        "hybrid-orchard-attestation-disclosure",
+        "hold-no-op"
+      ],
+      "evidence_required": [
+        "current Orchard/Halo2 implementation evidence",
+        "privacy threat model",
+        "disclosure and auditability requirements",
+        "proof verification cost",
+        "regulatory disclosure posture",
+        "wallet and RPC integration impact"
+      ],
+      "source_ref_ids": [
+        "implementation-whitepaper",
+        "privacy-orchard-halo2"
+      ],
+      "fallback_option": "hold-no-op",
+      "live_authority": false
+    },
+    {
+      "question_id": "vc-ai-governance-architecture-001",
+      "scope": "model_governance",
+      "title": "Evidence-bound AI governance versus private committee judgment",
+      "question": "Should PostFiat keep developing evidence-bound Qwen/Cobalt governance as the default validator and protocol-decision lane rather than relying on private foundation judgment?",
+      "status_quo_summary": "The current governance direction is typed Qwen-generated evidence requests and decisions, deterministic replay, challenge packets, conformance mapping, and Cobalt or release-gate binding.",
+      "closed_options": [
+        "preserve-evidence-bound-ai-governance",
+        "return-to-private-committee",
+        "static-rule-table-only",
+        "hold-no-op"
+      ],
+      "evidence_required": [
+        "deterministic replay reports",
+        "typed packet schemas",
+        "challenge-packet drills",
+        "attack-surface comparison",
+        "Cobalt dry-run evidence",
+        "override-detection evidence"
+      ],
+      "source_ref_ids": [
+        "deterministic-governance-overview",
+        "model-selection-requirement",
+        "verifiable-constitution-plan"
+      ],
+      "fallback_option": "hold-no-op",
+      "live_authority": false
+    },
+    {
+      "question_id": "vc-cobalt-governance-001",
+      "scope": "cobalt_governance",
+      "title": "Cobalt hard governance gates",
+      "question": "Which Cobalt trust-graph and validator-registry transition gates should remain constitutional hard requirements?",
+      "status_quo_summary": "The current Cobalt baseline requires trust-graph linkedness, essential-subset threshold checks, validator-registry transition rules, stale replay rejection, dry-run no-mutation checks, and replay bundles before registry or trust-graph changes can become live authority.",
+      "closed_options": [
+        "preserve-cobalt-hard-gates",
+        "alter-trust-graph-thresholds",
+        "alter-registry-transition-gates",
+        "hold-no-op"
+      ],
+      "evidence_required": [
+        "Cobalt overview and implementation evidence",
+        "linkedness and essential-subset threshold evidence",
+        "validator-registry transition rules",
+        "adversarial Cobalt packet coverage",
+        "dry-run and replay no-mutation evidence",
+        "rollback and supersession evidence"
+      ],
+      "source_ref_ids": [
+        "implementation-whitepaper",
+        "cobalt-overview",
+        "cobalt-implementation",
+        "cobalt-adversarial-testing",
+        "validator-registry",
+        "qwen-cobalt-internal-validation-plan"
+      ],
+      "fallback_option": "hold-no-op",
+      "live_authority": false
+    },
+    {
+      "question_id": "vc-pq-authorization-001",
+      "scope": "post_quantum_authorization",
+      "title": "ML-DSA authorization baseline",
+      "question": "Should PostFiat preserve ML-DSA-style post-quantum authorization as a genesis protocol premise, alter the certificate/key-rotation design, or defer PQ authorization?",
+      "status_quo_summary": "The current authorization direction is ML-DSA-style post-quantum signing and wallet authorization, with key-rotation and wallet implications documented.",
+      "closed_options": [
+        "preserve-ml-dsa-baseline",
+        "alter-certificate-and-rotation-policy",
+        "defer-pq-authorization",
+        "hold-no-op"
+      ],
+      "evidence_required": [
+        "signature parameter identifiers",
+        "signature-size and latency evidence",
+        "wallet backup and rotation impact",
+        "verification tests",
+        "compatibility constraints"
+      ],
+      "source_ref_ids": [
+        "implementation-whitepaper",
+        "quantum-authorization"
+      ],
+      "fallback_option": "hold-no-op",
+      "live_authority": false
+    },
+    {
+      "question_id": "vc-monetary-policy-001",
+      "scope": "monetary_policy",
+      "title": "Fixed supply and fee burn",
+      "question": "Should PostFiat preserve fixed supply, fee burn, and no native validator rewards as constitutional monetary-policy invariants?",
+      "status_quo_summary": "The current monetary-policy premise is fixed supply with fee burn and no native validator subsidy, while validator operation is justified by stakeholder utility rather than protocol inflation.",
+      "closed_options": [
+        "preserve-fixed-supply-fee-burn",
+        "alter-fee-burn-accounting",
+        "add-native-validator-reward",
+        "hold-no-op"
+      ],
+      "evidence_required": [
+        "genesis supply configuration",
+        "fee accounting tests",
+        "supply invariant tests",
+        "validator economics analysis",
+        "consensus and wallet impact"
+      ],
+      "source_ref_ids": [
+        "implementation-whitepaper"
+      ],
+      "fallback_option": "hold-no-op",
+      "live_authority": false
+    }
+  ],
+  "context_boundaries": {
+    "qwen_may_use_as_context": true,
+    "qwen_may_modify_context": false,
+    "qwen_may_add_options": false,
+    "qwen_may_collect_evidence": false,
+    "qwen_may_authorize_live_action": false,
+    "qwen_may_request_secret_material": false,
+    "accepted_context_is_live_authority": false
+  },
+  "checks": {
+    "source_refs_present": true,
+    "source_hashes_verified": true,
+    "decision_queue_present": true,
+    "closed_options_present": true,
+    "evidence_requirements_present": true,
+    "fallback_options_present": true,
+    "no_live_mutation": true,
+    "authority_transfer": false
+  }
+}

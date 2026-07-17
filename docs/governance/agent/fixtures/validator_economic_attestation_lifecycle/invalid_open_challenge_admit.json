@@ -1,0 +1,18 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_attestation_lifecycle/valid_attestation_lifecycle.json",
+  "expected_error_contains": [
+    "case-03-open-challenge-hold: expected_route mismatch"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        2,
+        "expected_route"
+      ],
+      "value": "admit"
+    }
+  ],
+  "schema": "postfiat-validator-economic-attestation-lifecycle-invalid-case-v1"
+}

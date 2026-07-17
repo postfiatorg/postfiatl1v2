@@ -1,0 +1,30 @@
+{
+  "authority": {
+    "direct_state_mutation": false,
+    "mode": "dry_run_only",
+    "scope_expansion": false,
+    "self_upgrade": false
+  },
+  "decisions": [
+    {
+      "condition": "local_gate_1_5_fixture",
+      "decision_id": "no-op-without-evidence-binding",
+      "kind": "no_op",
+      "rationale": "Every decision must cite a registered evidence field and its evidence semantics."
+    }
+  ],
+  "inputs": [
+    {
+      "kind": "validator_registry_snapshot",
+      "required": true
+    }
+  ],
+  "rollback": {
+    "max_mutations": 0,
+    "operator_confirmation_required": true,
+    "required": true
+  },
+  "ruleset_id": "gate-1_5-evidence-unbound",
+  "schema": "postfiat-governance-ruleset-v1",
+  "scope": "validator_registry_policy"
+}

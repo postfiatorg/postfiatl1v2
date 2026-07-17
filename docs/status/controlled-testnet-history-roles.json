@@ -1,0 +1,81 @@
+{
+  "schema": "postfiat-controlled-testnet-history-roles-v1",
+  "status": "active",
+  "status_date": "2026-05-13",
+  "validator_history_role": {
+    "role_id": "validator-partial-history",
+    "mode": "partial",
+    "pruning": "advisory",
+    "archive_handoff_required": true,
+    "source_backfill_required": true,
+    "must_not_serve_as_full_history": true,
+    "retains": [
+      "current_state",
+      "genesis_config",
+      "current_validator_registry",
+      "retained_registry_history",
+      "recent_blocks",
+      "recent_receipts",
+      "recent_certificates",
+      "recent_batches",
+      "governance_records_for_retained_window",
+      "checkpoints",
+      "prune_journal",
+      "archive_window_import_index"
+    ],
+    "may_prune_after_verified_handoff": [
+      "full_block_payloads_outside_retention",
+      "batch_payloads_outside_retention",
+      "receipt_rows_outside_retention"
+    ]
+  },
+  "archive_roles": [
+    {
+      "role_id": "controlled-full-history-archive",
+      "min_count": 1,
+      "required_for_controlled_testnet": true,
+      "operator_model": "foundation-operated until independent archive/indexer operators are onboarded",
+      "responsibilities": [
+        "retain_full_block_history",
+        "retain_full_receipt_history",
+        "retain_full_batch_payload_history",
+        "retain_long_range_finality_proofs",
+        "serve_archive_window_rpc",
+        "verify_archive_windows_before_serving",
+        "support_backfill_for_partial_validators",
+        "export_auditor_evidence"
+      ]
+    }
+  ],
+  "rpc_requirements": {
+    "archive_window": {
+      "read_only": true,
+      "bounded_range": true,
+      "sdk_validation_required": true,
+      "private_key_free": true
+    }
+  },
+  "gate_requirements": {
+    "readiness": [
+      "history_retention_smoke",
+      "history_role_policy_smoke"
+    ],
+    "p0": [
+      "history_retention_smoke",
+      "history_role_policy_smoke"
+    ],
+    "release": [
+      "remote_p0_history_retention",
+      "remote_p0_history_role_policy"
+    ]
+  },
+  "claim_boundary": {
+    "allowed": "PostFiat controlled testnet supports partial-history validators with archive-window backfill from a declared full-history/archive role.",
+    "not_allowed": "PostFiat validators are full-history indexers by default."
+  },
+  "open_items": [
+    "name the first production archive operator",
+    "publish archive node hardware and retention targets after candidate disk growth evidence",
+    "define independent archive/indexer onboarding after controlled testnet"
+  ]
+}

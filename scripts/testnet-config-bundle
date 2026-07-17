@@ -1,0 +1,436 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VALIDATORS="${VALIDATORS:-4}"
+CHAIN_ID="${CHAIN_ID:-postfiat-testnet-candidate}"
+BASE_PORT="${BASE_PORT:-26650}"
+RPC_BASE_PORT="${RPC_BASE_PORT:-27650}"
+HOSTS="${HOSTS:-}"
+OUT_DIR="${OUT_DIR:-reports/testnet-config-bundles}"
+PRIVATE_OUT_DIR="${PRIVATE_OUT_DIR:-reports/testnet-private-key-material}"
+REMOTE_DATA_ROOT="${REMOTE_DATA_ROOT:-/var/lib/postfiat}"
+REMOTE_LOG_ROOT="${REMOTE_LOG_ROOT:-/var/log/postfiat}"
+BINARY_PATH="${BINARY_PATH:-/usr/local/bin/postfiat-node}"
+PUBLIC_STATE_FILES=(
+  genesis.json
+  governance.json
+  ledger.json
+  blocks.json
+  batch_archive.json
+  mempool.json
+  ordered_batches.json
+  receipts.json
+  shielded.json
+  bridge.json
+  faucet_account.json
+  validator_registry.json
+  validator_registry_genesis.json
+)
+
+require_command() {
+  local command="$1"
+  if ! command -v "$command" >/dev/null 2>&1; then
+    echo "missing required command: $command" >&2
+    exit 1
+  fi
+}
+
+require_positive_integer() {
+  local name="$1"
+  local value="$2"
+  if ! [[ "$value" =~ ^[0-9]+$ ]] || [ "$value" -lt 1 ]; then
+    echo "$name must be a positive integer" >&2
+    exit 2
+  fi
+}
+
+normalize_hosts() {
+  if [ -n "$HOSTS" ]; then
+    printf '%s\n' "$HOSTS" | tr ', ' '\n' | sed '/^$/d'
+    return 0
+  fi
+  for ((i = 0; i < VALIDATORS; i++)); do
+    printf 'validator-%s.testnet.local\n' "$i"
+  done
+}
+
+multiaddr_for_host() {
+  local host="$1"
+  local port="$2"
+  if [[ "$host" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    printf '/ip4/%s/tcp/%s' "$host" "$port"
+  elif [[ "$host" =~ ^[0-9a-fA-F:]+$ && "$host" == *:* ]]; then
+    printf '/ip6/%s/tcp/%s' "$host" "$port"
+  else
+    printf '/dns4/%s/tcp/%s' "$host" "$port"
+  fi
+}
+
+json_file_record() {
+  local bundle_dir="$1"
+  local path="$2"
+  local relative_path
+  relative_path="${path#"$bundle_dir"/}"
+  local bytes sha
+  bytes="$(wc -c <"$path" | tr -d ' ')"
+  sha="$(sha256sum "$path" | awk '{print $1}')"
+  jq -cn \
+    --arg path "$relative_path" \
+    --arg sha256 "$sha" \
+    --argjson bytes "$bytes" \
+    '{path: $path, bytes: $bytes, sha256: $sha256}'
+}
+
+copy_public_artifact() {
+  local source="$1"
+  local destination="$2"
+  if [ ! -f "$source" ]; then
+    echo "missing required public artifact: $source" >&2
+    exit 1
+  fi
+  cp "$source" "$destination"
+}
+
+require_command jq
+require_command sha256sum
+require_command git
+require_command date
+require_command wc
+require_command awk
+require_command cargo
+
+require_positive_integer VALIDATORS "$VALIDATORS"
+require_positive_integer BASE_PORT "$BASE_PORT"
+require_positive_integer RPC_BASE_PORT "$RPC_BASE_PORT"
+
+mapfile -t host_list < <(normalize_hosts)
+if [ "${#host_list[@]}" -ne "$VALIDATORS" ]; then
+  echo "HOSTS must provide exactly $VALIDATORS hosts, got ${#host_list[@]}" >&2
+  exit 2
+fi
+
+cargo build -p postfiat-node >/dev/null
+
+mkdir -p "$OUT_DIR"
+stamp="$(date -u +"%Y%m%dT%H%M%SZ")"
+generated_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+base_bundle_dir="$OUT_DIR/testnet-config-bundle-$stamp"
+base_key_material_dir="$PRIVATE_OUT_DIR/testnet-key-material-$stamp"
+bundle_dir="$base_bundle_dir"
+key_material_dir="$base_key_material_dir"
+suffix=0
+while [ -e "$bundle_dir" ] || [ -e "$key_material_dir" ]; do
+  suffix=$((suffix + 1))
+  bundle_dir="$base_bundle_dir-$suffix"
+  key_material_dir="$base_key_material_dir-$suffix"
+done
+validators_dir="$bundle_dir/validators"
+mkdir -p "$validators_dir"
+mkdir -p "$key_material_dir"
+chmod 700 "$key_material_dir"
+
+scratch="$(mktemp -d)"
+cleanup() {
+  rm -rf "$scratch"
+}
+trap cleanup EXIT
+
+source_topology="$scratch/source-topology.json"
+source_node_dir="$key_material_dir/source-node"
+
+target/debug/postfiat-node topology \
+  --chain-id "$CHAIN_ID" \
+  --validators "$VALIDATORS" \
+  --base-port "$BASE_PORT" \
+  --output "$source_topology" >/dev/null
+
+hosts_csv="$(IFS=,; printf '%s' "${host_list[*]}")"
+remote_topology="$bundle_dir/remote-topology.json"
+target/debug/postfiat-node topology \
+  --chain-id "$CHAIN_ID" \
+  --hosts "$hosts_csv" \
+  --base-port "$BASE_PORT" \
+  --rpc-base-port "$RPC_BASE_PORT" \
+  --output "$remote_topology" >/dev/null
+topology_hash="$(jq -r '.topology_id' "$remote_topology")"
+
+target/debug/postfiat-node init \
+  --data-dir "$source_node_dir" \
+  --chain-id "$CHAIN_ID" \
+  --node-id "validator-0" \
+  --validators "$VALIDATORS" >/dev/null
+
+target/debug/postfiat-node validator-keys \
+  --data-dir "$source_node_dir" \
+  --validators "$VALIDATORS" >/dev/null
+
+chmod 700 "$source_node_dir"
+per_validator_key_material_dir="$key_material_dir/validators"
+mkdir -p "$per_validator_key_material_dir"
+
+for ((i = 0; i < VALIDATORS; i++)); do
+  node_id="validator-$i"
+  node_key_dir="$per_validator_key_material_dir/$node_id"
+  mkdir -p "$node_key_dir"
+  chmod 700 "$node_key_dir"
+  jq \
+    --arg node_id "$node_id" \
+    '{validators: [.validators[] | select(.node_id == $node_id)]}' \
+    "$source_node_dir/validator_keys.json" >"$node_key_dir/validator_keys.json"
+  cp "$source_node_dir/faucet_key.json" "$node_key_dir/faucet_key.json"
+  chmod 600 "$node_key_dir/validator_keys.json" "$node_key_dir/faucet_key.json"
+  jq -e \
+    --arg node_id "$node_id" \
+    '.validators | length == 1 and .[0].node_id == $node_id and (.[0].private_key_hex | length > 0)' \
+    "$node_key_dir/validator_keys.json" >/dev/null
+done
+
+for state_file in "${PUBLIC_STATE_FILES[@]}"; do
+  copy_public_artifact "$source_node_dir/$state_file" "$bundle_dir/$state_file"
+done
+cp "$source_topology" "$bundle_dir/source-local-topology.json"
+
+peer_records="$scratch/peers.jsonl"
+validator_config_paths=()
+for ((i = 0; i < VALIDATORS; i++)); do
+  node_id="validator-$i"
+  host="${host_list[$i]}"
+  p2p_port=$((BASE_PORT + (i * 2)))
+  rpc_port=$((RPC_BASE_PORT + i))
+  data_dir="$REMOTE_DATA_ROOT/$node_id"
+  log_dir="$REMOTE_LOG_ROOT/$node_id"
+  service_name="postfiat-$node_id"
+  key_file="$data_dir/validator_keys.json"
+  faucet_key_file="$data_dir/faucet_key.json"
+  p2p_address="$(multiaddr_for_host "$host" "$p2p_port")"
+
+  jq -cn \
+    --arg node_id "$node_id" \
+    --arg host "$host" \
+    --arg p2p_address "$p2p_address" \
+    --argjson p2p_port "$p2p_port" \
+    --argjson rpc_port "$rpc_port" \
+    '{
+      node_id: $node_id,
+      host: $host,
+      p2p_port: $p2p_port,
+      rpc_port: $rpc_port,
+      p2p_address: $p2p_address
+    }' >>"$peer_records"
+
+  config_path="$validators_dir/$node_id.json"
+  validator_config_paths+=("$config_path")
+  jq -n \
+    --arg schema "postfiat-remote-validator-config-v1" \
+    --arg generated_utc "$generated_utc" \
+    --arg chain_id "$CHAIN_ID" \
+    --arg node_id "$node_id" \
+    --arg host "$host" \
+    --arg p2p_address "$p2p_address" \
+    --arg service_name "$service_name" \
+    --arg data_dir "$data_dir" \
+    --arg log_dir "$log_dir" \
+    --arg key_file "$key_file" \
+    --arg faucet_key_file "$faucet_key_file" \
+    --arg binary_path "$BINARY_PATH" \
+    --argjson p2p_port "$p2p_port" \
+    --argjson rpc_port "$rpc_port" \
+    '{
+      schema: $schema,
+      generated_utc: $generated_utc,
+      chain_id: $chain_id,
+      node: {
+        node_id: $node_id,
+        host: $host,
+        p2p_port: $p2p_port,
+        rpc_port: $rpc_port,
+        p2p_address: $p2p_address
+      },
+      paths: {
+        binary: $binary_path,
+        data_dir: $data_dir,
+        log_dir: $log_dir,
+        genesis: "\($data_dir)/genesis.json",
+        validator_registry: "\($data_dir)/validator_registry.json",
+        validator_registry_genesis: "\($data_dir)/validator_registry_genesis.json",
+        topology: "\($data_dir)/remote-topology.json",
+        validator_keys: $key_file,
+        faucet_key: $faucet_key_file
+      },
+      service: {
+        name: $service_name,
+        run_command: "\($binary_path) run --data-dir \($data_dir)",
+        status_command: "\($binary_path) status --data-dir \($data_dir)",
+        metrics_command: "\($binary_path) metrics --data-dir \($data_dir)"
+      },
+      private_key_policy: {
+        included_in_bundle: false,
+        required_files: [$key_file, $faucet_key_file],
+        install_mode: "operator-local-or-secure-channel"
+      }
+    }' >"$config_path"
+done
+
+peers_json="$scratch/peers.json"
+jq -s '.' "$peer_records" >"$peers_json"
+jq -e --slurpfile expected "$peers_json" '.peers == $expected[0]' \
+  "$remote_topology" >/dev/null
+
+runbook="$bundle_dir/runbook.md"
+cat >"$runbook" <<EOF
+# PostFiat Testnet Config Bundle
+
+Generated: $generated_utc
+
+This bundle prepares $VALIDATORS remote validators for chain \`$CHAIN_ID\`.
+
+## Files
+
+- \`genesis.json\`, \`governance.json\`, \`ledger.json\`, \`blocks.json\`,
+  \`batch_archive.json\`, \`mempool.json\`, \`ordered_batches.json\`,
+  \`receipts.json\`, \`shielded.json\`, \`bridge.json\`,
+  \`faucet_account.json\`, \`validator_registry.json\`, and
+  \`validator_registry_genesis.json\`: public initial validator state.
+- \`remote-topology.json\`: remote host and port topology.
+- \`validators/validator-N.json\`: per-validator runtime config.
+- \`bundle.json\`: manifest with hashes for every bundle file.
+
+## Private Keys
+
+Private key files are not included in this bundle. They were preserved outside
+the bundle on the local CTO machine at:
+
+- \`$key_material_dir\`
+
+That directory now contains two forms of key material:
+
+- \`source-node/validator_keys.json\`: combined internal MVP validator key set.
+- \`validators/validator-N/validator_keys.json\`: split private key file containing only validator-N's own key.
+- \`validators/validator-N/faucet_key.json\`: faucet key copy for controlled internal testnet use.
+
+Each validator runtime still requires:
+
+- \`validator_keys.json\`
+- \`faucet_key.json\`
+
+Install private files only through an operator-local or secure channel and set mode \`600\`.
+The controlled testnet certified-round driver can assemble a certificate from
+split per-validator key files supplied to one operator process. Normal receiving
+validators only need their own \`validator_keys.json\` file and can apply externally
+certified batches. Do not install the combined \`source-node/validator_keys.json\`
+file on runtime validators; distributed vote collection remains the next step
+before no operator process needs access to the full split-key set.
+
+## Per Validator Setup
+
+For each \`validator-N\`:
+
+\`\`\`sh
+sudo mkdir -p $REMOTE_DATA_ROOT/validator-N $REMOTE_LOG_ROOT/validator-N
+sudo cp genesis.json governance.json ledger.json blocks.json batch_archive.json mempool.json ordered_batches.json receipts.json shielded.json bridge.json faucet_account.json validator_registry.json validator_registry_genesis.json remote-topology.json $REMOTE_DATA_ROOT/validator-N/
+printf '{\n  "node_id": "validator-N",\n  "status": "initialized",\n  "last_run_unix": 0\n}\n' | sudo tee $REMOTE_DATA_ROOT/validator-N/node_state.json >/dev/null
+sudo install -m 600 validator_keys.json $REMOTE_DATA_ROOT/validator-N/validator_keys.json
+sudo install -m 600 faucet_key.json $REMOTE_DATA_ROOT/validator-N/faucet_key.json
+$BINARY_PATH status --data-dir $REMOTE_DATA_ROOT/validator-N
+$BINARY_PATH run --data-dir $REMOTE_DATA_ROOT/validator-N
+\`\`\`
+
+The current node runtime is still a single-shot MVP runner, so service supervision belongs to the next transport and operations milestones.
+EOF
+
+files_tmp="$scratch/files.jsonl"
+while IFS= read -r file; do
+  json_file_record "$bundle_dir" "$file" >>"$files_tmp"
+done < <(find "$bundle_dir" -type f ! -name bundle.json | sort)
+
+manifest_tmp="$scratch/bundle.body.json"
+manifest="$bundle_dir/bundle.json"
+git_status_file="$scratch/git-status.txt"
+git status --short >"$git_status_file"
+git_dirty=false
+if [ -s "$git_status_file" ]; then
+  git_dirty=true
+fi
+
+jq -n \
+  --arg schema "postfiat-testnet-config-bundle-v1" \
+  --arg generated_utc "$generated_utc" \
+  --arg chain_id "$CHAIN_ID" \
+  --arg bundle_dir "$bundle_dir" \
+  --arg remote_data_root "$REMOTE_DATA_ROOT" \
+  --arg remote_log_root "$REMOTE_LOG_ROOT" \
+  --arg binary_path "$BINARY_PATH" \
+  --arg key_material_dir "$key_material_dir" \
+  --arg per_validator_key_material_dir "$per_validator_key_material_dir" \
+  --arg validator_keys_source "$source_node_dir/validator_keys.json" \
+  --arg faucet_key_source "$source_node_dir/faucet_key.json" \
+  --arg topology_id "$topology_hash" \
+  --arg git_revision "$(git rev-parse HEAD)" \
+  --arg git_branch "$(git branch --show-current 2>/dev/null || true)" \
+  --argjson validators "$VALIDATORS" \
+  --argjson base_port "$BASE_PORT" \
+  --argjson rpc_base_port "$RPC_BASE_PORT" \
+  --argjson git_dirty "$git_dirty" \
+  --slurpfile source "$source_topology" \
+  --slurpfile peers "$peers_json" \
+  --slurpfile files "$files_tmp" \
+  '{
+    schema: $schema,
+    generated_utc: $generated_utc,
+    status: "ready",
+    bundle_dir: $bundle_dir,
+    chain: {
+      chain_id: $chain_id,
+      genesis_hash: $source[0].genesis_hash,
+      protocol_version: $source[0].protocol_version,
+      validator_count: $validators
+    },
+    validators: $validators,
+    network: {
+      base_port: $base_port,
+      rpc_base_port: $rpc_base_port,
+      topology_id: $topology_id,
+      peers: $peers[0]
+    },
+    remote_paths: {
+      data_root: $remote_data_root,
+      log_root: $remote_log_root,
+      binary: $binary_path
+    },
+    private_key_policy: {
+      included_in_bundle: false,
+      required_per_validator: ["validator_keys.json", "faucet_key.json"],
+      install_mode: "operator-local-or-secure-channel",
+      local_private_material_dir: $key_material_dir,
+      combined_validator_keys_source: $validator_keys_source,
+      per_validator_key_material_dir: $per_validator_key_material_dir,
+      split_validator_keys_available: true,
+      faucet_key_source: $faucet_key_source,
+      runtime_limitation: "controlled testnet certified-round driver can assemble certificates from split per-validator key files supplied to one operator process; distributed vote collection is still required before no process needs the full split-key set"
+    },
+    git: {
+      branch: $git_branch,
+      revision: $git_revision,
+      dirty: $git_dirty
+    },
+    files: $files
+  }' >"$manifest_tmp"
+
+manifest_hash="$(sha256sum "$manifest_tmp" | awk '{print $1}')"
+jq --arg manifest_hash "$manifest_hash" '. + {manifest_hash: $manifest_hash}' \
+  "$manifest_tmp" >"$manifest"
+
+jq -e '
+  .schema == "postfiat-testnet-config-bundle-v1"
+  and .status == "ready"
+  and (.validators == (.network.peers | length))
+  and (.private_key_policy.included_in_bundle == false)
+  and all(.files[]; (.path | contains("validator_keys.json") | not) and (.path | contains("faucet_key.json") | not))
+' "$manifest" >/dev/null
+
+printf 'postfiat testnet config bundle\n'
+printf 'bundle_dir=%s\n' "$bundle_dir"
+printf 'manifest=%s\n' "$manifest"
+printf 'validators=%s chain_id=%s topology_id=%s\n' "$VALIDATORS" "$CHAIN_ID" "$topology_hash"
+printf 'private_keys_included=false\n'
+printf 'local_private_material_dir=%s\n' "$key_material_dir"

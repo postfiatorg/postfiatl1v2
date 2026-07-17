@@ -1,0 +1,18 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/performance_methodology_policy/valid_performance_methodology_policy.json",
+  "expected_error_contains": [
+    "ML-DSA throughput boundary must reject unsupported measured claim"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "cards",
+        3,
+        "status"
+      ],
+      "value": "supported"
+    }
+  ],
+  "schema": "postfiat-performance-methodology-policy-invalid-case-v1"
+}

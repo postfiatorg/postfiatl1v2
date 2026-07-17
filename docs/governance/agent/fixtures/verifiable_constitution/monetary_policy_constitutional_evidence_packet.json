@@ -1,0 +1,321 @@
+{
+  "schema": "postfiat-constitutional-evidence-packet-v1",
+  "packet_id": "vc-monetary-policy-001-evidence-001",
+  "packet_version": 1,
+  "status": "approved",
+  "packet_scope": "monetary_policy",
+  "created_at": "2026-05-25T00:00:00Z",
+  "request_ref": {
+    "request_id": "vc-monetary-policy-001-request-001",
+    "request_path": "docs/governance/agent/fixtures/verifiable_constitution/monetary_policy_constitutional_evidence_request.json",
+    "request_file_sha3_384": "3ffd4f5260578b4e9266a0caddf6186389576b1d3f2f06e066e55357d715ea6687ae63d0bea469666d56b5f1a7a915ff",
+    "request_canonical_hash": "6d90444eb2dd201073f09502df791853f22d0375d09424c6d49697dbf3f081adc001b9c75c34a940cc28716997049f81",
+    "request_schema_path": "docs/governance/agent/constitutional_evidence_request_schema.json",
+    "request_schema_sha3_384": "f278cce70a5c668424bac14d94719c0371b994fef98dbbd53f01b3f15e557ba8823aa363f7b407079f776c4cdf9d39d3"
+  },
+  "collection_manifest": {
+    "collector_id": "vc-non-validator-repo-snapshot-collector",
+    "collection_mode": "repo_snapshot_only",
+    "collected_at": "2026-05-25T00:00:00Z",
+    "source_commit": "f8eae038918507b94e570f9472f61a4a21088d6b",
+    "live_collection_executed": false,
+    "network_reads": false,
+    "provider_spend": false,
+    "secret_material_seen": false,
+    "live_mutation_executed": false
+  },
+  "evidence_root": "c98e850f270cd97c5db858ce54754289d2960b4d9d26d0836708118fc5e3b703fc302a480b84a4a461e79869ad7fd394",
+  "evidence_items": [
+    {
+      "field_path": "monetary_policy.status_quo_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "96ade526f37c8702d1daa9645684e1de10e4f24b8d519a8476b889e2097bc419bd52b7e7e06662815a7c752a1225c6fd",
+      "source_refs": [
+        {
+          "ref_id": "constitutional-question-schema",
+          "path": "docs/governance/agent/constitutional_question_schema.json",
+          "sha3_384": "47c2b2f27bdc745615f4d0d893333c12825b8b935358efbf4f53bdb9ad7b72e03d46d5264812d2cd9066d3c11813bd7f",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "initial-context-packet",
+          "path": "docs/governance/agent/fixtures/verifiable_constitution/initial_context_packet.json",
+          "sha3_384": "b370232a7544900f82c21268d1a08dea911835f670a52d2c5a229ab4ac8c878e66cd858cb23ac06c36d425a9ddf50e3a",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "implementation-whitepaper",
+          "path": "docs_site/whitepaper.md",
+          "sha3_384": "ea4f650da64ae54aa291f2fe5a3ca14189bb6492972681a4f247d5baa6b252d8d3935c24411c90b22003587d53415e45",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "execution-entrypoints",
+          "path": "crates/execution/src/lib_parts/entrypoints.rs",
+          "sha3_384": "8d6bfb63a3bc3cac90a1e6d20e934c1a71a49805ef1f7460059144ed775bc335dc55e48e33fef77ddfbb73e8a717ffa2",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "docs-site-index",
+          "path": "docs_site/index.md",
+          "sha3_384": "d7ec58e74f3ba99ec6e0d1c1643f2c2640516fa56dc7f5ef103fe3823903e90632dcf1155af4c8df3283e4e93f324b1a",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "fee-reserve-policy-smoke",
+          "path": "scripts/testnet-fee-reserve-policy-smoke",
+          "sha3_384": "db3ef5a0d1b335ec7585c77a46ebda5758f41b1280e45018409b6e966a8ecbf57d616856a6aa6758cae6e4940b26082a",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "transfer-fee-quote-smoke",
+          "path": "scripts/testnet-transfer-fee-quote-smoke",
+          "sha3_384": "9e8d116801a31302fe5ee46481dfb3fa66af9be58705f96774f57807feb2f104a74dc4337fd0b38ab704c765fe572cd1",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "fuzz-harness-supply-invariant",
+          "path": "crates/fuzz_harness/src/main.rs",
+          "sha3_384": "045f1564c19b6f55ca2aca6d43e2bcab39670bc30b9eb38d954884f62a9238eb5ceca9309b3d3951e253b9e906572bbf",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "redaction_status": "public",
+      "collector_note": "monetary_policy evidence field collected from existing repo-bound constitutional question references."
+    },
+    {
+      "field_path": "monetary_policy.implementation_refs_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "19e173e6aa20d0d52a5a368571beec23d57f85478b8aa9965ae12eb48370bacd46a18bc54be536a7b642a8917891bf74",
+      "source_refs": [
+        {
+          "ref_id": "constitutional-question-schema",
+          "path": "docs/governance/agent/constitutional_question_schema.json",
+          "sha3_384": "47c2b2f27bdc745615f4d0d893333c12825b8b935358efbf4f53bdb9ad7b72e03d46d5264812d2cd9066d3c11813bd7f",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "initial-context-packet",
+          "path": "docs/governance/agent/fixtures/verifiable_constitution/initial_context_packet.json",
+          "sha3_384": "b370232a7544900f82c21268d1a08dea911835f670a52d2c5a229ab4ac8c878e66cd858cb23ac06c36d425a9ddf50e3a",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "implementation-whitepaper",
+          "path": "docs_site/whitepaper.md",
+          "sha3_384": "ea4f650da64ae54aa291f2fe5a3ca14189bb6492972681a4f247d5baa6b252d8d3935c24411c90b22003587d53415e45",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "execution-entrypoints",
+          "path": "crates/execution/src/lib_parts/entrypoints.rs",
+          "sha3_384": "8d6bfb63a3bc3cac90a1e6d20e934c1a71a49805ef1f7460059144ed775bc335dc55e48e33fef77ddfbb73e8a717ffa2",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "docs-site-index",
+          "path": "docs_site/index.md",
+          "sha3_384": "d7ec58e74f3ba99ec6e0d1c1643f2c2640516fa56dc7f5ef103fe3823903e90632dcf1155af4c8df3283e4e93f324b1a",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "fee-reserve-policy-smoke",
+          "path": "scripts/testnet-fee-reserve-policy-smoke",
+          "sha3_384": "db3ef5a0d1b335ec7585c77a46ebda5758f41b1280e45018409b6e966a8ecbf57d616856a6aa6758cae6e4940b26082a",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "transfer-fee-quote-smoke",
+          "path": "scripts/testnet-transfer-fee-quote-smoke",
+          "sha3_384": "9e8d116801a31302fe5ee46481dfb3fa66af9be58705f96774f57807feb2f104a74dc4337fd0b38ab704c765fe572cd1",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "fuzz-harness-supply-invariant",
+          "path": "crates/fuzz_harness/src/main.rs",
+          "sha3_384": "045f1564c19b6f55ca2aca6d43e2bcab39670bc30b9eb38d954884f62a9238eb5ceca9309b3d3951e253b9e906572bbf",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "redaction_status": "public",
+      "collector_note": "monetary_policy evidence field collected from existing repo-bound constitutional question references."
+    },
+    {
+      "field_path": "monetary_policy.evidence_refs_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "1b1f7d1976a2a7beb3a25373134c76bed4312a30a36e5ed0ab30bc0343767bad8aaab7d3ebb976d4c97e8bbaf79363f7",
+      "source_refs": [
+        {
+          "ref_id": "constitutional-question-schema",
+          "path": "docs/governance/agent/constitutional_question_schema.json",
+          "sha3_384": "47c2b2f27bdc745615f4d0d893333c12825b8b935358efbf4f53bdb9ad7b72e03d46d5264812d2cd9066d3c11813bd7f",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "initial-context-packet",
+          "path": "docs/governance/agent/fixtures/verifiable_constitution/initial_context_packet.json",
+          "sha3_384": "b370232a7544900f82c21268d1a08dea911835f670a52d2c5a229ab4ac8c878e66cd858cb23ac06c36d425a9ddf50e3a",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "implementation-whitepaper",
+          "path": "docs_site/whitepaper.md",
+          "sha3_384": "ea4f650da64ae54aa291f2fe5a3ca14189bb6492972681a4f247d5baa6b252d8d3935c24411c90b22003587d53415e45",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "execution-entrypoints",
+          "path": "crates/execution/src/lib_parts/entrypoints.rs",
+          "sha3_384": "8d6bfb63a3bc3cac90a1e6d20e934c1a71a49805ef1f7460059144ed775bc335dc55e48e33fef77ddfbb73e8a717ffa2",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "docs-site-index",
+          "path": "docs_site/index.md",
+          "sha3_384": "d7ec58e74f3ba99ec6e0d1c1643f2c2640516fa56dc7f5ef103fe3823903e90632dcf1155af4c8df3283e4e93f324b1a",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "fee-reserve-policy-smoke",
+          "path": "scripts/testnet-fee-reserve-policy-smoke",
+          "sha3_384": "db3ef5a0d1b335ec7585c77a46ebda5758f41b1280e45018409b6e966a8ecbf57d616856a6aa6758cae6e4940b26082a",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "transfer-fee-quote-smoke",
+          "path": "scripts/testnet-transfer-fee-quote-smoke",
+          "sha3_384": "9e8d116801a31302fe5ee46481dfb3fa66af9be58705f96774f57807feb2f104a74dc4337fd0b38ab704c765fe572cd1",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "fuzz-harness-supply-invariant",
+          "path": "crates/fuzz_harness/src/main.rs",
+          "sha3_384": "045f1564c19b6f55ca2aca6d43e2bcab39670bc30b9eb38d954884f62a9238eb5ceca9309b3d3951e253b9e906572bbf",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "redaction_status": "public",
+      "collector_note": "monetary_policy evidence field collected from existing repo-bound constitutional question references."
+    },
+    {
+      "field_path": "monetary_policy.closed_option_set_hash",
+      "requested_value_type": "hash",
+      "request_required": true,
+      "evidence_status": "present",
+      "canonical_value": "e79648f2f6d8485a3474a1a4f80aa75aa31619078b2219a8c03028d89b2bc1fe9578bc68ea11023fe623e35dc7aa8e3f",
+      "source_refs": [
+        {
+          "ref_id": "constitutional-question-schema",
+          "path": "docs/governance/agent/constitutional_question_schema.json",
+          "sha3_384": "47c2b2f27bdc745615f4d0d893333c12825b8b935358efbf4f53bdb9ad7b72e03d46d5264812d2cd9066d3c11813bd7f",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "initial-context-packet",
+          "path": "docs/governance/agent/fixtures/verifiable_constitution/initial_context_packet.json",
+          "sha3_384": "b370232a7544900f82c21268d1a08dea911835f670a52d2c5a229ab4ac8c878e66cd858cb23ac06c36d425a9ddf50e3a",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "implementation-whitepaper",
+          "path": "docs_site/whitepaper.md",
+          "sha3_384": "ea4f650da64ae54aa291f2fe5a3ca14189bb6492972681a4f247d5baa6b252d8d3935c24411c90b22003587d53415e45",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "execution-entrypoints",
+          "path": "crates/execution/src/lib_parts/entrypoints.rs",
+          "sha3_384": "8d6bfb63a3bc3cac90a1e6d20e934c1a71a49805ef1f7460059144ed775bc335dc55e48e33fef77ddfbb73e8a717ffa2",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "docs-site-index",
+          "path": "docs_site/index.md",
+          "sha3_384": "d7ec58e74f3ba99ec6e0d1c1643f2c2640516fa56dc7f5ef103fe3823903e90632dcf1155af4c8df3283e4e93f324b1a",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "fee-reserve-policy-smoke",
+          "path": "scripts/testnet-fee-reserve-policy-smoke",
+          "sha3_384": "db3ef5a0d1b335ec7585c77a46ebda5758f41b1280e45018409b6e966a8ecbf57d616856a6aa6758cae6e4940b26082a",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "transfer-fee-quote-smoke",
+          "path": "scripts/testnet-transfer-fee-quote-smoke",
+          "sha3_384": "9e8d116801a31302fe5ee46481dfb3fa66af9be58705f96774f57807feb2f104a74dc4337fd0b38ab704c765fe572cd1",
+          "provenance": "governance_documented"
+        },
+        {
+          "ref_id": "fuzz-harness-supply-invariant",
+          "path": "crates/fuzz_harness/src/main.rs",
+          "sha3_384": "045f1564c19b6f55ca2aca6d43e2bcab39670bc30b9eb38d954884f62a9238eb5ceca9309b3d3951e253b9e906572bbf",
+          "provenance": "governance_documented"
+        }
+      ],
+      "provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "redaction_status": "public",
+      "collector_note": "monetary_policy evidence field collected from existing repo-bound constitutional question references."
+    }
+  ],
+  "missing_evidence": [],
+  "redaction": {
+    "redaction_passed": true,
+    "secret_scan_passed": true,
+    "hidden_evidence_absent": true,
+    "prohibited_fields_absent": true,
+    "raw_secret_material_retained": false,
+    "public_packet_only": true
+  },
+  "checks": {
+    "schema_valid": true,
+    "request_hash_matches": true,
+    "requested_fields_bound": true,
+    "source_hashes_verified": true,
+    "missing_behaviors_applied": true,
+    "redaction_passed": true,
+    "secret_scan_passed": true,
+    "no_hidden_evidence": true,
+    "no_live_collection": true,
+    "no_live_mutation": true,
+    "packet_root_verified": true,
+    "authority_transfer": false
+  }
+}

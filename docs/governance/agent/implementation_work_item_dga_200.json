@@ -1,0 +1,92 @@
+{
+  "schema": "postfiat-governance-agent-implementation-work-item-v1",
+  "work_item_id": "DGA-IMPLEMENTATION-WORK-ITEM-2026-05-23-001",
+  "work_package_id": "DGA-IMPLEMENTATION-WORK-PACKAGE-2026-05-23-001",
+  "authorization_plan_id": "DGA-IMPLEMENTATION-AUTH-2026-05-23-001",
+  "queue_decision_id": "DGA-QUEUE-DECISION-2026-05-23-001",
+  "source_authorization_doc": "docs/governance/deterministic-governance-agent-implementation-authorization.md",
+  "scope": "Create a no-spend local implementation-execution verifier for the first DGA work item.",
+  "exact_targets": [
+    "typed implementation work item fixture",
+    "no-spend implementation execution report",
+    "CLI and script entrypoint",
+    "focused governance-agent tests"
+  ],
+  "allowed_surfaces": [
+    "docs/governance/deterministic-governance-agent-*.md",
+    "docs/governance/agent/*",
+    "scripts/gov-inference-*",
+    "crates/node/src/governance_agent.rs",
+    "docs/ai-handoff.md",
+    "docs/status/deterministic-governance-agent-whip-mandate.md",
+    "docs/whip-harness.md",
+    "$CODEX_WHIP_CONFIG"
+  ],
+  "touched_surfaces": [
+    "docs/governance/agent/implementation_work_item_dga_200.json",
+    "scripts/gov-inference-implementation-execution",
+    "crates/node/src/governance_agent.rs",
+    "crates/node/src/main.rs",
+    "docs/governance/deterministic-governance-agent-burndown.md",
+    "docs/ai-handoff.md",
+    "docs/status/deterministic-governance-agent-whip-mandate.md",
+    "docs/whip-harness.md",
+    "$CODEX_WHIP_CONFIG"
+  ],
+  "authorized_surface_expansions": [
+    {
+      "surface": "crates/node/src/main.rs",
+      "reason": "Expose the local verifier through the existing postfiat-node governance-agent CLI pattern.",
+      "boundary": "no live authority change; CLI only verifies a local work item and writes a redaction-safe report"
+    }
+  ],
+  "forbidden_actions": [
+    "live validator-registry mutation",
+    "Cobalt amendment submission",
+    "provider start, stop, or delete commands",
+    "hidden 100-run or 1000-run replay regeneration",
+    "validator-side sidecar activation",
+    "commit-reveal activation",
+    "tensor parallelism greater than one",
+    "canonical publishing-authority transfer",
+    "secret capture"
+  ],
+  "live_action_flags": {
+    "registry_mutation": false,
+    "cobalt_amendment_submission": false,
+    "provider_start_stop_delete": false,
+    "paid_replay_regeneration": false,
+    "validator_side_sidecar_activation": false,
+    "commit_reveal_activation": false,
+    "tensor_parallelism_greater_than_one": false,
+    "authority_transfer": false,
+    "secret_capture": false
+  },
+  "required_gates": [
+    {
+      "name": "implementation-execution-report",
+      "command": "scripts/gov-inference-implementation-execution",
+      "required_before_live_mutation": true,
+      "no_spend": true
+    },
+    {
+      "name": "release-handoff-no-refresh",
+      "command": "scripts/gov-inference-release-handoff --no-refresh-local",
+      "required_before_live_mutation": true,
+      "no_spend": true
+    },
+    {
+      "name": "docs-site-build",
+      "command": "scripts/docs-site-build",
+      "required_before_live_mutation": true,
+      "no_spend": true
+    },
+    {
+      "name": "repository-checks",
+      "command": "scripts/check",
+      "required_before_live_mutation": true,
+      "no_spend": true
+    }
+  ],
+  "rollback_or_noop_fallback": "If verification fails or evidence is stale, perform a no-op: leave registry, Cobalt, provider, replay, sidecar, commit-reveal, tensor-parallel, and authority state unchanged."
+}

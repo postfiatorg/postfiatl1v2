@@ -1,0 +1,146 @@
+{
+  "schema": "postfiat-verifiable-constitution-live-replay-readiness-gate-v1",
+  "gate_id": "vc-protocol-architecture-001-live-replay-readiness-001",
+  "gate_version": 1,
+  "status": "staged_not_executed",
+  "created_at": "2026-05-25T00:00:00Z",
+  "selected_vector": "protocol_architecture",
+  "purpose": "Define the provider-backed Qwen replay manifest required to reproduce or challenge the VC-045 protocol-architecture decision using the VC-046 prompt.",
+  "vc046_prompt_ref": {
+    "prompt_id": "vc-protocol-architecture-001-decision-replay-prompt-001",
+    "prompt_fixture_path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_decision_replay_prompt_fixture.json",
+    "prompt_fixture_sha3_384": "7da4ceb8fff54721532bf48b82713d44d66175541a59ebf02ea50b965ce38aae0ae98ce8d0932a2d28ad8bdc229172fb",
+    "prompt_fixture_canonical_hash": "ef8d4ca90b5d983a5e38a174de1122579525ffc1bbe505b129bf50c04797304dca5105509d30c46cf0ce1beeb283e4a3",
+    "prompt_report_path": "reports/verifiable-constitution/vc-046-protocol-architecture-replay-prompt-report.json",
+    "prompt_report_sha3_384": "d5503d2505f3ff9fca1322175117225eaaf16cdef01695c03690c20e8cbd189d91ed1d411e74249eb34ff9aaab31c9d4",
+    "prompt_hash": "8d9e1473fe96155b123fc408e58ce2cae63bdd9a3473a6a35d78918e339e9a7148c9bad4ee6560994fad893a847685e5",
+    "prompt_payload_hash": "d94d334b3db45b933e40c364e0fe6c0bc1d478935e838ff051c7428a3fa3d6f91c75993d2aeaa46d0b0d1f2ba7a3e51a",
+    "target_decision_hash": "24333d8ba08daa332e078586b4b5de0bf9720d176f758d852465ac1ae6b86a20a766ff06b86b445d29a5caf7149440ab",
+    "evidence_packet_hash": "d04d3f89694c0c6fed1c23d4d72252d1bc774423cff577fe476cad39f8a5e7fe846bf30f517514170b4bf48e6dd4f8ce",
+    "evidence_root": "d9f1d159b3be6b34376c937a8cce10a08b457c7e13dbf73758c95c80e8b5833249a162ab408d2eb717fa0f1203c77c40"
+  },
+  "model_runtime_manifest": {
+    "model_id": "Qwen/Qwen3.6-27B-FP8",
+    "runtime": "SGLang",
+    "runtime_profile": "Modal/SGLang H100 deterministic profile",
+    "provider_profile": "Vast preferred; RunPod fallback",
+    "image": "lmsysorg/sglang:nightly-dev-cu13-20260523-c112f762",
+    "tensor_parallelism": 1,
+    "max_running_requests": 1,
+    "temperature": 0,
+    "top_p": 1,
+    "required_deterministic_flags": [
+      "--enable-deterministic-inference",
+      "--max-running-requests=1",
+      "--tp=1",
+      "--temperature=0",
+      "--top-p=1"
+    ],
+    "forbidden_runtime_modes": [
+      "tensor_parallelism_gt_1",
+      "dynamic_batching",
+      "temperature_gt_0",
+      "unrecorded_image",
+      "unrecorded_chat_template",
+      "unrecorded_tokenizer"
+    ]
+  },
+  "provider_run_manifest": {
+    "execution_enabled": false,
+    "requires_explicit_provider_backed_replay_instruction": true,
+    "minimum_machine_count": 2,
+    "preferred_provider_order": [
+      "vast",
+      "runpod"
+    ],
+    "preferred_hardware_classes": [
+      "H100 80GB HBM3",
+      "H200 141GB",
+      "A100-SXM4-80GB"
+    ],
+    "same_class_repeat_required_when_available": true,
+    "cross_class_repeat_required": true,
+    "pre_run_inventory_required": true,
+    "post_run_cleanup_required": true,
+    "cleanup_zero_resources_required": true,
+    "redaction_safe_manifest_required": true,
+    "secret_capture_allowed": false,
+    "network_reads_allowed_only_for_provider_runtime": true
+  },
+  "required_artifacts": [
+    {
+      "artifact": "pre_run_provider_inventory",
+      "required": true,
+      "redaction": "redacted_provider_access_material"
+    },
+    {
+      "artifact": "per_machine_prompt_manifest",
+      "required": true,
+      "must_match": "vc046_prompt_ref.prompt_hash"
+    },
+    {
+      "artifact": "per_machine_raw_model_response",
+      "required": true,
+      "must_hash": true
+    },
+    {
+      "artifact": "per_machine_parsed_decision_packet",
+      "required": true,
+      "must_validate_schema": "postfiat-constitutional-decision-packet-v1"
+    },
+    {
+      "artifact": "per_machine_parsed_output_hash",
+      "required": true,
+      "must_compare_to": "vc046_prompt_ref.target_decision_hash"
+    },
+    {
+      "artifact": "per_machine_top_logprob_root",
+      "required": true,
+      "must_hash": true
+    },
+    {
+      "artifact": "per_machine_full_vocab_root",
+      "required": false,
+      "required_when_runtime_supports_full_distribution": true
+    },
+    {
+      "artifact": "provider_cleanup_report",
+      "required": true,
+      "must_show_zero_created_resources_remaining": true
+    }
+  ],
+  "pass_fail_policy": {
+    "prompt_hash_mismatch": "fail_closed",
+    "model_profile_mismatch": "fail_closed",
+    "parsed_decision_matches_target": "pass_replay_reproduced",
+    "parsed_decision_valid_but_differs": "challenge_required",
+    "schema_invalid_output": "fail_closed",
+    "missing_required_artifact": "fail_closed",
+    "provider_cleanup_failure": "fail_closed",
+    "full_vocab_root_mismatch": "classify_not_ready",
+    "top_logprob_root_mismatch": "classify_not_ready",
+    "same_class_divergence": "classify_not_ready",
+    "cross_class_divergence": "challenge_required"
+  },
+  "next_slice_contract": {
+    "may_execute_provider_spend": false,
+    "execution_precondition": "explicit_provider_backed_replay_slice",
+    "expected_next_report": "vc-048-protocol-architecture-live-replay-execution-report.json",
+    "must_clean_up_created_resources": true,
+    "must_not_mutate_chain_or_cobalt": true
+  },
+  "authority_boundary": {
+    "provider_spend_authorized": false,
+    "live_model_request_authorized": false,
+    "model_output_generated": false,
+    "live_evidence_collection_authorized": false,
+    "rippled_code_import_authorized": false,
+    "consensus_rewrite_authorized": false,
+    "xrpl_compatibility_activation_authorized": false,
+    "protocol_migration_authorized": false,
+    "live_validator_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "mainnet_mutation_authorized": false,
+    "authority_transfer_authorized": false
+  }
+}

@@ -1,0 +1,171 @@
+{
+  "schema": "postfiat-constitutional-challenge-packet-v1",
+  "challenge_id": "vc-model-governance-001-challenge-001",
+  "challenge_version": 1,
+  "status": "candidate",
+  "challenge_scope": "model_governance",
+  "created_at": "2026-05-24T00:00:00Z",
+  "target_decision_ref": {
+    "decision_id": "vc-model-governance-001-decision-001",
+    "decision_path": "docs/governance/agent/fixtures/verifiable_constitution/valid_constitutional_decision_packet.json",
+    "decision_file_sha3_384": "9581c668a383f21326f0ebaccf369c61e4f7ce3b63c73c965c6c0945054d8572c3fca3f2813e4ded27820a109349dd6a",
+    "decision_canonical_hash": "f0dd85f6de6a8990c92a593334b9c53ed1a761036328b19d44cbcc007ef49311c7bd839d7f417b43277ebdcddc90c25a",
+    "decision_schema_path": "docs/governance/agent/constitutional_decision_packet_schema.json",
+    "decision_schema_sha3_384": "8075b9d26086776837157a1e4002e855ad587b437c2d2a21cdb78b231543abcb747b0fd3c7066fc3aacbd4f027d56c59"
+  },
+  "challenge_summary": {
+    "title": "Hold fixture decision until Qwen replay evidence exists",
+    "challenge_kind": "missing_replay_evidence",
+    "severity": "hold_required",
+    "requested_disposition": "hold",
+    "rationale": "The target decision is intentionally a schema fixture: it records model_output_generated=false and replay_required_before_authority=true. Any attempt to treat it as a live Qwen decision must hold until replay evidence or a superseding packet exists."
+  },
+  "defect_claims": [
+    {
+      "claim_id": "decision-not-qwen-replayed",
+      "defect_type": "missing_replay_evidence",
+      "target_json_pointer": "/decision_generation/model_output_generated",
+      "evidence_ref_paths": [
+        "model.candidate.replay_convergence_count",
+        "model.candidate.cross_machine_receipt_root"
+      ],
+      "description": "The target packet does not contain Qwen-generated raw output, parsed output, or replay hashes. Its own boundary requires later replay before authority.",
+      "expected_disposition": "hold"
+    },
+    {
+      "claim_id": "candidate-evidence-absent",
+      "defect_type": "missing_evidence",
+      "target_json_pointer": "/selected_option/evidence_ref_paths",
+      "evidence_ref_paths": [
+        "model.candidate.model_id",
+        "model.candidate.replay_convergence_count",
+        "model.candidate.adversarial_failure_count",
+        "model.candidate.cross_machine_receipt_root",
+        "model.candidate.rollback_plan_hash"
+      ],
+      "description": "The decision cites missing candidate evidence while preserving the active profile; this is valid for a fixture, but cannot promote a candidate or become live authority.",
+      "expected_disposition": "hold"
+    },
+    {
+      "claim_id": "live-use-would-bypass-boundary",
+      "defect_type": "unsafe_live_action",
+      "target_json_pointer": "/authority_boundary/default_conformance_requires_later_gate",
+      "evidence_ref_paths": [
+        "model.active.model_id",
+        "model.active.runtime_profile_hash",
+        "model.candidate.rollback_plan_hash"
+      ],
+      "description": "Using the target fixture as default-conforming live authority would bypass its later gate and missing rollback evidence.",
+      "expected_disposition": "hold"
+    }
+  ],
+  "evidence_refs": [
+    {
+      "field_path": "model.candidate.replay_convergence_count",
+      "evidence_status": "missing",
+      "evidence_root": "094c5836c049e6394b1981d3e119f599af5f1a6af3429cb8f060d021b514c06b7aa1e515e07a7ffda54aadfa06097e51",
+      "supports_claim_id": "decision-not-qwen-replayed"
+    },
+    {
+      "field_path": "model.candidate.cross_machine_receipt_root",
+      "evidence_status": "missing",
+      "evidence_root": "094c5836c049e6394b1981d3e119f599af5f1a6af3429cb8f060d021b514c06b7aa1e515e07a7ffda54aadfa06097e51",
+      "supports_claim_id": "decision-not-qwen-replayed"
+    },
+    {
+      "field_path": "model.candidate.model_id",
+      "evidence_status": "missing",
+      "evidence_root": "094c5836c049e6394b1981d3e119f599af5f1a6af3429cb8f060d021b514c06b7aa1e515e07a7ffda54aadfa06097e51",
+      "supports_claim_id": "candidate-evidence-absent"
+    },
+    {
+      "field_path": "model.candidate.adversarial_failure_count",
+      "evidence_status": "missing",
+      "evidence_root": "094c5836c049e6394b1981d3e119f599af5f1a6af3429cb8f060d021b514c06b7aa1e515e07a7ffda54aadfa06097e51",
+      "supports_claim_id": "candidate-evidence-absent"
+    },
+    {
+      "field_path": "model.candidate.rollback_plan_hash",
+      "evidence_status": "missing",
+      "evidence_root": "094c5836c049e6394b1981d3e119f599af5f1a6af3429cb8f060d021b514c06b7aa1e515e07a7ffda54aadfa06097e51",
+      "supports_claim_id": "live-use-would-bypass-boundary"
+    },
+    {
+      "field_path": "model.active.model_id",
+      "evidence_status": "present",
+      "evidence_root": "094c5836c049e6394b1981d3e119f599af5f1a6af3429cb8f060d021b514c06b7aa1e515e07a7ffda54aadfa06097e51",
+      "supports_claim_id": "live-use-would-bypass-boundary"
+    },
+    {
+      "field_path": "model.active.runtime_profile_hash",
+      "evidence_status": "present",
+      "evidence_root": "094c5836c049e6394b1981d3e119f599af5f1a6af3429cb8f060d021b514c06b7aa1e515e07a7ffda54aadfa06097e51",
+      "supports_claim_id": "live-use-would-bypass-boundary"
+    }
+  ],
+  "disposition": {
+    "selected": "hold",
+    "allowed_routes": [
+      "hold",
+      "supersede",
+      "rollback",
+      "reject_challenge"
+    ],
+    "hold_until": [
+      "qwen_decision_replay_completed",
+      "new_decision_packet_accepted",
+      "challenge_rejected",
+      "rollback_packet_accepted"
+    ],
+    "rationale": "The fixture remains useful as schema evidence, but any live or default-conforming use must hold until replayed Qwen evidence, a superseding decision packet, rejection of this challenge, or a rollback packet applies."
+  },
+  "invalidation_or_resolution": [
+    {
+      "step_id": "hold-target-fixture",
+      "route": "hold",
+      "description": "Keep the challenged decision non-authoritative while missing replay evidence remains absent.",
+      "requires_new_packet": false,
+      "live_effect": false
+    },
+    {
+      "step_id": "supersede-with-replayed-decision",
+      "route": "supersede",
+      "description": "Accept a later decision packet only if it binds a Qwen request, raw output, parsed output, and replay evidence.",
+      "requires_new_packet": true,
+      "live_effect": false
+    },
+    {
+      "step_id": "rollback-if-used-live",
+      "route": "rollback",
+      "description": "If the fixture was accidentally used as live authority, require a rollback packet before any further promotion or registry action.",
+      "requires_new_packet": true,
+      "live_effect": false
+    },
+    {
+      "step_id": "reject-after-replay-proof",
+      "route": "reject_challenge",
+      "description": "Reject this challenge only if replay evidence proves the target decision was generated under an accepted model profile and all cited evidence remains valid.",
+      "requires_new_packet": false,
+      "live_effect": false
+    }
+  ],
+  "authority_boundary": {
+    "live_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "model_promotion_authorized": false,
+    "authority_transfer_authorized": false,
+    "sidecar_activation_authorized": false,
+    "challenge_is_live_authority": false
+  },
+  "checks": {
+    "target_hash_matches": true,
+    "concrete_defect_cited": true,
+    "defect_evidence_bound": true,
+    "disposition_valid": true,
+    "resolution_path_present": true,
+    "no_hidden_evidence": true,
+    "no_secret_dependency": true,
+    "no_live_mutation": true,
+    "authority_transfer": false
+  }
+}

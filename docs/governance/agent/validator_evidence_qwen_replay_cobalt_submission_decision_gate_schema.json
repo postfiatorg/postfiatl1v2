@@ -1,0 +1,514 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-validator-evidence-qwen-replay-cobalt-submission-decision-gate-v1.json",
+  "title": "PostFiat Validator Evidence Qwen Replay Cobalt Submission Decision Gate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "gate_id",
+    "mode",
+    "qwen_replay_governance_queue_decision_gate_hash",
+    "qwen_replay_governance_queue_gate_hash",
+    "qwen_replay_release_decision_gate_hash",
+    "qwen_replay_operator_review_gate_hash",
+    "qwen_replay_release_candidate_gate_hash",
+    "qwen_replay_promotion_decision_hash",
+    "qwen_replay_output_validation_receipt_hash",
+    "qwen_replay_output_manifest_hash",
+    "qwen_replay_authorization_hash",
+    "qwen_replay_preflight_hash",
+    "qwen_prompt_redaction_audit_hash",
+    "qwen_prompt_input_manifest_hash",
+    "qwen_public_summary_projection_hash",
+    "model_request_hash",
+    "packet_schema_hash",
+    "field_registry_hash",
+    "collection_window",
+    "cobalt_submission_decision",
+    "required_future_inputs",
+    "execution_boundary",
+    "failure_policy",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-evidence-qwen-replay-cobalt-submission-decision-gate-v1"
+    },
+    "gate_id": {
+      "$ref": "#/$defs/id"
+    },
+    "mode": {
+      "const": "design_fixture_only"
+    },
+    "qwen_replay_governance_queue_decision_gate_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_governance_queue_gate_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_release_decision_gate_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_operator_review_gate_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_release_candidate_gate_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_promotion_decision_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_output_validation_receipt_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_output_manifest_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_authorization_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_preflight_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_prompt_redaction_audit_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_prompt_input_manifest_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_public_summary_projection_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "model_request_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "packet_schema_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "field_registry_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "collection_window": {
+      "$ref": "#/$defs/collection_window"
+    },
+    "cobalt_submission_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "queue_submission_status",
+        "queue_decision_status",
+        "queue_decision_complete",
+        "queue_submission_receipt_hash",
+        "queue_decision_receipt_hash",
+        "queue_acceptance_hash",
+        "release_packet_hash",
+        "cobalt_submission_decision_status",
+        "cobalt_submission_decision_complete",
+        "cobalt_submission_decision_receipt_hash",
+        "cobalt_dry_run_binding_hash",
+        "cobalt_submission_package_hash",
+        "cobalt_amendment_hash",
+        "operator_pack_update_authorized",
+        "cobalt_submission_authorized",
+        "registry_mutation_authorized",
+        "authority_transfer_authorized",
+        "future_governance_queue_decision_gate_required",
+        "future_explicit_registry_mutation_decision_required"
+      ],
+      "properties": {
+        "queue_submission_status": {
+          "const": "not_submitted"
+        },
+        "queue_decision_status": {
+          "const": "not_requested"
+        },
+        "queue_decision_complete": {
+          "const": false
+        },
+        "queue_submission_receipt_hash": {
+          "type": "null"
+        },
+        "queue_decision_receipt_hash": {
+          "type": "null"
+        },
+        "queue_acceptance_hash": {
+          "type": "null"
+        },
+        "release_packet_hash": {
+          "type": "null"
+        },
+        "cobalt_submission_decision_status": {
+          "const": "not_requested"
+        },
+        "cobalt_submission_decision_complete": {
+          "const": false
+        },
+        "cobalt_submission_decision_receipt_hash": {
+          "type": "null"
+        },
+        "cobalt_dry_run_binding_hash": {
+          "type": "null"
+        },
+        "cobalt_submission_package_hash": {
+          "type": "null"
+        },
+        "cobalt_amendment_hash": {
+          "type": "null"
+        },
+        "operator_pack_update_authorized": {
+          "const": false
+        },
+        "cobalt_submission_authorized": {
+          "const": false
+        },
+        "registry_mutation_authorized": {
+          "const": false
+        },
+        "authority_transfer_authorized": {
+          "const": false
+        },
+        "future_governance_queue_decision_gate_required": {
+          "const": true
+        },
+        "future_explicit_registry_mutation_decision_required": {
+          "const": true
+        }
+      }
+    },
+    "required_future_inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "governance_queue_decision_gate_required",
+        "completed_queue_decision_required",
+        "queue_acceptance_required",
+        "cobalt_submission_decision_receipt_required",
+        "cobalt_dry_run_binding_required",
+        "cobalt_submission_package_required",
+        "cobalt_amendment_review_required",
+        "rollback_plan_required",
+        "registry_mutation_authorization_required",
+        "authority_transfer_rejection_required"
+      ],
+      "properties": {
+        "governance_queue_decision_gate_required": {
+          "const": true
+        },
+        "completed_queue_decision_required": {
+          "const": true
+        },
+        "queue_acceptance_required": {
+          "const": true
+        },
+        "cobalt_submission_decision_receipt_required": {
+          "const": true
+        },
+        "cobalt_dry_run_binding_required": {
+          "const": true
+        },
+        "cobalt_submission_package_required": {
+          "const": true
+        },
+        "cobalt_amendment_review_required": {
+          "const": true
+        },
+        "rollback_plan_required": {
+          "const": true
+        },
+        "registry_mutation_authorization_required": {
+          "const": true
+        },
+        "authority_transfer_rejection_required": {
+          "const": true
+        }
+      }
+    },
+    "execution_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_spend_executed",
+        "provider_resource_created",
+        "provider_resource_destroyed",
+        "live_model_request_executed",
+        "model_output_generated",
+        "live_network_access",
+        "live_registry_mutation",
+        "cobalt_amendment_submitted",
+        "authority_transfer"
+      ],
+      "properties": {
+        "provider_spend_executed": {
+          "const": false
+        },
+        "provider_resource_created": {
+          "const": false
+        },
+        "provider_resource_destroyed": {
+          "const": false
+        },
+        "live_model_request_executed": {
+          "const": false
+        },
+        "model_output_generated": {
+          "const": false
+        },
+        "live_network_access": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "cobalt_amendment_submitted": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    },
+    "failure_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cobalt_submission_without_queue_decision",
+        "cobalt_submission_without_dry_run_binding",
+        "operator_pack_update_without_cobalt_decision",
+        "registry_mutation_without_cobalt_decision",
+        "authority_transfer_without_cobalt_decision",
+        "fallback_decision"
+      ],
+      "properties": {
+        "cobalt_submission_without_queue_decision": {
+          "const": "reject_future_cobalt_submission"
+        },
+        "cobalt_submission_without_dry_run_binding": {
+          "const": "reject_future_cobalt_submission"
+        },
+        "operator_pack_update_without_cobalt_decision": {
+          "const": "reject_future_operator_pack_update"
+        },
+        "registry_mutation_without_cobalt_decision": {
+          "const": "reject_future_registry_mutation"
+        },
+        "authority_transfer_without_cobalt_decision": {
+          "const": "reject_future_authority_transfer"
+        },
+        "fallback_decision": {
+          "const": "no_op"
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "qwen_replay_governance_queue_decision_gate_hash_bound",
+        "qwen_replay_governance_queue_gate_hash_bound",
+        "qwen_replay_release_decision_gate_hash_bound",
+        "qwen_replay_operator_review_gate_hash_bound",
+        "qwen_replay_release_candidate_gate_hash_bound",
+        "qwen_replay_promotion_decision_hash_bound",
+        "qwen_replay_output_validation_receipt_hash_bound",
+        "qwen_replay_output_manifest_hash_bound",
+        "qwen_replay_authorization_hash_bound",
+        "qwen_replay_preflight_hash_bound",
+        "qwen_prompt_redaction_audit_hash_bound",
+        "qwen_prompt_input_manifest_hash_bound",
+        "qwen_public_summary_projection_hash_bound",
+        "model_request_hash_bound",
+        "packet_schema_hash_bound",
+        "field_registry_hash_bound",
+        "collection_window_bound",
+        "queue_not_submitted",
+        "queue_decision_not_requested",
+        "queue_decision_not_complete",
+        "no_queue_submission_receipt",
+        "no_queue_decision_receipt",
+        "no_queue_acceptance",
+        "no_release_packet",
+        "cobalt_submission_decision_not_requested",
+        "cobalt_submission_decision_not_complete",
+        "no_cobalt_submission_decision_receipt",
+        "no_cobalt_dry_run_binding",
+        "no_cobalt_submission_package",
+        "no_cobalt_amendment",
+        "required_future_inputs_bound",
+        "operator_pack_update_authorized",
+        "cobalt_submission_authorized",
+        "registry_mutation_authorized",
+        "authority_transfer_authorized",
+        "provider_spend_executed",
+        "live_model_request_executed",
+        "model_output_generated",
+        "live_registry_mutation",
+        "cobalt_amendment_submitted",
+        "authority_transfer"
+      ],
+      "properties": {
+        "qwen_replay_governance_queue_decision_gate_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_governance_queue_gate_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_release_decision_gate_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_operator_review_gate_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_release_candidate_gate_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_promotion_decision_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_output_validation_receipt_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_output_manifest_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_authorization_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_preflight_hash_bound": {
+          "const": true
+        },
+        "qwen_prompt_redaction_audit_hash_bound": {
+          "const": true
+        },
+        "qwen_prompt_input_manifest_hash_bound": {
+          "const": true
+        },
+        "qwen_public_summary_projection_hash_bound": {
+          "const": true
+        },
+        "model_request_hash_bound": {
+          "const": true
+        },
+        "packet_schema_hash_bound": {
+          "const": true
+        },
+        "field_registry_hash_bound": {
+          "const": true
+        },
+        "collection_window_bound": {
+          "const": true
+        },
+        "queue_not_submitted": {
+          "const": true
+        },
+        "queue_decision_not_requested": {
+          "const": true
+        },
+        "queue_decision_not_complete": {
+          "const": true
+        },
+        "no_queue_submission_receipt": {
+          "const": true
+        },
+        "no_queue_decision_receipt": {
+          "const": true
+        },
+        "no_queue_acceptance": {
+          "const": true
+        },
+        "no_release_packet": {
+          "const": true
+        },
+        "cobalt_submission_decision_not_requested": {
+          "const": true
+        },
+        "cobalt_submission_decision_not_complete": {
+          "const": true
+        },
+        "no_cobalt_submission_decision_receipt": {
+          "const": true
+        },
+        "no_cobalt_dry_run_binding": {
+          "const": true
+        },
+        "no_cobalt_submission_package": {
+          "const": true
+        },
+        "no_cobalt_amendment": {
+          "const": true
+        },
+        "required_future_inputs_bound": {
+          "const": true
+        },
+        "operator_pack_update_authorized": {
+          "const": false
+        },
+        "cobalt_submission_authorized": {
+          "const": false
+        },
+        "registry_mutation_authorized": {
+          "const": false
+        },
+        "authority_transfer_authorized": {
+          "const": false
+        },
+        "provider_spend_executed": {
+          "const": false
+        },
+        "live_model_request_executed": {
+          "const": false
+        },
+        "model_output_generated": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "cobalt_amendment_submitted": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "collection_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_height",
+        "to_height",
+        "from_time",
+        "to_time"
+      ],
+      "properties": {
+        "from_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "from_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to_time": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    }
+  }
+}

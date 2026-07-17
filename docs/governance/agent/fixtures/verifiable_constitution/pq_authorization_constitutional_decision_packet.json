@@ -1,0 +1,181 @@
+{
+  "schema": "postfiat-constitutional-decision-packet-v1",
+  "decision_id": "vc-pq-authorization-001-decision-001",
+  "decision_version": 1,
+  "status": "accepted",
+  "decision_scope": "post_quantum_authorization",
+  "created_at": "2026-05-25T00:00:00Z",
+  "evidence_packet_ref": {
+    "packet_id": "vc-pq-authorization-001-evidence-001",
+    "packet_path": "docs/governance/agent/fixtures/verifiable_constitution/pq_authorization_constitutional_evidence_packet.json",
+    "packet_file_sha3_384": "c76ccfc0529b5828bc0274804b9f0fc03456471434ca291f5b599dce25dcb87a161e5dbc985fcab3dc02df7f067afec8",
+    "packet_canonical_hash": "efea43bea8119dbe0dae64df0974c48a2fe55d1b82f95f2d93144a58bee85f4ffc38a3389ca9db1462cd26bb154c35a1",
+    "evidence_root": "cc5d6ec6cc9995b947010b0e9186cb1dd705e42889313214e54ad9fb253a1e5801a4c5ab0e6bc65c75044e02996011d6",
+    "packet_schema_path": "docs/governance/agent/constitutional_evidence_packet_schema.json",
+    "packet_schema_sha3_384": "5019bce76ede61a24de4c617f1b6f1275d701907c733267541ae95999aa1540ca97d00403fb65389703f5f0ea44837f2"
+  },
+  "decision_generation": {
+    "authoring_mode": "schema_fixture",
+    "model_output_generated": false,
+    "model_profile_id": null,
+    "model_request_hash": null,
+    "raw_output_hash": null,
+    "parsed_output_hash": null,
+    "replay_required_before_authority": true
+  },
+  "selected_option": {
+    "option_id": "preserve-ml-dsa-baseline",
+    "decision_kind": "preserve_status_quo",
+    "confidence": "medium",
+    "rationale": "The approved non-validator evidence packet supports preserving the current status quo while live effects remain gated.",
+    "evidence_ref_paths": [
+      "post_quantum_authorization.status_quo_hash",
+      "post_quantum_authorization.implementation_refs_hash",
+      "post_quantum_authorization.evidence_refs_hash",
+      "post_quantum_authorization.closed_option_set_hash"
+    ]
+  },
+  "rejected_options": [
+    {
+      "option_id": "alter-certificate-and-rotation-policy",
+      "rejection_kind": "missing_evidence",
+      "reason": "The current approved packet only supports preserving the non-validator status quo.",
+      "evidence_ref_paths": [
+        "post_quantum_authorization.status_quo_hash",
+        "post_quantum_authorization.implementation_refs_hash",
+        "post_quantum_authorization.evidence_refs_hash",
+        "post_quantum_authorization.closed_option_set_hash"
+      ]
+    },
+    {
+      "option_id": "defer-pq-authorization",
+      "rejection_kind": "missing_evidence",
+      "reason": "The current approved packet only supports preserving the non-validator status quo.",
+      "evidence_ref_paths": [
+        "post_quantum_authorization.status_quo_hash",
+        "post_quantum_authorization.implementation_refs_hash",
+        "post_quantum_authorization.evidence_refs_hash",
+        "post_quantum_authorization.closed_option_set_hash"
+      ]
+    },
+    {
+      "option_id": "hold-no-op",
+      "rejection_kind": "missing_evidence",
+      "reason": "The current approved packet only supports preserving the non-validator status quo.",
+      "evidence_ref_paths": [
+        "post_quantum_authorization.status_quo_hash",
+        "post_quantum_authorization.implementation_refs_hash",
+        "post_quantum_authorization.evidence_refs_hash",
+        "post_quantum_authorization.closed_option_set_hash"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    {
+      "field_path": "post_quantum_authorization.status_quo_hash",
+      "evidence_status": "present",
+      "evidence_root": "cc5d6ec6cc9995b947010b0e9186cb1dd705e42889313214e54ad9fb253a1e5801a4c5ab0e6bc65c75044e02996011d6",
+      "supports": "selected_option"
+    },
+    {
+      "field_path": "post_quantum_authorization.implementation_refs_hash",
+      "evidence_status": "present",
+      "evidence_root": "cc5d6ec6cc9995b947010b0e9186cb1dd705e42889313214e54ad9fb253a1e5801a4c5ab0e6bc65c75044e02996011d6",
+      "supports": "selected_option"
+    },
+    {
+      "field_path": "post_quantum_authorization.evidence_refs_hash",
+      "evidence_status": "present",
+      "evidence_root": "cc5d6ec6cc9995b947010b0e9186cb1dd705e42889313214e54ad9fb253a1e5801a4c5ab0e6bc65c75044e02996011d6",
+      "supports": "selected_option"
+    },
+    {
+      "field_path": "post_quantum_authorization.closed_option_set_hash",
+      "evidence_status": "present",
+      "evidence_root": "cc5d6ec6cc9995b947010b0e9186cb1dd705e42889313214e54ad9fb253a1e5801a4c5ab0e6bc65c75044e02996011d6",
+      "supports": "selected_option"
+    }
+  ],
+  "implementation_consequences": [
+    {
+      "consequence_id": "pq-authorization-preserve-status-quo",
+      "effect": "no_code_change",
+      "description": "No live implementation effect is authorized by this non-validator decision packet.",
+      "evidence_ref_paths": [
+        "post_quantum_authorization.status_quo_hash",
+        "post_quantum_authorization.implementation_refs_hash",
+        "post_quantum_authorization.evidence_refs_hash",
+        "post_quantum_authorization.closed_option_set_hash"
+      ],
+      "requires_later_authorization": false
+    }
+  ],
+  "invalidation_criteria": [
+    {
+      "criterion_id": "pq-authorization-evidence-root-drift",
+      "description": "Hold if the approved evidence root changes or cannot be recomputed.",
+      "evidence_ref_paths": [
+        "post_quantum_authorization.status_quo_hash",
+        "post_quantum_authorization.implementation_refs_hash",
+        "post_quantum_authorization.evidence_refs_hash",
+        "post_quantum_authorization.closed_option_set_hash"
+      ],
+      "effect": "hold"
+    },
+    {
+      "criterion_id": "pq-authorization-hidden-evidence",
+      "description": "Reject if hidden evidence, secret material, or unregistered fields enter the packet.",
+      "evidence_ref_paths": [
+        "post_quantum_authorization.status_quo_hash",
+        "post_quantum_authorization.implementation_refs_hash",
+        "post_quantum_authorization.evidence_refs_hash",
+        "post_quantum_authorization.closed_option_set_hash"
+      ],
+      "effect": "reject_decision"
+    },
+    {
+      "criterion_id": "pq-authorization-new-option-needed",
+      "description": "Reopen the question if a missing option is required to describe the safe action.",
+      "evidence_ref_paths": [
+        "post_quantum_authorization.status_quo_hash",
+        "post_quantum_authorization.implementation_refs_hash",
+        "post_quantum_authorization.evidence_refs_hash",
+        "post_quantum_authorization.closed_option_set_hash"
+      ],
+      "effect": "reopen_question"
+    }
+  ],
+  "fallback": {
+    "decision": "no_op",
+    "trigger_conditions": [
+      "missing_evidence",
+      "ambiguous_evidence",
+      "schema_invalid",
+      "replay_drift",
+      "hidden_evidence_attempt",
+      "scope_expansion_attempt",
+      "unsafe_live_action_attempt"
+    ],
+    "rationale": "The packet remains advisory until replay, challenge, conformance, and live authorization gates pass."
+  },
+  "authority_boundary": {
+    "live_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "model_promotion_authorized": false,
+    "authority_transfer_authorized": false,
+    "sidecar_activation_authorized": false,
+    "default_conformance_requires_later_gate": true
+  },
+  "checks": {
+    "selected_option_in_question": true,
+    "selected_option_evidence_bound": true,
+    "rejected_options_evidence_bound": true,
+    "implementation_consequences_present": true,
+    "invalidation_criteria_present": true,
+    "fallback_present": true,
+    "no_hidden_evidence": true,
+    "no_secret_dependency": true,
+    "no_live_mutation": true,
+    "authority_transfer": false
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_metadata_anonymity_bound/valid_metadata_bound.json",
+  "expected_error_contains": [
+    "case-05-unique-disclosure-explicit: expected_route mismatch"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        4,
+        "expected_route"
+      ],
+      "value": "baseline-private"
+    }
+  ],
+  "schema": "postfiat-privacy-metadata-anonymity-bound-invalid-case-v1"
+}

@@ -1,0 +1,17 @@
+{
+  "base": "valid_attestor_cost.json",
+  "description": "Cost root must bind the governed cost model and cases.",
+  "expected_error_contains": [
+    "statement.cost_root_hash does not match cost material"
+  ],
+  "overrides": [
+    {
+      "path": [
+        "statement",
+        "cost_root_hash"
+      ],
+      "value": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  ],
+  "schema": "postfiat-validator-economic-attestor-cost-delta-v1"
+}

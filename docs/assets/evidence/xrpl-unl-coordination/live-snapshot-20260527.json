@@ -1,0 +1,291 @@
+{
+  "amendment_state": {
+    "amendments_ledger_entry": {
+      "enabled_count": 92,
+      "index": "7DB0788C020F02780A673DC74757F23823FA3014C1866E72CC4CD8B226CD6EF4",
+      "ledger_hash": "66BFF7CE992167761473F2FDCDFB1DF0AB6DE3529BE694B51C2A6ED590448EEB",
+      "ledger_index": 104522075,
+      "validated": true
+    },
+    "feature_rpc": {
+      "feature_count": 104,
+      "ledger_hash": "66BFF7CE992167761473F2FDCDFB1DF0AB6DE3529BE694B51C2A6ED590448EEB",
+      "ledger_index": 104522075,
+      "validated": true
+    },
+    "rpc_url": "https://s1.ripple.com:51234/",
+    "scope_features": {
+      "AMM": {
+        "enabled": true,
+        "feature_rpc_visible": true,
+        "id": "8CC0774A3BF66D1D22E76BBDA8E8A232E6B6313834301B3B23E8601196AE6455",
+        "id_source": "feature_rpc",
+        "supported": true
+      },
+      "AMMClawback": {
+        "enabled": true,
+        "feature_rpc_visible": true,
+        "id": "726F944886BCDF7433203787E93DD9AA87FAB74DFE3AF4785BA03BEFC97ADA1F",
+        "id_source": "feature_rpc",
+        "supported": true
+      },
+      "Batch": {
+        "enabled": false,
+        "feature_rpc_visible": true,
+        "id": "894646DD5284E97DECFE6674A6D6152686791C4A95F8C132CCA9BAF9E5812FB6",
+        "id_source": "feature_rpc",
+        "supported": true
+      },
+      "Credentials": {
+        "enabled": true,
+        "feature_rpc_visible": true,
+        "id": "1CB67D082CF7D9102412D34258CEDB400E659352D3B207348889297A6D90F5EF",
+        "id_source": "feature_rpc",
+        "supported": true
+      },
+      "DisallowIncoming": {
+        "enabled": true,
+        "feature_rpc_visible": true,
+        "id": "47C3002ABA31628447E8E9A8B315FAA935CE30183F9A9B86845E469CA2CDC3DF",
+        "id_source": "feature_rpc",
+        "supported": true
+      },
+      "LendingProtocol": {
+        "enabled": false,
+        "feature_rpc_visible": true,
+        "id": "565B90CA1AB2B9D42208ED10884188C64F9E19083DECB9634AAF06EB03299509",
+        "id_source": "feature_rpc",
+        "supported": true
+      },
+      "MPTokensV1": {
+        "enabled": true,
+        "feature_rpc_visible": true,
+        "id": "950AE2EA4654E47F04AA8739C0B214E242097E802FD372D24047A89AB1F5EC38",
+        "id_source": "feature_rpc",
+        "supported": true
+      },
+      "NonFungibleTokensV1_1": {
+        "enabled": true,
+        "feature_rpc_visible": true,
+        "id": "32A122F1352A4C7B3A6D790362CC34749C5E57FCE896377BFDC6CCD14F6CD627",
+        "id_source": "feature_rpc",
+        "supported": true
+      },
+      "PermissionDelegation": {
+        "enabled": false,
+        "feature_rpc_visible": true,
+        "id": "AE6AB9028EEB7299EBB03C7CBCC3F2A4F5FBE00EA28B8223AA3118A0B436C1C5",
+        "id_source": "feature_rpc",
+        "supported": true
+      },
+      "PermissionedDEX": {
+        "enabled": true,
+        "feature_rpc_visible": true,
+        "id": "677E401A423E3708363A36BA8B3A7D019D21AC5ABD00387BDBEA6BDE4C91247E",
+        "id_source": "feature_rpc",
+        "supported": true
+      },
+      "PermissionedDomains": {
+        "enabled": true,
+        "feature_rpc_visible": true,
+        "id": "A730EB18A9D4BB52502C898589558B4CCEB4BE10044500EE5581137A2E80E849",
+        "id_source": "feature_rpc",
+        "supported": true
+      },
+      "SingleAssetVault": {
+        "enabled": false,
+        "feature_rpc_visible": true,
+        "id": "81BD2619B6B3C8625AC5D0BC01DE17F06C3F0AB95C7C87C93715B87A4FD240D8",
+        "id_source": "feature_rpc",
+        "supported": true
+      },
+      "TokenEscrow": {
+        "enabled": true,
+        "feature_rpc_visible": true,
+        "id": "138B968F25822EFBF54C00F97031221C47B1EAB8321D93C7C2AEAF85F04EC5DF",
+        "id_source": "feature_rpc",
+        "supported": true
+      },
+      "fixCleanup3_1_3": {
+        "enabled": true,
+        "feature_rpc_visible": false,
+        "id": "303ACB16CF8DBD3B5C34F131A9D19A7DE01AE05F480A8A682B869D1B4AAC8CFC",
+        "id_source": "sha512_half_name",
+        "supported": null
+      },
+      "fixDisallowIncomingV1": {
+        "enabled": true,
+        "feature_rpc_visible": true,
+        "id": "15D61F0C6DB6A2F86BCF96F1E2444FEC54E705923339EC175BD3E517C8B3FF91",
+        "id_source": "feature_rpc",
+        "supported": true
+      },
+      "fixDisallowIncomingV1_1": {
+        "enabled": false,
+        "feature_rpc_visible": false,
+        "id": "DA95590DFAF344AE3342A57BF8E23DC48028F1A8FE0AB8C4CE36BEA3E0E35558",
+        "id_source": "sha512_half_name",
+        "supported": null
+      }
+    }
+  },
+  "checked_utc": "2026-05-27T19:55:19Z",
+  "conclusions": [
+    "This snapshot proves publisher-list convergence, not private validator intent.",
+    "The live default-list surface is controlled by a small number of signed publisher blobs, not by raw node count.",
+    "The two fetched publisher lists have 31 shared validators out of 35 and 35 entries, with Jaccard overlap 0.7949.",
+    "fixCleanup3_1_3 is enabled by direct raw Amendments-object hash check; feature RPC visibility is false.",
+    "A one-decision-maker claim still requires time-series vote/upgrade behavior; this snapshot is the ground-zero artifact for that study."
+  ],
+  "inputs": {
+    "rpc_url": "https://s1.ripple.com:51234/",
+    "validator_list_urls": {
+      "ripple": "https://vl.ripple.com/",
+      "xrplf": "https://vl.xrplf.org/"
+    }
+  },
+  "limits": [
+    "Does not verify validator-list signatures locally.",
+    "Does not infer private Telegram membership or private coordination.",
+    "Does not prove per-validator decision independence without time-series vote/upgrade data."
+  ],
+  "overlap": {
+    "effective_membership_bucket_count": 1.5317220543806649,
+    "intersection_relative_to_union": 0.7948717948717948,
+    "list_count": 2,
+    "membership_bucket_counts": {
+      "ripple": 4,
+      "ripple+xrplf": 31,
+      "xrplf": 4
+    },
+    "pairwise": {
+      "ripple:xrplf": {
+        "intersection_count": 31,
+        "jaccard": 0.7948717948717948,
+        "left_count": 35,
+        "left_only": [
+          "ED6FCBE961C9B67924155C84AE192023606385DC7BDED3ECFDB6F117FBE12EE8C3",
+          "ED7B1A5F8FDAA19A2CA33B5BB8FED39B442F4F2F45BB331C525B09F92D8486B824",
+          "EDC4B6B0D7D8C53A21C1147C31C378923E9DAA6513283CC3FA6B2EF11B6E67279B",
+          "EDD3DB9E85A9B26772464BE9FCE120007E504AAF7AFF4648FA24E155B35A48FE6D"
+        ],
+        "overlap_relative_to_left": 0.8857142857142857,
+        "overlap_relative_to_right": 0.8857142857142857,
+        "right_count": 35,
+        "right_only": [
+          "ED580AD4FA5DA989FA999535ECC20197A5B53A1A49A971F6652ED8D5D466CA605D",
+          "ED580C4282950CB3F7E0185F37F2CFB216882C5EDDD3BB1EE49C304A1AA3C5DB92",
+          "ED583ECD06C3B7369980E65C78C440A529300F557ED81256283F7DD5AA3513A334",
+          "EDC2A138B3771C208965596D4D372331C17A5476BD2CE2BC7A6D3CD273DF330D99"
+        ],
+        "union_count": 39
+      }
+    },
+    "shannon_entropy_bits": 0.9371948952213989,
+    "validator_intersection_count": 31,
+    "validator_union_count": 39
+  },
+  "schema": "postfiat-xrpl-unl-coordination-snapshot-v1",
+  "validator_lists": {
+    "ripple": {
+      "blob_sha256": "e63e9aac777ccd2fb1c51c7f0229ad6cde7ddeaf8224886b281cee025c6d0057",
+      "expiration_ripple_time": 860349094,
+      "expiration_utc": "2027-04-06T17:51:34Z",
+      "manifest_present": true,
+      "name": "ripple",
+      "publisher_public_key": "ED2677ABFFD1B33AC6FBC3062B71F1E8397C1505E1C42C64D11AD1B28FF73F4734",
+      "sequence": 85,
+      "signature_present": true,
+      "top_level_sha256": "5e8b538c66dc6e6b25cef2830ddf0119b17763f8d5b9ec7d6624617fce7c85f5",
+      "url": "https://vl.ripple.com/",
+      "validator_count": 35,
+      "validators": [
+        "ED135050AE848C37B894EFC67BBEC54A5B4CBAA2281C9DB2D7754A3DF6195DA65E",
+        "ED13AAFCB6A87BCB5D093C2EF37F04431C291126D674293305152D9776C6ABA4D6",
+        "ED2C5C95F6B67357282B7F1675AFBBAACFB61DF06DEEDF986166E7ADD3D7D33462",
+        "ED38B0288EA240B4CDEC18A1A6289EB49007E4EBC0DE944803EB7EF141C5664073",
+        "ED4246AA3AE9D29863944800CCA91829E4447498A20CD9C3973A6B59346C75AB95",
+        "ED55BB5A2C8E040367DBA0BA563E924463C360C9C565EFE41701596BA2B828DE16",
+        "ED571031CEB567106CD4E128D46E4DD4087DA12DA9FAB78EEFF7A93971DCC59900",
+        "ED5784A43AA84B5BDAFD0AFEF64ADA5583A3129182C6A7464950FD6BF2D9FAE5B0",
+        "ED63CF929BE85B266A66584B3FE2EB97FC248203F0271DC9C833563E60418E7818",
+        "ED65142881189CA8FE8D246A8EACE7637A8CA7CE78656638C6D87FAD369F8A5C81",
+        "ED6753539020782A777B8F4BF6931A7DB13F9D259486E337C639B99E0C57CD5FF2",
+        "ED6A54975A94EB9715E4F4E3FCD1661FCD40C065E6C22E461FEE87267DD73A2D6A",
+        "ED6FCBE961C9B67924155C84AE192023606385DC7BDED3ECFDB6F117FBE12EE8C3",
+        "ED7098772471769E82A5466329967DC8BF51C941190164E88D7CC9C393AD407C52",
+        "ED75940EC09130F9C553D8AF0FE354A112CC27251472AF1A90917597489192135F",
+        "ED7B1A5F8FDAA19A2CA33B5BB8FED39B442F4F2F45BB331C525B09F92D8486B824",
+        "ED7FB8CC142B70AC837A9A0F57B38EB17DD569E388F33558D90B60170F1ACA5F1E",
+        "ED8252C2F91523126EEF9A21964C7E487A10D6D63D459139700DBC70D9F7BAD542",
+        "ED8651B672BCE2727BD93A62431592447D6637E5D0E768595ECC19E5E4AEACAF3B",
+        "ED8815A1E647DF83DE643289804F4610464D1ABCF6B38F40404EFA84B5D1A69D81",
+        "ED95C5172B2AD7D39434EEBC436B65B3BB7E58D5C1CEFC820B6972ACAD776E286A",
+        "ED9AE4F5887BA029EB7C0884486D23CF281975F773F44BD213054219882C411CC7",
+        "ED9DA743B769045A91AC41CA5C56FBD090168CB771E9558DD9D1C4FE8B3F4C842E",
+        "EDA1EFC81058EECB48DEB4FEB7FAFACEAEA42C3E00C0BFB31F85EC116F31A13DAD",
+        "EDA4074FD039407BD2464F14C378440D5B02CA8FBA661B286D1C82A3D59E8E6EC0",
+        "EDA54C85F91219FD259134B6B126AD64AE7204B81DD4052510657E1A5697246AD2",
+        "EDA8B1D8A071E85A6E36DCAC7999AB814E4CDC664668385173767C5B89554243C0",
+        "EDAF4CBCF4A9BEE306646549301E22770D5E62D8C03DD9FF42B65A83B2BE1C70F3",
+        "EDC1897CE83B6DCF58858574EC9FE027D4B1538A0F20823800A5529E121E87A93B",
+        "EDC4B6B0D7D8C53A21C1147C31C378923E9DAA6513283CC3FA6B2EF11B6E67279B",
+        "EDCF08053DFF0F00AC6E78B61F7B7FD187AF74052DEB5074207506D3A2CDCD9E5C",
+        "EDD3DB9E85A9B26772464BE9FCE120007E504AAF7AFF4648FA24E155B35A48FE6D",
+        "EDF10074F5FBBB975A8EA8E9C42306854E6A49C71B7D33B0293AB1830FECF2C400",
+        "EDFE65FB385B6BB16951153D2A0F32BD6D8CC4532C87BB3E1900913A7BE34F5EF7",
+        "EDFF91FA911FE9BF2CCCC2A1F750900C4A6056139FE0DD6872D2A577CA51B27200"
+      ]
+    },
+    "xrplf": {
+      "blob_sha256": "c30b4c2b4c0ed77dae01a6f31848f651d8d8f3577f56852ffa8d3fe4c57cbb29",
+      "expiration_ripple_time": 822009600,
+      "expiration_utc": "2026-01-18T00:00:00Z",
+      "manifest_present": true,
+      "name": "xrplf",
+      "publisher_public_key": "ED45D1840EE724BE327ABE9146503D5848EFD5F38B6D5FEDE71E80ACCE5E6E738B",
+      "sequence": 2025011701,
+      "signature_present": true,
+      "top_level_sha256": "2479dd10c85f695f12eaf50f17784ce4c59c37653f2e79bd172b7bc73120254f",
+      "url": "https://vl.xrplf.org/",
+      "validator_count": 35,
+      "validators": [
+        "ED135050AE848C37B894EFC67BBEC54A5B4CBAA2281C9DB2D7754A3DF6195DA65E",
+        "ED13AAFCB6A87BCB5D093C2EF37F04431C291126D674293305152D9776C6ABA4D6",
+        "ED2C5C95F6B67357282B7F1675AFBBAACFB61DF06DEEDF986166E7ADD3D7D33462",
+        "ED38B0288EA240B4CDEC18A1A6289EB49007E4EBC0DE944803EB7EF141C5664073",
+        "ED4246AA3AE9D29863944800CCA91829E4447498A20CD9C3973A6B59346C75AB95",
+        "ED55BB5A2C8E040367DBA0BA563E924463C360C9C565EFE41701596BA2B828DE16",
+        "ED571031CEB567106CD4E128D46E4DD4087DA12DA9FAB78EEFF7A93971DCC59900",
+        "ED5784A43AA84B5BDAFD0AFEF64ADA5583A3129182C6A7464950FD6BF2D9FAE5B0",
+        "ED580AD4FA5DA989FA999535ECC20197A5B53A1A49A971F6652ED8D5D466CA605D",
+        "ED580C4282950CB3F7E0185F37F2CFB216882C5EDDD3BB1EE49C304A1AA3C5DB92",
+        "ED583ECD06C3B7369980E65C78C440A529300F557ED81256283F7DD5AA3513A334",
+        "ED63CF929BE85B266A66584B3FE2EB97FC248203F0271DC9C833563E60418E7818",
+        "ED65142881189CA8FE8D246A8EACE7637A8CA7CE78656638C6D87FAD369F8A5C81",
+        "ED6753539020782A777B8F4BF6931A7DB13F9D259486E337C639B99E0C57CD5FF2",
+        "ED6A54975A94EB9715E4F4E3FCD1661FCD40C065E6C22E461FEE87267DD73A2D6A",
+        "ED7098772471769E82A5466329967DC8BF51C941190164E88D7CC9C393AD407C52",
+        "ED75940EC09130F9C553D8AF0FE354A112CC27251472AF1A90917597489192135F",
+        "ED7FB8CC142B70AC837A9A0F57B38EB17DD569E388F33558D90B60170F1ACA5F1E",
+        "ED8252C2F91523126EEF9A21964C7E487A10D6D63D459139700DBC70D9F7BAD542",
+        "ED8651B672BCE2727BD93A62431592447D6637E5D0E768595ECC19E5E4AEACAF3B",
+        "ED8815A1E647DF83DE643289804F4610464D1ABCF6B38F40404EFA84B5D1A69D81",
+        "ED95C5172B2AD7D39434EEBC436B65B3BB7E58D5C1CEFC820B6972ACAD776E286A",
+        "ED9AE4F5887BA029EB7C0884486D23CF281975F773F44BD213054219882C411CC7",
+        "ED9DA743B769045A91AC41CA5C56FBD090168CB771E9558DD9D1C4FE8B3F4C842E",
+        "EDA1EFC81058EECB48DEB4FEB7FAFACEAEA42C3E00C0BFB31F85EC116F31A13DAD",
+        "EDA4074FD039407BD2464F14C378440D5B02CA8FBA661B286D1C82A3D59E8E6EC0",
+        "EDA54C85F91219FD259134B6B126AD64AE7204B81DD4052510657E1A5697246AD2",
+        "EDA8B1D8A071E85A6E36DCAC7999AB814E4CDC664668385173767C5B89554243C0",
+        "EDAF4CBCF4A9BEE306646549301E22770D5E62D8C03DD9FF42B65A83B2BE1C70F3",
+        "EDC1897CE83B6DCF58858574EC9FE027D4B1538A0F20823800A5529E121E87A93B",
+        "EDC2A138B3771C208965596D4D372331C17A5476BD2CE2BC7A6D3CD273DF330D99",
+        "EDCF08053DFF0F00AC6E78B61F7B7FD187AF74052DEB5074207506D3A2CDCD9E5C",
+        "EDF10074F5FBBB975A8EA8E9C42306854E6A49C71B7D33B0293AB1830FECF2C400",
+        "EDFE65FB385B6BB16951153D2A0F32BD6D8CC4532C87BB3E1900913A7BE34F5EF7",
+        "EDFF91FA911FE9BF2CCCC2A1F750900C4A6056139FE0DD6872D2A577CA51B27200"
+      ]
+    }
+  }
+}

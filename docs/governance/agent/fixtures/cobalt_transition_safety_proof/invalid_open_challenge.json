@@ -1,0 +1,11 @@
+{
+  "base_fixture": "valid_transition_safety_proof.json",
+  "overrides": {
+    "profile": {
+      "challenge_state": "open"
+    }
+  },
+  "expected_error_contains": [
+    "challenge_state is not closed"
+  ]
+}

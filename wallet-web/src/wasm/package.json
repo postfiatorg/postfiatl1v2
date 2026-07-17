@@ -1,0 +1,17 @@
+{
+  "name": "postfiat-wallet-wasm",
+  "type": "module",
+  "description": "WASM wallet core for PostFiat L1 — keygen, signing, address derivation in the browser",
+  "version": "0.1.0",
+  "license": "MIT OR Apache-2.0",
+  "files": [
+    "postfiat_wallet_wasm_bg.wasm",
+    "postfiat_wallet_wasm.js",
+    "postfiat_wallet_wasm.d.ts"
+  ],
+  "main": "postfiat_wallet_wasm.js",
+  "types": "postfiat_wallet_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

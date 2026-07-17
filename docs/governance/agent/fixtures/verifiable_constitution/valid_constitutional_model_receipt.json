@@ -1,0 +1,46 @@
+{
+  "schema": "postfiat-constitutional-model-receipt-v1",
+  "run_id": "0001",
+  "provider_label": "vast",
+  "provider_run_id": "37675954",
+  "hardware_class": "NVIDIA H100 NVL",
+  "endpoint_host_hash": "2a9fd9831c97d8e0325221e098ddda60ffa271824e1dcb7025573e48672a3abc23551f3e5e48c421b0be7cfdb291e737",
+  "model_profile": {
+    "model_id": "Qwen/Qwen3.6-27B-FP8",
+    "runtime": "SGLang",
+    "runtime_profile": "Modal/SGLang H100 deterministic profile",
+    "provider_profile": "RunPod H100 primary; Vast fallback",
+    "image": "lmsysorg/sglang:nightly-dev-cu13-20260523-c112f762",
+    "tensor_parallelism": 1,
+    "context_length": 32768,
+    "chunked_prefill_size": 4096,
+    "max_running_requests": 1,
+    "deterministic_flags": [
+      "--enable-deterministic-inference",
+      "--max-running-requests=1",
+      "--tp=1",
+      "chat_template_kwargs.enable_thinking=false",
+      "--temperature=0",
+      "--top-p=1"
+    ]
+  },
+  "prompt_hash": "78ed00ee0d2e014a1ea356ff960d70d853fc035262edcfe1098974bc51191c7de9a785a999c703510f52a141bda00ae0",
+  "prompt_payload_hash": "4ae953b334746ce7b9ab11421625b2cadd517bae8b7bd256a56d8acdfcd410a574a7f8c91e07b4a12efd5fdb488f3f77",
+  "chat_request_hash": "5d49bd8225f3e88da51a7f8980b0739a11c5fd3924aab6a3fe386306d754eb671b8df3a17bad3e37eb22e4d93e0b704d",
+  "question_id": "vc-privacy-architecture-001",
+  "question_canonical_hash": "1cad272115f55f6fdb0dd378c4910881f29e8fd33cfd8cc3caa41ba004476a1c9a0ec8ad556c8daac3a7e087fa04bab0",
+  "output_commitment": {
+    "raw_response_sha3_384": "9260d720a3828eae52c93abc9a24b9e110c14db2ca7f9328184a6114da7555bcca0508e41d27669a5237b9b12843417c",
+    "content_sha3_384": "a27c920c104280a5c421ed233ba8e686c10682590558fc7f95229a139b4db491281c94fa28e5878f129b364a198834b7",
+    "parsed_output_hash": "29b94f774e6a827b2461146472349527d2ce7c5b12e875668bd7465d3a854022518980e178787c753f01ed5df2b14cbf",
+    "logprob_commitment_root": "f168514f56ee4e10bf1bbb2f634804bf956c68699fca2fd08b77ac146298223f6b1f8038286fbbfd17ccc8acf5db9d1a",
+    "full_distribution_available": false,
+    "full_distribution_root": null
+  },
+  "elapsed_ms": 11785,
+  "receipt_root": "b729aa24048918629dbbd162e55d07967184558e8d3adcf5fee4c3a31d4c7f14504e8f70c6fae7c69d9ab013821a7a9b",
+  "raw_response_path": "reports/verifiable-constitution/live-model-receipts/h100-20260524/raw_response_0001.json",
+  "parsed_output_path": "reports/verifiable-constitution/live-model-receipts/h100-20260524/model_output_0001.json",
+  "logprob_commitment_kind": "openai_chat_top_logprobs",
+  "logprob_token_count": 533
+}

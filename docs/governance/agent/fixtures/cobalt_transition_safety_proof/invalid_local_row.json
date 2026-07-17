@@ -1,0 +1,17 @@
+{
+  "base_fixture": "valid_transition_safety_proof.json",
+  "overrides": {
+    "new_cover": [
+      {
+        "id": "new-main-10-bad-row",
+        "active": true,
+        "validators": ["A", "B", "C", "D", "E", "F", "G", "H", "I", "K"],
+        "t_s": 2,
+        "q_s": 6
+      }
+    ]
+  },
+  "expected_error_contains": [
+    "violates t_s < 2q_s - n_s"
+  ]
+}

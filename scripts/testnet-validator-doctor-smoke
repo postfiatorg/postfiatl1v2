@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VALIDATORS="${VALIDATORS:-4}"
+ROOT_DIR="${ROOT_DIR:-reports/testnet-validator-doctor-smoke}"
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+BASE_DIR="${BASE_DIR:-$ROOT_DIR/nodes}"
+LOG_DIR="${LOG_DIR:-$ROOT_DIR/logs-$STAMP}"
+REPORT="${REPORT:-$ROOT_DIR/testnet-validator-doctor-smoke-$STAMP.json}"
+DOCTOR_REPORT="${DOCTOR_REPORT:-reports/testnet-validator-doctor/testnet-validator-doctor-smoke-$STAMP.json}"
+ACCOUNT_TX_AMOUNT="${ACCOUNT_TX_AMOUNT:-100}"
+ACCOUNT_TX_RECIPIENT="${ACCOUNT_TX_RECIPIENT:-pfvalidatordoctoraccounttxrecipient01}"
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "jq is required for validator doctor smoke" >&2
+  exit 2
+fi
+
+mkdir -p "$ROOT_DIR" "$LOG_DIR" "$(dirname "$REPORT")" "$(dirname "$DOCTOR_REPORT")"
+
+VALIDATORS="$VALIDATORS" \
+  BASE_DIR="$BASE_DIR" \
+  LOG_DIR="$LOG_DIR/harness" \
+  REPORT="$LOG_DIR/local-harness.json" \
+  scripts/testnet-local-harness >"$LOG_DIR/local-harness.out"
+
+node_id="validator-0"
+account_tx_batch_file="$LOG_DIR/account-tx-funding.batch.json"
+target/debug/postfiat-node batch-transfer \
+  --data-dir "$BASE_DIR/$node_id" \
+  --to "$ACCOUNT_TX_RECIPIENT" \
+  --amount "$ACCOUNT_TX_AMOUNT" \
+  --batch-file "$account_tx_batch_file" >"$LOG_DIR/account-tx-funding.batch.out"
+for ((i = 0; i < VALIDATORS; i++)); do
+  target/debug/postfiat-node apply-batch \
+    --data-dir "$BASE_DIR/validator-$i" \
+    --batch-file "$account_tx_batch_file" >"$LOG_DIR/account-tx-funding.validator-$i.receipts.json"
+  target/debug/postfiat-node account-tx-index-build \
+    --data-dir "$BASE_DIR/validator-$i" >"$LOG_DIR/account-tx-index-build.validator-$i.json"
+  target/debug/postfiat-node account-tx-index-status \
+    --data-dir "$BASE_DIR/validator-$i" >"$LOG_DIR/account-tx-index-status.validator-$i.json"
+  jq -e \
+    '.schema == "postfiat-account-tx-index-status-v1"
+      and .index_present == true
+      and .index_usable == true
+      and .indexed_row_count >= 1
+      and .account_count >= 1' \
+    "$LOG_DIR/account-tx-index-status.validator-$i.json" >/dev/null
+done
+
+scripts/testnet-validator-doctor \
+  --no-build \
+  --data-root "$BASE_DIR" \
+  --validator-count "$VALIDATORS" \
+  --output "$DOCTOR_REPORT" \
+  --log-dir "$LOG_DIR/doctor" >"$LOG_DIR/validator-doctor.out"
+
+jq -e \
+  --argjson validators "$VALIDATORS" \
+  '.schema == "postfiat-testnet-validator-doctor-v1"
+    and .validator_doctor_ok == true
+    and .mode == "all_validators"
+    and (.validators | length) == $validators
+    and .aggregate.quorum_healthy == true
+    and .aggregate.height_lag == 0
+    and .aggregate.chain_context_consistent == true
+    and .aggregate.state_root_consistent == true
+    and .aggregate.registry_root_consistent == true
+    and .aggregate.account_tx_index_all_ready == true
+    and all(.validators[]; .validator_ok == true
+      and .checks.status_running == true
+      and .checks.state_verified == true
+      and .checks.history_retention_ready == true
+      and .checks.account_tx_index_ready == true
+      and .checks.active_registry_member == true
+      and .account_tx_index.index_present == true
+      and .account_tx_index.index_usable == true
+      and .account_tx_index.tip_matches_current == true
+      and (.validator_identity.public_key_fingerprint | type == "string")
+      and (.validator_identity.registry_root | test("^[0-9a-f]{96}$")))' \
+  "$DOCTOR_REPORT" >/dev/null
+
+if grep -RIEq '"(private_key_hex|spending_key_hex|full_viewing_key_hex|master_seed_hex|rseed)"' "$DOCTOR_REPORT" "$LOG_DIR/doctor"; then
+  echo "validator doctor smoke leaked private key-shaped fields" >&2
+  exit 1
+fi
+if grep -RIEq '"public_key_hex"' "$DOCTOR_REPORT" "$LOG_DIR/doctor"; then
+  echo "validator doctor smoke leaked raw public key fields instead of fingerprints" >&2
+  exit 1
+fi
+
+jq -n \
+  --arg schema "postfiat-testnet-validator-doctor-smoke-v1" \
+  --arg generated_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --arg harness_report "$LOG_DIR/local-harness.json" \
+  --arg doctor_report "$DOCTOR_REPORT" \
+  --arg log_dir "$LOG_DIR" \
+  --arg account_tx_recipient "$ACCOUNT_TX_RECIPIENT" \
+  --argjson validators "$VALIDATORS" \
+  --argjson account_tx_amount "$ACCOUNT_TX_AMOUNT" \
+  --slurpfile doctor "$DOCTOR_REPORT" \
+  '{
+    schema: $schema,
+    generated_utc: $generated_utc,
+    validators: $validators,
+    reports: {
+      local_harness: $harness_report,
+      validator_doctor: $doctor_report,
+      log_dir: $log_dir
+    },
+    account_tx_index_canary: {
+      to: $account_tx_recipient,
+      amount: $account_tx_amount,
+      ready_count: $doctor[0].aggregate.account_tx_index_ready_count,
+      present_count: $doctor[0].aggregate.account_tx_index_present_count,
+      usable_count: $doctor[0].aggregate.account_tx_index_usable_count,
+      all_ready: $doctor[0].aggregate.account_tx_index_all_ready
+    },
+    checks: {
+      doctor_ok: $doctor[0].validator_doctor_ok,
+      quorum_healthy: $doctor[0].aggregate.quorum_healthy,
+      height_lag: $doctor[0].aggregate.height_lag,
+      chain_context_consistent: $doctor[0].aggregate.chain_context_consistent,
+      state_root_consistent: $doctor[0].aggregate.state_root_consistent,
+      registry_root_consistent: $doctor[0].aggregate.registry_root_consistent,
+      account_tx_index_all_ready: $doctor[0].aggregate.account_tx_index_all_ready,
+      redaction_checked: true
+    }
+  }
+  | .smoke_ok = (
+      .checks.doctor_ok == true
+      and .checks.quorum_healthy == true
+      and .checks.height_lag == 0
+      and .checks.chain_context_consistent == true
+      and .checks.state_root_consistent == true
+      and .checks.registry_root_consistent == true
+      and .checks.account_tx_index_all_ready == true
+      and .checks.redaction_checked == true
+    )' >"$REPORT"
+
+jq -e \
+  '.schema == "postfiat-testnet-validator-doctor-smoke-v1" and .smoke_ok == true' \
+  "$REPORT" >/dev/null
+
+printf 'testnet_validator_doctor_smoke=ok validators=%s report=%s doctor_report=%s\n' \
+  "$VALIDATORS" "$REPORT" "$DOCTOR_REPORT"

@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-validator-economic-attestor-cost-v1.json",
+  "title": "PostFiat Validator Economic Attestor Cost",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "packet_id",
+    "mode",
+    "statement",
+    "attestation",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-economic-attestor-cost-v1"
+    },
+    "packet_id": {
+      "$ref": "#/$defs/id"
+    },
+    "mode": {
+      "const": "controlled_testnet_fixture"
+    },
+    "statement": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "policy_id",
+        "cost_root_hash",
+        "scope",
+        "cost_policy",
+        "base_model",
+        "selector_cases",
+        "evidence_artifacts"
+      ],
+      "properties": {
+        "policy_id": {
+          "$ref": "#/$defs/id"
+        },
+        "cost_root_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "chain_id",
+            "profile_id",
+            "live_registry_mutation",
+            "authority_transfer"
+          ],
+          "properties": {
+            "chain_id": {
+              "$ref": "#/$defs/id"
+            },
+            "profile_id": {
+              "$ref": "#/$defs/id"
+            },
+            "live_registry_mutation": {
+              "const": false
+            },
+            "authority_transfer": {
+              "const": false
+            }
+          }
+        },
+        "cost_policy": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "policy_units",
+            "min_capture_to_value_ratio_bps",
+            "min_independent_groups",
+            "min_control_surfaces",
+            "max_cost_evidence_age_epochs",
+            "route_on_underpriced_capture",
+            "route_on_unpriced_capture",
+            "route_on_stale_cost_evidence",
+            "route_on_detected_capture",
+            "route_on_under_budget",
+            "route_on_unbounded_value",
+            "route_on_ungoverned_cost_policy"
+          ]
+        },
+        "base_model": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "B",
+            "min_t_s",
+            "cost_policy_governed",
+            "value_at_stake_bounded",
+            "max_short_window_value_at_stake_usd",
+            "attack_paths"
+          ]
+        },
+        "selector_cases": {
+          "type": "array",
+          "minItems": 9
+        },
+        "evidence_artifacts": {
+          "type": "array",
+          "minItems": 1
+        }
+      }
+    },
+    "attestation": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "attestor_key_hash",
+        "statement_hash",
+        "signature_hash",
+        "signature_scheme",
+        "attested_at"
+      ]
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    }
+  }
+}

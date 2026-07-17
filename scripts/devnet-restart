@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VALIDATORS="${VALIDATORS:-4}"
+BASE_DIR="${BASE_DIR:-devnet/local}"
+LOG_DIR="${LOG_DIR:-devnet/logs}"
+
+cargo build -p postfiat-node >/dev/null
+mkdir -p "$LOG_DIR"
+
+for ((i = 0; i < VALIDATORS; i++)); do
+  node_dir="$BASE_DIR/node$i"
+  if [ ! -d "$node_dir" ]; then
+    echo "validator-$i missing at $node_dir" >&2
+    exit 2
+  fi
+  target/debug/postfiat-node run --unsafe-devnet-json-storage \
+    --data-dir "$node_dir" >"$LOG_DIR/validator-$i.restart.log"
+done
+
+scripts/devnet-status
+

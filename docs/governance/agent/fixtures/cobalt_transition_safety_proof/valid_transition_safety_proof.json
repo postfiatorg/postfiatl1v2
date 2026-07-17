@@ -1,0 +1,88 @@
+{
+  "schema_id": "postfiat-cobalt-transition-safety-proof-v1",
+  "statement": {
+    "claim": "Bounded old/new Cobalt registry transitions preserve agreement when local rows, cover completeness, B<=min(t_S), key-continuity intersection, and lock import all verify.",
+    "material_root_hash": "eb23af6dbb175cdb496550dd18294c7f99864e59e8264f4ffa0cc551966ae53b67d749a4dc35cbe26135e0acd32ec297",
+    "cases_root_hash": "976619f827ec70789ae6ce29024d653497bb62d812d7f29c4ed6491100fed57609f575b53e059d700171138a71be4049"
+  },
+  "profile": {
+    "byzantine_budget": 2,
+    "max_cover": 8,
+    "parent_validation": "old-checker",
+    "challenge_state": "closed",
+    "old_checker_root": "checker-old-v1",
+    "new_checker_root": "checker-new-v1"
+  },
+  "byzantine_validators": ["A", "B"],
+  "key_continuity_validators": ["A", "B", "C", "D", "E", "F", "G", "H", "I"],
+  "old_cover": [
+    {
+      "id": "old-main-10",
+      "active": true,
+      "validators": ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"],
+      "t_s": 2,
+      "q_s": 8
+    }
+  ],
+  "new_cover": [
+    {
+      "id": "new-main-10-one-rotation",
+      "active": true,
+      "validators": ["A", "B", "C", "D", "E", "F", "G", "H", "I", "K"],
+      "t_s": 2,
+      "q_s": 8
+    }
+  ],
+  "cases": [
+    {
+      "id": "case-01-valid-one-validator-rotation",
+      "kind": "accept_transition",
+      "old_certificate": {
+        "registry_root": "G_t",
+        "branch": "old-prefix",
+        "signers": ["A", "B", "C", "D", "E", "F", "G", "H"]
+      },
+      "new_certificate": {
+        "registry_root": "G_t_plus_1",
+        "branch": "extends-old-prefix",
+        "extends_old_lock": true,
+        "signers": ["A", "B", "C", "D", "E", "F", "G", "K"]
+      },
+      "expected_route": "accept-transition"
+    },
+    {
+      "id": "case-02-same-registry-conflict",
+      "kind": "same_registry_conflict",
+      "certificate_a": {
+        "registry_root": "G_t",
+        "branch": "branch-left",
+        "signers": ["A", "B", "C", "D", "E", "F", "G", "H"]
+      },
+      "certificate_b": {
+        "registry_root": "G_t",
+        "branch": "branch-right",
+        "signers": ["C", "D", "E", "F", "G", "H", "I", "J"]
+      },
+      "expected_route": "reject-same-registry-conflict"
+    },
+    {
+      "id": "case-03-old-new-conflict",
+      "kind": "old_new_conflict",
+      "old_certificate": {
+        "registry_root": "G_t",
+        "branch": "old-prefix",
+        "signers": ["A", "B", "C", "D", "E", "F", "G", "H"]
+      },
+      "new_certificate": {
+        "registry_root": "G_t_plus_1",
+        "branch": "conflicting-child",
+        "extends_old_lock": false,
+        "signers": ["A", "B", "C", "D", "E", "F", "G", "K"]
+      },
+      "expected_route": "reject-old-new-conflict"
+    }
+  ],
+  "attestation": {
+    "statement_hash": "77970fea7f82efe2d9f5fb64c12abfb2769648f9f769f9fbf911798a76972de5ddc1db1426c10bffd2319b1d3af4e5a6"
+  }
+}

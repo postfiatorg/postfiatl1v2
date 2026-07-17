@@ -1,0 +1,16 @@
+# Default review ownership. Security-sensitive boundaries are listed
+# separately so branch protection can require their owners explicitly.
+* @goodalexander
+
+/crates/consensus_cobalt/ @goodalexander
+/crates/ordering_fast/ @goodalexander
+/crates/execution/ @goodalexander
+/crates/storage/ @goodalexander
+/crates/crypto_provider/ @goodalexander
+/crates/privacy/ @goodalexander
+/crates/privacy_orchard/ @goodalexander
+/crates/ethereum-contracts/ @goodalexander
+/crates/node/src/rpc_cli.rs @goodalexander
+/wallet-proxy/ @goodalexander
+/.github/workflows/ @goodalexander
+/SECURITY.md @goodalexander

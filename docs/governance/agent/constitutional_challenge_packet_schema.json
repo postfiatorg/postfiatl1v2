@@ -1,0 +1,436 @@
+{
+  "$id": "https://postfiat.org/schemas/postfiat-constitutional-challenge-packet-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "postfiat-constitutional-challenge-packet-v1",
+      "type": "string"
+    },
+    "challenge_id": {
+      "$ref": "#/$defs/id"
+    },
+    "challenge_version": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "candidate",
+        "accepted",
+        "rejected",
+        "superseded"
+      ],
+      "type": "string"
+    },
+    "challenge_scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "target_decision_ref": {
+      "$ref": "#/$defs/target_decision_ref"
+    },
+    "challenge_summary": {
+      "$ref": "#/$defs/challenge_summary"
+    },
+    "defect_claims": {
+      "items": {
+        "$ref": "#/$defs/defect_claim"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "evidence_refs": {
+      "items": {
+        "$ref": "#/$defs/evidence_ref"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "disposition": {
+      "$ref": "#/$defs/disposition"
+    },
+    "invalidation_or_resolution": {
+      "items": {
+        "$ref": "#/$defs/resolution_step"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "authority_boundary": {
+      "$ref": "#/$defs/authority_boundary"
+    },
+    "checks": {
+      "$ref": "#/$defs/checks"
+    }
+  },
+  "required": [
+    "schema",
+    "challenge_id",
+    "challenge_version",
+    "status",
+    "challenge_scope",
+    "created_at",
+    "target_decision_ref",
+    "challenge_summary",
+    "defect_claims",
+    "evidence_refs",
+    "disposition",
+    "invalidation_or_resolution",
+    "authority_boundary",
+    "checks"
+  ],
+  "title": "PostFiat Constitutional Challenge Packet",
+  "type": "object",
+  "$defs": {
+    "authority_boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "live_registry_mutation_authorized": {
+          "const": false
+        },
+        "live_cobalt_amendment_submission_authorized": {
+          "const": false
+        },
+        "model_promotion_authorized": {
+          "const": false
+        },
+        "authority_transfer_authorized": {
+          "const": false
+        },
+        "sidecar_activation_authorized": {
+          "const": false
+        },
+        "challenge_is_live_authority": {
+          "const": false
+        }
+      },
+      "required": [
+        "live_registry_mutation_authorized",
+        "live_cobalt_amendment_submission_authorized",
+        "model_promotion_authorized",
+        "authority_transfer_authorized",
+        "sidecar_activation_authorized",
+        "challenge_is_live_authority"
+      ],
+      "type": "object"
+    },
+    "challenge_kind": {
+      "enum": [
+        "bad_situation_framing",
+        "missing_option",
+        "bad_evidence_request",
+        "missing_evidence",
+        "stale_evidence",
+        "hidden_evidence",
+        "invalid_model_profile",
+        "missing_replay_evidence",
+        "replay_drift",
+        "unsafe_selector",
+        "unsafe_cobalt_effect",
+        "impossible_implementation",
+        "failed_test",
+        "unsafe_live_action"
+      ],
+      "type": "string"
+    },
+    "challenge_summary": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "challenge_kind": {
+          "$ref": "#/$defs/challenge_kind"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "hold_required",
+            "supersede_required",
+            "rollback_required",
+            "reject_challenge"
+          ],
+          "type": "string"
+        },
+        "requested_disposition": {
+          "$ref": "#/$defs/disposition_kind"
+        },
+        "rationale": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "challenge_kind",
+        "severity",
+        "requested_disposition",
+        "rationale"
+      ],
+      "type": "object"
+    },
+    "checks": {
+      "additionalProperties": false,
+      "properties": {
+        "target_hash_matches": {
+          "const": true
+        },
+        "concrete_defect_cited": {
+          "const": true
+        },
+        "defect_evidence_bound": {
+          "const": true
+        },
+        "disposition_valid": {
+          "const": true
+        },
+        "resolution_path_present": {
+          "const": true
+        },
+        "no_hidden_evidence": {
+          "const": true
+        },
+        "no_secret_dependency": {
+          "const": true
+        },
+        "no_live_mutation": {
+          "const": true
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      },
+      "required": [
+        "target_hash_matches",
+        "concrete_defect_cited",
+        "defect_evidence_bound",
+        "disposition_valid",
+        "resolution_path_present",
+        "no_hidden_evidence",
+        "no_secret_dependency",
+        "no_live_mutation",
+        "authority_transfer"
+      ],
+      "type": "object"
+    },
+    "defect_claim": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "$ref": "#/$defs/id"
+        },
+        "defect_type": {
+          "$ref": "#/$defs/challenge_kind"
+        },
+        "target_json_pointer": {
+          "pattern": "^/[^\\s]*$",
+          "type": "string"
+        },
+        "evidence_ref_paths": {
+          "items": {
+            "$ref": "#/$defs/field_path"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "description": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "expected_disposition": {
+          "$ref": "#/$defs/disposition_kind"
+        }
+      },
+      "required": [
+        "claim_id",
+        "defect_type",
+        "target_json_pointer",
+        "evidence_ref_paths",
+        "description",
+        "expected_disposition"
+      ],
+      "type": "object"
+    },
+    "disposition": {
+      "additionalProperties": false,
+      "properties": {
+        "selected": {
+          "$ref": "#/$defs/disposition_kind"
+        },
+        "allowed_routes": {
+          "items": {
+            "$ref": "#/$defs/disposition_kind"
+          },
+          "minItems": 4,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "hold_until": {
+          "items": {
+            "enum": [
+              "qwen_decision_replay_completed",
+              "evidence_packet_superseded",
+              "challenge_rejected",
+              "new_decision_packet_accepted",
+              "rollback_packet_accepted"
+            ],
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "rationale": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "selected",
+        "allowed_routes",
+        "hold_until",
+        "rationale"
+      ],
+      "type": "object"
+    },
+    "disposition_kind": {
+      "enum": [
+        "hold",
+        "supersede",
+        "rollback",
+        "reject_challenge"
+      ],
+      "type": "string"
+    },
+    "evidence_ref": {
+      "additionalProperties": false,
+      "properties": {
+        "field_path": {
+          "$ref": "#/$defs/field_path"
+        },
+        "evidence_status": {
+          "enum": [
+            "present",
+            "missing",
+            "conflicted",
+            "prohibited"
+          ],
+          "type": "string"
+        },
+        "evidence_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "supports_claim_id": {
+          "$ref": "#/$defs/id"
+        }
+      },
+      "required": [
+        "field_path",
+        "evidence_status",
+        "evidence_root",
+        "supports_claim_id"
+      ],
+      "type": "object"
+    },
+    "field_path": {
+      "pattern": "^[a-z0-9][a-z0-9_]*(\\.[a-z0-9][a-z0-9_]*){1,9}$",
+      "type": "string"
+    },
+    "id": {
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$",
+      "type": "string"
+    },
+    "resolution_step": {
+      "additionalProperties": false,
+      "properties": {
+        "step_id": {
+          "$ref": "#/$defs/id"
+        },
+        "route": {
+          "$ref": "#/$defs/disposition_kind"
+        },
+        "description": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "requires_new_packet": {
+          "type": "boolean"
+        },
+        "live_effect": {
+          "const": false
+        }
+      },
+      "required": [
+        "step_id",
+        "route",
+        "description",
+        "requires_new_packet",
+        "live_effect"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "enum": [
+        "model_governance",
+        "validator_governance",
+        "cobalt_governance",
+        "privacy",
+        "post_quantum_authorization",
+        "monetary_policy",
+        "storage_history",
+        "rpc_edge_policy",
+        "operator_security",
+        "release_authority"
+      ],
+      "type": "string"
+    },
+    "sha3_384": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "target_decision_ref": {
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "$ref": "#/$defs/id"
+        },
+        "decision_path": {
+          "pattern": "^(docs/governance/agent/fixtures/verifiable_constitution/[a-z0-9_]+constitutional_decision_packet\\.json|reports/verifiable-constitution/vc-[0-9]{3}-[a-z0-9_-]+-decision-packet\\.json)$",
+          "type": "string"
+        },
+        "decision_file_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "decision_canonical_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "decision_schema_path": {
+          "const": "docs/governance/agent/constitutional_decision_packet_schema.json",
+          "type": "string"
+        },
+        "decision_schema_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        }
+      },
+      "required": [
+        "decision_id",
+        "decision_path",
+        "decision_file_sha3_384",
+        "decision_canonical_hash",
+        "decision_schema_path",
+        "decision_schema_sha3_384"
+      ],
+      "type": "object"
+    }
+  }
+}

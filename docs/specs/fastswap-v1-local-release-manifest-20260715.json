@@ -1,0 +1,45 @@
+{
+  "schema": "postfiat-fastswap-local-release-candidate-v1",
+  "created_at_utc": "2026-07-15T06:13:45Z",
+  "authority": "local-build-evidence-only",
+  "signed": false,
+  "deployable_without_release_signoff": false,
+  "repository_baseline": "87500aed04017d1870978ca99e8dd9dd6f773291",
+  "git_revision": "c545d1000767abc85ca5bb77ae402da415ad538d",
+  "branch": "fastswap-v1-20260714",
+  "build_command": "cargo build --release -p postfiat-node -p postfiat-rpc-sdk",
+  "artifacts": [
+    {
+      "path": "target/release/postfiat-node",
+      "size_bytes": 45558120,
+      "sha256": "702be55359d80874a3f6742748a87a52b19751791ab992397dd529464c0559bd",
+      "embedded_git_revision_verified": true
+    },
+    {
+      "path": "target/release/postfiat-rpc-sdk",
+      "size_bytes": 3789304,
+      "sha256": "ed35d8f817d88b02d747e4b10b0e3e918c5e5e62595ba5ab9d6613e8b7a4a7be"
+    }
+  ],
+  "protocol_spec": {
+    "path": "../orc_directives/FASTPAY-ATOMIC-SWAP-PROTOCOL-GROUND-SPEC-20260714.md",
+    "sha256": "ba1c63a2e09a977e35b0076f9839e200ea45d71f0ccf1c1b43d479c297a22bdc"
+  },
+  "implementation_evidence": {
+    "path": "docs/specs/fastswap-v1-implementation-status-20260714.md",
+    "sha256": "35830ebef73ab795bfaad57c35f8d8ec580150febba1e2d85dab317eccd3b794",
+    "six_process_test_sha256": "d888696ec759d82ae87e42b3587fb53b3c288fe44fa8c73fd475b40b632c6c84"
+  },
+  "release_profile_gates": {
+    "cold_ms": 210,
+    "warm_operations": 100,
+    "warm_p50_ms": 125,
+    "warm_p95_ms": 133,
+    "warm_p99_ms": 134,
+    "accepted_effects_qc": 101,
+    "exact_six_audits": 101,
+    "conserved_dvp": 101,
+    "restart_replay_verified": true
+  },
+  "rollout_boundary": "unsigned local candidate; no push, deployment, activation, or shared-fleet mutation"
+}

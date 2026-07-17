@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import os
+import pathlib
+import subprocess
+import tempfile
+
+repo = pathlib.Path(__file__).resolve().parents[1]
+scanner = repo / "scripts" / "public-runtime-default-scan"
+
+with tempfile.TemporaryDirectory(prefix="postfiat-runtime-default-scan-") as raw:
+    root = pathlib.Path(raw)
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    (root / "wallet-proxy").mkdir()
+    (root / "wallet-web" / "src").mkdir(parents=True)
+    target = root / "wallet-proxy" / "server.js"
+    wallet_target = root / "wallet-web" / "src" / "config.js"
+    target.write_text("const host = '127.0.0.1';\n", encoding="utf-8")
+    wallet_target.write_text("export const bridge = '';\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    env = {**os.environ, "POSTFIAT_RUNTIME_SCAN_ROOT": str(root)}
+    clean = subprocess.run([scanner], env=env, text=True, capture_output=True)
+    assert clean.returncode == 0, clean.stderr
+
+    global_address = ".".join(("203", "1", "2", "3"))
+    target.write_text(
+        f"const host = '{global_address}';\n"
+        "process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    unsafe = subprocess.run([scanner], env=env, text=True, capture_output=True)
+    assert unsafe.returncode != 0
+    assert "global-ip-runtime-default" in unsafe.stderr
+    assert "global-tls-verification-disable" in unsafe.stderr
+
+    wallet_target.write_text(
+        "export const bridge = '0x1A15e6103D6Af4e88924F748e13B829D3948DEa9';\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    retired = subprocess.run([scanner], env=env, text=True, capture_output=True)
+    assert retired.returncode != 0
+    assert "retired-money-destination" in retired.stderr
+
+self_scan = subprocess.run([scanner], text=True, capture_output=True)
+assert self_scan.returncode == 0, self_scan.stderr
+
+print("public runtime default scan regression passed")

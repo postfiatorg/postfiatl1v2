@@ -1,0 +1,485 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T00:00:00Z",
+    "attestor_key_hash": "555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555",
+    "signature_hash": "666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666",
+    "signature_scheme": "mldsa44-placeholder",
+    "statement_hash": "92ccecce12160fcd3b7b44c0b6923c9ddb81ff4faaefc5bc66c511d211fac2ea83bf0624d4fbf51420178b926f39c9cc"
+  },
+  "checks": {
+    "attestor_overlap_held": true,
+    "authority_transfer": false,
+    "challenge_bond_required_for_soft_loss": true,
+    "favorable_misreport_rejected": true,
+    "input_root_bound": true,
+    "live_registry_mutation": false,
+    "self_declared_only_held": true,
+    "source_bound_values_recomputed": true,
+    "stale_evidence_held": true,
+    "statement_hash_bound": true,
+    "ungoverned_input_policy_fails_closed": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "validator-economic-input-misreporting-v1-fixture",
+  "schema": "postfiat-validator-economic-input-misreporting-v1",
+  "statement": {
+    "base_input": {
+      "components": {
+        "B_i": [
+          {
+            "age_epochs": 0,
+            "attestor_group": "exchange-ledger-a",
+            "candidate_controlled": false,
+            "captured_attestor": false,
+            "control_surface": "exchange-settlement-flow",
+            "field": "exchange_volume_floor",
+            "self_declared": false,
+            "soft_value": false,
+            "source_class": "chain_derived",
+            "value_usd": 5000000
+          },
+          {
+            "age_epochs": 0,
+            "attestor_group": "custody-auditor-a",
+            "candidate_controlled": false,
+            "captured_attestor": false,
+            "control_surface": "beneficial-owner-record",
+            "field": "custody_assets_floor",
+            "self_declared": false,
+            "soft_value": false,
+            "source_class": "auditor_attested",
+            "value_usd": 4000000
+          },
+          {
+            "age_epochs": 0,
+            "attestor_group": "settlement-counterparty-a",
+            "candidate_controlled": false,
+            "captured_attestor": false,
+            "control_surface": "counterparty-flow-control",
+            "field": "customer_settlement_flow_floor",
+            "self_declared": false,
+            "soft_value": false,
+            "source_class": "counterparty_signed",
+            "value_usd": 6000000
+          }
+        ],
+        "C_i": [
+          {
+            "age_epochs": 0,
+            "attestor_group": "operator-finance-a",
+            "candidate_controlled": false,
+            "captured_attestor": false,
+            "control_surface": "operator-cost-manifest",
+            "field": "operator_monthly_cost_ceiling",
+            "self_declared": false,
+            "soft_value": false,
+            "source_class": "operator_signed",
+            "value_usd": 2500000
+          },
+          {
+            "age_epochs": 0,
+            "attestor_group": "cost-auditor-a",
+            "candidate_controlled": false,
+            "captured_attestor": false,
+            "control_surface": "audited-cost-record",
+            "field": "auditor_attested_operating_cost_ceiling",
+            "self_declared": false,
+            "soft_value": false,
+            "source_class": "auditor_attested",
+            "value_usd": 3200000
+          }
+        ],
+        "G_i_w": [
+          {
+            "age_epochs": 0,
+            "attestor_group": "chain-window-a",
+            "candidate_controlled": false,
+            "captured_attestor": false,
+            "control_surface": "proposer-slot-ledger",
+            "field": "proposer_slot_gain_ceiling",
+            "self_declared": false,
+            "soft_value": false,
+            "source_class": "chain_derived",
+            "value_usd": 300000
+          },
+          {
+            "age_epochs": 0,
+            "attestor_group": "receipt-window-a",
+            "candidate_controlled": false,
+            "captured_attestor": false,
+            "control_surface": "omission-receipt-window",
+            "field": "omission_window_gain_ceiling",
+            "self_declared": false,
+            "soft_value": false,
+            "source_class": "receipt_derived",
+            "value_usd": 500000
+          },
+          {
+            "age_epochs": 0,
+            "attestor_group": "registry-window-a",
+            "candidate_controlled": false,
+            "captured_attestor": false,
+            "control_surface": "registry-delay-window",
+            "field": "registry_delay_gain_ceiling",
+            "self_declared": false,
+            "soft_value": false,
+            "source_class": "registry_derived",
+            "value_usd": 400000
+          },
+          {
+            "age_epochs": 0,
+            "attestor_group": "external-position-auditor-a",
+            "candidate_controlled": false,
+            "captured_attestor": false,
+            "control_surface": "external-position-control",
+            "field": "external_position_cap",
+            "self_declared": false,
+            "soft_value": false,
+            "source_class": "auditor_attested",
+            "value_usd": 2000000
+          }
+        ],
+        "L_i_w": [
+          {
+            "age_epochs": 0,
+            "attestor_group": "contract-liability-a",
+            "candidate_controlled": false,
+            "captured_attestor": false,
+            "control_surface": "contract-obligation",
+            "field": "contractual_liability_floor",
+            "self_declared": false,
+            "soft_value": false,
+            "source_class": "contract_signed",
+            "value_usd": 6000000
+          },
+          {
+            "age_epochs": 0,
+            "attestor_group": "registry-exclusion-a",
+            "candidate_controlled": false,
+            "captured_attestor": false,
+            "control_surface": "registry-exclusion-record",
+            "field": "registry_exclusion_flow_floor",
+            "self_declared": false,
+            "soft_value": false,
+            "source_class": "registry_derived",
+            "value_usd": 3000000
+          },
+          {
+            "age_epochs": 0,
+            "attestor_group": "route-loss-counterparty-a",
+            "candidate_controlled": false,
+            "captured_attestor": false,
+            "control_surface": "route-customer-record",
+            "field": "route_customer_loss_floor",
+            "self_declared": false,
+            "soft_value": false,
+            "source_class": "counterparty_signed",
+            "value_usd": 2000000
+          },
+          {
+            "age_epochs": 0,
+            "attestor_group": "public-incident-index-a",
+            "candidate_controlled": false,
+            "captured_attestor": false,
+            "challenge_bond_usd": 250000,
+            "control_surface": "public-incident-index",
+            "field": "public_incident_reputation_floor",
+            "self_declared": false,
+            "soft_value": true,
+            "source_class": "public_incident_index",
+            "value_usd": 1000000
+          },
+          {
+            "age_epochs": 0,
+            "attestor_group": "governance-consequence-a",
+            "candidate_controlled": false,
+            "captured_attestor": false,
+            "control_surface": "challenge-exclusion-record",
+            "field": "governed_challenge_exclusion_floor",
+            "self_declared": false,
+            "soft_value": false,
+            "source_class": "governance_derived",
+            "value_usd": 500000
+          }
+        ]
+      },
+      "input_policy_governed": true,
+      "reported_terms": {
+        "B_i": 15000000,
+        "C_i": 3200000,
+        "G_i_w": 1200000,
+        "L_i_w": 12500000
+      }
+    },
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_scalar_reduction/valid_scalar_reduction.json",
+        "sha3_384": "0a59e491c693323b505404fbecfa44263a1ff972f3a6a3cc47f4ff4cb94d9766fc3c824e0c6d813c39266bd5532b2d94"
+      },
+      {
+        "path": "reports/validator-economic-scalar-reduction/20260529T062230Z/validator-economic-scalar-reduction-report.json",
+        "sha3_384": "e17383db463a1c1faa55f5709857169899d4dbc956839e2925c65fe97ab1f4a190be45f49693c66cf0c489e984dd3f40"
+      },
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_attestor_budget/valid_attestor_budget.json",
+        "sha3_384": "f66ec0b1185c53bcc514ac00a0009b50e89d3c2189ce04d42affb8329fc6066a986a054d77fd477914bc23202470f4b3"
+      },
+      {
+        "path": "reports/validator-economic-attestor-budget/20260529T064042Z/validator-economic-attestor-budget-report.json",
+        "sha3_384": "83839fa2e33728a54b3c30f3515d9abd75200ba7f136234387ec039d07ac3a1a70011fb6cdf96de09dc705a61e199282"
+      },
+      {
+        "path": "docs/governance/agent/validator_economic_input_misreporting_schema.json",
+        "sha3_384": "9384af387083f50410a988b187d9047f4cdaf85f072a157d5d03e41d3d97a3119ac548b6c637b53cfb11c18fe1307be5"
+      },
+      {
+        "path": "scripts/validator-economic-input-misreporting-verify",
+        "sha3_384": "5040a98ffb3a1e7eb62885403a1224b3093f05296fd3fa075290105828c8223a95b8c0a012d37a9a8c1bee6f2041aff4"
+      }
+    ],
+    "input_policy": {
+      "loss_over_gain_margin_usd": 1000000,
+      "max_evidence_age_epochs": 3,
+      "min_challenge_bond_usd": 250000,
+      "min_control_surfaces": 2,
+      "min_independent_attestor_groups": 2,
+      "participation_margin_usd": 0,
+      "policy_units": "validator-economic-input-misreporting-v1",
+      "route_on_attestor_overlap": "hold",
+      "route_on_favorable_misreport": "reject",
+      "route_on_incomplete_source_bound": "hold",
+      "route_on_ungoverned_input_policy": "fail-closed"
+    },
+    "input_root_hash": "39f58d0375eff3ad8a499b036f72dd53b3c0370c5c96185423adce2175d71365533a60a6b0ec71dc2c7da660799e9ed1",
+    "policy_id": "validator-economic-input-misreporting-v1",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "validator-economic-input-misreporting-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-clean-input-admit",
+        "expected_reason_codes": [
+          "all_input_misreporting_checks_passed"
+        ],
+        "expected_route": "admit",
+        "overrides": []
+      },
+      {
+        "case_id": "case-02-inflated-b-reject",
+        "expected_reason_codes": [
+          "B_i_floor_reported_above_verified"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "reported_terms",
+              "B_i"
+            ],
+            "value": 18000000
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-understated-c-reject",
+        "expected_reason_codes": [
+          "C_i_ceiling_reported_below_verified"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "reported_terms",
+              "C_i"
+            ],
+            "value": 1000000
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-understated-g-reject",
+        "expected_reason_codes": [
+          "G_i_w_ceiling_reported_below_verified"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "reported_terms",
+              "G_i_w"
+            ],
+            "value": 100000
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-overstated-l-reject",
+        "expected_reason_codes": [
+          "L_i_w_floor_reported_above_verified"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "reported_terms",
+              "L_i_w"
+            ],
+            "value": 16000000
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-self-declared-only-b-hold",
+        "expected_reason_codes": [
+          "B_i_attestor_group_shortfall",
+          "B_i_control_surface_shortfall",
+          "B_i_missing_required_source_class",
+          "B_i_self_declared_component",
+          "B_i_self_declared_only",
+          "participation_margin_below_floor"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "components",
+              "B_i"
+            ],
+            "value": [
+              {
+                "age_epochs": 0,
+                "attestor_group": "candidate-public-claim",
+                "candidate_controlled": false,
+                "captured_attestor": false,
+                "control_surface": "candidate-webpage",
+                "field": "candidate_declared_flow_floor",
+                "self_declared": true,
+                "soft_value": false,
+                "source_class": "self_declared",
+                "value_usd": 15000000
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-stale-evidence-hold",
+        "expected_reason_codes": [
+          "B_i_floor_reported_above_verified",
+          "B_i_missing_required_source_class",
+          "B_i_stale_evidence"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "components",
+              "B_i",
+              0,
+              "age_epochs"
+            ],
+            "value": 4
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-attestor-overlap-hold",
+        "expected_reason_codes": [
+          "attestor_group_overlap"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "components",
+              "C_i",
+              1,
+              "attestor_group"
+            ],
+            "value": "exchange-ledger-a"
+          }
+        ]
+      },
+      {
+        "case_id": "case-09-missing-challenge-bond-hold",
+        "expected_reason_codes": [
+          "L_i_w_floor_reported_above_verified",
+          "L_i_w_missing_challenge_bond",
+          "L_i_w_missing_required_source_class"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "components",
+              "L_i_w",
+              3,
+              "challenge_bond_usd"
+            ],
+            "value": 0
+          }
+        ]
+      },
+      {
+        "case_id": "case-10-missing-liability-exclusion-hold",
+        "expected_reason_codes": [
+          "L_i_w_floor_reported_above_verified",
+          "L_i_w_missing_required_source_class"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "components",
+              "L_i_w"
+            ],
+            "value": [
+              {
+                "age_epochs": 0,
+                "attestor_group": "contract-liability-a",
+                "candidate_controlled": false,
+                "captured_attestor": false,
+                "control_surface": "contract-obligation",
+                "field": "contractual_liability_floor",
+                "self_declared": false,
+                "soft_value": false,
+                "source_class": "contract_signed",
+                "value_usd": 6000000
+              },
+              {
+                "age_epochs": 0,
+                "attestor_group": "route-loss-counterparty-a",
+                "candidate_controlled": false,
+                "captured_attestor": false,
+                "control_surface": "route-customer-record",
+                "field": "route_customer_loss_floor",
+                "self_declared": false,
+                "soft_value": false,
+                "source_class": "counterparty_signed",
+                "value_usd": 2000000
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-11-ungoverned-policy-fail-closed",
+        "expected_reason_codes": [
+          "ungoverned_input_policy"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "input_policy_governed"
+            ],
+            "value": false
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,138 @@
+{
+  "schema": "postfiat-constitutional-question-v1",
+  "question_id": "vc-model-governance-001",
+  "question_version": 1,
+  "status": "active",
+  "scope": "model_governance",
+  "created_at": "2026-05-24T00:00:00Z",
+  "situation": {
+    "summary": "Decide whether the current Qwen/SGLang deterministic model profile remains the active constitutional governance profile while candidate model admission evidence is missing.",
+    "problem_statement": "PostFiat needs a replayable model-governance question whose answer cannot silently authorize a model swap, live registry mutation, or authority transfer.",
+    "decision_boundary": "This question may preserve, hold, or freeze the model-governance profile for internal constitutional decision replay. It may not promote a candidate model or authorize live governance effects.",
+    "out_of_scope": [
+      "mainnet mutation",
+      "live validator-registry mutation",
+      "live Cobalt amendment submission",
+      "provider resource creation",
+      "authority transfer"
+    ]
+  },
+  "status_quo": {
+    "current_position": "The current internal model profile is Qwen/Qwen3.6-27B-FP8 served through SGLang TP=1 with deterministic replay settings; model promotion remains a future governed decision.",
+    "implementation_refs": [
+      {
+        "ref_id": "constitutional-question-schema",
+        "path": "docs/governance/agent/constitutional_question_schema.json",
+        "sha3_384": "47c2b2f27bdc745615f4d0d893333c12825b8b935358efbf4f53bdb9ad7b72e03d46d5264812d2cd9066d3c11813bd7f"
+      },
+      {
+        "ref_id": "model-selection-requirement",
+        "path": "docs_site/governance/model-selection-governance-requirement.md",
+        "sha3_384": "5ecc42acc51559329ede55769dc925de379f7aff3b87beb646cd886b73d9f528c2289d27550af2a4b4312fac484f04ed"
+      }
+    ],
+    "evidence_refs": [
+      {
+        "ref_id": "dry-run-model-request",
+        "path": "docs/governance/agent/fixtures/dry_run_model_request.json",
+        "sha3_384": "3bf271143efe07552f588dcdcc61b60910d698d4b5b1164c9e2301fffd52e96dd1fb0be10775b7c93f3a27f79224ab08"
+      }
+    ]
+  },
+  "option_order": [
+    "preserve-current-profile",
+    "admit-candidate-now",
+    "freeze-model-profile",
+    "hold-no-op"
+  ],
+  "options": {
+    "preserve-current-profile": {
+      "option_id": "preserve-current-profile",
+      "title": "Preserve current Qwen/SGLang profile",
+      "kind": "preserve_status_quo",
+      "description": "Keep the current deterministic Qwen/SGLang TP=1 profile active for internal constitutional replay until candidate-model evidence exists.",
+      "implementation_effect": "no_code_change",
+      "requires_new_evidence": false
+    },
+    "admit-candidate-now": {
+      "option_id": "admit-candidate-now",
+      "title": "Admit candidate model now",
+      "kind": "adopt_change",
+      "description": "Promote a candidate model profile immediately.",
+      "implementation_effect": "future_authorization_required",
+      "requires_new_evidence": true
+    },
+    "freeze-model-profile": {
+      "option_id": "freeze-model-profile",
+      "title": "Freeze current model profile",
+      "kind": "hold_for_evidence",
+      "description": "Freeze model-governance changes until replay, adversarial, and cross-machine evidence exist.",
+      "implementation_effect": "test_or_gate_change",
+      "requires_new_evidence": true
+    },
+    "hold-no-op": {
+      "option_id": "hold-no-op",
+      "title": "Hold and no-op",
+      "kind": "defer_no_op",
+      "description": "Take no model-governance action because required evidence is missing or ambiguous.",
+      "implementation_effect": "no_code_change",
+      "requires_new_evidence": true
+    }
+  },
+  "hard_constraints": [
+    "json_only",
+    "closed_option_set",
+    "cite_status_quo_refs",
+    "cite_evidence_refs_only",
+    "no_hidden_evidence",
+    "no_secret_material",
+    "no_live_mutation",
+    "no_authority_transfer",
+    "prefer_no_op_when_uncertain",
+    "challenge_path_required",
+    "conformance_packet_required"
+  ],
+  "forbidden_outputs": [
+    "live_registry_mutation",
+    "live_cobalt_amendment_submission",
+    "authority_transfer",
+    "hidden_evidence",
+    "secret_dependency",
+    "unregistered_reputation_claim",
+    "scope_expansion",
+    "model_self_upgrade",
+    "selector_self_upgrade",
+    "prompt_self_upgrade",
+    "prose_only_output",
+    "option_outside_closed_set"
+  ],
+  "fallback": {
+    "decision": "no_op",
+    "trigger_conditions": [
+      "missing_evidence",
+      "ambiguous_evidence",
+      "schema_invalid",
+      "replay_drift",
+      "hidden_evidence_attempt",
+      "scope_expansion_attempt",
+      "unsafe_live_action_attempt"
+    ]
+  },
+  "prompt_contract": {
+    "qwen_may_propose_evidence_request": true,
+    "qwen_may_add_options": false,
+    "qwen_may_change_constraints": false,
+    "qwen_may_authorize_live_action": false,
+    "output_json_only": true,
+    "decision_must_select_option_id": true
+  },
+  "checks": {
+    "status_quo_present": true,
+    "option_set_closed": true,
+    "hard_constraints_present": true,
+    "forbidden_outputs_present": true,
+    "no_op_fallback_present": true,
+    "live_mutation_authorized": false,
+    "authority_transfer": false
+  }
+}

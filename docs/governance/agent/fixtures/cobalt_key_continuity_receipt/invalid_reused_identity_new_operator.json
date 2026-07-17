@@ -1,0 +1,11 @@
+{
+  "base_fixture": "valid_key_continuity_receipt.json",
+  "overrides": {
+    "new_registry": [
+      {"validator_id": "C", "operator_id": "op-attacker", "consensus_key": "new-key-c", "operator_manifest_hash": "manifest-attacker", "status": "active"}
+    ]
+  },
+  "expected_error_contains": [
+    "receipt[C]: operator_id mismatch"
+  ]
+}

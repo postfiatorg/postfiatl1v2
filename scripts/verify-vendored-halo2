@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VENDOR="$ROOT/third_party/halo2_proofs"
+UPSTREAM_COMMIT="f6200adaa6ca064d8d2eaa6fcc5e2671232d7249"
+EXPECTED_PATCH_SHA256="d51e2e6edaa55be0910f4a72b1fd66ef9f634f9037437247ab3d25f6eb0d7a73"
+
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+
+if [[ $# -gt 1 ]]; then
+  echo "usage: $0 [existing-halo2-checkout]" >&2
+  exit 2
+fi
+
+if [[ $# -eq 1 ]]; then
+  upstream_root="$(cd "$1" && pwd)"
+else
+  upstream_root="$work/upstream"
+  git clone --filter=blob:none --no-checkout https://github.com/zcash/halo2.git "$upstream_root"
+  git -C "$upstream_root" checkout --detach "$UPSTREAM_COMMIT"
+fi
+
+actual_commit="$(git -C "$upstream_root" rev-parse HEAD)"
+if [[ "$actual_commit" != "$UPSTREAM_COMMIT" ]]; then
+  echo "Halo2 checkout is $actual_commit, expected $UPSTREAM_COMMIT" >&2
+  exit 1
+fi
+
+expected_inventory="$work/expected-inventory"
+actual_inventory="$work/actual-inventory"
+cat > "$expected_inventory" <<'EOF'
+Files UPSTREAM/Cargo.toml and VENDORED/Cargo.toml differ
+Files UPSTREAM/src/lib.rs and VENDORED/src/lib.rs differ
+Files UPSTREAM/src/multicore.rs and VENDORED/src/multicore.rs differ
+Files UPSTREAM/src/plonk.rs and VENDORED/src/plonk.rs differ
+Files UPSTREAM/src/plonk/error.rs and VENDORED/src/plonk/error.rs differ
+Files UPSTREAM/src/plonk/keygen.rs and VENDORED/src/plonk/keygen.rs differ
+Files UPSTREAM/src/plonk/permutation.rs and VENDORED/src/plonk/permutation.rs differ
+Only in VENDORED: .cargo-ok
+Only in VENDORED: .cargo_vcs_info.json
+Only in VENDORED: COPYING.md
+Only in VENDORED: Cargo.lock
+Only in VENDORED: Cargo.toml.orig
+Only in VENDORED: LICENSE-APACHE
+Only in VENDORED: LICENSE-MIT
+Only in VENDORED: PROVENANCE.md
+EOF
+
+diff -qr "$upstream_root/halo2_proofs" "$VENDOR" \
+  | sed -e "s#$upstream_root/halo2_proofs#UPSTREAM#g" -e "s#$VENDOR#VENDORED#g" \
+  | sort > "$actual_inventory" || true
+diff -u "$expected_inventory" "$actual_inventory"
+
+printf '%s  %s\n' \
+  "3708458dee7f359ac6c9c5558023ed481be87e5372c43ebd7f2ca7ad23c12026" \
+  "$VENDOR/LICENSE-APACHE" \
+  "cc6e3688129428de0b1f9e35d796955f0c826671700097b26a920b3112a7a697" \
+  "$VENDOR/LICENSE-MIT" \
+  "1b0f8332e3f8b72835e1bf816a7471103c74e82b16c149e08f36136e175d9846" \
+  "$VENDOR/COPYING.md" | sha256sum --check --status
+
+patch="$work/halo2-local.patch"
+: > "$patch"
+for mapping in \
+  "Cargo.toml:Cargo.toml.orig" \
+  "src/lib.rs:src/lib.rs" \
+  "src/multicore.rs:src/multicore.rs" \
+  "src/plonk/error.rs:src/plonk/error.rs" \
+  "src/plonk/keygen.rs:src/plonk/keygen.rs" \
+  "src/plonk/permutation.rs:src/plonk/permutation.rs" \
+  "src/plonk.rs:src/plonk.rs"
+do
+  upstream_file="${mapping%%:*}"
+  vendor_file="${mapping#*:}"
+  diff -u \
+    --label "upstream/halo2_proofs/$upstream_file" \
+    --label "vendored/halo2_proofs/$vendor_file" \
+    "$upstream_root/halo2_proofs/$upstream_file" \
+    "$VENDOR/$vendor_file" >> "$patch" || [[ $? -eq 1 ]]
+done
+
+actual_patch_sha256="$(sha256sum "$patch" | awk '{print $1}')"
+if [[ "$actual_patch_sha256" != "$EXPECTED_PATCH_SHA256" ]]; then
+  echo "Halo2 local patch hash $actual_patch_sha256, expected $EXPECTED_PATCH_SHA256" >&2
+  exit 1
+fi
+
+echo "vendored Halo2 provenance verified at $UPSTREAM_COMMIT ($actual_patch_sha256)"

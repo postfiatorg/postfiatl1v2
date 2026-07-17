@@ -1,0 +1,18 @@
+[package]
+name = "postfiat-ordering-fast"
+version = "0.1.0"
+description = "Deterministic ordering and quorum primitives for PostFiat L1"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+postfiat-crypto-provider = { path = "../crypto_provider" }
+postfiat-mempool-dag = { path = "../mempool_dag" }
+postfiat-types = { path = "../types" }
+serde = { workspace = true }
+serde_json = { workspace = true }

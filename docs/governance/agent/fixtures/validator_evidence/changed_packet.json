@@ -1,0 +1,491 @@
+{
+  "schema": "postfiat-validator-evidence-packet-v1",
+  "packet_id": "validator-evidence-2026-05-23-qcv-006-changed",
+  "collection_window": {
+    "from_height": 1000,
+    "to_height": 2000,
+    "from_time": "2026-05-23T00:00:00Z",
+    "to_time": "2026-05-23T06:00:00Z"
+  },
+  "collector": {
+    "name": "postfiat-validator-evidence-collector",
+    "version": "0.1.0",
+    "config_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "field_registry": {
+    "registry_id": "validator-evidence-field-registry-v1",
+    "registry_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "registered_field_paths": [
+      "packet.schema",
+      "packet.packet_id",
+      "packet.collection_window.from_height",
+      "packet.collection_window.to_height",
+      "packet.collection_window.from_time",
+      "packet.collection_window.to_time",
+      "packet.collector.name",
+      "packet.collector.version",
+      "packet.collector.config_hash",
+      "packet.raw_observation_root",
+      "packet.redaction.private_fields_removed",
+      "packet.redaction.secret_scan_passed",
+      "validator.registry.validator_id",
+      "validator.registry.public_key_hash",
+      "validator.registry.active_status",
+      "validator.registry.registry_root",
+      "validator.registry.governance_epoch",
+      "validator.operator_manifest.manifest_hash",
+      "validator.operator_manifest.signature_valid",
+      "validator.operator_manifest.expires_at",
+      "validator.identity.declared_domain",
+      "validator.identity.declared_url",
+      "validator.identity.url_fetch.status",
+      "validator.identity.url_fetch.content_hash",
+      "validator.identity.key_domain_binding.status",
+      "validator.performance.uptime_window_bps",
+      "validator.performance.missed_vote_count",
+      "validator.performance.equivocation_event_count",
+      "validator.cobalt.amendment_vote_count",
+      "validator.cobalt.missed_amendment_vote_count",
+      "validator.cobalt.rollback_event_count",
+      "validator.governance.open_remediation_hold",
+      "validator.topology.host_group",
+      "validator.topology.operator_group",
+      "validator.topology.jurisdiction_group",
+      "validator.evidence_quality.missing_required_field_count",
+      "cohort.topology.host_group_count",
+      "cohort.topology.operator_group_count",
+      "cohort.topology.jurisdiction_group_count",
+      "cohort.registry.active_validator_count"
+    ],
+    "provenance_levels": [
+      "chain_derived",
+      "registry_derived",
+      "operator_signed",
+      "collector_observed",
+      "network_observed",
+      "self_asserted",
+      "third_party_attested"
+    ],
+    "freshness_classes": [
+      "same_packet",
+      "recent_24h",
+      "recent_7d",
+      "recent_30d",
+      "epoch_bound",
+      "historical"
+    ],
+    "missing_evidence_behaviors": [
+      "reject_packet",
+      "reject_validator_entry",
+      "hold",
+      "neutral",
+      "stale"
+    ],
+    "conflict_behaviors": [
+      "reject_packet",
+      "reject_validator_entry",
+      "hold"
+    ],
+    "action_bounds": [
+      "informational_only",
+      "score_adjustment",
+      "admission_gate",
+      "hold_only",
+      "suspend_candidate",
+      "remove_candidate",
+      "no_action"
+    ]
+  },
+  "validator_order": [
+    "validator-alpha"
+  ],
+  "validators": {
+    "validator-alpha": {
+      "validator_id": "validator-alpha",
+      "fields": [
+        {
+          "field_path": "validator.registry.validator_id",
+          "value_type": "string",
+          "value": "validator-alpha",
+          "provenance": [
+            "registry_derived"
+          ],
+          "freshness": "epoch_bound",
+          "missing_evidence_behavior": "reject_validator_entry",
+          "conflict_behavior": "reject_validator_entry",
+          "action_bound": "no_action",
+          "observed_at": "2026-05-23T06:00:00Z",
+          "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "redacted": false
+        },
+        {
+          "field_path": "validator.registry.public_key_hash",
+          "value_type": "hash",
+          "value": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "provenance": [
+            "registry_derived"
+          ],
+          "freshness": "epoch_bound",
+          "missing_evidence_behavior": "reject_validator_entry",
+          "conflict_behavior": "reject_validator_entry",
+          "action_bound": "no_action",
+          "observed_at": "2026-05-23T06:00:00Z",
+          "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "redacted": false
+        },
+        {
+          "field_path": "validator.registry.active_status",
+          "value_type": "enum",
+          "value": "active",
+          "provenance": [
+            "registry_derived"
+          ],
+          "freshness": "epoch_bound",
+          "missing_evidence_behavior": "hold",
+          "conflict_behavior": "hold",
+          "action_bound": "admission_gate",
+          "observed_at": "2026-05-23T06:00:00Z",
+          "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "redacted": false
+        },
+        {
+          "field_path": "validator.operator_manifest.manifest_hash",
+          "value_type": "hash",
+          "value": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "provenance": [
+            "operator_signed"
+          ],
+          "freshness": "recent_30d",
+          "missing_evidence_behavior": "neutral",
+          "conflict_behavior": "hold",
+          "action_bound": "score_adjustment",
+          "observed_at": "2026-05-23T05:50:00Z",
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "redacted": false
+        },
+        {
+          "field_path": "validator.operator_manifest.signature_valid",
+          "value_type": "boolean",
+          "value": true,
+          "provenance": [
+            "operator_signed"
+          ],
+          "freshness": "recent_30d",
+          "missing_evidence_behavior": "neutral",
+          "conflict_behavior": "hold",
+          "action_bound": "admission_gate",
+          "observed_at": "2026-05-23T05:50:00Z",
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "redacted": false
+        },
+        {
+          "field_path": "validator.identity.declared_domain",
+          "value_type": "domain",
+          "value": "validator.example",
+          "provenance": [
+            "operator_signed"
+          ],
+          "freshness": "recent_30d",
+          "missing_evidence_behavior": "neutral",
+          "conflict_behavior": "hold",
+          "action_bound": "score_adjustment",
+          "observed_at": "2026-05-23T05:50:00Z",
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "redacted": false
+        },
+        {
+          "field_path": "validator.identity.declared_url",
+          "value_type": "url",
+          "value": "https://validator.example/postfiat.json",
+          "provenance": [
+            "operator_signed"
+          ],
+          "freshness": "recent_30d",
+          "missing_evidence_behavior": "neutral",
+          "conflict_behavior": "hold",
+          "action_bound": "score_adjustment",
+          "observed_at": "2026-05-23T05:50:00Z",
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "redacted": false
+        },
+        {
+          "field_path": "validator.identity.url_fetch.status",
+          "value_type": "enum",
+          "value": "reachable_with_redirect",
+          "provenance": [
+            "collector_observed"
+          ],
+          "freshness": "recent_24h",
+          "missing_evidence_behavior": "neutral",
+          "conflict_behavior": "hold",
+          "action_bound": "score_adjustment",
+          "observed_at": "2026-05-23T05:55:00Z",
+          "source_hash": "888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888",
+          "redacted": false
+        },
+        {
+          "field_path": "validator.identity.url_fetch.content_hash",
+          "value_type": "hash_or_null",
+          "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "provenance": [
+            "collector_observed"
+          ],
+          "freshness": "recent_24h",
+          "missing_evidence_behavior": "neutral",
+          "conflict_behavior": "hold",
+          "action_bound": "score_adjustment",
+          "observed_at": "2026-05-23T05:55:00Z",
+          "source_hash": "888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888",
+          "redacted": false
+        },
+        {
+          "field_path": "validator.identity.key_domain_binding.status",
+          "value_type": "enum",
+          "value": "proved",
+          "provenance": [
+            "operator_signed",
+            "collector_observed"
+          ],
+          "freshness": "recent_30d",
+          "missing_evidence_behavior": "neutral",
+          "conflict_behavior": "hold",
+          "action_bound": "admission_gate",
+          "observed_at": "2026-05-23T05:55:00Z",
+          "source_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "redacted": false
+        },
+        {
+          "field_path": "validator.performance.uptime_window_bps",
+          "value_type": "integer",
+          "value": 9975,
+          "provenance": [
+            "network_observed"
+          ],
+          "freshness": "recent_7d",
+          "missing_evidence_behavior": "neutral",
+          "conflict_behavior": "hold",
+          "action_bound": "score_adjustment",
+          "observed_at": "2026-05-23T06:00:00Z",
+          "source_hash": "777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+          "redacted": false
+        },
+        {
+          "field_path": "validator.performance.missed_vote_count",
+          "value_type": "integer",
+          "value": 1,
+          "provenance": [
+            "chain_derived",
+            "network_observed"
+          ],
+          "freshness": "recent_7d",
+          "missing_evidence_behavior": "neutral",
+          "conflict_behavior": "hold",
+          "action_bound": "score_adjustment",
+          "observed_at": "2026-05-23T06:00:00Z",
+          "source_hash": "777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+          "redacted": false
+        },
+        {
+          "field_path": "validator.performance.equivocation_event_count",
+          "value_type": "integer",
+          "value": 0,
+          "provenance": [
+            "chain_derived"
+          ],
+          "freshness": "historical",
+          "missing_evidence_behavior": "neutral",
+          "conflict_behavior": "hold",
+          "action_bound": "suspend_candidate",
+          "observed_at": "2026-05-23T06:00:00Z",
+          "source_hash": "222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
+          "redacted": false
+        },
+        {
+          "field_path": "validator.cobalt.amendment_vote_count",
+          "value_type": "integer",
+          "value": 13,
+          "provenance": [
+            "chain_derived"
+          ],
+          "freshness": "epoch_bound",
+          "missing_evidence_behavior": "neutral",
+          "conflict_behavior": "hold",
+          "action_bound": "score_adjustment",
+          "observed_at": "2026-05-23T06:00:00Z",
+          "source_hash": "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+          "redacted": false
+        },
+        {
+          "field_path": "validator.cobalt.missed_amendment_vote_count",
+          "value_type": "integer",
+          "value": 0,
+          "provenance": [
+            "chain_derived"
+          ],
+          "freshness": "epoch_bound",
+          "missing_evidence_behavior": "neutral",
+          "conflict_behavior": "hold",
+          "action_bound": "score_adjustment",
+          "observed_at": "2026-05-23T06:00:00Z",
+          "source_hash": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+          "redacted": false
+        },
+        {
+          "field_path": "validator.cobalt.rollback_event_count",
+          "value_type": "integer",
+          "value": 0,
+          "provenance": [
+            "chain_derived"
+          ],
+          "freshness": "historical",
+          "missing_evidence_behavior": "neutral",
+          "conflict_behavior": "hold",
+          "action_bound": "hold_only",
+          "observed_at": "2026-05-23T06:00:00Z",
+          "source_hash": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+          "redacted": false
+        },
+        {
+          "field_path": "validator.governance.open_remediation_hold",
+          "value_type": "boolean",
+          "value": false,
+          "provenance": [
+            "chain_derived"
+          ],
+          "freshness": "epoch_bound",
+          "missing_evidence_behavior": "neutral",
+          "conflict_behavior": "hold",
+          "action_bound": "hold_only",
+          "observed_at": "2026-05-23T06:00:00Z",
+          "source_hash": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+          "redacted": false
+        },
+        {
+          "field_path": "validator.topology.host_group",
+          "value_type": "string",
+          "value": "host-group-b",
+          "provenance": [
+            "operator_signed"
+          ],
+          "freshness": "recent_30d",
+          "missing_evidence_behavior": "neutral",
+          "conflict_behavior": "hold",
+          "action_bound": "score_adjustment",
+          "observed_at": "2026-05-23T05:50:00Z",
+          "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "redacted": false
+        },
+        {
+          "field_path": "validator.topology.operator_group",
+          "value_type": "string",
+          "value": "operator-group-a",
+          "provenance": [
+            "operator_signed"
+          ],
+          "freshness": "recent_30d",
+          "missing_evidence_behavior": "neutral",
+          "conflict_behavior": "hold",
+          "action_bound": "score_adjustment",
+          "observed_at": "2026-05-23T05:50:00Z",
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "redacted": false
+        },
+        {
+          "field_path": "validator.topology.jurisdiction_group",
+          "value_type": "string",
+          "value": "jurisdiction-us",
+          "provenance": [
+            "operator_signed",
+            "self_asserted"
+          ],
+          "freshness": "recent_30d",
+          "missing_evidence_behavior": "neutral",
+          "conflict_behavior": "hold",
+          "action_bound": "score_adjustment",
+          "observed_at": "2026-05-23T05:50:00Z",
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "redacted": false
+        },
+        {
+          "field_path": "validator.evidence_quality.missing_required_field_count",
+          "value_type": "integer",
+          "value": 0,
+          "provenance": [
+            "collector_observed"
+          ],
+          "freshness": "same_packet",
+          "missing_evidence_behavior": "neutral",
+          "conflict_behavior": "hold",
+          "action_bound": "hold_only",
+          "observed_at": "2026-05-23T06:00:00Z",
+          "source_hash": "555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555",
+          "redacted": false
+        }
+      ]
+    }
+  },
+  "cohort": {
+    "fields": [
+      {
+        "field_path": "cohort.topology.host_group_count",
+        "value_type": "integer",
+        "value": 7,
+        "provenance": [
+          "collector_observed"
+        ],
+        "freshness": "same_packet",
+        "missing_evidence_behavior": "neutral",
+        "conflict_behavior": "hold",
+        "action_bound": "admission_gate",
+        "observed_at": "2026-05-23T06:00:00Z",
+        "source_hash": "555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555",
+        "redacted": false
+      },
+      {
+        "field_path": "cohort.topology.operator_group_count",
+        "value_type": "integer",
+        "value": 7,
+        "provenance": [
+          "collector_observed"
+        ],
+        "freshness": "same_packet",
+        "missing_evidence_behavior": "neutral",
+        "conflict_behavior": "hold",
+        "action_bound": "admission_gate",
+        "observed_at": "2026-05-23T06:00:00Z",
+        "source_hash": "555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555",
+        "redacted": false
+      },
+      {
+        "field_path": "cohort.registry.active_validator_count",
+        "value_type": "integer",
+        "value": 7,
+        "provenance": [
+          "registry_derived"
+        ],
+        "freshness": "epoch_bound",
+        "missing_evidence_behavior": "reject_packet",
+        "conflict_behavior": "reject_packet",
+        "action_bound": "no_action",
+        "observed_at": "2026-05-23T06:00:00Z",
+        "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "redacted": false
+      }
+    ]
+  },
+  "raw_observation_root": "777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+  "raw_observation_hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+    "222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
+    "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+    "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+    "555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555"
+  ],
+  "redaction": {
+    "private_fields_removed": true,
+    "secret_scan_passed": true
+  }
+}

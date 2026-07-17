@@ -1,0 +1,18 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_registry_addition_liveness/valid_registry_addition_liveness.json",
+  "expected_error_contains": [
+    "evidence artifact hash mismatch"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "evidence_artifacts",
+        0,
+        "sha3_384"
+      ],
+      "value": "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+    }
+  ],
+  "schema": "postfiat-validator-registry-addition-liveness-invalid-case-v1"
+}

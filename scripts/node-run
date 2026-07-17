@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DATA_DIR="${DATA_DIR:-.postfiat/node0}"
+
+cargo run -p postfiat-node -- run --data-dir "$DATA_DIR"
+

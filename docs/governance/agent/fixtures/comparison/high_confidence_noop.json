@@ -1,0 +1,31 @@
+{
+  "schema": "postfiat-governance-agent-comparison-fixture-v1",
+  "case_id": "high-confidence-noop",
+  "case_class": "high_confidence",
+  "evidence": {
+    "schema": "postfiat-governance-agent-frozen-evidence-v1",
+    "snapshot_id": "gate-7_6-high-confidence-noop",
+    "validator_registry_root": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+    "cobalt_evidence_root": "555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555",
+    "operator_manifest_root": "666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666",
+    "validator_evidence_packet_root": "7f146e261443b04f443764468e94343f81a1dd87ec30a122b267b3d2050d43321ea6b122cb2b19efbe57b1728a6e4cea",
+    "available_inputs": [
+      "cobalt_evidence_packet",
+      "operator_manifest_set",
+      "validator_evidence_packet",
+      "validator_registry_snapshot"
+    ],
+    "network_access_allowed": false,
+    "model_access_allowed": false,
+    "filesystem_access_allowed": false,
+    "direct_state_mutation_allowed": false
+  },
+  "direct_baseline": {
+    "source": "offline-direct-judgment-fixture-v1",
+    "authoritative": false,
+    "action": "no_op",
+    "confidence_bps": 9900,
+    "mutations": [],
+    "rationale": "Evidence is complete and the direct baseline finds no safe registry change."
+  }
+}

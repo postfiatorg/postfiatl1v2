@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MODEL_REQUEST="${MODEL_REQUEST:-docs/governance/agent/fixtures/dry_run_model_request.json}"
+RULESET="${RULESET:-docs/governance/agent/fixtures/guarded_apply_ruleset.json}"
+GATE_9_5_REPORT="${GATE_9_5_REPORT:-reports/gov-inference-gate-9_5-generated-ruleset-guarded-apply.json}"
+REPORT="${REPORT:-reports/gov-inference-gate-10_1-verillm-postfiat-benchmark.json}"
+
+require_command() {
+  local command="$1"
+  if ! command -v "$command" >/dev/null 2>&1; then
+    echo "missing required command: $command" >&2
+    exit 1
+  fi
+}
+
+require_command cargo
+require_command mkdir
+require_command rm
+
+if [ ! -s "$GATE_9_5_REPORT" ]; then
+  GATE_9_5_REPORT="$GATE_9_5_REPORT" scripts/gov-inference-gate-9_5 >/dev/null
+fi
+
+cargo build -p postfiat-node >/dev/null
+
+mkdir -p "$(dirname "$REPORT")"
+rm -f "$REPORT"
+
+target/debug/postfiat-node governance-agent-gate10-1 \
+  --model-request "$MODEL_REQUEST" \
+  --ruleset "$RULESET" \
+  --gate-9_5-report "$GATE_9_5_REPORT" \
+  --output "$REPORT" \
+  --overwrite

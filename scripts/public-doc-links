@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""Fail when a local public-documentation link or anchor is unresolved."""
+
+from __future__ import annotations
+
+import argparse
+from html.parser import HTMLParser
+from pathlib import Path
+from urllib.parse import unquote, urlsplit
+
+import markdown
+
+
+ROOT_DOCS = ("README.md", "CONTRIBUTING.md", "SECURITY.md")
+MARKDOWN_EXTENSIONS = ("fenced_code", "tables", "toc", "attr_list", "md_in_html")
+
+
+class RenderedDocument(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.references: list[str] = []
+        self.ids: set[str] = set()
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributes = dict(attrs)
+        element_id = attributes.get("id")
+        if element_id:
+            self.ids.add(element_id)
+        if tag == "a" and attributes.get("href"):
+            self.references.append(str(attributes["href"]))
+        elif tag in {"img", "script"} and attributes.get("src"):
+            self.references.append(str(attributes["src"]))
+        elif tag == "link" and attributes.get("href"):
+            self.references.append(str(attributes["href"]))
+
+
+def markdown_files(repository: Path) -> list[Path]:
+    files = [repository / name for name in ROOT_DOCS if (repository / name).is_file()]
+    docs = repository / "docs"
+    if docs.is_dir():
+        files.extend(sorted(docs.rglob("*.md")))
+    return files
+
+
+def render(path: Path, cache: dict[Path, RenderedDocument]) -> RenderedDocument:
+    if path not in cache:
+        document = RenderedDocument()
+        document.feed(
+            markdown.markdown(
+                path.read_text(encoding="utf-8"),
+                extensions=list(MARKDOWN_EXTENSIONS),
+            )
+        )
+        cache[path] = document
+    return cache[path]
+
+
+def local_target(repository: Path, source: Path, raw_path: str) -> Path:
+    if raw_path.startswith("/"):
+        return (repository / "docs" / raw_path.lstrip("/")).resolve()
+    return (source.parent / raw_path).resolve()
+
+
+def existing_target(path: Path) -> Path | None:
+    candidates = [path]
+    if not path.suffix:
+        candidates.extend((path.with_suffix(".md"), path / "index.md"))
+    return next((candidate for candidate in candidates if candidate.exists()), None)
+
+
+def verify(repository: Path) -> tuple[int, list[str]]:
+    repository = repository.resolve()
+    cache: dict[Path, RenderedDocument] = {}
+    failures: list[str] = []
+    files = markdown_files(repository)
+    for source in files:
+        for reference in render(source, cache).references:
+            parsed = urlsplit(reference)
+            if parsed.scheme or parsed.netloc or reference.startswith(
+                ("mailto:", "tel:", "javascript:")
+            ):
+                continue
+            raw_path = unquote(parsed.path)
+            target = source if not raw_path else local_target(repository, source, raw_path)
+            try:
+                target.relative_to(repository)
+            except ValueError:
+                failures.append(f"{source.relative_to(repository)}: path escapes repository: {reference}")
+                continue
+            target = existing_target(target)
+            if target is None:
+                failures.append(f"{source.relative_to(repository)}: missing target: {reference}")
+                continue
+            resolved_target = target.resolve()
+            try:
+                resolved_target.relative_to(repository)
+            except ValueError:
+                failures.append(f"{source.relative_to(repository)}: target escapes repository: {reference}")
+                continue
+            fragment = unquote(parsed.fragment)
+            if (
+                fragment
+                and resolved_target.is_file()
+                and resolved_target.suffix.lower() == ".md"
+                and fragment not in render(resolved_target, cache).ids
+            ):
+                failures.append(f"{source.relative_to(repository)}: missing anchor: {reference}")
+    return len(files), failures
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--repository", type=Path, default=Path(__file__).resolve().parents[1])
+    args = parser.parse_args()
+    file_count, failures = verify(args.repository)
+    for failure in failures:
+        print(f"DOC_LINK finding {failure}")
+    if failures:
+        print(f"public documentation link check FAILED findings={len(failures)}")
+        return 1
+    print(f"public_documentation_links=ok files={file_count}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

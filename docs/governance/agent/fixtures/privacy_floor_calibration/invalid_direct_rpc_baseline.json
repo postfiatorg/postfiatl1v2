@@ -1,0 +1,18 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_floor_calibration/valid_floor_calibration.json",
+  "expected_error_contains": [
+    "case-09-direct-rpc-observer: expected_route mismatch"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        8,
+        "expected_route"
+      ],
+      "value": "baseline-private"
+    }
+  ],
+  "schema": "postfiat-privacy-floor-calibration-invalid-case-v1"
+}

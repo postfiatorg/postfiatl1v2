@@ -1,0 +1,233 @@
+{
+  "schema": "postfiat-shielded-asset-predicate-registry-v1",
+  "packet_id": "shielded-asset-predicate-registry-demo-2026-05-29",
+  "mode": "design_fixture_only",
+  "statement": {
+    "protocol_boundary": {
+      "pool_id": "orchard-v1",
+      "supply_mode_v0": "transparent_supply_private_flow",
+      "programming_model_v0": "closed_cobalt_governed_predicate_library",
+      "deferred_modes": [
+        "private_supply",
+        "bilateral_dvp",
+        "amm_pool",
+        "order_book",
+        "arbitrary_zkvm",
+        "recipient_identity_transfer_policy"
+      ]
+    },
+    "registry": {
+      "registry_id": "postfiat-shielded-asset-predicate-registry-v0",
+      "version": "v0",
+      "root_governance": "cobalt_governed",
+      "registry_root_hash": "49abd466e5b01e1b461b12f214135465273fabd289c8700399c669f5e04b6e8d013875249aec9e826bfa7421b5c9ae80",
+      "predicate_id_derivation": "pred-<sha3_384(circuit_content)[0:32]>",
+      "cobalt_transition_required": true,
+      "allowed_state_scopes": [
+        "owner_scoped"
+      ],
+      "forbidden_predicate_classes": [
+        "private_supply",
+        "bilateral_dvp",
+        "amm_pool",
+        "order_book",
+        "arbitrary_zkvm",
+        "recipient_identity_transfer_policy"
+      ]
+    },
+    "asset_profile": {
+      "asset_id": "asset-pusd-demo",
+      "issuer_key_hash": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+      "supply_accounting": "transparent_supply_map",
+      "public_supply": "1000000000000",
+      "private_flow": true,
+      "transfer_policy": {
+        "policy_class": "owner_scoped_static",
+        "recipient_identity_required": false,
+        "recipient_attribute_public_inputs": [],
+        "privacy_tier": "unified_pool_no_recipient_attribute_leakage"
+      }
+    },
+    "predicates": [
+      {
+        "predicate_id": "pred-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "name": "asset-issuance-v0",
+        "predicate_class": "asset_issuance",
+        "state_scope": "owner_scoped",
+        "shared_mutable_state": false,
+        "arbitrary_vm": false,
+        "circuit_content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "verifying_key_hash": "fafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafa",
+        "public_inputs_schema_hash": "515151515151515151515151515151515151515151515151515151515151515151515151515151515151515151515151",
+        "trusted_setup": "halo2_universal_no_per_circuit_setup",
+        "max_actions": 1,
+        "public_inputs": [
+          "asset_id",
+          "issuer_key_hash",
+          "public_supply_delta",
+          "predicate_registry_root"
+        ]
+      },
+      {
+        "predicate_id": "pred-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "name": "asset-transfer-v0",
+        "predicate_class": "asset_transfer",
+        "state_scope": "owner_scoped",
+        "shared_mutable_state": false,
+        "arbitrary_vm": false,
+        "circuit_content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "verifying_key_hash": "fbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbfb",
+        "public_inputs_schema_hash": "525252525252525252525252525252525252525252525252525252525252525252525252525252525252525252525252",
+        "trusted_setup": "halo2_universal_no_per_circuit_setup",
+        "max_actions": 4,
+        "public_inputs": [
+          "asset_commitment",
+          "nullifier",
+          "output_commitments",
+          "predicate_registry_root",
+          "policy_root",
+          "disclosure_hash"
+        ]
+      },
+      {
+        "predicate_id": "pred-cccccccccccccccccccccccccccccccc",
+        "name": "asset-burn-v0",
+        "predicate_class": "asset_burn",
+        "state_scope": "owner_scoped",
+        "shared_mutable_state": false,
+        "arbitrary_vm": false,
+        "circuit_content_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "verifying_key_hash": "fcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfc",
+        "public_inputs_schema_hash": "535353535353535353535353535353535353535353535353535353535353535353535353535353535353535353535353",
+        "trusted_setup": "halo2_universal_no_per_circuit_setup",
+        "max_actions": 1,
+        "public_inputs": [
+          "asset_id",
+          "public_supply_delta",
+          "nullifier",
+          "predicate_registry_root"
+        ]
+      },
+      {
+        "predicate_id": "pred-dddddddddddddddddddddddddddddddd",
+        "name": "assurance-non-inclusion-v0",
+        "predicate_class": "assurance_non_inclusion",
+        "state_scope": "owner_scoped",
+        "shared_mutable_state": false,
+        "arbitrary_vm": false,
+        "circuit_content_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "verifying_key_hash": "fdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfdfd",
+        "public_inputs_schema_hash": "545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454",
+        "trusted_setup": "halo2_universal_no_per_circuit_setup",
+        "max_actions": 2,
+        "public_inputs": [
+          "asset_commitment",
+          "policy_root",
+          "disclosure_hash",
+          "predicate_registry_root"
+        ]
+      },
+      {
+        "predicate_id": "pred-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "name": "vesting-lock-v0",
+        "predicate_class": "vesting_lock",
+        "state_scope": "owner_scoped",
+        "shared_mutable_state": false,
+        "arbitrary_vm": false,
+        "circuit_content_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "verifying_key_hash": "efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef",
+        "public_inputs_schema_hash": "555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555",
+        "trusted_setup": "halo2_universal_no_per_circuit_setup",
+        "max_actions": 1,
+        "public_inputs": [
+          "asset_commitment",
+          "release_height",
+          "nullifier",
+          "predicate_registry_root"
+        ]
+      }
+    ],
+    "privacy_fixture": {
+      "fixture_id": "same-asset-same-policy-public-shape-v0",
+      "claim": "same_asset_same_policy_transfers_have_no_distinguishing_public_artifact",
+      "anonymity_set_floor": 128,
+      "public_artifact_allowed_fields": [
+        "root",
+        "nullifier",
+        "output_commitments",
+        "fee",
+        "asset_commitment",
+        "predicate_registry_root",
+        "policy_root",
+        "disclosure_hash"
+      ],
+      "transfers": [
+        {
+          "case_id": "transfer-a",
+          "public_artifact": {
+            "root": "212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121",
+            "nullifier": "222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
+            "output_commitments": [
+              "232323232323232323232323232323232323232323232323232323232323232323232323232323232323232323232323",
+              "242424242424242424242424242424242424242424242424242424242424242424242424242424242424242424242424"
+            ],
+            "fee": "10",
+            "asset_commitment": "252525252525252525252525252525252525252525252525252525252525252525252525252525252525252525252525",
+            "predicate_registry_root": "49abd466e5b01e1b461b12f214135465273fabd289c8700399c669f5e04b6e8d013875249aec9e826bfa7421b5c9ae80",
+            "policy_root": "262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626",
+            "disclosure_hash": "272727272727272727272727272727272727272727272727272727272727272727272727272727272727272727272727"
+          }
+        },
+        {
+          "case_id": "transfer-b",
+          "public_artifact": {
+            "root": "313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131",
+            "nullifier": "323232323232323232323232323232323232323232323232323232323232323232323232323232323232323232323232",
+            "output_commitments": [
+              "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+              "343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434"
+            ],
+            "fee": "10",
+            "asset_commitment": "353535353535353535353535353535353535353535353535353535353535353535353535353535353535353535353535",
+            "predicate_registry_root": "49abd466e5b01e1b461b12f214135465273fabd289c8700399c669f5e04b6e8d013875249aec9e826bfa7421b5c9ae80",
+            "policy_root": "363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636363636",
+            "disclosure_hash": "373737373737373737373737373737373737373737373737373737373737373737373737373737373737373737373737"
+          }
+        }
+      ]
+    },
+    "evidence_artifacts": [
+      {
+        "path": "reports/orchard-verification-budget-v1-report.json",
+        "sha3_384": "0b3af474fe246b27cf7f167d13f52523ac25f3e3245518fa197f5b61e5d54e2c901f0b0bb9ab50ad078f9e28bfa9f2aa"
+      },
+      {
+        "path": "reports/privacy-assurance-receipt/20260528T215323Z/privacy-assurance-receipt-report.json",
+        "sha3_384": "aa438efce9f1988387a24efbd14357635366899e0f934aaa4425b62485829d55edbed26579cf96f34804b00efad1dc84"
+      }
+    ]
+  },
+  "attestation": {
+    "attestor_key_hash": "414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141",
+    "statement_hash": "58fc3d2729ed6868a404c37bc3d5b4285a94f46012863e814c9cc8217c6daee452b33d562c0248c0996965573d97dcbe",
+    "signature_hash": "424242424242424242424242424242424242424242424242424242424242424242424242424242424242424242424242",
+    "signature_scheme": "mldsa44-placeholder",
+    "attested_at": "2026-05-29T00:00:00Z"
+  },
+  "checks": {
+    "transparent_supply_private_flow": true,
+    "no_private_supply_v0": true,
+    "closed_predicate_vocabulary": true,
+    "content_addressed_predicate_ids": true,
+    "cobalt_governed_registry_root": true,
+    "owner_scoped_only_v0": true,
+    "no_bilateral_dvp_v0": true,
+    "no_arbitrary_zkvm": true,
+    "no_shared_mutable_state": true,
+    "no_counterparty_identity_public_inputs": true,
+    "privacy_fixture_same_public_shape": true,
+    "no_full_viewing_key": true,
+    "live_registry_mutation": false,
+    "authority_transfer": false
+  }
+}

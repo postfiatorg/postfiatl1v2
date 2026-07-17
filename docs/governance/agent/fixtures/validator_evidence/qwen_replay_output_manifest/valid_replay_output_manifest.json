@@ -1,0 +1,78 @@
+{
+  "schema": "postfiat-validator-evidence-qwen-replay-output-manifest-v1",
+  "manifest_id": "validator-evidence-qwen-replay-output-manifest-2026-05-23-example",
+  "mode": "design_fixture_only",
+  "qwen_replay_authorization_hash": "1f042d1a29ed6f3fa9a993a8e75a62e392fef11feaea838eb63f4116bf55b8ca0362bab0d4b0f878e2492fb44eaacd37",
+  "qwen_replay_preflight_hash": "a9bfa93538b64baa57175631bf474d7df68726bcf5ed97265a6b0bb453384b68339f150f4fe88d1b47962406af1fe4d3",
+  "qwen_prompt_redaction_audit_hash": "8a8f8dba3c0a39976774c3d7d3d22ca870416c0439a66320aa7517089d08fed8f93080ffe2f9ef3faa10668a5f80591c",
+  "qwen_prompt_input_manifest_hash": "3fbef662f11c1eb0a5ebe6fb1e179f1442595a432c8be2dcc0e330c064835ad0e6a7a6506bc38773127a71a2fac30310",
+  "qwen_public_summary_projection_hash": "0655f52f349f25be91688730073dec47737647efe9a4c07c020dd347ae8fa450476c1a4fe1d20efa440dbeaabe64f347",
+  "model_request_hash": "16e0536cdaf31cac4400dbbe0d8cda5a8c5b06cfdf59c1a399277658ca50af1f1d586898703148491b8e4e2a040d1a5b",
+  "packet_schema_hash": "92544968ea283754c5cd3cfba85194afff80f9366f07063b5cd228ea58a6f9efbeb74ad416f9f118595f8c6719d4f0c3",
+  "field_registry_hash": "a4d0ad75fcf706432e2d44bfd75486139a69116249ffb47bbc786fcb67ab939b25f99834d5cb5aa7bb93cfed8901200f",
+  "collection_window": {
+    "from_height": 1000,
+    "to_height": 2000,
+    "from_time": "2026-05-23T00:00:00Z",
+    "to_time": "2026-05-23T06:00:00Z"
+  },
+  "output_scope": {
+    "authorization_status": "not_authorized",
+    "replay_outputs_accepted": false,
+    "authorized_replay_count": 0,
+    "future_planned_replay_count": 50,
+    "generated_output_count": 0,
+    "valid_output_count": 0,
+    "invalid_output_count": 0,
+    "output_hashes": [],
+    "future_authorized_replay_required": true
+  },
+  "output_artifacts": {
+    "model_response_manifest_hash": null,
+    "ruleset_candidate_hash": null,
+    "compiled_policy_hash": null,
+    "output_bundle_cid": null,
+    "retained_output_paths": []
+  },
+  "execution_boundary": {
+    "provider_spend_executed": false,
+    "provider_resource_created": false,
+    "provider_resource_destroyed": false,
+    "live_model_request_executed": false,
+    "model_output_generated": false,
+    "live_network_access": false,
+    "live_registry_mutation": false,
+    "authority_transfer": false
+  },
+  "failure_policy": {
+    "output_without_authorization": "reject_future_replay",
+    "authorization_not_explicit": "reject_future_replay",
+    "lineage_drift": "reject_future_replay",
+    "retained_output_without_authorization": "reject_future_replay",
+    "output_schema_invalid": "reject_future_replay",
+    "fallback_decision": "no_op"
+  },
+  "checks": {
+    "qwen_replay_authorization_hash_bound": true,
+    "qwen_replay_preflight_hash_bound": true,
+    "qwen_prompt_redaction_audit_hash_bound": true,
+    "qwen_prompt_input_manifest_hash_bound": true,
+    "qwen_public_summary_projection_hash_bound": true,
+    "model_request_hash_bound": true,
+    "packet_schema_hash_bound": true,
+    "field_registry_hash_bound": true,
+    "collection_window_bound": true,
+    "authorization_status_not_authorized": true,
+    "future_authorized_replay_required": true,
+    "replay_outputs_accepted": false,
+    "generated_output_count_zero": true,
+    "retained_output_artifacts_empty": true,
+    "provider_spend_executed": false,
+    "provider_resource_created": false,
+    "live_model_request_executed": false,
+    "model_output_generated": false,
+    "live_network_access": false,
+    "live_registry_mutation": false,
+    "authority_transfer": false
+  }
+}

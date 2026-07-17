@@ -1,0 +1,36 @@
+{
+  "authority": {
+    "direct_state_mutation": false,
+    "mode": "dry_run_only",
+    "scope_expansion": false,
+    "self_upgrade": false
+  },
+  "decisions": [
+    {
+      "condition": "local_gate_1_5_fixture",
+      "decision_id": "no-op-preserve-registry",
+      "kind": "no_op",
+      "evidence_field_path": "validator.identity.reputation_score",
+      "required_provenance": "collector_observed",
+      "freshness_requirement": "recent_30d",
+      "missing_evidence_behavior": "neutral",
+      "conflict_behavior": "hold",
+      "action_bound": "no_action",
+      "rationale": "Unknown evidence fields must fail closed."
+    }
+  ],
+  "inputs": [
+    {
+      "kind": "validator_registry_snapshot",
+      "required": true
+    }
+  ],
+  "rollback": {
+    "max_mutations": 0,
+    "operator_confirmation_required": true,
+    "required": true
+  },
+  "ruleset_id": "gate-1_5-unknown-field",
+  "schema": "postfiat-governance-ruleset-v1",
+  "scope": "validator_registry_policy"
+}

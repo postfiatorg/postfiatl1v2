@@ -1,0 +1,109 @@
+{
+  "schema": "postfiat-verifiable-constitution-decision-replay-prompt-fixture-v1",
+  "prompt_id": "vc-protocol-architecture-001-decision-replay-prompt-001",
+  "prompt_version": 1,
+  "status": "accepted",
+  "created_at": "2026-05-25T00:00:00Z",
+  "selected_vector": "protocol_architecture",
+  "task": "generate_constitutional_decision_packet",
+  "question_ref": {
+    "question_id": "vc-protocol-architecture-001",
+    "question_path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_constitutional_question.json",
+    "question_file_sha3_384": "2f667c57807478582e6b2dfd4146a5ec60ec3f07354adae1200b2ebd746b1316cd11168ac06df421b61ed17fc08e7000",
+    "question_canonical_hash": "06b88b7e0b91d65be9e8b168bd730de40369434f68ca9d80ed9fb8c71196a5a02e2ca1c31b6d711b944885d1fb8c18ce",
+    "question_schema_path": "docs/governance/agent/constitutional_question_schema.json",
+    "question_schema_sha3_384": "47c2b2f27bdc745615f4d0d893333c12825b8b935358efbf4f53bdb9ad7b72e03d46d5264812d2cd9066d3c11813bd7f"
+  },
+  "evidence_packet_ref": {
+    "packet_id": "vc-protocol-architecture-001-evidence-001",
+    "packet_path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_constitutional_evidence_packet.json",
+    "packet_file_sha3_384": "46a4bbfcbc913e28a813211e1cf7437c8f9987e785bc334f0bd93cda53581e572527bb21b243bf71b1bab674680a808e",
+    "packet_canonical_hash": "d04d3f89694c0c6fed1c23d4d72252d1bc774423cff577fe476cad39f8a5e7fe846bf30f517514170b4bf48e6dd4f8ce",
+    "evidence_root": "d9f1d159b3be6b34376c937a8cce10a08b457c7e13dbf73758c95c80e8b5833249a162ab408d2eb717fa0f1203c77c40",
+    "packet_schema_path": "docs/governance/agent/constitutional_evidence_packet_schema.json",
+    "packet_schema_sha3_384": "5019bce76ede61a24de4c617f1b6f1275d701907c733267541ae95999aa1540ca97d00403fb65389703f5f0ea44837f2"
+  },
+  "decision_schema_ref": {
+    "decision_schema_path": "docs/governance/agent/constitutional_decision_packet_schema.json",
+    "decision_schema_sha3_384": "8075b9d26086776837157a1e4002e855ad587b437c2d2a21cdb78b231543abcb747b0fd3c7066fc3aacbd4f027d56c59"
+  },
+  "target_decision_ref": {
+    "decision_id": "vc-protocol-architecture-001-decision-001",
+    "decision_path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_constitutional_decision_packet.json",
+    "decision_file_sha3_384": "bdc071b5fd154b5036a50eb8818917ded6eef1b18ebe830ca3163c5c98da153b291eac7f10d874b0adb4997037bc7bed",
+    "decision_canonical_hash": "24333d8ba08daa332e078586b4b5de0bf9720d176f758d852465ac1ae6b86a20a766ff06b86b445d29a5caf7149440ab",
+    "selected_option": "preserve-rust-l1",
+    "target_is_not_prompt_input": true
+  },
+  "model_profile_ref": {
+    "dry_run_model_request_path": "docs/governance/agent/fixtures/dry_run_model_request.json",
+    "dry_run_model_request_file_sha3_384": "3bf271143efe07552f588dcdcc61b60910d698d4b5b1164c9e2301fffd52e96dd1fb0be10775b7c93f3a27f79224ab08",
+    "model_id": "Qwen/Qwen3.6-27B-FP8",
+    "runtime": "SGLang",
+    "tensor_parallelism": 1,
+    "max_running_requests": 1,
+    "required_deterministic_flags": [
+      "--enable-deterministic-inference",
+      "--max-running-requests=1",
+      "--tp=1",
+      "--temperature=0",
+      "--top-p=1"
+    ]
+  },
+  "prompt_contract": {
+    "output_schema": "postfiat-constitutional-decision-packet-v1",
+    "json_only": true,
+    "unknown_fields_allowed": false,
+    "must_select_exactly_one_option": true,
+    "closed_option_set": [
+      "preserve-rust-l1",
+      "fully-fork-xrpl",
+      "hybrid-xrpl-compatibility-layer",
+      "hold-no-op"
+    ],
+    "must_cite_packet_fields_only": true,
+    "must_state_rejected_options": true,
+    "must_state_implementation_consequences": true,
+    "must_state_invalidation_criteria": true,
+    "qwen_may_collect_evidence": false,
+    "qwen_may_change_question": false,
+    "qwen_may_expand_options": false,
+    "qwen_may_authorize_live_action": false,
+    "qwen_may_request_secret_material": false,
+    "accepted_decision_is_live_authority": false,
+    "fallback_decision": "no_op"
+  },
+  "forbidden_outputs": [
+    "rippled_code_import_authorized",
+    "consensus_rewrite_authorized",
+    "xrpl_compatibility_activation_authorized",
+    "protocol_migration_authorized",
+    "live_cobalt_amendment_submission",
+    "mainnet_mutation",
+    "authority_transfer",
+    "hidden_evidence",
+    "secret_material_request",
+    "option_expansion"
+  ],
+  "replay_plan": {
+    "mode": "fixture_prompt_render_no_model_execution",
+    "minimum_local_prompt_renders": 50,
+    "fixture_output_replay_target": "target_decision_ref.decision_canonical_hash",
+    "live_qwen_replay_required_before_authority": true,
+    "challenge_allowed": true,
+    "no_live_effect": true
+  },
+  "authority_boundary": {
+    "provider_spend_authorized": false,
+    "live_model_request_authorized": false,
+    "model_output_generated": false,
+    "rippled_code_import_authorized": false,
+    "consensus_rewrite_authorized": false,
+    "xrpl_compatibility_activation_authorized": false,
+    "protocol_migration_authorized": false,
+    "live_validator_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "mainnet_mutation_authorized": false,
+    "authority_transfer_authorized": false
+  }
+}

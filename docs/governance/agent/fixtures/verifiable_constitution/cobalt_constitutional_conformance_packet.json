@@ -1,0 +1,282 @@
+{
+  "schema": "postfiat-constitutional-conformance-packet-v1",
+  "conformance_id": "vc-cobalt-governance-001-conformance-001",
+  "conformance_version": 1,
+  "status": "accepted",
+  "conformance_scope": "cobalt_governance",
+  "created_at": "2026-05-24T00:00:00Z",
+  "target_decision_ref": {
+    "decision_id": "vc-cobalt-governance-001-decision-001",
+    "decision_path": "docs/governance/agent/fixtures/verifiable_constitution/cobalt_constitutional_decision_packet.json",
+    "decision_file_sha3_384": "3c4073c9b7eb9ead951f25bb1de56a6bb5d8d8661e663e1585c255dcd29df3be5ff3e3d09ed4c12fe4bd82b6d5a183c0",
+    "decision_canonical_hash": "b292b88fc4143ef9d34327997ba1d107c6bb47bdd1837a15a20af684b9939e7758d3c6cfa55f8723debac79b9f91a396",
+    "decision_schema_path": "docs/governance/agent/constitutional_decision_packet_schema.json",
+    "decision_schema_sha3_384": "8075b9d26086776837157a1e4002e855ad587b437c2d2a21cdb78b231543abcb747b0fd3c7066fc3aacbd4f027d56c59"
+  },
+  "conformance_disposition": {
+    "selected": "hold_no_live_effect",
+    "decision_status_at_mapping": "candidate",
+    "default_action": "preserve_status_quo",
+    "rationale": "The Cobalt decision preserves existing hard gates and its own authority boundary requires a later Cobalt or release gate before live effect. The accepted conformance action is therefore docs/tests/report binding only, with no registry mutation, no Cobalt submission, no sidecar activation, no model promotion, and no authority transfer."
+  },
+  "implementation_mappings": [
+    {
+      "mapping_id": "document-conformance-boundary",
+      "target_type": "docs",
+      "target_path": "docs_site/governance/verifiable-constitution-plan.md",
+      "effect": "docs_only",
+      "decision_json_pointers": [
+        "/selected_option",
+        "/authority_boundary",
+        "/fallback"
+      ],
+      "evidence_ref_paths": [
+        "cobalt.registry_transition_rules_hash",
+        "cobalt.dry_run_no_mutation_report_hash",
+        "cobalt.override_detection_report_hash"
+      ],
+      "required_for_conformance": true,
+      "requires_later_authorization": false,
+      "live_effect": false,
+      "rationale": "The plan must state that the accepted Cobalt decision maps to documentation and verification gates only until a later governed action authorizes live effect."
+    },
+    {
+      "mapping_id": "verify-decision-replay",
+      "target_type": "test",
+      "target_path": "scripts/verifiable-constitution-internal-decision-replay",
+      "effect": "test_gate",
+      "decision_json_pointers": [
+        "/decision_generation",
+        "/selected_option",
+        "/implementation_consequences"
+      ],
+      "evidence_ref_paths": [
+        "cobalt.replay_bundle_root",
+        "cobalt.adversarial_packet_coverage",
+        "cobalt.rollback_supersession_evidence_hash"
+      ],
+      "required_for_conformance": true,
+      "requires_later_authorization": false,
+      "live_effect": false,
+      "rationale": "The replay verifier remains a required local gate before any conformance packet can be considered accepted."
+    },
+    {
+      "mapping_id": "bind-model-receipt-roots",
+      "target_type": "report",
+      "target_path": "reports/verifiable-constitution/vc-022-cross-machine-model-receipts-report.json",
+      "effect": "report_gate",
+      "decision_json_pointers": [
+        "/decision_generation",
+        "/authority_boundary/default_conformance_requires_later_gate",
+        "/fallback"
+      ],
+      "evidence_ref_paths": [
+        "cobalt.replay_bundle_root",
+        "cobalt.override_detection_report_hash",
+        "cobalt.rollback_supersession_evidence_hash"
+      ],
+      "required_for_conformance": true,
+      "requires_later_authorization": false,
+      "live_effect": false,
+      "rationale": "The conformance packet binds the existing cross-machine constitutional model receipt roots as evidence for replayability, while keeping them advisory until a later governed activation packet."
+    },
+    {
+      "mapping_id": "bind-conformance-schema-and-fixture",
+      "target_type": "schema",
+      "target_path": "docs/governance/agent/constitutional_conformance_packet_schema.json",
+      "effect": "schema_validation",
+      "decision_json_pointers": [
+        "/implementation_consequences/0",
+        "/implementation_consequences/1",
+        "/implementation_consequences/2"
+      ],
+      "evidence_ref_paths": [
+        "cobalt.registry_transition_rules_hash",
+        "cobalt.dry_run_no_mutation_report_hash",
+        "cobalt.override_detection_report_hash"
+      ],
+      "required_for_conformance": true,
+      "requires_later_authorization": false,
+      "live_effect": false,
+      "rationale": "A typed conformance packet converts the decision's implementation consequences into a machine-checkable docs/tests/gates mapping."
+    },
+    {
+      "mapping_id": "hold-live-registry-effect",
+      "target_type": "governance_gate",
+      "target_path": "future-cobalt-or-release-gate",
+      "effect": "future_authorization_required",
+      "decision_json_pointers": [
+        "/authority_boundary/default_conformance_requires_later_gate",
+        "/implementation_consequences/2",
+        "/invalidation_criteria/2"
+      ],
+      "evidence_ref_paths": [
+        "cobalt.registry_transition_rules_hash",
+        "cobalt.dry_run_no_mutation_report_hash",
+        "cobalt.override_detection_report_hash"
+      ],
+      "required_for_conformance": true,
+      "requires_later_authorization": true,
+      "live_effect": false,
+      "rationale": "The conformance packet deliberately records that any live validator-registry, Cobalt-amendment, sidecar, model-promotion, or authority-transfer effect is held until a separate future-authorized gate."
+    }
+  ],
+  "verification_commands": [
+    {
+      "command": "scripts/verifiable-constitution-conformance-packet-validate --verify-report",
+      "purpose": "Verify the accepted conformance packet, target decision hashes, authority boundary, implementation mappings, and conformance root.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-model-receipt-conformance-binding --verify-report",
+      "purpose": "Verify that the conformance packet binds the available H100/H200 model receipt roots, full-vocabulary root, decision packet root, implementation mappings, rollback path, and Cobalt dry-run binding.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-internal-decision-replay --verify-report",
+      "purpose": "Verify the target Cobalt decision replay report and one parsed decision hash.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-cobalt-question --verify-report",
+      "purpose": "Verify the underlying Cobalt constitutional question remains bound to closed options and no live authority.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/validator-evidence-fixtures-validate",
+      "purpose": "Keep the validator-evidence fixture suite passing while the conformance lane is added.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/docs-site-build",
+      "purpose": "Build the docs site after updating the Verifiable Constitution plan.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    }
+  ],
+  "model_receipt_bindings": [
+    {
+      "binding_id": "vc022_privacy_full_vocab",
+      "question_id": "vc-privacy-architecture-001",
+      "binding_scope": "non_validator_constitutional_prompt",
+      "source_report_path": "reports/verifiable-constitution/vc-022-cross-machine-model-receipts-report.json",
+      "source_report_sha3_384": "448d56f393aebee9f5617a47ca288d3f82e968b40f46dfc08af56c5e5fb064b672129b6524e655ee9cf170503b8992e1",
+      "source_report_schema": "postfiat-verifiable-constitution-cross-machine-receipts-report-v1",
+      "cross_machine_receipt_root": "ea19d6788e18f947b0f4156b0df7ffae2a38915a1b154f20a5c7632a968c99cddc91ce5e69f36c3ad296b12d5051b724",
+      "parsed_output_hash": "29b94f774e6a827b2461146472349527d2ce7c5b12e875668bd7465d3a854022518980e178787c753f01ed5df2b14cbf",
+      "top_logprob_commitment_root": "f168514f56ee4e10bf1bbb2f634804bf956c68699fca2fd08b77ac146298223f6b1f8038286fbbfd17ccc8acf5db9d1a",
+      "full_vocab_logprob_vector_root": "47937e0f19da588d92d46b677de95070134d1203575272add0f2af9d024361bc",
+      "classification": "green-full-vocab-universal",
+      "receipt_report_refs": [
+        {
+          "report_path": "reports/verifiable-constitution/vc-021-live-model-receipt-h100-report.json",
+          "report_sha3_384": "1654c75b019143e5ad29b8703ac79c85e84e56465b1ff44aac31f3d4a4cdcdc13d79521aa0600f9bc91a24baaf74a4a9",
+          "report_kind": "live_model_receipt_report",
+          "hardware_class": "NVIDIA H100 NVL",
+          "receipt_roots": [
+            "b729aa24048918629dbbd162e55d07967184558e8d3adcf5fee4c3a31d4c7f14504e8f70c6fae7c69d9ab013821a7a9b",
+            "d1fbd1bbe05020517be67c6d62a130cbb3ebe02c925d446bc2e3f46ef299c1a9bd372e4358593409fbcd6475aac1b860",
+            "3b56bbfa200ffd29ef4f9c6240ae3d46416565de8c7e5b229a2806d19f86b85a44c36cea2d7dcc54d59a581d820bcf66",
+            "d7f3f5c44187f754d554c1cd08dea96b40d51b4d5c7c729b4bd4cc26e964282431bb37e77b0f328376634d68c4d2aa57",
+            "b2c2724c8cbb221b28daee13b4f7620fa916477d404542da86339b6db6e8ad47bb3767e61bf344956d650c1bc37d17a0"
+          ],
+          "parsed_output_hash": "29b94f774e6a827b2461146472349527d2ce7c5b12e875668bd7465d3a854022518980e178787c753f01ed5df2b14cbf",
+          "top_logprob_commitment_root": "f168514f56ee4e10bf1bbb2f634804bf956c68699fca2fd08b77ac146298223f6b1f8038286fbbfd17ccc8acf5db9d1a",
+          "full_vocab_logprob_vector_root": null
+        },
+        {
+          "report_path": "reports/verifiable-constitution/vc-021-live-model-receipt-h200-report.json",
+          "report_sha3_384": "6f615bca86cf55654c69a82f4168e648aa4b4e7a8f2f75d2843f61b94661173cc08ca0950fd58de262546df3b62adea2",
+          "report_kind": "live_model_receipt_report",
+          "hardware_class": "NVIDIA H200 NVL",
+          "receipt_roots": [
+            "0cdedeedb46ed6ec8a3f670708734efb6fd7d9367bd50f6a2e8f479e2b35891af9ccd3cd74a7cf2464d2e746e38ea4b8",
+            "3cbef02d333d195868343935e997f537cc72744cf9a01457d51fd463b025f8d4c03f3e7da438a066b6599241ac91e680",
+            "2dc62409127de8c9325f233576b78cadb52b8651d45af9a9a841f79c96f866fd1396bc27fa6dded28550caf3e4feaab3",
+            "5898c3e69b709f5ce341b1339bc066bd7b89c1c9fcf9554effa28457470d581fd820c9676bb60207663f325291cdc66d",
+            "124a69b2956284566ca32d6ce9b0981b9698051d93e791fbc66689ad2fe98c2aded06e02dc845cd044d3b9de6f39518b"
+          ],
+          "parsed_output_hash": "29b94f774e6a827b2461146472349527d2ce7c5b12e875668bd7465d3a854022518980e178787c753f01ed5df2b14cbf",
+          "top_logprob_commitment_root": "f168514f56ee4e10bf1bbb2f634804bf956c68699fca2fd08b77ac146298223f6b1f8038286fbbfd17ccc8acf5db9d1a",
+          "full_vocab_logprob_vector_root": null
+        },
+        {
+          "report_path": "reports/verifiable-constitution/vc-022-full-vocab-receipt-h100-report.json",
+          "report_sha3_384": "2606e4161186444d8be8aefab345a7f8bf7e77378aa7cd7abf97652375a2c65e5dd89ee221e4b1a5b3a8ee7924b5c60b",
+          "report_kind": "full_vocab_receipt_report",
+          "hardware_class": "NVIDIA H100 NVL",
+          "receipt_roots": [
+            "a692428adb0ed2e8831c67702bb6646a4d7fac07751fbea72a7e62f665e8054e330bc93b7ac618e532f80be148bad5b4"
+          ],
+          "parsed_output_hash": null,
+          "top_logprob_commitment_root": null,
+          "full_vocab_logprob_vector_root": "47937e0f19da588d92d46b677de95070134d1203575272add0f2af9d024361bc"
+        },
+        {
+          "report_path": "reports/verifiable-constitution/vc-022-full-vocab-receipt-h200-report.json",
+          "report_sha3_384": "188135d6c99a86b9bd56a32f9cfd6e1f9248557f751a868668a14c5fdf2c6b0931745a7696cecb0f5b5339e992bbce05",
+          "report_kind": "full_vocab_receipt_report",
+          "hardware_class": "NVIDIA H200 NVL",
+          "receipt_roots": [
+            "843d6b3efafc92c7eabe71155614853a7faa581cfeda91ebbf1b79eef46f8266e5e3eb40d6732beb7b8c8d4dec8fe9b2"
+          ],
+          "parsed_output_hash": null,
+          "top_logprob_commitment_root": null,
+          "full_vocab_logprob_vector_root": "47937e0f19da588d92d46b677de95070134d1203575272add0f2af9d024361bc"
+        }
+      ],
+      "binding_status": "available_evidence_not_live_authority",
+      "requires_later_authorization": true,
+      "live_effect": false,
+      "rationale": "This binding records the available H100/H200 constitutional model receipt roots and the matching full-vocabulary vector root as conformance evidence only. It does not activate model promotion, validator scoring, Cobalt submission, or authority transfer."
+    }
+  ],
+  "challenge_and_rollback": {
+    "challenge_packet_required": true,
+    "challenge_schema_path": "docs/governance/agent/constitutional_challenge_packet_schema.json",
+    "challenge_schema_sha3_384": "c6c53bb8e5b85b332cd72c96c98c44ec3d51ec9050df6ea54ebc84991ce856bb4cd754d2a6945818d72b56d9775002e0",
+    "rollback_path_available": true,
+    "supersession_allowed": true,
+    "no_live_reversal_needed": true,
+    "rationale": "Because this conformance packet has no live effect, rollback only needs to supersede the packet and reports. A challenge remains mandatory for any claim that the decision, evidence, mapping, or authority boundary is wrong."
+  },
+  "authority_boundary": {
+    "live_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "model_promotion_authorized": false,
+    "authority_transfer_authorized": false,
+    "sidecar_activation_authorized": false,
+    "conformance_is_live_authority": false,
+    "default_conformance_requires_later_gate": true
+  },
+  "checks": {
+    "schema_valid": true,
+    "decision_hash_matches": true,
+    "decision_boundary_closed": true,
+    "mappings_present": true,
+    "mappings_cite_decision": true,
+    "mappings_cite_evidence": true,
+    "verification_commands_present": true,
+    "model_receipt_roots_bound": true,
+    "no_hidden_evidence": true,
+    "no_secret_dependency": true,
+    "no_code_or_docs_live_effect": true,
+    "no_live_registry_mutation": true,
+    "no_live_cobalt_amendment_submission": true,
+    "no_model_promotion": true,
+    "authority_transfer": false,
+    "conformance_root_verified": true
+  },
+  "conformance_root": "cf009773d72984faae280b4baf4656ca3c57f092e04c6c4676eab3f4a5557a5ce74b23ce7e05de41ee6a955c10afa373"
+}

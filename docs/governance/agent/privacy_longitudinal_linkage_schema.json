@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "PostFiat privacy longitudinal-linkage packet. The verifier is normative for route computation; this schema documents the packet envelope.",
+  "properties": {
+    "attestation": {
+      "type": "object"
+    },
+    "checks": {
+      "type": "object"
+    },
+    "mode": {
+      "const": "controlled_testnet_fixture"
+    },
+    "packet_id": {
+      "type": "string"
+    },
+    "schema": {
+      "const": "postfiat-privacy-longitudinal-linkage-v1"
+    },
+    "statement": {
+      "properties": {
+        "adversary_model": {
+          "type": "object"
+        },
+        "baseline_observation": {
+          "type": "object"
+        },
+        "linkage_policy": {
+          "type": "object"
+        },
+        "linkage_root_hash": {
+          "pattern": "^[0-9a-f]{96}$",
+          "type": "string"
+        },
+        "selector_cases": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "policy_id",
+        "scope",
+        "adversary_model",
+        "linkage_policy",
+        "baseline_observation",
+        "selector_cases",
+        "linkage_root_hash"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema",
+    "packet_id",
+    "mode",
+    "statement",
+    "attestation",
+    "checks"
+  ],
+  "title": "PostFiat Privacy Longitudinal Linkage v1",
+  "type": "object"
+}

@@ -1,0 +1,245 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T00:00:00Z",
+    "attestor_key_hash": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+    "signature_hash": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+    "signature_scheme": "mldsa44-placeholder",
+    "statement_hash": "502156753bd47301b9e762eed5013e3c56711dcdc55d498bd541d58c76d716430c5b9005ff725b7e829b417d89ad3636"
+  },
+  "checks": {
+    "authority_transfer": false,
+    "bft_margin_counted": true,
+    "decayed_margin_removal_window": true,
+    "economic_margin_population_counted": true,
+    "liveness_margin_counted": true,
+    "live_registry_mutation": false,
+    "registry_thinning_fail_closed": true,
+    "stability_root_bound": true,
+    "stale_evidence_held": true,
+    "statement_hash_bound": true,
+    "temporary_offline_negative_unl": true,
+    "underfilled_set_recruitment_window": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "validator-economic-population-stability-v1-fixture",
+  "schema": "postfiat-validator-economic-population-stability-v1",
+  "statement": {
+    "base_population": {
+      "decayed_economic_count": 0,
+      "healthy_economic_count": 35,
+      "n_active": 35,
+      "population_policy_governed": true,
+      "proposed_removal_count": 0,
+      "registry_thinning_delta": 0,
+      "stale_evidence_count": 0,
+      "temporary_offline_count": 0,
+      "unfilled_slot_count": 0
+    },
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_scalar_reduction/valid_scalar_reduction.json",
+        "sha3_384": "0a59e491c693323b505404fbecfa44263a1ff972f3a6a3cc47f4ff4cb94d9766fc3c824e0c6d813c39266bd5532b2d94"
+      },
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_attestor_budget/valid_attestor_budget.json",
+        "sha3_384": "f66ec0b1185c53bcc514ac00a0009b50e89d3c2189ce04d42affb8329fc6066a986a054d77fd477914bc23202470f4b3"
+      },
+      {
+        "path": "docs/governance/agent/validator_economic_population_stability_schema.json",
+        "sha3_384": "dfc42a529b8d5526c76bef48d9cec8c0f18253e950504f5bd667f72b2eab57511335e881b8a3713de395874688e615ca"
+      },
+      {
+        "path": "scripts/validator-economic-population-stability-verify",
+        "sha3_384": "6a0e62a2c2d16c21fe86973e1f0d3e11a64d918558eb82810daa4fd8be869bffb0dead051ad949e021036302f9fcea6b"
+      }
+    ],
+    "policy_id": "validator-economic-population-stability-v1",
+    "population_policy": {
+      "f_tolerated": 11,
+      "max_registry_thinning_without_joint_transition": 1,
+      "max_stale_evidence_count": 0,
+      "max_temporary_excluded_without_reconfig": 1,
+      "min_bft_safe_count": 34,
+      "min_liveness_count": 24,
+      "n_active": 35,
+      "policy_units": "validator-population-stability-v1",
+      "q_cert": 24,
+      "route_on_bft_margin_eroded": "recruitment-window",
+      "route_on_decayed_margin": "removal-and-recruitment-window",
+      "route_on_liveness_margin_eroded": "fail-closed",
+      "route_on_registry_thinning": "fail-closed",
+      "route_on_stale_evidence": "hold",
+      "route_on_temporary_offline": "negative-unl-temp-exclusion"
+    },
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "validator-economic-population-stability-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-clean-population-continue",
+        "expected_reason_codes": [
+          "population_stability_bounds_passed"
+        ],
+        "expected_route": "continue",
+        "overrides": []
+      },
+      {
+        "case_id": "case-02-one-decayed-validator-removal-window",
+        "expected_reason_codes": [
+          "decayed_natural_stake_removal_window"
+        ],
+        "expected_route": "removal-and-recruitment-window",
+        "overrides": [
+          {
+            "path": [
+              "healthy_economic_count"
+            ],
+            "value": 34
+          },
+          {
+            "path": [
+              "decayed_economic_count"
+            ],
+            "value": 1
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-bft-margin-eroded-recruitment-window",
+        "expected_reason_codes": [
+          "economic_bft_margin_eroded"
+        ],
+        "expected_route": "recruitment-window",
+        "overrides": [
+          {
+            "path": [
+              "healthy_economic_count"
+            ],
+            "value": 33
+          },
+          {
+            "path": [
+              "decayed_economic_count"
+            ],
+            "value": 2
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-liveness-margin-eroded-fail-closed",
+        "expected_reason_codes": [
+          "economic_liveness_margin_eroded"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "healthy_economic_count"
+            ],
+            "value": 23
+          },
+          {
+            "path": [
+              "decayed_economic_count"
+            ],
+            "value": 12
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-stale-natural-stake-evidence-hold",
+        "expected_reason_codes": [
+          "stale_natural_stake_evidence"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "stale_evidence_count"
+            ],
+            "value": 1
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-one-temporary-offline-negative-unl",
+        "expected_reason_codes": [
+          "temporary_offline_within_negative_unl_budget"
+        ],
+        "expected_route": "negative-unl-temp-exclusion",
+        "overrides": [
+          {
+            "path": [
+              "temporary_offline_count"
+            ],
+            "value": 1
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-temporary-exclusion-breaks-bft-fail-closed",
+        "expected_reason_codes": [
+          "temporary_exclusion_breaks_bft_safe_count"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "temporary_offline_count"
+            ],
+            "value": 2
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-registry-thinning-fail-closed",
+        "expected_reason_codes": [
+          "registry_thinning_breaks_bft_safe_count"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "registry_thinning_delta"
+            ],
+            "value": 2
+          }
+        ]
+      },
+      {
+        "case_id": "case-09-underfilled-active-set-recruitment-window",
+        "expected_reason_codes": [
+          "underfilled_active_set_recruitment_window"
+        ],
+        "expected_route": "recruitment-window",
+        "overrides": [
+          {
+            "path": [
+              "unfilled_slot_count"
+            ],
+            "value": 2
+          }
+        ]
+      },
+      {
+        "case_id": "case-10-ungoverned-policy-fail-closed",
+        "expected_reason_codes": [
+          "ungoverned_population_policy"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "population_policy_governed"
+            ],
+            "value": false
+          }
+        ]
+      }
+    ],
+    "stability_root_hash": "5bbd14223f9ca4a16254dd856dfeaf1811701197b5cf2df08d4cead31977e4e08509e2fecab23eb34b86cc53eb91bd8c"
+  }
+}

@@ -1,0 +1,327 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-operator-manifest-delegation-v1.json",
+  "title": "PostFiat Operator Manifest Delegation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "delegation_id",
+    "validator_id",
+    "validator_public_key_hash",
+    "governance_epoch",
+    "delegation",
+    "operator_accountability_key",
+    "manifest_binding",
+    "revocation",
+    "redaction",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-operator-manifest-delegation-v1"
+    },
+    "delegation_id": {
+      "$ref": "#/$defs/id"
+    },
+    "validator_id": {
+      "$ref": "#/$defs/id"
+    },
+    "validator_public_key_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "governance_epoch": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "delegation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "delegator_key_role",
+        "delegator_key_hash",
+        "method",
+        "statement_hash",
+        "signed_at",
+        "expires_at",
+        "signature_valid",
+        "scopes"
+      ],
+      "properties": {
+        "delegator_key_role": {
+          "enum": [
+            "validator_consensus",
+            "validator_governance",
+            "registry_governance"
+          ]
+        },
+        "delegator_key_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "method": {
+          "enum": [
+            "validator_signed_statement",
+            "governance_signed_statement",
+            "registry_binding"
+          ]
+        },
+        "statement_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "signed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "signature_valid": {
+          "const": true
+        },
+        "scopes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "operator_manifest_signing",
+              "identity_url_claims",
+              "topology_claims",
+              "contact_claims"
+            ]
+          }
+        }
+      }
+    },
+    "operator_accountability_key": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "public_key_hash",
+        "algorithm",
+        "key_created_at",
+        "rotation_allowed"
+      ],
+      "properties": {
+        "role": {
+          "const": "operator_accountability"
+        },
+        "public_key_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "algorithm": {
+          "enum": [
+            "ed25519",
+            "secp256k1"
+          ]
+        },
+        "key_created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "rotation_allowed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "manifest_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest_hash",
+        "claims_hash",
+        "signing_key_hash",
+        "signing_key_role",
+        "signed_at",
+        "expires_at",
+        "manifest_signature_valid"
+      ],
+      "properties": {
+        "manifest_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "claims_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "signing_key_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "signing_key_role": {
+          "const": "operator_accountability"
+        },
+        "signed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "manifest_signature_valid": {
+          "const": true
+        }
+      }
+    },
+    "revocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "revocation_statement_hash",
+        "revoked_at"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "active"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "revocation_statement_hash": {
+                "type": "null"
+              },
+              "revoked_at": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "revoked"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "revocation_statement_hash": {
+                "$ref": "#/$defs/hash96"
+              },
+              "revoked_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "active",
+            "revoked"
+          ]
+        },
+        "revocation_statement_hash": {
+          "$ref": "#/$defs/maybe_hash96"
+        },
+        "revoked_at": {
+          "$ref": "#/$defs/maybe_date_time"
+        }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "private_fields_removed",
+        "secret_scan_passed",
+        "public_artifact_safe"
+      ],
+      "properties": {
+        "private_fields_removed": {
+          "const": true
+        },
+        "secret_scan_passed": {
+          "const": true
+        },
+        "public_artifact_safe": {
+          "const": true
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "validator_binding_present",
+        "operator_key_delegated",
+        "delegation_signature_valid",
+        "manifest_signed_by_operator_key",
+        "manifest_signature_valid",
+        "scope_excludes_authority_transfer",
+        "no_consensus_key_routine_manifest_updates",
+        "registry_mutation",
+        "live_authority_transfer"
+      ],
+      "properties": {
+        "validator_binding_present": {
+          "const": true
+        },
+        "operator_key_delegated": {
+          "const": true
+        },
+        "delegation_signature_valid": {
+          "const": true
+        },
+        "manifest_signed_by_operator_key": {
+          "const": true
+        },
+        "manifest_signature_valid": {
+          "const": true
+        },
+        "scope_excludes_authority_transfer": {
+          "const": true
+        },
+        "no_consensus_key_routine_manifest_updates": {
+          "const": true
+        },
+        "registry_mutation": {
+          "const": false
+        },
+        "live_authority_transfer": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    },
+    "maybe_hash96": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/hash96"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "maybe_date_time": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "date-time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

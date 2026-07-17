@@ -1,0 +1,168 @@
+{
+  "schema": "postfiat-constitutional-non-validator-rebuttal-packet-v1",
+  "packet_id": "vc-036-non-validator-rebuttal-packet",
+  "packet_version": 1,
+  "status": "active",
+  "created_at": "2026-05-25T00:00:00Z",
+  "target_objection": "This is validator-specific.",
+  "claim": "The Verifiable Constitution lane applies to protocol decisions outside validator evidence and UNL selection. The current packet exercises privacy, post-quantum authorization, monetary policy, storage, RPC, and model governance prompts; privacy, post-quantum authorization, and monetary policy already complete the full evidence-request to evidence-packet to decision replay flow with no validator evidence fields.",
+  "minimums": {
+    "prompt_target_count": 6,
+    "full_flow_target_count": 3,
+    "full_flow_replay_count": 50
+  },
+  "required_target_scopes": [
+    "privacy",
+    "post_quantum_authorization",
+    "monetary_policy",
+    "storage",
+    "rpc",
+    "model_governance"
+  ],
+  "prompt_targets": [
+    {
+      "target_id": "privacy",
+      "scope": "privacy",
+      "status": "full_flow_verified_by_vc023",
+      "question": "Should PostFiat preserve the Orchard/Halo2 shielded-flow baseline, replace it with attestation privacy, adopt a hybrid disclosure layer, or hold?",
+      "closed_options": [
+        "preserve-orchard-halo2",
+        "adopt-attestation-privacy",
+        "hybrid-orchard-attestation-disclosure",
+        "hold-no-op"
+      ],
+      "required_evidence_field_prefixes": [
+        "privacy"
+      ],
+      "full_flow_required_for_vc036": true,
+      "full_flow_report": "reports/verifiable-constitution/vc-023-non-validator-flow-report.json"
+    },
+    {
+      "target_id": "post_quantum_authorization",
+      "scope": "post_quantum_authorization",
+      "status": "full_flow_verified_by_vc023",
+      "question": "Should PostFiat preserve the current ML-DSA authorization baseline, alter certificate and rotation rules, defer post-quantum authorization, or hold?",
+      "closed_options": [
+        "preserve-ml-dsa-baseline",
+        "alter-certificate-rotation",
+        "defer-post-quantum-authorization",
+        "hold-no-op"
+      ],
+      "required_evidence_field_prefixes": [
+        "post_quantum_authorization"
+      ],
+      "full_flow_required_for_vc036": true,
+      "full_flow_report": "reports/verifiable-constitution/vc-023-non-validator-flow-report.json"
+    },
+    {
+      "target_id": "monetary_policy",
+      "scope": "monetary_policy",
+      "status": "full_flow_verified_by_vc023",
+      "question": "Should PostFiat preserve fixed supply, fee burn, and no native validator rewards as constitutional monetary-policy invariants, alter fee burn, add native validator rewards, or hold?",
+      "closed_options": [
+        "preserve-fixed-supply-fee-burn",
+        "alter-fee-burn-accounting",
+        "add-native-validator-reward",
+        "hold-no-op"
+      ],
+      "required_evidence_field_prefixes": [
+        "monetary_policy"
+      ],
+      "full_flow_required_for_vc036": true,
+      "full_flow_report": "reports/verifiable-constitution/vc-023-non-validator-flow-report.json"
+    },
+    {
+      "target_id": "storage",
+      "scope": "storage",
+      "status": "prompt_exercised_in_vc036_packet",
+      "question": "Which storage, snapshot, pruning, migration, and corruption-recovery invariants should be constitutional before live governance can depend on node state?",
+      "closed_options": [
+        "preserve-current-storage-invariants",
+        "tighten-snapshot-and-pruning-gates",
+        "require-new-storage-migration-gate",
+        "hold-no-op"
+      ],
+      "required_evidence_field_prefixes": [
+        "storage"
+      ],
+      "evidence_required": [
+        "state encoding and database version references",
+        "snapshot import and export checks",
+        "pruning and archive-node policy",
+        "migration rollback evidence",
+        "corruption and restart recovery tests"
+      ],
+      "full_flow_required_for_vc036": false,
+      "full_flow_report": null
+    },
+    {
+      "target_id": "rpc",
+      "scope": "rpc",
+      "status": "prompt_exercised_in_vc036_packet",
+      "question": "Which public RPC methods, write policies, rate limits, privacy boundaries, and abuse-case checks should be constitutional for operator-facing endpoints?",
+      "closed_options": [
+        "preserve-current-rpc-policy",
+        "restrict-public-write-methods",
+        "add-rate-limit-and-redaction-gates",
+        "hold-no-op"
+      ],
+      "required_evidence_field_prefixes": [
+        "rpc"
+      ],
+      "evidence_required": [
+        "RPC method inventory",
+        "public write policy",
+        "rate-limit and load evidence",
+        "redaction checks",
+        "abuse-case tests"
+      ],
+      "full_flow_required_for_vc036": false,
+      "full_flow_report": null
+    },
+    {
+      "target_id": "model_governance",
+      "scope": "model_governance",
+      "status": "question_and_request_verified_by_vc009",
+      "question": "Should PostFiat keep the current Qwen/SGLang TP=1 profile active, promote a candidate model, freeze model-governance changes, or hold?",
+      "closed_options": [
+        "preserve-current-qwen-sglang-tp1",
+        "promote-candidate-after-evidence",
+        "freeze-model-governance",
+        "hold-no-op"
+      ],
+      "required_evidence_field_prefixes": [
+        "model"
+      ],
+      "evidence_required": [
+        "active model identity and runtime profile",
+        "deterministic flags",
+        "candidate replay convergence",
+        "candidate adversarial failures",
+        "cross-machine receipt root",
+        "rollback plan"
+      ],
+      "full_flow_required_for_vc036": false,
+      "full_flow_report": "reports/verifiable-constitution/vc-009-model-governance-question-report.json"
+    }
+  ],
+  "authority_boundary": {
+    "provider_spend_authorized": false,
+    "live_model_request_authorized": false,
+    "live_evidence_collection_authorized": false,
+    "mainnet_mutation_authorized": false,
+    "live_validator_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "model_promotion_authorized": false,
+    "sidecar_activation_authorized": false,
+    "commit_reveal_activation_authorized": false,
+    "authority_transfer_authorized": false
+  },
+  "checks": {
+    "closed_options_required": true,
+    "typed_evidence_fields_required": true,
+    "hidden_private_evidence_forbidden": true,
+    "validator_evidence_fields_forbidden": true,
+    "full_flow_claim_requires_report": true,
+    "live_authority_forbidden": true
+  }
+}

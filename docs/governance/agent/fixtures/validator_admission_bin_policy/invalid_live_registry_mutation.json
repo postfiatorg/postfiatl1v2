@@ -1,0 +1,25 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_admission_bin_policy/valid_bin_policy.json",
+  "expected_error_contains": [
+    "statement.scope.live_registry_mutation must be false",
+    "checks.live_registry_mutation must be False"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "scope",
+        "live_registry_mutation"
+      ],
+      "value": true
+    },
+    {
+      "path": [
+        "checks",
+        "live_registry_mutation"
+      ],
+      "value": true
+    }
+  ],
+  "schema": "postfiat-validator-admission-bin-policy-invalid-case-v1"
+}

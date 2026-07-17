@@ -1,0 +1,152 @@
+{
+  "schema": "postfiat-protocol-architecture-full-vocab-disposition-packet-v1",
+  "disposition_id": "vc-protocol-architecture-001-full-vocab-disposition-001",
+  "disposition_version": 1,
+  "status": "accepted",
+  "created_at": "2026-05-25T00:00:00Z",
+  "source_gate_ref": {
+    "report_path": "reports/verifiable-constitution/vc-050-protocol-architecture-full-vocab-sufficiency-gate-report.json",
+    "report_file_sha3_384": "943154d594df0adccc909eb5e4411a327974199f861de4d4dee1a4adc7f181ddd0b86319f82f85fad24d6c72f2fdb2f7",
+    "report_canonical_hash": "15aa5b99d5414b43c0b0a6e20263cbeb22dfc25b0e2a7d1ec19fc108f2474f83d218753a4971f9bc89ca850a741be6c7",
+    "report_schema": "postfiat-verifiable-constitution-vc-050-report-v1",
+    "verified": true
+  },
+  "source_full_vocab_ref": {
+    "report_path": "reports/verifiable-constitution/vc-051-protocol-architecture-full-vocab-replay-execution-report.json",
+    "report_file_sha3_384": "670c930444d321dce383d286528eeb130313263a9fc3375ddbe6eb92cab79d2306d2dac35545dec1f6150d0ada80e3be",
+    "report_canonical_hash": "62273155312f7d43f24a2e20a046517aa2cd832253450d8d2e7779a4e4eb75dcb3801231f5400d1cdabc4cb6a08d51e4",
+    "report_schema": "postfiat-verifiable-constitution-vc-051-report-v1",
+    "outcome": "full_vocab_and_chat_converged_challenge_still_open",
+    "classification": "live_outputs_converged_target_not_reproduced",
+    "prompt_hash": "8d9e1473fe96155b123fc408e58ce2cae63bdd9a3473a6a35d78918e339e9a7148c9bad4ee6560994fad893a847685e5",
+    "full_vocab_vector_root": "0b3cf64b186ff9b8b130260d6a795fe56cf2a65bd6e324ea9ce92222ed1d7c23",
+    "parsed_decision_hash": "36bb5c03f73701ae71811a7b86b3228f0f23a640b802b7562fd054fc7b4b5e21bb875e1b27d2756cf16e6c8668e0c9b3",
+    "top_logprob_root": "101dff18a4354fd29ae851c1efd595aaaa69d6961e54482b47abceaae1b3499a5d25116822dec3343024b3054a2a7529",
+    "cleanup_verified": true
+  },
+  "target_decision_ref": {
+    "decision_id": "vc-protocol-architecture-001-decision-001",
+    "decision_path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_constitutional_decision_packet.json",
+    "decision_file_sha3_384": "bdc071b5fd154b5036a50eb8818917ded6eef1b18ebe830ca3163c5c98da153b291eac7f10d874b0adb4997037bc7bed",
+    "decision_canonical_hash": "24333d8ba08daa332e078586b4b5de0bf9720d176f758d852465ac1ae6b86a20a766ff06b86b445d29a5caf7149440ab",
+    "selected_option": "preserve-rust-l1"
+  },
+  "live_decision_refs": [
+    {
+      "machine_id": "vast-h200-37716714",
+      "hardware_class": "H200 141GB",
+      "decision_path": "reports/verifiable-constitution/protocol-architecture-full-vocab-replay/chat-replay/model_output_vast-h200-37716714-01.json",
+      "decision_file_sha3_384": "7b7b29269a45ce8fc9e0394de33fe7612611be182fbe8950a2131d7fcbf85f9291707d964999fb2230a4f5b7b4ad0f8e",
+      "decision_canonical_hash": "36bb5c03f73701ae71811a7b86b3228f0f23a640b802b7562fd054fc7b4b5e21bb875e1b27d2756cf16e6c8668e0c9b3",
+      "selected_option": "preserve-rust-l1",
+      "top_logprob_root": "101dff18a4354fd29ae851c1efd595aaaa69d6961e54482b47abceaae1b3499a5d25116822dec3343024b3054a2a7529",
+      "full_vocab_vector_root": "0b3cf64b186ff9b8b130260d6a795fe56cf2a65bd6e324ea9ce92222ed1d7c23"
+    },
+    {
+      "machine_id": "vast-h100nvl-37718088",
+      "hardware_class": "H100 NVL",
+      "decision_path": "reports/verifiable-constitution/protocol-architecture-full-vocab-replay/chat-replay/model_output_vast-h100nvl-37718088-01.json",
+      "decision_file_sha3_384": "7b7b29269a45ce8fc9e0394de33fe7612611be182fbe8950a2131d7fcbf85f9291707d964999fb2230a4f5b7b4ad0f8e",
+      "decision_canonical_hash": "36bb5c03f73701ae71811a7b86b3228f0f23a640b802b7562fd054fc7b4b5e21bb875e1b27d2756cf16e6c8668e0c9b3",
+      "selected_option": "preserve-rust-l1",
+      "top_logprob_root": "101dff18a4354fd29ae851c1efd595aaaa69d6961e54482b47abceaae1b3499a5d25116822dec3343024b3054a2a7529",
+      "full_vocab_vector_root": "0b3cf64b186ff9b8b130260d6a795fe56cf2a65bd6e324ea9ce92222ed1d7c23"
+    }
+  ],
+  "challenge_ref": {
+    "challenge_path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_live_replay_challenge_packet.json",
+    "challenge_file_sha3_384": "9a2f95259d1d641c34d88b4e01c464278f6ec9fdff4cbe7fb36bf446ad5c2e90fa9bfbdeaea7d0da67d18368f924b541",
+    "challenge_canonical_hash": "4742cd20fe01f79d1c218a77536260b7e693a95c57cf456c4cc2cd9a4d0ea55fcc7854ff79b576c8293dd03e9a552348",
+    "challenge_status": "candidate",
+    "challenge_disposition_before_this_packet": "hold",
+    "challenge_route_after_this_packet": "supersede_target"
+  },
+  "equivalence_analysis": {
+    "exact_hash_reproduced": false,
+    "selected_option_matches": true,
+    "authority_boundary_compatible": true,
+    "live_output_is_schema_valid": true,
+    "full_vocab_replay_converged": true,
+    "semantic_equivalence_rule_available": false,
+    "equivalence_rule_used_to_reject_challenge": false,
+    "disposition": "supersede_target_with_live_replayed_decision_packet",
+    "rationale": "The live Qwen outputs select the same status-quo architecture route as the target packet and preserve the no-live-authority boundary, but the target hash was not reproduced. Because no governed semantic equivalence rule exists, this packet does not reject the challenge by equivalence; it routes to a separate superseding replayed decision packet."
+  },
+  "disposition_options": {
+    "hold_on_challenge": {
+      "allowed_now": true,
+      "reason": "Holding remains valid because exact target-hash reproduction failed."
+    },
+    "accept_superseding_replayed_decision_packet": {
+      "allowed_now": true,
+      "reason": "VC-051 supplies a two-machine full-vocabulary root, converged parsed decision hash, converged top-logprob root, and cleanup proof. The next safe route is a typed superseding decision packet, not silent target acceptance."
+    },
+    "request_additional_prompt_runtime_coverage": {
+      "allowed_now": false,
+      "reason": "Additional coverage may be useful later, but VC-051 satisfied the specific VC-050 requirement for two-machine SGLang /generate full-vocabulary replay."
+    },
+    "reject_challenge_by_governed_equivalence_rule": {
+      "allowed_now": false,
+      "reason": "The target and live outputs are semantically aligned, but no prior governed equivalence rule allows replacing exact hash reproduction with semantic similarity."
+    }
+  },
+  "selected_disposition": {
+    "selected": "accept_superseding_replayed_decision_packet",
+    "challenge_route": "supersede_target",
+    "conformance_allowed_now": false,
+    "superseding_decision_packet_required": true,
+    "live_effect": false,
+    "rationale": "Accept the converged live replay as eligible to become a new typed superseding decision packet. Do not resolve the challenge by informal equivalence, and do not start conformance mapping until the superseding packet is created and verified."
+  },
+  "next_required_packets": [
+    {
+      "packet_id": "vc-protocol-architecture-001-superseding-replayed-decision-001",
+      "packet_kind": "superseding_replayed_decision_packet",
+      "required_before": "supersede_decision",
+      "rationale": "The replayed Qwen decision must be promoted into its own typed packet before it can supersede the VC-045 target fixture."
+    },
+    {
+      "packet_id": "vc-protocol-architecture-001-challenge-disposition-002",
+      "packet_kind": "challenge_disposition_packet",
+      "required_before": "challenge_resolution",
+      "rationale": "The challenge remains open until a later packet explicitly records that the target was superseded rather than reproduced."
+    },
+    {
+      "packet_id": "vc-protocol-architecture-001-conformance-001",
+      "packet_kind": "conformance_mapping_packet",
+      "required_before": "conformance_mapping",
+      "rationale": "Implementation planning can resume only after the superseding replayed decision packet is accepted."
+    }
+  ],
+  "authority_boundary": {
+    "provider_spend_authorized": false,
+    "live_model_request_authorized": false,
+    "model_output_generated_in_this_packet": false,
+    "rippled_code_import_authorized": false,
+    "consensus_rewrite_authorized": false,
+    "xrpl_compatibility_activation_authorized": false,
+    "protocol_migration_authorized": false,
+    "live_validator_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "mainnet_mutation_authorized": false,
+    "authority_transfer_authorized": false,
+    "conformance_mapping_authorized": false,
+    "superseding_decision_authorized": false
+  },
+  "checks": {
+    "source_gate_verified": true,
+    "source_full_vocab_verified": true,
+    "full_vocab_two_machine_classes": true,
+    "full_vocab_roots_converged": true,
+    "chat_decisions_converged": true,
+    "top_logprob_roots_converged": true,
+    "target_decision_not_reproduced": true,
+    "live_outputs_select_target_option": true,
+    "semantic_equivalence_not_used_as_rejection": true,
+    "superseding_packet_required": true,
+    "conformance_mapping_blocked": true,
+    "no_provider_spend_in_this_packet": true,
+    "no_live_mutation": true,
+    "authority_transfer": false
+  }
+}

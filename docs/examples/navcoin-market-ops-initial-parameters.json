@@ -1,0 +1,54 @@
+{
+  "schema": "postfiat-navcoin-market-ops-cold-start-parameters-v1",
+  "mode": "observe_only",
+  "venue": {
+    "kind": "uniswap_v4",
+    "pool_config_hash_required": true,
+    "hook_code_hash_required": true,
+    "nav_guard_hook_required": true,
+    "eligible_route_count": 1
+  },
+  "windows": {
+    "minimum_observation_window_seconds": 1209600,
+    "premium_mint_minimum_history_seconds": 2592000,
+    "max_reserve_packet_age_blocks": 7200,
+    "max_supply_packet_age_blocks": 7200,
+    "max_evm_evidence_age_seconds": 1800,
+    "bridge_challenge_delay_seconds": 86400,
+    "envelope_execution_window_seconds": 3600
+  },
+  "alignment_reserve": {
+    "initial_funding_usd_e8": 2500000000000,
+    "minimum_required_funding_ratio_bps": 10000,
+    "initial_per_epoch_reserve_deploy_cap_usd_e8": 250000000000,
+    "initial_per_epoch_reserve_deploy_cap_bps_of_funded_reserve": 1000,
+    "cooldown_seconds": 3600
+  },
+  "market_policy": {
+    "floor_factor_bps": 10000,
+    "discount_trigger_bps": 300,
+    "premium_trigger_bps": 1000,
+    "slippage_limit_bps": 100,
+    "discount_time_weight": 25,
+    "discount_volume_weight": 15,
+    "discount_severity_weight": 150,
+    "max_discount_response_bps": 2500,
+    "premium_time_weight": 2,
+    "premium_volume_weight": 1,
+    "premium_severity_weight": 10,
+    "max_premium_response_bps": 1500,
+    "high_stale_data_penalty": true
+  },
+  "minting": {
+    "premium_mint_enabled_at_launch": false,
+    "initial_max_mint_atoms": 0,
+    "primary_issuance_mode": "manual_pftl_governed",
+    "escrow_required": true,
+    "post_mint_backing_check_required": true
+  },
+  "publication": {
+    "replay_bundle_required_before_caps": true,
+    "expected_envelope_hash_required": true,
+    "public_status_required": true
+  }
+}

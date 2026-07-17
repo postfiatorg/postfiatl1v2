@@ -1,0 +1,71 @@
+{
+  "schema_id": "postfiat-cobalt-key-continuity-receipt-v1",
+  "statement": {
+    "claim": "A validator receives old/new quorum-intersection credit only with a parent-root-bound continuity receipt signed by both old and new consensus keys under the old checker.",
+    "material_root_hash": "7c249c6e8fd7fd33072f9a96ff692b1cf07bd90e7f9635e811aaf9f7d12ac41fc6547dbcf99de220b29815bb2eec8cf3",
+    "cases_root_hash": "b913839ec325ad5a5b9834aaa6fb0eaf888ba95f5e4f8dff702bd19473dc1e416f6ffb0a1ea46724bbcf4461b1e658e9"
+  },
+  "profile": {
+    "parent_registry_root": "registry-root-old-001",
+    "next_registry_root": "registry-root-new-001",
+    "transition_root": "transition-root-key-continuity-001",
+    "old_checker_root": "checker-root-old-001",
+    "new_checker_root": "checker-root-new-001",
+    "activation_epoch": 42,
+    "current_epoch": 41,
+    "max_receipt_age_epochs": 4,
+    "byzantine_budget": 2,
+    "parent_validation": "old-checker"
+  },
+  "byzantine_validators": ["A", "B"],
+  "old_registry": [
+    {"validator_id": "A", "operator_id": "op-a", "consensus_key": "old-key-a", "operator_manifest_hash": "manifest-a", "status": "active"},
+    {"validator_id": "B", "operator_id": "op-b", "consensus_key": "old-key-b", "operator_manifest_hash": "manifest-b", "status": "active"},
+    {"validator_id": "C", "operator_id": "op-c", "consensus_key": "old-key-c", "operator_manifest_hash": "manifest-c", "status": "active"},
+    {"validator_id": "D", "operator_id": "op-d", "consensus_key": "old-key-d", "operator_manifest_hash": "manifest-d", "status": "active"},
+    {"validator_id": "E", "operator_id": "op-e", "consensus_key": "old-key-e", "operator_manifest_hash": "manifest-e", "status": "active"},
+    {"validator_id": "F", "operator_id": "op-f", "consensus_key": "old-key-f", "operator_manifest_hash": "manifest-f", "status": "active"},
+    {"validator_id": "G", "operator_id": "op-g", "consensus_key": "old-key-g", "operator_manifest_hash": "manifest-g", "status": "active"},
+    {"validator_id": "H", "operator_id": "op-h", "consensus_key": "old-key-h", "operator_manifest_hash": "manifest-h", "status": "active"},
+    {"validator_id": "I", "operator_id": "op-i", "consensus_key": "old-key-i", "operator_manifest_hash": "manifest-i", "status": "active"},
+    {"validator_id": "J", "operator_id": "op-j", "consensus_key": "old-key-j", "operator_manifest_hash": "manifest-j", "status": "active"}
+  ],
+  "new_registry": [
+    {"validator_id": "A", "operator_id": "op-a", "consensus_key": "new-key-a", "operator_manifest_hash": "manifest-a", "status": "active"},
+    {"validator_id": "B", "operator_id": "op-b", "consensus_key": "new-key-b", "operator_manifest_hash": "manifest-b", "status": "active"},
+    {"validator_id": "C", "operator_id": "op-c", "consensus_key": "new-key-c", "operator_manifest_hash": "manifest-c", "status": "active"},
+    {"validator_id": "D", "operator_id": "op-d", "consensus_key": "new-key-d", "operator_manifest_hash": "manifest-d", "status": "active"},
+    {"validator_id": "E", "operator_id": "op-e", "consensus_key": "new-key-e", "operator_manifest_hash": "manifest-e", "status": "active"},
+    {"validator_id": "F", "operator_id": "op-f", "consensus_key": "new-key-f", "operator_manifest_hash": "manifest-f", "status": "active"},
+    {"validator_id": "G", "operator_id": "op-g", "consensus_key": "new-key-g", "operator_manifest_hash": "manifest-g", "status": "active"},
+    {"validator_id": "H", "operator_id": "op-h", "consensus_key": "new-key-h", "operator_manifest_hash": "manifest-h", "status": "active"},
+    {"validator_id": "I", "operator_id": "op-i", "consensus_key": "new-key-i", "operator_manifest_hash": "manifest-i", "status": "active"},
+    {"validator_id": "K", "operator_id": "op-k", "consensus_key": "new-key-k", "operator_manifest_hash": "manifest-k", "status": "active"}
+  ],
+  "continuity_receipts": [
+    {"validator_id": "A", "operator_id": "op-a", "operator_manifest_hash": "manifest-a", "old_consensus_key": "old-key-a", "new_consensus_key": "new-key-a", "parent_registry_root": "registry-root-old-001", "next_registry_root": "registry-root-new-001", "transition_root": "transition-root-key-continuity-001", "old_checker_root": "checker-root-old-001", "checker_root": "checker-root-old-001", "signed_by_old_key": true, "signed_by_new_key": true, "issued_epoch": 41, "expires_epoch": 42},
+    {"validator_id": "B", "operator_id": "op-b", "operator_manifest_hash": "manifest-b", "old_consensus_key": "old-key-b", "new_consensus_key": "new-key-b", "parent_registry_root": "registry-root-old-001", "next_registry_root": "registry-root-new-001", "transition_root": "transition-root-key-continuity-001", "old_checker_root": "checker-root-old-001", "checker_root": "checker-root-old-001", "signed_by_old_key": true, "signed_by_new_key": true, "issued_epoch": 41, "expires_epoch": 42},
+    {"validator_id": "C", "operator_id": "op-c", "operator_manifest_hash": "manifest-c", "old_consensus_key": "old-key-c", "new_consensus_key": "new-key-c", "parent_registry_root": "registry-root-old-001", "next_registry_root": "registry-root-new-001", "transition_root": "transition-root-key-continuity-001", "old_checker_root": "checker-root-old-001", "checker_root": "checker-root-old-001", "signed_by_old_key": true, "signed_by_new_key": true, "issued_epoch": 41, "expires_epoch": 42},
+    {"validator_id": "D", "operator_id": "op-d", "operator_manifest_hash": "manifest-d", "old_consensus_key": "old-key-d", "new_consensus_key": "new-key-d", "parent_registry_root": "registry-root-old-001", "next_registry_root": "registry-root-new-001", "transition_root": "transition-root-key-continuity-001", "old_checker_root": "checker-root-old-001", "checker_root": "checker-root-old-001", "signed_by_old_key": true, "signed_by_new_key": true, "issued_epoch": 41, "expires_epoch": 42},
+    {"validator_id": "E", "operator_id": "op-e", "operator_manifest_hash": "manifest-e", "old_consensus_key": "old-key-e", "new_consensus_key": "new-key-e", "parent_registry_root": "registry-root-old-001", "next_registry_root": "registry-root-new-001", "transition_root": "transition-root-key-continuity-001", "old_checker_root": "checker-root-old-001", "checker_root": "checker-root-old-001", "signed_by_old_key": true, "signed_by_new_key": true, "issued_epoch": 41, "expires_epoch": 42},
+    {"validator_id": "F", "operator_id": "op-f", "operator_manifest_hash": "manifest-f", "old_consensus_key": "old-key-f", "new_consensus_key": "new-key-f", "parent_registry_root": "registry-root-old-001", "next_registry_root": "registry-root-new-001", "transition_root": "transition-root-key-continuity-001", "old_checker_root": "checker-root-old-001", "checker_root": "checker-root-old-001", "signed_by_old_key": true, "signed_by_new_key": true, "issued_epoch": 41, "expires_epoch": 42},
+    {"validator_id": "G", "operator_id": "op-g", "operator_manifest_hash": "manifest-g", "old_consensus_key": "old-key-g", "new_consensus_key": "new-key-g", "parent_registry_root": "registry-root-old-001", "next_registry_root": "registry-root-new-001", "transition_root": "transition-root-key-continuity-001", "old_checker_root": "checker-root-old-001", "checker_root": "checker-root-old-001", "signed_by_old_key": true, "signed_by_new_key": true, "issued_epoch": 41, "expires_epoch": 42}
+  ],
+  "cases": [
+    {
+      "id": "case-01-continuity-credit",
+      "old_certificate": {"signers": ["A", "B", "C", "D", "E", "F", "G", "H"]},
+      "new_certificate": {"signers": ["A", "B", "C", "D", "E", "F", "G", "K"], "extends_old_lock": true},
+      "expected_route": "accept-continuity-credit"
+    },
+    {
+      "id": "case-02-conflicting-child-rejected",
+      "old_certificate": {"signers": ["A", "B", "C", "D", "E", "F", "G", "H"]},
+      "new_certificate": {"signers": ["A", "B", "C", "D", "E", "F", "G", "K"], "extends_old_lock": false},
+      "expected_route": "reject-old-new-conflict"
+    }
+  ],
+  "attestation": {
+    "statement_hash": "c5bb8aa36f8ec0c213bfacfef27b612d957135fe2646ba243cf01a0705659d0c46452b35830ac74a53028d7eb3b4170b"
+  }
+}

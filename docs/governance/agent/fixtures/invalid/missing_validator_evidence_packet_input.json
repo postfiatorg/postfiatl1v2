@@ -1,0 +1,44 @@
+{
+  "authority": {
+    "direct_state_mutation": false,
+    "mode": "dry_run_only",
+    "scope_expansion": false,
+    "self_upgrade": false
+  },
+  "decisions": [
+    {
+      "condition": "local_gate_1_5_fixture",
+      "decision_id": "no-op-without-validator-evidence-packet",
+      "kind": "no_op",
+      "evidence_field_path": "packet.schema",
+      "required_provenance": "collector_observed",
+      "freshness_requirement": "same_packet",
+      "missing_evidence_behavior": "reject_packet",
+      "conflict_behavior": "reject_packet",
+      "action_bound": "no_action",
+      "rationale": "Rules that cite validator evidence must explicitly require the validator evidence packet input."
+    }
+  ],
+  "inputs": [
+    {
+      "kind": "validator_registry_snapshot",
+      "required": true
+    },
+    {
+      "kind": "cobalt_evidence_packet",
+      "required": true
+    },
+    {
+      "kind": "operator_manifest_set",
+      "required": false
+    }
+  ],
+  "rollback": {
+    "max_mutations": 0,
+    "operator_confirmation_required": true,
+    "required": true
+  },
+  "ruleset_id": "gate-1_5-missing-validator-evidence-packet-input",
+  "schema": "postfiat-governance-ruleset-v1",
+  "scope": "validator_registry_policy"
+}

@@ -1,0 +1,11 @@
+{
+  "base_fixture": "valid_transition_safety_proof.json",
+  "overrides": {
+    "profile": {
+      "parent_validation": "new-checker"
+    }
+  },
+  "expected_error_contains": [
+    "transition is not validated by old checker"
+  ]
+}

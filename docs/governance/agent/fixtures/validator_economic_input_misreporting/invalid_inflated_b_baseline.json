@@ -1,0 +1,18 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_input_misreporting/valid_input_misreporting.json",
+  "expected_error_contains": [
+    "case-02-inflated-b-reject: expected_route mismatch"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        1,
+        "expected_route"
+      ],
+      "value": "admit"
+    }
+  ],
+  "schema": "postfiat-validator-economic-input-misreporting-invalid-case-v1"
+}

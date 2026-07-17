@@ -1,0 +1,550 @@
+#!/usr/bin/env python3
+"""Generate a code-derived inventory of PostFiat RPC methods and launch posture."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SDK_SRC = ROOT / "crates/rpc_sdk/src"
+NODE_RPC = ROOT / "crates/node/src/rpc_cli.rs"
+NODE_DISPATCH = ROOT / "crates/node/src/rpc_dispatch.rs"
+PY_CLIENT = ROOT / "python/postfiat_rpc/client.py"
+
+METHOD_RE = re.compile(r'pub const METHOD_[A-Z0-9_]+:\s*&str\s*=\s*"([^"]+)"')
+
+POSTURE_NOTES = {
+    "status": "public chain/node health read",
+    "server_info": "XRP-like server info alias",
+    "metrics": "public node metrics read",
+    "ledger": "XRP-like latest ledger alias with bounded block sample",
+    "account": "XRP-like transparent account read",
+    "account_tx": "XRP-like bounded transparent account transaction history read; uses rebuilt index when current",
+    "account_tx_index_status": "read-only account_tx index freshness/status report",
+    "fee": "XRP-like fee policy read",
+    "transfer_fee_quote": "transparent wallet quote read",
+    "receipts": "bounded receipt lookup",
+    "tx": "transaction finality lookup",
+    "blocks": "bounded block query; node/Rust SDK/Python support from_height",
+    "validators": "active validator registry read",
+    "manifests": "operator manifest read",
+    "batch_archive": "bounded batch payload archive read",
+    "archive_window": "bounded archive-window bundle read",
+    "verify_blocks": "local verification surfaced through read RPC",
+    "verify_state": "local verification surfaced through read RPC",
+    "verify_bridge": "local verification surfaced through read RPC",
+    "verify_mempool": "local verification surfaced through read RPC",
+    "verify_shielded": "local verification surfaced through read RPC",
+    "orchard_pool_report": "public Orchard pool counters only",
+    "mempool_status": "mempool read",
+    "shield_scan": "legacy shielded owner scan; not Orchard privacy",
+    "shield_disclose": "legacy shielded disclosure; not Orchard privacy",
+    "shield_turnstile": "shielded turnstile accounting read",
+    "bridge_status": "bridge simulation state read",
+    "mempool_submit_signed_transfer": "controlled write edge; disabled unless explicitly enabled",
+    "mempool_submit_signed_transfer_finality": "controlled in-process write/finality edge; disabled unless explicitly enabled",
+    "shield_batch_orchard": "privacy-alpha batch-create edge; disabled unless explicitly enabled",
+    "shield_batch_orchard_deposit": "privacy-alpha direct-deposit batch-create edge; disabled unless explicitly enabled",
+    "shield_batch_orchard_withdraw": "privacy-alpha withdraw batch-create edge; disabled unless explicitly enabled",
+    "validate_local_keys": "operator-only local key validation",
+    "mempool_submit_transfer": "local wallet/debug helper; uses local key file",
+    "mempool_batch": "operator/proposer batch creation",
+    "apply_batch": "operator/state-apply path; not public RPC",
+    "apply_shield_batch": "operator/state-apply path; not public RPC",
+    "apply_bridge_batch": "operator/state-apply path; not public RPC",
+}
+
+# Security posture is deliberately explicit rather than inferred from an
+# allowlist position. Adding a remotely enabled method therefore fails the
+# inventory until a reviewer classifies it as a read or an authenticated
+# protocol mutation.
+READ_ONLY_PUBLIC_METHODS = {
+    "status",
+    "server_info",
+    "metrics",
+    "ledger",
+    "account",
+    "account_tx",
+    "account_tx_index_status",
+    "fee",
+    "transfer_fee_quote",
+    "atomic_swap_fee_quote",
+    "asset_fee_quote",
+    "escrow_fee_quote",
+    "nft_fee_quote",
+    "offer_fee_quote",
+    "atomic_settlement_template",
+    "offer_info",
+    "account_offers",
+    "book_offers",
+    "asset_info",
+    "account_lines",
+    "account_assets",
+    "owned_objects",
+    "issuer_assets",
+    "market_ops_status",
+    "vault_bridge_status",
+    "vault_bridge_route",
+    "navcoin_bridge_routes",
+    "navcoin_bridge_packet",
+    "navcoin_bridge_claims",
+    "navcoin_bridge_supply_status",
+    "navcoin_bridge_receipt_replay",
+    "escrow_info",
+    "account_escrows",
+    "nft_info",
+    "account_nfts",
+    "issuer_nfts",
+    "receipts",
+    "tx",
+    "blocks",
+    "validators",
+    "manifests",
+    "batch_archive",
+    "archive_window",
+    "verify_blocks",
+    "verify_state",
+    "verify_bridge",
+    "verify_mempool",
+    "verify_shielded",
+    "orchard_pool_report",
+    "mempool_status",
+    "shield_scan",
+    "shield_disclose",
+    "shield_turnstile",
+    "bridge_status",
+    "fastswap_capabilities",
+    "fastswap_preview",
+    "fastswap_status",
+    "fastswap_effects",
+    "fastswap_votes",
+    "fastswap_propose_round",
+    "fastswap_checkpoint_status",
+    "fastswap_objects",
+    "fastswap_policy",
+    "fastlane_asset_control_preview",
+    "owned_recovery_capabilities",
+    "owned_certificate",
+    "owned_recovery_status",
+}
+
+AUTHORIZED_PROTOCOL_MUTATION_PUBLIC_METHODS = {
+    "fastswap_prepare",
+    "fastswap_commit",
+    "fastswap_apply",
+    "fastswap_catch_up",
+    "fastswap_new_round_vote",
+    "fastswap_precommit",
+    "fastswap_commit_round",
+    "fastswap_cancel_apply",
+    "fastlane_exit",
+    "fastlane_asset_control_prepare",
+    "fastlane_asset_control_apply",
+    "fastlane_asset_control_catch_up",
+}
+
+OWNED_LANE_GATED_METHODS = {
+    "owned_sign",
+    "owned_apply",
+    "owned_unwrap_sign",
+    "owned_unwrap_apply",
+    "owned_sign_v3",
+    "owned_apply_v3",
+    "owned_unwrap_sign_v3",
+    "owned_unwrap_apply_v3",
+}
+
+XRP_LIKE_REQUIREMENTS = [
+    {
+        "capability": "server_info",
+        "state": "covered",
+        "methods": ["server_info"],
+        "notes": "Node and Rust/Python clients expose a server_info alias.",
+    },
+    {
+        "capability": "latest ledger",
+        "state": "covered",
+        "methods": ["ledger", "blocks"],
+        "notes": "Latest ledger alias plus bounded block query exist.",
+    },
+    {
+        "capability": "ledger range",
+        "state": "covered",
+        "methods": ["blocks", "archive_window"],
+        "notes": "Node, Rust SDK, and Python client support bounded blocks.from_height; archive_window provides bounded handoff bundles.",
+    },
+    {
+        "capability": "fee",
+        "state": "covered",
+        "methods": ["fee", "transfer_fee_quote"],
+        "notes": "Static fee policy and wallet quote path exist.",
+    },
+    {
+        "capability": "validators",
+        "state": "covered",
+        "methods": ["validators", "manifests"],
+        "notes": "Active registry and operator manifests are public reads.",
+    },
+    {
+        "capability": "transaction lookup",
+        "state": "covered",
+        "methods": ["tx", "receipts"],
+        "notes": "Finality lookup and receipt reads exist.",
+    },
+    {
+        "capability": "account info",
+        "state": "covered",
+        "methods": ["account"],
+        "notes": "Transparent account read exists.",
+    },
+    {
+        "capability": "account_tx",
+        "state": "covered",
+        "methods": [
+            "account_tx",
+            "account_tx_index_status",
+            "python account_tx",
+            "python account_tx_index_status",
+        ],
+        "notes": "Server-side bounded account_tx exists for transparent history and uses a rebuilt account_tx index when current, with scan fallback for absent or stale index data.",
+    },
+]
+
+
+def utc_stamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def utc_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def rel(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def git_metadata() -> dict[str, Any]:
+    def run(args: list[str]) -> str | None:
+        completed = subprocess.run(
+            args,
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        return completed.stdout.strip() if completed.returncode == 0 else None
+
+    status = run(["git", "status", "--short"])
+    return {
+        "revision": run(["git", "rev-parse", "HEAD"]),
+        "dirty": bool(status),
+    }
+
+
+def extract_sdk_methods() -> set[str]:
+    methods: set[str] = set()
+    for source_file in sorted(SDK_SRC.rglob("*.rs")):
+        methods.update(METHOD_RE.findall(source_file.read_text(encoding="utf-8")))
+    return methods
+
+
+def extract_function_body(source: str, name: str) -> str:
+    start = source.index(f"fn {name}")
+    brace = source.index("{", start)
+    depth = 0
+    for index in range(brace, len(source)):
+        char = source[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return source[brace : index + 1]
+    raise ValueError(f"function body not found for {name}")
+
+
+def extract_default_remote_methods(source: str) -> set[str]:
+    body = extract_function_body(source, "rpc_serve_method_allowed_with_owned_lane")
+    first_matches = body.split(") ||", 1)[0]
+    return set(re.findall(r'"([^"]+)"', first_matches))
+
+
+def extract_mempool_gated_methods(source: str) -> set[str]:
+    body = extract_function_body(source, "is_mempool_submit_signed_method")
+    return set(re.findall(r'"([^"]+)"', body))
+
+
+def extract_orchard_gated_methods(source: str) -> set[str]:
+    body = extract_function_body(source, "is_orchard_batch_create_method")
+    return set(re.findall(r'"([^"]+)"', body))
+
+
+def extract_node_dispatch_methods(source: str) -> set[str]:
+    start = source.index("match method {", source.index("fn run_rpc"))
+    end = source.index('other => Err(format!("unknown rpc method', start)
+    methods: set[str] = set()
+    for line in source[start:end].splitlines():
+        stripped = line.strip()
+        if not stripped.startswith('"') or "=>" not in stripped:
+            continue
+        left = stripped.split("=>", 1)[0]
+        methods.update(re.findall(r'"([^"]+)"', left))
+    return methods
+
+
+def extract_python_client_methods() -> set[str]:
+    if not PY_CLIENT.is_file():
+        return set()
+    source = PY_CLIENT.read_text(encoding="utf-8")
+    return set(re.findall(r'self\._call\("([^"]+)"', source))
+
+
+def method_posture(
+    method: str,
+    *,
+    mempool_gated: set[str],
+    orchard_gated: set[str],
+    node_dispatch: set[str],
+) -> str:
+    if method in READ_ONLY_PUBLIC_METHODS:
+        return "read_only_public"
+    if method in AUTHORIZED_PROTOCOL_MUTATION_PUBLIC_METHODS:
+        return "authorized_protocol_mutation_public"
+    if method in mempool_gated:
+        return "controlled_write_gated"
+    if method in orchard_gated:
+        return "privacy_alpha_gated"
+    if method in OWNED_LANE_GATED_METHODS:
+        return "owned_lane_gated"
+    if method in node_dispatch:
+        return "operator_or_local_only"
+    return "sdk_only_or_unknown"
+
+
+def build_inventory() -> dict[str, Any]:
+    node_source = NODE_RPC.read_text(encoding="utf-8")
+    dispatch_source = NODE_DISPATCH.read_text(encoding="utf-8")
+    sdk_methods = extract_sdk_methods()
+    default_remote = extract_default_remote_methods(node_source)
+    orchard_gated = extract_orchard_gated_methods(node_source)
+    mempool_gated = extract_mempool_gated_methods(node_source)
+    node_dispatch = extract_node_dispatch_methods(dispatch_source)
+    python_methods = extract_python_client_methods()
+    remotely_implemented = (
+        default_remote | orchard_gated | mempool_gated | OWNED_LANE_GATED_METHODS
+    )
+    all_methods = sorted(
+        sdk_methods | remotely_implemented | node_dispatch | python_methods
+    )
+    methods = [
+        {
+            "method": method,
+            "posture": method_posture(
+                method,
+                mempool_gated=mempool_gated,
+                orchard_gated=orchard_gated,
+                node_dispatch=node_dispatch,
+            ),
+            "sdk_constant": method in sdk_methods,
+            "node_dispatch": method in node_dispatch,
+            "remote_rpc_implemented": method in remotely_implemented,
+            "remote_enabled_by_default": method in default_remote,
+            "remote_read_allowed": method in READ_ONLY_PUBLIC_METHODS,
+            "authorized_protocol_mutation_public": method
+            in AUTHORIZED_PROTOCOL_MUTATION_PUBLIC_METHODS,
+            "controlled_write_allowed_when_enabled": method in mempool_gated,
+            "privacy_alpha_allowed_when_enabled": method in orchard_gated,
+            "owned_lane_allowed_when_enabled": method in OWNED_LANE_GATED_METHODS,
+            "python_client": method in python_methods,
+            "notes": POSTURE_NOTES.get(method, ""),
+        }
+        for method in all_methods
+    ]
+    postures = {item["method"]: item["posture"] for item in methods}
+    checks = {
+        "default_remote_methods_explicitly_partitioned": default_remote
+        == READ_ONLY_PUBLIC_METHODS | AUTHORIZED_PROTOCOL_MUTATION_PUBLIC_METHODS,
+        "default_remote_categories_disjoint": READ_ONLY_PUBLIC_METHODS.isdisjoint(
+            AUTHORIZED_PROTOCOL_MUTATION_PUBLIC_METHODS
+        ),
+        "gated_categories_disjoint": mempool_gated.isdisjoint(orchard_gated)
+        and mempool_gated.isdisjoint(OWNED_LANE_GATED_METHODS)
+        and orchard_gated.isdisjoint(OWNED_LANE_GATED_METHODS),
+        "all_observed_methods_classified": all(
+            item["posture"] != "sdk_only_or_unknown" for item in methods
+        ),
+        "fastswap_prepare_is_not_read_only": postures.get("fastswap_prepare")
+        == "authorized_protocol_mutation_public",
+        "all_mempool_submit_methods_are_gated": all(
+            postures.get(method) == "controlled_write_gated"
+            for method in mempool_gated
+        ),
+    }
+    gaps = [
+        {
+            "id": "account_tx_index_incremental_store",
+            "severity": "scale_follow_up",
+            "description": "account_tx index refreshes automatically after ordered commits using the rebuilt JSON cache; incremental append/update and a disk-backed store remain scale follow-ups.",
+        },
+        {
+            "id": "public_write_edge_not_default",
+            "severity": "intentional_gate",
+            "description": "All signed-mempool, Orchard batch-create, and owned-lane methods are disabled unless their exact operator flag enables them.",
+        },
+        {
+            "id": "fastswap_public_protocol_mutations",
+            "severity": "authenticated_protocol_surface",
+            "description": "FastSwap lock/vote/apply and FastLane control methods are remotely enabled protocol mutations, not reads; request signatures and quorum certificates are their authorization boundary.",
+        },
+    ]
+    return {
+        "schema": "postfiat-rpc-method-inventory-v2",
+        "generated_utc": utc_iso(),
+        "git": git_metadata(),
+        "sources": {
+            "sdk_constants": rel(SDK_SRC),
+            "node_rpc_policy": rel(NODE_RPC),
+            "node_rpc_dispatch": rel(NODE_DISPATCH),
+            "python_client": rel(PY_CLIENT),
+        },
+        "counts": {
+            "total_methods": len(methods),
+            "read_only_public": sum(1 for item in methods if item["posture"] == "read_only_public"),
+            "authorized_protocol_mutation_public": sum(
+                1
+                for item in methods
+                if item["posture"] == "authorized_protocol_mutation_public"
+            ),
+            "controlled_write_gated": sum(1 for item in methods if item["posture"] == "controlled_write_gated"),
+            "privacy_alpha_gated": sum(1 for item in methods if item["posture"] == "privacy_alpha_gated"),
+            "owned_lane_gated": sum(
+                1 for item in methods if item["posture"] == "owned_lane_gated"
+            ),
+            "operator_or_local_only": sum(1 for item in methods if item["posture"] == "operator_or_local_only"),
+            "sdk_only_or_unknown": sum(
+                1 for item in methods if item["posture"] == "sdk_only_or_unknown"
+            ),
+        },
+        "methods": methods,
+        "xrp_like_requirements": XRP_LIKE_REQUIREMENTS,
+        "gaps": gaps,
+        "checks": checks,
+        "verified": all(checks.values()),
+    }
+
+
+def markdown_table(methods: list[dict[str, Any]]) -> str:
+    lines = [
+        "| Method | Posture | Remote default | Remote gated | Local CLI | SDK | Python | Notes |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for item in methods:
+        remote_gated = item["remote_rpc_implemented"] and not item["remote_enabled_by_default"]
+        lines.append(
+            "| {method} | {posture} | {remote_default} | {remote_gated} | {local} | {sdk} | {python} | {notes} |".format(
+                method=item["method"],
+                posture=item["posture"],
+                remote_default="yes" if item["remote_enabled_by_default"] else "no",
+                remote_gated="yes" if remote_gated else "no",
+                local="yes" if item["node_dispatch"] else "no",
+                sdk="yes" if item["sdk_constant"] else "no",
+                python="yes" if item["python_client"] else "no",
+                notes=(item["notes"] or "").replace("|", "\\|"),
+            )
+        )
+    return "\n".join(lines)
+
+
+def render_markdown(inventory: dict[str, Any], report_path: Path) -> str:
+    xrp_lines = [
+        "| Capability | State | Methods | Notes |",
+        "| --- | --- | --- | --- |",
+    ]
+    for item in inventory["xrp_like_requirements"]:
+        xrp_lines.append(
+            f"| {item['capability']} | {item['state']} | {', '.join(item['methods'])} | {item['notes']} |"
+        )
+    gap_lines = ["| Gap | Severity | Description |", "| --- | --- | --- |"]
+    for item in inventory["gaps"]:
+        gap_lines.append(f"| {item['id']} | {item['severity']} | {item['description']} |")
+    return f"""# RPC Method Inventory
+
+Status: code-derived inventory
+Date: {inventory['generated_utc'][:10]}
+Report: `{rel(report_path)}`
+
+This inventory is generated from Rust SDK method constants, node RPC dispatch,
+the remote `rpc-serve` allowlist, and the Python RPC client. It is a launch
+surface map, not a feature wishlist. “Public protocol mutation” means remotely
+reachable by default but cryptographically authorized by a signed intent,
+owner authorization, policy command, or quorum certificate; it does not mean
+an unauthenticated state write. The generator fails closed if a newly observed
+method lacks an explicit posture.
+
+## Summary
+
+- Total methods observed: {inventory['counts']['total_methods']}
+- Read-only public methods: {inventory['counts']['read_only_public']}
+- Public cryptographically authorized protocol mutations: {inventory['counts']['authorized_protocol_mutation_public']}
+- Controlled write gated methods: {inventory['counts']['controlled_write_gated']}
+- Privacy-alpha gated methods: {inventory['counts']['privacy_alpha_gated']}
+- Owned-lane gated methods: {inventory['counts']['owned_lane_gated']}
+- Operator/local-only methods: {inventory['counts']['operator_or_local_only']}
+- Unclassified methods: {inventory['counts']['sdk_only_or_unknown']}
+- Classification checks: {'PASS' if inventory['verified'] else 'FAIL'}
+
+## XRP-Like Coverage
+
+{chr(10).join(xrp_lines)}
+
+## Gaps
+
+{chr(10).join(gap_lines)}
+
+## Methods
+
+{markdown_table(inventory['methods'])}
+"""
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=ROOT / f"reports/testnet-rpc-method-inventory/testnet-rpc-method-inventory-{utc_stamp()}.json",
+    )
+    parser.add_argument("--markdown", type=Path)
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str]) -> int:
+    args = parse_args(argv)
+    inventory = build_inventory()
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(inventory, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if args.markdown is not None:
+        args.markdown.parent.mkdir(parents=True, exist_ok=True)
+        args.markdown.write_text(render_markdown(inventory, args.output), encoding="utf-8")
+    print(
+        f"testnet_rpc_method_inventory={'ok' if inventory['verified'] else 'failed'} "
+        f"methods={inventory['counts']['total_methods']} "
+        f"report={rel(args.output)}"
+    )
+    return 0 if inventory["verified"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

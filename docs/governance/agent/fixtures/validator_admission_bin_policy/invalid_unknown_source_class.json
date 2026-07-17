@@ -1,0 +1,21 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_admission_bin_policy/valid_bin_policy.json",
+  "expected_error_contains": [
+    "case-01-clean-admit: expected_route mismatch"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        0,
+        "evidence",
+        "exposure_sources",
+        0,
+        "source_class"
+      ],
+      "value": "web_search"
+    }
+  ],
+  "schema": "postfiat-validator-admission-bin-policy-invalid-case-v1"
+}

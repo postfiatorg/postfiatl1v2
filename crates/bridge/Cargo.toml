@@ -1,0 +1,18 @@
+[package]
+name = "postfiat-bridge"
+version = "0.1.0"
+description = "PostFiat L1 bridge state-transition primitives"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+postfiat-crypto-provider = { path = "../crypto_provider" }
+postfiat-types = { path = "../types" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha3 = { workspace = true }

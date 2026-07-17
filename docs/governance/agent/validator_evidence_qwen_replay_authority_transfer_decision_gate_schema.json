@@ -1,0 +1,686 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-validator-evidence-qwen-replay-authority-transfer-decision-gate-v1.json",
+  "title": "PostFiat Validator Evidence Qwen Replay Authority Transfer Decision Gate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "gate_id",
+    "mode",
+    "qwen_replay_registry_mutation_decision_gate_hash",
+    "qwen_replay_cobalt_submission_decision_gate_hash",
+    "qwen_replay_governance_queue_decision_gate_hash",
+    "qwen_replay_governance_queue_gate_hash",
+    "qwen_replay_release_decision_gate_hash",
+    "qwen_replay_operator_review_gate_hash",
+    "qwen_replay_release_candidate_gate_hash",
+    "qwen_replay_promotion_decision_hash",
+    "qwen_replay_output_validation_receipt_hash",
+    "qwen_replay_output_manifest_hash",
+    "qwen_replay_authorization_hash",
+    "qwen_replay_preflight_hash",
+    "qwen_prompt_redaction_audit_hash",
+    "qwen_prompt_input_manifest_hash",
+    "qwen_public_summary_projection_hash",
+    "model_request_hash",
+    "packet_schema_hash",
+    "field_registry_hash",
+    "collection_window",
+    "authority_transfer_decision",
+    "required_future_inputs",
+    "execution_boundary",
+    "failure_policy",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-evidence-qwen-replay-authority-transfer-decision-gate-v1"
+    },
+    "gate_id": {
+      "$ref": "#/$defs/id"
+    },
+    "mode": {
+      "const": "design_fixture_only"
+    },
+    "qwen_replay_registry_mutation_decision_gate_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_cobalt_submission_decision_gate_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_governance_queue_decision_gate_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_governance_queue_gate_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_release_decision_gate_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_operator_review_gate_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_release_candidate_gate_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_promotion_decision_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_output_validation_receipt_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_output_manifest_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_authorization_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_preflight_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_prompt_redaction_audit_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_prompt_input_manifest_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_public_summary_projection_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "model_request_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "packet_schema_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "field_registry_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "collection_window": {
+      "$ref": "#/$defs/collection_window"
+    },
+    "authority_transfer_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "queue_submission_status",
+        "queue_decision_status",
+        "queue_decision_complete",
+        "queue_submission_receipt_hash",
+        "queue_decision_receipt_hash",
+        "queue_acceptance_hash",
+        "release_packet_hash",
+        "cobalt_submission_decision_status",
+        "cobalt_submission_decision_complete",
+        "cobalt_submission_decision_receipt_hash",
+        "cobalt_dry_run_binding_hash",
+        "cobalt_submission_package_hash",
+        "cobalt_amendment_hash",
+        "registry_mutation_decision_status",
+        "registry_mutation_decision_complete",
+        "registry_mutation_authorization_hash",
+        "registry_delta_candidate_hash",
+        "guarded_apply_plan_hash",
+        "rollback_plan_hash",
+        "pre_mutation_registry_root",
+        "post_mutation_registry_root",
+        "registry_mutation_receipt_hash",
+        "registry_mutation_count",
+        "authority_transfer_decision_status",
+        "authority_transfer_decision_complete",
+        "authority_transfer_authorization_hash",
+        "authority_transfer_plan_hash",
+        "authority_transfer_receipt_hash",
+        "sidecar_activation_plan_hash",
+        "commit_reveal_activation_plan_hash",
+        "validator_enforced_scoring_plan_hash",
+        "tp1_admission_plan_hash",
+        "sidecar_activation_authorized",
+        "commit_reveal_activation_authorized",
+        "validator_enforced_scoring_authorized",
+        "tp1_admission_authorized",
+        "operator_pack_update_authorized",
+        "cobalt_submission_authorized",
+        "registry_mutation_authorized",
+        "authority_transfer_authorized",
+        "foundation_authority_retained",
+        "future_registry_mutation_decision_gate_required",
+        "future_explicit_live_release_lane_required"
+      ],
+      "properties": {
+        "queue_submission_status": {
+          "const": "not_submitted"
+        },
+        "queue_decision_status": {
+          "const": "not_requested"
+        },
+        "queue_decision_complete": {
+          "const": false
+        },
+        "queue_submission_receipt_hash": {
+          "type": "null"
+        },
+        "queue_decision_receipt_hash": {
+          "type": "null"
+        },
+        "queue_acceptance_hash": {
+          "type": "null"
+        },
+        "release_packet_hash": {
+          "type": "null"
+        },
+        "cobalt_submission_decision_status": {
+          "const": "not_requested"
+        },
+        "cobalt_submission_decision_complete": {
+          "const": false
+        },
+        "cobalt_submission_decision_receipt_hash": {
+          "type": "null"
+        },
+        "cobalt_dry_run_binding_hash": {
+          "type": "null"
+        },
+        "cobalt_submission_package_hash": {
+          "type": "null"
+        },
+        "cobalt_amendment_hash": {
+          "type": "null"
+        },
+        "registry_mutation_decision_status": {
+          "const": "not_requested"
+        },
+        "registry_mutation_decision_complete": {
+          "const": false
+        },
+        "registry_mutation_authorization_hash": {
+          "type": "null"
+        },
+        "registry_delta_candidate_hash": {
+          "type": "null"
+        },
+        "guarded_apply_plan_hash": {
+          "type": "null"
+        },
+        "rollback_plan_hash": {
+          "type": "null"
+        },
+        "pre_mutation_registry_root": {
+          "type": "null"
+        },
+        "post_mutation_registry_root": {
+          "type": "null"
+        },
+        "registry_mutation_receipt_hash": {
+          "type": "null"
+        },
+        "registry_mutation_count": {
+          "const": 0
+        },
+        "authority_transfer_decision_status": {
+          "const": "not_requested"
+        },
+        "authority_transfer_decision_complete": {
+          "const": false
+        },
+        "authority_transfer_authorization_hash": {
+          "type": "null"
+        },
+        "authority_transfer_plan_hash": {
+          "type": "null"
+        },
+        "authority_transfer_receipt_hash": {
+          "type": "null"
+        },
+        "sidecar_activation_plan_hash": {
+          "type": "null"
+        },
+        "commit_reveal_activation_plan_hash": {
+          "type": "null"
+        },
+        "validator_enforced_scoring_plan_hash": {
+          "type": "null"
+        },
+        "tp1_admission_plan_hash": {
+          "type": "null"
+        },
+        "sidecar_activation_authorized": {
+          "const": false
+        },
+        "commit_reveal_activation_authorized": {
+          "const": false
+        },
+        "validator_enforced_scoring_authorized": {
+          "const": false
+        },
+        "tp1_admission_authorized": {
+          "const": false
+        },
+        "operator_pack_update_authorized": {
+          "const": false
+        },
+        "cobalt_submission_authorized": {
+          "const": false
+        },
+        "registry_mutation_authorized": {
+          "const": false
+        },
+        "authority_transfer_authorized": {
+          "const": false
+        },
+        "foundation_authority_retained": {
+          "const": true
+        },
+        "future_registry_mutation_decision_gate_required": {
+          "const": true
+        },
+        "future_explicit_live_release_lane_required": {
+          "const": true
+        }
+      }
+    },
+    "required_future_inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "registry_mutation_decision_gate_required",
+        "completed_registry_mutation_decision_required",
+        "registry_delta_candidate_required",
+        "guarded_apply_plan_required",
+        "registry_mutation_receipt_required",
+        "authority_transfer_decision_receipt_required",
+        "sidecar_activation_plan_required",
+        "commit_reveal_activation_plan_required",
+        "validator_enforced_scoring_plan_required",
+        "tp1_admission_rejection_required",
+        "foundation_exit_criteria_required",
+        "rollback_plan_required"
+      ],
+      "properties": {
+        "registry_mutation_decision_gate_required": {
+          "const": true
+        },
+        "completed_registry_mutation_decision_required": {
+          "const": true
+        },
+        "registry_delta_candidate_required": {
+          "const": true
+        },
+        "guarded_apply_plan_required": {
+          "const": true
+        },
+        "registry_mutation_receipt_required": {
+          "const": true
+        },
+        "authority_transfer_decision_receipt_required": {
+          "const": true
+        },
+        "sidecar_activation_plan_required": {
+          "const": true
+        },
+        "commit_reveal_activation_plan_required": {
+          "const": true
+        },
+        "validator_enforced_scoring_plan_required": {
+          "const": true
+        },
+        "tp1_admission_rejection_required": {
+          "const": true
+        },
+        "foundation_exit_criteria_required": {
+          "const": true
+        },
+        "rollback_plan_required": {
+          "const": true
+        }
+      }
+    },
+    "execution_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_spend_executed",
+        "provider_resource_created",
+        "provider_resource_destroyed",
+        "live_model_request_executed",
+        "model_output_generated",
+        "live_network_access",
+        "live_registry_mutation",
+        "cobalt_amendment_submitted",
+        "sidecar_activation",
+        "commit_reveal_activation",
+        "validator_enforced_scoring",
+        "tp1_admission",
+        "authority_transfer"
+      ],
+      "properties": {
+        "provider_spend_executed": {
+          "const": false
+        },
+        "provider_resource_created": {
+          "const": false
+        },
+        "provider_resource_destroyed": {
+          "const": false
+        },
+        "live_model_request_executed": {
+          "const": false
+        },
+        "model_output_generated": {
+          "const": false
+        },
+        "live_network_access": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "cobalt_amendment_submitted": {
+          "const": false
+        },
+        "sidecar_activation": {
+          "const": false
+        },
+        "commit_reveal_activation": {
+          "const": false
+        },
+        "validator_enforced_scoring": {
+          "const": false
+        },
+        "tp1_admission": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    },
+    "failure_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authority_transfer_without_registry_mutation_decision",
+        "authority_transfer_without_sidecar_plan",
+        "sidecar_activation_without_authority_transfer_decision",
+        "commit_reveal_without_authority_transfer_decision",
+        "tp1_admission_without_authority_transfer_decision",
+        "operator_pack_update_without_authority_transfer_decision",
+        "fallback_decision"
+      ],
+      "properties": {
+        "authority_transfer_without_registry_mutation_decision": {
+          "const": "reject_future_authority_transfer"
+        },
+        "authority_transfer_without_sidecar_plan": {
+          "const": "reject_future_authority_transfer"
+        },
+        "sidecar_activation_without_authority_transfer_decision": {
+          "const": "reject_future_sidecar_activation"
+        },
+        "commit_reveal_without_authority_transfer_decision": {
+          "const": "reject_future_commit_reveal"
+        },
+        "tp1_admission_without_authority_transfer_decision": {
+          "const": "reject_future_tp1_admission"
+        },
+        "operator_pack_update_without_authority_transfer_decision": {
+          "const": "reject_future_operator_pack_update"
+        },
+        "fallback_decision": {
+          "const": "no_op"
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "qwen_replay_registry_mutation_decision_gate_hash_bound",
+        "qwen_replay_cobalt_submission_decision_gate_hash_bound",
+        "qwen_replay_governance_queue_decision_gate_hash_bound",
+        "qwen_replay_governance_queue_gate_hash_bound",
+        "qwen_replay_release_decision_gate_hash_bound",
+        "qwen_replay_operator_review_gate_hash_bound",
+        "qwen_replay_release_candidate_gate_hash_bound",
+        "qwen_replay_promotion_decision_hash_bound",
+        "qwen_replay_output_validation_receipt_hash_bound",
+        "qwen_replay_output_manifest_hash_bound",
+        "qwen_replay_authorization_hash_bound",
+        "qwen_replay_preflight_hash_bound",
+        "qwen_prompt_redaction_audit_hash_bound",
+        "qwen_prompt_input_manifest_hash_bound",
+        "qwen_public_summary_projection_hash_bound",
+        "model_request_hash_bound",
+        "packet_schema_hash_bound",
+        "field_registry_hash_bound",
+        "collection_window_bound",
+        "registry_mutation_decision_not_requested",
+        "registry_mutation_decision_not_complete",
+        "registry_mutation_count_zero",
+        "authority_transfer_decision_not_requested",
+        "authority_transfer_decision_not_complete",
+        "no_authority_transfer_authorization",
+        "no_authority_transfer_plan",
+        "no_authority_transfer_receipt",
+        "no_sidecar_activation_plan",
+        "no_commit_reveal_activation_plan",
+        "no_validator_enforced_scoring_plan",
+        "no_tp1_admission_plan",
+        "foundation_authority_retained",
+        "required_future_inputs_bound",
+        "operator_pack_update_authorized",
+        "cobalt_submission_authorized",
+        "registry_mutation_authorized",
+        "authority_transfer_authorized",
+        "sidecar_activation_authorized",
+        "commit_reveal_activation_authorized",
+        "validator_enforced_scoring_authorized",
+        "tp1_admission_authorized",
+        "provider_spend_executed",
+        "live_model_request_executed",
+        "model_output_generated",
+        "live_registry_mutation",
+        "cobalt_amendment_submitted",
+        "sidecar_activation",
+        "commit_reveal_activation",
+        "validator_enforced_scoring",
+        "tp1_admission",
+        "authority_transfer"
+      ],
+      "properties": {
+        "qwen_replay_registry_mutation_decision_gate_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_cobalt_submission_decision_gate_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_governance_queue_decision_gate_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_governance_queue_gate_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_release_decision_gate_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_operator_review_gate_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_release_candidate_gate_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_promotion_decision_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_output_validation_receipt_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_output_manifest_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_authorization_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_preflight_hash_bound": {
+          "const": true
+        },
+        "qwen_prompt_redaction_audit_hash_bound": {
+          "const": true
+        },
+        "qwen_prompt_input_manifest_hash_bound": {
+          "const": true
+        },
+        "qwen_public_summary_projection_hash_bound": {
+          "const": true
+        },
+        "model_request_hash_bound": {
+          "const": true
+        },
+        "packet_schema_hash_bound": {
+          "const": true
+        },
+        "field_registry_hash_bound": {
+          "const": true
+        },
+        "collection_window_bound": {
+          "const": true
+        },
+        "registry_mutation_decision_not_requested": {
+          "const": true
+        },
+        "registry_mutation_decision_not_complete": {
+          "const": true
+        },
+        "registry_mutation_count_zero": {
+          "const": true
+        },
+        "authority_transfer_decision_not_requested": {
+          "const": true
+        },
+        "authority_transfer_decision_not_complete": {
+          "const": true
+        },
+        "no_authority_transfer_authorization": {
+          "const": true
+        },
+        "no_authority_transfer_plan": {
+          "const": true
+        },
+        "no_authority_transfer_receipt": {
+          "const": true
+        },
+        "no_sidecar_activation_plan": {
+          "const": true
+        },
+        "no_commit_reveal_activation_plan": {
+          "const": true
+        },
+        "no_validator_enforced_scoring_plan": {
+          "const": true
+        },
+        "no_tp1_admission_plan": {
+          "const": true
+        },
+        "foundation_authority_retained": {
+          "const": true
+        },
+        "required_future_inputs_bound": {
+          "const": true
+        },
+        "operator_pack_update_authorized": {
+          "const": false
+        },
+        "cobalt_submission_authorized": {
+          "const": false
+        },
+        "registry_mutation_authorized": {
+          "const": false
+        },
+        "authority_transfer_authorized": {
+          "const": false
+        },
+        "sidecar_activation_authorized": {
+          "const": false
+        },
+        "commit_reveal_activation_authorized": {
+          "const": false
+        },
+        "validator_enforced_scoring_authorized": {
+          "const": false
+        },
+        "tp1_admission_authorized": {
+          "const": false
+        },
+        "provider_spend_executed": {
+          "const": false
+        },
+        "live_model_request_executed": {
+          "const": false
+        },
+        "model_output_generated": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "cobalt_amendment_submitted": {
+          "const": false
+        },
+        "sidecar_activation": {
+          "const": false
+        },
+        "commit_reveal_activation": {
+          "const": false
+        },
+        "validator_enforced_scoring": {
+          "const": false
+        },
+        "tp1_admission": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "collection_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_height",
+        "to_height",
+        "from_time",
+        "to_time"
+      ],
+      "properties": {
+        "from_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "from_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to_time": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    }
+  }
+}

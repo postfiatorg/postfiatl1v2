@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REQUEST="${REQUEST:-docs/governance/agent/fixtures/dry_run_model_request.json}"
+OUTPUTS_DIR="${OUTPUTS_DIR:-reports/gov-inference-gate-3_5-responses}"
+REPORT="${REPORT:-reports/gov-inference-gate-3_5-deterministic-ruleset-generation.json}"
+COUNT="${COUNT:-50}"
+BASE_URL="${BASE_URL:-${POSTFIAT_GOV_ENDPOINT_URL:-}}"
+REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-600}"
+
+usage() {
+  cat <<'USAGE'
+usage:
+  scripts/gov-inference-gate-3_5 --base-url URL [--count N] [--request PATH] [--outputs-dir PATH] [--report PATH]
+
+Runs a sequential deterministic replay against an OpenAI-compatible SGLang
+endpoint, stores raw responses plus parsed model outputs, and verifies the
+outputs with postfiat-node governance-agent-gate3-5.
+USAGE
+}
+
+require_command() {
+  local command="$1"
+  if ! command -v "$command" >/dev/null 2>&1; then
+    echo "missing required command: $command" >&2
+    exit 1
+  fi
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --base-url) BASE_URL="${2:?missing --base-url value}"; shift 2 ;;
+    --count) COUNT="${2:?missing --count value}"; shift 2 ;;
+    --request) REQUEST="${2:?missing --request value}"; shift 2 ;;
+    --outputs-dir) OUTPUTS_DIR="${2:?missing --outputs-dir value}"; shift 2 ;;
+    --report) REPORT="${2:?missing --report value}"; shift 2 ;;
+    --request-timeout) REQUEST_TIMEOUT="${2:?missing --request-timeout value}"; shift 2 ;;
+    --help|-h) usage; exit 0 ;;
+    *) echo "unknown arg: $1" >&2; usage >&2; exit 2 ;;
+  esac
+done
+
+[ -n "$BASE_URL" ] || {
+  echo "missing --base-url or POSTFIAT_GOV_ENDPOINT_URL" >&2
+  exit 2
+}
+
+require_command cargo
+require_command mkdir
+require_command python3
+require_command rm
+
+cargo build -p postfiat-node >/dev/null
+
+mkdir -p "$OUTPUTS_DIR"
+rm -f "$OUTPUTS_DIR"/model_output_*.json "$OUTPUTS_DIR"/model_output_raw_*.txt \
+  "$OUTPUTS_DIR"/raw_response_*.json
+
+python3 - "$BASE_URL" "$REQUEST" "$OUTPUTS_DIR" "$COUNT" "$REQUEST_TIMEOUT" <<'PY'
+import json
+import pathlib
+import sys
+import time
+import urllib.error
+import urllib.request
+
+base_url = sys.argv[1].rstrip("/")
+request_path = pathlib.Path(sys.argv[2])
+outputs_dir = pathlib.Path(sys.argv[3])
+count = int(sys.argv[4])
+timeout = float(sys.argv[5])
+
+if count <= 0:
+    raise SystemExit("count must be positive")
+
+with request_path.open("r", encoding="utf-8") as handle:
+    governed_request = json.load(handle)
+
+chat_request = dict(governed_request["openai_chat_request"])
+chat_request.pop("postfiat_output_contract", None)
+chat_request["stream"] = False
+
+endpoint = f"{base_url}/v1/chat/completions"
+headers = {
+    "Content-Type": "application/json",
+    "User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+    ),
+}
+
+for index in range(1, count + 1):
+    body = json.dumps(chat_request, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    request = urllib.request.Request(endpoint, data=body, headers=headers, method="POST")
+    started = time.time()
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            raw_bytes = response.read()
+    except urllib.error.HTTPError as error:
+        error_body = error.read().decode("utf-8", errors="replace")
+        raise SystemExit(f"generation {index} HTTP {error.code}: {error_body}") from error
+    except urllib.error.URLError as error:
+        raise SystemExit(f"generation {index} request failed: {error}") from error
+
+    elapsed_ms = int((time.time() - started) * 1000)
+    try:
+        raw_response = json.loads(raw_bytes)
+    except json.JSONDecodeError as error:
+        raise SystemExit(f"generation {index} response was not JSON: {error}") from error
+
+    choices = raw_response.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise SystemExit(f"generation {index} response missing choices")
+    message = choices[0].get("message")
+    if not isinstance(message, dict):
+        raise SystemExit(f"generation {index} response missing message")
+    content = message.get("content")
+    if not isinstance(content, str):
+        raise SystemExit(f"generation {index} response missing string content")
+
+    stripped = content.strip()
+    if stripped.startswith("```") or stripped.endswith("```"):
+        raise SystemExit(f"generation {index} returned a Markdown fence")
+    try:
+        model_output = json.loads(stripped)
+    except json.JSONDecodeError as error:
+        raise SystemExit(f"generation {index} content was not JSON: {error}") from error
+    if not isinstance(model_output, dict):
+        raise SystemExit(f"generation {index} content was not one JSON object")
+
+    stem = f"{index:04}"
+    (outputs_dir / f"raw_response_{stem}.json").write_text(
+        json.dumps(raw_response, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    (outputs_dir / f"model_output_raw_{stem}.txt").write_text(content, encoding="utf-8")
+    (outputs_dir / f"model_output_{stem}.json").write_text(
+        json.dumps(model_output, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(f"generation {index}/{count} ok elapsed_ms={elapsed_ms}", flush=True)
+PY
+
+target/debug/postfiat-node governance-agent-gate3-5 \
+  --model-request "$REQUEST" \
+  --outputs-dir "$OUTPUTS_DIR" \
+  --expected-count "$COUNT" \
+  --output "$REPORT" \
+  --overwrite

@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_loss_measurement/valid_loss_measurement.json",
+  "expected_error_contains": [
+    "statement.measurement_root_hash does not match measurement material"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "measurement_root_hash"
+      ],
+      "value": "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+    }
+  ],
+  "schema": "postfiat-validator-economic-loss-measurement-invalid-case-v1"
+}

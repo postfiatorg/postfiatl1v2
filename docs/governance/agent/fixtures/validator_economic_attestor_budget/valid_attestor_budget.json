@@ -1,0 +1,336 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T00:00:00Z",
+    "attestor_key_hash": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+    "signature_hash": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+    "signature_scheme": "mldsa44-placeholder",
+    "statement_hash": "99dd5ab5757942d2738c05cb4538f05ce7a4bac48a81623d06688fd1f5b21fe1249754b358acdb9dd29b83f586b94f46"
+  },
+  "checks": {
+    "authority_transfer": false,
+    "budget_root_bound": true,
+    "capture_above_cobalt_budget_fail_closed": true,
+    "conflict_erasure_budget_quantified": true,
+    "detected_capture_rejected": true,
+    "incomplete_budget_held": true,
+    "live_registry_mutation": false,
+    "manufacture_b_i_budget_quantified": true,
+    "statement_hash_bound": true,
+    "under_budget_fail_closed": true,
+    "ungoverned_budget_fail_closed": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "validator-economic-attestor-budget-v1-fixture",
+  "schema": "postfiat-validator-economic-attestor-budget-v1",
+  "statement": {
+    "base_budget": {
+      "B": 2,
+      "attack_paths": {
+        "erase_conflict": {
+          "description": "Erase a short-window conflict or external-position signal from the admission record.",
+          "detected_captured_groups": [],
+          "detected_captured_surfaces": [],
+          "evidence_age_epochs": 0,
+          "linked_scalar": "G_i_w",
+          "missing_required_surfaces": [],
+          "required_control_surfaces": [
+            "off_ledger_position_control",
+            "registry_control",
+            "risk_desk_control"
+          ],
+          "required_independent_groups": [
+            "auditor-external-a",
+            "conflict-auditor-a",
+            "registry-a"
+          ],
+          "undetected_captured_groups": 0,
+          "undetected_captured_surfaces": 0
+        },
+        "manufacture_B_i": {
+          "description": "Manufacture current exogenous settlement exposure sufficient to pass the participation-benefit floor.",
+          "detected_captured_groups": [],
+          "detected_captured_surfaces": [],
+          "evidence_age_epochs": 0,
+          "linked_scalar": "B_i",
+          "missing_required_surfaces": [],
+          "required_control_surfaces": [
+            "attestor_group",
+            "beneficial_owner",
+            "settlement_flow_control"
+          ],
+          "required_independent_groups": [
+            "custody-auditor-a",
+            "registry-a",
+            "settlement-counterparty-a"
+          ],
+          "undetected_captured_groups": 0,
+          "undetected_captured_surfaces": 0
+        }
+      },
+      "budget_policy_governed": true,
+      "min_t_s": 2
+    },
+    "budget_policy": {
+      "max_evidence_age_epochs": 3,
+      "max_undetected_captured_groups": 2,
+      "max_undetected_captured_surfaces": 2,
+      "min_control_surfaces_to_erase_conflict": 3,
+      "min_control_surfaces_to_manufacture_B_i": 3,
+      "min_independent_groups_to_erase_conflict": 3,
+      "min_independent_groups_to_manufacture_B_i": 3,
+      "policy_units": "attestor-capture-budget-v1",
+      "route_on_capture_above_budget": "fail-closed",
+      "route_on_detected_capture": "reject",
+      "route_on_incomplete_budget": "hold",
+      "route_on_under_budget": "fail-closed",
+      "route_on_ungoverned_budget_policy": "fail-closed"
+    },
+    "budget_root_hash": "5604f51f2f085282194f41629b87916384e4f3f2252dc55a6c4d150ed0e553fafeba04fc3ed7f84e90ec0c214ba94393",
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_attestor_capture/valid_attestor_capture.json",
+        "sha3_384": "8e1c14d6bba86ecae29fba49cee99759add9c7cc46af353570d32614b0339560356acf8a9e363b622b5c8d1ef489bbcc"
+      },
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_scalar_reduction/valid_scalar_reduction.json",
+        "sha3_384": "0a59e491c693323b505404fbecfa44263a1ff972f3a6a3cc47f4ff4cb94d9766fc3c824e0c6d813c39266bd5532b2d94"
+      },
+      {
+        "path": "docs/governance/agent/validator_economic_attestor_budget_schema.json",
+        "sha3_384": "7eb07dac56ea0876350eae22080ad988f76859bb4100ee1e34646d8dbed4539132142c74615c0c6d9ef849752f8aad77"
+      },
+      {
+        "path": "scripts/validator-economic-attestor-budget-verify",
+        "sha3_384": "e2606bc953d94b5c529f1329f83370b49b78cd984918956fe390b0db5aaf40335b4946d43e000d3c847bb2aa61f11fdd"
+      }
+    ],
+    "policy_id": "validator-economic-attestor-budget-v1",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "validator-economic-attestor-budget-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-clean-budget-admit",
+        "expected_reason_codes": [
+          "all_capture_budget_bounds_passed"
+        ],
+        "expected_route": "admit",
+        "overrides": []
+      },
+      {
+        "case_id": "case-02-one-undetected-capture-priced-admit",
+        "expected_reason_codes": [
+          "priced_undetected_capture_within_budget"
+        ],
+        "expected_route": "admit",
+        "overrides": [
+          {
+            "path": [
+              "attack_paths",
+              "manufacture_B_i",
+              "undetected_captured_groups"
+            ],
+            "value": 1
+          },
+          {
+            "path": [
+              "attack_paths",
+              "manufacture_B_i",
+              "undetected_captured_surfaces"
+            ],
+            "value": 1
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-manufacture-b-under-group-budget-fail-closed",
+        "expected_reason_codes": [
+          "manufacture_B_i_attestor_group_budget_below_floor"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "attack_paths",
+              "manufacture_B_i",
+              "required_independent_groups"
+            ],
+            "value": [
+              "registry-a",
+              "settlement-counterparty-a"
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-manufacture-b-under-surface-budget-fail-closed",
+        "expected_reason_codes": [
+          "manufacture_B_i_control_surface_budget_below_floor"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "attack_paths",
+              "manufacture_B_i",
+              "required_control_surfaces"
+            ],
+            "value": [
+              "beneficial_owner",
+              "settlement_flow_control"
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-conflict-erasure-under-group-budget-fail-closed",
+        "expected_reason_codes": [
+          "erase_conflict_attestor_group_budget_below_floor"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "attack_paths",
+              "erase_conflict",
+              "required_independent_groups"
+            ],
+            "value": [
+              "auditor-external-a",
+              "registry-a"
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-conflict-erasure-under-surface-budget-fail-closed",
+        "expected_reason_codes": [
+          "erase_conflict_control_surface_budget_below_floor"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "attack_paths",
+              "erase_conflict",
+              "required_control_surfaces"
+            ],
+            "value": [
+              "off_ledger_position_control",
+              "registry_control"
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-detected-exposure-capture-reject",
+        "expected_reason_codes": [
+          "manufacture_B_i_detected_captured_group"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "attack_paths",
+              "manufacture_B_i",
+              "detected_captured_groups"
+            ],
+            "value": [
+              "settlement-counterparty-a"
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-detected-conflict-capture-reject",
+        "expected_reason_codes": [
+          "erase_conflict_detected_captured_surface"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "attack_paths",
+              "erase_conflict",
+              "detected_captured_surfaces"
+            ],
+            "value": [
+              "off_ledger_position_control"
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-09-stale-budget-evidence-hold",
+        "expected_reason_codes": [
+          "erase_conflict_stale_budget_evidence"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "attack_paths",
+              "erase_conflict",
+              "evidence_age_epochs"
+            ],
+            "value": 4
+          }
+        ]
+      },
+      {
+        "case_id": "case-10-missing-control-surface-hold",
+        "expected_reason_codes": [
+          "manufacture_B_i_missing_required_surface"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "attack_paths",
+              "manufacture_B_i",
+              "missing_required_surfaces"
+            ],
+            "value": [
+              "beneficial_owner"
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-11-undetected-capture-above-b-fail-closed",
+        "expected_reason_codes": [
+          "erase_conflict_undetected_capture_exceeds_budget"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "attack_paths",
+              "erase_conflict",
+              "undetected_captured_groups"
+            ],
+            "value": 3
+          }
+        ]
+      },
+      {
+        "case_id": "case-12-ungoverned-budget-policy-fail-closed",
+        "expected_reason_codes": [
+          "ungoverned_budget_policy"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "budget_policy_governed"
+            ],
+            "value": false
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,361 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-privacy-assurance-receipt-v1.json",
+  "title": "PostFiat Privacy Assurance Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "receipt_id",
+    "mode",
+    "statement",
+    "attestation",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-privacy-assurance-receipt-v1"
+    },
+    "receipt_id": {
+      "$ref": "#/$defs/id"
+    },
+    "mode": {
+      "enum": [
+        "design_fixture_only",
+        "controlled_testnet_attestation"
+      ]
+    },
+    "statement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "chain",
+        "subject",
+        "policy",
+        "disclosure",
+        "validity",
+        "evidence_artifacts"
+      ],
+      "properties": {
+        "chain": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "chain_id",
+            "pool_id",
+            "registry_root_hash"
+          ],
+          "properties": {
+            "chain_id": {
+              "$ref": "#/$defs/id"
+            },
+            "pool_id": {
+              "$ref": "#/$defs/id"
+            },
+            "registry_root_hash": {
+              "$ref": "#/$defs/hash96"
+            }
+          }
+        },
+        "subject": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "subject_kind",
+            "blinded_subject_tag",
+            "action_class",
+            "public_chain_fields"
+          ],
+          "properties": {
+            "subject_kind": {
+              "enum": [
+                "blinded_note_commitment",
+                "withdrawal_binding",
+                "auditor_scoped_note"
+              ]
+            },
+            "blinded_subject_tag": {
+              "$ref": "#/$defs/hash96"
+            },
+            "action_class": {
+              "enum": [
+                "deposit",
+                "spend",
+                "withdraw",
+                "disclosure"
+              ]
+            },
+            "public_chain_fields": {
+              "type": "array",
+              "minItems": 3,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "root",
+                  "nullifier",
+                  "output_commitments",
+                  "fee",
+                  "burn",
+                  "policy_hash",
+                  "disclosure_hash"
+                ]
+              }
+            }
+          }
+        },
+        "policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "policy_root_hash",
+            "policy_root_governance",
+            "list_provider_root_hash",
+            "list_provider_order",
+            "proof_statement",
+            "standby_period_seconds",
+            "staleness_limit_seconds"
+          ],
+          "properties": {
+            "policy_root_hash": {
+              "$ref": "#/$defs/hash96"
+            },
+            "policy_root_governance": {
+              "const": "cobalt_governed"
+            },
+            "list_provider_root_hash": {
+              "$ref": "#/$defs/hash96"
+            },
+            "list_provider_order": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/id"
+              }
+            },
+            "proof_statement": {
+              "const": "non_inclusion_against_policy_root"
+            },
+            "standby_period_seconds": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 604800
+            },
+            "staleness_limit_seconds": {
+              "type": "integer",
+              "minimum": 60,
+              "maximum": 2592000
+            }
+          }
+        },
+        "disclosure": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "scope",
+            "recipient_class",
+            "full_viewing_key_disclosed",
+            "future_history_access",
+            "full_wallet_history_access",
+            "raw_private_values_disclosed",
+            "allowed_reveals"
+          ],
+          "properties": {
+            "scope": {
+              "enum": [
+                "single_action",
+                "single_note",
+                "bounded_time_window",
+                "counterparty_transaction"
+              ]
+            },
+            "recipient_class": {
+              "enum": [
+                "auditor",
+                "custodian",
+                "exchange",
+                "counterparty",
+                "public_observer"
+              ]
+            },
+            "full_viewing_key_disclosed": {
+              "const": false
+            },
+            "future_history_access": {
+              "const": false
+            },
+            "full_wallet_history_access": {
+              "const": false
+            },
+            "raw_private_values_disclosed": {
+              "const": false
+            },
+            "allowed_reveals": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "policy_membership",
+                  "note_opening_to_recipient",
+                  "transaction_binding",
+                  "auditor_amount",
+                  "auditor_memo",
+                  "counterparty_receipt"
+                ]
+              }
+            }
+          }
+        },
+        "validity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "not_before",
+            "expires_at",
+            "ledger_from",
+            "ledger_to"
+          ],
+          "properties": {
+            "not_before": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "expires_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "ledger_from": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "ledger_to": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "evidence_artifacts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "sha3_384"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sha3_384": {
+                "$ref": "#/$defs/hash96"
+              }
+            }
+          }
+        }
+      }
+    },
+    "attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attestor_key_hash",
+        "statement_hash",
+        "signature_hash",
+        "signature_scheme",
+        "attested_at"
+      ],
+      "properties": {
+        "attestor_key_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "statement_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "signature_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "signature_scheme": {
+          "enum": [
+            "mldsa44-placeholder",
+            "mldsa65-placeholder",
+            "ed25519-test-fixture"
+          ]
+        },
+        "attested_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "orchard_pool_bound",
+        "policy_root_bound",
+        "list_provider_root_bound",
+        "proof_root_bound",
+        "scoped_disclosure_only",
+        "no_full_viewing_key",
+        "no_future_history_access",
+        "no_raw_private_values",
+        "expiry_enforced",
+        "cobalt_policy_transition_required",
+        "live_registry_mutation",
+        "authority_transfer"
+      ],
+      "properties": {
+        "orchard_pool_bound": {
+          "const": true
+        },
+        "policy_root_bound": {
+          "const": true
+        },
+        "list_provider_root_bound": {
+          "const": true
+        },
+        "proof_root_bound": {
+          "const": true
+        },
+        "scoped_disclosure_only": {
+          "const": true
+        },
+        "no_full_viewing_key": {
+          "const": true
+        },
+        "no_future_history_access": {
+          "const": true
+        },
+        "no_raw_private_values": {
+          "const": true
+        },
+        "expiry_enforced": {
+          "const": true
+        },
+        "cobalt_policy_transition_required": {
+          "const": true
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    }
+  }
+}

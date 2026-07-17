@@ -1,0 +1,306 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/validator-evidence-collector-run-manifest-v1.json",
+  "title": "PostFiat Validator Evidence Collector Run Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "manifest_id",
+    "collector",
+    "collection_window",
+    "packet_path",
+    "validator_evidence_packet_root",
+    "packet_schema_path",
+    "packet_schema_hash",
+    "field_registry_path",
+    "field_registry_hash",
+    "source_roots",
+    "collection_inputs",
+    "checks",
+    "artifacts"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-evidence-collector-run-manifest-v1"
+    },
+    "manifest_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{2,127}$"
+    },
+    "collector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "config_hash"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "config_hash": {
+          "$ref": "#/$defs/hash96"
+        }
+      }
+    },
+    "collection_window": {
+      "$ref": "#/$defs/collection_window"
+    },
+    "packet_path": {
+      "$ref": "#/$defs/repo_path"
+    },
+    "validator_evidence_packet_root": {
+      "$ref": "#/$defs/hash96"
+    },
+    "packet_schema_path": {
+      "$ref": "#/$defs/repo_path"
+    },
+    "packet_schema_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "field_registry_path": {
+      "$ref": "#/$defs/repo_path"
+    },
+    "field_registry_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "source_roots": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "registry_snapshot_root",
+        "operator_manifest_root",
+        "url_observation_root",
+        "network_observation_root",
+        "chain_performance_root",
+        "cobalt_history_root",
+        "governance_lifecycle_root",
+        "evidence_quality_root",
+        "raw_observation_root"
+      ],
+      "properties": {
+        "registry_snapshot_root": {
+          "$ref": "#/$defs/hash96"
+        },
+        "operator_manifest_root": {
+          "$ref": "#/$defs/hash96"
+        },
+        "url_observation_root": {
+          "$ref": "#/$defs/hash96"
+        },
+        "network_observation_root": {
+          "$ref": "#/$defs/hash96"
+        },
+        "chain_performance_root": {
+          "$ref": "#/$defs/hash96"
+        },
+        "cobalt_history_root": {
+          "$ref": "#/$defs/hash96"
+        },
+        "governance_lifecycle_root": {
+          "$ref": "#/$defs/hash96"
+        },
+        "evidence_quality_root": {
+          "$ref": "#/$defs/hash96"
+        },
+        "raw_observation_root": {
+          "$ref": "#/$defs/hash96"
+        }
+      }
+    },
+    "collection_inputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "source_root",
+          "provenance",
+          "freshness",
+          "required"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "registry_snapshot",
+              "operator_manifest_set",
+              "url_domain_observation",
+              "network_performance_observation",
+              "chain_performance_history",
+              "cobalt_governance_history",
+              "governance_lifecycle_history",
+              "topology_claims",
+              "evidence_quality_summary"
+            ]
+          },
+          "source_root": {
+            "$ref": "#/$defs/hash96"
+          },
+          "provenance": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/$defs/provenance"
+            },
+            "uniqueItems": true
+          },
+          "freshness": {
+            "$ref": "#/$defs/freshness"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packet_schema_valid",
+        "packet_root_verified",
+        "redaction_checked",
+        "private_fields_removed",
+        "secret_scan_passed",
+        "policy_network_access_allowed",
+        "policy_model_access_allowed",
+        "policy_filesystem_mutation_allowed",
+        "direct_state_mutation_allowed",
+        "live_registry_mutation_allowed"
+      ],
+      "properties": {
+        "packet_schema_valid": {
+          "const": true
+        },
+        "packet_root_verified": {
+          "const": true
+        },
+        "redaction_checked": {
+          "const": true
+        },
+        "private_fields_removed": {
+          "const": true
+        },
+        "secret_scan_passed": {
+          "const": true
+        },
+        "policy_network_access_allowed": {
+          "const": false
+        },
+        "policy_model_access_allowed": {
+          "const": false
+        },
+        "policy_filesystem_mutation_allowed": {
+          "const": false
+        },
+        "direct_state_mutation_allowed": {
+          "const": false
+        },
+        "live_registry_mutation_allowed": {
+          "const": false
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packet",
+        "raw_observation_root"
+      ],
+      "properties": {
+        "packet": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "canonical_sha384",
+            "public"
+          ],
+          "properties": {
+            "path": {
+              "$ref": "#/$defs/repo_path"
+            },
+            "canonical_sha384": {
+              "$ref": "#/$defs/hash96"
+            },
+            "public": {
+              "const": true
+            }
+          }
+        },
+        "raw_observation_root": {
+          "$ref": "#/$defs/hash96"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "collection_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_height",
+        "to_height",
+        "from_time",
+        "to_time"
+      ],
+      "properties": {
+        "from_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "from_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to_time": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "freshness": {
+      "enum": [
+        "same_packet",
+        "recent_24h",
+        "recent_7d",
+        "recent_30d",
+        "epoch_bound",
+        "historical"
+      ]
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "provenance": {
+      "enum": [
+        "chain_derived",
+        "registry_derived",
+        "operator_signed",
+        "collector_observed",
+        "network_observed",
+        "self_asserted",
+        "third_party_attested"
+      ]
+    },
+    "repo_path": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/-]+$"
+    }
+  }
+}

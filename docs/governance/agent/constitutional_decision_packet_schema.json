@@ -1,0 +1,545 @@
+{
+  "$id": "https://postfiat.org/schemas/postfiat-constitutional-decision-packet-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "postfiat-constitutional-decision-packet-v1",
+      "type": "string"
+    },
+    "decision_id": {
+      "$ref": "#/$defs/id"
+    },
+    "decision_version": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "candidate",
+        "accepted",
+        "superseded",
+        "rejected"
+      ],
+      "type": "string"
+    },
+    "decision_scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "evidence_packet_ref": {
+      "$ref": "#/$defs/evidence_packet_ref"
+    },
+    "decision_generation": {
+      "$ref": "#/$defs/decision_generation"
+    },
+    "selected_option": {
+      "$ref": "#/$defs/selected_option"
+    },
+    "rejected_options": {
+      "items": {
+        "$ref": "#/$defs/rejected_option"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "evidence_refs": {
+      "items": {
+        "$ref": "#/$defs/evidence_ref"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "implementation_consequences": {
+      "items": {
+        "$ref": "#/$defs/implementation_consequence"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "invalidation_criteria": {
+      "items": {
+        "$ref": "#/$defs/invalidation_criterion"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "fallback": {
+      "$ref": "#/$defs/fallback"
+    },
+    "authority_boundary": {
+      "$ref": "#/$defs/authority_boundary"
+    },
+    "checks": {
+      "$ref": "#/$defs/checks"
+    }
+  },
+  "required": [
+    "schema",
+    "decision_id",
+    "decision_version",
+    "status",
+    "decision_scope",
+    "created_at",
+    "evidence_packet_ref",
+    "decision_generation",
+    "selected_option",
+    "rejected_options",
+    "evidence_refs",
+    "implementation_consequences",
+    "invalidation_criteria",
+    "fallback",
+    "authority_boundary",
+    "checks"
+  ],
+  "title": "PostFiat Constitutional Decision Packet",
+  "type": "object",
+  "$defs": {
+    "authority_boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "live_registry_mutation_authorized": {
+          "const": false
+        },
+        "live_cobalt_amendment_submission_authorized": {
+          "const": false
+        },
+        "model_promotion_authorized": {
+          "const": false
+        },
+        "authority_transfer_authorized": {
+          "const": false
+        },
+        "sidecar_activation_authorized": {
+          "const": false
+        },
+        "default_conformance_requires_later_gate": {
+          "const": true
+        }
+      },
+      "required": [
+        "live_registry_mutation_authorized",
+        "live_cobalt_amendment_submission_authorized",
+        "model_promotion_authorized",
+        "authority_transfer_authorized",
+        "sidecar_activation_authorized",
+        "default_conformance_requires_later_gate"
+      ],
+      "type": "object"
+    },
+    "checks": {
+      "additionalProperties": false,
+      "properties": {
+        "selected_option_in_question": {
+          "const": true
+        },
+        "selected_option_evidence_bound": {
+          "const": true
+        },
+        "rejected_options_evidence_bound": {
+          "const": true
+        },
+        "implementation_consequences_present": {
+          "const": true
+        },
+        "invalidation_criteria_present": {
+          "const": true
+        },
+        "fallback_present": {
+          "const": true
+        },
+        "no_hidden_evidence": {
+          "const": true
+        },
+        "no_secret_dependency": {
+          "const": true
+        },
+        "no_live_mutation": {
+          "const": true
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      },
+      "required": [
+        "selected_option_in_question",
+        "selected_option_evidence_bound",
+        "rejected_options_evidence_bound",
+        "implementation_consequences_present",
+        "invalidation_criteria_present",
+        "fallback_present",
+        "no_hidden_evidence",
+        "no_secret_dependency",
+        "no_live_mutation",
+        "authority_transfer"
+      ],
+      "type": "object"
+    },
+    "decision_generation": {
+      "additionalProperties": false,
+      "properties": {
+        "authoring_mode": {
+          "enum": [
+            "schema_fixture",
+            "qwen_replay"
+          ],
+          "type": "string"
+        },
+        "model_output_generated": {
+          "type": "boolean"
+        },
+        "model_profile_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model_request_hash": {
+          "$ref": "#/$defs/nullable_sha3_384"
+        },
+        "raw_output_hash": {
+          "$ref": "#/$defs/nullable_sha3_384"
+        },
+        "parsed_output_hash": {
+          "$ref": "#/$defs/nullable_sha3_384"
+        },
+        "replay_required_before_authority": {
+          "const": true
+        }
+      },
+      "required": [
+        "authoring_mode",
+        "model_output_generated",
+        "model_profile_id",
+        "model_request_hash",
+        "raw_output_hash",
+        "parsed_output_hash",
+        "replay_required_before_authority"
+      ],
+      "type": "object"
+    },
+    "decision_kind": {
+      "enum": [
+        "preserve_status_quo",
+        "hold",
+        "no_op",
+        "adopt_change"
+      ],
+      "type": "string"
+    },
+    "effect": {
+      "enum": [
+        "no_code_change",
+        "docs_only",
+        "schema_change",
+        "test_or_gate_change",
+        "future_authorization_required"
+      ],
+      "type": "string"
+    },
+    "evidence_packet_ref": {
+      "additionalProperties": false,
+      "properties": {
+        "packet_id": {
+          "$ref": "#/$defs/id"
+        },
+        "packet_path": {
+          "pattern": "^docs/governance/agent/fixtures/verifiable_constitution/[a-z0-9_]+constitutional_evidence_packet\\.json$",
+          "type": "string"
+        },
+        "packet_file_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "packet_canonical_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "evidence_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "packet_schema_path": {
+          "const": "docs/governance/agent/constitutional_evidence_packet_schema.json",
+          "type": "string"
+        },
+        "packet_schema_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        }
+      },
+      "required": [
+        "packet_id",
+        "packet_path",
+        "packet_file_sha3_384",
+        "packet_canonical_hash",
+        "evidence_root",
+        "packet_schema_path",
+        "packet_schema_sha3_384"
+      ],
+      "type": "object"
+    },
+    "evidence_ref": {
+      "additionalProperties": false,
+      "properties": {
+        "field_path": {
+          "$ref": "#/$defs/field_path"
+        },
+        "evidence_status": {
+          "enum": [
+            "present",
+            "missing",
+            "conflicted",
+            "prohibited"
+          ],
+          "type": "string"
+        },
+        "evidence_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "supports": {
+          "enum": [
+            "selected_option",
+            "rejected_option",
+            "implementation_consequence",
+            "invalidation_criterion",
+            "fallback"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "field_path",
+        "evidence_status",
+        "evidence_root",
+        "supports"
+      ],
+      "type": "object"
+    },
+    "fallback": {
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "enum": [
+            "no_op",
+            "hold"
+          ],
+          "type": "string"
+        },
+        "trigger_conditions": {
+          "items": {
+            "enum": [
+              "missing_evidence",
+              "ambiguous_evidence",
+              "schema_invalid",
+              "replay_drift",
+              "hidden_evidence_attempt",
+              "scope_expansion_attempt",
+              "unsafe_live_action_attempt"
+            ],
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "rationale": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision",
+        "trigger_conditions",
+        "rationale"
+      ],
+      "type": "object"
+    },
+    "field_path": {
+      "pattern": "^[a-z0-9][a-z0-9_]*(\\.[a-z0-9][a-z0-9_]*){1,9}$",
+      "type": "string"
+    },
+    "id": {
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$",
+      "type": "string"
+    },
+    "implementation_consequence": {
+      "additionalProperties": false,
+      "properties": {
+        "consequence_id": {
+          "$ref": "#/$defs/id"
+        },
+        "effect": {
+          "$ref": "#/$defs/effect"
+        },
+        "description": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "evidence_ref_paths": {
+          "items": {
+            "$ref": "#/$defs/field_path"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "requires_later_authorization": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "consequence_id",
+        "effect",
+        "description",
+        "evidence_ref_paths",
+        "requires_later_authorization"
+      ],
+      "type": "object"
+    },
+    "invalidation_criterion": {
+      "additionalProperties": false,
+      "properties": {
+        "criterion_id": {
+          "$ref": "#/$defs/id"
+        },
+        "description": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "evidence_ref_paths": {
+          "items": {
+            "$ref": "#/$defs/field_path"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "effect": {
+          "enum": [
+            "hold",
+            "supersede",
+            "reopen_question",
+            "reject_decision"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "criterion_id",
+        "description",
+        "evidence_ref_paths",
+        "effect"
+      ],
+      "type": "object"
+    },
+    "nullable_sha3_384": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/sha3_384"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "rejected_option": {
+      "additionalProperties": false,
+      "properties": {
+        "option_id": {
+          "$ref": "#/$defs/id"
+        },
+        "rejection_kind": {
+          "enum": [
+            "missing_evidence",
+            "unsafe_live_action",
+            "outside_scope",
+            "less_preferred"
+          ],
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "evidence_ref_paths": {
+          "items": {
+            "$ref": "#/$defs/field_path"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "option_id",
+        "rejection_kind",
+        "reason",
+        "evidence_ref_paths"
+      ],
+      "type": "object"
+    },
+    "scope": {
+      "enum": [
+        "model_governance",
+        "validator_governance",
+        "cobalt_governance",
+        "privacy",
+        "post_quantum_authorization",
+        "monetary_policy",
+        "storage_history",
+        "rpc_edge_policy",
+        "operator_security",
+        "release_authority"
+      ],
+      "type": "string"
+    },
+    "selected_option": {
+      "additionalProperties": false,
+      "properties": {
+        "option_id": {
+          "$ref": "#/$defs/id"
+        },
+        "decision_kind": {
+          "$ref": "#/$defs/decision_kind"
+        },
+        "confidence": {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "type": "string"
+        },
+        "rationale": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "evidence_ref_paths": {
+          "items": {
+            "$ref": "#/$defs/field_path"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "option_id",
+        "decision_kind",
+        "confidence",
+        "rationale",
+        "evidence_ref_paths"
+      ],
+      "type": "object"
+    },
+    "sha3_384": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    }
+  }
+}

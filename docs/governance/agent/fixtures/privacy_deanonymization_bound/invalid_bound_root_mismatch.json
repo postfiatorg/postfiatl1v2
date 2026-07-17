@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_deanonymization_bound/valid_deanonymization_bound.json",
+  "expected_error_contains": [
+    "statement.bound_root_hash does not match bound material"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "bound_root_hash"
+      ],
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "schema": "postfiat-privacy-deanonymization-bound-invalid-case-v1"
+}

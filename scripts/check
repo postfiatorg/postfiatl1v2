@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "cargo is not installed; install Rust before running checks" >&2
+  exit 127
+fi
+
+cargo fmt --all -- --check
+cargo check --workspace --all-targets --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
+
+for script in \
+  scripts/check \
+  scripts/node-init \
+  scripts/node-run \
+  scripts/node-status \
+  scripts/node-faucet \
+  scripts/node-transfer \
+  scripts/node-account \
+  scripts/devnet-up \
+  scripts/devnet-submit-transfer \
+  scripts/devnet-cobalt-transition \
+  scripts/devnet-restart \
+  scripts/devnet-status \
+  scripts/devnet-down \
+  scripts/testnet-readiness-gate \
+  scripts/testnet-p0-network-gate \
+  scripts/testnet-node-run-peer-certified-smoke \
+  scripts/testnet-wallet-minimum-smoke; do
+  bash -n "$script"
+done

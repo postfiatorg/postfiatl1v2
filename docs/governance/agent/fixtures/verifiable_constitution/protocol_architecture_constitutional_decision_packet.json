@@ -1,0 +1,256 @@
+{
+  "schema": "postfiat-constitutional-decision-packet-v1",
+  "decision_id": "vc-protocol-architecture-001-decision-001",
+  "decision_version": 1,
+  "status": "accepted",
+  "decision_scope": "release_authority",
+  "created_at": "2026-05-25T00:00:00Z",
+  "evidence_packet_ref": {
+    "packet_id": "vc-protocol-architecture-001-evidence-001",
+    "packet_path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_constitutional_evidence_packet.json",
+    "packet_file_sha3_384": "46a4bbfcbc913e28a813211e1cf7437c8f9987e785bc334f0bd93cda53581e572527bb21b243bf71b1bab674680a808e",
+    "packet_canonical_hash": "d04d3f89694c0c6fed1c23d4d72252d1bc774423cff577fe476cad39f8a5e7fe846bf30f517514170b4bf48e6dd4f8ce",
+    "evidence_root": "d9f1d159b3be6b34376c937a8cce10a08b457c7e13dbf73758c95c80e8b5833249a162ab408d2eb717fa0f1203c77c40",
+    "packet_schema_path": "docs/governance/agent/constitutional_evidence_packet_schema.json",
+    "packet_schema_sha3_384": "5019bce76ede61a24de4c617f1b6f1275d701907c733267541ae95999aa1540ca97d00403fb65389703f5f0ea44837f2"
+  },
+  "decision_generation": {
+    "authoring_mode": "schema_fixture",
+    "model_output_generated": false,
+    "model_profile_id": null,
+    "model_request_hash": null,
+    "raw_output_hash": null,
+    "parsed_output_hash": null,
+    "replay_required_before_authority": true
+  },
+  "selected_option": {
+    "option_id": "preserve-rust-l1",
+    "decision_kind": "preserve_status_quo",
+    "confidence": "medium",
+    "rationale": "The approved architecture evidence packet binds the current Rust L1 status quo, implementation surface, ML-DSA and Orchard/Halo2 cost, Cobalt fit, operator impact, and release-gate boundaries. It supports preserving the status quo for docs and planning while keeping every implementation effect behind later replay, conformance, challenge, and release gates.",
+    "evidence_ref_paths": [
+      "protocol_architecture.status_quo_hash",
+      "protocol_architecture.rust_l1_surface_hash",
+      "protocol_architecture.pq_privacy_integration_cost_hash",
+      "protocol_architecture.cobalt_governance_fit_hash",
+      "protocol_architecture.release_gate_readiness_hash"
+    ]
+  },
+  "rejected_options": [
+    {
+      "option_id": "fully-fork-xrpl",
+      "rejection_kind": "missing_evidence",
+      "reason": "The packet contains a fork-delta hash, but no approved implementation, migration, operator, Cobalt, PQ/privacy, rollback, or release evidence proving that a full XRPL/rippled fork is safer than the current Rust L1.",
+      "evidence_ref_paths": [
+        "protocol_architecture.xrpl_fork_delta_hash",
+        "protocol_architecture.pq_privacy_integration_cost_hash",
+        "protocol_architecture.cobalt_governance_fit_hash",
+        "protocol_architecture.operator_migration_impact_hash",
+        "protocol_architecture.release_gate_readiness_hash"
+      ]
+    },
+    {
+      "option_id": "hybrid-xrpl-compatibility-layer",
+      "rejection_kind": "missing_evidence",
+      "reason": "The packet contains compatibility requirements, but no approved implementation or release evidence authorizing a compatibility layer. The compatibility path remains a future evidence-gated option.",
+      "evidence_ref_paths": [
+        "protocol_architecture.xrpl_compatibility_requirements_hash",
+        "protocol_architecture.pq_privacy_integration_cost_hash",
+        "protocol_architecture.cobalt_governance_fit_hash",
+        "protocol_architecture.operator_migration_impact_hash",
+        "protocol_architecture.release_gate_readiness_hash"
+      ]
+    },
+    {
+      "option_id": "hold-no-op",
+      "rejection_kind": "less_preferred",
+      "reason": "The packet is sufficient to preserve the no-code-change Rust L1 status quo for planning. If packet hashes, replay, or source evidence drift, the fallback still becomes hold or no-op.",
+      "evidence_ref_paths": [
+        "protocol_architecture.cobalt_governance_fit_hash",
+        "protocol_architecture.operator_migration_impact_hash",
+        "protocol_architecture.pq_privacy_integration_cost_hash",
+        "protocol_architecture.release_gate_readiness_hash",
+        "protocol_architecture.rust_l1_surface_hash",
+        "protocol_architecture.status_quo_hash",
+        "protocol_architecture.xrpl_compatibility_requirements_hash",
+        "protocol_architecture.xrpl_fork_delta_hash"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    {
+      "field_path": "protocol_architecture.cobalt_governance_fit_hash",
+      "evidence_status": "present",
+      "evidence_root": "d9f1d159b3be6b34376c937a8cce10a08b457c7e13dbf73758c95c80e8b5833249a162ab408d2eb717fa0f1203c77c40",
+      "supports": "selected_option"
+    },
+    {
+      "field_path": "protocol_architecture.operator_migration_impact_hash",
+      "evidence_status": "present",
+      "evidence_root": "d9f1d159b3be6b34376c937a8cce10a08b457c7e13dbf73758c95c80e8b5833249a162ab408d2eb717fa0f1203c77c40",
+      "supports": "selected_option"
+    },
+    {
+      "field_path": "protocol_architecture.pq_privacy_integration_cost_hash",
+      "evidence_status": "present",
+      "evidence_root": "d9f1d159b3be6b34376c937a8cce10a08b457c7e13dbf73758c95c80e8b5833249a162ab408d2eb717fa0f1203c77c40",
+      "supports": "selected_option"
+    },
+    {
+      "field_path": "protocol_architecture.release_gate_readiness_hash",
+      "evidence_status": "present",
+      "evidence_root": "d9f1d159b3be6b34376c937a8cce10a08b457c7e13dbf73758c95c80e8b5833249a162ab408d2eb717fa0f1203c77c40",
+      "supports": "selected_option"
+    },
+    {
+      "field_path": "protocol_architecture.rust_l1_surface_hash",
+      "evidence_status": "present",
+      "evidence_root": "d9f1d159b3be6b34376c937a8cce10a08b457c7e13dbf73758c95c80e8b5833249a162ab408d2eb717fa0f1203c77c40",
+      "supports": "selected_option"
+    },
+    {
+      "field_path": "protocol_architecture.status_quo_hash",
+      "evidence_status": "present",
+      "evidence_root": "d9f1d159b3be6b34376c937a8cce10a08b457c7e13dbf73758c95c80e8b5833249a162ab408d2eb717fa0f1203c77c40",
+      "supports": "selected_option"
+    },
+    {
+      "field_path": "protocol_architecture.xrpl_compatibility_requirements_hash",
+      "evidence_status": "present",
+      "evidence_root": "d9f1d159b3be6b34376c937a8cce10a08b457c7e13dbf73758c95c80e8b5833249a162ab408d2eb717fa0f1203c77c40",
+      "supports": "selected_option"
+    },
+    {
+      "field_path": "protocol_architecture.xrpl_fork_delta_hash",
+      "evidence_status": "present",
+      "evidence_root": "d9f1d159b3be6b34376c937a8cce10a08b457c7e13dbf73758c95c80e8b5833249a162ab408d2eb717fa0f1203c77c40",
+      "supports": "selected_option"
+    }
+  ],
+  "implementation_consequences": [
+    {
+      "consequence_id": "protocol-architecture-preserve-rust-l1",
+      "effect": "no_code_change",
+      "description": "Preserve the current Rust L1 architecture as the no-code-change planning baseline; no consensus rewrite, rippled import, migration, compatibility activation, Cobalt submission, mainnet mutation, or authority transfer is authorized by this packet.",
+      "evidence_ref_paths": [
+        "protocol_architecture.status_quo_hash",
+        "protocol_architecture.rust_l1_surface_hash",
+        "protocol_architecture.pq_privacy_integration_cost_hash",
+        "protocol_architecture.cobalt_governance_fit_hash",
+        "protocol_architecture.release_gate_readiness_hash"
+      ],
+      "requires_later_authorization": false
+    },
+    {
+      "consequence_id": "protocol-architecture-fork-or-compatibility-future-gate",
+      "effect": "future_authorization_required",
+      "description": "Any full XRPL/rippled fork, bounded compatibility layer, operator migration, release action, or live governance action requires a later replayed decision, conformance mapping, challenge window, and named Cobalt or release authorization gate.",
+      "evidence_ref_paths": [
+        "protocol_architecture.cobalt_governance_fit_hash",
+        "protocol_architecture.operator_migration_impact_hash",
+        "protocol_architecture.pq_privacy_integration_cost_hash",
+        "protocol_architecture.release_gate_readiness_hash",
+        "protocol_architecture.rust_l1_surface_hash",
+        "protocol_architecture.status_quo_hash",
+        "protocol_architecture.xrpl_compatibility_requirements_hash",
+        "protocol_architecture.xrpl_fork_delta_hash"
+      ],
+      "requires_later_authorization": true
+    }
+  ],
+  "invalidation_criteria": [
+    {
+      "criterion_id": "protocol-architecture-evidence-root-drift",
+      "description": "Hold if the approved architecture evidence root changes, cannot be recomputed, or no longer matches the cited evidence packet.",
+      "evidence_ref_paths": [
+        "protocol_architecture.cobalt_governance_fit_hash",
+        "protocol_architecture.operator_migration_impact_hash",
+        "protocol_architecture.pq_privacy_integration_cost_hash",
+        "protocol_architecture.release_gate_readiness_hash",
+        "protocol_architecture.rust_l1_surface_hash",
+        "protocol_architecture.status_quo_hash",
+        "protocol_architecture.xrpl_compatibility_requirements_hash",
+        "protocol_architecture.xrpl_fork_delta_hash"
+      ],
+      "effect": "hold"
+    },
+    {
+      "criterion_id": "protocol-architecture-source-hash-drift",
+      "description": "Reopen the question if any cited source hash changes before the later replay or conformance gate consumes this decision.",
+      "evidence_ref_paths": [
+        "protocol_architecture.cobalt_governance_fit_hash",
+        "protocol_architecture.operator_migration_impact_hash",
+        "protocol_architecture.pq_privacy_integration_cost_hash",
+        "protocol_architecture.release_gate_readiness_hash",
+        "protocol_architecture.rust_l1_surface_hash",
+        "protocol_architecture.status_quo_hash",
+        "protocol_architecture.xrpl_compatibility_requirements_hash",
+        "protocol_architecture.xrpl_fork_delta_hash"
+      ],
+      "effect": "reopen_question"
+    },
+    {
+      "criterion_id": "protocol-architecture-hidden-evidence-or-secret",
+      "description": "Reject the decision if hidden evidence, secret material, private patchsets, private operator notes, or unregistered reputation claims enter the architecture decision lane.",
+      "evidence_ref_paths": [
+        "protocol_architecture.cobalt_governance_fit_hash",
+        "protocol_architecture.operator_migration_impact_hash",
+        "protocol_architecture.pq_privacy_integration_cost_hash",
+        "protocol_architecture.release_gate_readiness_hash",
+        "protocol_architecture.rust_l1_surface_hash",
+        "protocol_architecture.status_quo_hash",
+        "protocol_architecture.xrpl_compatibility_requirements_hash",
+        "protocol_architecture.xrpl_fork_delta_hash"
+      ],
+      "effect": "reject_decision"
+    },
+    {
+      "criterion_id": "protocol-architecture-live-action-attempt",
+      "description": "Reject the decision if it is used to authorize rippled import, consensus rewrite, compatibility activation, protocol migration, live Cobalt submission, mainnet mutation, or authority transfer without a later named gate.",
+      "evidence_ref_paths": [
+        "protocol_architecture.cobalt_governance_fit_hash",
+        "protocol_architecture.operator_migration_impact_hash",
+        "protocol_architecture.pq_privacy_integration_cost_hash",
+        "protocol_architecture.release_gate_readiness_hash",
+        "protocol_architecture.rust_l1_surface_hash",
+        "protocol_architecture.status_quo_hash",
+        "protocol_architecture.xrpl_compatibility_requirements_hash",
+        "protocol_architecture.xrpl_fork_delta_hash"
+      ],
+      "effect": "reject_decision"
+    }
+  ],
+  "fallback": {
+    "decision": "no_op",
+    "trigger_conditions": [
+      "missing_evidence",
+      "ambiguous_evidence",
+      "schema_invalid",
+      "replay_drift",
+      "hidden_evidence_attempt",
+      "scope_expansion_attempt",
+      "unsafe_live_action_attempt"
+    ],
+    "rationale": "The decision preserves the status quo only as a no-code-change baseline. Any missing evidence, replay drift, source drift, hidden input, scope expansion, or unsafe live action attempt falls back to no-op before effect."
+  },
+  "authority_boundary": {
+    "live_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "model_promotion_authorized": false,
+    "authority_transfer_authorized": false,
+    "sidecar_activation_authorized": false,
+    "default_conformance_requires_later_gate": true
+  },
+  "checks": {
+    "selected_option_in_question": true,
+    "selected_option_evidence_bound": true,
+    "rejected_options_evidence_bound": true,
+    "implementation_consequences_present": true,
+    "invalidation_criteria_present": true,
+    "fallback_present": true,
+    "no_hidden_evidence": true,
+    "no_secret_dependency": true,
+    "no_live_mutation": true,
+    "authority_transfer": false
+  }
+}

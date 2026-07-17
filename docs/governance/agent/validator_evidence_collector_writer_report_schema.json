@@ -1,0 +1,256 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-validator-evidence-collector-writer-report-v1.json",
+  "title": "PostFiat Validator Evidence Collector Writer Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "run_id",
+    "mode",
+    "verified",
+    "packet_path",
+    "collector_manifest_path",
+    "packet_id",
+    "validator_evidence_packet_root",
+    "packet_schema_hash",
+    "field_registry_hash",
+    "collection_window",
+    "raw_observation_root",
+    "raw_observation_hash_count",
+    "output_artifacts",
+    "redaction",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-evidence-collector-writer-report-v1"
+    },
+    "run_id": {
+      "$ref": "#/$defs/id"
+    },
+    "mode": {
+      "const": "local_fixture_only"
+    },
+    "verified": {
+      "const": true
+    },
+    "packet_path": {
+      "$ref": "#/$defs/path"
+    },
+    "collector_manifest_path": {
+      "$ref": "#/$defs/path"
+    },
+    "packet_id": {
+      "$ref": "#/$defs/id"
+    },
+    "validator_evidence_packet_root": {
+      "$ref": "#/$defs/hash96"
+    },
+    "packet_schema_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "field_registry_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "collection_window": {
+      "$ref": "#/$defs/collection_window"
+    },
+    "raw_observation_root": {
+      "$ref": "#/$defs/hash96"
+    },
+    "raw_observation_hash_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "output_artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packet",
+        "collector_manifest",
+        "writer_report"
+      ],
+      "properties": {
+        "packet": {
+          "$ref": "#/$defs/hashed_artifact"
+        },
+        "collector_manifest": {
+          "$ref": "#/$defs/hashed_artifact"
+        },
+        "writer_report": {
+          "$ref": "#/$defs/public_artifact"
+        }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "private_fields_removed",
+        "secret_scan_passed",
+        "raw_values_retained",
+        "forbidden_key_hits",
+        "forbidden_value_hits",
+        "public_artifact_safe"
+      ],
+      "properties": {
+        "private_fields_removed": {
+          "const": true
+        },
+        "secret_scan_passed": {
+          "const": true
+        },
+        "raw_values_retained": {
+          "const": false
+        },
+        "forbidden_key_hits": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "forbidden_value_hits": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "public_artifact_safe": {
+          "const": true
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packet_schema_valid",
+        "collector_manifest_schema_valid",
+        "packet_root_verified",
+        "manifest_binds_packet",
+        "source_hashes_retained",
+        "raw_observation_hashes_only",
+        "output_directory_outside_repo",
+        "live_network_access",
+        "model_access",
+        "direct_state_mutation",
+        "live_registry_mutation",
+        "authority_transfer"
+      ],
+      "properties": {
+        "packet_schema_valid": {
+          "const": true
+        },
+        "collector_manifest_schema_valid": {
+          "const": true
+        },
+        "packet_root_verified": {
+          "const": true
+        },
+        "manifest_binds_packet": {
+          "const": true
+        },
+        "source_hashes_retained": {
+          "const": true
+        },
+        "raw_observation_hashes_only": {
+          "const": true
+        },
+        "output_directory_outside_repo": {
+          "const": true
+        },
+        "live_network_access": {
+          "const": false
+        },
+        "model_access": {
+          "const": false
+        },
+        "direct_state_mutation": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "collection_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_height",
+        "to_height",
+        "from_time",
+        "to_time"
+      ],
+      "properties": {
+        "from_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "from_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to_time": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "hashed_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "canonical_sha384",
+        "public"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/path"
+        },
+        "canonical_sha384": {
+          "$ref": "#/$defs/hash96"
+        },
+        "public": {
+          "const": true
+        }
+      }
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "public_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "public"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/path"
+        },
+        "public": {
+          "const": true
+        }
+      }
+    }
+  }
+}

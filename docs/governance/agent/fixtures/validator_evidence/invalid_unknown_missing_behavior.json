@@ -1,0 +1,90 @@
+{
+  "schema": "postfiat-validator-evidence-packet-v1",
+  "packet_id": "validator-evidence-2026-05-23-invalid-missing-behavior",
+  "collection_window": {
+    "from_height": 1000,
+    "to_height": 2000,
+    "from_time": "2026-05-23T00:00:00Z",
+    "to_time": "2026-05-23T06:00:00Z"
+  },
+  "collector": {
+    "name": "postfiat-validator-evidence-collector",
+    "version": "0.1.0",
+    "config_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "field_registry": {
+    "registry_id": "validator-evidence-field-registry-v1",
+    "registry_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "registered_field_paths": [
+      "validator.identity.declared_domain"
+    ],
+    "provenance_levels": [
+      "operator_signed"
+    ],
+    "freshness_classes": [
+      "recent_30d"
+    ],
+    "missing_evidence_behaviors": [
+      "penalize"
+    ],
+    "conflict_behaviors": [
+      "hold"
+    ],
+    "action_bounds": [
+      "score_adjustment"
+    ]
+  },
+  "validator_order": [
+    "validator-alpha"
+  ],
+  "validators": {
+    "validator-alpha": {
+      "validator_id": "validator-alpha",
+      "fields": [
+        {
+          "field_path": "validator.identity.declared_domain",
+          "value_type": "domain",
+          "value": "validator.example",
+          "provenance": [
+            "operator_signed"
+          ],
+          "freshness": "recent_30d",
+          "missing_evidence_behavior": "penalize",
+          "conflict_behavior": "hold",
+          "action_bound": "score_adjustment",
+          "observed_at": "2026-05-23T05:50:00Z",
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "redacted": false
+        }
+      ]
+    }
+  },
+  "cohort": {
+    "fields": [
+      {
+        "field_path": "cohort.registry.active_validator_count",
+        "value_type": "integer",
+        "value": 1,
+        "provenance": [
+          "registry_derived"
+        ],
+        "freshness": "epoch_bound",
+        "missing_evidence_behavior": "reject_packet",
+        "conflict_behavior": "reject_packet",
+        "action_bound": "no_action",
+        "observed_at": "2026-05-23T06:00:00Z",
+        "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "redacted": false
+      }
+    ]
+  },
+  "raw_observation_root": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "raw_observation_hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  ],
+  "redaction": {
+    "private_fields_removed": true,
+    "secret_scan_passed": true
+  }
+}

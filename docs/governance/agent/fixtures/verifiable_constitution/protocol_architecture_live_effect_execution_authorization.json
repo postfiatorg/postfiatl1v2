@@ -1,0 +1,258 @@
+{
+  "schema": "postfiat-protocol-architecture-live-effect-execution-authorization-v1",
+  "authorization_id": "vc-protocol-architecture-001-live-effect-execution-authorization-001",
+  "authorization_version": 1,
+  "status": "guarded_execution_authorized_no_live_effect",
+  "authorization_scope": "protocol_architecture",
+  "created_at": "2026-05-25T00:00:00Z",
+  "source_signoff_ref": {
+    "signoff_id": "vc-protocol-architecture-001-live-effect-operator-signoff-001",
+    "packet_path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_live_effect_operator_signoff.json",
+    "packet_file_sha3_384": "c4ac054f4aa3e28c956983a518283f5a6710a8a50a83fe27a0c4c10d73c591c28a4def536d7c4d8d985fa7f04870038c",
+    "packet_canonical_hash": "1333a0f7e98d90ebf457fed8d44eeeb529798d03aa703db50eecc9ab87c8c42f0d612cfd30bfe26088875c504c8f5f13",
+    "schema_path": "docs/governance/agent/protocol_architecture_live_effect_operator_signoff_schema.json",
+    "schema_sha3_384": "2ecc3b197b18b59141ebba2df9e2a450d8979e2559b3f526ba553d0b9dd9dd668a7546ffcee712ebb1ae2180eda85e4a",
+    "report_path": "reports/verifiable-constitution/vc-062-protocol-architecture-live-effect-operator-signoff-report.json",
+    "report_file_sha3_384": "3db4583eb6da6f3f6e9b8ce8b2f5e75ef64eade1954dd1499d4ca82295c8ad0d1161ab88686e7e5bf746bf12b9c80057",
+    "report_canonical_hash": "02efc0bb902474ffcbf9f06d4a9873107589f0468b3d7819e43a9cfeeb87fc15df52d3bec53dc8eafd978ae775f003e3",
+    "report_verified": true,
+    "report_classification": "operator_signoff_ready_no_execution",
+    "selected_live_action": "protocol_architecture_release_or_cobalt_effect",
+    "signoff_root": "4e9064a69e71960c0034472b9df486a661f9313eef2afa15567742c56218a97ed1ab80aa2a565fb41746ddc0b40d6456",
+    "report_signoff_root": "4e9064a69e71960c0034472b9df486a661f9313eef2afa15567742c56218a97ed1ab80aa2a565fb41746ddc0b40d6456"
+  },
+  "root_bindings": {
+    "signoff_root": "4e9064a69e71960c0034472b9df486a661f9313eef2afa15567742c56218a97ed1ab80aa2a565fb41746ddc0b40d6456",
+    "rehearsal_root": "5b53d170e3c50a94cb8645db23cc0b32ecaf81f97252362f4cbe1816b0544657464403e3ec8009d8d4598e9dc2b39092",
+    "approval_root": "fdbf2742663c9007b05c94973f55509173deeac00f40cca7cf050e37b3bcd6466e2056a6a3707104cd54bb9281acf22d",
+    "request_root": "e77a3c5500c9ceec34661f35c51c26c31e5d397ff2784f8e3ac8072add138d7e2e8b691f3678deb577d3fe002803741c",
+    "readiness_root": "589e2f9b8d654c1540098d6d76e3a496fb7af42b50717e1a90b21f5068fc267a39b9f71bdaa161ecc9b5e5caaaad33f4",
+    "conformance_review_root": "68e60989b5d4f46e671bb05c31cac1ff5d584723d5af7bdf8f52e2fd314e57a457d538a62264b5f8cb158d1811925e8f",
+    "conformance_root": "b48f64b2fe8a72ca85045aa0bb8bcd5dabc0435373824c0ad84993b2e01d022a6abd1c28584753eedf97655294367d5b",
+    "guarded_apply_candidate_hash": "9f443037959c7e48ddfdec245decfd0a54faa790389208685b79c0053969a6c7b6efb8c475cb4932a7b8553f945cb6d1",
+    "guarded_apply_registry_root": "2a30649283caeb4e444fc6ead3f942190d5a130c2f7e71afb2c8de911b2f16b50b2b36757b31b29efc3fd67a463c0c10",
+    "rollback_registry_root": "c794a9ccab78a48ea302b5ce07f03c55e284881622b0b51919e9470ac886303672d8dc65957b34367433b8e6cfea6673",
+    "full_vocab_vector_root": "0b3cf64b186ff9b8b130260d6a795fe56cf2a65bd6e324ea9ce92222ed1d7c23",
+    "evidence_packet_root": "d9f1d159b3be6b34376c937a8cce10a08b457c7e13dbf73758c95c80e8b5833249a162ab408d2eb717fa0f1203c77c40",
+    "selected_option": "preserve-rust-l1"
+  },
+  "fresh_root_revalidation": [
+    {
+      "root_id": "signoff-root",
+      "label": "VC-062 operator signoff root",
+      "expected_root": "4e9064a69e71960c0034472b9df486a661f9313eef2afa15567742c56218a97ed1ab80aa2a565fb41746ddc0b40d6456",
+      "observed_root": "4e9064a69e71960c0034472b9df486a661f9313eef2afa15567742c56218a97ed1ab80aa2a565fb41746ddc0b40d6456",
+      "stale_action": "hold_execution_authorization_and_require_supersession",
+      "verified": true,
+      "live_effect": false
+    },
+    {
+      "root_id": "rehearsal-root",
+      "label": "VC-061 rehearsal root",
+      "expected_root": "5b53d170e3c50a94cb8645db23cc0b32ecaf81f97252362f4cbe1816b0544657464403e3ec8009d8d4598e9dc2b39092",
+      "observed_root": "5b53d170e3c50a94cb8645db23cc0b32ecaf81f97252362f4cbe1816b0544657464403e3ec8009d8d4598e9dc2b39092",
+      "stale_action": "hold_execution_authorization_and_require_supersession",
+      "verified": true,
+      "live_effect": false
+    },
+    {
+      "root_id": "approval-root",
+      "label": "VC-060 approval root",
+      "expected_root": "fdbf2742663c9007b05c94973f55509173deeac00f40cca7cf050e37b3bcd6466e2056a6a3707104cd54bb9281acf22d",
+      "observed_root": "fdbf2742663c9007b05c94973f55509173deeac00f40cca7cf050e37b3bcd6466e2056a6a3707104cd54bb9281acf22d",
+      "stale_action": "hold_execution_authorization_and_require_supersession",
+      "verified": true,
+      "live_effect": false
+    },
+    {
+      "root_id": "request-root",
+      "label": "VC-059 request root",
+      "expected_root": "e77a3c5500c9ceec34661f35c51c26c31e5d397ff2784f8e3ac8072add138d7e2e8b691f3678deb577d3fe002803741c",
+      "observed_root": "e77a3c5500c9ceec34661f35c51c26c31e5d397ff2784f8e3ac8072add138d7e2e8b691f3678deb577d3fe002803741c",
+      "stale_action": "hold_execution_authorization_and_require_supersession",
+      "verified": true,
+      "live_effect": false
+    },
+    {
+      "root_id": "gate-9_5-report",
+      "label": "Gate 9.5 guarded-apply report hash",
+      "expected_root": "bf3ca66a21e972937d748a335c4362592b0faba28ecf9451bb4401465f798dd1b7698226aa9f73faac5561cb87ba5ae4",
+      "observed_root": "bf3ca66a21e972937d748a335c4362592b0faba28ecf9451bb4401465f798dd1b7698226aa9f73faac5561cb87ba5ae4",
+      "stale_action": "hold_execution_authorization_and_require_supersession",
+      "verified": true,
+      "live_effect": false
+    },
+    {
+      "root_id": "guarded-apply-candidate",
+      "label": "Gate 9.5 guarded-apply candidate hash",
+      "expected_root": "9f443037959c7e48ddfdec245decfd0a54faa790389208685b79c0053969a6c7b6efb8c475cb4932a7b8553f945cb6d1",
+      "observed_root": "9f443037959c7e48ddfdec245decfd0a54faa790389208685b79c0053969a6c7b6efb8c475cb4932a7b8553f945cb6d1",
+      "stale_action": "hold_execution_authorization_and_require_supersession",
+      "verified": true,
+      "live_effect": false
+    },
+    {
+      "root_id": "guarded-apply-registry-root",
+      "label": "Gate 9.5 post-apply registry root",
+      "expected_root": "2a30649283caeb4e444fc6ead3f942190d5a130c2f7e71afb2c8de911b2f16b50b2b36757b31b29efc3fd67a463c0c10",
+      "observed_root": "2a30649283caeb4e444fc6ead3f942190d5a130c2f7e71afb2c8de911b2f16b50b2b36757b31b29efc3fd67a463c0c10",
+      "stale_action": "hold_execution_authorization_and_require_supersession",
+      "verified": true,
+      "live_effect": false
+    },
+    {
+      "root_id": "rollback-registry-root",
+      "label": "Gate 9.5 rollback registry root",
+      "expected_root": "c794a9ccab78a48ea302b5ce07f03c55e284881622b0b51919e9470ac886303672d8dc65957b34367433b8e6cfea6673",
+      "observed_root": "c794a9ccab78a48ea302b5ce07f03c55e284881622b0b51919e9470ac886303672d8dc65957b34367433b8e6cfea6673",
+      "stale_action": "hold_execution_authorization_and_require_supersession",
+      "verified": true,
+      "live_effect": false
+    },
+    {
+      "root_id": "full-vocab-vector-root",
+      "label": "Full-vocabulary replay vector root",
+      "expected_root": "0b3cf64b186ff9b8b130260d6a795fe56cf2a65bd6e324ea9ce92222ed1d7c23",
+      "observed_root": "0b3cf64b186ff9b8b130260d6a795fe56cf2a65bd6e324ea9ce92222ed1d7c23",
+      "stale_action": "hold_execution_authorization_and_require_supersession",
+      "verified": true,
+      "live_effect": false
+    },
+    {
+      "root_id": "challenge-schema-root",
+      "label": "Constitutional challenge schema hash",
+      "expected_root": "c6c53bb8e5b85b332cd72c96c98c44ec3d51ec9050df6ea54ebc84991ce856bb4cd754d2a6945818d72b56d9775002e0",
+      "observed_root": "c6c53bb8e5b85b332cd72c96c98c44ec3d51ec9050df6ea54ebc84991ce856bb4cd754d2a6945818d72b56d9775002e0",
+      "stale_action": "hold_execution_authorization_and_require_supersession",
+      "verified": true,
+      "live_effect": false
+    }
+  ],
+  "execution_target": {
+    "selected_live_action": "protocol_architecture_release_or_cobalt_effect",
+    "target_id": "protocol-architecture-release-or-cobalt-effect-guarded-execution",
+    "target_kind": "guarded_release_or_cobalt_action",
+    "target_scope": "protocol_architecture",
+    "guarded_execution_packet_id_required": "vc-protocol-architecture-001-live-effect-guarded-execution-001",
+    "guarded_execution_packet_required": true,
+    "live_effect_by_this_packet": false
+  },
+  "rollback_preconditions": {
+    "initial_registry_root": "c794a9ccab78a48ea302b5ce07f03c55e284881622b0b51919e9470ac886303672d8dc65957b34367433b8e6cfea6673",
+    "post_apply_registry_root": "2a30649283caeb4e444fc6ead3f942190d5a130c2f7e71afb2c8de911b2f16b50b2b36757b31b29efc3fd67a463c0c10",
+    "rollback_registry_root": "c794a9ccab78a48ea302b5ce07f03c55e284881622b0b51919e9470ac886303672d8dc65957b34367433b8e6cfea6673",
+    "rollback_restores_initial_root": true,
+    "rollback_command_required": true,
+    "challenge_before_execution": true,
+    "rollback_verified_before_guarded_execution": true,
+    "live_effect": false
+  },
+  "challenge_path": {
+    "challenge_packet_required": true,
+    "challenge_schema_path": "docs/governance/agent/constitutional_challenge_packet_schema.json",
+    "challenge_schema_sha3_384": "c6c53bb8e5b85b332cd72c96c98c44ec3d51ec9050df6ea54ebc84991ce856bb4cd754d2a6945818d72b56d9775002e0",
+    "challenge_action": "hold_execution_authorization_and_require_supersession",
+    "live_effect": false
+  },
+  "verification_commands": [
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-execution-authorization --verify-report",
+      "purpose": "Verify the VC-063 execution-authorization packet.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-operator-signoff --verify-report",
+      "purpose": "Verify the VC-062 operator signoff remains current.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-guarded-apply-rehearsal --verify-report",
+      "purpose": "Verify the VC-061 guarded-apply rehearsal remains current.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-approval --verify-report",
+      "purpose": "Verify the VC-060 approval gate remains current.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/verifiable-constitution-protocol-architecture-live-effect-authorization-request --verify-report",
+      "purpose": "Verify the VC-059 authorization request remains current.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/gov-inference-gate-9_5",
+      "purpose": "Regenerate the local guarded-apply and rollback drill report.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/validator-evidence-fixtures-validate",
+      "purpose": "Keep the validator-evidence fixture suite passing.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    },
+    {
+      "command": "scripts/docs-site-build",
+      "purpose": "Build the docs site after adding the execution-authorization packet.",
+      "expected_result": "pass",
+      "required": true,
+      "live_effect": false
+    }
+  ],
+  "authority_boundary": {
+    "provider_spend_authorized": false,
+    "live_model_request_authorized": false,
+    "model_output_generated_in_this_packet": false,
+    "operator_signoff_root_bound": true,
+    "execution_authorization_recorded": true,
+    "guarded_execution_packet_required_next": true,
+    "guarded_execution_packet_authorized": true,
+    "execution_authorized_by_this_packet": false,
+    "release_gate_execution_authorized": false,
+    "code_rewrite_authorized": false,
+    "rippled_code_import_authorized": false,
+    "consensus_rewrite_authorized": false,
+    "xrpl_compatibility_activation_authorized": false,
+    "protocol_migration_authorized": false,
+    "live_validator_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "mainnet_mutation_authorized": false,
+    "authority_transfer_authorized": false,
+    "default_live_effect_requires_guarded_execution_packet": true
+  },
+  "checks": {
+    "schema_valid": true,
+    "source_signoff_verified": true,
+    "signoff_root_bound": true,
+    "fresh_roots_verified": true,
+    "execution_target_bound": true,
+    "rollback_preconditions_verified": true,
+    "challenge_path_verified": true,
+    "guarded_execution_packet_required_next": true,
+    "guarded_execution_packet_authorized": true,
+    "execution_not_performed": true,
+    "verification_command_coverage_verified": true,
+    "no_hidden_evidence": true,
+    "no_secret_dependency": true,
+    "no_code_rewrite": true,
+    "no_live_cobalt_amendment_submission": true,
+    "no_compatibility_activation": true,
+    "no_mainnet_mutation": true,
+    "authority_transfer": false,
+    "authorization_root_verified": true
+  },
+  "authorization_root": "d9a26bd8f5837fd31d1a0bc0c9b72f6d05240dbf305a83627375e511e9476dbb08dd29e86ac8afecf075f1a6a1331152"
+}

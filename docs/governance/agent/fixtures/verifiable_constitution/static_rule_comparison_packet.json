@@ -1,0 +1,129 @@
+{
+  "schema": "postfiat-constitutional-static-rule-comparison-packet-v1",
+  "packet_id": "vc-037-static-rule-comparison-packet",
+  "packet_version": 1,
+  "status": "active",
+  "created_at": "2026-05-25T00:00:00Z",
+  "target_objection": "A deterministic quantitative evidence score or static rule table is better than AI-assisted constitutional judgment.",
+  "claim": "Static rules are mandatory for exact binary invariants, but they are not enough for adversarial qualitative evidence. The evidence-bound AI lane is justified only where it converts a threshold pass into a hold, rejection, additional evidence request, or challengeable rationale before any live effect.",
+  "minimums": {
+    "static_preferred_case_count": 2,
+    "typed_preferred_case_count": 5,
+    "joint_noop_gate_count": 4
+  },
+  "source_reports": [
+    {
+      "report_id": "vc-027-static-rule-baseline",
+      "path": "reports/verifiable-constitution/vc-027-static-rule-baseline-report.json",
+      "role": "primary_static_rule_case_source"
+    },
+    {
+      "report_id": "vc-025-attack-surface-comparison",
+      "path": "reports/verifiable-constitution/vc-025-attack-surface-comparison-report.json",
+      "role": "attack_surface_context"
+    },
+    {
+      "report_id": "vc-030-attack-hardness-readiness",
+      "path": "reports/verifiable-constitution/vc-030-ai-validation-attack-hardness-readiness-report.json",
+      "role": "readiness_context"
+    }
+  ],
+  "comparison_categories": [
+    {
+      "category_id": "static_rules_preferred",
+      "decision_rule": "Use deterministic code, schemas, or exact set/hash checks when the condition is binary and fully specified.",
+      "expected_case_kinds": [
+        "binary_invariant"
+      ],
+      "examples": [
+        "registry_mutation_count == 0",
+        "selected option is a member of the closed option set",
+        "evidence root recomputes",
+        "source hash equals expected hash"
+      ],
+      "model_role": "none_for_the_binary_check",
+      "live_effect_policy": "exact_check_must_pass_before_any_live_effect"
+    },
+    {
+      "category_id": "typed_ai_lane_preferred",
+      "decision_rule": "Use evidence-bound model judgment only after static schemas and field checks pass, and only for cases where a visible threshold can be gamed or evidence completeness must be reasoned about.",
+      "expected_case_kinds": [
+        "threshold_gaming",
+        "stale_evidence",
+        "forged_evidence"
+      ],
+      "examples": [
+        "identity score barely clears a threshold but control evidence is missing",
+        "uptime clears a threshold but window and outage semantics are stale",
+        "region count clears a threshold but topology independence is cosmetic",
+        "high score cites a stale or mismatched source"
+      ],
+      "model_role": "produce_hold_reject_or_additional_evidence_request_with_cited_packet_fields",
+      "live_effect_policy": "model_output_is_advisory_until_conformance_challenge_and_cobalt_or_release_gates_pass"
+    },
+    {
+      "category_id": "joint_noop_required",
+      "decision_rule": "Both static rules and the typed AI lane must produce no live effect when required evidence is missing, the option is outside the closed set, replay drifts, authority is absent, or a live mutation is attempted without an explicit gate.",
+      "expected_case_kinds": [
+        "missing_evidence",
+        "closed_option_violation",
+        "replay_drift",
+        "authority_boundary_failure"
+      ],
+      "examples": [
+        "missing requested evidence",
+        "ambiguous or stale evidence",
+        "decision selects an unregistered option",
+        "live authority boundary is not closed"
+      ],
+      "model_role": "emit_hold_or_reject_only",
+      "live_effect_policy": "no_op_until_a_new_governed_packet_supersedes_the_defect"
+    }
+  ],
+  "joint_noop_gates": [
+    {
+      "gate_id": "missing_required_evidence",
+      "static_rule_action": "reject_or_hold",
+      "typed_lane_action": "hold",
+      "live_effect_authorized": false
+    },
+    {
+      "gate_id": "closed_option_violation",
+      "static_rule_action": "reject",
+      "typed_lane_action": "reject",
+      "live_effect_authorized": false
+    },
+    {
+      "gate_id": "replay_or_hash_drift",
+      "static_rule_action": "reject",
+      "typed_lane_action": "hold_and_challenge",
+      "live_effect_authorized": false
+    },
+    {
+      "gate_id": "missing_cobalt_or_release_gate",
+      "static_rule_action": "no_op",
+      "typed_lane_action": "no_op",
+      "live_effect_authorized": false
+    }
+  ],
+  "authority_boundary": {
+    "provider_spend_authorized": false,
+    "live_model_request_authorized": false,
+    "live_evidence_collection_authorized": false,
+    "mainnet_mutation_authorized": false,
+    "live_validator_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "model_promotion_authorized": false,
+    "sidecar_activation_authorized": false,
+    "commit_reveal_activation_authorized": false,
+    "authority_transfer_authorized": false
+  },
+  "checks": {
+    "static_rules_required_for_binary_invariants": true,
+    "typed_ai_lane_requires_registered_evidence": true,
+    "threshold_acceptance_is_not_live_authority": true,
+    "challengeable_rationale_required": true,
+    "joint_noop_required_without_live_gate": true,
+    "live_authority_forbidden": true
+  }
+}

@@ -1,0 +1,129 @@
+{
+  "schema": "postfiat-validator-evidence-operator-consent-receipt-v1",
+  "receipt_id": "validator-evidence-operator-consent-validator-alpha-2026-05-23-example",
+  "mode": "design_fixture_only",
+  "validator_id": "validator-alpha",
+  "source_authorization_hash": "dbc6ae7840627b1572faf01c47c12cd55b8af1817c14978f78e20cab68f6339101002f763409737b3918a18971e94145",
+  "packet_schema_hash": "92544968ea283754c5cd3cfba85194afff80f9366f07063b5cd228ea58a6f9efbeb74ad416f9f118595f8c6719d4f0c3",
+  "field_registry_hash": "a4d0ad75fcf706432e2d44bfd75486139a69116249ffb47bbc786fcb67ab939b25f99834d5cb5aa7bb93cfed8901200f",
+  "collection_window": {
+    "from_height": 1000,
+    "to_height": 2000,
+    "from_time": "2026-05-23T00:00:00Z",
+    "to_time": "2026-05-23T06:00:00Z"
+  },
+  "operator_identity": {
+    "operator_accountability_key_hash": "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+    "delegation_hash": "70d4153e612cd63f307e3ec07b593bd6d6bfc017c522e1a6d4ce038065e452275e063c0368f0aa17c88102e8e9c1fa17",
+    "manifest_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "signing_key_hash": "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+  },
+  "consent": {
+    "status": "granted",
+    "signed_at": "2026-05-23T05:52:00Z",
+    "expires_at": "2026-06-22T05:52:00Z",
+    "statement_hash": "121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212",
+    "signature_hash": "343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434",
+    "revocation_status": "not_revoked",
+    "collection_scope": {
+      "public_summary_publication": true,
+      "operator_approved_summary_only": true,
+      "raw_private_retention": false,
+      "live_collection_authorized": false,
+      "qwen_raw_access": false
+    }
+  },
+  "permitted_sources_order": [
+    "operator-manifest-set",
+    "url-domain-observation",
+    "network-performance-observation",
+    "topology-claims"
+  ],
+  "permitted_sources": {
+    "operator-manifest-set": {
+      "source_id": "operator-manifest-set",
+      "kind": "operator_manifest_set",
+      "consent_basis": "operator_manifest_signed",
+      "operator_scope": "operator_approved_public_summary",
+      "permitted_field_paths": [
+        "validator.operator_manifest.manifest_hash",
+        "validator.operator_manifest.signature_valid",
+        "validator.identity.declared_domain",
+        "validator.identity.declared_url"
+      ],
+      "raw_values_retained": false,
+      "live_collection_authorized": false,
+      "qwen_raw_access": false
+    },
+    "url-domain-observation": {
+      "source_id": "url-domain-observation",
+      "kind": "url_domain_observation",
+      "consent_basis": "operator_manifest_signed",
+      "operator_scope": "collector_observed_public_summary",
+      "permitted_field_paths": [
+        "validator.identity.url_fetch.status",
+        "validator.identity.url_fetch.content_hash",
+        "validator.identity.key_domain_binding.status"
+      ],
+      "raw_values_retained": false,
+      "live_collection_authorized": false,
+      "qwen_raw_access": false
+    },
+    "network-performance-observation": {
+      "source_id": "network-performance-observation",
+      "kind": "network_performance_observation",
+      "consent_basis": "operator_opt_in_required",
+      "operator_scope": "collector_observed_public_summary",
+      "permitted_field_paths": [
+        "validator.performance.uptime_window_bps",
+        "validator.performance.rpc_reachable_bps",
+        "validator.performance.peer_reachable_bps",
+        "validator.performance.p95_latency_ms"
+      ],
+      "raw_values_retained": false,
+      "live_collection_authorized": false,
+      "qwen_raw_access": false
+    },
+    "topology-claims": {
+      "source_id": "topology-claims",
+      "kind": "topology_claims",
+      "consent_basis": "operator_manifest_signed",
+      "operator_scope": "operator_approved_public_summary",
+      "permitted_field_paths": [
+        "validator.topology.host_group",
+        "validator.topology.operator_group",
+        "validator.topology.jurisdiction_group"
+      ],
+      "raw_values_retained": false,
+      "live_collection_authorized": false,
+      "qwen_raw_access": false
+    }
+  },
+  "summary": {
+    "permitted_source_count": 4,
+    "permitted_field_count": 14,
+    "operator_opt_in_source_count": 1
+  },
+  "redaction": {
+    "raw_values_retained": false,
+    "private_fields_removed": true,
+    "secret_scan_required": true,
+    "public_artifact_safe": true
+  },
+  "checks": {
+    "source_authorization_bound": true,
+    "packet_schema_hash_bound": true,
+    "field_registry_hash_bound": true,
+    "operator_signature_bound": true,
+    "delegation_bound": true,
+    "revocation_checked": true,
+    "permitted_sources_authorized": true,
+    "permitted_fields_subset_of_authorized_fields": true,
+    "field_paths_registered": true,
+    "raw_values_retained": false,
+    "live_collection_authorized": false,
+    "qwen_raw_access": false,
+    "live_registry_mutation": false,
+    "authority_transfer": false
+  }
+}

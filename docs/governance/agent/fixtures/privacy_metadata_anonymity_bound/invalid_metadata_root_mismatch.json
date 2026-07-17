@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_metadata_anonymity_bound/valid_metadata_bound.json",
+  "expected_error_contains": [
+    "statement.metadata_root_hash does not match metadata material"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "metadata_root_hash"
+      ],
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "schema": "postfiat-privacy-metadata-anonymity-bound-invalid-case-v1"
+}

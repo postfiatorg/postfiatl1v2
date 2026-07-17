@@ -1,0 +1,94 @@
+{
+  "schema": "postfiat-oversized-file-baseline-v1",
+  "threshold_lines": 5000,
+  "policy": {
+    "handwritten_source_control": "must_not_grow_and_must_be_refactored",
+    "generated_or_reference_artifact": "must_not_grow_without_retention_review",
+    "unlisted_tracked_file_over_threshold": "fail"
+  },
+  "files": [
+    {
+      "path": "docs/archive/whitepaper-drafts/comps/tron-white-paper-v2.1.pdf",
+      "max_lines": 7680,
+      "category": "generated_or_reference_artifact",
+      "disposition": "retained_in_git_reference_pdf_for_archived_whitepaper_comparison"
+    },
+    {
+      "path": "docs/governance/ai_governance_live_benchmark/packets.json",
+      "max_lines": 12805,
+      "category": "generated_or_reference_artifact",
+      "disposition": "generated_live_benchmark_packet_corpus_retained_for_replay_evidence"
+    },
+    {
+      "path": "docs/references/cobalt-bft-governance-in-open-networks.pdf",
+      "max_lines": 9005,
+      "category": "generated_or_reference_artifact",
+      "disposition": "retained_in_git_hash_pinned_reference_source_for_local_cobalt_markdown_extraction",
+      "sha256": "d22cc32bb561bc1ce9ce8fa4fbdf59def12a3ed89ff44add47fcd74f9eb9b625",
+      "byte_size": 500545,
+      "line_count": 9005,
+      "retention_policy": "docs/status/reference-artifact-retention-policy-2026-05-24.md"
+    },
+    {
+      "path": "docs/research-requests/arxiv-2509.24257.pdf",
+      "max_lines": 9839,
+      "category": "generated_or_reference_artifact",
+      "disposition": "retained_in_git_reference_pdf_for_research_request_reproducibility"
+    },
+    {
+      "path": "reports/ai-governance-external-corpus-model-replay/20260530TaiExternalCorpusModelReplayV2/model_predictions.json",
+      "max_lines": 11520,
+      "category": "generated_or_reference_artifact",
+      "disposition": "generated_external_corpus_model_replay_predictions"
+    },
+    {
+      "path": "reports/ai-governance-external-corpus-model-replay/20260530TaiExternalCorpusModelReplayV2/production_predictions.json",
+      "max_lines": 6002,
+      "category": "generated_or_reference_artifact",
+      "disposition": "generated_external_corpus_production_replay_predictions"
+    },
+    {
+      "path": "reports/ai-governance-external-corpus-score/20260530TaiExternalCorpusScoreV1/corpus.json",
+      "max_lines": 54032,
+      "category": "generated_or_reference_artifact",
+      "disposition": "generated_external_corpus_score_input_corpus"
+    },
+    {
+      "path": "reports/ai-governance-external-corpus-score/20260530TaiExternalCorpusScoreV1/summary.json",
+      "max_lines": 54404,
+      "category": "generated_or_reference_artifact",
+      "disposition": "generated_external_corpus_score_summary"
+    },
+    {
+      "path": "reports/ai-governance-live-benchmark/score/20260529T160937Z/summary.json",
+      "max_lines": 5999,
+      "category": "generated_or_reference_artifact",
+      "disposition": "generated_live_benchmark_score_summary"
+    },
+    {
+      "path": "reports/ai-governance-live-benchmark/score/20260529T161225Z/summary.json",
+      "max_lines": 5999,
+      "category": "generated_or_reference_artifact",
+      "disposition": "generated_live_benchmark_score_summary"
+    },
+    {
+      "path": "reports/testnet-cobalt-canonical-artifacts/testnet-cobalt-collusion-threshold-normalized-v1.json",
+      "max_lines": 21807,
+      "category": "generated_or_reference_artifact",
+      "disposition": "canonical_hash_bound_cobalt_collusion_packet_body"
+    },
+    {
+      "path": "reports/testnet-cobalt-canonical-artifacts/testnet-cobalt-strict-launch-expected-fail-normalized-3acd2aa2a2110cb9.json",
+      "max_lines": 5179,
+      "category": "generated_or_reference_artifact",
+      "disposition": "canonical_hash_bound_cobalt_strict_launch_expected_fail_body"
+    },
+    {
+      "path": "reports/testnet-cobalt-canonical-artifacts/testnet-cobalt-strict-launch-expected-fail-normalized-3d79c9237148da12.json",
+      "max_lines": 5317,
+      "category": "generated_or_reference_artifact",
+      "disposition": "canonical_hash_bound_cobalt_strict_launch_expected_fail_body"
+    }
+  ],
+  "patterns": []
+}

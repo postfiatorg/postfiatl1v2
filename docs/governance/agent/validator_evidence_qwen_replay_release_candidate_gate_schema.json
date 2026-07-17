@@ -1,0 +1,426 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-validator-evidence-qwen-replay-release-candidate-gate-v1.json",
+  "title": "PostFiat Validator Evidence Qwen Replay Release Candidate Gate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "gate_id",
+    "mode",
+    "qwen_replay_promotion_decision_hash",
+    "qwen_replay_output_validation_receipt_hash",
+    "qwen_replay_output_manifest_hash",
+    "qwen_replay_authorization_hash",
+    "qwen_replay_preflight_hash",
+    "qwen_prompt_redaction_audit_hash",
+    "qwen_prompt_input_manifest_hash",
+    "qwen_public_summary_projection_hash",
+    "model_request_hash",
+    "packet_schema_hash",
+    "field_registry_hash",
+    "collection_window",
+    "candidate_gate",
+    "required_future_inputs",
+    "execution_boundary",
+    "failure_policy",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-evidence-qwen-replay-release-candidate-gate-v1"
+    },
+    "gate_id": {
+      "$ref": "#/$defs/id"
+    },
+    "mode": {
+      "const": "design_fixture_only"
+    },
+    "qwen_replay_promotion_decision_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_output_validation_receipt_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_output_manifest_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_authorization_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_replay_preflight_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_prompt_redaction_audit_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_prompt_input_manifest_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "qwen_public_summary_projection_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "model_request_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "packet_schema_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "field_registry_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "collection_window": {
+      "$ref": "#/$defs/collection_window"
+    },
+    "candidate_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "promotion_status",
+        "release_candidate_status",
+        "release_candidate_eligible",
+        "candidate_packet_hash",
+        "candidate_ruleset_hash",
+        "candidate_compiled_policy_hash",
+        "candidate_operator_pack_hash",
+        "candidate_cobalt_binding_hash",
+        "candidate_registry_delta_hash",
+        "operator_pack_update_authorized",
+        "cobalt_submission_authorized",
+        "registry_mutation_authorized",
+        "authority_transfer_authorized",
+        "future_promotion_decision_required",
+        "future_explicit_release_lane_required"
+      ],
+      "properties": {
+        "promotion_status": {
+          "const": "not_promoted"
+        },
+        "release_candidate_status": {
+          "const": "not_created"
+        },
+        "release_candidate_eligible": {
+          "const": false
+        },
+        "candidate_packet_hash": {
+          "type": "null"
+        },
+        "candidate_ruleset_hash": {
+          "type": "null"
+        },
+        "candidate_compiled_policy_hash": {
+          "type": "null"
+        },
+        "candidate_operator_pack_hash": {
+          "type": "null"
+        },
+        "candidate_cobalt_binding_hash": {
+          "type": "null"
+        },
+        "candidate_registry_delta_hash": {
+          "type": "null"
+        },
+        "operator_pack_update_authorized": {
+          "const": false
+        },
+        "cobalt_submission_authorized": {
+          "const": false
+        },
+        "registry_mutation_authorized": {
+          "const": false
+        },
+        "authority_transfer_authorized": {
+          "const": false
+        },
+        "future_promotion_decision_required": {
+          "const": true
+        },
+        "future_explicit_release_lane_required": {
+          "const": true
+        }
+      }
+    },
+    "required_future_inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "promotion_decision_required",
+        "accepted_validation_receipt_required",
+        "output_manifest_required",
+        "operator_review_required",
+        "release_decision_required",
+        "governance_queue_decision_required",
+        "rollback_plan_required",
+        "cobalt_submission_decision_required",
+        "registry_mutation_authorization_required"
+      ],
+      "properties": {
+        "promotion_decision_required": {
+          "const": true
+        },
+        "accepted_validation_receipt_required": {
+          "const": true
+        },
+        "output_manifest_required": {
+          "const": true
+        },
+        "operator_review_required": {
+          "const": true
+        },
+        "release_decision_required": {
+          "const": true
+        },
+        "governance_queue_decision_required": {
+          "const": true
+        },
+        "rollback_plan_required": {
+          "const": true
+        },
+        "cobalt_submission_decision_required": {
+          "const": true
+        },
+        "registry_mutation_authorization_required": {
+          "const": true
+        }
+      }
+    },
+    "execution_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_spend_executed",
+        "provider_resource_created",
+        "provider_resource_destroyed",
+        "live_model_request_executed",
+        "model_output_generated",
+        "live_network_access",
+        "live_registry_mutation",
+        "cobalt_amendment_submitted",
+        "authority_transfer"
+      ],
+      "properties": {
+        "provider_spend_executed": {
+          "const": false
+        },
+        "provider_resource_created": {
+          "const": false
+        },
+        "provider_resource_destroyed": {
+          "const": false
+        },
+        "live_model_request_executed": {
+          "const": false
+        },
+        "model_output_generated": {
+          "const": false
+        },
+        "live_network_access": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "cobalt_amendment_submitted": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    },
+    "failure_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_without_promotion",
+        "candidate_without_validated_output",
+        "candidate_without_operator_gate",
+        "candidate_without_governance_queue_decision",
+        "cobalt_submission_without_candidate",
+        "fallback_decision"
+      ],
+      "properties": {
+        "candidate_without_promotion": {
+          "const": "reject_future_candidate"
+        },
+        "candidate_without_validated_output": {
+          "const": "reject_future_candidate"
+        },
+        "candidate_without_operator_gate": {
+          "const": "reject_future_candidate"
+        },
+        "candidate_without_governance_queue_decision": {
+          "const": "reject_future_candidate"
+        },
+        "cobalt_submission_without_candidate": {
+          "const": "reject_future_cobalt_submission"
+        },
+        "fallback_decision": {
+          "const": "no_op"
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "qwen_replay_promotion_decision_hash_bound",
+        "qwen_replay_output_validation_receipt_hash_bound",
+        "qwen_replay_output_manifest_hash_bound",
+        "qwen_replay_authorization_hash_bound",
+        "qwen_replay_preflight_hash_bound",
+        "qwen_prompt_redaction_audit_hash_bound",
+        "qwen_prompt_input_manifest_hash_bound",
+        "qwen_public_summary_projection_hash_bound",
+        "model_request_hash_bound",
+        "packet_schema_hash_bound",
+        "field_registry_hash_bound",
+        "collection_window_bound",
+        "promotion_status_not_promoted",
+        "release_candidate_not_created",
+        "release_candidate_not_eligible",
+        "no_candidate_packet",
+        "no_candidate_ruleset",
+        "no_candidate_compiled_policy",
+        "required_future_inputs_bound",
+        "operator_pack_update_authorized",
+        "cobalt_submission_authorized",
+        "registry_mutation_authorized",
+        "authority_transfer_authorized",
+        "provider_spend_executed",
+        "live_model_request_executed",
+        "model_output_generated",
+        "live_registry_mutation",
+        "cobalt_amendment_submitted",
+        "authority_transfer"
+      ],
+      "properties": {
+        "qwen_replay_promotion_decision_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_output_validation_receipt_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_output_manifest_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_authorization_hash_bound": {
+          "const": true
+        },
+        "qwen_replay_preflight_hash_bound": {
+          "const": true
+        },
+        "qwen_prompt_redaction_audit_hash_bound": {
+          "const": true
+        },
+        "qwen_prompt_input_manifest_hash_bound": {
+          "const": true
+        },
+        "qwen_public_summary_projection_hash_bound": {
+          "const": true
+        },
+        "model_request_hash_bound": {
+          "const": true
+        },
+        "packet_schema_hash_bound": {
+          "const": true
+        },
+        "field_registry_hash_bound": {
+          "const": true
+        },
+        "collection_window_bound": {
+          "const": true
+        },
+        "promotion_status_not_promoted": {
+          "const": true
+        },
+        "release_candidate_not_created": {
+          "const": true
+        },
+        "release_candidate_not_eligible": {
+          "const": true
+        },
+        "no_candidate_packet": {
+          "const": true
+        },
+        "no_candidate_ruleset": {
+          "const": true
+        },
+        "no_candidate_compiled_policy": {
+          "const": true
+        },
+        "required_future_inputs_bound": {
+          "const": true
+        },
+        "operator_pack_update_authorized": {
+          "const": false
+        },
+        "cobalt_submission_authorized": {
+          "const": false
+        },
+        "registry_mutation_authorized": {
+          "const": false
+        },
+        "authority_transfer_authorized": {
+          "const": false
+        },
+        "provider_spend_executed": {
+          "const": false
+        },
+        "live_model_request_executed": {
+          "const": false
+        },
+        "model_output_generated": {
+          "const": false
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "cobalt_amendment_submitted": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "collection_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_height",
+        "to_height",
+        "from_time",
+        "to_time"
+      ],
+      "properties": {
+        "from_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "from_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to_time": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    }
+  }
+}

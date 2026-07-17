@@ -1,0 +1,242 @@
+{
+  "schema": "postfiat-constitutional-evidence-request-v1",
+  "request_id": "vc-cobalt-governance-001-request-001",
+  "request_version": 1,
+  "status": "candidate",
+  "request_scope": "cobalt_governance",
+  "created_at": "2026-05-24T00:00:00Z",
+  "question_ref": {
+    "question_id": "vc-cobalt-governance-001",
+    "question_path": "docs/governance/agent/fixtures/verifiable_constitution/cobalt_constitutional_question.json",
+    "question_file_sha3_384": "27e81d431fcbd4af2aae368b146ee05ce8c195cd7aaff21e7007e82e2cbad5c3cbf9df5188e78e56bfb4ed8a79d39cd7",
+    "question_canonical_hash": "a2e013e0afb5d546f346597522ca95a143818081ac175b7596defc5cd48fdfed5f4db611c017e39a0b243202b4977d60",
+    "question_schema_path": "docs/governance/agent/constitutional_question_schema.json",
+    "question_schema_sha3_384": "47c2b2f27bdc745615f4d0d893333c12825b8b935358efbf4f53bdb9ad7b72e03d46d5264812d2cd9066d3c11813bd7f"
+  },
+  "requested_fields": [
+    {
+      "field_path": "cobalt.trust_graph_linkedness_report_hash",
+      "value_type": "hash",
+      "required": true,
+      "required_provenance": [
+        "test_report",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "admission_gate",
+      "privacy_class": "public",
+      "collection_methods": [
+        "replay_report",
+        "repo_file_hash"
+      ],
+      "rationale": "Linkedness evidence must be hash-bound before any Cobalt gate can be treated as preserved or safely changed."
+    },
+    {
+      "field_path": "cobalt.essential_subset_thresholds",
+      "value_type": "object",
+      "required": true,
+      "required_provenance": [
+        "governance_documented",
+        "source_code"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "privacy_class": "public",
+      "collection_methods": [
+        "governance_doc",
+        "repo_file_hash"
+      ],
+      "rationale": "Essential-subset, t_S, q_S, and trust-view thresholds define the safety boundary that a constitutional decision may not silently weaken."
+    },
+    {
+      "field_path": "cobalt.registry_transition_rules_hash",
+      "value_type": "hash",
+      "required": true,
+      "required_provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "admission_gate",
+      "privacy_class": "public",
+      "collection_methods": [
+        "governance_doc",
+        "repo_file_hash"
+      ],
+      "rationale": "Registry-transition rules must be fixed by hash so an implementation cannot quietly bypass Cobalt before changing validator authority."
+    },
+    {
+      "field_path": "cobalt.dry_run_no_mutation_report_hash",
+      "value_type": "hash",
+      "required": true,
+      "required_provenance": [
+        "test_report",
+        "replay_derived"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "hold",
+      "action_bound": "admission_gate",
+      "privacy_class": "public",
+      "collection_methods": [
+        "test_command",
+        "replay_report"
+      ],
+      "rationale": "A Cobalt governance question may only be rehearsed internally unless a no-mutation report proves the run did not alter registry or trust-graph state."
+    },
+    {
+      "field_path": "cobalt.replay_bundle_root",
+      "value_type": "hash",
+      "required": true,
+      "required_provenance": [
+        "replay_derived",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "privacy_class": "public",
+      "collection_methods": [
+        "replay_report",
+        "local_artifact"
+      ],
+      "rationale": "Replay bundles are the object independent verifiers use to decide whether a Cobalt gate result can be reproduced."
+    },
+    {
+      "field_path": "cobalt.adversarial_packet_coverage",
+      "value_type": "object",
+      "required": true,
+      "required_provenance": [
+        "test_report",
+        "collector_observed"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "reject_conflicted_field",
+      "action_bound": "decision_input",
+      "privacy_class": "public",
+      "collection_methods": [
+        "test_command",
+        "replay_report"
+      ],
+      "rationale": "The decision needs hostile packet coverage for stale replay, hidden evidence, hash substitution, topology gaming, and unsafe live-action attempts."
+    },
+    {
+      "field_path": "cobalt.rollback_supersession_evidence_hash",
+      "value_type": "hash",
+      "required": true,
+      "required_provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "hold",
+      "action_bound": "conformance_input",
+      "privacy_class": "public",
+      "collection_methods": [
+        "governance_doc",
+        "repo_file_hash"
+      ],
+      "rationale": "Any Cobalt gate change must preserve a rollback or supersession path before implementation can conform to it."
+    },
+    {
+      "field_path": "cobalt.override_detection_report_hash",
+      "value_type": "hash",
+      "required": true,
+      "required_provenance": [
+        "test_report",
+        "replay_derived"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "admission_gate",
+      "privacy_class": "public",
+      "collection_methods": [
+        "test_command",
+        "replay_report"
+      ],
+      "rationale": "The selected Cobalt process must prove that changed prompts, schemas, model profiles, selectors, or gate roots become public mismatches rather than silent overrides."
+    }
+  ],
+  "forbidden_fields": [
+    {
+      "field_path": "provider.private_api_key",
+      "reason": "Provider credentials are never constitutional evidence.",
+      "severity": "reject_packet"
+    },
+    {
+      "field_path": "operator.private_notes",
+      "reason": "Private reputation notes are hidden evidence and cannot drive Cobalt governance.",
+      "severity": "reject_packet"
+    },
+    {
+      "field_path": "unregistered.reputation_claim",
+      "reason": "Untyped reputation claims recreate the opaque publisher process this lane is replacing.",
+      "severity": "reject_request"
+    },
+    {
+      "field_path": "live.registry_mutation_authorization",
+      "reason": "An evidence request cannot authorize live validator-registry mutation.",
+      "severity": "reject_request"
+    },
+    {
+      "field_path": "live.cobalt_amendment_submission",
+      "reason": "An evidence request cannot submit or authorize a live Cobalt amendment.",
+      "severity": "reject_request"
+    },
+    {
+      "field_path": "live.authority_transfer_claim",
+      "reason": "Authority transfer is outside this packet's action boundary.",
+      "severity": "reject_request"
+    },
+    {
+      "field_path": "cobalt.hidden_trust_override",
+      "reason": "Trust-graph or validator-registry overrides must be public governance artifacts, not hidden inputs.",
+      "severity": "reject_packet"
+    }
+  ],
+  "minimum_packet_checks": {
+    "schema_valid": true,
+    "question_hash_matches": true,
+    "field_registry_bound": true,
+    "source_hashes_verified": true,
+    "all_required_fields_present_or_noop": true,
+    "missing_and_conflict_behaviors_applied": true,
+    "redaction_passed": true,
+    "secret_scan_passed": true,
+    "no_hidden_evidence": true,
+    "no_live_mutation": true,
+    "provenance_validated": true
+  },
+  "request_boundaries": {
+    "qwen_may_request_fields": true,
+    "qwen_may_collect_evidence": false,
+    "qwen_may_change_question": false,
+    "qwen_may_expand_options": false,
+    "qwen_may_authorize_live_action": false,
+    "qwen_may_request_secret_material": false,
+    "accepted_request_is_live_authority": false
+  },
+  "fallback": "no_op_until_packet_approved",
+  "checks": {
+    "requested_fields_present": true,
+    "provenance_declared": true,
+    "freshness_declared": true,
+    "missing_behavior_declared": true,
+    "conflict_behavior_declared": true,
+    "action_bounds_declared": true,
+    "forbidden_fields_present": true,
+    "minimum_packet_checks_present": true,
+    "live_mutation_authorized": false,
+    "authority_transfer": false
+  }
+}

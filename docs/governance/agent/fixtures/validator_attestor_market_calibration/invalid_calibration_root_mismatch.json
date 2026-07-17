@@ -1,0 +1,16 @@
+{
+  "schema": "postfiat-validator-attestor-market-calibration-delta-v1",
+  "base": "valid_attestor_market_calibration.json",
+  "overrides": [
+    {
+      "path": [
+        "statement",
+        "calibration_root_hash"
+      ],
+      "value": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    }
+  ],
+  "expected_error_contains": [
+    "statement.calibration_root_hash does not match calibration material"
+  ]
+}

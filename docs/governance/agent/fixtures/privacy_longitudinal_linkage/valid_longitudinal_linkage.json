@@ -1,0 +1,338 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T00:00:00Z",
+    "attestor_key_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "signature_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "signature_scheme": "mldsa44-placeholder",
+    "statement_hash": "c29e85ed4751d65a23f8957ec0e50766d021e0de45254484957bb7063973e38370ce82df554ee4a9b0a64c70c08a711d"
+  },
+  "checks": {
+    "authority_transfer": false,
+    "direct_rpc_reuse_routes": true,
+    "linkage_root_bound": true,
+    "live_registry_mutation": false,
+    "longitudinal_k_derived_from_window_intersection": true,
+    "multi_target_bound_uses_union_bound": true,
+    "no_probability_multiplication_across_windows": true,
+    "repeated_disclosure_routes": true,
+    "side_information_downgrades": true,
+    "statement_hash_bound": true,
+    "ungoverned_policy_fails_closed": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "privacy-longitudinal-linkage-v1-fixture",
+  "schema": "postfiat-privacy-longitudinal-linkage-v1",
+  "statement": {
+    "adversary_model": {
+      "adversary": "public_observer_linking_repeated_actions_and_multi_target_queries",
+      "composition_rule": "linked_windows_use_actual_intersection_not_probability_multiplication",
+      "model_id": "longitudinal-multi-target-deanonymization-v1",
+      "multi_target_rule": "union_bound_over_target_count"
+    },
+    "baseline_observation": {
+      "declared_side_information": false,
+      "direct_rpc_reuse": false,
+      "exchange_side_batch_link": false,
+      "linkage_policy_governed": true,
+      "linked_windows": [
+        {
+          "candidate_ids": [
+            "ll-001",
+            "ll-002",
+            "ll-003",
+            "ll-004",
+            "ll-005",
+            "ll-006",
+            "ll-007",
+            "ll-008",
+            "ll-009",
+            "ll-010",
+            "ll-011",
+            "ll-012",
+            "ll-013",
+            "ll-014",
+            "ll-015",
+            "ll-016",
+            "w1-017",
+            "w1-018"
+          ],
+          "window_id": "window-001"
+        },
+        {
+          "candidate_ids": [
+            "ll-001",
+            "ll-002",
+            "ll-003",
+            "ll-004",
+            "ll-005",
+            "ll-006",
+            "ll-007",
+            "ll-008",
+            "ll-009",
+            "ll-010",
+            "ll-011",
+            "ll-012",
+            "ll-013",
+            "ll-014",
+            "ll-015",
+            "ll-016",
+            "w2-017",
+            "w2-018"
+          ],
+          "window_id": "window-002"
+        },
+        {
+          "candidate_ids": [
+            "ll-001",
+            "ll-002",
+            "ll-003",
+            "ll-004",
+            "ll-005",
+            "ll-006",
+            "ll-007",
+            "ll-008",
+            "ll-009",
+            "ll-010",
+            "ll-011",
+            "ll-012",
+            "ll-013",
+            "ll-014",
+            "ll-015",
+            "ll-016",
+            "w3-017",
+            "w3-018"
+          ],
+          "window_id": "window-003"
+        },
+        {
+          "candidate_ids": [
+            "ll-001",
+            "ll-002",
+            "ll-003",
+            "ll-004",
+            "ll-005",
+            "ll-006",
+            "ll-007",
+            "ll-008",
+            "ll-009",
+            "ll-010",
+            "ll-011",
+            "ll-012",
+            "ll-013",
+            "ll-014",
+            "ll-015",
+            "ll-016",
+            "w4-017",
+            "w4-018"
+          ],
+          "window_id": "window-004"
+        }
+      ],
+      "multi_target_candidate_count": 64,
+      "multi_target_count": 4,
+      "recurring_timing_pattern": false,
+      "repeated_disclosure_link": false,
+      "thin_asset_policy_reuse": false
+    },
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/fixtures/privacy_floor_calibration/valid_floor_calibration.json",
+        "sha3_384": "727a5d2b8f9b3836ca867387c8ad792f024d518fd414b5416eff24ed2c27bc4d2d09a9a25fb1bfd934bd0f9546b835f9"
+      },
+      {
+        "path": "reports/privacy-floor-calibration/20260529T085352Z/privacy-floor-calibration-report.json",
+        "sha3_384": "934d5bddc69a64daef480d8907b3f116c7e31292bdb4b4ad5abb68cd3a2fe656cba5f720cde8fb54e083319f1b5b6f78"
+      },
+      {
+        "path": "docs/governance/agent/privacy_longitudinal_linkage_schema.json",
+        "sha3_384": "0d0c778f86e8f3bc2ada35cd05a3b470acd6b6118bc13bc60f49db8570a0a00037de3f111aacc69683a97b0650be7b8d"
+      },
+      {
+        "path": "scripts/privacy-longitudinal-linkage-verify",
+        "sha3_384": "7e87e770ec7fe723e637b4c8914eabf97acaec7ad8cde4ebeb37a4ae39d965680817b8b3ffb1c35ec98b2b910f4bc9ca"
+      }
+    ],
+    "linkage_policy": {
+      "max_longitudinal_posterior_bps": 625,
+      "max_multi_target_union_bps": 625,
+      "min_linked_window_count": 4,
+      "min_longitudinal_candidate_count": 16,
+      "min_multi_target_candidate_count": 64,
+      "min_per_window_candidate_count": 16,
+      "multi_target_query_count": 4,
+      "policy_units": "privacy-longitudinal-linkage-v1"
+    },
+    "linkage_root_hash": "dec51f066a643382a9f999fbee7029a7fdf1ef863158dc2db0c80818836ddc485ec700d1f24d583189503ccbabd1220b",
+    "policy_id": "privacy-longitudinal-linkage-v1",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "privacy-longitudinal-linkage-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-baseline-longitudinal",
+        "expected_reason_codes": [
+          "privacy_longitudinal_linkage_passed"
+        ],
+        "expected_route": "baseline-private",
+        "overrides": []
+      },
+      {
+        "case_id": "case-02-linked-window-shortfall",
+        "expected_reason_codes": [
+          "longitudinal_candidate_shortfall"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "linked_windows",
+              2,
+              "candidate_ids"
+            ],
+            "value": [
+              "ll-001",
+              "ll-002",
+              "ll-003",
+              "ll-004",
+              "ll-005",
+              "ll-006",
+              "ll-007",
+              "ll-008",
+              "w3-009",
+              "w3-010",
+              "w3-011",
+              "w3-012",
+              "w3-013",
+              "w3-014",
+              "w3-015",
+              "w3-016"
+            ]
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-multi-target-shortfall",
+        "expected_reason_codes": [
+          "multi_target_union_bound_exceeded"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "multi_target_candidate_count"
+            ],
+            "value": 32
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-repeated-disclosure-link",
+        "expected_reason_codes": [
+          "repeated_disclosure_link"
+        ],
+        "expected_route": "explicit-disclosure-required",
+        "overrides": [
+          {
+            "path": [
+              "repeated_disclosure_link"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-exchange-side-batch-link",
+        "expected_reason_codes": [
+          "exchange_side_batch_link"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "exchange_side_batch_link"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-recurring-timing-pattern",
+        "expected_reason_codes": [
+          "recurring_timing_pattern"
+        ],
+        "expected_route": "hold-for-batching",
+        "overrides": [
+          {
+            "path": [
+              "recurring_timing_pattern"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-direct-rpc-reuse",
+        "expected_reason_codes": [
+          "direct_rpc_reuse"
+        ],
+        "expected_route": "hold-for-private-relay",
+        "overrides": [
+          {
+            "path": [
+              "direct_rpc_reuse"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-thin-asset-policy-reuse",
+        "expected_reason_codes": [
+          "thin_asset_policy_reuse"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "thin_asset_policy_reuse"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-09-declared-side-information",
+        "expected_reason_codes": [
+          "side_information_outside_model"
+        ],
+        "expected_route": "downgrade-privacy-claim",
+        "overrides": [
+          {
+            "path": [
+              "declared_side_information"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-10-ungoverned-linkage-policy",
+        "expected_reason_codes": [
+          "ungoverned_linkage_policy"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "linkage_policy_governed"
+            ],
+            "value": false
+          }
+        ]
+      }
+    ]
+  }
+}

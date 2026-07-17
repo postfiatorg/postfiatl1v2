@@ -1,0 +1,390 @@
+{
+  "$id": "https://postfiat.org/schemas/postfiat-constitutional-question-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "postfiat-constitutional-question-v1",
+      "type": "string"
+    },
+    "question_id": {
+      "$ref": "#/$defs/id"
+    },
+    "question_version": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "active",
+        "superseded",
+        "rejected"
+      ],
+      "type": "string"
+    },
+    "scope": {
+      "enum": [
+        "model_governance",
+        "validator_governance",
+        "cobalt_governance",
+        "privacy",
+        "post_quantum_authorization",
+        "monetary_policy",
+        "storage_history",
+        "rpc_edge_policy",
+        "operator_security",
+        "release_authority"
+      ],
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "situation": {
+      "$ref": "#/$defs/situation"
+    },
+    "status_quo": {
+      "$ref": "#/$defs/status_quo"
+    },
+    "option_order": {
+      "items": {
+        "$ref": "#/$defs/id"
+      },
+      "minItems": 2,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "options": {
+      "additionalProperties": false,
+      "minProperties": 2,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9._:-]{2,127}$": {
+          "$ref": "#/$defs/option"
+        }
+      },
+      "type": "object"
+    },
+    "hard_constraints": {
+      "items": {
+        "$ref": "#/$defs/hard_constraint"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "forbidden_outputs": {
+      "items": {
+        "$ref": "#/$defs/forbidden_output"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "fallback": {
+      "$ref": "#/$defs/fallback"
+    },
+    "prompt_contract": {
+      "$ref": "#/$defs/prompt_contract"
+    },
+    "checks": {
+      "$ref": "#/$defs/checks"
+    }
+  },
+  "required": [
+    "schema",
+    "question_id",
+    "question_version",
+    "status",
+    "scope",
+    "created_at",
+    "situation",
+    "status_quo",
+    "option_order",
+    "options",
+    "hard_constraints",
+    "forbidden_outputs",
+    "fallback",
+    "prompt_contract",
+    "checks"
+  ],
+  "title": "PostFiat Constitutional Question",
+  "type": "object",
+  "$defs": {
+    "checks": {
+      "additionalProperties": false,
+      "properties": {
+        "status_quo_present": {
+          "const": true
+        },
+        "option_set_closed": {
+          "const": true
+        },
+        "hard_constraints_present": {
+          "const": true
+        },
+        "forbidden_outputs_present": {
+          "const": true
+        },
+        "no_op_fallback_present": {
+          "const": true
+        },
+        "live_mutation_authorized": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      },
+      "required": [
+        "status_quo_present",
+        "option_set_closed",
+        "hard_constraints_present",
+        "forbidden_outputs_present",
+        "no_op_fallback_present",
+        "live_mutation_authorized",
+        "authority_transfer"
+      ],
+      "type": "object"
+    },
+    "fallback": {
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "enum": [
+            "no_op",
+            "hold"
+          ],
+          "type": "string"
+        },
+        "trigger_conditions": {
+          "items": {
+            "enum": [
+              "missing_evidence",
+              "ambiguous_evidence",
+              "schema_invalid",
+              "replay_drift",
+              "hidden_evidence_attempt",
+              "scope_expansion_attempt",
+              "unsafe_live_action_attempt"
+            ],
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "decision",
+        "trigger_conditions"
+      ],
+      "type": "object"
+    },
+    "forbidden_output": {
+      "enum": [
+        "live_registry_mutation",
+        "live_cobalt_amendment_submission",
+        "authority_transfer",
+        "hidden_evidence",
+        "secret_dependency",
+        "unregistered_reputation_claim",
+        "scope_expansion",
+        "model_self_upgrade",
+        "selector_self_upgrade",
+        "prompt_self_upgrade",
+        "prose_only_output",
+        "option_outside_closed_set"
+      ],
+      "type": "string"
+    },
+    "hard_constraint": {
+      "enum": [
+        "json_only",
+        "closed_option_set",
+        "cite_status_quo_refs",
+        "cite_evidence_refs_only",
+        "no_hidden_evidence",
+        "no_secret_material",
+        "no_live_mutation",
+        "no_authority_transfer",
+        "prefer_no_op_when_uncertain",
+        "challenge_path_required",
+        "conformance_packet_required"
+      ],
+      "type": "string"
+    },
+    "id": {
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$",
+      "type": "string"
+    },
+    "option": {
+      "additionalProperties": false,
+      "properties": {
+        "option_id": {
+          "$ref": "#/$defs/id"
+        },
+        "title": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "preserve_status_quo",
+            "adopt_change",
+            "defer_no_op",
+            "hold_for_evidence"
+          ],
+          "type": "string"
+        },
+        "description": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "implementation_effect": {
+          "enum": [
+            "no_code_change",
+            "docs_only",
+            "schema_change",
+            "code_change",
+            "test_or_gate_change",
+            "future_authorization_required"
+          ],
+          "type": "string"
+        },
+        "requires_new_evidence": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "option_id",
+        "title",
+        "kind",
+        "description",
+        "implementation_effect",
+        "requires_new_evidence"
+      ],
+      "type": "object"
+    },
+    "prompt_contract": {
+      "additionalProperties": false,
+      "properties": {
+        "qwen_may_propose_evidence_request": {
+          "const": true
+        },
+        "qwen_may_add_options": {
+          "const": false
+        },
+        "qwen_may_change_constraints": {
+          "const": false
+        },
+        "qwen_may_authorize_live_action": {
+          "const": false
+        },
+        "output_json_only": {
+          "const": true
+        },
+        "decision_must_select_option_id": {
+          "const": true
+        }
+      },
+      "required": [
+        "qwen_may_propose_evidence_request",
+        "qwen_may_add_options",
+        "qwen_may_change_constraints",
+        "qwen_may_authorize_live_action",
+        "output_json_only",
+        "decision_must_select_option_id"
+      ],
+      "type": "object"
+    },
+    "ref": {
+      "additionalProperties": false,
+      "properties": {
+        "ref_id": {
+          "$ref": "#/$defs/id"
+        },
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        }
+      },
+      "required": [
+        "ref_id",
+        "path",
+        "sha3_384"
+      ],
+      "type": "object"
+    },
+    "sha3_384": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "situation": {
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "problem_statement": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "decision_boundary": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "out_of_scope": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "summary",
+        "problem_statement",
+        "decision_boundary",
+        "out_of_scope"
+      ],
+      "type": "object"
+    },
+    "status_quo": {
+      "additionalProperties": false,
+      "properties": {
+        "current_position": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "implementation_refs": {
+          "items": {
+            "$ref": "#/$defs/ref"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "evidence_refs": {
+          "items": {
+            "$ref": "#/$defs/ref"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "current_position",
+        "implementation_refs",
+        "evidence_refs"
+      ],
+      "type": "object"
+    }
+  }
+}

@@ -1,0 +1,687 @@
+{
+  "$id": "https://postfiat.org/schemas/postfiat-validator-evidence-packet-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-evidence-packet-v1",
+      "type": "string"
+    },
+    "packet_id": {
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$",
+      "type": "string"
+    },
+    "collection_window": {
+      "$ref": "#/$defs/collection_window"
+    },
+    "collector": {
+      "$ref": "#/$defs/collector"
+    },
+    "field_registry": {
+      "$ref": "#/$defs/field_registry"
+    },
+    "validator_order": {
+      "items": {
+        "$ref": "#/$defs/id"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "validators": {
+      "additionalProperties": false,
+      "minProperties": 1,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9._:-]{2,127}$": {
+          "$ref": "#/$defs/validator_entry"
+        }
+      },
+      "type": "object"
+    },
+    "cohort": {
+      "$ref": "#/$defs/cohort_entry"
+    },
+    "raw_observation_root": {
+      "$ref": "#/$defs/hash"
+    },
+    "raw_observation_hashes": {
+      "items": {
+        "$ref": "#/$defs/hash"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "redaction": {
+      "$ref": "#/$defs/redaction"
+    }
+  },
+  "required": [
+    "schema",
+    "packet_id",
+    "collection_window",
+    "collector",
+    "field_registry",
+    "validator_order",
+    "validators",
+    "cohort",
+    "raw_observation_root",
+    "raw_observation_hashes",
+    "redaction"
+  ],
+  "title": "PostFiat Validator Evidence Packet",
+  "type": "object",
+  "$defs": {
+    "action_bound": {
+      "enum": [
+        "informational_only",
+        "score_adjustment",
+        "admission_gate",
+        "hold_only",
+        "suspend_candidate",
+        "remove_candidate",
+        "no_action"
+      ],
+      "type": "string"
+    },
+    "cohort_entry": {
+      "additionalProperties": false,
+      "properties": {
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/field_record"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "fields"
+      ],
+      "type": "object"
+    },
+    "collection_window": {
+      "additionalProperties": false,
+      "properties": {
+        "from_height": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "to_height": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "from_time": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "to_time": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from_height",
+        "to_height",
+        "from_time",
+        "to_time"
+      ],
+      "type": "object"
+    },
+    "collector": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "version": {
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$",
+          "type": "string"
+        },
+        "config_hash": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "config_hash"
+      ],
+      "type": "object"
+    },
+    "conflict_behavior": {
+      "enum": [
+        "reject_packet",
+        "reject_validator_entry",
+        "hold"
+      ],
+      "type": "string"
+    },
+    "domain": {
+      "maxLength": 253,
+      "pattern": "^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
+      "type": "string"
+    },
+    "field_path": {
+      "enum": [
+        "packet.schema",
+        "packet.packet_id",
+        "packet.collection_window.from_height",
+        "packet.collection_window.to_height",
+        "packet.collection_window.from_time",
+        "packet.collection_window.to_time",
+        "packet.collector.name",
+        "packet.collector.version",
+        "packet.collector.config_hash",
+        "packet.raw_observation_root",
+        "packet.redaction.private_fields_removed",
+        "packet.redaction.secret_scan_passed",
+        "validator.registry.validator_id",
+        "validator.registry.public_key_hash",
+        "validator.registry.active_status",
+        "validator.registry.registry_root",
+        "validator.registry.governance_epoch",
+        "validator.registry.activation_height",
+        "validator.registry.suspension_height",
+        "validator.registry.removal_height",
+        "validator.registry.key_rotation_count",
+        "validator.operator_manifest.manifest_hash",
+        "validator.operator_manifest.signing_key_hash",
+        "validator.operator_manifest.signature_valid",
+        "validator.operator_manifest.signed_at",
+        "validator.operator_manifest.expires_at",
+        "validator.operator_manifest.claims_hash",
+        "validator.identity.declared_domain",
+        "validator.identity.declared_url",
+        "validator.identity.url_fetch.status",
+        "validator.identity.url_fetch.http_status",
+        "validator.identity.url_fetch.content_hash",
+        "validator.identity.url_fetch.observed_at",
+        "validator.identity.url_fetch.failure_reason",
+        "validator.identity.key_domain_binding.status",
+        "validator.identity.key_domain_binding.method",
+        "validator.identity.key_domain_binding.proof_hash",
+        "validator.performance.uptime_window_bps",
+        "validator.performance.rpc_reachable_bps",
+        "validator.performance.peer_reachable_bps",
+        "validator.performance.missed_vote_count",
+        "validator.performance.missed_proposal_count",
+        "validator.performance.late_vote_count",
+        "validator.performance.malformed_message_count",
+        "validator.performance.equivocation_event_count",
+        "validator.performance.restart_event_count",
+        "validator.performance.p95_latency_ms",
+        "validator.cobalt.amendment_vote_count",
+        "validator.cobalt.missed_amendment_vote_count",
+        "validator.cobalt.dabc_participation_count",
+        "validator.cobalt.stale_evidence_rejection_count",
+        "validator.cobalt.rollback_event_count",
+        "validator.cobalt.supersession_event_count",
+        "validator.cobalt.trust_view_mismatch_count",
+        "validator.cobalt.last_participation_height",
+        "validator.governance.admit_event_count",
+        "validator.governance.hold_event_count",
+        "validator.governance.suspend_event_count",
+        "validator.governance.reactivate_event_count",
+        "validator.governance.remove_event_count",
+        "validator.governance.key_rotation_event_count",
+        "validator.governance.last_lifecycle_event_height",
+        "validator.governance.open_remediation_hold",
+        "validator.topology.host_group",
+        "validator.topology.operator_group",
+        "validator.topology.operator_host_group",
+        "validator.topology.cloud_provider_group",
+        "validator.topology.region_group",
+        "validator.topology.jurisdiction_group",
+        "validator.topology.legal_domain_group",
+        "validator.topology.funding_source_group",
+        "cohort.topology.host_group_count",
+        "cohort.topology.operator_group_count",
+        "cohort.topology.operator_host_group_count",
+        "cohort.topology.cloud_provider_group_count",
+        "cohort.topology.region_group_count",
+        "cohort.topology.jurisdiction_group_count",
+        "cohort.registry.active_validator_count",
+        "cohort.registry.pending_validator_count",
+        "validator.evidence_quality.field_conflict_count",
+        "validator.evidence_quality.stale_field_count",
+        "validator.evidence_quality.missing_required_field_count",
+        "validator.evidence_quality.redacted_field_count",
+        "validator.evidence_quality.private_field_rejected_count",
+        "validator.evidence_quality.raw_observation_hash_count"
+      ],
+      "type": "string"
+    },
+    "field_record": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "value_type": {
+                "const": "string"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "value_type": {
+                "const": "enum"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "value_type": {
+                "const": "enum_or_null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "value_type": {
+                "const": "integer"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "value_type": {
+                "const": "integer_or_null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "value_type": {
+                "const": "boolean"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "value_type": {
+                "const": "hash"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "$ref": "#/$defs/hash"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "value_type": {
+                "const": "hash_or_null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "$ref": "#/$defs/maybe_hash"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "value_type": {
+                "const": "timestamp"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "format": "date-time",
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "value_type": {
+                "const": "url"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "format": "uri",
+                "pattern": "^https://",
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "value_type": {
+                "const": "domain"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "$ref": "#/$defs/domain"
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "field_path": {
+          "$ref": "#/$defs/field_path"
+        },
+        "value_type": {
+          "$ref": "#/$defs/value_type"
+        },
+        "value": true,
+        "provenance": {
+          "items": {
+            "$ref": "#/$defs/provenance"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "freshness": {
+          "$ref": "#/$defs/freshness_class"
+        },
+        "missing_evidence_behavior": {
+          "$ref": "#/$defs/missing_evidence_behavior"
+        },
+        "conflict_behavior": {
+          "$ref": "#/$defs/conflict_behavior"
+        },
+        "action_bound": {
+          "$ref": "#/$defs/action_bound"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "source_hash": {
+          "$ref": "#/$defs/maybe_hash"
+        },
+        "redacted": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "field_path",
+        "value_type",
+        "value",
+        "provenance",
+        "freshness",
+        "missing_evidence_behavior",
+        "conflict_behavior",
+        "action_bound",
+        "observed_at",
+        "source_hash",
+        "redacted"
+      ],
+      "type": "object"
+    },
+    "field_registry": {
+      "additionalProperties": false,
+      "properties": {
+        "registry_id": {
+          "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$",
+          "type": "string"
+        },
+        "registry_hash": {
+          "$ref": "#/$defs/hash"
+        },
+        "registered_field_paths": {
+          "items": {
+            "$ref": "#/$defs/field_path"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "provenance_levels": {
+          "items": {
+            "$ref": "#/$defs/provenance"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "freshness_classes": {
+          "items": {
+            "$ref": "#/$defs/freshness_class"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "missing_evidence_behaviors": {
+          "items": {
+            "$ref": "#/$defs/missing_evidence_behavior"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "conflict_behaviors": {
+          "items": {
+            "$ref": "#/$defs/conflict_behavior"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "action_bounds": {
+          "items": {
+            "$ref": "#/$defs/action_bound"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "registry_id",
+        "registry_hash",
+        "registered_field_paths",
+        "provenance_levels",
+        "freshness_classes",
+        "missing_evidence_behaviors",
+        "conflict_behaviors",
+        "action_bounds"
+      ],
+      "type": "object"
+    },
+    "freshness_class": {
+      "enum": [
+        "same_packet",
+        "recent_24h",
+        "recent_7d",
+        "recent_30d",
+        "epoch_bound",
+        "historical"
+      ],
+      "type": "string"
+    },
+    "hash": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "id": {
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$",
+      "type": "string"
+    },
+    "maybe_hash": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "missing_evidence_behavior": {
+      "enum": [
+        "reject_packet",
+        "reject_validator_entry",
+        "hold",
+        "neutral",
+        "stale"
+      ],
+      "type": "string"
+    },
+    "provenance": {
+      "enum": [
+        "chain_derived",
+        "registry_derived",
+        "operator_signed",
+        "collector_observed",
+        "network_observed",
+        "self_asserted",
+        "third_party_attested"
+      ],
+      "type": "string"
+    },
+    "redaction": {
+      "additionalProperties": false,
+      "properties": {
+        "private_fields_removed": {
+          "const": true,
+          "type": "boolean"
+        },
+        "secret_scan_passed": {
+          "const": true,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "private_fields_removed",
+        "secret_scan_passed"
+      ],
+      "type": "object"
+    },
+    "validator_entry": {
+      "additionalProperties": false,
+      "properties": {
+        "validator_id": {
+          "$ref": "#/$defs/id"
+        },
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/field_record"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "validator_id",
+        "fields"
+      ],
+      "type": "object"
+    },
+    "value_type": {
+      "enum": [
+        "string",
+        "enum",
+        "enum_or_null",
+        "integer",
+        "integer_or_null",
+        "boolean",
+        "hash",
+        "hash_or_null",
+        "timestamp",
+        "url",
+        "domain"
+      ],
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "base_fixture": "valid_key_continuity_receipt.json",
+  "overrides": {
+    "profile": {
+      "current_epoch": 48
+    }
+  },
+  "expected_error_contains": [
+    "stale continuity receipt"
+  ]
+}

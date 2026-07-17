@@ -1,0 +1,26 @@
+{
+  "schema": "postfiat-constitutional-prompt-space-coverage-matrix-requirements-v1",
+  "fixture_id": "vc-035-prompt-space-coverage-matrix-requirements",
+  "minimums": {
+    "scope_count": 4,
+    "fixture_prompt_case_count": 8,
+    "live_full_output_case_count": 1,
+    "fail_closed_case_count": 4,
+    "replay_count_per_fixture_case": 50
+  },
+  "required_coverage": [
+    "option_count_inventory",
+    "packet_size_inventory",
+    "raw_output_hash_per_fixture_case",
+    "parsed_output_hash_per_fixture_case",
+    "full_output_receipt_root_where_available",
+    "fail_closed_divergence_classification",
+    "vc034_full_distribution_lane_binding",
+    "no_live_authority"
+  ],
+  "classification_scale": {
+    "green": "The target is directly proven by the current report set.",
+    "yellow": "The target is tracked but only partially sampled.",
+    "red": "The target diverged, is missing, or failed closed."
+  }
+}

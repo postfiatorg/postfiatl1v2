@@ -1,0 +1,646 @@
+{
+  "$id": "https://postfiat.org/schemas/postfiat-protocol-architecture-live-effect-authorization-request-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PostFiat Protocol Architecture Live-Effect Authorization Request",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "postfiat-protocol-architecture-live-effect-authorization-request-v1",
+      "type": "string"
+    },
+    "request_id": {
+      "$ref": "#/$defs/id"
+    },
+    "request_version": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "status": {
+      "const": "submitted_for_review_no_execution",
+      "type": "string"
+    },
+    "request_scope": {
+      "const": "protocol_architecture",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "source_readiness_ref": {
+      "$ref": "#/$defs/source_readiness_ref"
+    },
+    "authorization_request": {
+      "$ref": "#/$defs/authorization_request"
+    },
+    "root_bindings": {
+      "$ref": "#/$defs/root_bindings"
+    },
+    "operator_visible_expected_hashes": {
+      "items": {
+        "$ref": "#/$defs/expected_hash"
+      },
+      "minItems": 5,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "rollback_commands": {
+      "items": {
+        "$ref": "#/$defs/rollback_command"
+      },
+      "minItems": 3,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "authorization_evidence": {
+      "items": {
+        "$ref": "#/$defs/authorization_evidence_item"
+      },
+      "minItems": 4,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "stale_root_handling": {
+      "$ref": "#/$defs/stale_root_handling"
+    },
+    "challenge_path": {
+      "$ref": "#/$defs/challenge_path"
+    },
+    "verification_commands": {
+      "items": {
+        "$ref": "#/$defs/verification_command"
+      },
+      "minItems": 5,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "authority_boundary": {
+      "$ref": "#/$defs/authority_boundary"
+    },
+    "checks": {
+      "$ref": "#/$defs/checks"
+    },
+    "request_root": {
+      "$ref": "#/$defs/sha3_384"
+    }
+  },
+  "required": [
+    "schema",
+    "request_id",
+    "request_version",
+    "status",
+    "request_scope",
+    "created_at",
+    "source_readiness_ref",
+    "authorization_request",
+    "root_bindings",
+    "operator_visible_expected_hashes",
+    "rollback_commands",
+    "authorization_evidence",
+    "stale_root_handling",
+    "challenge_path",
+    "verification_commands",
+    "authority_boundary",
+    "checks",
+    "request_root"
+  ],
+  "$defs": {
+    "authority_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider_spend_authorized": {
+          "const": false
+        },
+        "live_model_request_authorized": {
+          "const": false
+        },
+        "model_output_generated_in_this_packet": {
+          "const": false
+        },
+        "authorization_request_recorded": {
+          "const": true
+        },
+        "request_is_approval": {
+          "const": false
+        },
+        "approval_packet_required_next": {
+          "const": true
+        },
+        "execution_authorized": {
+          "const": false
+        },
+        "release_gate_execution_authorized": {
+          "const": false
+        },
+        "code_rewrite_authorized": {
+          "const": false
+        },
+        "rippled_code_import_authorized": {
+          "const": false
+        },
+        "consensus_rewrite_authorized": {
+          "const": false
+        },
+        "xrpl_compatibility_activation_authorized": {
+          "const": false
+        },
+        "protocol_migration_authorized": {
+          "const": false
+        },
+        "live_validator_registry_mutation_authorized": {
+          "const": false
+        },
+        "live_cobalt_amendment_submission_authorized": {
+          "const": false
+        },
+        "mainnet_mutation_authorized": {
+          "const": false
+        },
+        "authority_transfer_authorized": {
+          "const": false
+        },
+        "default_live_effect_requires_later_approval": {
+          "const": true
+        }
+      },
+      "required": [
+        "provider_spend_authorized",
+        "live_model_request_authorized",
+        "model_output_generated_in_this_packet",
+        "authorization_request_recorded",
+        "request_is_approval",
+        "approval_packet_required_next",
+        "execution_authorized",
+        "release_gate_execution_authorized",
+        "code_rewrite_authorized",
+        "rippled_code_import_authorized",
+        "consensus_rewrite_authorized",
+        "xrpl_compatibility_activation_authorized",
+        "protocol_migration_authorized",
+        "live_validator_registry_mutation_authorized",
+        "live_cobalt_amendment_submission_authorized",
+        "mainnet_mutation_authorized",
+        "authority_transfer_authorized",
+        "default_live_effect_requires_later_approval"
+      ]
+    },
+    "authorization_evidence_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "evidence_id": {
+          "$ref": "#/$defs/id"
+        },
+        "evidence_kind": {
+          "enum": [
+            "readiness_report",
+            "conformance_review_report",
+            "conformance_packet_report",
+            "operator_command_policy",
+            "rollback_policy"
+          ],
+          "type": "string"
+        },
+        "evidence_path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "evidence_hash": {
+          "$ref": "#/$defs/hex_hash"
+        },
+        "required_for_approval": {
+          "const": true
+        },
+        "approval_status": {
+          "const": "not_approved",
+          "type": "string"
+        },
+        "live_effect": {
+          "const": false
+        }
+      },
+      "required": [
+        "evidence_id",
+        "evidence_kind",
+        "evidence_path",
+        "evidence_hash",
+        "required_for_approval",
+        "approval_status",
+        "live_effect"
+      ]
+    },
+    "authorization_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "selected_live_action": {
+          "const": "protocol_architecture_release_or_cobalt_effect",
+          "type": "string"
+        },
+        "request_status": {
+          "const": "submitted_for_review",
+          "type": "string"
+        },
+        "approval_status": {
+          "const": "not_approved",
+          "type": "string"
+        },
+        "execution_status": {
+          "const": "not_authorized",
+          "type": "string"
+        },
+        "approval_packet_id_required": {
+          "const": "vc-protocol-architecture-001-live-effect-approval-gate-001",
+          "type": "string"
+        },
+        "apply_gate_id_required": {
+          "const": "vc-protocol-architecture-001-live-effect-apply-gate-001",
+          "type": "string"
+        },
+        "live_effect": {
+          "const": false
+        },
+        "rationale": {
+          "minLength": 30,
+          "type": "string"
+        }
+      },
+      "required": [
+        "selected_live_action",
+        "request_status",
+        "approval_status",
+        "execution_status",
+        "approval_packet_id_required",
+        "apply_gate_id_required",
+        "live_effect",
+        "rationale"
+      ]
+    },
+    "challenge_path": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "challenge_packet_required": {
+          "const": true
+        },
+        "challenge_schema_path": {
+          "const": "docs/governance/agent/constitutional_challenge_packet_schema.json",
+          "type": "string"
+        },
+        "challenge_schema_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "challenge_action": {
+          "const": "hold_request_and_require_supersession",
+          "type": "string"
+        },
+        "live_effect": {
+          "const": false
+        }
+      },
+      "required": [
+        "challenge_packet_required",
+        "challenge_schema_path",
+        "challenge_schema_sha3_384",
+        "challenge_action",
+        "live_effect"
+      ]
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_valid": {
+          "const": true
+        },
+        "source_readiness_verified": {
+          "const": true
+        },
+        "readiness_root_bound": {
+          "const": true
+        },
+        "selected_live_action_bound": {
+          "const": true
+        },
+        "operator_hashes_bound": {
+          "const": true
+        },
+        "rollback_commands_bound": {
+          "const": true
+        },
+        "authorization_evidence_bound": {
+          "const": true
+        },
+        "stale_root_handling_bound": {
+          "const": true
+        },
+        "challenge_path_bound": {
+          "const": true
+        },
+        "approval_required_next": {
+          "const": true
+        },
+        "execution_not_authorized": {
+          "const": true
+        },
+        "verification_command_coverage_verified": {
+          "const": true
+        },
+        "no_hidden_evidence": {
+          "const": true
+        },
+        "no_secret_dependency": {
+          "const": true
+        },
+        "no_code_rewrite": {
+          "const": true
+        },
+        "no_live_cobalt_amendment_submission": {
+          "const": true
+        },
+        "no_compatibility_activation": {
+          "const": true
+        },
+        "no_mainnet_mutation": {
+          "const": true
+        },
+        "authority_transfer": {
+          "const": false
+        },
+        "request_root_verified": {
+          "const": true
+        }
+      },
+      "required": [
+        "schema_valid",
+        "source_readiness_verified",
+        "readiness_root_bound",
+        "selected_live_action_bound",
+        "operator_hashes_bound",
+        "rollback_commands_bound",
+        "authorization_evidence_bound",
+        "stale_root_handling_bound",
+        "challenge_path_bound",
+        "approval_required_next",
+        "execution_not_authorized",
+        "verification_command_coverage_verified",
+        "no_hidden_evidence",
+        "no_secret_dependency",
+        "no_code_rewrite",
+        "no_live_cobalt_amendment_submission",
+        "no_compatibility_activation",
+        "no_mainnet_mutation",
+        "authority_transfer",
+        "request_root_verified"
+      ]
+    },
+    "expected_hash": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hash_id": {
+          "$ref": "#/$defs/id"
+        },
+        "label": {
+          "minLength": 3,
+          "type": "string"
+        },
+        "hash_value": {
+          "$ref": "#/$defs/hex_hash"
+        },
+        "operator_must_verify": {
+          "const": true
+        },
+        "live_effect": {
+          "const": false
+        }
+      },
+      "required": [
+        "hash_id",
+        "label",
+        "hash_value",
+        "operator_must_verify",
+        "live_effect"
+      ]
+    },
+    "hex_hash": {
+      "pattern": "^([0-9a-f]{64}|[0-9a-f]{96})$",
+      "type": "string"
+    },
+    "id": {
+      "maxLength": 180,
+      "minLength": 8,
+      "pattern": "^[a-z0-9][a-z0-9._:-]*$",
+      "type": "string"
+    },
+    "rollback_command": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "command_id": {
+          "$ref": "#/$defs/id"
+        },
+        "command": {
+          "minLength": 3,
+          "type": "string"
+        },
+        "purpose": {
+          "minLength": 10,
+          "type": "string"
+        },
+        "expected_result": {
+          "minLength": 3,
+          "type": "string"
+        },
+        "operator_visible": {
+          "const": true
+        },
+        "live_effect": {
+          "const": false
+        }
+      },
+      "required": [
+        "command_id",
+        "command",
+        "purpose",
+        "expected_result",
+        "operator_visible",
+        "live_effect"
+      ]
+    },
+    "root_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "readiness_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "conformance_review_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "conformance_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "readiness_gate_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "superseding_decision_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "challenge_disposition_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "full_vocab_vector_root": {
+          "$ref": "#/$defs/hex_hash"
+        },
+        "evidence_packet_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "selected_option": {
+          "const": "preserve-rust-l1",
+          "type": "string"
+        }
+      },
+      "required": [
+        "readiness_root",
+        "conformance_review_root",
+        "conformance_root",
+        "readiness_gate_root",
+        "superseding_decision_root",
+        "challenge_disposition_root",
+        "full_vocab_vector_root",
+        "evidence_packet_root",
+        "selected_option"
+      ]
+    },
+    "sha3_384": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "source_readiness_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gate_id": {
+          "const": "vc-protocol-architecture-001-live-effect-readiness-gate-001",
+          "type": "string"
+        },
+        "packet_path": {
+          "const": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_live_effect_readiness_gate.json",
+          "type": "string"
+        },
+        "packet_file_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "packet_canonical_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "schema_path": {
+          "const": "docs/governance/agent/protocol_architecture_live_effect_readiness_gate_schema.json",
+          "type": "string"
+        },
+        "schema_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "report_path": {
+          "const": "reports/verifiable-constitution/vc-058-protocol-architecture-live-effect-readiness-report.json",
+          "type": "string"
+        },
+        "report_file_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "report_canonical_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "report_verified": {
+          "const": true
+        },
+        "report_classification": {
+          "const": "defined_not_authorized",
+          "type": "string"
+        },
+        "readiness_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "report_readiness_root": {
+          "$ref": "#/$defs/sha3_384"
+        }
+      },
+      "required": [
+        "gate_id",
+        "packet_path",
+        "packet_file_sha3_384",
+        "packet_canonical_hash",
+        "schema_path",
+        "schema_sha3_384",
+        "report_path",
+        "report_file_sha3_384",
+        "report_canonical_hash",
+        "report_verified",
+        "report_classification",
+        "readiness_root",
+        "report_readiness_root"
+      ]
+    },
+    "stale_root_handling": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stale_readiness_root_action": {
+          "const": "reject_request_and_require_supersession",
+          "type": "string"
+        },
+        "stale_review_root_action": {
+          "const": "reject_request_and_require_supersession",
+          "type": "string"
+        },
+        "missing_expected_hash_action": {
+          "const": "hold_before_approval",
+          "type": "string"
+        },
+        "live_effect": {
+          "const": false
+        }
+      },
+      "required": [
+        "stale_readiness_root_action",
+        "stale_review_root_action",
+        "missing_expected_hash_action",
+        "live_effect"
+      ]
+    },
+    "verification_command": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "minLength": 3,
+          "type": "string"
+        },
+        "purpose": {
+          "minLength": 10,
+          "type": "string"
+        },
+        "expected_result": {
+          "const": "pass",
+          "type": "string"
+        },
+        "required": {
+          "const": true
+        },
+        "live_effect": {
+          "const": false
+        }
+      },
+      "required": [
+        "command",
+        "purpose",
+        "expected_result",
+        "required",
+        "live_effect"
+      ]
+    }
+  }
+}

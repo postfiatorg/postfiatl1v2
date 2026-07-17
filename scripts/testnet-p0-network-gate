@@ -1,0 +1,1229 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VALIDATORS="${VALIDATORS:-4}"
+ROUNDS="${ROUNDS:-3}"
+ROOT_DIR="${ROOT_DIR:-reports/testnet-p0-network-gate}"
+LOG_DIR="${LOG_DIR:-$ROOT_DIR/logs}"
+REPORT="${REPORT:-$ROOT_DIR/testnet-p0-network-gate-$(date -u +%Y%m%dT%H%M%SZ).json}"
+TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-20}"
+TRANSPORT_TIMEOUT_MS="${TRANSPORT_TIMEOUT_MS:-10000}"
+SSH_CRED_FILE="${SSH_CRED_FILE:-$HOME/ssh_cred.txt}"
+PLACEMENT_MANIFEST="${PLACEMENT_MANIFEST:-}"
+P0_MODE="${P0_MODE:-auto}"
+REMOTE_SMOKE_DEPLOY="${REMOTE_SMOKE_DEPLOY:-1}"
+REMOTE_TRANSPARENT_DRIVER="${REMOTE_TRANSPARENT_DRIVER:-normal-run}"
+P0_REQUIRE_TOPOLOGY_CAPTURE_OK="${P0_REQUIRE_TOPOLOGY_CAPTURE_OK:-0}"
+PLACEMENT_REQUIRE_PUBLIC_DIVERSITY="${PLACEMENT_REQUIRE_PUBLIC_DIVERSITY:-0}"
+OPEN_FIREWALL="${OPEN_FIREWALL:-0}"
+P0_WALLET_SIGNER_MODE="${P0_WALLET_SIGNER_MODE:-sdk}"
+
+require_command() {
+  local command="$1"
+  if ! command -v "$command" >/dev/null 2>&1; then
+    echo "missing required command: $command" >&2
+    exit 1
+  fi
+}
+
+require_positive_integer() {
+  local name="$1"
+  local value="$2"
+  if ! [[ "$value" =~ ^[0-9]+$ ]] || [ "$value" -lt 1 ]; then
+    echo "$name must be a positive integer" >&2
+    exit 2
+  fi
+}
+
+newest_report() {
+  local dir="$1"
+  local pattern="$2"
+  find "$dir" -maxdepth 1 -type f -name "$pattern" -printf '%T@ %p\n' \
+    | sort -nr \
+    | awk 'NR == 1 {print $2}'
+}
+
+write_failure_report() {
+  local exit_code="$1"
+  local generated_utc
+  local remote_placement_capacity_summary
+  local remote_operator_preflight_summary
+  generated_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  remote_placement_capacity_summary="{}"
+  remote_operator_preflight_summary="{}"
+  if [ -n "${remote_placement_capacity_report:-}" ] && [ -f "$remote_placement_capacity_report" ]; then
+    remote_placement_capacity_summary="$(jq -c '{
+      placement_capacity_gate_ok: (.placement_capacity_gate_ok // false),
+      public_expansion_capacity_gate_ok: (.public_expansion_capacity_gate_ok // false),
+      capacity_shortfall: (.capacity_shortfall // {}),
+      placement_manifest: {
+        present: (.placement_manifest.present // false),
+        targets_seen: (.placement_manifest.targets_seen // null),
+        bindable_targets: (.placement_manifest.bindable_targets // null),
+        complete_controlled_targets: (.placement_manifest.complete_controlled_targets // null),
+        complete_public_targets: (.placement_manifest.complete_public_targets // null)
+      }
+    }' "$remote_placement_capacity_report")"
+  fi
+  if [ -n "${remote_operator_preflight_report:-}" ] && [ -f "$remote_operator_preflight_report" ]; then
+    remote_operator_preflight_summary="$(jq -c '{
+      status: (.status // "unknown"),
+      operator_preflight_ok: (.operator_preflight_ok // false),
+      preflight_only: (.preflight_only // false),
+      credential_machine_entries: (.credential_machine_entries // null),
+      validators: (.validators // null),
+      failed_count: (.operator_preflight_failed_count // null),
+      failed_nodes: (.operator_preflight_failed_nodes // []),
+      failure_classes: (.operator_preflight_failure_classes // [])
+    }' "$remote_operator_preflight_report")"
+  fi
+  mkdir -p "$(dirname "$REPORT")"
+  jq -n \
+    --arg schema "postfiat-testnet-p0-network-gate-v1" \
+    --arg generated_utc "$generated_utc" \
+    --arg mode "$mode" \
+    --arg failed_step "$failed_step" \
+    --arg remote_blocked_reason "$remote_blocked_reason" \
+    --arg remote_placement_capacity_report "$remote_placement_capacity_report" \
+    --arg remote_operator_preflight_report "$remote_operator_preflight_report" \
+    --arg local_readiness_report "$local_readiness_report" \
+    --arg remote_readiness_report "$remote_readiness_report" \
+    --arg remote_restart_report "$remote_restart_report" \
+    --arg remote_partial_outage_report "$remote_partial_outage_report" \
+    --arg remote_rpc_catchup_report "$remote_rpc_catchup_report" \
+    --arg remote_validator_registry_report "$remote_validator_registry_report" \
+    --arg remote_emergency_key_rotation_report "$remote_emergency_key_rotation_report" \
+    --arg remote_topology_capture_profile_report "$remote_topology_capture_profile_report" \
+    --arg local_validator_registry_report "$local_validator_registry_report" \
+    --arg wallet_test_vectors_report "$wallet_test_vectors_report" \
+    --arg wallet_sign_transfer_report "$wallet_sign_transfer_report" \
+    --arg wallet_signer_mode "$P0_WALLET_SIGNER_MODE" \
+    --arg rpc_write_edge_load_report "$rpc_write_edge_load_report" \
+    --arg rpc_read_alias_report "$rpc_read_alias_report" \
+    --arg rpc_serve_tamper_report "$rpc_serve_tamper_report" \
+    --arg fee_reserve_policy_report "$fee_reserve_policy_report" \
+    --arg history_retention_report "$history_retention_report" \
+    --arg history_role_policy_report "$history_role_policy_report" \
+    --argjson validators "$VALIDATORS" \
+    --argjson rounds "$ROUNDS" \
+    --argjson exit_code "$exit_code" \
+    --argjson remote_blocked "$remote_blocked" \
+    --argjson remote_placement_capacity_summary "$remote_placement_capacity_summary" \
+    --argjson remote_operator_preflight_summary "$remote_operator_preflight_summary" \
+    '{
+      schema: $schema,
+      generated_utc: $generated_utc,
+      status: "failed",
+      mode: $mode,
+      remote_blocked: $remote_blocked,
+      remote_blocked_reason: $remote_blocked_reason,
+      validators: $validators,
+      rounds: $rounds,
+      wallet_signer_mode: $wallet_signer_mode,
+      failed_step: $failed_step,
+      exit_code: $exit_code,
+      reports: {
+        remote_placement_capacity_profile: $remote_placement_capacity_report,
+        remote_operator_preflight: $remote_operator_preflight_report,
+        local_readiness: $local_readiness_report,
+        remote_readiness: $remote_readiness_report,
+        remote_restart_drill: $remote_restart_report,
+        remote_partial_outage_drill: $remote_partial_outage_report,
+        remote_rpc_catchup_drill: $remote_rpc_catchup_report,
+        remote_validator_registry_drill: $remote_validator_registry_report,
+        remote_emergency_key_rotation_rehearsal: $remote_emergency_key_rotation_report,
+        remote_topology_capture_profile: $remote_topology_capture_profile_report,
+        local_validator_registry_drill: $local_validator_registry_report,
+        wallet_test_vectors_smoke: $wallet_test_vectors_report,
+        wallet_sign_transfer_smoke: $wallet_sign_transfer_report,
+        rpc_serve_tamper: $rpc_serve_tamper_report,
+        fee_reserve_policy_smoke: $fee_reserve_policy_report,
+        history_retention_smoke: $history_retention_report,
+        history_role_policy_smoke: $history_role_policy_report,
+        rpc_write_edge_load_smoke: $rpc_write_edge_load_report,
+        rpc_read_alias_smoke: $rpc_read_alias_report
+      },
+      remote_placement_capacity_summary: $remote_placement_capacity_summary,
+      remote_operator_preflight_summary: $remote_operator_preflight_summary,
+      configured_gate_ok: false,
+      p0_network_ok: false
+    }' >"$REPORT"
+}
+
+require_command jq
+require_command date
+require_command awk
+require_command find
+require_command sort
+require_command python3
+
+require_positive_integer VALIDATORS "$VALIDATORS"
+require_positive_integer ROUNDS "$ROUNDS"
+require_positive_integer TIMEOUT_SECONDS "$TIMEOUT_SECONDS"
+require_positive_integer TRANSPORT_TIMEOUT_MS "$TRANSPORT_TIMEOUT_MS"
+case "$P0_REQUIRE_TOPOLOGY_CAPTURE_OK" in
+  0|1) ;;
+  *)
+    echo "P0_REQUIRE_TOPOLOGY_CAPTURE_OK must be 0 or 1" >&2
+    exit 2
+    ;;
+esac
+case "$PLACEMENT_REQUIRE_PUBLIC_DIVERSITY" in
+  0|1) ;;
+  *)
+    echo "PLACEMENT_REQUIRE_PUBLIC_DIVERSITY must be 0 or 1" >&2
+    exit 2
+    ;;
+esac
+case "$P0_WALLET_SIGNER_MODE" in
+  node|sdk) ;;
+  *)
+    echo "P0_WALLET_SIGNER_MODE must be node or sdk" >&2
+    exit 2
+    ;;
+esac
+if [ "$VALIDATORS" -lt 4 ]; then
+  echo "VALIDATORS must be at least 4 for P0 partial-outage/catch-up coverage" >&2
+  exit 2
+fi
+
+mode=""
+remote_blocked=false
+remote_blocked_reason=""
+case "$P0_MODE" in
+  auto)
+    if [ -f "$SSH_CRED_FILE" ]; then
+      mode="remote"
+    else
+      mode="local_fallback"
+      remote_blocked=true
+      remote_blocked_reason="SSH_CRED_FILE missing: $SSH_CRED_FILE"
+    fi
+    ;;
+  remote)
+    mode="remote"
+    if [ ! -f "$SSH_CRED_FILE" ]; then
+      echo "P0_MODE=remote requires SSH_CRED_FILE: $SSH_CRED_FILE" >&2
+      exit 2
+    fi
+    ;;
+  local|local_fallback)
+    mode="local_fallback"
+    remote_blocked=true
+    remote_blocked_reason="P0_MODE=$P0_MODE"
+    ;;
+  *)
+    echo "P0_MODE must be auto, remote, local, or local_fallback" >&2
+    exit 2
+    ;;
+esac
+
+if [ -z "$LOG_DIR" ] || [ "$LOG_DIR" = "/" ]; then
+  echo "LOG_DIR must not be empty or /" >&2
+  exit 2
+fi
+rm -rf "$LOG_DIR"
+mkdir -p "$LOG_DIR" "$(dirname "$REPORT")"
+
+local_root="$LOG_DIR/local-readiness"
+local_readiness_report="$local_root/readiness.json"
+local_readiness_out="$LOG_DIR/local-readiness.out"
+remote_root="$LOG_DIR/remote"
+remote_readiness_report="$remote_root/readiness/testnet-remote-readiness-gate.json"
+remote_restart_report="$remote_root/restart/testnet-remote-restart-drill.json"
+remote_partial_outage_report=""
+remote_rpc_catchup_report=""
+remote_validator_registry_report=""
+remote_emergency_key_rotation_report=""
+remote_placement_capacity_report=""
+remote_operator_preflight_report=""
+remote_topology_capture_profile_report=""
+local_validator_registry_report=""
+wallet_test_vectors_report=""
+wallet_sign_transfer_report=""
+rpc_write_edge_load_report=""
+rpc_read_alias_report=""
+rpc_serve_tamper_report=""
+fee_reserve_policy_report=""
+transfer_fee_quote_report=""
+history_retention_report=""
+history_role_policy_report=""
+failed_step="initializing"
+
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then write_failure_report "$rc"; fi' EXIT
+
+if [ "$mode" = "remote" ]; then
+  failed_step="remote placement capacity profile"
+  remote_placement_capacity_report="$LOG_DIR/remote-placement-capacity.json"
+  if [ "$P0_REQUIRE_TOPOLOGY_CAPTURE_OK" = "1" ] || [ "$PLACEMENT_REQUIRE_PUBLIC_DIVERSITY" = "1" ]; then
+    remote_blocked=true
+    remote_blocked_reason="remote placement capacity gate pending: $remote_placement_capacity_report"
+  fi
+  VALIDATORS="$VALIDATORS" \
+    SSH_CRED_FILE="$SSH_CRED_FILE" \
+    PLACEMENT_MANIFEST="$PLACEMENT_MANIFEST" \
+    PLACEMENT_REQUIRE_STRICT="$P0_REQUIRE_TOPOLOGY_CAPTURE_OK" \
+    PLACEMENT_REQUIRE_PUBLIC_DIVERSITY="$PLACEMENT_REQUIRE_PUBLIC_DIVERSITY" \
+    REPORT="$remote_placement_capacity_report" \
+    scripts/testnet-remote-placement-capacity-profile >"$LOG_DIR/remote-placement-capacity.out"
+  jq -e \
+    --argjson require_topology_capture_ok "$P0_REQUIRE_TOPOLOGY_CAPTURE_OK" \
+    --argjson require_public_diversity "$PLACEMENT_REQUIRE_PUBLIC_DIVERSITY" \
+    '.schema == "postfiat-testnet-remote-placement-capacity-profile-v1"
+      and .status == "profiled"
+      and .placement_capacity_profile_recorded == true
+      and (
+        if $require_topology_capture_ok == 1 then
+          .placement_capacity_gate_ok == true
+        else
+          true
+        end
+      )
+      and (
+        if $require_public_diversity == 1 then
+          .public_expansion_capacity_gate_ok == true
+        else
+          true
+        end
+      )' \
+    "$remote_placement_capacity_report" >/dev/null
+  remote_blocked=false
+  remote_blocked_reason=""
+
+  failed_step="remote operator preflight"
+  remote_operator_preflight_report="$LOG_DIR/remote-operator-preflight.json"
+  remote_blocked=true
+  remote_blocked_reason="remote operator preflight pending: $remote_operator_preflight_report"
+  VALIDATORS="$VALIDATORS" \
+    ROUNDS=1 \
+    SSH_CRED_FILE="$SSH_CRED_FILE" \
+    REMOTE_SMOKE_PREFLIGHT_ONLY=1 \
+    REMOTE_SMOKE_BUILD=0 \
+    REMOTE_TRANSPARENT_DRIVER="$REMOTE_TRANSPARENT_DRIVER" \
+    REPORT="$remote_operator_preflight_report" \
+    scripts/testnet-remote-ssh-smoke >"$LOG_DIR/remote-operator-preflight.out"
+  jq -e \
+    '.schema == "postfiat-testnet-remote-ssh-smoke-v1"
+      and .status == "passed"
+      and .preflight_only == true
+      and .operator_preflight_ok == true' \
+    "$remote_operator_preflight_report" >/dev/null
+  remote_blocked=false
+  remote_blocked_reason=""
+fi
+
+failed_step="local readiness gate"
+VALIDATORS="$VALIDATORS" \
+  ROUNDS="$ROUNDS" \
+  ROOT_DIR="$local_root" \
+  REPORT="$local_readiness_report" \
+  TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+  TRANSPORT_TIMEOUT_MS="$TRANSPORT_TIMEOUT_MS" \
+  WALLET_SIGNER_MODE="$P0_WALLET_SIGNER_MODE" \
+  scripts/testnet-readiness-gate >"$local_readiness_out"
+
+jq -e \
+  --arg wallet_signer_mode "$P0_WALLET_SIGNER_MODE" \
+  '.schema == "postfiat-testnet-readiness-gate-v1"
+    and .readiness_ok == true
+    and .wallet_signer_mode == $wallet_signer_mode
+    and .node_run_peer_certified_ok == true
+    and .node_run_peer_certified_restart_ok == true
+    and .node_run_peer_certified_partial_outage_ok == true
+    and .rpc_catchup_ok == true
+    and .rpc_edge_exhaustion_ok == true
+    and .wallet_sign_transfer_ok == true
+    and .wallet_test_vectors_ok == true
+    and .governance_replay_package_ok == true
+    and .governance_genesis_bundle_ok == true
+    and .rpc_write_edge_load_ok == true
+    and .rpc_read_alias_ok == true
+    and .history_retention_ok == true
+    and .history_role_policy_ok == true' \
+  "$local_readiness_report" >/dev/null
+
+provision_manifest="$(jq -r '.reports.provision_manifest' "$local_readiness_report")"
+if [ -z "$provision_manifest" ] || [ "$provision_manifest" = "null" ] || [ ! -f "$provision_manifest" ]; then
+  echo "local readiness report did not include a usable provision manifest" >&2
+  exit 1
+fi
+local_validator_registry_report="$(jq -r '.reports.validator_registry_update_smoke' "$local_readiness_report")"
+if [ -z "$local_validator_registry_report" ] || [ "$local_validator_registry_report" = "null" ] || [ ! -f "$local_validator_registry_report" ]; then
+  echo "local readiness report did not include a usable validator registry report" >&2
+  exit 1
+fi
+governance_replay_package_report="$(jq -r '.reports.governance_replay_package_smoke' "$local_readiness_report")"
+if [ -z "$governance_replay_package_report" ] || [ "$governance_replay_package_report" = "null" ] || [ ! -f "$governance_replay_package_report" ]; then
+  echo "local readiness report did not include a usable governance replay package report" >&2
+  exit 1
+fi
+governance_genesis_bundle_report="$(jq -r '.reports.governance_genesis_bundle_smoke' "$local_readiness_report")"
+if [ -z "$governance_genesis_bundle_report" ] || [ "$governance_genesis_bundle_report" = "null" ] || [ ! -f "$governance_genesis_bundle_report" ]; then
+  echo "local readiness report did not include a usable governance genesis bundle report" >&2
+  exit 1
+fi
+wallet_test_vectors_report="$(jq -r '.reports.wallet_test_vectors_smoke' "$local_readiness_report")"
+if [ -z "$wallet_test_vectors_report" ] || [ "$wallet_test_vectors_report" = "null" ] || [ ! -f "$wallet_test_vectors_report" ]; then
+  echo "local readiness report did not include a usable wallet test-vectors report" >&2
+  exit 1
+fi
+wallet_sign_transfer_report="$(jq -r '.reports.wallet_sign_transfer_smoke' "$local_readiness_report")"
+if [ -z "$wallet_sign_transfer_report" ] || [ "$wallet_sign_transfer_report" = "null" ] || [ ! -f "$wallet_sign_transfer_report" ]; then
+  echo "local readiness report did not include a usable wallet sign-transfer report" >&2
+  exit 1
+fi
+rpc_write_edge_load_report="$(jq -r '.reports.rpc_write_edge_load_smoke' "$local_readiness_report")"
+if [ -z "$rpc_write_edge_load_report" ] || [ "$rpc_write_edge_load_report" = "null" ] || [ ! -f "$rpc_write_edge_load_report" ]; then
+  echo "local readiness report did not include a usable RPC write-edge load report" >&2
+  exit 1
+fi
+rpc_read_alias_report="$(jq -r '.reports.rpc_read_alias_smoke' "$local_readiness_report")"
+if [ -z "$rpc_read_alias_report" ] || [ "$rpc_read_alias_report" = "null" ] || [ ! -f "$rpc_read_alias_report" ]; then
+  echo "local readiness report did not include a usable RPC read-alias report" >&2
+  exit 1
+fi
+rpc_serve_tamper_report="$(jq -r '.reports.rpc_serve_tamper' "$local_readiness_report")"
+if [ -z "$rpc_serve_tamper_report" ] || [ "$rpc_serve_tamper_report" = "null" ] || [ ! -f "$rpc_serve_tamper_report" ]; then
+  echo "local readiness report did not include a usable RPC serve tamper report" >&2
+  exit 1
+fi
+fee_reserve_policy_report="$(jq -r '.reports.fee_reserve_policy_smoke' "$local_readiness_report")"
+if [ -z "$fee_reserve_policy_report" ] || [ "$fee_reserve_policy_report" = "null" ] || [ ! -f "$fee_reserve_policy_report" ]; then
+  echo "local readiness report did not include a usable fee/reserve policy report" >&2
+  exit 1
+fi
+transfer_fee_quote_report="$(jq -r '.reports.transfer_fee_quote_smoke' "$local_readiness_report")"
+if [ -z "$transfer_fee_quote_report" ] || [ "$transfer_fee_quote_report" = "null" ] || [ ! -f "$transfer_fee_quote_report" ]; then
+  echo "local readiness report did not include a usable transfer fee quote report" >&2
+  exit 1
+fi
+history_retention_report="$(jq -r '.reports.history_retention_smoke' "$local_readiness_report")"
+if [ -z "$history_retention_report" ] || [ "$history_retention_report" = "null" ] || [ ! -f "$history_retention_report" ]; then
+  echo "local readiness report did not include a usable history retention report" >&2
+  exit 1
+fi
+history_role_policy_report="$(jq -r '.reports.history_role_policy_smoke' "$local_readiness_report")"
+if [ -z "$history_role_policy_report" ] || [ "$history_role_policy_report" = "null" ] || [ ! -f "$history_role_policy_report" ]; then
+  echo "local readiness report did not include a usable history role policy report" >&2
+  exit 1
+fi
+
+if [ "$mode" = "remote" ]; then
+  mkdir -p "$remote_root/readiness" "$remote_root/restart" "$remote_root/partial-outage" "$remote_root/rpc-catchup" "$remote_root/validator-registry" "$remote_root/emergency-key-rotation" "$remote_root/topology-capture"
+
+  failed_step="remote readiness gate"
+  VALIDATORS="$VALIDATORS" \
+    ROUNDS="$ROUNDS" \
+    ROOT_DIR="$remote_root/readiness" \
+    REPORT="$remote_readiness_report" \
+    SSH_CRED_FILE="$SSH_CRED_FILE" \
+    OPEN_FIREWALL="$OPEN_FIREWALL" \
+    REMOTE_SMOKE_DEPLOY="$REMOTE_SMOKE_DEPLOY" \
+    REMOTE_TRANSPARENT_DRIVER="$REMOTE_TRANSPARENT_DRIVER" \
+    scripts/testnet-remote-readiness-gate >"$LOG_DIR/remote-readiness.out"
+
+  jq -e \
+    '.schema == "postfiat-testnet-remote-readiness-gate-v1"
+      and .remote_readiness_ok == true' \
+    "$remote_readiness_report" >/dev/null
+  remote_plan="$(jq -r '.plan' "$remote_readiness_report")"
+  if [ -z "$remote_plan" ] || [ "$remote_plan" = "null" ] || [ ! -f "$remote_plan" ]; then
+    echo "remote readiness report did not include a usable plan" >&2
+    exit 1
+  fi
+
+  failed_step="remote topology capture profile"
+  remote_topology_capture_profile_report="$remote_root/topology-capture/testnet-remote-topology-capture-profile.json"
+  PLAN="$remote_plan" \
+    REPORT_DIR="$remote_root/topology-capture" \
+    REPORT="$remote_topology_capture_profile_report" \
+    scripts/testnet-remote-topology-capture-profile >"$LOG_DIR/remote-topology-capture.out"
+  jq -e \
+    '.schema == "postfiat-testnet-remote-topology-capture-profile-v1"
+      and .status == "profiled"
+      and .topology_capture_profile_recorded == true' \
+    "$remote_topology_capture_profile_report" >/dev/null
+
+  failed_step="remote restart drill"
+  PLAN="$remote_plan" \
+    REPORT_DIR="$remote_root/restart" \
+    LOG_DIR="$remote_root/restart/logs" \
+    REPORT="$remote_restart_report" \
+    SSH_CRED_FILE="$SSH_CRED_FILE" \
+    scripts/testnet-remote-restart-drill >"$LOG_DIR/remote-restart.out"
+  jq -e \
+    '.schema == "postfiat-testnet-remote-restart-drill-v1"
+      and .remote_restart_drill_ok == true' \
+    "$remote_restart_report" >/dev/null
+
+  failed_step="remote partial-outage drill"
+  PLAN="$remote_plan" \
+    REPORT_DIR="$remote_root/partial-outage" \
+    LOG_DIR="$remote_root/partial-outage/logs" \
+    SSH_CRED_FILE="$SSH_CRED_FILE" \
+    scripts/testnet-remote-partial-outage-drill >"$LOG_DIR/remote-partial-outage.out"
+  remote_partial_outage_report="$(newest_report "$remote_root/partial-outage" 'testnet-remote-partial-outage-drill-*.json')"
+  if [ -z "$remote_partial_outage_report" ]; then
+    echo "remote partial-outage drill did not emit a report" >&2
+    exit 1
+  fi
+  jq -e \
+    '.schema == "postfiat-testnet-remote-partial-outage-drill-v1"
+      and .ok == true
+      and .final_convergence.all_validators_converged == true' \
+    "$remote_partial_outage_report" >/dev/null
+
+  failed_step="remote RPC catch-up drill"
+  PLAN="$remote_plan" \
+    REPORT_DIR="$remote_root/rpc-catchup" \
+    LOG_DIR="$remote_root/rpc-catchup/logs" \
+    SSH_CRED_FILE="$SSH_CRED_FILE" \
+    scripts/testnet-remote-rpc-catchup-drill >"$LOG_DIR/remote-rpc-catchup.out"
+  remote_rpc_catchup_report="$(newest_report "$remote_root/rpc-catchup" 'testnet-remote-rpc-catchup-drill-*.json')"
+  if [ -z "$remote_rpc_catchup_report" ]; then
+    echo "remote RPC catch-up drill did not emit a report" >&2
+    exit 1
+  fi
+  jq -e \
+    '.schema == "postfiat-testnet-remote-rpc-catchup-drill-v1"
+      and .ok == true
+      and .final_convergence.all_validators_converged == true' \
+    "$remote_rpc_catchup_report" >/dev/null
+
+  failed_step="remote validator registry drill"
+  PLAN="$remote_plan" \
+    REPORT_DIR="$remote_root/validator-registry" \
+    LOG_DIR="$remote_root/validator-registry/logs" \
+    SSH_CRED_FILE="$SSH_CRED_FILE" \
+    scripts/testnet-remote-validator-registry-drill >"$LOG_DIR/remote-validator-registry.out"
+  remote_validator_registry_report="$(newest_report "$remote_root/validator-registry" 'testnet-remote-validator-registry-drill-*.json')"
+  if [ -z "$remote_validator_registry_report" ]; then
+    echo "remote validator registry drill did not emit a report" >&2
+    exit 1
+  fi
+  jq -e \
+    '. as $report
+      | .schema == "postfiat-testnet-remote-validator-registry-drill-v1"
+      and .ok == true
+      and .governance_ordering.update_verified == true
+      and .governance_ordering.round.certificate_validators == .previous_validators
+      and .post_suspend_ordering.round.certificate_validators == .new_validators
+      and (.post_suspend_ordering.round.certificate_validators | index($report.subject_node)) == null
+      and .post_suspend_ordering.round.local_apply_verified == true
+      and .post_suspend_ordering.round.subject_failure_recorded == true
+      and .post_suspend_convergence.active_validators_converged == true
+      and .active_registry_roots.active_registry_roots_verified == true
+      and (
+        if .post_suspend_fault_tolerance_required == true then
+          .post_suspend_fault_tolerance.verified == true
+          and .post_suspend_fault_tolerance.outage_convergence.active_quorum_preserved == true
+          and .post_suspend_fault_tolerance.recovery_replay.verified == true
+          and .post_suspend_fault_tolerance.final_convergence.active_validators_converged == true
+        else
+          true
+        end
+      )' \
+    "$remote_validator_registry_report" >/dev/null
+
+  failed_step="remote emergency key-rotation rehearsal"
+  remote_emergency_key_rotation_report="$remote_root/emergency-key-rotation/testnet-remote-emergency-key-rotation-rehearsal.json"
+  PLAN="$remote_plan" \
+    LOCAL_REGISTRY_REPORT="$local_validator_registry_report" \
+    REMOTE_REGISTRY_REPORT="$remote_validator_registry_report" \
+    REPORT_DIR="$remote_root/emergency-key-rotation" \
+    REPORT="$remote_emergency_key_rotation_report" \
+    scripts/testnet-remote-emergency-key-rotation-rehearsal >"$LOG_DIR/remote-emergency-key-rotation.out"
+  jq -e \
+    '.schema == "postfiat-testnet-remote-emergency-key-rotation-rehearsal-v1"
+      and .status == "passed"
+      and .remote_emergency_key_rotation_rehearsal_ok == true' \
+    "$remote_emergency_key_rotation_report" >/dev/null
+else
+  remote_placement_capacity_report="$LOG_DIR/remote-placement-capacity-skipped.json"
+  remote_operator_preflight_report="$LOG_DIR/remote-operator-preflight-skipped.json"
+  remote_readiness_report="$LOG_DIR/remote-readiness-skipped.json"
+  remote_restart_report="$LOG_DIR/remote-restart-skipped.json"
+  remote_partial_outage_report="$LOG_DIR/remote-partial-outage-skipped.json"
+  remote_rpc_catchup_report="$LOG_DIR/remote-rpc-catchup-skipped.json"
+  remote_validator_registry_report="$LOG_DIR/remote-validator-registry-skipped.json"
+  remote_emergency_key_rotation_report="$LOG_DIR/remote-emergency-key-rotation-skipped.json"
+  remote_topology_capture_profile_report="$LOG_DIR/remote-topology-capture-skipped.json"
+  printf '{}\n' >"$remote_placement_capacity_report"
+  printf '{}\n' >"$remote_operator_preflight_report"
+  printf '{}\n' >"$remote_readiness_report"
+  printf '{}\n' >"$remote_restart_report"
+  printf '{}\n' >"$remote_partial_outage_report"
+  printf '{}\n' >"$remote_rpc_catchup_report"
+  printf '{}\n' >"$remote_validator_registry_report"
+  printf '{}\n' >"$remote_emergency_key_rotation_report"
+  printf '{}\n' >"$remote_topology_capture_profile_report"
+fi
+
+generated_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+failed_step="final report"
+jq -n \
+  --arg schema "postfiat-testnet-p0-network-gate-v1" \
+  --arg generated_utc "$generated_utc" \
+  --arg mode "$mode" \
+  --arg remote_blocked_reason "$remote_blocked_reason" \
+  --arg remote_placement_capacity_report "$remote_placement_capacity_report" \
+  --arg remote_operator_preflight_report "$remote_operator_preflight_report" \
+  --arg local_readiness_report "$local_readiness_report" \
+  --arg remote_readiness_report "$remote_readiness_report" \
+  --arg remote_restart_report "$remote_restart_report" \
+  --arg remote_partial_outage_report "$remote_partial_outage_report" \
+  --arg remote_rpc_catchup_report "$remote_rpc_catchup_report" \
+  --arg remote_validator_registry_report "$remote_validator_registry_report" \
+  --arg remote_emergency_key_rotation_report "$remote_emergency_key_rotation_report" \
+  --arg remote_topology_capture_profile_report "$remote_topology_capture_profile_report" \
+  --arg local_validator_registry_report "$local_validator_registry_report" \
+  --arg governance_replay_package_report "$governance_replay_package_report" \
+  --arg governance_genesis_bundle_report "$governance_genesis_bundle_report" \
+  --arg wallet_test_vectors_report "$wallet_test_vectors_report" \
+  --arg wallet_sign_transfer_report "$wallet_sign_transfer_report" \
+  --arg wallet_signer_mode "$P0_WALLET_SIGNER_MODE" \
+  --arg rpc_write_edge_load_report "$rpc_write_edge_load_report" \
+  --arg rpc_read_alias_report "$rpc_read_alias_report" \
+  --arg rpc_serve_tamper_report "$rpc_serve_tamper_report" \
+  --arg fee_reserve_policy_report "$fee_reserve_policy_report" \
+  --arg transfer_fee_quote_report "$transfer_fee_quote_report" \
+  --arg history_retention_report "$history_retention_report" \
+  --arg history_role_policy_report "$history_role_policy_report" \
+  --arg remote_transparent_driver "$REMOTE_TRANSPARENT_DRIVER" \
+  --argjson validators "$VALIDATORS" \
+  --argjson rounds "$ROUNDS" \
+  --argjson remote_blocked "$remote_blocked" \
+  --argjson require_topology_capture_ok "$P0_REQUIRE_TOPOLOGY_CAPTURE_OK" \
+  --argjson require_public_diversity "$PLACEMENT_REQUIRE_PUBLIC_DIVERSITY" \
+  --slurpfile local "$local_readiness_report" \
+  --slurpfile local_registry "$local_validator_registry_report" \
+  --slurpfile governance_replay_package "$governance_replay_package_report" \
+  --slurpfile governance_genesis_bundle "$governance_genesis_bundle_report" \
+  --slurpfile wallet_test_vectors "$wallet_test_vectors_report" \
+  --slurpfile wallet_sign_transfer "$wallet_sign_transfer_report" \
+  --slurpfile rpc_write_edge_load "$rpc_write_edge_load_report" \
+  --slurpfile rpc_read_alias "$rpc_read_alias_report" \
+  --slurpfile rpc_serve_tamper "$rpc_serve_tamper_report" \
+  --slurpfile fee_reserve_policy "$fee_reserve_policy_report" \
+  --slurpfile transfer_fee_quote "$transfer_fee_quote_report" \
+  --slurpfile history_retention "$history_retention_report" \
+  --slurpfile history_role_policy "$history_role_policy_report" \
+  --slurpfile manifest "$provision_manifest" \
+  --slurpfile remote_placement_capacity "$remote_placement_capacity_report" \
+  --slurpfile remote_operator_preflight "$remote_operator_preflight_report" \
+  --slurpfile remote_readiness "$remote_readiness_report" \
+  --slurpfile remote_restart "$remote_restart_report" \
+  --slurpfile remote_partial_outage "$remote_partial_outage_report" \
+  --slurpfile remote_rpc_catchup "$remote_rpc_catchup_report" \
+  --slurpfile remote_validator_registry "$remote_validator_registry_report" \
+  --slurpfile remote_emergency_key_rotation "$remote_emergency_key_rotation_report" \
+  --slurpfile remote_topology_capture_profile "$remote_topology_capture_profile_report" \
+  '{
+    schema: $schema,
+    generated_utc: $generated_utc,
+    status: "passed",
+    mode: $mode,
+    remote_blocked: $remote_blocked,
+    remote_blocked_reason: $remote_blocked_reason,
+    validators: $validators,
+    rounds: $rounds,
+    wallet_signer_mode: $wallet_signer_mode,
+    remote_transparent_driver: $remote_transparent_driver,
+    remote_placement_capacity_required: ($require_topology_capture_ok == 1),
+    remote_public_diversity_required: ($require_public_diversity == 1),
+    remote_topology_capture_required: ($require_topology_capture_ok == 1),
+    reports: {
+      remote_placement_capacity_profile: $remote_placement_capacity_report,
+      remote_operator_preflight: $remote_operator_preflight_report,
+      local_readiness: $local_readiness_report,
+      remote_readiness: $remote_readiness_report,
+      remote_restart_drill: $remote_restart_report,
+      remote_partial_outage_drill: $remote_partial_outage_report,
+      remote_rpc_catchup_drill: $remote_rpc_catchup_report,
+      local_validator_registry_drill: $local_validator_registry_report,
+      governance_replay_package_smoke: $governance_replay_package_report,
+      governance_genesis_bundle_smoke: $governance_genesis_bundle_report,
+      remote_validator_registry_drill: $remote_validator_registry_report,
+      remote_emergency_key_rotation_rehearsal: $remote_emergency_key_rotation_report,
+      remote_topology_capture_profile: $remote_topology_capture_profile_report,
+      wallet_test_vectors_smoke: $wallet_test_vectors_report,
+      wallet_sign_transfer_smoke: $wallet_sign_transfer_report,
+      rpc_serve_tamper: $rpc_serve_tamper_report,
+      fee_reserve_policy_smoke: $fee_reserve_policy_report,
+      transfer_fee_quote_smoke: $transfer_fee_quote_report,
+      history_retention_smoke: $history_retention_report,
+      history_role_policy_smoke: $history_role_policy_report,
+      rpc_write_edge_load_smoke: $rpc_write_edge_load_report,
+      rpc_read_alias_smoke: $rpc_read_alias_report
+    },
+    local_readiness_ok: ($local[0].readiness_ok == true),
+    local_fallback_ok: (
+      $local[0].readiness_ok == true
+      and $local[0].node_run_peer_certified_ok == true
+      and $local[0].node_run_peer_certified_restart_ok == true
+      and $local[0].node_run_peer_certified_partial_outage_ok == true
+      and $local[0].node_run_peer_certified_partial_outage_recovery_ok == true
+      and $local[0].rpc_catchup_ok == true
+      and $local[0].rpc_write_edge_load_ok == true
+      and $local[0].rpc_read_alias_ok == true
+    ),
+    provision_ok: (
+      $local[0].provision_ready == true
+      and $local[0].remote_deploy_plan_ready == true
+    ),
+    normal_rounds_ok: (
+      $local[0].node_run_peer_certified_ok == true
+      and $local[0].final_block_height == $rounds
+    ),
+    restart_recovery_ok: ($local[0].node_run_peer_certified_restart_ok == true),
+    partial_outage_quorum_ok: (
+      $local[0].node_run_peer_certified_partial_outage_ok == true
+      and $local[0].node_run_peer_certified_partial_outage_recovery_ok == true
+    ),
+    rpc_catchup_ok: ($local[0].rpc_catchup_ok == true),
+    rpc_edge_exhaustion_ok: (
+      $local[0].rpc_edge_exhaustion_ok == true
+      and $rpc_serve_tamper[0].edge_exhaustion_ok == true
+    ),
+    rpc_edge_exhaustion_metrics: {
+      report: $rpc_serve_tamper_report,
+      oversized_attempts: ($rpc_serve_tamper[0].oversized_attempts // null),
+      oversized_request_bytes: ($rpc_serve_tamper[0].oversized_request_bytes // null),
+      request_too_large_count: ($rpc_serve_tamper[0].oversized_request_wave.request_too_large_count // null),
+      event_request_too_large_count: ($rpc_serve_tamper[0].oversized_request_wave.event_request_too_large_count // null),
+      all_rejected_before_parse: ($rpc_serve_tamper[0].oversized_request_wave.all_rejected_before_parse == true),
+      valid_after_tamper_ok: ($rpc_serve_tamper[0].valid_after_tamper_ok == true),
+      child_timeout_enforced: ($rpc_serve_tamper[0].child_timeout_enforced == true)
+    },
+    fee_reserve_policy_ok: (
+      $local[0].fee_reserve_policy_ok == true
+      and $fee_reserve_policy[0].fee_reserve_policy_ok == true
+    ),
+    fee_reserve_policy_metrics: {
+      report: $fee_reserve_policy_report,
+      fee_charged: ($fee_reserve_policy[0].receipt.fee_charged // null),
+      fee_burned: ($fee_reserve_policy[0].receipt.fee_burned // null),
+      minimum_fee: ($fee_reserve_policy[0].receipt.minimum_fee // null),
+      account_reserve: ($fee_reserve_policy[0].receipt.account_reserve // null),
+      state_expansion_fee: ($fee_reserve_policy[0].receipt.state_expansion_fee // null),
+      burned_fee_total: ($fee_reserve_policy[0].metrics.execution.burned_fee_total // null),
+      transfer_account_creation_fee: ($fee_reserve_policy[0].metrics.execution.transfer_account_creation_fee // null),
+      transfer_fee_byte_quantum: ($fee_reserve_policy[0].metrics.execution.transfer_fee_byte_quantum // null),
+      transfer_fee_per_quantum: ($fee_reserve_policy[0].metrics.execution.transfer_fee_per_quantum // null),
+      state_expansion_fee_visible: ($fee_reserve_policy[0].checks.receipt_state_expansion_fee_visible == true),
+      fee_collector_not_funded: ($fee_reserve_policy[0].checks.fee_collector_not_funded == true)
+    },
+    transfer_fee_quote_ok: (
+      $local[0].transfer_fee_quote_ok == true
+      and $transfer_fee_quote[0].transfer_fee_quote_ok == true
+    ),
+    transfer_fee_quote_metrics: {
+      report: $transfer_fee_quote_report,
+      minimum_fee: ($transfer_fee_quote[0].quote_new_recipient.minimum_fee // null),
+      state_expansion_fee: ($transfer_fee_quote[0].quote_new_recipient.state_expansion_fee // null),
+      transfer_account_creation_fee: ($transfer_fee_quote[0].quote_new_recipient.transfer_account_creation_fee // null),
+      will_create_recipient_account: ($transfer_fee_quote[0].quote_new_recipient.will_create_recipient_account == true),
+      rpc_quote_matches_cli_quote: ($transfer_fee_quote[0].checks.rpc_quote_matches_cli_quote == true),
+      receipt_matches_quote: ($transfer_fee_quote[0].checks.receipt_matches_quote == true),
+      existing_recipient_no_state_expansion_fee: ($transfer_fee_quote[0].checks.quote_existing_no_state_expansion_fee == true)
+    },
+    history_retention_ok: (
+      $local[0].history_retention_ok == true
+      and $history_retention[0].history_retention_smoke_ok == true
+      and $history_retention[0].archive_window_backfilled == true
+      and $history_retention[0].archive_window_sdk_verified == true
+      and $history_retention[0].archive_window_source_rpc_ok_count == 2
+    ),
+    history_retention_metrics: {
+      report: $history_retention_report,
+      archive_window_verified: ($history_retention[0].archive_window_verified == true),
+      archive_window_backfilled: ($history_retention[0].archive_window_backfilled == true),
+      archive_window_sdk_verified: ($history_retention[0].archive_window_sdk_verified == true),
+      archive_window_source_rpc_ok_count: ($history_retention[0].archive_window_source_rpc_ok_count // null),
+      archived_window_count: ($history_retention[0].archived_window_count // null),
+      current_height_after_post_prune_block: ($history_retention[0].current_height_after_post_prune_block // null),
+      local_block_count_after_post_prune_block: ($history_retention[0].local_block_count_after_post_prune_block // null)
+    },
+    history_role_policy_ok: (
+      $local[0].history_role_policy_ok == true
+      and $history_role_policy[0].history_role_policy_smoke_ok == true
+      and $history_role_policy[0].policy_ok == true
+      and $history_role_policy[0].history_retention_ok == true
+    ),
+    history_role_policy_metrics: {
+      report: $history_role_policy_report,
+      policy_file: ($history_role_policy[0].policy_file // null),
+      policy_status: ($history_role_policy[0].policy_status // null),
+      archive_role_count: (($history_role_policy[0].archive_roles // []) | length),
+      validator_mode: ($history_role_policy[0].validator_history_role.mode // null),
+      source_backfill_required: ($history_role_policy[0].validator_history_role.source_backfill_required == true)
+    },
+    wallet_minimum_ok: ($local[0].wallet_minimum_ok == true),
+    wallet_sign_transfer_ok: (
+      $local[0].wallet_sign_transfer_ok == true
+      and $wallet_sign_transfer[0].wallet_sign_transfer_ok == true
+      and $local[0].wallet_signer_mode == $wallet_signer_mode
+      and $wallet_sign_transfer[0].signer_mode == $wallet_signer_mode
+      and $wallet_sign_transfer[0].checks.signer_mode_ok == true
+    ),
+    wallet_sign_transfer_metrics: {
+      report: $wallet_sign_transfer_report,
+      signer_mode: ($wallet_sign_transfer[0].signer_mode // null),
+      minimum_fee: ($wallet_sign_transfer[0].rpc_fee_quote.result.minimum_fee // null),
+      state_expansion_fee: ($wallet_sign_transfer[0].rpc_fee_quote.result.state_expansion_fee // null),
+      rpc_fee_quote_request_count: ($wallet_sign_transfer[0].rpc_fee_quote_server.request_count // null),
+      rpc_fee_quote_ok_count: ($wallet_sign_transfer[0].rpc_fee_quote_server.ok_count // null),
+      rpc_fee_quote_read_only: ($wallet_sign_transfer[0].rpc_fee_quote_server.read_only == true),
+      signed_transfer_matches_quote: ($wallet_sign_transfer[0].checks.signed_transfer_matches_quote == true),
+      rpc_signed_transfer_submission_ok: ($wallet_sign_transfer[0].checks.rpc_signed_transfer_submission_ok == true),
+      rpc_submit_request_count: ($wallet_sign_transfer[0].rpc_submission.server.request_count // null),
+      rpc_submit_ok_count: ($wallet_sign_transfer[0].rpc_submission.server.ok_count // null),
+      rpc_submit_invalid_signature_count: ($wallet_sign_transfer[0].rpc_submission.server.invalid_signature_count // null),
+      signed_transfer_submission_ok: ($wallet_sign_transfer[0].checks.signed_transfer_submission_ok == true),
+      signed_transfer_apply_ok: ($wallet_sign_transfer[0].checks.signed_transfer_apply_ok == true),
+      receipt_matches_quote: ($wallet_sign_transfer[0].checks.receipt_matches_quote == true),
+      tx_finality_rpc_ok: ($wallet_sign_transfer[0].checks.tx_finality_rpc_ok == true),
+      tx_finality_proof_id: ($wallet_sign_transfer[0].tx_finality.response.result.proof_id // null),
+      tx_finality_block_hash: ($wallet_sign_transfer[0].tx_finality.response.result.block.header.block_hash // null),
+      tx_finality_certificate_id: ($wallet_sign_transfer[0].tx_finality.response.result.block.header.certificate_id // null),
+      tx_finality_read_only: ($wallet_sign_transfer[0].tx_finality.server.read_only == true),
+      first_spend_public_key_binding_ok: ($wallet_sign_transfer[0].checks.first_spend_public_key_binding_ok == true)
+    },
+    wallet_test_vectors_ok: (
+      $local[0].wallet_test_vectors_ok == true
+      and $wallet_test_vectors[0].wallet_test_vectors_ok == true
+    ),
+    wallet_test_vectors_metrics: {
+      report: $wallet_test_vectors_report,
+      vector_bundle: ($wallet_test_vectors[0].vector_bundle // null),
+      vector_count: ($wallet_test_vectors[0].vector_count // null),
+      deterministic_vector_replay_ok: ($wallet_test_vectors[0].deterministic_vector_replay_ok == true),
+      public_fixture_seed_included: ($wallet_test_vectors[0].public_fixture_seed_included == true),
+      vectors_unique_ok: ($wallet_test_vectors[0].vectors_unique_ok == true),
+      vector_signatures_ok: ($wallet_test_vectors[0].vector_signatures_ok == true),
+      signed_transfer_apply_ok: ($wallet_test_vectors[0].signed_transfer_apply_ok == true),
+      first_spend_public_key_binding_ok: ($wallet_test_vectors[0].first_spend_public_key_binding_ok == true)
+    },
+    write_edge_load_ok: ($local[0].rpc_write_edge_load_ok == true),
+    write_edge_load_metrics: {
+      report: $rpc_write_edge_load_report,
+      invalid_attempts: ($rpc_write_edge_load[0].invalid_attempts // null),
+      max_requests: ($rpc_write_edge_load[0].max_requests // null),
+      max_mempool_submit_per_peer: ($rpc_write_edge_load[0].max_mempool_submit_per_peer // null),
+      max_mempool_submit_total: ($rpc_write_edge_load[0].max_mempool_submit_total // null),
+      invalid_wave_rejected_without_persisting: ($rpc_write_edge_load[0].invalid_wave_rejected_without_persisting == true),
+      valid_after_invalid_pressure_admitted: ($rpc_write_edge_load[0].valid_after_invalid_pressure_admitted == true),
+      bounded_window_reported: ($rpc_write_edge_load[0].bounded_window_reported == true),
+      edge_counters_ok: ($rpc_write_edge_load[0].edge_counters_ok == true),
+      global_limit_enforced_without_persisting: ($rpc_write_edge_load[0].global_limit_enforced_without_persisting == true),
+      parallel_invalid_pressure_does_not_starve_valid_transfer: ($rpc_write_edge_load[0].parallel_invalid_pressure_does_not_starve_valid_transfer == true),
+      server_invalid_signature_count: ($rpc_write_edge_load[0].server.invalid_signature_count // null),
+      global_invalid_signature_count: ($rpc_write_edge_load[0].global_limit.invalid_signature_count // null),
+      global_rate_limited_count: ($rpc_write_edge_load[0].global_limit.mempool_submit_global_rate_limited_count // null),
+      parallel_invalid_signature_count: ($rpc_write_edge_load[0].parallel.invalid_signature_count // null)
+    },
+    rpc_read_alias_ok: (
+      $local[0].rpc_read_alias_ok == true
+      and $rpc_read_alias[0].rpc_read_alias_smoke_ok == true
+    ),
+    rpc_read_alias_metrics: {
+      report: $rpc_read_alias_report,
+      server_info_ok: ($rpc_read_alias[0].checks.server_info_ok == true),
+      ledger_ok: ($rpc_read_alias[0].checks.ledger_ok == true),
+      fee_ok: ($rpc_read_alias[0].checks.fee_ok == true),
+      validators_ok: ($rpc_read_alias[0].checks.validators_ok == true),
+      manifests_ok: ($rpc_read_alias[0].checks.manifests_ok == true),
+      read_only_server_ok: ($rpc_read_alias[0].checks.read_only_server_ok == true)
+    },
+    validator_registry_update_ok: ($local[0].validator_registry_update_ok == true),
+    governance_replay_package_ok: (
+      $local[0].governance_replay_package_ok == true
+      and $governance_replay_package[0].governance_replay_package_ok == true
+      and $governance_replay_package[0].post_change_certificate_verified == true
+      and $governance_replay_package[0].post_change_certificate_registry_root == $governance_replay_package[0].new_registry_root
+      and $governance_replay_package[0].tampered_replay_rejected == true
+    ),
+    governance_replay_package_metrics: {
+      report: $governance_replay_package_report,
+      previous_registry_root_verified: ($governance_replay_package[0].previous_registry_root_verified == true),
+      new_registry_root_verified: ($governance_replay_package[0].new_registry_root_verified == true),
+      governance_batch_verified: ($governance_replay_package[0].governance_batch_verified == true),
+      governance_batch_contains_update: ($governance_replay_package[0].governance_batch_contains_update == true),
+      post_change_certificate_verified: ($governance_replay_package[0].post_change_certificate_verified == true),
+      post_change_block_height: ($governance_replay_package[0].post_change_block_height // null),
+      post_change_certificate_registry_root_matches: (
+        $governance_replay_package[0].post_change_certificate_registry_root == $governance_replay_package[0].new_registry_root
+      ),
+      tampered_replay_rejected: ($governance_replay_package[0].tampered_replay_rejected == true)
+    },
+    governance_genesis_bundle_ok: (
+      $local[0].governance_genesis_bundle_ok == true
+      and $governance_genesis_bundle[0].governance_genesis_bundle_smoke_ok == true
+      and $governance_genesis_bundle[0].validators == $validators
+      and $governance_genesis_bundle[0].metrics.manifest_count == $validators
+      and $governance_genesis_bundle[0].checks.operator_manifests_ok == true
+      and $governance_genesis_bundle[0].checks.genesis_bundle_ok == true
+      and $governance_genesis_bundle[0].checks.tampered_manifest_rejected == true
+      and $governance_genesis_bundle[0].checks.private_material_removed == true
+      and $governance_genesis_bundle[0].checks.node_private_keys_removed == true
+      and $governance_genesis_bundle[0].checks.public_redaction_ok == true
+    ),
+    governance_genesis_bundle_metrics: {
+      report: $governance_genesis_bundle_report,
+      manifest_count: ($governance_genesis_bundle[0].metrics.manifest_count // null),
+      bundle_hash: ($governance_genesis_bundle[0].metrics.bundle_hash // null),
+      registry_root: ($governance_genesis_bundle[0].metrics.registry_root // null),
+      tampered_manifest_rejected: ($governance_genesis_bundle[0].checks.tampered_manifest_rejected == true),
+      public_redaction_ok: ($governance_genesis_bundle[0].checks.public_redaction_ok == true)
+    },
+    local_validator_registry_faults: {
+      report: $local_validator_registry_report,
+      emergency_key_rotation_ok: ($local_registry[0].emergency_key_rotation_ok == true),
+      stale_key_stage_rejected: ($local_registry[0].emergency_key_rotation.stale_key_stage_rejected == true),
+      stale_key_vote_rejected: ($local_registry[0].emergency_key_rotation.stale_key_vote_rejected == true),
+      replacement_key_vote_ok: ($local_registry[0].emergency_key_rotation.replacement_key_vote_ok == true),
+      f_plus_one_halt_verified: ($local_registry[0].multi_process_post_suspend.f_plus_one_halt_verified == true),
+      f_plus_one_halt_non_skipped: ($local_registry[0].multi_process_post_suspend.f_plus_one_halt.skipped == false),
+      f_plus_one_halt_below_quorum: (
+        $local_registry[0].multi_process_post_suspend.f_plus_one_halt.halt_threshold_verified == true
+        and $local_registry[0].multi_process_post_suspend.f_plus_one_halt.command_failed_below_quorum == true
+        and $local_registry[0].multi_process_post_suspend.f_plus_one_halt.no_state_advance == true
+      ),
+      failed_leader_view_change_verified: ($local_registry[0].multi_process_post_suspend.failed_leader_verified == true),
+      failed_leader_view_change_non_skipped: ($local_registry[0].multi_process_post_suspend.failed_leader.skipped == false),
+      failed_leader_recovery_ok: (
+        $local_registry[0].multi_process_post_suspend.failed_leader.timeout_certificate_verified == true
+        and $local_registry[0].multi_process_post_suspend.failed_leader.view_change_round_verified == true
+        and $local_registry[0].multi_process_post_suspend.failed_leader.recovery_replay_verified == true
+        and $local_registry[0].multi_process_post_suspend.failed_leader.recovered_converged == true
+      ),
+      partition_verified: ($local_registry[0].multi_process_post_suspend.partition_verified == true),
+      partition_non_skipped: ($local_registry[0].multi_process_post_suspend.partition.skipped == false),
+      partition_below_quorum: (
+        $local_registry[0].multi_process_post_suspend.partition.partition_threshold_verified == true
+        and $local_registry[0].multi_process_post_suspend.partition.command_failed_below_quorum == true
+        and $local_registry[0].multi_process_post_suspend.partition.certificate_not_written == true
+        and $local_registry[0].multi_process_post_suspend.partition.no_state_advance == true
+      ),
+      stale_vote_verified: ($local_registry[0].multi_process_post_suspend.stale_vote_verified == true),
+      stale_vote_non_skipped: ($local_registry[0].multi_process_post_suspend.stale_vote.skipped == false),
+      stale_vote_rejected: (
+        $local_registry[0].multi_process_post_suspend.stale_vote.stale_vote_rejected == true
+        and $local_registry[0].multi_process_post_suspend.stale_vote.certificate_not_written == true
+        and $local_registry[0].multi_process_post_suspend.stale_vote.no_state_advance == true
+      )
+    },
+    final_convergence_ok: (
+      $local[0].readiness_ok == true
+      and $local[0].final_block_height == $rounds
+    ),
+    private_key_policy_ok: (
+      $manifest[0].private_key_policy.included_in_provision_bundle == false
+      and (($manifest[0].private_key_policy.private_keys_in_public_bundle // false) == false)
+      and $manifest[0].private_key_policy.peer_certified_loop_driver_key_source == "installed_local_validator_key"
+      and $manifest[0].private_key_policy.peer_certified_action_loop_driver_key_source == "installed_local_validator_key"
+      and $manifest[0].service_identity.private_key_mode == "600"
+    ),
+    certificate_size_metrics_ok: ($local[0].certificate_size_metrics_ok == true),
+    certificate_artifact_metrics: ($local[0].certificate_artifact_metrics // {}),
+    remote_readiness_ok: ($remote_readiness[0].remote_readiness_ok == true),
+    remote_rpc_edge_load_ok: (
+      $remote_readiness[0].remote_rpc_edge_load_ok == true
+    ),
+    remote_operator_preflight_ok: (
+      if $mode != "remote" then
+        true
+      else
+        $remote_operator_preflight[0].schema == "postfiat-testnet-remote-ssh-smoke-v1"
+        and $remote_operator_preflight[0].status == "passed"
+        and $remote_operator_preflight[0].preflight_only == true
+        and $remote_operator_preflight[0].operator_preflight_ok == true
+      end
+    ),
+    remote_operator_preflight_failed_count: (
+      $remote_operator_preflight[0].operator_preflight_failed_count // null
+    ),
+    remote_operator_preflight_failed_nodes: (
+      $remote_operator_preflight[0].operator_preflight_failed_nodes // []
+    ),
+    remote_operator_preflight_failure_classes: (
+      $remote_operator_preflight[0].operator_preflight_failure_classes // []
+    ),
+    remote_restart_recovery_ok: ($remote_restart[0].remote_restart_drill_ok == true),
+    remote_partial_outage_quorum_ok: (
+      $remote_partial_outage[0].ok == true
+      and $remote_partial_outage[0].final_convergence.all_validators_converged == true
+    ),
+    remote_rpc_catchup_ok: (
+      $remote_rpc_catchup[0].ok == true
+      and $remote_rpc_catchup[0].final_convergence.all_validators_converged == true
+    ),
+    remote_validator_registry_update_ok: (
+      $remote_validator_registry[0].ok == true
+      and $remote_validator_registry[0].governance_ordering.update_verified == true
+      and $remote_validator_registry[0].governance_ordering.round.certificate_validators == $remote_validator_registry[0].previous_validators
+      and $remote_validator_registry[0].post_suspend_ordering.round.certificate_validators == $remote_validator_registry[0].new_validators
+      and ($remote_validator_registry[0].post_suspend_ordering.round.certificate_validators | index($remote_validator_registry[0].subject_node)) == null
+      and $remote_validator_registry[0].post_suspend_ordering.round.local_apply_verified == true
+      and $remote_validator_registry[0].post_suspend_ordering.round.subject_failure_recorded == true
+      and $remote_validator_registry[0].post_suspend_convergence.active_validators_converged == true
+      and $remote_validator_registry[0].active_registry_roots.active_registry_roots_verified == true
+      and (
+        if $remote_validator_registry[0].post_suspend_fault_tolerance_required == true then
+          $remote_validator_registry[0].post_suspend_fault_tolerance.verified == true
+          and $remote_validator_registry[0].post_suspend_fault_tolerance.outage_convergence.active_quorum_preserved == true
+          and $remote_validator_registry[0].post_suspend_fault_tolerance.recovery_replay.verified == true
+          and $remote_validator_registry[0].post_suspend_fault_tolerance.final_convergence.active_validators_converged == true
+        else
+          true
+        end
+      )
+    ),
+    remote_validator_registry_fault_tolerance_ok: (
+      if $remote_validator_registry[0].post_suspend_fault_tolerance_required == true then
+        $remote_validator_registry[0].post_suspend_fault_tolerance.verified == true
+        and $remote_validator_registry[0].post_suspend_fault_tolerance.outage_convergence.active_quorum_preserved == true
+        and $remote_validator_registry[0].post_suspend_fault_tolerance.recovery_replay.verified == true
+        and $remote_validator_registry[0].post_suspend_fault_tolerance.final_convergence.active_validators_converged == true
+      else
+        $mode != "remote" or $remote_validator_registry[0].ok == true
+      end
+    ),
+    remote_emergency_key_rotation_rehearsal_ok: (
+      $remote_emergency_key_rotation[0].schema == "postfiat-testnet-remote-emergency-key-rotation-rehearsal-v1"
+      and $remote_emergency_key_rotation[0].status == "passed"
+      and $remote_emergency_key_rotation[0].remote_emergency_key_rotation_rehearsal_ok == true
+      and $remote_emergency_key_rotation[0].checks.operator_manifest_bound_ok == true
+      and $remote_emergency_key_rotation[0].checks.local_emergency_key_rotation_evidence_ok == true
+      and $remote_emergency_key_rotation[0].checks.remote_fault_tolerance_evidence_ok == true
+    ),
+    remote_placement_capacity_profile_recorded: (
+      $remote_placement_capacity[0].schema == "postfiat-testnet-remote-placement-capacity-profile-v1"
+      and $remote_placement_capacity[0].status == "profiled"
+      and $remote_placement_capacity[0].placement_capacity_profile_recorded == true
+    ),
+    remote_placement_minimum_independent_groups_for_no_blocking: (
+      $remote_placement_capacity[0].minimum_independent_groups_for_no_blocking // null
+    ),
+    remote_placement_complete_machine_entries: (
+      $remote_placement_capacity[0].credential_complete_machine_entries // null
+    ),
+    remote_placement_machine_reuse_required: (
+      $remote_placement_capacity[0].machine_reuse_required_for_requested_validators == true
+    ),
+    remote_placement_manifest_present: (
+      $remote_placement_capacity[0].placement_manifest.present == true
+    ),
+    remote_placement_manifest_bindable_targets: (
+      $remote_placement_capacity[0].placement_manifest.bindable_targets // null
+    ),
+    remote_placement_manifest_complete_controlled_targets: (
+      $remote_placement_capacity[0].placement_manifest.complete_controlled_targets // null
+    ),
+    remote_placement_controlled_missing_independent_groups: (
+      $remote_placement_capacity[0].capacity_shortfall.controlled_testnet.max_missing_independent_groups // null
+    ),
+    remote_placement_public_missing_independent_groups: (
+      $remote_placement_capacity[0].capacity_shortfall.public_expansion.max_missing_independent_groups // null
+    ),
+    remote_placement_shortfall: (
+      $remote_placement_capacity[0].capacity_shortfall // {}
+    ),
+    remote_placement_public_expansion_capacity_gate_ok: (
+      if $mode != "remote" then
+        true
+      elif $require_public_diversity == 1 then
+        $remote_placement_capacity[0].public_expansion_capacity_gate_ok == true
+      else
+        true
+      end
+    ),
+    remote_placement_capacity_gate_ok: (
+      if $mode != "remote" then
+        true
+      elif $require_topology_capture_ok == 1 then
+        $remote_placement_capacity[0].placement_capacity_gate_ok == true
+      else
+        $remote_placement_capacity[0].placement_capacity_profile_recorded == true
+      end
+    ),
+    remote_topology_capture_profile_recorded: (
+      $remote_topology_capture_profile[0].schema == "postfiat-testnet-remote-topology-capture-profile-v1"
+      and $remote_topology_capture_profile[0].status == "profiled"
+      and $remote_topology_capture_profile[0].topology_capture_profile_recorded == true
+    ),
+    remote_topology_single_group_can_block_quorum: (
+      $remote_topology_capture_profile[0].single_group_can_block_quorum == true
+    ),
+    remote_topology_single_group_can_reach_quorum: (
+      $remote_topology_capture_profile[0].single_group_can_reach_quorum == true
+    ),
+    remote_topology_minimum_groups_to_block_quorum: (
+      $remote_topology_capture_profile[0].minimum_groups_to_block_quorum // null
+    ),
+    remote_topology_minimum_groups_to_reach_quorum: (
+      $remote_topology_capture_profile[0].minimum_groups_to_reach_quorum // null
+    ),
+    remote_topology_capture_threshold_profile_ok: (
+      if $mode != "remote" then
+        null
+      else
+        $remote_topology_capture_profile[0].capture_threshold_profile_ok == true
+      end
+    ),
+    remote_topology_capture_thresholds: (
+      $remote_topology_capture_profile[0].capture_thresholds // {}
+    ),
+    remote_topology_capture_profile_ok: (
+      $remote_topology_capture_profile[0].topology_capture_profile_ok == true
+    ),
+    remote_topology_gate_ok: (
+      if $mode != "remote" then
+        true
+      elif $require_topology_capture_ok == 1 then
+        $remote_topology_capture_profile[0].topology_capture_profile_ok == true
+      else
+        $remote_topology_capture_profile[0].topology_capture_profile_recorded == true
+      end
+    ),
+    remote_normal_run_ordering_ok: (
+      $mode == "remote"
+      and $remote_transparent_driver == "normal-run"
+      and $remote_readiness[0].remote_transparent_driver == "normal-run"
+      and $remote_readiness[0].remote_normal_run_ordering_ok == true
+      and $remote_readiness[0].remote_readiness_ok == true
+    )
+  } | .remote_drills_ok = (
+    if .mode == "remote" then
+      .remote_readiness_ok == true
+      and .remote_operator_preflight_ok == true
+      and .remote_restart_recovery_ok == true
+      and .remote_partial_outage_quorum_ok == true
+      and .remote_rpc_catchup_ok == true
+      and .remote_rpc_edge_load_ok == true
+      and .remote_placement_capacity_gate_ok == true
+      and .remote_placement_public_expansion_capacity_gate_ok == true
+      and .remote_topology_gate_ok == true
+      and .remote_validator_registry_update_ok == true
+      and .remote_validator_registry_fault_tolerance_ok == true
+      and .remote_emergency_key_rotation_rehearsal_ok == true
+      and .remote_normal_run_ordering_ok == true
+    else
+      .remote_blocked == true
+    end
+  ) | .local_validator_registry_fault_drills_ok = (
+    .local_validator_registry_faults.emergency_key_rotation_ok == true
+    and .local_validator_registry_faults.stale_key_stage_rejected == true
+    and .local_validator_registry_faults.stale_key_vote_rejected == true
+    and .local_validator_registry_faults.replacement_key_vote_ok == true
+    and .local_validator_registry_faults.f_plus_one_halt_verified == true
+    and .local_validator_registry_faults.f_plus_one_halt_non_skipped == true
+    and .local_validator_registry_faults.f_plus_one_halt_below_quorum == true
+    and .local_validator_registry_faults.failed_leader_view_change_verified == true
+    and .local_validator_registry_faults.failed_leader_view_change_non_skipped == true
+    and .local_validator_registry_faults.failed_leader_recovery_ok == true
+    and .local_validator_registry_faults.partition_verified == true
+    and .local_validator_registry_faults.partition_non_skipped == true
+    and .local_validator_registry_faults.partition_below_quorum == true
+    and .local_validator_registry_faults.stale_vote_verified == true
+    and .local_validator_registry_faults.stale_vote_non_skipped == true
+    and .local_validator_registry_faults.stale_vote_rejected == true
+  ) | .core_p0_checks_ok = (
+    .provision_ok == true
+    and .normal_rounds_ok == true
+    and .restart_recovery_ok == true
+    and .partial_outage_quorum_ok == true
+    and .rpc_catchup_ok == true
+    and .rpc_edge_exhaustion_ok == true
+    and .fee_reserve_policy_ok == true
+    and .transfer_fee_quote_ok == true
+    and .history_retention_ok == true
+    and .history_role_policy_ok == true
+    and .wallet_minimum_ok == true
+    and .wallet_sign_transfer_ok == true
+    and .wallet_test_vectors_ok == true
+    and .write_edge_load_ok == true
+    and .rpc_read_alias_ok == true
+    and .validator_registry_update_ok == true
+    and .governance_replay_package_ok == true
+    and .governance_genesis_bundle_ok == true
+    and .local_validator_registry_fault_drills_ok == true
+    and .final_convergence_ok == true
+    and .private_key_policy_ok == true
+    and .certificate_size_metrics_ok == true
+  ) | .configured_gate_ok = (
+    .core_p0_checks_ok == true
+    and .remote_drills_ok == true
+  ) | .p0_network_ok = (
+    .core_p0_checks_ok == true
+    and .mode == "remote"
+    and .remote_drills_ok == true
+  )' >"$REPORT"
+
+jq -e \
+  --arg wallet_signer_mode "$P0_WALLET_SIGNER_MODE" \
+  '.schema == "postfiat-testnet-p0-network-gate-v1"
+    and .status == "passed"
+    and .configured_gate_ok == true
+    and .wallet_signer_mode == $wallet_signer_mode
+    and .provision_ok == true
+    and .normal_rounds_ok == true
+    and .restart_recovery_ok == true
+    and .partial_outage_quorum_ok == true
+    and .rpc_catchup_ok == true
+    and .rpc_edge_exhaustion_ok == true
+    and .fee_reserve_policy_ok == true
+    and .transfer_fee_quote_ok == true
+    and .history_retention_ok == true
+    and .history_role_policy_ok == true
+    and .wallet_minimum_ok == true
+    and .wallet_sign_transfer_ok == true
+    and .wallet_test_vectors_ok == true
+    and .write_edge_load_ok == true
+    and .rpc_read_alias_ok == true
+    and .validator_registry_update_ok == true
+    and .governance_replay_package_ok == true
+    and .governance_genesis_bundle_ok == true
+    and .local_validator_registry_fault_drills_ok == true
+    and .final_convergence_ok == true
+    and .private_key_policy_ok == true
+    and .certificate_size_metrics_ok == true
+    and .remote_validator_registry_fault_tolerance_ok == true
+    and (
+      .mode != "remote"
+      or .remote_rpc_edge_load_ok == true
+    )
+    and (
+      .mode != "remote"
+      or .remote_operator_preflight_ok == true
+    )
+    and (
+      .mode != "remote"
+      or .remote_placement_capacity_gate_ok == true
+    )
+    and (
+      .mode != "remote"
+      or .remote_placement_public_expansion_capacity_gate_ok == true
+    )
+    and (
+      .mode != "remote"
+      or .remote_emergency_key_rotation_rehearsal_ok == true
+    )
+    and (
+      .mode != "remote"
+      or .remote_topology_gate_ok == true
+    )
+    and (
+      (.mode == "remote" and .p0_network_ok == true)
+      or (.mode == "local_fallback" and .remote_blocked == true and .local_fallback_ok == true and .p0_network_ok == false)
+    )' \
+  "$REPORT" >/dev/null
+
+if grep -R -E '"private_key_hex"|everythingIsRigged|[0-9]{1,3}(\.[0-9]{1,3}){3}' "$REPORT" >/dev/null; then
+  echo "P0 network gate report leaked private key, credential, or IP material" >&2
+  exit 1
+fi
+
+trap - EXIT
+printf 'testnet_p0_network_gate=ok mode=%s remote_blocked=%s validators=%s rounds=%s report=%s\n' \
+  "$mode" "$remote_blocked" "$VALIDATORS" "$ROUNDS" "$REPORT"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "L1 Rust Engineer"
+  short_description: "Rust L1 protocol engineering guardrails"
+  default_prompt: "Use $l1-rust-engineer to review this Rust L1 protocol change for determinism, safety, latency, and test coverage."

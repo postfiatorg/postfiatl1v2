@@ -1,0 +1,18 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_attestor_capture/valid_attestor_capture.json",
+  "expected_error_contains": [
+    "case-03-undetected-capture-above-b-fail-closed: expected_route mismatch"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        2,
+        "expected_route"
+      ],
+      "value": "admit"
+    }
+  ],
+  "schema": "postfiat-validator-economic-attestor-capture-invalid-case-v1"
+}

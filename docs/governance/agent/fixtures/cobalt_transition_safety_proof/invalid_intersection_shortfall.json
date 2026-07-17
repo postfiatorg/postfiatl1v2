@@ -1,0 +1,17 @@
+{
+  "base_fixture": "valid_transition_safety_proof.json",
+  "overrides": {
+    "new_cover": [
+      {
+        "id": "new-main-10-unsafe-rotation",
+        "active": true,
+        "validators": ["A", "B", "C", "D", "E", "K", "L", "M", "N", "O"],
+        "t_s": 2,
+        "q_s": 8
+      }
+    ]
+  },
+  "expected_error_contains": [
+    "old/new quorum intersection has no guaranteed correct continuity signer"
+  ]
+}

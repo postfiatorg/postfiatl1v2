@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_floor_calibration/valid_floor_calibration.json",
+  "expected_error_contains": [
+    "statement.calibration_root_hash does not match calibration material"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "calibration_root_hash"
+      ],
+      "value": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  ],
+  "schema": "postfiat-privacy-floor-calibration-invalid-case-v1"
+}

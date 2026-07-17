@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VALIDATORS="${VALIDATORS:-4}"
+BASE_DIR="${BASE_DIR:-devnet/local}"
+
+cargo build -p postfiat-node >/dev/null
+
+expected_root=""
+expected_block_height=""
+expected_block_tip=""
+diverged=0
+
+for ((i = 0; i < VALIDATORS; i++)); do
+  node_dir="$BASE_DIR/node$i"
+  if [ ! -d "$node_dir" ]; then
+    echo "validator-$i missing at $node_dir" >&2
+    exit 2
+  fi
+  status="$(target/debug/postfiat-node status --data-dir "$node_dir")"
+  root="$(printf '%s\n' "$status" | sed -n 's/.*"state_root": "\(.*\)".*/\1/p')"
+  node_status="$(printf '%s\n' "$status" | sed -n 's/.*"status": "\(.*\)".*/\1/p')"
+  block_height="$(printf '%s\n' "$status" | sed -n 's/.*"block_height": \([0-9][0-9]*\).*/\1/p')"
+  block_tip="$(printf '%s\n' "$status" | sed -n 's/.*"block_tip_hash": "\(.*\)",/\1/p')"
+  mempool_pending="$(printf '%s\n' "$status" | sed -n 's/.*"mempool_pending": \([0-9][0-9]*\).*/\1/p')"
+  block_report="$(target/debug/postfiat-node verify-blocks --data-dir "$node_dir")"
+  verified_block_count="$(printf '%s\n' "$block_report" | sed -n 's/.*"block_count": \([0-9][0-9]*\).*/\1/p')"
+  verified_block_tip="$(printf '%s\n' "$block_report" | sed -n 's/.*"tip_hash": "\(.*\)",/\1/p')"
+  if [ "$verified_block_tip" != "$block_tip" ]; then
+    echo "validator-$i verified block tip mismatch status=$block_tip verified=$verified_block_tip" >&2
+    exit 1
+  fi
+  echo "validator-$i status=$node_status state_root=$root block_height=$block_height block_tip=$block_tip verified_blocks=$verified_block_count mempool_pending=$mempool_pending"
+  if [ -z "$expected_root" ]; then
+    expected_root="$root"
+    expected_block_height="$block_height"
+    expected_block_tip="$block_tip"
+  elif [ "$root" != "$expected_root" ]; then
+    diverged=1
+  elif [ "$block_height" != "$expected_block_height" ]; then
+    diverged=1
+  elif [ "$block_tip" != "$expected_block_tip" ]; then
+    diverged=1
+  fi
+done
+
+if [ "$diverged" -ne 0 ]; then
+  echo "state root or block tip divergence detected" >&2
+  exit 1
+fi
+
+echo "all validators converged state_root=$expected_root block_height=$expected_block_height block_tip=$expected_block_tip"

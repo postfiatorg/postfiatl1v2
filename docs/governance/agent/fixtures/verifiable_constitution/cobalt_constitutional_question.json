@@ -1,0 +1,170 @@
+{
+  "schema": "postfiat-constitutional-question-v1",
+  "question_id": "vc-cobalt-governance-001",
+  "question_version": 1,
+  "status": "active",
+  "scope": "cobalt_governance",
+  "created_at": "2026-05-24T00:00:00Z",
+  "situation": {
+    "summary": "Decide which Cobalt trust-graph and validator-registry transition gates should remain constitutional hard requirements.",
+    "problem_statement": "PostFiat needs a replayable Cobalt-governance question whose answer cannot silently bypass linkedness checks, essential-subset thresholds, registry-transition activation rules, or replay evidence.",
+    "decision_boundary": "This question may preserve, hold, or request future evidence for Cobalt gate changes. It may not mutate live validator registry state, submit a live Cobalt amendment, change trust thresholds, activate a registry transition, or transfer authority.",
+    "out_of_scope": [
+      "mainnet mutation",
+      "live validator-registry mutation",
+      "live trust-graph activation",
+      "live Cobalt amendment submission",
+      "sidecar activation",
+      "commit-reveal activation",
+      "authority transfer"
+    ]
+  },
+  "status_quo": {
+    "current_position": "The current Cobalt baseline treats trust-graph linkedness, essential-subset threshold checks, validator-registry transition rules, stale replay rejection, dry-run no-mutation checks, and replay bundles as hard gates before any validator-registry or trust-graph change can become live authority.",
+    "implementation_refs": [
+      {
+        "ref_id": "constitutional-question-schema",
+        "path": "docs/governance/agent/constitutional_question_schema.json",
+        "sha3_384": "47c2b2f27bdc745615f4d0d893333c12825b8b935358efbf4f53bdb9ad7b72e03d46d5264812d2cd9066d3c11813bd7f"
+      },
+      {
+        "ref_id": "initial-context-packet",
+        "path": "docs/governance/agent/fixtures/verifiable_constitution/initial_context_packet.json",
+        "sha3_384": "b370232a7544900f82c21268d1a08dea911835f670a52d2c5a229ab4ac8c878e66cd858cb23ac06c36d425a9ddf50e3a"
+      },
+      {
+        "ref_id": "cobalt-overview",
+        "path": "docs_site/governance/cobalt.md",
+        "sha3_384": "acf0e856b93180f8a5bd6bf5957f85db070d96f4bbc46adca2ddfc078f875ad845e18fb7e34acf2a9e4ddde384f74e52"
+      },
+      {
+        "ref_id": "deterministic-governance-overview",
+        "path": "docs_site/governance/deterministic-governance-overview.md",
+        "sha3_384": "6cc2ae0ea4afce4d96a8ad3bc537ee5d2854623fc0190bbef1be69adf85f7d53132c39ce80b850b4694ce1cefda295f3"
+      }
+    ],
+    "evidence_refs": [
+      {
+        "ref_id": "implementation-whitepaper",
+        "path": "docs_site/whitepaper.md",
+        "sha3_384": "ea4f650da64ae54aa291f2fe5a3ca14189bb6492972681a4f247d5baa6b252d8d3935c24411c90b22003587d53415e45"
+      },
+      {
+        "ref_id": "cobalt-implementation",
+        "path": "docs_site/governance/cobalt-implementation.md",
+        "sha3_384": "8fccab3a620958c6bef72b57515ceb7472b3f250bd8cc075877be25307f10676e4d0457562386d17d8e7890588afa756"
+      },
+      {
+        "ref_id": "cobalt-adversarial-testing",
+        "path": "docs_site/governance/cobalt-adversarial-testing.md",
+        "sha3_384": "371c1234edd0bd53305f3e1a421e3ae2f20b41e6380088424a6fed431302395a1a7e801cae126fa07d8173699c28104b"
+      },
+      {
+        "ref_id": "validator-registry",
+        "path": "docs_site/governance/validator-registry.md",
+        "sha3_384": "509ca09608c926a604e4eef1700ba77358b44fcd060066d9f17ec4974f740b5fe27c9e2f3eea5e0d22a67df93afe66d7"
+      },
+      {
+        "ref_id": "qwen-cobalt-internal-validation-plan",
+        "path": "docs_site/governance/qwen-cobalt-internal-validation-plan.md",
+        "sha3_384": "3ef666d69c3ad28e999b8051749aac63296100ffcf9c528ae7d5c19deb0ad44a50f7e17ed4396596305ed10334147bb5"
+      }
+    ]
+  },
+  "option_order": [
+    "preserve-cobalt-hard-gates",
+    "alter-trust-graph-thresholds",
+    "alter-registry-transition-gates",
+    "hold-no-op"
+  ],
+  "options": {
+    "preserve-cobalt-hard-gates": {
+      "option_id": "preserve-cobalt-hard-gates",
+      "title": "Preserve Cobalt hard gates",
+      "kind": "preserve_status_quo",
+      "description": "Keep linkedness, essential-subset thresholds, registry-transition gates, stale replay rejection, dry-run no-mutation checks, and replay bundles as hard requirements before validator-registry or trust-graph changes can become live authority.",
+      "implementation_effect": "no_code_change",
+      "requires_new_evidence": false
+    },
+    "alter-trust-graph-thresholds": {
+      "option_id": "alter-trust-graph-thresholds",
+      "title": "Alter trust-graph thresholds",
+      "kind": "adopt_change",
+      "description": "Change linkedness, essential-subset, t_S, q_S, or trust-view threshold semantics only after a future evidence packet proves the change preserves Cobalt safety.",
+      "implementation_effect": "future_authorization_required",
+      "requires_new_evidence": true
+    },
+    "alter-registry-transition-gates": {
+      "option_id": "alter-registry-transition-gates",
+      "title": "Alter registry-transition gates",
+      "kind": "adopt_change",
+      "description": "Change validator-registry transition activation, replay, rollback, supersession, or dry-run mutation gates only after a future evidence packet proves the change is safer and remains Cobalt-gated.",
+      "implementation_effect": "future_authorization_required",
+      "requires_new_evidence": true
+    },
+    "hold-no-op": {
+      "option_id": "hold-no-op",
+      "title": "Hold and no-op",
+      "kind": "defer_no_op",
+      "description": "Take no Cobalt-governance action because required comparative evidence is missing, ambiguous, or not yet replayed.",
+      "implementation_effect": "no_code_change",
+      "requires_new_evidence": true
+    }
+  },
+  "hard_constraints": [
+    "json_only",
+    "closed_option_set",
+    "cite_status_quo_refs",
+    "cite_evidence_refs_only",
+    "no_hidden_evidence",
+    "no_secret_material",
+    "no_live_mutation",
+    "no_authority_transfer",
+    "prefer_no_op_when_uncertain",
+    "challenge_path_required",
+    "conformance_packet_required"
+  ],
+  "forbidden_outputs": [
+    "live_registry_mutation",
+    "live_cobalt_amendment_submission",
+    "authority_transfer",
+    "hidden_evidence",
+    "secret_dependency",
+    "unregistered_reputation_claim",
+    "scope_expansion",
+    "model_self_upgrade",
+    "selector_self_upgrade",
+    "prompt_self_upgrade",
+    "prose_only_output",
+    "option_outside_closed_set"
+  ],
+  "fallback": {
+    "decision": "no_op",
+    "trigger_conditions": [
+      "missing_evidence",
+      "ambiguous_evidence",
+      "schema_invalid",
+      "replay_drift",
+      "hidden_evidence_attempt",
+      "scope_expansion_attempt",
+      "unsafe_live_action_attempt"
+    ]
+  },
+  "prompt_contract": {
+    "qwen_may_propose_evidence_request": true,
+    "qwen_may_add_options": false,
+    "qwen_may_change_constraints": false,
+    "qwen_may_authorize_live_action": false,
+    "output_json_only": true,
+    "decision_must_select_option_id": true
+  },
+  "checks": {
+    "status_quo_present": true,
+    "option_set_closed": true,
+    "hard_constraints_present": true,
+    "forbidden_outputs_present": true,
+    "no_op_fallback_present": true,
+    "live_mutation_authorized": false,
+    "authority_transfer": false
+  }
+}

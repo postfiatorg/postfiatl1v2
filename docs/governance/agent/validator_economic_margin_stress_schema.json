@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-validator-economic-margin-stress-v1.json",
+  "title": "PostFiat Validator Economic Margin Stress",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "packet_id",
+    "mode",
+    "statement",
+    "attestation",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-economic-margin-stress-v1"
+    },
+    "packet_id": {
+      "$ref": "#/$defs/id"
+    },
+    "mode": {
+      "const": "controlled_testnet_fixture"
+    },
+    "statement": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "policy_id",
+        "stress_root_hash",
+        "scope",
+        "stress_policy",
+        "base_stress",
+        "selector_cases",
+        "evidence_artifacts"
+      ],
+      "properties": {
+        "policy_id": {
+          "$ref": "#/$defs/id"
+        },
+        "stress_root_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "chain_id",
+            "profile_id",
+            "live_registry_mutation",
+            "authority_transfer"
+          ],
+          "properties": {
+            "chain_id": {
+              "$ref": "#/$defs/id"
+            },
+            "profile_id": {
+              "$ref": "#/$defs/id"
+            },
+            "live_registry_mutation": {
+              "const": false
+            },
+            "authority_transfer": {
+              "const": false
+            }
+          }
+        },
+        "stress_policy": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "policy_units",
+            "n_active",
+            "f_tolerated",
+            "q_cert",
+            "min_bft_safe_count",
+            "min_liveness_count",
+            "participation_margin_usd",
+            "loss_over_gain_margin_usd"
+          ]
+        },
+        "base_stress": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "stress_policy_governed",
+            "stress_source_class",
+            "stress_window_age_epochs",
+            "validator_buckets"
+          ]
+        },
+        "selector_cases": {
+          "type": "array",
+          "minItems": 9
+        },
+        "evidence_artifacts": {
+          "type": "array",
+          "minItems": 1
+        }
+      }
+    },
+    "attestation": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "attestor_key_hash",
+        "statement_hash",
+        "signature_hash",
+        "signature_scheme",
+        "attested_at"
+      ]
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    }
+  }
+}

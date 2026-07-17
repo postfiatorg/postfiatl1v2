@@ -1,0 +1,60 @@
+# Editor swap files
+*.swp
+.*.swp
+__pycache__/
+*.py[cod]
+
+# Rust/build output
+target/
+site/
+.venv/
+.venv-docs/
+.docs-site-password
+.venv-vast/
+
+# Local editor and generated agent output
+.cursor/
+.tih/
+milestones/
+
+# Tracked repo-local Codex skill docs; .git/info/exclude may ignore .codex/.
+!.codex/
+!.codex/skills/
+!.codex/skills/l1-rust-engineer/
+!.codex/skills/l1-rust-engineer/SKILL.md
+
+.whitepaper-journal/
+work_archive/
+docs/archive/
+docs/pfterminal/
+docs/ai-handoff.md
+whip.md
+WHITEPAPER_REWRITE_REQUEST.md
+NAVCOIN_RESEARCH_REQUEST.md
+NAVCOIN_POR_V2_PLAN.md
+AISLOP3_83_OPTIMIZER_BRIEF.md
+collateralization_burndown.md
+
+# Local node/devnet output
+.postfiat/
+devnet/local/
+devnet/logs/
+devnet/orchard-wallet-finality-smoke/
+devnet/orchard-peer-certified-smoke/
+devnet/configs/*.json
+!devnet/configs/.gitkeep
+reports/*
+!reports/.gitkeep
+!reports/README.md
+
+# One-off local soak/smoke scripts belong in the archive, not source.
+scripts/test-python-*-continuous.py
+
+# Wallet extension & proxy
+node_modules/
+wallet-proxy/node_modules/
+wallet-web/dist/
+wallet-web/node_modules/
+crates/wallet_wasm/target/
+crates/wallet_wasm/pkg/
+crates/node/data/

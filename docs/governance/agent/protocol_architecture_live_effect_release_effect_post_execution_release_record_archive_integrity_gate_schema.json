@@ -1,0 +1,80 @@
+{
+  "$id": "postfiat-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-integrity-gate-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authority_boundary": {
+      "type": "object"
+    },
+    "challenge_and_rollback_route": {
+      "type": "object"
+    },
+    "checks": {
+      "type": "object"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "current_integrity_state": {
+      "type": "object"
+    },
+    "gate_scope": {
+      "const": "protocol_architecture"
+    },
+    "integrity_contract": {
+      "type": "object"
+    },
+    "integrity_input_requirements": {
+      "type": "object"
+    },
+    "release_effect_post_execution_release_record_archive_integrity_id": {
+      "const": "vc-protocol-architecture-001-live-effect-release-effect-post-execution-release-record-archive-integrity-001"
+    },
+    "release_effect_post_execution_release_record_archive_integrity_root": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "release_effect_post_execution_release_record_archive_integrity_version": {
+      "const": 1
+    },
+    "root_bindings": {
+      "type": "object"
+    },
+    "schema": {
+      "const": "postfiat-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-integrity-gate-v1"
+    },
+    "source_release_effect_post_execution_release_record_archive_redundancy_gate_ref": {
+      "type": "object"
+    },
+    "stale_root_policy": {
+      "type": "object"
+    },
+    "status": {
+      "const": "release_effect_post_execution_release_record_archive_integrity_gate_defined_no_integrity"
+    },
+    "verification_commands": {
+      "minItems": 6,
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "release_effect_post_execution_release_record_archive_integrity_id",
+    "release_effect_post_execution_release_record_archive_integrity_version",
+    "status",
+    "gate_scope",
+    "created_at",
+    "source_release_effect_post_execution_release_record_archive_redundancy_gate_ref",
+    "root_bindings",
+    "integrity_contract",
+    "integrity_input_requirements",
+    "current_integrity_state",
+    "stale_root_policy",
+    "challenge_and_rollback_route",
+    "verification_commands",
+    "authority_boundary",
+    "checks",
+    "release_effect_post_execution_release_record_archive_integrity_root"
+  ],
+  "type": "object"
+}

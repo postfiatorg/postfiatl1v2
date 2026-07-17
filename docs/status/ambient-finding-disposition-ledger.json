@@ -1,0 +1,125 @@
+{
+  "allowed_status_values": [
+    "fixed",
+    "duplicate",
+    "downgraded",
+    "false_positive",
+    "generated_artifact",
+    "archive_only",
+    "script_backlog",
+    "wont_fix_documented"
+  ],
+  "canonical_ledger_sha256": "a55911d18ea4470217a16b948715e552df2958ffdc79d937fb031f362fbbb600",
+  "counts_by_source_severity_and_bucket": {
+    "P0:active-code": 15,
+    "P0:archive": 4,
+    "P0:generated-artifact": 96,
+    "P0:operator-docs": 9,
+    "P0:operator-script": 74,
+    "P1:active-code": 24,
+    "P1:archive": 18,
+    "P1:cobalt-example": 10,
+    "P1:generated-artifact": 377,
+    "P1:operator-docs": 30,
+    "P1:operator-script": 213,
+    "P1:repo-metadata": 5
+  },
+  "counts_by_source_severity_and_status": {
+    "P0:archive_only": 4,
+    "P0:downgraded": 10,
+    "P0:fixed": 13,
+    "P0:generated_artifact": 96,
+    "P0:script_backlog": 74,
+    "P0:wont_fix_documented": 1,
+    "P1:archive_only": 18,
+    "P1:downgraded": 37,
+    "P1:fixed": 27,
+    "P1:generated_artifact": 377,
+    "P1:script_backlog": 213,
+    "P1:wont_fix_documented": 5
+  },
+  "generated_at": "2026-05-22",
+  "ledger_schema": "postfiat-ambient-finding-disposition-ledger-v1",
+  "schema": "postfiat-ambient-finding-disposition-ledger-manifest-v1",
+  "scope_note": "This is a raw Ambient P0/P1 disposition ledger. Rows marked fixed are remediated in the current working tree; rows marked script_backlog, generated_artifact, archive_only, downgraded, or wont_fix_documented are not all-closed claims.",
+  "shard_directory": "docs/status/ambient-finding-disposition-ledger",
+  "shard_strategy": "source severity plus 100-finding ID ranges; shard order reconstructs the original finding order",
+  "shards": [
+    {
+      "finding_count": 100,
+      "first_id": "SEC-P0-001",
+      "last_id": "SEC-P0-100",
+      "path": "docs/status/ambient-finding-disposition-ledger/p0-001-100.json",
+      "sha256": "d5dca6d753f7cd1a30943c7615a67fbc785db23ea35b14424521cfb57be8b48e",
+      "source_severity": "P0"
+    },
+    {
+      "finding_count": 98,
+      "first_id": "SEC-P0-101",
+      "last_id": "SEC-P0-198",
+      "path": "docs/status/ambient-finding-disposition-ledger/p0-101-198.json",
+      "sha256": "52f770ae71917b28d4709ec47f6f13b6cdd9c5c689521a077247465af2e6c0a0",
+      "source_severity": "P0"
+    },
+    {
+      "finding_count": 100,
+      "first_id": "SEC-P1-001",
+      "last_id": "SEC-P1-100",
+      "path": "docs/status/ambient-finding-disposition-ledger/p1-001-100.json",
+      "sha256": "e23ff4bf7218fb7c5c7a0a7068223583a5d73f2d9056237c505f7eac46960683",
+      "source_severity": "P1"
+    },
+    {
+      "finding_count": 100,
+      "first_id": "SEC-P1-101",
+      "last_id": "SEC-P1-200",
+      "path": "docs/status/ambient-finding-disposition-ledger/p1-101-200.json",
+      "sha256": "b33fe54300657bdb31ce4ddc709bf1a3a1383f9a476364f0c1550915b113cf7b",
+      "source_severity": "P1"
+    },
+    {
+      "finding_count": 100,
+      "first_id": "SEC-P1-201",
+      "last_id": "SEC-P1-300",
+      "path": "docs/status/ambient-finding-disposition-ledger/p1-201-300.json",
+      "sha256": "c144d3d6ced078196da2f76b871d9147d64157d4eaf080753181e57abda1d86b",
+      "source_severity": "P1"
+    },
+    {
+      "finding_count": 100,
+      "first_id": "SEC-P1-301",
+      "last_id": "SEC-P1-400",
+      "path": "docs/status/ambient-finding-disposition-ledger/p1-301-400.json",
+      "sha256": "211bd319a0769335cd7a0ad8e008e2cee94ccf667f886edc9a57a3a2f52b0efe",
+      "source_severity": "P1"
+    },
+    {
+      "finding_count": 100,
+      "first_id": "SEC-P1-401",
+      "last_id": "SEC-P1-500",
+      "path": "docs/status/ambient-finding-disposition-ledger/p1-401-500.json",
+      "sha256": "b5eeb943cc0e6e372383867a9e286df6f04deeebc0391f7abb1743bca4314fa4",
+      "source_severity": "P1"
+    },
+    {
+      "finding_count": 100,
+      "first_id": "SEC-P1-501",
+      "last_id": "SEC-P1-600",
+      "path": "docs/status/ambient-finding-disposition-ledger/p1-501-600.json",
+      "sha256": "cc6f705e59190c4466c540b511a71b4e804767084abee5a14a9acaf994ebbfc8",
+      "source_severity": "P1"
+    },
+    {
+      "finding_count": 77,
+      "first_id": "SEC-P1-601",
+      "last_id": "SEC-P1-677",
+      "path": "docs/status/ambient-finding-disposition-ledger/p1-601-677.json",
+      "sha256": "cd67aa1c559345ec522aa3450c84f5acf7eb9289445d03e6c448305bf8f32936",
+      "source_severity": "P1"
+    }
+  ],
+  "source_commit": "fd80ae5157992e1d12548ff732101d1aa728c08e",
+  "source_report": "milestones/ambient-code-review-20260522T010605Z-023bbb6ba6/report.json",
+  "source_run_id": "20260522T010605Z-023bbb6ba6",
+  "total_findings": 875
+}

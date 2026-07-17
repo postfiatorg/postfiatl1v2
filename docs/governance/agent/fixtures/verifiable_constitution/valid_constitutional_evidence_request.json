@@ -1,0 +1,263 @@
+{
+  "schema": "postfiat-constitutional-evidence-request-v1",
+  "request_id": "vc-model-governance-001-request-001",
+  "request_version": 1,
+  "status": "candidate",
+  "request_scope": "model_governance",
+  "created_at": "2026-05-24T00:00:00Z",
+  "question_ref": {
+    "question_id": "vc-model-governance-001",
+    "question_path": "docs/governance/agent/fixtures/verifiable_constitution/valid_constitutional_question.json",
+    "question_file_sha3_384": "f40b8d50a697f92b16acc958decd9328cd83c2af33d3daa528654a1c885d2b9e0197c896c8335deb6b94cf8735fcd99b",
+    "question_canonical_hash": "2a88bc5f9b0d0aff8bfeec29050bb142a58f43081599dc35778a1914fc98c112576aa00da764498d956ca9533931a08b",
+    "question_schema_path": "docs/governance/agent/constitutional_question_schema.json",
+    "question_schema_sha3_384": "47c2b2f27bdc745615f4d0d893333c12825b8b935358efbf4f53bdb9ad7b72e03d46d5264812d2cd9066d3c11813bd7f"
+  },
+  "requested_fields": [
+    {
+      "field_path": "model.active.model_id",
+      "value_type": "string",
+      "required": true,
+      "required_provenance": [
+        "governance_documented",
+        "config_derived"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "preserve_status_quo",
+      "conflict_behavior": "hold",
+      "action_bound": "decision_input",
+      "privacy_class": "public",
+      "collection_methods": [
+        "governance_doc",
+        "repo_file_hash"
+      ],
+      "rationale": "The active model identity must be explicit before a candidate model can be compared or rejected."
+    },
+    {
+      "field_path": "model.active.runtime_profile_hash",
+      "value_type": "hash",
+      "required": true,
+      "required_provenance": [
+        "artifact_hash",
+        "source_code"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "admission_gate",
+      "privacy_class": "public",
+      "collection_methods": [
+        "runtime_manifest",
+        "repo_file_hash"
+      ],
+      "rationale": "Runtime identity must be hash-bound so a silent provider or container swap becomes detectable."
+    },
+    {
+      "field_path": "model.active.prompt_template_hash",
+      "value_type": "hash",
+      "required": true,
+      "required_provenance": [
+        "artifact_hash",
+        "governance_documented"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "decision_input",
+      "privacy_class": "public",
+      "collection_methods": [
+        "governance_doc",
+        "repo_file_hash"
+      ],
+      "rationale": "Prompt drift changes the constitutional decision surface and must be visible before model promotion."
+    },
+    {
+      "field_path": "model.active.deterministic_flags",
+      "value_type": "object",
+      "required": true,
+      "required_provenance": [
+        "config_derived",
+        "source_code"
+      ],
+      "freshness": "current_commit",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "hold",
+      "action_bound": "admission_gate",
+      "privacy_class": "public",
+      "collection_methods": [
+        "runtime_manifest",
+        "repo_file_hash"
+      ],
+      "rationale": "Temperature, batching, tensor parallelism, and scheduler settings define whether replay is meaningful."
+    },
+    {
+      "field_path": "model.candidate.model_id",
+      "value_type": "string",
+      "required": false,
+      "required_provenance": [
+        "governance_documented",
+        "model_manifest"
+      ],
+      "freshness": "candidate_epoch_bound",
+      "missing_evidence_behavior": "preserve_status_quo",
+      "conflict_behavior": "reject_conflicted_field",
+      "action_bound": "decision_input",
+      "privacy_class": "public",
+      "collection_methods": [
+        "model_manifest",
+        "governance_doc"
+      ],
+      "rationale": "A candidate model can only be considered when its model artifact identity is explicit."
+    },
+    {
+      "field_path": "model.candidate.replay_convergence_count",
+      "value_type": "integer",
+      "required": false,
+      "required_provenance": [
+        "replay_derived",
+        "test_report"
+      ],
+      "freshness": "candidate_epoch_bound",
+      "missing_evidence_behavior": "reject_candidate",
+      "conflict_behavior": "hold",
+      "action_bound": "admission_gate",
+      "privacy_class": "public",
+      "collection_methods": [
+        "replay_report",
+        "test_command"
+      ],
+      "rationale": "Candidate promotion needs deterministic replay evidence, not only a model name."
+    },
+    {
+      "field_path": "model.candidate.adversarial_failure_count",
+      "value_type": "integer",
+      "required": false,
+      "required_provenance": [
+        "test_report",
+        "replay_derived"
+      ],
+      "freshness": "candidate_epoch_bound",
+      "missing_evidence_behavior": "reject_candidate",
+      "conflict_behavior": "hold",
+      "action_bound": "admission_gate",
+      "privacy_class": "public",
+      "collection_methods": [
+        "replay_report",
+        "test_command"
+      ],
+      "rationale": "A candidate model must survive hostile packet and prompt-injection cases before it can shape governance."
+    },
+    {
+      "field_path": "model.candidate.cross_machine_receipt_root",
+      "value_type": "hash",
+      "required": false,
+      "required_provenance": [
+        "replay_derived",
+        "artifact_hash",
+        "provider_manifest"
+      ],
+      "freshness": "candidate_epoch_bound",
+      "missing_evidence_behavior": "hold",
+      "conflict_behavior": "require_challenge_packet",
+      "action_bound": "admission_gate",
+      "privacy_class": "public",
+      "collection_methods": [
+        "replay_report",
+        "provider_manifest",
+        "local_artifact"
+      ],
+      "rationale": "Cross-machine receipts show whether replay is exact, class-bound, or unsafe for governance claims."
+    },
+    {
+      "field_path": "model.candidate.rollback_plan_hash",
+      "value_type": "hash",
+      "required": false,
+      "required_provenance": [
+        "governance_documented",
+        "artifact_hash"
+      ],
+      "freshness": "candidate_epoch_bound",
+      "missing_evidence_behavior": "reject_candidate",
+      "conflict_behavior": "hold",
+      "action_bound": "conformance_input",
+      "privacy_class": "public",
+      "collection_methods": [
+        "governance_doc",
+        "repo_file_hash"
+      ],
+      "rationale": "A promoted model must have a rollback path before any default-conform rule can depend on it."
+    }
+  ],
+  "forbidden_fields": [
+    {
+      "field_path": "provider.private_api_key",
+      "reason": "Secret provider credentials are never constitutional evidence.",
+      "severity": "reject_packet"
+    },
+    {
+      "field_path": "operator.private_notes",
+      "reason": "Private reputation notes are hidden evidence and cannot drive replayable governance.",
+      "severity": "reject_packet"
+    },
+    {
+      "field_path": "unregistered.reputation_claim",
+      "reason": "Untyped reputation claims recreate opaque committee discretion.",
+      "severity": "reject_request"
+    },
+    {
+      "field_path": "live.registry_mutation_authorization",
+      "reason": "An evidence request cannot authorize live registry mutation.",
+      "severity": "reject_request"
+    },
+    {
+      "field_path": "live.cobalt_amendment_submission",
+      "reason": "A request packet cannot submit or authorize a live Cobalt amendment.",
+      "severity": "reject_request"
+    },
+    {
+      "field_path": "live.authority_transfer_claim",
+      "reason": "Authority transfer is outside this packet's action boundary.",
+      "severity": "reject_request"
+    },
+    {
+      "field_path": "runtime.secret_override",
+      "reason": "Runtime behavior must be public and hash-bound, not secret-dependent.",
+      "severity": "reject_packet"
+    }
+  ],
+  "minimum_packet_checks": {
+    "schema_valid": true,
+    "question_hash_matches": true,
+    "field_registry_bound": true,
+    "source_hashes_verified": true,
+    "all_required_fields_present_or_noop": true,
+    "missing_and_conflict_behaviors_applied": true,
+    "redaction_passed": true,
+    "secret_scan_passed": true,
+    "no_hidden_evidence": true,
+    "no_live_mutation": true,
+    "provenance_validated": true
+  },
+  "request_boundaries": {
+    "qwen_may_request_fields": true,
+    "qwen_may_collect_evidence": false,
+    "qwen_may_change_question": false,
+    "qwen_may_expand_options": false,
+    "qwen_may_authorize_live_action": false,
+    "qwen_may_request_secret_material": false,
+    "accepted_request_is_live_authority": false
+  },
+  "fallback": "no_op_until_packet_approved",
+  "checks": {
+    "requested_fields_present": true,
+    "provenance_declared": true,
+    "freshness_declared": true,
+    "missing_behavior_declared": true,
+    "conflict_behavior_declared": true,
+    "action_bounds_declared": true,
+    "forbidden_fields_present": true,
+    "minimum_packet_checks_present": true,
+    "live_mutation_authorized": false,
+    "authority_transfer": false
+  }
+}

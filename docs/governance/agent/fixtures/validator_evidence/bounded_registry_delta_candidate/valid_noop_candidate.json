@@ -1,0 +1,127 @@
+{
+  "schema": "postfiat-validator-evidence-bounded-registry-delta-candidate-v1",
+  "candidate_id": "76f995505edab41d89a597ae84b70164dd2f9dfaa694865e941511eb146be16e0620f26bd914798822289028c77093d9",
+  "candidate_version": 1,
+  "candidate_kind": "bounded_registry_delta",
+  "candidate_scope": "qwen_cobalt_internal_validation",
+  "qclc010_report_path": "reports/qwen-cobalt-internal-validation/qclc-010-live-collector-readiness-summary-report.json",
+  "qclc010_report_hash": "0e0685485b41e4642efd5a0f9c90ed99d3ac2a128fdc19e29fc43fe1f5438775cc1637e40ecf5fc433f75fa82dfef3f6",
+  "validator_evidence_packet_root": "e64c8fb9627009d5701fa8c71f7c14e53a9815554c44d4670b74ae8703180205a9ca782afe416a7d6c0efc463e6dac57",
+  "raw_observation_root": "015db82ae37c30d617b50f2003af9bbf10910c0f2a48f83326f73de4f49b0cdf428fb8c03ba0c746fb4d27df867de4f2",
+  "ruleset_hash": "5f1dbdc3ae6cf8c7cfed63f75eefd5b1aba08f84b9c814c9301a1564278526c8f867e3f2e7dde0216ff0d7c4b7817cef",
+  "compiled_policy_hash": "aceab6e187a3ff76af5033b8c70112c893405e494ffe261b30396920239d0dc35cfeb2a8d88b3b0ff6df5cdbf1977bbe",
+  "registry_root_before": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+  "action_mode": "NoOp",
+  "proposed_delta": {
+    "delta_id": "qbrd-002-noop-live-collector-root",
+    "delta_kind": "no_op",
+    "rationale": "Positive fixture for schema binding only; no live registry mutation is authorized.",
+    "mutation_count": 0,
+    "routine_removal": false,
+    "additions": [],
+    "holds": [],
+    "suspensions": [],
+    "rotations": [],
+    "removals": [],
+    "evidence_refs": [
+      {
+        "ref_id": "qclc010-readiness-summary",
+        "path": "reports/qwen-cobalt-internal-validation/qclc-010-live-collector-readiness-summary-report.json",
+        "sha3_384": "0e0685485b41e4642efd5a0f9c90ed99d3ac2a128fdc19e29fc43fe1f5438775cc1637e40ecf5fc433f75fa82dfef3f6"
+      },
+      {
+        "ref_id": "qclc005-cobalt-dry-run-replay",
+        "path": "reports/qwen-cobalt-internal-validation/qclc-005-cobalt-dry-run-replay-report.json",
+        "sha3_384": "c0c2369ae8deaa64e35a2ce86071898fa296222f242b854b44e2407ae0da25032c8ebc76e71cfc35dcb1765e42d4f473"
+      },
+      {
+        "ref_id": "validator-economic-bound-policy",
+        "path": "docs/governance/agent/fixtures/validator_economic_bound_policy/valid_economic_bound_policy.json",
+        "sha3_384": "c658fda79f51a8da0736440cf4cde57a9a76ec9acefb60130f13d04b4156705003235d9510a0a947671ef109fbf66a24"
+      }
+    ]
+  },
+  "hard_caps": {
+    "max_adds_per_round": 1,
+    "max_registry_mutations": 1,
+    "routine_removals_allowed": 0,
+    "evidence_refs_required": true,
+    "concentration_caps_required": true,
+    "linkedness_required": true,
+    "rollback_required": true,
+    "cobalt_acceptance_required": true,
+    "human_approval_after_activation_allowed": false,
+    "live_apply_allowed": false
+  },
+  "economic_bound_reference": {
+    "policy_id": "validator-economic-bound-policy-v1",
+    "packet_path": "docs/governance/agent/fixtures/validator_economic_bound_policy/valid_economic_bound_policy.json",
+    "packet_file_hash": "c658fda79f51a8da0736440cf4cde57a9a76ec9acefb60130f13d04b4156705003235d9510a0a947671ef109fbf66a24",
+    "packet_canonical_hash": "2afd192e7ade2abdfc13574fd2d830f5eb54e05b5da2e7754b4b0af47f017e8b1e6f308e7d309c2cd817611f6517f247",
+    "statement_hash": "6b7ac347a03deac40fb80ed47fba39c259319e8a153755e1658d7ac05f6b2c6376545a651ec5a6354b554e547f139ead",
+    "policy_root_hash": "e231e0ad85945ab3ac4f96e0e6f3366be4bffdee84514ed71c37b070e695a820b0a2523a05e39b7c8e2e4fcfb89173e2",
+    "schema_path": "docs/governance/agent/validator_economic_bound_policy_schema.json",
+    "schema_file_hash": "9a3cbc57ef4a593e0bc6d7df3388015a316b1aa2b8ddc7d8eb496cca08e12fdefb830b7ed03df433f686a65a83be282e",
+    "verifier_path": "scripts/validator-economic-bound-policy-verify",
+    "verifier_file_hash": "4c39bb1932be2e39bd4f8f565612cc2f812d0dfce6ca1a769437ed130a8fdb43be47d27ee099c8c50eb1bd58bcb950e0",
+    "accepted_routes_for_mutation": [
+      "admit"
+    ],
+    "non_mutating_routes": [
+      "fail-closed",
+      "hold",
+      "reject"
+    ],
+    "required_delta_kinds": [
+      "add",
+      "hold",
+      "remove",
+      "rotate",
+      "suspend"
+    ],
+    "preflight_required": true
+  },
+  "rollback_reference": {
+    "rollback_mode": "noop_restore",
+    "rollback_artifact_path": "reports/testnet-cobalt-amendment-replay-bundle/cleanup-clean-v1-20260519T150324Z/testnet-cobalt-amendment-replay-bundle.json",
+    "rollback_artifact_hash": "cfdfb57b2b2d4f0353ee82fd845afd118cf38e591e218e4e343e13c0a24a00d0cb179bfa38e93c41d50c259b9fc99dac",
+    "rollback_recovery_report_path": "reports/testnet-cobalt-adversarial/rollback-recovery-v0-20260519T0750Z/testnet-cobalt-rollback-recovery.json",
+    "rollback_recovery_report_hash": "a7852a45119f0ba82f141395d7afbc33d559d7205e32f7a672aca8a660d369e8ea68354efb1b27e492959c9f3844f701",
+    "registry_root_after_rollback": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+    "rollback_required": true
+  },
+  "cobalt_replay_reference": {
+    "qclc005_report_path": "reports/qwen-cobalt-internal-validation/qclc-005-cobalt-dry-run-replay-report.json",
+    "qclc005_report_hash": "c0c2369ae8deaa64e35a2ce86071898fa296222f242b854b44e2407ae0da25032c8ebc76e71cfc35dcb1765e42d4f473",
+    "replay_bundle_path": "reports/qwen-cobalt-internal-validation/qclc-005-cobalt-dry-run-replay/qclc-005-cobalt-gate-8_5-replay-bundle.json",
+    "replay_bundle_root": "84eb4dbcf7f89e73b5d73dbbf536f99bcea3d25acf3def8bdd4e7c7d1135d921ee6891acc986f58029a01c0fc09a0626",
+    "registry_mutation_count": 0,
+    "registry_unchanged": true
+  },
+  "authority_boundary": {
+    "mainnet_mutation": false,
+    "live_validator_registry_mutation": false,
+    "live_cobalt_amendment_submission": false,
+    "sidecar_activation": false,
+    "commit_reveal_activation": false,
+    "tp_gt_one_admission": false,
+    "validator_enforced_scoring_activation": false,
+    "model_promotion": false,
+    "guarded_apply": false,
+    "authority_transfer": false
+  },
+  "checks": {
+    "qclc010_report_hash_bound": true,
+    "packet_root_bound": true,
+    "ruleset_hash_bound": true,
+    "compiled_policy_hash_bound": true,
+    "registry_root_bound": true,
+    "hard_caps_bound": true,
+    "rollback_reference_bound": true,
+    "economic_bound_preflight_bound": true,
+    "non_live_action_mode": true,
+    "live_registry_mutation": false,
+    "live_cobalt_amendment_submission": false,
+    "authority_transfer": false
+  }
+}

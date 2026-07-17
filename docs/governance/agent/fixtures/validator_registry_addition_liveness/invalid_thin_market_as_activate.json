@@ -1,0 +1,18 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_registry_addition_liveness/valid_registry_addition_liveness.json",
+  "expected_error_contains": [
+    "case-02-thin-attestor-market-holds: expected_route mismatch"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        1,
+        "expected_route"
+      ],
+      "value": "activate"
+    }
+  ],
+  "schema": "postfiat-validator-registry-addition-liveness-invalid-case-v1"
+}

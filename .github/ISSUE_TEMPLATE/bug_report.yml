@@ -1,0 +1,33 @@
+name: Bug report
+description: Report a reproducible non-security defect
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Do not report vulnerabilities here; use SECURITY.md."
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Observed behavior
+      description: Include receipt codes and release identifiers, but no secrets or private wallet material.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+    validations:
+      required: true
+  - type: input
+    id: revision
+    attributes:
+      label: Git revision or release ID
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true

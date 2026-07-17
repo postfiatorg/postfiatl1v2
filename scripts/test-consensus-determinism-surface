@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+"""Fail closed on nondeterministic APIs entering replicated transition code.
+
+This is deliberately narrower than a repository-wide textual ban. Node runtime
+code legitimately uses clocks and unordered collections for metrics, timeouts,
+deduplication, and local files. The paths below are the deterministic execution,
+ordering, availability-reference, and state-commitment boundaries where those
+APIs must not become inputs to a receipt, batch identity, or replicated root.
+"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SOURCE_ROOTS = (
+    ROOT / "crates/execution/src",
+    ROOT / "crates/ordering_fast/src",
+    ROOT / "crates/mempool_dag/src",
+)
+EXTRA_SOURCES = (ROOT / "crates/node/src/state_commitment.rs",)
+TEST_FILE_MARKERS = ("_tests.rs", "/tests/")
+TEST_MODULE = re.compile(r"(?m)^\s*#\[cfg\(test\)\]\s*\n\s*mod\s+tests\b")
+FORBIDDEN = {
+    "wall clock": re.compile(r"\b(?:SystemTime|Instant)::now\s*\("),
+    "randomness": re.compile(r"\b(?:thread_rng|OsRng|getrandom)\b"),
+    "environment": re.compile(r"\b(?:std::)?env::(?:var|var_os|vars)\s*\("),
+    "filesystem enumeration": re.compile(r"\bread_dir\s*\("),
+    "unordered collection": re.compile(r"\b(?:HashMap|HashSet)\b"),
+    "floating point": re.compile(r"\b(?:f32|f64)\b"),
+}
+
+
+def production_text(path: Path) -> str:
+    text = path.read_text(encoding="utf-8")
+    marker = TEST_MODULE.search(text)
+    return text[: marker.start()] if marker else text
+
+
+def sources() -> list[Path]:
+    paths: list[Path] = []
+    for root in SOURCE_ROOTS:
+        for path in root.rglob("*.rs"):
+            relative = path.relative_to(ROOT).as_posix()
+            if any(marker in relative for marker in TEST_FILE_MARKERS):
+                continue
+            paths.append(path)
+    paths.extend(EXTRA_SOURCES)
+    return sorted(set(paths))
+
+
+def main() -> int:
+    findings: list[str] = []
+    checked = sources()
+    for path in checked:
+        text = production_text(path)
+        for category, pattern in FORBIDDEN.items():
+            for match in pattern.finditer(text):
+                line = text.count("\n", 0, match.start()) + 1
+                findings.append(
+                    f"{path.relative_to(ROOT)}:{line}: {category}: {match.group(0)}"
+                )
+    if findings:
+        raise AssertionError(
+            "nondeterministic API entered a consensus-critical boundary; "
+            "classify and remove it rather than extending an allowlist:\n"
+            + "\n".join(findings)
+        )
+    print(
+        f"consensus_determinism_surface=ok files={len(checked)} "
+        f"categories={len(FORBIDDEN)}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

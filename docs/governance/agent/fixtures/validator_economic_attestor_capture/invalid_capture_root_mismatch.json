@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_attestor_capture/valid_attestor_capture.json",
+  "expected_error_contains": [
+    "statement.capture_root_hash does not match capture material"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "capture_root_hash"
+      ],
+      "value": "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+    }
+  ],
+  "schema": "postfiat-validator-economic-attestor-capture-invalid-case-v1"
+}

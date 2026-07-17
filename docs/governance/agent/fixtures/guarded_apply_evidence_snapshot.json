@@ -1,0 +1,18 @@
+{
+  "schema": "postfiat-governance-agent-frozen-evidence-v1",
+  "snapshot_id": "gate-9_5-local-guarded-apply-evidence",
+  "validator_registry_root": "c794a9ccab78a48ea302b5ce07f03c55e284881622b0b51919e9470ac886303672d8dc65957b34367433b8e6cfea6673",
+  "cobalt_evidence_root": "222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
+  "operator_manifest_root": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+  "validator_evidence_packet_root": "7f146e261443b04f443764468e94343f81a1dd87ec30a122b267b3d2050d43321ea6b122cb2b19efbe57b1728a6e4cea",
+  "available_inputs": [
+    "cobalt_evidence_packet",
+    "operator_manifest_set",
+    "validator_evidence_packet",
+    "validator_registry_snapshot"
+  ],
+  "network_access_allowed": false,
+  "model_access_allowed": false,
+  "filesystem_access_allowed": false,
+  "direct_state_mutation_allowed": false
+}

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+if rg -Fq 'while ML-DSA signs the outer transaction envelope' docs/whitepaper.md; then
+  echo 'whitepaper falsely claims an ML-DSA outer envelope for shielded actions' >&2
+  exit 1
+fi
+
+rg -Fq 'does not add an account-level ML-DSA' docs/whitepaper.md
+rg -Fq 'pub struct ShieldedActionBatch {' crates/types/src/shielded_bridge_governance.rs
+rg -Fq 'pub batch_id: String' crates/types/src/shielded_bridge_governance.rs
+rg -Fq 'pub actions: Vec<ShieldedAction>' crates/types/src/shielded_bridge_governance.rs
+
+echo 'whitepaper implementation-boundary checks passed'

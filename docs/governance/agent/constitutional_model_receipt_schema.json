@@ -1,0 +1,247 @@
+{
+  "$id": "https://postfiat.org/schemas/postfiat-constitutional-model-receipt-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "postfiat-constitutional-model-receipt-v1",
+      "type": "string"
+    },
+    "run_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "provider_label": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "provider_run_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "hardware_class": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "endpoint_host_hash": {
+      "$ref": "#/$defs/sha3_384"
+    },
+    "model_profile": {
+      "$ref": "#/$defs/model_profile"
+    },
+    "prompt_hash": {
+      "$ref": "#/$defs/sha3_384"
+    },
+    "prompt_payload_hash": {
+      "$ref": "#/$defs/sha3_384"
+    },
+    "chat_request_hash": {
+      "$ref": "#/$defs/sha3_384"
+    },
+    "question_id": {
+      "pattern": "^vc-[a-z0-9-]+-[0-9]{3}$",
+      "type": "string"
+    },
+    "question_canonical_hash": {
+      "$ref": "#/$defs/sha3_384"
+    },
+    "output_commitment": {
+      "$ref": "#/$defs/output_commitment"
+    },
+    "elapsed_ms": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "receipt_root": {
+      "$ref": "#/$defs/sha3_384"
+    },
+    "raw_response_path": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "parsed_output_path": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "logprob_commitment_kind": {
+      "anyOf": [
+        {
+          "enum": [
+            "openai_chat_top_logprobs"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "logprob_token_count": {
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema",
+    "run_id",
+    "provider_label",
+    "provider_run_id",
+    "hardware_class",
+    "endpoint_host_hash",
+    "model_profile",
+    "prompt_hash",
+    "prompt_payload_hash",
+    "chat_request_hash",
+    "question_id",
+    "question_canonical_hash",
+    "output_commitment",
+    "elapsed_ms",
+    "receipt_root",
+    "raw_response_path",
+    "parsed_output_path",
+    "logprob_commitment_kind",
+    "logprob_token_count"
+  ],
+  "title": "PostFiat Constitutional Model Receipt",
+  "type": "object",
+  "$defs": {
+    "model_profile": {
+      "additionalProperties": false,
+      "properties": {
+        "model_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "runtime": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "runtime_profile": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "provider_profile": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "image": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "tensor_parallelism": {
+          "const": 1,
+          "type": "integer"
+        },
+        "context_length": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "chunked_prefill_size": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "max_running_requests": {
+          "const": 1,
+          "type": "integer"
+        },
+        "deterministic_flags": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "model_id",
+        "runtime",
+        "runtime_profile",
+        "provider_profile",
+        "image",
+        "tensor_parallelism",
+        "context_length",
+        "chunked_prefill_size",
+        "max_running_requests",
+        "deterministic_flags"
+      ],
+      "type": "object"
+    },
+    "output_commitment": {
+      "additionalProperties": false,
+      "properties": {
+        "raw_response_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "content_sha3_384": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha3_384"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parsed_output_hash": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha3_384"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "logprob_commitment_root": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha3_384"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "full_distribution_available": {
+          "type": "boolean"
+        },
+        "full_distribution_root": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "raw_response_sha3_384",
+        "content_sha3_384",
+        "parsed_output_hash",
+        "logprob_commitment_root",
+        "full_distribution_available",
+        "full_distribution_root"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "sha3_384": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    }
+  }
+}

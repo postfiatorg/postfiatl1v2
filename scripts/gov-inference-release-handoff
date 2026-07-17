@@ -1,0 +1,285 @@
+#!/usr/bin/env python3
+import argparse
+import hashlib
+import json
+import pathlib
+import subprocess
+import sys
+import tempfile
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+DEFAULT_OUTPUT = pathlib.Path("reports/gov-inference-release-handoff.json")
+DEFAULT_OPERATOR_PACK_REPORT = pathlib.Path("reports/gov-inference-operator-gate-pack.json")
+SENSITIVE_MARKERS = [
+    "private_key_hex",
+    "seed_hex",
+    '"mnemonic"',
+    "mnemonic=",
+    "ssh_cred",
+    "begin private key",
+    "runpod_api_key",
+    "vast_api_key",
+]
+
+
+def rel(path: pathlib.Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def no_sensitive_markers(text: str) -> bool:
+    lowered = text.lower()
+    return not any(marker in lowered for marker in SENSITIVE_MARKERS)
+
+
+def sha3_384_file(path: pathlib.Path) -> str:
+    digest = hashlib.sha3_384()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def load_json(path: pathlib.Path) -> dict:
+    with path.open("r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    if not isinstance(data, dict):
+        raise SystemExit(f"expected object JSON in `{path}`")
+    return data
+
+
+def run_operator_pack(no_refresh_local: bool) -> None:
+    command = ["scripts/gov-inference-operator-gate-pack"]
+    if no_refresh_local:
+        command.append("--no-refresh-local")
+    print(f"running final no-spend verifier: {' '.join(command)}", file=sys.stderr)
+    subprocess.run(command, cwd=ROOT, stdout=subprocess.DEVNULL, check=True)
+
+
+def summarize_evidence_report(root: pathlib.Path, report: dict) -> dict:
+    path = root / report["path"]
+    present = path.is_file()
+    summary = {
+        "gate_id": report.get("gate_id"),
+        "gate": report.get("gate"),
+        "schema": report.get("schema"),
+        "path": rel(path),
+        "present": present,
+        "verified": report.get("verified") is True,
+        "redaction_scan_ok": report.get("redaction_scan_ok") is True,
+        "promotion_scope": report.get("promotion_scope"),
+        "authority_effect": report.get("authority_effect"),
+        "sha3_384": None,
+    }
+    if present:
+        raw = path.read_text(encoding="utf-8")
+        summary["sha3_384"] = sha3_384_file(path)
+        summary["redaction_scan_ok"] = summary["redaction_scan_ok"] and no_sensitive_markers(raw)
+    return summary
+
+
+def build_handoff(
+    root: pathlib.Path,
+    operator_pack_report: pathlib.Path,
+    output: pathlib.Path,
+    refresh_local: bool,
+) -> dict:
+    pack_path = root / operator_pack_report
+    if not pack_path.is_file():
+        raise SystemExit(f"missing operator gate pack report `{rel(pack_path)}`")
+    pack = load_json(pack_path)
+    pack_raw = pack_path.read_text(encoding="utf-8")
+    evidence = [summarize_evidence_report(root, report) for report in pack.get("reports", [])]
+    checks = {
+        "operator_pack_report_present": pack_path.is_file(),
+        "operator_pack_schema_ok": pack.get("schema")
+        == "postfiat-governance-agent-operator-gate-pack-v1",
+        "operator_pack_verified": pack.get("verified") is True,
+        "operator_pack_redaction_scan_ok": no_sensitive_markers(pack_raw),
+        "release_requires_paid_replay_present": pack.get("allow_missing_paid_replay") is False
+        and pack.get("paid_replay_missing_allowed") is False,
+        "all_evidence_reports_present": all(item["present"] for item in evidence),
+        "all_evidence_reports_verified": all(item["verified"] for item in evidence),
+        "all_evidence_hashes_present": all(item["sha3_384"] for item in evidence),
+        "all_evidence_redaction_scanned": all(item["redaction_scan_ok"] for item in evidence),
+        "provider_spend_command_executed": pack.get("provider_spend_command_executed") is True,
+        "paid_replay_regenerated": pack.get("paid_replay_regenerated") is True,
+        "operator_gate_pack_no_spend_safe": pack.get("checks", {}).get(
+            "operator_gate_pack_no_spend_safe"
+        )
+        is True,
+        "authority_transfer_not_live": pack.get("checks", {}).get("authority_transfer_not_live")
+        is True,
+        "sidecars_not_live": pack.get("checks", {}).get("sidecars_not_live") is True,
+        "commit_reveal_not_live": pack.get("checks", {}).get("commit_reveal_not_live") is True,
+        "tp_greater_than_one_not_admitted": pack.get("checks", {}).get(
+            "tp_greater_than_one_not_admitted"
+        )
+        is True,
+    }
+    checks["candidate_handoff_no_spend_ready"] = (
+        checks["operator_pack_verified"]
+        and checks["release_requires_paid_replay_present"]
+        and checks["all_evidence_reports_present"]
+        and checks["all_evidence_reports_verified"]
+        and checks["all_evidence_hashes_present"]
+        and checks["all_evidence_redaction_scanned"]
+        and checks["operator_gate_pack_no_spend_safe"]
+        and checks["provider_spend_command_executed"] is False
+        and checks["paid_replay_regenerated"] is False
+        and checks["authority_transfer_not_live"]
+        and checks["sidecars_not_live"]
+        and checks["commit_reveal_not_live"]
+        and checks["tp_greater_than_one_not_admitted"]
+    )
+    expected_false = {"provider_spend_command_executed", "paid_replay_regenerated"}
+    verified = True
+    for key, value in checks.items():
+        expected = False if key in expected_false else True
+        verified = verified and value is expected
+
+    handoff = {
+        "schema": "postfiat-governance-agent-release-handoff-v1",
+        "gate": "release-handoff",
+        "verified": verified,
+        "output_file": rel(output),
+        "hash_algorithm": "sha3_384",
+        "refresh_local": refresh_local,
+        "operator_pack_report": rel(pack_path),
+        "operator_pack_report_sha3_384": sha3_384_file(pack_path),
+        "report_count": len(evidence),
+        "checks": checks,
+        "evidence_reports": evidence,
+        "release_scope": {
+            "candidate_evidence_packet": True,
+            "provider_spend_required": False,
+            "paid_replay_regenerated": False,
+            "sidecars_live": False,
+            "commit_reveal_live": False,
+            "authority_transfer_live": False,
+            "tp_greater_than_one_admitted": False,
+        },
+        "review_boundary": (
+            "This handoff freezes evidence for review; it does not promote "
+            "validator-side authority transfer or regenerate paid replay evidence."
+        ),
+    }
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(handoff, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if not no_sensitive_markers(json.dumps(handoff)):
+        raise SystemExit("release handoff report contains sensitive marker")
+    return handoff
+
+
+def self_test() -> int:
+    with tempfile.TemporaryDirectory(prefix="postfiat-dga-release-handoff-") as temp_name:
+        temp = pathlib.Path(temp_name)
+        gate1 = temp / "gate-1_5.json"
+        gate15 = temp / "gate-15.json"
+        gate1.write_text('{"schema":"gate1","verified":true}\n', encoding="utf-8")
+        gate15.write_text('{"schema":"gate15","verified":true}\n', encoding="utf-8")
+        pack = {
+            "schema": "postfiat-governance-agent-operator-gate-pack-v1",
+            "verified": True,
+            "allow_missing_paid_replay": False,
+            "paid_replay_missing_allowed": False,
+            "provider_spend_command_executed": False,
+            "paid_replay_regenerated": False,
+            "checks": {
+                "operator_gate_pack_no_spend_safe": True,
+                "authority_transfer_not_live": True,
+                "sidecars_not_live": True,
+                "commit_reveal_not_live": True,
+                "tp_greater_than_one_not_admitted": True,
+            },
+            "reports": [
+                {
+                    "gate_id": "1.5",
+                    "gate": "gate1",
+                    "schema": "gate1",
+                    "path": str(gate1.relative_to(temp)),
+                    "verified": True,
+                    "redaction_scan_ok": True,
+                    "promotion_scope": "test",
+                    "authority_effect": "test only",
+                },
+                {
+                    "gate_id": "15",
+                    "gate": "gate15",
+                    "schema": "gate15",
+                    "path": str(gate15.relative_to(temp)),
+                    "verified": True,
+                    "redaction_scan_ok": True,
+                    "promotion_scope": "test",
+                    "authority_effect": "test only",
+                },
+            ],
+        }
+        pack_path = temp / "operator-pack.json"
+        pack_path.write_text(json.dumps(pack) + "\n", encoding="utf-8")
+        output = temp / "handoff.json"
+        good = build_handoff(temp, pathlib.Path("operator-pack.json"), output, refresh_local=False)
+        if not good["verified"]:
+            print("self-test expected release handoff to verify", file=sys.stderr)
+            return 1
+        bad_pack = dict(pack)
+        bad_pack["provider_spend_command_executed"] = True
+        pack_path.write_text(json.dumps(bad_pack) + "\n", encoding="utf-8")
+        bad = build_handoff(temp, pathlib.Path("operator-pack.json"), output, refresh_local=False)
+        if bad["verified"]:
+            print("self-test expected provider-spend handoff to fail", file=sys.stderr)
+            return 1
+    print(
+        json.dumps(
+            {
+                "schema": "postfiat-governance-agent-release-handoff-self-test-v1",
+                "verified": True,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Freeze the deterministic governance-agent release handoff packet."
+    )
+    parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="output handoff report path")
+    parser.add_argument(
+        "--operator-pack-report",
+        default=str(DEFAULT_OPERATOR_PACK_REPORT),
+        help="operator gate pack report to freeze",
+    )
+    parser.add_argument(
+        "--no-refresh-local",
+        action="store_true",
+        help="verify existing operator pack evidence without refreshing local DGA gates",
+    )
+    parser.add_argument("--self-test", action="store_true", help="run script self-test")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    if args.self_test:
+        return self_test()
+    refresh_local = not args.no_refresh_local
+    if refresh_local:
+        run_operator_pack(no_refresh_local=False)
+    handoff = build_handoff(
+        ROOT,
+        pathlib.Path(args.operator_pack_report),
+        ROOT / args.output,
+        refresh_local=refresh_local,
+    )
+    print(json.dumps(handoff, indent=2, sort_keys=True))
+    return 0 if handoff["verified"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

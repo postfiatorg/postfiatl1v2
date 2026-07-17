@@ -1,0 +1,681 @@
+{
+  "$id": "https://postfiat.org/schemas/postfiat-protocol-architecture-superseding-replayed-decision-packet-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PostFiat Protocol Architecture Superseding Replayed Decision Packet",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "postfiat-protocol-architecture-superseding-replayed-decision-packet-v1",
+      "type": "string"
+    },
+    "superseding_decision_id": {
+      "$ref": "#/$defs/id"
+    },
+    "superseding_decision_version": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "candidate",
+        "accepted",
+        "rejected",
+        "superseded"
+      ],
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "target_decision_ref": {
+      "$ref": "#/$defs/target_decision_ref"
+    },
+    "source_disposition_ref": {
+      "$ref": "#/$defs/disposition_ref"
+    },
+    "source_full_vocab_ref": {
+      "$ref": "#/$defs/full_vocab_ref"
+    },
+    "replayed_decision_refs": {
+      "items": {
+        "$ref": "#/$defs/replayed_decision_ref"
+      },
+      "minItems": 2,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "promoted_decision": {
+      "$ref": "#/$defs/promoted_decision"
+    },
+    "challenge_lineage": {
+      "$ref": "#/$defs/challenge_lineage"
+    },
+    "next_required_packets": {
+      "items": {
+        "$ref": "#/$defs/next_required_packet"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "authority_boundary": {
+      "$ref": "#/$defs/authority_boundary"
+    },
+    "checks": {
+      "$ref": "#/$defs/checks"
+    }
+  },
+  "required": [
+    "schema",
+    "superseding_decision_id",
+    "superseding_decision_version",
+    "status",
+    "created_at",
+    "target_decision_ref",
+    "source_disposition_ref",
+    "source_full_vocab_ref",
+    "replayed_decision_refs",
+    "promoted_decision",
+    "challenge_lineage",
+    "next_required_packets",
+    "authority_boundary",
+    "checks"
+  ],
+  "$defs": {
+    "authority_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider_spend_authorized": {
+          "const": false
+        },
+        "live_model_request_authorized": {
+          "const": false
+        },
+        "model_output_generated_in_this_packet": {
+          "const": false
+        },
+        "target_artifact_overwrite_authorized": {
+          "const": false
+        },
+        "rippled_code_import_authorized": {
+          "const": false
+        },
+        "consensus_rewrite_authorized": {
+          "const": false
+        },
+        "xrpl_compatibility_activation_authorized": {
+          "const": false
+        },
+        "protocol_migration_authorized": {
+          "const": false
+        },
+        "live_validator_registry_mutation_authorized": {
+          "const": false
+        },
+        "live_cobalt_amendment_submission_authorized": {
+          "const": false
+        },
+        "mainnet_mutation_authorized": {
+          "const": false
+        },
+        "authority_transfer_authorized": {
+          "const": false
+        },
+        "conformance_mapping_authorized": {
+          "const": false
+        }
+      },
+      "required": [
+        "provider_spend_authorized",
+        "live_model_request_authorized",
+        "model_output_generated_in_this_packet",
+        "target_artifact_overwrite_authorized",
+        "rippled_code_import_authorized",
+        "consensus_rewrite_authorized",
+        "xrpl_compatibility_activation_authorized",
+        "protocol_migration_authorized",
+        "live_validator_registry_mutation_authorized",
+        "live_cobalt_amendment_submission_authorized",
+        "mainnet_mutation_authorized",
+        "authority_transfer_authorized",
+        "conformance_mapping_authorized"
+      ]
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_disposition_verified": {
+          "const": true
+        },
+        "source_full_vocab_verified": {
+          "const": true
+        },
+        "source_disposition_allows_superseding_packet": {
+          "const": true
+        },
+        "two_machine_replay_bound": {
+          "const": true
+        },
+        "raw_response_hashes_bound": {
+          "const": true
+        },
+        "parsed_decisions_converged": {
+          "const": true
+        },
+        "top_logprob_roots_converged": {
+          "const": true
+        },
+        "full_vocab_roots_converged": {
+          "const": true
+        },
+        "replayed_decisions_schema_valid": {
+          "const": true
+        },
+        "selected_option_in_question": {
+          "const": true
+        },
+        "selected_option_matches_target": {
+          "const": true
+        },
+        "target_hash_not_reproduced": {
+          "const": true
+        },
+        "supersedes_target_only_as_no_live_effect_artifact": {
+          "const": true
+        },
+        "challenge_disposition_still_required": {
+          "const": true
+        },
+        "conformance_mapping_blocked": {
+          "const": true
+        },
+        "no_provider_spend_in_this_packet": {
+          "const": true
+        },
+        "no_live_mutation": {
+          "const": true
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      },
+      "required": [
+        "source_disposition_verified",
+        "source_full_vocab_verified",
+        "source_disposition_allows_superseding_packet",
+        "two_machine_replay_bound",
+        "raw_response_hashes_bound",
+        "parsed_decisions_converged",
+        "top_logprob_roots_converged",
+        "full_vocab_roots_converged",
+        "replayed_decisions_schema_valid",
+        "selected_option_in_question",
+        "selected_option_matches_target",
+        "target_hash_not_reproduced",
+        "supersedes_target_only_as_no_live_effect_artifact",
+        "challenge_disposition_still_required",
+        "conformance_mapping_blocked",
+        "no_provider_spend_in_this_packet",
+        "no_live_mutation",
+        "authority_transfer"
+      ]
+    },
+    "challenge_lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "challenge_path": {
+          "const": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_live_replay_challenge_packet.json",
+          "type": "string"
+        },
+        "challenge_file_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "challenge_canonical_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "challenge_status_before": {
+          "const": "candidate",
+          "type": "string"
+        },
+        "route_from_vc052": {
+          "const": "supersede_target",
+          "type": "string"
+        },
+        "challenge_status_after": {
+          "const": "superseding_decision_created_challenge_disposition_required",
+          "type": "string"
+        },
+        "challenge_disposition_still_required": {
+          "const": true
+        },
+        "next_challenge_disposition_packet_id": {
+          "const": "vc-protocol-architecture-001-challenge-disposition-002",
+          "type": "string"
+        }
+      },
+      "required": [
+        "challenge_path",
+        "challenge_file_sha3_384",
+        "challenge_canonical_hash",
+        "challenge_status_before",
+        "route_from_vc052",
+        "challenge_status_after",
+        "challenge_disposition_still_required",
+        "next_challenge_disposition_packet_id"
+      ]
+    },
+    "disposition_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "report_path": {
+          "const": "reports/verifiable-constitution/vc-052-protocol-architecture-full-vocab-disposition-report.json",
+          "type": "string"
+        },
+        "report_file_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "report_canonical_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "report_schema": {
+          "const": "postfiat-verifiable-constitution-vc-052-report-v1",
+          "type": "string"
+        },
+        "verified": {
+          "const": true
+        },
+        "classification": {
+          "const": "accept_superseding_replayed_decision_packet",
+          "type": "string"
+        },
+        "challenge_route": {
+          "const": "supersede_target",
+          "type": "string"
+        },
+        "conformance_allowed_now": {
+          "const": false
+        },
+        "superseding_decision_packet_required": {
+          "const": true
+        }
+      },
+      "required": [
+        "report_path",
+        "report_file_sha3_384",
+        "report_canonical_hash",
+        "report_schema",
+        "verified",
+        "classification",
+        "challenge_route",
+        "conformance_allowed_now",
+        "superseding_decision_packet_required"
+      ]
+    },
+    "full_vocab_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "report_path": {
+          "const": "reports/verifiable-constitution/vc-051-protocol-architecture-full-vocab-replay-execution-report.json",
+          "type": "string"
+        },
+        "report_file_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "report_canonical_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "report_schema": {
+          "const": "postfiat-verifiable-constitution-vc-051-report-v1",
+          "type": "string"
+        },
+        "verified": {
+          "const": true
+        },
+        "outcome": {
+          "const": "full_vocab_and_chat_converged_challenge_still_open",
+          "type": "string"
+        },
+        "classification": {
+          "const": "live_outputs_converged_target_not_reproduced",
+          "type": "string"
+        },
+        "prompt_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "prompt_payload_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "chat_request_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "live_decision_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "top_logprob_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "full_vocab_vector_root": {
+          "$ref": "#/$defs/sha256"
+        },
+        "raw_response_hashes": {
+          "items": {
+            "$ref": "#/$defs/sha3_384"
+          },
+          "minItems": 2,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "hardware_classes": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 2,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "machine_count": {
+          "minimum": 2,
+          "type": "integer"
+        },
+        "cleanup_verified": {
+          "const": true
+        }
+      },
+      "required": [
+        "report_path",
+        "report_file_sha3_384",
+        "report_canonical_hash",
+        "report_schema",
+        "verified",
+        "outcome",
+        "classification",
+        "prompt_hash",
+        "prompt_payload_hash",
+        "chat_request_hash",
+        "live_decision_hash",
+        "top_logprob_root",
+        "full_vocab_vector_root",
+        "raw_response_hashes",
+        "hardware_classes",
+        "machine_count",
+        "cleanup_verified"
+      ]
+    },
+    "id": {
+      "maxLength": 160,
+      "minLength": 3,
+      "pattern": "^[a-z0-9][a-z0-9_.:-]*$",
+      "type": "string"
+    },
+    "next_required_packet": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "packet_id": {
+          "$ref": "#/$defs/id"
+        },
+        "packet_kind": {
+          "enum": [
+            "challenge_disposition_packet",
+            "conformance_mapping_packet",
+            "cobalt_or_release_authorization_gate"
+          ],
+          "type": "string"
+        },
+        "required_before": {
+          "enum": [
+            "challenge_resolution",
+            "conformance_mapping",
+            "live_effect"
+          ],
+          "type": "string"
+        },
+        "rationale": {
+          "minLength": 20,
+          "type": "string"
+        }
+      },
+      "required": [
+        "packet_id",
+        "packet_kind",
+        "required_before",
+        "rationale"
+      ]
+    },
+    "promoted_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "decision_payload_schema": {
+          "const": "postfiat-constitutional-decision-packet-v1",
+          "type": "string"
+        },
+        "decision_payload_source": {
+          "const": "vc051_replayed_qwen_parsed_output",
+          "type": "string"
+        },
+        "decision_payload_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "decision_payload_status_before_promotion": {
+          "const": "candidate",
+          "type": "string"
+        },
+        "accepted_as": {
+          "const": "superseding_no_live_effect_governance_artifact",
+          "type": "string"
+        },
+        "selected_option": {
+          "const": "preserve-rust-l1",
+          "type": "string"
+        },
+        "target_decision_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "target_hash_reproduced": {
+          "const": false
+        },
+        "selected_option_matches_target": {
+          "const": true
+        },
+        "supersedes_target_decision": {
+          "const": true
+        },
+        "supersession_scope": {
+          "items": {
+            "enum": [
+              "verifiable_constitution_lineage",
+              "docs_planning_baseline",
+              "challenge_lineage"
+            ],
+            "type": "string"
+          },
+          "minItems": 2,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "live_effect": {
+          "const": false
+        },
+        "conformance_mapping_allowed_now": {
+          "const": false
+        },
+        "rationale": {
+          "minLength": 40,
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision_payload_schema",
+        "decision_payload_source",
+        "decision_payload_hash",
+        "decision_payload_status_before_promotion",
+        "accepted_as",
+        "selected_option",
+        "target_decision_hash",
+        "target_hash_reproduced",
+        "selected_option_matches_target",
+        "supersedes_target_decision",
+        "supersession_scope",
+        "live_effect",
+        "conformance_mapping_allowed_now",
+        "rationale"
+      ]
+    },
+    "replayed_decision_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "$ref": "#/$defs/id"
+        },
+        "machine_id": {
+          "$ref": "#/$defs/id"
+        },
+        "hardware_class": {
+          "minLength": 2,
+          "type": "string"
+        },
+        "provider_label": {
+          "const": "vast",
+          "type": "string"
+        },
+        "provider_run_id": {
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "raw_response_path": {
+          "pattern": "^reports/verifiable-constitution/protocol-architecture-full-vocab-replay/chat-replay/raw_response_[a-z0-9-]+\\.json$",
+          "type": "string"
+        },
+        "raw_response_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "raw_response_file_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "raw_content_path": {
+          "pattern": "^reports/verifiable-constitution/protocol-architecture-full-vocab-replay/chat-replay/model_output_raw_[a-z0-9-]+\\.txt$",
+          "type": "string"
+        },
+        "raw_content_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "parsed_decision_path": {
+          "pattern": "^reports/verifiable-constitution/protocol-architecture-full-vocab-replay/chat-replay/model_output_[a-z0-9-]+\\.json$",
+          "type": "string"
+        },
+        "parsed_decision_file_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "parsed_decision_canonical_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "decision_schema_valid": {
+          "const": true
+        },
+        "decision_schema_errors": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 0,
+          "type": "array"
+        },
+        "selected_option": {
+          "const": "preserve-rust-l1",
+          "type": "string"
+        },
+        "receipt_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "top_logprob_root": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "full_vocab_vector_root": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "run_id",
+        "machine_id",
+        "hardware_class",
+        "provider_label",
+        "provider_run_id",
+        "raw_response_path",
+        "raw_response_sha3_384",
+        "raw_response_file_sha3_384",
+        "raw_content_path",
+        "raw_content_sha3_384",
+        "parsed_decision_path",
+        "parsed_decision_file_sha3_384",
+        "parsed_decision_canonical_hash",
+        "decision_schema_valid",
+        "decision_schema_errors",
+        "selected_option",
+        "receipt_root",
+        "top_logprob_root",
+        "full_vocab_vector_root"
+      ]
+    },
+    "sha3_384": {
+      "pattern": "^[0-9a-f]{96}$",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "target_decision_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "const": "vc-protocol-architecture-001-decision-001",
+          "type": "string"
+        },
+        "decision_path": {
+          "const": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_constitutional_decision_packet.json",
+          "type": "string"
+        },
+        "decision_file_sha3_384": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "decision_canonical_hash": {
+          "$ref": "#/$defs/sha3_384"
+        },
+        "decision_status": {
+          "const": "accepted",
+          "type": "string"
+        },
+        "selected_option": {
+          "const": "preserve-rust-l1",
+          "type": "string"
+        },
+        "superseded_by_this_packet": {
+          "const": true
+        },
+        "target_artifact_overwritten": {
+          "const": false
+        }
+      },
+      "required": [
+        "decision_id",
+        "decision_path",
+        "decision_file_sha3_384",
+        "decision_canonical_hash",
+        "decision_status",
+        "selected_option",
+        "superseded_by_this_packet",
+        "target_artifact_overwritten"
+      ]
+    }
+  }
+}

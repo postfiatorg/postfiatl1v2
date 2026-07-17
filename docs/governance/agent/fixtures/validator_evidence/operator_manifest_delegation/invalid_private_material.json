@@ -1,0 +1,57 @@
+{
+  "schema": "postfiat-operator-manifest-delegation-v1",
+  "delegation_id": "operator-manifest-delegation-validator-alpha-2026-05-23",
+  "validator_id": "validator-alpha",
+  "validator_public_key_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "governance_epoch": 1,
+  "delegation": {
+    "delegator_key_role": "validator_governance",
+    "delegator_key_hash": "777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+    "method": "governance_signed_statement",
+    "statement_hash": "888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888",
+    "signed_at": "2026-05-23T05:40:00Z",
+    "expires_at": "2026-06-22T05:40:00Z",
+    "signature_valid": true,
+    "scopes": [
+      "operator_manifest_signing"
+    ]
+  },
+  "operator_accountability_key": {
+    "role": "operator_accountability",
+    "public_key_hash": "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+    "algorithm": "ed25519",
+    "key_created_at": "2026-05-23T05:30:00Z",
+    "rotation_allowed": true,
+    "private_key_material": "redacted-but-still-forbidden"
+  },
+  "manifest_binding": {
+    "manifest_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "claims_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "signing_key_hash": "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+    "signing_key_role": "operator_accountability",
+    "signed_at": "2026-05-23T05:50:00Z",
+    "expires_at": "2026-06-22T05:50:00Z",
+    "manifest_signature_valid": true
+  },
+  "revocation": {
+    "status": "active",
+    "revocation_statement_hash": null,
+    "revoked_at": null
+  },
+  "redaction": {
+    "private_fields_removed": false,
+    "secret_scan_passed": false,
+    "public_artifact_safe": false
+  },
+  "checks": {
+    "validator_binding_present": true,
+    "operator_key_delegated": true,
+    "delegation_signature_valid": true,
+    "manifest_signed_by_operator_key": true,
+    "manifest_signature_valid": true,
+    "scope_excludes_authority_transfer": true,
+    "no_consensus_key_routine_manifest_updates": true,
+    "registry_mutation": false,
+    "live_authority_transfer": false
+  }
+}

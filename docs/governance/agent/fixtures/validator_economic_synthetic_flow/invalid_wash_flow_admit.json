@@ -1,0 +1,18 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_synthetic_flow/valid_synthetic_flow.json",
+  "expected_error_contains": [
+    "case-11-wash-routed-flow-reject: expected_route mismatch"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        10,
+        "expected_route"
+      ],
+      "value": "admit"
+    }
+  ],
+  "schema": "postfiat-validator-economic-synthetic-flow-invalid-case-v1"
+}

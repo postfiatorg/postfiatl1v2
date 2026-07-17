@@ -1,0 +1,81 @@
+{
+  "schema": "postfiat-privacy-assurance-receipt-v1",
+  "receipt_id": "privacy-assurance-receipt-invalid-ungoverned-policy",
+  "mode": "design_fixture_only",
+  "statement": {
+    "chain": {
+      "chain_id": "postfiat-controlled-testnet",
+      "pool_id": "orchard-v1",
+      "registry_root_hash": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "subject": {
+      "subject_kind": "blinded_note_commitment",
+      "blinded_subject_tag": "222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
+      "action_class": "withdraw",
+      "public_chain_fields": [
+        "root",
+        "nullifier",
+        "output_commitments",
+        "fee",
+        "policy_hash",
+        "disclosure_hash"
+      ]
+    },
+    "policy": {
+      "policy_root_hash": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+      "policy_root_governance": "wallet_local_default",
+      "list_provider_root_hash": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+      "list_provider_order": [
+        "ofac-public-sdn-root"
+      ],
+      "proof_statement": "non_inclusion_against_policy_root",
+      "standby_period_seconds": 3600,
+      "staleness_limit_seconds": 86400
+    },
+    "disclosure": {
+      "scope": "single_action",
+      "recipient_class": "custodian",
+      "full_viewing_key_disclosed": false,
+      "future_history_access": false,
+      "full_wallet_history_access": false,
+      "raw_private_values_disclosed": false,
+      "allowed_reveals": [
+        "policy_membership",
+        "transaction_binding"
+      ]
+    },
+    "validity": {
+      "not_before": "2026-05-28T00:00:00Z",
+      "expires_at": "2026-06-27T00:00:00Z",
+      "ledger_from": 1000,
+      "ledger_to": 2000
+    },
+    "evidence_artifacts": [
+      {
+        "path": "reports/orchard-verification-budget-v1-report.json",
+        "sha3_384": "0b3af474fe246b27cf7f167d13f52523ac25f3e3245518fa197f5b61e5d54e2c901f0b0bb9ab50ad078f9e28bfa9f2aa"
+      }
+    ]
+  },
+  "attestation": {
+    "attestor_key_hash": "555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555",
+    "statement_hash": "3183336400b9d6ce99a88e1a3c89e96263cc5888d869cf4f69c7217452ac7b5eab985faeb8c39f615ad30f2343c9c401",
+    "signature_hash": "666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666",
+    "signature_scheme": "mldsa44-placeholder",
+    "attested_at": "2026-05-28T00:00:00Z"
+  },
+  "checks": {
+    "orchard_pool_bound": true,
+    "policy_root_bound": true,
+    "list_provider_root_bound": true,
+    "proof_root_bound": true,
+    "scoped_disclosure_only": true,
+    "no_full_viewing_key": true,
+    "no_future_history_access": true,
+    "no_raw_private_values": true,
+    "expiry_enforced": true,
+    "cobalt_policy_transition_required": false,
+    "live_registry_mutation": false,
+    "authority_transfer": false
+  }
+}

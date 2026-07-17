@@ -1,0 +1,16 @@
+[package]
+name = "postfiat-proofs"
+version = "0.1.0"
+description = "Proof interfaces and verification policies for PostFiat L1"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+postfiat-crypto-provider = { path = "../crypto_provider" }
+serde = { workspace = true }
+serde_json = { workspace = true }

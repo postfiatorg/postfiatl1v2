@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_attestor_budget/valid_attestor_budget.json",
+  "expected_error_contains": [
+    "statement.budget_root_hash does not match budget material"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "budget_root_hash"
+      ],
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "schema": "postfiat-validator-economic-attestor-budget-invalid-case-v1"
+}

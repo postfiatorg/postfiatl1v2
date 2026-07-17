@@ -1,0 +1,278 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VALIDATORS="${VALIDATORS:-4}"
+CHAIN_ID="${CHAIN_ID:-postfiat-testnet-candidate}"
+BASE_PORT="${BASE_PORT:-26650}"
+RPC_BASE_PORT="${RPC_BASE_PORT:-27650}"
+HOSTS="${HOSTS:-}"
+BASE_DIR="${BASE_DIR:-reports/testnet-local-harness/nodes}"
+LOG_DIR="${LOG_DIR:-reports/testnet-local-harness/logs}"
+BUNDLE_OUT_DIR="${BUNDLE_OUT_DIR:-reports/testnet-config-bundles}"
+PRIVATE_OUT_DIR="${PRIVATE_OUT_DIR:-reports/testnet-private-key-material}"
+REPORT="${REPORT:-reports/testnet-local-harness/testnet-local-harness-$(date -u +%Y%m%dT%H%M%SZ).json}"
+CARGO_BUILD_MODE="${CARGO_BUILD_MODE:-debug}"
+if [ "${POSTFIAT_NODE_BIN+x}" != "x" ]; then
+  POSTFIAT_NODE_BIN="target/$CARGO_BUILD_MODE/postfiat-node"
+fi
+PUBLIC_STATE_FILES=(
+  genesis.json
+  governance.json
+  ledger.json
+  blocks.json
+  batch_archive.json
+  mempool.json
+  ordered_batches.json
+  receipts.json
+  shielded.json
+  bridge.json
+  faucet_account.json
+  validator_registry.json
+  validator_registry_genesis.json
+)
+
+require_command() {
+  local command="$1"
+  if ! command -v "$command" >/dev/null 2>&1; then
+    echo "missing required command: $command" >&2
+    exit 1
+  fi
+}
+
+require_positive_integer() {
+  local name="$1"
+  local value="$2"
+  if ! [[ "$value" =~ ^[0-9]+$ ]] || [ "$value" -lt 1 ]; then
+    echo "$name must be a positive integer" >&2
+    exit 2
+  fi
+}
+
+default_loopback_hosts() {
+  for ((i = 0; i < VALIDATORS; i++)); do
+    if [ "$i" -eq 0 ]; then
+      printf '127.0.0.1'
+    else
+      printf ',127.0.0.1'
+    fi
+  done
+}
+
+copy_private_file() {
+  local source="$1"
+  local destination="$2"
+  cp "$source" "$destination"
+  chmod 600 "$destination"
+}
+
+write_node_state() {
+  local path="$1"
+  local node_id="$2"
+  cat >"$path" <<EOF
+{
+  "node_id": "$node_id",
+  "status": "initialized",
+  "last_run_unix": 0
+}
+EOF
+}
+
+require_command jq
+require_command cargo
+require_command date
+require_command grep
+
+require_positive_integer VALIDATORS "$VALIDATORS"
+require_positive_integer BASE_PORT "$BASE_PORT"
+require_positive_integer RPC_BASE_PORT "$RPC_BASE_PORT"
+case "$CARGO_BUILD_MODE" in
+  debug|release) ;;
+  *)
+    echo "CARGO_BUILD_MODE must be debug or release" >&2
+    exit 2
+    ;;
+esac
+
+cargo_build_args=()
+if [ "$CARGO_BUILD_MODE" = "release" ]; then
+  cargo_build_args+=(--release)
+fi
+cargo build "${cargo_build_args[@]}" -p postfiat-node >/dev/null
+if [ ! -x "$POSTFIAT_NODE_BIN" ]; then
+  echo "POSTFIAT_NODE_BIN is not executable: $POSTFIAT_NODE_BIN" >&2
+  exit 1
+fi
+
+mkdir -p "$LOG_DIR" "$(dirname "$REPORT")"
+rm -rf "$BASE_DIR"
+mkdir -p "$BASE_DIR"
+
+host_csv="$HOSTS"
+if [ -z "$host_csv" ]; then
+  host_csv="$(default_loopback_hosts)"
+fi
+
+bundle_output="$LOG_DIR/testnet-config-bundle.out"
+VALIDATORS="$VALIDATORS" \
+  CHAIN_ID="$CHAIN_ID" \
+  BASE_PORT="$BASE_PORT" \
+  RPC_BASE_PORT="$RPC_BASE_PORT" \
+  HOSTS="$host_csv" \
+  OUT_DIR="$BUNDLE_OUT_DIR" \
+  PRIVATE_OUT_DIR="$PRIVATE_OUT_DIR" \
+  REMOTE_DATA_ROOT="$BASE_DIR" \
+  REMOTE_LOG_ROOT="$LOG_DIR" \
+  scripts/testnet-config-bundle >"$bundle_output"
+
+bundle_dir="$(awk -F= '/^bundle_dir=/{print $2}' "$bundle_output")"
+manifest="$(awk -F= '/^manifest=/{print $2}' "$bundle_output")"
+key_material_dir="$(awk -F= '/^local_private_material_dir=/{print $2}' "$bundle_output")"
+if [ -z "$bundle_dir" ] || [ ! -d "$bundle_dir" ]; then
+  echo "bundle generation did not produce a bundle_dir" >&2
+  cat "$bundle_output" >&2
+  exit 1
+fi
+if [ -z "$key_material_dir" ] || [ ! -d "$key_material_dir/source-node" ]; then
+  echo "bundle generation did not preserve private key material" >&2
+  cat "$bundle_output" >&2
+  exit 1
+fi
+
+jq -e \
+  --argjson validators "$VALIDATORS" \
+  '.schema == "postfiat-testnet-config-bundle-v1" and .status == "ready" and .validators == $validators and (.network.peers | length) == $validators and .private_key_policy.included_in_bundle == false' \
+  "$manifest" >/dev/null
+
+status_files=()
+state_files=()
+key_files=()
+for ((i = 0; i < VALIDATORS; i++)); do
+  node_id="validator-$i"
+  node_dir="$BASE_DIR/$node_id"
+  node_log_dir="$LOG_DIR/$node_id"
+  mkdir -p "$node_dir" "$node_log_dir"
+
+  for state_file in "${PUBLIC_STATE_FILES[@]}"; do
+    cp "$bundle_dir/$state_file" "$node_dir/$state_file"
+  done
+  cp "$bundle_dir/remote-topology.json" "$node_dir/remote-topology.json"
+  copy_private_file "$key_material_dir/source-node/validator_keys.json" "$node_dir/validator_keys.json"
+  copy_private_file "$key_material_dir/source-node/faucet_key.json" "$node_dir/faucet_key.json"
+  write_node_state "$node_dir/node_state.json" "$node_id"
+
+  "$POSTFIAT_NODE_BIN" run \
+    --data-dir "$node_dir" >"$node_log_dir/run.json"
+  "$POSTFIAT_NODE_BIN" status \
+    --data-dir "$node_dir" >"$node_log_dir/status.json"
+  "$POSTFIAT_NODE_BIN" verify-state \
+    --data-dir "$node_dir" >"$node_log_dir/state.json"
+  "$POSTFIAT_NODE_BIN" validate-local-keys \
+    --data-dir "$node_dir" \
+    --validators "$VALIDATORS" >"$node_log_dir/keys.json"
+
+  jq -e \
+    --arg node_id "$node_id" \
+    '.node_id == $node_id and .status == "running" and (.state_root | test("^[0-9a-f]{96}$")) and (.genesis_hash | test("^[0-9a-f]{96}$"))' \
+    "$node_log_dir/status.json" >/dev/null
+  jq -e \
+    '.schema == "postfiat-state-verification-v1" and .verified == true and .block_log.verified == true and .governance.verified == true and .bridge.verified == true and .shielded.verified == true and .mempool.verified == true' \
+    "$node_log_dir/state.json" >/dev/null
+  jq -e \
+    --arg node_id "$node_id" \
+    --argjson validators "$VALIDATORS" \
+    '.schema == "postfiat-local-key-validation-v1" and .node_id == $node_id and .faucet_key_valid == true and .validator_keys_valid == true and .required_validator_count == $validators and .validator_key_count >= $validators' \
+    "$node_log_dir/keys.json" >/dev/null
+
+  status_files+=("$node_log_dir/status.json")
+  state_files+=("$node_log_dir/state.json")
+  key_files+=("$node_log_dir/keys.json")
+done
+
+statuses_bundle="$LOG_DIR/statuses.json"
+states_bundle="$LOG_DIR/states.json"
+keys_bundle="$LOG_DIR/keys.json"
+jq -s '.' "${status_files[@]}" >"$statuses_bundle"
+jq -s '.' "${state_files[@]}" >"$states_bundle"
+jq -s '.' "${key_files[@]}" >"$keys_bundle"
+
+generated_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+jq -n \
+  --arg schema "postfiat-testnet-local-harness-v1" \
+  --arg generated_utc "$generated_utc" \
+  --arg base_dir "$BASE_DIR" \
+  --arg log_dir "$LOG_DIR" \
+  --arg bundle_dir "$bundle_dir" \
+  --arg manifest "$manifest" \
+  --arg key_material_dir "$key_material_dir" \
+  --argjson validators "$VALIDATORS" \
+  --slurpfile bundle "$manifest" \
+  --slurpfile statuses "$statuses_bundle" \
+  --slurpfile states "$states_bundle" \
+  --slurpfile keys "$keys_bundle" \
+  '
+  ($statuses[0]) as $status_list
+  | ($states[0]) as $state_list
+  | ($keys[0]) as $key_list
+  | {
+      schema: $schema,
+      generated_utc: $generated_utc,
+      validators: $validators,
+      base_dir: $base_dir,
+      log_dir: $log_dir,
+      bundle: {
+        path: $bundle_dir,
+        manifest: $manifest,
+        topology_id: $bundle[0].network.topology_id,
+        chain: $bundle[0].chain
+      },
+      private_key_policy: {
+        included_in_report: false,
+        source_dir: $key_material_dir
+      },
+      converged: (
+        ([$status_list[].state_root] | unique | length) == 1
+        and ([$status_list[].block_height] | unique | length) == 1
+        and ([$status_list[].block_tip_hash] | unique | length) == 1
+      ),
+      all_running: all($status_list[]; .status == "running"),
+      state_verified_all: all($state_list[]; .schema == "postfiat-state-verification-v1" and .verified == true),
+      local_keys_valid_all: all($key_list[]; .schema == "postfiat-local-key-validation-v1" and .faucet_key_valid == true and .validator_keys_valid == true),
+      validator_summaries: [
+        range(0; $validators) as $i
+        | {
+            node_id: $status_list[$i].node_id,
+            host: $bundle[0].network.peers[$i].host,
+            p2p_port: $bundle[0].network.peers[$i].p2p_port,
+            rpc_port: $bundle[0].network.peers[$i].rpc_port,
+            status: $status_list[$i].status,
+            state_root: $status_list[$i].state_root,
+            block_height: $status_list[$i].block_height,
+            block_tip_hash: $status_list[$i].block_tip_hash,
+            state_verified: $state_list[$i].verified,
+            keys_valid: (
+              $key_list[$i].faucet_key_valid == true
+              and $key_list[$i].validator_keys_valid == true
+            )
+          }
+      ]
+    }
+  | .harness_ok = (
+      .converged == true
+      and .all_running == true
+      and .state_verified_all == true
+      and .local_keys_valid_all == true
+    )
+  ' >"$REPORT"
+
+jq -e \
+  --argjson validators "$VALIDATORS" \
+  '.schema == "postfiat-testnet-local-harness-v1" and .harness_ok == true and .validators == $validators and .converged == true and .all_running == true and .state_verified_all == true and .local_keys_valid_all == true and (.validator_summaries | length) == $validators' \
+  "$REPORT" >/dev/null
+
+if grep -Eq '"(private_key_hex|public_key_hex)"' "$REPORT" "$LOG_DIR"/*.json "$LOG_DIR"/validator-*/*.json; then
+  echo "testnet local harness report leaked key material" >&2
+  exit 1
+fi
+
+printf 'testnet_local_harness=ok validators=%s report=%s bundle=%s\n' \
+  "$VALIDATORS" "$REPORT" "$manifest"

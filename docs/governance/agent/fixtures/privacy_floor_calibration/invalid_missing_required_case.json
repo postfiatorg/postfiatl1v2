@@ -1,0 +1,25 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_floor_calibration/valid_floor_calibration.json",
+  "expected_error_contains": [
+    "selector_cases missing required floor-calibration cases"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases"
+      ],
+      "value": [
+        {
+          "case_id": "case-01-baseline-calibration",
+          "expected_reason_codes": [
+            "privacy_floor_calibration_passed"
+          ],
+          "expected_route": "baseline-private",
+          "overrides": []
+        }
+      ]
+    }
+  ],
+  "schema": "postfiat-privacy-floor-calibration-invalid-case-v1"
+}

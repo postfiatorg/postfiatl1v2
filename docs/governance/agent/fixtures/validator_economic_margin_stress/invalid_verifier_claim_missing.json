@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_margin_stress/valid_margin_stress.json",
+  "expected_error_contains": [
+    "checks.liveness_margin_erosion_fail_closed must be True"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "checks",
+        "liveness_margin_erosion_fail_closed"
+      ],
+      "value": false
+    }
+  ],
+  "schema": "postfiat-validator-economic-margin-stress-invalid-case-v1"
+}

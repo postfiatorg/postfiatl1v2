@@ -1,0 +1,105 @@
+{
+  "schema": "postfiat-constitutional-silent-override-detector-cases-v1",
+  "fixture_id": "vc-032-silent-override-detector-cases",
+  "cases": [
+    {
+      "case_id": "unchanged-replayed-packet",
+      "description": "The published replay snapshot exactly matches the accepted activation packet and bound replay roots.",
+      "mutation": {
+        "operation": "none"
+      },
+      "expected_status": "accepted",
+      "expected_mismatches": []
+    },
+    {
+      "case_id": "changed-prompt",
+      "description": "A prompt hash root is silently substituted after activation.",
+      "mutation": {
+        "operation": "replace",
+        "field": "prompt_hash_root",
+        "value": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "expected_status": "rejected",
+      "expected_mismatches": [
+        "prompt_hash_mismatch"
+      ]
+    },
+    {
+      "case_id": "changed-schema",
+      "description": "A packet schema hash root is silently substituted after activation.",
+      "mutation": {
+        "operation": "replace",
+        "field": "schema_hash_root",
+        "value": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "expected_status": "rejected",
+      "expected_mismatches": [
+        "schema_hash_mismatch"
+      ]
+    },
+    {
+      "case_id": "changed-model-profile",
+      "description": "The active model profile hash is silently substituted after activation.",
+      "mutation": {
+        "operation": "replace",
+        "field": "model_profile_hash",
+        "value": "222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "expected_status": "rejected",
+      "expected_mismatches": [
+        "model_profile_hash_mismatch"
+      ]
+    },
+    {
+      "case_id": "changed-selector",
+      "description": "The selector or conformance binding hash is silently substituted after activation.",
+      "mutation": {
+        "operation": "replace",
+        "field": "selector_or_conformance_hash",
+        "value": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333"
+      },
+      "expected_status": "rejected",
+      "expected_mismatches": [
+        "selector_or_conformance_hash_mismatch"
+      ]
+    },
+    {
+      "case_id": "changed-evidence-root",
+      "description": "The evidence root that was replayed into the decision is silently substituted after activation.",
+      "mutation": {
+        "operation": "replace",
+        "field": "evidence_root",
+        "value": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444"
+      },
+      "expected_status": "rejected",
+      "expected_mismatches": [
+        "evidence_root_mismatch"
+      ]
+    },
+    {
+      "case_id": "changed-decision-output",
+      "description": "The accepted decision output hash is silently substituted after activation.",
+      "mutation": {
+        "operation": "replace",
+        "field": "decision_output_hash",
+        "value": "555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "expected_status": "rejected",
+      "expected_mismatches": [
+        "decision_output_hash_mismatch"
+      ]
+    },
+    {
+      "case_id": "missing-cobalt-release-gate",
+      "description": "The Cobalt or release authorization gate binding is omitted from the published replay snapshot.",
+      "mutation": {
+        "operation": "delete",
+        "field": "cobalt_release_gate_root"
+      },
+      "expected_status": "rejected",
+      "expected_mismatches": [
+        "missing_cobalt_release_gate"
+      ]
+    }
+  ]
+}

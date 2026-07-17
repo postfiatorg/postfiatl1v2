@@ -1,0 +1,19 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/performance_methodology_policy/valid_performance_methodology_policy.json",
+  "expected_error_contains": [
+    "orchard values.median_verify_ms not artifact-bound"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "cards",
+        4,
+        "values",
+        "median_verify_ms"
+      ],
+      "value": 79
+    }
+  ],
+  "schema": "postfiat-performance-methodology-policy-invalid-case-v1"
+}

@@ -1,0 +1,17 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_floor_calibration/valid_floor_calibration.json",
+  "expected_error_contains": [
+    "min_joint_candidate_count must be 16"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "calibration_policy",
+        "min_joint_candidate_count"
+      ],
+      "value": 15
+    }
+  ],
+  "schema": "postfiat-privacy-floor-calibration-invalid-case-v1"
+}

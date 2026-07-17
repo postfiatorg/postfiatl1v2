@@ -1,0 +1,18 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_influence_window_policy/valid_influence_window_policy.json",
+  "expected_error_contains": [
+    "case-10-liveness-threshold-mismatch-fail-closed: expected_route mismatch"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "selector_cases",
+        9,
+        "expected_route"
+      ],
+      "value": "admit"
+    }
+  ],
+  "schema": "postfiat-validator-economic-influence-window-policy-invalid-case-v1"
+}

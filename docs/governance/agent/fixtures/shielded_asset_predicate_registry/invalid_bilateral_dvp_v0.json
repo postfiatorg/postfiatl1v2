@@ -1,0 +1,29 @@
+{
+  "schema": "postfiat-shielded-asset-predicate-registry-invalid-case-v1",
+  "case_id": "invalid-bilateral-dvp-v0",
+  "base_packet": "docs/governance/agent/fixtures/shielded_asset_predicate_registry/valid_predicate_registry.json",
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "predicates",
+        1,
+        "predicate_class"
+      ],
+      "value": "bilateral_dvp"
+    },
+    {
+      "path": [
+        "statement",
+        "predicates",
+        1,
+        "state_scope"
+      ],
+      "value": "bilateral_session"
+    }
+  ],
+  "expected_error_contains": [
+    "predicate_class is not v0-admitted",
+    "state_scope must be owner_scoped"
+  ]
+}

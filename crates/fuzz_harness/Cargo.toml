@@ -1,0 +1,30 @@
+[package]
+name = "postfiat-fuzz"
+version = "0.1.0"
+description = "Internal adversarial and fuzz harness for PostFiat L1"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "postfiat-fuzz"
+path = "src/main.rs"
+
+[dependencies]
+orchard = { workspace = true }
+postfiat-bridge = { path = "../bridge" }
+postfiat-consensus-cobalt = { path = "../consensus_cobalt" }
+postfiat-crypto-provider = { path = "../crypto_provider" }
+postfiat-execution = { path = "../execution" }
+postfiat-mempool-dag = { path = "../mempool_dag" }
+postfiat-network = { path = "../network" }
+postfiat-node = { path = "../node" }
+postfiat-ordering-fast = { path = "../ordering_fast" }
+postfiat-privacy = { path = "../privacy" }
+postfiat-privacy-orchard = { path = "../privacy_orchard" }
+postfiat-proofs = { path = "../proofs" }
+postfiat-types = { path = "../types" }
+rand = "0.8.6"
+serde = { workspace = true }
+serde_json = { workspace = true }

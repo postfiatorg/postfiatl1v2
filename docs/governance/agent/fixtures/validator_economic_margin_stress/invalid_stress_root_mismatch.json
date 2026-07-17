@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/validator_economic_margin_stress/valid_margin_stress.json",
+  "expected_error_contains": [
+    "statement.stress_root_hash does not match stress material"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "statement",
+        "stress_root_hash"
+      ],
+      "value": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    }
+  ],
+  "schema": "postfiat-validator-economic-margin-stress-invalid-case-v1"
+}

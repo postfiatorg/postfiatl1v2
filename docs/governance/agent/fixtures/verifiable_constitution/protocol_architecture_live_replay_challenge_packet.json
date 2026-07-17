@@ -1,0 +1,108 @@
+{
+  "schema": "postfiat-constitutional-challenge-packet-v1",
+  "challenge_id": "vc-protocol-architecture-001-live-replay-challenge-001",
+  "challenge_version": 1,
+  "status": "candidate",
+  "challenge_scope": "release_authority",
+  "created_at": "2026-05-25T00:00:00Z",
+  "target_decision_ref": {
+    "decision_id": "vc-protocol-architecture-001-decision-001",
+    "decision_path": "docs/governance/agent/fixtures/verifiable_constitution/protocol_architecture_constitutional_decision_packet.json",
+    "decision_file_sha3_384": "bdc071b5fd154b5036a50eb8818917ded6eef1b18ebe830ca3163c5c98da153b291eac7f10d874b0adb4997037bc7bed",
+    "decision_canonical_hash": "24333d8ba08daa332e078586b4b5de0bf9720d176f758d852465ac1ae6b86a20a766ff06b86b445d29a5caf7149440ab",
+    "decision_schema_path": "docs/governance/agent/constitutional_decision_packet_schema.json",
+    "decision_schema_sha3_384": "8075b9d26086776837157a1e4002e855ad587b437c2d2a21cdb78b231543abcb747b0fd3c7066fc3aacbd4f027d56c59"
+  },
+  "challenge_summary": {
+    "title": "Hold protocol architecture decision pending replay disposition",
+    "challenge_kind": "replay_drift",
+    "severity": "hold_required",
+    "requested_disposition": "hold",
+    "rationale": "The live Qwen replay did not reproduce the target decision hash exactly, or did not produce a schema-valid converged decision on all machines. The result is captured as replay evidence, not live authority."
+  },
+  "defect_claims": [
+    {
+      "claim_id": "live-replay-target-hash-mismatch",
+      "defect_type": "replay_drift",
+      "target_json_pointer": "/decision_generation/parsed_output_hash",
+      "evidence_ref_paths": [
+        "protocol_architecture.live_replay_output"
+      ],
+      "description": "At least one live parsed output hash differs from the target decision hash 24333d8ba08daa332e078586b4b5de0bf9720d176f758d852465ac1ae6b86a20a766ff06b86b445d29a5caf7149440ab; parsed hashes observed: 36bb5c03f73701ae71811a7b86b3228f0f23a640b802b7562fd054fc7b4b5e21bb875e1b27d2756cf16e6c8668e0c9b3, 36bb5c03f73701ae71811a7b86b3228f0f23a640b802b7562fd054fc7b4b5e21bb875e1b27d2756cf16e6c8668e0c9b3.",
+      "expected_disposition": "hold"
+    }
+  ],
+  "evidence_refs": [
+    {
+      "field_path": "protocol_architecture.live_replay_output",
+      "evidence_status": "present",
+      "evidence_root": "782b3d5ebeef04fef1069419c48f8c74fba2d578750c3fc211e0d2293a0d1e921cfe5e34bc1f1a30541244c8d9e6fa23",
+      "supports_claim_id": "live-replay-target-hash-mismatch"
+    }
+  ],
+  "disposition": {
+    "selected": "hold",
+    "allowed_routes": [
+      "hold",
+      "supersede",
+      "rollback",
+      "reject_challenge"
+    ],
+    "hold_until": [
+      "qwen_decision_replay_completed",
+      "new_decision_packet_accepted",
+      "challenge_rejected",
+      "rollback_packet_accepted"
+    ],
+    "rationale": "Do not treat a non-reproduced or non-converged live replay as default conformance. Hold until a superseding replay decision, challenge rejection, or rollback packet is accepted."
+  },
+  "invalidation_or_resolution": [
+    {
+      "step_id": "hold-target-decision",
+      "route": "hold",
+      "description": "Keep the target decision advisory while replay drift is unresolved.",
+      "requires_new_packet": false,
+      "live_effect": false
+    },
+    {
+      "step_id": "supersede-with-live-replay-decision",
+      "route": "supersede",
+      "description": "Accept a new decision packet only if it binds live replay receipts and passes challenge review.",
+      "requires_new_packet": true,
+      "live_effect": false
+    },
+    {
+      "step_id": "rollback-if-used-live",
+      "route": "rollback",
+      "description": "If the target was used as live authority before replay disposition, require rollback.",
+      "requires_new_packet": true,
+      "live_effect": false
+    },
+    {
+      "step_id": "reject-after-acceptable-drift-explanation",
+      "route": "reject_challenge",
+      "description": "Reject only if governance accepts the replay result as semantically equivalent under a governed rule.",
+      "requires_new_packet": false,
+      "live_effect": false
+    }
+  ],
+  "authority_boundary": {
+    "live_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "model_promotion_authorized": false,
+    "authority_transfer_authorized": false,
+    "sidecar_activation_authorized": false,
+    "challenge_is_live_authority": false
+  },
+  "checks": {
+    "target_hash_matches": true,
+    "concrete_defect_cited": true,
+    "defect_evidence_bound": true,
+    "disposition_valid": true,
+    "resolution_path_present": true,
+    "no_hidden_evidence": true,
+    "no_secret_dependency": true,
+    "no_live_mutation": true,
+    "authority_transfer": false
+  }
+}

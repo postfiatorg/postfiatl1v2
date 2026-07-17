@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/validator-evidence-cobalt-binding-v1.json",
+  "title": "PostFiat Validator Evidence Cobalt Binding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "binding_id",
+    "collector_manifest_path",
+    "collector_manifest_hash",
+    "packet_path",
+    "validator_evidence_packet_root",
+    "packet_schema_hash",
+    "field_registry_hash",
+    "collection_window",
+    "raw_observation_root",
+    "ruleset_hash",
+    "compiled_policy_hash",
+    "evidence_snapshot_hash",
+    "action_mode",
+    "registry_mutation_count",
+    "registry_unchanged",
+    "authority_transfer",
+    "live_registry_mutation",
+    "dry_run_recorded",
+    "redaction_checked",
+    "ratification_boundary"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-evidence-cobalt-binding-v1"
+    },
+    "binding_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{2,127}$"
+    },
+    "collector_manifest_path": {
+      "$ref": "#/$defs/repo_path"
+    },
+    "collector_manifest_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "packet_path": {
+      "$ref": "#/$defs/repo_path"
+    },
+    "validator_evidence_packet_root": {
+      "$ref": "#/$defs/hash96"
+    },
+    "packet_schema_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "field_registry_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "collection_window": {
+      "$ref": "#/$defs/collection_window"
+    },
+    "raw_observation_root": {
+      "$ref": "#/$defs/hash96"
+    },
+    "ruleset_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "compiled_policy_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "evidence_snapshot_hash": {
+      "$ref": "#/$defs/hash96"
+    },
+    "action_mode": {
+      "const": "DryRunValidate"
+    },
+    "registry_mutation_count": {
+      "const": 0
+    },
+    "registry_unchanged": {
+      "const": true
+    },
+    "authority_transfer": {
+      "const": false
+    },
+    "live_registry_mutation": {
+      "const": false
+    },
+    "dry_run_recorded": {
+      "const": true
+    },
+    "redaction_checked": {
+      "const": true
+    },
+    "ratification_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cobalt_amendment_submission_allowed",
+        "sidecar_activation_allowed",
+        "commit_reveal_activation_allowed",
+        "direct_state_mutation_allowed"
+      ],
+      "properties": {
+        "cobalt_amendment_submission_allowed": {
+          "const": false
+        },
+        "sidecar_activation_allowed": {
+          "const": false
+        },
+        "commit_reveal_activation_allowed": {
+          "const": false
+        },
+        "direct_state_mutation_allowed": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "collection_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_height",
+        "to_height",
+        "from_time",
+        "to_time"
+      ],
+      "properties": {
+        "from_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "from_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to_time": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "repo_path": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/-]+$"
+    }
+  }
+}

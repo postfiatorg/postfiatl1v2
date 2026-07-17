@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+HOST="127.0.0.1"
+PORT="8088"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --host)
+      HOST="${2:?missing --host value}"
+      shift 2
+      ;;
+    --port)
+      PORT="${2:?missing --port value}"
+      shift 2
+      ;;
+    *)
+      echo "usage: scripts/docs-site-serve [--host HOST] [--port PORT]" >&2
+      exit 2
+      ;;
+  esac
+done
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+if [[ ! -d site ]]; then
+  scripts/docs-site-build
+fi
+
+if [[ -n "${POSTFIAT_DOCS_PASSWORD:-}" ]]; then
+  exec scripts/docs-site-basic-auth-server \
+    --host "$HOST" \
+    --port "$PORT" \
+    --directory site \
+    --user "${POSTFIAT_DOCS_USER:-postfiat}"
+fi
+
+echo "serving PostFiat docs without auth at http://${HOST}:${PORT}/"
+exec python3 -m http.server "$PORT" --bind "$HOST" --directory site

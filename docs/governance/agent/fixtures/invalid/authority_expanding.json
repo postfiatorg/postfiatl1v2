@@ -1,0 +1,36 @@
+{
+  "authority": {
+    "direct_state_mutation": true,
+    "mode": "dry_run_only",
+    "scope_expansion": false,
+    "self_upgrade": false
+  },
+  "decisions": [
+    {
+      "condition": "local_gate_1_5_fixture",
+      "decision_id": "unsafe-direct-mutation",
+      "kind": "no_op",
+      "evidence_field_path": "packet.schema",
+      "required_provenance": "collector_observed",
+      "freshness_requirement": "same_packet",
+      "missing_evidence_behavior": "reject_packet",
+      "conflict_behavior": "reject_packet",
+      "action_bound": "no_action",
+      "rationale": "Authority expansion must fail even if the decision says no-op."
+    }
+  ],
+  "inputs": [
+    {
+      "kind": "validator_registry_snapshot",
+      "required": true
+    }
+  ],
+  "rollback": {
+    "max_mutations": 0,
+    "operator_confirmation_required": true,
+    "required": true
+  },
+  "ruleset_id": "gate-1_5-authority-expanding",
+  "schema": "postfiat-governance-ruleset-v1",
+  "scope": "validator_registry_policy"
+}

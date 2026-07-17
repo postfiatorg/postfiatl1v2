@@ -1,0 +1,12 @@
+{
+  "name": "postfiat-wallet-proxy",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "private": true,
+  "scripts": {
+    "test": "node run_tests.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}

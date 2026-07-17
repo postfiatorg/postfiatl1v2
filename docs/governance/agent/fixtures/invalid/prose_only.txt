@@ -1,0 +1,1 @@
+The validator set looks reasonable. No JSON is necessary because this is only a recommendation.

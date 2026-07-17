@@ -1,0 +1,164 @@
+{
+  "schema": "postfiat-constitutional-question-v1",
+  "question_id": "vc-monetary-policy-001",
+  "question_version": 1,
+  "status": "active",
+  "scope": "monetary_policy",
+  "created_at": "2026-05-24T00:00:00Z",
+  "situation": {
+    "summary": "Decide whether PostFiat should preserve fixed supply, fee burn, and no native validator rewards as constitutional monetary-policy invariants.",
+    "problem_statement": "PostFiat needs a replayable monetary-policy question whose answer cannot silently add inflation, redirect burned fees, or create a validator reward schedule.",
+    "decision_boundary": "This question may preserve, hold, or request future evidence for monetary-policy changes. It may not mutate supply, fee accounting, validator rewards, genesis distribution, or Cobalt governance state.",
+    "out_of_scope": [
+      "mainnet mutation",
+      "live supply mutation",
+      "live fee-accounting mutation",
+      "live validator-reward activation",
+      "live Cobalt amendment submission",
+      "authority transfer"
+    ]
+  },
+  "status_quo": {
+    "current_position": "The current monetary-policy baseline is fixed supply with fee burn and no native validator reward schedule. Fees price spam, state growth, verifier work, and network resources; they are burned rather than redirected into mining, staking, or validator yield.",
+    "implementation_refs": [
+      {
+        "ref_id": "constitutional-question-schema",
+        "path": "docs/governance/agent/constitutional_question_schema.json",
+        "sha3_384": "47c2b2f27bdc745615f4d0d893333c12825b8b935358efbf4f53bdb9ad7b72e03d46d5264812d2cd9066d3c11813bd7f"
+      },
+      {
+        "ref_id": "initial-context-packet",
+        "path": "docs/governance/agent/fixtures/verifiable_constitution/initial_context_packet.json",
+        "sha3_384": "b370232a7544900f82c21268d1a08dea911835f670a52d2c5a229ab4ac8c878e66cd858cb23ac06c36d425a9ddf50e3a"
+      },
+      {
+        "ref_id": "implementation-whitepaper",
+        "path": "docs_site/whitepaper.md",
+        "sha3_384": "ea4f650da64ae54aa291f2fe5a3ca14189bb6492972681a4f247d5baa6b252d8d3935c24411c90b22003587d53415e45"
+      },
+      {
+        "ref_id": "execution-entrypoints",
+        "path": "crates/execution/src/lib_parts/entrypoints.rs",
+        "sha3_384": "8d6bfb63a3bc3cac90a1e6d20e934c1a71a49805ef1f7460059144ed775bc335dc55e48e33fef77ddfbb73e8a717ffa2"
+      }
+    ],
+    "evidence_refs": [
+      {
+        "ref_id": "docs-site-index",
+        "path": "docs_site/index.md",
+        "sha3_384": "d7ec58e74f3ba99ec6e0d1c1643f2c2640516fa56dc7f5ef103fe3823903e90632dcf1155af4c8df3283e4e93f324b1a"
+      },
+      {
+        "ref_id": "fee-reserve-policy-smoke",
+        "path": "scripts/testnet-fee-reserve-policy-smoke",
+        "sha3_384": "db3ef5a0d1b335ec7585c77a46ebda5758f41b1280e45018409b6e966a8ecbf57d616856a6aa6758cae6e4940b26082a"
+      },
+      {
+        "ref_id": "transfer-fee-quote-smoke",
+        "path": "scripts/testnet-transfer-fee-quote-smoke",
+        "sha3_384": "9e8d116801a31302fe5ee46481dfb3fa66af9be58705f96774f57807feb2f104a74dc4337fd0b38ab704c765fe572cd1"
+      },
+      {
+        "ref_id": "fuzz-harness-supply-invariant",
+        "path": "crates/fuzz_harness/src/main.rs",
+        "sha3_384": "045f1564c19b6f55ca2aca6d43e2bcab39670bc30b9eb38d954884f62a9238eb5ceca9309b3d3951e253b9e906572bbf"
+      }
+    ]
+  },
+  "option_order": [
+    "preserve-fixed-supply-fee-burn",
+    "alter-fee-burn-accounting",
+    "add-native-validator-reward",
+    "hold-no-op"
+  ],
+  "options": {
+    "preserve-fixed-supply-fee-burn": {
+      "option_id": "preserve-fixed-supply-fee-burn",
+      "title": "Preserve fixed supply and fee burn",
+      "kind": "preserve_status_quo",
+      "description": "Keep fixed supply, fee burn, and no native validator reward schedule as the active internal monetary-policy baseline.",
+      "implementation_effect": "no_code_change",
+      "requires_new_evidence": false
+    },
+    "alter-fee-burn-accounting": {
+      "option_id": "alter-fee-burn-accounting",
+      "title": "Alter fee-burn accounting",
+      "kind": "adopt_change",
+      "description": "Change fee accounting, fee destination, burn visibility, or resource-pricing semantics only after a future evidence packet proves the change is safer and preserves monetary invariants.",
+      "implementation_effect": "future_authorization_required",
+      "requires_new_evidence": true
+    },
+    "add-native-validator-reward": {
+      "option_id": "add-native-validator-reward",
+      "title": "Add native validator reward",
+      "kind": "adopt_change",
+      "description": "Add inflation, fee redistribution, or a native validator reward schedule only after future evidence proves the change is necessary and compatible with the constitutional monetary promise.",
+      "implementation_effect": "future_authorization_required",
+      "requires_new_evidence": true
+    },
+    "hold-no-op": {
+      "option_id": "hold-no-op",
+      "title": "Hold and no-op",
+      "kind": "defer_no_op",
+      "description": "Take no monetary-policy action because required comparative evidence is missing, ambiguous, or not yet replayed.",
+      "implementation_effect": "no_code_change",
+      "requires_new_evidence": true
+    }
+  },
+  "hard_constraints": [
+    "json_only",
+    "closed_option_set",
+    "cite_status_quo_refs",
+    "cite_evidence_refs_only",
+    "no_hidden_evidence",
+    "no_secret_material",
+    "no_live_mutation",
+    "no_authority_transfer",
+    "prefer_no_op_when_uncertain",
+    "challenge_path_required",
+    "conformance_packet_required"
+  ],
+  "forbidden_outputs": [
+    "live_registry_mutation",
+    "live_cobalt_amendment_submission",
+    "authority_transfer",
+    "hidden_evidence",
+    "secret_dependency",
+    "unregistered_reputation_claim",
+    "scope_expansion",
+    "model_self_upgrade",
+    "selector_self_upgrade",
+    "prompt_self_upgrade",
+    "prose_only_output",
+    "option_outside_closed_set"
+  ],
+  "fallback": {
+    "decision": "no_op",
+    "trigger_conditions": [
+      "missing_evidence",
+      "ambiguous_evidence",
+      "schema_invalid",
+      "replay_drift",
+      "hidden_evidence_attempt",
+      "scope_expansion_attempt",
+      "unsafe_live_action_attempt"
+    ]
+  },
+  "prompt_contract": {
+    "qwen_may_propose_evidence_request": true,
+    "qwen_may_add_options": false,
+    "qwen_may_change_constraints": false,
+    "qwen_may_authorize_live_action": false,
+    "output_json_only": true,
+    "decision_must_select_option_id": true
+  },
+  "checks": {
+    "status_quo_present": true,
+    "option_set_closed": true,
+    "hard_constraints_present": true,
+    "forbidden_outputs_present": true,
+    "no_op_fallback_present": true,
+    "live_mutation_authorized": false,
+    "authority_transfer": false
+  }
+}

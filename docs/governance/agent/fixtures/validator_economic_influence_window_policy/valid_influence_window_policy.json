@@ -1,0 +1,551 @@
+{
+  "attestation": {
+    "attested_at": "2026-05-29T00:00:00Z",
+    "attestor_key_hash": "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+    "signature_hash": "abababababababababababababababababababababababababababababababababababababababababababababababab",
+    "signature_scheme": "mldsa44-placeholder",
+    "statement_hash": "26634ba11ecb871f89278671662f7cbcdad4a176a082cc63d113a47a637be0920429722a0ffc8000f5314dddfa0025a1"
+  },
+  "checks": {
+    "authority_transfer": false,
+    "external_position_cap_required": true,
+    "live_registry_mutation": false,
+    "monetizable_action_caps_enumerated": true,
+    "policy_root_bound": true,
+    "stale_or_self_declared_cap_held": true,
+    "statement_hash_bound": true,
+    "stress_policy_governed": true,
+    "threshold_mismatch_fails_closed": true,
+    "thresholds_derived": true,
+    "unbounded_influence_window_rejected": true
+  },
+  "mode": "controlled_testnet_fixture",
+  "packet_id": "validator-economic-influence-window-policy-v1-fixture",
+  "schema": "postfiat-validator-economic-influence-window-policy-v1",
+  "statement": {
+    "base_evidence": {
+      "gain_caps": {
+        "external_position_cap": {
+          "age_epochs": 0,
+          "attestor_group": "risk-desk-a",
+          "attestor_independence": "independent",
+          "measurement_type": "external_position_cap_usd_window",
+          "source_class": "auditor_attested",
+          "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "status": "verified",
+          "unbounded": false,
+          "usd_value": 2000000,
+          "window_bounded": true
+        },
+        "fee_class_spread": {
+          "age_epochs": 0,
+          "attestor_group": "chain-index-a",
+          "attestor_independence": "independent",
+          "measurement_type": "fee_class_spread_usd_window",
+          "source_class": "chain_derived",
+          "source_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "status": "verified",
+          "unbounded": false,
+          "usd_value": 150000,
+          "window_bounded": true
+        },
+        "omission_window": {
+          "age_epochs": 0,
+          "attestor_group": "receipt-collector-a",
+          "attestor_independence": "independent",
+          "measurement_type": "omission_window_gain_usd_window",
+          "source_class": "receipt_derived",
+          "source_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "status": "verified",
+          "unbounded": false,
+          "usd_value": 500000,
+          "window_bounded": true
+        },
+        "proposer_slot_reordering": {
+          "age_epochs": 0,
+          "attestor_group": "chain-index-a",
+          "attestor_independence": "independent",
+          "measurement_type": "proposer_slot_gain_usd_window",
+          "source_class": "chain_derived",
+          "source_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "status": "verified",
+          "unbounded": false,
+          "usd_value": 250000,
+          "window_bounded": true
+        },
+        "registry_delay": {
+          "age_epochs": 0,
+          "attestor_group": "registry-a",
+          "attestor_independence": "independent",
+          "measurement_type": "registry_delay_gain_usd_window",
+          "source_class": "registry_derived",
+          "source_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "status": "verified",
+          "unbounded": false,
+          "usd_value": 300000,
+          "window_bounded": true
+        }
+      },
+      "launch_profile": {
+        "bft_safe_count": 34,
+        "f_tolerated": 11,
+        "liveness_count": 24,
+        "n_active": 35,
+        "profile_governed": true,
+        "profile_id": "postfiat-controlled-testnet-launch-35-v1",
+        "q_cert": 24
+      },
+      "loss_floors": {
+        "contractual_liability_floor": {
+          "age_epochs": 0,
+          "attestor_group": "legal-counsel-a",
+          "attestor_independence": "independent",
+          "measurement_type": "contract_liability_usd_window",
+          "source_class": "contract_signed",
+          "source_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "status": "verified",
+          "unbounded": false,
+          "usd_value": 5000000,
+          "window_bounded": true
+        },
+        "exclusion_loss_floor": {
+          "age_epochs": 0,
+          "attestor_group": "registry-a",
+          "attestor_independence": "independent",
+          "measurement_type": "registry_exclusion_flow_usd_30d",
+          "source_class": "registry_derived",
+          "source_hash": "121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212",
+          "status": "verified",
+          "unbounded": false,
+          "usd_value": 3000000,
+          "window_bounded": true
+        },
+        "reputation_loss_floor": {
+          "age_epochs": 0,
+          "attestor_group": "auditor-reputation-a",
+          "attestor_independence": "independent",
+          "measurement_type": "reputation_loss_usd_floor",
+          "source_class": "auditor_attested",
+          "source_hash": "343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434343434",
+          "status": "verified",
+          "unbounded": false,
+          "usd_value": 2000000,
+          "window_bounded": true
+        }
+      },
+      "stress_policy_governance": {
+        "author_chosen_factors_admitted": false,
+        "challenge_window_epochs": 2,
+        "governed_by": "cobalt-transition",
+        "parent_policy_root": "565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656",
+        "policy_status": "active",
+        "proposal_root": "787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878",
+        "stress_policy_governed": true,
+        "stress_policy_id": "validator-economic-margin-stress-v1"
+      }
+    },
+    "evidence_artifacts": [
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_deviation_gain/valid_deviation_gain.json",
+        "sha3_384": "a4f908b9fff86b77911a4bd59a7623c0ab9fa0962689978d8aa507b783d9718f1e2c95efb0d83fd51a8dbcb93f81c944"
+      },
+      {
+        "path": "reports/validator-economic-deviation-gain/20260529T052040Z/validator-economic-deviation-gain-report.json",
+        "sha3_384": "964fe8a990e49c0f338a8000c648fc555f80acd14c297c2bd9e8193590d880c16c8e42365c7cdf7aed936958faf27180"
+      },
+      {
+        "path": "docs/governance/agent/fixtures/validator_economic_margin_stress/valid_margin_stress.json",
+        "sha3_384": "44027350d7f4d79a4232b0b86a838437ba025c80fd87999058d001e79b3f51fed7370a4cf9c2a08d53d80cc7517eb473"
+      },
+      {
+        "path": "reports/validator-economic-margin-stress/20260529T094108Z/validator-economic-margin-stress-report.json",
+        "sha3_384": "fd702120ca9aa5a2f41177b7a45d67ae13e9569a23559ff6d157a3b48759484a529513d9c5f04f57dd33f0bb57937d73"
+      },
+      {
+        "path": "docs/governance/agent/validator_economic_influence_window_policy_schema.json",
+        "sha3_384": "51f5332e467273059cc265775a1f50852eca63f95454b9e0d85b214f2a9e849e758d3472f9bd0bf15a9a36708ca96e80"
+      },
+      {
+        "path": "scripts/validator-economic-influence-window-policy-verify",
+        "sha3_384": "f4385c8accb7e55b6c8523fce2597995d66e9ce9628afe8d11ecfd7df50938f59807aebee6ea1f7af1748acce818397c"
+      }
+    ],
+    "influence_policy": {
+      "gain_formula": "min(sum(monetizable_action_caps), external_position_cap)",
+      "max_evidence_age_epochs": 3,
+      "min_loss_over_gain_margin_usd": 1000000,
+      "policy_units": "influence-window-policy-v1",
+      "route_on_missing_external_position_cap": "reject",
+      "route_on_stale_or_self_declared_cap": "hold",
+      "route_on_threshold_derivation_mismatch": "fail-closed",
+      "route_on_unbounded_influence_window": "reject",
+      "route_on_ungoverned_stress_policy": "fail-closed",
+      "threshold_formula": "q_cert=n_active-f_tolerated;bft_safe_count=3*f_tolerated+1;liveness_count=q_cert"
+    },
+    "policy_id": "validator-economic-influence-window-policy-v1",
+    "policy_root_hash": "d82cd844f3dedeba4e08bc03897450fc7d2d68133f72340d0d6d7c85323e7ac55047b356147d9eb457dc439b81ded92a",
+    "scope": {
+      "authority_transfer": false,
+      "chain_id": "postfiat-controlled-testnet",
+      "live_registry_mutation": false,
+      "profile_id": "validator-economic-influence-window-policy-v1"
+    },
+    "selector_cases": [
+      {
+        "case_id": "case-01-governed-policy-admit",
+        "expected_derivation": {
+          "bft_safe_count": 34,
+          "component_gain_sum_usd": 1200000,
+          "derived_G_i_w_usd": 1200000,
+          "derived_bft_safe_count": 34,
+          "derived_q_cert": 24,
+          "external_position_cap_usd": 2000000,
+          "f_tolerated": 11,
+          "liveness_count": 24,
+          "loss_floor_usd": 10000000,
+          "loss_over_gain_margin_usd": 8800000,
+          "n_active": 35,
+          "q_cert": 24,
+          "required_margin_usd": 1000000
+        },
+        "expected_reason_codes": [
+          "all_influence_window_bounds_passed"
+        ],
+        "expected_route": "admit",
+        "overrides": []
+      },
+      {
+        "case_id": "case-02-external-cap-binds-admit",
+        "expected_derivation": {
+          "bft_safe_count": 34,
+          "component_gain_sum_usd": 1200000,
+          "derived_G_i_w_usd": 700000,
+          "derived_bft_safe_count": 34,
+          "derived_q_cert": 24,
+          "external_position_cap_usd": 700000,
+          "f_tolerated": 11,
+          "liveness_count": 24,
+          "loss_floor_usd": 10000000,
+          "loss_over_gain_margin_usd": 9300000,
+          "n_active": 35,
+          "q_cert": 24,
+          "required_margin_usd": 1000000
+        },
+        "expected_reason_codes": [
+          "external_position_cap_binds"
+        ],
+        "expected_route": "admit",
+        "overrides": [
+          {
+            "path": [
+              "gain_caps",
+              "external_position_cap",
+              "usd_value"
+            ],
+            "value": 700000
+          }
+        ]
+      },
+      {
+        "case_id": "case-03-unbounded-omission-window-reject",
+        "expected_derivation": {
+          "bft_safe_count": 34,
+          "component_gain_sum_usd": 1200000,
+          "derived_G_i_w_usd": 1200000,
+          "derived_bft_safe_count": 34,
+          "derived_q_cert": 24,
+          "external_position_cap_usd": 2000000,
+          "f_tolerated": 11,
+          "liveness_count": 24,
+          "loss_floor_usd": 10000000,
+          "loss_over_gain_margin_usd": 8800000,
+          "n_active": 35,
+          "q_cert": 24,
+          "required_margin_usd": 1000000
+        },
+        "expected_reason_codes": [
+          "unbounded_influence_window_omission_window"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "gain_caps",
+              "omission_window",
+              "unbounded"
+            ],
+            "value": true
+          }
+        ]
+      },
+      {
+        "case_id": "case-04-missing-external-cap-reject",
+        "expected_derivation": {
+          "bft_safe_count": 34,
+          "component_gain_sum_usd": 1200000,
+          "derived_G_i_w_usd": 1200000,
+          "derived_bft_safe_count": 34,
+          "derived_q_cert": 24,
+          "external_position_cap_usd": 0,
+          "f_tolerated": 11,
+          "liveness_count": 24,
+          "loss_floor_usd": 10000000,
+          "loss_over_gain_margin_usd": 8800000,
+          "n_active": 35,
+          "q_cert": 24,
+          "required_margin_usd": 1000000
+        },
+        "expected_reason_codes": [
+          "missing_external_position_cap"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "gain_caps",
+              "external_position_cap"
+            ],
+            "value": null
+          }
+        ]
+      },
+      {
+        "case_id": "case-05-stale-proposer-slot-hold",
+        "expected_derivation": {
+          "bft_safe_count": 34,
+          "component_gain_sum_usd": 1200000,
+          "derived_G_i_w_usd": 1200000,
+          "derived_bft_safe_count": 34,
+          "derived_q_cert": 24,
+          "external_position_cap_usd": 2000000,
+          "f_tolerated": 11,
+          "liveness_count": 24,
+          "loss_floor_usd": 10000000,
+          "loss_over_gain_margin_usd": 8800000,
+          "n_active": 35,
+          "q_cert": 24,
+          "required_margin_usd": 1000000
+        },
+        "expected_reason_codes": [
+          "stale_source_proposer_slot_reordering"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "gain_caps",
+              "proposer_slot_reordering",
+              "age_epochs"
+            ],
+            "value": 4
+          }
+        ]
+      },
+      {
+        "case_id": "case-06-self-declared-fee-spread-hold",
+        "expected_derivation": {
+          "bft_safe_count": 34,
+          "component_gain_sum_usd": 1200000,
+          "derived_G_i_w_usd": 1200000,
+          "derived_bft_safe_count": 34,
+          "derived_q_cert": 24,
+          "external_position_cap_usd": 2000000,
+          "f_tolerated": 11,
+          "liveness_count": 24,
+          "loss_floor_usd": 10000000,
+          "loss_over_gain_margin_usd": 8800000,
+          "n_active": 35,
+          "q_cert": 24,
+          "required_margin_usd": 1000000
+        },
+        "expected_reason_codes": [
+          "self_declared_source_fee_class_spread"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "gain_caps",
+              "fee_class_spread",
+              "attestor_independence"
+            ],
+            "value": "self_declared"
+          }
+        ]
+      },
+      {
+        "case_id": "case-07-registry-delay-source-mismatch-hold",
+        "expected_derivation": {
+          "bft_safe_count": 34,
+          "component_gain_sum_usd": 1200000,
+          "derived_G_i_w_usd": 1200000,
+          "derived_bft_safe_count": 34,
+          "derived_q_cert": 24,
+          "external_position_cap_usd": 2000000,
+          "f_tolerated": 11,
+          "liveness_count": 24,
+          "loss_floor_usd": 10000000,
+          "loss_over_gain_margin_usd": 8800000,
+          "n_active": 35,
+          "q_cert": 24,
+          "required_margin_usd": 1000000
+        },
+        "expected_reason_codes": [
+          "source_class_mismatch_registry_delay"
+        ],
+        "expected_route": "hold",
+        "overrides": [
+          {
+            "path": [
+              "gain_caps",
+              "registry_delay",
+              "source_class"
+            ],
+            "value": "auditor_attested"
+          }
+        ]
+      },
+      {
+        "case_id": "case-08-loss-margin-below-gain-reject",
+        "expected_derivation": {
+          "bft_safe_count": 34,
+          "component_gain_sum_usd": 1200000,
+          "derived_G_i_w_usd": 1200000,
+          "derived_bft_safe_count": 34,
+          "derived_q_cert": 24,
+          "external_position_cap_usd": 2000000,
+          "f_tolerated": 11,
+          "liveness_count": 24,
+          "loss_floor_usd": 1000000,
+          "loss_over_gain_margin_usd": -200000,
+          "n_active": 35,
+          "q_cert": 24,
+          "required_margin_usd": 1000000
+        },
+        "expected_reason_codes": [
+          "loss_margin_below_required"
+        ],
+        "expected_route": "reject",
+        "overrides": [
+          {
+            "path": [
+              "loss_floors",
+              "contractual_liability_floor",
+              "usd_value"
+            ],
+            "value": 500000
+          },
+          {
+            "path": [
+              "loss_floors",
+              "exclusion_loss_floor",
+              "usd_value"
+            ],
+            "value": 300000
+          },
+          {
+            "path": [
+              "loss_floors",
+              "reputation_loss_floor",
+              "usd_value"
+            ],
+            "value": 200000
+          }
+        ]
+      },
+      {
+        "case_id": "case-09-ungoverned-stress-policy-fail-closed",
+        "expected_derivation": {
+          "bft_safe_count": 34,
+          "component_gain_sum_usd": 1200000,
+          "derived_G_i_w_usd": 1200000,
+          "derived_bft_safe_count": 34,
+          "derived_q_cert": 24,
+          "external_position_cap_usd": 2000000,
+          "f_tolerated": 11,
+          "liveness_count": 24,
+          "loss_floor_usd": 10000000,
+          "loss_over_gain_margin_usd": 8800000,
+          "n_active": 35,
+          "q_cert": 24,
+          "required_margin_usd": 1000000
+        },
+        "expected_reason_codes": [
+          "ungoverned_stress_policy"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "stress_policy_governance",
+              "stress_policy_governed"
+            ],
+            "value": false
+          }
+        ]
+      },
+      {
+        "case_id": "case-10-liveness-threshold-mismatch-fail-closed",
+        "expected_derivation": {
+          "bft_safe_count": 34,
+          "component_gain_sum_usd": 1200000,
+          "derived_G_i_w_usd": 1200000,
+          "derived_bft_safe_count": 34,
+          "derived_q_cert": 24,
+          "external_position_cap_usd": 2000000,
+          "f_tolerated": 11,
+          "liveness_count": 23,
+          "loss_floor_usd": 10000000,
+          "loss_over_gain_margin_usd": 8800000,
+          "n_active": 35,
+          "q_cert": 24,
+          "required_margin_usd": 1000000
+        },
+        "expected_reason_codes": [
+          "liveness_count_derivation_mismatch"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "launch_profile",
+              "liveness_count"
+            ],
+            "value": 23
+          }
+        ]
+      },
+      {
+        "case_id": "case-11-ungoverned-launch-profile-change-fail-closed",
+        "expected_derivation": {
+          "bft_safe_count": 34,
+          "component_gain_sum_usd": 1200000,
+          "derived_G_i_w_usd": 1200000,
+          "derived_bft_safe_count": 34,
+          "derived_q_cert": 24,
+          "external_position_cap_usd": 2000000,
+          "f_tolerated": 11,
+          "liveness_count": 24,
+          "loss_floor_usd": 10000000,
+          "loss_over_gain_margin_usd": 8800000,
+          "n_active": 35,
+          "q_cert": 24,
+          "required_margin_usd": 1000000
+        },
+        "expected_reason_codes": [
+          "ungoverned_launch_profile_change"
+        ],
+        "expected_route": "fail-closed",
+        "overrides": [
+          {
+            "path": [
+              "launch_profile",
+              "profile_governed"
+            ],
+            "value": false
+          }
+        ]
+      }
+    ]
+  }
+}

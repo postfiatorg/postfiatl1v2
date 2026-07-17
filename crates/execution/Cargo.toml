@@ -1,0 +1,20 @@
+[package]
+name = "postfiat-execution"
+version = "0.1.0"
+description = "Deterministic state-transition execution for PostFiat L1"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+postfiat-bridge = { path = "../bridge" }
+postfiat-crypto-provider = { path = "../crypto_provider" }
+postfiat-types = { path = "../types" }
+sp1-verifier = "6.3.1"
+
+[dev-dependencies]
+serde_json = { workspace = true }

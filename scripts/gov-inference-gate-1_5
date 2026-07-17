@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AGENT_DIR="${AGENT_DIR:-docs/governance/agent}"
+REPORT="${REPORT:-reports/gov-inference-gate-1_5-constitutional-prompt-bundle.json}"
+
+require_command() {
+  local command="$1"
+  if ! command -v "$command" >/dev/null 2>&1; then
+    echo "missing required command: $command" >&2
+    exit 1
+  fi
+}
+
+require_command cargo
+require_command mkdir
+require_command rm
+
+cargo build -p postfiat-node >/dev/null
+
+mkdir -p "$(dirname "$REPORT")"
+rm -f "$REPORT"
+
+target/debug/postfiat-node governance-agent-gate1-5 \
+  --agent-dir "$AGENT_DIR" \
+  --output "$REPORT" \
+  --overwrite

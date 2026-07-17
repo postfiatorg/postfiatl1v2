@@ -1,0 +1,224 @@
+{
+  "schema": "postfiat-constitutional-decision-packet-v1",
+  "decision_id": "vc-cobalt-governance-001-decision-001",
+  "decision_version": 1,
+  "status": "candidate",
+  "decision_scope": "cobalt_governance",
+  "created_at": "2026-05-24T00:00:00Z",
+  "evidence_packet_ref": {
+    "packet_id": "vc-cobalt-governance-001-evidence-001",
+    "packet_path": "docs/governance/agent/fixtures/verifiable_constitution/cobalt_constitutional_evidence_packet.json",
+    "packet_file_sha3_384": "9e2d6a480e1fba1c4953c8bce2e76248d4f8f4f05f9f262cd7dd53c56ee2a63be622c15e4f08f14041bcc1bd5a56030e",
+    "packet_canonical_hash": "8b46b578a20702de2520c149ae04b253156aae2929a285837cbfc95075ced930dea915ab544b7ecb96ab46e7c974250f",
+    "evidence_root": "e9a54bd3bd6219341478578057e64c0903cf7c27145a90e6e6f57ec35e61ad71867a525b2d119dab79b8a06e944e6b22",
+    "packet_schema_path": "docs/governance/agent/constitutional_evidence_packet_schema.json",
+    "packet_schema_sha3_384": "5019bce76ede61a24de4c617f1b6f1275d701907c733267541ae95999aa1540ca97d00403fb65389703f5f0ea44837f2"
+  },
+  "decision_generation": {
+    "authoring_mode": "schema_fixture",
+    "model_output_generated": false,
+    "model_profile_id": null,
+    "model_request_hash": null,
+    "raw_output_hash": null,
+    "parsed_output_hash": null,
+    "replay_required_before_authority": true
+  },
+  "selected_option": {
+    "option_id": "preserve-cobalt-hard-gates",
+    "decision_kind": "preserve_status_quo",
+    "confidence": "high",
+    "rationale": "The approved evidence packet supplies linkedness, essential-subset, registry-transition, no-mutation, replay-bundle, adversarial-coverage, rollback, and override-detection evidence. The safe constitutional decision is to preserve the current Cobalt hard gates and require future authorization before changing them.",
+    "evidence_ref_paths": [
+      "cobalt.trust_graph_linkedness_report_hash",
+      "cobalt.essential_subset_thresholds",
+      "cobalt.registry_transition_rules_hash",
+      "cobalt.dry_run_no_mutation_report_hash",
+      "cobalt.replay_bundle_root",
+      "cobalt.adversarial_packet_coverage",
+      "cobalt.rollback_supersession_evidence_hash",
+      "cobalt.override_detection_report_hash"
+    ]
+  },
+  "rejected_options": [
+    {
+      "option_id": "alter-trust-graph-thresholds",
+      "rejection_kind": "unsafe_live_action",
+      "reason": "The packet confirms current trust-graph thresholds are constitutional hard gates and provides no future-authorized replacement threshold packet.",
+      "evidence_ref_paths": [
+        "cobalt.essential_subset_thresholds",
+        "cobalt.trust_graph_linkedness_report_hash",
+        "cobalt.rollback_supersession_evidence_hash"
+      ]
+    },
+    {
+      "option_id": "alter-registry-transition-gates",
+      "rejection_kind": "unsafe_live_action",
+      "reason": "The packet binds current registry-transition rules and no-mutation replay evidence, but does not supply a safer replacement gate or Cobalt-ratified transition.",
+      "evidence_ref_paths": [
+        "cobalt.registry_transition_rules_hash",
+        "cobalt.dry_run_no_mutation_report_hash",
+        "cobalt.replay_bundle_root",
+        "cobalt.override_detection_report_hash"
+      ]
+    },
+    {
+      "option_id": "hold-no-op",
+      "rejection_kind": "less_preferred",
+      "reason": "The evidence packet is complete enough to preserve the current hard gates rather than no-op the entire Cobalt-governance question.",
+      "evidence_ref_paths": [
+        "cobalt.trust_graph_linkedness_report_hash",
+        "cobalt.registry_transition_rules_hash",
+        "cobalt.adversarial_packet_coverage"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    {
+      "field_path": "cobalt.trust_graph_linkedness_report_hash",
+      "evidence_status": "present",
+      "evidence_root": "e9a54bd3bd6219341478578057e64c0903cf7c27145a90e6e6f57ec35e61ad71867a525b2d119dab79b8a06e944e6b22",
+      "supports": "selected_option"
+    },
+    {
+      "field_path": "cobalt.essential_subset_thresholds",
+      "evidence_status": "present",
+      "evidence_root": "e9a54bd3bd6219341478578057e64c0903cf7c27145a90e6e6f57ec35e61ad71867a525b2d119dab79b8a06e944e6b22",
+      "supports": "selected_option"
+    },
+    {
+      "field_path": "cobalt.registry_transition_rules_hash",
+      "evidence_status": "present",
+      "evidence_root": "e9a54bd3bd6219341478578057e64c0903cf7c27145a90e6e6f57ec35e61ad71867a525b2d119dab79b8a06e944e6b22",
+      "supports": "selected_option"
+    },
+    {
+      "field_path": "cobalt.dry_run_no_mutation_report_hash",
+      "evidence_status": "present",
+      "evidence_root": "e9a54bd3bd6219341478578057e64c0903cf7c27145a90e6e6f57ec35e61ad71867a525b2d119dab79b8a06e944e6b22",
+      "supports": "rejected_option"
+    },
+    {
+      "field_path": "cobalt.replay_bundle_root",
+      "evidence_status": "present",
+      "evidence_root": "e9a54bd3bd6219341478578057e64c0903cf7c27145a90e6e6f57ec35e61ad71867a525b2d119dab79b8a06e944e6b22",
+      "supports": "implementation_consequence"
+    },
+    {
+      "field_path": "cobalt.adversarial_packet_coverage",
+      "evidence_status": "present",
+      "evidence_root": "e9a54bd3bd6219341478578057e64c0903cf7c27145a90e6e6f57ec35e61ad71867a525b2d119dab79b8a06e944e6b22",
+      "supports": "selected_option"
+    },
+    {
+      "field_path": "cobalt.rollback_supersession_evidence_hash",
+      "evidence_status": "present",
+      "evidence_root": "e9a54bd3bd6219341478578057e64c0903cf7c27145a90e6e6f57ec35e61ad71867a525b2d119dab79b8a06e944e6b22",
+      "supports": "invalidation_criterion"
+    },
+    {
+      "field_path": "cobalt.override_detection_report_hash",
+      "evidence_status": "present",
+      "evidence_root": "e9a54bd3bd6219341478578057e64c0903cf7c27145a90e6e6f57ec35e61ad71867a525b2d119dab79b8a06e944e6b22",
+      "supports": "fallback"
+    }
+  ],
+  "implementation_consequences": [
+    {
+      "consequence_id": "keep-cobalt-hard-gates",
+      "effect": "no_code_change",
+      "description": "Keep linkedness, essential-subset thresholds, registry-transition rules, stale replay rejection, dry-run no-mutation checks, and replay bundles as constitutional Cobalt hard gates.",
+      "evidence_ref_paths": [
+        "cobalt.trust_graph_linkedness_report_hash",
+        "cobalt.essential_subset_thresholds",
+        "cobalt.registry_transition_rules_hash",
+        "cobalt.replay_bundle_root"
+      ],
+      "requires_later_authorization": false
+    },
+    {
+      "consequence_id": "reject-silent-cobalt-gate-change",
+      "effect": "test_or_gate_change",
+      "description": "Any changed prompt, schema, selector, registry-transition rule, trust threshold, model profile, or gate root must become a mismatch, challenge packet, or future governed amendment.",
+      "evidence_ref_paths": [
+        "cobalt.override_detection_report_hash",
+        "cobalt.rollback_supersession_evidence_hash",
+        "cobalt.dry_run_no_mutation_report_hash"
+      ],
+      "requires_later_authorization": true
+    },
+    {
+      "consequence_id": "no-live-registry-effect",
+      "effect": "future_authorization_required",
+      "description": "This decision packet does not mutate the validator registry, submit a live Cobalt amendment, activate sidecars, or transfer authority.",
+      "evidence_ref_paths": [
+        "cobalt.dry_run_no_mutation_report_hash",
+        "cobalt.registry_transition_rules_hash"
+      ],
+      "requires_later_authorization": true
+    }
+  ],
+  "invalidation_criteria": [
+    {
+      "criterion_id": "cobalt-evidence-root-drift",
+      "description": "If the approved evidence packet root, replay bundle root, or override-detection report hash changes, this decision must be held and replayed.",
+      "evidence_ref_paths": [
+        "cobalt.replay_bundle_root",
+        "cobalt.override_detection_report_hash"
+      ],
+      "effect": "hold"
+    },
+    {
+      "criterion_id": "future-authorized-cobalt-threshold-packet",
+      "description": "If a future evidence packet proves safer trust thresholds or registry-transition gates and passes Cobalt/release gates, this decision should be superseded.",
+      "evidence_ref_paths": [
+        "cobalt.essential_subset_thresholds",
+        "cobalt.registry_transition_rules_hash",
+        "cobalt.rollback_supersession_evidence_hash"
+      ],
+      "effect": "supersede"
+    },
+    {
+      "criterion_id": "hidden-or-live-cobalt-action",
+      "description": "If this decision is used to justify hidden evidence, live registry mutation, live Cobalt submission, or authority transfer, reject it and require a challenge packet.",
+      "evidence_ref_paths": [
+        "cobalt.dry_run_no_mutation_report_hash",
+        "cobalt.adversarial_packet_coverage",
+        "cobalt.override_detection_report_hash"
+      ],
+      "effect": "reject_decision"
+    }
+  ],
+  "fallback": {
+    "decision": "no_op",
+    "trigger_conditions": [
+      "missing_evidence",
+      "ambiguous_evidence",
+      "schema_invalid",
+      "replay_drift",
+      "hidden_evidence_attempt",
+      "scope_expansion_attempt",
+      "unsafe_live_action_attempt"
+    ],
+    "rationale": "If the Cobalt evidence packet, decision packet, replay, or authority boundary is malformed or ambiguous, the safe result is no-op with no registry mutation, no live Cobalt submission, and no authority transfer."
+  },
+  "authority_boundary": {
+    "live_registry_mutation_authorized": false,
+    "live_cobalt_amendment_submission_authorized": false,
+    "model_promotion_authorized": false,
+    "authority_transfer_authorized": false,
+    "sidecar_activation_authorized": false,
+    "default_conformance_requires_later_gate": true
+  },
+  "checks": {
+    "selected_option_in_question": true,
+    "selected_option_evidence_bound": true,
+    "rejected_options_evidence_bound": true,
+    "implementation_consequences_present": true,
+    "invalidation_criteria_present": true,
+    "fallback_present": true,
+    "no_hidden_evidence": true,
+    "no_secret_dependency": true,
+    "no_live_mutation": true,
+    "authority_transfer": false
+  }
+}

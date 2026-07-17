@@ -1,0 +1,11 @@
+{
+  "chain_id": 1,
+  "deployments_source_url": "https://developers.uniswap.org/docs/protocols/v4/deployments",
+  "deployments_table_hash": "d2d4b87bafe27c1cf07d4af5698b1a3766b351e219769d652dea2bd85213e2ab",
+  "checked_at_utc": "2026-07-01T00:00:00Z",
+  "pool_manager": "0x000000000004444c5dc75cB358380D2e3dE08A90",
+  "position_manager": "0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e",
+  "universal_router": "0x66a9893cC07D91D95644AEDD05D03f95E1dBA8Af",
+  "permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+  "state_view": "0x7fFE42C4a5DEeA5b0fec41C94C136Cf115597227"
+}

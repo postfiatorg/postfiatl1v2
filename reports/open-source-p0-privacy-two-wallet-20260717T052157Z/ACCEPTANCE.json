@@ -1,0 +1,64 @@
+{
+  "schema": "postfiat-open-source-p0-privacy-two-fresh-wallet-acceptance-v1",
+  "generated_at_utc": "2026-07-17T05:21:57Z",
+  "status": "accepted",
+  "source": {
+    "branch": "open-source-productionization-20260716",
+    "commit": "d1e68ee8bd51b8ccbce7cb8cc493d97b19495b2f",
+    "tested_rust_source_exactly_committed": true,
+    "non_rust_documentation_dirty_during_test": true
+  },
+  "command": "cargo test --release -p postfiat-node --lib tests::wan_devnet_invalid_asset_orchard_swap_proof_is_rejected_and_valid_swap_still_applies --locked -- --exact --nocapture",
+  "result": {
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0,
+    "filtered_out": 211,
+    "duration_seconds": 340.41,
+    "profile": "release"
+  },
+  "fresh_wallets": {
+    "count": 2,
+    "distinct_addresses_required": true,
+    "preexisting_accounts": false,
+    "separate_master_keys": true,
+    "separate_public_funding_receipts_accepted": 2,
+    "separate_asset_trustlines": true,
+    "wallet_a_private_input_asset": "a651",
+    "wallet_b_private_input_asset": "pfUSDC"
+  },
+  "privacy_flow": {
+    "encrypted_ingress_v2_only": true,
+    "legacy_v1_live_admission_rejected_without_mutation": true,
+    "real_k15_private_atomic_swap_proof_verified": true,
+    "swap_receipt_accepted_code_checked": true,
+    "both_input_nullifiers_recorded_once": true,
+    "chain_only_output_recovery": true,
+    "private_egress_receipt_accepted_code_checked": true,
+    "egress_input_nullified": true,
+    "exact_positive_public_delta": true,
+    "global_issued_supply_conserved": true,
+    "public_artifacts_scanned": 13,
+    "private_note_or_spend_authority_leaks": 0
+  },
+  "negative_controls": {
+    "custom_plaintext_ciphertext_rejected": true,
+    "mixed_v1_v2_batch_rejected": true,
+    "invalid_swap_proof_rejected_without_nullifier_mutation": true,
+    "stale_epoch_rejected": true,
+    "wrong_reserve_packet_rejected": true,
+    "off_band_pricing_rejected": true,
+    "accepted_ingress_replay_rejected": true
+  },
+  "guarding_gates": {
+    "cargo_clippy_postfiat_node_all_targets_deny_warnings": "passed",
+    "cargo_fmt_all_check": "passed",
+    "git_diff_check": "passed"
+  },
+  "operational_impact": {
+    "shared_fleet_touched": false,
+    "money_moved": false,
+    "signer_or_key_changed": false,
+    "consensus_or_threshold_changed": false
+  }
+}

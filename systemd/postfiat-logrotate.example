@@ -1,0 +1,14 @@
+/var/log/postfiat/*.log /var/log/postfiat/*.jsonl /var/log/postfiat/*.ndjson /var/log/postfiat/*/*.log /var/log/postfiat/*/*.jsonl /var/log/postfiat/*/*.ndjson {
+    daily
+    rotate 14
+    maxsize 100M
+    missingok
+    notifempty
+    compress
+    delaycompress
+    dateext
+    dateformat -%Y%m%dT%H%M%S
+    create 0640 postfiat postfiat
+    su postfiat postfiat
+    copytruncate
+}

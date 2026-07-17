@@ -1,0 +1,16 @@
+{
+  "base_packet": "docs/governance/agent/fixtures/privacy_observer_inference_model/valid_observer_inference_model.json",
+  "expected_error_contains": [
+    "checks.k_derived_from_partition_intersection must be True"
+  ],
+  "mutations": [
+    {
+      "path": [
+        "checks",
+        "k_derived_from_partition_intersection"
+      ],
+      "value": false
+    }
+  ],
+  "schema": "postfiat-privacy-observer-inference-model-invalid-case-v1"
+}

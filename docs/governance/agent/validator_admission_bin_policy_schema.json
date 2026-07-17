@@ -1,0 +1,340 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://postfiat.org/schemas/postfiat-validator-admission-bin-policy-v1.json",
+  "title": "PostFiat Validator Admission Bin Policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "packet_id",
+    "mode",
+    "statement",
+    "attestation",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "postfiat-validator-admission-bin-policy-v1"
+    },
+    "packet_id": {
+      "$ref": "#/$defs/id"
+    },
+    "mode": {
+      "enum": [
+        "design_fixture_only",
+        "controlled_testnet_attestation"
+      ]
+    },
+    "statement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_id",
+        "policy_root_hash",
+        "scope",
+        "bin_policy",
+        "selector_cases",
+        "evidence_artifacts"
+      ],
+      "properties": {
+        "policy_id": {
+          "$ref": "#/$defs/id"
+        },
+        "policy_root_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "chain_id",
+            "profile_id",
+            "live_registry_mutation",
+            "authority_transfer"
+          ],
+          "properties": {
+            "chain_id": {
+              "$ref": "#/$defs/id"
+            },
+            "profile_id": {
+              "$ref": "#/$defs/id"
+            },
+            "live_registry_mutation": {
+              "const": false
+            },
+            "authority_transfer": {
+              "const": false
+            }
+          }
+        },
+        "bin_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "exposure_min_bin",
+            "reliability_min_bps",
+            "accountability_min_bin",
+            "attack_max_bin",
+            "rho_max_bin",
+            "rolling_window_epochs",
+            "decay_challenge_epochs",
+            "admitted_source_classes",
+            "bin_rules"
+          ],
+          "properties": {
+            "exposure_min_bin": {
+              "const": 2
+            },
+            "reliability_min_bps": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "accountability_min_bin": {
+              "const": 2
+            },
+            "attack_max_bin": {
+              "const": 1
+            },
+            "rho_max_bin": {
+              "const": 0
+            },
+            "rolling_window_epochs": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "decay_challenge_epochs": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "admitted_source_classes": {
+              "type": "array",
+              "minItems": 4,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "chain_derived",
+                  "counterparty_signed",
+                  "operator_signed",
+                  "registry_derived",
+                  "network_observed",
+                  "auditor_attested",
+                  "public_domain_control",
+                  "private_infra_attested"
+                ]
+              }
+            },
+            "bin_rules": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "exposure",
+                "accountability",
+                "attack",
+                "rho",
+                "staleness"
+              ],
+              "properties": {
+                "exposure": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "accountability": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "attack": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "rho": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "staleness": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        },
+        "selector_cases": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/selector_case"
+          }
+        },
+        "evidence_artifacts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidence_artifact"
+          }
+        }
+      }
+    },
+    "attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attestor_key_hash",
+        "statement_hash",
+        "signature_hash",
+        "signature_scheme",
+        "attested_at"
+      ],
+      "properties": {
+        "attestor_key_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "statement_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "signature_hash": {
+          "$ref": "#/$defs/hash96"
+        },
+        "signature_scheme": {
+          "enum": [
+            "mldsa44-placeholder",
+            "mldsa65-placeholder",
+            "ed25519-test-fixture"
+          ]
+        },
+        "attested_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_root_bound",
+        "statement_hash_bound",
+        "source_independence_enforced",
+        "self_attestation_only_rejected",
+        "wash_or_rented_exposure_rejected",
+        "stale_evidence_held",
+        "contradictory_evidence_held",
+        "hidden_shared_control_rejected",
+        "attack_cap_enforced",
+        "rho_cap_enforced",
+        "rolling_decay_challenge_enforced",
+        "live_registry_mutation",
+        "authority_transfer"
+      ],
+      "properties": {
+        "policy_root_bound": {
+          "const": true
+        },
+        "statement_hash_bound": {
+          "const": true
+        },
+        "source_independence_enforced": {
+          "const": true
+        },
+        "self_attestation_only_rejected": {
+          "const": true
+        },
+        "wash_or_rented_exposure_rejected": {
+          "const": true
+        },
+        "stale_evidence_held": {
+          "const": true
+        },
+        "contradictory_evidence_held": {
+          "const": true
+        },
+        "hidden_shared_control_rejected": {
+          "const": true
+        },
+        "attack_cap_enforced": {
+          "const": true
+        },
+        "rho_cap_enforced": {
+          "const": true
+        },
+        "rolling_decay_challenge_enforced": {
+          "const": true
+        },
+        "live_registry_mutation": {
+          "const": false
+        },
+        "authority_transfer": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{2,127}$"
+    },
+    "hash96": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{96}$"
+    },
+    "evidence_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha3_384"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha3_384": {
+          "$ref": "#/$defs/hash96"
+        }
+      }
+    },
+    "selector_case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "candidate_id",
+        "evidence",
+        "expected_bins",
+        "expected_route",
+        "expected_reason_codes"
+      ],
+      "properties": {
+        "case_id": {
+          "$ref": "#/$defs/id"
+        },
+        "candidate_id": {
+          "$ref": "#/$defs/id"
+        },
+        "evidence": {
+          "type": "object"
+        },
+        "expected_bins": {
+          "type": "object"
+        },
+        "expected_route": {
+          "enum": [
+            "admit",
+            "hold",
+            "hold-for-challenge",
+            "reject"
+          ]
+        },
+        "expected_reason_codes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        }
+      }
+    }
+  }
+}

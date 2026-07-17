@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Fast controlled-devnet repair for a lagging WAN validator.
+#
+# This is intentionally not rpc-catch-up. rpc-catch-up replays missing blocks
+# through the full state transition path, which can rebuild/verify expensive
+# privacy proof material for historical shielded blocks. For a controlled WAN
+# devnet where a quorum of validators already agrees on the latest root, this
+# script copies replicated state from a healthy majority validator and preserves
+# the target validator's local key/topology material.
+
+: "${VALIDATOR_HOSTS:?VALIDATOR_HOSTS must be supplied by the typed fleet configuration}"
+: "${VALIDATOR_RPC_PORTS:?VALIDATOR_RPC_PORTS must be supplied by the typed fleet configuration}"
+SOURCE_VALIDATOR="${SOURCE_VALIDATOR:-1}"
+TARGET_VALIDATOR="${TARGET_VALIDATOR:-0}"
+QUORUM_MIN="${QUORUM_MIN:-5}"
+SSH_USER="${SSH_USER:-root}"
+SSH_OPTS="${SSH_OPTS:--o BatchMode=yes -o ConnectTimeout=6 -o StrictHostKeyChecking=no}"
+REMOTE_OWNER="${REMOTE_OWNER:-postfiat:postfiat}"
+WORK_ROOT="${WORK_ROOT:-/tmp}"
+DRY_RUN="${DRY_RUN:-0}"
+
+STATE_FILES="${STATE_FILES:-genesis.json node_state.json governance.json ledger.json blocks.json blocks.append.jsonl batch_archive.json batch_archive.append.jsonl ordered_batches.json ordered_batches.append.jsonl receipts.json receipts.append.jsonl mempool.json shielded.json bridge.json faucet_account.json validator_registry_genesis.json validator_registry.json chain_tip.json owned_locks.json}"
+SCRATCH_FILES="${SCRATCH_FILES:-pending_checkpoint_certs.json}"
+
+IFS=',' read -r -a HOSTS <<<"$VALIDATOR_HOSTS"
+IFS=',' read -r -a PORTS <<<"$VALIDATOR_RPC_PORTS"
+
+if [ "${#HOSTS[@]}" -ne "${#PORTS[@]}" ]; then
+  echo "VALIDATOR_HOSTS and VALIDATOR_RPC_PORTS length mismatch" >&2
+  exit 2
+fi
+if ! [[ "$SOURCE_VALIDATOR" =~ ^[0-9]+$ ]] || [ "$SOURCE_VALIDATOR" -ge "${#HOSTS[@]}" ]; then
+  echo "SOURCE_VALIDATOR must be an index into VALIDATOR_HOSTS" >&2
+  exit 2
+fi
+if ! [[ "$TARGET_VALIDATOR" =~ ^[0-9]+$ ]] || [ "$TARGET_VALIDATOR" -ge "${#HOSTS[@]}" ]; then
+  echo "TARGET_VALIDATOR must be an index into VALIDATOR_HOSTS" >&2
+  exit 2
+fi
+if [ "$SOURCE_VALIDATOR" = "$TARGET_VALIDATOR" ]; then
+  echo "SOURCE_VALIDATOR and TARGET_VALIDATOR must differ" >&2
+  exit 2
+fi
+
+SOURCE_HOST="${HOSTS[$SOURCE_VALIDATOR]}"
+TARGET_HOST="${HOSTS[$TARGET_VALIDATOR]}"
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+WORK_DIR="$WORK_ROOT/pftl-wan-state-sync-$STAMP"
+ARCHIVE="$WORK_DIR/state-from-validator-$SOURCE_VALIDATOR.tgz"
+
+python3 - "$VALIDATOR_HOSTS" "$VALIDATOR_RPC_PORTS" "$SOURCE_VALIDATOR" "$TARGET_VALIDATOR" "$QUORUM_MIN" <<'PY'
+import collections
+import json
+import socket
+import sys
+
+hosts = sys.argv[1].split(",")
+ports = [int(port) for port in sys.argv[2].split(",")]
+source = int(sys.argv[3])
+target = int(sys.argv[4])
+quorum_min = int(sys.argv[5])
+
+statuses = []
+for idx, (host, port) in enumerate(zip(hosts, ports)):
+    req = {
+        "version": "postfiat-local-rpc-v1",
+        "id": f"state-sync-status-{idx}",
+        "method": "status",
+        "params": {},
+    }
+    with socket.create_connection((host, port), timeout=5) as sock:
+        sock.settimeout(8)
+        sock.sendall((json.dumps(req) + "\n").encode("utf-8"))
+        raw = b""
+        while b"\n" not in raw:
+            chunk = sock.recv(65536)
+            if not chunk:
+                break
+            raw += chunk
+    response = json.loads(raw.decode("utf-8").strip())
+    if not response.get("ok"):
+        if idx == target:
+            error = response.get("error")
+            statuses.append({"idx": idx, "error": error})
+            print(f"validator-{idx}: status_error={error}")
+            continue
+        raise SystemExit(f"validator-{idx} status failed: {response.get('error')}")
+    result = response["result"]
+    status = {
+        "idx": idx,
+        "height": result["block_height"],
+        "tip": result["block_tip_hash"],
+        "root": result["state_root"],
+        "mempool": result.get("mempool_pending"),
+    }
+    statuses.append(status)
+    print(
+        f"validator-{idx}: height={status['height']} tip={status['tip']} "
+        f"root={status['root']} mempool={status['mempool']}"
+    )
+
+healthy_statuses = [s for s in statuses if "error" not in s]
+groups = collections.Counter((s["height"], s["tip"], s["root"]) for s in healthy_statuses)
+(majority_key, majority_count) = groups.most_common(1)[0]
+source_status = statuses[source]
+if "error" in source_status:
+    raise SystemExit(f"refusing sync: source validator-{source} status failed")
+source_key = (source_status["height"], source_status["tip"], source_status["root"])
+target_status = statuses[target]
+target_key = None if "error" in target_status else (target_status["height"], target_status["tip"], target_status["root"])
+
+if majority_count < quorum_min:
+    raise SystemExit(
+        f"refusing sync: largest matching group has {majority_count}, need {quorum_min}"
+    )
+if source_key != majority_key:
+    raise SystemExit(
+        f"refusing sync: source validator-{source} is not in majority group"
+    )
+
+print(
+    f"majority: count={majority_count} height={majority_key[0]} "
+    f"tip={majority_key[1]} root={majority_key[2]}"
+)
+if target_key == majority_key:
+    print(f"target validator-{target} already matches majority; sync is still allowed")
+PY
+
+echo "source validator-$SOURCE_VALIDATOR: $SOURCE_HOST"
+echo "target validator-$TARGET_VALIDATOR: $TARGET_HOST"
+echo "state files: $STATE_FILES"
+
+if [ "$DRY_RUN" = "1" ]; then
+  echo "DRY_RUN=1, stopping before mutation"
+  exit 0
+fi
+
+mkdir -p "$WORK_DIR"
+echo "creating source state archive at $ARCHIVE"
+ssh $SSH_OPTS "$SSH_USER@$SOURCE_HOST" \
+  "cd /var/lib/postfiat/validator-$SOURCE_VALIDATOR && tar -czf - $STATE_FILES" >"$ARCHIVE"
+ls -lh "$ARCHIVE"
+
+echo "copying archive to target"
+scp -q $SSH_OPTS "$ARCHIVE" "$SSH_USER@$TARGET_HOST:/tmp/state-from-validator-$SOURCE_VALIDATOR.tgz"
+
+echo "installing replicated state on target"
+ssh $SSH_OPTS "$SSH_USER@$TARGET_HOST" \
+  "TARGET_VALIDATOR=$TARGET_VALIDATOR SOURCE_VALIDATOR=$SOURCE_VALIDATOR STAMP=$STAMP REMOTE_OWNER=$REMOTE_OWNER STATE_FILES='$STATE_FILES' SCRATCH_FILES='$SCRATCH_FILES' bash -s" <<'REMOTE'
+set -euo pipefail
+DATA="/var/lib/postfiat/validator-$TARGET_VALIDATOR"
+BACKUP="/var/lib/postfiat/validator-$TARGET_VALIDATOR-backup-$STAMP"
+
+pgrep -f "postfiat-node verify-blocks --data-dir $DATA" | xargs -r kill || true
+systemctl stop "postfiat-validator-$TARGET_VALIDATOR-rpc.service"
+systemctl stop "postfiat-validator-$TARGET_VALIDATOR.service"
+
+mkdir -p "$BACKUP"
+cd "$DATA"
+for file in $STATE_FILES $SCRATCH_FILES; do
+  if [ -e "$file" ]; then
+    cp -a "$file" "$BACKUP/"
+  fi
+done
+
+tar -xzf "/tmp/state-from-validator-$SOURCE_VALIDATOR.tgz" -C "$DATA"
+python3 - "$TARGET_VALIDATOR" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+target = sys.argv[1]
+path = Path(f"/var/lib/postfiat/validator-{target}/node_state.json")
+state = json.loads(path.read_text())
+state["node_id"] = f"validator-{target}"
+path.write_text(json.dumps(state, indent=2) + "\n")
+PY
+
+for file in $SCRATCH_FILES; do
+  rm -f "$DATA/$file"
+done
+
+chown "$REMOTE_OWNER" $STATE_FILES
+chmod 600 ledger.json mempool.json node_state.json shielded.json 2>/dev/null || true
+
+systemctl start "postfiat-validator-$TARGET_VALIDATOR.service"
+systemctl start "postfiat-validator-$TARGET_VALIDATOR-rpc.service"
+sleep 2
+/usr/local/bin/postfiat-node status --data-dir "$DATA"
+echo "backup=$BACKUP"
+REMOTE
