@@ -701,6 +701,8 @@ pub struct VaultBridgeRouteProfileActivationV1 {
     pub schema: String,
     pub profile: VaultBridgeRouteProfileV1,
     pub amendment: GovernanceAmendment,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tier4_finality_bootstrap: Option<EthereumArbitrumFinalityStateV1>,
 }
 
 impl VaultBridgeRouteProfileActivationV1 {
@@ -709,6 +711,30 @@ impl VaultBridgeRouteProfileActivationV1 {
             return Err("vault bridge route profile activation schema mismatch".to_string());
         }
         self.profile.validate()?;
+        let profile_hash = self.profile.profile_hash()?;
+        match (
+            self.profile.verifier_kind.as_str(),
+            self.tier4_finality_bootstrap.as_ref(),
+        ) {
+            (NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1, Some(state)) => {
+                state.validate()?;
+                if state.route_profile_hash != profile_hash
+                    || state.route_epoch != u64::from(self.profile.route_epoch)
+                    || state.arbitrum_chain_id != self.profile.source_chain_id
+                {
+                    return Err("Tier-4 route finality bootstrap does not match route profile"
+                        .to_string());
+                }
+            }
+            (NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1, None) => {
+                return Err("Tier-4 route activation requires a finality bootstrap".to_string());
+            }
+            (_, Some(_)) => {
+                return Err("non-Tier-4 route activation cannot carry a finality bootstrap"
+                    .to_string());
+            }
+            (_, None) => {}
+        }
         let expected_kind = vault_bridge_route_amendment_kind(&self.profile)?;
         if self.amendment.kind != expected_kind
             || self.amendment.value != self.profile.route_epoch
@@ -1426,6 +1452,7 @@ mod shielded_bridge_governance_tests {
             schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
             profile: profile.clone(),
             amendment: amendment.clone(),
+            tier4_finality_bootstrap: None,
         };
         let record = VaultBridgeRouteProfileRecordV1::new(&activation, profile.activation_height)
             .expect("route profile record");

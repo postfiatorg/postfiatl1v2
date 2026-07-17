@@ -1839,6 +1839,7 @@ pub fn native_pft_live_total(ledger: &LedgerState, shielded: &ShieldedState) -> 
         fast_lane_prepare_fences: _,
         fast_lane_checkpoint_anchors: _,
         fastswap_activation_height: _,
+        ethereum_arbitrum_finality_states: _,
     } = ledger;
     let ShieldedState {
         next_note_position: _,

@@ -1923,6 +1923,8 @@ fn nav_roundtrip_live_demo_deposit_relay(
                 source_proof_kind: options.source_proof_kind.clone(),
                 source_proof_hash: options.source_proof_hash.clone(),
                 source_public_values_hash: options.source_public_values_hash.clone(),
+                source_proof_file: None,
+                source_public_values_file: None,
             },
             bundle_dir: relay_bundle_dir.clone(),
             overwrite: options.overwrite,

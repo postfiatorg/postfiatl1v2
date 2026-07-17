@@ -1,0 +1,17 @@
+[package]
+name = "postfiat-pfusdc-proofs"
+version = "0.1.0"
+description = "Pure Tier-4 pfUSDC proof statement verification"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+postfiat-crypto-provider = { path = "../crypto_provider" }
+postfiat-ordering-fast = { path = "../ordering_fast" }
+postfiat-types = { path = "../types" }
+

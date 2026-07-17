@@ -508,25 +508,39 @@ pub fn vault_bridge_deposit_plan(
         vault_bridge_deposit_public_values_hash(&evidence, &evidence_root, &options.policy_hash)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
 
+    let source_proof_bytes = read_optional_bounded_bridge_proof_file(
+        options.source_proof_file.as_deref(),
+        postfiat_types::DEFAULT_MAX_NAV_SP1_PROOF_BYTES,
+        "pfUSDC ingress proof",
+    )?;
+    let source_public_values = read_optional_bounded_bridge_proof_file(
+        options.source_public_values_file.as_deref(),
+        postfiat_types::DEFAULT_MAX_NAV_SP1_PUBLIC_VALUES_BYTES,
+        "pfUSDC ingress public values",
+    )?;
     let source_proof_kind = options.source_proof_kind.unwrap_or_default();
-    let source_proof_hash = options.source_proof_hash.unwrap_or_default();
+    let provided_source_proof_hash = options.source_proof_hash.unwrap_or_default();
     let provided_source_public_values_hash = options.source_public_values_hash.unwrap_or_default();
-    let operation_source_public_values_hash = if source_proof_kind.is_empty() {
-        if !source_proof_hash.is_empty() || !provided_source_public_values_hash.is_empty() {
+    let (source_proof_hash, operation_source_public_values_hash) = if source_proof_kind.is_empty() {
+        if !provided_source_proof_hash.is_empty()
+            || !provided_source_public_values_hash.is_empty()
+            || !source_proof_bytes.is_empty()
+            || !source_public_values.is_empty()
+        {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "source proof hashes require --source-proof-kind",
+                "source proof material requires --source-proof-kind",
             ));
         }
-        String::new()
-    } else {
-        if source_proof_kind != NAV_PROFILE_VERIFIER_SP1_GROTH16 {
+        (String::new(), String::new())
+    } else if source_proof_kind == NAV_PROFILE_VERIFIER_SP1_GROTH16 {
+        if !source_proof_bytes.is_empty() || !source_public_values.is_empty() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("--source-proof-kind must be {NAV_PROFILE_VERIFIER_SP1_GROTH16}"),
+                "legacy sp1-groth16 bridge route accepts commitments only, not proof files",
             ));
         }
-        if provided_source_public_values_hash.is_empty() {
+        let public_values_hash = if provided_source_public_values_hash.is_empty() {
             computed_source_public_values_hash.clone()
         } else if provided_source_public_values_hash != computed_source_public_values_hash {
             return Err(io::Error::new(
@@ -535,7 +549,44 @@ pub fn vault_bridge_deposit_plan(
             ));
         } else {
             provided_source_public_values_hash
+        };
+        (provided_source_proof_hash, public_values_hash)
+    } else if source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1 {
+        if source_proof_bytes.is_empty() || source_public_values.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "proof-native bridge route requires --source-proof-file and --source-public-values-file",
+            ));
         }
+        let computed_proof_hash = postfiat_types::pfusdc_ingress_proof_hash_v1(&source_proof_bytes);
+        let computed_public_values_hash =
+            postfiat_types::pfusdc_ingress_public_values_hash_v1(&source_public_values);
+        if !provided_source_proof_hash.is_empty()
+            && provided_source_proof_hash != computed_proof_hash
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "--source-proof-hash does not match --source-proof-file",
+            ));
+        }
+        if !provided_source_public_values_hash.is_empty()
+            && provided_source_public_values_hash != computed_public_values_hash
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "--source-public-values-hash does not match --source-public-values-file",
+            ));
+        }
+        postfiat_types::PfUsdcIngressPublicValuesV1::from_canonical_bytes(&source_public_values)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+        (computed_proof_hash, computed_public_values_hash)
+    } else {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "--source-proof-kind must be {NAV_PROFILE_VERIFIER_SP1_GROTH16} or {NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1}"
+            ),
+        ));
     };
 
     let propose_operation =
@@ -548,6 +599,8 @@ pub fn vault_bridge_deposit_plan(
             source_proof_kind,
             source_proof_hash,
             source_public_values_hash: operation_source_public_values_hash,
+            source_proof_bytes,
+            source_public_values,
             expires_at_height: options.expires_at_height,
         });
     propose_operation
@@ -635,6 +688,41 @@ pub fn vault_bridge_deposit_plan(
             "validated ERC20BridgeVault event payload; Ethereum receipt inclusion still requires the configured source proof or challenge/finality path"
                 .to_string(),
     })
+}
+
+fn read_optional_bounded_bridge_proof_file(
+    path: Option<&Path>,
+    max_bytes: u64,
+    label: &str,
+) -> io::Result<Vec<u8>> {
+    let Some(path) = path else {
+        return Ok(Vec::new());
+    };
+    let metadata = std::fs::metadata(path).map_err(|error| {
+        io::Error::new(
+            error.kind(),
+            format!("failed to inspect {label} `{}`: {error}", path.display()),
+        )
+    })?;
+    if !metadata.is_file() || metadata.len() > max_bytes {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("{label} must be a regular file no larger than {max_bytes} bytes"),
+        ));
+    }
+    let bytes = std::fs::read(path).map_err(|error| {
+        io::Error::new(
+            error.kind(),
+            format!("failed to read {label} `{}`: {error}", path.display()),
+        )
+    })?;
+    if bytes.len() as u64 > max_bytes || bytes.len() as u64 != metadata.len() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("{label} changed while being read or exceeded its size limit"),
+        ));
+    }
+    Ok(bytes)
 }
 
 pub fn vault_bridge_withdrawal_plan(

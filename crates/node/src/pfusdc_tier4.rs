@@ -1,7 +1,5 @@
 use super::*;
 
-pub const PFUSDC_EGRESS_WITNESS_SCHEMA_V1: &str = "postfiat.pfusdc.egress_witness.v1";
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PfUsdcEgressWitnessOptions {
     pub data_dir: PathBuf,
@@ -10,7 +8,7 @@ pub struct PfUsdcEgressWitnessOptions {
 
 pub fn pfusdc_egress_witness(
     options: PfUsdcEgressWitnessOptions,
-) -> io::Result<PfUsdcEgressWitnessV1> {
+) -> io::Result<PfUsdcEgressProofWitnessV1> {
     validate_lower_hex_len("withdrawal_id", &options.withdrawal_id, 96)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
     let store = NodeStore::new(options.data_dir);
@@ -110,13 +108,28 @@ pub fn pfusdc_egress_witness(
             "current validator registry does not reproduce the finalized committee root",
         ));
     }
+    let committee_epoch = commit.proposal.domain.committee_epoch;
 
-    Ok(PfUsdcEgressWitnessV1 {
-        schema: PFUSDC_EGRESS_WITNESS_SCHEMA_V1.to_string(),
+    let committee = committee_validators
+        .iter()
+        .map(|validator_id| {
+            let record = validator_registry_record(&validator_registry, validator_id)?;
+            Ok(ValidatorRegistryEntry {
+                node_id: record.node_id.clone(),
+                algorithm_id: record.algorithm_id.clone(),
+                public_key_hex: record.public_key_hex.clone(),
+                active: true,
+            })
+        })
+        .collect::<io::Result<Vec<_>>>()?;
+
+    let witness = PfUsdcEgressProofWitnessV1 {
+        schema: PFUSDC_EGRESS_PROOF_WITNESS_SCHEMA_V1.to_string(),
         chain_id: genesis.chain_id.clone(),
         genesis_hash: genesis_hash(&genesis),
         protocol_version: genesis.protocol_version,
         bridge_exit_root_activation_height: activation_height,
+        prior_checkpoint_block_id: block.header.parent_hash.clone(),
         route_profile,
         block,
         receipt,
@@ -124,7 +137,11 @@ pub fn pfusdc_egress_witness(
         withdrawal_packet: redemption.withdrawal_packet,
         withdrawal_packet_hash: redemption.withdrawal_packet_hash,
         withdrawal_packet_evm_digest: redemption.withdrawal_packet_evm_digest,
-        committee_validators,
-        validator_registry,
-    })
+        committee_epoch,
+        committee,
+    };
+    witness
+        .validate_bounds()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    Ok(witness)
 }

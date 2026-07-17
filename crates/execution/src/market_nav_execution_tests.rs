@@ -667,6 +667,8 @@
                     source_proof_kind: String::new(),
                     source_proof_hash: String::new(),
                     source_public_values_hash: String::new(),
+                    source_proof_bytes: Vec::new(),
+                    source_public_values: Vec::new(),
                     expires_at_height: 1_000,
                 },
             ),
@@ -1250,6 +1252,8 @@
                     source_proof_kind: String::new(),
                     source_proof_hash: String::new(),
                     source_public_values_hash: String::new(),
+                    source_proof_bytes: Vec::new(),
+                    source_public_values: Vec::new(),
                     expires_at_height: 1_000,
                 },
             ),
@@ -1638,6 +1642,66 @@
         );
         assert!(execute_asset_transaction(&genesis, &mut ledger, &register, 3).accepted);
 
+        let mut proof_native_ledger = ledger.clone();
+        let proof_native_profile = NavProofProfile::new(
+            issuer.clone(),
+            NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1,
+            format!("vault_bridge:{source_domain}"),
+            100,
+            2,
+            100,
+            0,
+            0,
+            0,
+            0,
+            policy_hash.clone(),
+            format!("0x{}", "11".repeat(32)),
+            NAV_SP1_PROOF_ENCODING_GROTH16,
+            4_096,
+            16_384,
+        )
+        .expect("proof-native profile");
+        proof_native_ledger.nav_assets[0].proof_profile = proof_native_profile.profile_id.clone();
+        proof_native_ledger.nav_proof_profiles[0] = proof_native_profile;
+        let invalid_proof = vec![1, 2, 3];
+        let invalid_public_values = vec![4, 5, 6];
+        let invalid_proof_propose = signed_asset_transaction_with_minimum_fee(
+            &genesis,
+            &proof_native_ledger,
+            &holder_key,
+            VAULT_BRIDGE_DEPOSIT_PROPOSE_TRANSACTION_KIND,
+            1,
+            AssetTransactionOperation::VaultBridgeDepositPropose(
+                VaultBridgeDepositProposeOperation {
+                    proposer: holder.clone(),
+                    asset_id: asset_id.clone(),
+                    evidence_root: bridge_evidence_root.clone(),
+                    evidence: bridge_evidence.clone(),
+                    policy_hash: policy_hash.clone(),
+                    source_proof_kind: NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1.to_string(),
+                    source_proof_hash: postfiat_types::pfusdc_ingress_proof_hash_v1(
+                        &invalid_proof,
+                    ),
+                    source_public_values_hash:
+                        postfiat_types::pfusdc_ingress_public_values_hash_v1(
+                        &invalid_public_values,
+                    ),
+                    source_proof_bytes: invalid_proof,
+                    source_public_values: invalid_public_values,
+                    expires_at_height: 1_000,
+                },
+            ),
+        );
+        let invalid_proof_receipt = execute_asset_transaction(
+            &genesis,
+            &mut proof_native_ledger,
+            &invalid_proof_propose,
+            4,
+        );
+        assert!(!invalid_proof_receipt.accepted);
+        assert_eq!(invalid_proof_receipt.code, "sp1_proof_invalid");
+        assert!(proof_native_ledger.vault_bridge_deposits.is_empty());
+
         let missing_proof_propose = signed_asset_transaction_with_minimum_fee(
             &genesis,
             &ledger,
@@ -1654,6 +1718,8 @@
                     source_proof_kind: String::new(),
                     source_proof_hash: String::new(),
                     source_public_values_hash: String::new(),
+                    source_proof_bytes: Vec::new(),
+                    source_public_values: Vec::new(),
                     expires_at_height: 1_000,
                 },
             ),
@@ -1688,6 +1754,8 @@
                     source_proof_kind: NAV_PROFILE_VERIFIER_SP1_GROTH16.to_string(),
                     source_proof_hash: "99".repeat(48),
                     source_public_values_hash: source_public_values_hash.clone(),
+                    source_proof_bytes: Vec::new(),
+                    source_public_values: Vec::new(),
                     expires_at_height: 1_000,
                 },
             ),
@@ -1874,6 +1942,8 @@
                     source_proof_kind: String::new(),
                     source_proof_hash: String::new(),
                     source_public_values_hash: String::new(),
+                    source_proof_bytes: Vec::new(),
+                    source_public_values: Vec::new(),
                     expires_at_height: 1_000,
                 },
             ),
@@ -2074,6 +2144,8 @@
                     source_proof_kind: String::new(),
                     source_proof_hash: String::new(),
                     source_public_values_hash: String::new(),
+                    source_proof_bytes: Vec::new(),
+                    source_public_values: Vec::new(),
                     expires_at_height: 1_000,
                 },
             ),

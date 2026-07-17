@@ -14,12 +14,14 @@ members = [
     "crates/ordering_fast",
     "crates/privacy",
     "crates/privacy_orchard",
+    "crates/pfusdc_proofs",
     "crates/proofs",
     "crates/rpc_sdk",
     "crates/storage",
     "crates/types",
     "crates/wallet_wasm",
 ]
+exclude = ["programs/pfusdc-egress", "programs/pfusdc-ingress"]
 resolver = "2"
 
 [workspace.package]

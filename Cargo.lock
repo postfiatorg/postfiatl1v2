@@ -1705,6 +1705,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "postfiat-pfusdc-proofs"
+version = "0.1.0"
+dependencies = [
+ "postfiat-crypto-provider",
+ "postfiat-ordering-fast",
+ "postfiat-types",
+]
+
+[[package]]
 name = "postfiat-privacy"
 version = "0.1.0"
 dependencies = [

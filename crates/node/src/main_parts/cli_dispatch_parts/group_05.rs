@@ -687,6 +687,9 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                 source_proof_hash: flag_value(flags, "--source-proof-hash").map(str::to_string),
                 source_public_values_hash: flag_value(flags, "--source-public-values-hash")
                     .map(str::to_string),
+                source_proof_file: flag_value(flags, "--source-proof-file").map(PathBuf::from),
+                source_public_values_file: flag_value(flags, "--source-public-values-file")
+                    .map(PathBuf::from),
             })
             .map_err(|error| format!("vault-bridge-deposit-plan failed: {error}"))?;
             let json = serde_json::to_string_pretty(&report).map_err(|error| {
@@ -739,6 +742,10 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                     source_proof_hash: flag_value(flags, "--source-proof-hash").map(str::to_string),
                     source_public_values_hash: flag_value(flags, "--source-public-values-hash")
                         .map(str::to_string),
+                    source_proof_file: flag_value(flags, "--source-proof-file")
+                        .map(PathBuf::from),
+                    source_public_values_file: flag_value(flags, "--source-public-values-file")
+                        .map(PathBuf::from),
                 },
                 bundle_dir: PathBuf::from(bundle_dir),
                 overwrite: flag_present(flags, "--overwrite"),
@@ -790,6 +797,13 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                             .map(str::to_string),
                         source_public_values_hash: flag_value(flags, "--source-public-values-hash")
                             .map(str::to_string),
+                        source_proof_file: flag_value(flags, "--source-proof-file")
+                            .map(PathBuf::from),
+                        source_public_values_file: flag_value(
+                            flags,
+                            "--source-public-values-file",
+                        )
+                        .map(PathBuf::from),
                     },
                     bundle_dir: PathBuf::from(bundle_dir),
                     overwrite: flag_present(flags, "--overwrite"),

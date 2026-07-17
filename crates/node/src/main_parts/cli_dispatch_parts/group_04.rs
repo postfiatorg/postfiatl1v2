@@ -805,6 +805,11 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                     support,
                     veto_until_height,
                     profile_file: PathBuf::from(profile_file),
+                    tier4_finality_bootstrap_file: flag_value(
+                        flags,
+                        "--tier4-finality-bootstrap-file",
+                    )
+                    .map(PathBuf::from),
                     amendment_file: PathBuf::from(amendment_file),
                     batch_file: PathBuf::from(batch_file),
                 },
@@ -834,6 +839,11 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                 SignedVaultBridgeRouteProfileGovernanceOptions {
                     data_dir: PathBuf::from(data_dir),
                     profile_file: PathBuf::from(profile_file),
+                    tier4_finality_bootstrap_file: flag_value(
+                        flags,
+                        "--tier4-finality-bootstrap-file",
+                    )
+                    .map(PathBuf::from),
                     signed_amendment_file: PathBuf::from(signed_amendment_file),
                     proposal_slot,
                     batch_file: PathBuf::from(batch_file),

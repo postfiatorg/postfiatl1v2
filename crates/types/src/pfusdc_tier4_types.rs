@@ -7,8 +7,13 @@ pub const BRIDGE_EXIT_ACCEPTED_RECEIPT_CODE: &str = "accepted";
 
 const PFUSDC_INGRESS_COMMITMENT_DOMAIN_V1: &str =
     "postfiat.pfusdc.ingress_public_values.commitment.v1";
+const PFUSDC_INGRESS_PROOF_HASH_DOMAIN_V1: &str =
+    "postfiat.pfusdc.ingress_proof.hash.v1";
+const PFUSDC_INGRESS_PUBLIC_VALUES_HASH_DOMAIN_V1: &str =
+    "postfiat.pfusdc.ingress_public_values.hash.v1";
 const PFUSDC_EGRESS_COMMITMENT_DOMAIN_V1: &str =
     "postfiat.pfusdc.egress_public_values.commitment.v1";
+const PFUSDC_EGRESS_NULLIFIER_DOMAIN_V1: &str = "postfiat.pfusdc.egress_proof.nullifier.v1";
 const BRIDGE_EXIT_LEAF_COMMITMENT_DOMAIN_V1: &str =
     "postfiat.bridge_exit_leaf.commitment.v1";
 const BRIDGE_EXIT_EMPTY_ROOT_DOMAIN_V1: &str = "postfiat.bridge_exit_tree.empty.v1";
@@ -153,6 +158,8 @@ pub struct PfUsdcIngressPublicValuesV1 {
     pub route_profile_hash: String,
     pub route_epoch: u64,
     pub ethereum_chain_id: u64,
+    pub prior_ethereum_finalized_beacon_root: String,
+    pub prior_ethereum_finalized_slot: u64,
     pub ethereum_finalized_beacon_root: String,
     pub ethereum_finalized_slot: u64,
     pub arbitrum_chain_id: u64,
@@ -184,6 +191,60 @@ pub struct PfUsdcIngressPublicValuesV1 {
 }
 
 impl PfUsdcIngressPublicValuesV1 {
+    /// Strictly decode the exact byte string committed by the ingress SP1
+    /// program. Tags must be contiguous and ordered, fixed-width fields must
+    /// have their canonical width, and trailing bytes are rejected.
+    pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, String> {
+        let mut reader = PfusdcCanonicalReader::new(bytes, PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V1)?;
+        let mut values = Self {
+            schema: reader.text(1)?,
+            proof_program_version: reader.u32(2)?,
+            pftl_chain_id: reader.text(3)?,
+            pftl_genesis_hash: reader.hex(4, 48)?,
+            pftl_protocol_version: reader.u32(5)?,
+            route_profile_hash: reader.hex(6, 48)?,
+            route_epoch: reader.u64(7)?,
+            ethereum_chain_id: reader.u64(8)?,
+            prior_ethereum_finalized_beacon_root: reader.hex(9, 32)?,
+            prior_ethereum_finalized_slot: reader.u64(10)?,
+            ethereum_finalized_beacon_root: reader.hex(11, 32)?,
+            ethereum_finalized_slot: reader.u64(12)?,
+            arbitrum_chain_id: reader.u64(13)?,
+            arbitrum_rollup_address: reader.evm_address(14)?,
+            arbitrum_assertion_hash: reader.hex(15, 32)?,
+            l2_block_number: reader.u64(16)?,
+            l2_block_hash: reader.hex(17, 32)?,
+            l2_state_root: reader.hex(18, 32)?,
+            l2_receipts_root: reader.hex(19, 32)?,
+            vault_address: reader.evm_address(20)?,
+            vault_runtime_code_hash: reader.hex(21, 32)?,
+            token_address: reader.evm_address(22)?,
+            token_runtime_code_hash: reader.hex(23, 32)?,
+            transaction_hash: reader.hex(24, 32)?,
+            transaction_index: reader.u64(25)?,
+            receipt_status: reader.u8(26)?,
+            log_index: reader.u64(27)?,
+            event_signature: reader.hex(28, 32)?,
+            event_emitter: reader.evm_address(29)?,
+            depositor: reader.evm_address(30)?,
+            pftl_recipient: reader.text(31)?,
+            pftl_recipient_hash: reader.hex(32, 32)?,
+            amount_atoms: reader.u64(33)?,
+            nonce: reader.hex(34, 32)?,
+            route_binding: reader.hex(35, 32)?,
+            deposit_id: reader.hex(36, 32)?,
+            evidence_root: reader.hex(37, 48)?,
+            public_values_commitment: String::new(),
+        };
+        reader.finish()?;
+        values.seal()?;
+        values.validate()?;
+        if values.canonical_bytes_without_commitment()? != bytes {
+            return Err("pfUSDC ingress public values are not canonical".to_string());
+        }
+        Ok(values)
+    }
+
     pub fn canonical_bytes_without_commitment(&self) -> Result<Vec<u8>, String> {
         self.validate_fields(false)?;
         let mut out = pfusdc_canonical_prefix(PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V1);
@@ -195,33 +256,39 @@ impl PfUsdcIngressPublicValuesV1 {
         pfusdc_append_hex(&mut out, 6, &self.route_profile_hash)?;
         pfusdc_append_u64(&mut out, 7, self.route_epoch);
         pfusdc_append_u64(&mut out, 8, self.ethereum_chain_id);
-        pfusdc_append_hex(&mut out, 9, &self.ethereum_finalized_beacon_root)?;
-        pfusdc_append_u64(&mut out, 10, self.ethereum_finalized_slot);
-        pfusdc_append_u64(&mut out, 11, self.arbitrum_chain_id);
-        pfusdc_append_evm_address(&mut out, 12, &self.arbitrum_rollup_address)?;
-        pfusdc_append_hex(&mut out, 13, &self.arbitrum_assertion_hash)?;
-        pfusdc_append_u64(&mut out, 14, self.l2_block_number);
-        pfusdc_append_hex(&mut out, 15, &self.l2_block_hash)?;
-        pfusdc_append_hex(&mut out, 16, &self.l2_state_root)?;
-        pfusdc_append_hex(&mut out, 17, &self.l2_receipts_root)?;
-        pfusdc_append_evm_address(&mut out, 18, &self.vault_address)?;
-        pfusdc_append_hex(&mut out, 19, &self.vault_runtime_code_hash)?;
-        pfusdc_append_evm_address(&mut out, 20, &self.token_address)?;
-        pfusdc_append_hex(&mut out, 21, &self.token_runtime_code_hash)?;
-        pfusdc_append_hex(&mut out, 22, &self.transaction_hash)?;
-        pfusdc_append_u64(&mut out, 23, self.transaction_index);
-        pfusdc_append_u8(&mut out, 24, self.receipt_status);
-        pfusdc_append_u64(&mut out, 25, self.log_index);
-        pfusdc_append_hex(&mut out, 26, &self.event_signature)?;
-        pfusdc_append_evm_address(&mut out, 27, &self.event_emitter)?;
-        pfusdc_append_evm_address(&mut out, 28, &self.depositor)?;
-        pfusdc_append_text(&mut out, 29, &self.pftl_recipient)?;
-        pfusdc_append_hex(&mut out, 30, &self.pftl_recipient_hash)?;
-        pfusdc_append_u64(&mut out, 31, self.amount_atoms);
-        pfusdc_append_hex(&mut out, 32, &self.nonce)?;
-        pfusdc_append_hex(&mut out, 33, &self.route_binding)?;
-        pfusdc_append_hex(&mut out, 34, &self.deposit_id)?;
-        pfusdc_append_hex(&mut out, 35, &self.evidence_root)?;
+        pfusdc_append_hex(
+            &mut out,
+            9,
+            &self.prior_ethereum_finalized_beacon_root,
+        )?;
+        pfusdc_append_u64(&mut out, 10, self.prior_ethereum_finalized_slot);
+        pfusdc_append_hex(&mut out, 11, &self.ethereum_finalized_beacon_root)?;
+        pfusdc_append_u64(&mut out, 12, self.ethereum_finalized_slot);
+        pfusdc_append_u64(&mut out, 13, self.arbitrum_chain_id);
+        pfusdc_append_evm_address(&mut out, 14, &self.arbitrum_rollup_address)?;
+        pfusdc_append_hex(&mut out, 15, &self.arbitrum_assertion_hash)?;
+        pfusdc_append_u64(&mut out, 16, self.l2_block_number);
+        pfusdc_append_hex(&mut out, 17, &self.l2_block_hash)?;
+        pfusdc_append_hex(&mut out, 18, &self.l2_state_root)?;
+        pfusdc_append_hex(&mut out, 19, &self.l2_receipts_root)?;
+        pfusdc_append_evm_address(&mut out, 20, &self.vault_address)?;
+        pfusdc_append_hex(&mut out, 21, &self.vault_runtime_code_hash)?;
+        pfusdc_append_evm_address(&mut out, 22, &self.token_address)?;
+        pfusdc_append_hex(&mut out, 23, &self.token_runtime_code_hash)?;
+        pfusdc_append_hex(&mut out, 24, &self.transaction_hash)?;
+        pfusdc_append_u64(&mut out, 25, self.transaction_index);
+        pfusdc_append_u8(&mut out, 26, self.receipt_status);
+        pfusdc_append_u64(&mut out, 27, self.log_index);
+        pfusdc_append_hex(&mut out, 28, &self.event_signature)?;
+        pfusdc_append_evm_address(&mut out, 29, &self.event_emitter)?;
+        pfusdc_append_evm_address(&mut out, 30, &self.depositor)?;
+        pfusdc_append_text(&mut out, 31, &self.pftl_recipient)?;
+        pfusdc_append_hex(&mut out, 32, &self.pftl_recipient_hash)?;
+        pfusdc_append_u64(&mut out, 33, self.amount_atoms);
+        pfusdc_append_hex(&mut out, 34, &self.nonce)?;
+        pfusdc_append_hex(&mut out, 35, &self.route_binding)?;
+        pfusdc_append_hex(&mut out, 36, &self.deposit_id)?;
+        pfusdc_append_hex(&mut out, 37, &self.evidence_root)?;
         Ok(out)
     }
 
@@ -252,6 +319,7 @@ impl PfUsdcIngressPublicValuesV1 {
         pfusdc_validate_hex_fields(&[
             ("pfusdc_ingress.pftl_genesis_hash", &self.pftl_genesis_hash, 96),
             ("pfusdc_ingress.route_profile_hash", &self.route_profile_hash, 96),
+            ("pfusdc_ingress.prior_ethereum_finalized_beacon_root", &self.prior_ethereum_finalized_beacon_root, 64),
             ("pfusdc_ingress.ethereum_finalized_beacon_root", &self.ethereum_finalized_beacon_root, 64),
             ("pfusdc_ingress.arbitrum_assertion_hash", &self.arbitrum_assertion_hash, 64),
             ("pfusdc_ingress.l2_block_hash", &self.l2_block_hash, 64),
@@ -263,12 +331,13 @@ impl PfUsdcIngressPublicValuesV1 {
             ("pfusdc_ingress.event_signature", &self.event_signature, 64),
             ("pfusdc_ingress.pftl_recipient_hash", &self.pftl_recipient_hash, 64),
             ("pfusdc_ingress.nonce", &self.nonce, 64),
-            ("pfusdc_ingress.route_binding", &self.route_binding, 96),
+            ("pfusdc_ingress.route_binding", &self.route_binding, 64),
             ("pfusdc_ingress.deposit_id", &self.deposit_id, 64),
             ("pfusdc_ingress.evidence_root", &self.evidence_root, 96),
         ])?;
         if self.route_epoch == 0
             || self.ethereum_chain_id == 0
+            || self.prior_ethereum_finalized_slot == 0
             || self.ethereum_finalized_slot == 0
             || self.arbitrum_chain_id == 0
             || self.l2_block_number == 0
@@ -276,6 +345,12 @@ impl PfUsdcIngressPublicValuesV1 {
             || self.amount_atoms == 0
         {
             return Err("pfUSDC ingress numeric/finality fields are invalid".to_string());
+        }
+        if self.ethereum_finalized_slot <= self.prior_ethereum_finalized_slot
+            || self.ethereum_finalized_beacon_root
+                == self.prior_ethereum_finalized_beacon_root
+        {
+            return Err("pfUSDC ingress finality checkpoint must strictly advance".to_string());
         }
         validate_evm_address_text("pfusdc_ingress.arbitrum_rollup_address", &self.arbitrum_rollup_address)?;
         validate_evm_address_text("pfusdc_ingress.vault_address", &self.vault_address)?;
@@ -294,6 +369,215 @@ impl PfUsdcIngressPublicValuesV1 {
             }
         }
         Ok(())
+    }
+}
+
+pub fn pfusdc_ingress_proof_hash_v1(proof: &[u8]) -> String {
+    pfusdc_sha3_384_commitment(PFUSDC_INGRESS_PROOF_HASH_DOMAIN_V1, proof)
+}
+
+pub fn pfusdc_ingress_public_values_hash_v1(public_values: &[u8]) -> String {
+    pfusdc_sha3_384_commitment(PFUSDC_INGRESS_PUBLIC_VALUES_HASH_DOMAIN_V1, public_values)
+}
+
+pub const ETHEREUM_ARBITRUM_FINALITY_STATE_SCHEMA_V1: &str =
+    "postfiat.ethereum_arbitrum_finality_state.v1";
+pub const MAX_RETAINED_ETHEREUM_ARBITRUM_CHECKPOINTS_V1: usize = 32;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EthereumArbitrumCheckpointV1 {
+    pub ethereum_finalized_beacon_root: String,
+    pub ethereum_finalized_slot: u64,
+    pub arbitrum_assertion_hash: String,
+    pub l2_block_number: u64,
+    pub l2_block_hash: String,
+    pub l2_state_root: String,
+    pub l2_receipts_root: String,
+}
+
+impl EthereumArbitrumCheckpointV1 {
+    pub fn validate(&self) -> Result<(), String> {
+        pfusdc_validate_hex_fields(&[
+            (
+                "pfusdc_finality.ethereum_finalized_beacon_root",
+                &self.ethereum_finalized_beacon_root,
+                64,
+            ),
+            (
+                "pfusdc_finality.arbitrum_assertion_hash",
+                &self.arbitrum_assertion_hash,
+                64,
+            ),
+            ("pfusdc_finality.l2_block_hash", &self.l2_block_hash, 64),
+            ("pfusdc_finality.l2_state_root", &self.l2_state_root, 64),
+            (
+                "pfusdc_finality.l2_receipts_root",
+                &self.l2_receipts_root,
+                64,
+            ),
+        ])?;
+        if self.ethereum_finalized_slot == 0 || self.l2_block_number == 0 {
+            return Err("pfUSDC finality checkpoint heights must be nonzero".to_string());
+        }
+        Ok(())
+    }
+
+    pub fn canonical_bytes(&self) -> Result<Vec<u8>, String> {
+        self.validate()?;
+        let mut bytes = Vec::with_capacity(200);
+        pfusdc_append_hex(&mut bytes, 1, &self.ethereum_finalized_beacon_root)?;
+        pfusdc_append_u64(&mut bytes, 2, self.ethereum_finalized_slot);
+        pfusdc_append_hex(&mut bytes, 3, &self.arbitrum_assertion_hash)?;
+        pfusdc_append_u64(&mut bytes, 4, self.l2_block_number);
+        pfusdc_append_hex(&mut bytes, 5, &self.l2_block_hash)?;
+        pfusdc_append_hex(&mut bytes, 6, &self.l2_state_root)?;
+        pfusdc_append_hex(&mut bytes, 7, &self.l2_receipts_root)?;
+        Ok(bytes)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EthereumArbitrumFinalityStateV1 {
+    pub schema: String,
+    pub route_profile_hash: String,
+    pub route_epoch: u64,
+    pub ethereum_chain_id: u64,
+    pub arbitrum_chain_id: u64,
+    pub arbitrum_rollup_address: String,
+    pub arbitrum_rollup_runtime_code_hash: String,
+    pub latest: EthereumArbitrumCheckpointV1,
+    pub retained: Vec<EthereumArbitrumCheckpointV1>,
+}
+
+impl EthereumArbitrumFinalityStateV1 {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.schema != ETHEREUM_ARBITRUM_FINALITY_STATE_SCHEMA_V1 {
+            return Err("pfUSDC finality-state schema mismatch".to_string());
+        }
+        validate_lower_hex_len(
+            "pfusdc_finality.route_profile_hash",
+            &self.route_profile_hash,
+            96,
+        )?;
+        if self.route_epoch == 0 || self.ethereum_chain_id == 0 || self.arbitrum_chain_id == 0 {
+            return Err("pfUSDC finality-state chain/route identifiers must be nonzero".to_string());
+        }
+        validate_evm_address_text(
+            "pfusdc_finality.arbitrum_rollup_address",
+            &self.arbitrum_rollup_address,
+        )?;
+        validate_lower_hex_len(
+            "pfusdc_finality.arbitrum_rollup_runtime_code_hash",
+            self.arbitrum_rollup_runtime_code_hash
+                .strip_prefix("0x")
+                .unwrap_or(&self.arbitrum_rollup_runtime_code_hash),
+            64,
+        )?;
+        self.latest.validate()?;
+        if self.retained.is_empty()
+            || self.retained.len() > MAX_RETAINED_ETHEREUM_ARBITRUM_CHECKPOINTS_V1
+        {
+            return Err("pfUSDC finality-state retained checkpoint window is invalid".to_string());
+        }
+        let mut previous_slot = 0;
+        let mut previous_l2 = 0;
+        for checkpoint in &self.retained {
+            checkpoint.validate()?;
+            if checkpoint.ethereum_finalized_slot <= previous_slot
+                || checkpoint.l2_block_number <= previous_l2
+            {
+                return Err("pfUSDC retained finality checkpoints must strictly advance".to_string());
+            }
+            previous_slot = checkpoint.ethereum_finalized_slot;
+            previous_l2 = checkpoint.l2_block_number;
+        }
+        if self.retained.last() != Some(&self.latest) {
+            return Err("pfUSDC finality-state latest checkpoint must end retained window".to_string());
+        }
+        Ok(())
+    }
+
+    pub fn recognizes_checkpoint(&self, root: &str, slot: u64) -> bool {
+        self.retained.iter().any(|checkpoint| {
+            checkpoint.ethereum_finalized_slot == slot
+                && checkpoint.ethereum_finalized_beacon_root == root
+        })
+    }
+
+    pub fn verify_and_advance(
+        &mut self,
+        values: &PfUsdcIngressPublicValuesV1,
+    ) -> Result<(), String> {
+        self.validate()?;
+        if values.route_profile_hash != self.route_profile_hash
+            || values.route_epoch != self.route_epoch
+            || values.ethereum_chain_id != self.ethereum_chain_id
+            || values.arbitrum_chain_id != self.arbitrum_chain_id
+            || values.arbitrum_rollup_address != self.arbitrum_rollup_address
+        {
+            return Err("pfUSDC proof does not match its pinned finality-state route".to_string());
+        }
+        if !self.recognizes_checkpoint(
+            &values.prior_ethereum_finalized_beacon_root,
+            values.prior_ethereum_finalized_slot,
+        ) {
+            return Err("pfUSDC proof does not start from a retained checkpoint".to_string());
+        }
+        let resulting = EthereumArbitrumCheckpointV1 {
+            ethereum_finalized_beacon_root: values.ethereum_finalized_beacon_root.clone(),
+            ethereum_finalized_slot: values.ethereum_finalized_slot,
+            arbitrum_assertion_hash: values.arbitrum_assertion_hash.clone(),
+            l2_block_number: values.l2_block_number,
+            l2_block_hash: values.l2_block_hash.clone(),
+            l2_state_root: values.l2_state_root.clone(),
+            l2_receipts_root: values.l2_receipts_root.clone(),
+        };
+        resulting.validate()?;
+        if let Some(existing) = self.retained.iter().find(|checkpoint| {
+            checkpoint.ethereum_finalized_slot == resulting.ethereum_finalized_slot
+                || checkpoint.l2_block_number == resulting.l2_block_number
+        }) {
+            if existing != &resulting {
+                return Err("pfUSDC proof conflicts with a retained finalized checkpoint".to_string());
+            }
+            return Ok(());
+        }
+        if resulting.ethereum_finalized_slot <= self.latest.ethereum_finalized_slot
+            || resulting.l2_block_number <= self.latest.l2_block_number
+        {
+            return Err("pfUSDC proof checkpoint does not monotonically advance".to_string());
+        }
+        self.retained.push(resulting.clone());
+        if self.retained.len() > MAX_RETAINED_ETHEREUM_ARBITRUM_CHECKPOINTS_V1 {
+            let remove = self.retained.len() - MAX_RETAINED_ETHEREUM_ARBITRUM_CHECKPOINTS_V1;
+            self.retained.drain(..remove);
+        }
+        self.latest = resulting;
+        self.validate()
+    }
+
+    pub fn state_commitment_bytes(&self) -> Result<Vec<u8>, String> {
+        self.validate()?;
+        let mut bytes = pfusdc_canonical_prefix(ETHEREUM_ARBITRUM_FINALITY_STATE_SCHEMA_V1);
+        pfusdc_append_text(&mut bytes, 1, &self.schema)?;
+        pfusdc_append_hex(&mut bytes, 2, &self.route_profile_hash)?;
+        pfusdc_append_u64(&mut bytes, 3, self.route_epoch);
+        pfusdc_append_u64(&mut bytes, 4, self.ethereum_chain_id);
+        pfusdc_append_u64(&mut bytes, 5, self.arbitrum_chain_id);
+        pfusdc_append_evm_address(&mut bytes, 6, &self.arbitrum_rollup_address)?;
+        let code_hash = self
+            .arbitrum_rollup_runtime_code_hash
+            .strip_prefix("0x")
+            .unwrap_or(&self.arbitrum_rollup_runtime_code_hash);
+        pfusdc_append_hex(&mut bytes, 7, code_hash)?;
+        let retained_len = u32::try_from(self.retained.len())
+            .map_err(|_| "pfUSDC retained checkpoint count exceeds u32".to_string())?;
+        pfusdc_append_u32(&mut bytes, 8, retained_len);
+        for checkpoint in &self.retained {
+            let checkpoint_bytes = checkpoint.canonical_bytes()?;
+            pfusdc_append_field(&mut bytes, 9, &checkpoint_bytes)?;
+        }
+        Ok(bytes)
     }
 }
 
@@ -339,6 +623,97 @@ pub struct PfUsdcEgressPublicValuesV1 {
     pub withdrawal_packet_hash: String,
     pub proof_nullifier: String,
     pub public_values_commitment: String,
+}
+
+pub const PFUSDC_EGRESS_PROOF_WITNESS_SCHEMA_V1: &str =
+    "postfiat.pfusdc.egress_proof_witness.v1";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PfUsdcEgressProofWitnessV1 {
+    pub schema: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub protocol_version: u32,
+    pub bridge_exit_root_activation_height: u64,
+    pub prior_checkpoint_block_id: String,
+    pub route_profile: VaultBridgeRouteProfileRecordV1,
+    pub block: BlockRecord,
+    pub receipt: Receipt,
+    pub merkle_proof: BridgeExitMerkleProofV1,
+    pub withdrawal_packet: VaultBridgeWithdrawalPacket,
+    pub withdrawal_packet_hash: String,
+    pub withdrawal_packet_evm_digest: String,
+    pub committee_epoch: u64,
+    pub committee: Vec<ValidatorRegistryEntry>,
+}
+
+impl PfUsdcEgressProofWitnessV1 {
+    pub fn validate_bounds(&self) -> Result<(), String> {
+        if self.schema != PFUSDC_EGRESS_PROOF_WITNESS_SCHEMA_V1 {
+            return Err("pfUSDC egress proof witness schema mismatch".to_string());
+        }
+        pfusdc_validate_text("pfusdc_egress_witness.chain_id", &self.chain_id)?;
+        validate_lower_hex_len(
+            "pfusdc_egress_witness.genesis_hash",
+            &self.genesis_hash,
+            96,
+        )?;
+        validate_lower_hex_len(
+            "pfusdc_egress_witness.prior_checkpoint_block_id",
+            &self.prior_checkpoint_block_id,
+            96,
+        )?;
+        if self.protocol_version == 0
+            || self.bridge_exit_root_activation_height == 0
+            || self.committee_epoch == 0
+            || self.committee.is_empty()
+            || self.committee.len() > 64
+        {
+            return Err("pfUSDC egress proof witness bounds are invalid".to_string());
+        }
+        self.route_profile.validate()?;
+        self.withdrawal_packet.validate()?;
+        validate_lower_hex_len(
+            "pfusdc_egress_witness.withdrawal_packet_hash",
+            &self.withdrawal_packet_hash,
+            96,
+        )?;
+        validate_lower_hex_len(
+            "pfusdc_egress_witness.withdrawal_packet_evm_digest",
+            &self.withdrawal_packet_evm_digest,
+            64,
+        )?;
+        if self.merkle_proof.siblings.len() > 12 {
+            return Err("pfUSDC egress Merkle proof exceeds bounded depth".to_string());
+        }
+        Ok(())
+    }
+}
+
+pub fn pfusdc_egress_proof_nullifier_v1(
+    route_epoch: u64,
+    burn_tx_id: &str,
+    withdrawal_id: &str,
+    finalized_block_id: &str,
+) -> Result<String, String> {
+    if route_epoch == 0 {
+        return Err("pfUSDC egress nullifier route epoch must be nonzero".to_string());
+    }
+    let burn = pfusdc_decode_hex(burn_tx_id)?;
+    let withdrawal = pfusdc_decode_hex(withdrawal_id)?;
+    let block = pfusdc_decode_hex(finalized_block_id)?;
+    if burn.len() != 48 || withdrawal.len() != 48 || block.len() != 48 {
+        return Err("pfUSDC egress nullifier identifiers must be 48 bytes".to_string());
+    }
+    let mut bytes = Vec::with_capacity(152);
+    bytes.extend_from_slice(&route_epoch.to_be_bytes());
+    bytes.extend_from_slice(&burn);
+    bytes.extend_from_slice(&withdrawal);
+    bytes.extend_from_slice(&block);
+    Ok(pfusdc_keccak_commitment(
+        PFUSDC_EGRESS_NULLIFIER_DOMAIN_V1,
+        &bytes,
+    ))
 }
 
 impl PfUsdcEgressPublicValuesV1 {
@@ -617,6 +992,125 @@ fn pfusdc_canonical_prefix(schema: &str) -> Vec<u8> {
     out.extend_from_slice(&(schema.len() as u32).to_be_bytes());
     out.extend_from_slice(schema.as_bytes());
     out
+}
+
+struct PfusdcCanonicalReader<'a> {
+    bytes: &'a [u8],
+    cursor: usize,
+}
+
+impl<'a> PfusdcCanonicalReader<'a> {
+    fn new(bytes: &'a [u8], expected_schema: &str) -> Result<Self, String> {
+        let prefix_len = PFUSDC_TIER4_CANONICAL_MAGIC
+            .len()
+            .checked_add(4)
+            .ok_or_else(|| "pfUSDC canonical prefix overflow".to_string())?;
+        if bytes.len() < prefix_len
+            || &bytes[..PFUSDC_TIER4_CANONICAL_MAGIC.len()] != PFUSDC_TIER4_CANONICAL_MAGIC
+        {
+            return Err("pfUSDC canonical magic mismatch".to_string());
+        }
+        let len_offset = PFUSDC_TIER4_CANONICAL_MAGIC.len();
+        let schema_len = u32::from_be_bytes(
+            bytes[len_offset..len_offset + 4]
+                .try_into()
+                .map_err(|_| "pfUSDC canonical schema length decode failed".to_string())?,
+        ) as usize;
+        let schema_end = prefix_len
+            .checked_add(schema_len)
+            .ok_or_else(|| "pfUSDC canonical schema length overflow".to_string())?;
+        if schema_end > bytes.len() || &bytes[prefix_len..schema_end] != expected_schema.as_bytes() {
+            return Err("pfUSDC canonical schema prefix mismatch".to_string());
+        }
+        Ok(Self {
+            bytes,
+            cursor: schema_end,
+        })
+    }
+
+    fn field(&mut self, expected_tag: u16) -> Result<&'a [u8], String> {
+        let header_end = self
+            .cursor
+            .checked_add(6)
+            .ok_or_else(|| "pfUSDC canonical field header overflow".to_string())?;
+        if header_end > self.bytes.len() {
+            return Err("pfUSDC canonical field header truncated".to_string());
+        }
+        let tag = u16::from_be_bytes(
+            self.bytes[self.cursor..self.cursor + 2]
+                .try_into()
+                .map_err(|_| "pfUSDC canonical tag decode failed".to_string())?,
+        );
+        if tag != expected_tag {
+            return Err(format!(
+                "pfUSDC canonical tag mismatch: expected {expected_tag}, got {tag}"
+            ));
+        }
+        let len = u32::from_be_bytes(
+            self.bytes[self.cursor + 2..header_end]
+                .try_into()
+                .map_err(|_| "pfUSDC canonical length decode failed".to_string())?,
+        ) as usize;
+        let end = header_end
+            .checked_add(len)
+            .ok_or_else(|| "pfUSDC canonical field length overflow".to_string())?;
+        if end > self.bytes.len() {
+            return Err("pfUSDC canonical field truncated".to_string());
+        }
+        self.cursor = end;
+        Ok(&self.bytes[header_end..end])
+    }
+
+    fn text(&mut self, tag: u16) -> Result<String, String> {
+        let value = std::str::from_utf8(self.field(tag)?)
+            .map_err(|_| "pfUSDC canonical text is not UTF-8".to_string())?
+            .to_string();
+        pfusdc_validate_text("pfUSDC canonical text", &value)?;
+        Ok(value)
+    }
+
+    fn hex(&mut self, tag: u16, exact_len: usize) -> Result<String, String> {
+        let value = self.field(tag)?;
+        if value.len() != exact_len {
+            return Err(format!(
+                "pfUSDC canonical tag {tag} must contain exactly {exact_len} bytes"
+            ));
+        }
+        Ok(bytes_to_hex(value))
+    }
+
+    fn evm_address(&mut self, tag: u16) -> Result<String, String> {
+        Ok(format!("0x{}", self.hex(tag, 20)?))
+    }
+
+    fn u8(&mut self, tag: u16) -> Result<u8, String> {
+        let value = self.field(tag)?;
+        if value.len() != 1 {
+            return Err(format!("pfUSDC canonical tag {tag} must contain one byte"));
+        }
+        Ok(value[0])
+    }
+
+    fn u32(&mut self, tag: u16) -> Result<u32, String> {
+        let value = self.field(tag)?;
+        Ok(u32::from_be_bytes(value.try_into().map_err(|_| {
+            format!("pfUSDC canonical tag {tag} must contain four bytes")
+        })?))
+    }
+
+    fn u64(&mut self, tag: u16) -> Result<u64, String> {
+        let value = self.field(tag)?;
+        Ok(u64::from_be_bytes(value.try_into().map_err(|_| {
+            format!("pfUSDC canonical tag {tag} must contain eight bytes")
+        })?))
+    }
+
+    fn finish(self) -> Result<(), String> {
+        if self.cursor != self.bytes.len() {
+            return Err("pfUSDC canonical public values contain trailing bytes".to_string());
+        }
+        Ok(())
+    }
 }
 
 fn pfusdc_append_field(out: &mut Vec<u8>, tag: u16, value: &[u8]) -> Result<(), String> {

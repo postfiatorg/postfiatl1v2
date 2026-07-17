@@ -149,12 +149,19 @@ pub const NAV_PROFILE_VERIFIER_PLACEHOLDER: &str = "placeholder";
 pub const NAV_PROFILE_VERIFIER_MULTI_FETCH: &str = "multi-fetch-quorum";
 /// NAV proof profile verifier kind for SP1 Groth16 aggregate reserve proofs.
 pub const NAV_PROFILE_VERIFIER_SP1_GROTH16: &str = "sp1-groth16";
+/// Dedicated verifier kind for a proof that follows Ethereum finality through
+/// an Arbitrum assertion and proves one exact successful vault-deposit log.
+/// This is deliberately distinct from the NAV aggregate-reserve program.
+pub const NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1: &str =
+    "sp1-arbitrum-finality-v1";
 pub const NAV_SP1_PROOF_ENCODING_GROTH16: &str = "groth16";
 pub const DEFAULT_MAX_NAV_SP1_PROOF_BYTES: u64 = 4096;
 pub const DEFAULT_MAX_NAV_SP1_PUBLIC_VALUES_BYTES: u64 = 16384;
 pub const NAV_SP1_PROGRAM_VKEY_HEX_LEN: usize = 66;
 pub const NAV_SP1_POLICY_HASH_HEX_LEN: usize = 64;
 pub const AGGREGATE_PUBLIC_VALUES_V2_SCHEMA_VERSION: u32 = 2;
+pub const VAULT_BRIDGE_V2_DEPOSIT_EVENT_TOPIC: &str =
+    "7564437da24aa33f24442c214d7047d8bf275a86555bc57b83be448783cd6d81";
 pub const NAV_PROFILE_SOURCE_CLASS_LEDGER: &str = "ledger";
 pub const MAX_NAV_ATTESTATIONS_PER_PACKET: usize = 64;
 pub const MAX_NAV_RESERVE_ACCOUNTS: usize = 32;

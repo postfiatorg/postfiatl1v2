@@ -515,7 +515,11 @@ impl NavProofProfile {
                     .to_string(),
             );
         }
-        if self.verifier_kind == NAV_PROFILE_VERIFIER_SP1_GROTH16
+        if matches!(
+            self.verifier_kind.as_str(),
+            NAV_PROFILE_VERIFIER_SP1_GROTH16
+                | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+        )
             && self.valuation_policy_hash.is_empty()
         {
             return Err(
@@ -528,7 +532,11 @@ impl NavProofProfile {
             &self.sp1_proof_encoding,
         )?;
         if !self.valuation_policy_hash.is_empty() {
-            let expected_len = if self.verifier_kind == NAV_PROFILE_VERIFIER_SP1_GROTH16 {
+            let expected_len = if matches!(
+                self.verifier_kind.as_str(),
+                NAV_PROFILE_VERIFIER_SP1_GROTH16
+                    | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+            ) {
                 NAV_SP1_POLICY_HASH_HEX_LEN
             } else {
                 NAV_PROFILE_ID_HEX_LEN
@@ -718,7 +726,11 @@ fn nav_proof_profile_id_with_route_policy(
                 .to_string(),
         );
     }
-    if verifier_kind == NAV_PROFILE_VERIFIER_SP1_GROTH16 && valuation_policy_hash.is_empty() {
+    if matches!(
+        verifier_kind,
+        NAV_PROFILE_VERIFIER_SP1_GROTH16 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+    ) && valuation_policy_hash.is_empty()
+    {
         return Err("nav_profile.valuation_policy_hash is required for sp1-groth16".to_string());
     }
     validate_nav_profile_sp1_fields(verifier_kind, sp1_program_vkey, sp1_proof_encoding)?;
@@ -743,7 +755,10 @@ fn validate_nav_profile_sp1_fields(
     sp1_program_vkey: &str,
     sp1_proof_encoding: &str,
 ) -> Result<(), String> {
-    if verifier_kind == NAV_PROFILE_VERIFIER_SP1_GROTH16 {
+    if matches!(
+        verifier_kind,
+        NAV_PROFILE_VERIFIER_SP1_GROTH16 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+    ) {
         if sp1_program_vkey.is_empty() {
             return Err("nav_profile.sp1_program_vkey is required for sp1-groth16".to_string());
         }
@@ -775,9 +790,10 @@ fn validate_nav_profile_verifier_kind(verifier_kind: &str) -> Result<(), String>
         NAV_PROFILE_VERIFIER_LEDGER_TRANSPARENT
         | NAV_PROFILE_VERIFIER_PLACEHOLDER
         | NAV_PROFILE_VERIFIER_MULTI_FETCH
-        | NAV_PROFILE_VERIFIER_SP1_GROTH16 => Ok(()),
+        | NAV_PROFILE_VERIFIER_SP1_GROTH16
+        | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1 => Ok(()),
         _ => Err(format!(
-            "nav_profile.verifier_kind must be one of [{NAV_PROFILE_VERIFIER_LEDGER_TRANSPARENT}, {NAV_PROFILE_VERIFIER_PLACEHOLDER}, {NAV_PROFILE_VERIFIER_MULTI_FETCH}, {NAV_PROFILE_VERIFIER_SP1_GROTH16}], got {verifier_kind}"
+            "nav_profile.verifier_kind must be one of [{NAV_PROFILE_VERIFIER_LEDGER_TRANSPARENT}, {NAV_PROFILE_VERIFIER_PLACEHOLDER}, {NAV_PROFILE_VERIFIER_MULTI_FETCH}, {NAV_PROFILE_VERIFIER_SP1_GROTH16}, {NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1}], got {verifier_kind}"
         )),
     }
 }
@@ -1158,9 +1174,12 @@ pub fn validate_vault_bridge_deposit_source_proof_fields(
         return Ok(());
     }
     validate_text_field(&format!("{prefix}.source_proof_kind"), source_proof_kind)?;
-    if source_proof_kind != NAV_PROFILE_VERIFIER_SP1_GROTH16 {
+    if !matches!(
+        source_proof_kind,
+        NAV_PROFILE_VERIFIER_SP1_GROTH16 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+    ) {
         return Err(format!(
-            "{prefix}.source_proof_kind must be {NAV_PROFILE_VERIFIER_SP1_GROTH16}"
+            "{prefix}.source_proof_kind must be {NAV_PROFILE_VERIFIER_SP1_GROTH16} or {NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1}"
         ));
     }
     validate_lower_hex_len(
@@ -2494,6 +2513,8 @@ pub struct LedgerState {
     pub fast_lane_checkpoint_anchors: Vec<FastLaneCheckpointCertificateV1>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fastswap_activation_height: Option<u64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ethereum_arbitrum_finality_states: Vec<EthereumArbitrumFinalityStateV1>,
 }
 
 impl LedgerState {
@@ -2534,6 +2555,7 @@ impl LedgerState {
             fast_lane_prepare_fences: Vec::new(),
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
+            ethereum_arbitrum_finality_states: Vec::new(),
         }
     }
 
@@ -2578,6 +2600,7 @@ impl LedgerState {
             fast_lane_prepare_fences: Vec::new(),
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
+            ethereum_arbitrum_finality_states: Vec::new(),
         }
     }
 
@@ -2623,6 +2646,7 @@ impl LedgerState {
             fast_lane_prepare_fences: Vec::new(),
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
+            ethereum_arbitrum_finality_states: Vec::new(),
         }
     }
 
@@ -2663,6 +2687,7 @@ impl LedgerState {
             fast_lane_prepare_fences: Vec::new(),
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
+            ethereum_arbitrum_finality_states: Vec::new(),
         }
     }
 
@@ -2708,6 +2733,7 @@ impl LedgerState {
             fast_lane_prepare_fences: Vec::new(),
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
+            ethereum_arbitrum_finality_states: Vec::new(),
         }
     }
 
@@ -2748,6 +2774,7 @@ impl LedgerState {
             fast_lane_prepare_fences: Vec::new(),
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
+            ethereum_arbitrum_finality_states: Vec::new(),
         }
     }
 
@@ -2850,6 +2877,28 @@ impl LedgerState {
         self.nav_proof_profiles
             .iter()
             .find(|profile| profile.profile_id == profile_id)
+    }
+
+    pub fn ethereum_arbitrum_finality_state(
+        &self,
+        route_profile_hash: &str,
+        route_epoch: u64,
+    ) -> Option<&EthereumArbitrumFinalityStateV1> {
+        self.ethereum_arbitrum_finality_states.iter().find(|state| {
+            state.route_profile_hash == route_profile_hash && state.route_epoch == route_epoch
+        })
+    }
+
+    pub fn ethereum_arbitrum_finality_state_mut(
+        &mut self,
+        route_profile_hash: &str,
+        route_epoch: u64,
+    ) -> Option<&mut EthereumArbitrumFinalityStateV1> {
+        self.ethereum_arbitrum_finality_states
+            .iter_mut()
+            .find(|state| {
+                state.route_profile_hash == route_profile_hash && state.route_epoch == route_epoch
+            })
     }
 
     pub fn nav_attestor(&self, address: &str) -> Option<&NavAttestor> {
@@ -3324,6 +3373,14 @@ impl LedgerState {
     }
 
     pub fn validate_nav_state(&self, chain_id: &str) -> Result<(), String> {
+        let mut finality_route_epochs = BTreeSet::new();
+        for state in &self.ethereum_arbitrum_finality_states {
+            state.validate()?;
+            if !finality_route_epochs.insert((state.route_profile_hash.clone(), state.route_epoch)) {
+                return Err("duplicate pfUSDC Ethereum/Arbitrum finality-state route epoch"
+                    .to_string());
+            }
+        }
         let mut asset_ids = BTreeSet::new();
         let assets_by_id = self
             .asset_definitions

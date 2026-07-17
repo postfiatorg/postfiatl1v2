@@ -827,10 +827,28 @@ pub(super) fn execute_governance_batch(
                 &activation.profile,
                 &profile_hash,
             )?;
+            if let Some(state) = activation.tier4_finality_bootstrap.as_ref() {
+                if ledger
+                    .ethereum_arbitrum_finality_state(&state.route_profile_hash, state.route_epoch)
+                    .is_some()
+                {
+                    return Err(
+                        "Tier-4 route finality bootstrap already exists for route epoch"
+                            .to_string(),
+                    );
+                }
+            }
             postfiat_types::VaultBridgeRouteProfileRecordV1::new(activation, block_height)
         })();
         match validated {
             Ok(record) => {
+                if let Some(state) = activation.tier4_finality_bootstrap.clone() {
+                    // The validation closure required canonical ledger context;
+                    // therefore an accepted Tier-4 activation must have it.
+                    if let Some(ledger) = ledger.as_deref_mut() {
+                        ledger.ethereum_arbitrum_finality_states.push(state);
+                    }
+                }
                 apply_governance_amendment_with_lifecycle_records(
                     governance,
                     amendment.clone(),
@@ -874,20 +892,23 @@ pub(super) fn validate_vault_bridge_route_profile_against_ledger(
     } else {
         &profile.vault_bridge_route_policy_hash
     };
-    let verifier_contract_matches =
-        if route.verifier_kind == postfiat_types::NAV_PROFILE_VERIFIER_SP1_GROTH16 {
-            profile.valuation_policy_hash == route.verifier_policy_hash
-                && profile.sp1_program_vkey == route.verifier_program_vkey
-                && profile.sp1_proof_encoding == route.verifier_proof_encoding
-                && profile.max_proof_bytes == route.max_proof_bytes
-                && profile.max_public_values_bytes == route.max_public_values_bytes
-        } else {
-            profile.valuation_policy_hash == route_hash
-                && profile.sp1_program_vkey.is_empty()
-                && profile.sp1_proof_encoding.is_empty()
-                && profile.max_proof_bytes == 0
-                && profile.max_public_values_bytes == 0
-        };
+    let verifier_contract_matches = if matches!(
+        route.verifier_kind.as_str(),
+        postfiat_types::NAV_PROFILE_VERIFIER_SP1_GROTH16
+            | postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+    ) {
+        profile.valuation_policy_hash == route.verifier_policy_hash
+            && profile.sp1_program_vkey == route.verifier_program_vkey
+            && profile.sp1_proof_encoding == route.verifier_proof_encoding
+            && profile.max_proof_bytes == route.max_proof_bytes
+            && profile.max_public_values_bytes == route.max_public_values_bytes
+    } else {
+        profile.valuation_policy_hash == route_hash
+            && profile.sp1_program_vkey.is_empty()
+            && profile.sp1_proof_encoding.is_empty()
+            && profile.max_proof_bytes == 0
+            && profile.max_public_values_bytes == 0
+    };
     if profile.source_class != expected_source_class
         || effective_route_policy_hash != route_hash
         || profile.verifier_kind != route.verifier_kind

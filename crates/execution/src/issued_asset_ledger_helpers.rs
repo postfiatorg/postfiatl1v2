@@ -742,6 +742,7 @@ fn assert_issued_supply_ledger_inventory_complete(ledger: &LedgerState) {
         fast_lane_prepare_fences: _,
         fast_lane_checkpoint_anchors: _,
         fastswap_activation_height: _,
+        ethereum_arbitrum_finality_states: _,
     } = ledger;
 }
 

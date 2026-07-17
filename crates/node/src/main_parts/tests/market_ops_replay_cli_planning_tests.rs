@@ -1231,6 +1231,8 @@ fn vault_bridge_deposit_plan_builds_canonical_operations_from_vault_log() {
         source_proof_kind: None,
         source_proof_hash: None,
         source_public_values_hash: None,
+        source_proof_file: None,
+        source_public_values_file: None,
     })
     .expect("plan bridge deposit");
 
@@ -1347,6 +1349,8 @@ fn vault_bridge_deposit_plan_selects_deposit_log_from_receipt() {
         source_proof_kind: None,
         source_proof_hash: None,
         source_public_values_hash: None,
+        source_proof_file: None,
+        source_public_values_file: None,
     })
     .expect("plan bridge deposit from receipt");
 
@@ -1404,6 +1408,8 @@ fn vault_bridge_deposit_relay_bundle_writes_operations_and_commands() {
         source_proof_kind: None,
         source_proof_hash: None,
         source_public_values_hash: None,
+        source_proof_file: None,
+        source_public_values_file: None,
     };
     let report = vault_bridge_deposit_relay_bundle(VaultBridgeDepositRelayBundleOptions {
         plan_options: plan_options.clone(),
@@ -1523,6 +1529,8 @@ fn vault_bridge_deposit_relay_rpc_bundle_fetches_receipt_and_writes_bundle() {
         source_proof_kind: None,
         source_proof_hash: None,
         source_public_values_hash: None,
+        source_proof_file: None,
+        source_public_values_file: None,
     };
     let report = vault_bridge_deposit_relay_rpc_bundle(VaultBridgeDepositRelayRpcBundleOptions {
         source_rpc_url: "https://source-chain.example.invalid/rpc".to_string(),
@@ -1819,6 +1827,8 @@ fn vault_bridge_product_e2e_receipt_to_swap_burn_and_withdrawal_plan() {
         source_proof_kind: None,
         source_proof_hash: None,
         source_public_values_hash: None,
+        source_proof_file: None,
+        source_public_values_file: None,
     })
     .expect("plan bridge deposit from source-chain receipt");
     assert_eq!(plan.evidence, evidence);
@@ -2195,6 +2205,8 @@ fn vault_bridge_deposit_plan_rejects_tampered_vault_log_amount() {
         source_proof_kind: None,
         source_proof_hash: None,
         source_public_values_hash: None,
+        source_proof_file: None,
+        source_public_values_file: None,
     })
     .expect_err("tampered log rejected");
     assert!(
