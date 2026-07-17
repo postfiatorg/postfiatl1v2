@@ -42,4 +42,4 @@ zeroize = { workspace = true }
 
 [dev-dependencies]
 orchard = { workspace = true }
-rand = "0.8.6"
+rand = "0.10.2"

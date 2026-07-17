@@ -25,6 +25,6 @@ postfiat-privacy = { path = "../privacy" }
 postfiat-privacy-orchard = { path = "../privacy_orchard" }
 postfiat-proofs = { path = "../proofs" }
 postfiat-types = { path = "../types" }
-rand = "0.8.6"
+rand = "0.10.2"
 serde = { workspace = true }
 serde_json = { workspace = true }

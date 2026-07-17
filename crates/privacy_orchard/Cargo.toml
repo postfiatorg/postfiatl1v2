@@ -26,7 +26,7 @@ nonempty = { workspace = true }
 orchard = { workspace = true }
 pasta_curves = "0.5"
 postfiat-crypto-provider = { path = "../crypto_provider" }
-rand = "0.8.6"
+rand = "0.10.2"
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha3 = { workspace = true }
