@@ -111,6 +111,7 @@ nav:
       - State And Storage: architecture/state-and-storage.md
       - Finality: architecture/finality.md
       - Evidence Model: architecture/evidence-model.md
+      - pfUSDC Tier-4 Plan: plans/PFUSDC-TIER4-IMPLEMENTATION-PLAN-20260717.md
   - Governance:
       - Cobalt: governance/cobalt.md
       - Cobalt Implementation: governance/cobalt-implementation.md
