@@ -34,10 +34,10 @@
       "severity": "authenticated_protocol_surface"
     }
   ],
-  "generated_utc": "2026-07-17T18:19:44Z",
+  "generated_utc": "2026-07-17T18:20:02Z",
   "git": {
-    "dirty": true,
-    "revision": "d77809787c00895d82d031de274f4bcd256d163a"
+    "dirty": false,
+    "revision": "a25f6164d259091d01526c9049f8b139ba14106f"
   },
   "methods": [
     {
