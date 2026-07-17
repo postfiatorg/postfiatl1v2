@@ -21,7 +21,11 @@ members = [
     "crates/types",
     "crates/wallet_wasm",
 ]
-exclude = ["programs/pfusdc-egress", "programs/pfusdc-ingress"]
+exclude = [
+    "programs/pfusdc-egress",
+    "programs/pfusdc-ingress",
+    "tools/pfusdc-tier4-prover",
+]
 resolver = "2"
 
 [workspace.package]
