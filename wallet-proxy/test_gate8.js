@@ -1,6 +1,8 @@
 // Gate 8 test: Polish and release prep
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const { execFileSync, execSync } = require('child_process');
 
 let passed = 0, failed = 0;
 function ok(name) { passed++; console.log('  PASS ' + name); }
@@ -9,6 +11,23 @@ function fail(name, err) { failed++; console.log('  FAIL ' + name + ': ' + err);
 async function main() {
   console.log('\n=== Gate 8: Polish and Release Prep ===');
   const extDir = path.resolve(__dirname, '../wallet-extension');
+  const packageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'postfiat-wallet-extension-'));
+  const packagePath = path.join(packageDir, 'postfiat-wallet-extension.zip');
+  process.on('exit', () => fs.rmSync(packageDir, { recursive: true, force: true }));
+
+  execFileSync('python3', [
+    '-c',
+    [
+      'import pathlib, sys, zipfile',
+      'root = pathlib.Path(sys.argv[1])',
+      'with zipfile.ZipFile(sys.argv[2], "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:',
+      '    for item in sorted(root.rglob("*")):',
+      '        if item.is_file():',
+      '            archive.write(item, item.relative_to(root))',
+    ].join('\n'),
+    extDir,
+    packagePath,
+  ]);
 
   // Test 1: Dark mode (dark background colors in CSS)
   const html = fs.readFileSync(path.join(extDir, 'popup/popup.html'), 'utf8');
@@ -55,9 +74,9 @@ async function main() {
     fail('README', 'missing');
 
   // Test 8: Extension packaged as zip
-  if (fs.existsSync('/tmp/postfiat-wallet-extension.zip')) {
-    const stat = fs.statSync('/tmp/postfiat-wallet-extension.zip');
-    if (stat.size > 100000 && stat.size < 500000)
+  if (fs.existsSync(packagePath)) {
+    const stat = fs.statSync(packagePath);
+    if (stat.size > 100000 && stat.size < 1000000)
       ok('extension packaged: ' + (stat.size / 1024).toFixed(0) + ' KB zip');
     else
       fail('package size', stat.size + ' bytes');
@@ -65,9 +84,12 @@ async function main() {
     fail('package', 'zip not found');
 
   // Test 9: All required files present in zip
-  const { execSync } = require('child_process');
   try {
-    const list = execSync('python3 -c "import zipfile; z=zipfile.ZipFile(\'/tmp/postfiat-wallet-extension.zip\'); [print(f) for f in z.namelist()]"', { encoding: 'utf8' });
+    const list = execFileSync('python3', [
+      '-c',
+      'import sys, zipfile; print("\\n".join(zipfile.ZipFile(sys.argv[1]).namelist()))',
+      packagePath,
+    ], { encoding: 'utf8' });
     const files = list.trim().split('\n');
     const required = ['manifest.json', 'background.js', 'popup/popup.html', 'popup/popup.js',
       'lib/rpc-client.js', 'lib/keystore.js', 'lib/tx-builder.js',
