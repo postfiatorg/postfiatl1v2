@@ -63,11 +63,13 @@ deployed or active.**
   corrected/frozen V3 ingress ELF/vkey exist and their targeted checks are
   green.
 - The legacy PFTL snapshot has been archived without mutation. The fresh
-  six-validator consensus-v2 target has now finalized through block 4 with
+  six-validator consensus-v2 target has now finalized through block 19 with
   identical block IDs, state roots, accepted receipts, and replicated files on
   all six nodes. Blocks 2-4 registered the exact Tier-4 NAV proof profile,
   created PFUSDC, and bound PFUSDC to that profile through three separate
-  certified rounds. The
+  certified rounds. Blocks 5-19 each carried one accepted certified staging
+  transfer and stop immediately before the immutable route activation height
+  20. The
   deterministic two-chain deployment manifest, exact Tier-4 NAV/route profile,
   governance bootstrap operations, constructors, predicted addresses, and code
   hashes were first frozen at `f4a199b` and were corrected at `7c0019b` after a
@@ -142,12 +144,27 @@ any plan parameter. The accepted transaction IDs are
 `6525bef33001a7e8b85cf39a995f2f6c7c51dc2ab00b6eee21df8d860043d75a74f4b828bd9da0ce5844d0910717bbe4`
 (PFUSDC creation), and
 `35e39131a909337080c6766c813eab33b0aade19540849b2cfbf133e057c0fe516d6ec60c82ff028dbe0f159074b869a`
-(NAV asset registration). All six validators are stopped at height 4 with
+(NAV asset registration). All six validators reached the bootstrap checkpoint
+at height 4 with
 state root
 `56f232665ecdb2c32cb3931965c449da209116323ec916e80247031aeb98530ee038431015e6bcf501c988221b325dcc`.
 The read-back ledger contains exactly one asset definition, one NAV proof
 profile, and one NAV asset; their asset ID, profile ID, ingress vkey, policy
 hash, route-profile hash, and source class exactly match the frozen manifest.
+
+**2026-07-18 activation-slot correction:** source enforcement requires the
+route governance batch to be committed at exactly the profile's
+`activation_height`; submitting it earlier would produce a rejected receipt.
+The controlled target therefore advanced through 15 dependency-free certified
+blocks and is stopped at height 19. Every staging receipt is `code=accepted`,
+and all six validators agree on block hash
+`a60c5c502beb7a5e36051309e6b815406ca647ce2c4c720558d4fa53eb11a04507aa3b4f734080ffe7043befb1e7ab7f`
+and state root
+`66f9e6d762299ef14515fa3157275465a6b0a2d0ad68933461b1413383cf4f4a9fc6ad32fd541fe95bc0d6a856ceb120`.
+Height 20 is reserved for the frozen route profile carrying the matching live
+finality bootstrap; its deterministic proposer is `validator-2`. Do not commit
+another staging transfer or attempt route governance before the live finality
+file exists.
 
 The corrected ingress guest, deployment-manifest generator, and frozen Sepolia
 input/manifest/bootstrap bundle are committed at `7c0019b`. The frozen input
@@ -168,8 +185,9 @@ The shortest correct path from here is:
    deterministic EVM deployment inputs—to freeze the pfUSDC asset, Tier-4 NAV
    profile, route, deployment manifest, and activation operations; then apply
    the profile/asset/NAV bootstrap through certified consensus. The controlled
-   target is converged at height 4. Route activation remains later because it
-   requires the post-deployment live finality-state capture.
+   target is now converged at height 19, immediately before activation height
+   20. Route activation remains later because it requires the post-deployment
+   live finality-state capture.
 3. Acquire only the required test assets under the $500 cap; deploy the
    Ethereum-Sepolia anchor and Arbitrum-Sepolia verifier/vault; verify every
    address, constructor value, storage binding, and runtime code hash.
@@ -459,13 +477,14 @@ all-target check now passes. There is no remaining Gate-1 compile blocker.
 - Live ingress still depends on the old observer route.
 - Live egress still depends on the old threshold-authorized route.
 - No live Tier-4 fresh-wallet round trip has been completed.
-- The controlled six-validator target is stopped and converged at height 4,
+- The controlled six-validator target is stopped and converged at height 19,
   state root
-  `56f232665ecdb2c32cb3931965c449da209116323ec916e80247031aeb98530ee038431015e6bcf501c988221b325dcc`.
+  `66f9e6d762299ef14515fa3157275465a6b0a2d0ad68933461b1413383cf4f4a9fc6ad32fd541fe95bc0d6a856ceb120`.
   Its three Tier-4 bootstrap receipts are literally `code=accepted`, and the
   ledger read-back exactly contains the frozen PFUSDC definition, Tier-4 NAV
-  profile, and PFUSDC-to-profile binding. This is activation preparation, not
-  Gate 2 or Gate 4 completion.
+  profile, and PFUSDC-to-profile binding. Fifteen subsequent certified staging
+  receipts are also accepted. Height 20 is reserved for exact route activation.
+  This is activation preparation, not Gate 2 or Gate 4 completion.
 - The approved wallet has live mainnet funding and explicit authority to spend
   up to $500 aggregate to acquire required testnet assets under Section 2.4.
   The target wallet still had zero Ethereum-Sepolia ETH and zero
@@ -830,8 +849,9 @@ Timeboxes are escalation points, not permission to weaken a gate.
    profile are frozen at `7c0019b` from those values plus the asset ID, route
    binding, constructor arguments, predicted addresses, and code hashes. The
    exact NAV profile, PFUSDC asset, and NAV binding subsequently finalized in
-   separate certified blocks 2-4; all six validators agree on height 4 and the
-   read-back ledger bindings.
+   separate certified blocks 2-4; all six validators agreed on the height-4
+   bootstrap checkpoint and read-back ledger bindings, then advanced through
+   accepted certified blocks to the height-19 activation staging checkpoint.
 5. Under the bounded real-value authorization in Section 2.4, acquire Ethereum
    Sepolia ETH, Arbitrum Sepolia ETH, and canonical Circle test USDC; deploy the
    production parent-chain anchor and asserted-L2 verifier/vault; then submit
@@ -962,16 +982,22 @@ repository-wide review:
    `VaultBridgeRouteProfileActivationV1`, and require ingress capture to advance
    from its exact retained checkpoint. Seven focused prover tests and seven
    ingress-library tests pass. Execute and validate the one live
-   `EthereumArbitrumFinalityStateV2` capture after Step 6 deploys and verifies
-   the contracts, but before route activation in Step 9.
+   `EthereumArbitrumFinalityStateV2` capture after Step 7 deploys and verifies
+   the contracts, but before route activation in Step 10.
 5. **Complete (controlled-target bootstrap):** register the exact frozen
    Tier-4 NAV profile, create PFUSDC, and bind PFUSDC to that profile through
    three dependency-safe certified rounds. All three receipts are accepted;
-   all six validators are stopped at height 4 with identical state root
+   all six validators recorded the identical height-4 bootstrap state root
    `56f232665ecdb2c32cb3931965c449da209116323ec916e80247031aeb98530ee038431015e6bcf501c988221b325dcc`.
    The committed evidence summary is
    `docs/evidence/pfusdc-tier4-controlled-target-bootstrap-20260718/summary.json`.
-6. Use the Section 2.4 authorization to acquire the minimum required Ethereum
+6. **Complete (activation staging):** advance the six-validator target through
+   accepted certified blocks 5-19 and stop before the frozen activation height.
+   All validators match at height 19; height 20 proposer is `validator-2` and
+   is reserved for the route governance batch carrying the live finality
+   bootstrap. Evidence:
+   `docs/evidence/pfusdc-tier4-activation-staging-20260718/summary.json`.
+7. Use the Section 2.4 authorization to acquire the minimum required Ethereum
    Sepolia ETH, Arbitrum Sepolia ETH, and canonical Circle test USDC. Then
    deploy/pin the production anchor on Ethereum Sepolia and verifier/vault on
    Arbitrum Sepolia, verify every constructor/read-back/code hash, and submit
@@ -982,20 +1008,22 @@ repository-wide review:
    `$1.05` native-gas orders, and obtain canonical USDC through Circle's API or
    browser faucet. Then run the guarded deployment driver; do not reopen
    provider research unless the pinned quote or contract check fails.
-7. Capture the finalized target witness using the V3 layout: Ethereum proofs for
+8. Capture the finalized target witness using the V3 layout: Ethereum proofs for
    Rollup plus parent-chain anchor, and asserted-L2 proofs for vault plus token.
    Use `pfusdc-tier4-prover ingress-capture`; it refuses to write a witness that
    fails native verification.
-8. Run `pfusdc-tier4-prover ingress-audit` once on that witness and retain its
+9. Run `pfusdc-tier4-prover ingress-audit` once on that witness and retain its
    21-case JSON rejection report.
-9. Register/activate the already-computed Tier-4 proof-policy, NAV profile,
-   governed finality state, route, and deployed address/code-hash bindings.
-10. Generate/verify the one required ingress SP1 proof from the captured witness.
+10. At exactly PFTL height 20, certify the already-computed Tier-4 proof-policy,
+   NAV profile, governed finality state, route, and deployed address/code-hash
+   bindings as one governance batch. Require literal accepted receipt and
+   six-node convergence; an earlier or later block is invalid.
+11. Generate/verify the one required ingress SP1 proof from the captured witness.
    If the proof exposes a guest defect, fix it in a new commit and explicitly
    invalidate the prior ELF/proof.
-11. Record Core Gate 2 evidence, then proceed directly to the one required egress
+12. Record Core Gate 2 evidence, then proceed directly to the one required egress
    proof for Core Gate 3.
-12. Report status only as: current core gate, core gates passed out of four,
+13. Report status only as: current core gate, core gates passed out of four,
    exact blocker, last evidence path, and next bounded action. After 4/4 core,
    report launch gates separately out of three.
 

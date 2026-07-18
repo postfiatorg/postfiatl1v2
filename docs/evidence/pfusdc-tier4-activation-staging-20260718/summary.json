@@ -1,0 +1,60 @@
+{
+  "schema": "postfiat-pfusdc-tier4-activation-staging-v1",
+  "captured_at_date_utc": "2026-07-18",
+  "source_artifact_root": "/home/postfiat/tmp/pfusdc-tier4-target-20260718/artifacts/activation-advance",
+  "chain_id": "postfiat-wan-devnet-2",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "plan_parameters_changed": false,
+  "reason": "Advance the certified controlled target to the block immediately before the frozen route activation height; the route governance batch must be committed at exactly height 20.",
+  "start_height": 4,
+  "end_height": 19,
+  "route_activation_height": 20,
+  "route_activation_proposer": "validator-2",
+  "advancement": {
+    "certified_block_count": 15,
+    "accepted_receipt_count": 15,
+    "rejected_receipt_count": 0,
+    "transaction_ids_by_height": {
+      "5": "f636edf0c34264f51adf103b0016ffbf9176ea607ef0114ff9a1d8e5dbb4095ef5f678757a9ba8d62a0cb5a6c1018d0f",
+      "6": "ef2dc1736c4c49eb2ac008f9da695b878b73a68e384dd3d4d827af337e25fd01834e25a2e538f2b0c825b4076cc62931",
+      "7": "4c2a811b5cfa4712c09932bdd6b4972850b57b92c51d0f812547cf143f6095560dd598c6efe8099c9aa72a8ef9af0f06",
+      "8": "e60ece6d3a6656aaf41c8f252170015e81fe735a19c5e7569905d1c5564d81eeac91d228992123b497b955418183a799",
+      "9": "8be8392a781173f319b8502f45d60ac9aac4520b4ca613e06d94d82c8fa3a93306253bc9bd3397bd5faddc04fdf4ff8a",
+      "10": "a7ac993ac8bb172618127091591a193a65b7dbe7209f5e78fdad667f19fc37c766fc9498ea667e2611169a202dfc77cb",
+      "11": "61dc5396ef6fee8e81b19e26a366b92a704fb8f368e9d86c1fcfb32be72e6cd639ccff0a21054c07697e1ac17c1c5065",
+      "12": "1a3ad1d80e2fb641f68c6e092b8fd69cc10f78fbe0fcf6ea345fbc272bb8c51c82ca688c87940df4eb0052f892a49cd6",
+      "13": "8709bfefda8176d1d57f1003e0b1c128413201226352920e634e4104c89739c099bccdce888a97a12420b3fb855daff3",
+      "14": "b47aa59e109382897ce60dbd0806f314b24c1743cdb6fa65b8d084c64c21d114b7a57853d18ba571916bdc35f8ea0458",
+      "15": "f8d0a258d1930dffaf32ce9fe4aeb27df734ff0656cff30dec1c56af82b875634b0b0592d463774ca9362f7786fd3f2c",
+      "16": "d8df9568e422e000d584c5cef266ca3fd0abc76dba40d6ccad1c1adda2bc4fa3fe05f30f3cf365ca05135d6c0c49cc5d",
+      "17": "7f28c1fc968e94818f8ccf4906fde709fb553a0d8dc39b6251a3a6aaa09de1b18e929cd5df4e1ff02150ef24d42a9275",
+      "18": "437c428ff77ea2923e74c3c210553e99119d2acd3f87fd7048ded7df7d70255e8acf45dbc5503c24bfbedd7e26707061",
+      "19": "09378769f3e7d1d0850abc6d47a9b31202e8317b9633fe8df0759b0b436bf5647e66dd6735c84ed791885f1ed99fc3ae"
+    },
+    "all_receipt_codes": "accepted"
+  },
+  "terminal_fleet_state": {
+    "validator_count": 6,
+    "all_processes_stopped": true,
+    "all_height": 19,
+    "all_block_hash": "a60c5c502beb7a5e36051309e6b815406ca647ce2c4c720558d4fa53eb11a04507aa3b4f734080ffe7043befb1e7ab7f",
+    "all_state_root": "66f9e6d762299ef14515fa3157275465a6b0a2d0ad68933461b1413383cf4f4a9fc6ad32fd541fe95bc0d6a856ceb120",
+    "all_receipt_count": 19,
+    "ledger_sha256": "2389661a66513c5c235d5f7037fec46ef3146a73ef4168712778dd146cfa8e4e",
+    "governance_sha256": "d14bcd98a3ce7e16f96ef63d8fec6103a8df63c7976f95534ae2d87c89c076cc",
+    "converged": true
+  },
+  "next_certified_block_contract": {
+    "height": 20,
+    "batch_kind": "governance",
+    "must_contain_frozen_route_profile": true,
+    "must_contain_live_finality_bootstrap": true,
+    "must_not_be_used_for_staging_transfer": true
+  },
+  "gate_effect": {
+    "core_gates_passed": 1,
+    "core_gates_total": 4,
+    "gate_4_closed": false,
+    "note": "Activation staging only; height 20 remains uncommitted until live contracts pass readback and the matching finality bootstrap is captured."
+  }
+}
