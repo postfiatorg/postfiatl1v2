@@ -4,7 +4,7 @@
 
 **Priority:** P0
 
-**Status:** Engineering plan; implementation not started
+**Status:** Implementation in progress on `pfusdc-tier4-20260717`; the live route remains Tier 1. See `PFUSDC-TIER4-CLOCK-CRITICAL-HANDOFF-20260718.md` for current state and execution order.
 
 **Target:** Proof-verified USDC entry and proof-verified USDC exit on the existing PFTL and StakeHub product path
 
@@ -12,7 +12,7 @@
 
 pfUSDC reaches Tier 4 only when both directions use cryptographic finality proofs:
 
-1. **USDC -> pfUSDC:** PFTL verifies that the exact `ERC20BridgeVault` deposit event exists in a successful Arbitrum One transaction and that the containing Arbitrum state is finalized through Ethereum.
+1. **USDC -> pfUSDC:** PFTL verifies that the exact canonical vault deposit output is included in a confirmed Arbitrum Nitro assertion `sendRoot`, and that assertion is confirmed under finalized Ethereum state.
 2. **pfUSDC -> USDC:** the Arbitrum vault verifies that the exact pfUSDC burn and withdrawal packet were accepted in a finalized PFTL block.
 3. Relayers transport proof material but cannot make a false deposit or withdrawal valid.
 4. A user can build and relay either proof without a bridge signer committee.
@@ -22,11 +22,20 @@ pfUSDC reaches Tier 4 only when both directions use cryptographic finality proof
    V = S + D + B - R
    ```
 
-6. StakeHub completes the existing USDC -> pfUSDC -> a651 -> pfUSDC -> USDC flow while showing the verification tier, proof state, source-finality age, receipt result, and balance changes.
-7. The threshold withdrawal verifier is not called by any Tier-4 withdrawal.
-8. Once the Tier-4 route is active, new operations cannot silently fall back to observer or threshold verification.
+6. The threshold withdrawal verifier is not called by any Tier-4 withdrawal.
+7. Once the Tier-4 route is active, new operations cannot silently fall back to observer or threshold verification.
 
 Tier 4 includes the Tier-3 entry requirement. Replacing only the exit signer set is not sufficient.
+
+Tier 4 is an evidence standard, not a frontend or demonstration standard. The
+protocol implementation is complete when both proof directions work under an
+activated no-fallback route. StakeHub polish, private-swap demonstrations,
+multi-wallet demos, and broad launch batteries are controlled-testnet release
+work after the protocol gate; they do not redefine Tier 4.
+
+The controlled-testnet product launch then carries those frozen artifacts into
+StakeHub's USDC -> pfUSDC -> a651 -> pfUSDC -> USDC flow and displays the tier,
+proof state, source-finality age, receipt result, and balance changes.
 
 ## 2. Operating assumptions
 
@@ -72,19 +81,22 @@ Tier 4 includes the Tier-3 entry requirement. Replacing only the exit signer set
 Arbitrum USDC deposit
         |
         v
-successful receipt + exact vault event
+vault measures exact token balance delta
         |
         v
-Arbitrum receipt/state proof
+canonical ArbSys L2-to-L1 deposit output
         |
         v
-confirmed Arbitrum assertion rooted in finalized Ethereum state
+exact output path into confirmed Nitro assertion sendRoot
         |
         v
-SP1 program -> Groth16 proof + PfUsdcIngressPublicValuesV1
+confirmed assertion rooted in finalized Ethereum state
         |
         v
-PFTL execution verifies proof, route, event, replay key, and recipient
+SP1 program -> Groth16 proof + PfUsdcIngressPublicValuesV2
+        |
+        v
+PFTL execution verifies proof, route, output, replay key, and recipient
         |
         v
 pfUSDC credited and bridge accounting updated
@@ -122,16 +134,17 @@ The proof path must be stateful and continuous:
 
 ## 5. Protocol artifacts to freeze first
 
-### 5.1 `PfUsdcIngressPublicValuesV1`
+### 5.1 `PfUsdcIngressPublicValuesV2`
 
 The canonical encoding must include at least:
 
 - schema and proof-program versions;
 - PFTL chain ID, genesis hash, protocol version, route profile hash, and route epoch;
 - Ethereum chain ID and finalized beacon checkpoint root/slot;
-- Arbitrum One chain ID, rollup contract address, confirmed assertion identifier, L2 block number/hash, state root, and receipts root;
+- Arbitrum One chain ID, Rollup contract address/code hash, confirmed assertion identifier, asserted L2 block hash, and assertion `sendRoot`;
+- canonical output index, item hash, sender, destination, calldata hash, L2/L1 block numbers, and timestamp;
 - vault and token addresses plus their pinned runtime code hashes;
-- transaction hash/index, successful receipt status, log index, exact event signature, and emitter;
+- production ingress-anchor address and runtime code hash;
 - depositor, PFTL recipient bytes/hash, amount atoms, nonce, route binding, and deposit ID;
 - evidence root and a domain-separated public-values commitment.
 
@@ -179,8 +192,7 @@ Required properties:
 - [ ] Freeze canonical Rust encoders for both public-value structs and `BridgeExitLeafV1`.
 - [ ] Produce Rust, SP1 guest, Solidity, and JSON conformance vectors.
 - [ ] Prove that every single-field mutation changes the relevant digest.
-- [ ] Benchmark ML-DSA-65 verification inside the SP1 guest for 5-of-6 votes, including proposal, prepare, and precommit material.
-- [ ] Benchmark the planned Arbitrum/Ethereum witness path and set explicit proof-size, witness-size, memory, and proving-time limits.
+- [ ] Set explicit proof-size, witness-size, memory, and proving-time limits from the two required release-candidate proofs. Do not generate standalone benchmark proofs on the critical path.
 
 **Exit gate:** the exact signed/committed bytes and proof public values are frozen. No prose-only binding is accepted.
 
@@ -199,11 +211,12 @@ Required properties:
 - [ ] Create a dedicated SP1 workspace/program for pfUSDC ingress rather than reusing the NAV proof program.
 - [ ] Verify Ethereum finality from the stored checkpoint to the new finalized checkpoint.
 - [ ] Verify the deployed Arbitrum One rollup contract binding and confirmed assertion/state commitment under that Ethereum state.
-- [ ] Verify the exact Arbitrum block and receipt trie inclusion.
-- [ ] Require receipt status `1`.
-- [ ] ABI-decode the exact `ERC20BridgeDepositedV2` event.
-- [ ] Recompute recipient hash, route binding, deposit ID, amount, nonce, vault, token, transaction, and log index.
-- [ ] Commit only `PfUsdcIngressPublicValuesV1`.
+- [ ] Verify the exact Nitro output leaf and Merkle path against the confirmed assertion `sendRoot` using canonical Nitro encoding or official vectors.
+- [ ] Prove that ArbOS binds the L2 sender to the executing Tier-4 vault contract.
+- [ ] Prove the Tier-4 vault and production ingress-anchor runtime code at the asserted L2 state.
+- [ ] ABI-decode the exact canonical `recordDepositV1(...)` output calldata.
+- [ ] Recompute recipient hash, route binding, deposit ID, amount, nonce, vault, token, sender, destination, output item hash, and output index.
+- [ ] Commit only `PfUsdcIngressPublicValuesV2`.
 - [ ] Generate reproducible Groth16 artifacts and record ELF hash, program vkey, verifier hash, toolchain lock, and proof encoding.
 
 ### 1C. PFTL proof verification
@@ -217,7 +230,10 @@ Required properties:
 - [ ] Preserve duplicate `deposit_id` and evidence-root rejection across restart, snapshot, replay, and route rotation.
 - [ ] Remove observer attestations from the proof-backed finalization rule. They may remain only on older pinned route epochs.
 
-**Exit gate:** a real Arbitrum deposit mints pfUSDC on a six-node local network with no observer attestation, and every mutated proof fixture rejects before balance mutation.
+**Exit gate:** a real Arbitrum deposit mints pfUSDC on a controlled PFTL target
+with no observer attestation, and every mutated proof fixture rejects before
+balance mutation. Six-validator rollout is a later controlled-testnet launch
+gate, not part of the Tier-3/Tier-4 evidence definition.
 
 ## Phase 2 — PFTL exit commitment and finality prover
 
@@ -289,7 +305,7 @@ Required properties:
 
 **Exit gate:** an Anvil/Arbitrum-fork round trip releases exact USDC from a real PFTL proof and no ECDSA withdrawal signature is requested or accepted.
 
-## Phase 4 — route activation, migration, CLI, and StakeHub
+## Phase 4 — protocol route activation, then product integration
 
 ### 4A. Route and migration
 
@@ -300,6 +316,10 @@ Required properties:
 - [ ] Deploy a fresh V2 vault/verifier pair and migrate backing through one reconciled operation with before/after balances recorded.
 - [ ] Disable new deposits and burns on the old route at the Tier-4 activation boundary.
 - [ ] Do not implement an automatic fallback from Tier 4 to the old verifier. A Tier-4 failure pauses the Tier-4 route and preserves state.
+
+**Protocol boundary:** Tier 4 is implemented when Phases 1-3 and this activated,
+no-fallback route are proven with the frozen ingress and egress artifacts. The
+CLI and StakeHub work below is controlled-testnet product integration.
 
 ### 4B. Canonical CLI
 
@@ -395,7 +415,10 @@ Run both a transparent and private flow with fresh PFTL wallets:
 
 ## 7. Required tests and commands
 
-Every implementation phase records the exact commands and outputs. The minimum guarding set is:
+During protocol implementation, run the smallest targeted command for the code
+just changed. Do not use the following workspace battery for debugging and do
+not run it through GitHub Actions. Run it locally once, after the four protocol
+gates are green, for the immutable controlled-testnet launch candidate:
 
 ```bash
 cargo fmt --all -- --check
@@ -405,14 +428,19 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 forge test --root crates/ethereum-contracts -vv
 ```
 
-Additional required gates:
+Core protocol gates require:
 
 - SP1 guest unit tests and deterministic ELF/vkey regeneration;
 - Rust/Solidity/public-values conformance vectors;
 - property tests for canonical encodings and Merkle construction;
-- fuzzing of RLP, trie, public-value, certificate, and ABI decoders;
-- six-validator deterministic replay and snapshot restore;
+- explicitly bounded fuzz/invariant tests for the affected trie, public-value,
+  certificate, and ABI decoders; no open-ended fuzzer or soak run;
 - Arbitrum fork deployment and exact USDC balance-delta tests;
+- one real ingress proof and one real egress proof from the frozen guests.
+
+Controlled-testnet launch gates additionally require:
+
+- six-validator deterministic replay and snapshot restore;
 - StakeHub backend and browser regression tests;
 - full round-trip evidence bundle with file hashes.
 
@@ -446,25 +474,33 @@ The shortest safe implementation order is:
 2. add and activate the consensus-bound bridge-exit root;
 3. build the PFTL-finality SP1 guest and EVM verifier;
 4. build the Arbitrum/Ethereum-finality SP1 guest and PFTL verifier path;
-5. deploy the proof-native vault and route profile;
-6. replace signer/observer steps in CLI and StakeHub;
-7. run adversarial, recovery, and two-wallet end-to-end batteries;
-8. activate Tier 4 and retire creation of old-route operations.
+5. deploy the proof-native vault and activate the no-fallback Tier-4 route;
+6. record the Tier-4 protocol result against the frozen artifacts;
+7. replace signer/observer steps in CLI and StakeHub;
+8. run controlled-testnet adversarial, recovery, and two-wallet launch batteries.
 
 Work on ingress and egress proof guests can run in parallel after Phase 0 freezes the shared encodings. Contract and StakeHub work can proceed against conformance fixtures before the proof systems finish.
 
-## 10. Completion checklist
+## 10. Completion checklists
+
+### Tier-4 protocol implementation
 
 - [ ] Real Arbitrum/Ethereum finality proof verified by PFTL execution.
 - [ ] Real PFTL consensus-v2 finality proof verified by Arbitrum contract.
 - [ ] Accepted receipt code proven in both directions.
 - [ ] PFTL committee rotation followed through proof.
-- [ ] Route/vkey rotation versioned and replay-safe.
 - [ ] No observer required for new deposits.
 - [ ] No threshold signer required for new withdrawals.
 - [ ] No automatic downgrade or fallback.
+- [ ] Exact conservation holds across the proof-verified ingress and egress.
+- [ ] The controlled-target Tier-4 route is activated and the core evidence
+      manifest records its frozen artifact hashes.
+
+### Controlled-testnet product launch
+
+- [ ] Route/vkey rotation is versioned and replay-safe.
 - [ ] Exact conservation holds across two fresh-wallet round trips.
 - [ ] StakeHub makes proof tier, age, state, result, and value movement visible.
 - [ ] CLI and self-relay paths are parameterized and reproducible.
 - [ ] Local, fork, six-node, restart, partition, replay, fuzz, and browser gates pass.
-- [ ] Tier-4 activation and evidence manifests are recorded.
+- [ ] The controlled-testnet launch evidence manifests are recorded.
