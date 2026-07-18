@@ -18,6 +18,8 @@ const INGRESS_ELF: Elf = Elf::Static(include_bytes!(
     "../../../programs/pfusdc-ingress/elf/pfusdc-ingress-program"
 ));
 
+mod ingress_capture;
+
 #[derive(Debug, Parser)]
 #[command(name = "pfusdc-tier4-prover")]
 #[command(about = "Proof builder for the proof-native pfUSDC Tier-4 route")]
@@ -34,6 +36,10 @@ enum Command {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    /// Capture and natively verify one finalized Ethereum/Arbitrum ingress witness.
+    IngressCapture(ingress_capture::IngressCaptureArgs),
+    /// Run the bounded security-field mutation matrix against a captured witness.
+    IngressAudit(ingress_capture::IngressAuditArgs),
     /// Execute or Groth16-prove a canonical Ethereum/Arbitrum ingress witness.
     Ingress {
         #[arg(long)]
@@ -69,6 +75,8 @@ async fn main() -> Result<()> {
     let args = Args::parse();
     match args.command {
         Command::ProgramInfo { output } => program_info(output).await,
+        Command::IngressCapture(capture) => ingress_capture::capture(capture).await,
+        Command::IngressAudit(audit) => ingress_capture::audit(audit),
         Command::Ingress {
             witness,
             output_dir,

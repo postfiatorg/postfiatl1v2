@@ -64,6 +64,7 @@ dependencies = [
  "alloy-consensus",
  "alloy-core",
  "alloy-eips",
+ "alloy-genesis",
  "alloy-network",
  "alloy-rpc-types",
  "alloy-serde",
@@ -151,8 +152,11 @@ version = "1.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23e8604b0c092fabc80d075ede181c9b9e596249c70b99253082d7e689836529"
 dependencies = [
+ "alloy-dyn-abi",
+ "alloy-json-abi",
  "alloy-primitives",
  "alloy-rlp",
+ "alloy-sol-types",
 ]
 
 [[package]]
@@ -247,6 +251,21 @@ dependencies = [
  "serde",
  "serde_with",
  "sha2 0.10.9",
+]
+
+[[package]]
+name = "alloy-genesis"
+version = "1.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbf9480307b09d22876efb67d30cadd9013134c21f3a17ec9f93fd7536d38024"
+dependencies = [
+ "alloy-eips",
+ "alloy-primitives",
+ "alloy-serde",
+ "alloy-trie",
+ "borsh",
+ "serde",
+ "serde_with",
 ]
 
 [[package]]
@@ -582,27 +601,27 @@ dependencies = [
 
 [[package]]
 name = "alloy-sol-macro-expander"
-version = "1.6.1"
+version = "1.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6277c780e07b76951e09a59788dde230d1582612324177d11a43a61e21a6bb83"
+checksum = "489f1620bb7e2483fb5819ed01ab6edc1d2f93939dce35a5695085a1afd1d699"
 dependencies = [
  "alloy-sol-macro-input",
  "const-hex",
  "heck",
  "indexmap 2.14.0",
- "proc-macro-error3",
+ "proc-macro-error2",
  "proc-macro2",
  "quote",
- "sha3 0.11.0",
+ "sha3 0.10.9",
  "syn 2.0.119",
  "syn-solidity",
 ]
 
 [[package]]
 name = "alloy-sol-macro-input"
-version = "1.6.1"
+version = "1.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9762b2ad3e5a0c09886de54fe549ab0056681df843cb082e2df7e1c0eb270d30"
+checksum = "56cef806ad22d4392c5fc83cf8f2089f988eb99c7067b4e0c6f1971fc1cca318"
 dependencies = [
  "const-hex",
  "dunce",
@@ -2870,7 +2889,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4012,9 +4031,9 @@ dependencies = [
 
 [[package]]
 name = "macro-string"
-version = "0.2.0"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59a9dbbfc75d2688ed057456ce8a3ee3f48d12eec09229f560f3643b9f275653"
+checksum = "1b27834086c65ec3f9387b096d66e99f221cf081c2b738042aa252bcd41204e3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4144,7 +4163,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4801,17 +4820,25 @@ dependencies = [
 name = "pfusdc-tier4-prover"
 version = "0.1.0"
 dependencies = [
+ "alloy",
+ "alloy-rlp",
+ "alloy-sol-types",
+ "alloy-trie",
  "anyhow",
  "bincode",
  "clap",
+ "helios-consensus-core",
  "hex",
  "pfusdc-ingress-program",
  "postfiat-pfusdc-proofs",
  "postfiat-types",
+ "reqwest",
+ "serde",
  "serde_cbor",
  "serde_json",
  "sha2 0.10.9",
  "sha3 0.10.9",
+ "sp1-helios-primitives",
  "sp1-sdk",
  "tokio",
 ]
@@ -5025,34 +5052,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "proc-macro-error-attr3"
-version = "3.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82366fd7d8b7a440d66d13418820c69df9b3908bcb1a0476d7f5ce5d12f5a04d"
-dependencies = [
- "proc-macro2",
- "quote",
-]
-
-[[package]]
 name = "proc-macro-error2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11ec05c52be0a07b08061f7dd003e7d7092e0472bc731b4af7bb1ef876109802"
 dependencies = [
  "proc-macro-error-attr2",
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
-name = "proc-macro-error3"
-version = "3.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b511283ea8a74b4b39447b128c5d00f03a356b7424554b13e298a5550100d9ac"
-dependencies = [
- "proc-macro-error-attr3",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -5103,7 +5108,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
 dependencies = [
  "heck",
- "itertools 0.14.0",
+ "itertools 0.12.1",
  "log",
  "multimap",
  "once_cell",
@@ -5123,7 +5128,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.12.1",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -5197,7 +5202,7 @@ dependencies = [
  "once_cell",
  "socket2 0.6.5",
  "tracing",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5644,7 +5649,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -7505,7 +7510,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
