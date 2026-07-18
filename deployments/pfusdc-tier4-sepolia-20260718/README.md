@@ -50,6 +50,7 @@ The frozen file hashes are:
 ```text
 input.json     7a507e956198c3f35f4ea1e22e68629ced5118866237e51fa9fd0ca57ddd5bc9
 manifest.json  efc94f6f426a89f6e8581af95e6f95e0138a312bf3b06ac7113134ffd0af3ada
+route-profile.json dae9d7e4adf3c0152859be53912cee06a111f8b5459e4a695921fe61cf9bbec9
 funding-route.json c65edb1d09dc46e7e589888d57381633037b40a1e86e7dba916775bb8431bf3d
 ```
 
@@ -114,6 +115,24 @@ Route activation must carry that exact file. The later `ingress-capture`
 command requires it through `--prior-finality-state` and refuses to write a
 witness unless the proof starts from that retained root/slot and can advance
 the governed state.
+
+Create the activation amendment and governance batch from the exact standalone
+profile (which is byte-for-byte equivalent to `manifest.json`'s profile) and
+the captured finality file:
+
+```sh
+target/debug/postfiat-node vault-bridge-route-profile-governance \
+  --data-dir "$PFTL_DATA_DIR" \
+  --validators validator-0,validator-1,validator-2,validator-3,validator-4,validator-5 \
+  --support validator-0,validator-1,validator-2,validator-3,validator-4,validator-5 \
+  --profile-file deployments/pfusdc-tier4-sepolia-20260718/route-profile.json \
+  --tier4-finality-bootstrap-file docs/evidence/pfusdc-tier4-finality-live/bootstrap.json \
+  --amendment-file docs/evidence/pfusdc-tier4-finality-live/route-amendment.json \
+  --batch-file docs/evidence/pfusdc-tier4-finality-live/route-governance-batch.json
+```
+
+Submit that batch through the normal certified six-validator path; do not apply
+it directly or omit the finality bootstrap.
 
 ## Live funding route
 
