@@ -60,6 +60,51 @@ contract Tier4TemporaryFinality is IPFTLFinalityVerifierV1 {
     }
 }
 
+contract Tier4FixedFinality is IPFTLFinalityVerifierV1 {
+    address private immutable recipient;
+    uint256 private immutable amount;
+
+    constructor(address recipient_, uint256 amount_) {
+        recipient = recipient_;
+        amount = amount_;
+    }
+
+    function verifyAndConsume(bytes calldata, bytes calldata)
+        external
+        view
+        returns (address, uint256, bytes32, bytes32, bytes32)
+    {
+        return (recipient, amount, keccak256("fee-withdrawal"), keccak256("fee-burn"), keccak256("fee-packet"));
+    }
+}
+
+contract Tier4FeeToken is IERC20BridgeTokenV2 {
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+
+    function mint(address to, uint256 amount) external {
+        balanceOf[to] += amount;
+    }
+
+    function approve(address spender, uint256 amount) external returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        return true;
+    }
+
+    function transfer(address to, uint256 amount) external returns (bool) {
+        balanceOf[msg.sender] -= amount;
+        balanceOf[to] += amount - 1;
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+        allowance[from][msg.sender] -= amount;
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount - 1;
+        return true;
+    }
+}
+
 contract Tier4MockArbSys is IArbSysPfUsdcV1 {
     address public destination;
     bytes public data;
@@ -382,6 +427,87 @@ contract PFUSDCTier4Test {
             address(verifier).call(abi.encodeCall(PFTLFinalityVerifierV1.advanceCheckpoint, (valid, hex"01020304")));
         _assertTrue(!proofOk, "invalid checkpoint proof must fail");
         _assertEq(verifier.latestFinalizedHeight(), 10, "invalid checkpoint proof does not mutate");
+    }
+
+    function testNonExactTokenDeltasRevertIngressAndEgressAtomically() public {
+        Tier4FeeToken feeToken = new Tier4FeeToken();
+        Tier4TemporaryFinality temporary = new Tier4TemporaryFinality();
+        ERC20BridgeVaultV2 ingressVault = new ERC20BridgeVaultV2(
+            feeToken, temporary, address(feeToken).codehash, arbSys, address(ingressAnchor), address(this)
+        );
+        feeToken.mint(address(this), 100);
+        feeToken.approve(address(ingressVault), 100);
+        (bool depositOk,) = address(ingressVault)
+            .call(
+                abi.encodeCall(
+                    ERC20BridgeVaultV2.depositV2,
+                    (100, "pf-fee-recipient", keccak256("fee-deposit"), keccak256("fee-route"))
+                )
+            );
+        _assertTrue(!depositOk, "fee token ingress accepted");
+        _assertEq(feeToken.balanceOf(address(this)), 100, "fee ingress changed sender");
+        _assertEq(feeToken.balanceOf(address(ingressVault)), 0, "fee ingress changed vault");
+
+        Tier4FixedFinality fixedFinality = new Tier4FixedFinality(RECIPIENT, 100);
+        ERC20BridgeVaultV2 egressVault = new ERC20BridgeVaultV2(
+            feeToken, fixedFinality, address(feeToken).codehash, arbSys, address(ingressAnchor), address(this)
+        );
+        feeToken.mint(address(egressVault), 100);
+        (bool withdrawalOk,) =
+            address(egressVault).call(abi.encodeCall(ERC20BridgeVaultV2.withdrawWithProof, (hex"01", hex"01")));
+        _assertTrue(!withdrawalOk, "fee token egress accepted");
+        _assertEq(feeToken.balanceOf(address(egressVault)), 100, "fee egress changed vault");
+        _assertEq(feeToken.balanceOf(RECIPIENT), 0, "fee egress changed recipient");
+    }
+
+    function testFuzzMalformedPublicValuesCannotMutate(bytes memory publicValues, bytes memory proof) public {
+        uint256 vaultBefore = token.balanceOf(address(vault));
+        uint256 recipientBefore = token.balanceOf(RECIPIENT);
+        (bool ok,) = address(vault).call(abi.encodeCall(ERC20BridgeVaultV2.withdrawWithProof, (publicValues, proof)));
+        _assertTrue(!ok, "malformed public values unexpectedly withdrew");
+        _assertEq(token.balanceOf(address(vault)), vaultBefore, "malformed public values changed vault");
+        _assertEq(token.balanceOf(RECIPIENT), recipientBefore, "malformed public values changed recipient");
+    }
+
+    function testFuzzRejectedSP1ProofCannotMutate(bytes memory proof) public {
+        sp1.setReject(true);
+        bytes memory publicValues = _publicValues(address(vault), true, 11, _h48(0x44), _h32(0x99));
+        uint256 vaultBefore = token.balanceOf(address(vault));
+        uint256 recipientBefore = token.balanceOf(RECIPIENT);
+        (bool ok,) = address(vault).call(abi.encodeCall(ERC20BridgeVaultV2.withdrawWithProof, (publicValues, proof)));
+        _assertTrue(!ok, "rejected SP1 proof unexpectedly withdrew");
+        _assertEq(verifier.latestFinalizedHeight(), 10, "rejected SP1 proof changed checkpoint");
+        _assertEq(token.balanceOf(address(vault)), vaultBefore, "rejected SP1 proof changed vault");
+        _assertEq(token.balanceOf(RECIPIENT), recipientBefore, "rejected SP1 proof changed recipient");
+    }
+
+    function testFuzzExactDepositDeltaAndReplay(uint64 rawAmount, bytes32 nonceSeed, bytes32 routeSeed) public {
+        uint256 amount = uint256(rawAmount) + 1;
+        bytes32 routeBinding = keccak256(abi.encode("pfusdc-fuzz-route", routeSeed));
+        token.mint(address(this), amount);
+        token.approve(address(vault), amount);
+        uint256 walletBefore = token.balanceOf(address(this));
+        uint256 vaultBefore = token.balanceOf(address(vault));
+        bytes32 depositId = vault.depositV2(amount, "pf-fuzz-recipient", nonceSeed, routeBinding);
+        _assertTrue(vault.depositSeen(depositId), "fuzz deposit replay key missing");
+        _assertEq(walletBefore - token.balanceOf(address(this)), amount, "fuzz deposit wallet delta");
+        _assertEq(token.balanceOf(address(vault)) - vaultBefore, amount, "fuzz deposit vault delta");
+
+        uint256 walletAfter = token.balanceOf(address(this));
+        uint256 vaultAfter = token.balanceOf(address(vault));
+        (bool replayOk,) = address(vault)
+            .call(abi.encodeCall(ERC20BridgeVaultV2.depositV2, (amount, "pf-fuzz-recipient", nonceSeed, routeBinding)));
+        _assertTrue(!replayOk, "fuzz deposit replay accepted");
+        _assertEq(token.balanceOf(address(this)), walletAfter, "fuzz replay changed wallet");
+        _assertEq(token.balanceOf(address(vault)), vaultAfter, "fuzz replay changed vault");
+    }
+
+    function invariantFrozenTier4BindingsRemainPinned() public view {
+        _assertTrue(address(vault.token()) == address(token), "vault token binding changed");
+        _assertTrue(address(vault.finalityVerifier()) == address(verifier), "vault verifier binding changed");
+        _assertTrue(vault.tokenRuntimeCodeHash() == address(token).codehash, "vault token code hash changed");
+        _assertTrue(address(verifier.sp1Verifier()) == address(sp1), "SP1 verifier binding changed");
+        _assertTrue(verifier.programVKey() == PROGRAM_VKEY, "program vkey changed");
     }
 
     function _publicValues(

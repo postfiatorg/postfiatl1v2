@@ -1,0 +1,15 @@
+2026-07-18 pfUSDC Tier-4 Gate 4 bounded contract prerequisite
+
+PASS  ARBITRUM_SEPOLIA_RPC_URL=https://sepolia-rollup.arbitrum.io/rpc ETHEREUM_SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com forge test --root crates/ethereum-contracts --match-contract PFUSDCTier4PinnedForkTest -vv
+      2 passed; 0 failed; pinned blocks 288769892 and 11298882
+
+PASS  forge test --root crates/ethereum-contracts --match-contract PFUSDCTier4Test --match-test 'testFuzz' --fuzz-runs 64 -vv
+      3 tests; 64 runs each; 192 generated cases; 0 failed
+
+PASS  FOUNDRY_INVARIANT_RUNS=32 FOUNDRY_INVARIANT_DEPTH=32 forge test --root crates/ethereum-contracts --match-contract PFUSDCTier4Test --match-test invariantFrozenTier4BindingsRemainPinned -vv
+      32 runs; 1024 calls; 701 expected reverts; 0 invariant failures
+
+PASS  forge test --root crates/ethereum-contracts --match-contract PFUSDCTier4Test --match-test testNonExactTokenDeltasRevertIngressAndEgressAtomically -vv
+      1 passed; 0 failed
+
+No SP1 proof was generated. No transaction was signed or broadcast.

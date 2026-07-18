@@ -230,6 +230,18 @@ audit command was smoke-verified on a valid committee-rotation fixture with
 the live EVM proof/withdrawal replay check remains part of the one egress proof
 submission.
 
+The bounded Gate-4 contract prerequisite is also complete without a live
+transaction or proof. The exact frozen Arbitrum-Sepolia and Ethereum-Sepolia
+fork suite passed 2/2 at pinned blocks `288769892` and `11298882`; three Tier-4
+fuzz tests passed 64 runs each (192 generated cases); the immutable-binding
+invariant passed 32 runs and 1,024 calls; and the non-exact token-delta test
+proved fee-on-transfer/rebasing-like ingress and egress behavior reverts
+atomically. Evidence is recorded in
+`docs/evidence/pfusdc-tier4-gate4-bounded-contract-20260718/`. This closes only
+the bounded fork/fuzz/invariant prerequisite. Gate 4 remains open until the
+production contracts are deployed/read back, the exact route is activated,
+and both live proof artifacts are verified against it.
+
 The corrected ingress guest, deployment-manifest generator, and frozen Sepolia
 input/manifest/bootstrap bundle are committed at `7c0019b`. The frozen input
 SHA-256 is
