@@ -108,14 +108,14 @@ then launch gates passed out of three. Gates 5-7 must not delay work on Gates
 ```text
 worktree: /home/postfiat/repos/postfiatl1v2-public-main-verification-20260717
 branch:   pfusdc-tier4-20260717
-last verified code commit: 69a056f5 (host witness capture/audit)
+last verified code commit: fd70c9c (anchor deployment hash-cycle fix)
 V3 guest freeze commit:    0b68a5be71c80d1cdc89d12e5c7cfe77b1eb831f
 base:     cc23185
 remote:   https://github.com/postfiatorg/postfiatl1v2.git
 public main observed 2026-07-18: 66de35034c46dabe46302e2abbeead23a438d3d0
 ```
 
-There are 22 Tier-4 commits through the host capture commit. The corrected Nitro-output ingress is
+There are 23 Tier-4 commits through the anchor hash-cycle fix. The corrected Nitro-output ingress is
 committed at `ce511818eab246d59d3aed66e4628c5f9045d802`; the storage integration
 fixture repair is committed at `887d98280bf9ff755966c322e156aaa1aee8794e`.
 Public `main` is two CI-only commits ahead of the branch base
