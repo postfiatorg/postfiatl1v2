@@ -2551,10 +2551,10 @@ fn vault_bridge_bucket_impairment_factor_is_deterministic() {
         .expect("impaired bucket with exact factor");
 }
 
-fn pfusdc_ingress_public_values_fixture() -> PfUsdcIngressPublicValuesV1 {
-    let mut values = PfUsdcIngressPublicValuesV1 {
-        schema: PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V1.to_string(),
-        proof_program_version: 1,
+fn pfusdc_ingress_public_values_fixture() -> PfUsdcIngressPublicValuesV2 {
+    let mut values = PfUsdcIngressPublicValuesV2 {
+        schema: PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V2.to_string(),
+        proof_program_version: 2,
         pftl_chain_id: "postfiat-devnet".to_string(),
         pftl_genesis_hash: "01".repeat(48),
         pftl_protocol_version: 1,
@@ -2568,20 +2568,19 @@ fn pfusdc_ingress_public_values_fixture() -> PfUsdcIngressPublicValuesV1 {
         arbitrum_chain_id: 42_161,
         arbitrum_rollup_address: "0x1111111111111111111111111111111111111111".to_string(),
         arbitrum_assertion_hash: "04".repeat(32),
-        l2_block_number: 98_765,
-        l2_block_hash: "05".repeat(32),
-        l2_state_root: "06".repeat(32),
-        l2_receipts_root: "07".repeat(32),
+        assertion_l2_block_hash: "05".repeat(32),
+        assertion_send_root: "06".repeat(32),
+        output_index: 3,
+        output_item_hash: "07".repeat(32),
+        output_l2_block_number: 98_765,
+        output_l1_block_number: 22_345_678,
+        output_timestamp: 1_700_000_000,
+        output_destination: "0x5555555555555555555555555555555555555555".to_string(),
+        output_calldata_hash: "08".repeat(32),
         vault_address: "0x2222222222222222222222222222222222222222".to_string(),
-        vault_runtime_code_hash: "08".repeat(32),
+        vault_runtime_code_hash: "09".repeat(32),
         token_address: "0x3333333333333333333333333333333333333333".to_string(),
-        token_runtime_code_hash: "09".repeat(32),
-        transaction_hash: "0a".repeat(32),
-        transaction_index: 3,
-        receipt_status: 1,
-        log_index: 2,
-        event_signature: VAULT_BRIDGE_V2_DEPOSIT_EVENT_TOPIC.to_string(),
-        event_emitter: "0x2222222222222222222222222222222222222222".to_string(),
+        token_runtime_code_hash: "0a".repeat(32),
         depositor: "0x4444444444444444444444444444444444444444".to_string(),
         pftl_recipient: "pfrecipient000000000000000000000000000000000".to_string(),
         pftl_recipient_hash: "0b".repeat(32),
@@ -2602,20 +2601,20 @@ fn pfusdc_ingress_public_values_round_trip_is_canonical_and_strict() {
     let bytes = values
         .canonical_bytes_without_commitment()
         .expect("canonical ingress bytes");
-    let decoded = PfUsdcIngressPublicValuesV1::from_canonical_bytes(&bytes)
+    let decoded = PfUsdcIngressPublicValuesV2::from_canonical_bytes(&bytes)
         .expect("strict ingress decode");
     assert_eq!(decoded, values);
 
     let mut trailing = bytes.clone();
     trailing.push(0);
-    assert!(PfUsdcIngressPublicValuesV1::from_canonical_bytes(&trailing).is_err());
+    assert!(PfUsdcIngressPublicValuesV2::from_canonical_bytes(&trailing).is_err());
 
     let mut wrong_tag = bytes.clone();
     let first_tag = b"PFTL-PFUSDC-TIER4".len()
         + 4
-        + PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V1.len();
+        + PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V2.len();
     wrong_tag[first_tag + 1] = 2;
-    assert!(PfUsdcIngressPublicValuesV1::from_canonical_bytes(&wrong_tag).is_err());
+    assert!(PfUsdcIngressPublicValuesV2::from_canonical_bytes(&wrong_tag).is_err());
 }
 
 #[test]
@@ -2631,14 +2630,13 @@ fn pfusdc_ingress_commitment_changes_for_each_field_class() {
     value.ethereum_finalized_beacon_root = "10".repeat(32);
     mutations.push(value);
     let mut value = original.clone();
-    value.l2_receipts_root = "11".repeat(32);
+    value.assertion_send_root = "11".repeat(32);
     mutations.push(value);
     let mut value = original.clone();
     value.vault_address = "0x5555555555555555555555555555555555555555".to_string();
-    value.event_emitter = value.vault_address.clone();
     mutations.push(value);
     let mut value = original.clone();
-    value.transaction_hash = "12".repeat(32);
+    value.output_item_hash = "12".repeat(32);
     mutations.push(value);
     let mut value = original.clone();
     value.amount_atoms += 1;
@@ -2671,10 +2669,8 @@ fn pfusdc_finality_state_requires_retained_ancestry_and_monotonic_advance() {
             .clone(),
         ethereum_finalized_slot: values.prior_ethereum_finalized_slot,
         arbitrum_assertion_hash: "20".repeat(32),
-        l2_block_number: values.l2_block_number - 1,
-        l2_block_hash: "21".repeat(32),
-        l2_state_root: "22".repeat(32),
-        l2_receipts_root: "23".repeat(32),
+        assertion_l2_block_hash: "21".repeat(32),
+        assertion_send_root: "22".repeat(32),
     };
     let mut state = EthereumArbitrumFinalityStateV1 {
         schema: ETHEREUM_ARBITRUM_FINALITY_STATE_SCHEMA_V1.to_string(),
@@ -2711,6 +2707,6 @@ fn pfusdc_finality_state_requires_retained_ancestry_and_monotonic_advance() {
     assert!(state.verify_and_advance(&unknown_parent).is_err());
 
     let mut conflict = values.clone();
-    conflict.l2_state_root = "26".repeat(32);
+    conflict.assertion_send_root = "26".repeat(32);
     assert!(state.verify_and_advance(&conflict).is_err());
 }

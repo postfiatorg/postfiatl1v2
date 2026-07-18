@@ -1,14 +1,12 @@
 use alloy_primitives::{keccak256, Address, Bytes, B256, U256};
-use alloy_rlp::{Decodable, Header, PayloadView};
 use alloy_sol_types::{sol, SolValue};
-use alloy_trie::{proof, Nibbles};
 use helios_consensus_core::{
     apply_finality_update, apply_update, verify_finality_update, verify_update,
 };
 use postfiat_types::{
-    vault_bridge_deposit_evidence_root, vault_bridge_route_binding, EthereumReceiptProofV1,
-    PfUsdcIngressPublicValuesV1, VaultBridgeDepositEvidence, VaultBridgeRouteProfileV1,
-    NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1, PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V1,
+    vault_bridge_deposit_evidence_root, vault_bridge_route_binding, PfUsdcIngressPublicValuesV2,
+    VaultBridgeDepositEvidence, VaultBridgeRouteProfileV1,
+    NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1, PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V2,
     VAULT_BRIDGE_EVIDENCE_TIER_RECEIPT_PROVEN,
 };
 use serde::{Deserialize, Serialize};
@@ -21,7 +19,7 @@ use tree_hash::TreeHash;
 
 pub const PFUSDC_INGRESS_PROOF_WITNESS_SCHEMA_V1: &str = "postfiat.pfusdc.ingress_proof_witness.v1";
 pub const PFUSDC_INGRESS_PROOF_POLICY_SCHEMA_V1: &str = "postfiat.pfusdc.ingress_proof_policy.v1";
-pub const PFUSDC_INGRESS_PROOF_PROGRAM_VERSION_V1: u32 = 1;
+pub const PFUSDC_INGRESS_PROOF_PROGRAM_VERSION_V2: u32 = 2;
 pub const ETHEREUM_MAINNET_CHAIN_ID: u64 = 1;
 pub const ETHEREUM_MAINNET_GENESIS_VALIDATORS_ROOT: B256 = B256::new([
     0x4b, 0x36, 0x3d, 0xb9, 0x4e, 0x28, 0x61, 0x20, 0xd7, 0x6e, 0xb9, 0x05, 0x34, 0x0f, 0xdd, 0x4e,
@@ -30,9 +28,8 @@ pub const ETHEREUM_MAINNET_GENESIS_VALIDATORS_ROOT: B256 = B256::new([
 const MAX_HELIOS_UPDATES_V1: usize = 8;
 const MAX_MPT_NODES_V1: usize = 64;
 const MAX_MPT_NODE_BYTES_V1: usize = 16_384;
-const MAX_L2_HEADER_BYTES_V1: usize = 4_096;
-const MAX_TRANSACTION_BYTES_V1: usize = 131_072;
-const MAX_RECEIPT_BYTES_V1: usize = 131_072;
+const MAX_OUTPUT_PROOF_NODES_V1: usize = 64;
+const MAX_OUTPUT_CALLDATA_BYTES_V1: usize = 2_048;
 
 sol! {
     struct NitroGlobalStateV1 {
@@ -57,6 +54,20 @@ pub struct PfUsdcIngressProofPolicyV1 {
     pub arbitrum_rollup_address: Address,
     pub arbitrum_rollup_runtime_code_hash: B256,
     pub rollup_latest_confirmed_storage_slot: B256,
+    pub arbitrum_ingress_anchor_address: Address,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NitroSendWitnessV1 {
+    pub output_index: u64,
+    pub output_proof: Vec<B256>,
+    pub l2_sender: Address,
+    pub destination: Address,
+    pub l2_block_number: u64,
+    pub l1_block_number: u64,
+    pub timestamp: u64,
+    pub value: U256,
+    pub calldata: Bytes,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -79,13 +90,7 @@ pub struct PfUsdcIngressProofWitnessV1 {
     pub helios: ProofInputs,
     pub rollup_storage: ContractStorage,
     pub assertion: NitroAssertionWitnessV1,
-    pub l2_header_rlp: Bytes,
-    pub l2_transaction_rlp: Bytes,
-    pub l2_transaction_index: u64,
-    pub l2_transaction_proof: Vec<Bytes>,
-    pub l2_receipt_rlp: Bytes,
-    pub l2_receipt_proof: Vec<Bytes>,
-    pub event_log_index: u64,
+    pub output: NitroSendWitnessV1,
     pub evidence: VaultBridgeDepositEvidence,
     pub pftl_chain_id: String,
     pub pftl_genesis_hash: String,
@@ -94,7 +99,7 @@ pub struct PfUsdcIngressProofWitnessV1 {
 
 pub fn verify_ingress_witness_v1(
     witness: &PfUsdcIngressProofWitnessV1,
-) -> Result<PfUsdcIngressPublicValuesV1, String> {
+) -> Result<PfUsdcIngressPublicValuesV2, String> {
     validate_bounds(witness)?;
     witness.route_profile.validate()?;
     witness.evidence.validate()?;
@@ -108,51 +113,12 @@ pub fn verify_ingress_witness_v1(
         &witness.policy,
         &witness.assertion,
     )?;
-    let header = decode_l2_header(&witness.l2_header_rlp)?;
-    if header.block_hash != witness.assertion.block_hash {
-        return Err("Nitro assertion does not bind the supplied L2 header".to_string());
-    }
-
-    let transaction_key = alloy_rlp::encode(witness.l2_transaction_index);
-    proof::verify_proof(
-        header.transactions_root,
-        Nibbles::unpack(Bytes::from(transaction_key)),
-        Some(witness.l2_transaction_rlp.to_vec()),
-        &witness.l2_transaction_proof,
-    )
-    .map_err(|error| format!("invalid Arbitrum transaction trie proof: {error}"))?;
-    let transaction_hash = keccak256(&witness.l2_transaction_rlp);
-
-    let receipt_proof = EthereumReceiptProofV1 {
-        transaction_index: witness.l2_transaction_index,
-        receipt_rlp: witness.l2_receipt_rlp.to_vec(),
-        proof_nodes_rlp: witness
-            .l2_receipt_proof
-            .iter()
-            .map(|node| node.to_vec())
-            .collect(),
-    };
-    let log_index = usize::try_from(witness.event_log_index)
-        .map_err(|_| "Arbitrum transaction-local log index exceeds usize".to_string())?;
-    let log = postfiat_bridge::verify_ethereum_receipt_log(
-        header.receipts_root.0,
-        &receipt_proof,
-        log_index,
-    )
-    .map_err(|error| format!("invalid successful Arbitrum receipt/log proof: {error}"))?;
-    verify_deposit_event(&log, &witness.evidence, &witness.route_profile)?;
-
-    if witness.evidence.block_hash != hex32(header.block_hash)
-        || witness.evidence.tx_hash != hex32(transaction_hash)
-        || witness.evidence.log_index != witness.event_log_index
-    {
-        return Err("deposit evidence does not match proved block/transaction/log".to_string());
-    }
+    let output_item_hash = verify_confirmed_deposit_output(witness)?;
     let profile_hash = witness.route_profile.profile_hash()?;
     let evidence_root = vault_bridge_deposit_evidence_root(&witness.evidence)?;
-    let mut values = PfUsdcIngressPublicValuesV1 {
-        schema: PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V1.to_string(),
-        proof_program_version: PFUSDC_INGRESS_PROOF_PROGRAM_VERSION_V1,
+    let mut values = PfUsdcIngressPublicValuesV2 {
+        schema: PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V2.to_string(),
+        proof_program_version: PFUSDC_INGRESS_PROOF_PROGRAM_VERSION_V2,
         pftl_chain_id: witness.pftl_chain_id.clone(),
         pftl_genesis_hash: witness.pftl_genesis_hash.clone(),
         pftl_protocol_version: witness.pftl_protocol_version,
@@ -166,20 +132,19 @@ pub fn verify_ingress_witness_v1(
         arbitrum_chain_id: witness.policy.arbitrum_chain_id,
         arbitrum_rollup_address: witness.policy.arbitrum_rollup_address.to_string(),
         arbitrum_assertion_hash: hex32(assertion_hash),
-        l2_block_number: header.number,
-        l2_block_hash: hex32(header.block_hash),
-        l2_state_root: hex32(header.state_root),
-        l2_receipts_root: hex32(header.receipts_root),
+        assertion_l2_block_hash: hex32(witness.assertion.block_hash),
+        assertion_send_root: hex32(witness.assertion.send_root),
+        output_index: witness.output.output_index,
+        output_item_hash: hex32(output_item_hash),
+        output_l2_block_number: witness.output.l2_block_number,
+        output_l1_block_number: witness.output.l1_block_number,
+        output_timestamp: witness.output.timestamp,
+        output_destination: witness.output.destination.to_string(),
+        output_calldata_hash: hex32(keccak256(&witness.output.calldata)),
         vault_address: witness.evidence.vault_address.clone(),
         vault_runtime_code_hash: strip_0x(&witness.route_profile.vault_runtime_code_hash),
         token_address: witness.evidence.token_address.clone(),
         token_runtime_code_hash: strip_0x(&witness.route_profile.token_runtime_code_hash),
-        transaction_hash: hex32(transaction_hash),
-        transaction_index: witness.l2_transaction_index,
-        receipt_status: 1,
-        log_index: witness.event_log_index,
-        event_signature: hex32(deposit_event_signature()),
-        event_emitter: witness.evidence.vault_address.clone(),
         depositor: witness.evidence.depositor.clone(),
         pftl_recipient: witness.evidence.pftl_recipient.clone(),
         pftl_recipient_hash: witness.evidence.pftl_recipient_hash.clone(),
@@ -331,81 +296,106 @@ fn verify_arbitrum_assertion(
     Ok(assertion_hash)
 }
 
-struct L2HeaderBindings {
-    block_hash: B256,
-    state_root: B256,
-    transactions_root: B256,
-    receipts_root: B256,
-    number: u64,
-}
-
-fn decode_l2_header(encoded: &[u8]) -> Result<L2HeaderBindings, String> {
-    let mut remaining = encoded;
-    let fields = match Header::decode_raw(&mut remaining)
-        .map_err(|error| format!("invalid Arbitrum block header RLP: {error}"))?
-    {
-        PayloadView::List(fields) => fields,
-        PayloadView::String(_) => {
-            return Err("Arbitrum block header must be an RLP list".to_string())
-        }
-    };
-    if !remaining.is_empty() || !(15..=21).contains(&fields.len()) {
-        return Err("Arbitrum block header has trailing bytes or unsupported shape".to_string());
-    }
-    Ok(L2HeaderBindings {
-        block_hash: keccak256(encoded),
-        state_root: decode_rlp_item(fields[3], "state root")?,
-        transactions_root: decode_rlp_item(fields[4], "transactions root")?,
-        receipts_root: decode_rlp_item(fields[5], "receipts root")?,
-        number: decode_rlp_item(fields[8], "block number")?,
-    })
-}
-
-fn decode_rlp_item<T: Decodable>(encoded: &[u8], field: &str) -> Result<T, String> {
-    let mut remaining = encoded;
-    let value = T::decode(&mut remaining)
-        .map_err(|error| format!("invalid Arbitrum header {field}: {error}"))?;
-    if !remaining.is_empty() {
-        return Err(format!("Arbitrum header {field} has trailing RLP bytes"));
-    }
-    Ok(value)
-}
-
-fn verify_deposit_event(
-    log: &postfiat_bridge::EthereumLogV1,
-    evidence: &VaultBridgeDepositEvidence,
-    profile: &VaultBridgeRouteProfileV1,
-) -> Result<(), String> {
-    if log.emitter != address_bytes(&evidence.vault_address)?
-        || log.topics.len() != 4
-        || B256::from(log.topics[0]) != deposit_event_signature()
-        || hex32(B256::from(log.topics[1])) != evidence.deposit_id
-        || topic_address(&log.topics[2])? != evidence.depositor
-        || hex32(B256::from(log.topics[3])) != evidence.pftl_recipient_hash
+fn verify_confirmed_deposit_output(witness: &PfUsdcIngressProofWitnessV1) -> Result<B256, String> {
+    let output = &witness.output;
+    let evidence = &witness.evidence;
+    if output.l2_sender.to_string() != evidence.vault_address
+        || output.destination != witness.policy.arbitrum_ingress_anchor_address
+        || output.value != U256::ZERO
     {
         return Err(
-            "proved Arbitrum log is not the exact expected vault deposit event".to_string(),
+            "Arbitrum output sender/destination/value does not match governed ingress".to_string(),
         );
     }
-    type DepositData = (String, U256, B256, B256, U256, Address, Address);
-    let (recipient, amount, nonce, route_binding, chain_id, vault, token) =
-        DepositData::abi_decode(&log.data)
-            .map_err(|error| format!("invalid canonical vault deposit event ABI: {error}"))?;
-    if recipient != evidence.pftl_recipient
+
+    let item_hash = nitro_output_item_hash(output);
+    let root = nitro_output_root(output, item_hash);
+    if root != witness.assertion.send_root {
+        return Err(
+            "Arbitrum output Merkle proof does not match confirmed assertion sendRoot".to_string(),
+        );
+    }
+
+    let selector = keccak256(b"recordDepositV1(bytes32,address,bytes32,string,uint256,bytes32,bytes32,uint256,address,address)");
+    if output.calldata.len() < 4 || output.calldata[..4] != selector[..4] {
+        return Err("Arbitrum output is not the canonical Tier-4 deposit call".to_string());
+    }
+    type DepositCall = (
+        B256,
+        Address,
+        B256,
+        String,
+        U256,
+        B256,
+        B256,
+        U256,
+        Address,
+        Address,
+    );
+    let (
+        deposit_id,
+        depositor,
+        recipient_hash,
+        recipient,
+        amount,
+        nonce,
+        route_binding,
+        chain_id,
+        vault,
+        token,
+    ) = DepositCall::abi_decode(&output.calldata[4..])
+        .map_err(|error| format!("invalid canonical Tier-4 deposit calldata: {error}"))?;
+    if hex32(deposit_id) != evidence.deposit_id
+        || depositor.to_string() != evidence.depositor
+        || hex32(recipient_hash) != evidence.pftl_recipient_hash
+        || recipient != evidence.pftl_recipient
         || u256_u64(amount, "amount")? != evidence.amount_atoms
         || hex32(nonce) != evidence.nonce
         || hex32(route_binding) != evidence.route_binding
         || u256_u64(chain_id, "source chain ID")? != evidence.source_chain_id
         || vault.to_string() != evidence.vault_address
         || token.to_string() != evidence.token_address
-        || profile.vault_address != evidence.vault_address
-        || profile.token_address != evidence.token_address
+        || evidence.block_hash != hex32(witness.assertion.block_hash)
+        || evidence.tx_hash != hex32(item_hash)
+        || evidence.log_index != output.output_index
     {
         return Err(
-            "vault deposit event fields do not exactly match proposed evidence".to_string(),
+            "confirmed Tier-4 deposit output does not exactly match proposed evidence".to_string(),
         );
     }
-    Ok(())
+    Ok(item_hash)
+}
+
+fn nitro_output_item_hash(output: &NitroSendWitnessV1) -> B256 {
+    let mut item_preimage = Vec::with_capacity(20 + 20 + 32 * 4 + output.calldata.len());
+    item_preimage.extend_from_slice(output.l2_sender.as_slice());
+    item_preimage.extend_from_slice(output.destination.as_slice());
+    append_u256(&mut item_preimage, U256::from(output.l2_block_number));
+    append_u256(&mut item_preimage, U256::from(output.l1_block_number));
+    append_u256(&mut item_preimage, U256::from(output.timestamp));
+    append_u256(&mut item_preimage, output.value);
+    item_preimage.extend_from_slice(&output.calldata);
+    keccak256(item_preimage)
+}
+
+fn nitro_output_root(output: &NitroSendWitnessV1, item_hash: B256) -> B256 {
+    let mut root = keccak256(item_hash.as_slice());
+    for (level, sibling) in output.output_proof.iter().enumerate() {
+        let mut pair = [0_u8; 64];
+        if output.output_index & (1_u64 << level) == 0 {
+            pair[..32].copy_from_slice(root.as_slice());
+            pair[32..].copy_from_slice(sibling.as_slice());
+        } else {
+            pair[..32].copy_from_slice(sibling.as_slice());
+            pair[32..].copy_from_slice(root.as_slice());
+        }
+        root = keccak256(pair);
+    }
+    root
+}
+
+fn append_u256(bytes: &mut Vec<u8>, value: U256) {
+    bytes.extend_from_slice(&value.to_be_bytes::<32>());
 }
 
 fn ingress_policy_hash(policy: &PfUsdcIngressProofPolicyV1) -> String {
@@ -416,30 +406,13 @@ fn ingress_policy_hash(policy: &PfUsdcIngressProofPolicyV1) -> String {
     bytes.extend_from_slice(policy.arbitrum_rollup_address.as_slice());
     bytes.extend_from_slice(policy.arbitrum_rollup_runtime_code_hash.as_slice());
     bytes.extend_from_slice(policy.rollup_latest_confirmed_storage_slot.as_slice());
+    bytes.extend_from_slice(policy.arbitrum_ingress_anchor_address.as_slice());
     let digest = Sha3_384::digest(bytes);
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-fn deposit_event_signature() -> B256 {
-    keccak256(b"ERC20BridgeDepositedV2(bytes32,address,bytes32,string,uint256,bytes32,bytes32,uint256,address,address)")
-}
-
 fn u256_u64(value: U256, field: &str) -> Result<u64, String> {
     u64::try_from(value).map_err(|_| format!("vault deposit {field} exceeds u64"))
-}
-
-fn topic_address(topic: &[u8; 32]) -> Result<String, String> {
-    if topic[..12].iter().any(|byte| *byte != 0) {
-        return Err("indexed depositor topic is not a canonical address".to_string());
-    }
-    Ok(Address::from_slice(&topic[12..]).to_string())
-}
-
-fn address_bytes(value: &str) -> Result<[u8; 20], String> {
-    let address = value
-        .parse::<Address>()
-        .map_err(|error| format!("invalid EVM address: {error}"))?;
-    Ok(address.into_array())
 }
 
 fn strip_0x(value: &str) -> String {
@@ -457,14 +430,12 @@ fn validate_bounds(witness: &PfUsdcIngressProofWitnessV1) -> Result<(), String> 
         return Err("pfUSDC ingress witness/policy schema mismatch".to_string());
     }
     if witness.helios.updates.len() > MAX_HELIOS_UPDATES_V1
-        || witness.l2_header_rlp.len() > MAX_L2_HEADER_BYTES_V1
-        || witness.l2_transaction_rlp.len() > MAX_TRANSACTION_BYTES_V1
-        || witness.l2_receipt_rlp.len() > MAX_RECEIPT_BYTES_V1
+        || witness.output.output_proof.is_empty()
+        || witness.output.output_proof.len() > MAX_OUTPUT_PROOF_NODES_V1
+        || witness.output.calldata.len() > MAX_OUTPUT_CALLDATA_BYTES_V1
     {
         return Err("pfUSDC ingress witness exceeds a byte/count bound".to_string());
     }
-    validate_mpt_proof(&witness.l2_transaction_proof)?;
-    validate_mpt_proof(&witness.l2_receipt_proof)?;
     if witness.rollup_storage.mpt_proof.len() > MAX_MPT_NODES_V1
         || witness.rollup_storage.storage_slots.len() != 1
     {
@@ -498,6 +469,7 @@ mod tests {
             arbitrum_rollup_address: Address::repeat_byte(0x11),
             arbitrum_rollup_runtime_code_hash: B256::repeat_byte(0x22),
             rollup_latest_confirmed_storage_slot: B256::repeat_byte(0x33),
+            arbitrum_ingress_anchor_address: Address::repeat_byte(0x44),
         }
     }
 
@@ -521,8 +493,11 @@ mod tests {
         let mut value = base.clone();
         value.arbitrum_rollup_runtime_code_hash = B256::repeat_byte(0x66);
         mutations.push(value);
-        let mut value = base;
+        let mut value = base.clone();
         value.rollup_latest_confirmed_storage_slot = B256::repeat_byte(0x77);
+        mutations.push(value);
+        let mut value = base;
+        value.arbitrum_ingress_anchor_address = Address::repeat_byte(0x88);
         mutations.push(value);
         assert!(mutations
             .iter()
@@ -530,39 +505,37 @@ mod tests {
     }
 
     #[test]
-    fn l2_header_decoder_binds_hash_and_trie_roots() {
-        let state_root = B256::repeat_byte(0x31);
-        let transactions_root = B256::repeat_byte(0x32);
-        let receipts_root = B256::repeat_byte(0x33);
-        let mut fields = Vec::new();
-        for index in 0..15 {
-            let encoded = match index {
-                3 => alloy_rlp::encode(state_root),
-                4 => alloy_rlp::encode(transactions_root),
-                5 => alloy_rlp::encode(receipts_root),
-                8 => alloy_rlp::encode(77_u64),
-                _ => alloy_rlp::encode(Vec::<u8>::new()),
-            };
-            fields.push(encoded);
-        }
-        let payload_len = fields.iter().map(Vec::len).sum();
-        let mut header = Vec::new();
-        Header {
-            list: true,
-            payload_length: payload_len,
-        }
-        .encode(&mut header);
-        for field in fields {
-            header.extend_from_slice(&field);
-        }
-        let decoded = decode_l2_header(&header).expect("canonical header");
-        assert_eq!(decoded.block_hash, keccak256(&header));
-        assert_eq!(decoded.state_root, state_root);
-        assert_eq!(decoded.transactions_root, transactions_root);
-        assert_eq!(decoded.receipts_root, receipts_root);
-        assert_eq!(decoded.number, 77);
-        let mut trailing = header;
-        trailing.push(0);
-        assert!(decode_l2_header(&trailing).is_err());
+    fn nitro_output_root_binds_every_item_and_path_field() {
+        let output = NitroSendWitnessV1 {
+            output_index: 1,
+            output_proof: vec![B256::repeat_byte(0x99), B256::repeat_byte(0x98)],
+            l2_sender: Address::repeat_byte(0x11),
+            destination: Address::repeat_byte(0x22),
+            l2_block_number: 7,
+            l1_block_number: 8,
+            timestamp: 9,
+            value: U256::ZERO,
+            calldata: Bytes::from_static(b"tier4"),
+        };
+        let item = nitro_output_item_hash(&output);
+        let root = nitro_output_root(&output, item);
+        let mut changed = output.clone();
+        changed.calldata = Bytes::from_static(b"tier5");
+        assert_ne!(
+            nitro_output_root(&changed, nitro_output_item_hash(&changed)),
+            root
+        );
+        let mut changed = output.clone();
+        changed.output_index = 0;
+        assert_ne!(
+            nitro_output_root(&changed, nitro_output_item_hash(&changed)),
+            root
+        );
+        let mut changed = output;
+        changed.output_proof[0] = B256::repeat_byte(0x97);
+        assert_ne!(
+            nitro_output_root(&changed, nitro_output_item_hash(&changed)),
+            root
+        );
     }
 }

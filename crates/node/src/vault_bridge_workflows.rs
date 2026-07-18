@@ -577,7 +577,7 @@ pub fn vault_bridge_deposit_plan(
                 "--source-public-values-hash does not match --source-public-values-file",
             ));
         }
-        postfiat_types::PfUsdcIngressPublicValuesV1::from_canonical_bytes(&source_public_values)
+        postfiat_types::PfUsdcIngressPublicValuesV2::from_canonical_bytes(&source_public_values)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
         (computed_proof_hash, computed_public_values_hash)
     } else {

@@ -1,5 +1,5 @@
-pub const PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V1: &str =
-    "postfiat.pfusdc.ingress_public_values.v1";
+pub const PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V2: &str =
+    "postfiat.pfusdc.ingress_public_values.v2";
 pub const PFUSDC_EGRESS_PUBLIC_VALUES_SCHEMA_V1: &str =
     "postfiat.pfusdc.egress_public_values.v1";
 pub const PFUSDC_CHECKPOINT_PUBLIC_VALUES_SCHEMA_V1: &str =
@@ -7,8 +7,8 @@ pub const PFUSDC_CHECKPOINT_PUBLIC_VALUES_SCHEMA_V1: &str =
 pub const BRIDGE_EXIT_LEAF_SCHEMA_V1: &str = "postfiat.bridge_exit_leaf.v1";
 pub const BRIDGE_EXIT_ACCEPTED_RECEIPT_CODE: &str = "accepted";
 
-const PFUSDC_INGRESS_COMMITMENT_DOMAIN_V1: &str =
-    "postfiat.pfusdc.ingress_public_values.commitment.v1";
+const PFUSDC_INGRESS_COMMITMENT_DOMAIN_V2: &str =
+    "postfiat.pfusdc.ingress_public_values.commitment.v2";
 const PFUSDC_INGRESS_PROOF_HASH_DOMAIN_V1: &str =
     "postfiat.pfusdc.ingress_proof.hash.v1";
 const PFUSDC_INGRESS_PUBLIC_VALUES_HASH_DOMAIN_V1: &str =
@@ -153,7 +153,7 @@ impl BridgeExitLeafV1 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PfUsdcIngressPublicValuesV1 {
+pub struct PfUsdcIngressPublicValuesV2 {
     pub schema: String,
     pub proof_program_version: u32,
     pub pftl_chain_id: String,
@@ -169,20 +169,19 @@ pub struct PfUsdcIngressPublicValuesV1 {
     pub arbitrum_chain_id: u64,
     pub arbitrum_rollup_address: String,
     pub arbitrum_assertion_hash: String,
-    pub l2_block_number: u64,
-    pub l2_block_hash: String,
-    pub l2_state_root: String,
-    pub l2_receipts_root: String,
+    pub assertion_l2_block_hash: String,
+    pub assertion_send_root: String,
+    pub output_index: u64,
+    pub output_item_hash: String,
+    pub output_l2_block_number: u64,
+    pub output_l1_block_number: u64,
+    pub output_timestamp: u64,
+    pub output_destination: String,
+    pub output_calldata_hash: String,
     pub vault_address: String,
     pub vault_runtime_code_hash: String,
     pub token_address: String,
     pub token_runtime_code_hash: String,
-    pub transaction_hash: String,
-    pub transaction_index: u64,
-    pub receipt_status: u8,
-    pub log_index: u64,
-    pub event_signature: String,
-    pub event_emitter: String,
     pub depositor: String,
     pub pftl_recipient: String,
     pub pftl_recipient_hash: String,
@@ -194,12 +193,12 @@ pub struct PfUsdcIngressPublicValuesV1 {
     pub public_values_commitment: String,
 }
 
-impl PfUsdcIngressPublicValuesV1 {
+impl PfUsdcIngressPublicValuesV2 {
     /// Strictly decode the exact byte string committed by the ingress SP1
     /// program. Tags must be contiguous and ordered, fixed-width fields must
     /// have their canonical width, and trailing bytes are rejected.
     pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, String> {
-        let mut reader = PfusdcCanonicalReader::new(bytes, PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V1)?;
+        let mut reader = PfusdcCanonicalReader::new(bytes, PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V2)?;
         let mut values = Self {
             schema: reader.text(1)?,
             proof_program_version: reader.u32(2)?,
@@ -216,28 +215,27 @@ impl PfUsdcIngressPublicValuesV1 {
             arbitrum_chain_id: reader.u64(13)?,
             arbitrum_rollup_address: reader.evm_address(14)?,
             arbitrum_assertion_hash: reader.hex(15, 32)?,
-            l2_block_number: reader.u64(16)?,
-            l2_block_hash: reader.hex(17, 32)?,
-            l2_state_root: reader.hex(18, 32)?,
-            l2_receipts_root: reader.hex(19, 32)?,
-            vault_address: reader.evm_address(20)?,
-            vault_runtime_code_hash: reader.hex(21, 32)?,
-            token_address: reader.evm_address(22)?,
-            token_runtime_code_hash: reader.hex(23, 32)?,
-            transaction_hash: reader.hex(24, 32)?,
-            transaction_index: reader.u64(25)?,
-            receipt_status: reader.u8(26)?,
-            log_index: reader.u64(27)?,
-            event_signature: reader.hex(28, 32)?,
-            event_emitter: reader.evm_address(29)?,
-            depositor: reader.evm_address(30)?,
-            pftl_recipient: reader.text(31)?,
-            pftl_recipient_hash: reader.hex(32, 32)?,
-            amount_atoms: reader.u64(33)?,
-            nonce: reader.hex(34, 32)?,
-            route_binding: reader.hex(35, 32)?,
-            deposit_id: reader.hex(36, 32)?,
-            evidence_root: reader.hex(37, 48)?,
+            assertion_l2_block_hash: reader.hex(16, 32)?,
+            assertion_send_root: reader.hex(17, 32)?,
+            output_index: reader.u64(18)?,
+            output_item_hash: reader.hex(19, 32)?,
+            output_l2_block_number: reader.u64(20)?,
+            output_l1_block_number: reader.u64(21)?,
+            output_timestamp: reader.u64(22)?,
+            output_destination: reader.evm_address(23)?,
+            output_calldata_hash: reader.hex(24, 32)?,
+            vault_address: reader.evm_address(25)?,
+            vault_runtime_code_hash: reader.hex(26, 32)?,
+            token_address: reader.evm_address(27)?,
+            token_runtime_code_hash: reader.hex(28, 32)?,
+            depositor: reader.evm_address(29)?,
+            pftl_recipient: reader.text(30)?,
+            pftl_recipient_hash: reader.hex(31, 32)?,
+            amount_atoms: reader.u64(32)?,
+            nonce: reader.hex(33, 32)?,
+            route_binding: reader.hex(34, 32)?,
+            deposit_id: reader.hex(35, 32)?,
+            evidence_root: reader.hex(36, 48)?,
             public_values_commitment: String::new(),
         };
         reader.finish()?;
@@ -251,7 +249,7 @@ impl PfUsdcIngressPublicValuesV1 {
 
     pub fn canonical_bytes_without_commitment(&self) -> Result<Vec<u8>, String> {
         self.validate_fields(false)?;
-        let mut out = pfusdc_canonical_prefix(PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V1);
+        let mut out = pfusdc_canonical_prefix(PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V2);
         pfusdc_append_text(&mut out, 1, &self.schema)?;
         pfusdc_append_u32(&mut out, 2, self.proof_program_version);
         pfusdc_append_text(&mut out, 3, &self.pftl_chain_id)?;
@@ -271,34 +269,33 @@ impl PfUsdcIngressPublicValuesV1 {
         pfusdc_append_u64(&mut out, 13, self.arbitrum_chain_id);
         pfusdc_append_evm_address(&mut out, 14, &self.arbitrum_rollup_address)?;
         pfusdc_append_hex(&mut out, 15, &self.arbitrum_assertion_hash)?;
-        pfusdc_append_u64(&mut out, 16, self.l2_block_number);
-        pfusdc_append_hex(&mut out, 17, &self.l2_block_hash)?;
-        pfusdc_append_hex(&mut out, 18, &self.l2_state_root)?;
-        pfusdc_append_hex(&mut out, 19, &self.l2_receipts_root)?;
-        pfusdc_append_evm_address(&mut out, 20, &self.vault_address)?;
-        pfusdc_append_hex(&mut out, 21, &self.vault_runtime_code_hash)?;
-        pfusdc_append_evm_address(&mut out, 22, &self.token_address)?;
-        pfusdc_append_hex(&mut out, 23, &self.token_runtime_code_hash)?;
-        pfusdc_append_hex(&mut out, 24, &self.transaction_hash)?;
-        pfusdc_append_u64(&mut out, 25, self.transaction_index);
-        pfusdc_append_u8(&mut out, 26, self.receipt_status);
-        pfusdc_append_u64(&mut out, 27, self.log_index);
-        pfusdc_append_hex(&mut out, 28, &self.event_signature)?;
-        pfusdc_append_evm_address(&mut out, 29, &self.event_emitter)?;
-        pfusdc_append_evm_address(&mut out, 30, &self.depositor)?;
-        pfusdc_append_text(&mut out, 31, &self.pftl_recipient)?;
-        pfusdc_append_hex(&mut out, 32, &self.pftl_recipient_hash)?;
-        pfusdc_append_u64(&mut out, 33, self.amount_atoms);
-        pfusdc_append_hex(&mut out, 34, &self.nonce)?;
-        pfusdc_append_hex(&mut out, 35, &self.route_binding)?;
-        pfusdc_append_hex(&mut out, 36, &self.deposit_id)?;
-        pfusdc_append_hex(&mut out, 37, &self.evidence_root)?;
+        pfusdc_append_hex(&mut out, 16, &self.assertion_l2_block_hash)?;
+        pfusdc_append_hex(&mut out, 17, &self.assertion_send_root)?;
+        pfusdc_append_u64(&mut out, 18, self.output_index);
+        pfusdc_append_hex(&mut out, 19, &self.output_item_hash)?;
+        pfusdc_append_u64(&mut out, 20, self.output_l2_block_number);
+        pfusdc_append_u64(&mut out, 21, self.output_l1_block_number);
+        pfusdc_append_u64(&mut out, 22, self.output_timestamp);
+        pfusdc_append_evm_address(&mut out, 23, &self.output_destination)?;
+        pfusdc_append_hex(&mut out, 24, &self.output_calldata_hash)?;
+        pfusdc_append_evm_address(&mut out, 25, &self.vault_address)?;
+        pfusdc_append_hex(&mut out, 26, &self.vault_runtime_code_hash)?;
+        pfusdc_append_evm_address(&mut out, 27, &self.token_address)?;
+        pfusdc_append_hex(&mut out, 28, &self.token_runtime_code_hash)?;
+        pfusdc_append_evm_address(&mut out, 29, &self.depositor)?;
+        pfusdc_append_text(&mut out, 30, &self.pftl_recipient)?;
+        pfusdc_append_hex(&mut out, 31, &self.pftl_recipient_hash)?;
+        pfusdc_append_u64(&mut out, 32, self.amount_atoms);
+        pfusdc_append_hex(&mut out, 33, &self.nonce)?;
+        pfusdc_append_hex(&mut out, 34, &self.route_binding)?;
+        pfusdc_append_hex(&mut out, 35, &self.deposit_id)?;
+        pfusdc_append_hex(&mut out, 36, &self.evidence_root)?;
         Ok(out)
     }
 
     pub fn expected_commitment(&self) -> Result<String, String> {
         Ok(pfusdc_keccak_commitment(
-            PFUSDC_INGRESS_COMMITMENT_DOMAIN_V1,
+            PFUSDC_INGRESS_COMMITMENT_DOMAIN_V2,
             &self.canonical_bytes_without_commitment()?,
         ))
     }
@@ -313,7 +310,7 @@ impl PfUsdcIngressPublicValuesV1 {
     }
 
     fn validate_fields(&self, check_commitment: bool) -> Result<(), String> {
-        if self.schema != PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V1 {
+        if self.schema != PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V2 {
             return Err("pfUSDC ingress public-values schema mismatch".to_string());
         }
         if self.proof_program_version == 0 || self.pftl_protocol_version == 0 {
@@ -326,13 +323,12 @@ impl PfUsdcIngressPublicValuesV1 {
             ("pfusdc_ingress.prior_ethereum_finalized_beacon_root", &self.prior_ethereum_finalized_beacon_root, 64),
             ("pfusdc_ingress.ethereum_finalized_beacon_root", &self.ethereum_finalized_beacon_root, 64),
             ("pfusdc_ingress.arbitrum_assertion_hash", &self.arbitrum_assertion_hash, 64),
-            ("pfusdc_ingress.l2_block_hash", &self.l2_block_hash, 64),
-            ("pfusdc_ingress.l2_state_root", &self.l2_state_root, 64),
-            ("pfusdc_ingress.l2_receipts_root", &self.l2_receipts_root, 64),
+            ("pfusdc_ingress.assertion_l2_block_hash", &self.assertion_l2_block_hash, 64),
+            ("pfusdc_ingress.assertion_send_root", &self.assertion_send_root, 64),
+            ("pfusdc_ingress.output_item_hash", &self.output_item_hash, 64),
+            ("pfusdc_ingress.output_calldata_hash", &self.output_calldata_hash, 64),
             ("pfusdc_ingress.vault_runtime_code_hash", &self.vault_runtime_code_hash, 64),
             ("pfusdc_ingress.token_runtime_code_hash", &self.token_runtime_code_hash, 64),
-            ("pfusdc_ingress.transaction_hash", &self.transaction_hash, 64),
-            ("pfusdc_ingress.event_signature", &self.event_signature, 64),
             ("pfusdc_ingress.pftl_recipient_hash", &self.pftl_recipient_hash, 64),
             ("pfusdc_ingress.nonce", &self.nonce, 64),
             ("pfusdc_ingress.route_binding", &self.route_binding, 64),
@@ -344,8 +340,9 @@ impl PfUsdcIngressPublicValuesV1 {
             || self.prior_ethereum_finalized_slot == 0
             || self.ethereum_finalized_slot == 0
             || self.arbitrum_chain_id == 0
-            || self.l2_block_number == 0
-            || self.receipt_status != 1
+            || self.output_l2_block_number == 0
+            || self.output_l1_block_number == 0
+            || self.output_timestamp == 0
             || self.amount_atoms == 0
         {
             return Err("pfUSDC ingress numeric/finality fields are invalid".to_string());
@@ -357,9 +354,9 @@ impl PfUsdcIngressPublicValuesV1 {
             return Err("pfUSDC ingress finality checkpoint must strictly advance".to_string());
         }
         validate_evm_address_text("pfusdc_ingress.arbitrum_rollup_address", &self.arbitrum_rollup_address)?;
+        validate_evm_address_text("pfusdc_ingress.output_destination", &self.output_destination)?;
         validate_evm_address_text("pfusdc_ingress.vault_address", &self.vault_address)?;
         validate_evm_address_text("pfusdc_ingress.token_address", &self.token_address)?;
-        validate_evm_address_text("pfusdc_ingress.event_emitter", &self.event_emitter)?;
         validate_evm_address_text("pfusdc_ingress.depositor", &self.depositor)?;
         pfusdc_validate_text("pfusdc_ingress.pftl_recipient", &self.pftl_recipient)?;
         if check_commitment {
@@ -393,10 +390,8 @@ pub struct EthereumArbitrumCheckpointV1 {
     pub ethereum_finalized_beacon_root: String,
     pub ethereum_finalized_slot: u64,
     pub arbitrum_assertion_hash: String,
-    pub l2_block_number: u64,
-    pub l2_block_hash: String,
-    pub l2_state_root: String,
-    pub l2_receipts_root: String,
+    pub assertion_l2_block_hash: String,
+    pub assertion_send_root: String,
 }
 
 impl EthereumArbitrumCheckpointV1 {
@@ -412,16 +407,11 @@ impl EthereumArbitrumCheckpointV1 {
                 &self.arbitrum_assertion_hash,
                 64,
             ),
-            ("pfusdc_finality.l2_block_hash", &self.l2_block_hash, 64),
-            ("pfusdc_finality.l2_state_root", &self.l2_state_root, 64),
-            (
-                "pfusdc_finality.l2_receipts_root",
-                &self.l2_receipts_root,
-                64,
-            ),
+            ("pfusdc_finality.assertion_l2_block_hash", &self.assertion_l2_block_hash, 64),
+            ("pfusdc_finality.assertion_send_root", &self.assertion_send_root, 64),
         ])?;
-        if self.ethereum_finalized_slot == 0 || self.l2_block_number == 0 {
-            return Err("pfUSDC finality checkpoint heights must be nonzero".to_string());
+        if self.ethereum_finalized_slot == 0 {
+            return Err("pfUSDC finality checkpoint slot must be nonzero".to_string());
         }
         Ok(())
     }
@@ -432,10 +422,8 @@ impl EthereumArbitrumCheckpointV1 {
         pfusdc_append_hex(&mut bytes, 1, &self.ethereum_finalized_beacon_root)?;
         pfusdc_append_u64(&mut bytes, 2, self.ethereum_finalized_slot);
         pfusdc_append_hex(&mut bytes, 3, &self.arbitrum_assertion_hash)?;
-        pfusdc_append_u64(&mut bytes, 4, self.l2_block_number);
-        pfusdc_append_hex(&mut bytes, 5, &self.l2_block_hash)?;
-        pfusdc_append_hex(&mut bytes, 6, &self.l2_state_root)?;
-        pfusdc_append_hex(&mut bytes, 7, &self.l2_receipts_root)?;
+        pfusdc_append_hex(&mut bytes, 4, &self.assertion_l2_block_hash)?;
+        pfusdc_append_hex(&mut bytes, 5, &self.assertion_send_root)?;
         Ok(bytes)
     }
 }
@@ -484,16 +472,12 @@ impl EthereumArbitrumFinalityStateV1 {
             return Err("pfUSDC finality-state retained checkpoint window is invalid".to_string());
         }
         let mut previous_slot = 0;
-        let mut previous_l2 = 0;
         for checkpoint in &self.retained {
             checkpoint.validate()?;
-            if checkpoint.ethereum_finalized_slot <= previous_slot
-                || checkpoint.l2_block_number <= previous_l2
-            {
+            if checkpoint.ethereum_finalized_slot <= previous_slot {
                 return Err("pfUSDC retained finality checkpoints must strictly advance".to_string());
             }
             previous_slot = checkpoint.ethereum_finalized_slot;
-            previous_l2 = checkpoint.l2_block_number;
         }
         if self.retained.last() != Some(&self.latest) {
             return Err("pfUSDC finality-state latest checkpoint must end retained window".to_string());
@@ -510,7 +494,7 @@ impl EthereumArbitrumFinalityStateV1 {
 
     pub fn verify_and_advance(
         &mut self,
-        values: &PfUsdcIngressPublicValuesV1,
+        values: &PfUsdcIngressPublicValuesV2,
     ) -> Result<(), String> {
         self.validate()?;
         if values.route_profile_hash != self.route_profile_hash
@@ -531,24 +515,19 @@ impl EthereumArbitrumFinalityStateV1 {
             ethereum_finalized_beacon_root: values.ethereum_finalized_beacon_root.clone(),
             ethereum_finalized_slot: values.ethereum_finalized_slot,
             arbitrum_assertion_hash: values.arbitrum_assertion_hash.clone(),
-            l2_block_number: values.l2_block_number,
-            l2_block_hash: values.l2_block_hash.clone(),
-            l2_state_root: values.l2_state_root.clone(),
-            l2_receipts_root: values.l2_receipts_root.clone(),
+            assertion_l2_block_hash: values.assertion_l2_block_hash.clone(),
+            assertion_send_root: values.assertion_send_root.clone(),
         };
         resulting.validate()?;
         if let Some(existing) = self.retained.iter().find(|checkpoint| {
             checkpoint.ethereum_finalized_slot == resulting.ethereum_finalized_slot
-                || checkpoint.l2_block_number == resulting.l2_block_number
         }) {
             if existing != &resulting {
                 return Err("pfUSDC proof conflicts with a retained finalized checkpoint".to_string());
             }
             return Ok(());
         }
-        if resulting.ethereum_finalized_slot <= self.latest.ethereum_finalized_slot
-            || resulting.l2_block_number <= self.latest.l2_block_number
-        {
+        if resulting.ethereum_finalized_slot <= self.latest.ethereum_finalized_slot {
             return Err("pfUSDC proof checkpoint does not monotonically advance".to_string());
         }
         self.retained.push(resulting.clone());
@@ -1285,14 +1264,6 @@ impl<'a> PfusdcCanonicalReader<'a> {
         Ok(format!("0x{}", self.hex(tag, 20)?))
     }
 
-    fn u8(&mut self, tag: u16) -> Result<u8, String> {
-        let value = self.field(tag)?;
-        if value.len() != 1 {
-            return Err(format!("pfUSDC canonical tag {tag} must contain one byte"));
-        }
-        Ok(value[0])
-    }
-
     fn u32(&mut self, tag: u16) -> Result<u32, String> {
         let value = self.field(tag)?;
         Ok(u32::from_be_bytes(value.try_into().map_err(|_| {
@@ -1351,10 +1322,6 @@ fn pfusdc_append_evm_address(out: &mut Vec<u8>, tag: u16, value: &str) -> Result
         .strip_prefix("0x")
         .ok_or_else(|| "pfUSDC canonical EVM address must start with 0x".to_string())?;
     pfusdc_append_hex(out, tag, stripped)
-}
-
-fn pfusdc_append_u8(out: &mut Vec<u8>, tag: u16, value: u8) {
-    pfusdc_append_fixed_field(out, tag, &[value]);
 }
 
 fn pfusdc_append_u32(out: &mut Vec<u8>, tag: u16, value: u32) {

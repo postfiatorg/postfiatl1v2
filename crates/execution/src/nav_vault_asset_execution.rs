@@ -4427,7 +4427,7 @@ struct VaultBridgeDepositSourceProof<'a> {
 fn ensure_vault_bridge_deposit_source_proof(
     proof: VaultBridgeDepositSourceProof<'_>,
 ) -> Result<
-    Option<postfiat_types::PfUsdcIngressPublicValuesV1>,
+    Option<postfiat_types::PfUsdcIngressPublicValuesV2>,
     (&'static str, String),
 > {
     let VaultBridgeDepositSourceProof {
@@ -4523,7 +4523,7 @@ fn ensure_vault_bridge_deposit_source_proof(
             )
             .map_err(|error| (error.code(), error.message()))?;
             let public_values =
-                postfiat_types::PfUsdcIngressPublicValuesV1::from_canonical_bytes(
+                postfiat_types::PfUsdcIngressPublicValuesV2::from_canonical_bytes(
                     source_public_values,
                 )
                 .map_err(|error| ("pfusdc_ingress_public_values_invalid", error))?;
@@ -4549,7 +4549,7 @@ fn ensure_pfusdc_ingress_public_values_match(
     evidence: &VaultBridgeDepositEvidence,
     evidence_root: &str,
     policy_hash: &str,
-    values: &postfiat_types::PfUsdcIngressPublicValuesV1,
+    values: &postfiat_types::PfUsdcIngressPublicValuesV2,
 ) -> Result<(), (&'static str, String)> {
     let route_epoch = u32::try_from(values.route_epoch).map_err(|_| {
         (
@@ -4563,20 +4563,17 @@ fn ensure_pfusdc_ingress_public_values_match(
     )
     .map_err(|error| ("pfusdc_ingress_route_binding_invalid", error))?;
     let expected_genesis_hash = genesis_hash(genesis);
-    let mismatch = values.proof_program_version != 1
+    let mismatch = values.proof_program_version != 2
         || values.pftl_chain_id != genesis.chain_id
         || values.pftl_genesis_hash != expected_genesis_hash
         || values.pftl_protocol_version != genesis.protocol_version
         || values.route_profile_hash != policy_hash
         || values.arbitrum_chain_id != evidence.source_chain_id
-        || values.l2_block_hash != evidence.block_hash
+        || values.assertion_l2_block_hash != evidence.block_hash
         || values.vault_address != evidence.vault_address
         || values.token_address != evidence.token_address
-        || values.transaction_hash != evidence.tx_hash
-        || values.receipt_status != 1
-        || values.log_index != evidence.log_index
-        || values.event_signature != postfiat_types::VAULT_BRIDGE_V2_DEPOSIT_EVENT_TOPIC
-        || values.event_emitter != evidence.vault_address
+        || values.output_item_hash != evidence.tx_hash
+        || values.output_index != evidence.log_index
         || values.depositor != evidence.depositor
         || values.pftl_recipient != evidence.pftl_recipient
         || values.pftl_recipient_hash != evidence.pftl_recipient_hash
