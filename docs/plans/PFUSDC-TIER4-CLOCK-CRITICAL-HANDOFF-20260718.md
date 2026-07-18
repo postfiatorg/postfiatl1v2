@@ -67,19 +67,20 @@ deployed or active.**
   state root, accepted receipt, and replicated files on all six nodes. The
   deterministic two-chain deployment manifest, exact Tier-4 NAV/route profile,
   governance bootstrap operations, constructors, predicted addresses, and code
-  hashes are now frozen at commit `f4a199b`. This does **not** yet include the
-  live Ethereum/Arbitrum finality-state bootstrap described below. No deployment
-  transaction, deposit, burn, or proof has been run.
+  hashes were first frozen at `f4a199b` and were corrected at `7c0019b` after a
+  live-style lowercase-address conformance test exposed noncanonical guest
+  address rendering. This does **not** yet include the live Ethereum/Arbitrum
+  finality-state value, which can only be captured after deployment. No
+  deployment transaction, deposit, burn, or proof has been run.
 - No live funds have been spent. StakeHub is **not** a signing or authorization
   blocker: its Ethereum-mainnet ETH and USDC are unlocked, and Section 2.4
   authorizes at most $500 aggregate for the minimum required testnet funding.
 - The agent is authorized to use the unlocked StakeHub mainnet funds to acquire
   Ethereum-Sepolia gas, Arbitrum-Sepolia gas, and canonical Circle test USDC
-  within the aggregate $500 cap. The exact provider/contract and live quote
-  still must be pinned before a transaction is sent. If the current paid-route
-  candidate is used, its exact mainnet contract must also be admitted by the
-  StakeHub transaction policy; otherwise use an approved faucet/API route. Do
-  not bypass that policy or substitute a mock token.
+  within the aggregate $500 cap. The provider, exact contract/runtime hash,
+  target orders, quote checks, and crash-resume driver are pinned at `d14d74a`.
+  Its mainnet contract must still be admitted by the StakeHub transaction
+  policy before spending. Do not bypass that policy or substitute a mock token.
 - **Plan correction:** the existing PFTL chain cannot safely activate
   consensus-v2 in place. `consensus_v2_activation_height` is a genesis field,
   and the full genesis document is committed by the genesis hash. The current
@@ -108,15 +109,15 @@ aggregate. Canonical Arbitrum-Sepolia USDC separately requires either a Circle
 API key or one browser reCAPTCHA completion. No code review, proof, GitHub
 Action, or additional provider investigation is on the critical path.
 
-**Bounded protocol work still required:** the frozen governance
-bundle does not contain the live `EthereumArbitrumFinalityStateV2` bootstrap
-required to activate the Tier-4 route. Add one dedicated finality-bootstrap
-capture command, validate it against the frozen route/policy and deployed code
-bindings, and make the later ingress capture start from that exact retained
-checkpoint. While making that bounded change, remove the existing duplicate
-`capture_helios_inputs(...)` call so the same Helios inputs are not fetched
-twice. This is required implementation work, not a reason to run an SP1 proof,
-a workspace battery, GitHub Actions, or a broad review.
+**Bounded finality tooling is complete at `7c0019b`:** `finality-bootstrap`
+host-verifies the Helios transition, finalized RollupCore storage, canonical
+Nitro assertion, and anchor/vault/token code proofs before writing the governed
+`EthereumArbitrumFinalityStateV2`. `ingress-capture` now requires that file,
+bootstraps Helios from its exact retained root/slot, and proves the resulting
+public values can advance the governed state before writing a witness. Current
+source contains one Helios capture call; the earlier report of a duplicate call
+was incorrect. Seven focused prover tests and seven ingress-library tests pass.
+No SP1 proof or workspace battery was run for this tooling closure.
 
 **2026-07-18 correction of prior agent error:** a prior agent incorrectly
 interpreted the user's request to record the plan before sleep as an instruction
@@ -129,11 +130,12 @@ agent signer, for at most **$500 aggregate** of the minimum required Sepolia
 funding path. This authorization is active and is not authorization to guess a
 provider, contract, quote, recipient, or constructor value.
 
-The deployment-manifest generator and frozen Sepolia input/manifest/bootstrap
-bundle are committed at `f4a199b`. The frozen input SHA-256 is
-`14ef6ca9de00e4e768fcf6f699eb8cde90628d8521cc64089f33ac8ccd6524ec` and
+The corrected ingress guest, deployment-manifest generator, and frozen Sepolia
+input/manifest/bootstrap bundle are committed at `7c0019b`. The frozen input
+SHA-256 is
+`7a507e956198c3f35f4ea1e22e68629ced5118866237e51fa9fd0ca57ddd5bc9` and
 the frozen manifest SHA-256 is
-`33dc0a56039a59d980c471a9687ec408c6e215c9d4096fc75f8a3888ee010513`.
+`efc94f6f426a89f6e8581af95e6f95e0138a312bf3b06ac7113134ffd0af3ada`.
 Two targeted manifest derivation/cross-binding tests passed. This closes the
 manifest prerequisite only; it is not Gate 2 evidence. The funding route was
 subsequently pinned at `d14d74a`; continue from Section 9.
@@ -276,9 +278,9 @@ fees required for this controlled Tier-4 Sepolia deployment.
 worktree: /home/postfiat/repos/postfiatl1v2-public-main-verification-20260717
 branch:   pfusdc-tier4-20260717
 handoff baseline:           b5b66b7 (corrected Tier-4 activation handoff)
-current protocol/artifact:  7634799 (registrable ingress program freeze)
-last protocol code commit:  5cafb31 (registrable Tier-4 policy commitment)
-V3 guest source freeze:     5cafb31
+current protocol/artifact:  7c0019b (canonical ingress + governed finality capture)
+last protocol code commit:  7c0019b (canonical live-address encoding)
+V3 guest source freeze:     7c0019b
 base:     cc23185
 remote:   https://github.com/postfiatorg/postfiatl1v2.git
 public main observed 2026-07-18: 66de35034c46dabe46302e2abbeead23a438d3d0
@@ -441,12 +443,21 @@ all-target check now passes. There is no remaining Gate-1 compile blocker.
   `deployments/pfusdc-tier4-sepolia-20260718/funding-route.json`. The contract
   is not yet on the passphrase-gated StakeHub allowlist.
 - The replacement V3 ingress build is complete and frozen against guest source
-  commit `5cafb31`. ELF SHA-256 is
-  `f61cb50d07eb9f588b0d12d0ba74842fdaa39064f4f9a286e50c8c5be4198e1e`;
+  commit `7c0019b`. ELF SHA-256 is
+  `9e9278fc725541815fb36a5e6049301a4183e3a950778cb091be2a4bf719c373`;
   program vkey is
-  `0x007a73f6c1661a43924e5f7212b75d2069943b20e96a475a2d101245977b5bb7`.
+  `0x00cf5150195737400718baa10a8cc8bfe419857a2507d5916bb95e024fa52726`.
   The copied ELF is byte-identical to Cargo's final RISC-V release artifact and
   contains the V3 schema/program logic. No SP1 proof was generated.
+
+The immediately preceding `f61cb50d...` ELF / `0x007a73f6...` vkey is also
+invalidated. It used Alloy's checksummed `Display` representation for addresses
+while every governed PFTL route/evidence/public-value address is required to be
+canonical lowercase. The actual alphabetic Sepolia addresses therefore could
+not pass the frozen route. Commit `7c0019b` uses one canonical lowercase
+encoding in the guest and capture host, rebuilds the ELF once, regenerates the
+NAV/route/bootstrap bundle, and remeasures the constructor-specific finality
+verifier runtime hash on an Arbitrum-Sepolia fork.
 
 The prior `03e6b9...` ELF / `0x007b629d...` vkey is explicitly invalidated.
 Manifest/bootstrap work proved that `ingress_policy_hash_v2` returned a 48-byte
@@ -543,7 +554,7 @@ batch log, and batch archive. `verify-state` and `verify-blocks` passed on each
 node. The services were stopped after verification. Sanitized evidence is at
 `docs/evidence/pfusdc-tier4-checkpoint-20260718T034713Z/`.
 
-The first two former resume steps are complete at `f4a199b`: the
+The first two former resume steps are complete and corrected at `7c0019b`: the
 checkpoint-bound asset, NAV profile, route, activation operations, predicted
 EVM addresses, constructors, runtime-code commitments, and bootstrap bundle
 were frozen and cross-checked. The approved funding route was subsequently
@@ -784,7 +795,7 @@ Timeboxes are escalation points, not permission to weaken a gate.
 4. **Complete through manifest freeze:** all six validators finalized the first
    consensus-v2 block and agree on its accepted receipt, block ID, state root,
    and committee root. The deterministic Sepolia deployment manifest and route
-   profile are frozen at `f4a199b` from those values plus the asset ID, route
+   profile are frozen at `7c0019b` from those values plus the asset ID, route
    binding, constructor arguments, predicted addresses, and code hashes.
 5. Under the bounded real-value authorization in Section 2.4, acquire Ethereum
    Sepolia ETH, Arbitrum Sepolia ETH, and canonical Circle test USDC; deploy the
@@ -908,14 +919,14 @@ repository-wide review:
 3. **Complete:** freeze and verify the deterministic two-chain deployment manifest, asset,
    NAV profile, route, and activation operations from the real genesis hash,
    committee root, checkpoint/state root, proof policy, vkeys, deployment
-   nonces/addresses, constructors, and code hashes. Frozen at `f4a199b` with
+   nonces/addresses, constructors, and code hashes. Corrected and frozen at
+   `7c0019b` with
    manifest SHA-256
-   `33dc0a56039a59d980c471a9687ec408c6e215c9d4096fc75f8a3888ee010513`.
-4. Add the bounded finality-state bootstrap capture path required by
+   `efc94f6f426a89f6e8581af95e6f95e0138a312bf3b06ac7113134ffd0af3ada`.
+4. **Complete (tooling):** add the bounded finality-state bootstrap capture path required by
    `VaultBridgeRouteProfileActivationV1`, and require ingress capture to advance
-   from its exact retained checkpoint. Remove the duplicate Helios-input capture
-   call in the same targeted change. Run only affected tests; do not generate a
-   proof or run the workspace battery. Execute and validate the one live
+   from its exact retained checkpoint. Seven focused prover tests and seven
+   ingress-library tests pass. Execute and validate the one live
    `EthereumArbitrumFinalityStateV2` capture after Step 5 deploys and verifies
    the contracts, but before route activation in Step 8.
 5. Use the Section 2.4 authorization to acquire the minimum required Ethereum
