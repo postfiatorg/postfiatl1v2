@@ -39,6 +39,68 @@ No percentage completes either boundary. Report core gates passed out of four,
 then launch gates passed out of three. Gates 5-7 must not delay work on Gates
 1-4.
 
+### 1.1 Plain-English status at the 2026-07-18 sleep handoff
+
+**Current result: 1/4 core gates passed; 0/3 launch gates passed. Tier 4 is not
+deployed or active.**
+
+- Gate 1 is done: the integrated code, corrected Tier-3 ingress statement, and
+  frozen V3 ingress ELF/vkey exist and their targeted checks are green.
+- Work is stopped immediately before freezing the deterministic two-chain
+  deployment manifest, route profile, and PFTL consensus-v2 activation
+  bootstrap. No deployment transaction, deposit, burn, or proof has been run.
+- No live funds have been spent. StakeHub is **not** a signing or authorization
+  blocker: its Ethereum-mainnet ETH and USDC are unlocked, and Section 2.4
+  authorizes at most $500 aggregate for the minimum required testnet funding.
+- The unresolved external prerequisite is acquiring Ethereum-Sepolia gas,
+  Arbitrum-Sepolia gas, and canonical Circle test USDC through a verified route.
+  A paid route has not yet been selected or quoted. This must not be reported as
+  “blocked on StakeHub,” and it must not be solved by deploying a mock token.
+- There is no honest fixed-hours completion estimate yet. Ethereum/Arbitrum
+  finality and the two required SP1 proof runs impose real elapsed time. Report
+  the current bounded action and observed duration instead of multiplying an
+  early gate count into a 16-hour estimate.
+- This handoff update is documentation-only. Do not rebuild the frozen ingress
+  guest, generate a proof, deploy, or spend merely to improve the status report.
+
+The shortest correct path from here is:
+
+1. Freeze the exact manifest, route/profile hashes, contract constructor
+   arguments, deployment nonces/addresses, code hashes, PFTL committee root,
+   checkpoint, route epoch, and future activation height.
+2. Acquire only the required test assets under the $500 cap; deploy the
+   Ethereum-Sepolia anchor and Arbitrum-Sepolia verifier/vault; verify every
+   address, constructor value, storage binding, and runtime code hash.
+3. Make one dust canonical test-USDC deposit, wait for real finality, capture
+   its witness, and run the bounded native mutation audit once.
+4. Generate exactly one ingress proof; activate the pinned PFTL profile and
+   encoding; submit it; require `code=accepted`, exact credit, and replay
+   rejection. That closes Gate 2.
+5. Burn once under the activated encoding, export the finalized PFTL witness,
+   generate exactly one egress proof, claim exact USDC through the deployed
+   verifier/vault, and prove nullifier/replay rejection. That closes Gate 3.
+6. Record the immutable deployment/route/no-downgrade/fork evidence. Deployment
+   work begins before Gates 2-3, but Gate 4 closes only after both proof paths
+   are bound to the activated route. Then report **4/4 core** before doing the
+   separate CLI, StakeHub, recovery, and demonstration launch gates.
+
+### 1.2 Original public tier ladder
+
+The source of truth is the public write-up
+`postfiatorg.github.io/content/research/trustless-wrapped-stablecoins.md` at
+commit `2735ad7`. Its permitted claims are:
+
+| Tier | Evidence change | Accurate claim |
+|---|---|---|
+| 1 | Exact deposit facts plus a registered-observer quorum | Independently observed deposits |
+| 2 | Receipt-inclusion proof against a governed finalized-header checkpoint | Receipt-proven deposits |
+| 3 | Source-chain finality proof replaces the governed checkpoint | Trustless entry |
+| 4 | Succinct PFTL-finality proof replaces the threshold exit verifier | Trustless round trip |
+
+This closure plan implements Tier 3 entry and Tier 4 exit together. Product UI,
+two demonstration wallets, and Tier-5 Circle canonical alignment are not part
+of the definition of the four core Tier-4 protocol gates.
+
 ## 2. Non-negotiable execution rules
 
 ### 2.1 Stay on the Tier-4 critical path
@@ -133,14 +195,15 @@ fees required for this controlled Tier-4 Sepolia deployment.
 ```text
 worktree: /home/postfiat/repos/postfiatl1v2-public-main-verification-20260717
 branch:   pfusdc-tier4-20260717
-last verified code commit: fd70c9c (anchor deployment hash-cycle fix)
+current handoff HEAD:       b6ff8bb237f02407aacffb335b43d5b907cf8545
+last protocol code commit:  fd70c9c (anchor deployment hash-cycle fix)
 V3 guest freeze commit:    0b68a5be71c80d1cdc89d12e5c7cfe77b1eb831f
 base:     cc23185
 remote:   https://github.com/postfiatorg/postfiatl1v2.git
 public main observed 2026-07-18: 66de35034c46dabe46302e2abbeead23a438d3d0
 ```
 
-There are 23 Tier-4 commits through the anchor hash-cycle fix. The corrected Nitro-output ingress is
+There are 26 Tier-4 commits through the frozen V3 ELF/vkey record. The corrected Nitro-output ingress is
 committed at `ce511818eab246d59d3aed66e4628c5f9045d802`; the storage integration
 fixture repair is committed at `887d98280bf9ff755966c322e156aaa1aee8794e`.
 Public `main` is two CI-only commits ahead of the branch base
@@ -511,7 +574,7 @@ Timeboxes are escalation points, not permission to weaken a gate.
 `ce511818eab246d59d3aed66e4628c5f9045d802` and
 `887d98280bf9ff755966c322e156aaa1aee8794e`.
 
-### Block B — close real ingress proof (target: next 90 minutes)
+### Block B — close real ingress proof (next bounded execution phase)
 
 1. Official Nitro/BoLD vectors and the asserted runtime-code proof statement are
    frozen at `0b68a5b`; do not reopen them without a concrete failing witness.
@@ -532,7 +595,7 @@ Timeboxes are escalation points, not permission to weaken a gate.
 **Exit:** Gate 2 passes; otherwise record the exact cryptographic binding that
 remains open. Do not substitute a mock or hash-only assertion.
 
-### Block C — close real egress proof and contracts (target: next 90 minutes)
+### Block C — close real egress proof and contracts (bounded after Gate 2)
 
 1. Generate a real PFTL finality proof from a finalized accepted burn.
 2. Verify it through the production SP1 verifier contract, not the mock.
@@ -544,7 +607,7 @@ remains open. Do not substitute a mock or hash-only assertion.
 implementation is 4/4 core gates green. Record that result before starting
 product-launch work.
 
-### Block D — controlled-testnet product wiring (post-core; target: next 60 minutes)
+### Block D — controlled-testnet product wiring (post-core)
 
 1. Replace old observer/signature steps in the canonical CLI for Tier-4 profiles.
 2. Wire the existing StakeHub backend/API/dashboard to those CLI/backend paths.
@@ -553,7 +616,7 @@ product-launch work.
 
 **Exit:** Launch Gate 5 passes. This work does not block the 4/4 protocol result.
 
-### Block E — one launch-candidate validation (post-core; target: next 60 minutes)
+### Block E — one launch-candidate validation (post-core)
 
 Run, once, against the immutable launch candidate. Do not invoke these commands
 as debugging loops:
@@ -634,9 +697,9 @@ Every `ACCEPTANCE.json` must include:
 
 Core Gate 1 is complete. Continue without a repository-wide review:
 
-1. Build the frozen V3 ingress guest once, derive its ELF hash/program vkey, and
-   use them to freeze the deterministic two-chain deployment manifest and route
-   profile. This is a build/setup step, not a proof run.
+1. Freeze the deterministic two-chain deployment manifest, route profile, and
+   PFTL activation bootstrap using the already-frozen V3 ingress ELF hash and
+   program vkey. Do not rebuild the guest and do not run a proof in this step.
    The approved deployment wallet is
    `0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0`. Use the frozen ELF/vkey recorded
    in Section 3.7; do not rebuild it without a guest-source change.
