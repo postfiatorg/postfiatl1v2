@@ -192,6 +192,19 @@ finalize/claim and exact-credit readback at height 24. This operational
 provisioning does not change any frozen asset, route, proof, funding, or gate
 parameter.
 
+The fresh NAV registration also begins with no finalized reserve epoch, so a
+burn at height 25 would be rejected even after the exact ingress credit. The
+egress runner therefore uses the existing deterministic vault-bucket accounting
+path: certify the custody-derived PFUSDC reserve packet at height 25, finalize
+epoch 1 after the one-block challenge window at height 26, and certify the
+single exact burn-to-redeem at height 27. It then exports a bounded finality
+segment from the constructor-pinned block-1 checkpoint, runs the single egress
+proof, submits `withdrawWithProof` to the frozen Arbitrum vault through the
+unlocked StakeHub signer, checks the exact 1-USDC balance deltas, and verifies
+proof/withdrawal replay rejection without broadcasting a second withdrawal.
+No observer attestation, withdrawal signature, mock verifier, or hash-only
+proof is used.
+
 The corrected ingress guest, deployment-manifest generator, and frozen Sepolia
 input/manifest/bootstrap bundle are committed at `7c0019b`. The frozen input
 SHA-256 is
