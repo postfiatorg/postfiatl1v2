@@ -101,6 +101,31 @@ then launch gates passed out of three. Gates 5-7 must not delay work on Gates
 - Preserve the existing uncommitted Tier-4 work. Do not reset, checkout, clean,
   or overwrite it.
 
+### 2.4 Authorized testnet funding
+
+The user explicitly authorized, on 2026-07-18, an aggregate maximum of **$500
+USD equivalent** from the unlocked StakeHub EVM wallet's live Ethereum-mainnet
+ETH and/or USDC solely to acquire the testnet assets and pay the funding-path
+fees required for this controlled Tier-4 Sepolia deployment.
+
+- Approved wallet: `0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0`.
+- Observed before authorization: `0.303226550043211924 ETH` and
+  `3,462.712789 USDC` on Ethereum mainnet, plus `0.008164051255532 ETH` on
+  Arbitrum One. Re-read balances immediately before spending.
+- The $500 cap includes provider charges, transfers, swaps, and mainnet gas.
+  Spend only the minimum necessary; the cap is not a target.
+- Use the existing unlocked StakeHub agent signer. Never extract, print, or
+  copy a raw private key.
+- Before each real-value transaction, pin the provider/contract, source chain,
+  destination chain, recipient, asset, amount, expected delivery, and maximum
+  fee. Record the quote, transaction hash, delivered testnet balance, and total
+  cumulative USD-equivalent spend.
+- This authorization does not permit a mainnet Tier-4 deployment, unrelated
+  purchases, or weakening the Sepolia finality/proof acceptance gates.
+- Free faucets may be used when immediately available, but CAPTCHA/account
+  delays must not become an open-ended critical-path loop. A verified paid
+  route is authorized within the cap.
+
 ## 3. Exact handoff state
 
 ### 3.1 Worktree and branch
@@ -262,6 +287,17 @@ all-target check now passes. There is no remaining Gate-1 compile blocker.
 - Live ingress still depends on the old observer route.
 - Live egress still depends on the old threshold-authorized route.
 - No live Tier-4 fresh-wallet round trip has been completed.
+- The approved wallet has live mainnet funding and explicit authority to spend
+  up to $500 aggregate to acquire required testnet assets under Section 2.4.
+  The target wallet still had zero Ethereum-Sepolia ETH and zero
+  Arbitrum-Sepolia ETH at the last read; acquisition, not spending authority,
+  remains pending.
+- The one V3 ingress build was started and then interrupted. It wrote a
+  provisional tracked ELF with SHA-256
+  `03e6b9dabf559f5bc69b8c4b501d31a45ab7db049f6d1d64a4a6e49edcc548eb`.
+  Treat that ELF as unverified and uncommitted until the completed build exit,
+  source/ELF binding, and derived program vkey are recorded. No SP1 proof was
+  generated.
 
 ## 4. Mandatory architecture closure before declaring ingress safe
 
@@ -478,15 +514,19 @@ Timeboxes are escalation points, not permission to weaken a gate.
 
 1. Official Nitro/BoLD vectors and the asserted runtime-code proof statement are
    frozen at `0b68a5b`; do not reopen them without a concrete failing witness.
-2. Freeze the deterministic Sepolia deployment manifest and route profile,
+2. Build the frozen V3 ingress guest once and derive its ELF hash/program vkey.
+   This must precede deployment because the route profile commits the vkey and
+   the anchor constructor commits the derived route binding. Do not prove yet.
+3. Freeze the deterministic Sepolia deployment manifest and route profile,
    including the constructor-set anchor route binding and all read-back hashes.
-3. Fund the approved deployment wallet with testnet-only Ethereum Sepolia and
-   Arbitrum Sepolia ETH, deploy the production parent-chain anchor and asserted-
-   L2 verifier/vault, and submit one Circle test-USDC dust deposit.
-4. Capture the finalized witness and run the bounded 21-case native mutation
+4. Under the bounded real-value authorization in Section 2.4, acquire Ethereum
+   Sepolia ETH, Arbitrum Sepolia ETH, and canonical Circle test USDC; deploy the
+   production parent-chain anchor and asserted-L2 verifier/vault; then submit
+   one dust deposit.
+5. Capture the finalized witness and run the bounded 21-case native mutation
    audit once.
-5. Build the frozen ingress guest once, record ELF/vkey hashes, generate exactly
-   one real proof, and verify it in PFTL execution with deposit replay rejection.
+6. Generate exactly one real ingress proof and verify it in PFTL execution with
+   deposit replay rejection.
 
 **Exit:** Gate 2 passes; otherwise record the exact cryptographic binding that
 remains open. Do not substitute a mock or hash-only assertion.
@@ -593,14 +633,17 @@ Every `ACCEPTANCE.json` must include:
 
 Core Gate 1 is complete. Continue without a repository-wide review:
 
-1. Freeze the deterministic two-chain deployment manifest and route profile.
+1. Build the frozen V3 ingress guest once, derive its ELF hash/program vkey, and
+   use them to freeze the deterministic two-chain deployment manifest and route
+   profile. This is a build/setup step, not a proof run.
    The approved deployment wallet is
-   `0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0`; it currently has zero test ETH
-   on both target chains, which is the only external deployment blocker.
-2. Fund that wallet with testnet-only Ethereum Sepolia and Arbitrum Sepolia ETH,
+   `0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0`. Validate the provisional ELF
+   recorded in Section 3.7 rather than starting a second build blindly.
+2. Use the Section 2.4 authorization to acquire the minimum required Ethereum
+   Sepolia ETH, Arbitrum Sepolia ETH, and canonical Circle test USDC. Then
    deploy/pin the production anchor on Ethereum Sepolia and verifier/vault on
-   Arbitrum Sepolia, verify every constructor/read-back/code hash, obtain Circle
-   test USDC, and submit one dust deposit.
+   Arbitrum Sepolia, verify every constructor/read-back/code hash, and submit
+   one dust deposit.
 3. Capture the finalized target witness using the V3 layout: Ethereum proofs for
    Rollup plus parent-chain anchor, and asserted-L2 proofs for vault plus token.
    Use `pfusdc-tier4-prover ingress-capture`; it refuses to write a witness that
@@ -609,8 +652,7 @@ Core Gate 1 is complete. Continue without a repository-wide review:
    21-case JSON rejection report.
 5. Pin the deployed addresses/code hashes and complete the proof-policy V2 and
    governed finality-state V2 bootstrap/route profile.
-6. Build the frozen ingress guest once, invalidate the Gate-1 V2 ELF, and
-   generate/verify the one required ingress SP1 proof.
+6. Generate/verify the one required ingress SP1 proof from the captured witness.
    If the proof exposes a guest defect, fix it in a new commit and explicitly
    invalidate the prior ELF/proof.
 7. Record Core Gate 2 evidence, then proceed directly to the one required egress
