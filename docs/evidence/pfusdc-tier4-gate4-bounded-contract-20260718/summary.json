@@ -36,8 +36,13 @@
     "failed": 0,
     "covers": "fee-on-transfer/rebasing-like non-exact ingress and egress deltas revert atomically"
   },
+  "pause_replay_state": {
+    "passed": 1,
+    "failed": 0,
+    "covers": "pause blocks new work and pause/resume cannot rewrite consumed deposit or withdrawal replay keys"
+  },
   "source_sha256": {
-    "crates/ethereum-contracts/test/PFUSDCTier4.t.sol": "b55a225ae1ef623b5e1def0ec438726cf28621684eb20db2e2339ae60d607bae",
+    "crates/ethereum-contracts/test/PFUSDCTier4.t.sol": "53f54f4415303d9d069b907338760a5bac0aa36cce4a60cd3fa2c1f0268096c6",
     "crates/ethereum-contracts/test/PFUSDCTier4PinnedFork.t.sol": "a11ca75c9a3e5c03bcc42f5c710d8e88c5f71845a9c98bae2589e15c4e200827"
   },
   "generated_sp1_proofs": 0,

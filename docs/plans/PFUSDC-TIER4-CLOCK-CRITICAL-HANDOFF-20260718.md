@@ -236,7 +236,8 @@ fork suite passed 2/2 at pinned blocks `288769892` and `11298882`; three Tier-4
 fuzz tests passed 64 runs each (192 generated cases); the immutable-binding
 invariant passed 32 runs and 1,024 calls; and the non-exact token-delta test
 proved fee-on-transfer/rebasing-like ingress and egress behavior reverts
-atomically. Evidence is recorded in
+atomically. A direct pause test also proves pause blocks new work without
+rewriting already-consumed deposit or withdrawal replay keys. Evidence is recorded in
 `docs/evidence/pfusdc-tier4-gate4-bounded-contract-20260718/`. This closes only
 the bounded fork/fuzz/invariant prerequisite. Gate 4 remains open until the
 production contracts are deployed/read back, the exact route is activated,

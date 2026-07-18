@@ -12,4 +12,7 @@ PASS  FOUNDRY_INVARIANT_RUNS=32 FOUNDRY_INVARIANT_DEPTH=32 forge test --root cra
 PASS  forge test --root crates/ethereum-contracts --match-contract PFUSDCTier4Test --match-test testNonExactTokenDeltasRevertIngressAndEgressAtomically -vv
       1 passed; 0 failed
 
+PASS  forge test --root crates/ethereum-contracts --match-contract PFUSDCTier4Test --match-test testPauseBlocksNewWorkWithoutRewritingConsumedClaims -vv
+      1 passed; 0 failed
+
 No SP1 proof was generated. No transaction was signed or broadcast.

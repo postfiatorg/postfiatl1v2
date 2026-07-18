@@ -460,6 +460,36 @@ contract PFUSDCTier4Test {
         _assertEq(feeToken.balanceOf(RECIPIENT), 0, "fee egress changed recipient");
     }
 
+    function testPauseBlocksNewWorkWithoutRewritingConsumedClaims() public {
+        token.mint(address(this), 1_000);
+        token.approve(address(vault), 1_000);
+        bytes32 routeBinding = keccak256("pause-route");
+        bytes32 depositId = vault.depositV2(125, "pf-pause-recipient", keccak256("pause-deposit"), routeBinding);
+        bytes memory publicValues = _publicValues(address(vault), true, 11, _h48(0x44), _h32(0x99));
+        bytes32 withdrawalCommitment = vault.withdrawWithProof(publicValues, hex"01020304");
+        _assertTrue(vault.depositSeen(depositId), "accepted deposit replay key missing");
+        _assertTrue(vault.consumedWithdrawalIdCommitment(withdrawalCommitment), "withdrawal replay key missing");
+
+        vault.setPaused(true);
+        uint256 walletBefore = token.balanceOf(address(this));
+        uint256 vaultBefore = token.balanceOf(address(vault));
+        (bool depositOk,) = address(vault)
+            .call(
+                abi.encodeCall(
+                    ERC20BridgeVaultV2.depositV2, (100, "pf-paused-new", keccak256("paused-new"), routeBinding)
+                )
+            );
+        _assertTrue(!depositOk, "paused vault accepted new deposit");
+        _assertEq(token.balanceOf(address(this)), walletBefore, "paused deposit changed wallet");
+        _assertEq(token.balanceOf(address(vault)), vaultBefore, "paused deposit changed vault");
+        _assertTrue(vault.depositSeen(depositId), "pause rewrote deposit replay key");
+        _assertTrue(vault.consumedWithdrawalIdCommitment(withdrawalCommitment), "pause rewrote withdrawal replay key");
+
+        vault.setPaused(false);
+        _assertTrue(vault.depositSeen(depositId), "resume rewrote deposit replay key");
+        _assertTrue(vault.consumedWithdrawalIdCommitment(withdrawalCommitment), "resume rewrote withdrawal replay key");
+    }
+
     function testFuzzMalformedPublicValuesCannotMutate(bytes memory publicValues, bytes memory proof) public {
         uint256 vaultBefore = token.balanceOf(address(vault));
         uint256 recipientBefore = token.balanceOf(RECIPIENT);
