@@ -88,6 +88,24 @@ authorized under Section 2.4. The current unfinished item is ordinary execution,
 not a dependency: derive and verify the deployment/route manifest from the real
 height-1 checkpoint commitments.
 
+**2026-07-18 user stop/resume checkpoint:** implementation was paused at the
+user's request so this planning handoff could be made explicit before they went
+to sleep. No funding transaction, deployment, deposit, burn, or SP1 proof was
+started. The authorization remains exactly the Section 2.4 authorization: use
+the unlocked StakeHub Ethereum-mainnet ETH and/or USDC, through the existing
+agent signer, for at most **$500 aggregate** of the minimum required Sepolia
+funding path. This is authorization to execute after the manifest is pinned; it
+is not authorization to guess a provider, contract, quote, recipient, or
+constructor value.
+
+The working tree at this pause contains unfinished, uncommitted deployment-
+manifest generator work in `tools/pfusdc-tier4-prover/src/main.rs` and
+`tools/pfusdc-tier4-prover/src/manifest.rs`. Its one targeted derivation test
+passed, but no real deployment input or frozen manifest was emitted. Preserve
+those files and resume with Current Next Action 3 below: finish and independently
+cross-check the checkpoint-bound manifest, then pin the funding route before
+spending. Do not treat the uncommitted generator or its test as Gate 2 evidence.
+
 The shortest correct path from here is:
 
 1. **Complete:** use the initialized controlled target and rollback archive,
