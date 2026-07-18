@@ -219,6 +219,17 @@ proof/withdrawal replay rejection without broadcasting a second withdrawal.
 No observer attestation, withdrawal signature, mock verifier, or hash-only
 proof is used.
 
+Before that single egress proof, the release driver runs one bounded native
+mutation audit against the exact exported live witness. Its 20 cases cover the
+chain/genesis/checkpoint, activation height, route profile, committed exit root,
+proposal-only and prepare-only artifacts, four-of-six/under-quorum finality,
+duplicate/wrong committee, ML-DSA signature/context binding, rejected receipt,
+Merkle path/leaf, packet, recipient, and packet hash/digest boundaries. The
+audit command was smoke-verified on a valid committee-rotation fixture with
+20 rejected mutations and zero accepted mutations. It generates no SP1 proof;
+the live EVM proof/withdrawal replay check remains part of the one egress proof
+submission.
+
 The corrected ingress guest, deployment-manifest generator, and frozen Sepolia
 input/manifest/bootstrap bundle are committed at `7c0019b`. The frozen input
 SHA-256 is

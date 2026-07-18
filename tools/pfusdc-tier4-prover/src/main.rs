@@ -18,6 +18,7 @@ const INGRESS_ELF: Elf = Elf::Static(include_bytes!(
     "../../../programs/pfusdc-ingress/elf/pfusdc-ingress-program"
 ));
 
+mod egress_audit;
 mod ingress_capture;
 mod manifest;
 
@@ -52,6 +53,8 @@ enum Command {
     FinalityBootstrap(ingress_capture::FinalityBootstrapArgs),
     /// Run the bounded security-field mutation matrix against a captured witness.
     IngressAudit(ingress_capture::IngressAuditArgs),
+    /// Run the bounded consensus/exit mutation matrix against a captured egress witness.
+    EgressAudit(egress_audit::EgressAuditArgs),
     /// Execute or Groth16-prove a canonical Ethereum/Arbitrum ingress witness.
     Ingress {
         #[arg(long)]
@@ -93,6 +96,7 @@ async fn main() -> Result<()> {
             ingress_capture::capture_finality_bootstrap(capture).await
         }
         Command::IngressAudit(audit) => ingress_capture::audit(audit),
+        Command::EgressAudit(audit) => egress_audit::audit(audit),
         Command::Ingress {
             witness,
             output_dir,
