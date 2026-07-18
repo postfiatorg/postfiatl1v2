@@ -54,3 +54,38 @@ The generated bootstrap operations independently reproduce the manifest's
 asset ID, NAV profile ID, ingress policy hash, route profile hash, SP1 vkey,
 encoding, and proof bounds. They are unsigned and must enter PFTL only through
 the normal certified transaction path.
+
+## Live deployment driver
+
+Use the StakeHub virtualenv so deployment signing remains inside the unlocked
+agent. The driver accepts no private-key argument and never reads a raw key:
+
+```sh
+/home/postfiat/repos/StakeHub/.venv/bin/python \
+  scripts/pfusdc-tier4-deploy.py preflight
+```
+
+Preflight validates the frozen input, manifest, artifacts, compiler settings,
+constructor encodings, predicted CREATE addresses, target chain IDs, system
+contract runtime hashes, deployer nonces, target addresses, StakeHub agent
+state, and testnet gas balances. It does not write evidence or send a
+transaction.
+
+After the wallet has the minimum gas on both chains, deploy Arbitrum first and
+Ethereum second:
+
+```sh
+/home/postfiat/repos/StakeHub/.venv/bin/python \
+  scripts/pfusdc-tier4-deploy.py deploy-arbitrum
+/home/postfiat/repos/StakeHub/.venv/bin/python \
+  scripts/pfusdc-tier4-deploy.py deploy-ethereum
+/home/postfiat/repos/StakeHub/.venv/bin/python \
+  scripts/pfusdc-tier4-deploy.py readback
+```
+
+Every agent request is checkpointed under
+`docs/evidence/pfusdc-tier4-deployment-live/state.json` before broadcast. A
+restart first checks predicted-address code, runtime hash, deployer nonce, and
+all constructor/storage getters, so an accepted deployment is never blindly
+rebroadcast. A mismatched chain, nonce, artifact, system contract, runtime
+hash, or getter fails closed.
