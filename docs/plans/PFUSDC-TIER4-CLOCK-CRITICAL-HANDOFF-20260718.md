@@ -2,9 +2,9 @@
 
 **Date:** 2026-07-18
 **Priority:** P0 / clock critical
-**Execution mode:** documentation-only sleep handoff recorded; implementation
-is paused at the bounded checkpoint in Section 1.1. Resume toward the four-gate
-Tier-4 protocol acceptance boundary; controlled-testnet product hardening follows
+**Execution mode:** documentation-only sleep handoff was recorded at `eacd7d7`;
+end-to-end execution has resumed from that boundary toward the four-gate Tier-4
+protocol acceptance boundary; controlled-testnet product hardening follows
 **Canonical architecture reference:** `docs/plans/PFUSDC-TIER4-IMPLEMENTATION-PLAN-20260717.md`
 
 ## 1. Mission
@@ -48,12 +48,12 @@ deployed or active.**
 - Gate 1 is done: the integrated code, corrected Tier-3 ingress statement, and
   corrected/frozen V3 ingress ELF/vkey exist and their targeted checks are
   green.
-- The legacy PFTL snapshot has been archived without mutation, and the fresh
-  six-validator consensus-v2 target has been initialized consistently at height
-  0. The next bounded action is to bring up those six validators and finalize
-  block 1. The deterministic two-chain deployment manifest and exact Tier-4
-  NAV/route profile must be frozen from that real finalized checkpoint. No
-  deployment transaction, deposit, burn, or proof has been run.
+- The legacy PFTL snapshot has been archived without mutation. The fresh
+  six-validator consensus-v2 target finalized block 1 with identical block ID,
+  state root, accepted receipt, and replicated files on all six nodes. The
+  deterministic two-chain deployment manifest and exact Tier-4 NAV/route profile
+  must now be frozen from that checkpoint. No deployment transaction, deposit,
+  burn, or proof has been run.
 - No live funds have been spent. StakeHub is **not** a signing or authorization
   blocker: its Ethereum-mainnet ETH and USDC are unlocked, and Section 2.4
   authorizes at most $500 aggregate for the minimum required testnet funding.
@@ -79,20 +79,19 @@ deployed or active.**
   finality and the two required SP1 proof runs impose real elapsed time. Report
   the current bounded action and observed duration instead of multiplying an
   early gate count into a 16-hour estimate.
-- The documentation-only sleep handoff is complete. Implementation is paused at
-  this recorded boundary at the user's request. Do not generate a proof, deploy,
-  spend, or start a long test merely to improve a status report.
+- The documentation-only sleep handoff is preserved at `eacd7d7`. Execution
+  resumed from that exact boundary; no proof, deployment, spend, or long test was
+  used to create the initial checkpoint.
 
 **Blocker status:** no known blocker. StakeHub signing/funds are available and
 authorized under Section 2.4. The current unfinished item is ordinary execution,
-not a dependency: finalize the first block on the already-initialized six-node
-target, then derive the manifest from its real commitments.
+not a dependency: derive and verify the deployment/route manifest from the real
+height-1 checkpoint commitments.
 
 The shortest correct path from here is:
 
-1. Use the already-initialized controlled target and rollback archive; do not
-   recreate them or mutate the legacy snapshot. Bring up all six validators and
-   finalize the first consensus-v2 block.
+1. **Complete:** use the initialized controlled target and rollback archive,
+   bring up all six validators, and finalize the first consensus-v2 block.
 2. Use that real finalized block, committee root, new genesis hash, state root,
    and checkpoint—together with the frozen vkeys and deterministic EVM
    deployment inputs—to freeze the pfUSDC asset, Tier-4 NAV profile, route,
@@ -470,19 +469,37 @@ genesis document SHA-256: d6ae81ee0732756ea8e67c2e6456e859ab345173d4ba2d4d055b55
 validator registry SHA-256: d05436b6bbfc68954fa4731b2144c823f08069e9a4cd945250315fd2aad3bc30
 ```
 
-All six initialized node states agree on the values above. No block has yet
-been finalized, no validator service is being left running for this handoff,
-and no profile/route/bootstrap transaction has been submitted. Before starting
-services, stage one signer file per validator without printing key material.
+Those values are the height-0 initialization baseline. The bounded checkpoint
+round is now complete:
 
-The exact resume point is:
+```text
+height: 1
+view: 0
+proposer: validator-1
+block ID: b9c3e38c523cc258dfbe106b45e000155dd8f0c193770d4d905f8b0777f91612519fc964ac890483b844c2ef7b6fdce8
+state root: 77a53da28e603fe409698d5ccbd8356b7cb036e0ab47ae47aa2d254f59222371ff82a30392f1003513cf568a13ca6049
+committee epoch: 1
+committee root: a84d4b4cadc9c068d5c668e040efe9ba303c59560bfb4c315c5b23aa235b8a6a279f3886d1352810e0b83822a90fc5d0
+prepare QC: 5 votes / quorum 5
+precommit QC: 6 votes / quorum 5
+receipt: 59cc3d56f63d2626e194755adb7287e6375c3133e0de0c0e72141f81f2e834905bbb7df68420f24092a7199fc7d80327, code=accepted
+```
 
-1. Create the six-validator topology and per-validator signer files.
-2. Start the six local validator transports with bounded readiness checks.
-3. Submit one valid batch at height 1 and require all six nodes to report the
-   identical finalized block, state root, and consensus-v2 commit.
-4. Export that checkpoint and only then compute/freeze the asset, NAV profile,
-   route, constructor, predicted-address, and runtime-code commitments.
+All six nodes have the identical tip, state root, accepted receipt, ledger,
+governance state, bridge state, shielded state, block log, receipt log, ordered
+batch log, and batch archive. `verify-state` and `verify-blocks` passed on each
+node. The services were stopped after verification. Sanitized evidence is at
+`docs/evidence/pfusdc-tier4-checkpoint-20260718T034713Z/`.
+
+The exact resume point is now:
+
+1. Freeze the checkpoint-bound asset, NAV profile, route, activation operations,
+   predicted EVM addresses, constructors, and runtime-code commitments.
+2. Validate that every circular dependency is broken by the intended storage
+   versus immutable binding and that the bootstrap bundle reproduces the same
+   profile/route IDs.
+3. Only after the manifest is internally consistent, acquire testnet assets and
+   deploy the pinned contracts.
 
 This is the only current execution thread. Do not run GitHub Actions, a
 workspace battery, an SP1 proof, or a live funding transaction before this
@@ -713,11 +730,11 @@ Timeboxes are escalation points, not permission to weaken a gate.
 3. The legacy archive and fresh six-validator height-0 target are complete as
    recorded in Section 3.9. Do not recreate or reset them. Stage the individual
    validator signer files without printing key material.
-4. Bring up all six validators and finalize the first consensus-v2 block. Freeze
-   the deterministic Sepolia deployment manifest and route profile only after
-   recording its real genesis hash, asset ID, committee root, finalized
-   checkpoint/state root, route hash, route binding, constructor arguments,
-   predicted addresses, and code hashes.
+4. **Complete through checkpoint:** all six validators finalized the first
+   consensus-v2 block and agree on its accepted receipt, block ID, state root,
+   and committee root. Now freeze the deterministic Sepolia deployment manifest
+   and route profile from those values plus the asset ID, route binding,
+   constructor arguments, predicted addresses, and code hashes.
 5. Under the bounded real-value authorization in Section 2.4, acquire Ethereum
    Sepolia ETH, Arbitrum Sepolia ETH, and canonical Circle test USDC; deploy the
    production parent-chain anchor and asserted-L2 verifier/vault; then submit
@@ -832,36 +849,35 @@ Every `ACCEPTANCE.json` must include:
 
 Core Gate 1 is complete. Continue without a repository-wide review:
 
-1. Use the existing archive and initialized six-validator target recorded in
-   Section 3.9; do not rebuild, reset, or mutate the legacy snapshot. Stage the
-   six individual signer files and topology without exposing key material.
-2. Start all six validators and finalize the first consensus-v2 block. Require
-   identical height, block ID, state root, and consensus-v2 commit on all six.
-   Freeze the deterministic two-chain deployment manifest and route only after
-   the real new genesis hash, committee root, asset ID, checkpoint/state root,
-   route profile hash, route binding, deployment nonces/addresses, constructors,
-   and code hashes are known.
-3. Use the Section 2.4 authorization to acquire the minimum required Ethereum
+1. **Complete:** the legacy archive and initialized target are preserved; six
+   split signer files and the topology were staged without exposing key material.
+2. **Complete:** all six validators finalized consensus-v2 block 1 and match on
+   height, block ID, state root, accepted receipt, and consensus-v2 commit.
+3. Freeze and verify the deterministic two-chain deployment manifest, asset,
+   NAV profile, route, and activation operations from the real genesis hash,
+   committee root, checkpoint/state root, proof policy, vkeys, deployment
+   nonces/addresses, constructors, and code hashes.
+4. Use the Section 2.4 authorization to acquire the minimum required Ethereum
    Sepolia ETH, Arbitrum Sepolia ETH, and canonical Circle test USDC. Then
    deploy/pin the production anchor on Ethereum Sepolia and verifier/vault on
    Arbitrum Sepolia, verify every constructor/read-back/code hash, and submit
    one dust deposit. The approved deployment wallet is
    `0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0`; the unlocked signer and funds are
    available, so this is not presently blocked on StakeHub.
-4. Capture the finalized target witness using the V3 layout: Ethereum proofs for
+5. Capture the finalized target witness using the V3 layout: Ethereum proofs for
    Rollup plus parent-chain anchor, and asserted-L2 proofs for vault plus token.
    Use `pfusdc-tier4-prover ingress-capture`; it refuses to write a witness that
    fails native verification.
-5. Run `pfusdc-tier4-prover ingress-audit` once on that witness and retain its
+6. Run `pfusdc-tier4-prover ingress-audit` once on that witness and retain its
    21-case JSON rejection report.
-6. Register/activate the already-computed Tier-4 proof-policy, NAV profile,
+7. Register/activate the already-computed Tier-4 proof-policy, NAV profile,
    governed finality state, route, and deployed address/code-hash bindings.
-7. Generate/verify the one required ingress SP1 proof from the captured witness.
+8. Generate/verify the one required ingress SP1 proof from the captured witness.
    If the proof exposes a guest defect, fix it in a new commit and explicitly
    invalidate the prior ELF/proof.
-8. Record Core Gate 2 evidence, then proceed directly to the one required egress
+9. Record Core Gate 2 evidence, then proceed directly to the one required egress
    proof for Core Gate 3.
-9. Report status only as: current core gate, core gates passed out of four,
+10. Report status only as: current core gate, core gates passed out of four,
    exact blocker, last evidence path, and next bounded action. After 4/4 core,
    report launch gates separately out of three.
 

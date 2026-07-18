@@ -1,0 +1,72 @@
+{
+  "schema": "postfiat-pfusdc-tier4-initial-checkpoint-v1",
+  "recorded_at_utc": "2026-07-18T03:47:13Z",
+  "checkpoint_valid": true,
+  "core_gate_claim": false,
+  "repository_commit_at_execution": "eacd7d7",
+  "node_binary_build_revision": "7634799e",
+  "dirty_worktree_at_execution": false,
+  "target": {
+    "root": "/home/postfiat/tmp/pfusdc-tier4-target-20260718",
+    "chain_id": "postfiat-wan-devnet-2",
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "protocol_version": 1,
+    "consensus_v2_activation_height": 1,
+    "validator_count": 6,
+    "topology_id": "e62e46d443045decc2426a35f0060ed3a4fa0c4f79f3eb07b0b5d63dc04d81cc5222d66a806036cb81c69a9982b66f83"
+  },
+  "checkpoint": {
+    "height": 1,
+    "view": 0,
+    "proposer": "validator-1",
+    "block_id": "b9c3e38c523cc258dfbe106b45e000155dd8f0c193770d4d905f8b0777f91612519fc964ac890483b844c2ef7b6fdce8",
+    "parent_block_id": "4e9f920638fa1a885d83d728f7bcaaf7a9e3a5677d5e8564e8432f01020e501f3f1201249e1a98730c38dd3a93dc638f",
+    "payload_hash": "6b476bce73eb9e31aff61b525f227d17512cdd58a8ef591427889a5a520242bc41266809973f4372647d9f9b403c21c6",
+    "state_root": "77a53da28e603fe409698d5ccbd8356b7cb036e0ab47ae47aa2d254f59222371ff82a30392f1003513cf568a13ca6049",
+    "committee_epoch": 1,
+    "committee_root": "a84d4b4cadc9c068d5c668e040efe9ba303c59560bfb4c315c5b23aa235b8a6a279f3886d1352810e0b83822a90fc5d0",
+    "prepare_qc": {
+      "quorum": 5,
+      "vote_count": 5,
+      "certificate_id": "45a60145c49600907c7908eb927337247a030e397ac13796e3b40ec7e0629e8999e5966545b9053033fe498d363367a6"
+    },
+    "precommit_qc": {
+      "quorum": 5,
+      "vote_count": 6,
+      "certificate_id": "ed51af62c811b5a96e51d11f3701c4c0b1e536ead276753e1593eff674c731c732b69fc8b0595186c1fc79c119c0c6e7"
+    }
+  },
+  "transaction": {
+    "batch_id": "6acbef60f2e27c882b5ce4759b95f3e7e9205f9c78829a7d5626defa2573cb14ea2265e2597452e7b3b5ad7c36915236",
+    "tx_id": "59cc3d56f63d2626e194755adb7287e6375c3133e0de0c0e72141f81f2e834905bbb7df68420f24092a7199fc7d80327",
+    "accepted": true,
+    "code": "accepted",
+    "receipt_count": 1,
+    "fee_charged_atoms": 22
+  },
+  "verification": {
+    "round_ok": true,
+    "local_apply_verified": true,
+    "all_five_peer_sends_verified": true,
+    "identical_height_tip_and_state_root_count": 6,
+    "identical_accepted_receipt_count": 6,
+    "verify_state_pass_count": 6,
+    "verify_blocks_pass_count": 6,
+    "services_stopped_after_verification": true
+  },
+  "secret_material_policy": {
+    "split_validator_key_files": true,
+    "key_file_mode": "0600",
+    "private_key_material_copied_to_evidence": false
+  },
+  "live_value": {
+    "funds_spent_usd": 0,
+    "sp1_proofs_generated": 0,
+    "evm_transactions_sent": 0
+  },
+  "remaining_before_deployment": [
+    "freeze deterministic EVM inputs and predicted addresses",
+    "freeze pfUSDC asset, NAV profile, route and activation operations from this checkpoint",
+    "verify constructor and runtime bytecode commitments"
+  ]
+}
