@@ -2,8 +2,9 @@
 
 **Date:** 2026-07-18
 **Priority:** P0 / clock critical
-**Execution mode:** continuous implementation to the four-gate Tier-4 protocol
-acceptance boundary; controlled-testnet product hardening follows
+**Execution mode:** documentation-only sleep handoff recorded; implementation
+is paused at the bounded checkpoint in Section 1.1. Resume toward the four-gate
+Tier-4 protocol acceptance boundary; controlled-testnet product hardening follows
 **Canonical architecture reference:** `docs/plans/PFUSDC-TIER4-IMPLEMENTATION-PLAN-20260717.md`
 
 ## 1. Mission
@@ -47,9 +48,12 @@ deployed or active.**
 - Gate 1 is done: the integrated code, corrected Tier-3 ingress statement, and
   corrected/frozen V3 ingress ELF/vkey exist and their targeted checks are
   green.
-- Current work is freezing the deterministic two-chain deployment manifest,
-  exact Tier-4 NAV/route profile, and PFTL consensus-v2 bootstrap. No deployment
-  transaction, deposit, burn, or proof has been run.
+- The legacy PFTL snapshot has been archived without mutation, and the fresh
+  six-validator consensus-v2 target has been initialized consistently at height
+  0. The next bounded action is to bring up those six validators and finalize
+  block 1. The deterministic two-chain deployment manifest and exact Tier-4
+  NAV/route profile must be frozen from that real finalized checkpoint. No
+  deployment transaction, deposit, burn, or proof has been run.
 - No live funds have been spent. StakeHub is **not** a signing or authorization
   blocker: its Ethereum-mainnet ETH and USDC are unlocked, and Section 2.4
   authorizes at most $500 aggregate for the minimum required testnet funding.
@@ -75,20 +79,24 @@ deployed or active.**
   finality and the two required SP1 proof runs impose real elapsed time. Report
   the current bounded action and observed duration instead of multiplying an
   early gate count into a 16-hour estimate.
-- The documentation-only sleep handoff is complete. Implementation resumed from
-  this recorded boundary. Do not generate a proof, deploy, or spend merely to
-  improve a status report.
+- The documentation-only sleep handoff is complete. Implementation is paused at
+  this recorded boundary at the user's request. Do not generate a proof, deploy,
+  spend, or start a long test merely to improve a status report.
+
+**Blocker status:** no known blocker. StakeHub signing/funds are available and
+authorized under Section 2.4. The current unfinished item is ordinary execution,
+not a dependency: finalize the first block on the already-initialized six-node
+target, then derive the manifest from its real commitments.
 
 The shortest correct path from here is:
 
-1. Freeze the new controlled-target inputs: six-validator registry, genesis
-   with consensus-v2 active from height 1, Tier-4 pfUSDC asset/NAV profile,
-   route epoch, proof bounds, timing values, vkeys, and deterministic EVM
-   deployment nonces/addresses. Archive the old chain; do not mutate it.
-2. Perform the single controlled PFTL reset, bring up all six validators, and
-   finalize the first consensus-v2 block. Use that real finalized block,
-   committee root, new genesis hash, asset ID, route/profile hashes, and
-   checkpoint to freeze the final deployment manifest.
+1. Use the already-initialized controlled target and rollback archive; do not
+   recreate them or mutate the legacy snapshot. Bring up all six validators and
+   finalize the first consensus-v2 block.
+2. Use that real finalized block, committee root, new genesis hash, state root,
+   and checkpoint—together with the frozen vkeys and deterministic EVM
+   deployment inputs—to freeze the pfUSDC asset, Tier-4 NAV profile, route,
+   deployment manifest, and activation operations.
 3. Acquire only the required test assets under the $500 cap; deploy the
    Ethereum-Sepolia anchor and Arbitrum-Sepolia verifier/vault; verify every
    address, constructor value, storage binding, and runtime code hash.
@@ -218,7 +226,8 @@ fees required for this controlled Tier-4 Sepolia deployment.
 ```text
 worktree: /home/postfiat/repos/postfiatl1v2-public-main-verification-20260717
 branch:   pfusdc-tier4-20260717
-documentation baseline:    47dbc26 (plain-English handoff status)
+handoff baseline:           b5b66b7 (corrected Tier-4 activation handoff)
+current protocol/artifact:  7634799 (registrable ingress program freeze)
 last protocol code commit:  5cafb31 (registrable Tier-4 policy commitment)
 V3 guest source freeze:     5cafb31
 base:     cc23185
@@ -418,13 +427,14 @@ Two source-level checks change the execution order in the earlier plan:
    `vault_bridge` / `multi-fetch-quorum` Arbitrum-One observer profile, so it
    will reject the Tier-4 route even if route governance itself is valid.
 
-The controlled target must therefore be bootstrapped once with:
+The controlled target must therefore be initialized and activated once with:
 
 - a fresh archived-and-recorded chain identity and six-validator registry;
 - consensus-v2 active from height 1;
-- the exact Tier-4 ingress verifier/source class, route-policy hash, SP1 vkey,
-  encoding, proof/public-value bounds, confirmations, timing, attestation, and
-  bond fields in a registered NAV proof profile;
+- post-genesis operations registering the exact Tier-4 ingress verifier/source
+  class, route-policy hash, SP1 vkey, encoding, proof/public-value bounds,
+  confirmations, timing, attestation, and bond fields in a registered NAV proof
+  profile;
 - pfUSDC registered or rebound to that exact profile; and
 - the Tier-4 route epoch and governance state.
 
@@ -433,6 +443,50 @@ constructor manifest. The resulting real genesis hash, asset ID, committee
 root, finalized height, checkpoint/state root, route hash, and route binding
 are constructor commitments for the Arbitrum verifier/vault and Ethereum
 anchor. Do not guess them and do not deploy against the legacy chain values.
+
+### 3.9 Controlled-reset progress at the sleep handoff
+
+The destructive part of the reset has **not** been performed against the legacy
+snapshot. It remains untouched. A deterministic compressed rollback archive was
+created at:
+
+```text
+/home/postfiat/archives/pfusdc-tier4-20260718/legacy-postfiat-wan-devnet-2-validator-0.tar.zst
+SHA-256: ca2de5d16ad4123f6b99ddd128a7aea84ed055a5827798c36715e33a32bcab0a
+legacy content-tree SHA-256: 44ce5643c52354315cf694a10176a80b61caad060270e77f236f32dbe7ef4d95
+```
+
+The replacement target is initialized at:
+
+```text
+/home/postfiat/tmp/pfusdc-tier4-target-20260718
+chain ID: postfiat-wan-devnet-2
+validators: 6
+height: 0
+consensus-v2 activation height: 1
+genesis hash: ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9
+state root: 4e50b6dd3a054cf72e89d472763e3475dd5ed24434385bcb5b5beaaab367066bf5c3d831982c3e3cbf9de96684e81ebf
+genesis document SHA-256: d6ae81ee0732756ea8e67c2e6456e859ab345173d4ba2d4d055b554180fcb55c
+validator registry SHA-256: d05436b6bbfc68954fa4731b2144c823f08069e9a4cd945250315fd2aad3bc30
+```
+
+All six initialized node states agree on the values above. No block has yet
+been finalized, no validator service is being left running for this handoff,
+and no profile/route/bootstrap transaction has been submitted. Before starting
+services, stage one signer file per validator without printing key material.
+
+The exact resume point is:
+
+1. Create the six-validator topology and per-validator signer files.
+2. Start the six local validator transports with bounded readiness checks.
+3. Submit one valid batch at height 1 and require all six nodes to report the
+   identical finalized block, state root, and consensus-v2 commit.
+4. Export that checkpoint and only then compute/freeze the asset, NAV profile,
+   route, constructor, predicted-address, and runtime-code commitments.
+
+This is the only current execution thread. Do not run GitHub Actions, a
+workspace battery, an SP1 proof, or a live funding transaction before this
+checkpoint is finalized and the deployment target is pinned.
 
 ## 4. Mandatory architecture closure before declaring ingress safe
 
@@ -656,10 +710,9 @@ Timeboxes are escalation points, not permission to weaken a gate.
    the anchor constructor commits the derived route binding. Do not prove yet.
    This step is complete; use the corrected frozen values in Section 3.7. The
    superseded `03e6b9...` ELF must not be deployed or proved.
-3. Archive the legacy chain. Create the fresh six-validator controlled target
-   with consensus-v2 active from height 1 and the exact Tier-4 NAV profile,
-   pfUSDC binding, route epoch, and governance bootstrap. Perform this as the
-   one controlled reset, not as repeated experimental resets.
+3. The legacy archive and fresh six-validator height-0 target are complete as
+   recorded in Section 3.9. Do not recreate or reset them. Stage the individual
+   validator signer files without printing key material.
 4. Bring up all six validators and finalize the first consensus-v2 block. Freeze
    the deterministic Sepolia deployment manifest and route profile only after
    recording its real genesis hash, asset ID, committee root, finalized
@@ -779,16 +832,15 @@ Every `ACCEPTANCE.json` must include:
 
 Core Gate 1 is complete. Continue without a repository-wide review:
 
-1. Archive, but do not alter, the legacy `postfiat-wan-devnet-2` snapshot.
-   Prepare the one-reset six-validator controlled target with consensus-v2
-   active from height 1, the exact Tier-4 NAV proof profile, pfUSDC profile
-   binding, route epoch, and governance bootstrap. Use the frozen ELF/vkey in
-   Section 3.7; do not rebuild it and do not generate a proof in this step.
-2. Start all six validators and finalize the first consensus-v2 block. Freeze
-   the deterministic two-chain deployment manifest and route only after the
-   real new genesis hash, committee root, asset ID, checkpoint/state root, route
-   profile hash, route binding, deployment nonces/addresses, constructors, and
-   code hashes are known.
+1. Use the existing archive and initialized six-validator target recorded in
+   Section 3.9; do not rebuild, reset, or mutate the legacy snapshot. Stage the
+   six individual signer files and topology without exposing key material.
+2. Start all six validators and finalize the first consensus-v2 block. Require
+   identical height, block ID, state root, and consensus-v2 commit on all six.
+   Freeze the deterministic two-chain deployment manifest and route only after
+   the real new genesis hash, committee root, asset ID, checkpoint/state root,
+   route profile hash, route binding, deployment nonces/addresses, constructors,
+   and code hashes are known.
 3. Use the Section 2.4 authorization to acquire the minimum required Ethereum
    Sepolia ETH, Arbitrum Sepolia ETH, and canonical Circle test USDC. Then
    deploy/pin the production anchor on Ethereum Sepolia and verifier/vault on
