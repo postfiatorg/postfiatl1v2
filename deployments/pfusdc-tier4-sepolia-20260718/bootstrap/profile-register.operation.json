@@ -1,0 +1,19 @@
+{
+  "operation": "nav_profile_register",
+  "registrant": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "verifier_kind": "sp1-arbitrum-finality-v1",
+  "source_class": "vault_bridge:erc20_bridge_vault:421614:0xa796dc3c9308f9c855a0659153b7afc2006cf27b:0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d",
+  "max_snapshot_age_blocks": 100,
+  "challenge_window_blocks": 1,
+  "max_epoch_gap_blocks": 1000,
+  "settle_deadline_blocks": 1000,
+  "min_challenge_bond": 0,
+  "min_attestations": 0,
+  "tolerance_bp": 0,
+  "valuation_policy_hash": "a19667214636171d344e9fdbed490cf849359ddb762b587879e6456a70000f7b",
+  "vault_bridge_route_policy_hash": "e7a4ed044f66dbff0d75df786bed6857fefffb8009b5e4959f4105bce4ae1483a418501d3df60b8848247ee41f003731",
+  "sp1_program_vkey": "0x007a73f6c1661a43924e5f7212b75d2069943b20e96a475a2d101245977b5bb7",
+  "sp1_proof_encoding": "groth16",
+  "max_proof_bytes": 4096,
+  "max_public_values_bytes": 16384
+}

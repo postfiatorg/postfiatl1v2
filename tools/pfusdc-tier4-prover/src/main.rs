@@ -19,6 +19,7 @@ const INGRESS_ELF: Elf = Elf::Static(include_bytes!(
 ));
 
 mod ingress_capture;
+mod manifest;
 
 #[derive(Debug, Parser)]
 #[command(name = "pfusdc-tier4-prover")]
@@ -35,6 +36,15 @@ enum Command {
         /// Optional JSON output path. The same document is always printed.
         #[arg(long)]
         output: Option<PathBuf>,
+    },
+    /// Build and cross-check the deterministic Tier-4 route/deployment manifest.
+    DeploymentManifest {
+        /// JSON input containing the frozen chain, network, and artifact values.
+        #[arg(long)]
+        input: PathBuf,
+        /// Canonical pretty-JSON output path.
+        #[arg(long)]
+        output: PathBuf,
     },
     /// Capture and natively verify one finalized Ethereum/Arbitrum ingress witness.
     IngressCapture(ingress_capture::IngressCaptureArgs),
@@ -75,6 +85,7 @@ async fn main() -> Result<()> {
     let args = Args::parse();
     match args.command {
         Command::ProgramInfo { output } => program_info(output).await,
+        Command::DeploymentManifest { input, output } => manifest::run(input, output),
         Command::IngressCapture(capture) => ingress_capture::capture(capture).await,
         Command::IngressAudit(audit) => ingress_capture::audit(audit),
         Command::Ingress {
