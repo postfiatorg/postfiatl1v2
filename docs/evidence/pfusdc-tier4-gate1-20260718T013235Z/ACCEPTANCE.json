@@ -1,0 +1,91 @@
+{
+  "schema": "postfiat.pfusdc.tier4.acceptance.v1",
+  "gate": 1,
+  "gate_kind": "core",
+  "result": true,
+  "core_gates_passed": 1,
+  "core_gates_total": 4,
+  "candidate_commit_sha": "546899cc8a76264776a34afcd5daed57fbe2a648",
+  "ingress_v2_commit_sha": "ce511818eab246d59d3aed66e4628c5f9045d802",
+  "storage_fixture_commit_sha": "887d98280bf9ff755966c322e156aaa1aee8794e",
+  "dirty_worktree_before_evidence_generation": false,
+  "public_main_observed_sha": "66de35034c46dabe46302e2abbeead23a438d3d0",
+  "artifact_hashes": {
+    "ingress_elf_sha256": "04856ece0239146e6f3ce9ca191ef5ff6ce6c1fac42a0dfef719423539876fd7",
+    "binary_sha256": null,
+    "contract_runtime_hashes": null,
+    "ingress_program_vkey": null,
+    "egress_program_vkey": null,
+    "route_profile_hash": null,
+    "deployment_manifest_hash": null
+  },
+  "chain_bindings": null,
+  "proof_identifiers": null,
+  "accepted_receipts": null,
+  "balances": null,
+  "commands": [
+    {
+      "command": "cargo fmt --all -- --check",
+      "exit_code": 0,
+      "duration_seconds": 1.2
+    },
+    {
+      "command": "cargo check --workspace --all-targets --locked",
+      "exit_code": 0,
+      "duration_seconds": 33.03
+    },
+    {
+      "command": "cargo test -p postfiat-types bridge_exit --locked",
+      "exit_code": 0,
+      "duration_seconds": 0.01,
+      "passed": 3
+    },
+    {
+      "command": "cargo test -p postfiat-types pfusdc_ --locked",
+      "exit_code": 0,
+      "duration_seconds": 0.02,
+      "passed": 3
+    },
+    {
+      "command": "cargo test -p postfiat-pfusdc-proofs --locked",
+      "exit_code": 0,
+      "duration_seconds": 2.45,
+      "passed": 4
+    },
+    {
+      "command": "cargo test --manifest-path programs/pfusdc-ingress/Cargo.toml --lib --locked",
+      "exit_code": 0,
+      "duration_seconds": 0.0,
+      "passed": 2
+    },
+    {
+      "command": "cargo test -p postfiat-execution vault_bridge_sp1_bridge_deposit_requires_source_proof_commitments --locked",
+      "exit_code": 0,
+      "duration_seconds": 0.5,
+      "passed": 1
+    },
+    {
+      "command": "cargo test -p postfiat-node bridge_exit_root_encoding_is_exactly_activation_gated --locked",
+      "exit_code": 0,
+      "duration_seconds": 0.0,
+      "passed": 1
+    },
+    {
+      "command": "cargo test -p postfiat-node egress_export_compares_the_consensus_committee_root_not_registry_root --locked",
+      "exit_code": 0,
+      "duration_seconds": 0.08,
+      "passed": 1
+    },
+    {
+      "command": "/home/postfiat/.foundry/bin/forge test --root crates/ethereum-contracts --match-contract PFUSDCTier4Test -vv",
+      "exit_code": 0,
+      "duration_seconds": 0.018,
+      "passed": 9
+    }
+  ],
+  "unresolved_findings": [
+    "Core Gate 2 requires canonical Nitro output conformance evidence.",
+    "Core Gate 2 requires asserted-L2-state vault and ingress-anchor runtime-code proofs.",
+    "Core Gate 2 requires the one real ingress SP1 proof and accepted PFTL receipt."
+  ]
+}

@@ -1,0 +1,23 @@
+2026-07-18T01:32:35Z pfUSDC Tier-4 Core Gate 1 command record
+
+PASS  cargo fmt --all -- --check
+PASS  cargo check --workspace --all-targets --locked
+PASS  cargo test -p postfiat-types bridge_exit --locked
+      3 passed; 0 failed
+PASS  cargo test -p postfiat-types pfusdc_ --locked
+      3 passed; 0 failed
+PASS  cargo test -p postfiat-pfusdc-proofs --locked
+      4 passed; 0 failed
+PASS  cargo test --manifest-path programs/pfusdc-ingress/Cargo.toml --lib --locked
+      2 passed; 0 failed
+PASS  cargo test -p postfiat-execution vault_bridge_sp1_bridge_deposit_requires_source_proof_commitments --locked
+      1 passed; 0 failed
+PASS  cargo test -p postfiat-node bridge_exit_root_encoding_is_exactly_activation_gated --locked
+      1 passed; 0 failed
+PASS  cargo test -p postfiat-node egress_export_compares_the_consensus_committee_root_not_registry_root --locked
+      1 passed; 0 failed
+PASS  /home/postfiat/.foundry/bin/forge test --root crates/ethereum-contracts --match-contract PFUSDCTier4Test -vv
+      9 passed; 0 failed
+
+No GitHub Actions were started, polled, or used as evidence.
+No SP1 proof was generated during Core Gate 1.

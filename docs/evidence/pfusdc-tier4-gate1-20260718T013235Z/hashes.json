@@ -1,0 +1,10 @@
+{
+  "schema": "postfiat.pfusdc.tier4.hashes.v1",
+  "candidate_commit_sha": "546899cc8a76264776a34afcd5daed57fbe2a648",
+  "ingress_v2_commit_sha": "ce511818eab246d59d3aed66e4628c5f9045d802",
+  "storage_fixture_commit_sha": "887d98280bf9ff755966c322e156aaa1aee8794e",
+  "ingress_elf": {
+    "path": "programs/pfusdc-ingress/elf/pfusdc-ingress-program",
+    "sha256": "04856ece0239146e6f3ce9ca191ef5ff6ce6c1fac42a0dfef719423539876fd7"
+  }
+}
