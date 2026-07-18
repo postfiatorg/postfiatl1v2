@@ -4427,7 +4427,7 @@ struct VaultBridgeDepositSourceProof<'a> {
 fn ensure_vault_bridge_deposit_source_proof(
     proof: VaultBridgeDepositSourceProof<'_>,
 ) -> Result<
-    Option<postfiat_types::PfUsdcIngressPublicValuesV2>,
+    Option<postfiat_types::PfUsdcIngressPublicValuesV3>,
     (&'static str, String),
 > {
     let VaultBridgeDepositSourceProof {
@@ -4523,7 +4523,7 @@ fn ensure_vault_bridge_deposit_source_proof(
             )
             .map_err(|error| (error.code(), error.message()))?;
             let public_values =
-                postfiat_types::PfUsdcIngressPublicValuesV2::from_canonical_bytes(
+                postfiat_types::PfUsdcIngressPublicValuesV3::from_canonical_bytes(
                     source_public_values,
                 )
                 .map_err(|error| ("pfusdc_ingress_public_values_invalid", error))?;
@@ -4549,7 +4549,7 @@ fn ensure_pfusdc_ingress_public_values_match(
     evidence: &VaultBridgeDepositEvidence,
     evidence_root: &str,
     policy_hash: &str,
-    values: &postfiat_types::PfUsdcIngressPublicValuesV2,
+    values: &postfiat_types::PfUsdcIngressPublicValuesV3,
 ) -> Result<(), (&'static str, String)> {
     let route_epoch = u32::try_from(values.route_epoch).map_err(|_| {
         (
@@ -4563,7 +4563,7 @@ fn ensure_pfusdc_ingress_public_values_match(
     )
     .map_err(|error| ("pfusdc_ingress_route_binding_invalid", error))?;
     let expected_genesis_hash = genesis_hash(genesis);
-    let mismatch = values.proof_program_version != 2
+    let mismatch = values.proof_program_version != 3
         || values.pftl_chain_id != genesis.chain_id
         || values.pftl_genesis_hash != expected_genesis_hash
         || values.pftl_protocol_version != genesis.protocol_version

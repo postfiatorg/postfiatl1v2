@@ -2551,10 +2551,10 @@ fn vault_bridge_bucket_impairment_factor_is_deterministic() {
         .expect("impaired bucket with exact factor");
 }
 
-fn pfusdc_ingress_public_values_fixture() -> PfUsdcIngressPublicValuesV2 {
-    let mut values = PfUsdcIngressPublicValuesV2 {
-        schema: PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V2.to_string(),
-        proof_program_version: 2,
+fn pfusdc_ingress_public_values_fixture() -> PfUsdcIngressPublicValuesV3 {
+    let mut values = PfUsdcIngressPublicValuesV3 {
+        schema: PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V3.to_string(),
+        proof_program_version: 3,
         pftl_chain_id: "postfiat-devnet".to_string(),
         pftl_genesis_hash: "01".repeat(48),
         pftl_protocol_version: 1,
@@ -2567,15 +2567,20 @@ fn pfusdc_ingress_public_values_fixture() -> PfUsdcIngressPublicValuesV2 {
         ethereum_finalized_slot: 12_345,
         arbitrum_chain_id: 42_161,
         arbitrum_rollup_address: "0x1111111111111111111111111111111111111111".to_string(),
+        arbitrum_rollup_runtime_code_hash: "16".repeat(32),
+        rollup_latest_confirmed_storage_slot: "17".repeat(32),
         arbitrum_assertion_hash: "04".repeat(32),
         assertion_l2_block_hash: "05".repeat(32),
+        assertion_l2_state_root: "18".repeat(32),
         assertion_send_root: "06".repeat(32),
         output_index: 3,
         output_item_hash: "07".repeat(32),
         output_l2_block_number: 98_765,
         output_l1_block_number: 22_345_678,
         output_timestamp: 1_700_000_000,
+        output_sender: "0x2222222222222222222222222222222222222222".to_string(),
         output_destination: "0x5555555555555555555555555555555555555555".to_string(),
+        ingress_anchor_runtime_code_hash: "19".repeat(32),
         output_calldata_hash: "08".repeat(32),
         vault_address: "0x2222222222222222222222222222222222222222".to_string(),
         vault_runtime_code_hash: "09".repeat(32),
@@ -2601,20 +2606,20 @@ fn pfusdc_ingress_public_values_round_trip_is_canonical_and_strict() {
     let bytes = values
         .canonical_bytes_without_commitment()
         .expect("canonical ingress bytes");
-    let decoded = PfUsdcIngressPublicValuesV2::from_canonical_bytes(&bytes)
+    let decoded = PfUsdcIngressPublicValuesV3::from_canonical_bytes(&bytes)
         .expect("strict ingress decode");
     assert_eq!(decoded, values);
 
     let mut trailing = bytes.clone();
     trailing.push(0);
-    assert!(PfUsdcIngressPublicValuesV2::from_canonical_bytes(&trailing).is_err());
+    assert!(PfUsdcIngressPublicValuesV3::from_canonical_bytes(&trailing).is_err());
 
     let mut wrong_tag = bytes.clone();
     let first_tag = b"PFTL-PFUSDC-TIER4".len()
         + 4
-        + PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V2.len();
+        + PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V3.len();
     wrong_tag[first_tag + 1] = 2;
-    assert!(PfUsdcIngressPublicValuesV2::from_canonical_bytes(&wrong_tag).is_err());
+    assert!(PfUsdcIngressPublicValuesV3::from_canonical_bytes(&wrong_tag).is_err());
 }
 
 #[test]
@@ -2631,6 +2636,21 @@ fn pfusdc_ingress_commitment_changes_for_each_field_class() {
     mutations.push(value);
     let mut value = original.clone();
     value.assertion_send_root = "11".repeat(32);
+    mutations.push(value);
+    let mut value = original.clone();
+    value.arbitrum_rollup_runtime_code_hash = "1a".repeat(32);
+    mutations.push(value);
+    let mut value = original.clone();
+    value.rollup_latest_confirmed_storage_slot = "1b".repeat(32);
+    mutations.push(value);
+    let mut value = original.clone();
+    value.assertion_l2_state_root = "1c".repeat(32);
+    mutations.push(value);
+    let mut value = original.clone();
+    value.output_sender = "0x6666666666666666666666666666666666666666".to_string();
+    mutations.push(value);
+    let mut value = original.clone();
+    value.ingress_anchor_runtime_code_hash = "1d".repeat(32);
     mutations.push(value);
     let mut value = original.clone();
     value.vault_address = "0x5555555555555555555555555555555555555555".to_string();
@@ -2672,14 +2692,29 @@ fn pfusdc_finality_state_requires_retained_ancestry_and_monotonic_advance() {
         assertion_l2_block_hash: "21".repeat(32),
         assertion_send_root: "22".repeat(32),
     };
-    let mut state = EthereumArbitrumFinalityStateV1 {
-        schema: ETHEREUM_ARBITRUM_FINALITY_STATE_SCHEMA_V1.to_string(),
+    let mut state = EthereumArbitrumFinalityStateV2 {
+        schema: ETHEREUM_ARBITRUM_FINALITY_STATE_SCHEMA_V2.to_string(),
         route_profile_hash: values.route_profile_hash.clone(),
         route_epoch: values.route_epoch,
         ethereum_chain_id: values.ethereum_chain_id,
         arbitrum_chain_id: values.arbitrum_chain_id,
         arbitrum_rollup_address: values.arbitrum_rollup_address.clone(),
-        arbitrum_rollup_runtime_code_hash: format!("0x{}", "24".repeat(32)),
+        arbitrum_rollup_runtime_code_hash: format!(
+            "0x{}",
+            values.arbitrum_rollup_runtime_code_hash
+        ),
+        rollup_latest_confirmed_storage_slot: values
+            .rollup_latest_confirmed_storage_slot
+            .clone(),
+        vault_address: values.vault_address.clone(),
+        vault_runtime_code_hash: format!("0x{}", values.vault_runtime_code_hash),
+        token_address: values.token_address.clone(),
+        token_runtime_code_hash: format!("0x{}", values.token_runtime_code_hash),
+        ethereum_ingress_anchor_address: values.output_destination.clone(),
+        ethereum_ingress_anchor_runtime_code_hash: format!(
+            "0x{}",
+            values.ingress_anchor_runtime_code_hash
+        ),
         latest: initial.clone(),
         retained: vec![initial],
     };
@@ -2709,4 +2744,36 @@ fn pfusdc_finality_state_requires_retained_ancestry_and_monotonic_advance() {
     let mut conflict = values.clone();
     conflict.assertion_send_root = "26".repeat(32);
     assert!(state.verify_and_advance(&conflict).is_err());
+
+    let mut route_mutations = Vec::new();
+    let mut value = values.clone();
+    value.arbitrum_rollup_runtime_code_hash = "27".repeat(32);
+    route_mutations.push(value);
+    let mut value = values.clone();
+    value.rollup_latest_confirmed_storage_slot = "28".repeat(32);
+    route_mutations.push(value);
+    let mut value = values.clone();
+    value.vault_address = "0x6666666666666666666666666666666666666666".to_string();
+    route_mutations.push(value);
+    let mut value = values.clone();
+    value.output_sender = "0x6666666666666666666666666666666666666666".to_string();
+    route_mutations.push(value);
+    let mut value = values.clone();
+    value.vault_runtime_code_hash = "29".repeat(32);
+    route_mutations.push(value);
+    let mut value = values.clone();
+    value.token_address = "0x7777777777777777777777777777777777777777".to_string();
+    route_mutations.push(value);
+    let mut value = values.clone();
+    value.token_runtime_code_hash = "2a".repeat(32);
+    route_mutations.push(value);
+    let mut value = values.clone();
+    value.output_destination = "0x8888888888888888888888888888888888888888".to_string();
+    route_mutations.push(value);
+    let mut value = values;
+    value.ingress_anchor_runtime_code_hash = "2b".repeat(32);
+    route_mutations.push(value);
+    assert!(route_mutations
+        .iter()
+        .all(|mutation| state.clone().verify_and_advance(mutation).is_err()));
 }

@@ -702,7 +702,7 @@ pub struct VaultBridgeRouteProfileActivationV1 {
     pub profile: VaultBridgeRouteProfileV1,
     pub amendment: GovernanceAmendment,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tier4_finality_bootstrap: Option<EthereumArbitrumFinalityStateV1>,
+    pub tier4_finality_bootstrap: Option<EthereumArbitrumFinalityStateV2>,
 }
 
 impl VaultBridgeRouteProfileActivationV1 {
@@ -721,6 +721,10 @@ impl VaultBridgeRouteProfileActivationV1 {
                 if state.route_profile_hash != profile_hash
                     || state.route_epoch != u64::from(self.profile.route_epoch)
                     || state.arbitrum_chain_id != self.profile.source_chain_id
+                    || state.vault_address != self.profile.vault_address
+                    || state.vault_runtime_code_hash != self.profile.vault_runtime_code_hash
+                    || state.token_address != self.profile.token_address
+                    || state.token_runtime_code_hash != self.profile.token_runtime_code_hash
                 {
                     return Err("Tier-4 route finality bootstrap does not match route profile"
                         .to_string());

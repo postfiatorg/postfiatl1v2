@@ -9,6 +9,7 @@ import {
     IPfUsdcIngressAnchorV1
 } from "../src/ERC20BridgeVaultV2.sol";
 import {PFTLFinalityVerifierV1, ISP1Verifier} from "../src/PFTLFinalityVerifierV1.sol";
+import {PfUsdcIngressAnchorV1, IArbitrumBridgeV1, IArbitrumOutboxV1} from "../src/PfUsdcIngressAnchorV1.sol";
 
 contract Tier4MockToken is IERC20BridgeTokenV2 {
     mapping(address => uint256) public balanceOf;
@@ -90,6 +91,26 @@ contract Tier4MockIngressAnchor is IPfUsdcIngressAnchorV1 {
         address,
         address
     ) external {}
+}
+
+contract Tier4MockBridge is IArbitrumBridgeV1 {
+    address public activeOutbox;
+
+    function setActiveOutbox(address outbox) external {
+        activeOutbox = outbox;
+    }
+}
+
+contract Tier4MockOutbox is IArbitrumOutboxV1 {
+    address public l2ToL1Sender;
+
+    function setL2ToL1Sender(address sender) external {
+        l2ToL1Sender = sender;
+    }
+
+    function relay(address destination, bytes calldata data) external returns (bool, bytes memory) {
+        return destination.call(data);
+    }
 }
 
 contract PFUSDCTier4Test {
@@ -197,6 +218,56 @@ contract PFUSDCTier4Test {
         _assertTrue(!ok, "failed commitment must revert deposit");
         _assertEq(token.balanceOf(address(this)), walletBefore, "failed send refunds depositor");
         _assertEq(token.balanceOf(address(vault)), vaultBefore, "failed send leaves vault unchanged");
+    }
+
+    function testProductionIngressAnchorPinsOutboxSenderRouteAndReplay() public {
+        Tier4MockBridge bridge = new Tier4MockBridge();
+        Tier4MockOutbox outbox = new Tier4MockOutbox();
+        bridge.setActiveOutbox(address(outbox));
+        outbox.setL2ToL1Sender(address(vault));
+        bytes32 routeBinding = keccak256("production-anchor-route");
+        PfUsdcIngressAnchorV1 anchor =
+            new PfUsdcIngressAnchorV1(bridge, address(vault), address(token), block.chainid, routeBinding);
+        bytes32 depositId = keccak256("production-anchor-deposit");
+        bytes memory callData = abi.encodeCall(
+            IPfUsdcIngressAnchorV1.recordDepositV1,
+            (
+                depositId,
+                address(this),
+                keccak256(bytes("pf-production-recipient")),
+                "pf-production-recipient",
+                125,
+                keccak256("production-anchor-nonce"),
+                routeBinding,
+                block.chainid,
+                address(vault),
+                address(token)
+            )
+        );
+        (bool ok,) = outbox.relay(address(anchor), callData);
+        _assertTrue(ok, "active outbox message accepted");
+        _assertTrue(anchor.depositSeen(depositId), "anchor replay key consumed");
+
+        (ok,) = outbox.relay(address(anchor), callData);
+        _assertTrue(!ok, "duplicate anchor message rejected");
+        outbox.setL2ToL1Sender(address(0xCAFE));
+        bytes memory secondCall = abi.encodeCall(
+            IPfUsdcIngressAnchorV1.recordDepositV1,
+            (
+                keccak256("second-production-anchor-deposit"),
+                address(this),
+                keccak256(bytes("pf-production-recipient")),
+                "pf-production-recipient",
+                125,
+                keccak256("second-production-anchor-nonce"),
+                routeBinding,
+                block.chainid,
+                address(vault),
+                address(token)
+            )
+        );
+        (ok,) = outbox.relay(address(anchor), secondCall);
+        _assertTrue(!ok, "wrong L2 sender rejected");
     }
 
     function testProofNativeWithdrawalPaysExactlyAndConsumesReplayKeys() public {

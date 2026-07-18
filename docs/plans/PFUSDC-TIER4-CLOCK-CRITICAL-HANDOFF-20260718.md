@@ -108,13 +108,13 @@ then launch gates passed out of three. Gates 5-7 must not delay work on Gates
 ```text
 worktree: /home/postfiat/repos/postfiatl1v2-public-main-verification-20260717
 branch:   pfusdc-tier4-20260717
-HEAD:     887d98280bf9ff755966c322e156aaa1aee8794e
+HEAD:     3d3bf41bb2bb751dffa6eb1f9421090dba7742ed
 base:     cc23185
 remote:   https://github.com/postfiatorg/postfiatl1v2.git
 public main observed 2026-07-18: 66de35034c46dabe46302e2abbeead23a438d3d0
 ```
 
-There are 17 Tier-4 commits on the branch. The corrected Nitro-output ingress is
+There are 19 Tier-4 commits on the branch. The corrected Nitro-output ingress is
 committed at `ce511818eab246d59d3aed66e4628c5f9045d802`; the storage integration
 fixture repair is committed at `887d98280bf9ff755966c322e156aaa1aee8794e`.
 Public `main` is two CI-only commits ahead of the branch base
@@ -159,8 +159,41 @@ receipt attachment with ingress V2:
 - update canonical public values and the regenerated ingress ELF.
 
 Do not revert this correction merely to recover an earlier green test. Its
-ingress ELF SHA-256 is
+Gate-1 ingress V2 ELF SHA-256 was
 `04856ece0239146e6f3ce9ca191ef5ff6ce6c1fac42a0dfef719423539876fd7`.
+Gate-2 code-proof closure changes the guest statement to V3, so that V2 ELF is
+now explicitly invalidated and must not be proved or activated.
+
+### 3.4 Gate-2 V3 closure — current dirty work
+
+The active worktree supersedes the pre-release ingress public values V2 with V3
+before any Tier-4 activation:
+
+- Nitro leaf and accumulator rules are pinned to Offchain Labs Nitro commit
+  `a618155919315241665356fe60f3cd00d66d5e46`, with fixed item-hash/sendRoot
+  vectors and the canonical final `index == 0` rule.
+- Zero-sibling single-leaf proofs are accepted; indexes deeper than their proof
+  path reject.
+- The confirmed assertion block hash authenticates a canonically decoded L2
+  header; its state root verifies exact vault and token account/code proofs.
+- The Ethereum-finalized state root verifies both Rollup `latestConfirmed` and
+  the parent-chain ingress-anchor account/code proof.
+- The guest allowlists only the canonical Ethereum/Arbitrum mainnet pair or the
+  canonical Sepolia/Arbitrum-Sepolia pair, including genesis root, fork
+  schedule, Rollup proxy, and storage slot. Cross-network mixtures reject.
+- Arbitrum Sepolia is the clock-critical controlled target. It provides real
+  Ethereum/Nitro finality in minutes; a local fork cannot provide a valid
+  Ethereum-finality witness, and a new Arbitrum One assertion normally cannot
+  close inside this work window.
+- `PfUsdcIngressPublicValuesV3` commits the Rollup code hash/slot, asserted L2
+  state root, output sender, and ingress-anchor runtime code hash in addition to
+  all prior deposit bindings.
+- `PfUsdcIngressAnchorV1` is the production parent-chain destination and checks
+  active Outbox, proof-derived L2 sender, route fields, recipient hash, and
+  deposit replay if the Nitro message is executed.
+
+Conformance record:
+`docs/specs/pfusdc-nitro-sendroot-conformance.md`.
 
 ### 3.4 Current verified results
 
@@ -169,12 +202,12 @@ These were run against the committed Gate-1 tree on 2026-07-18:
 - Tier-4 type tests: **3 passed, 0 failed**.
 - Ingress V2 public-value/finality-state type tests: **3 passed, 0 failed**.
 - Pure egress proof tests: **4 passed, 0 failed**.
-- Corrected ingress library tests: **2 passed, 0 failed** when the library target
-  is selected.
+- Corrected ingress V3 library tests: **5 passed, 0 failed** when the library
+  target is selected.
 - Proof-native ingress execution test: **1 passed, 0 failed**.
 - Targeted bridge-exit activation and egress-export node tests: **2 passed, 0
   failed**.
-- Tier-4 Foundry tests: **9 passed, 0 failed**.
+- Tier-4 Foundry tests: **10 passed, 0 failed**.
 - `cargo fmt --all -- --check`: **passed**.
 - `cargo check --workspace --all-targets --locked`: **passed**.
 - Running the SP1 guest binary as a host unit test is invalid because
@@ -208,25 +241,27 @@ all-target check now passes. There is no remaining Gate-1 compile blocker.
 The corrected `sendRoot` direction is promising but must close every item below.
 Mock-only evidence is insufficient.
 
-- [ ] Prove against canonical Arbitrum Nitro encoding or official vectors that
+- [x] Prove against canonical Arbitrum Nitro encoding or official vectors that
       the output leaf hash, tree path, and `sendRoot` calculation are byte exact.
-- [ ] Prove that the output sender is populated by ArbOS from the executing L2
+- [x] Prove that the output sender is populated by ArbOS from the executing L2
       contract and cannot be selected arbitrarily by calldata.
-- [ ] Bind the asserted L2 block hash to the confirmed rollup assertion under an
+- [x] Bind the asserted L2 block hash to the confirmed rollup assertion under an
       Ethereum-finalized Rollup contract state proof.
-- [ ] Bind the deployed Tier-4 vault runtime code at the asserted L2 state. If
-      this requires the L2 header and account proof, include them; a route field
-      that merely states an expected code hash is not a proof.
+- [ ] Bind the deployed Tier-4 vault and token runtime code at the asserted L2
+      state through the canonical L2 header and account proofs. Bind the
+      production ingress-anchor runtime code through an account proof at the
+      Ethereum-finalized parent-chain state; it is not an L2 account. A route
+      field that merely states an expected code hash is not a proof.
 - [ ] Pin the production ingress-anchor address and its runtime code hash in the
       route profile. A test-only mock anchor is not sufficient.
-- [ ] Prove that `depositV2` measures the exact USDC balance delta, records the
+- [x] Prove that `depositV2` measures the exact USDC balance delta, records the
       deposit, and emits/sends the canonical output atomically. A reverted token
       transfer or failed ArbSys send must create neither a valid output nor a
       mintable deposit.
-- [ ] Bind Arbitrum chain ID, Rollup address/code hash, confirmation slot,
+- [x] Bind Arbitrum chain ID, Rollup address/code hash, confirmation slot,
       assertion hash, route epoch, vault, token, and all relevant runtime code
       hashes into the proof policy and public-values commitment.
-- [ ] Reject malformed and oversized output paths/calldata before expensive
+- [x] Reject malformed and oversized output paths/calldata before expensive
       proof work or state mutation.
 - [ ] Generate one real SP1 proof from a captured finalized Arbitrum witness and
       verify the exact proof in PFTL execution. Native/mock guest execution alone
@@ -265,8 +300,9 @@ compile errors.
 
 ### Core Gate 2 — proof-verified ingress, no observer
 
-- [ ] A real dust USDC deposit enters `ERC20BridgeVaultV2` on an Arbitrum fork or
-      devnet and creates the canonical Nitro output.
+- [ ] A real dust test-USDC deposit enters `ERC20BridgeVaultV2` on Arbitrum
+      Sepolia and creates the canonical Nitro output. A fork-only receipt does
+      not satisfy this gate because its modified state is not Ethereum-finalized.
 - [ ] Ethereum finality, confirmed Rollup assertion, exact output path, exact
       vault code, exact token, exact route, exact recipient, amount, nonce, and
       deposit ID are verified by the ingress SP1 guest.
@@ -310,7 +346,7 @@ and negative matrix.
 ### Core Gate 4 — immutable route and contracts
 
 - [ ] Deploy production, not mock, verifier/vault/anchor components on the pinned
-      Arbitrum devnet or fork target.
+      Sepolia/Arbitrum-Sepolia controlled target.
 - [ ] Deployment manifest records compiler, optimizer, constructor arguments,
       creation/runtime bytecode hashes, program vkeys, initial checkpoints,
       chain IDs, vault, token, Rollup, anchor, and route epoch.
@@ -411,7 +447,8 @@ Timeboxes are escalation points, not permission to weaken a gate.
 
 1. Close every item in Section 4, especially official Nitro encoding vectors and
    the asserted vault runtime-code proof.
-2. Add/fix the production ingress anchor and route bindings if absent.
+2. Deploy/pin the production parent-chain ingress anchor and the asserted-L2
+   vault/token route bindings.
 3. Build the ingress guest once, record ELF/vkey hashes, generate one real proof,
    and verify it in PFTL execution.
 4. Run the ingress negative matrix and restart replay test.
@@ -521,14 +558,16 @@ Every `ACCEPTANCE.json` must include:
 
 Core Gate 1 is complete. Continue without a repository-wide review:
 
-1. Audit Section 4 against canonical Nitro source/vectors. Do not accept the
-   hand-written output hash without byte-exact conformance evidence.
-2. Add any missing asserted-L2-state account/code proof required to bind the
-   Tier-4 vault and production ingress anchor runtime code.
-3. Pin the production ingress anchor address/code hash and all route-policy
-   fields in public values and execution matching.
-4. Run the bounded ingress mutation/replay tests.
-5. Generate and verify the one required ingress SP1 proof from the frozen guest.
+1. Finish the capture command and bounded V3 witness mutation matrix; do not
+   build or prove while guest source is still changing.
+2. Deploy/pin the production anchor on Ethereum Sepolia and verifier/vault on
+   Arbitrum Sepolia, using Circle test USDC, then submit one dust deposit.
+3. Capture the finalized target witness using the V3 layout: Ethereum proofs for
+   Rollup plus parent-chain anchor, and asserted-L2 proofs for vault plus token.
+4. Pin the deployed addresses/code hashes and complete V2 proof policy in the
+   governed finality V2 bootstrap/route profile.
+5. Build the frozen ingress guest once, invalidate the Gate-1 V2 ELF, and
+   generate/verify the one required ingress SP1 proof.
    If the proof exposes a guest defect, fix it in a new commit and explicitly
    invalidate the prior ELF/proof.
 6. Record Core Gate 2 evidence, then proceed directly to the one required egress

@@ -2,7 +2,7 @@ use std::{fs, path::PathBuf, time::Instant};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use pfusdc_ingress_program::{verify_ingress_witness_v1, PfUsdcIngressProofWitnessV1};
+use pfusdc_ingress_program::{verify_ingress_witness_v2, PfUsdcIngressProofWitnessV2};
 use postfiat_pfusdc_proofs::{verify_checkpoint_witness_v1, verify_egress_witness_v1};
 use postfiat_types::{
     PfUsdcCheckpointProofWitnessV1, PfUsdcEgressProgramInputV1, PfUsdcEgressProofWitnessV1,
@@ -121,9 +121,9 @@ async fn prove_ingress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) 
     }
     let witness_bytes = fs::read(&witness_path)
         .with_context(|| format!("read ingress witness {}", witness_path.display()))?;
-    let witness: PfUsdcIngressProofWitnessV1 = serde_json::from_slice(&witness_bytes)
+    let witness: PfUsdcIngressProofWitnessV2 = serde_json::from_slice(&witness_bytes)
         .with_context(|| format!("decode ingress witness {}", witness_path.display()))?;
-    let expected = verify_ingress_witness_v1(&witness)
+    let expected = verify_ingress_witness_v2(&witness)
         .map_err(|error| anyhow::anyhow!("native ingress witness verification failed: {error}"))?;
     let expected_public_values = expected
         .canonical_bytes_without_commitment()
@@ -213,7 +213,10 @@ async fn prove_egress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) -
     let executed = executed_public_values.to_vec();
     if executed != expected_public_values {
         fs::create_dir_all(&output_dir)?;
-        fs::write(output_dir.join("guest-public-values.mismatch.bin"), &executed)?;
+        fs::write(
+            output_dir.join("guest-public-values.mismatch.bin"),
+            &executed,
+        )?;
         fs::write(
             output_dir.join("native-public-values.mismatch.bin"),
             &expected_public_values,
@@ -280,11 +283,7 @@ async fn prove_egress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) -
     Ok(())
 }
 
-async fn prove_checkpoint(
-    witness_path: PathBuf,
-    output_dir: PathBuf,
-    prove: bool,
-) -> Result<()> {
+async fn prove_checkpoint(witness_path: PathBuf, output_dir: PathBuf, prove: bool) -> Result<()> {
     #[cfg(debug_assertions)]
     if prove {
         anyhow::bail!("Groth16 proving requires a --release build");

@@ -411,7 +411,7 @@ pub fn create_vault_bridge_route_profile_governance(
         .as_ref()
         .map(|path| {
             let raw = read_bounded_json_text_file(path, "Tier-4 finality bootstrap")?;
-            serde_json::from_str::<postfiat_types::EthereumArbitrumFinalityStateV1>(&raw)
+            serde_json::from_str::<postfiat_types::EthereumArbitrumFinalityStateV2>(&raw)
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
         })
         .transpose()?;
@@ -446,7 +446,7 @@ pub fn assemble_signed_vault_bridge_route_profile_governance(
         .as_ref()
         .map(|path| {
             let raw = read_bounded_json_text_file(path, "Tier-4 finality bootstrap")?;
-            serde_json::from_str::<postfiat_types::EthereumArbitrumFinalityStateV1>(&raw)
+            serde_json::from_str::<postfiat_types::EthereumArbitrumFinalityStateV2>(&raw)
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
         })
         .transpose()?;

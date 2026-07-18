@@ -40,11 +40,18 @@ proof state, source-finality age, receipt result, and balance changes.
 ## 2. Operating assumptions
 
 - The StakeHub agent and test wallets may be unlocked while running approved implementation batteries.
-- Devnet PFT, pfUSDC, a651, Arbitrum ETH, and dust USDC may be funded as needed.
+- Devnet PFT, pfUSDC, and a651 may be funded as needed. The clock-critical
+  external-chain proof uses Ethereum Sepolia, Arbitrum Sepolia, and Circle test
+  USDC; the production profile remains Ethereum mainnet and Arbitrum One.
 - New contracts may be deployed and the controlled devnet may be upgraded or reset when a phase explicitly requires it.
 - Use the current six-validator WAN topology. No validator geography change is required.
 - Preserve the generic vault and governed-route model. Do not hardcode a user address, StakeHub address, current vault address, or asset ID into proof code.
-- All chain IDs, genesis hashes, route epochs, contract addresses, runtime code hashes, program verification keys, proof-size limits, and activation heights come from versioned protocol configuration.
+- Route profiles pin all chain IDs, genesis hashes, route epochs, contract
+  addresses, runtime code hashes, program verification keys, proof-size limits,
+  and activation heights. The ingress guest additionally allowlists only the
+  canonical Ethereum-mainnet/Arbitrum-One and
+  Ethereum-Sepolia/Arbitrum-Sepolia pairs; no user, wallet, or mutable
+  deployment address is compiled into proof code.
 - The existing StakeHub transparent and private swap paths remain consumers of pfUSDC. This project changes pfUSDC ingress and egress verification, not a651 pricing or swap settlement.
 
 ## 3. Current ground truth
@@ -93,7 +100,7 @@ exact output path into confirmed Nitro assertion sendRoot
 confirmed assertion rooted in finalized Ethereum state
         |
         v
-SP1 program -> Groth16 proof + PfUsdcIngressPublicValuesV2
+SP1 program -> Groth16 proof + PfUsdcIngressPublicValuesV3
         |
         v
 PFTL execution verifies proof, route, output, replay key, and recipient
@@ -134,14 +141,14 @@ The proof path must be stateful and continuous:
 
 ## 5. Protocol artifacts to freeze first
 
-### 5.1 `PfUsdcIngressPublicValuesV2`
+### 5.1 `PfUsdcIngressPublicValuesV3`
 
 The canonical encoding must include at least:
 
 - schema and proof-program versions;
 - PFTL chain ID, genesis hash, protocol version, route profile hash, and route epoch;
 - Ethereum chain ID and finalized beacon checkpoint root/slot;
-- Arbitrum One chain ID, Rollup contract address/code hash, confirmed assertion identifier, asserted L2 block hash, and assertion `sendRoot`;
+- allowlisted Arbitrum chain ID, Rollup contract address/code hash, confirmed assertion identifier, asserted L2 block hash, and assertion `sendRoot`;
 - canonical output index, item hash, sender, destination, calldata hash, L2/L1 block numbers, and timestamp;
 - vault and token addresses plus their pinned runtime code hashes;
 - production ingress-anchor address and runtime code hash;
@@ -200,7 +207,7 @@ Required properties:
 
 ### 1A. Ethereum and Arbitrum finality state
 
-- [ ] Add versioned replicated `EthereumArbitrumFinalityStateV1` with the pinned Ethereum checkpoint, Arbitrum rollup binding, latest verified assertion, retained finalized roots, and route epoch.
+- [ ] Add versioned replicated `EthereumArbitrumFinalityStateV2` with the pinned Ethereum checkpoint, Arbitrum rollup/vault/token/anchor bindings, latest verified assertion, retained finalized roots, and route epoch. V1 was never activated and is superseded before launch.
 - [ ] Add bounded finality-update transaction types and deterministic state transition logic.
 - [ ] Require monotonic checkpoint advancement and exact ancestry from a retained checkpoint.
 - [ ] Reject wrong chain, stale route epoch, wrong rollup, wrong code hash, unconfirmed assertion, unfinalized Ethereum root, conflicting root, and oversized proof input before mutation.
@@ -210,13 +217,16 @@ Required properties:
 
 - [ ] Create a dedicated SP1 workspace/program for pfUSDC ingress rather than reusing the NAV proof program.
 - [ ] Verify Ethereum finality from the stored checkpoint to the new finalized checkpoint.
-- [ ] Verify the deployed Arbitrum One rollup contract binding and confirmed assertion/state commitment under that Ethereum state.
+- [ ] Verify the selected allowlisted Rollup contract binding and confirmed assertion/state commitment under that Ethereum state.
 - [ ] Verify the exact Nitro output leaf and Merkle path against the confirmed assertion `sendRoot` using canonical Nitro encoding or official vectors.
 - [ ] Prove that ArbOS binds the L2 sender to the executing Tier-4 vault contract.
-- [ ] Prove the Tier-4 vault and production ingress-anchor runtime code at the asserted L2 state.
+- [ ] Prove the Tier-4 vault and token runtime code at the asserted L2 state,
+      and prove the production ingress-anchor runtime code at the finalized
+      Ethereum parent-chain state. `ArbSys.sendTxToL1` destinations are parent
+      chain addresses and cannot be proven from the Arbitrum L2 trie.
 - [ ] ABI-decode the exact canonical `recordDepositV1(...)` output calldata.
 - [ ] Recompute recipient hash, route binding, deposit ID, amount, nonce, vault, token, sender, destination, output item hash, and output index.
-- [ ] Commit only `PfUsdcIngressPublicValuesV2`.
+- [ ] Commit only `PfUsdcIngressPublicValuesV3`.
 - [ ] Generate reproducible Groth16 artifacts and record ELF hash, program vkey, verifier hash, toolchain lock, and proof encoding.
 
 ### 1C. PFTL proof verification
@@ -230,7 +240,7 @@ Required properties:
 - [ ] Preserve duplicate `deposit_id` and evidence-root rejection across restart, snapshot, replay, and route rotation.
 - [ ] Remove observer attestations from the proof-backed finalization rule. They may remain only on older pinned route epochs.
 
-**Exit gate:** a real Arbitrum deposit mints pfUSDC on a controlled PFTL target
+**Exit gate:** a real Circle test-USDC deposit on Arbitrum Sepolia mints pfUSDC on a controlled PFTL target
 with no observer attestation, and every mutated proof fixture rejects before
 balance mutation. Six-validator rollout is a later controlled-testnet launch
 gate, not part of the Tier-3/Tier-4 evidence definition.
@@ -300,10 +310,15 @@ gate, not part of the Tier-3/Tier-4 evidence definition.
 - [ ] Add cross-language public-value and packet-digest vectors.
 - [ ] Add Foundry fuzz tests for calldata lengths, malformed proof encodings, reentrancy, malicious tokens, replay, checkpoint races, and maximum integers.
 - [ ] Add invariants: total vault outflow never exceeds unique proof-verified burns; one burn pays once; recipient and amount never differ from the PFTL leaf.
-- [ ] Run a pinned Arbitrum fork test that deploys the exact release contracts and uses the real USDC behavior.
+- [ ] Run a pinned Arbitrum fork test that deploys the exact release contracts
+      and exercises the real token behavior. This is a contract-behavior gate;
+      modified fork state cannot satisfy the Ethereum-finality ingress gate.
 - [ ] Produce deterministic deployment manifests with compiler, optimizer, sources, constructor arguments, bytecode, runtime hashes, program vkeys, and initial checkpoints.
 
-**Exit gate:** an Anvil/Arbitrum-fork round trip releases exact USDC from a real PFTL proof and no ECDSA withdrawal signature is requested or accepted.
+**Exit gate:** an Anvil/Arbitrum-fork egress releases exact USDC from a real PFTL
+proof and no ECDSA withdrawal signature is requested or accepted. Tier-3
+ingress evidence comes only from the live allowlisted Sepolia pair, not from
+locally modified fork state.
 
 ## Phase 4 — protocol route activation, then product integration
 
@@ -375,16 +390,19 @@ Update the existing StakeHub dashboard and runner rather than creating a second 
 - [ ] Rotate the route/program vkey through a new epoch while preserving pinned in-flight work.
 - [ ] Reconcile the full conservation identity after every test and at terminal state.
 
-## Phase 6 — devnet deployment and final proof
+## Phase 6 — controlled-testnet deployment and final proof
 
 ### 6A. Deployment batching
 
 Use the fewest disruptive network events:
 
-1. Finish types, proof programs, contracts, execution, replay, snapshots, RPC, CLI, StakeHub, and local/fork batteries before touching WAN devnet.
+1. Finish types, proof programs, contracts, execution, replay, snapshots, RPC, CLI, StakeHub, and local/fork batteries before touching the WAN PFTL target.
 2. If the block encoding can activate by protocol height, perform one rolling binary deploy and one governed activation. Do not reset.
 3. If a new genesis is unavoidable, perform one planned devnet reset only after all release artifacts and migration fixtures are green. Archive the old chain first.
-4. Deploy the Arbitrum contracts once per candidate. Any bytecode change creates a new candidate and repeats fork tests before redeployment.
+4. Deploy the frozen candidate to Arbitrum Sepolia, paired with Ethereum
+   Sepolia and Circle test USDC. Any bytecode change creates a new candidate and
+   repeats targeted local/fork tests before redeployment. Deploy the separately
+   governed mainnet profile only after controlled-testnet acceptance.
 
 ### 6B. Rolling release gate
 
@@ -398,7 +416,7 @@ Use the fewest disruptive network events:
 
 Run both a transparent and private flow with fresh PFTL wallets:
 
-1. acquire dust native Arbitrum USDC;
+1. acquire dust Circle test USDC on Arbitrum Sepolia;
 2. deposit into `ERC20BridgeVaultV2` for the fresh PFTL address;
 3. build and submit the ingress finality proof;
 4. verify accepted PFTL receipt and exact pfUSDC delta on all six validators;

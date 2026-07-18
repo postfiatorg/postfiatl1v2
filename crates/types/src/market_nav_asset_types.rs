@@ -2514,7 +2514,7 @@ pub struct LedgerState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fastswap_activation_height: Option<u64>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub ethereum_arbitrum_finality_states: Vec<EthereumArbitrumFinalityStateV1>,
+    pub ethereum_arbitrum_finality_states: Vec<EthereumArbitrumFinalityStateV2>,
 }
 
 impl LedgerState {
@@ -2883,7 +2883,7 @@ impl LedgerState {
         &self,
         route_profile_hash: &str,
         route_epoch: u64,
-    ) -> Option<&EthereumArbitrumFinalityStateV1> {
+    ) -> Option<&EthereumArbitrumFinalityStateV2> {
         self.ethereum_arbitrum_finality_states.iter().find(|state| {
             state.route_profile_hash == route_profile_hash && state.route_epoch == route_epoch
         })
@@ -2893,7 +2893,7 @@ impl LedgerState {
         &mut self,
         route_profile_hash: &str,
         route_epoch: u64,
-    ) -> Option<&mut EthereumArbitrumFinalityStateV1> {
+    ) -> Option<&mut EthereumArbitrumFinalityStateV2> {
         self.ethereum_arbitrum_finality_states
             .iter_mut()
             .find(|state| {

@@ -13,6 +13,7 @@ name = "pfusdc-ingress-program"
 path = "src/main.rs"
 
 [dependencies]
+alloy-consensus = "=1.8.3"
 alloy-primitives = { version = "=1.5.7", features = ["sha3-keccak"] }
 alloy-rlp = "=0.3.12"
 alloy-sol-types = "=1.5.7"

@@ -4779,6 +4779,7 @@ dependencies = [
 name = "pfusdc-ingress-program"
 version = "0.1.0"
 dependencies = [
+ "alloy-consensus",
  "alloy-primitives",
  "alloy-rlp",
  "alloy-sol-macro",
