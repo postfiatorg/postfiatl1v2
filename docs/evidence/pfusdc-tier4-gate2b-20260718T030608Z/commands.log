@@ -1,0 +1,8 @@
+PASS cargo prove build --locked --binaries pfusdc-ingress-program --elf-name pfusdc-ingress-program --output-directory elf --warning-level minimal
+PASS cmp -s programs/pfusdc-ingress/elf/pfusdc-ingress-program programs/pfusdc-ingress/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/pfusdc-ingress-program
+PASS readelf -h programs/pfusdc-ingress/elf/pfusdc-ingress-program
+FAIL cargo run --release --manifest-path tools/pfusdc-tier4-prover/Cargo.toml --locked -- program-info --output programs/pfusdc-tier4-program-info.json
+  reason: host protoc path was not set; no setup or proof ran
+PASS PROTOC=/home/postfiat/.local/protoc-29.3/bin/protoc cargo run --release --manifest-path tools/pfusdc-tier4-prover/Cargo.toml --locked -- program-info --output programs/pfusdc-tier4-program-info.json
+
+No GitHub Actions or SP1 proof command was run.

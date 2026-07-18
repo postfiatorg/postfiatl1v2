@@ -292,12 +292,13 @@ all-target check now passes. There is no remaining Gate-1 compile blocker.
   The target wallet still had zero Ethereum-Sepolia ETH and zero
   Arbitrum-Sepolia ETH at the last read; acquisition, not spending authority,
   remains pending.
-- The one V3 ingress build was started and then interrupted. It wrote a
-  provisional tracked ELF with SHA-256
-  `03e6b9dabf559f5bc69b8c4b501d31a45ab7db049f6d1d64a4a6e49edcc548eb`.
-  Treat that ELF as unverified and uncommitted until the completed build exit,
-  source/ELF binding, and derived program vkey are recorded. No SP1 proof was
-  generated.
+- The one V3 ingress build is complete and frozen against guest source commit
+  `0b68a5b`. ELF SHA-256 is
+  `03e6b9dabf559f5bc69b8c4b501d31a45ab7db049f6d1d64a4a6e49edcc548eb`;
+  program vkey is
+  `0x007b629db1f140ba592d36ed9ec62ab807d78ecc292fa0b435c9f7f180238df4`.
+  The copied ELF is byte-identical to Cargo's final RISC-V release artifact and
+  contains the V3 schema/program logic. No SP1 proof was generated.
 
 ## 4. Mandatory architecture closure before declaring ingress safe
 
@@ -637,8 +638,8 @@ Core Gate 1 is complete. Continue without a repository-wide review:
    use them to freeze the deterministic two-chain deployment manifest and route
    profile. This is a build/setup step, not a proof run.
    The approved deployment wallet is
-   `0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0`. Validate the provisional ELF
-   recorded in Section 3.7 rather than starting a second build blindly.
+   `0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0`. Use the frozen ELF/vkey recorded
+   in Section 3.7; do not rebuild it without a guest-source change.
 2. Use the Section 2.4 authorization to acquire the minimum required Ethereum
    Sepolia ETH, Arbitrum Sepolia ETH, and canonical Circle test USDC. Then
    deploy/pin the production anchor on Ethereum Sepolia and verifier/vault on
