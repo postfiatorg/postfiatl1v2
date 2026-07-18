@@ -47,15 +47,30 @@ deployed or active.**
 - Gate 1 is done: the integrated code, corrected Tier-3 ingress statement, and
   frozen V3 ingress ELF/vkey exist and their targeted checks are green.
 - Work is stopped immediately before freezing the deterministic two-chain
-  deployment manifest, route profile, and PFTL consensus-v2 activation
-  bootstrap. No deployment transaction, deposit, burn, or proof has been run.
+  deployment manifest, route profile, and PFTL consensus-v2 bootstrap. No
+  implementation is running while this handoff is being recorded. No
+  deployment transaction, deposit, burn, or proof has been run.
 - No live funds have been spent. StakeHub is **not** a signing or authorization
   blocker: its Ethereum-mainnet ETH and USDC are unlocked, and Section 2.4
   authorizes at most $500 aggregate for the minimum required testnet funding.
-- The unresolved external prerequisite is acquiring Ethereum-Sepolia gas,
-  Arbitrum-Sepolia gas, and canonical Circle test USDC through a verified route.
-  A paid route has not yet been selected or quoted. This must not be reported as
-  “blocked on StakeHub,” and it must not be solved by deploying a mock token.
+- There is no known authorization or signing blocker. The agent is authorized
+  to use the unlocked StakeHub mainnet funds to acquire Ethereum-Sepolia gas,
+  Arbitrum-Sepolia gas, and canonical Circle test USDC within the aggregate
+  $500 cap. The exact provider/contract and quote still must be pinned before a
+  transaction is sent. This is a pending execution step, not a StakeHub
+  blocker, and it must not be solved by deploying a mock token.
+- **Plan correction:** the existing PFTL chain cannot safely activate
+  consensus-v2 in place. `consensus_v2_activation_height` is a genesis field,
+  and the full genesis document is committed by the genesis hash. The current
+  live genesis omits that field. Changing it necessarily creates a different
+  chain identity. One controlled PFTL reset is therefore required; archive the
+  old chain and batch all required genesis/profile changes into that one reset.
+- **Plan correction:** Tier-4 route governance alone is insufficient. The
+  active pfUSDC NAV proof profile is still the old Arbitrum-One observer
+  profile. Route activation validates an exact match on source class, verifier
+  kind, ingress policy, route hash, SP1 vkey/encoding/bounds, confirmations,
+  timing, attestations, and bond fields. The reset/bootstrap must register the
+  exact Tier-4 NAV profile and bind pfUSDC to it before route activation.
 - There is no honest fixed-hours completion estimate yet. Ethereum/Arbitrum
   finality and the two required SP1 proof runs impose real elapsed time. Report
   the current bounded action and observed duration instead of multiplying an
@@ -65,21 +80,26 @@ deployed or active.**
 
 The shortest correct path from here is:
 
-1. Freeze the exact manifest, route/profile hashes, contract constructor
-   arguments, deployment nonces/addresses, code hashes, PFTL committee root,
-   checkpoint, route epoch, and future activation height.
-2. Acquire only the required test assets under the $500 cap; deploy the
+1. Freeze the new controlled-target inputs: six-validator registry, genesis
+   with consensus-v2 active from height 1, Tier-4 pfUSDC asset/NAV profile,
+   route epoch, proof bounds, timing values, vkeys, and deterministic EVM
+   deployment nonces/addresses. Archive the old chain; do not mutate it.
+2. Perform the single controlled PFTL reset, bring up all six validators, and
+   finalize the first consensus-v2 block. Use that real finalized block,
+   committee root, new genesis hash, asset ID, route/profile hashes, and
+   checkpoint to freeze the final deployment manifest.
+3. Acquire only the required test assets under the $500 cap; deploy the
    Ethereum-Sepolia anchor and Arbitrum-Sepolia verifier/vault; verify every
    address, constructor value, storage binding, and runtime code hash.
-3. Make one dust canonical test-USDC deposit, wait for real finality, capture
+4. Make one dust canonical test-USDC deposit, wait for real finality, capture
    its witness, and run the bounded native mutation audit once.
-4. Generate exactly one ingress proof; activate the pinned PFTL profile and
+5. Generate exactly one ingress proof; activate the pinned PFTL profile and
    encoding; submit it; require `code=accepted`, exact credit, and replay
    rejection. That closes Gate 2.
-5. Burn once under the activated encoding, export the finalized PFTL witness,
+6. Burn once under the activated encoding, export the finalized PFTL witness,
    generate exactly one egress proof, claim exact USDC through the deployed
    verifier/vault, and prove nullifier/replay rejection. That closes Gate 3.
-6. Record the immutable deployment/route/no-downgrade/fork evidence. Deployment
+7. Record the immutable deployment/route/no-downgrade/fork evidence. Deployment
    work begins before Gates 2-3, but Gate 4 closes only after both proof paths
    are bound to the activated route. Then report **4/4 core** before doing the
    separate CLI, StakeHub, recovery, and demonstration launch gates.
@@ -157,9 +177,11 @@ of the definition of the four core Tier-4 protocol gates.
   replay protection, or conservation checks to make a test pass.
 - Never add an automatic fallback from the Tier-4 route to the observer or
   threshold route.
-- A devnet reset is permitted only if the activated block encoding cannot be
-  introduced by a versioned future-height transition. Finish local and fork
-  gates first and batch all reset-requiring changes into one reset.
+- The current chain's genesis hash commits the absent consensus-v2 activation
+  field, so a versioned in-place transition is not available. Perform exactly
+  one controlled reset before the real proof gates. Archive the old chain,
+  initialize consensus-v2 and the exact Tier-4 NAV/route bootstrap together,
+  and do not reset again merely to simplify testing.
 - Preserve the existing uncommitted Tier-4 work. Do not reset, checkout, clean,
   or overwrite it.
 
@@ -195,7 +217,7 @@ fees required for this controlled Tier-4 Sepolia deployment.
 ```text
 worktree: /home/postfiat/repos/postfiatl1v2-public-main-verification-20260717
 branch:   pfusdc-tier4-20260717
-current handoff HEAD:       b6ff8bb237f02407aacffb335b43d5b907cf8545
+documentation baseline:    47dbc26 (plain-English handoff status)
 last protocol code commit:  fd70c9c (anchor deployment hash-cycle fix)
 V3 guest freeze commit:    0b68a5be71c80d1cdc89d12e5c7cfe77b1eb831f
 base:     cc23185
@@ -353,8 +375,9 @@ all-target check now passes. There is no remaining Gate-1 compile blocker.
 - The approved wallet has live mainnet funding and explicit authority to spend
   up to $500 aggregate to acquire required testnet assets under Section 2.4.
   The target wallet still had zero Ethereum-Sepolia ETH and zero
-  Arbitrum-Sepolia ETH at the last read; acquisition, not spending authority,
-  remains pending.
+  Arbitrum-Sepolia ETH at the last read. The agent can acquire the required
+  testnet assets after pinning the exact provider/contract/quote; this is not a
+  StakeHub or authorization blocker.
 - The one V3 ingress build is complete and frozen against guest source commit
   `0b68a5b`. ELF SHA-256 is
   `03e6b9dabf559f5bc69b8c4b501d31a45ab7db049f6d1d64a4a6e49edcc548eb`;
@@ -362,6 +385,42 @@ all-target check now passes. There is no remaining Gate-1 compile blocker.
   `0x007b629db1f140ba592d36ed9ec62ab807d78ecc292fa0b435c9f7f180238df4`.
   The copied ELF is byte-identical to Cargo's final RISC-V release artifact and
   contains the V3 schema/program logic. No SP1 proof was generated.
+
+### 3.8 PFTL activation and route-profile correction
+
+The existing local live snapshot is the legacy chain
+`postfiat-wan-devnet-2` at height 598. Its genesis has no
+`consensus_v2_activation_height`; its blocks have no `consensus_v2_commit` or
+`bridge_exit_root`. Only validator-0's local data snapshot is present, while
+the recorded topology points at the existing remote validators. Preserve this
+snapshot as rollback evidence; do not mutate it to impersonate the new chain.
+
+Two source-level checks change the execution order in the earlier plan:
+
+1. `Genesis::genesis_hash()` commits the complete genesis document, including
+   `consensus_v2_activation_height`. Adding that field changes the genesis hash
+   and therefore the chain identity. Excluding it from the hash would make the
+   consensus transition unauthenticated and is prohibited.
+2. Tier-4 route activation checks that the active pfUSDC `NavProofProfile`
+   exactly matches the route. The current profile is the legacy
+   `vault_bridge` / `multi-fetch-quorum` Arbitrum-One observer profile, so it
+   will reject the Tier-4 route even if route governance itself is valid.
+
+The controlled target must therefore be bootstrapped once with:
+
+- a fresh archived-and-recorded chain identity and six-validator registry;
+- consensus-v2 active from height 1;
+- the exact Tier-4 ingress verifier/source class, route-policy hash, SP1 vkey,
+  encoding, proof/public-value bounds, confirmations, timing, attestation, and
+  bond fields in a registered NAV proof profile;
+- pfUSDC registered or rebound to that exact profile; and
+- the Tier-4 route epoch and governance state.
+
+Finalize the first consensus-v2 block before freezing the final EVM
+constructor manifest. The resulting real genesis hash, asset ID, committee
+root, finalized height, checkpoint/state root, route hash, and route binding
+are constructor commitments for the Arbitrum verifier/vault and Ethereum
+anchor. Do not guess them and do not deploy against the legacy chain values.
 
 ## 4. Mandatory architecture closure before declaring ingress safe
 
@@ -483,9 +542,10 @@ and negative matrix.
       chain IDs, vault, token, Rollup, anchor, and route epoch.
 - [ ] Route profile pins both verifier kinds, proof bounds, program versions,
       vkeys, runtime code hashes, checkpoints, and activation height.
-- [ ] Activate that exact route and block encoding on the controlled target;
-      verify the already-generated ingress and egress artifacts bind to it.
-      Do not regenerate either proof for activation.
+- [ ] Bootstrap consensus-v2 from height 1 on the single-reset controlled
+      target, register and bind the exact Tier-4 NAV proof profile, and activate
+      that exact route. Verify the already-generated ingress and egress
+      artifacts bind to it. Do not regenerate either proof for activation.
 - [ ] New Tier-4 work cannot downgrade to observer/threshold verification.
 - [ ] Pause stops new work but cannot rewrite, redirect, duplicate, or fabricate
       an existing claim.
@@ -581,15 +641,23 @@ Timeboxes are escalation points, not permission to weaken a gate.
 2. Build the frozen V3 ingress guest once and derive its ELF hash/program vkey.
    This must precede deployment because the route profile commits the vkey and
    the anchor constructor commits the derived route binding. Do not prove yet.
-3. Freeze the deterministic Sepolia deployment manifest and route profile,
-   including the constructor-set anchor route binding and all read-back hashes.
-4. Under the bounded real-value authorization in Section 2.4, acquire Ethereum
+   This step is complete; use the frozen values in Section 3.7.
+3. Archive the legacy chain. Create the fresh six-validator controlled target
+   with consensus-v2 active from height 1 and the exact Tier-4 NAV profile,
+   pfUSDC binding, route epoch, and governance bootstrap. Perform this as the
+   one controlled reset, not as repeated experimental resets.
+4. Bring up all six validators and finalize the first consensus-v2 block. Freeze
+   the deterministic Sepolia deployment manifest and route profile only after
+   recording its real genesis hash, asset ID, committee root, finalized
+   checkpoint/state root, route hash, route binding, constructor arguments,
+   predicted addresses, and code hashes.
+5. Under the bounded real-value authorization in Section 2.4, acquire Ethereum
    Sepolia ETH, Arbitrum Sepolia ETH, and canonical Circle test USDC; deploy the
    production parent-chain anchor and asserted-L2 verifier/vault; then submit
    one dust deposit.
-5. Capture the finalized witness and run the bounded 21-case native mutation
+6. Capture the finalized witness and run the bounded 21-case native mutation
    audit once.
-6. Generate exactly one real ingress proof and verify it in PFTL execution with
+7. Generate exactly one real ingress proof and verify it in PFTL execution with
    deposit replay rejection.
 
 **Exit:** Gate 2 passes; otherwise record the exact cryptographic binding that
@@ -601,7 +669,8 @@ remains open. Do not substitute a mock or hash-only assertion.
 2. Verify it through the production SP1 verifier contract, not the mock.
 3. Prove exact payment, nullifier/withdrawal replay protection, committee
    progression, and every consensus negative case.
-4. Freeze deterministic deployment manifests and route profile.
+4. Append the actual proof, receipt, nullifier, balance, and code-hash evidence
+   to the already-frozen deployment manifest and route record.
 
 **Exit:** Core Gates 3 and 4 pass. At this point the Tier-4 protocol
 implementation is 4/4 core gates green. Record that result before starting
@@ -634,14 +703,13 @@ with their exact evidence paths. Do not invoke GitHub Actions as a substitute.
 
 **Exit:** immutable binary, ELFs, vkeys, contracts, route profile, and manifests.
 
-### Block F — one controlled-testnet deployment event (post-core; remaining time)
+### Block F — controlled-testnet launch demonstration (post-core)
 
-1. Prefer a versioned future-height activation and rolling deployment.
-2. If a reset is technically unavoidable, archive the old chain and perform one
-   reset containing every required change.
-3. Run Gate 6 recovery/conservation cases that require the final binary.
-4. Run both Gate 7 fresh-wallet demonstrations.
-5. Write the controlled-testnet launch record only after 3/3 launch gates are
+1. Do not reset again. The required controlled reset occurred in Block B before
+   the real proof gates, and Gates 2-4 bind their evidence to that chain.
+2. Run Gate 6 recovery/conservation cases that require the final binary.
+3. Run both Gate 7 fresh-wallet demonstrations.
+4. Write the controlled-testnet launch record only after 3/3 launch gates are
    green in addition to the already-recorded 4/4 core result.
 
 ## 7. Efficient test matrix
@@ -697,31 +765,37 @@ Every `ACCEPTANCE.json` must include:
 
 Core Gate 1 is complete. Continue without a repository-wide review:
 
-1. Freeze the deterministic two-chain deployment manifest, route profile, and
-   PFTL activation bootstrap using the already-frozen V3 ingress ELF hash and
-   program vkey. Do not rebuild the guest and do not run a proof in this step.
-   The approved deployment wallet is
-   `0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0`. Use the frozen ELF/vkey recorded
-   in Section 3.7; do not rebuild it without a guest-source change.
-2. Use the Section 2.4 authorization to acquire the minimum required Ethereum
+1. Archive, but do not alter, the legacy `postfiat-wan-devnet-2` snapshot.
+   Prepare the one-reset six-validator controlled target with consensus-v2
+   active from height 1, the exact Tier-4 NAV proof profile, pfUSDC profile
+   binding, route epoch, and governance bootstrap. Use the frozen ELF/vkey in
+   Section 3.7; do not rebuild it and do not generate a proof in this step.
+2. Start all six validators and finalize the first consensus-v2 block. Freeze
+   the deterministic two-chain deployment manifest and route only after the
+   real new genesis hash, committee root, asset ID, checkpoint/state root, route
+   profile hash, route binding, deployment nonces/addresses, constructors, and
+   code hashes are known.
+3. Use the Section 2.4 authorization to acquire the minimum required Ethereum
    Sepolia ETH, Arbitrum Sepolia ETH, and canonical Circle test USDC. Then
    deploy/pin the production anchor on Ethereum Sepolia and verifier/vault on
    Arbitrum Sepolia, verify every constructor/read-back/code hash, and submit
-   one dust deposit.
-3. Capture the finalized target witness using the V3 layout: Ethereum proofs for
+   one dust deposit. The approved deployment wallet is
+   `0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0`; the unlocked signer and funds are
+   available, so this is not presently blocked on StakeHub.
+4. Capture the finalized target witness using the V3 layout: Ethereum proofs for
    Rollup plus parent-chain anchor, and asserted-L2 proofs for vault plus token.
    Use `pfusdc-tier4-prover ingress-capture`; it refuses to write a witness that
    fails native verification.
-4. Run `pfusdc-tier4-prover ingress-audit` once on that witness and retain its
+5. Run `pfusdc-tier4-prover ingress-audit` once on that witness and retain its
    21-case JSON rejection report.
-5. Pin the deployed addresses/code hashes and complete the proof-policy V2 and
-   governed finality-state V2 bootstrap/route profile.
-6. Generate/verify the one required ingress SP1 proof from the captured witness.
+6. Register/activate the already-computed Tier-4 proof-policy, NAV profile,
+   governed finality state, route, and deployed address/code-hash bindings.
+7. Generate/verify the one required ingress SP1 proof from the captured witness.
    If the proof exposes a guest defect, fix it in a new commit and explicitly
    invalidate the prior ELF/proof.
-7. Record Core Gate 2 evidence, then proceed directly to the one required egress
+8. Record Core Gate 2 evidence, then proceed directly to the one required egress
    proof for Core Gate 3.
-8. Report status only as: current core gate, core gates passed out of four,
+9. Report status only as: current core gate, core gates passed out of four,
    exact blocker, last evidence path, and next bounded action. After 4/4 core,
    report launch gates separately out of three.
 
