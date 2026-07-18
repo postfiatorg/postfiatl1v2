@@ -45,11 +45,11 @@ then launch gates passed out of three. Gates 5-7 must not delay work on Gates
 deployed or active.**
 
 - Gate 1 is done: the integrated code, corrected Tier-3 ingress statement, and
-  frozen V3 ingress ELF/vkey exist and their targeted checks are green.
-- Work is stopped immediately before freezing the deterministic two-chain
-  deployment manifest, route profile, and PFTL consensus-v2 bootstrap. No
-  implementation is running while this handoff is being recorded. No
-  deployment transaction, deposit, burn, or proof has been run.
+  corrected/frozen V3 ingress ELF/vkey exist and their targeted checks are
+  green.
+- Current work is freezing the deterministic two-chain deployment manifest,
+  exact Tier-4 NAV/route profile, and PFTL consensus-v2 bootstrap. No deployment
+  transaction, deposit, burn, or proof has been run.
 - No live funds have been spent. StakeHub is **not** a signing or authorization
   blocker: its Ethereum-mainnet ETH and USDC are unlocked, and Section 2.4
   authorizes at most $500 aggregate for the minimum required testnet funding.
@@ -75,8 +75,9 @@ deployed or active.**
   finality and the two required SP1 proof runs impose real elapsed time. Report
   the current bounded action and observed duration instead of multiplying an
   early gate count into a 16-hour estimate.
-- This handoff update is documentation-only. Do not rebuild the frozen ingress
-  guest, generate a proof, deploy, or spend merely to improve the status report.
+- The documentation-only sleep handoff is complete. Implementation resumed from
+  this recorded boundary. Do not generate a proof, deploy, or spend merely to
+  improve a status report.
 
 The shortest correct path from here is:
 
@@ -218,14 +219,15 @@ fees required for this controlled Tier-4 Sepolia deployment.
 worktree: /home/postfiat/repos/postfiatl1v2-public-main-verification-20260717
 branch:   pfusdc-tier4-20260717
 documentation baseline:    47dbc26 (plain-English handoff status)
-last protocol code commit:  fd70c9c (anchor deployment hash-cycle fix)
-V3 guest freeze commit:    0b68a5be71c80d1cdc89d12e5c7cfe77b1eb831f
+last protocol code commit:  5cafb31 (registrable Tier-4 policy commitment)
+V3 guest source freeze:     5cafb31
 base:     cc23185
 remote:   https://github.com/postfiatorg/postfiatl1v2.git
 public main observed 2026-07-18: 66de35034c46dabe46302e2abbeead23a438d3d0
 ```
 
-There are 26 Tier-4 commits through the frozen V3 ELF/vkey record. The corrected Nitro-output ingress is
+The Tier-4 history preserves both the superseded and corrected V3 ELF/vkey
+records. The corrected Nitro-output ingress is
 committed at `ce511818eab246d59d3aed66e4628c5f9045d802`; the storage integration
 fixture repair is committed at `887d98280bf9ff755966c322e156aaa1aee8794e`.
 Public `main` is two CI-only commits ahead of the branch base
@@ -329,13 +331,13 @@ Host commit `69a056f5` adds two bounded commands without changing guest code:
 
 ### 3.5 Current verified results
 
-These targeted results were current through the frozen V3 source commit on
+These targeted results were current through the corrected V3 source commit on
 2026-07-18:
 
 - Tier-4 type tests: **3 passed, 0 failed**.
 - Ingress V2 public-value/finality-state type tests: **3 passed, 0 failed**.
 - Pure egress proof tests: **4 passed, 0 failed**.
-- Corrected ingress V3 library tests: **5 passed, 0 failed** when the library
+- Corrected ingress V3 library tests: **6 passed, 0 failed** when the library
   target is selected.
 - Proof-native ingress execution test: **1 passed, 0 failed**.
 - Targeted bridge-exit activation and egress-export node tests: **2 passed, 0
@@ -378,13 +380,23 @@ all-target check now passes. There is no remaining Gate-1 compile blocker.
   Arbitrum-Sepolia ETH at the last read. The agent can acquire the required
   testnet assets after pinning the exact provider/contract/quote; this is not a
   StakeHub or authorization blocker.
-- The one V3 ingress build is complete and frozen against guest source commit
-  `0b68a5b`. ELF SHA-256 is
-  `03e6b9dabf559f5bc69b8c4b501d31a45ab7db049f6d1d64a4a6e49edcc548eb`;
+- The replacement V3 ingress build is complete and frozen against guest source
+  commit `5cafb31`. ELF SHA-256 is
+  `f61cb50d07eb9f588b0d12d0ba74842fdaa39064f4f9a286e50c8c5be4198e1e`;
   program vkey is
-  `0x007b629db1f140ba592d36ed9ec62ab807d78ecc292fa0b435c9f7f180238df4`.
+  `0x007a73f6c1661a43924e5f7212b75d2069943b20e96a475a2d101245977b5bb7`.
   The copied ELF is byte-identical to Cargo's final RISC-V release artifact and
   contains the V3 schema/program logic. No SP1 proof was generated.
+
+The prior `03e6b9...` ELF / `0x007b629d...` vkey is explicitly invalidated.
+Manifest/bootstrap work proved that `ingress_policy_hash_v2` returned a 48-byte
+SHA3-384 string while the SP1 route and NAV profile contract requires an exact
+32-byte policy hash. That made the old ELF impossible to register in a valid
+Tier-4 NAV profile. Commit `5cafb31` corrects the policy commitment to a
+domain-separated 32-byte Keccak hash, adds a fixed conformance vector, and
+extends `vault-bridge-bootstrap-bundle` to emit the exact SP1 vkey, encoding,
+proof bounds, ingress policy, and route-policy hash. The affected ingress
+library tests and both legacy/Tier-4 bootstrap tests pass.
 
 ### 3.8 PFTL activation and route-profile correction
 
@@ -637,11 +649,13 @@ Timeboxes are escalation points, not permission to weaken a gate.
 ### Block B — close real ingress proof (next bounded execution phase)
 
 1. Official Nitro/BoLD vectors and the asserted runtime-code proof statement are
-   frozen at `0b68a5b`; do not reopen them without a concrete failing witness.
+   frozen at `0b68a5b`; the policy-width correction is frozen at `5cafb31`. Do
+   not reopen them without a concrete failing witness.
 2. Build the frozen V3 ingress guest once and derive its ELF hash/program vkey.
    This must precede deployment because the route profile commits the vkey and
    the anchor constructor commits the derived route binding. Do not prove yet.
-   This step is complete; use the frozen values in Section 3.7.
+   This step is complete; use the corrected frozen values in Section 3.7. The
+   superseded `03e6b9...` ELF must not be deployed or proved.
 3. Archive the legacy chain. Create the fresh six-validator controlled target
    with consensus-v2 active from height 1 and the exact Tier-4 NAV profile,
    pfUSDC binding, route epoch, and governance bootstrap. Perform this as the

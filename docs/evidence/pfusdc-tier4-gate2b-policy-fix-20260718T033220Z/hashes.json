@@ -1,0 +1,24 @@
+{
+  "schema": "postfiat.pfusdc.tier4_gate2b_policy_fix_hashes.v1",
+  "guest_source_commit": "5cafb31e642dfd1629f3a841ca7dc495e5d39668",
+  "sp1_sdk_version": "6.3.1",
+  "policy_commitment": {
+    "algorithm": "keccak256",
+    "domain": "PFTL-PFUSDC-INGRESS-POLICY-V2",
+    "bytes": 32,
+    "conformance_vector": "733caef1634282b0d659ea837e52e93ec33bb62dede10899d5a482142ca56103"
+  },
+  "ingress": {
+    "elf_sha256": "f61cb50d07eb9f588b0d12d0ba74842fdaa39064f4f9a286e50c8c5be4198e1e",
+    "program_vkey": "0x007a73f6c1661a43924e5f7212b75d2069943b20e96a475a2d101245977b5bb7"
+  },
+  "superseded_ingress": {
+    "elf_sha256": "03e6b9dabf559f5bc69b8c4b501d31a45ab7db049f6d1d64a4a6e49edcc548eb",
+    "program_vkey": "0x007b629db1f140ba592d36ed9ec62ab807d78ecc292fa0b435c9f7f180238df4"
+  },
+  "egress": {
+    "elf_sha256": "8d2d5ce451bbd91c28f8fafcbd12f7bc961c6a4be59de12e246b8cb6734f81e8",
+    "program_vkey": "0x00eaaf9372917c3edf9d6fdf70ff64ae08ba25e13cb1e2b2ab7b6e9585d50cd4"
+  },
+  "proof_generated": false
+}

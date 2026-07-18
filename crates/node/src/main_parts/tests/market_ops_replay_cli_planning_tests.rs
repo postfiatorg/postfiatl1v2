@@ -1121,7 +1121,7 @@ fn vault_bridge_bootstrap_bundle_binds_tier4_sp1_route_profile() {
     let route_policy_hash = "53".repeat(48);
     let ingress_policy_hash = "64".repeat(32);
     let program_vkey =
-        "0x007b629db1f140ba592d36ed9ec62ab807d78ecc292fa0b435c9f7f180238df4";
+        "0x007a73f6c1661a43924e5f7212b75d2069943b20e96a475a2d101245977b5bb7";
     let report = vault_bridge_bootstrap_bundle(VaultBridgeBootstrapBundleOptions {
         pftl_chain_id: DEFAULT_CHAIN_ID.to_string(),
         source_chain_id: evidence.source_chain_id,
