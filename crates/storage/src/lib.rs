@@ -1398,6 +1398,7 @@ mod tests {
                 batch_kind: "transparent".to_string(),
                 batch_id: batch_id.to_string(),
                 state_root: format!("state-root-{height}"),
+                bridge_exit_root: None,
                 receipt_count: 0,
                 certificate_id: format!("certificate-{height}"),
                 certificate: BlockCertificate {
