@@ -48,6 +48,7 @@ The frozen file hashes are:
 ```text
 input.json     14ef6ca9de00e4e768fcf6f699eb8cde90628d8521cc64089f33ac8ccd6524ec
 manifest.json  33dc0a56039a59d980c471a9687ec408c6e215c9d4096fc75f8a3888ee010513
+funding-route.json c65edb1d09dc46e7e589888d57381633037b40a1e86e7dba916775bb8431bf3d
 ```
 
 The generated bootstrap operations independently reproduce the manifest's
@@ -89,3 +90,49 @@ restart first checks predicted-address code, runtime hash, deployer nonce, and
 all constructor/storage getters, so an accepted deployment is never blindly
 rebroadcast. A mismatched chain, nonce, artifact, system contract, runtime
 hash, or getter fails closed.
+
+## Live funding route
+
+The exact provider, source contract, live-code hash, target chains, quote
+snapshot, user cap, and canonical-USDC route are frozen in
+`funding-route.json`. Refresh the read-only quote with:
+
+```sh
+/home/postfiat/repos/StakeHub/.venv/bin/python \
+  scripts/pfusdc-tier4-fund.py quote
+```
+
+At the 2026-07-18 freeze, the two native-gas orders plus conservative mainnet
+gas totaled about `$2.13`, far below the aggregate `$500` authorization. The
+provider route is an off-chain delivery service: its verified mainnet vault
+emits the order and the provider relayer delivers the testnet ETH. The driver
+therefore records both the source transaction and delivered target balance.
+
+One passphrase-gated StakeHub policy step is required before that exact vault
+can receive value:
+
+```sh
+/home/postfiat/repos/StakeHub/.venv/bin/stakehub policy \
+  --add-whitelist 0x33c1AD63CCbd322208A0Dd2C9f3C3FD21CCA3329
+```
+
+After the policy command, execute each bounded order independently:
+
+```sh
+/home/postfiat/repos/StakeHub/.venv/bin/python \
+  scripts/pfusdc-tier4-fund.py buy-ethereum-gas --confirm-live-funds
+/home/postfiat/repos/StakeHub/.venv/bin/python \
+  scripts/pfusdc-tier4-fund.py buy-arbitrum-gas --confirm-live-funds
+```
+
+Canonical Arbitrum-Sepolia USDC remains the official Circle token at
+`0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d`. If `CIRCLE_API_KEY` is available,
+the official API request is ready as:
+
+```sh
+/home/postfiat/repos/StakeHub/.venv/bin/python \
+  scripts/pfusdc-tier4-fund.py circle-usdc --confirm-circle-request
+```
+
+Otherwise, one browser reCAPTCHA completion at `https://faucet.circle.com/` is
+required. The route must not substitute a mock or noncanonical token.

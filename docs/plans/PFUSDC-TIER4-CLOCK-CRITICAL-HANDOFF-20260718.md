@@ -86,10 +86,13 @@ deployed or active.**
   used to create the initial checkpoint.
 
 **Blocker status:** no protocol, artifact, signer, or funds blocker. The next
-live-value action is operationally gated on pinning an exact funding provider,
-contract, recipient, delivery amount, and quote. A paid route must also pass the
-StakeHub allowlist policy; the currently identified candidate is not yet on that
-allowlist. This is the only funding-path constraint recorded at this handoff.
+live-value action is operationally gated on one passphrase entry to add the now-
+pinned Drip.Tools mainnet vault
+`0x33c1AD63CCbd322208A0Dd2C9f3C3FD21CCA3329` to the StakeHub allowlist. The
+two live native-gas quotes plus conservative mainnet gas were about `$2.13`
+aggregate. Canonical Arbitrum-Sepolia USDC separately requires either a Circle
+API key or one browser reCAPTCHA completion. No code review, proof, GitHub
+Action, or additional provider investigation is on the critical path.
 
 **2026-07-18 user stop/resume checkpoint:** implementation was paused at the
 user's request so this planning handoff could be made explicit before they went
@@ -407,9 +410,11 @@ all-target check now passes. There is no remaining Gate-1 compile blocker.
 - The approved wallet has live mainnet funding and explicit authority to spend
   up to $500 aggregate to acquire required testnet assets under Section 2.4.
   The target wallet still had zero Ethereum-Sepolia ETH and zero
-  Arbitrum-Sepolia ETH at the last read. The agent can acquire the required
-  testnet assets after pinning the exact provider/contract/quote; this is not a
-  StakeHub or authorization blocker.
+  Arbitrum-Sepolia ETH at the last read. The exact native-gas provider route,
+  verified mainnet contract/runtime hash, two target orders, quote schema, and
+  crash-resume driver are frozen in
+  `deployments/pfusdc-tier4-sepolia-20260718/funding-route.json`. The contract
+  is not yet on the passphrase-gated StakeHub allowlist.
 - The replacement V3 ingress build is complete and frozen against guest source
   commit `5cafb31`. ELF SHA-256 is
   `f61cb50d07eb9f588b0d12d0ba74842fdaa39064f4f9a286e50c8c5be4198e1e`;
@@ -884,9 +889,11 @@ Core Gate 1 is complete. Continue without a repository-wide review:
    Arbitrum Sepolia, verify every constructor/read-back/code hash, and submit
    one dust deposit. The approved deployment wallet is
    `0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0`. The unlocked signer and funds are
-   available. Before spending, pin the live quote and ensure the selected paid
-   provider contract is admitted by StakeHub policy; the current candidate is
-   not yet allowlisted.
+   available. The provider and contract are pinned. Run the single recorded
+   StakeHub allowlist command, refresh the live quote, execute the two roughly
+   `$1.05` native-gas orders, and obtain canonical USDC through Circle's API or
+   browser faucet. Then run the guarded deployment driver; do not reopen
+   provider research unless the pinned quote or contract check fails.
 5. Capture the finalized target witness using the V3 layout: Ethereum proofs for
    Rollup plus parent-chain anchor, and asserted-L2 proofs for vault plus token.
    Use `pfusdc-tier4-prover ingress-capture`; it refuses to write a witness that
