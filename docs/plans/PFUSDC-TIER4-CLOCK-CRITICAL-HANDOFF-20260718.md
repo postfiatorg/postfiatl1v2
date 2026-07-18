@@ -51,18 +51,20 @@ deployed or active.**
 - The legacy PFTL snapshot has been archived without mutation. The fresh
   six-validator consensus-v2 target finalized block 1 with identical block ID,
   state root, accepted receipt, and replicated files on all six nodes. The
-  deterministic two-chain deployment manifest and exact Tier-4 NAV/route profile
-  must now be frozen from that checkpoint. No deployment transaction, deposit,
-  burn, or proof has been run.
+  deterministic two-chain deployment manifest, exact Tier-4 NAV/route profile,
+  bootstrap operations, constructors, predicted addresses, and code hashes are
+  now frozen at commit `f4a199b`. No deployment transaction, deposit, burn, or
+  proof has been run.
 - No live funds have been spent. StakeHub is **not** a signing or authorization
   blocker: its Ethereum-mainnet ETH and USDC are unlocked, and Section 2.4
   authorizes at most $500 aggregate for the minimum required testnet funding.
-- There is no known authorization or signing blocker. The agent is authorized
-  to use the unlocked StakeHub mainnet funds to acquire Ethereum-Sepolia gas,
-  Arbitrum-Sepolia gas, and canonical Circle test USDC within the aggregate
-  $500 cap. The exact provider/contract and quote still must be pinned before a
-  transaction is sent. This is a pending execution step, not a StakeHub
-  blocker, and it must not be solved by deploying a mock token.
+- The agent is authorized to use the unlocked StakeHub mainnet funds to acquire
+  Ethereum-Sepolia gas, Arbitrum-Sepolia gas, and canonical Circle test USDC
+  within the aggregate $500 cap. The exact provider/contract and live quote
+  still must be pinned before a transaction is sent. If the current paid-route
+  candidate is used, its exact mainnet contract must also be admitted by the
+  StakeHub transaction policy; otherwise use an approved faucet/API route. Do
+  not bypass that policy or substitute a mock token.
 - **Plan correction:** the existing PFTL chain cannot safely activate
   consensus-v2 in place. `consensus_v2_activation_height` is a genesis field,
   and the full genesis document is committed by the genesis hash. The current
@@ -83,10 +85,11 @@ deployed or active.**
   resumed from that exact boundary; no proof, deployment, spend, or long test was
   used to create the initial checkpoint.
 
-**Blocker status:** no known blocker. StakeHub signing/funds are available and
-authorized under Section 2.4. The current unfinished item is ordinary execution,
-not a dependency: derive and verify the deployment/route manifest from the real
-height-1 checkpoint commitments.
+**Blocker status:** no protocol, artifact, signer, or funds blocker. The next
+live-value action is operationally gated on pinning an exact funding provider,
+contract, recipient, delivery amount, and quote. A paid route must also pass the
+StakeHub allowlist policy; the currently identified candidate is not yet on that
+allowlist. This is the only funding-path constraint recorded at this handoff.
 
 **2026-07-18 user stop/resume checkpoint:** implementation was paused at the
 user's request so this planning handoff could be made explicit before they went
@@ -98,13 +101,14 @@ funding path. This is authorization to execute after the manifest is pinned; it
 is not authorization to guess a provider, contract, quote, recipient, or
 constructor value.
 
-The working tree at this pause contains unfinished, uncommitted deployment-
-manifest generator work in `tools/pfusdc-tier4-prover/src/main.rs` and
-`tools/pfusdc-tier4-prover/src/manifest.rs`. Its one targeted derivation test
-passed, but no real deployment input or frozen manifest was emitted. Preserve
-those files and resume with Current Next Action 3 below: finish and independently
-cross-check the checkpoint-bound manifest, then pin the funding route before
-spending. Do not treat the uncommitted generator or its test as Gate 2 evidence.
+The deployment-manifest generator and frozen Sepolia input/manifest/bootstrap
+bundle are committed at `f4a199b`. The frozen input SHA-256 is
+`14ef6ca9de00e4e768fcf6f699eb8cde90628d8521cc64089f33ac8ccd6524ec` and
+the frozen manifest SHA-256 is
+`33dc0a56039a59d980c471a9687ec408c6e215c9d4096fc75f8a3888ee010513`.
+Two targeted manifest derivation/cross-binding tests passed. This closes the
+manifest prerequisite only; it is not Gate 2 evidence. Resume with Current Next
+Action 4 below: pin the funding route before spending.
 
 The shortest correct path from here is:
 
@@ -509,15 +513,12 @@ batch log, and batch archive. `verify-state` and `verify-blocks` passed on each
 node. The services were stopped after verification. Sanitized evidence is at
 `docs/evidence/pfusdc-tier4-checkpoint-20260718T034713Z/`.
 
-The exact resume point is now:
-
-1. Freeze the checkpoint-bound asset, NAV profile, route, activation operations,
-   predicted EVM addresses, constructors, and runtime-code commitments.
-2. Validate that every circular dependency is broken by the intended storage
-   versus immutable binding and that the bootstrap bundle reproduces the same
-   profile/route IDs.
-3. Only after the manifest is internally consistent, acquire testnet assets and
-   deploy the pinned contracts.
+The first two former resume steps are complete at `f4a199b`: the
+checkpoint-bound asset, NAV profile, route, activation operations, predicted
+EVM addresses, constructors, runtime-code commitments, and bootstrap bundle
+were frozen and cross-checked. The exact resume point is now to pin an approved
+funding route, acquire only the minimum testnet assets under Section 2.4, and
+then deploy/read back the pinned contracts.
 
 This is the only current execution thread. Do not run GitHub Actions, a
 workspace battery, an SP1 proof, or a live funding transaction before this
@@ -748,11 +749,11 @@ Timeboxes are escalation points, not permission to weaken a gate.
 3. The legacy archive and fresh six-validator height-0 target are complete as
    recorded in Section 3.9. Do not recreate or reset them. Stage the individual
    validator signer files without printing key material.
-4. **Complete through checkpoint:** all six validators finalized the first
+4. **Complete through manifest freeze:** all six validators finalized the first
    consensus-v2 block and agree on its accepted receipt, block ID, state root,
-   and committee root. Now freeze the deterministic Sepolia deployment manifest
-   and route profile from those values plus the asset ID, route binding,
-   constructor arguments, predicted addresses, and code hashes.
+   and committee root. The deterministic Sepolia deployment manifest and route
+   profile are frozen at `f4a199b` from those values plus the asset ID, route
+   binding, constructor arguments, predicted addresses, and code hashes.
 5. Under the bounded real-value authorization in Section 2.4, acquire Ethereum
    Sepolia ETH, Arbitrum Sepolia ETH, and canonical Circle test USDC; deploy the
    production parent-chain anchor and asserted-L2 verifier/vault; then submit
@@ -871,17 +872,21 @@ Core Gate 1 is complete. Continue without a repository-wide review:
    split signer files and the topology were staged without exposing key material.
 2. **Complete:** all six validators finalized consensus-v2 block 1 and match on
    height, block ID, state root, accepted receipt, and consensus-v2 commit.
-3. Freeze and verify the deterministic two-chain deployment manifest, asset,
+3. **Complete:** freeze and verify the deterministic two-chain deployment manifest, asset,
    NAV profile, route, and activation operations from the real genesis hash,
    committee root, checkpoint/state root, proof policy, vkeys, deployment
-   nonces/addresses, constructors, and code hashes.
+   nonces/addresses, constructors, and code hashes. Frozen at `f4a199b` with
+   manifest SHA-256
+   `33dc0a56039a59d980c471a9687ec408c6e215c9d4096fc75f8a3888ee010513`.
 4. Use the Section 2.4 authorization to acquire the minimum required Ethereum
    Sepolia ETH, Arbitrum Sepolia ETH, and canonical Circle test USDC. Then
    deploy/pin the production anchor on Ethereum Sepolia and verifier/vault on
    Arbitrum Sepolia, verify every constructor/read-back/code hash, and submit
    one dust deposit. The approved deployment wallet is
-   `0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0`; the unlocked signer and funds are
-   available, so this is not presently blocked on StakeHub.
+   `0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0`. The unlocked signer and funds are
+   available. Before spending, pin the live quote and ensure the selected paid
+   provider contract is admitted by StakeHub policy; the current candidate is
+   not yet allowlisted.
 5. Capture the finalized target witness using the V3 layout: Ethereum proofs for
    Rollup plus parent-chain anchor, and asserted-L2 proofs for vault plus token.
    Use `pfusdc-tier4-prover ingress-capture`; it refuses to write a witness that
