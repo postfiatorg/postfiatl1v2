@@ -108,19 +108,20 @@ then launch gates passed out of three. Gates 5-7 must not delay work on Gates
 ```text
 worktree: /home/postfiat/repos/postfiatl1v2-public-main-verification-20260717
 branch:   pfusdc-tier4-20260717
-HEAD:     0b68a5be71c80d1cdc89d12e5c7cfe77b1eb831f
+last verified code commit: 69a056f5 (host witness capture/audit)
+V3 guest freeze commit:    0b68a5be71c80d1cdc89d12e5c7cfe77b1eb831f
 base:     cc23185
 remote:   https://github.com/postfiatorg/postfiatl1v2.git
 public main observed 2026-07-18: 66de35034c46dabe46302e2abbeead23a438d3d0
 ```
 
-There are 20 Tier-4 commits on the branch. The corrected Nitro-output ingress is
+There are 22 Tier-4 commits through the host capture commit. The corrected Nitro-output ingress is
 committed at `ce511818eab246d59d3aed66e4628c5f9045d802`; the storage integration
 fixture repair is committed at `887d98280bf9ff755966c322e156aaa1aee8794e`.
 Public `main` is two CI-only commits ahead of the branch base
 (`b4dab41f2de9`, `66de35034c46`). They do not change Tier-4 Rust or Solidity.
-Do not interrupt the dirty ingress correction to integrate them; merge or
-rebase only after the worktree is clean, and do not run their GitHub workflows.
+No dirty ingress correction remains. Integrate those CI-only commits only at a
+normal clean-tree boundary, and do not run their GitHub workflows.
 
 ### 3.2 Implemented and committed
 
@@ -191,13 +192,32 @@ pre-release ingress public values V2 with V3 before any Tier-4 activation:
 - `PfUsdcIngressAnchorV1` is the production parent-chain destination and checks
   active Outbox, proof-derived L2 sender, route fields, recipient hash, and
   deposit replay if the Nitro message is executed.
+- The anchor route binding is constructor-set, non-settable storage rather than
+  an immutable. Making it an immutable creates a deployment hash cycle
+  (`route profile -> verifier policy -> anchor runtime hash -> route binding ->
+  route profile`). The bridge, vault, token, and chain ID remain bytecode-level
+  immutables. The deployment manifest must record and read back the stored route
+  binding; PFTL mint authorization independently verifies that same binding in
+  the proof policy and public values.
 
 Conformance record:
 `docs/specs/pfusdc-nitro-sendroot-conformance.md`.
 Local evidence:
 `docs/evidence/pfusdc-tier4-gate2a-20260718T022015Z/`.
 
-### 3.4 Current verified results
+Host commit `69a056f5` adds two bounded commands without changing guest code:
+
+- `ingress-capture` decodes the real deposit/ArbSys receipt, bootstraps a
+  Helios light-client store from standard Beacon REST data, fetches the
+  finalized Ethereum Rollup/anchor proofs, recovers the confirmed BoLD
+  assertion, fetches asserted-L2 vault/token proofs, obtains the canonical
+  NodeInterface outbox path, and writes a witness only after native V3
+  verification succeeds.
+- `ingress-audit` runs 21 named security-field mutations against that captured
+  witness and requires every mutation to reject. SP1 proof-byte mutation and
+  PFTL deposit replay remain execution-level cases after the one proof exists.
+
+### 3.5 Current verified results
 
 These targeted results were current through the frozen V3 source commit on
 2026-07-18:
@@ -210,7 +230,9 @@ These targeted results were current through the frozen V3 source commit on
 - Proof-native ingress execution test: **1 passed, 0 failed**.
 - Targeted bridge-exit activation and egress-export node tests: **2 passed, 0
   failed**.
-- Tier-4 Foundry tests: **10 passed, 0 failed**.
+- Tier-4 Foundry tests: **11 passed, 0 failed**, including the production-anchor
+  runtime-hash cycle regression test.
+- Ingress capture/ABI/fork/mutation helper tests: **3 passed, 0 failed**.
 - `cargo fmt --all -- --check`: **passed**.
 - The earlier Gate-1 `cargo check --workspace --all-targets --locked` remains
   passed; V3 was checked only through its affected packages because the full
@@ -219,7 +241,7 @@ These targeted results were current through the frozen V3 source commit on
   `sp1_zkvm::io::read` only runs on the zkVM target. Use the library test target
   for unit tests and the SP1 toolchain for the guest execution/proof gate.
 
-### 3.5 Gate-1 compile closure
+### 3.6 Gate-1 compile closure
 
 The former compile failure was:
 
@@ -232,7 +254,7 @@ Commit `887d98280bf9ff755966c322e156aaa1aee8794e` adds
 `bridge_exit_root: None` to that legacy storage fixture. The complete workspace
 all-target check now passes. There is no remaining Gate-1 compile blocker.
 
-### 3.6 Live state
+### 3.7 Live state
 
 - The Tier-4 branch is not merged into current public `main`.
 - The Tier-4 binary and contracts are not deployed.
@@ -352,6 +374,10 @@ and negative matrix.
 
 - [ ] Deploy production, not mock, verifier/vault/anchor components on the pinned
       Sepolia/Arbitrum-Sepolia controlled target.
+- [ ] Read back the anchor's constructor-set `governedRouteBinding` and require
+      it to equal the manifest/route-profile binding. Its runtime hash is
+      deliberately independent of this stored value to avoid the deployment
+      hash cycle described in Section 3.4.
 - [ ] Deployment manifest records compiler, optimizer, constructor arguments,
       creation/runtime bytecode hashes, program vkeys, initial checkpoints,
       chain IDs, vault, token, Rollup, anchor, and route epoch.
@@ -450,13 +476,17 @@ Timeboxes are escalation points, not permission to weaken a gate.
 
 ### Block B — close real ingress proof (target: next 90 minutes)
 
-1. Close every item in Section 4, especially official Nitro encoding vectors and
-   the asserted vault runtime-code proof.
-2. Deploy/pin the production parent-chain ingress anchor and the asserted-L2
-   vault/token route bindings.
-3. Build the ingress guest once, record ELF/vkey hashes, generate one real proof,
-   and verify it in PFTL execution.
-4. Run the ingress negative matrix and restart replay test.
+1. Official Nitro/BoLD vectors and the asserted runtime-code proof statement are
+   frozen at `0b68a5b`; do not reopen them without a concrete failing witness.
+2. Freeze the deterministic Sepolia deployment manifest and route profile,
+   including the constructor-set anchor route binding and all read-back hashes.
+3. Fund the approved deployment wallet with testnet-only Ethereum Sepolia and
+   Arbitrum Sepolia ETH, deploy the production parent-chain anchor and asserted-
+   L2 verifier/vault, and submit one Circle test-USDC dust deposit.
+4. Capture the finalized witness and run the bounded 21-case native mutation
+   audit once.
+5. Build the frozen ingress guest once, record ELF/vkey hashes, generate exactly
+   one real proof, and verify it in PFTL execution with deposit replay rejection.
 
 **Exit:** Gate 2 passes; otherwise record the exact cryptographic binding that
 remains open. Do not substitute a mock or hash-only assertion.
@@ -563,21 +593,29 @@ Every `ACCEPTANCE.json` must include:
 
 Core Gate 1 is complete. Continue without a repository-wide review:
 
-1. Finish the capture command and bounded V3 witness mutation matrix; do not
-   build or prove while guest source is still changing.
-2. Deploy/pin the production anchor on Ethereum Sepolia and verifier/vault on
-   Arbitrum Sepolia, using Circle test USDC, then submit one dust deposit.
+1. Freeze the deterministic two-chain deployment manifest and route profile.
+   The approved deployment wallet is
+   `0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0`; it currently has zero test ETH
+   on both target chains, which is the only external deployment blocker.
+2. Fund that wallet with testnet-only Ethereum Sepolia and Arbitrum Sepolia ETH,
+   deploy/pin the production anchor on Ethereum Sepolia and verifier/vault on
+   Arbitrum Sepolia, verify every constructor/read-back/code hash, obtain Circle
+   test USDC, and submit one dust deposit.
 3. Capture the finalized target witness using the V3 layout: Ethereum proofs for
    Rollup plus parent-chain anchor, and asserted-L2 proofs for vault plus token.
-4. Pin the deployed addresses/code hashes and complete V2 proof policy in the
-   governed finality V2 bootstrap/route profile.
-5. Build the frozen ingress guest once, invalidate the Gate-1 V2 ELF, and
+   Use `pfusdc-tier4-prover ingress-capture`; it refuses to write a witness that
+   fails native verification.
+4. Run `pfusdc-tier4-prover ingress-audit` once on that witness and retain its
+   21-case JSON rejection report.
+5. Pin the deployed addresses/code hashes and complete the proof-policy V2 and
+   governed finality-state V2 bootstrap/route profile.
+6. Build the frozen ingress guest once, invalidate the Gate-1 V2 ELF, and
    generate/verify the one required ingress SP1 proof.
    If the proof exposes a guest defect, fix it in a new commit and explicitly
    invalidate the prior ELF/proof.
-6. Record Core Gate 2 evidence, then proceed directly to the one required egress
+7. Record Core Gate 2 evidence, then proceed directly to the one required egress
    proof for Core Gate 3.
-7. Report status only as: current core gate, core gates passed out of four,
+8. Report status only as: current core gate, core gates passed out of four,
    exact blocker, last evidence path, and next bounded action. After 4/4 core,
    report launch gates separately out of three.
 

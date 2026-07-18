@@ -212,9 +212,8 @@ contract PFUSDCTier4Test {
         arbSys.setReject(true);
         uint256 walletBefore = token.balanceOf(address(this));
         uint256 vaultBefore = token.balanceOf(address(vault));
-        (bool ok,) = address(vault).call(
-            abi.encodeCall(ERC20BridgeVaultV2.depositV2, (100, "pf-rejected", bytes32(uint256(2)), routeBinding))
-        );
+        (bool ok,) = address(vault)
+            .call(abi.encodeCall(ERC20BridgeVaultV2.depositV2, (100, "pf-rejected", bytes32(uint256(2)), routeBinding)));
         _assertTrue(!ok, "failed commitment must revert deposit");
         _assertEq(token.balanceOf(address(this)), walletBefore, "failed send refunds depositor");
         _assertEq(token.balanceOf(address(vault)), vaultBefore, "failed send leaves vault unchanged");
@@ -270,6 +269,20 @@ contract PFUSDCTier4Test {
         _assertTrue(!ok, "wrong L2 sender rejected");
     }
 
+    function testProductionIngressAnchorRuntimeHashDoesNotDependOnRouteBinding() public {
+        Tier4MockBridge bridge = new Tier4MockBridge();
+        PfUsdcIngressAnchorV1 first =
+            new PfUsdcIngressAnchorV1(bridge, address(vault), address(token), block.chainid, keccak256("route-a"));
+        PfUsdcIngressAnchorV1 second =
+            new PfUsdcIngressAnchorV1(bridge, address(vault), address(token), block.chainid, keccak256("route-b"));
+        _assertEq(
+            address(first).codehash, address(second).codehash, "route binding must not change anchor runtime hash"
+        );
+        _assertTrue(
+            first.governedRouteBinding() != second.governedRouteBinding(), "route binding remains instance-pinned"
+        );
+    }
+
     function testProofNativeWithdrawalPaysExactlyAndConsumesReplayKeys() public {
         bytes memory publicValues = _publicValues(address(vault), true, 11, _h48(0x44), _h32(0x99));
         uint256 vaultBefore = token.balanceOf(address(vault));
@@ -305,28 +318,22 @@ contract PFUSDCTier4Test {
 
     function testUnprovedCommitteeChangeFailsBeforeMutation() public {
         bytes memory publicValues =
-            _publicValuesWithCommittee(
-                address(vault), true, 11, _h48(0x44), _h32(0x99), _h48(0x42), bytes("")
-            );
+            _publicValuesWithCommittee(address(vault), true, 11, _h48(0x44), _h32(0x99), _h48(0x42), bytes(""));
         _expectWithdrawRevert(publicValues, hex"01020304");
         _assertEq(verifier.latestFinalizedHeight(), 10, "committee mismatch checkpoint unchanged");
         _assertEq(token.balanceOf(RECIPIENT), 0, "committee mismatch recipient unchanged");
     }
 
     function testProvedCommitteeChangeMustStartAtStoredCommitteeRoot() public {
-        bytes memory wrongStart = _publicValuesWithCommittee(
-            address(vault), true, 11, _h48(0x44), _h32(0x98), _h48(0x42), _h48(0x40)
-        );
+        bytes memory wrongStart =
+            _publicValuesWithCommittee(address(vault), true, 11, _h48(0x44), _h32(0x98), _h48(0x42), _h48(0x40));
         _expectWithdrawRevert(wrongStart, hex"01020304");
 
-        bytes memory provedTransition = _publicValuesWithCommittee(
-            address(vault), true, 11, _h48(0x44), _h32(0x99), _h48(0x42), _h48(0x41)
-        );
+        bytes memory provedTransition =
+            _publicValuesWithCommittee(address(vault), true, 11, _h48(0x44), _h32(0x99), _h48(0x42), _h48(0x41));
         vault.withdrawWithProof(provedTransition, hex"01020304");
         _assertEq(
-            verifier.latestCommitteeRootCommitment(),
-            keccak256(_h48(0x42)),
-            "proved transition advances committee root"
+            verifier.latestCommitteeRootCommitment(), keccak256(_h48(0x42)), "proved transition advances committee root"
         );
     }
 
@@ -341,48 +348,38 @@ contract PFUSDCTier4Test {
     }
 
     function testCheckpointOnlyProofKeepsFinalityWindowLive() public {
-        bytes memory checkpoint11 = _checkpointPublicValues(
-            initialCheckpoint48, _h48(0x44), 11, _h48(0x41), bytes("")
-        );
+        bytes memory checkpoint11 = _checkpointPublicValues(initialCheckpoint48, _h48(0x44), 11, _h48(0x41), bytes(""));
         verifier.advanceCheckpoint(checkpoint11, hex"01020304");
         _assertEq(verifier.latestFinalizedHeight(), 11, "checkpoint-only height");
         _assertEq(verifier.latestCheckpointCommitment(), keccak256(_h48(0x44)), "checkpoint-only root");
 
-        bytes memory checkpoint12 =
-            _checkpointPublicValues(_h48(0x44), _h48(0x45), 12, _h48(0x41), bytes(""));
+        bytes memory checkpoint12 = _checkpointPublicValues(_h48(0x44), _h48(0x45), 12, _h48(0x41), bytes(""));
         verifier.advanceCheckpoint(checkpoint12, hex"01020304");
         _assertEq(verifier.latestFinalizedHeight(), 12, "second checkpoint height");
 
         // Advancing the maintenance checkpoint must not strand an unclaimed
         // withdrawal finalized at the earlier accepted checkpoint.
-        bytes memory historicalWithdrawal =
-            _publicValues(address(vault), true, 11, _h48(0x44), _h32(0x97));
+        bytes memory historicalWithdrawal = _publicValues(address(vault), true, 11, _h48(0x44), _h32(0x97));
         vault.withdrawWithProof(historicalWithdrawal, hex"01020304");
         _assertEq(token.balanceOf(RECIPIENT), 125, "historical withdrawal remains claimable");
         _assertEq(verifier.latestFinalizedHeight(), 12, "historical claim cannot roll back tip");
 
-        (bool replayOk,) = address(verifier).call(
-            abi.encodeCall(PFTLFinalityVerifierV1.advanceCheckpoint, (checkpoint11, hex"01020304"))
-        );
+        (bool replayOk,) = address(verifier)
+            .call(abi.encodeCall(PFTLFinalityVerifierV1.advanceCheckpoint, (checkpoint11, hex"01020304")));
         _assertTrue(!replayOk, "stale checkpoint replay must fail");
     }
 
     function testCheckpointOnlyProofRejectsWrongCommitteeAndInvalidProof() public {
-        bytes memory wrongCommittee = _checkpointPublicValues(
-            initialCheckpoint48, _h48(0x44), 11, _h48(0x42), bytes("")
-        );
-        (bool committeeOk,) = address(verifier).call(
-            abi.encodeCall(PFTLFinalityVerifierV1.advanceCheckpoint, (wrongCommittee, hex"01020304"))
-        );
+        bytes memory wrongCommittee =
+            _checkpointPublicValues(initialCheckpoint48, _h48(0x44), 11, _h48(0x42), bytes(""));
+        (bool committeeOk,) = address(verifier)
+            .call(abi.encodeCall(PFTLFinalityVerifierV1.advanceCheckpoint, (wrongCommittee, hex"01020304")));
         _assertTrue(!committeeOk, "unproved checkpoint committee change must fail");
 
         sp1.setReject(true);
-        bytes memory valid = _checkpointPublicValues(
-            initialCheckpoint48, _h48(0x44), 11, _h48(0x41), bytes("")
-        );
-        (bool proofOk,) = address(verifier).call(
-            abi.encodeCall(PFTLFinalityVerifierV1.advanceCheckpoint, (valid, hex"01020304"))
-        );
+        bytes memory valid = _checkpointPublicValues(initialCheckpoint48, _h48(0x44), 11, _h48(0x41), bytes(""));
+        (bool proofOk,) =
+            address(verifier).call(abi.encodeCall(PFTLFinalityVerifierV1.advanceCheckpoint, (valid, hex"01020304")));
         _assertTrue(!proofOk, "invalid checkpoint proof must fail");
         _assertEq(verifier.latestFinalizedHeight(), 10, "invalid checkpoint proof does not mutate");
     }
@@ -395,13 +392,7 @@ contract PFUSDCTier4Test {
         bytes memory nullifier
     ) private view returns (bytes memory out) {
         return _publicValuesWithCommittee(
-            vaultAddress,
-            accepted,
-            finalizedHeight,
-            resultingCheckpoint,
-            nullifier,
-            _h48(0x41),
-            bytes("")
+            vaultAddress, accepted, finalizedHeight, resultingCheckpoint, nullifier, _h48(0x41), bytes("")
         );
     }
 
@@ -487,18 +478,20 @@ contract PFUSDCTier4Test {
 
     function _h32(uint8 value) private pure returns (bytes memory out) {
         out = new bytes(32);
-        for (uint256 i = 0; i < out.length; i++) out[i] = bytes1(value);
+        for (uint256 i = 0; i < out.length; i++) {
+            out[i] = bytes1(value);
+        }
     }
 
     function _h48(uint8 value) private pure returns (bytes memory out) {
         out = new bytes(48);
-        for (uint256 i = 0; i < out.length; i++) out[i] = bytes1(value);
+        for (uint256 i = 0; i < out.length; i++) {
+            out[i] = bytes1(value);
+        }
     }
 
     function _expectWithdrawRevert(bytes memory publicValues, bytes memory proof) private {
-        (bool ok,) = address(vault).call(
-            abi.encodeCall(ERC20BridgeVaultV2.withdrawWithProof, (publicValues, proof))
-        );
+        (bool ok,) = address(vault).call(abi.encodeCall(ERC20BridgeVaultV2.withdrawWithProof, (publicValues, proof)));
         _assertTrue(!ok, "withdrawal must revert");
     }
 
@@ -513,5 +506,4 @@ contract PFUSDCTier4Test {
     function _assertEq(bytes32 actual, bytes32 expected, string memory message) private pure {
         require(actual == expected, message);
     }
-
 }

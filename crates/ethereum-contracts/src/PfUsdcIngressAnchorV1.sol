@@ -51,7 +51,10 @@ contract PfUsdcIngressAnchorV1 is IPfUsdcIngressAnchorV1 {
     address public immutable l2Vault;
     address public immutable l2Token;
     uint256 public immutable l2ChainId;
-    bytes32 public immutable governedRouteBinding;
+    // Constructor-set and deliberately non-settable. Keeping the route binding
+    // in storage makes the runtime code hash independent of the route-profile
+    // hash, avoiding a circular route -> anchor-code -> policy -> route hash.
+    bytes32 public governedRouteBinding;
     mapping(bytes32 => bool) public depositSeen;
 
     constructor(

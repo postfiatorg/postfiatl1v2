@@ -122,3 +122,10 @@ The confirmed Nitro assertion authenticates its endpoint L2 block hash and
 The ingress anchor is an Ethereum parent-chain destination of
 `ArbSys.sendTxToL1`, not an Arbitrum L2 account. Proving it against the asserted
 L2 state would be the wrong trie and is forbidden by the V3 witness layout.
+
+The anchor's governed route binding is constructor-set storage with no setter,
+not a Solidity immutable. This is intentional: compiling the route binding
+into runtime bytecode would create an undeployable circular commitment because
+the route profile commits the verifier policy, the policy commits the anchor
+runtime code hash, and the route binding commits the route-profile hash. The
+bridge, L2 vault, L2 token, and L2 chain remain bytecode-level immutables.
