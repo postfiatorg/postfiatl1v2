@@ -157,7 +157,6 @@ use postfiat_types::ShieldMintAction;
 use postfiat_types::{
     bridge_exit_merkle_root_v1, issued_asset_id, market_ops_asset_id, market_ops_evidence_root,
     market_ops_reserve_packet_hash, market_ops_supply_packet_hash, nav_proof_profile_id,
-    nav_proof_profile_id_with_bridge_observer_min_confirmations,
     vault_bridge_counted_value_for_asset, vault_bridge_deposit_evidence_root,
     vault_bridge_deposit_id, vault_bridge_deposit_observation_root,
     vault_bridge_deposit_public_values_hash, vault_bridge_pftl_recipient_hash,

@@ -12,7 +12,6 @@ use postfiat_types::{
     VAULT_BRIDGE_EVIDENCE_TIER_RECEIPT_PROVEN,
 };
 use serde::{Deserialize, Serialize};
-use sha3::{Digest, Sha3_384};
 use sp1_helios_primitives::{
     types::{ContractStorage, ProofInputs},
     verify_storage_slot_proofs,
@@ -570,8 +569,7 @@ pub fn ingress_policy_hash_v2(policy: &PfUsdcIngressProofPolicyV2) -> String {
     bytes.extend_from_slice(policy.arbitrum_token_runtime_code_hash.as_slice());
     bytes.extend_from_slice(policy.ethereum_ingress_anchor_address.as_slice());
     bytes.extend_from_slice(policy.ethereum_ingress_anchor_runtime_code_hash.as_slice());
-    let digest = Sha3_384::digest(bytes);
-    digest.iter().map(|byte| format!("{byte:02x}")).collect()
+    hex32(keccak256(bytes))
 }
 
 fn u256_u64(value: U256, field: &str) -> Result<u64, String> {
@@ -659,6 +657,7 @@ mod tests {
     fn ingress_policy_hash_binds_every_policy_field_class() {
         let base = policy();
         let expected = ingress_policy_hash_v2(&base);
+        assert_eq!(expected.len(), 64);
         let mut mutations = Vec::new();
         let mut value = base.clone();
         value.ethereum_chain_id += 1;
@@ -699,6 +698,29 @@ mod tests {
         assert!(mutations
             .iter()
             .all(|mutation| ingress_policy_hash_v2(mutation) != expected));
+    }
+
+    #[test]
+    fn ingress_policy_hash_matches_keccak_conformance_vector() {
+        let vector = PfUsdcIngressProofPolicyV2 {
+            schema: PFUSDC_INGRESS_PROOF_POLICY_SCHEMA_V2.to_string(),
+            ethereum_chain_id: 1,
+            ethereum_genesis_validators_root: B256::repeat_byte(0x11),
+            arbitrum_chain_id: 42_161,
+            arbitrum_rollup_address: Address::repeat_byte(0x22),
+            arbitrum_rollup_runtime_code_hash: B256::repeat_byte(0x33),
+            rollup_latest_confirmed_storage_slot: B256::repeat_byte(0x44),
+            arbitrum_vault_address: Address::repeat_byte(0x55),
+            arbitrum_vault_runtime_code_hash: B256::repeat_byte(0x66),
+            arbitrum_token_address: Address::repeat_byte(0x77),
+            arbitrum_token_runtime_code_hash: B256::repeat_byte(0x88),
+            ethereum_ingress_anchor_address: Address::repeat_byte(0x99),
+            ethereum_ingress_anchor_runtime_code_hash: B256::repeat_byte(0xaa),
+        };
+        assert_eq!(
+            ingress_policy_hash_v2(&vector),
+            "733caef1634282b0d659ea837e52e93ec33bb62dede10899d5a482142ca56103"
+        );
     }
 
     #[test]

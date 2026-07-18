@@ -953,6 +953,11 @@ fn vault_bridge_bootstrap_bundle_writes_pftl_setup_operations() {
         tolerance_bp: 0,
         bridge_observer_min_confirmations: 0,
         valuation_policy_hash: policy_hash.clone(),
+        vault_bridge_route_policy_hash: String::new(),
+        sp1_program_vkey: String::new(),
+        sp1_proof_encoding: String::new(),
+        max_proof_bytes: 0,
+        max_public_values_bytes: 0,
         trust_accounts: vec![holder.to_string(), buyer.to_string()],
         trust_limit: 100_000_000,
         trust_reserve_paid: 10,
@@ -1087,6 +1092,11 @@ fn vault_bridge_bootstrap_bundle_writes_pftl_setup_operations() {
         tolerance_bp: 0,
         bridge_observer_min_confirmations: 0,
         valuation_policy_hash: policy_hash,
+        vault_bridge_route_policy_hash: String::new(),
+        sp1_program_vkey: String::new(),
+        sp1_proof_encoding: String::new(),
+        max_proof_bytes: 0,
+        max_public_values_bytes: 0,
         trust_accounts: vec![holder.to_string()],
         trust_limit: 100_000_000,
         trust_reserve_paid: 10,
@@ -1095,6 +1105,112 @@ fn vault_bridge_bootstrap_bundle_writes_pftl_setup_operations() {
     })
     .expect_err("refuse overwrite by default");
     assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn vault_bridge_bootstrap_bundle_binds_tier4_sp1_route_profile() {
+    let root = env::temp_dir().join(format!(
+        "postfiat-vault-bridge-tier4-bootstrap-{}",
+        process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    let evidence = vault_bridge_deposit_evidence_fixture();
+    let issuer = "vault_bridge-tier4-issuer";
+    let route_policy_hash = "53".repeat(48);
+    let ingress_policy_hash = "64".repeat(32);
+    let program_vkey =
+        "0x007b629db1f140ba592d36ed9ec62ab807d78ecc292fa0b435c9f7f180238df4";
+    let report = vault_bridge_bootstrap_bundle(VaultBridgeBootstrapBundleOptions {
+        pftl_chain_id: DEFAULT_CHAIN_ID.to_string(),
+        source_chain_id: evidence.source_chain_id,
+        vault_address: evidence.vault_address.clone(),
+        token_address: evidence.token_address.clone(),
+        issuer: issuer.to_string(),
+        reserve_operator: issuer.to_string(),
+        redemption_account: issuer.to_string(),
+        asset_code: "PFUSDC".to_string(),
+        asset_version: 1,
+        asset_precision: 6,
+        asset_display_name: "proof-native pfUSDC".to_string(),
+        max_supply: Some(1_000_000_000_000_000),
+        valuation_unit: "USDC".to_string(),
+        verifier_kind: postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+            .to_string(),
+        max_snapshot_age_blocks: 100,
+        challenge_window_blocks: 1,
+        max_epoch_gap_blocks: 1_000,
+        settle_deadline_blocks: 1_000,
+        min_challenge_bond: 0,
+        min_attestations: 0,
+        tolerance_bp: 0,
+        bridge_observer_min_confirmations: 0,
+        valuation_policy_hash: ingress_policy_hash.clone(),
+        vault_bridge_route_policy_hash: route_policy_hash.clone(),
+        sp1_program_vkey: program_vkey.to_string(),
+        sp1_proof_encoding: "groth16".to_string(),
+        max_proof_bytes: 4_096,
+        max_public_values_bytes: 16_384,
+        trust_accounts: Vec::new(),
+        trust_limit: 1_000_000_000_000_000,
+        trust_reserve_paid: 10,
+        bundle_dir: root.clone(),
+        overwrite: false,
+    })
+    .expect("write Tier-4 bootstrap bundle");
+
+    let source_class = format!("vault_bridge:{}", evidence.source_domain());
+    let expected_profile = postfiat_types::NavProofProfile::new_with_bridge_observer_min_confirmations(
+        issuer,
+        postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1,
+        &source_class,
+        100,
+        1,
+        1_000,
+        1_000,
+        0,
+        0,
+        0,
+        0,
+        &ingress_policy_hash,
+        program_vkey,
+        "groth16",
+        4_096,
+        16_384,
+    )
+    .expect("build Tier-4 profile")
+    .with_vault_bridge_route_policy_hash(&route_policy_hash)
+    .expect("bind Tier-4 route policy");
+    assert_eq!(report.profile_id, expected_profile.profile_id);
+
+    let operation: AssetTransactionOperation = serde_json::from_slice(
+        &std::fs::read(root.join("profile-register.operation.json"))
+            .expect("read Tier-4 profile operation"),
+    )
+    .expect("decode Tier-4 profile operation");
+    let AssetTransactionOperation::NavProfileRegister(operation) = operation else {
+        panic!("expected NAV profile registration operation");
+    };
+    assert_eq!(operation.valuation_policy_hash, ingress_policy_hash);
+    assert_eq!(
+        operation.vault_bridge_route_policy_hash,
+        route_policy_hash
+    );
+    assert_eq!(operation.sp1_program_vkey, program_vkey);
+    assert_eq!(operation.sp1_proof_encoding, "groth16");
+    assert_eq!(operation.max_proof_bytes, 4_096);
+    assert_eq!(operation.max_public_values_bytes, 16_384);
+
+    let nav_operation: AssetTransactionOperation = serde_json::from_slice(
+        &std::fs::read(root.join("nav-asset-register.operation.json"))
+            .expect("read Tier-4 NAV asset operation"),
+    )
+    .expect("decode Tier-4 NAV asset operation");
+    let AssetTransactionOperation::NavAssetRegister(nav_operation) = nav_operation else {
+        panic!("expected NAV asset registration operation");
+    };
+    assert_eq!(nav_operation.proof_profile, expected_profile.profile_id);
 
     let _ = std::fs::remove_dir_all(root);
 }

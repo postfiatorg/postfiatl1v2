@@ -159,7 +159,8 @@ pub fn vault_bridge_bootstrap_bundle(
         options.asset_version,
     )
     .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
-    let profile_id = nav_proof_profile_id_with_bridge_observer_min_confirmations(
+    let mut profile = NavProofProfile::new_with_bridge_observer_min_confirmations(
+        &options.issuer,
         &options.verifier_kind,
         &source_class,
         options.max_snapshot_age_blocks,
@@ -171,12 +172,18 @@ pub fn vault_bridge_bootstrap_bundle(
         options.tolerance_bp,
         options.bridge_observer_min_confirmations,
         &options.valuation_policy_hash,
-        "",
-        "",
-        0,
-        0,
+        &options.sp1_program_vkey,
+        &options.sp1_proof_encoding,
+        options.max_proof_bytes,
+        options.max_public_values_bytes,
     )
     .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    if !options.vault_bridge_route_policy_hash.is_empty() {
+        profile = profile
+            .with_vault_bridge_route_policy_hash(&options.vault_bridge_route_policy_hash)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    }
+    let profile_id = profile.profile_id;
 
     let profile_register_operation =
         AssetTransactionOperation::NavProfileRegister(NavProfileRegisterOperation {
@@ -192,11 +199,11 @@ pub fn vault_bridge_bootstrap_bundle(
             tolerance_bp: options.tolerance_bp,
             bridge_observer_min_confirmations: options.bridge_observer_min_confirmations,
             valuation_policy_hash: options.valuation_policy_hash.clone(),
-            vault_bridge_route_policy_hash: String::new(),
-            sp1_program_vkey: String::new(),
-            sp1_proof_encoding: String::new(),
-            max_proof_bytes: 0,
-            max_public_values_bytes: 0,
+            vault_bridge_route_policy_hash: options.vault_bridge_route_policy_hash.clone(),
+            sp1_program_vkey: options.sp1_program_vkey.clone(),
+            sp1_proof_encoding: options.sp1_proof_encoding.clone(),
+            max_proof_bytes: options.max_proof_bytes,
+            max_public_values_bytes: options.max_public_values_bytes,
         });
     profile_register_operation
         .validate()
