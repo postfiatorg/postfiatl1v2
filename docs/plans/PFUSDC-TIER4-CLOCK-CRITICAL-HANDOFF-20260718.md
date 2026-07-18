@@ -108,13 +108,13 @@ then launch gates passed out of three. Gates 5-7 must not delay work on Gates
 ```text
 worktree: /home/postfiat/repos/postfiatl1v2-public-main-verification-20260717
 branch:   pfusdc-tier4-20260717
-HEAD:     3d3bf41bb2bb751dffa6eb1f9421090dba7742ed
+HEAD:     0b68a5be71c80d1cdc89d12e5c7cfe77b1eb831f
 base:     cc23185
 remote:   https://github.com/postfiatorg/postfiatl1v2.git
 public main observed 2026-07-18: 66de35034c46dabe46302e2abbeead23a438d3d0
 ```
 
-There are 19 Tier-4 commits on the branch. The corrected Nitro-output ingress is
+There are 20 Tier-4 commits on the branch. The corrected Nitro-output ingress is
 committed at `ce511818eab246d59d3aed66e4628c5f9045d802`; the storage integration
 fixture repair is committed at `887d98280bf9ff755966c322e156aaa1aee8794e`.
 Public `main` is two CI-only commits ahead of the branch base
@@ -164,10 +164,10 @@ Gate-1 ingress V2 ELF SHA-256 was
 Gate-2 code-proof closure changes the guest statement to V3, so that V2 ELF is
 now explicitly invalidated and must not be proved or activated.
 
-### 3.4 Gate-2 V3 closure — current dirty work
+### 3.4 Gate-2 V3 closure — committed and frozen
 
-The active worktree supersedes the pre-release ingress public values V2 with V3
-before any Tier-4 activation:
+Commit `0b68a5be71c80d1cdc89d12e5c7cfe77b1eb831f` supersedes the
+pre-release ingress public values V2 with V3 before any Tier-4 activation:
 
 - Nitro leaf and accumulator rules are pinned to Offchain Labs Nitro commit
   `a618155919315241665356fe60f3cd00d66d5e46`, with fixed item-hash/sendRoot
@@ -194,10 +194,13 @@ before any Tier-4 activation:
 
 Conformance record:
 `docs/specs/pfusdc-nitro-sendroot-conformance.md`.
+Local evidence:
+`docs/evidence/pfusdc-tier4-gate2a-20260718T022015Z/`.
 
 ### 3.4 Current verified results
 
-These were run against the committed Gate-1 tree on 2026-07-18:
+These targeted results were current through the frozen V3 source commit on
+2026-07-18:
 
 - Tier-4 type tests: **3 passed, 0 failed**.
 - Ingress V2 public-value/finality-state type tests: **3 passed, 0 failed**.
@@ -209,7 +212,9 @@ These were run against the committed Gate-1 tree on 2026-07-18:
   failed**.
 - Tier-4 Foundry tests: **10 passed, 0 failed**.
 - `cargo fmt --all -- --check`: **passed**.
-- `cargo check --workspace --all-targets --locked`: **passed**.
+- The earlier Gate-1 `cargo check --workspace --all-targets --locked` remains
+  passed; V3 was checked only through its affected packages because the full
+  workspace battery is reserved for the immutable launch candidate.
 - Running the SP1 guest binary as a host unit test is invalid because
   `sp1_zkvm::io::read` only runs on the zkVM target. Use the library test target
   for unit tests and the SP1 toolchain for the guest execution/proof gate.
