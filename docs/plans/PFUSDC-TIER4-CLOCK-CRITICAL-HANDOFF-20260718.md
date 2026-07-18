@@ -166,6 +166,32 @@ finality bootstrap; its deterministic proposer is `validator-2`. Do not commit
 another staging transfer or attempt route governance before the live finality
 file exists.
 
+**2026-07-18 active-runner correction:** the bounded overnight runner remains
+active and polls the StakeHub policy state every 30 seconds. The only current
+external hold is that the pinned Drip.Tools mainnet vault remains absent from
+the StakeHub allowlist; the live two-order quote remains approximately `$2.12`
+and no funds have been spent. Once admitted, the runner follows the existing
+critical-path order without another operator prompt: acquire both Sepolia gas
+assets, verify delivery, deploy and read back the three frozen contracts, wait
+for canonical Circle test USDC, make the single dust deposit, capture the live
+finality state and finalized ingress witness, run the bounded ingress audit
+once, activate the route at exact PFTL height 20, generate the single ingress
+proof, and submit it through certified six-validator consensus.
+
+Pre-spend inspection found two runner defects and corrected them before any
+live transaction or proof: the deposit driver read addresses/route binding from
+nonexistent manifest fields, and it selected the PFUSDC issuer as the mint
+recipient even though consensus requires a non-issuer holder trustline. The
+driver now reads the frozen deployment sequence and route-profile binding and
+uses dedicated holder
+`pfab9b9228942e5c529633a13aa271d5297bec6353`. After exact height-20 route
+activation, certified blocks 21 and 22 fund that holder and establish its
+PFUSDC trustline; the proof-native proposal then carries the actual Groth16
+proof bytes and canonical public values at height 23, followed by
+finalize/claim and exact-credit readback at height 24. This operational
+provisioning does not change any frozen asset, route, proof, funding, or gate
+parameter.
+
 The corrected ingress guest, deployment-manifest generator, and frozen Sepolia
 input/manifest/bootstrap bundle are committed at `7c0019b`. The frozen input
 SHA-256 is
