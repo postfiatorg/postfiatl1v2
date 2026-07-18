@@ -1,28 +1,34 @@
 use std::{fs, path::PathBuf};
 
 use alloy::{
-    primitives::{Address, Bytes, FixedBytes, B256, U256},
+    primitives::{keccak256, Address, Bytes, FixedBytes, B256, U256},
     rpc::types::{Block, EIP1186AccountProofResponse},
 };
 use alloy_rlp::Encodable;
-use alloy_sol_types::{sol, SolCall, SolEvent};
+use alloy_sol_types::{sol, SolCall, SolEvent, SolValue};
 use anyhow::{anyhow, bail, Context, Result};
 use clap::Args;
 use helios_consensus_core::{
-    apply_bootstrap, calc_sync_period,
+    apply_bootstrap, apply_finality_update, apply_update, calc_sync_period,
     consensus_spec::MainnetConsensusSpec,
     types::{Bootstrap, FinalityUpdate, Fork, Forks, LightClientStore, Update},
-    verify_bootstrap,
+    verify_bootstrap, verify_finality_update, verify_update,
 };
 use pfusdc_ingress_program::{
-    verify_ingress_witness_v2, NitroAssertionWitnessV1, NitroSendWitnessV1,
+    ingress_policy_hash_v2, verify_ingress_witness_v2, NitroAssertionWitnessV1, NitroSendWitnessV1,
     PfUsdcIngressProofPolicyV2, PfUsdcIngressProofWitnessV2,
     PFUSDC_INGRESS_PROOF_WITNESS_SCHEMA_V2,
 };
-use postfiat_types::{VaultBridgeDepositEvidence, VaultBridgeRouteProfileV1};
-use serde::de::DeserializeOwned;
+use postfiat_types::{
+    EthereumArbitrumCheckpointV1, EthereumArbitrumFinalityStateV2, VaultBridgeDepositEvidence,
+    VaultBridgeRouteProfileV1, ETHEREUM_ARBITRUM_FINALITY_STATE_SCHEMA_V2,
+    NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1,
+};
+use serde::{de::DeserializeOwned, Serialize};
 use serde_json::{json, Value};
 use sp1_helios_primitives::types::{ContractStorage, ProofInputs, StorageSlotWithProof};
+use sp1_helios_primitives::verify_storage_slot_proofs;
+use tree_hash::TreeHash;
 
 const CHECKPOINTS_BEHIND: u64 = 16;
 const MAX_HELIOS_UPDATES: u8 = 8;
@@ -119,9 +125,9 @@ sol! {
 #[derive(Debug, Clone, Args)]
 pub struct IngressCaptureArgs {
     #[arg(long)]
-    pub route_profile: PathBuf,
+    pub manifest: PathBuf,
     #[arg(long)]
-    pub policy: PathBuf,
+    pub prior_finality_state: PathBuf,
     #[arg(long)]
     pub ethereum_rpc: String,
     #[arg(long)]
@@ -136,6 +142,20 @@ pub struct IngressCaptureArgs {
     pub pftl_genesis_hash: String,
     #[arg(long)]
     pub pftl_protocol_version: u32,
+    #[arg(long)]
+    pub output: PathBuf,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct FinalityBootstrapArgs {
+    #[arg(long)]
+    pub manifest: PathBuf,
+    #[arg(long)]
+    pub ethereum_rpc: String,
+    #[arg(long)]
+    pub ethereum_consensus_rpc: String,
+    #[arg(long)]
+    pub arbitrum_rpc: String,
     #[arg(long)]
     pub output: PathBuf,
 }
@@ -238,9 +258,143 @@ struct BeaconRootData {
     root: B256,
 }
 
+#[derive(Debug)]
+struct VerifiedFinality {
+    prior_root: B256,
+    prior_slot: u64,
+    final_root: B256,
+    final_slot: u64,
+    execution_state_root: B256,
+    execution_block_number: u64,
+}
+
+pub async fn capture_finality_bootstrap(args: FinalityBootstrapArgs) -> Result<()> {
+    let (route_profile, policy) = read_manifest_bindings(&args.manifest)?;
+    let rpc = RpcClient::new()?;
+    let helios = capture_helios_inputs(&rpc, &policy, &args.ethereum_consensus_rpc, None).await?;
+    let finality = verify_helios_inputs_host(&helios, &policy)?;
+    let ethereum_block = quantity(finality.execution_block_number);
+
+    let rollup_storage = get_account_proof(
+        &rpc,
+        &args.ethereum_rpc,
+        policy.arbitrum_rollup_address,
+        &[policy.rollup_latest_confirmed_storage_slot],
+        &ethereum_block,
+    )
+    .await?;
+    anyhow::ensure!(
+        rollup_storage.address == policy.arbitrum_rollup_address
+            && rollup_storage.value.code_hash == policy.arbitrum_rollup_runtime_code_hash
+            && rollup_storage.storage_slots.len() == 1
+            && rollup_storage.storage_slots[0].key == policy.rollup_latest_confirmed_storage_slot,
+        "Rollup proof does not match pinned address, code, and latestConfirmed slot"
+    );
+    let verified_slots = verify_storage_slot_proofs(finality.execution_state_root, &rollup_storage)
+        .map_err(|error| anyhow!("invalid RollupCore account/storage proof: {error}"))?;
+    anyhow::ensure!(
+        verified_slots.len() == 1,
+        "Rollup latestConfirmed proof must contain exactly one slot"
+    );
+    let assertion_hash = B256::from(rollup_storage.storage_slots[0].value.to_be_bytes::<32>());
+    anyhow::ensure!(
+        verified_slots[0].value == assertion_hash,
+        "Rollup latestConfirmed storage proof returned a different value"
+    );
+
+    let anchor_account = get_account_proof(
+        &rpc,
+        &args.ethereum_rpc,
+        policy.ethereum_ingress_anchor_address,
+        &[],
+        &ethereum_block,
+    )
+    .await?;
+    verify_account_code_host(
+        finality.execution_state_root,
+        &anchor_account,
+        policy.ethereum_ingress_anchor_address,
+        policy.ethereum_ingress_anchor_runtime_code_hash,
+        "Ethereum ingress anchor",
+    )?;
+
+    let assertion = capture_assertion(
+        &rpc,
+        &args.ethereum_rpc,
+        policy.arbitrum_rollup_address,
+        assertion_hash,
+        &ethereum_block,
+    )
+    .await?;
+    anyhow::ensure!(
+        assertion.machine_status == 1 && nitro_assertion_hash(&assertion) == assertion_hash,
+        "latestConfirmed does not match the canonical Nitro assertion preimage"
+    );
+    let asserted_block: Block = rpc
+        .call(
+            &args.arbitrum_rpc,
+            "eth_getBlockByHash",
+            json!([assertion.block_hash, false]),
+        )
+        .await?;
+    anyhow::ensure!(
+        asserted_block.header.hash == assertion.block_hash
+            && asserted_block.header.inner.hash_slow() == assertion.block_hash,
+        "Arbitrum RPC returned a noncanonical asserted block"
+    );
+    let asserted_l2_block = quantity(asserted_block.header.inner.number);
+    let vault_account = get_account_proof(
+        &rpc,
+        &args.arbitrum_rpc,
+        policy.arbitrum_vault_address,
+        &[],
+        &asserted_l2_block,
+    )
+    .await?;
+    verify_account_code_host(
+        asserted_block.header.inner.state_root,
+        &vault_account,
+        policy.arbitrum_vault_address,
+        policy.arbitrum_vault_runtime_code_hash,
+        "Arbitrum vault",
+    )?;
+    let token_account = get_account_proof(
+        &rpc,
+        &args.arbitrum_rpc,
+        policy.arbitrum_token_address,
+        &[],
+        &asserted_l2_block,
+    )
+    .await?;
+    verify_account_code_host(
+        asserted_block.header.inner.state_root,
+        &token_account,
+        policy.arbitrum_token_address,
+        policy.arbitrum_token_runtime_code_hash,
+        "Arbitrum token",
+    )?;
+
+    let checkpoint = EthereumArbitrumCheckpointV1 {
+        ethereum_finalized_beacon_root: hex32(finality.final_root),
+        ethereum_finalized_slot: finality.final_slot,
+        arbitrum_assertion_hash: hex32(assertion_hash),
+        assertion_l2_block_hash: hex32(assertion.block_hash),
+        assertion_send_root: hex32(assertion.send_root),
+    };
+    let state = finality_state_from_checkpoint(&route_profile, &policy, checkpoint)?;
+    write_new_json(&args.output, &state)?;
+    println!(
+        "captured Tier-4 finality bootstrap: Ethereum slot {}, assertion {}",
+        state.latest.ethereum_finalized_slot, state.latest.arbitrum_assertion_hash
+    );
+    println!("wrote {}", args.output.display());
+    Ok(())
+}
+
 pub async fn capture(args: IngressCaptureArgs) -> Result<()> {
-    let route_profile: VaultBridgeRouteProfileV1 = read_json(&args.route_profile)?;
-    let policy: PfUsdcIngressProofPolicyV2 = read_json(&args.policy)?;
+    let (route_profile, policy) = read_manifest_bindings(&args.manifest)?;
+    let finality_state: EthereumArbitrumFinalityStateV2 = read_json(&args.prior_finality_state)?;
+    validate_finality_state_binding(&finality_state, &route_profile, &policy)?;
     let deposit_tx: B256 = args
         .deposit_tx
         .parse()
@@ -257,13 +411,24 @@ pub async fn capture(args: IngressCaptureArgs) -> Result<()> {
     ensure_successful_receipt(&receipt, deposit_tx)?;
     let (evidence, output_index, output) = decode_deposit_receipt(&receipt, deposit_tx, &policy)?;
 
-    let helios = capture_helios_inputs(&rpc, &policy, &args.ethereum_consensus_rpc).await?;
-    let execution = helios
-        .finality_update
-        .finalized_header()
-        .execution()
-        .map_err(|_| anyhow!("finalized Helios header omitted execution payload"))?;
-    let ethereum_block_number = *execution.block_number();
+    let helios = capture_helios_inputs(
+        &rpc,
+        &policy,
+        &args.ethereum_consensus_rpc,
+        Some(&finality_state.latest),
+    )
+    .await?;
+    let verified_finality = verify_helios_inputs_host(&helios, &policy)?;
+    anyhow::ensure!(
+        verified_finality.prior_root
+            == parse_hex32(&finality_state.latest.ethereum_finalized_beacon_root)?,
+        "Helios witness does not start from the governed finalized root"
+    );
+    anyhow::ensure!(
+        verified_finality.prior_slot == finality_state.latest.ethereum_finalized_slot,
+        "Helios witness does not start from the governed finalized slot"
+    );
+    let ethereum_block_number = verified_finality.execution_block_number;
     let ethereum_block = quantity(ethereum_block_number);
 
     let rollup_storage = get_account_proof(
@@ -401,6 +566,10 @@ pub async fn capture(args: IngressCaptureArgs) -> Result<()> {
     };
     let public_values = verify_ingress_witness_v2(&witness)
         .map_err(|error| anyhow!("captured witness failed native verification: {error}"))?;
+    let mut advanced_state = finality_state;
+    advanced_state
+        .verify_and_advance(&public_values)
+        .map_err(|error| anyhow!("captured witness cannot advance governed finality: {error}"))?;
     let encoded = serde_json::to_vec_pretty(&witness)?;
     if let Some(parent) = args.output.parent() {
         fs::create_dir_all(parent)?;
@@ -534,20 +703,42 @@ async fn capture_helios_inputs(
     rpc: &RpcClient,
     policy: &PfUsdcIngressProofPolicyV2,
     consensus_rpc: &str,
+    prior_checkpoint: Option<&EthereumArbitrumCheckpointV1>,
 ) -> Result<ProofInputs> {
     let finality: BeaconData<FinalityUpdate<MainnetConsensusSpec>> = rpc
         .beacon_get(consensus_rpc, "eth/v1/beacon/light_client/finality_update")
         .await?;
     let finality_update = finality.data;
     let final_slot = finality_update.finalized_header().beacon().slot;
-    let mut bootstrap_slot = final_slot.saturating_sub(CHECKPOINTS_BEHIND * 32) / 32 * 32;
-    let checkpoint_root = loop {
-        if let Some(root) = rpc.beacon_root(consensus_rpc, bootstrap_slot).await? {
-            break root;
-        }
-        bootstrap_slot = bootstrap_slot
-            .checked_sub(32)
-            .ok_or_else(|| anyhow!("checkpoint search underflow"))?;
+    let (bootstrap_slot, checkpoint_root) = if let Some(checkpoint) = prior_checkpoint {
+        checkpoint.validate().map_err(|error| anyhow!(error))?;
+        anyhow::ensure!(
+            checkpoint.ethereum_finalized_slot.is_multiple_of(32),
+            "governed Ethereum checkpoint slot is not an epoch boundary"
+        );
+        let root = parse_hex32(&checkpoint.ethereum_finalized_beacon_root)?;
+        let canonical = rpc
+            .beacon_root(consensus_rpc, checkpoint.ethereum_finalized_slot)
+            .await?
+            .ok_or_else(|| {
+                anyhow!("governed Ethereum checkpoint is unavailable from beacon RPC")
+            })?;
+        anyhow::ensure!(
+            canonical == root,
+            "beacon RPC root differs from governed Ethereum checkpoint"
+        );
+        (checkpoint.ethereum_finalized_slot, root)
+    } else {
+        let mut slot = final_slot.saturating_sub(CHECKPOINTS_BEHIND * 32) / 32 * 32;
+        let root = loop {
+            if let Some(root) = rpc.beacon_root(consensus_rpc, slot).await? {
+                break root;
+            }
+            slot = slot
+                .checked_sub(32)
+                .ok_or_else(|| anyhow!("checkpoint search underflow"))?;
+        };
+        (slot, root)
     };
     let bootstrap: BeaconData<Bootstrap<MainnetConsensusSpec>> = rpc
         .beacon_get(
@@ -600,6 +791,83 @@ async fn capture_helios_inputs(
         forks,
         contract_storage: vec![],
     })
+}
+
+fn verify_helios_inputs_host(
+    inputs: &ProofInputs,
+    policy: &PfUsdcIngressProofPolicyV2,
+) -> Result<VerifiedFinality> {
+    anyhow::ensure!(
+        inputs.genesis_root == policy.ethereum_genesis_validators_root
+            && inputs.contract_storage.is_empty()
+            && inputs.expected_current_slot == *inputs.finality_update.signature_slot(),
+        "Helios input does not match pinned Ethereum policy"
+    );
+    let expected_forks = supported_forks(policy.ethereum_chain_id)?;
+    anyhow::ensure!(
+        forks_equal(&inputs.forks, &expected_forks),
+        "Helios fork schedule does not match pinned network"
+    );
+    anyhow::ensure!(
+        inputs.updates.len() <= usize::from(MAX_HELIOS_UPDATES),
+        "Helios update count exceeds guest bound"
+    );
+    let mut store = inputs.store.clone();
+    store.next_sync_committee = None;
+    let prior_root: B256 = store.finalized_header.beacon().tree_hash_root();
+    let prior_slot = store.finalized_header.beacon().slot;
+    for update in &inputs.updates {
+        verify_update(
+            update,
+            inputs.expected_current_slot,
+            &store,
+            inputs.genesis_root,
+            &inputs.forks,
+        )
+        .map_err(|error| anyhow!("invalid Helios committee update: {error}"))?;
+        apply_update(&mut store, update);
+    }
+    verify_finality_update(
+        &inputs.finality_update,
+        inputs.expected_current_slot,
+        &store,
+        inputs.genesis_root,
+        &inputs.forks,
+    )
+    .map_err(|error| anyhow!("invalid Helios finality update: {error}"))?;
+    apply_finality_update(&mut store, &inputs.finality_update);
+    let final_slot = store.finalized_header.beacon().slot;
+    anyhow::ensure!(
+        final_slot > prior_slot && final_slot.is_multiple_of(32),
+        "Ethereum finalized checkpoint did not canonically advance"
+    );
+    let final_root: B256 = store.finalized_header.beacon().tree_hash_root();
+    let execution = store
+        .finalized_header
+        .execution()
+        .map_err(|_| anyhow!("finalized Ethereum header has no execution payload"))?;
+    Ok(VerifiedFinality {
+        prior_root,
+        prior_slot,
+        final_root,
+        final_slot,
+        execution_state_root: *execution.state_root(),
+        execution_block_number: *execution.block_number(),
+    })
+}
+
+fn forks_equal(left: &Forks, right: &Forks) -> bool {
+    [
+        (&left.genesis, &right.genesis),
+        (&left.altair, &right.altair),
+        (&left.bellatrix, &right.bellatrix),
+        (&left.capella, &right.capella),
+        (&left.deneb, &right.deneb),
+        (&left.electra, &right.electra),
+        (&left.fulu, &right.fulu),
+    ]
+    .iter()
+    .all(|(left, right)| left.epoch == right.epoch && left.fork_version == right.fork_version)
 }
 
 fn supported_forks(chain_id: u64) -> Result<Forks> {
@@ -749,9 +1017,9 @@ fn decode_deposit_receipt(
     let amount_atoms = u256_u64(deposit.amount, "deposit amount")?;
     let evidence = VaultBridgeDepositEvidence {
         source_chain_id: u256_u64(deposit.sourceChainId, "deposit sourceChainId")?,
-        vault_address: deposit.vault.to_string(),
-        token_address: deposit.token.to_string(),
-        depositor: deposit.depositor.to_string(),
+        vault_address: evm_address_text(deposit.vault),
+        token_address: evm_address_text(deposit.token),
+        depositor: evm_address_text(deposit.depositor),
         pftl_recipient: deposit.pftlRecipient,
         pftl_recipient_hash: hex32(deposit.pftlRecipientHash),
         amount_atoms,
@@ -849,6 +1117,199 @@ fn raw_log(log: &Value) -> Result<(Vec<B256>, Bytes)> {
     Ok((topics, data))
 }
 
+fn read_manifest_bindings(
+    path: &PathBuf,
+) -> Result<(VaultBridgeRouteProfileV1, PfUsdcIngressProofPolicyV2)> {
+    let document: Value = read_json(path)?;
+    anyhow::ensure!(
+        document.get("schema").and_then(Value::as_str)
+            == Some("postfiat.pfusdc.tier4_deployment_manifest.v1"),
+        "deployment manifest schema mismatch"
+    );
+    let route_profile: VaultBridgeRouteProfileV1 = serde_json::from_value(
+        document
+            .pointer("/route_profile/profile")
+            .cloned()
+            .ok_or_else(|| anyhow!("deployment manifest omitted route profile"))?,
+    )
+    .context("decode deployment manifest route profile")?;
+    let policy: PfUsdcIngressProofPolicyV2 = serde_json::from_value(
+        document
+            .pointer("/ingress_policy/policy")
+            .cloned()
+            .ok_or_else(|| anyhow!("deployment manifest omitted ingress policy"))?,
+    )
+    .context("decode deployment manifest ingress policy")?;
+    route_profile.validate().map_err(|error| anyhow!(error))?;
+    let profile_hash = route_profile
+        .profile_hash()
+        .map_err(|error| anyhow!(error))?;
+    let declared_profile_hash = document
+        .pointer("/route_profile/profile_hash")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("deployment manifest omitted route profile hash"))?;
+    anyhow::ensure!(
+        declared_profile_hash == profile_hash,
+        "deployment manifest route profile hash mismatch"
+    );
+    let policy_hash = ingress_policy_hash_v2(&policy);
+    let declared_policy_hash = document
+        .pointer("/ingress_policy/policy_hash")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("deployment manifest omitted ingress policy hash"))?;
+    anyhow::ensure!(
+        declared_policy_hash == policy_hash,
+        "deployment manifest ingress policy hash mismatch"
+    );
+    validate_route_policy_binding(&route_profile, &policy)?;
+    Ok((route_profile, policy))
+}
+
+fn validate_route_policy_binding(
+    route_profile: &VaultBridgeRouteProfileV1,
+    policy: &PfUsdcIngressProofPolicyV2,
+) -> Result<()> {
+    anyhow::ensure!(
+        route_profile.verifier_kind == NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+            && route_profile.verifier_policy_hash == ingress_policy_hash_v2(policy)
+            && route_profile.source_chain_id == policy.arbitrum_chain_id
+            && route_profile.vault_address == evm_address_text(policy.arbitrum_vault_address)
+            && normalized_hash(&route_profile.vault_runtime_code_hash)
+                == hex32(policy.arbitrum_vault_runtime_code_hash)
+            && route_profile.token_address == evm_address_text(policy.arbitrum_token_address)
+            && normalized_hash(&route_profile.token_runtime_code_hash)
+                == hex32(policy.arbitrum_token_runtime_code_hash),
+        "deployment manifest route and ingress policy are not exactly bound"
+    );
+    Ok(())
+}
+
+fn finality_state_from_checkpoint(
+    route_profile: &VaultBridgeRouteProfileV1,
+    policy: &PfUsdcIngressProofPolicyV2,
+    checkpoint: EthereumArbitrumCheckpointV1,
+) -> Result<EthereumArbitrumFinalityStateV2> {
+    validate_route_policy_binding(route_profile, policy)?;
+    checkpoint.validate().map_err(|error| anyhow!(error))?;
+    let state = EthereumArbitrumFinalityStateV2 {
+        schema: ETHEREUM_ARBITRUM_FINALITY_STATE_SCHEMA_V2.to_string(),
+        route_profile_hash: route_profile
+            .profile_hash()
+            .map_err(|error| anyhow!(error))?,
+        route_epoch: u64::from(route_profile.route_epoch),
+        ethereum_chain_id: policy.ethereum_chain_id,
+        arbitrum_chain_id: policy.arbitrum_chain_id,
+        arbitrum_rollup_address: evm_address_text(policy.arbitrum_rollup_address),
+        arbitrum_rollup_runtime_code_hash: format!(
+            "{:#x}",
+            policy.arbitrum_rollup_runtime_code_hash
+        ),
+        rollup_latest_confirmed_storage_slot: hex32(policy.rollup_latest_confirmed_storage_slot),
+        vault_address: route_profile.vault_address.clone(),
+        vault_runtime_code_hash: route_profile.vault_runtime_code_hash.clone(),
+        token_address: route_profile.token_address.clone(),
+        token_runtime_code_hash: route_profile.token_runtime_code_hash.clone(),
+        ethereum_ingress_anchor_address: evm_address_text(policy.ethereum_ingress_anchor_address),
+        ethereum_ingress_anchor_runtime_code_hash: format!(
+            "{:#x}",
+            policy.ethereum_ingress_anchor_runtime_code_hash
+        ),
+        latest: checkpoint.clone(),
+        retained: vec![checkpoint],
+    };
+    state.validate().map_err(|error| anyhow!(error))?;
+    Ok(state)
+}
+
+fn validate_finality_state_binding(
+    state: &EthereumArbitrumFinalityStateV2,
+    route_profile: &VaultBridgeRouteProfileV1,
+    policy: &PfUsdcIngressProofPolicyV2,
+) -> Result<()> {
+    state.validate().map_err(|error| anyhow!(error))?;
+    let mut expected = finality_state_from_checkpoint(route_profile, policy, state.latest.clone())?;
+    expected.retained.clone_from(&state.retained);
+    anyhow::ensure!(
+        state == &expected,
+        "governed finality state does not exactly match frozen route and policy"
+    );
+    Ok(())
+}
+
+fn verify_account_code_host(
+    state_root: B256,
+    account: &ContractStorage,
+    expected_address: Address,
+    expected_code_hash: B256,
+    label: &str,
+) -> Result<()> {
+    anyhow::ensure!(
+        account.address == expected_address
+            && account.value.code_hash == expected_code_hash
+            && account.storage_slots.is_empty(),
+        "{label} account proof does not match pinned address/code"
+    );
+    let slots = verify_storage_slot_proofs(state_root, account)
+        .map_err(|error| anyhow!("invalid {label} account proof: {error}"))?;
+    anyhow::ensure!(
+        slots.is_empty(),
+        "{label} proof returned unexpected storage"
+    );
+    Ok(())
+}
+
+fn nitro_assertion_hash(assertion: &NitroAssertionWitnessV1) -> B256 {
+    let global = CaptureGlobalState {
+        bytes32Vals: [assertion.block_hash, assertion.send_root],
+        u64Vals: [assertion.inbox_position, assertion.position_in_message],
+    };
+    let state = CaptureAssertionState {
+        globalState: global,
+        machineStatus: assertion.machine_status,
+        endHistoryRoot: assertion.end_history_root,
+    };
+    let state_hash = keccak256(state.abi_encode());
+    let mut preimage = Vec::with_capacity(96);
+    preimage.extend_from_slice(assertion.parent_assertion_hash.as_slice());
+    preimage.extend_from_slice(state_hash.as_slice());
+    preimage.extend_from_slice(assertion.inbox_accumulator.as_slice());
+    keccak256(preimage)
+}
+
+fn write_new_json<T: Serialize>(path: &PathBuf, value: &T) -> Result<()> {
+    anyhow::ensure!(!path.exists(), "refusing to overwrite {}", path.display());
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let bytes = serde_json::to_vec_pretty(value)?;
+    let temporary = path.with_extension("json.tmp");
+    anyhow::ensure!(
+        !temporary.exists(),
+        "refusing to overwrite temporary output {}",
+        temporary.display()
+    );
+    fs::write(&temporary, bytes)?;
+    fs::rename(&temporary, path)?;
+    Ok(())
+}
+
+fn parse_hex32(value: &str) -> Result<B256> {
+    let normalized = value.strip_prefix("0x").unwrap_or(value);
+    anyhow::ensure!(
+        normalized.len() == 64
+            && normalized.bytes().all(|byte| byte.is_ascii_hexdigit())
+            && normalized == normalized.to_ascii_lowercase(),
+        "expected canonical lowercase bytes32"
+    );
+    format!("0x{normalized}")
+        .parse()
+        .context("decode canonical bytes32")
+}
+
+fn normalized_hash(value: &str) -> &str {
+    value.strip_prefix("0x").unwrap_or(value)
+}
+
 fn read_json<T: DeserializeOwned>(path: &PathBuf) -> Result<T> {
     let bytes = fs::read(path).with_context(|| format!("read {}", path.display()))?;
     serde_json::from_slice(&bytes).with_context(|| format!("decode {}", path.display()))
@@ -882,9 +1343,28 @@ fn hex32(value: B256) -> String {
     format!("{value:x}")
 }
 
+fn evm_address_text(value: Address) -> String {
+    format!("{value:#x}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn frozen_manifest() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../deployments/pfusdc-tier4-sepolia-20260718/manifest.json")
+    }
+
+    fn checkpoint() -> EthereumArbitrumCheckpointV1 {
+        EthereumArbitrumCheckpointV1 {
+            ethereum_finalized_beacon_root: "11".repeat(32),
+            ethereum_finalized_slot: 32,
+            arbitrum_assertion_hash: "22".repeat(32),
+            assertion_l2_block_hash: "33".repeat(32),
+            assertion_send_root: "44".repeat(32),
+        }
+    }
 
     #[test]
     fn capture_abis_pin_official_arbos_surfaces() {
@@ -932,5 +1412,33 @@ mod tests {
         mutate_json_scalar(&mut number).expect("number mutation");
         assert_eq!(number, json!(8));
         assert!(mutate_json_scalar(&mut Value::Bool(true)).is_err());
+    }
+
+    #[test]
+    fn frozen_manifest_builds_exact_finality_state_binding() {
+        let (route, policy) = read_manifest_bindings(&frozen_manifest()).expect("frozen manifest");
+        let state = finality_state_from_checkpoint(&route, &policy, checkpoint())
+            .expect("valid finality state");
+        validate_finality_state_binding(&state, &route, &policy).expect("exact binding");
+        assert_eq!(
+            state.route_profile_hash,
+            "d89f1b9cc9842112748090c7c655d9b8208a5bbd591085347b4750c4076ab005c38575625754cf4274d6a380c04cec48"
+        );
+        assert_eq!(state.latest, state.retained[0]);
+    }
+
+    #[test]
+    fn finality_binding_and_checkpoint_encoding_fail_closed() {
+        let (route, policy) = read_manifest_bindings(&frozen_manifest()).expect("frozen manifest");
+        let mut state = finality_state_from_checkpoint(&route, &policy, checkpoint())
+            .expect("valid finality state");
+        state.arbitrum_rollup_address = "0x0000000000000000000000000000000000000001".to_string();
+        assert!(validate_finality_state_binding(&state, &route, &policy).is_err());
+        assert!(parse_hex32(&"AA".repeat(32)).is_err());
+        assert!(parse_hex32(&"00".repeat(31)).is_err());
+        assert_eq!(
+            parse_hex32(&"ab".repeat(32)).expect("bytes32"),
+            B256::repeat_byte(0xab)
+        );
     }
 }

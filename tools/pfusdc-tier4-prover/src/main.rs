@@ -48,6 +48,8 @@ enum Command {
     },
     /// Capture and natively verify one finalized Ethereum/Arbitrum ingress witness.
     IngressCapture(ingress_capture::IngressCaptureArgs),
+    /// Capture the governed Ethereum/Arbitrum checkpoint from which ingress must advance.
+    FinalityBootstrap(ingress_capture::FinalityBootstrapArgs),
     /// Run the bounded security-field mutation matrix against a captured witness.
     IngressAudit(ingress_capture::IngressAuditArgs),
     /// Execute or Groth16-prove a canonical Ethereum/Arbitrum ingress witness.
@@ -87,6 +89,9 @@ async fn main() -> Result<()> {
         Command::ProgramInfo { output } => program_info(output).await,
         Command::DeploymentManifest { input, output } => manifest::run(input, output),
         Command::IngressCapture(capture) => ingress_capture::capture(capture).await,
+        Command::FinalityBootstrap(capture) => {
+            ingress_capture::capture_finality_bootstrap(capture).await
+        }
         Command::IngressAudit(audit) => ingress_capture::audit(audit),
         Command::Ingress {
             witness,

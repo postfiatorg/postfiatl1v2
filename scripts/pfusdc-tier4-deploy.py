@@ -25,8 +25,8 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DEPLOYMENT_DIR = REPOSITORY_ROOT / "deployments/pfusdc-tier4-sepolia-20260718"
 DEFAULT_STAKEHUB_REPO = REPOSITORY_ROOT.parent / "StakeHub"
 DEFAULT_EVIDENCE_DIR = REPOSITORY_ROOT / "docs/evidence/pfusdc-tier4-deployment-live"
-EXPECTED_MANIFEST_SHA256 = "33dc0a56039a59d980c471a9687ec408c6e215c9d4096fc75f8a3888ee010513"
-EXPECTED_INPUT_SHA256 = "14ef6ca9de00e4e768fcf6f699eb8cde90628d8521cc64089f33ac8ccd6524ec"
+EXPECTED_MANIFEST_SHA256 = "efc94f6f426a89f6e8581af95e6f95e0138a312bf3b06ac7113134ffd0af3ada"
+EXPECTED_INPUT_SHA256 = "7a507e956198c3f35f4ea1e22e68629ced5118866237e51fa9fd0ca57ddd5bc9"
 DEFAULT_ETHEREUM_RPC = "https://ethereum-sepolia-rpc.publicnode.com"
 DEFAULT_ARBITRUM_RPC = "https://arbitrum-sepolia-rpc.publicnode.com"
 

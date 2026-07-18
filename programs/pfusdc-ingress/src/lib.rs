@@ -171,7 +171,7 @@ pub fn verify_ingress_witness_v2(
         ethereum_finalized_beacon_root: hex32(final_root),
         ethereum_finalized_slot: final_slot,
         arbitrum_chain_id: witness.policy.arbitrum_chain_id,
-        arbitrum_rollup_address: witness.policy.arbitrum_rollup_address.to_string(),
+        arbitrum_rollup_address: evm_address_text(witness.policy.arbitrum_rollup_address),
         arbitrum_rollup_runtime_code_hash: hex32(witness.policy.arbitrum_rollup_runtime_code_hash),
         rollup_latest_confirmed_storage_slot: hex32(
             witness.policy.rollup_latest_confirmed_storage_slot,
@@ -185,8 +185,8 @@ pub fn verify_ingress_witness_v2(
         output_l2_block_number: witness.output.l2_block_number,
         output_l1_block_number: witness.output.l1_block_number,
         output_timestamp: witness.output.timestamp,
-        output_sender: witness.output.l2_sender.to_string(),
-        output_destination: witness.output.destination.to_string(),
+        output_sender: evm_address_text(witness.output.l2_sender),
+        output_destination: evm_address_text(witness.output.destination),
         ingress_anchor_runtime_code_hash: hex32(
             witness.policy.ethereum_ingress_anchor_runtime_code_hash,
         ),
@@ -219,10 +219,10 @@ fn verify_route_and_policy(witness: &PfUsdcIngressProofWitnessV2) -> Result<(), 
         || profile.source_chain_id != witness.evidence.source_chain_id
         || profile.vault_address != witness.evidence.vault_address
         || profile.token_address != witness.evidence.token_address
-        || profile.vault_address != policy.arbitrum_vault_address.to_string()
+        || profile.vault_address != evm_address_text(policy.arbitrum_vault_address)
         || strip_0x(&profile.vault_runtime_code_hash)
             != hex32(policy.arbitrum_vault_runtime_code_hash)
-        || profile.token_address != policy.arbitrum_token_address.to_string()
+        || profile.token_address != evm_address_text(policy.arbitrum_token_address)
         || strip_0x(&profile.token_runtime_code_hash)
             != hex32(policy.arbitrum_token_runtime_code_hash)
         || !supported_network_binding(policy)
@@ -451,7 +451,7 @@ fn verify_account_code(
 fn verify_confirmed_deposit_output(witness: &PfUsdcIngressProofWitnessV2) -> Result<B256, String> {
     let output = &witness.output;
     let evidence = &witness.evidence;
-    if output.l2_sender.to_string() != evidence.vault_address
+    if evm_address_text(output.l2_sender) != evidence.vault_address
         || output.destination != witness.policy.ethereum_ingress_anchor_address
         || output.value != U256::ZERO
     {
@@ -498,15 +498,15 @@ fn verify_confirmed_deposit_output(witness: &PfUsdcIngressProofWitnessV2) -> Res
     ) = DepositCall::abi_decode(&output.calldata[4..])
         .map_err(|error| format!("invalid canonical Tier-4 deposit calldata: {error}"))?;
     if hex32(deposit_id) != evidence.deposit_id
-        || depositor.to_string() != evidence.depositor
+        || evm_address_text(depositor) != evidence.depositor
         || hex32(recipient_hash) != evidence.pftl_recipient_hash
         || recipient != evidence.pftl_recipient
         || u256_u64(amount, "amount")? != evidence.amount_atoms
         || hex32(nonce) != evidence.nonce
         || hex32(route_binding) != evidence.route_binding
         || u256_u64(chain_id, "source chain ID")? != evidence.source_chain_id
-        || vault.to_string() != evidence.vault_address
-        || token.to_string() != evidence.token_address
+        || evm_address_text(vault) != evidence.vault_address
+        || evm_address_text(token) != evidence.token_address
         || evidence.block_hash != hex32(witness.assertion.block_hash)
         || evidence.tx_hash != hex32(item_hash)
         || evidence.log_index != output.output_index
@@ -582,6 +582,10 @@ fn strip_0x(value: &str) -> String {
 
 fn hex32(value: B256) -> String {
     format!("{value:x}")
+}
+
+fn evm_address_text(value: Address) -> String {
+    format!("{value:#x}")
 }
 
 fn validate_bounds(witness: &PfUsdcIngressProofWitnessV2) -> Result<(), String> {
@@ -720,6 +724,17 @@ mod tests {
         assert_eq!(
             ingress_policy_hash_v2(&vector),
             "733caef1634282b0d659ea837e52e93ec33bb62dede10899d5a482142ca56103"
+        );
+    }
+
+    #[test]
+    fn evm_address_text_is_canonical_lowercase_for_live_style_addresses() {
+        let address: Address = "0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d"
+            .parse()
+            .expect("address");
+        assert_eq!(
+            evm_address_text(address),
+            "0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d"
         );
     }
 

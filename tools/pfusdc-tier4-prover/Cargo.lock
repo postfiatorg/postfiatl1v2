@@ -4841,6 +4841,7 @@ dependencies = [
  "sp1-helios-primitives",
  "sp1-sdk",
  "tokio",
+ "tree_hash",
 ]
 
 [[package]]

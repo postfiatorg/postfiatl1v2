@@ -4,8 +4,8 @@
     "program_vkey": "0x00eaaf9372917c3edf9d6fdf70ff64ae08ba25e13cb1e2b2ab7b6e9585d50cd4"
   },
   "ingress": {
-    "elf_sha256": "f61cb50d07eb9f588b0d12d0ba74842fdaa39064f4f9a286e50c8c5be4198e1e",
-    "program_vkey": "0x007a73f6c1661a43924e5f7212b75d2069943b20e96a475a2d101245977b5bb7"
+    "elf_sha256": "9e9278fc725541815fb36a5e6049301a4183e3a950778cb091be2a4bf719c373",
+    "program_vkey": "0x00cf5150195737400718baa10a8cc8bfe419857a2507d5916bb95e024fa52726"
   },
   "schema": "postfiat.pfusdc.tier4_program_info.v1",
   "sp1_sdk_version": "6.3.1"

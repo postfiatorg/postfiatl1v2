@@ -10,10 +10,12 @@ already occurred.
 - PFTL checkpoint block ID: `b9c3e38c523cc258dfbe106b45e000155dd8f0c193770d4d905f8b0777f91612519fc964ac890483b844c2ef7b6fdce8`
 - PFTL committee root: `a84d4b4cadc9c068d5c668e040efe9ba303c59560bfb4c315c5b23aa235b8a6a279f3886d1352810e0b83822a90fc5d0`
 - pfUSDC asset ID: `02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b`
-- NAV profile ID: `3b876874ee28167ee4b751544e17ca4a50983d9eb48337f13b53d4e9d1ea461775fbcc61fb3ea280006e98e437b1dd8e`
+- NAV profile ID: `f61b0bc9f5b51964605cb0df8304b4e3a36de350c1734a40f836aa73d2bd7b104caf7ac7e4a2daafc780928a30ef7659`
 - Ingress policy hash: `a19667214636171d344e9fdbed490cf849359ddb762b587879e6456a70000f7b`
-- Route profile hash: `e7a4ed044f66dbff0d75df786bed6857fefffb8009b5e4959f4105bce4ae1483a418501d3df60b8848247ee41f003731`
-- Route binding: `a1fdb5c4550bb3d54ea515490e415525de4b26201889c547e733f4b7ea773fd3`
+- Route profile hash: `d89f1b9cc9842112748090c7c655d9b8208a5bbd591085347b4750c4076ab005c38575625754cf4274d6a380c04cec48`
+- Route binding: `d072739d73648a6b3bf853ab284da9072584ad83605a16a66de4748b110b795c`
+- Ingress ELF SHA-256: `9e9278fc725541815fb36a5e6049301a4183e3a950778cb091be2a4bf719c373`
+- Ingress program vkey: `0x00cf5150195737400718baa10a8cc8bfe419857a2507d5916bb95e024fa52726`
 
 ## Predicted contracts
 
@@ -23,7 +25,7 @@ already occurred.
 
 Exact constructor-specific runtime Keccak commitments are:
 
-- finality verifier: `0x0feb99e603cdaafe111cb0fdac03e693e049d206b0ea3a43c83ec8613eedbd2b`
+- finality verifier: `0x8dd7e23c7d42a104fc91893cfc93184c0d2d2a7e2b2115574c9a048e82fdb781`
 - vault: `0xc53ec5dad1757e65df90675446ee1f02bcadafbde12a4df4ccb396f7a98b9812`
 - ingress anchor: `0x3a5e3f49d40d340dd996975d29bb4a17669ab3a8f32f1dc1d0c13e1889825fc0`
 
@@ -46,8 +48,8 @@ cargo run --manifest-path tools/pfusdc-tier4-prover/Cargo.toml --locked -- \
 The frozen file hashes are:
 
 ```text
-input.json     14ef6ca9de00e4e768fcf6f699eb8cde90628d8521cc64089f33ac8ccd6524ec
-manifest.json  33dc0a56039a59d980c471a9687ec408c6e215c9d4096fc75f8a3888ee010513
+input.json     7a507e956198c3f35f4ea1e22e68629ced5118866237e51fa9fd0ca57ddd5bc9
+manifest.json  efc94f6f426a89f6e8581af95e6f95e0138a312bf3b06ac7113134ffd0af3ada
 funding-route.json c65edb1d09dc46e7e589888d57381633037b40a1e86e7dba916775bb8431bf3d
 ```
 
@@ -90,6 +92,28 @@ restart first checks predicted-address code, runtime hash, deployer nonce, and
 all constructor/storage getters, so an accepted deployment is never blindly
 rebroadcast. A mismatched chain, nonce, artifact, system contract, runtime
 hash, or getter fails closed.
+
+## Governed finality bootstrap
+
+After all three contracts pass live readback, capture the one governed
+Ethereum/Arbitrum starting checkpoint. The command verifies the Helios update,
+the finalized RollupCore account/storage proof, the canonical Nitro assertion,
+and the vault/token/anchor account-code proofs before writing a new file:
+
+```sh
+cargo run --manifest-path tools/pfusdc-tier4-prover/Cargo.toml --locked -- \
+  finality-bootstrap \
+  --manifest deployments/pfusdc-tier4-sepolia-20260718/manifest.json \
+  --ethereum-rpc "$ETHEREUM_SEPOLIA_RPC_URL" \
+  --ethereum-consensus-rpc "$ETHEREUM_SEPOLIA_CONSENSUS_RPC_URL" \
+  --arbitrum-rpc "$ARBITRUM_SEPOLIA_RPC_URL" \
+  --output docs/evidence/pfusdc-tier4-finality-live/bootstrap.json
+```
+
+Route activation must carry that exact file. The later `ingress-capture`
+command requires it through `--prior-finality-state` and refuses to write a
+witness unless the proof starts from that retained root/slot and can advance
+the governed state.
 
 ## Live funding route
 

@@ -11,8 +11,8 @@
   "min_attestations": 0,
   "tolerance_bp": 0,
   "valuation_policy_hash": "a19667214636171d344e9fdbed490cf849359ddb762b587879e6456a70000f7b",
-  "vault_bridge_route_policy_hash": "e7a4ed044f66dbff0d75df786bed6857fefffb8009b5e4959f4105bce4ae1483a418501d3df60b8848247ee41f003731",
-  "sp1_program_vkey": "0x007a73f6c1661a43924e5f7212b75d2069943b20e96a475a2d101245977b5bb7",
+  "vault_bridge_route_policy_hash": "d89f1b9cc9842112748090c7c655d9b8208a5bbd591085347b4750c4076ab005c38575625754cf4274d6a380c04cec48",
+  "sp1_program_vkey": "0x00cf5150195737400718baa10a8cc8bfe419857a2507d5916bb95e024fa52726",
   "sp1_proof_encoding": "groth16",
   "max_proof_bytes": 4096,
   "max_public_values_bytes": 16384
