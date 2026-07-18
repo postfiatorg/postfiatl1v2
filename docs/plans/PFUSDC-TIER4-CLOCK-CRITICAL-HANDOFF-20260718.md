@@ -63,8 +63,11 @@ deployed or active.**
   corrected/frozen V3 ingress ELF/vkey exist and their targeted checks are
   green.
 - The legacy PFTL snapshot has been archived without mutation. The fresh
-  six-validator consensus-v2 target finalized block 1 with identical block ID,
-  state root, accepted receipt, and replicated files on all six nodes. The
+  six-validator consensus-v2 target has now finalized through block 4 with
+  identical block IDs, state roots, accepted receipts, and replicated files on
+  all six nodes. Blocks 2-4 registered the exact Tier-4 NAV proof profile,
+  created PFUSDC, and bound PFUSDC to that profile through three separate
+  certified rounds. The
   deterministic two-chain deployment manifest, exact Tier-4 NAV/route profile,
   governance bootstrap operations, constructors, predicted addresses, and code
   hashes were first frozen at `f4a199b` and were corrected at `7c0019b` after a
@@ -130,6 +133,22 @@ agent signer, for at most **$500 aggregate** of the minimum required Sepolia
 funding path. This authorization is active and is not authorization to guess a
 provider, contract, quote, recipient, or constructor value.
 
+**2026-07-18 active-execution update:** operator absence never paused the
+sprint. After correcting the pause error, execution advanced the controlled
+six-validator target through three additional certified rounds without changing
+any plan parameter. The accepted transaction IDs are
+`306966aa2bc6e2d696ddb489a18862d268662d006671196be56f93a79c3167664886bbe32ce8e0b4203522f2e98edceb`
+(profile registration),
+`6525bef33001a7e8b85cf39a995f2f6c7c51dc2ab00b6eee21df8d860043d75a74f4b828bd9da0ce5844d0910717bbe4`
+(PFUSDC creation), and
+`35e39131a909337080c6766c813eab33b0aade19540849b2cfbf133e057c0fe516d6ec60c82ff028dbe0f159074b869a`
+(NAV asset registration). All six validators are stopped at height 4 with
+state root
+`56f232665ecdb2c32cb3931965c449da209116323ec916e80247031aeb98530ee038431015e6bcf501c988221b325dcc`.
+The read-back ledger contains exactly one asset definition, one NAV proof
+profile, and one NAV asset; their asset ID, profile ID, ingress vkey, policy
+hash, route-profile hash, and source class exactly match the frozen manifest.
+
 The corrected ingress guest, deployment-manifest generator, and frozen Sepolia
 input/manifest/bootstrap bundle are committed at `7c0019b`. The frozen input
 SHA-256 is
@@ -144,10 +163,13 @@ The shortest correct path from here is:
 
 1. **Complete:** use the initialized controlled target and rollback archive,
    bring up all six validators, and finalize the first consensus-v2 block.
-2. Use that real finalized block, committee root, new genesis hash, state root,
-   and checkpoint—together with the frozen vkeys and deterministic EVM
-   deployment inputs—to freeze the pfUSDC asset, Tier-4 NAV profile, route,
-   deployment manifest, and activation operations.
+2. **Complete:** use that real finalized block, committee root, new genesis
+   hash, state root, and checkpoint—together with the frozen vkeys and
+   deterministic EVM deployment inputs—to freeze the pfUSDC asset, Tier-4 NAV
+   profile, route, deployment manifest, and activation operations; then apply
+   the profile/asset/NAV bootstrap through certified consensus. The controlled
+   target is converged at height 4. Route activation remains later because it
+   requires the post-deployment live finality-state capture.
 3. Acquire only the required test assets under the $500 cap; deploy the
    Ethereum-Sepolia anchor and Arbitrum-Sepolia verifier/vault; verify every
    address, constructor value, storage binding, and runtime code hash.
@@ -399,6 +421,9 @@ These targeted results were current through the corrected V3 source commit on
 - Pure egress proof tests: **4 passed, 0 failed**.
 - Corrected ingress V3 library tests: **6 passed, 0 failed** when the library
   target is selected.
+- Post-correction finality/manifest closure: **7 focused prover tests and 7
+  ingress-library tests passed, 0 failed**. The changed ingress guest was built
+  once to freeze its ELF/vkey; no SP1 proof was generated.
 - Proof-native ingress execution test: **1 passed, 0 failed**.
 - Targeted bridge-exit activation and egress-export node tests: **2 passed, 0
   failed**.
@@ -434,6 +459,13 @@ all-target check now passes. There is no remaining Gate-1 compile blocker.
 - Live ingress still depends on the old observer route.
 - Live egress still depends on the old threshold-authorized route.
 - No live Tier-4 fresh-wallet round trip has been completed.
+- The controlled six-validator target is stopped and converged at height 4,
+  state root
+  `56f232665ecdb2c32cb3931965c449da209116323ec916e80247031aeb98530ee038431015e6bcf501c988221b325dcc`.
+  Its three Tier-4 bootstrap receipts are literally `code=accepted`, and the
+  ledger read-back exactly contains the frozen PFUSDC definition, Tier-4 NAV
+  profile, and PFUSDC-to-profile binding. This is activation preparation, not
+  Gate 2 or Gate 4 completion.
 - The approved wallet has live mainnet funding and explicit authority to spend
   up to $500 aggregate to acquire required testnet assets under Section 2.4.
   The target wallet still had zero Ethereum-Sepolia ETH and zero
@@ -796,7 +828,10 @@ Timeboxes are escalation points, not permission to weaken a gate.
    consensus-v2 block and agree on its accepted receipt, block ID, state root,
    and committee root. The deterministic Sepolia deployment manifest and route
    profile are frozen at `7c0019b` from those values plus the asset ID, route
-   binding, constructor arguments, predicted addresses, and code hashes.
+   binding, constructor arguments, predicted addresses, and code hashes. The
+   exact NAV profile, PFUSDC asset, and NAV binding subsequently finalized in
+   separate certified blocks 2-4; all six validators agree on height 4 and the
+   read-back ledger bindings.
 5. Under the bounded real-value authorization in Section 2.4, acquire Ethereum
    Sepolia ETH, Arbitrum Sepolia ETH, and canonical Circle test USDC; deploy the
    production parent-chain anchor and asserted-L2 verifier/vault; then submit
@@ -927,9 +962,16 @@ repository-wide review:
    `VaultBridgeRouteProfileActivationV1`, and require ingress capture to advance
    from its exact retained checkpoint. Seven focused prover tests and seven
    ingress-library tests pass. Execute and validate the one live
-   `EthereumArbitrumFinalityStateV2` capture after Step 5 deploys and verifies
-   the contracts, but before route activation in Step 8.
-5. Use the Section 2.4 authorization to acquire the minimum required Ethereum
+   `EthereumArbitrumFinalityStateV2` capture after Step 6 deploys and verifies
+   the contracts, but before route activation in Step 9.
+5. **Complete (controlled-target bootstrap):** register the exact frozen
+   Tier-4 NAV profile, create PFUSDC, and bind PFUSDC to that profile through
+   three dependency-safe certified rounds. All three receipts are accepted;
+   all six validators are stopped at height 4 with identical state root
+   `56f232665ecdb2c32cb3931965c449da209116323ec916e80247031aeb98530ee038431015e6bcf501c988221b325dcc`.
+   The committed evidence summary is
+   `docs/evidence/pfusdc-tier4-controlled-target-bootstrap-20260718/summary.json`.
+6. Use the Section 2.4 authorization to acquire the minimum required Ethereum
    Sepolia ETH, Arbitrum Sepolia ETH, and canonical Circle test USDC. Then
    deploy/pin the production anchor on Ethereum Sepolia and verifier/vault on
    Arbitrum Sepolia, verify every constructor/read-back/code hash, and submit
@@ -940,20 +982,20 @@ repository-wide review:
    `$1.05` native-gas orders, and obtain canonical USDC through Circle's API or
    browser faucet. Then run the guarded deployment driver; do not reopen
    provider research unless the pinned quote or contract check fails.
-6. Capture the finalized target witness using the V3 layout: Ethereum proofs for
+7. Capture the finalized target witness using the V3 layout: Ethereum proofs for
    Rollup plus parent-chain anchor, and asserted-L2 proofs for vault plus token.
    Use `pfusdc-tier4-prover ingress-capture`; it refuses to write a witness that
    fails native verification.
-7. Run `pfusdc-tier4-prover ingress-audit` once on that witness and retain its
+8. Run `pfusdc-tier4-prover ingress-audit` once on that witness and retain its
    21-case JSON rejection report.
-8. Register/activate the already-computed Tier-4 proof-policy, NAV profile,
+9. Register/activate the already-computed Tier-4 proof-policy, NAV profile,
    governed finality state, route, and deployed address/code-hash bindings.
-9. Generate/verify the one required ingress SP1 proof from the captured witness.
+10. Generate/verify the one required ingress SP1 proof from the captured witness.
    If the proof exposes a guest defect, fix it in a new commit and explicitly
    invalidate the prior ELF/proof.
-10. Record Core Gate 2 evidence, then proceed directly to the one required egress
+11. Record Core Gate 2 evidence, then proceed directly to the one required egress
    proof for Core Gate 3.
-11. Report status only as: current core gate, core gates passed out of four,
+12. Report status only as: current core gate, core gates passed out of four,
    exact blocker, last evidence path, and next bounded action. After 4/4 core,
    report launch gates separately out of three.
 

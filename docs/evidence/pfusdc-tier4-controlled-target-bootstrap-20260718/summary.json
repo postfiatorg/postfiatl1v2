@@ -1,0 +1,77 @@
+{
+  "schema": "postfiat-pfusdc-tier4-controlled-target-bootstrap-v1",
+  "captured_at_date_utc": "2026-07-18",
+  "source_artifact_root": "/home/postfiat/tmp/pfusdc-tier4-target-20260718",
+  "chain_id": "postfiat-wan-devnet-2",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "plan_parameters_changed": false,
+  "rounds": [
+    {
+      "height": 2,
+      "operation": "nav_profile_register",
+      "proposer": "validator-2",
+      "tx_id": "306966aa2bc6e2d696ddb489a18862d268662d006671196be56f93a79c3167664886bbe32ce8e0b4203522f2e98edceb",
+      "batch_id": "1790a497503e50436b8197221e1421241f6962dadf4308112afdf16e8bccad0ed2bf9f0c196824a6d3ffa9bc48d8f7a0",
+      "certificate_id": "4a3d1fa8ffc25dd3eda349985e605e03e9e281ebe130b667200db180f36449fcdda5c3da0f8633cc4742b7367d5da8b8",
+      "receipt_code": "accepted",
+      "local_accepted_count": 1,
+      "local_rejected_count": 0,
+      "state_root": "d653dea6dc91d9af98cb8805880e743f0ddf57a147cf4ba4007198a6ee35c4a9f2f1a4081c1f611f1f1c779f5df0ca7a",
+      "round_ok": true
+    },
+    {
+      "height": 3,
+      "operation": "asset_create",
+      "proposer": "validator-3",
+      "tx_id": "6525bef33001a7e8b85cf39a995f2f6c7c51dc2ab00b6eee21df8d860043d75a74f4b828bd9da0ce5844d0910717bbe4",
+      "batch_id": "c70633cb21ad1354a78cc1060e226c330bbac546468da2107eac56e5f3b7c4c2c787e24b15414a8f0158762bc582a354",
+      "certificate_id": "4b74d86397c0ef084eff8db3955e459d7bd51ad3780f370bf4e827dfd1dca511356d294588e946e92f4e707d29da3e22",
+      "receipt_code": "accepted",
+      "local_accepted_count": 1,
+      "local_rejected_count": 0,
+      "state_root": "cf59afb1883dee18bb5c154870273c620536a11658ec2716805e77ec10a626f734359c255e105d073b74137766b25bc4",
+      "round_ok": true
+    },
+    {
+      "height": 4,
+      "operation": "nav_asset_register",
+      "proposer": "validator-4",
+      "tx_id": "35e39131a909337080c6766c813eab33b0aade19540849b2cfbf133e057c0fe516d6ec60c82ff028dbe0f159074b869a",
+      "batch_id": "9cdc819ba505642f26158ef89f1e9ec24dc4fecc317ea460604fb0d54e103bb1fecd7685897988c0cac1f2b105efce78",
+      "certificate_id": "a4a01193729ce63b2331b4ec72e1bcafea009164ef8cc9830eafdc37525fd7c63dd7ae650c2e74482184c28ff2fa9312",
+      "receipt_code": "accepted",
+      "local_accepted_count": 1,
+      "local_rejected_count": 0,
+      "state_root": "56f232665ecdb2c32cb3931965c449da209116323ec916e80247031aeb98530ee038431015e6bcf501c988221b325dcc",
+      "round_ok": true
+    }
+  ],
+  "terminal_fleet_state": {
+    "validator_count": 6,
+    "all_processes_stopped": true,
+    "all_height": 4,
+    "all_block_hash": "dfb3920de4d5d82d46aefd9dbd073593735f89159c9b0ad7a5fafe907d2cc2caaa07526952baa04d97db95b9c0021fab",
+    "all_state_root": "56f232665ecdb2c32cb3931965c449da209116323ec916e80247031aeb98530ee038431015e6bcf501c988221b325dcc",
+    "all_receipt_count": 4,
+    "converged": true
+  },
+  "ledger_readback": {
+    "asset_definition_count": 1,
+    "nav_profile_count": 1,
+    "nav_asset_count": 1,
+    "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+    "nav_profile_id": "f61b0bc9f5b51964605cb0df8304b4e3a36de350c1734a40f836aa73d2bd7b104caf7ac7e4a2daafc780928a30ef7659",
+    "ingress_program_vkey": "0x00cf5150195737400718baa10a8cc8bfe419857a2507d5916bb95e024fa52726",
+    "ingress_policy_hash": "a19667214636171d344e9fdbed490cf849359ddb762b587879e6456a70000f7b",
+    "route_profile_hash": "d89f1b9cc9842112748090c7c655d9b8208a5bbd591085347b4750c4076ab005c38575625754cf4274d6a380c04cec48",
+    "source_class": "vault_bridge:erc20_bridge_vault:421614:0xa796dc3c9308f9c855a0659153b7afc2006cf27b:0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d",
+    "matches_frozen_manifest": true
+  },
+  "gate_effect": {
+    "core_gates_passed": 1,
+    "core_gates_total": 4,
+    "gate_2_closed": false,
+    "gate_4_closed": false,
+    "note": "Controlled-target activation preparation only; live contract deployment, finality-state capture, route activation, ingress proof, and egress proof remain."
+  }
+}
