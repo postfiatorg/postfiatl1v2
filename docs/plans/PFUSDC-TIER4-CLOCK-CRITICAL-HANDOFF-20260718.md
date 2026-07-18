@@ -2,9 +2,10 @@
 
 **Date:** 2026-07-18
 **Priority:** P0 / clock critical
-**Execution mode:** documentation-only sleep handoff was recorded at `eacd7d7`;
-end-to-end execution has resumed from that boundary toward the four-gate Tier-4
-protocol acceptance boundary; controlled-testnet product hardening follows
+**Execution mode:** **PAUSED AT USER REQUEST FOR THE 2026-07-18 SLEEP
+HANDOFF.** Do not fund, deploy, transact, prove, or continue implementation
+until the user explicitly resumes execution. Documentation-only handoffs are
+recorded at `eacd7d7` and the current plan checkpoint below.
 **Canonical architecture reference:** `docs/plans/PFUSDC-TIER4-IMPLEMENTATION-PLAN-20260717.md`
 
 ## 1. Mission
@@ -52,9 +53,10 @@ deployed or active.**
   six-validator consensus-v2 target finalized block 1 with identical block ID,
   state root, accepted receipt, and replicated files on all six nodes. The
   deterministic two-chain deployment manifest, exact Tier-4 NAV/route profile,
-  bootstrap operations, constructors, predicted addresses, and code hashes are
-  now frozen at commit `f4a199b`. No deployment transaction, deposit, burn, or
-  proof has been run.
+  governance bootstrap operations, constructors, predicted addresses, and code
+  hashes are now frozen at commit `f4a199b`. This does **not** yet include the
+  live Ethereum/Arbitrum finality-state bootstrap described below. No deployment
+  transaction, deposit, burn, or proof has been run.
 - No live funds have been spent. StakeHub is **not** a signing or authorization
   blocker: its Ethereum-mainnet ETH and USDC are unlocked, and Section 2.4
   authorizes at most $500 aggregate for the minimum required testnet funding.
@@ -85,24 +87,37 @@ deployed or active.**
   resumed from that exact boundary; no proof, deployment, spend, or long test was
   used to create the initial checkpoint.
 
-**Blocker status:** no protocol, artifact, signer, or funds blocker. The next
-live-value action is operationally gated on one passphrase entry to add the now-
-pinned Drip.Tools mainnet vault
+**Execution is paused, not running.** No transaction, deployment, proof, long
+test, or further implementation should be started while the user sleeps.
+
+**External prerequisites after the user resumes:** the next live-value action
+is operationally gated on one passphrase entry to add the now-pinned Drip.Tools
+mainnet vault
 `0x33c1AD63CCbd322208A0Dd2C9f3C3FD21CCA3329` to the StakeHub allowlist. The
 two live native-gas quotes plus conservative mainnet gas were about `$2.13`
 aggregate. Canonical Arbitrum-Sepolia USDC separately requires either a Circle
 API key or one browser reCAPTCHA completion. No code review, proof, GitHub
 Action, or additional provider investigation is on the critical path.
 
-**2026-07-18 user stop/resume checkpoint:** implementation was paused at the
-user's request so this planning handoff could be made explicit before they went
-to sleep. No funding transaction, deployment, deposit, burn, or SP1 proof was
-started. The authorization remains exactly the Section 2.4 authorization: use
+**Bounded protocol work still required after resume:** the frozen governance
+bundle does not contain the live `EthereumArbitrumFinalityStateV2` bootstrap
+required to activate the Tier-4 route. Add one dedicated finality-bootstrap
+capture command, validate it against the frozen route/policy and deployed code
+bindings, and make the later ingress capture start from that exact retained
+checkpoint. While making that bounded change, remove the existing duplicate
+`capture_helios_inputs(...)` call so the same Helios inputs are not fetched
+twice. This is required implementation work, not a reason to run an SP1 proof,
+a workspace battery, GitHub Actions, or a broad review.
+
+**2026-07-18 user sleep checkpoint:** implementation is paused at the user's
+request so the plan can be reviewed without concurrent execution. No funding
+transaction, deployment, deposit, burn, or SP1 proof has been started. The
+authorization remains exactly the Section 2.4 authorization: use
 the unlocked StakeHub Ethereum-mainnet ETH and/or USDC, through the existing
 agent signer, for at most **$500 aggregate** of the minimum required Sepolia
-funding path. This is authorization to execute after the manifest is pinned; it
-is not authorization to guess a provider, contract, quote, recipient, or
-constructor value.
+funding path. This authorization remains recorded for execution after the user
+resumes; it does not override the current pause and is not authorization to
+guess a provider, contract, quote, recipient, or constructor value.
 
 The deployment-manifest generator and frozen Sepolia input/manifest/bootstrap
 bundle are committed at `f4a199b`. The frozen input SHA-256 is
@@ -110,8 +125,9 @@ bundle are committed at `f4a199b`. The frozen input SHA-256 is
 the frozen manifest SHA-256 is
 `33dc0a56039a59d980c471a9687ec408c6e215c9d4096fc75f8a3888ee010513`.
 Two targeted manifest derivation/cross-binding tests passed. This closes the
-manifest prerequisite only; it is not Gate 2 evidence. Resume with Current Next
-Action 4 below: pin the funding route before spending.
+manifest prerequisite only; it is not Gate 2 evidence. The funding route was
+subsequently pinned at `d14d74a`; resume from Section 9 only after the user
+explicitly lifts the sleep pause.
 
 The shortest correct path from here is:
 
@@ -521,13 +537,16 @@ node. The services were stopped after verification. Sanitized evidence is at
 The first two former resume steps are complete at `f4a199b`: the
 checkpoint-bound asset, NAV profile, route, activation operations, predicted
 EVM addresses, constructors, runtime-code commitments, and bootstrap bundle
-were frozen and cross-checked. The exact resume point is now to pin an approved
-funding route, acquire only the minimum testnet assets under Section 2.4, and
-then deploy/read back the pinned contracts.
+were frozen and cross-checked. The approved funding route was subsequently
+pinned at `d14d74a`; no funds have been sent. After explicit resume, implement
+the bounded finality-bootstrap capture path, acquire only the minimum testnet
+assets under Section 2.4, and deploy/read back the pinned contracts. Execute the
+separate live finality-state capture after deployment and before route
+activation, then bind the first ingress witness to that exact checkpoint.
 
-This is the only current execution thread. Do not run GitHub Actions, a
-workspace battery, an SP1 proof, or a live funding transaction before this
-checkpoint is finalized and the deployment target is pinned.
+Execution is currently paused at the user's request. After explicit resume,
+this remains the only execution thread. Do not run GitHub Actions, a workspace
+battery, or an SP1 proof before the corresponding one-time acceptance gate.
 
 ## 4. Mandatory architecture closure before declaring ingress safe
 
@@ -871,7 +890,8 @@ Every `ACCEPTANCE.json` must include:
 
 ## 9. Current next actions
 
-Core Gate 1 is complete. Continue without a repository-wide review:
+Core Gate 1 is complete. **Execution is paused until the user explicitly
+resumes.** After resume, continue without a repository-wide review:
 
 1. **Complete:** the legacy archive and initialized target are preserved; six
    split signer files and the topology were staged without exposing key material.
@@ -883,7 +903,14 @@ Core Gate 1 is complete. Continue without a repository-wide review:
    nonces/addresses, constructors, and code hashes. Frozen at `f4a199b` with
    manifest SHA-256
    `33dc0a56039a59d980c471a9687ec408c6e215c9d4096fc75f8a3888ee010513`.
-4. Use the Section 2.4 authorization to acquire the minimum required Ethereum
+4. Add the bounded finality-state bootstrap capture path required by
+   `VaultBridgeRouteProfileActivationV1`, and require ingress capture to advance
+   from its exact retained checkpoint. Remove the duplicate Helios-input capture
+   call in the same targeted change. Run only affected tests; do not generate a
+   proof or run the workspace battery. Execute and validate the one live
+   `EthereumArbitrumFinalityStateV2` capture after Step 5 deploys and verifies
+   the contracts, but before route activation in Step 8.
+5. Use the Section 2.4 authorization to acquire the minimum required Ethereum
    Sepolia ETH, Arbitrum Sepolia ETH, and canonical Circle test USDC. Then
    deploy/pin the production anchor on Ethereum Sepolia and verifier/vault on
    Arbitrum Sepolia, verify every constructor/read-back/code hash, and submit
@@ -894,20 +921,20 @@ Core Gate 1 is complete. Continue without a repository-wide review:
    `$1.05` native-gas orders, and obtain canonical USDC through Circle's API or
    browser faucet. Then run the guarded deployment driver; do not reopen
    provider research unless the pinned quote or contract check fails.
-5. Capture the finalized target witness using the V3 layout: Ethereum proofs for
+6. Capture the finalized target witness using the V3 layout: Ethereum proofs for
    Rollup plus parent-chain anchor, and asserted-L2 proofs for vault plus token.
    Use `pfusdc-tier4-prover ingress-capture`; it refuses to write a witness that
    fails native verification.
-6. Run `pfusdc-tier4-prover ingress-audit` once on that witness and retain its
+7. Run `pfusdc-tier4-prover ingress-audit` once on that witness and retain its
    21-case JSON rejection report.
-7. Register/activate the already-computed Tier-4 proof-policy, NAV profile,
+8. Register/activate the already-computed Tier-4 proof-policy, NAV profile,
    governed finality state, route, and deployed address/code-hash bindings.
-8. Generate/verify the one required ingress SP1 proof from the captured witness.
+9. Generate/verify the one required ingress SP1 proof from the captured witness.
    If the proof exposes a guest defect, fix it in a new commit and explicitly
    invalidate the prior ELF/proof.
-9. Record Core Gate 2 evidence, then proceed directly to the one required egress
+10. Record Core Gate 2 evidence, then proceed directly to the one required egress
    proof for Core Gate 3.
-10. Report status only as: current core gate, core gates passed out of four,
+11. Report status only as: current core gate, core gates passed out of four,
    exact blocker, last evidence path, and next bounded action. After 4/4 core,
    report launch gates separately out of three.
 
