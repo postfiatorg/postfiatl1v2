@@ -2,11 +2,24 @@
 
 **Date:** 2026-07-18
 **Priority:** P0 / clock critical
-**Execution mode:** **PAUSED AT USER REQUEST FOR THE 2026-07-18 SLEEP
-HANDOFF.** Do not fund, deploy, transact, prove, or continue implementation
-until the user explicitly resumes execution. Documentation-only handoffs are
-recorded at `eacd7d7` and the current plan checkpoint below.
+**Execution mode:** active, end-to-end execution toward the four-gate Tier-4
+protocol acceptance boundary; controlled-testnet product hardening follows.
 **Canonical architecture reference:** `docs/plans/PFUSDC-TIER4-IMPLEMENTATION-PLAN-20260717.md`
+
+### Immutable operator directive — agents may not change plan parameters
+
+No agent is authorized to change, reinterpret, pause, narrow, expand, reorder,
+or replace the parameters of this document without an explicit user instruction
+that identifies the change. This includes execution status, scope, priority,
+funding authorization and cap, gate definitions, proof count, validation limits,
+deployment target, security invariants, and the critical-path order.
+
+Agents must continue executing this plan end to end. They may update factual
+status, hashes, transaction identifiers, evidence paths, observed blockers, and
+completed checklist items as work progresses, but those factual updates must not
+silently alter the plan's governing parameters. A user statement that they are
+going to sleep, asking for a status update, or asking that information be
+recorded is **not** authorization to pause execution or change this plan.
 
 ## 1. Mission
 
@@ -87,19 +100,15 @@ deployed or active.**
   resumed from that exact boundary; no proof, deployment, spend, or long test was
   used to create the initial checkpoint.
 
-**Execution is paused, not running.** No transaction, deployment, proof, long
-test, or further implementation should be started while the user sleeps.
-
-**External prerequisites after the user resumes:** the next live-value action
-is operationally gated on one passphrase entry to add the now-pinned Drip.Tools
-mainnet vault
+**External prerequisites:** the next live-value action is operationally gated
+on one passphrase entry to add the now-pinned Drip.Tools mainnet vault
 `0x33c1AD63CCbd322208A0Dd2C9f3C3FD21CCA3329` to the StakeHub allowlist. The
 two live native-gas quotes plus conservative mainnet gas were about `$2.13`
 aggregate. Canonical Arbitrum-Sepolia USDC separately requires either a Circle
 API key or one browser reCAPTCHA completion. No code review, proof, GitHub
 Action, or additional provider investigation is on the critical path.
 
-**Bounded protocol work still required after resume:** the frozen governance
+**Bounded protocol work still required:** the frozen governance
 bundle does not contain the live `EthereumArbitrumFinalityStateV2` bootstrap
 required to activate the Tier-4 route. Add one dedicated finality-bootstrap
 capture command, validate it against the frozen route/policy and deployed code
@@ -109,15 +118,16 @@ checkpoint. While making that bounded change, remove the existing duplicate
 twice. This is required implementation work, not a reason to run an SP1 proof,
 a workspace battery, GitHub Actions, or a broad review.
 
-**2026-07-18 user sleep checkpoint:** implementation is paused at the user's
-request so the plan can be reviewed without concurrent execution. No funding
-transaction, deployment, deposit, burn, or SP1 proof has been started. The
-authorization remains exactly the Section 2.4 authorization: use
+**2026-07-18 correction of prior agent error:** a prior agent incorrectly
+interpreted the user's request to record the plan before sleep as an instruction
+to pause execution. The user gave no such instruction. Execution remains active.
+No funding transaction, deployment, deposit, burn, or SP1 proof had been started
+at the correction point. The authorization remains exactly the Section 2.4
+authorization: use
 the unlocked StakeHub Ethereum-mainnet ETH and/or USDC, through the existing
 agent signer, for at most **$500 aggregate** of the minimum required Sepolia
-funding path. This authorization remains recorded for execution after the user
-resumes; it does not override the current pause and is not authorization to
-guess a provider, contract, quote, recipient, or constructor value.
+funding path. This authorization is active and is not authorization to guess a
+provider, contract, quote, recipient, or constructor value.
 
 The deployment-manifest generator and frozen Sepolia input/manifest/bootstrap
 bundle are committed at `f4a199b`. The frozen input SHA-256 is
@@ -126,8 +136,7 @@ the frozen manifest SHA-256 is
 `33dc0a56039a59d980c471a9687ec408c6e215c9d4096fc75f8a3888ee010513`.
 Two targeted manifest derivation/cross-binding tests passed. This closes the
 manifest prerequisite only; it is not Gate 2 evidence. The funding route was
-subsequently pinned at `d14d74a`; resume from Section 9 only after the user
-explicitly lifts the sleep pause.
+subsequently pinned at `d14d74a`; continue from Section 9.
 
 The shortest correct path from here is:
 
@@ -538,14 +547,13 @@ The first two former resume steps are complete at `f4a199b`: the
 checkpoint-bound asset, NAV profile, route, activation operations, predicted
 EVM addresses, constructors, runtime-code commitments, and bootstrap bundle
 were frozen and cross-checked. The approved funding route was subsequently
-pinned at `d14d74a`; no funds have been sent. After explicit resume, implement
-the bounded finality-bootstrap capture path, acquire only the minimum testnet
+pinned at `d14d74a`; no funds have been sent. Implement the bounded
+finality-bootstrap capture path, acquire only the minimum testnet
 assets under Section 2.4, and deploy/read back the pinned contracts. Execute the
 separate live finality-state capture after deployment and before route
 activation, then bind the first ingress witness to that exact checkpoint.
 
-Execution is currently paused at the user's request. After explicit resume,
-this remains the only execution thread. Do not run GitHub Actions, a workspace
+This remains the only execution thread. Do not run GitHub Actions, a workspace
 battery, or an SP1 proof before the corresponding one-time acceptance gate.
 
 ## 4. Mandatory architecture closure before declaring ingress safe
@@ -890,8 +898,8 @@ Every `ACCEPTANCE.json` must include:
 
 ## 9. Current next actions
 
-Core Gate 1 is complete. **Execution is paused until the user explicitly
-resumes.** After resume, continue without a repository-wide review:
+Core Gate 1 is complete. Execution is active. Continue without a
+repository-wide review:
 
 1. **Complete:** the legacy archive and initialized target are preserved; six
    split signer files and the topology were staged without exposing key material.
