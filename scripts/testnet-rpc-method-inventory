@@ -134,6 +134,7 @@ READ_ONLY_PUBLIC_METHODS = {
     "owned_recovery_capabilities",
     "owned_certificate",
     "owned_recovery_status",
+    "pfusdc_egress_witness",
 }
 
 AUTHORIZED_PROTOCOL_MUTATION_PUBLIC_METHODS = {
