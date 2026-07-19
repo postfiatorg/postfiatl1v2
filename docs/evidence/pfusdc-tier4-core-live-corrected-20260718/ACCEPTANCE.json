@@ -39,7 +39,7 @@
     "egress": "20/20",
     "ingress": "21/21"
   },
-  "candidate_commit_sha": "0949640af29a8750ab5fb37da9b1da2c201d1afd",
+  "candidate_commit_sha": "4efe50c2fff5cfe8334992e495022f449ff317fc",
   "chain_bindings": {
     "activation_height": 20,
     "addresses": {
@@ -62,7 +62,7 @@
     "c32fc09dd1ea0b4e8f8b6c61591f4c77880df76278a3fbdbc6c8acfe7a58f5bb",
     "ca52439e65915ba56e02ccddcf558f3c9481870e58f53b36149b8967c6ac7b9a"
   ],
-  "dirty_worktree_at_evidence_generation": true,
+  "dirty_worktree_at_evidence_generation": false,
   "gate": 4,
   "gate_kind": "core-terminal",
   "launch_gates_passed": 0,
