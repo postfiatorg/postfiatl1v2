@@ -14,30 +14,34 @@ from typing import Any
 
 REPO = Path(__file__).resolve().parents[1]
 PYTHON = "/home/postfiat/repos/StakeHub/.venv/bin/python"
-MANIFEST = REPO / "deployments/pfusdc-tier4-sepolia-20260718/manifest.json"
-ROUTE_PROFILE = REPO / "deployments/pfusdc-tier4-sepolia-20260718/route-profile.json"
+MANIFEST = REPO / "deployments/pfusdc-tier4-v3-accel-short-epoch6-20260719/manifest.json"
+ROUTE_PROFILE = REPO / "deployments/pfusdc-tier4-v3-accel-short-epoch6-20260719/route-profile.json"
 GATE1 = REPO / "docs/evidence/pfusdc-tier4-gate1-20260718T013235Z/ACCEPTANCE.json"
 GATE4_BOUNDED = REPO / "docs/evidence/pfusdc-tier4-gate4-bounded-contract-20260718/summary.json"
-DEPLOY_STATE = REPO / "docs/evidence/pfusdc-tier4-deployment-live-corrected/state.json"
-DEPOSIT = REPO / "docs/evidence/pfusdc-tier4-ingress-live-corrected/deposit-state.json"
-FINALITY = REPO / "docs/evidence/pfusdc-tier4-finality-live-corrected/bootstrap.json"
-ACTIVATION = REPO / "docs/evidence/pfusdc-tier4-finality-live-corrected/route-activation-summary.json"
-INGRESS_WITNESS = REPO / "docs/evidence/pfusdc-tier4-ingress-live-corrected/witness.json"
-INGRESS_AUDIT = REPO / "docs/evidence/pfusdc-tier4-ingress-live-corrected/audit.json"
-INGRESS_PROOF_DIR = REPO / "docs/evidence/pfusdc-tier4-ingress-live-corrected/proof"
-INGRESS_SUMMARY = REPO / "docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/summary.json"
-EGRESS_WITNESS = REPO / "docs/evidence/pfusdc-tier4-egress-live-corrected/witness.json"
-EGRESS_AUDIT = REPO / "docs/evidence/pfusdc-tier4-egress-live-corrected/audit.json"
-EGRESS_PROOF_DIR = REPO / "docs/evidence/pfusdc-tier4-egress-live-corrected/proof"
-EGRESS_STATE = REPO / "docs/evidence/pfusdc-tier4-egress-live-corrected/withdrawal-state.json"
-EGRESS_SUMMARY = REPO / "docs/evidence/pfusdc-tier4-egress-live-corrected/summary.json"
+ANCHOR_DEPLOY_STATE = REPO / "docs/evidence/pfusdc-tier4-v3-epoch6-live-route-deployment-20260719/state.json"
+VAULT_DEPLOY_STATE = REPO / "docs/evidence/pfusdc-tier4-v3-epoch6-live-route-deployment-20260719/state.json"
+VERIFIER_DEPLOY_STATE = REPO / "docs/evidence/pfusdc-tier4-v3-epoch6-final-verifier-deployment-20260719/state.json"
+DEPOSIT = REPO / "docs/evidence/pfusdc-tier4-v3-epoch6-ingress-live-20260719/deposit-state.json"
+FINALITY = REPO / "docs/evidence/pfusdc-tier4-v3-epoch6-finality-bootstrap-20260719/bootstrap.json"
+ACTIVATION = REPO / "docs/evidence/pfusdc-tier4-v3-epoch6-route-activation-20260719/route-activation-summary.json"
+INGRESS_WITNESS = REPO / "docs/evidence/pfusdc-tier4-v3-epoch6-ingress-live-20260719/witness.json"
+INGRESS_AUDIT = REPO / "docs/evidence/pfusdc-tier4-v3-epoch6-ingress-live-20260719/audit.json"
+INGRESS_PROOF_DIR = REPO / "docs/evidence/pfusdc-tier4-v3-epoch6-ingress-live-20260719/proof"
+INGRESS_SUMMARY = REPO / "docs/evidence/pfusdc-tier4-v3-epoch6-ingress-pftl-20260719/summary.json"
+EGRESS_WITNESS = REPO / "docs/evidence/pfusdc-tier4-v3-epoch6-egress-live-20260719/witness.json"
+EGRESS_AUDIT = REPO / "docs/evidence/pfusdc-tier4-v3-epoch6-egress-live-20260719/audit.json"
+EGRESS_PROOF_DIR = REPO / "docs/evidence/pfusdc-tier4-v3-epoch6-egress-live-20260719/proof"
+EGRESS_STATE = REPO / "docs/evidence/pfusdc-tier4-v3-epoch6-egress-live-20260719/withdrawal-state.json"
+EGRESS_SUMMARY = REPO / "docs/evidence/pfusdc-tier4-v3-epoch6-egress-live-20260719/summary.json"
+HEADLINE = REPO / "docs/evidence/pfusdc-tier4-v3-short-segment-benchmark-20260719/summary.json"
+GATEWAY_PREFLIGHT = REPO / "docs/evidence/pfusdc-tier4-v3-short-segment-benchmark-20260719/gateway-preflight.json"
 TARGET = Path("/home/postfiat/tmp/pfusdc-tier4-target-exit-root-final-20260718")
-OUTPUT = REPO / "docs/evidence/pfusdc-tier4-core-live-corrected-20260718"
-EXPECTED_MANIFEST_SHA256 = "5871fa73bcf5472198c6946095a388bdf7d32bd535429b53c3c45ce8ea408ad4"
+OUTPUT = REPO / "docs/evidence/pfusdc-tier4-v3-epoch6-core-acceptance-20260719"
+FINAL_FREEZE = REPO / "docs/evidence/pfusdc-tier4-v3-epoch6-height37-verifier-freeze-20260719/summary.json"
 EXPECTED_INGRESS_VKEY = "0x0033bd140207b97fb2442eb279cc2ce55714be6fbcd66beb325fe7c3786d4dfc"
-EXPECTED_EGRESS_VKEY = "0x00eaaf9372917c3edf9d6fdf70ff64ae08ba25e13cb1e2b2ab7b6e9585d50cd4"
+EXPECTED_EGRESS_VKEY = "0x00c8d744e19bc828d1b3fb19709d36863d8c5aba14af0ca939eb85fc806f868f"
 EXPECTED_INGRESS_ELF = "7c581aa42a196bd5df5a1efc2c4569663744d9b597cc1cd2253e839f9ba2f921"
-EXPECTED_EGRESS_ELF = "8d2d5ce451bbd91c28f8fafcbd12f7bc961c6a4be59de12e246b8cb6734f81e8"
+EXPECTED_EGRESS_ELF = "8e2464227d7428d9928871c4a655fd73f6a87879c2e8eae6c0228a5db367f7bd"
 AMOUNT = 1_000_000
 
 
@@ -80,6 +84,7 @@ def deployment_readback() -> dict[str, Any]:
     from web3 import Web3
 
     manifest = read_json(MANIFEST)
+    freeze = read_json(FINAL_FREEZE)
     verifier_address = next(
         item["address"]
         for item in manifest["deployment_sequence"]["arbitrum"]
@@ -108,6 +113,14 @@ def deployment_readback() -> dict[str, Any]:
             PYTHON,
             str(REPO / "scripts/pfusdc-tier4-deploy.py"),
             "readback",
+            "--deployment-dir",
+            str(MANIFEST.parent),
+            "--expected-manifest-sha256",
+            freeze["manifest_sha256"],
+            "--expected-input-sha256",
+            freeze["input_sha256"],
+            "--evidence-dir",
+            str(VERIFIER_DEPLOY_STATE.parent),
             "--expected-latest-checkpoint-commitment",
             resulting_checkpoint,
             "--expected-latest-finalized-height",
@@ -135,7 +148,9 @@ def main() -> None:
         ROUTE_PROFILE,
         GATE1,
         GATE4_BOUNDED,
-        DEPLOY_STATE,
+        ANCHOR_DEPLOY_STATE,
+        VAULT_DEPLOY_STATE,
+        VERIFIER_DEPLOY_STATE,
         DEPOSIT,
         FINALITY,
         ACTIVATION,
@@ -152,16 +167,25 @@ def main() -> None:
         EGRESS_PROOF_DIR / "proof-report.json",
         EGRESS_STATE,
         EGRESS_SUMMARY,
+        HEADLINE,
+        GATEWAY_PREFLIGHT,
+        FINAL_FREEZE,
     ]
     for path in required_files:
         require(path.is_file(), f"required Core Gate evidence is missing: {path}")
 
-    require(sha256(MANIFEST) == EXPECTED_MANIFEST_SHA256, "frozen manifest hash mismatch")
+    freeze = read_json(FINAL_FREEZE)
+    expected_manifest_sha256 = freeze["manifest_sha256"]
+    expected_input_sha256 = freeze["input_sha256"]
+    require(sha256(MANIFEST) == expected_manifest_sha256, "frozen manifest hash mismatch")
+    require(sha256(MANIFEST.parent / "input.json") == expected_input_sha256, "frozen input hash mismatch")
     manifest = read_json(MANIFEST)
     route = read_json(ROUTE_PROFILE)
     gate1 = read_json(GATE1)
     gate4_bounded = read_json(GATE4_BOUNDED)
-    deployment = read_json(DEPLOY_STATE)
+    anchor_deployment = read_json(ANCHOR_DEPLOY_STATE)
+    vault_deployment = read_json(VAULT_DEPLOY_STATE)
+    verifier_deployment = read_json(VERIFIER_DEPLOY_STATE)
     deposit = read_json(DEPOSIT)
     activation = read_json(ACTIVATION)
     ingress_audit = read_json(INGRESS_AUDIT)
@@ -171,16 +195,32 @@ def main() -> None:
     egress_proof = read_json(EGRESS_PROOF_DIR / "proof-report.json")
     egress_state = read_json(EGRESS_STATE)
     egress = read_json(EGRESS_SUMMARY)
+    headline = read_json(HEADLINE)
+    gateway_preflight = read_json(GATEWAY_PREFLIGHT)
     readback = deployment_readback()
 
     require(gate1.get("gate") == 1 and gate1.get("result") is True, "Core Gate 1 is not green")
     require(gate4_bounded.get("status") == "passed", "bounded Gate 4 contract evidence is not green")
+    require(
+        anchor_deployment.get("manifest_sha256")
+        == "b621b912c776c303c044e43cf05c732210e53d3e01ab8787542322a13bd1b141",
+        "anchor deployment manifest lineage differs",
+    )
+    require(
+        vault_deployment.get("manifest_sha256")
+        == "b621b912c776c303c044e43cf05c732210e53d3e01ab8787542322a13bd1b141",
+        "vault deployment manifest lineage differs",
+    )
+    require(
+        verifier_deployment.get("manifest_sha256") == expected_manifest_sha256,
+        "final verifier deployment manifest differs",
+    )
     require(readback.get("system_contracts_verified") is True, "system contract readback failed")
     require(readback["ethereum"]["remaining"] == [], "Ethereum deployment is incomplete")
     require(readback["arbitrum"]["remaining"] == [], "Arbitrum deployment is incomplete")
     require(readback["ethereum"]["deployed"] == ["ingress_anchor"], "Ethereum deployment readback differs")
     require(
-        readback["arbitrum"]["deployed"] == ["finality_verifier", "vault"],
+        set(readback["arbitrum"]["deployed"]) == {"finality_verifier", "vault"},
         "Arbitrum deployment readback differs",
     )
 
@@ -192,25 +232,34 @@ def main() -> None:
     require(deposit.get("event_exact") is True, "ingress event binding is not exact")
     require(deposit.get("replay_rejected") is True, "ingress replay was not rejected")
     require(ingress_audit.get("passed") == 21 and ingress_audit.get("failed") == 0, "ingress audit is not 21/21")
-    require(activation.get("activation_height") == 20, "route was not activated at height 20")
+    require(activation.get("activation_height") == 35, "route was not activated at height 35")
     require(activation.get("converged") is True, "route activation did not converge")
     require(activation.get("route_readback_exact") is True, "route activation readback differs")
     require(activation.get("finality_readback_exact") is True, "finality activation readback differs")
     require(activation.get("profile_sha256") == sha256(ROUTE_PROFILE), "activated profile file hash differs")
     require(activation.get("finality_sha256") == sha256(FINALITY), "activated finality file hash differs")
     require(manifest["route_profile"]["profile"] == route, "route profile file differs from frozen manifest")
+    require(route.get("route_epoch") == 6, "accelerated route epoch is not six")
+    require(manifest["programs"]["ingress_program_vkey"] == EXPECTED_INGRESS_VKEY, "manifest ingress vkey differs")
+    require(manifest["programs"]["egress_program_vkey"] == EXPECTED_EGRESS_VKEY, "manifest egress vkey differs")
     require(ingress_proof.get("program_vkey") == EXPECTED_INGRESS_VKEY, "ingress proof vkey differs")
+    require(ingress_proof.get("proof_mode") == "groth16", "ingress proof is not Groth16")
     require(ingress.get("converged") is True, "ingress PFTL state did not converge")
-    require(ingress.get("height") == 24, "ingress PFTL terminal height differs")
+    require(ingress.get("height") == 37, "ingress PFTL terminal height differs")
     require(ingress.get("source_proof_kind") == "sp1-arbitrum-finality-v1", "ingress used a non-Tier-4 proof kind")
     require(ingress.get("credited_pfusdc_atoms") == AMOUNT, "ingress credited amount differs")
     require(ingress.get("deposit_status") == "finalized", "ingress deposit is not finalized")
 
     require(egress_audit.get("passed") == 20 and egress_audit.get("failed") == 0, "egress audit is not 20/20")
     require(egress_proof.get("program_vkey") == EXPECTED_EGRESS_VKEY, "egress proof vkey differs")
+    require(egress_proof.get("proof_mode") == "plonk", "egress proof report is not PLONK")
+    require((EGRESS_PROOF_DIR / "proof-calldata.bin").read_bytes()[:4] == bytes.fromhex("5a093a2f"), "egress PLONK selector differs")
     require(egress_state.get("phase") == "verified", "egress EVM state is not verified")
     require(egress.get("converged") is True, "egress PFTL state did not converge")
-    require(egress.get("pftl_height") == 27, "egress PFTL terminal height differs")
+    require(egress.get("pftl_height") == 40, "egress PFTL terminal height differs")
+    require(egress.get("checkpoint_height") == 37, "egress checkpoint height differs")
+    require(egress.get("segment_block_count") == 3, "egress segment is not exactly three blocks")
+    require(egress.get("proof_mode") == "plonk", "egress proof is not PLONK")
     require(egress.get("amount_atoms") == AMOUNT, "egress amount differs")
     require(egress.get("vault_balance_before") - egress.get("vault_balance_after") == AMOUNT, "egress vault delta differs")
     require(egress.get("wallet_balance_after") - egress.get("wallet_balance_before") == AMOUNT, "egress wallet delta differs")
@@ -231,6 +280,12 @@ def main() -> None:
         egress.get("public_values_sha256") == sha256(EGRESS_PROOF_DIR / "public-values.bin"),
         "egress public-values hash differs",
     )
+    require(headline.get("segment_block_count") == 3, "headline benchmark is not three blocks")
+    require(headline.get("proof_mode") == "plonk", "headline benchmark is not PLONK")
+    require(headline.get("program_vkey") == EXPECTED_EGRESS_VKEY, "headline benchmark vkey differs")
+    require(headline.get("host_verified") is True, "headline benchmark proof was not host-verified")
+    require(gateway_preflight.get("eth_call_accepted") is True, "deployed PLONK gateway preflight failed")
+    require(gateway_preflight.get("proof_selector") == "0x5a093a2f", "PLONK route selector differs")
 
     ledger_hashes = {sha256(TARGET / f"validator-{index}/ledger.json") for index in range(6)}
     require(len(ledger_hashes) == 1, "terminal validator ledgers differ")
@@ -238,6 +293,7 @@ def main() -> None:
 
     deployment_txs = [
         event["tx"]
+        for deployment in (anchor_deployment, vault_deployment, verifier_deployment)
         for event in deployment.get("events", [])
         if event.get("phase") == "accepted" and event.get("tx")
     ]
@@ -271,7 +327,7 @@ def main() -> None:
         **proof_identifiers,
     }
     acceptance = {
-        "schema": "postfiat.pfusdc.tier4.acceptance.v1",
+        "schema": "postfiat.pfusdc.tier4_v3_accelerated.acceptance.v1",
         "gate": 4,
         "gate_kind": "core-terminal",
         "result": True,
@@ -287,8 +343,19 @@ def main() -> None:
             "ingress_program_vkey": EXPECTED_INGRESS_VKEY,
             "egress_program_vkey": EXPECTED_EGRESS_VKEY,
             "route_profile_hash": manifest["route_profile"]["profile_hash"],
-            "deployment_manifest_sha256": EXPECTED_MANIFEST_SHA256,
+            "deployment_manifest_sha256": expected_manifest_sha256,
             "contract_runtime_hashes": manifest["contracts"]["configuration"],
+        },
+        "acceleration": {
+            "mldsa_ntt_precompile": True,
+            "checkpoint_pinned": True,
+            "checkpoint_height": egress["checkpoint_height"],
+            "segment_block_count": egress["segment_block_count"],
+            "fresh_egress_gpu_proof_mode": egress["proof_mode"],
+            "fresh_egress_gpu_setup_and_prove_ms": egress["setup_and_prove_ms"],
+            "headline_gpu_setup_and_prove_ms": headline["setup_and_prove_ms"],
+            "headline_end_to_end_wall_seconds": headline["end_to_end_wall_seconds"],
+            "headline_proof_sha256": headline["proof_sha256"],
         },
         "chain_bindings": {
             "pftl_chain_id": manifest["pftl"]["chain_id"],

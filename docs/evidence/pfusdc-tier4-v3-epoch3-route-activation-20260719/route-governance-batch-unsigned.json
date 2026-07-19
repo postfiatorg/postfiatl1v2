@@ -1,0 +1,129 @@
+{
+  "batch_id": "62753f6d893078057dfe981f235ea0daf3b0c699449298070f5a91995a0281a299e4d146053038c76273f1f4fa0686ea",
+  "vault_bridge_route_profile_activations": [
+    {
+      "schema": "postfiat.vault_bridge.route_profile_activation.v1",
+      "profile": {
+        "schema": "postfiat.vault_bridge.route_profile.v1",
+        "route_id": "pfusdc-tier4-arbitrum-sepolia-v3",
+        "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+        "source_chain_id": 421614,
+        "vault_address": "0x0836c8cc7646f04085b1a34c9b019e750d817b2b",
+        "vault_runtime_code_hash": "0xad739144ac31125090622906f27069c3a104391a2c798a737a0e2c5a144fecbb",
+        "token_address": "0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d",
+        "token_runtime_code_hash": "0x9a736af6aac290d9196883e8686fc1d127ff657ca534fe4b88d6d40dc0bc6750",
+        "route_epoch": 3,
+        "verifier_kind": "sp1-arbitrum-finality-v1",
+        "evidence_tier": "receipt-proven",
+        "verifier_policy_hash": "d56e05916d3eb7287f376c0f5a20872011e827314f51af89b9df15fb9bef99bd",
+        "verifier_program_vkey": "0x0033bd140207b97fb2442eb279cc2ce55714be6fbcd66beb325fe7c3786d4dfc",
+        "verifier_proof_encoding": "groth16",
+        "max_proof_bytes": 4096,
+        "max_public_values_bytes": 16384,
+        "max_snapshot_age_blocks": 100,
+        "challenge_window_blocks": 1,
+        "max_epoch_gap_blocks": 1000,
+        "settle_deadline_blocks": 1000,
+        "min_challenge_bond": 0,
+        "min_attestations": 0,
+        "minimum_confirmations": 0,
+        "activation_height": 30,
+        "expires_at_height": 100000
+      },
+      "amendment": {
+        "amendment_id": "36e11e1c460544b4a959956d207dfe5b24cda07d43c26496b21b353bb8732a56452b28fdb50f5e8e0767356a2afbbb22",
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+        "protocol_version": 1,
+        "instance_id": "020f3111414185b2a33d5246fd01916e186bbe3b5d281b804f3cde6627c12815969b94041861262dc6bf57d572196ceb",
+        "proposal_id": "a71030703f391db1a8a8d587b6ef17b4013699bdac24e464d2e5ed6f3025da0e3a584f526aea484c52121749311c971c",
+        "certificate_id": "024fdf5ff0bf08928abe1cdcefb68fd3764f1a1e001bc442e9c3ce89016462092685943757c2cd39bd2d70d7ec4266b8",
+        "proposer": "validator-0",
+        "validators": [
+          "validator-0",
+          "validator-1",
+          "validator-2",
+          "validator-3",
+          "validator-4",
+          "validator-5"
+        ],
+        "quorum": 6,
+        "kind": "vault_bridge_route_v1:02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b:aa59b6ea7bc501ce0bbecbbb428874dd4b44dc5be18d550219b40d6b0e6e2f807292a957a5aacdfb517f688409468884",
+        "value": 3,
+        "activation_height": 30,
+        "support": [
+          "validator-0",
+          "validator-1",
+          "validator-2",
+          "validator-3",
+          "validator-4",
+          "validator-5"
+        ],
+        "votes": [
+          {
+            "vote_id": "06ef71b01def668a396ecbea096579690774b3a297fdf75d1fcdd2a0f7c30f7954482351a56d44f965b198be248ce2aa",
+            "validator": "validator-0",
+            "accept": true
+          },
+          {
+            "vote_id": "a35c06f3dcaae26dfd217da975d6927538e06b3d3ac9af7017a8ea80385e8c73a3a15e74a3ee266a3618240d6d8dca20",
+            "validator": "validator-1",
+            "accept": true
+          },
+          {
+            "vote_id": "7710eb6045afc5d3e5cbef2b1e4a2c35fb0e61baf8208215e27265bbbe768d3b075da23bf224251e15a81be542b860a5",
+            "validator": "validator-2",
+            "accept": true
+          },
+          {
+            "vote_id": "467a604dcb9dd7c809db2af3e403fce80a19550ac2d9ff4ab2e2db534b92c5d44de9d23012f3e7d2b17b698d0715e77f",
+            "validator": "validator-3",
+            "accept": true
+          },
+          {
+            "vote_id": "5f2e5aaded723e2700d83006f53b5309324a7b0385a4ae2fe3d33a5c970df41c3fe6a115eed9e1b7461c9e93e4c8969a",
+            "validator": "validator-4",
+            "accept": true
+          },
+          {
+            "vote_id": "9dae22316d42bc51921415a16cbc94b070f9b8b0226562048ca48feb916512d18bd903a8dd840629df1be639dfe2a4da",
+            "validator": "validator-5",
+            "accept": true
+          }
+        ]
+      },
+      "tier4_finality_bootstrap": {
+        "schema": "postfiat.ethereum_arbitrum_finality_state.v2",
+        "route_profile_hash": "aa59b6ea7bc501ce0bbecbbb428874dd4b44dc5be18d550219b40d6b0e6e2f807292a957a5aacdfb517f688409468884",
+        "route_epoch": 3,
+        "ethereum_chain_id": 11155111,
+        "arbitrum_chain_id": 421614,
+        "arbitrum_rollup_address": "0x042b2e6c5e99d4c521bd49beed5e99651d9b0cf4",
+        "arbitrum_rollup_runtime_code_hash": "0x5961c8c303762fe3bdc69d0df28db034e475e46ef4e3582c632eaaa51314ce29",
+        "rollup_latest_confirmed_storage_slot": "0000000000000000000000000000000000000000000000000000000000000074",
+        "vault_address": "0x0836c8cc7646f04085b1a34c9b019e750d817b2b",
+        "vault_runtime_code_hash": "0xad739144ac31125090622906f27069c3a104391a2c798a737a0e2c5a144fecbb",
+        "token_address": "0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d",
+        "token_runtime_code_hash": "0x9a736af6aac290d9196883e8686fc1d127ff657ca534fe4b88d6d40dc0bc6750",
+        "ethereum_ingress_anchor_address": "0xa097ab5e139f1a30c8261e9f937c04da2defe550",
+        "ethereum_ingress_anchor_runtime_code_hash": "0x0f57a879c8e6f5521f8725d8d303e427eb35e51523822c05af92c5739159ebcc",
+        "latest": {
+          "ethereum_finalized_beacon_root": "da31276ee815e74cd8cb7f64c6fc803e0abdf755dbec4006d15ecf5f7497b3d7",
+          "ethereum_finalized_slot": 10725728,
+          "arbitrum_assertion_hash": "19f318f9f166f6eb8f6c9c49726b2359d293507044ebf9a0afb7eb840713bf96",
+          "assertion_l2_block_hash": "782797acc18ccc69f910fc51eb62e50688dbc3e70f621f02a2004a676cde4494",
+          "assertion_send_root": "766b0638ebe75e48d0120a94ab1e37d6b7bba82c3b172d2d984e11a23adb50d8"
+        },
+        "retained": [
+          {
+            "ethereum_finalized_beacon_root": "da31276ee815e74cd8cb7f64c6fc803e0abdf755dbec4006d15ecf5f7497b3d7",
+            "ethereum_finalized_slot": 10725728,
+            "arbitrum_assertion_hash": "19f318f9f166f6eb8f6c9c49726b2359d293507044ebf9a0afb7eb840713bf96",
+            "assertion_l2_block_hash": "782797acc18ccc69f910fc51eb62e50688dbc3e70f621f02a2004a676cde4494",
+            "assertion_send_root": "766b0638ebe75e48d0120a94ab1e37d6b7bba82c3b172d2d984e11a23adb50d8"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "schema": "postfiat.pfusdc.tier4_v3_short_segment_benchmark.v1",
+  "checkpoint_height": 24,
+  "terminal_burn_height": 27,
+  "segment_block_count": 3,
+  "ancestry_heights": [25, 26],
+  "literal_receipt_code": "accepted",
+  "witness_sha256": "253514b196cf242245032fa7e979c1d449a97f6eb90dd3e019390275d9e10eb9",
+  "execute_cycles": 74838044,
+  "execute_ms": 2506,
+  "proof_mode": "plonk",
+  "program_vkey": "0x00c8d744e19bc828d1b3fb19709d36863d8c5aba14af0ca939eb85fc806f868f",
+  "setup_and_prove_ms": 190735,
+  "end_to_end_wall_seconds": 194.08,
+  "proof_sha256": "71e4bd0a893a182635b72a466f43c5fd3127121004d3ff6042d01056537bdb3b",
+  "proof_calldata_sha256": "28fed418fa1b396e6a99d09facfc074d03dfc2b3a1b98f6e58ad39f5532fc007",
+  "public_values_sha256": "bf71553526d89ad135024cfb327a67668a0f923406283f3e2ac5e1450095d0c6",
+  "host_verified": true,
+  "bounded_mutation_audit": {
+    "passed": 20,
+    "failed": 0
+  },
+  "note": "This benchmark uses an honestly finalized existing PFTL checkpoint and accepted burn. The mandatory fresh v3 round trip is tracked separately."
+}

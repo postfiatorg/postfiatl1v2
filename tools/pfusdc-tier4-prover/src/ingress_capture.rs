@@ -352,12 +352,16 @@ pub async fn capture_finality_bootstrap(args: FinalityBootstrapArgs) -> Result<(
         &asserted_l2_block,
     )
     .await?;
+    let vault_label = format!(
+        "Arbitrum vault at asserted L2 block {}",
+        asserted_block.header.inner.number
+    );
     verify_account_code_host(
         asserted_block.header.inner.state_root,
         &vault_account,
         policy.arbitrum_vault_address,
         policy.arbitrum_vault_runtime_code_hash,
-        "Arbitrum vault",
+        &vault_label,
     )?;
     let token_account = get_account_proof(
         &rpc,
@@ -1259,7 +1263,12 @@ fn verify_account_code_host(
         account.address == expected_address
             && account.value.code_hash == expected_code_hash
             && account.storage_slots.is_empty(),
-        "{label} account proof does not match pinned address/code"
+        "{label} account proof does not match pinned address/code: observed_address={:#x} expected_address={:#x} observed_code_hash={:#x} expected_code_hash={:#x} storage_slots={}",
+        account.address,
+        expected_address,
+        account.value.code_hash,
+        expected_code_hash,
+        account.storage_slots.len()
     );
     let slots = verify_storage_slot_proofs(state_root, account)
         .map_err(|error| anyhow!("invalid {label} account proof: {error}"))?;
@@ -1434,7 +1443,7 @@ mod tests {
         validate_finality_state_binding(&state, &route, &policy).expect("exact binding");
         assert_eq!(
             state.route_profile_hash,
-            "d89f1b9cc9842112748090c7c655d9b8208a5bbd591085347b4750c4076ab005c38575625754cf4274d6a380c04cec48"
+            "7b93053c2a1a26b918c3bd2cd4737d1e00f3f5cf0f8cb8fba9aff1a1126eac10516881b4a2bb153200f9c08fe8c1b5ef"
         );
         assert_eq!(state.latest, state.retained[0]);
     }

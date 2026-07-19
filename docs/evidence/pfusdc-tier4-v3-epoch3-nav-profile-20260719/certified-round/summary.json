@@ -1,0 +1,77 @@
+{
+  "schema": "postfiat-certified-asset-ops-report-v1",
+  "request_schema": "postfiat-certified-asset-ops-request-v1",
+  "data_dir": "/home/postfiat/tmp/pfusdc-tier4-target-exit-root-final-20260718/validator-5",
+  "topology_file": "/home/postfiat/tmp/pfusdc-tier4-target-exit-root-final-20260718/topology.json",
+  "artifact_dir": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round",
+  "operation_count": 2,
+  "max_transactions": 2,
+  "allow_existing_mempool": false,
+  "prepare_only": false,
+  "batch_only": false,
+  "start_height": 28,
+  "start_state_root": "5146edd9370d1c029f9642c1dc42f3901fec50b827221ea05cf59debdd924304ef896ed1fb63251c66716e10a26cced5",
+  "start_mempool_pending": 0,
+  "end_height": 29,
+  "end_state_root": "1111bca7116bddfef958a7befebe058b666b1d9e22c59055f1327ac8f9a9303304d50d389af054437e924775ce004e13",
+  "end_mempool_pending": 0,
+  "operations": [
+    {
+      "label": "epoch3-profile-register",
+      "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+      "transaction_kind": "nav_profile_register",
+      "operation_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round/epoch3-profile-register/operation.json",
+      "quote_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round/epoch3-profile-register/quote.json",
+      "signed_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round/epoch3-profile-register/signed.json",
+      "submit_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round/epoch3-profile-register/submit.json",
+      "tx_id": "49c4eee66c75490ec6893aa4ad24df15cc97861ae527e00e0eb87e372367f5b60e6728c5c560530c236c0e60a01d58a9",
+      "sequence": 21,
+      "fee": 23,
+      "timings_ms": {
+        "prepare_ms": 0.123416,
+        "quote_ms": 5.2600620000000005,
+        "sign_ms": 52.380235,
+        "submit_ms": 31.602432999999998
+      }
+    },
+    {
+      "label": "epoch3-nav-asset-bind",
+      "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+      "transaction_kind": "nav_asset_register",
+      "operation_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round/epoch3-nav-asset-bind/operation.json",
+      "quote_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round/epoch3-nav-asset-bind/quote.json",
+      "signed_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round/epoch3-nav-asset-bind/signed.json",
+      "submit_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round/epoch3-nav-asset-bind/submit.json",
+      "tx_id": "37ccf3f0773991c9ee18b61aaaf96bb884dbef38c66fe2064bb0ceeffacff8f5df8127c3c7ba7ec64d04be4ff37a12e4",
+      "sequence": 22,
+      "fee": 23,
+      "timings_ms": {
+        "prepare_ms": 0.07890799999999999,
+        "quote_ms": 19.223498,
+        "sign_ms": 67.630224,
+        "submit_ms": 60.246072
+      }
+    }
+  ],
+  "dependency_report": {
+    "declared_dependency_count": 0,
+    "same_round_dependency_count": 0,
+    "prior_round_dependency_count": 0,
+    "same_round_batch_eligible": true,
+    "candidate_batch_classes": [],
+    "replay_equivalence_required": false,
+    "live_round_compression_ready": true,
+    "live_round_compression_blockers": [],
+    "declarations": []
+  },
+  "batch_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round/peer-certified-mempool-round/mempool-batch.json",
+  "round_artifact_dir": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round/peer-certified-mempool-round",
+  "round_ok": true,
+  "timings_ms": {
+    "total_ms": 39946.053563,
+    "preflight_ms": 5.525030999999999,
+    "operations_ms": 240.198666,
+    "certify_ms": 39698.076491,
+    "final_status_ms": 1.70393
+  }
+}

@@ -1,0 +1,111 @@
+{
+  "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "block_hash": "6a4dfa8fb1d1504d233a81d6b04e1fb134f2301651f0bf376c3ab12ac8b6e409e71c58a3b94fd79346c4cf31151bc1fc",
+  "converged": true,
+  "height": 29,
+  "literal_accepted": true,
+  "profile_id": "4399b47db84503f7e125871c9f99399c5b5e0660c369c5c48620b3b5ce6bbefe811ac404839ebf7e6fd1b66814f32424",
+  "receipts": [
+    {
+      "accepted": true,
+      "account_reserve": 10,
+      "code": "accepted",
+      "fee_burned": 23,
+      "fee_charged": 23,
+      "message": "asset transaction applied; fee burned",
+      "minimum_fee": 23,
+      "state_expansion_fee": 0,
+      "tx_id": "49c4eee66c75490ec6893aa4ad24df15cc97861ae527e00e0eb87e372367f5b60e6728c5c560530c236c0e60a01d58a9"
+    },
+    {
+      "accepted": true,
+      "account_reserve": 10,
+      "code": "accepted",
+      "fee_burned": 23,
+      "fee_charged": 23,
+      "message": "asset transaction applied; fee burned",
+      "minimum_fee": 23,
+      "state_expansion_fee": 0,
+      "tx_id": "37ccf3f0773991c9ee18b61aaaf96bb884dbef38c66fe2064bb0ceeffacff8f5df8127c3c7ba7ec64d04be4ff37a12e4"
+    }
+  ],
+  "round_report": {
+    "allow_existing_mempool": false,
+    "artifact_dir": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round",
+    "batch_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round/peer-certified-mempool-round/mempool-batch.json",
+    "batch_only": false,
+    "data_dir": "/home/postfiat/tmp/pfusdc-tier4-target-exit-root-final-20260718/validator-5",
+    "dependency_report": {
+      "candidate_batch_classes": [],
+      "declarations": [],
+      "declared_dependency_count": 0,
+      "live_round_compression_blockers": [],
+      "live_round_compression_ready": true,
+      "prior_round_dependency_count": 0,
+      "replay_equivalence_required": false,
+      "same_round_batch_eligible": true,
+      "same_round_dependency_count": 0
+    },
+    "end_height": 29,
+    "end_mempool_pending": 0,
+    "end_state_root": "1111bca7116bddfef958a7befebe058b666b1d9e22c59055f1327ac8f9a9303304d50d389af054437e924775ce004e13",
+    "max_transactions": 2,
+    "operation_count": 2,
+    "operations": [
+      {
+        "fee": 23,
+        "label": "epoch3-profile-register",
+        "operation_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round/epoch3-profile-register/operation.json",
+        "quote_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round/epoch3-profile-register/quote.json",
+        "sequence": 21,
+        "signed_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round/epoch3-profile-register/signed.json",
+        "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "submit_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round/epoch3-profile-register/submit.json",
+        "timings_ms": {
+          "prepare_ms": 0.123416,
+          "quote_ms": 5.2600620000000005,
+          "sign_ms": 52.380235,
+          "submit_ms": 31.602432999999998
+        },
+        "transaction_kind": "nav_profile_register",
+        "tx_id": "49c4eee66c75490ec6893aa4ad24df15cc97861ae527e00e0eb87e372367f5b60e6728c5c560530c236c0e60a01d58a9"
+      },
+      {
+        "fee": 23,
+        "label": "epoch3-nav-asset-bind",
+        "operation_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round/epoch3-nav-asset-bind/operation.json",
+        "quote_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round/epoch3-nav-asset-bind/quote.json",
+        "sequence": 22,
+        "signed_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round/epoch3-nav-asset-bind/signed.json",
+        "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "submit_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round/epoch3-nav-asset-bind/submit.json",
+        "timings_ms": {
+          "prepare_ms": 0.07890799999999999,
+          "quote_ms": 19.223498,
+          "sign_ms": 67.630224,
+          "submit_ms": 60.246072
+        },
+        "transaction_kind": "nav_asset_register",
+        "tx_id": "37ccf3f0773991c9ee18b61aaaf96bb884dbef38c66fe2064bb0ceeffacff8f5df8127c3c7ba7ec64d04be4ff37a12e4"
+      }
+    ],
+    "prepare_only": false,
+    "request_schema": "postfiat-certified-asset-ops-request-v1",
+    "round_artifact_dir": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch3-nav-profile-20260719/certified-round/peer-certified-mempool-round",
+    "round_ok": true,
+    "schema": "postfiat-certified-asset-ops-report-v1",
+    "start_height": 28,
+    "start_mempool_pending": 0,
+    "start_state_root": "5146edd9370d1c029f9642c1dc42f3901fec50b827221ea05cf59debdd924304ef896ed1fb63251c66716e10a26cced5",
+    "timings_ms": {
+      "certify_ms": 39698.076491,
+      "final_status_ms": 1.70393,
+      "operations_ms": 240.198666,
+      "preflight_ms": 5.525030999999999,
+      "total_ms": 39946.053563
+    },
+    "topology_file": "/home/postfiat/tmp/pfusdc-tier4-target-exit-root-final-20260718/topology.json"
+  },
+  "schema": "postfiat-pfusdc-tier4-v3-nav-profile-activation-v1",
+  "validator_count": 6
+}

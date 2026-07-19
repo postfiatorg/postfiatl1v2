@@ -65,7 +65,7 @@ enum Command {
         #[arg(long)]
         prove: bool,
     },
-    /// Execute or Groth16-prove a canonical PFTL egress witness.
+    /// Execute or Plonk-prove a canonical PFTL egress witness.
     Egress {
         #[arg(long)]
         witness: PathBuf,
@@ -164,15 +164,14 @@ async fn prove_ingress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) 
     let (executed_public_values, report) = client.execute(INGRESS_ELF, stdin.clone()).await?;
     let executed = executed_public_values.to_vec();
     if executed != expected_public_values {
-        let actual = PfUsdcIngressPublicValuesV3::from_canonical_bytes(&executed).map_err(
-            |error| {
+        let actual =
+            PfUsdcIngressPublicValuesV3::from_canonical_bytes(&executed).map_err(|error| {
                 anyhow::anyhow!(
                     "decode SP1 ingress output: {error}; bytes={}, hex={}",
                     executed.len(),
                     hex::encode(&executed)
                 )
-            },
-        )?;
+            })?;
         let expected_json = serde_json::to_value(&expected)?;
         let actual_json = serde_json::to_value(&actual)?;
         let differences = expected_json
@@ -232,6 +231,7 @@ async fn prove_ingress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) 
             serde_json::to_vec_pretty(&serde_json::json!({
                 "schema": "postfiat.pfusdc.ingress_proof_report.v1",
                 "program_vkey": pk.verifying_key().bytes32(),
+                "proof_mode": "groth16",
                 "setup_and_prove_ms": setup_started.elapsed().as_millis(),
                 "proof_bytes": proof.bytes().len(),
                 "public_values_bytes": proof.public_values.to_vec().len(),
@@ -248,7 +248,7 @@ async fn prove_ingress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) 
 async fn prove_egress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) -> Result<()> {
     #[cfg(debug_assertions)]
     if prove {
-        anyhow::bail!("Groth16 proving requires a --release build");
+        anyhow::bail!("Plonk proving requires a --release build");
     }
     let witness_bytes = fs::read(&witness_path)
         .with_context(|| format!("read egress witness {}", witness_path.display()))?;
@@ -326,11 +326,11 @@ async fn prove_egress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) -
     if prove {
         let setup_started = Instant::now();
         let pk = client.setup(EGRESS_ELF).await?;
-        let proof = client.prove(&pk, stdin).groth16().await?;
+        let proof = client.prove(&pk, stdin).plonk().await?;
         client.verify(&proof, pk.verifying_key(), None)?;
         anyhow::ensure!(
             proof.public_values.to_vec() == expected_public_values,
-            "verified Groth16 proof contains unexpected public values"
+            "verified Plonk proof contains unexpected public values"
         );
         fs::write(output_dir.join("proof.bin"), bincode::serialize(&proof)?)?;
         fs::write(output_dir.join("proof-calldata.bin"), proof.bytes())?;
@@ -339,13 +339,14 @@ async fn prove_egress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) -
             serde_json::to_vec_pretty(&serde_json::json!({
                 "schema": "postfiat.pfusdc.egress_proof_report.v1",
                 "program_vkey": pk.verifying_key().bytes32(),
+                "proof_mode": "plonk",
                 "setup_and_prove_ms": setup_started.elapsed().as_millis(),
                 "proof_bytes": proof.bytes().len(),
                 "public_values_bytes": proof.public_values.to_vec().len(),
             }))?,
         )?;
         println!(
-            "verified Groth16 proof; vkey {}",
+            "verified Plonk proof; vkey {}",
             pk.verifying_key().bytes32()
         );
     }

@@ -1,0 +1,45 @@
+{
+  "schema": "postfiat-certified-asset-ops-request-v1",
+  "operations": [
+    {
+      "label": "epoch5-profile-register",
+      "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+      "key_file": "/home/postfiat/tmp/pfusdc-tier4-target-corrected-20260718/seed/faucet_key.json",
+      "operation": {
+        "operation": "nav_profile_register",
+        "registrant": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "verifier_kind": "sp1-arbitrum-finality-v1",
+        "source_class": "vault_bridge:erc20_bridge_vault:421614:0x5495c2edc3d0f34e352c92ca8cd97761ad2a1cb1:0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d",
+        "max_snapshot_age_blocks": 100,
+        "challenge_window_blocks": 1,
+        "max_epoch_gap_blocks": 1000,
+        "settle_deadline_blocks": 1000,
+        "min_challenge_bond": 0,
+        "min_attestations": 0,
+        "tolerance_bp": 0,
+        "valuation_policy_hash": "67790c17faa77437ed35b49df9469691d9c6a97b91dedaea308968e24942424a",
+        "vault_bridge_route_policy_hash": "b5270ee150b6f7b41353a65d831329d0dc61daae0218b4ddf0c65a36782a8cbaeec6df10183d6193f4a5819a77f0ceac",
+        "sp1_program_vkey": "0x0033bd140207b97fb2442eb279cc2ce55714be6fbcd66beb325fe7c3786d4dfc",
+        "sp1_proof_encoding": "groth16",
+        "max_proof_bytes": 4096,
+        "max_public_values_bytes": 16384
+      },
+      "dependencies": []
+    },
+    {
+      "label": "epoch5-nav-asset-bind",
+      "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+      "key_file": "/home/postfiat/tmp/pfusdc-tier4-target-corrected-20260718/seed/faucet_key.json",
+      "operation": {
+        "operation": "nav_asset_register",
+        "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+        "reserve_operator": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "proof_profile": "2cb4f924656490ed08364b3816f036df296a88d4aaea9aecaa46fac2267e5d029659d1441e9687350de1d9acf5f5d261",
+        "valuation_unit": "USDC",
+        "redemption_account": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8"
+      },
+      "dependencies": []
+    }
+  ]
+}

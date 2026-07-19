@@ -1,0 +1,19 @@
+{
+  "amount_atoms": 1000000,
+  "artifact_sha256": "4b6b25979b1200c100a9b803526df4ddbb03479afcb0ede899305e60b5d27500",
+  "chain_id": 421614,
+  "constructor_simulation": true,
+  "creation_bytecode_keccak256": "0x041388cd100b104cd0b1a0c6df9e4e839bdcfe14549300b218109f776f4619d0",
+  "deployer": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+  "deployer_nonce_after": 22,
+  "owner_balance_after": 1000000,
+  "owner_balance_before": 0,
+  "owner_delta_atoms": 1000000,
+  "phase": "verified",
+  "recovery_address": "0x6CE8d6dA4319A59EE3C7b59E1f0df84030E99B3f",
+  "recovery_balance_after": 0,
+  "recovery_balance_before": 1000000,
+  "recovery_delta_atoms": 1000000,
+  "schema": "postfiat-pfusdc-tier4-v3-prefund-recovery-v1",
+  "tx": "3ddc2a168ef557ca05cb73d052ae5630c3b1aef7ede368b0ddce30c94419dd7e"
+}

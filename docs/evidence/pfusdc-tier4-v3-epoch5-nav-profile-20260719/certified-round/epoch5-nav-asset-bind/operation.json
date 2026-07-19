@@ -1,0 +1,9 @@
+{
+  "operation": "nav_asset_register",
+  "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "reserve_operator": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "proof_profile": "2cb4f924656490ed08364b3816f036df296a88d4aaea9aecaa46fac2267e5d029659d1441e9687350de1d9acf5f5d261",
+  "valuation_unit": "USDC",
+  "redemption_account": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8"
+}

@@ -1,0 +1,32 @@
+{
+  "schema": "postfiat.ethereum_arbitrum_finality_state.v2",
+  "route_profile_hash": "aa59b6ea7bc501ce0bbecbbb428874dd4b44dc5be18d550219b40d6b0e6e2f807292a957a5aacdfb517f688409468884",
+  "route_epoch": 3,
+  "ethereum_chain_id": 11155111,
+  "arbitrum_chain_id": 421614,
+  "arbitrum_rollup_address": "0x042b2e6c5e99d4c521bd49beed5e99651d9b0cf4",
+  "arbitrum_rollup_runtime_code_hash": "0x5961c8c303762fe3bdc69d0df28db034e475e46ef4e3582c632eaaa51314ce29",
+  "rollup_latest_confirmed_storage_slot": "0000000000000000000000000000000000000000000000000000000000000074",
+  "vault_address": "0x0836c8cc7646f04085b1a34c9b019e750d817b2b",
+  "vault_runtime_code_hash": "0xad739144ac31125090622906f27069c3a104391a2c798a737a0e2c5a144fecbb",
+  "token_address": "0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d",
+  "token_runtime_code_hash": "0x9a736af6aac290d9196883e8686fc1d127ff657ca534fe4b88d6d40dc0bc6750",
+  "ethereum_ingress_anchor_address": "0xa097ab5e139f1a30c8261e9f937c04da2defe550",
+  "ethereum_ingress_anchor_runtime_code_hash": "0x0f57a879c8e6f5521f8725d8d303e427eb35e51523822c05af92c5739159ebcc",
+  "latest": {
+    "ethereum_finalized_beacon_root": "da31276ee815e74cd8cb7f64c6fc803e0abdf755dbec4006d15ecf5f7497b3d7",
+    "ethereum_finalized_slot": 10725728,
+    "arbitrum_assertion_hash": "19f318f9f166f6eb8f6c9c49726b2359d293507044ebf9a0afb7eb840713bf96",
+    "assertion_l2_block_hash": "782797acc18ccc69f910fc51eb62e50688dbc3e70f621f02a2004a676cde4494",
+    "assertion_send_root": "766b0638ebe75e48d0120a94ab1e37d6b7bba82c3b172d2d984e11a23adb50d8"
+  },
+  "retained": [
+    {
+      "ethereum_finalized_beacon_root": "da31276ee815e74cd8cb7f64c6fc803e0abdf755dbec4006d15ecf5f7497b3d7",
+      "ethereum_finalized_slot": 10725728,
+      "arbitrum_assertion_hash": "19f318f9f166f6eb8f6c9c49726b2359d293507044ebf9a0afb7eb840713bf96",
+      "assertion_l2_block_hash": "782797acc18ccc69f910fc51eb62e50688dbc3e70f621f02a2004a676cde4494",
+      "assertion_send_root": "766b0638ebe75e48d0120a94ab1e37d6b7bba82c3b172d2d984e11a23adb50d8"
+    }
+  ]
+}

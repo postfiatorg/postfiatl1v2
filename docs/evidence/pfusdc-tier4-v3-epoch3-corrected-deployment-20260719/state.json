@@ -1,0 +1,93 @@
+{
+  "deployer": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+  "events": [
+    {
+      "action": "close_prior_session",
+      "at": "2026-07-19T05:04:18Z",
+      "chain": "ethereum",
+      "closed": false,
+      "phase": "session_recovery"
+    },
+    {
+      "action": "open_launch_session",
+      "at": "2026-07-19T05:04:18Z",
+      "chain": "ethereum",
+      "phase": "prepared",
+      "session_id": "pfusdc-tier4-v3-accel-short-epoch3-20260719-ethereum"
+    },
+    {
+      "action": "open_launch_session",
+      "at": "2026-07-19T05:04:18Z",
+      "chain": "ethereum",
+      "phase": "accepted",
+      "session_id": "pfusdc-tier4-v3-accel-short-epoch3-20260719-ethereum"
+    },
+    {
+      "action": "deploy_ingress_anchor",
+      "at": "2026-07-19T05:04:19Z",
+      "base_bytecode_hash": "0x8c0134e5734e9023dac898013c34e3beb6e5bdfd3dd7eedc0419a27fd5f68359",
+      "chain": "ethereum",
+      "expected_address": "0x3F40563A3D786d008854f046A78Cc2216ceAC3e1",
+      "expected_nonce": 11,
+      "phase": "prepared"
+    },
+    {
+      "action": "deploy_ingress_anchor",
+      "at": "2026-07-19T05:04:36Z",
+      "base_bytecode_hash": "0x8c0134e5734e9023dac898013c34e3beb6e5bdfd3dd7eedc0419a27fd5f68359",
+      "chain": "ethereum",
+      "charged_usd": 0.0,
+      "contract_address": "0x3F40563A3D786d008854f046A78Cc2216ceAC3e1",
+      "expected_address": "0x3F40563A3D786d008854f046A78Cc2216ceAC3e1",
+      "expected_nonce": 11,
+      "gas_used": 638061,
+      "phase": "accepted",
+      "tx": "3fe1b081264279b2e4e073450f2cdeb51084d1157acb9e678ad847eed8a964a6"
+    },
+    {
+      "action": "close_prior_session",
+      "at": "2026-07-19T05:04:46Z",
+      "chain": "arbitrum",
+      "closed": false,
+      "phase": "session_recovery"
+    },
+    {
+      "action": "open_launch_session",
+      "at": "2026-07-19T05:04:46Z",
+      "chain": "arbitrum",
+      "phase": "prepared",
+      "session_id": "pfusdc-tier4-v3-accel-short-epoch3-20260719-arbitrum"
+    },
+    {
+      "action": "open_launch_session",
+      "at": "2026-07-19T05:04:46Z",
+      "chain": "arbitrum",
+      "phase": "accepted",
+      "session_id": "pfusdc-tier4-v3-accel-short-epoch3-20260719-arbitrum"
+    },
+    {
+      "action": "deploy_vault",
+      "at": "2026-07-19T05:04:47Z",
+      "base_bytecode_hash": "0x38ce311f0b75a423c6ed08a1779bd7f8435a0186ea6460a27f1af28074d3402f",
+      "chain": "arbitrum",
+      "expected_address": "0xB50C69C17A9D2b65Be9fEA03070B2C12aC502bC5",
+      "expected_nonce": 14,
+      "phase": "prepared"
+    },
+    {
+      "action": "deploy_vault",
+      "at": "2026-07-19T05:04:49Z",
+      "base_bytecode_hash": "0x38ce311f0b75a423c6ed08a1779bd7f8435a0186ea6460a27f1af28074d3402f",
+      "chain": "arbitrum",
+      "charged_usd": 0.0,
+      "contract_address": "0xB50C69C17A9D2b65Be9fEA03070B2C12aC502bC5",
+      "expected_address": "0xB50C69C17A9D2b65Be9fEA03070B2C12aC502bC5",
+      "expected_nonce": 14,
+      "gas_used": 1250013,
+      "phase": "accepted",
+      "tx": "b6d9f7df0d8fd2026aa124272bbf6ce7898647f6102f8837c709c445f4fa829c"
+    }
+  ],
+  "manifest_sha256": "fac1f9de73ee713bf4c434f9e49189a00b6583debb71b659440f54030a27a33d",
+  "schema": "pfusdc-tier4-deploy.v1"
+}
