@@ -27,6 +27,8 @@ pub struct DeploymentManifestInputV1 {
     pub deployer: String,
     pub ethereum_deployer_nonce: u64,
     pub arbitrum_deployer_nonce: u64,
+    #[serde(default)]
+    pub arbitrum_finality_verifier_nonce: Option<u64>,
     pub pftl: PftlInputV1,
     pub asset: AssetInputV1,
     pub network: NetworkInputV1,
@@ -239,11 +241,22 @@ fn build_manifest(input: &DeploymentManifestInputV1) -> Result<Value> {
         bail!("deployer must be nonzero");
     }
     let anchor_address = deployer.create(input.ethereum_deployer_nonce);
-    let verifier_address = deployer.create(input.arbitrum_deployer_nonce);
-    let vault_nonce = input
-        .arbitrum_deployer_nonce
-        .checked_add(1)
-        .context("Arbitrum deployment nonce overflow")?;
+    let (verifier_nonce, vault_nonce) = match input.arbitrum_finality_verifier_nonce {
+        Some(verifier_nonce) => {
+            if verifier_nonce <= input.arbitrum_deployer_nonce {
+                bail!("reserved finality-verifier nonce must follow the vault nonce");
+            }
+            (verifier_nonce, input.arbitrum_deployer_nonce)
+        }
+        None => (
+            input.arbitrum_deployer_nonce,
+            input
+                .arbitrum_deployer_nonce
+                .checked_add(1)
+                .context("Arbitrum deployment nonce overflow")?,
+        ),
+    };
+    let verifier_address = deployer.create(verifier_nonce);
     let vault_address = deployer.create(vault_nonce);
     let token_address = parse_address("network.arbitrum_token", &input.network.arbitrum_token)?;
     let bridge_address = parse_address(
@@ -425,10 +438,17 @@ fn build_manifest(input: &DeploymentManifestInputV1) -> Result<Value> {
             "ethereum": [
                 {"nonce": input.ethereum_deployer_nonce, "contract": "PfUsdcIngressAnchorV1", "address": lower_address(anchor_address)}
             ],
-            "arbitrum": [
-                {"nonce": input.arbitrum_deployer_nonce, "contract": "PFTLFinalityVerifierV1", "address": lower_address(verifier_address)},
-                {"nonce": vault_nonce, "contract": "ERC20BridgeVaultV2", "address": vault_address_text}
-            ]
+            "arbitrum": if input.arbitrum_finality_verifier_nonce.is_some() {
+                json!([
+                    {"nonce": vault_nonce, "contract": "ERC20BridgeVaultV2", "address": vault_address_text},
+                    {"nonce": verifier_nonce, "contract": "PFTLFinalityVerifierV1", "address": lower_address(verifier_address)}
+                ])
+            } else {
+                json!([
+                    {"nonce": verifier_nonce, "contract": "PFTLFinalityVerifierV1", "address": lower_address(verifier_address)},
+                    {"nonce": vault_nonce, "contract": "ERC20BridgeVaultV2", "address": vault_address_text}
+                ])
+            }
         },
         "pftl": input.pftl,
         "asset": {
@@ -633,6 +653,7 @@ mod tests {
             deployer: "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0".to_string(),
             ethereum_deployer_nonce: 0,
             arbitrum_deployer_nonce: 0,
+            arbitrum_finality_verifier_nonce: None,
             pftl: PftlInputV1 {
                 chain_id: "postfiat-wan-devnet-2".to_string(),
                 genesis_hash: "11".repeat(48),
@@ -769,5 +790,24 @@ mod tests {
         assert!(error
             .to_string()
             .contains("route epoch/lifetime is inconsistent"));
+    }
+
+    #[test]
+    fn manifest_reserves_deferred_finality_verifier_after_vault_actions() {
+        let mut input = input();
+        input.arbitrum_deployer_nonce = 10;
+        input.arbitrum_finality_verifier_nonce = Some(13);
+
+        let output = build_manifest(&input).expect("build deferred-verifier manifest");
+        assert_eq!(output["deployment_sequence"]["arbitrum"][0]["nonce"], 10);
+        assert_eq!(
+            output["deployment_sequence"]["arbitrum"][0]["contract"],
+            "ERC20BridgeVaultV2"
+        );
+        assert_eq!(output["deployment_sequence"]["arbitrum"][1]["nonce"], 13);
+        assert_eq!(
+            output["contracts"]["constructors"]["vault"]["finality_verifier"],
+            output["deployment_sequence"]["arbitrum"][1]["address"]
+        );
     }
 }

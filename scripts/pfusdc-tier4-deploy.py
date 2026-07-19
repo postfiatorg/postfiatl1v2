@@ -355,6 +355,11 @@ class DeploymentDriver:
             ],
         }
 
+        # Checkpoint-pinned deployments may reserve the verifier at a later
+        # nonce and deploy the vault first. The vault safely binds the future
+        # CREATE address; intervening nonces remain explicit in the manifest.
+        plans["arbitrum"].sort(key=lambda plan: plan.nonce)
+
         for chain_plans in plans.values():
             for plan in chain_plans:
                 derived = _contract_address(self.deployer, plan.nonce, self.Web3)
@@ -515,17 +520,21 @@ class DeploymentDriver:
                 deployed.append(plan.key)
             else:
                 saw_empty = True
-        expected_nonce = chain_plans[0].nonce + len(deployed)
         latest_nonce = int(client.eth.get_transaction_count(self.deployer, "latest"))
         pending_nonce = int(client.eth.get_transaction_count(self.deployer, "pending"))
         if len(deployed) < len(chain_plans):
-            # Before deterministic deployment is complete, an extra nonce
-            # would change every remaining CREATE address and must fail closed.
-            _assert_equal(f"{chain} latest deployer nonce", latest_nonce, expected_nonce)
-        elif latest_nonce < expected_nonce:
+            next_nonce = chain_plans[len(deployed)].nonce
+            if latest_nonce > next_nonce:
+                raise DeploymentError(
+                    f"{chain} deployer nonce {latest_nonce} passed reserved deployment "
+                    f"nonce {next_nonce}"
+                )
+        else:
+            next_nonce = chain_plans[-1].nonce + 1
+        if len(deployed) == len(chain_plans) and latest_nonce < next_nonce:
             raise DeploymentError(
                 f"{chain} latest deployer nonce {latest_nonce} is below completed "
-                f"deployment floor {expected_nonce}"
+                f"deployment floor {next_nonce}"
             )
         if pending_nonce != latest_nonce:
             raise DeploymentError(
@@ -536,7 +545,7 @@ class DeploymentDriver:
             "chain_id": int(client.eth.chain_id),
             "balance_wei": int(client.eth.get_balance(self.deployer)),
             "deployer_nonce": latest_nonce,
-            "deployment_nonce_floor": expected_nonce,
+            "next_reserved_deployment_nonce": next_nonce,
             "deployed": deployed,
             "remaining": [plan.key for plan in chain_plans[len(deployed) :]],
         }
@@ -584,7 +593,8 @@ class DeploymentDriver:
             and bool(ethereum["remaining"]),
             "ready_to_deploy_arbitrum": bool(status.get("unlocked"))
             and bool(arbitrum["balance_wei"])
-            and bool(arbitrum["remaining"]),
+            and bool(arbitrum["remaining"])
+            and arbitrum["deployer_nonce"] == arbitrum["next_reserved_deployment_nonce"],
         }
 
     def _record(self, event: dict[str, Any]) -> None:
@@ -620,7 +630,7 @@ class DeploymentDriver:
         self._record(result_event)
         return response
 
-    def deploy(self, chain: str) -> dict[str, Any]:
+    def deploy(self, chain: str, only_key: str | None = None) -> dict[str, Any]:
         before = self.preflight()
         chain_status = before[chain]
         if not before["agent_unlocked"]:
@@ -632,6 +642,15 @@ class DeploymentDriver:
 
         client = self.ethereum if chain == "ethereum" else self.arbitrum
         missing = [plan for plan in self.plans[chain] if plan.key in chain_status["remaining"]]
+        if only_key is not None:
+            if missing[0].key != only_key:
+                deployed_plans = self.plans[chain][: len(chain_status["deployed"])]
+                if any(plan.key == only_key for plan in deployed_plans):
+                    return {"chain": chain, "already_complete": True, "status": chain_status}
+                raise DeploymentError(
+                    f"{only_key} is not the next deterministic {chain} deployment"
+                )
+            missing = [missing[0]]
         session_id = f"{self.manifest['deployment_id']}-{chain}"
 
         close = self.agent_call({"op": "close_launch_session", "session_id": session_id})
@@ -729,7 +748,7 @@ class DeploymentDriver:
             )
 
         after = self._chain_status(chain, client)
-        if after["remaining"]:
+        if only_key is None and after["remaining"]:
             raise DeploymentError(f"{chain} deployment ended with missing contracts")
         return {"chain": chain, "transactions": transactions, "status": after}
 
@@ -737,7 +756,15 @@ class DeploymentDriver:
 def _parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "action", choices=("preflight", "readback", "deploy-arbitrum", "deploy-ethereum")
+        "action",
+        choices=(
+            "preflight",
+            "readback",
+            "deploy-arbitrum",
+            "deploy-arbitrum-vault",
+            "deploy-arbitrum-finality",
+            "deploy-ethereum",
+        ),
     )
     parser.add_argument("--deployment-dir", type=Path, default=DEFAULT_DEPLOYMENT_DIR)
     parser.add_argument(
@@ -776,6 +803,10 @@ def main() -> int:
             result = driver.preflight()
         elif arguments.action == "deploy-arbitrum":
             result = driver.deploy("arbitrum")
+        elif arguments.action == "deploy-arbitrum-vault":
+            result = driver.deploy("arbitrum", "vault")
+        elif arguments.action == "deploy-arbitrum-finality":
+            result = driver.deploy("arbitrum", "finality_verifier")
         else:
             result = driver.deploy("ethereum")
         print(json.dumps(result, indent=2, sort_keys=True))
