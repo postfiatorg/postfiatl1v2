@@ -2,8 +2,8 @@
   "schema": "postfiat.pfusdc.tier4_deployment_manifest_input.v1",
   "deployment_id": "pfusdc-tier4-sepolia-20260718",
   "deployer": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
-  "ethereum_deployer_nonce": 0,
-  "arbitrum_deployer_nonce": 0,
+  "ethereum_deployer_nonce": 4,
+  "arbitrum_deployer_nonce": 5,
   "pftl": {
     "chain_id": "postfiat-wan-devnet-2",
     "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
@@ -54,8 +54,8 @@
     "minimum_confirmations": 0
   },
   "programs": {
-    "ingress_elf_sha256": "9e9278fc725541815fb36a5e6049301a4183e3a950778cb091be2a4bf719c373",
-    "ingress_program_vkey": "0x00cf5150195737400718baa10a8cc8bfe419857a2507d5916bb95e024fa52726",
+    "ingress_elf_sha256": "7c581aa42a196bd5df5a1efc2c4569663744d9b597cc1cd2253e839f9ba2f921",
+    "ingress_program_vkey": "0x0033bd140207b97fb2442eb279cc2ce55714be6fbcd66beb325fe7c3786d4dfc",
     "egress_elf_sha256": "8d2d5ce451bbd91c28f8fafcbd12f7bc961c6a4be59de12e246b8cb6734f81e8",
     "egress_program_vkey": "0x00eaaf9372917c3edf9d6fdf70ff64ae08ba25e13cb1e2b2ab7b6e9585d50cd4",
     "proof_encoding": "groth16",
@@ -63,9 +63,9 @@
     "max_public_values_bytes": 16384
   },
   "contracts": {
-    "finality_verifier_runtime_code_hash": "0x8dd7e23c7d42a104fc91893cfc93184c0d2d2a7e2b2115574c9a048e82fdb781",
-    "vault_runtime_code_hash": "0xc53ec5dad1757e65df90675446ee1f02bcadafbde12a4df4ccb396f7a98b9812",
-    "ingress_anchor_runtime_code_hash": "0x3a5e3f49d40d340dd996975d29bb4a17669ab3a8f32f1dc1d0c13e1889825fc0",
+    "finality_verifier_runtime_code_hash": "0x3c79de8193ae2ca24c817d690fc06c2fbac59ff89937b718f95499af6bd472f6",
+    "vault_runtime_code_hash": "0x9552ab7b9b2c515ac6b38060fe08197d807eac56c21ea79db7e260637d3c7387",
+    "ingress_anchor_runtime_code_hash": "0x243d5a90f24189d818a8d8ff8bf5b1a712c1801793d0c423c4f4b116f7cc698e",
     "compiler": "0.8.24+commit.e11b9ed9",
     "optimizer_runs": 200,
     "evm_version": "cancun",

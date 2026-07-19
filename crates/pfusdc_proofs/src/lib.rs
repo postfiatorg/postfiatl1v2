@@ -5,8 +5,8 @@ use postfiat_crypto_provider::{
     hash_hex, hex_to_bytes, ml_dsa_65_verify_with_context, ML_DSA_65_ALGORITHM,
 };
 use postfiat_ordering_fast::{
-    consensus_v2_domain, verify_consensus_v2_commit, ConsensusV2QcGraph, ConsensusV2Validator,
-    ConsensusV2ValidatorSet,
+    consensus_v2_commit_from_precommit_qc, consensus_v2_domain, verify_consensus_v2_commit,
+    ConsensusV2QcGraph, ConsensusV2Validator, ConsensusV2ValidatorSet,
 };
 use postfiat_types::{
     pfusdc_egress_proof_nullifier_v1, vault_bridge_withdrawal_packet_evm_digest,
@@ -14,9 +14,10 @@ use postfiat_types::{
     GovernanceActionBatch, PfUsdcCheckpointProofWitnessV1, PfUsdcCheckpointPublicValuesV1,
     PfUsdcEgressFinalityStepV1, PfUsdcEgressProofWitnessV1, PfUsdcEgressPublicValuesV1,
     SignedGovernanceAuthorizationV2, ValidatorRegistryEntry, ValidatorRegistryUpdateRecord,
-    BRIDGE_EXIT_ACCEPTED_RECEIPT_CODE, PFUSDC_CHECKPOINT_PROOF_WITNESS_SCHEMA_V1,
-    PFUSDC_CHECKPOINT_PUBLIC_VALUES_SCHEMA_V1, PFUSDC_EGRESS_PROOF_WITNESS_SCHEMA_V1,
-    PFUSDC_EGRESS_PUBLIC_VALUES_SCHEMA_V1, SIGNED_GOVERNANCE_AUTHORIZATION_SCHEMA_V2,
+    BRIDGE_EXIT_ACCEPTED_RECEIPT_CODE, CONSENSUS_V2_COMMIT_SCHEMA,
+    PFUSDC_CHECKPOINT_PROOF_WITNESS_SCHEMA_V1, PFUSDC_CHECKPOINT_PUBLIC_VALUES_SCHEMA_V1,
+    PFUSDC_EGRESS_PROOF_WITNESS_SCHEMA_V1, PFUSDC_EGRESS_PUBLIC_VALUES_SCHEMA_V1,
+    SIGNED_GOVERNANCE_AUTHORIZATION_SCHEMA_V2,
 };
 
 pub const PFUSDC_EGRESS_PROOF_PROGRAM_VERSION_V1: u32 = 1;
@@ -228,22 +229,38 @@ fn verify_finality_segment(
     target_committee_epoch: u64,
     target_committee: &[ValidatorRegistryEntry],
 ) -> Result<VerifiedFinalitySegment, String> {
-    let validator_set = consensus_committee(target_committee)?;
     let mut cursor = prior_checkpoint_block_id.to_string();
-    let mut expected_committee: Option<(u64, ConsensusV2ValidatorSet)> = None;
+    let mut expected_committee: Option<(
+        u64,
+        Vec<ValidatorRegistryEntry>,
+        ConsensusV2ValidatorSet,
+    )> = None;
     let mut transition_start_root = String::new();
     for step in ancestry {
-        let step_committee = consensus_committee(&step.committee)?;
-        if let Some((expected_epoch, expected_set)) = &expected_committee {
-            if step.committee_epoch != *expected_epoch
-                || step_committee.committee_root != expected_set.committee_root
-            {
-                return Err("finality ancestry changes committee without proof".to_string());
-            }
-        } else {
-            expected_committee = Some((step.committee_epoch, step_committee.clone()));
-        }
-        let committed = verify_finalized_block(
+        let step_committee =
+            if let Some((expected_epoch, expected_records, expected_set)) = &expected_committee {
+                if step.committee_epoch != *expected_epoch {
+                    return Err("finality ancestry changes committee without proof".to_string());
+                }
+                if step.committee == *expected_records {
+                    expected_set.clone()
+                } else {
+                    let candidate = consensus_committee(&step.committee)?;
+                    if candidate.committee_root != expected_set.committee_root {
+                        return Err("finality ancestry changes committee without proof".to_string());
+                    }
+                    candidate
+                }
+            } else {
+                let candidate = consensus_committee(&step.committee)?;
+                expected_committee = Some((
+                    step.committee_epoch,
+                    step.committee.clone(),
+                    candidate.clone(),
+                ));
+                candidate
+            };
+        let committed = verify_finalized_ancestry_block(
             chain_id,
             genesis_hash,
             protocol_version,
@@ -268,16 +285,28 @@ fn verify_finality_segment(
             if transition_start_root.is_empty() {
                 transition_start_root = step_committee.committee_root.clone();
             }
-            expected_committee = Some((step.next_committee_epoch, next));
+            expected_committee =
+                Some((step.next_committee_epoch, step.next_committee.clone(), next));
         }
     }
-    if let Some((expected_epoch, expected_set)) = &expected_committee {
-        if target_committee_epoch != *expected_epoch
-            || validator_set.committee_root != expected_set.committee_root
-        {
+    let validator_set = if let Some((expected_epoch, expected_records, expected_set)) =
+        &expected_committee
+    {
+        if target_committee_epoch != *expected_epoch {
             return Err("target block committee does not follow proved ancestry".to_string());
         }
-    }
+        if target_committee == expected_records.as_slice() {
+            expected_set.clone()
+        } else {
+            let candidate = consensus_committee(target_committee)?;
+            if candidate.committee_root != expected_set.committee_root {
+                return Err("target block committee does not follow proved ancestry".to_string());
+            }
+            candidate
+        }
+    } else {
+        consensus_committee(target_committee)?
+    };
     let committed_block = verify_finalized_block(
         chain_id,
         genesis_hash,
@@ -294,6 +323,48 @@ fn verify_finality_segment(
         validator_set,
         transition_start_root,
     })
+}
+
+fn verify_finalized_ancestry_block(
+    chain_id: &str,
+    genesis_hash: &str,
+    protocol_version: u32,
+    block: &postfiat_types::BlockRecord,
+    committee_epoch: u64,
+    validator_set: &ConsensusV2ValidatorSet,
+) -> Result<ConsensusV2BlockRef, String> {
+    let header = &block.header;
+    let commit = header
+        .consensus_v2_commit
+        .as_ref()
+        .ok_or_else(|| "egress finality block has no consensus-v2 commit".to_string())?;
+    if commit.schema != CONSENSUS_V2_COMMIT_SCHEMA {
+        return Err("unsupported ancestry consensus-v2 commit schema".to_string());
+    }
+    let domain = consensus_v2_domain(
+        chain_id.to_string(),
+        genesis_hash.to_string(),
+        protocol_version,
+        committee_epoch,
+        validator_set,
+    );
+    // A non-nil precommit QC is consensus-v2's commit authority. Historical
+    // ancestry needs that authority plus exact header linkage; proposal and
+    // prepare evidence remain mandatory for the terminal target block.
+    let committed =
+        consensus_v2_commit_from_precommit_qc(&domain, validator_set, &commit.precommit_qc)
+            .map_err(|error| format!("invalid consensus-v2 ancestry finality: {error}"))?;
+    if commit.precommit_qc.round.height != header.height
+        || commit.precommit_qc.round.view != header.view
+        || committed.height != header.height
+        || committed.parent_block_id != header.parent_hash
+        || committed.state_root != header.state_root
+        || committed.bridge_exit_root != header.bridge_exit_root
+        || committed.block_id != header.block_hash
+    {
+        return Err("ancestry precommit QC does not exactly bind block header".to_string());
+    }
+    Ok(committed)
 }
 
 fn consensus_committee(
@@ -409,8 +480,10 @@ fn verify_committee_transition(
         .consensus_v2_commit
         .as_ref()
         .ok_or_else(|| "committee transition block commit is absent".to_string())?
-        .proposal
+        .precommit_qc
         .block
+        .as_ref()
+        .ok_or_else(|| "committee transition precommit QC is nil".to_string())?
         .payload_hash
         .as_str();
     if payload_hash != committed_payload_hash {

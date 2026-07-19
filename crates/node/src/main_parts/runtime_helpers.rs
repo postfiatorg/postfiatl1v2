@@ -675,7 +675,9 @@ fn print_usage() {
   postfiat-node ratify-orchard-pool-pause [--data-dir PATH] --validators CSV [--support CSV] --state paused|resumed [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-atomic-swap-pause [--data-dir PATH] --validators CSV [--support CSV] --state paused|resumed [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-atomic-swap-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
+  postfiat-node ratify-vault-bridge-route-authority-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-replicated-state-v2-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
+  postfiat-node ratify-bridge-exit-root-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node governance-authorization-sign [--data-dir PATH] --amendment-file PATH --validator NODE_ID --validator-key-file PATH --proposal-slot H --expires-at-height H --authorization-file PATH
   postfiat-node governance-amendment-assemble [--data-dir PATH] --amendment-file PATH --authorization-files CSV --proposal-slot H --output PATH
   postfiat-node ethereum-checkpoint-observe [--data-dir PATH] --route-id ID --ethereum-rpc http://HOST:PORT[/PATH] [--block-number N] --checkpoint-file PATH

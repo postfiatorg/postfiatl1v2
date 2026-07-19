@@ -1,0 +1,59 @@
+{
+  "schema": "postfiat-certified-asset-ops-report-v1",
+  "request_schema": "postfiat-certified-asset-ops-request-v1",
+  "data_dir": "/home/postfiat/tmp/pfusdc-tier4-target-exit-root-final-20260718/validator-1",
+  "topology_file": "/home/postfiat/tmp/pfusdc-tier4-target-exit-root-final-20260718/topology.json",
+  "artifact_dir": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-egress-live-corrected/nav-submit-round",
+  "operation_count": 1,
+  "max_transactions": 1,
+  "allow_existing_mempool": false,
+  "prepare_only": false,
+  "batch_only": false,
+  "start_height": 24,
+  "start_state_root": "d4a021f4f37128ac8e894bd1fb5dc328b4fcc492769f22fdc301e3aeb0875435b83e0dc8a8e136805fa7896e9bfbeb1d",
+  "start_mempool_pending": 0,
+  "end_height": 25,
+  "end_state_root": "a3f8b6a5be128040653ec1abbcfd6b319685379aa6708dc74d4997a569b2c76dfcbc1f9e67b480608b1102c03ed15ef4",
+  "end_mempool_pending": 0,
+  "operations": [
+    {
+      "label": "nav-reserve-submit",
+      "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+      "transaction_kind": "nav_reserve_submit",
+      "operation_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-egress-live-corrected/nav-submit-round/nav-reserve-submit/operation.json",
+      "quote_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-egress-live-corrected/nav-submit-round/nav-reserve-submit/quote.json",
+      "signed_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-egress-live-corrected/nav-submit-round/nav-reserve-submit/signed.json",
+      "submit_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-egress-live-corrected/nav-submit-round/nav-reserve-submit/submit.json",
+      "tx_id": "33af048a3b011d5c0e9f6b016b15797d66fe8dea71d0d31c4dd98dcf2fcb80c6eb7ae1a324c1f6152a18c2bb2bc14df3",
+      "sequence": 19,
+      "fee": 34,
+      "timings_ms": {
+        "prepare_ms": 0.35047700000000004,
+        "quote_ms": 5.922130999999999,
+        "sign_ms": 66.657781,
+        "submit_ms": 25.866379
+      }
+    }
+  ],
+  "dependency_report": {
+    "declared_dependency_count": 0,
+    "same_round_dependency_count": 0,
+    "prior_round_dependency_count": 0,
+    "same_round_batch_eligible": true,
+    "candidate_batch_classes": [],
+    "replay_equivalence_required": false,
+    "live_round_compression_ready": true,
+    "live_round_compression_blockers": [],
+    "declarations": []
+  },
+  "batch_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-egress-live-corrected/nav-submit-round/peer-certified-mempool-round/mempool-batch.json",
+  "round_artifact_dir": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-egress-live-corrected/nav-submit-round/peer-certified-mempool-round",
+  "round_ok": true,
+  "timings_ms": {
+    "total_ms": 35190.731761,
+    "preflight_ms": 6.512068,
+    "operations_ms": 100.21531999999999,
+    "certify_ms": 35081.637977,
+    "final_status_ms": 1.618483
+  }
+}

@@ -2,9 +2,18 @@
 
 **Date:** 2026-07-18
 **Priority:** P0 / clock critical
-**Execution mode:** active, end-to-end execution toward the four-gate Tier-4
-protocol acceptance boundary; controlled-testnet product hardening follows.
+**Execution mode:** Tier-4 core boundary complete at 4/4; stopped at the
+founder-review boundary before controlled-testnet product hardening.
 **Canonical architecture reference:** `docs/plans/PFUSDC-TIER4-IMPLEMENTATION-PLAN-20260717.md`
+**Execution incident report:**
+`docs/postmortems/pfusdc-tier4-clock-critical-execution-2026-07-18.md`
+**Original public tier ladder:**
+`https://postfiat.org/research/trustless-wrapped-stablecoins/` (source file:
+`postfiatorg/postfiatorg.github.io/content/research/trustless-wrapped-stablecoins.md`).
+That writeup defines Tier 1 as independently observed deposits, Tier 2 as
+receipt-proven deposits against a governed finalized checkpoint, Tier 3 as
+finality-verified/trustless entry, and Tier 4 as a proof-verified PFTL-finality
+exit completing the trustless round trip.
 
 ### Immutable operator directive — agents may not change plan parameters
 
@@ -56,8 +65,333 @@ then launch gates passed out of three. Gates 5-7 must not delay work on Gates
 
 ### 1.1 Plain-English status at the 2026-07-18 sleep handoff
 
-**Current result: 1/4 core gates passed; 0/3 launch gates passed. Tier 4 is not
-deployed or active.**
+**Authoritative terminal status — 2026-07-19 03:07 UTC: pfUSDC Tier 4 is 4/4
+core gates green and is stopped at the founder-review boundary.** The terminal
+acceptance record is
+`docs/evidence/pfusdc-tier4-core-live-corrected-20260718/ACCEPTANCE.json`
+(SHA-256
+`76b9a8c943d0ab3c1fd5effbdb52eb9684726a9b3b54c8abfdfd2225d2f76a56`).
+It records `result=true`, `core_gates_passed=4`, `core_gates_total=4`, and no
+unresolved core findings. Controlled-testnet launch gates remain separately
+0/3 and do not invalidate the completed Tier-4 protocol boundary.
+
+The accepted Arbitrum Sepolia `withdrawWithProof` transaction is
+`0x23eed687e728055c821d98ca4c45e3fe43a806c9b4c32cc6d2298f03adde6311`,
+status 1 in block 288,973,669. Historical state reads at block 288,973,668 and
+288,973,669 prove the atomic transition: vault balance 1,000,000 to 0,
+recipient balance 0 to 1,000,000, withdrawal commitment false to true, and
+proof nullifier false to true. The transaction emitted one exact 1,000,000-atom
+USDC transfer from the frozen vault to the proof-bound recipient and one exact
+`ProofNativeWithdrawal` event. A no-broadcast replay is rejected. Recovered
+egress evidence is converged at
+`docs/evidence/pfusdc-tier4-egress-live-corrected/summary.json`; the immutable
+block-by-block reconstruction is recorded in the adjacent
+`recovery-forensics.json`.
+
+The submit-on-unlock runner broadcast the successful transaction but exited
+before persisting its transaction hash. Its subsequent retries did not
+rebroadcast because the on-chain withdrawal commitment was already consumed;
+they failed closed at the recovery guard instead. The crash-looping unit was
+stopped, chain logs recovered the unique transaction hash, and that hash was
+written into `withdrawal-state.json`. The normal recovery path then verified
+the receipt, exact deltas, both nullifiers, and replay rejection without a new
+transaction. The terminal acceptance readback was also corrected to compare
+the verifier's mutable latest checkpoint against the height-27 checkpoint
+decoded from the accepted egress public values, while retaining exact checks
+of all immutable deployment fields and the constructor checkpoint history.
+After 4/4 acceptance, redundant billed Vast instances 45264613 (CPU fallback)
+and 45275714 (gate RTX 5090) were destroyed. The sibling R&D instance 45269977
+was not touched.
+
+The status below is historical chronology and is superseded by the terminal
+4/4 status above.
+
+**Historical V2 founder-directive status — 2026-07-18 22:52 UTC: execution
+was active and the V2 gate count was 0/4.** The controlling directive is
+`/home/postfiat/repos/orc_directives/PFUSDC-TIER4-V2-DIRECTIVE-20260718.md`.
+The V1 egress proof is abandoned: it must not be resumed, retried, submitted,
+or counted. Its partial proof directories are archived as historical evidence.
+
+The standalone egress guest now carries the required SP1 precompile patches,
+including the exact `sha3` 0.10.8 resolution required by the SP1 patch while
+`fips204` had requested 0.10.9. Bounded ancestry verification was reduced to
+the valid non-nil precommit commit QC, while the terminal target still requires
+proposal, prepare QC, and precommit QC. Negative target/ancestry tests and the
+bounded 1/2/8/64-block synthetic segment checks pass. The optimized candidate
+ELF SHA-256 is
+`27e0d07d5563b982ef549a4ad793c0b49d9ef69534aff33ac2c6a224cc9f0099`
+and its candidate vkey is
+`0x0079327e8673d2d415897390d9ad7c050bb0f74d694e498b62436b568bc0116e`.
+They are candidates, not frozen deployment artifacts, until the representative
+proof succeeds.
+
+The exact archived 26-block witness fell from 2,030,290,233 V1 cycles to
+520,023,827 V2 cycles. A local representative proof nevertheless hit the
+mandatory systemd `MemoryMax=60G` ceiling because Groth16 recursion/compression
+has a large nonlinear memory floor. That incomplete attempt is archived at
+`docs/evidence/pfusdc-tier4-v2-representative-proof-26block-local-cap-20260718T220851Z/`
+and cannot count as a receipt. There will be no further proof attempt on the
+122 GiB host.
+
+The same single representative proof is now running on rented Vast instance
+45264613 under its remote cgroup `memory.max` of 734,528,536,576 bytes with
+swap disabled, supervised by persistent local systemd unit
+`pfusdc-tier4-v2-remote-benchmark-proof-retry1-20260718.service`. The pinned
+prover, witness, optimized ELF, and official SP1 v6.1.0 Groth16 circuit files
+all match local SHA-256 values. Execute completed in 520,023,827 cycles; the
+proof has measured 135.9 GiB peak RSS so far and has not produced a receipt yet.
+The duplicate KVM instance 45265250 was destroyed and is no longer billing.
+
+Remote prover PID 6501 completed SP1 recursion, shrink, and wrap after 2 hours
+43 minutes with 135.9 GiB peak RSS, then failed at the final Groth16 conversion
+at 01:14:34 UTC on 2026-07-19 because SP1 6.3.1 requires the official gnark
+finalizer through a `docker` invocation and the rented container had neither a
+Docker client nor daemon. The remote cgroup recorded zero memory-high,
+memory-max, OOM, OOM-kill, or pressure events. No `proof.bin` was produced, so
+the failed run is not a receipt and cannot count. Its output is preserved at
+`/workspace/pfusdc-tier4-v2/representative-proof-26block-failed-no-docker-20260719T011434Z`.
+
+The exact official `ghcr.io/succinctlabs/sp1-gnark:v6.1.0` image was already
+available on the local Docker host. Its `/gnark-cli` executable was extracted,
+copied to the rented box with SHA-256
+`e9e9f32503c5cb7dc5fa87b651318fe0c53d5066a60e55db1f7563d047d5047d`,
+and tested there behind a minimal compatibility runner. This changes prover
+infrastructure only; it does not change the guest, ELF, vkey, witness, public
+statement, proof mode, or gate definitions.
+
+At 01:17 UTC, one corrected representative rerun was launched with the same
+pinned inputs and CPU settings. It is fully detached: `/usr/bin/time` PID 12854
+has PPID 1 and session ID 12854, and prover PID 12856 is its child. Output and
+logs are respectively
+`/workspace/pfusdc-tier4-v2/representative-proof-26block-gnark-fixed/` and
+`/workspace/pfusdc-tier4-v2/representative-proof-26block-gnark-fixed.log`.
+The provider cgroup's 684 GiB memory cap remains enforced. No competing prover
+is running. The bounded action is to let this corrected run finish and require
+its locally verified `proof.bin` receipt.
+
+At 02:05 UTC on 2026-07-19, an explicit founder instruction added a parallel
+GPU gate-proof path without stopping the CPU fallback. Vast instance 45275714
+is a standard Docker RTX 5090 instance using the official SP1 6.3.1 CUDA server
+and official v6.1.0 Groth16 circuit artifacts. This GPU path is deliberately
+pinned to the already-deployed route-epoch-1 egress gate, not the optimized V2
+candidate: egress ELF SHA-256
+`8d2d5ce451bbd91c28f8fafcbd12f7bc961c6a4be59de12e246b8cb6734f81e8`,
+program vkey
+`0x00eaaf9372917c3edf9d6fdf70ff64ae08ba25e13cb1e2b2ab7b6e9585d50cd4`,
+and height-27 witness SHA-256
+`b5645fde0d8c13438be5218fc91b0cb5d275405ab1aba068374ca3e3874a7b46`.
+The deployed verifier was read back on Arbitrum Sepolia and reports that exact
+program vkey. CUDA prover PID 6768 is detached with PPID 1 and session ID 6768;
+the CPU fallback PID 12856 remains alive and untouched. No receipt exists yet,
+so this parallelization does not increment any gate. Whichever path first
+produces a locally verified receipt matching the deployed vkey is the only
+receipt to be submitted to `withdrawWithProof`.
+
+The RTX 5090 path produced and locally verified that Groth16 receipt at 02:16
+UTC in 603,256 ms of setup/prove time. The winning Groth16 `proof.bin` SHA-256
+is `c7b41506189c76178edff641d6480d9c0f6258c0932d5ebc7ad983883969179f`;
+the raw proof-calldata SHA-256 is
+`018779094b97ae7474215ee22f7ed0fa973f810e14291d9d07162b0b50ca8c44`;
+the public-values SHA-256 is
+`dfe21e43169ba1d262abbc941dd66dab8747503414b3c79db7968c813ca8d0e8`.
+The canonical evidence copy is
+`docs/evidence/pfusdc-tier4-egress-live-corrected/proof/`.
+
+An immediate no-broadcast Arbitrum simulation then exposed a deployment
+configuration error: the deployed pfUSDC finality verifier points to Succinct's
+v6.1.0 **Plonk** gateway `0x3B6041173B80E77f038f3F2C0f9744f04837185e`,
+while the requested proof is Groth16 with selector `0x4388a21c`. The gateway
+reverted `RouteNotFound(0x4388a21c)`; the Groth16 gateway
+`0x397A5f7f3dBd538f23DE225B51f532c34448dA9B` does have that route. No
+transaction was broadcast, the vault still holds exactly 1,000,000 USDC atoms,
+the recipient still holds zero, and neither nullifier is consumed. Because the
+existing vault has no verifier setter or rescue path and its witness binds its
+address, the bounded compatibility fix is a Plonk receipt for the identical
+frozen ELF, vkey, witness, and public values. The deployed gateway has the live,
+unfrozen v6.1.0 Plonk route selector `0x5a093a2f`.
+
+The RTX 5090 Plonk path completed at 02:47:28 UTC and won the proof race. The
+host verifier accepted the receipt against frozen program vkey
+`0x00eaaf9372917c3edf9d6fdf70ff64ae08ba25e13cb1e2b2ab7b6e9585d50cd4`.
+The verified Plonk `proof.bin` SHA-256 is
+`d69238c9313e4fcde242fc90c83225ced1864de12b1027a9839e0af6c8a3d8e2`;
+the submitted proof-calldata SHA-256 is
+`73ca78617e6e74f5f28f6edb0e38dd65057b78dee6c961d077b09003462d73da`;
+the public-values SHA-256 remains
+`dfe21e43169ba1d262abbc941dd66dab8747503414b3c79db7968c813ca8d0e8`.
+The proof-calldata begins with the deployed Plonk route selector `0x5a093a2f`.
+Its measured setup/prove time was 1,215,862 ms. The incompatible but valid
+Groth16 receipt is preserved separately at
+`docs/evidence/pfusdc-tier4-egress-live-corrected/proof-groth16-verified-route-mismatch-20260719T0216Z/`;
+the compatible Plonk receipt is now the canonical `proof/` evidence. CPU
+fallback PID 12856 remains alive and untouched as explicitly directed.
+
+A no-broadcast `eth_call` against Arbitrum Sepolia block 288,971,596 accepted
+the canonical Plonk proof. It decoded the exact 1,000,000-atom payout to
+`0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0`; the vault held exactly
+1,000,000 atoms, the recipient held zero, and both the withdrawal commitment
+and proof nullifier were false before submission. At that preflight moment no
+transaction had been broadcast and no nullifier had been consumed.
+
+Historically, the previous wallet-agent process disappeared during the earlier host process
+crash and left a stale StakeHub socket. At 23:06 UTC a fresh-USDC acquisition
+preflight therefore failed closed before broadcasting any transaction. The
+wallet agent has been restarted as persistent user unit
+`stakehub-pfusdc-tier4-wallet-agent-20260718.service`; it is currently locked.
+This does not block the representative proof, but it must be unlocked before
+the already-authorized fresh USDC acquisition or V2 contract deployments can
+sign. No additional authorization is required. A single persistent acquisition
+waiter, `pfusdc-tier4-v2-canonical-usdc-wait-20260718.service`, is active and
+will continue automatically after unlock; it has not broadcast a transaction.
+
+At 02:51 UTC, the locked StakeHub signing vault was the only blocker to the
+already-simulated `withdrawWithProof` transaction. The crash-resume state is
+prepared with the exact frozen withdrawal commitment and proof nullifier. The
+bounded user unit
+`pfusdc-tier4-egress-submit-on-unlock-20260719.service` polls only the existing
+agent and will submit the verified canonical receipt immediately after unlock,
+then require the exact 1.000000-USDC vault/recipient delta, both consumed
+nullifiers, and replay rejection before writing converged egress evidence.
+
+At 03:02 UTC the submit-on-unlock unit was stopped after the successful
+transaction's missing local hash caused recovery-guard retries. On-chain
+forensics and the normal recovery path closed that evidence gap. The bounded
+Core Gates 1-4 acceptance passed at 03:07 UTC. No GitHub Actions, workspace
+battery, observer/threshold fallback, gate weakening, extra proof, or extra EVM
+transaction was used. There is no remaining core blocker; stop for founder
+review before launch-gate work.
+
+The historical V1 status below is retained for chronology and is superseded by
+this V2 status.
+
+**Authoritative current status — 2026-07-18 20:40 UTC: execution is active,
+not paused. Core acceptance is now 2/4. The single ingress SP1 proof is complete,
+verified, and was accepted by the six-validator PFTL target; it must not be
+regenerated. The exact 1,000,000-atom PFUSDC credit, NAV checkpoint, burn,
+height-27 exit root, egress witness, and bounded 20/20 egress mutation audit are
+complete. The only unfinished proof is the single egress SP1 proof required by
+the deployed Arbitrum vault before it can release the exact 1.000000 USDC.**
+
+pfUSDC is an ordinary issued PFTL asset, not a ZK token. The Tier-4 proofs are
+boundary authorization proofs: ingress proves the finalized canonical
+Arbitrum deposit to PFTL, and egress proves the finalized PFTL burn/withdrawal
+packet to the Arbitrum vault. No ingress proof, chain round, burn, witness, or
+mutation audit is being rerun.
+
+The completed ingress proof is preserved at
+`docs/evidence/pfusdc-tier4-ingress-live-corrected/proof/`; the accepted PFTL
+ingress lifecycle is recorded at
+`docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/summary.json`. The
+height-27 egress witness and audit are
+`docs/evidence/pfusdc-tier4-egress-live-corrected/witness.json` and
+`docs/evidence/pfusdc-tier4-egress-live-corrected/audit.json`.
+
+The first persistent egress proving attempt executed the exact witness in
+2,030,290,233 cycles, then was killed by the host OOM killer after 1 hour 8
+minutes 55 seconds. Its service peaked at 109.2 GB RAM plus 5.1 GB swap and did
+not produce `proof.bin`, `proof-calldata.bin`, or `proof-report.json`; therefore
+it did not generate a usable proof and was not submitted anywhere. Its partial
+artifacts are preserved at
+`docs/evidence/pfusdc-tier4-egress-live-corrected/proof-oom-20260718T2037Z/`.
+An earlier process interrupted when the agent execution process crashed is
+preserved separately at
+`docs/evidence/pfusdc-tier4-egress-live-corrected/proof-interrupted-20260718T1908Z/`.
+
+At 20:40 UTC the same single egress proof was restarted as persistent user
+service `pfusdc-tier4-egress-lowmem-20260718.service` with
+`RAYON_NUM_THREADS=20`, `TRACE_CHUNK_SLOTS=2`, and CPU affinity `0-19`. These
+settings bound prover concurrency and memory only; they do not change the
+guest, ELF, vkey, witness, public statement, contracts, route, proof count, or
+any other frozen plan parameter. On success the crash-resumable runner submits
+the resulting proof to `withdrawWithProof`, verifies exact USDC balance deltas
+and both nullifiers, performs a non-broadcast replay rejection check, runs only
+the bounded core acceptance check, and updates this document. There is no
+operator, funding, StakeHub, GitHub Actions, or authorization blocker.
+
+The 18:22 UTC status below is retained as historical chronology and is
+superseded by the authoritative 20:40 UTC status above.
+
+**Authoritative current status — 2026-07-18 18:22 UTC: execution is active,
+not paused. Core acceptance remains 1/4 because no SP1 proof has been generated
+yet. There is no authorization, funding, StakeHub, implementation, test, or
+GitHub Actions blocker. The governed bootstrap, route activation, and holder
+provisioning are complete. The sole current wait is the protocol-required next
+Ethereum-finalized checkpoint needed to advance the ingress witness beyond the
+governed bootstrap.**
+
+The user subsequently gave an explicit instruction to fix the frozen-guest and
+StakeHub defects and to continue until completion. That instruction superseded
+the historical stop recorded below while leaving the governing scope,
+two-proof limit, `$500` cap, gate definitions, and security invariants
+unchanged. Agents may not use this factual correction to change any other plan
+parameter or pause execution.
+
+The corrected live path is now:
+
+- Corrected ingress ABI decoding is frozen in ELF SHA-256
+  `7c581aa42a196bd5df5a1efc2c4569663744d9b597cc1cd2253e839f9ba2f921`
+  with SP1 vkey
+  `0x0033bd140207b97fb2442eb279cc2ce55714be6fbcd66beb325fe7c3786d4dfc`.
+  The unchanged egress ELF/vkey remain
+  `8d2d5ce451bbd91c28f8fafcbd12f7bc961c6a4be59de12e246b8cb6734f81e8`
+  and
+  `0x00eaaf9372917c3edf9d6fdf70ff64ae08ba25e13cb1e2b2ab7b6e9585d50cd4`.
+  The corrected ingress guest executed the exact live witness natively in
+  34,205,473 cycles. Exactly zero SP1 proofs have been generated so far.
+- The corrected manifest SHA-256 is
+  `5871fa73bcf5472198c6946095a388bdf7d32bd535429b53c3c45ce8ea408ad4`;
+  its route-profile hash is
+  `7b93053c2a1a26b918c3bd2cd4737d1e00f3f5cf0f8cb8fba9aff1a1126eac10516881b4a2bb153200f9c08fe8c1b5ef`
+  and its governed route binding is
+  `0cdf6748abdf669143acea7a4e657066b7e4c049594966b8f5cfde31f7c6d2c5`.
+- Corrected contracts are deployed and exact readback passed: Arbitrum
+  verifier `0xa17a876dEea3a711591248f726D9Fac420809cfe` in transaction
+  `7fbe110610d423033a6a7887bc44accd351ef0a5f1011ababf35e3485f7a83c9`;
+  Arbitrum vault `0x2983579e8C60B1e1fF06B3Bdc59805FFb0D4f915` in transaction
+  `ca52439e65915ba56e02ccddcf558f3c9481870e58f53b36149b8967c6ac7b9a`;
+  and Ethereum ingress anchor
+  `0xabE2A1A76fB5c89f00780bb46f9870B7768F523A` in transaction
+  `c32fc09dd1ea0b4e8f8b6c61591f4c77880df76278a3fbdbc6c8acfe7a58f5bb`.
+- The replacement exact `1.000000` USDC deposit is complete at Arbitrum block
+  `288827626`: approval
+  `031f8e7e71dc0289704215edfea8754adc6c24a2b65bc301e1ca2a3f8a5f0e47`,
+  deposit
+  `fc1dd222a9c84f5f37cbcdf8c3572db33ea1741b05c357a14904e296054a0736`,
+  and deposit ID
+  `0x9d9226a435d55ef91f26c22387b5921b922cae2689704e0fed2f94569ceb7835`.
+  Exact balance deltas passed and a non-broadcast replay was rejected. Evidence:
+  `docs/evidence/pfusdc-tier4-ingress-live-corrected/deposit-state.json`.
+- A clean six-validator target was rebuilt from the certified height-1
+  snapshot. Blocks 2-4 committed the corrected profile, PFUSDC definition, and
+  NAV binding; height 5 committed the missing route-authority activation
+  amendment; heights 6-19 are accepted staging transfers. All six validators
+  agree at height 19 on block
+  `478e6ee5ff49c31f63f04ae6973a451d52c74bea4e6622e304b7e98e7f0bc2db050c1751814c2c1c39a4dae8458b33b7`
+  and state root
+  `27fc319096949d5fa911761847e9b245455979887b75fd91eadfbafa8fe25623466f7d850aa0f717d4da6dd34ed6d3d4`.
+  Height 20 remains reserved for the exact corrected route plus live finality.
+- The corrected governed finality bootstrap is complete at Ethereum finalized
+  slot `10722016`, bound to confirmed Arbitrum assertion
+  `0xc8fc3aec8312ee745e7bab0a546f2136833ccdceb7a65dc2752d27af560701b3`.
+  Evidence is
+  `docs/evidence/pfusdc-tier4-finality-live-corrected/bootstrap.json`.
+- The exact route activated at height 20 on all six validators with block
+  `47b0b53d84000a27a5a658e66c1e9bf490293dc071b187845811363b40cae99ff5b6917208c1cedbf719f94d7d8dd136`
+  and state root
+  `4d6bb09ecfb6ed10377ece5ae1751ed42af77a24f3efd3de4202b83f57956d7376ba35cb65f255fa8aee064b82b049a7`.
+  Holder funding and the exact PFUSDC trustline then converged at height 22.
+- On the next finalized checkpoint, continue without another prompt: capture
+  and audit one corrected ingress witness; generate the single ingress proof;
+  certify the ingress lifecycle and exact PFUSDC credit;
+  certify the NAV checkpoint and exact burn; generate the single egress proof;
+  submit it to the corrected vault; verify exact USDC deltas and both replay
+  protections; then run only the bounded core acceptance check and update this
+  document. Do not run GitHub Actions, a workspace-wide proof/test battery, or
+  any extra SP1 proof.
+
+**Current result: 1/4 core gates passed; 0/3 launch gates passed. The three
+Tier-4 contracts are deployed and the exact PFTL route is active at height 20;
+the holder/trustline is ready at height 22.**
 
 - Gate 1 is done: the integrated code, corrected Tier-3 ingress statement, and
   corrected/frozen V3 ingress ELF/vkey exist and their targeted checks are
@@ -106,13 +440,11 @@ deployed or active.**
   resumed from that exact boundary; no proof, deployment, spend, or long test was
   used to create the initial checkpoint.
 
-**External prerequisites:** the next live-value action is operationally gated
-on one passphrase entry to add the now-pinned Drip.Tools mainnet vault
-`0x33c1AD63CCbd322208A0Dd2C9f3C3FD21CCA3329` to the StakeHub allowlist. The
-two live native-gas quotes plus conservative mainnet gas were about `$2.13`
-aggregate. Canonical Arbitrum-Sepolia USDC separately requires either a Circle
-API key or one browser reCAPTCHA completion. No code review, proof, GitHub
-Action, or additional provider investigation is on the critical path.
+**External prerequisites:** cleared. StakeHub is unlocked, the Drip.Tools vault
+is allowlisted, both testnet gas balances were delivered, and canonical Circle
+USDC was acquired and deposited. The current failures are internal frozen-guest
+and controlled-target bootstrap defects recorded below; no passphrase, faucet,
+API key, GitHub Action, broad test, or provider investigation is required.
 
 **Bounded finality tooling is complete at `7c0019b`:** `finality-bootstrap`
 host-verifies the Helios transition, finalized RollupCore storage, canonical
@@ -218,6 +550,93 @@ unlocked StakeHub signer, checks the exact 1-USDC balance deltas, and verifies
 proof/withdrawal replay rejection without broadcasting a second withdrawal.
 No observer attestation, withdrawal signature, mock verifier, or hash-only
 proof is used.
+
+**2026-07-18 live deployment update:** the StakeHub policy blocker is cleared.
+StakeHub now permits an already-unlocked daemon to persist policy changes
+without a second passphrase prompt; the Drip.Tools vault is allowlisted. The
+two bounded mainnet source transactions
+`e870a6668265cf8758ddd6fe9f162a1ea2d35b3e0620909ca61683b131060f99`
+and
+`9df1cfba09a3e039add525afb6629c771b97d22c41989b02b0679c36032987a9`
+delivered exactly `4.2` test ETH to the frozen wallet on each of Ethereum
+Sepolia and Arbitrum Sepolia. The provider quote remained approximately
+`$2.13` aggregate, far below the `$500` authorization.
+
+All three frozen contracts are now deployed and exact readback passed:
+
+- Arbitrum-Sepolia finality verifier `0x89eC019B4AA5423b8d96152a502a0DB52CF48164`,
+  transaction `1011c98010062ce491738f3c62319900d577efd34c81bfac964c39eb66f2305b`;
+- Arbitrum-Sepolia vault `0xa796dc3c9308F9C855a0659153b7AfC2006cF27B`,
+  transaction `ff1f4d4e808cb5ae60dcae6d526e45b4a684ab96415401a5160be385132c9032`;
+- Ethereum-Sepolia ingress anchor `0x89eC019B4AA5423b8d96152a502a0DB52CF48164`,
+  transaction `3e8d77e7e403711887e774871eb34a4c4330a83bd2d764cc53f379fb839c66f3`.
+
+The browser/API-key faucet hold is also bypassed without changing the frozen
+canonical token. Transaction
+`a3ead60374d2e0fecaaef5b2ec2a6c94022a81ecb63ac3002eb56bb5dbe0301c`
+swapped `0.0002` Ethereum-Sepolia test ETH through the live official Uniswap
+pool into `3.999644` Circle test USDC at the exact canonical Ethereum-Sepolia
+token. Exactly `2.000000` USDC was approved and burned through Circle CCTP V1
+in transactions
+`67cd4335ca4d96ce7d60302fc5a18870c07959bf98bb1c4435323f8b290f5734`
+and
+`8d57d8a1762d5cd7ca599e508347f509f197b2c6e0dfdf27fcd9be620de246b3`.
+Circle message
+`0x5fbc06cd00db030a6ce12514a5fbe54bb5852943dd422965bceb654c34009445`
+completed after 82 Ethereum-Sepolia confirmations. Transaction
+`a928b82df8b8a9d2743707105f07e8f99affcbda2df80fc777ae2a23d802f8c6`
+minted exactly `2.000000` USDC to the unchanged canonical Arbitrum-Sepolia
+token `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d`.
+
+The one authorized live ingress deposit is also complete. Approval transaction
+`0978009dce68cb676f202869f831491ef06c22e9cf0c6fcd3672730aa0d31eb3`
+and deposit transaction
+`6a492ca85953fce48135f06c24bc1cadd8f56f66f32d9b2f50f8d614e1f2e09e`
+moved exactly `1.000000` canonical USDC from the wallet into the frozen vault.
+The exact event fields match the frozen recipient, nonce, route binding, chain,
+vault, and token; wallet and vault deltas are each exactly `1.000000`, and a
+non-broadcast exact replay is rejected. Evidence is
+`docs/evidence/pfusdc-tier4-ingress-live/deposit-state.json`.
+
+The finality wait is complete. Ethereum-finalized assertion
+`bf69500f7ec035e1016974b60425e2327b3cd814ac8ae2d40079c899b5f80009`
+covers Arbitrum block `288800186`, past the deposit at `288793284`. The live
+witness was written and natively verified at
+`docs/evidence/pfusdc-tier4-ingress-live/witness.json`; its bounded audit
+rejected all 21 mutations at
+`docs/evidence/pfusdc-tier4-ingress-live/audit.json`. No SP1 proof has been
+generated.
+
+**2026-07-18 live execution defect record — frozen parameters unchanged:**
+
+1. The exact signed route batch was certified at PFTL height 20. All six
+   validators finalized the same block
+   `64e6c2cc54fc746c27d60c48857257414e8a89132444252235392545989e30139348f648a76edbb67d7b9960a57b3e03`
+   and state root
+   `2dde21b1223bf4ad5ab3bb50980a146bf33af6665b06396b1fc4eae5e93ebb090512ac412ed53774a8b92a35b2707400`,
+   but the route receipt was rejected with
+   `vault_bridge_route_profile_rejected: vault bridge route authority is not active`.
+   The controlled-target bootstrap omitted the prerequisite route-authority
+   amendment. Because the profile is frozen to activation height 20, the same
+   target cannot honestly retry it at height 21. Evidence:
+   `docs/evidence/pfusdc-tier4-finality-live/route-activation-failure.json`.
+2. Non-proving execution of the exact live witness against frozen ingress ELF
+   SHA-256
+   `9e9278fc725541815fb36a5e6049301a4183e3a950778cb091be2a4bf719c373`
+   returned zero public-value bytes. The ELF was frozen at `7634799` from guest
+   source that calls `SolValue::abi_decode` on ten top-level function arguments
+   as though they were one dynamic tuple. It therefore expects an outer `0x20`
+   offset that canonical Solidity `abi.encodeCall` does not emit. The live
+   calldata begins correctly with the deposit ID, and changing it would break
+   the Nitro item hash/sendRoot proof. Evidence:
+   `docs/evidence/pfusdc-tier4-ingress-live/frozen-elf-execute-failure.json`.
+3. **Historical stop, superseded by the user's later explicit instruction to
+   fix the defect and continue:** the source decoder and host
+   evidence-coordinate construction were corrected, the guest was rebuilt,
+   and the dependent manifest, contracts, deposit, and controlled target were
+   replaced as recorded in the authoritative status above. This did not alter
+   the two-proof limit, funding cap, acceptance gates, or downgrade/security
+   invariants.
 
 Before that single egress proof, the release driver runs one bounded native
 mutation audit against the exact exported live witness. Its 20 cases cover the
@@ -549,34 +968,27 @@ all-target check now passes. There is no remaining Gate-1 compile blocker.
 ### 3.7 Live state
 
 - The Tier-4 branch is not merged into current public `main`.
-- The Tier-4 binary and contracts are not deployed.
-- The active pfUSDC route is not Tier 4.
-- Live ingress still depends on the old observer route.
-- Live egress still depends on the old threshold-authorized route.
+- The corrected Tier-4 contracts are deployed and exact readback passed on the
+  Sepolia controlled-testnet path. This is not a production-main deployment.
+- The corrected controlled PFTL route is staged but not active; height 20 is
+  reserved for activation after the live finality bootstrap passes.
 - No live Tier-4 fresh-wallet round trip has been completed.
 - The controlled six-validator target is stopped and converged at height 19,
   state root
-  `66f9e6d762299ef14515fa3157275465a6b0a2d0ad68933461b1413383cf4f4a9fc6ad32fd541fe95bc0d6a856ceb120`.
-  Its three Tier-4 bootstrap receipts are literally `code=accepted`, and the
-  ledger read-back exactly contains the frozen PFUSDC definition, Tier-4 NAV
-  profile, and PFUSDC-to-profile binding. Fifteen subsequent certified staging
-  receipts are also accepted. Height 20 is reserved for exact route activation.
-  This is activation preparation, not Gate 2 or Gate 4 completion.
-- The approved wallet has live mainnet funding and explicit authority to spend
-  up to $500 aggregate to acquire required testnet assets under Section 2.4.
-  The target wallet still had zero Ethereum-Sepolia ETH and zero
-  Arbitrum-Sepolia ETH at the last read. The exact native-gas provider route,
-  verified mainnet contract/runtime hash, two target orders, quote schema, and
-  crash-resume driver are frozen in
-  `deployments/pfusdc-tier4-sepolia-20260718/funding-route.json`. The contract
-  is not yet on the passphrase-gated StakeHub allowlist.
-- The replacement V3 ingress build is complete and frozen against guest source
-  commit `7c0019b`. ELF SHA-256 is
-  `9e9278fc725541815fb36a5e6049301a4183e3a950778cb091be2a4bf719c373`;
+  `27fc319096949d5fa911761847e9b245455979887b75fd91eadfbafa8fe25623466f7d850aa0f717d4da6dd34ed6d3d4`.
+  Its profile, asset, NAV binding, and route-authority receipts are accepted;
+  all six validators have identical ledgers and governance state.
+- StakeHub is unlocked and is not a blocker. The gas funding, corrected three
+  contract deployments, corrected exact USDC deposit, and readbacks are
+  complete. The only current wait is Ethereum/Arbitrum finality; no additional
+  funding transaction is needed.
+- The corrected V3 ingress build is complete. ELF SHA-256 is
+  `7c581aa42a196bd5df5a1efc2c4569663744d9b597cc1cd2253e839f9ba2f921`;
   program vkey is
-  `0x00cf5150195737400718baa10a8cc8bfe419857a2507d5916bb95e024fa52726`.
+  `0x0033bd140207b97fb2442eb279cc2ce55714be6fbcd66beb325fe7c3786d4dfc`.
   The copied ELF is byte-identical to Cargo's final RISC-V release artifact and
-  contains the V3 schema/program logic. No SP1 proof was generated.
+  contains the corrected canonical ABI decoder. Native execution against the
+  live witness succeeded; no SP1 proof has been generated.
 
 The immediately preceding `f61cb50d...` ELF / `0x007a73f6...` vkey is also
 invalidated. It used Alloy's checksummed `Display` representation for addresses
@@ -1048,58 +1460,57 @@ repository-wide review:
    split signer files and the topology were staged without exposing key material.
 2. **Complete:** all six validators finalized consensus-v2 block 1 and match on
    height, block ID, state root, accepted receipt, and consensus-v2 commit.
-3. **Complete:** freeze and verify the deterministic two-chain deployment manifest, asset,
-   NAV profile, route, and activation operations from the real genesis hash,
-   committee root, checkpoint/state root, proof policy, vkeys, deployment
-   nonces/addresses, constructors, and code hashes. Corrected and frozen at
-   `7c0019b` with
-   manifest SHA-256
-   `efc94f6f426a89f6e8581af95e6f95e0138a312bf3b06ac7113134ffd0af3ada`.
+3. **Complete (corrected):** freeze and verify the deterministic two-chain
+   deployment manifest, asset, NAV profile, route, and activation operations
+   from the real genesis hash, committee root, checkpoint/state root, corrected
+   proof policy/vkey, live deployer nonces/addresses, constructors, and code
+   hashes. The current manifest SHA-256 is
+   `5871fa73bcf5472198c6946095a388bdf7d32bd535429b53c3c45ce8ea408ad4`.
 4. **Complete (tooling):** add the bounded finality-state bootstrap capture path required by
    `VaultBridgeRouteProfileActivationV1`, and require ingress capture to advance
    from its exact retained checkpoint. Seven focused prover tests and seven
    ingress-library tests pass. Execute and validate the one live
    `EthereumArbitrumFinalityStateV2` capture after Step 7 deploys and verifies
    the contracts, but before route activation in Step 10.
-5. **Complete (controlled-target bootstrap):** register the exact frozen
-   Tier-4 NAV profile, create PFUSDC, and bind PFUSDC to that profile through
-   three dependency-safe certified rounds. All three receipts are accepted;
-   all six validators recorded the identical height-4 bootstrap state root
-   `56f232665ecdb2c32cb3931965c449da209116323ec916e80247031aeb98530ee038431015e6bcf501c988221b325dcc`.
-   The committed evidence summary is
-   `docs/evidence/pfusdc-tier4-controlled-target-bootstrap-20260718/summary.json`.
-6. **Complete (activation staging):** advance the six-validator target through
-   accepted certified blocks 5-19 and stop before the frozen activation height.
-   All validators match at height 19; height 20 proposer is `validator-2` and
-   is reserved for the route governance batch carrying the live finality
-   bootstrap. Evidence:
-   `docs/evidence/pfusdc-tier4-activation-staging-20260718/summary.json`.
-7. Use the Section 2.4 authorization to acquire the minimum required Ethereum
-   Sepolia ETH, Arbitrum Sepolia ETH, and canonical Circle test USDC. Then
-   deploy/pin the production anchor on Ethereum Sepolia and verifier/vault on
-   Arbitrum Sepolia, verify every constructor/read-back/code hash, and submit
-   one dust deposit. The approved deployment wallet is
-   `0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0`. The unlocked signer and funds are
-   available. The provider and contract are pinned. Run the single recorded
-   StakeHub allowlist command, refresh the live quote, execute the two roughly
-   `$1.05` native-gas orders, and obtain canonical USDC through Circle's API or
-   browser faucet. Then run the guarded deployment driver; do not reopen
-   provider research unless the pinned quote or contract check fails.
-8. Capture the finalized target witness using the V3 layout: Ethereum proofs for
-   Rollup plus parent-chain anchor, and asserted-L2 proofs for vault plus token.
-   Use `pfusdc-tier4-prover ingress-capture`; it refuses to write a witness that
-   fails native verification.
-9. Run `pfusdc-tier4-prover ingress-audit` once on that witness and retain its
-   21-case JSON rejection report.
-10. At exactly PFTL height 20, certify the already-computed Tier-4 proof-policy,
-   NAV profile, governed finality state, route, and deployed address/code-hash
-   bindings as one governance batch. Require literal accepted receipt and
-   six-node convergence; an earlier or later block is invalid.
-11. Generate/verify the one required ingress SP1 proof from the captured witness.
-   If the proof exposes a guest defect, fix it in a new commit and explicitly
-   invalidate the prior ELF/proof.
-12. Record Core Gate 2 evidence, then proceed directly to the one required egress
-   proof for Core Gate 3.
+5. **Complete (corrected controlled-target bootstrap):** register the exact
+   corrected Tier-4 NAV profile, create PFUSDC, bind PFUSDC to that profile, and
+   activate route authority through four dependency-safe certified rounds.
+   All receipts are accepted and all six validators recorded the identical
+   height-5 state root
+   `5c41ed042011b9eb80720c901c374657a37370254f127f007dab5dbdfa5c7dc24d4903fed7d08e5d29686748414e8774`.
+6. **Complete (corrected activation staging):** advance the clean
+   six-validator target through accepted certified height 19 and stop before
+   the frozen activation height. All validators match on block
+   `478e6ee5ff49c31f63f04ae6973a451d52c74bea4e6622e304b7e98e7f0bc2db050c1751814c2c1c39a4dae8458b33b7`
+   and state root
+   `27fc319096949d5fa911761847e9b245455979887b75fd91eadfbafa8fe25623466f7d850aa0f717d4da6dd34ed6d3d4`.
+   Height 20 proposer is `validator-2` and remains reserved for the corrected
+   route governance batch carrying live finality.
+7. **Complete (corrected live deployment/deposit):** the corrected verifier,
+   vault, and anchor are deployed and exact readback passed. The replacement
+   exact `1.000000`-USDC deposit is confirmed with exact deltas and replay
+   rejection at
+   `docs/evidence/pfusdc-tier4-ingress-live-corrected/deposit-state.json`.
+   The approved wallet remains
+   `0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0`. Do not repeat funding, CCTP,
+   deployment, approval, or deposit transactions.
+8. **Complete:** the corrected governed finality bootstrap was captured at
+   Ethereum finalized slot `10722016` for confirmed assertion
+   `0xc8fc3aec8312ee745e7bab0a546f2136833ccdceb7a65dc2752d27af560701b3`.
+9. **Active bounded wait:** capture the exact corrected ingress witness from a
+   later finalized checkpoint and run the bounded 21-case ingress audit once.
+   The persistent 60-second poll is active. Do not generate a proof during this
+   step and no operator action is required.
+10. **Complete:** the exact route activated at height 20 and the holder funding
+   and PFUSDC trustline converged across all six validators at heights 21-22.
+11. **Not run:** exactly zero SP1 proofs have been generated. After Step 9,
+   generate the one ingress proof, certify propose/finalize/claim through height
+   24, and verify exact `1.000000` PFUSDC credit.
+12. **Pending after ingress:** certify the NAV checkpoint/finalization and exact
+   burn through height 27, generate the one egress proof, submit it to the
+   corrected vault, verify exact USDC conservation and replay rejection, then
+   run only the bounded core acceptance assembler. The persistent finish runner
+   is already staged for these steps.
 13. Report status only as: current core gate, core gates passed out of four,
    exact blocker, last evidence path, and next bounded action. After 4/4 core,
    report launch gates separately out of three.

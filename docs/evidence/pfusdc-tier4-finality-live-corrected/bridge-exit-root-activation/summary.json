@@ -1,0 +1,12 @@
+{
+  "amendment_block_height": 19,
+  "amendment_id": "263b4719b2175b0943d373b18b83e24bbc5494363ca412a01ba16cbbbb5a86ca77a972f1beb912cba19305baf0b30b85",
+  "block_hash": "107d4883c59cf77a023503b627a3c03b57b629e80ac27a31e1c984a058c2971d169d6c5704fadcadb42499bc50733d5c",
+  "bridge_exit_root_activation_height": 20,
+  "converged": true,
+  "proposer": "validator-1",
+  "receipt_count": 19,
+  "schema": "postfiat-pfusdc-tier4-bridge-exit-root-activation-v1",
+  "state_root": "d4553c862f6d1b73ff2d41a41e44428d6b4dc37ad6713eb69caf54e57d85cec7550d4c3d4cd8c6c0cd551dd777fba3ce",
+  "validator_count": 6
+}

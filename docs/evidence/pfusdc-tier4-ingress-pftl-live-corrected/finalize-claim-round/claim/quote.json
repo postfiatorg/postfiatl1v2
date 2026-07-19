@@ -1,0 +1,31 @@
+{
+  "schema": "postfiat-asset-fee-quote-v1",
+  "transaction_kind": "vault_bridge_deposit_claim",
+  "chain_id": "postfiat-wan-devnet-2",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "protocol_version": 1,
+  "source": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "sequence": 4,
+  "sequence_source": "explicit",
+  "sender_balance": 99914,
+  "sender_sequence": 3,
+  "mempool_pending_for_sender": 1,
+  "base_asset_fee": 23,
+  "state_expansion_fee": 30,
+  "minimum_fee": 53,
+  "account_reserve": 10,
+  "transfer_fee_byte_quantum": 512,
+  "transfer_fee_per_quantum": 1,
+  "asset_weight_bytes": 11426,
+  "sender_balance_after_fee": 99861,
+  "sender_meets_reserve_after_fee": true,
+  "operation": {
+    "operation": "vault_bridge_deposit_claim",
+    "claimer": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+    "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+    "evidence_root": "784572e8cea5ba09b6f07e09beed67e3f8f81d632c5dab7741a589e631aab24c20d3a0629732904ca3464e9a1e29a490",
+    "policy_hash": "7b93053c2a1a26b918c3bd2cd4737d1e00f3f5cf0f8cb8fba9aff1a1126eac10516881b4a2bb153200f9c08fe8c1b5ef",
+    "recipient": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+    "amount_atoms": 1000000
+  }
+}

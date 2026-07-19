@@ -554,8 +554,144 @@ fn bounded_finality_ancestry_advances_over_unrelated_blocks() {
     witness.block = target;
     verify_egress_witness_v1(&witness).expect("contiguous ancestry");
 
-    witness.finality_ancestry[0].block.header.parent_hash = "98".repeat(48);
-    assert!(verify_egress_witness_v1(&witness).is_err());
+    let valid = witness;
+
+    let mut broken_parent = valid.clone();
+    broken_parent.finality_ancestry[0].block.header.parent_hash = "98".repeat(48);
+    assert!(verify_egress_witness_v1(&broken_parent).is_err());
+
+    let mut under_quorum_ancestry = valid.clone();
+    under_quorum_ancestry.finality_ancestry[0]
+        .block
+        .header
+        .consensus_v2_commit
+        .as_mut()
+        .expect("ancestry commit")
+        .precommit_qc
+        .votes
+        .pop();
+    assert!(verify_egress_witness_v1(&under_quorum_ancestry).is_err());
+
+    let mut duplicate_ancestry_vote = valid.clone();
+    let ancestry_qc = &mut duplicate_ancestry_vote.finality_ancestry[0]
+        .block
+        .header
+        .consensus_v2_commit
+        .as_mut()
+        .expect("ancestry commit")
+        .precommit_qc;
+    ancestry_qc.votes[1] = ancestry_qc.votes[0].clone();
+    assert!(verify_egress_witness_v1(&duplicate_ancestry_vote).is_err());
+
+    let mut wrong_ancestry_committee = valid.clone();
+    wrong_ancestry_committee.finality_ancestry[0].committee[0] =
+        wrong_ancestry_committee.finality_ancestry[0].committee[1].clone();
+    assert!(verify_egress_witness_v1(&wrong_ancestry_committee).is_err());
+
+    let mut target_prepare_only = valid.clone();
+    target_prepare_only
+        .block
+        .header
+        .consensus_v2_commit
+        .as_mut()
+        .expect("target commit")
+        .precommit_qc
+        .votes
+        .clear();
+    assert!(verify_egress_witness_v1(&target_prepare_only).is_err());
+
+    let mut target_proposal_only = valid;
+    let target_commit = target_proposal_only
+        .block
+        .header
+        .consensus_v2_commit
+        .as_mut()
+        .expect("target commit");
+    target_commit.prepare_qc.votes.clear();
+    target_commit.precommit_qc.votes.clear();
+    assert!(verify_egress_witness_v1(&target_proposal_only).is_err());
+}
+
+fn synthetic_segment_witness(block_count: usize) -> PfUsdcEgressProofWitnessV1 {
+    assert!((1..=65).contains(&block_count));
+    let mut witness = fixture();
+    let (validators, keys) = committee();
+    let domain = consensus_v2_domain(
+        witness.chain_id.clone(),
+        witness.genesis_hash.clone(),
+        witness.protocol_version,
+        witness.committee_epoch,
+        &validators,
+    );
+    let prior_checkpoint = "99".repeat(48);
+    let mut parent = prior_checkpoint.clone();
+    let mut ancestry = Vec::with_capacity(block_count.saturating_sub(1));
+    for index in 0..block_count.saturating_sub(1) {
+        let height = 100 + index as u64;
+        let block = signed_block_record(
+            &domain,
+            &validators,
+            &keys,
+            height,
+            parent,
+            format!("{:096x}", 10_000 + height),
+            format!("{:096x}", 20_000 + height),
+            None,
+            "transactions",
+            format!("{:096x}", 30_000 + height),
+            Vec::new(),
+        );
+        parent = block.header.block_hash.clone();
+        ancestry.push(PfUsdcEgressFinalityStepV1 {
+            block,
+            committee_epoch: witness.committee_epoch,
+            committee: witness.committee.clone(),
+            governance_payload_json: String::new(),
+            next_committee: Vec::new(),
+            next_committee_epoch: 0,
+        });
+    }
+    let original_commit = witness
+        .block
+        .header
+        .consensus_v2_commit
+        .as_ref()
+        .expect("target commit");
+    witness.block = signed_block_record(
+        &domain,
+        &validators,
+        &keys,
+        100 + block_count as u64 - 1,
+        parent,
+        original_commit.proposal.block.payload_hash.clone(),
+        witness.block.header.state_root.clone(),
+        witness.block.header.bridge_exit_root.clone(),
+        &witness.block.header.batch_kind,
+        witness.block.header.batch_id.clone(),
+        witness.block.receipt_ids.clone(),
+    );
+    witness.prior_checkpoint_block_id = prior_checkpoint;
+    witness.finality_ancestry = ancestry;
+    witness
+}
+
+#[test]
+fn writes_synthetic_segment_benchmark_witnesses_when_requested() {
+    let Ok(output_dir) = std::env::var("PFUSDC_SEGMENT_FIXTURE_DIR") else {
+        return;
+    };
+    std::fs::create_dir_all(&output_dir).expect("create segment fixture directory");
+    for block_count in [1usize, 2, 8, 64] {
+        let witness = synthetic_segment_witness(block_count);
+        verify_egress_witness_v1(&witness).expect("synthetic segment verifies");
+        let path =
+            std::path::Path::new(&output_dir).join(format!("segment-{block_count}-blocks.json"));
+        std::fs::write(
+            path,
+            serde_json::to_vec_pretty(&witness).expect("serialize synthetic segment"),
+        )
+        .expect("write synthetic segment fixture");
+    }
 }
 
 #[test]

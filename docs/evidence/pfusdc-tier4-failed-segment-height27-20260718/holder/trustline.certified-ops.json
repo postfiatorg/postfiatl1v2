@@ -1,0 +1,21 @@
+{
+  "operations": [
+    {
+      "dependencies": [],
+      "key_file": "/home/postfiat/tmp/pfusdc-tier4-target-final-20260718/key-files/holder/holder-key.json",
+      "label": "holder-trustline",
+      "operation": {
+        "account": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+        "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+        "authorized": false,
+        "frozen": false,
+        "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "limit": 1000000000,
+        "operation": "trust_set",
+        "reserve_paid": 10
+      },
+      "source": "pfab9b9228942e5c529633a13aa271d5297bec6353"
+    }
+  ],
+  "schema": "postfiat-certified-asset-ops-request-v1"
+}

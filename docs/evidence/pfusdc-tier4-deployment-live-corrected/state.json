@@ -1,0 +1,115 @@
+{
+  "deployer": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+  "events": [
+    {
+      "action": "close_prior_session",
+      "at": "2026-07-18T16:48:25Z",
+      "chain": "arbitrum",
+      "closed": false,
+      "phase": "session_recovery"
+    },
+    {
+      "action": "open_launch_session",
+      "at": "2026-07-18T16:48:25Z",
+      "chain": "arbitrum",
+      "phase": "prepared",
+      "session_id": "pfusdc-tier4-sepolia-20260718-arbitrum"
+    },
+    {
+      "action": "open_launch_session",
+      "at": "2026-07-18T16:48:25Z",
+      "chain": "arbitrum",
+      "phase": "accepted",
+      "session_id": "pfusdc-tier4-sepolia-20260718-arbitrum"
+    },
+    {
+      "action": "deploy_finality_verifier",
+      "at": "2026-07-18T16:48:26Z",
+      "base_bytecode_hash": "0xfa916a7257b8d7cfc3430905517a859c0849dbed577a709e9610591bf53a5512",
+      "chain": "arbitrum",
+      "expected_address": "0xa17a876dEea3a711591248f726D9Fac420809cfe",
+      "expected_nonce": 5,
+      "phase": "prepared"
+    },
+    {
+      "action": "deploy_finality_verifier",
+      "at": "2026-07-18T16:48:28Z",
+      "base_bytecode_hash": "0xfa916a7257b8d7cfc3430905517a859c0849dbed577a709e9610591bf53a5512",
+      "chain": "arbitrum",
+      "charged_usd": 0.0,
+      "contract_address": "0xa17a876dEea3a711591248f726D9Fac420809cfe",
+      "expected_address": "0xa17a876dEea3a711591248f726D9Fac420809cfe",
+      "expected_nonce": 5,
+      "gas_used": 2757957,
+      "phase": "accepted",
+      "tx": "7fbe110610d423033a6a7887bc44accd351ef0a5f1011ababf35e3485f7a83c9"
+    },
+    {
+      "action": "deploy_vault",
+      "at": "2026-07-18T16:48:36Z",
+      "base_bytecode_hash": "0x38ce311f0b75a423c6ed08a1779bd7f8435a0186ea6460a27f1af28074d3402f",
+      "chain": "arbitrum",
+      "expected_address": "0x2983579e8C60B1e1fF06B3Bdc59805FFb0D4f915",
+      "expected_nonce": 6,
+      "phase": "prepared"
+    },
+    {
+      "action": "deploy_vault",
+      "at": "2026-07-18T16:48:38Z",
+      "base_bytecode_hash": "0x38ce311f0b75a423c6ed08a1779bd7f8435a0186ea6460a27f1af28074d3402f",
+      "chain": "arbitrum",
+      "charged_usd": 0.0,
+      "contract_address": "0x2983579e8C60B1e1fF06B3Bdc59805FFb0D4f915",
+      "expected_address": "0x2983579e8C60B1e1fF06B3Bdc59805FFb0D4f915",
+      "expected_nonce": 6,
+      "gas_used": 1262695,
+      "phase": "accepted",
+      "tx": "ca52439e65915ba56e02ccddcf558f3c9481870e58f53b36149b8967c6ac7b9a"
+    },
+    {
+      "action": "close_prior_session",
+      "at": "2026-07-18T16:49:09Z",
+      "chain": "ethereum",
+      "closed": false,
+      "phase": "session_recovery"
+    },
+    {
+      "action": "open_launch_session",
+      "at": "2026-07-18T16:49:09Z",
+      "chain": "ethereum",
+      "phase": "prepared",
+      "session_id": "pfusdc-tier4-sepolia-20260718-ethereum"
+    },
+    {
+      "action": "open_launch_session",
+      "at": "2026-07-18T16:49:09Z",
+      "chain": "ethereum",
+      "phase": "accepted",
+      "session_id": "pfusdc-tier4-sepolia-20260718-ethereum"
+    },
+    {
+      "action": "deploy_ingress_anchor",
+      "at": "2026-07-18T16:49:10Z",
+      "base_bytecode_hash": "0x8c0134e5734e9023dac898013c34e3beb6e5bdfd3dd7eedc0419a27fd5f68359",
+      "chain": "ethereum",
+      "expected_address": "0xabE2A1A76fB5c89f00780bb46f9870B7768F523A",
+      "expected_nonce": 4,
+      "phase": "prepared"
+    },
+    {
+      "action": "deploy_ingress_anchor",
+      "at": "2026-07-18T16:49:24Z",
+      "base_bytecode_hash": "0x8c0134e5734e9023dac898013c34e3beb6e5bdfd3dd7eedc0419a27fd5f68359",
+      "chain": "ethereum",
+      "charged_usd": 0.0,
+      "contract_address": "0xabE2A1A76fB5c89f00780bb46f9870B7768F523A",
+      "expected_address": "0xabE2A1A76fB5c89f00780bb46f9870B7768F523A",
+      "expected_nonce": 4,
+      "gas_used": 638061,
+      "phase": "accepted",
+      "tx": "c32fc09dd1ea0b4e8f8b6c61591f4c77880df76278a3fbdbc6c8acfe7a58f5bb"
+    }
+  ],
+  "manifest_sha256": "5871fa73bcf5472198c6946095a388bdf7d32bd535429b53c3c45ce8ea408ad4",
+  "schema": "pfusdc-tier4-deploy.v1"
+}

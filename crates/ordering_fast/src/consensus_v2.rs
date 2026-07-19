@@ -142,7 +142,16 @@ impl ConsensusV2QcGraph {
             .certificates
             .get(&reference.certificate_id)
             .ok_or_else(|| OrderingError::new("consensus v2 QC reference is unresolved"))?;
-        verify_consensus_v2_qc(domain, validators, certificate)?;
+        // `certificates` is private and `insert_verified` is its only mutation
+        // path, so every retained QC has already passed signature, domain, and
+        // committee verification. Re-verifying it for each typed reference is
+        // redundant and makes proof guests repeat the same ML-DSA work.
+        validate_domain_and_committee(domain, validators)?;
+        if certificate.domain != *domain {
+            return Err(OrderingError::new(
+                "consensus v2 QC reference domain mismatch",
+            ));
+        }
         if consensus_v2_qc_ref(certificate)? != *reference {
             return Err(OrderingError::new(
                 "consensus v2 QC reference does not match resolved certificate",

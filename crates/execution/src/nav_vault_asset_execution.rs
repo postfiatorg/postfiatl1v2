@@ -4669,7 +4669,11 @@ fn validate_vault_bridge_reserve_packet_fields(
         .source_class
         .strip_prefix(VAULT_BRIDGE_PROFILE_SOURCE_CLASS_PREFIX)
         .unwrap_or_default();
-    ensure_vault_bridge_source_policy(profile, source_domain, &profile.valuation_policy_hash)?;
+    ensure_vault_bridge_source_policy(
+        profile,
+        source_domain,
+        vault_bridge_route_policy_hash(profile),
+    )?;
 
     let expected_verified_net_assets =
         vault_bridge_counted_value_for_asset(&ledger.vault_bridge_bucket_states, &operation.asset_id)

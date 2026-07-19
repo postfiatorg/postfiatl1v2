@@ -6,6 +6,7 @@ use pfusdc_ingress_program::{verify_ingress_witness_v2, PfUsdcIngressProofWitnes
 use postfiat_pfusdc_proofs::{verify_checkpoint_witness_v1, verify_egress_witness_v1};
 use postfiat_types::{
     PfUsdcCheckpointProofWitnessV1, PfUsdcEgressProgramInputV1, PfUsdcEgressProofWitnessV1,
+    PfUsdcIngressPublicValuesV3,
 };
 use sha2::Sha256;
 use sha3::{Digest, Sha3_384};
@@ -162,10 +163,38 @@ async fn prove_ingress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) 
     let started = Instant::now();
     let (executed_public_values, report) = client.execute(INGRESS_ELF, stdin.clone()).await?;
     let executed = executed_public_values.to_vec();
-    anyhow::ensure!(
-        executed == expected_public_values,
-        "SP1 ingress output differs from native canonical public values"
-    );
+    if executed != expected_public_values {
+        let actual = PfUsdcIngressPublicValuesV3::from_canonical_bytes(&executed).map_err(
+            |error| {
+                anyhow::anyhow!(
+                    "decode SP1 ingress output: {error}; bytes={}, hex={}",
+                    executed.len(),
+                    hex::encode(&executed)
+                )
+            },
+        )?;
+        let expected_json = serde_json::to_value(&expected)?;
+        let actual_json = serde_json::to_value(&actual)?;
+        let differences = expected_json
+            .as_object()
+            .into_iter()
+            .flatten()
+            .filter_map(|(key, expected_value)| {
+                let actual_value = actual_json.get(key);
+                (actual_value != Some(expected_value)).then(|| {
+                    serde_json::json!({
+                        "field": key,
+                        "expected": expected_value,
+                        "actual": actual_value,
+                    })
+                })
+            })
+            .collect::<Vec<_>>();
+        anyhow::bail!(
+            "SP1 ingress output differs from native canonical public values: {}",
+            serde_json::to_string(&differences)?
+        );
+    }
     fs::create_dir_all(&output_dir)?;
     fs::write(output_dir.join("public-values.bin"), &executed)?;
     fs::write(

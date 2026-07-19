@@ -1,0 +1,32 @@
+{
+  "schema": "postfiat.ethereum_arbitrum_finality_state.v2",
+  "route_profile_hash": "d89f1b9cc9842112748090c7c655d9b8208a5bbd591085347b4750c4076ab005c38575625754cf4274d6a380c04cec48",
+  "route_epoch": 1,
+  "ethereum_chain_id": 11155111,
+  "arbitrum_chain_id": 421614,
+  "arbitrum_rollup_address": "0x042b2e6c5e99d4c521bd49beed5e99651d9b0cf4",
+  "arbitrum_rollup_runtime_code_hash": "0x5961c8c303762fe3bdc69d0df28db034e475e46ef4e3582c632eaaa51314ce29",
+  "rollup_latest_confirmed_storage_slot": "0000000000000000000000000000000000000000000000000000000000000074",
+  "vault_address": "0xa796dc3c9308f9c855a0659153b7afc2006cf27b",
+  "vault_runtime_code_hash": "0xc53ec5dad1757e65df90675446ee1f02bcadafbde12a4df4ccb396f7a98b9812",
+  "token_address": "0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d",
+  "token_runtime_code_hash": "0x9a736af6aac290d9196883e8686fc1d127ff657ca534fe4b88d6d40dc0bc6750",
+  "ethereum_ingress_anchor_address": "0x89ec019b4aa5423b8d96152a502a0db52cf48164",
+  "ethereum_ingress_anchor_runtime_code_hash": "0x3a5e3f49d40d340dd996975d29bb4a17669ab3a8f32f1dc1d0c13e1889825fc0",
+  "latest": {
+    "ethereum_finalized_beacon_root": "b296c40ad08d44ee042ac4f5ab6b3e47d5c80c3239fb86fa91968346905a53d6",
+    "ethereum_finalized_slot": 10721216,
+    "arbitrum_assertion_hash": "f9b70fb2ac07c411b04d5319d2ae027aa8ce70b0a0a4a7995d09ec8540adbc19",
+    "assertion_l2_block_hash": "605bb822763739d5e575b24c1efbe277e1f80645d6519031e21b83344f7540b9",
+    "assertion_send_root": "92ea5fb608018fe75e018a415121dfc0f2ee4f2bd784ef0eb81e74066d8d5c25"
+  },
+  "retained": [
+    {
+      "ethereum_finalized_beacon_root": "b296c40ad08d44ee042ac4f5ab6b3e47d5c80c3239fb86fa91968346905a53d6",
+      "ethereum_finalized_slot": 10721216,
+      "arbitrum_assertion_hash": "f9b70fb2ac07c411b04d5319d2ae027aa8ce70b0a0a4a7995d09ec8540adbc19",
+      "assertion_l2_block_hash": "605bb822763739d5e575b24c1efbe277e1f80645d6519031e21b83344f7540b9",
+      "assertion_send_root": "92ea5fb608018fe75e018a415121dfc0f2ee4f2bd784ef0eb81e74066d8d5c25"
+    }
+  ]
+}

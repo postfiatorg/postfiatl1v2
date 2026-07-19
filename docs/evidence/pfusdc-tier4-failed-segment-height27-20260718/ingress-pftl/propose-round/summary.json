@@ -1,0 +1,59 @@
+{
+  "schema": "postfiat-certified-asset-ops-report-v1",
+  "request_schema": "postfiat-certified-asset-ops-request-v1",
+  "data_dir": "/home/postfiat/tmp/pfusdc-tier4-target-final-20260718/validator-5",
+  "topology_file": "/home/postfiat/tmp/pfusdc-tier4-target-final-20260718/topology.json",
+  "artifact_dir": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/propose-round",
+  "operation_count": 1,
+  "max_transactions": 1,
+  "allow_existing_mempool": false,
+  "prepare_only": false,
+  "batch_only": false,
+  "start_height": 22,
+  "start_state_root": "4d2ead414c9a61bb940fefe2ad2ef8a4cbd0b7e4f4b8aa0aff5365946964f126cb75bc9175308890eb428f16b7942b73",
+  "start_mempool_pending": 0,
+  "end_height": 23,
+  "end_state_root": "ebab27f5231ef36e86769d1cd08973650b784a199d0df92ae72b60570defe7eaab6fa6cbaa2de1d119a6a41f959d72b5",
+  "end_mempool_pending": 0,
+  "operations": [
+    {
+      "label": "propose",
+      "source": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+      "transaction_kind": "vault_bridge_deposit_propose",
+      "operation_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/propose-round/propose/operation.json",
+      "quote_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/propose-round/propose/quote.json",
+      "signed_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/propose-round/propose/signed.json",
+      "submit_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/propose-round/propose/submit.json",
+      "tx_id": "ce1abdde6894c72afc8e4921f4076519afca09783f6093e017774dbd0edae5498fcc200f0fb6f3b92150d8cd79a49bdd",
+      "sequence": 2,
+      "fee": 32,
+      "timings_ms": {
+        "prepare_ms": 1.8609959999999999,
+        "quote_ms": 7.789956,
+        "sign_ms": 71.239489,
+        "submit_ms": 6442.095142
+      }
+    }
+  ],
+  "dependency_report": {
+    "declared_dependency_count": 0,
+    "same_round_dependency_count": 0,
+    "prior_round_dependency_count": 0,
+    "same_round_batch_eligible": true,
+    "candidate_batch_classes": [],
+    "replay_equivalence_required": false,
+    "live_round_compression_ready": true,
+    "live_round_compression_blockers": [],
+    "declarations": []
+  },
+  "batch_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/propose-round/peer-certified-mempool-round/mempool-batch.json",
+  "round_artifact_dir": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/propose-round/peer-certified-mempool-round",
+  "round_ok": true,
+  "timings_ms": {
+    "total_ms": 84634.537412,
+    "preflight_ms": 7.30674,
+    "operations_ms": 6526.39044,
+    "certify_ms": 78096.840612,
+    "final_status_ms": 1.192682
+  }
+}

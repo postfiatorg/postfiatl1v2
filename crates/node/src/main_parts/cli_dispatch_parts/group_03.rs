@@ -1798,7 +1798,9 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             Ok(())
         }
         "ratify-atomic-swap-activation-height"
-        | "ratify-replicated-state-v2-activation-height" => {
+        | "ratify-replicated-state-v2-activation-height"
+        | "ratify-bridge-exit-root-activation-height"
+        | "ratify-vault-bridge-route-authority-activation-height" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let validators =
                 split_csv(flag_value(flags, "--validators").ok_or("missing --validators")?);
@@ -1808,18 +1810,23 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             } else {
                 support
             };
-            let (kind, command_specific_height_flag) = if command
-                == "ratify-atomic-swap-activation-height"
-            {
-                (
+            let (kind, command_specific_height_flag) = match command {
+                "ratify-atomic-swap-activation-height" => (
                     GOVERNANCE_KIND_ATOMIC_SWAP_ACTIVATION_HEIGHT,
                     "--atomic-swap-activation-height",
-                )
-            } else {
-                (
+                ),
+                "ratify-replicated-state-v2-activation-height" => (
                     GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT,
                     "--replicated-state-v2-activation-height",
-                )
+                ),
+                "ratify-bridge-exit-root-activation-height" => (
+                    GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT,
+                    "--bridge-exit-root-activation-height",
+                ),
+                _ => (
+                    GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT,
+                    "--vault-bridge-route-authority-activation-height",
+                ),
             };
             let value = flag_value(flags, "--height")
                 .or_else(|| flag_value(flags, command_specific_height_flag))

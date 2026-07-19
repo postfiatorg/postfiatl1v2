@@ -1,0 +1,30 @@
+{
+  "activation_height": 20,
+  "activation_receipt": {
+    "accepted": true,
+    "account_reserve": 0,
+    "code": "accepted",
+    "fee_burned": 0,
+    "fee_charged": 0,
+    "message": "vault bridge route profile activated",
+    "minimum_fee": 0,
+    "state_expansion_fee": 0,
+    "tx_id": "1b6ef8b64ea13825e37c5edecef0a4466493e2a8f5a833485fb5edb2de2c786c0e75ca8d17ae588a91ff1d83b365c084"
+  },
+  "amendment_sha256": "6fb207acf67cb90047a10282d50c0be181c33e6b828d507173b1f2456c723eb8",
+  "batch_sha256": "f70900619bfae0a51cef2f1f3f62caad6f7689a4c75f86dae77fe34c293be536",
+  "block_hash": "d2955b1c652bbb3a665597a6a5e2205367e615e635bf597f3954d44a5220f0cc59827c25fcc46ef0d18d5a5321a724b4",
+  "converged": true,
+  "finality_readback_exact": true,
+  "finality_sha256": "0421819c6de6e71e559f51d3f48251d5c2fe4bba6c69e0dc73fccf2a16e5297d",
+  "governance_sha256": "8f56270830b42748528519dcc60999204c1085ff429935c6a722d01a575b6ed6",
+  "ledger_sha256": "fc4380adf23570e8fb5a20b851612fd06b7c770e8094fd2f5b8dd95bb79f535d",
+  "profile_sha256": "1c5ad84fe8b6fd66e8d7f09617dffb4d45b10f9de98f45a3abd09b7ba33519b0",
+  "proposer": "validator-2",
+  "receipt_count": 20,
+  "receipts_append_sha256": "11da45439c77b9a809b100a7b198e89c0ba4e9a62a134f98186221880568e7cf",
+  "route_readback_exact": true,
+  "schema": "postfiat-pfusdc-tier4-route-activation-evidence-v1",
+  "state_root": "009b4ec28b52ff0ec89fc4c1deacf78bced4483d6035dcce420423a8e5267e153e8c91351f186c75c0e566a683d5474a",
+  "validator_count": 6
+}

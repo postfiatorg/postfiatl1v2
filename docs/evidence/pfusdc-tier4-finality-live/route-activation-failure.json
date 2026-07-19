@@ -1,0 +1,21 @@
+{
+  "schema": "postfiat-pfusdc-tier4-route-activation-failure-v1",
+  "height": 20,
+  "proposer": "validator-2",
+  "block_hash": "64e6c2cc54fc746c27d60c48857257414e8a89132444252235392545989e30139348f648a76edbb67d7b9960a57b3e03",
+  "state_root": "2dde21b1223bf4ad5ab3bb50980a146bf33af6665b06396b1fc4eae5e93ebb090512ac412ed53774a8b92a35b2707400",
+  "receipt_count": 20,
+  "validator_count": 6,
+  "converged": true,
+  "batch_id": "5fb5e634f7945227dc8fdfc7213a94e25d60a1084b4f5979033e020d3363b230b5ac63767a45ea3c91e0a5bade7027c2",
+  "batch_sha256": "076d439b1347f134c5a924b55c08abd08608eca484ded9fa2a3bb1bdf7021095",
+  "signed_amendment_sha256": "e1f06d76f3ffef24fb7f7f6b8e9523b2874c9ba6685f95efd8c3b05c3d9ea7b5",
+  "receipt": {
+    "tx_id": "ddb5821b734fdde7cdd9b446ed150071f4278b175b7a653ada0c5b7d81e085b0a17945816833aabb9abc47f276d46ee7",
+    "accepted": false,
+    "code": "vault_bridge_route_profile_rejected",
+    "message": "vault bridge route authority is not active"
+  },
+  "route_activated": false,
+  "plan_parameters_changed": false
+}

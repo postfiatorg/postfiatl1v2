@@ -1,0 +1,96 @@
+{
+  "schema": "postfiat-certified-asset-ops-report-v1",
+  "request_schema": "postfiat-certified-asset-ops-request-v1",
+  "data_dir": "/home/postfiat/tmp/pfusdc-tier4-target-final-20260718/validator-0",
+  "topology_file": "/home/postfiat/tmp/pfusdc-tier4-target-final-20260718/topology.json",
+  "artifact_dir": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/finalize-claim-round",
+  "operation_count": 2,
+  "max_transactions": 2,
+  "allow_existing_mempool": false,
+  "prepare_only": false,
+  "batch_only": false,
+  "start_height": 23,
+  "start_state_root": "ebab27f5231ef36e86769d1cd08973650b784a199d0df92ae72b60570defe7eaab6fa6cbaa2de1d119a6a41f959d72b5",
+  "start_mempool_pending": 0,
+  "end_height": 24,
+  "end_state_root": "458c91848066e842c078e6869401449262f6f18befc32eb5fc785291f8fb09d230ef9fe7a81423bda7d103dbb361396e",
+  "end_mempool_pending": 0,
+  "operations": [
+    {
+      "label": "finalize",
+      "source": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+      "transaction_kind": "vault_bridge_deposit_finalize",
+      "operation_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/finalize-claim-round/finalize/operation.json",
+      "quote_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/finalize-claim-round/finalize/quote.json",
+      "signed_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/finalize-claim-round/finalize/signed.json",
+      "submit_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/finalize-claim-round/finalize/submit.json",
+      "tx_id": "52a25366b399e6737f782809c3f97c974eb5d49468796caf9155bd23386efb30ea20dd908ac0c9ae7627cd10f49cdd63",
+      "sequence": 3,
+      "fee": 22,
+      "timings_ms": {
+        "prepare_ms": 0.217456,
+        "quote_ms": 4.230497,
+        "sign_ms": 61.669449,
+        "submit_ms": 23.888407
+      }
+    },
+    {
+      "label": "claim",
+      "source": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+      "transaction_kind": "vault_bridge_deposit_claim",
+      "operation_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/finalize-claim-round/claim/operation.json",
+      "quote_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/finalize-claim-round/claim/quote.json",
+      "signed_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/finalize-claim-round/claim/signed.json",
+      "submit_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/finalize-claim-round/claim/submit.json",
+      "tx_id": "89c1560a861aa802f253c744a8d0a416d7ed65a07bcb1303ee3fa38cb7ad1ed2225f043f85adf1f90bacd45009c2fb69",
+      "sequence": 4,
+      "fee": 53,
+      "timings_ms": {
+        "prepare_ms": 0.078619,
+        "quote_ms": 15.31989,
+        "sign_ms": 41.317837000000004,
+        "submit_ms": 53.378602
+      }
+    }
+  ],
+  "dependency_report": {
+    "declared_dependency_count": 2,
+    "same_round_dependency_count": 1,
+    "prior_round_dependency_count": 1,
+    "same_round_batch_eligible": false,
+    "candidate_batch_classes": [
+      "vault_bridge_deposit_finalize_claim"
+    ],
+    "replay_equivalence_required": true,
+    "live_round_compression_ready": false,
+    "live_round_compression_blockers": [
+      "request contains prior_round dependencies that must remain separate certified rounds",
+      "same_round dependency candidates require replay-equivalence corpus evidence before live round compression"
+    ],
+    "declarations": [
+      {
+        "operation": "finalize",
+        "depends_on": "propose",
+        "mode": "prior_round",
+        "reason": "finalize requires the proof-verified proposal from height 23"
+      },
+      {
+        "operation": "claim",
+        "depends_on": "finalize",
+        "mode": "same_round",
+        "candidate_batch_class": "vault_bridge_deposit_finalize_claim",
+        "reason": "claim consumes the deterministic finalized evidence"
+      }
+    ]
+  },
+  "batch_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/finalize-claim-round/peer-certified-mempool-round/mempool-batch.json",
+  "round_artifact_dir": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/finalize-claim-round/peer-certified-mempool-round",
+  "round_ok": true,
+  "timings_ms": {
+    "total_ms": 34091.196467,
+    "preflight_ms": 5.224321,
+    "operations_ms": 202.564829,
+    "certify_ms": 33881.041742999994,
+    "final_status_ms": 1.495387
+  }
+}

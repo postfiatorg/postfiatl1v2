@@ -178,6 +178,7 @@ impl RpcClient {
         Ok(Self {
             http: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(45))
+                .user_agent("postfiat-pfusdc-tier4/1")
                 .build()?,
         })
     }
@@ -409,7 +410,8 @@ pub async fn capture(args: IngressCaptureArgs) -> Result<()> {
         )
         .await?;
     ensure_successful_receipt(&receipt, deposit_tx)?;
-    let (evidence, output_index, output) = decode_deposit_receipt(&receipt, deposit_tx, &policy)?;
+    let (mut evidence, output_index, output) =
+        decode_deposit_receipt(&receipt, deposit_tx, &policy)?;
 
     let helios = capture_helios_inputs(
         &rpc,
@@ -536,6 +538,16 @@ pub async fn capture(args: IngressCaptureArgs) -> Result<()> {
         outbox.send == B256::from(output.hash.to_be_bytes::<32>()),
         "NodeInterface send hash differs from the L2ToL1Tx event"
     );
+
+    // Tier-4 source coordinates are the proof-authenticated assertion/outbox
+    // coordinates consumed by PFTL execution, not the host-only receipt
+    // lookup coordinates used above to recover the canonical message.
+    evidence.block_hash = hex32(assertion.block_hash);
+    evidence.tx_hash = hex32(outbox.send);
+    evidence.log_index = output_index;
+    evidence
+        .validate()
+        .map_err(|error| anyhow!("canonical Tier-4 evidence is invalid: {error}"))?;
 
     let witness = PfUsdcIngressProofWitnessV2 {
         schema: PFUSDC_INGRESS_PROOF_WITNESS_SCHEMA_V2.to_string(),

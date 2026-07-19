@@ -501,7 +501,7 @@ pub fn vault_bridge_deposit_plan(
     options: VaultBridgeDepositPlanOptions,
 ) -> io::Result<VaultBridgeDepositPlanReport> {
     let log = vault_bridge_deposit_plan_log_input(&options)?;
-    let evidence = parse_vault_bridge_vault_deposit_log(&log)
+    let mut evidence = parse_vault_bridge_vault_deposit_log(&log)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     validate_vault_bridge_deposit_filters(
         &evidence,
@@ -509,7 +509,7 @@ pub fn vault_bridge_deposit_plan(
         options.token_address.as_deref(),
     )
     .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
-    let evidence_root = vault_bridge_deposit_evidence_root(&evidence)
+    let mut evidence_root = vault_bridge_deposit_evidence_root(&evidence)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     let computed_source_public_values_hash =
         vault_bridge_deposit_public_values_hash(&evidence, &evidence_root, &options.policy_hash)
@@ -584,8 +584,45 @@ pub fn vault_bridge_deposit_plan(
                 "--source-public-values-hash does not match --source-public-values-file",
             ));
         }
-        postfiat_types::PfUsdcIngressPublicValuesV3::from_canonical_bytes(&source_public_values)
+        let public_values =
+            postfiat_types::PfUsdcIngressPublicValuesV3::from_canonical_bytes(
+                &source_public_values,
+            )
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+        if public_values.route_profile_hash != options.policy_hash
+            || public_values.arbitrum_chain_id != evidence.source_chain_id
+            || public_values.vault_address != evidence.vault_address
+            || public_values.token_address != evidence.token_address
+            || public_values.depositor != evidence.depositor
+            || public_values.pftl_recipient != evidence.pftl_recipient
+            || public_values.pftl_recipient_hash != evidence.pftl_recipient_hash
+            || public_values.amount_atoms != evidence.amount_atoms
+            || public_values.nonce != evidence.nonce
+            || public_values.route_binding != evidence.route_binding
+            || public_values.deposit_id != evidence.deposit_id
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "proof-native public values do not match the canonical vault deposit receipt",
+            ));
+        }
+        // Tier-4 execution consumes proof-authenticated Nitro assertion/outbox
+        // coordinates. The receipt coordinates above are host lookup inputs
+        // only and must not replace the coordinates committed by the guest.
+        evidence.block_hash = public_values.assertion_l2_block_hash;
+        evidence.tx_hash = public_values.output_item_hash;
+        evidence.log_index = public_values.output_index;
+        evidence
+            .validate()
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+        evidence_root = vault_bridge_deposit_evidence_root(&evidence)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        if evidence_root != public_values.evidence_root {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "proof-native public values commit a different vault deposit evidence root",
+            ));
+        }
         (computed_proof_hash, computed_public_values_hash)
     } else {
         return Err(io::Error::new(

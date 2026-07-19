@@ -24,9 +24,9 @@ from typing import Any, Callable
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DEPLOYMENT_DIR = REPOSITORY_ROOT / "deployments/pfusdc-tier4-sepolia-20260718"
 DEFAULT_STAKEHUB_REPO = REPOSITORY_ROOT.parent / "StakeHub"
-DEFAULT_EVIDENCE_DIR = REPOSITORY_ROOT / "docs/evidence/pfusdc-tier4-deployment-live"
-EXPECTED_MANIFEST_SHA256 = "efc94f6f426a89f6e8581af95e6f95e0138a312bf3b06ac7113134ffd0af3ada"
-EXPECTED_INPUT_SHA256 = "7a507e956198c3f35f4ea1e22e68629ced5118866237e51fa9fd0ca57ddd5bc9"
+DEFAULT_EVIDENCE_DIR = REPOSITORY_ROOT / "docs/evidence/pfusdc-tier4-deployment-live-corrected"
+EXPECTED_MANIFEST_SHA256 = "5871fa73bcf5472198c6946095a388bdf7d32bd535429b53c3c45ce8ea408ad4"
+EXPECTED_INPUT_SHA256 = "2ebf71c6cf156b71317147ff5e7579a231c36ce0a9c4fcdc0d2624c8dc8678e4"
 DEFAULT_ETHEREUM_RPC = "https://ethereum-sepolia-rpc.publicnode.com"
 DEFAULT_ARBITRUM_RPC = "https://arbitrum-sepolia-rpc.publicnode.com"
 
@@ -41,6 +41,19 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _sha256_argument(value: str) -> str:
+    if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+        raise argparse.ArgumentTypeError("SHA-256 pins must be canonical lowercase 32-byte hex")
+    return value
+
+
+def _bytes32_argument(value: str) -> str:
+    raw = value.removeprefix("0x")
+    if len(raw) != 64 or any(character not in "0123456789abcdef" for character in raw):
+        raise argparse.ArgumentTypeError("bytes32 values must be canonical lowercase hex")
+    return "0x" + raw
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -163,6 +176,8 @@ class DeploymentDriver:
         self.deployment_dir = arguments.deployment_dir.resolve()
         self.manifest_path = self.deployment_dir / "manifest.json"
         self.input_path = self.deployment_dir / "input.json"
+        self.expected_manifest_sha256 = arguments.expected_manifest_sha256
+        self.expected_input_sha256 = arguments.expected_input_sha256
         self.state_path = arguments.evidence_dir.resolve() / "state.json"
         self.manifest = self._load_and_validate_manifest()
         self.deployer = Web3.to_checksum_address(self.manifest["deployer"])
@@ -177,9 +192,9 @@ class DeploymentDriver:
         self.plans = self._build_plans()
 
     def _load_and_validate_manifest(self) -> dict[str, Any]:
-        if _sha256(self.manifest_path) != EXPECTED_MANIFEST_SHA256:
+        if _sha256(self.manifest_path) != self.expected_manifest_sha256:
             raise DeploymentError("frozen manifest SHA-256 mismatch")
-        if _sha256(self.input_path) != EXPECTED_INPUT_SHA256:
+        if _sha256(self.input_path) != self.expected_input_sha256:
             raise DeploymentError("frozen deployment input SHA-256 mismatch")
         manifest = _load_json(self.manifest_path)
         _assert_equal(
@@ -369,19 +384,44 @@ class DeploymentDriver:
             "tokenRuntimeCodeHash": "token_runtime_code_hash",
             "maxProofBytes": "max_proof_bytes",
             "maxPublicValuesBytes": "max_public_values_bytes",
-            "latestCheckpointCommitment": "initial_checkpoint_commitment",
-            "latestFinalizedHeight": "initial_finalized_height",
-            "latestCommitteeRootCommitment": "initial_committee_root_commitment",
         }
         for getter, key in getters.items():
             self._call_getter(contract, getter, expected[key])
-        checkpoint = bytes.fromhex(expected["initial_checkpoint_commitment"].removeprefix("0x"))
-        self._call_getter(contract, "acceptedCheckpointCommitment", True, checkpoint)
+
+        latest_checkpoint = (
+            self.arguments.expected_latest_checkpoint_commitment
+            or expected["initial_checkpoint_commitment"]
+        )
+        latest_height = (
+            self.arguments.expected_latest_finalized_height
+            if self.arguments.expected_latest_finalized_height is not None
+            else expected["initial_finalized_height"]
+        )
+        latest_committee_root = (
+            self.arguments.expected_latest_committee_root_commitment
+            or expected["initial_committee_root_commitment"]
+        )
+        self._call_getter(contract, "latestCheckpointCommitment", latest_checkpoint)
+        self._call_getter(contract, "latestFinalizedHeight", latest_height)
+        self._call_getter(contract, "latestCommitteeRootCommitment", latest_committee_root)
+
+        initial_checkpoint = bytes.fromhex(
+            expected["initial_checkpoint_commitment"].removeprefix("0x")
+        )
+        self._call_getter(contract, "acceptedCheckpointCommitment", True, initial_checkpoint)
         self._call_getter(
             contract,
             "checkpointCommitteeRootCommitment",
             expected["initial_committee_root_commitment"],
-            checkpoint,
+            initial_checkpoint,
+        )
+        terminal_checkpoint = bytes.fromhex(latest_checkpoint.removeprefix("0x"))
+        self._call_getter(contract, "acceptedCheckpointCommitment", True, terminal_checkpoint)
+        self._call_getter(
+            contract,
+            "checkpointCommitteeRootCommitment",
+            latest_committee_root,
+            terminal_checkpoint,
         )
 
     def _readback_vault(self, contract: Any, expected: dict[str, Any]) -> None:
@@ -475,10 +515,18 @@ class DeploymentDriver:
                 deployed.append(plan.key)
             else:
                 saw_empty = True
-        expected_nonce = len(deployed)
+        expected_nonce = chain_plans[0].nonce + len(deployed)
         latest_nonce = int(client.eth.get_transaction_count(self.deployer, "latest"))
         pending_nonce = int(client.eth.get_transaction_count(self.deployer, "pending"))
-        _assert_equal(f"{chain} latest deployer nonce", latest_nonce, expected_nonce)
+        if len(deployed) < len(chain_plans):
+            # Before deterministic deployment is complete, an extra nonce
+            # would change every remaining CREATE address and must fail closed.
+            _assert_equal(f"{chain} latest deployer nonce", latest_nonce, expected_nonce)
+        elif latest_nonce < expected_nonce:
+            raise DeploymentError(
+                f"{chain} latest deployer nonce {latest_nonce} is below completed "
+                f"deployment floor {expected_nonce}"
+            )
         if pending_nonce != latest_nonce:
             raise DeploymentError(
                 f"{chain} has an unresolved pending deployer transaction: latest nonce "
@@ -488,6 +536,7 @@ class DeploymentDriver:
             "chain_id": int(client.eth.chain_id),
             "balance_wei": int(client.eth.get_balance(self.deployer)),
             "deployer_nonce": latest_nonce,
+            "deployment_nonce_floor": expected_nonce,
             "deployed": deployed,
             "remaining": [plan.key for plan in chain_plans[len(deployed) :]],
         }
@@ -522,7 +571,7 @@ class DeploymentDriver:
             for plan in plans
         }
         return {
-            "manifest_sha256": EXPECTED_MANIFEST_SHA256,
+            "manifest_sha256": self.expected_manifest_sha256,
             "deployer": self.deployer,
             "agent_unlocked": bool(status.get("unlocked")),
             "spent_today_usd": status.get("spent_today_usd"),
@@ -545,12 +594,12 @@ class DeploymentDriver:
             _assert_equal(
                 "deployment state manifest",
                 state.get("manifest_sha256"),
-                EXPECTED_MANIFEST_SHA256,
+                self.expected_manifest_sha256,
             )
         else:
             state = {
                 "schema": "pfusdc-tier4-deploy.v1",
-                "manifest_sha256": EXPECTED_MANIFEST_SHA256,
+                "manifest_sha256": self.expected_manifest_sha256,
                 "deployer": self.deployer,
                 "events": [],
             }
@@ -691,8 +740,23 @@ def _parse_arguments() -> argparse.Namespace:
         "action", choices=("preflight", "readback", "deploy-arbitrum", "deploy-ethereum")
     )
     parser.add_argument("--deployment-dir", type=Path, default=DEFAULT_DEPLOYMENT_DIR)
+    parser.add_argument(
+        "--expected-manifest-sha256",
+        type=_sha256_argument,
+        default=EXPECTED_MANIFEST_SHA256,
+        help="fail-closed SHA-256 pin for deployment-dir/manifest.json",
+    )
+    parser.add_argument(
+        "--expected-input-sha256",
+        type=_sha256_argument,
+        default=EXPECTED_INPUT_SHA256,
+        help="fail-closed SHA-256 pin for deployment-dir/input.json",
+    )
     parser.add_argument("--stakehub-repo", type=Path, default=DEFAULT_STAKEHUB_REPO)
     parser.add_argument("--evidence-dir", type=Path, default=DEFAULT_EVIDENCE_DIR)
+    parser.add_argument("--expected-latest-checkpoint-commitment", type=_bytes32_argument)
+    parser.add_argument("--expected-latest-finalized-height", type=int)
+    parser.add_argument("--expected-latest-committee-root-commitment", type=_bytes32_argument)
     parser.add_argument(
         "--ethereum-rpc",
         default=os.environ.get("ETHEREUM_SEPOLIA_RPC_URL", DEFAULT_ETHEREUM_RPC),

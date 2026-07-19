@@ -1,7 +1,7 @@
 use alloy_consensus::Header;
 use alloy_primitives::{keccak256, Address, Bytes, B256, U256};
 use alloy_rlp::Decodable;
-use alloy_sol_types::{sol, SolValue};
+use alloy_sol_types::{sol, SolCall, SolValue};
 use helios_consensus_core::{
     apply_finality_update, apply_update, verify_finality_update, verify_update,
 };
@@ -56,6 +56,19 @@ const MAX_OUTPUT_CALLDATA_BYTES_V1: usize = 2_048;
 const MAX_L2_HEADER_RLP_BYTES_V1: usize = 4_096;
 
 sol! {
+    function recordDepositV1(
+        bytes32 deposit_id,
+        address depositor,
+        bytes32 recipient_hash,
+        string recipient,
+        uint256 amount,
+        bytes32 nonce,
+        bytes32 route_binding,
+        uint256 chain_id,
+        address vault,
+        address token
+    );
+
     struct NitroGlobalStateV1 {
         bytes32[2] bytes32Vals;
         uint64[2] u64Vals;
@@ -468,45 +481,18 @@ fn verify_confirmed_deposit_output(witness: &PfUsdcIngressProofWitnessV2) -> Res
         );
     }
 
-    let selector = keccak256(b"recordDepositV1(bytes32,address,bytes32,string,uint256,bytes32,bytes32,uint256,address,address)");
-    if output.calldata.len() < 4 || output.calldata[..4] != selector[..4] {
-        return Err("Arbitrum output is not the canonical Tier-4 deposit call".to_string());
-    }
-    type DepositCall = (
-        B256,
-        Address,
-        B256,
-        String,
-        U256,
-        B256,
-        B256,
-        U256,
-        Address,
-        Address,
-    );
-    let (
-        deposit_id,
-        depositor,
-        recipient_hash,
-        recipient,
-        amount,
-        nonce,
-        route_binding,
-        chain_id,
-        vault,
-        token,
-    ) = DepositCall::abi_decode(&output.calldata[4..])
+    let call = recordDepositV1Call::abi_decode_validate(&output.calldata)
         .map_err(|error| format!("invalid canonical Tier-4 deposit calldata: {error}"))?;
-    if hex32(deposit_id) != evidence.deposit_id
-        || evm_address_text(depositor) != evidence.depositor
-        || hex32(recipient_hash) != evidence.pftl_recipient_hash
-        || recipient != evidence.pftl_recipient
-        || u256_u64(amount, "amount")? != evidence.amount_atoms
-        || hex32(nonce) != evidence.nonce
-        || hex32(route_binding) != evidence.route_binding
-        || u256_u64(chain_id, "source chain ID")? != evidence.source_chain_id
-        || evm_address_text(vault) != evidence.vault_address
-        || evm_address_text(token) != evidence.token_address
+    if hex32(call.deposit_id) != evidence.deposit_id
+        || evm_address_text(call.depositor) != evidence.depositor
+        || hex32(call.recipient_hash) != evidence.pftl_recipient_hash
+        || call.recipient != evidence.pftl_recipient
+        || u256_u64(call.amount, "amount")? != evidence.amount_atoms
+        || hex32(call.nonce) != evidence.nonce
+        || hex32(call.route_binding) != evidence.route_binding
+        || u256_u64(call.chain_id, "source chain ID")? != evidence.source_chain_id
+        || evm_address_text(call.vault) != evidence.vault_address
+        || evm_address_text(call.token) != evidence.token_address
         || evidence.block_hash != hex32(witness.assertion.block_hash)
         || evidence.tx_hash != hex32(item_hash)
         || evidence.log_index != output.output_index
@@ -736,6 +722,28 @@ mod tests {
             evm_address_text(address),
             "0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d"
         );
+    }
+
+    #[test]
+    fn canonical_record_deposit_call_decodes_top_level_dynamic_arguments() {
+        let expected = recordDepositV1Call {
+            deposit_id: B256::repeat_byte(0x11),
+            depositor: Address::repeat_byte(0x22),
+            recipient_hash: B256::repeat_byte(0x33),
+            recipient: "pftl1tier4regression".to_string(),
+            amount: U256::from(1_000_000_u64),
+            nonce: B256::repeat_byte(0x44),
+            route_binding: B256::repeat_byte(0x55),
+            chain_id: U256::from(ARBITRUM_SEPOLIA_CHAIN_ID),
+            vault: Address::repeat_byte(0x66),
+            token: Address::repeat_byte(0x77),
+        };
+        let calldata = expected.abi_encode();
+        let decoded = recordDepositV1Call::abi_decode_validate(&calldata)
+            .expect("canonical Solidity call must decode without a tuple offset");
+        assert_eq!(decoded.abi_encode(), calldata);
+        assert_eq!(decoded.recipient, "pftl1tier4regression");
+        assert_eq!(decoded.amount, U256::from(1_000_000_u64));
     }
 
     #[test]

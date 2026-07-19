@@ -1,0 +1,24 @@
+{
+  "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "block_hash": "1e8f0c6152f93db247cdf2249a895a811311fa39cd918d74ce43cef249454c11e21e1d6609405228a3276e301adaad43",
+  "converged": true,
+  "height": 22,
+  "holder": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "holder_balance": 99968,
+  "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "ledger_sha256": "cc4e5fcf1f5838f612c03697724074dad3c4fa9d37642558326a52d2f425337d",
+  "schema": "postfiat-pfusdc-tier4-holder-provisioning-evidence-v1",
+  "state_root": "db150e9eea453b833ad201d02831448802d17bf3121454717e67a4f2fe27c68c251d666ebaed60a0815185158e56886d",
+  "trustline": {
+    "account": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+    "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+    "authorized": true,
+    "balance": 0,
+    "frozen": false,
+    "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+    "limit": 1000000000,
+    "reserve_paid": 10,
+    "trustline_id": "e94b1634a7d6255aa12e3bd90fd81cb098577cd428c45010584a8c103044b029af8625873daa500d14250eccc46c2943"
+  },
+  "validator_count": 6
+}

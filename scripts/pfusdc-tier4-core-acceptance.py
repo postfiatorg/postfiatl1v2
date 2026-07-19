@@ -18,25 +18,25 @@ MANIFEST = REPO / "deployments/pfusdc-tier4-sepolia-20260718/manifest.json"
 ROUTE_PROFILE = REPO / "deployments/pfusdc-tier4-sepolia-20260718/route-profile.json"
 GATE1 = REPO / "docs/evidence/pfusdc-tier4-gate1-20260718T013235Z/ACCEPTANCE.json"
 GATE4_BOUNDED = REPO / "docs/evidence/pfusdc-tier4-gate4-bounded-contract-20260718/summary.json"
-DEPLOY_STATE = REPO / "docs/evidence/pfusdc-tier4-deployment-live/state.json"
-DEPOSIT = REPO / "docs/evidence/pfusdc-tier4-ingress-live/deposit-state.json"
-FINALITY = REPO / "docs/evidence/pfusdc-tier4-finality-live/bootstrap.json"
-ACTIVATION = REPO / "docs/evidence/pfusdc-tier4-finality-live/route-activation-summary.json"
-INGRESS_WITNESS = REPO / "docs/evidence/pfusdc-tier4-ingress-live/witness.json"
-INGRESS_AUDIT = REPO / "docs/evidence/pfusdc-tier4-ingress-live/audit.json"
-INGRESS_PROOF_DIR = REPO / "docs/evidence/pfusdc-tier4-ingress-live/proof"
-INGRESS_SUMMARY = REPO / "docs/evidence/pfusdc-tier4-ingress-pftl-live/summary.json"
-EGRESS_WITNESS = REPO / "docs/evidence/pfusdc-tier4-egress-live/witness.json"
-EGRESS_AUDIT = REPO / "docs/evidence/pfusdc-tier4-egress-live/audit.json"
-EGRESS_PROOF_DIR = REPO / "docs/evidence/pfusdc-tier4-egress-live/proof"
-EGRESS_STATE = REPO / "docs/evidence/pfusdc-tier4-egress-live/withdrawal-state.json"
-EGRESS_SUMMARY = REPO / "docs/evidence/pfusdc-tier4-egress-live/summary.json"
-TARGET = Path("/home/postfiat/tmp/pfusdc-tier4-target-20260718")
-OUTPUT = REPO / "docs/evidence/pfusdc-tier4-core-live-20260718"
-EXPECTED_MANIFEST_SHA256 = "efc94f6f426a89f6e8581af95e6f95e0138a312bf3b06ac7113134ffd0af3ada"
-EXPECTED_INGRESS_VKEY = "0x00cf5150195737400718baa10a8cc8bfe419857a2507d5916bb95e024fa52726"
+DEPLOY_STATE = REPO / "docs/evidence/pfusdc-tier4-deployment-live-corrected/state.json"
+DEPOSIT = REPO / "docs/evidence/pfusdc-tier4-ingress-live-corrected/deposit-state.json"
+FINALITY = REPO / "docs/evidence/pfusdc-tier4-finality-live-corrected/bootstrap.json"
+ACTIVATION = REPO / "docs/evidence/pfusdc-tier4-finality-live-corrected/route-activation-summary.json"
+INGRESS_WITNESS = REPO / "docs/evidence/pfusdc-tier4-ingress-live-corrected/witness.json"
+INGRESS_AUDIT = REPO / "docs/evidence/pfusdc-tier4-ingress-live-corrected/audit.json"
+INGRESS_PROOF_DIR = REPO / "docs/evidence/pfusdc-tier4-ingress-live-corrected/proof"
+INGRESS_SUMMARY = REPO / "docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/summary.json"
+EGRESS_WITNESS = REPO / "docs/evidence/pfusdc-tier4-egress-live-corrected/witness.json"
+EGRESS_AUDIT = REPO / "docs/evidence/pfusdc-tier4-egress-live-corrected/audit.json"
+EGRESS_PROOF_DIR = REPO / "docs/evidence/pfusdc-tier4-egress-live-corrected/proof"
+EGRESS_STATE = REPO / "docs/evidence/pfusdc-tier4-egress-live-corrected/withdrawal-state.json"
+EGRESS_SUMMARY = REPO / "docs/evidence/pfusdc-tier4-egress-live-corrected/summary.json"
+TARGET = Path("/home/postfiat/tmp/pfusdc-tier4-target-exit-root-final-20260718")
+OUTPUT = REPO / "docs/evidence/pfusdc-tier4-core-live-corrected-20260718"
+EXPECTED_MANIFEST_SHA256 = "5871fa73bcf5472198c6946095a388bdf7d32bd535429b53c3c45ce8ea408ad4"
+EXPECTED_INGRESS_VKEY = "0x0033bd140207b97fb2442eb279cc2ce55714be6fbcd66beb325fe7c3786d4dfc"
 EXPECTED_EGRESS_VKEY = "0x00eaaf9372917c3edf9d6fdf70ff64ae08ba25e13cb1e2b2ab7b6e9585d50cd4"
-EXPECTED_INGRESS_ELF = "9e9278fc725541815fb36a5e6049301a4183e3a950778cb091be2a4bf719c373"
+EXPECTED_INGRESS_ELF = "7c581aa42a196bd5df5a1efc2c4569663744d9b597cc1cd2253e839f9ba2f921"
 EXPECTED_EGRESS_ELF = "8d2d5ce451bbd91c28f8fafcbd12f7bc961c6a4be59de12e246b8cb6734f81e8"
 AMOUNT = 1_000_000
 
@@ -77,8 +77,44 @@ def atomic_json(path: Path, value: dict[str, Any]) -> None:
 
 
 def deployment_readback() -> dict[str, Any]:
+    from web3 import Web3
+
+    manifest = read_json(MANIFEST)
+    verifier_address = next(
+        item["address"]
+        for item in manifest["deployment_sequence"]["arbitrum"]
+        if item["contract"] == "PFTLFinalityVerifierV1"
+    )
+    verifier_artifact = read_json(
+        REPO
+        / "crates/ethereum-contracts/out/PFTLFinalityVerifierV1.sol/PFTLFinalityVerifierV1.json"
+    )
+    arbitrum = Web3(
+        Web3.HTTPProvider(
+            "https://sepolia-rollup.arbitrum.io/rpc", request_kwargs={"timeout": 30}
+        )
+    )
+    verifier = arbitrum.eth.contract(
+        address=Web3.to_checksum_address(verifier_address), abi=verifier_artifact["abi"]
+    )
+    decoded = verifier.functions.decodePublicValues(
+        (EGRESS_PROOF_DIR / "public-values.bin").read_bytes()
+    ).call()
+    resulting_checkpoint = Web3.to_hex(decoded[7])
+    committee_root = Web3.to_hex(decoded[8])
+    finalized_height = int(decoded[10])
     completed = subprocess.run(
-        [PYTHON, str(REPO / "scripts/pfusdc-tier4-deploy.py"), "readback"],
+        [
+            PYTHON,
+            str(REPO / "scripts/pfusdc-tier4-deploy.py"),
+            "readback",
+            "--expected-latest-checkpoint-commitment",
+            resulting_checkpoint,
+            "--expected-latest-finalized-height",
+            str(finalized_height),
+            "--expected-latest-committee-root-commitment",
+            committee_root,
+        ],
         cwd=REPO,
         check=True,
         text=True,

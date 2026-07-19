@@ -251,9 +251,11 @@ use postfiat_types::{
     DEFAULT_BRIDGE_DOMAIN_ID, DEFAULT_SHIELDED_ASSET_ID, GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED,
     GOVERNANCE_AUTHORITY_MODE_FOUNDATION, GOVERNANCE_KIND_ATOMIC_SWAP_ACTIVATION_HEIGHT,
     GOVERNANCE_KIND_ATOMIC_SWAP_PAUSE, GOVERNANCE_KIND_AUTHORITY_MODE,
+    GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT,
     GOVERNANCE_KIND_BRIDGE_VERIFICATION_ACTIVATION_HEIGHT, GOVERNANCE_KIND_BRIDGE_WITNESS_EPOCH,
     GOVERNANCE_KIND_CRYPTO_POLICY, GOVERNANCE_KIND_ORCHARD_POOL_PAUSE,
     GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT,
+    GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT,
 };
 
 const DEFAULT_DATA_DIR: &str = ".postfiat/node0";
@@ -418,8 +420,10 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "ratify-orchard-pool-pause"
         | "ratify-atomic-swap-pause"
         | "ratify-bridge-verification-activation-height"
+        | "ratify-vault-bridge-route-authority-activation-height"
         | "ratify-atomic-swap-activation-height"
         | "ratify-replicated-state-v2-activation-height"
+        | "ratify-bridge-exit-root-activation-height"
         | "governance-authorization-sign"
         | "governance-amendment-assemble"
         | "ethereum-checkpoint-observe"

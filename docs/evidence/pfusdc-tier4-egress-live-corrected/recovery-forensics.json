@@ -1,0 +1,43 @@
+{
+  "after": {
+    "block_number": 288973669,
+    "proof_nullifier_consumed": true,
+    "recipient_balance_atoms": 1000000,
+    "vault_balance_atoms": 0,
+    "withdrawal_id_commitment_consumed": true
+  },
+  "before": {
+    "block_number": 288973668,
+    "proof_nullifier_consumed": false,
+    "recipient_balance_atoms": 0,
+    "vault_balance_atoms": 1000000,
+    "withdrawal_id_commitment_consumed": false
+  },
+  "block_hash": "0x0e65187e85ce672b35730b08a80ff761535141da34d108cca2cceaa1f18921df",
+  "block_timestamp_utc": "2026-07-19T02:58:02+00:00",
+  "chain_id": 421614,
+  "exact_recipient_delta_atoms": 1000000,
+  "exact_vault_delta_atoms": 1000000,
+  "proof_native_withdrawal_event": {
+    "amount_atoms": 1000000,
+    "burn_tx_id_commitment": "0xd54ebe07cc8d6a62a3410d6571444bde9cadc5ab1467573b4ff25bc009ad98f5",
+    "packet_digest": "0xfbd1bd1c08520a210f608ae0d55159716486fe9720de6c297108e7757a67ae60",
+    "recipient": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+    "withdrawal_id_commitment": "0xaaffbdd8191095a5cb87be1d2a4fbfd3d39b0f2ea4f566e2089810477025d2b5"
+  },
+  "proof_nullifier": "0x22d5308c8c665bf8c7f06d21c0c9b18be9ca8df411abbf02c5206d8999afeab4",
+  "receipt_status": 1,
+  "replay_rejected_without_broadcast": true,
+  "schema": "postfiat.pfusdc.tier4.egress_recovery_forensics.v1",
+  "token_transfer_event": {
+    "amount_atoms": 1000000,
+    "from": "0x2983579e8C60B1e1fF06B3Bdc59805FFb0D4f915",
+    "to": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0"
+  },
+  "transaction_from": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+  "transaction_hash": "0x23eed687e728055c821d98ca4c45e3fe43a806c9b4c32cc6d2298f03adde6311",
+  "transaction_input_selector": "0xb8e3ec32",
+  "transaction_to": "0x2983579e8C60B1e1fF06B3Bdc59805FFb0D4f915",
+  "withdrawal_id": "83e7c8aaf76e889ca90b5541e139ff84becc10c8b50643526b0cb5eacc9b315af2bde0b4b693f9a1470a2e9b54165e3d",
+  "withdrawal_id_commitment": "0xaaffbdd8191095a5cb87be1d2a4fbfd3d39b0f2ea4f566e2089810477025d2b5"
+}

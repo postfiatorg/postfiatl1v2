@@ -1,0 +1,7 @@
+{
+  "elapsed_ms": 4690,
+  "instruction_count": 159095645,
+  "public_values_bytes": 1484,
+  "schema": "postfiat.pfusdc.egress_execute_report.v1",
+  "witness": "docs/evidence/pfusdc-tier4-v2-segment-benchmark-witnesses-20260718/segment-8-blocks.json"
+}
