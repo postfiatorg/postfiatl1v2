@@ -1,0 +1,19 @@
+{
+  "deduplicated_clone_receipts_append_sha256": "7b949a3823ad6abde6b1a1c864754f87ceff7cd79e41826f2996a2895d0e6d31",
+  "duplicate_receipt_accepted": false,
+  "duplicate_receipt_code": "vault_bridge_route_profile_rejected",
+  "duplicate_receipt_id": "46b2ed740f12db8db023f8d69b6832553b3c350349162f4d4114481e2c5fdbe40ece715a381a8bebcc91f797990e4223",
+  "duplicate_receipt_route_epoch": 5,
+  "export_clone": "/home/postfiat/tmp/pfusdc-tier4-v3-epoch6-witness-export-validator0",
+  "live_segment_heights": [
+    38,
+    39,
+    40
+  ],
+  "original_receipts_append_preserved": true,
+  "original_receipts_append_sha256": "300247b88a0696b235d642303b49d11de4f0bcffaa938bda7da1926de7c2f81b",
+  "schema": "postfiat.pfusdc.tier4_v3.witness_export_provenance.v1",
+  "source_validator": 0,
+  "withdrawal_id": "2fcfe2445bb5ce8bbee3d4426fee6109895cc9e11e429ef87d601b83a3c9e583e5e71ef0e6104a67579c347c7bb63293",
+  "witness_sha256": "98c9cf43f921bae1aea6a3085d7b79fc7e5d953b1295bd850a7d8389d3cb8d58"
+}

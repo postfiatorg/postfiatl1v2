@@ -1,0 +1,7 @@
+{
+  "operation": "nav_epoch_finalize",
+  "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "epoch": 2,
+  "reserve_packet_hash": "5971eabf29ee9f077c6a427e0be79c4d4f9ae8c6e201b64ea68bec1b917de184d7e499f4fb25d378b170276f5a8989ab"
+}

@@ -1,0 +1,166 @@
+{
+  "schema": "postfiat-nav-roundtrip-nav-checkpoint-report-v1",
+  "artifact_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch6-egress-live-20260719/nav-checkpoint/nav-checkpoint.json",
+  "nav_asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "submitter": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "verifier_kind": "sp1-arbitrum-finality-v1",
+  "source_class": "vault_bridge:erc20_bridge_vault:421614:0xc6e0f9828f7947156a04102d9b72147e4c44589c:0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d",
+  "epoch_before": 1,
+  "epoch_after": null,
+  "checkpoint_epoch": 2,
+  "reserve_packet_hash_before": "25c0ee893b953700dde0aa2f606e277690bda10a766142f8769858831f72cb268387147d671f6ac7c7a7c6e72d753e0b",
+  "reserve_packet_hash_after": null,
+  "reserve_packet_hash": "5971eabf29ee9f077c6a427e0be79c4d4f9ae8c6e201b64ea68bec1b917de184d7e499f4fb25d378b170276f5a8989ab",
+  "nav_per_unit_before": 1000000,
+  "nav_per_unit_after": null,
+  "nav_per_unit": 1000000,
+  "circulating_supply_before": 1000000,
+  "circulating_supply_after": null,
+  "circulating_supply": 1000000,
+  "verified_net_assets_before": 1000000,
+  "verified_net_assets_after": null,
+  "verified_net_assets": 2000000,
+  "verified_net_assets_delta": null,
+  "expected_verified_net_assets_delta": null,
+  "delta_ok": null,
+  "source_root": "3a5f9a843523e03d996dc3e26f202268a15a3ec38966c331356697413d49358e0d204d9a480a96060c293a4e147ace36",
+  "attestor_root": "40eff7696b8ee14170cd9e97442441b0f07cc4c105218017b0c05d978cdf0f25480f1bc65e408c35691cadcba3429af1",
+  "overlay_value_nav_units": null,
+  "overlay_source_root": null,
+  "sp1_base_verified_net_assets": null,
+  "submit_operation_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch6-egress-live-20260719/nav-checkpoint/nav-reserve-submit.operation.json",
+  "finalize_operation_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch6-egress-live-20260719/nav-checkpoint/nav-epoch-finalize.operation.json",
+  "submit_operations_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch6-egress-live-20260719/nav-checkpoint/nav-checkpoint-submit.certified-ops.json",
+  "finalize_operations_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch6-egress-live-20260719/nav-checkpoint/nav-checkpoint-finalize.certified-ops.json",
+  "submit_certified_ops_artifact_dir": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch6-egress-live-20260719/nav-checkpoint/nav-checkpoint-submit-certified",
+  "finalize_certified_ops_artifact_dir": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch6-egress-live-20260719/nav-checkpoint/nav-checkpoint-finalize-certified",
+  "submit_certified_ops": {
+    "schema": "postfiat-certified-asset-ops-report-v1",
+    "request_schema": "postfiat-certified-asset-ops-request-v1",
+    "data_dir": "/home/postfiat/tmp/pfusdc-tier4-target-exit-root-final-20260718/validator-0",
+    "topology_file": "/home/postfiat/tmp/pfusdc-tier4-target-exit-root-final-20260718/topology.json",
+    "artifact_dir": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch6-egress-live-20260719/nav-checkpoint/nav-checkpoint-submit-certified",
+    "operation_count": 1,
+    "max_transactions": 1,
+    "allow_existing_mempool": false,
+    "prepare_only": true,
+    "batch_only": false,
+    "start_height": 37,
+    "start_state_root": "2e84e2ddc70daf17518068410ae039de463e2d07face0b905dc64d515a23f785f248c3a1ac55f42760f2d8e3853a272a",
+    "start_mempool_pending": 0,
+    "end_height": null,
+    "end_state_root": null,
+    "end_mempool_pending": null,
+    "operations": [
+      {
+        "label": "nav-reserve-submit",
+        "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "transaction_kind": "nav_reserve_submit",
+        "operation_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch6-egress-live-20260719/nav-checkpoint/nav-checkpoint-submit-certified/nav-reserve-submit/operation.json",
+        "quote_file": null,
+        "signed_file": null,
+        "submit_file": null,
+        "tx_id": null,
+        "sequence": null,
+        "fee": null,
+        "timings_ms": {
+          "prepare_ms": 0.26876500000000003,
+          "quote_ms": 0.0,
+          "sign_ms": 0.0,
+          "submit_ms": 0.0
+        }
+      }
+    ],
+    "dependency_report": {
+      "declared_dependency_count": 0,
+      "same_round_dependency_count": 0,
+      "prior_round_dependency_count": 0,
+      "same_round_batch_eligible": true,
+      "candidate_batch_classes": [],
+      "replay_equivalence_required": false,
+      "live_round_compression_ready": true,
+      "live_round_compression_blockers": [],
+      "declarations": []
+    },
+    "batch_file": null,
+    "round_artifact_dir": null,
+    "round_ok": null,
+    "timings_ms": {
+      "total_ms": 8.996262999999999,
+      "preflight_ms": 8.141529,
+      "operations_ms": 0.363827,
+      "certify_ms": 0.00008999999999999999,
+      "final_status_ms": 0.00013
+    }
+  },
+  "finalize_certified_ops": {
+    "schema": "postfiat-certified-asset-ops-report-v1",
+    "request_schema": "postfiat-certified-asset-ops-request-v1",
+    "data_dir": "/home/postfiat/tmp/pfusdc-tier4-target-exit-root-final-20260718/validator-0",
+    "topology_file": "/home/postfiat/tmp/pfusdc-tier4-target-exit-root-final-20260718/topology.json",
+    "artifact_dir": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch6-egress-live-20260719/nav-checkpoint/nav-checkpoint-finalize-certified",
+    "operation_count": 1,
+    "max_transactions": 1,
+    "allow_existing_mempool": false,
+    "prepare_only": true,
+    "batch_only": false,
+    "start_height": 37,
+    "start_state_root": "2e84e2ddc70daf17518068410ae039de463e2d07face0b905dc64d515a23f785f248c3a1ac55f42760f2d8e3853a272a",
+    "start_mempool_pending": 0,
+    "end_height": null,
+    "end_state_root": null,
+    "end_mempool_pending": null,
+    "operations": [
+      {
+        "label": "nav-epoch-finalize",
+        "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "transaction_kind": "nav_epoch_finalize",
+        "operation_file": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-v3-epoch6-egress-live-20260719/nav-checkpoint/nav-checkpoint-finalize-certified/nav-epoch-finalize/operation.json",
+        "quote_file": null,
+        "signed_file": null,
+        "submit_file": null,
+        "tx_id": null,
+        "sequence": null,
+        "fee": null,
+        "timings_ms": {
+          "prepare_ms": 0.125189,
+          "quote_ms": 0.0,
+          "sign_ms": 0.0,
+          "submit_ms": 0.0
+        }
+      }
+    ],
+    "dependency_report": {
+      "declared_dependency_count": 1,
+      "same_round_dependency_count": 0,
+      "prior_round_dependency_count": 1,
+      "same_round_batch_eligible": false,
+      "candidate_batch_classes": [],
+      "replay_equivalence_required": false,
+      "live_round_compression_ready": false,
+      "live_round_compression_blockers": [
+        "request contains prior_round dependencies that must remain separate certified rounds"
+      ],
+      "declarations": [
+        {
+          "operation": "nav-epoch-finalize",
+          "depends_on": "nav-reserve-submit",
+          "mode": "prior_round",
+          "reason": "epoch finalize must respect the reserve packet/profile freshness gate"
+        }
+      ]
+    },
+    "batch_file": null,
+    "round_artifact_dir": null,
+    "round_ok": null,
+    "timings_ms": {
+      "total_ms": 6.852702,
+      "preflight_ms": 6.3242080000000005,
+      "operations_ms": 0.192289,
+      "certify_ms": 0.00008,
+      "final_status_ms": 0.00012100000000000001
+    }
+  },
+  "failure_reasons": []
+}

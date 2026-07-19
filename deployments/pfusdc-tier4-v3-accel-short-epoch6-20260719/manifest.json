@@ -65,9 +65,9 @@
       "finality_verifier": {
         "arbitrum_chain_id": 421614,
         "asset_id_commitment": "0x24e5fe4c65497dff08ec93064e5eb76e23c61992e7ec2c946136334a28eab403",
-        "initial_checkpoint_commitment": "0x4efe8fa3321e2200f396ca138b547724bc99c9608b964af4c9b1ce9964188294",
+        "initial_checkpoint_commitment": "0x5aa720ee2315f8b1236f14e55921ae99b6d604d9e8680c0c59703c57eb10cbb3",
         "initial_committee_root_commitment": "0xaaffb2ebf63f1201c65bef3f71537474225cedafdd30dfe0f3a2bfe5887bdc11",
-        "initial_finalized_height": 30,
+        "initial_finalized_height": 37,
         "max_proof_bytes": 4096,
         "max_public_values_bytes": 16384,
         "pftl_chain_id_hash": "0xe61f64cfb4299057c29b1c1dbf031c81beeb1b016878f4a087824eaa14c2cc00",
@@ -123,7 +123,7 @@
   },
   "evm_commitments": {
     "asset_id_commitment": "0x24e5fe4c65497dff08ec93064e5eb76e23c61992e7ec2c946136334a28eab403",
-    "initial_checkpoint_commitment": "0x4efe8fa3321e2200f396ca138b547724bc99c9608b964af4c9b1ce9964188294",
+    "initial_checkpoint_commitment": "0x5aa720ee2315f8b1236f14e55921ae99b6d604d9e8680c0c59703c57eb10cbb3",
     "initial_committee_root_commitment": "0xaaffb2ebf63f1201c65bef3f71537474225cedafdd30dfe0f3a2bfe5887bdc11",
     "pftl_chain_id_hash": "0xe61f64cfb4299057c29b1c1dbf031c81beeb1b016878f4a087824eaa14c2cc00",
     "pftl_genesis_hash_commitment": "0x396aceff4e14037223cc2781a3197c8eef78f44903b4e00d2e5441abec789418",
@@ -193,9 +193,9 @@
   "pftl": {
     "chain_id": "postfiat-wan-devnet-2",
     "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
-    "initial_checkpoint_block_id": "fdc08a39e33766f7956d0fb5dcbf4bd893b367d965db5116f1737d7624403d4b87d12c67b089e0ddf6379bf0e7c8a1fb",
+    "initial_checkpoint_block_id": "4c70391e5a0d483549b86c4a4bae9828c63eb1ed93dcd5ace3fe8f0a4907b5bb8637c06874a07c9be57b230163a2f28b",
     "initial_committee_root": "a84d4b4cadc9c068d5c668e040efe9ba303c59560bfb4c315c5b23aa235b8a6a279f3886d1352810e0b83822a90fc5d0",
-    "initial_finalized_height": 30,
+    "initial_finalized_height": 37,
     "protocol_version": 1
   },
   "programs": {

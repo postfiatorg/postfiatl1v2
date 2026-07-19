@@ -1,0 +1,39 @@
+{
+  "schema": "postfiat-asset-fee-quote-v1",
+  "transaction_kind": "nav_reserve_submit",
+  "chain_id": "postfiat-wan-devnet-2",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "protocol_version": 1,
+  "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "sequence": 27,
+  "sequence_source": "ledger_mempool",
+  "sender_balance": 999899358,
+  "sender_sequence": 26,
+  "mempool_pending_for_sender": 0,
+  "base_asset_fee": 24,
+  "state_expansion_fee": 10,
+  "minimum_fee": 34,
+  "account_reserve": 10,
+  "transfer_fee_byte_quantum": 512,
+  "transfer_fee_per_quantum": 1,
+  "asset_weight_bytes": 11851,
+  "sender_balance_after_fee": 999899324,
+  "sender_meets_reserve_after_fee": true,
+  "operation": {
+    "operation": "nav_reserve_submit",
+    "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+    "submitter": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+    "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+    "epoch": 2,
+    "nav_per_unit": 1000000,
+    "circulating_supply": 1000000,
+    "verified_net_assets": 2000000,
+    "proof_profile": "9367f176b3e685469b97b21368b0d9cd8cc51f47089d0fb062ba08d6974681fe0d915b551ae26578267ec1712f508d84",
+    "source_root": "3a5f9a843523e03d996dc3e26f202268a15a3ec38966c331356697413d49358e0d204d9a480a96060c293a4e147ace36",
+    "attestor_root": "40eff7696b8ee14170cd9e97442441b0f07cc4c105218017b0c05d978cdf0f25480f1bc65e408c35691cadcba3429af1",
+    "reserve_packet_hash": "5971eabf29ee9f077c6a427e0be79c4d4f9ae8c6e201b64ea68bec1b917de184d7e499f4fb25d378b170276f5a8989ab",
+    "reserve_accounts": [
+      "evm:421614:0xc6e0f9828f7947156a04102d9b72147e4c44589c:0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d"
+    ]
+  }
+}

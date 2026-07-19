@@ -1,0 +1,6 @@
+{
+  "operation": "vault_bridge_deposit_finalize",
+  "finalizer": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "evidence_root": "f9b6ed5a7a75f1d64a8c68b68e91d6bce40b97673be5814a2fc84ffe2334f71acf24479e513ff89b4da7634c9a984136"
+}

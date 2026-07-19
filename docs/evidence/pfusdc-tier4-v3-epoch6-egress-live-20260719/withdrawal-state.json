@@ -1,0 +1,18 @@
+{
+  "amount_atoms": 1000000,
+  "burn_tx_id_commitment": "0x19196db9f3f471eb55d11b89d402a1d7e8e280c0a7010b779ef3b1f5237893ef",
+  "phase": "verified",
+  "proof_nullifier": "0x85e2fb0e8af0b9d25cf88a1800cf93f87858667334e27adb1c87ff50d8af6f7f",
+  "receipt_block_hash": "0x0b39436edbe00efd7f31296af1cfe5d15479213432a70e29a39d056720232365",
+  "receipt_block_number": 289092923,
+  "recipient": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+  "replay_rejected": true,
+  "schema": "postfiat-pfusdc-tier4-live-egress-v1",
+  "vault_balance_after": 0,
+  "vault_balance_before": 1000000,
+  "wallet_balance_after": 1000000,
+  "wallet_balance_before": 0,
+  "withdrawal_id": "2fcfe2445bb5ce8bbee3d4426fee6109895cc9e11e429ef87d601b83a3c9e583e5e71ef0e6104a67579c347c7bb63293",
+  "withdrawal_id_commitment": "0x6c4bb719aa9614117f0b21c6b7e38977b82bb7ec7c367390a8e4fcd2dc8dd442",
+  "withdrawal_tx": "664b2897f9f569bebeb5ef50968fde89c162c56c96cfa676740c4e42e702c1f9"
+}

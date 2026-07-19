@@ -1,0 +1,28 @@
+{
+  "operations": [
+    {
+      "dependencies": [],
+      "key_file": "/home/postfiat/tmp/pfusdc-tier4-target-exit-root-final-20260718/seed/faucet_key.json",
+      "label": "nav-reserve-submit",
+      "operation": {
+        "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+        "attestor_root": "40eff7696b8ee14170cd9e97442441b0f07cc4c105218017b0c05d978cdf0f25480f1bc65e408c35691cadcba3429af1",
+        "circulating_supply": 1000000,
+        "epoch": 2,
+        "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "nav_per_unit": 1000000,
+        "operation": "nav_reserve_submit",
+        "proof_profile": "9367f176b3e685469b97b21368b0d9cd8cc51f47089d0fb062ba08d6974681fe0d915b551ae26578267ec1712f508d84",
+        "reserve_accounts": [
+          "evm:421614:0xc6e0f9828f7947156a04102d9b72147e4c44589c:0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d"
+        ],
+        "reserve_packet_hash": "5971eabf29ee9f077c6a427e0be79c4d4f9ae8c6e201b64ea68bec1b917de184d7e499f4fb25d378b170276f5a8989ab",
+        "source_root": "3a5f9a843523e03d996dc3e26f202268a15a3ec38966c331356697413d49358e0d204d9a480a96060c293a4e147ace36",
+        "submitter": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "verified_net_assets": 2000000
+      },
+      "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8"
+    }
+  ],
+  "schema": "postfiat-certified-asset-ops-request-v1"
+}
