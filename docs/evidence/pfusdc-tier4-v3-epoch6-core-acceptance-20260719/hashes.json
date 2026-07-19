@@ -1,0 +1,20 @@
+{
+  "deposit_id": "0xf13c632ccf5b9dc2766e94963c1f7fa54d337aaec3841e2c89b5352ee5be06bf",
+  "deposit_tx": "0xf20a2e4014f651ac94d4271912ba0b11e897a4ca214d88df40145f35d8af7862",
+  "egress_audit_sha256": "92714b68bb8c59a2fbd4cd97b4d218584d11f670b031049f3ac810e03e3f8875",
+  "egress_proof_calldata_sha256": "e4b8170e624ab520568c106c26e619f6a8ea4d6d9437ffb08bfa50db9510a88b",
+  "egress_public_values_sha256": "e70f5b01d43b7cbdc96f4d688d9b39e6af014ca6bd00ac5da905064d7f01d723",
+  "egress_witness_sha256": "98c9cf43f921bae1aea6a3085d7b79fc7e5d953b1295bd850a7d8389d3cb8d58",
+  "finality_bootstrap_sha256": "b46c4ca6949a6668bcf363b11986169826c815b4d1feaf137748b5c261ada77d",
+  "ingress_audit_sha256": "b41ffc15877e37012757fc812e96e0fff011f77545ac84940e5a1a0d758942ce",
+  "ingress_proof_calldata_sha256": "5ffd84ecb6a92635f700d66c4d836aa778820aa5d99d02b077ea21724a0f6bb4",
+  "ingress_public_values_sha256": "362e2bc9b9814c1769c3a862cff22657fb7989c7801c996e69420f31b9b92621",
+  "ingress_source_proof_hash": "f374c8d9f524fffe79a2eaee9acf48ea93702f4d05235100235ecd1132721b10ebd24fd7f3958e7597469dc83807d29e",
+  "ingress_witness_sha256": "b2989a41ccb191003c1a40b27bdb478838067441690e0caeb1c00d1013d04f54",
+  "manifest_sha256": "c497d38776cc3dde49a80ced29a6a1e9ab20daf9c6f8c37c455be39aa75d6554",
+  "proof_nullifier": "0x85e2fb0e8af0b9d25cf88a1800cf93f87858667334e27adb1c87ff50d8af6f7f",
+  "route_profile_sha256": "73545802aa0d85ec2a2cb059f65f568fb7623d1b7c558a1a18dbe929bff4e58f",
+  "terminal_ledger_sha256": "cfc3b74a16fdc24cc819c2a6bd4edf3401c2f3e5cd9bc626856ba13467c1f73c",
+  "withdrawal_id": "2fcfe2445bb5ce8bbee3d4426fee6109895cc9e11e429ef87d601b83a3c9e583e5e71ef0e6104a67579c347c7bb63293",
+  "withdrawal_tx": "664b2897f9f569bebeb5ef50968fde89c162c56c96cfa676740c4e42e702c1f9"
+}
