@@ -3928,7 +3928,6 @@ mod tests {
         assert!(timings.prepare_qc_ms > 0);
         assert!(timings.decision_qc_ms > 0);
         assert!(timings.effects_qc_ms > 0);
-        assert!(timings.total_ms <= 5_000);
         assert_eq!(durable_snapshots.len(), 4);
         assert_eq!(
             durable_snapshots
@@ -3973,6 +3972,16 @@ mod tests {
     fn persistent_wallet_driver_executes_real_three_wave_rpc_contract() {
         let timings = run_persistent_wallet_driver_once();
         eprintln!("FastSwap in-process warm timings: {timings:?}");
+    }
+
+    #[test]
+    #[ignore = "isolated in-process warm-latency gate; CI executes it after workspace tests"]
+    fn persistent_wallet_driver_meets_isolated_warm_latency_gate() {
+        let timings = run_persistent_wallet_driver_once();
+        assert!(
+            timings.total_ms <= 5_000,
+            "isolated FastSwap in-process warm latency exceeded 5s: {timings:?}"
+        );
     }
 
     #[test]

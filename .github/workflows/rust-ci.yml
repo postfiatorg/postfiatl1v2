@@ -34,4 +34,8 @@ jobs:
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.95.0 --profile minimal
       - name: cargo test
-        run: cargo test --workspace --locked
+        run: |
+          cargo test --workspace --locked
+          cargo test --locked -p postfiat-node --bin postfiat-node \
+            fastswap_service::tests::persistent_wallet_driver_meets_isolated_warm_latency_gate \
+            -- --ignored --exact --nocapture
