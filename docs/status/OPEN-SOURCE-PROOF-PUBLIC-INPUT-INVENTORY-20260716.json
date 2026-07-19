@@ -6,7 +6,7 @@
     "crates/privacy_orchard/src/asset_orchard.rs": "0e311ffca9c97096d270124ccdcb8a8010b4d4fad0c053ec10f2fc1dd06d158e",
     "crates/privacy_orchard/src/asset_orchard_circuit.rs": "806d3ce4d6c8cf34c2d99813093683ca38ecf6578992b9096219c0aefe779748",
     "crates/privacy_orchard/src/verify.rs": "7b1bdf76dd5093aa8a938c597c9516c1a956571b214b04db6cf4cb7b234a64b1",
-    "crates/execution/src/nav_sp1_verifier.rs": "77e2227b87aece1a0197ee13dbe6b4e4012c19b2282d874761d804e8ae53622d",
+    "crates/execution/src/nav_sp1_verifier.rs": "28a89483d259f9cf033bcc8aa47a8dc8f1caa8c17896a0a036ddb52bade4aed2",
     "crates/proofs/src/lib.rs": "6ad08dd265fc25958daf6e0ae3d55bbecaa13cdebdcafc9739c2d682d0eb4527"
   },
   "systems": [
@@ -115,7 +115,8 @@
         {"abi_offset": 352, "name": "liability", "constraint": "subtracted with checked arithmetic"}
       ],
       "packet_binding": "decoded spot_total + cash_total - liability must equal reserve_packet.verified_net_assets",
-      "residual_gate": "The aggregate guest source, build recipe and program-vkey reproduction are not present in this repository. The host decodes only the fields above and accepts a minimum ABI length; production activation requires exact guest provenance, a canonical ABI/vector package and governed program/VK activation evidence."
+      "residual_gate": "The aggregate guest source, build recipe and program-vkey reproduction are not present in this repository. The host decodes only the fields above and accepts a minimum ABI length; production activation requires exact guest provenance, a canonical ABI/vector package and governed program/VK activation evidence.",
+      "bounded_bridge_verify": "verify_bounded_sp1_groth16 (nav_sp1_verifier.rs) cryptographically verifies a size-bounded SP1 Groth16 proof against the profile-bound program vkey and pinned Groth16 VK without decoding the NAV aggregate ABI; dedicated bridge programs (e.g. pfUSDC Tier-4 ingress/egress) decode and bind their own public values after this check. Fail-closed on verifier-kind mismatch, empty proof/public-values, or oversize inputs."
     },
     {
       "name": "Debug shielded proof adapter",

@@ -584,11 +584,10 @@ pub fn vault_bridge_deposit_plan(
                 "--source-public-values-hash does not match --source-public-values-file",
             ));
         }
-        let public_values =
-            postfiat_types::PfUsdcIngressPublicValuesV3::from_canonical_bytes(
-                &source_public_values,
-            )
-            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+        let public_values = postfiat_types::PfUsdcIngressPublicValuesV3::from_canonical_bytes(
+            &source_public_values,
+        )
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
         if public_values.route_profile_hash != options.policy_hash
             || public_values.arbitrum_chain_id != evidence.source_chain_id
             || public_values.vault_address != evidence.vault_address
