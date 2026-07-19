@@ -530,6 +530,14 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                     .unwrap_or("0")
                     .parse::<u64>()
                     .map_err(|_| "--bridge-observer-min-confirmations must be a u64".to_string())?;
+            let max_proof_bytes = flag_value(flags, "--max-proof-bytes")
+                .unwrap_or("0")
+                .parse::<u64>()
+                .map_err(|_| "--max-proof-bytes must be a u64".to_string())?;
+            let max_public_values_bytes = flag_value(flags, "--max-public-values-bytes")
+                .unwrap_or("0")
+                .parse::<u64>()
+                .map_err(|_| "--max-public-values-bytes must be a u64".to_string())?;
             let trust_limit = flag_value(flags, "--trust-limit")
                 .unwrap_or("1000000000000000")
                 .parse::<u64>()
@@ -580,6 +588,20 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                 tolerance_bp,
                 bridge_observer_min_confirmations,
                 valuation_policy_hash: valuation_policy_hash.to_string(),
+                vault_bridge_route_policy_hash: flag_value(
+                    flags,
+                    "--vault-bridge-route-policy-hash",
+                )
+                .unwrap_or("")
+                .to_string(),
+                sp1_program_vkey: flag_value(flags, "--sp1-program-vkey")
+                    .unwrap_or("")
+                    .to_string(),
+                sp1_proof_encoding: flag_value(flags, "--sp1-proof-encoding")
+                    .unwrap_or("")
+                    .to_string(),
+                max_proof_bytes,
+                max_public_values_bytes,
                 trust_accounts,
                 trust_limit,
                 trust_reserve_paid,
@@ -687,6 +709,9 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                 source_proof_hash: flag_value(flags, "--source-proof-hash").map(str::to_string),
                 source_public_values_hash: flag_value(flags, "--source-public-values-hash")
                     .map(str::to_string),
+                source_proof_file: flag_value(flags, "--source-proof-file").map(PathBuf::from),
+                source_public_values_file: flag_value(flags, "--source-public-values-file")
+                    .map(PathBuf::from),
             })
             .map_err(|error| format!("vault-bridge-deposit-plan failed: {error}"))?;
             let json = serde_json::to_string_pretty(&report).map_err(|error| {
@@ -739,6 +764,10 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                     source_proof_hash: flag_value(flags, "--source-proof-hash").map(str::to_string),
                     source_public_values_hash: flag_value(flags, "--source-public-values-hash")
                         .map(str::to_string),
+                    source_proof_file: flag_value(flags, "--source-proof-file")
+                        .map(PathBuf::from),
+                    source_public_values_file: flag_value(flags, "--source-public-values-file")
+                        .map(PathBuf::from),
                 },
                 bundle_dir: PathBuf::from(bundle_dir),
                 overwrite: flag_present(flags, "--overwrite"),
@@ -790,6 +819,13 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                             .map(str::to_string),
                         source_public_values_hash: flag_value(flags, "--source-public-values-hash")
                             .map(str::to_string),
+                        source_proof_file: flag_value(flags, "--source-proof-file")
+                            .map(PathBuf::from),
+                        source_public_values_file: flag_value(
+                            flags,
+                            "--source-public-values-file",
+                        )
+                        .map(PathBuf::from),
                     },
                     bundle_dir: PathBuf::from(bundle_dir),
                     overwrite: flag_present(flags, "--overwrite"),

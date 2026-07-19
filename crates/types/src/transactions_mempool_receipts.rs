@@ -1233,6 +1233,13 @@ pub struct VaultBridgeDepositProposeOperation {
     pub source_proof_hash: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub source_public_values_hash: String,
+    /// Actual Groth16 proof for proof-native route kinds. Legacy observer and
+    /// hash-only route epochs leave this empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub source_proof_bytes: Vec<u8>,
+    /// Canonical public values committed by `source_proof_bytes`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub source_public_values: Vec<u8>,
     pub expires_at_height: u64,
 }
 
@@ -1260,6 +1267,28 @@ impl VaultBridgeDepositProposeOperation {
             &self.source_proof_hash,
             &self.source_public_values_hash,
         )?;
+        if self.source_proof_bytes.len() > DEFAULT_MAX_NAV_SP1_PROOF_BYTES as usize {
+            return Err(format!(
+                "vault_bridge_deposit_propose.source_proof_bytes exceeds maximum of {DEFAULT_MAX_NAV_SP1_PROOF_BYTES}"
+            ));
+        }
+        if self.source_public_values.len() > DEFAULT_MAX_NAV_SP1_PUBLIC_VALUES_BYTES as usize {
+            return Err(format!(
+                "vault_bridge_deposit_propose.source_public_values exceeds maximum of {DEFAULT_MAX_NAV_SP1_PUBLIC_VALUES_BYTES}"
+            ));
+        }
+        let proof_native =
+            self.source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1;
+        if proof_native && (self.source_proof_bytes.is_empty() || self.source_public_values.is_empty())
+        {
+            return Err("proof-native vault bridge deposit requires proof bytes and public values"
+                .to_string());
+        }
+        if !proof_native && (!self.source_proof_bytes.is_empty() || !self.source_public_values.is_empty())
+        {
+            return Err("proof bytes are only valid for the proof-native vault bridge verifier"
+                .to_string());
+        }
         if self.expires_at_height == 0 {
             return Err(
                 "vault_bridge_deposit_propose.expires_at_height must be nonzero".to_string(),
@@ -1282,6 +1311,16 @@ impl VaultBridgeDepositProposeOperation {
         )
         .into_bytes();
         self.evidence.append_signing_bytes(&mut bytes, "evidence");
+        if !self.source_proof_bytes.is_empty() || !self.source_public_values.is_empty() {
+            bytes.extend_from_slice(
+                format!(
+                    "source_proof_bytes={}\nsource_public_values={}\n",
+                    bytes_to_lower_hex(&self.source_proof_bytes),
+                    bytes_to_lower_hex(&self.source_public_values),
+                )
+                .as_bytes(),
+            );
+        }
         bytes
     }
 }

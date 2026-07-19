@@ -1,0 +1,22 @@
+[package]
+name = "postfiat-pfusdc-proofs"
+version = "0.1.0"
+description = "Pure Tier-4 pfUSDC proof statement verification"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+mldsa-guest-acceleration = ["postfiat-crypto-provider/mldsa-guest-acceleration"]
+mldsa-cycle-tracking = ["postfiat-crypto-provider/sp1-cycle-tracking"]
+
+[dependencies]
+postfiat-crypto-provider = { path = "../crypto_provider" }
+postfiat-consensus-cobalt = { path = "../consensus_cobalt" }
+postfiat-ordering-fast = { path = "../ordering_fast" }
+postfiat-types = { path = "../types" }
+serde_json = { workspace = true }

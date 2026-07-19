@@ -2,6 +2,7 @@ use super::*;
 
 include!("atomic_swap_type_tests.rs");
 include!("atomic_swap_batch_tests.rs");
+include!("pfusdc_tier4_type_tests.rs");
 
 #[test]
 fn genesis_round_trip() {
@@ -2548,4 +2549,231 @@ fn vault_bridge_bucket_impairment_factor_is_deterministic() {
     bucket
         .validate()
         .expect("impaired bucket with exact factor");
+}
+
+fn pfusdc_ingress_public_values_fixture() -> PfUsdcIngressPublicValuesV3 {
+    let mut values = PfUsdcIngressPublicValuesV3 {
+        schema: PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V3.to_string(),
+        proof_program_version: 3,
+        pftl_chain_id: "postfiat-devnet".to_string(),
+        pftl_genesis_hash: "01".repeat(48),
+        pftl_protocol_version: 1,
+        route_profile_hash: "02".repeat(48),
+        route_epoch: 7,
+        ethereum_chain_id: 1,
+        prior_ethereum_finalized_beacon_root: "15".repeat(32),
+        prior_ethereum_finalized_slot: 12_344,
+        ethereum_finalized_beacon_root: "03".repeat(32),
+        ethereum_finalized_slot: 12_345,
+        arbitrum_chain_id: 42_161,
+        arbitrum_rollup_address: "0x1111111111111111111111111111111111111111".to_string(),
+        arbitrum_rollup_runtime_code_hash: "16".repeat(32),
+        rollup_latest_confirmed_storage_slot: "17".repeat(32),
+        arbitrum_assertion_hash: "04".repeat(32),
+        assertion_l2_block_hash: "05".repeat(32),
+        assertion_l2_state_root: "18".repeat(32),
+        assertion_send_root: "06".repeat(32),
+        output_index: 3,
+        output_item_hash: "07".repeat(32),
+        output_l2_block_number: 98_765,
+        output_l1_block_number: 22_345_678,
+        output_timestamp: 1_700_000_000,
+        output_sender: "0x2222222222222222222222222222222222222222".to_string(),
+        output_destination: "0x5555555555555555555555555555555555555555".to_string(),
+        ingress_anchor_runtime_code_hash: "19".repeat(32),
+        output_calldata_hash: "08".repeat(32),
+        vault_address: "0x2222222222222222222222222222222222222222".to_string(),
+        vault_runtime_code_hash: "09".repeat(32),
+        token_address: "0x3333333333333333333333333333333333333333".to_string(),
+        token_runtime_code_hash: "0a".repeat(32),
+        depositor: "0x4444444444444444444444444444444444444444".to_string(),
+        pftl_recipient: "pfrecipient000000000000000000000000000000000".to_string(),
+        pftl_recipient_hash: "0b".repeat(32),
+        amount_atoms: 1_000_000,
+        nonce: "0c".repeat(32),
+        route_binding: "0d".repeat(32),
+        deposit_id: "0e".repeat(32),
+        evidence_root: "0f".repeat(48),
+        public_values_commitment: String::new(),
+    };
+    values.seal().expect("seal ingress fixture");
+    values
+}
+
+#[test]
+fn pfusdc_ingress_public_values_round_trip_is_canonical_and_strict() {
+    let values = pfusdc_ingress_public_values_fixture();
+    let bytes = values
+        .canonical_bytes_without_commitment()
+        .expect("canonical ingress bytes");
+    let decoded = PfUsdcIngressPublicValuesV3::from_canonical_bytes(&bytes)
+        .expect("strict ingress decode");
+    assert_eq!(decoded, values);
+
+    let mut trailing = bytes.clone();
+    trailing.push(0);
+    assert!(PfUsdcIngressPublicValuesV3::from_canonical_bytes(&trailing).is_err());
+
+    let mut wrong_tag = bytes.clone();
+    let first_tag = b"PFTL-PFUSDC-TIER4".len()
+        + 4
+        + PFUSDC_INGRESS_PUBLIC_VALUES_SCHEMA_V3.len();
+    wrong_tag[first_tag + 1] = 2;
+    assert!(PfUsdcIngressPublicValuesV3::from_canonical_bytes(&wrong_tag).is_err());
+}
+
+#[test]
+fn pfusdc_ingress_commitment_changes_for_each_field_class() {
+    let original = pfusdc_ingress_public_values_fixture();
+    let commitment = original.expected_commitment().expect("original commitment");
+    let mut mutations = Vec::new();
+
+    let mut value = original.clone();
+    value.route_epoch += 1;
+    mutations.push(value);
+    let mut value = original.clone();
+    value.ethereum_finalized_beacon_root = "10".repeat(32);
+    mutations.push(value);
+    let mut value = original.clone();
+    value.assertion_send_root = "11".repeat(32);
+    mutations.push(value);
+    let mut value = original.clone();
+    value.arbitrum_rollup_runtime_code_hash = "1a".repeat(32);
+    mutations.push(value);
+    let mut value = original.clone();
+    value.rollup_latest_confirmed_storage_slot = "1b".repeat(32);
+    mutations.push(value);
+    let mut value = original.clone();
+    value.assertion_l2_state_root = "1c".repeat(32);
+    mutations.push(value);
+    let mut value = original.clone();
+    value.output_sender = "0x6666666666666666666666666666666666666666".to_string();
+    mutations.push(value);
+    let mut value = original.clone();
+    value.ingress_anchor_runtime_code_hash = "1d".repeat(32);
+    mutations.push(value);
+    let mut value = original.clone();
+    value.vault_address = "0x5555555555555555555555555555555555555555".to_string();
+    mutations.push(value);
+    let mut value = original.clone();
+    value.output_item_hash = "12".repeat(32);
+    mutations.push(value);
+    let mut value = original.clone();
+    value.amount_atoms += 1;
+    mutations.push(value);
+    let mut value = original.clone();
+    value.pftl_recipient.push('1');
+    mutations.push(value);
+    let mut value = original.clone();
+    value.route_binding = "13".repeat(32);
+    mutations.push(value);
+    let mut value = original.clone();
+    value.evidence_root = "14".repeat(48);
+    mutations.push(value);
+
+    for mut value in mutations {
+        value.public_values_commitment.clear();
+        assert_ne!(
+            value.expected_commitment().expect("mutated commitment"),
+            commitment
+        );
+    }
+}
+
+#[test]
+fn pfusdc_finality_state_requires_retained_ancestry_and_monotonic_advance() {
+    let values = pfusdc_ingress_public_values_fixture();
+    let initial = EthereumArbitrumCheckpointV1 {
+        ethereum_finalized_beacon_root: values
+            .prior_ethereum_finalized_beacon_root
+            .clone(),
+        ethereum_finalized_slot: values.prior_ethereum_finalized_slot,
+        arbitrum_assertion_hash: "20".repeat(32),
+        assertion_l2_block_hash: "21".repeat(32),
+        assertion_send_root: "22".repeat(32),
+    };
+    let mut state = EthereumArbitrumFinalityStateV2 {
+        schema: ETHEREUM_ARBITRUM_FINALITY_STATE_SCHEMA_V2.to_string(),
+        route_profile_hash: values.route_profile_hash.clone(),
+        route_epoch: values.route_epoch,
+        ethereum_chain_id: values.ethereum_chain_id,
+        arbitrum_chain_id: values.arbitrum_chain_id,
+        arbitrum_rollup_address: values.arbitrum_rollup_address.clone(),
+        arbitrum_rollup_runtime_code_hash: format!(
+            "0x{}",
+            values.arbitrum_rollup_runtime_code_hash
+        ),
+        rollup_latest_confirmed_storage_slot: values
+            .rollup_latest_confirmed_storage_slot
+            .clone(),
+        vault_address: values.vault_address.clone(),
+        vault_runtime_code_hash: format!("0x{}", values.vault_runtime_code_hash),
+        token_address: values.token_address.clone(),
+        token_runtime_code_hash: format!("0x{}", values.token_runtime_code_hash),
+        ethereum_ingress_anchor_address: values.output_destination.clone(),
+        ethereum_ingress_anchor_runtime_code_hash: format!(
+            "0x{}",
+            values.ingress_anchor_runtime_code_hash
+        ),
+        latest: initial.clone(),
+        retained: vec![initial],
+    };
+    let before = state
+        .state_commitment_bytes()
+        .expect("initial state commitment");
+    state
+        .verify_and_advance(&values)
+        .expect("valid finality advance");
+    assert_eq!(state.latest.ethereum_finalized_slot, values.ethereum_finalized_slot);
+    assert_ne!(
+        state
+            .state_commitment_bytes()
+            .expect("advanced state commitment"),
+        before
+    );
+
+    // An idempotent proof of the already-retained result remains admissible.
+    state
+        .verify_and_advance(&values)
+        .expect("retained checkpoint replay is idempotent");
+
+    let mut unknown_parent = values.clone();
+    unknown_parent.prior_ethereum_finalized_beacon_root = "25".repeat(32);
+    assert!(state.verify_and_advance(&unknown_parent).is_err());
+
+    let mut conflict = values.clone();
+    conflict.assertion_send_root = "26".repeat(32);
+    assert!(state.verify_and_advance(&conflict).is_err());
+
+    let mut route_mutations = Vec::new();
+    let mut value = values.clone();
+    value.arbitrum_rollup_runtime_code_hash = "27".repeat(32);
+    route_mutations.push(value);
+    let mut value = values.clone();
+    value.rollup_latest_confirmed_storage_slot = "28".repeat(32);
+    route_mutations.push(value);
+    let mut value = values.clone();
+    value.vault_address = "0x6666666666666666666666666666666666666666".to_string();
+    route_mutations.push(value);
+    let mut value = values.clone();
+    value.output_sender = "0x6666666666666666666666666666666666666666".to_string();
+    route_mutations.push(value);
+    let mut value = values.clone();
+    value.vault_runtime_code_hash = "29".repeat(32);
+    route_mutations.push(value);
+    let mut value = values.clone();
+    value.token_address = "0x7777777777777777777777777777777777777777".to_string();
+    route_mutations.push(value);
+    let mut value = values.clone();
+    value.token_runtime_code_hash = "2a".repeat(32);
+    route_mutations.push(value);
+    let mut value = values.clone();
+    value.output_destination = "0x8888888888888888888888888888888888888888".to_string();
+    route_mutations.push(value);
+    let mut value = values;
+    value.ingress_anchor_runtime_code_hash = "2b".repeat(32);
+    route_mutations.push(value);
+    assert!(route_mutations
+        .iter()
+        .all(|mutation| state.clone().verify_and_advance(mutation).is_err()));
 }

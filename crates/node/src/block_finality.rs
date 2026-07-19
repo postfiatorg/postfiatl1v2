@@ -2187,6 +2187,7 @@ pub fn create_block_vote_for_verified_proposal(
     }
     let governance =
         governance_with_due_validator_registry_activations(&store, &genesis, proposal.block_height)?;
+    validate_bridge_exit_root_activation(&proposal, &genesis, &governance)?;
     let validators = active_validator_ids(&governance)?;
     let proposal_hash = block_proposal_hash(&proposal)?;
     let target = BlockVoteTarget {
@@ -2583,6 +2584,7 @@ mod block_proposal_vote_lock_tests {
                 batch_kind: "mempool".to_string(),
                 batch_id: format!("batch-{view}"),
                 state_root: "state".to_string(),
+                bridge_exit_root: None,
                 receipt_ids: Vec::new(),
                 fastpay_pre_state_effects: Vec::new(),
             },
@@ -3843,6 +3845,7 @@ fn block_vote_target_with_timings(
             genesis,
             proposal.block_height,
         )?;
+        validate_bridge_exit_root_activation(&proposal, genesis, &governance)?;
         timings.governance_ms = node_timing_elapsed_ms(stage_start);
 
         let stage_start = std::time::Instant::now();
@@ -3948,6 +3951,118 @@ fn validate_block_proposal_file(proposal: &BlockProposalFile, genesis: &Genesis)
     Ok(())
 }
 
+fn validate_bridge_exit_root_activation(
+    proposal: &BlockProposalFile,
+    genesis: &Genesis,
+    governance: &GovernanceState,
+) -> io::Result<()> {
+    let active = bridge_exit_root_activation_height_for_chain(governance)
+        .is_some_and(|height| proposal.block_height >= height);
+    match (active, proposal.bridge_exit_root.as_deref()) {
+        (false, None) => Ok(()),
+        (false, Some(_)) => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "block proposal supplies bridge_exit_root before activation",
+        )),
+        (true, None) => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "activated block proposal omits bridge_exit_root",
+        )),
+        (true, Some(root)) => {
+            if !consensus_v2_active_at(genesis, proposal.block_height) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "bridge-exit-root activation requires consensus v2 finality",
+                ));
+            }
+            validate_lower_hex_len("block_proposal.bridge_exit_root", root, 96)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+        }
+    }
+}
+
+#[cfg(test)]
+mod bridge_exit_root_activation_tests {
+    use super::*;
+
+    fn proposal(height: u64, root: Option<String>) -> BlockProposalFile {
+        let genesis = Genesis::new("postfiat-tier4-test");
+        BlockProposalFile {
+            schema: BLOCK_PROPOSAL_FILE_SCHEMA.to_string(),
+            chain_id: genesis.chain_id.clone(),
+            genesis_hash: genesis_hash(&genesis),
+            protocol_version: genesis.protocol_version,
+            block_height: height,
+            view: 0,
+            parent_hash: "11".repeat(48),
+            proposer: "validator-0".to_string(),
+            batch_kind: BATCH_KIND_TRANSPARENT.to_string(),
+            batch_id: "22".repeat(48),
+            payload_hash: "33".repeat(48),
+            state_root: "44".repeat(48),
+            bridge_exit_root: root,
+            receipt_count: 0,
+            receipt_ids: Vec::new(),
+            fastpay_pre_state_effects: Vec::new(),
+            signature: None,
+        }
+    }
+
+    fn governance(activation_height: u32) -> GovernanceState {
+        let mut governance = GovernanceState::new(1);
+        governance.apply(GovernanceAmendment {
+            amendment_id: "bridge-exit-root-activation".to_string(),
+            chain_id: "postfiat-tier4-test".to_string(),
+            genesis_hash: "aa".repeat(48),
+            protocol_version: 1,
+            instance_id: "tier4".to_string(),
+            proposal_id: "tier4-proposal".to_string(),
+            certificate_id: "tier4-certificate".to_string(),
+            proposer: "validator-0".to_string(),
+            validators: vec!["validator-0".to_string()],
+            quorum: 1,
+            kind: GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT.to_string(),
+            value: activation_height,
+            activation_height: 0,
+            veto_until_height: 0,
+            paused: false,
+            support: vec!["validator-0".to_string()],
+            votes: Vec::new(),
+            signed_authorizations: Vec::new(),
+        });
+        governance
+    }
+
+    #[test]
+    fn bridge_exit_root_encoding_is_exactly_activation_gated() {
+        let mut genesis = Genesis::new("postfiat-tier4-test");
+        genesis.consensus_v2_activation_height = Some(1);
+        let governance = governance(10);
+        let root = postfiat_types::bridge_exit_empty_root_v1();
+
+        validate_bridge_exit_root_activation(&proposal(9, None), &genesis, &governance)
+            .expect("legacy encoding before activation");
+        assert!(validate_bridge_exit_root_activation(
+            &proposal(9, Some(root.clone())),
+            &genesis,
+            &governance,
+        )
+        .is_err());
+        assert!(validate_bridge_exit_root_activation(
+            &proposal(10, None),
+            &genesis,
+            &governance,
+        )
+        .is_err());
+        validate_bridge_exit_root_activation(
+            &proposal(10, Some(root)),
+            &genesis,
+            &governance,
+        )
+        .expect("v1 exit root at activation");
+    }
+}
+
 fn sign_block_proposal_file(
     store: &NodeStore,
     proposal: &mut BlockProposalFile,
@@ -3975,6 +4090,7 @@ fn sign_block_proposal_file(
     let genesis = store.read_genesis()?;
     let governance =
         governance_with_due_validator_registry_activations(store, &genesis, proposal.block_height)?;
+    validate_bridge_exit_root_activation(proposal, &genesis, &governance)?;
     let validators = active_validator_ids(&governance)?;
     if !validators
         .iter()
@@ -4037,6 +4153,7 @@ fn verify_block_proposal_signature_if_present(
     let genesis = store.read_genesis()?;
     let governance =
         governance_with_due_validator_registry_activations(store, &genesis, proposal.block_height)?;
+    validate_bridge_exit_root_activation(proposal, &genesis, &governance)?;
     let validators = active_validator_ids(&governance)?;
     if !validators
         .iter()
@@ -4104,6 +4221,7 @@ fn block_proposal_hash(proposal: &BlockProposalFile) -> io::Result<String> {
         batch_id: proposal.batch_id.as_str(),
         payload_hash: proposal.payload_hash.as_str(),
         state_root: proposal.state_root.as_str(),
+        bridge_exit_root: proposal.bridge_exit_root.as_deref(),
         receipt_ids: &proposal.receipt_ids,
         fastpay_pre_state_effects: &proposal.fastpay_pre_state_effects,
     })
@@ -4229,6 +4347,7 @@ fn block_proposal_hash_from_evidence(
         batch_id: evidence.batch_id,
         payload_hash,
         state_root: evidence.state_root,
+        bridge_exit_root: evidence.bridge_exit_root,
         receipt_ids: evidence.receipt_ids,
         fastpay_pre_state_effects: evidence.fastpay_pre_state_effects,
     })
@@ -4246,11 +4365,33 @@ struct BlockProposalHashInput<'a> {
     batch_id: &'a str,
     payload_hash: &'a str,
     state_root: &'a str,
+    bridge_exit_root: Option<&'a str>,
     receipt_ids: &'a [String],
     fastpay_pre_state_effects: &'a [postfiat_types::FastPayVersionFenceV1],
 }
 
 fn block_proposal_hash_fields(fields: BlockProposalHashInput<'_>) -> io::Result<String> {
+    if let Some(bridge_exit_root) = fields.bridge_exit_root {
+        let encoded = serde_json::to_vec(&(
+            "postfiat.block_proposal.v3",
+            fields.chain_id,
+            fields.genesis_hash,
+            fields.protocol_version,
+            fields.block_height,
+            fields.view,
+            fields.parent_hash,
+            fields.proposer,
+            fields.batch_kind,
+            fields.batch_id,
+            fields.payload_hash,
+            fields.state_root,
+            bridge_exit_root,
+            fields.receipt_ids,
+            fields.fastpay_pre_state_effects,
+        ))
+        .map_err(invalid_data)?;
+        return Ok(hash_hex("postfiat.block_proposal.v3", &encoded));
+    }
     if fields.fastpay_pre_state_effects.is_empty() {
         let encoded = serde_json::to_vec(&(
             fields.chain_id,

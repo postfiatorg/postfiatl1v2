@@ -1,0 +1,449 @@
+use super::*;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PfUsdcEgressWitnessOptions {
+    pub data_dir: PathBuf,
+    pub withdrawal_id: String,
+    pub prior_checkpoint_block_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PfUsdcCheckpointWitnessOptions {
+    pub data_dir: PathBuf,
+    pub prior_checkpoint_block_id: String,
+    pub target_block_id: String,
+}
+
+struct ExportedFinalitySegment {
+    prior_checkpoint_block_id: String,
+    finality_ancestry: Vec<PfUsdcEgressFinalityStepV1>,
+    committee_epoch: u64,
+    committee: Vec<ValidatorRegistryEntry>,
+}
+
+pub fn pfusdc_egress_witness(
+    options: PfUsdcEgressWitnessOptions,
+) -> io::Result<PfUsdcEgressProofWitnessV1> {
+    validate_lower_hex_len("withdrawal_id", &options.withdrawal_id, 96)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    if let Some(prior) = options.prior_checkpoint_block_id.as_deref() {
+        validate_lower_hex_len("prior_checkpoint_block_id", prior, 96)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    }
+    let store = NodeStore::new(options.data_dir);
+    let genesis = store.read_genesis()?;
+    let governance = store.read_governance()?;
+    let ledger = store.read_ledger()?;
+    let receipts = store.read_receipts()?;
+    let blocks = store.read_blocks()?;
+
+    let redemption = ledger
+        .vault_bridge_redemptions
+        .iter()
+        .find(|redemption| redemption.withdrawal_packet.withdrawal_id == options.withdrawal_id)
+        .cloned()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "withdrawal ID is not finalized"))?;
+    let block = blocks
+        .blocks
+        .iter()
+        .find(|block| block.header.height == redemption.created_at_height)
+        .cloned()
+        .ok_or_else(|| {
+            io::Error::new(io::ErrorKind::NotFound, "withdrawal block is unavailable")
+        })?;
+    let expected_root = block.header.bridge_exit_root.as_deref().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "withdrawal block predates the Tier-4 bridge-exit-root encoding",
+        )
+    })?;
+    let activation_height =
+        bridge_exit_root_activation_height_for_chain(&governance).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "bridge exit root is not governed",
+            )
+        })?;
+    if block.header.height < activation_height {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "withdrawal block is before bridge-exit-root activation",
+        ));
+    }
+    let block_receipts = receipts_for_block(&receipts, &block.receipt_ids)?;
+    let receipt = block_receipts
+        .iter()
+        .find(|receipt| receipt.tx_id == redemption.withdrawal_packet.burn_tx_id)
+        .cloned()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "burn receipt is absent"))?;
+    if !receipt.accepted || receipt.code != BRIDGE_EXIT_ACCEPTED_RECEIPT_CODE {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "burn receipt is not literal accepted",
+        ));
+    }
+
+    let leaves =
+        bridge_exit_leaves_for_block(&governance, &ledger, &block_receipts, block.header.height)?;
+    let leaf_index = leaves
+        .iter()
+        .position(|leaf| leaf.withdrawal_id == options.withdrawal_id)
+        .ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "withdrawal exit leaf is absent")
+        })?;
+    let merkle_proof = postfiat_types::bridge_exit_merkle_proof_v1(&leaves, leaf_index)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    postfiat_types::verify_bridge_exit_merkle_proof_v1(expected_root, &merkle_proof)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+
+    let bucket = ledger
+        .vault_bridge_bucket_states
+        .iter()
+        .find(|bucket| bucket.bucket_id == redemption.bucket_id)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "withdrawal bucket is absent"))?;
+    let route_profile = governance
+        .authorized_vault_bridge_route_profile(&redemption.asset_id, &bucket.policy_hash)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?
+        .clone();
+    let commit = block.header.consensus_v2_commit.as_ref().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Tier-4 egress witness requires a consensus-v2 commit",
+        )
+    })?;
+    if commit.proposal.block.bridge_exit_root.as_deref() != Some(expected_root) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "consensus-v2 commit does not bind the block bridge-exit root",
+        ));
+    }
+    let prior_checkpoint_block_id = options
+        .prior_checkpoint_block_id
+        .unwrap_or_else(|| block.header.parent_hash.clone());
+    let segment = pfusdc_export_finality_segment(
+        &store,
+        &genesis,
+        &governance,
+        &blocks,
+        prior_checkpoint_block_id,
+        &block,
+    )?;
+    let witness = PfUsdcEgressProofWitnessV1 {
+        schema: PFUSDC_EGRESS_PROOF_WITNESS_SCHEMA_V1.to_string(),
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        protocol_version: genesis.protocol_version,
+        bridge_exit_root_activation_height: activation_height,
+        prior_checkpoint_block_id: segment.prior_checkpoint_block_id,
+        finality_ancestry: segment.finality_ancestry,
+        route_profile,
+        block,
+        receipt,
+        merkle_proof,
+        withdrawal_packet: redemption.withdrawal_packet,
+        withdrawal_packet_hash: redemption.withdrawal_packet_hash,
+        withdrawal_packet_evm_digest: redemption.withdrawal_packet_evm_digest,
+        committee_epoch: segment.committee_epoch,
+        committee: segment.committee,
+    };
+    witness
+        .validate_bounds()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    Ok(witness)
+}
+
+pub fn pfusdc_checkpoint_witness(
+    options: PfUsdcCheckpointWitnessOptions,
+) -> io::Result<PfUsdcCheckpointProofWitnessV1> {
+    validate_lower_hex_len(
+        "prior_checkpoint_block_id",
+        &options.prior_checkpoint_block_id,
+        96,
+    )
+    .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    validate_lower_hex_len("target_block_id", &options.target_block_id, 96)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    let store = NodeStore::new(options.data_dir);
+    let genesis = store.read_genesis()?;
+    let governance = store.read_governance()?;
+    let blocks = store.read_blocks()?;
+    let block = blocks
+        .blocks
+        .iter()
+        .find(|candidate| candidate.header.block_hash == options.target_block_id)
+        .cloned()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "target block is unavailable"))?;
+    let segment = pfusdc_export_finality_segment(
+        &store,
+        &genesis,
+        &governance,
+        &blocks,
+        options.prior_checkpoint_block_id,
+        &block,
+    )?;
+    let witness = PfUsdcCheckpointProofWitnessV1 {
+        schema: PFUSDC_CHECKPOINT_PROOF_WITNESS_SCHEMA_V1.to_string(),
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        protocol_version: genesis.protocol_version,
+        prior_checkpoint_block_id: segment.prior_checkpoint_block_id,
+        finality_ancestry: segment.finality_ancestry,
+        block,
+        committee_epoch: segment.committee_epoch,
+        committee: segment.committee,
+    };
+    witness
+        .validate_bounds()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    Ok(witness)
+}
+
+fn pfusdc_export_finality_segment(
+    store: &NodeStore,
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    blocks: &BlockLog,
+    prior_checkpoint_block_id: String,
+    block: &BlockRecord,
+) -> io::Result<ExportedFinalitySegment> {
+    let commit = block.header.consensus_v2_commit.as_ref().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Tier-4 finality target has no consensus-v2 commit",
+        )
+    })?;
+    let (consensus_committee, committee) =
+        pfusdc_committee_at_height(store, genesis, governance, block.header.height)?;
+    if consensus_committee.committee_root != commit.proposal.domain.committee_root {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "historical validator registry does not reproduce the finalized committee root",
+        ));
+    }
+    let committee_epoch = commit.proposal.domain.committee_epoch;
+    let ancestry_start = if prior_checkpoint_block_id == block.header.parent_hash {
+        block.header.height
+    } else {
+        let prior_index = blocks
+            .blocks
+            .iter()
+            .position(|candidate| candidate.header.block_hash == prior_checkpoint_block_id)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "prior Tier-4 checkpoint block is unavailable",
+                )
+            })?;
+        let prior_height = blocks.blocks[prior_index].header.height;
+        if prior_height >= block.header.height {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "prior Tier-4 checkpoint must precede the target block",
+            ));
+        }
+        prior_height
+            .checked_add(1)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "block height overflow"))?
+    };
+    let archive = store.read_batch_archive()?;
+    let ancestry_blocks = blocks
+        .blocks
+        .iter()
+        .filter(|candidate| {
+            candidate.header.height >= ancestry_start
+                && candidate.header.height < block.header.height
+        })
+        .collect::<Vec<_>>();
+    let finality_ancestry = ancestry_blocks
+        .iter()
+        .enumerate()
+        .map(|(index, candidate)| {
+            let candidate_commit =
+                candidate
+                    .header
+                    .consensus_v2_commit
+                    .as_ref()
+                    .ok_or_else(|| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "Tier-4 ancestry block has no consensus-v2 commit",
+                        )
+                    })?;
+            let (candidate_set, candidate_committee) =
+                pfusdc_committee_at_height(store, genesis, governance, candidate.header.height)?;
+            if candidate_commit.proposal.domain.committee_root != candidate_set.committee_root {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "historical registry does not reproduce ancestry committee root",
+                ));
+            }
+            let next_block = ancestry_blocks.get(index + 1).copied().unwrap_or(&block);
+            let next_height = next_block.header.height;
+            let (next_set, next_committee) =
+                pfusdc_committee_at_height(store, genesis, governance, next_height)?;
+            let transition = next_set.committee_root != candidate_set.committee_root;
+            let governance_payload_json = if transition {
+                if candidate.header.batch_kind != BATCH_KIND_GOVERNANCE {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "committee changes without a finalized governance block",
+                    ));
+                }
+                archive
+                    .batches
+                    .iter()
+                    .find(|entry| {
+                        entry.batch_kind == BATCH_KIND_GOVERNANCE
+                            && entry.batch_id == candidate.header.batch_id
+                    })
+                    .map(|entry| entry.payload_json.clone())
+                    .ok_or_else(|| {
+                        io::Error::new(
+                            io::ErrorKind::NotFound,
+                            "committee transition governance payload is unavailable",
+                        )
+                    })?
+            } else {
+                String::new()
+            };
+            Ok(PfUsdcEgressFinalityStepV1 {
+                block: (*candidate).clone(),
+                committee_epoch: candidate_commit.proposal.domain.committee_epoch,
+                committee: candidate_committee,
+                governance_payload_json,
+                next_committee: if transition {
+                    next_committee
+                } else {
+                    Vec::new()
+                },
+                next_committee_epoch: if transition {
+                    next_block
+                        .header
+                        .consensus_v2_commit
+                        .as_ref()
+                        .ok_or_else(|| {
+                            io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                "post-transition block has no consensus-v2 commit",
+                            )
+                        })?
+                        .proposal
+                        .domain
+                        .committee_epoch
+                } else {
+                    0
+                },
+            })
+        })
+        .collect::<io::Result<Vec<_>>>()?;
+    Ok(ExportedFinalitySegment {
+        prior_checkpoint_block_id,
+        finality_ancestry,
+        committee_epoch,
+        committee,
+    })
+}
+
+fn pfusdc_committee_at_height(
+    store: &NodeStore,
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    height: u64,
+) -> io::Result<(
+    postfiat_ordering_fast::ConsensusV2ValidatorSet,
+    Vec<ValidatorRegistryEntry>,
+)> {
+    let mut registry = read_validator_registry_replay_base(store)?;
+    let mut validator_ids = local_validator_ids(genesis.validator_count)?;
+    let mut updates = governance
+        .validator_registry_updates
+        .iter()
+        .filter(|update| update.activation_height < height)
+        .collect::<Vec<_>>();
+    // Governance history order is consensus-significant when multiple
+    // updates share an activation height. Stable sorting by height preserves
+    // that archived order rather than inventing an update-id ordering.
+    updates.sort_by_key(|update| update.activation_height);
+    for update in updates {
+        validator_ids = apply_historical_validator_registry_update_to_registry(
+            genesis,
+            &mut registry,
+            update,
+            height,
+            "pfUSDC Tier-4 egress historical committee",
+        )?;
+    }
+    pfusdc_consensus_committee(&registry, &validator_ids)
+}
+
+fn pfusdc_consensus_committee(
+    registry: &ValidatorRegistry,
+    validator_ids: &[String],
+) -> io::Result<(
+    postfiat_ordering_fast::ConsensusV2ValidatorSet,
+    Vec<ValidatorRegistryEntry>,
+)> {
+    let committee = validator_ids
+        .iter()
+        .map(|validator_id| {
+            let record = validator_registry_record(registry, validator_id)?;
+            if record.algorithm_id != ML_DSA_65_ALGORITHM {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Tier-4 egress committee contains a non-ML-DSA-65 validator",
+                ));
+            }
+            Ok(ValidatorRegistryEntry {
+                node_id: record.node_id.clone(),
+                algorithm_id: record.algorithm_id.clone(),
+                public_key_hex: record.public_key_hex.clone(),
+                active: true,
+            })
+        })
+        .collect::<io::Result<Vec<_>>>()?;
+    let validators = committee
+        .iter()
+        .map(|record| postfiat_ordering_fast::ConsensusV2Validator {
+            validator_id: record.node_id.clone(),
+            public_key_hex: record.public_key_hex.clone(),
+        })
+        .collect();
+    let consensus = postfiat_ordering_fast::ConsensusV2ValidatorSet::try_new(validators)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
+    Ok((consensus, committee))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn egress_export_compares_the_consensus_committee_root_not_registry_root() {
+        let validators = (0..4)
+            .map(|index| {
+                let key = ml_dsa_65_keygen_from_seed(&[index as u8 + 1; 32]);
+                ValidatorRegistryRecord {
+                    node_id: format!("validator-{index}"),
+                    algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+                    public_key_hex: bytes_to_hex(&key.public_key),
+                }
+            })
+            .collect::<Vec<_>>();
+        let validator_ids = validators
+            .iter()
+            .map(|record| record.node_id.clone())
+            .collect::<Vec<_>>();
+        let registry = ValidatorRegistry { validators };
+        let registry_root =
+            validator_registry_root(&registry, &validator_ids).expect("registry root");
+        let (consensus, witness_committee) =
+            pfusdc_consensus_committee(&registry, &validator_ids).expect("consensus committee");
+
+        assert_ne!(
+            registry_root, consensus.committee_root,
+            "different root domains must never be compared as equivalent"
+        );
+        assert_eq!(witness_committee.len(), validator_ids.len());
+        assert!(witness_committee.iter().all(|record| record.active));
+    }
+}

@@ -3815,6 +3815,7 @@ fn rpc_serve_method_allowed_with_owned_lane(
             | "receipts"
             | "tx"
             | "blocks"
+            | "pfusdc_egress_witness"
             | "validators"
             | "manifests"
             | "batch_archive"

@@ -884,7 +884,8 @@ fn apply_vault_bridge_receipt_submit(
     Ok(())
 }
 
-fn apply_vault_bridge_deposit_propose(
+fn apply_vault_bridge_deposit_propose_with_genesis(
+    genesis: &Genesis,
     ledger: &mut LedgerState,
     operation: &VaultBridgeDepositProposeOperation,
     block_height: u64,
@@ -918,15 +919,37 @@ fn apply_vault_bridge_deposit_propose(
                 .to_string(),
         ));
     }
-    ensure_vault_bridge_deposit_source_proof(
-        profile,
-        &operation.evidence,
-        &expected_root,
-        &operation.policy_hash,
-        &operation.source_proof_kind,
-        &operation.source_proof_hash,
-        &operation.source_public_values_hash,
+    let proof_public_values = ensure_vault_bridge_deposit_source_proof(
+        VaultBridgeDepositSourceProof {
+            genesis: Some(genesis),
+            profile,
+            evidence: &operation.evidence,
+            evidence_root: &expected_root,
+            policy_hash: &operation.policy_hash,
+            source_proof_kind: &operation.source_proof_kind,
+            source_proof_hash: &operation.source_proof_hash,
+            source_public_values_hash: &operation.source_public_values_hash,
+            source_proof_bytes: &operation.source_proof_bytes,
+            source_public_values: &operation.source_public_values,
+        },
     )?;
+    if let Some(public_values) = proof_public_values {
+        let state = ledger
+            .ethereum_arbitrum_finality_state_mut(
+                &operation.policy_hash,
+                public_values.route_epoch,
+            )
+            .ok_or_else(|| {
+                (
+                    "pfusdc_finality_state_missing",
+                    "proof-native pfUSDC ingress requires a governance-pinned Ethereum/Arbitrum finality state"
+                        .to_string(),
+                )
+            })?;
+        state
+            .verify_and_advance(&public_values)
+            .map_err(|error| ("pfusdc_finality_state_rejected", error))?;
+    }
     if ledger.vault_bridge_deposits.iter().any(|record| {
         record.asset_id == operation.asset_id
             && record.evidence.deposit_id == operation.evidence.deposit_id
@@ -960,6 +983,21 @@ fn apply_vault_bridge_deposit_propose(
     .map_err(|error| ("bad_vault_bridge_deposit", error))?;
     ledger.vault_bridge_deposits.push(record);
     Ok(())
+}
+
+#[cfg(test)]
+fn apply_vault_bridge_deposit_propose(
+    ledger: &mut LedgerState,
+    operation: &VaultBridgeDepositProposeOperation,
+    block_height: u64,
+) -> Result<(), (&'static str, String)> {
+    let genesis = Genesis::new("postfiat-execution-test");
+    apply_vault_bridge_deposit_propose_with_genesis(
+        &genesis,
+        ledger,
+        operation,
+        block_height,
+    )
 }
 
 fn ensure_vault_bridge_deposit_admission_hygiene(
@@ -1511,15 +1549,18 @@ fn apply_vault_bridge_deposit_finalize_with_compatibility(
         &record.policy_hash,
     )?;
     ensure_vault_bridge_source_policy(profile, &record.evidence.source_domain(), &record.policy_hash)?;
-    ensure_vault_bridge_deposit_source_proof(
+    ensure_vault_bridge_deposit_source_proof(VaultBridgeDepositSourceProof {
+        genesis: None,
         profile,
-        &record.evidence,
-        &record.evidence_root,
-        &record.policy_hash,
-        &record.source_proof_kind,
-        &record.source_proof_hash,
-        &record.source_public_values_hash,
-    )?;
+        evidence: &record.evidence,
+        evidence_root: &record.evidence_root,
+        policy_hash: &record.policy_hash,
+        source_proof_kind: &record.source_proof_kind,
+        source_proof_hash: &record.source_proof_hash,
+        source_public_values_hash: &record.source_public_values_hash,
+        source_proof_bytes: &[],
+        source_public_values: &[],
+    })?;
     match profile.verifier_kind.as_str() {
         NAV_PROFILE_VERIFIER_MULTI_FETCH => {
             let fail_count = record
@@ -1569,7 +1610,8 @@ fn apply_vault_bridge_deposit_finalize_with_compatibility(
                 }
             }
         }
-        NAV_PROFILE_VERIFIER_SP1_GROTH16 => {}
+        NAV_PROFILE_VERIFIER_SP1_GROTH16
+        | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1 => {}
         _ => {
             return Err((
                 "unsupported_vault_bridge_deposit_verifier",
@@ -4369,20 +4411,44 @@ fn apply_vault_bridge_bucket_impair(
     Ok(())
 }
 
+struct VaultBridgeDepositSourceProof<'a> {
+    genesis: Option<&'a Genesis>,
+    profile: &'a NavProofProfile,
+    evidence: &'a VaultBridgeDepositEvidence,
+    evidence_root: &'a str,
+    policy_hash: &'a str,
+    source_proof_kind: &'a str,
+    source_proof_hash: &'a str,
+    source_public_values_hash: &'a str,
+    source_proof_bytes: &'a [u8],
+    source_public_values: &'a [u8],
+}
+
 fn ensure_vault_bridge_deposit_source_proof(
-    profile: &NavProofProfile,
-    evidence: &VaultBridgeDepositEvidence,
-    evidence_root: &str,
-    policy_hash: &str,
-    source_proof_kind: &str,
-    source_proof_hash: &str,
-    source_public_values_hash: &str,
-) -> Result<(), (&'static str, String)> {
+    proof: VaultBridgeDepositSourceProof<'_>,
+) -> Result<
+    Option<postfiat_types::PfUsdcIngressPublicValuesV3>,
+    (&'static str, String),
+> {
+    let VaultBridgeDepositSourceProof {
+        genesis,
+        profile,
+        evidence,
+        evidence_root,
+        policy_hash,
+        source_proof_kind,
+        source_proof_hash,
+        source_public_values_hash,
+        source_proof_bytes,
+        source_public_values,
+    } = proof;
     match profile.verifier_kind.as_str() {
         NAV_PROFILE_VERIFIER_MULTI_FETCH => {
             if !source_proof_kind.is_empty()
                 || !source_proof_hash.is_empty()
                 || !source_public_values_hash.is_empty()
+                || !source_proof_bytes.is_empty()
+                || !source_public_values.is_empty()
             {
                 return Err((
                     "unexpected_vault_bridge_deposit_source_proof",
@@ -4390,7 +4456,7 @@ fn ensure_vault_bridge_deposit_source_proof(
                         .to_string(),
                 ));
             }
-            Ok(())
+            Ok(None)
         }
         NAV_PROFILE_VERIFIER_SP1_GROTH16 => {
             if source_proof_kind != NAV_PROFILE_VERIFIER_SP1_GROTH16
@@ -4413,7 +4479,62 @@ fn ensure_vault_bridge_deposit_source_proof(
                         .to_string(),
                 ));
             }
-            Ok(())
+            Ok(None)
+        }
+        NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1 => {
+            if source_proof_kind != NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+                || source_proof_hash.is_empty()
+                || source_public_values_hash.is_empty()
+            {
+                return Err((
+                    "missing_vault_bridge_deposit_source_proof",
+                    "proof-native vault bridge deposit requires its dedicated proof kind and proof commitments"
+                        .to_string(),
+                ));
+            }
+            // A committed deposit record stores only digests. Replay verifies
+            // the material at proposal execution; later finalization trusts
+            // that consensus-committed record rather than retaining megabytes.
+            let Some(genesis) = genesis else {
+                return Ok(None);
+            };
+            if postfiat_types::pfusdc_ingress_proof_hash_v1(source_proof_bytes)
+                != source_proof_hash
+            {
+                return Err((
+                    "vault_bridge_deposit_source_proof_hash_mismatch",
+                    "source_proof_hash does not commit the supplied proof bytes".to_string(),
+                ));
+            }
+            if postfiat_types::pfusdc_ingress_public_values_hash_v1(source_public_values)
+                != source_public_values_hash
+            {
+                return Err((
+                    "vault_bridge_deposit_source_public_values_hash_mismatch",
+                    "source_public_values_hash does not commit the supplied public values"
+                        .to_string(),
+                ));
+            }
+            verify_bounded_sp1_groth16(
+                profile,
+                NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1,
+                source_proof_bytes,
+                source_public_values,
+            )
+            .map_err(|error| (error.code(), error.message()))?;
+            let public_values =
+                postfiat_types::PfUsdcIngressPublicValuesV3::from_canonical_bytes(
+                    source_public_values,
+                )
+                .map_err(|error| ("pfusdc_ingress_public_values_invalid", error))?;
+            ensure_pfusdc_ingress_public_values_match(
+                genesis,
+                evidence,
+                evidence_root,
+                policy_hash,
+                &public_values,
+            )?;
+            Ok(Some(public_values))
         }
         _ => Err((
             "unsupported_vault_bridge_deposit_verifier",
@@ -4421,6 +4542,55 @@ fn ensure_vault_bridge_deposit_source_proof(
                 .to_string(),
         )),
     }
+}
+
+fn ensure_pfusdc_ingress_public_values_match(
+    genesis: &Genesis,
+    evidence: &VaultBridgeDepositEvidence,
+    evidence_root: &str,
+    policy_hash: &str,
+    values: &postfiat_types::PfUsdcIngressPublicValuesV3,
+) -> Result<(), (&'static str, String)> {
+    let route_epoch = u32::try_from(values.route_epoch).map_err(|_| {
+        (
+            "pfusdc_ingress_route_epoch_invalid",
+            "pfUSDC ingress route epoch exceeds the governed u32 range".to_string(),
+        )
+    })?;
+    let expected_route_binding = postfiat_types::vault_bridge_route_binding(
+        policy_hash,
+        route_epoch,
+    )
+    .map_err(|error| ("pfusdc_ingress_route_binding_invalid", error))?;
+    let expected_genesis_hash = genesis_hash(genesis);
+    let mismatch = values.proof_program_version != 3
+        || values.pftl_chain_id != genesis.chain_id
+        || values.pftl_genesis_hash != expected_genesis_hash
+        || values.pftl_protocol_version != genesis.protocol_version
+        || values.route_profile_hash != policy_hash
+        || values.arbitrum_chain_id != evidence.source_chain_id
+        || values.assertion_l2_block_hash != evidence.block_hash
+        || values.vault_address != evidence.vault_address
+        || values.token_address != evidence.token_address
+        || values.output_item_hash != evidence.tx_hash
+        || values.output_index != evidence.log_index
+        || values.depositor != evidence.depositor
+        || values.pftl_recipient != evidence.pftl_recipient
+        || values.pftl_recipient_hash != evidence.pftl_recipient_hash
+        || values.amount_atoms != evidence.amount_atoms
+        || values.nonce != evidence.nonce
+        || values.route_binding != evidence.route_binding
+        || values.route_binding != expected_route_binding
+        || values.deposit_id != evidence.deposit_id
+        || values.evidence_root != evidence_root;
+    if mismatch {
+        return Err((
+            "pfusdc_ingress_public_values_mismatch",
+            "proof-verified pfUSDC ingress public values do not exactly match the active chain, route, and deposit evidence"
+                .to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn ensure_vault_bridge_asset_policy(
@@ -4499,7 +4669,11 @@ fn validate_vault_bridge_reserve_packet_fields(
         .source_class
         .strip_prefix(VAULT_BRIDGE_PROFILE_SOURCE_CLASS_PREFIX)
         .unwrap_or_default();
-    ensure_vault_bridge_source_policy(profile, source_domain, &profile.valuation_policy_hash)?;
+    ensure_vault_bridge_source_policy(
+        profile,
+        source_domain,
+        vault_bridge_route_policy_hash(profile),
+    )?;
 
     let expected_verified_net_assets =
         vault_bridge_counted_value_for_asset(&ledger.vault_bridge_bucket_states, &operation.asset_id)

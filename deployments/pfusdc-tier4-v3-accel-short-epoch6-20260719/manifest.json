@@ -1,0 +1,242 @@
+{
+  "asset": {
+    "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+    "configuration": {
+      "code": "PFUSDC",
+      "display_name": "proof-native pfUSDC",
+      "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+      "max_supply": 1000000000000000,
+      "precision": 6,
+      "redemption_account": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+      "reserve_operator": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+      "valuation_unit": "USDC",
+      "version": 1
+    }
+  },
+  "contracts": {
+    "artifacts": [
+      {
+        "artifact_sha256": "8245adb91f037d12dd3d56e1853ad935d74fd1e4286d6c6428291b292c259348",
+        "compiler": "0.8.24+commit.e11b9ed9",
+        "contract": "PFTLFinalityVerifierV1",
+        "creation_bytecode_keccak256": "0xfa916a7257b8d7cfc3430905517a859c0849dbed577a709e9610591bf53a5512",
+        "evm_version": "cancun",
+        "metadata_bytecode_hash": "ipfs",
+        "optimizer_enabled": true,
+        "optimizer_runs": 200,
+        "path": "crates/ethereum-contracts/out/PFTLFinalityVerifierV1.sol/PFTLFinalityVerifierV1.json",
+        "unlinked_deployed_bytecode_keccak256": "0x602fb08220e87656e2a7c98b8d862bdbc62a1d75220c22a61d3227bb856ac367"
+      },
+      {
+        "artifact_sha256": "9fcae3e60e21c9cbd839384d062d2a6dc1ca4eb5c57588123c29e94f9b493606",
+        "compiler": "0.8.24+commit.e11b9ed9",
+        "contract": "ERC20BridgeVaultV2",
+        "creation_bytecode_keccak256": "0x38ce311f0b75a423c6ed08a1779bd7f8435a0186ea6460a27f1af28074d3402f",
+        "evm_version": "cancun",
+        "metadata_bytecode_hash": "ipfs",
+        "optimizer_enabled": true,
+        "optimizer_runs": 200,
+        "path": "crates/ethereum-contracts/out/ERC20BridgeVaultV2.sol/ERC20BridgeVaultV2.json",
+        "unlinked_deployed_bytecode_keccak256": "0x5c7b7fa199b587f9ab2703a17378f6fd1642426681d951920129cd2b6bfc2c2c"
+      },
+      {
+        "artifact_sha256": "2a2630c35d5952b59d968b76a5af3b2d0cdd915fa7dd6056b037a79879a03aa1",
+        "compiler": "0.8.24+commit.e11b9ed9",
+        "contract": "PfUsdcIngressAnchorV1",
+        "creation_bytecode_keccak256": "0x8c0134e5734e9023dac898013c34e3beb6e5bdfd3dd7eedc0419a27fd5f68359",
+        "evm_version": "cancun",
+        "metadata_bytecode_hash": "ipfs",
+        "optimizer_enabled": true,
+        "optimizer_runs": 200,
+        "path": "crates/ethereum-contracts/out/PfUsdcIngressAnchorV1.sol/PfUsdcIngressAnchorV1.json",
+        "unlinked_deployed_bytecode_keccak256": "0x3d44eda0e2e1ac5217cadb4b2bb38751d393c0665d582b38581bdec7497247e7"
+      }
+    ],
+    "configuration": {
+      "compiler": "0.8.24+commit.e11b9ed9",
+      "evm_version": "cancun",
+      "finality_verifier_runtime_code_hash": "0x8fb11aa1c93f56c6b58d3868ed76a814c29c1c1cdf7af1552df0c356ee14f3e1",
+      "ingress_anchor_runtime_code_hash": "0xefe877fda2f1fd01177df72bceb08bb961a85a9507a0ac6da51304756f2b9de6",
+      "metadata_bytecode_hash": "ipfs",
+      "optimizer_runs": 200,
+      "vault_runtime_code_hash": "0xc146d992b7a6801415a0ca9b311477283698e420a073cd0198c047b08c48b7b4"
+    },
+    "constructors": {
+      "finality_verifier": {
+        "arbitrum_chain_id": 421614,
+        "asset_id_commitment": "0x24e5fe4c65497dff08ec93064e5eb76e23c61992e7ec2c946136334a28eab403",
+        "initial_checkpoint_commitment": "0x5aa720ee2315f8b1236f14e55921ae99b6d604d9e8680c0c59703c57eb10cbb3",
+        "initial_committee_root_commitment": "0xaaffb2ebf63f1201c65bef3f71537474225cedafdd30dfe0f3a2bfe5887bdc11",
+        "initial_finalized_height": 37,
+        "max_proof_bytes": 4096,
+        "max_public_values_bytes": 16384,
+        "pftl_chain_id_hash": "0xe61f64cfb4299057c29b1c1dbf031c81beeb1b016878f4a087824eaa14c2cc00",
+        "pftl_genesis_hash_commitment": "0x396aceff4e14037223cc2781a3197c8eef78f44903b4e00d2e5441abec789418",
+        "pftl_protocol_version": 1,
+        "program_vkey": "0x00c8d744e19bc828d1b3fb19709d36863d8c5aba14af0ca939eb85fc806f868f",
+        "route_epoch": 6,
+        "route_profile_hash_commitment": "0xbaa73b3ff7eb776ede8f8460ff92d8a246ad5a00c9e7bc58fa1fdf5e356e8880",
+        "sp1_verifier": "0x3b6041173b80e77f038f3f2c0f9744f04837185e",
+        "token": "0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d",
+        "token_runtime_code_hash": "0x9a736af6aac290d9196883e8686fc1d127ff657ca534fe4b88d6d40dc0bc6750",
+        "vault_runtime_code_hash": "0xc146d992b7a6801415a0ca9b311477283698e420a073cd0198c047b08c48b7b4"
+      },
+      "ingress_anchor": {
+        "bridge": "0x38f918d0e9f1b721edaa41302e399fa1b79333a9",
+        "governed_route_binding": "0x214ec06d5c3deea0178039e0d3aa193f8dd1e1bb2a6298ca2fc50acb5d6650ac",
+        "l2_chain_id": 421614,
+        "l2_token": "0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d",
+        "l2_vault": "0xc6e0f9828f7947156a04102d9b72147e4c44589c"
+      },
+      "vault": {
+        "arb_sys": "0x0000000000000000000000000000000000000064",
+        "finality_verifier": "0xe469e7d5335e5bea9c8f2c4bc157243aa37256a2",
+        "ingress_anchor": "0x5495c2edc3d0f34e352c92ca8cd97761ad2a1cb1",
+        "initial_owner": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+        "token": "0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d",
+        "token_runtime_code_hash": "0x9a736af6aac290d9196883e8686fc1d127ff657ca534fe4b88d6d40dc0bc6750"
+      }
+    }
+  },
+  "deployer": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+  "deployment_id": "pfusdc-tier4-v3-accel-short-epoch6-20260719",
+  "deployment_sequence": {
+    "arbitrum": [
+      {
+        "address": "0xc6e0f9828f7947156a04102d9b72147e4c44589c",
+        "contract": "ERC20BridgeVaultV2",
+        "nonce": 26
+      },
+      {
+        "address": "0xe469e7d5335e5bea9c8f2c4bc157243aa37256a2",
+        "contract": "PFTLFinalityVerifierV1",
+        "nonce": 29
+      }
+    ],
+    "ethereum": [
+      {
+        "address": "0x5495c2edc3d0f34e352c92ca8cd97761ad2a1cb1",
+        "contract": "PfUsdcIngressAnchorV1",
+        "nonce": 22
+      }
+    ]
+  },
+  "evm_commitments": {
+    "asset_id_commitment": "0x24e5fe4c65497dff08ec93064e5eb76e23c61992e7ec2c946136334a28eab403",
+    "initial_checkpoint_commitment": "0x5aa720ee2315f8b1236f14e55921ae99b6d604d9e8680c0c59703c57eb10cbb3",
+    "initial_committee_root_commitment": "0xaaffb2ebf63f1201c65bef3f71537474225cedafdd30dfe0f3a2bfe5887bdc11",
+    "pftl_chain_id_hash": "0xe61f64cfb4299057c29b1c1dbf031c81beeb1b016878f4a087824eaa14c2cc00",
+    "pftl_genesis_hash_commitment": "0x396aceff4e14037223cc2781a3197c8eef78f44903b4e00d2e5441abec789418",
+    "route_profile_hash_commitment": "0xbaa73b3ff7eb776ede8f8460ff92d8a246ad5a00c9e7bc58fa1fdf5e356e8880"
+  },
+  "ingress_policy": {
+    "policy": {
+      "arbitrum_chain_id": 421614,
+      "arbitrum_rollup_address": "0x042b2e6c5e99d4c521bd49beed5e99651d9b0cf4",
+      "arbitrum_rollup_runtime_code_hash": "0x5961c8c303762fe3bdc69d0df28db034e475e46ef4e3582c632eaaa51314ce29",
+      "arbitrum_token_address": "0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d",
+      "arbitrum_token_runtime_code_hash": "0x9a736af6aac290d9196883e8686fc1d127ff657ca534fe4b88d6d40dc0bc6750",
+      "arbitrum_vault_address": "0xc6e0f9828f7947156a04102d9b72147e4c44589c",
+      "arbitrum_vault_runtime_code_hash": "0xc146d992b7a6801415a0ca9b311477283698e420a073cd0198c047b08c48b7b4",
+      "ethereum_chain_id": 11155111,
+      "ethereum_genesis_validators_root": "0xd8ea171f3c94aea21ebc42a1ed61052acf3f9209c00e4efbaaddac09ed9b8078",
+      "ethereum_ingress_anchor_address": "0x5495c2edc3d0f34e352c92ca8cd97761ad2a1cb1",
+      "ethereum_ingress_anchor_runtime_code_hash": "0xefe877fda2f1fd01177df72bceb08bb961a85a9507a0ac6da51304756f2b9de6",
+      "rollup_latest_confirmed_storage_slot": "0x0000000000000000000000000000000000000000000000000000000000000074",
+      "schema": "postfiat.pfusdc.ingress_proof_policy.v2"
+    },
+    "policy_hash": "cb62d495bc2c6c98c9fbf2c79bf3e7bcc224eb9ccccb58b34cb958581694e88d"
+  },
+  "invariants": {
+    "anchor_runtime_hash_excludes_route_binding": true,
+    "observer_attestations_required": false,
+    "observer_confirmations_required": false,
+    "proof_encoding_is_groth16": true,
+    "route_and_nav_profile_cross_bound": true,
+    "vault_runtime_hash_excludes_finality_verifier_and_owner": true
+  },
+  "nav_profile": {
+    "challenge_window_blocks": 1,
+    "max_epoch_gap_blocks": 1000,
+    "max_proof_bytes": 4096,
+    "max_public_values_bytes": 16384,
+    "max_snapshot_age_blocks": 100,
+    "min_attestations": 0,
+    "min_challenge_bond": 0,
+    "profile_id": "9367f176b3e685469b97b21368b0d9cd8cc51f47089d0fb062ba08d6974681fe0d915b551ae26578267ec1712f508d84",
+    "registered_by": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+    "settle_deadline_blocks": 1000,
+    "source_class": "vault_bridge:erc20_bridge_vault:421614:0xc6e0f9828f7947156a04102d9b72147e4c44589c:0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d",
+    "sp1_program_vkey": "0x0033bd140207b97fb2442eb279cc2ce55714be6fbcd66beb325fe7c3786d4dfc",
+    "sp1_proof_encoding": "groth16",
+    "tolerance_bp": 0,
+    "valuation_policy_hash": "cb62d495bc2c6c98c9fbf2c79bf3e7bcc224eb9ccccb58b34cb958581694e88d",
+    "vault_bridge_route_policy_hash": "9fb47a665b5772e2c7dc58367384016b205f0635c55d8d52a1906ded33c845e19e3fa158e3a44bc46950e44031a3c272",
+    "verifier_kind": "sp1-arbitrum-finality-v1"
+  },
+  "network": {
+    "arbitrum_arb_sys": "0x0000000000000000000000000000000000000064",
+    "arbitrum_arb_sys_runtime_code_hash": "0xbcc90f2d6dada5b18e155c17a1c0a55920aae94f39857d39d0d8ed07ae8f228b",
+    "arbitrum_chain_id": 421614,
+    "arbitrum_rollup": "0x042b2e6c5e99d4c521bd49beed5e99651d9b0cf4",
+    "arbitrum_rollup_runtime_code_hash": "0x5961c8c303762fe3bdc69d0df28db034e475e46ef4e3582c632eaaa51314ce29",
+    "arbitrum_sp1_verifier": "0x3b6041173b80e77f038f3f2c0f9744f04837185e",
+    "arbitrum_sp1_verifier_runtime_code_hash": "0xdcba737cf430260fdbc8010a56d97a9f29e64465155819e74d75da8f95eb24ed",
+    "arbitrum_token": "0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d",
+    "arbitrum_token_runtime_code_hash": "0x9a736af6aac290d9196883e8686fc1d127ff657ca534fe4b88d6d40dc0bc6750",
+    "ethereum_arbitrum_bridge": "0x38f918d0e9f1b721edaa41302e399fa1b79333a9",
+    "ethereum_arbitrum_bridge_runtime_code_hash": "0x8736329b580cfc0c0c39ee6700515e0bc51652afb614640db9e34a5d784933e8",
+    "ethereum_chain_id": 11155111,
+    "ethereum_genesis_validators_root": "0xd8ea171f3c94aea21ebc42a1ed61052acf3f9209c00e4efbaaddac09ed9b8078",
+    "rollup_latest_confirmed_storage_slot": "0x0000000000000000000000000000000000000000000000000000000000000074"
+  },
+  "pftl": {
+    "chain_id": "postfiat-wan-devnet-2",
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "initial_checkpoint_block_id": "4c70391e5a0d483549b86c4a4bae9828c63eb1ed93dcd5ace3fe8f0a4907b5bb8637c06874a07c9be57b230163a2f28b",
+    "initial_committee_root": "a84d4b4cadc9c068d5c668e040efe9ba303c59560bfb4c315c5b23aa235b8a6a279f3886d1352810e0b83822a90fc5d0",
+    "initial_finalized_height": 37,
+    "protocol_version": 1
+  },
+  "programs": {
+    "egress_elf_sha256": "8e2464227d7428d9928871c4a655fd73f6a87879c2e8eae6c0228a5db367f7bd",
+    "egress_program_vkey": "0x00c8d744e19bc828d1b3fb19709d36863d8c5aba14af0ca939eb85fc806f868f",
+    "ingress_elf_sha256": "7c581aa42a196bd5df5a1efc2c4569663744d9b597cc1cd2253e839f9ba2f921",
+    "ingress_program_vkey": "0x0033bd140207b97fb2442eb279cc2ce55714be6fbcd66beb325fe7c3786d4dfc",
+    "max_proof_bytes": 4096,
+    "max_public_values_bytes": 16384,
+    "proof_encoding": "groth16"
+  },
+  "route_profile": {
+    "profile": {
+      "activation_height": 35,
+      "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+      "challenge_window_blocks": 1,
+      "evidence_tier": "receipt-proven",
+      "expires_at_height": 100000,
+      "max_epoch_gap_blocks": 1000,
+      "max_proof_bytes": 4096,
+      "max_public_values_bytes": 16384,
+      "max_snapshot_age_blocks": 100,
+      "min_attestations": 0,
+      "min_challenge_bond": 0,
+      "minimum_confirmations": 0,
+      "route_epoch": 6,
+      "route_id": "pfusdc-tier4-arbitrum-sepolia-v3-epoch6",
+      "schema": "postfiat.vault_bridge.route_profile.v1",
+      "settle_deadline_blocks": 1000,
+      "source_chain_id": 421614,
+      "token_address": "0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d",
+      "token_runtime_code_hash": "0x9a736af6aac290d9196883e8686fc1d127ff657ca534fe4b88d6d40dc0bc6750",
+      "vault_address": "0xc6e0f9828f7947156a04102d9b72147e4c44589c",
+      "vault_runtime_code_hash": "0xc146d992b7a6801415a0ca9b311477283698e420a073cd0198c047b08c48b7b4",
+      "verifier_kind": "sp1-arbitrum-finality-v1",
+      "verifier_policy_hash": "cb62d495bc2c6c98c9fbf2c79bf3e7bcc224eb9ccccb58b34cb958581694e88d",
+      "verifier_program_vkey": "0x0033bd140207b97fb2442eb279cc2ce55714be6fbcd66beb325fe7c3786d4dfc",
+      "verifier_proof_encoding": "groth16"
+    },
+    "profile_hash": "9fb47a665b5772e2c7dc58367384016b205f0635c55d8d52a1906ded33c845e19e3fa158e3a44bc46950e44031a3c272",
+    "route_binding": "214ec06d5c3deea0178039e0d3aa193f8dd1e1bb2a6298ca2fc50acb5d6650ac"
+  },
+  "schema": "postfiat.pfusdc.tier4_deployment_manifest.v1"
+}

@@ -1404,6 +1404,8 @@
             source_proof_kind: String::new(),
             source_proof_hash: String::new(),
             source_public_values_hash: String::new(),
+            source_proof_bytes: Vec::new(),
+            source_public_values: Vec::new(),
             expires_at_height: 1_000,
         }
     }
@@ -2172,6 +2174,8 @@
                 source_proof_kind: String::new(),
                 source_proof_hash: String::new(),
                 source_public_values_hash: String::new(),
+                source_proof_bytes: Vec::new(),
+                source_public_values: Vec::new(),
                 expires_at_height: 1_000,
             }),
         );

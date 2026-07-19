@@ -32,6 +32,40 @@ fn domain(validators: &ConsensusV2ValidatorSet) -> ConsensusV2Domain {
     )
 }
 
+#[test]
+fn consensus_v2_commit_must_bind_the_exact_bridge_exit_root() {
+    let (validators, _) = committee(6);
+    let domain = domain(&validators);
+    let parent = "11".repeat(48);
+    let payload = "22".repeat(48);
+    let state = "33".repeat(48);
+    let committed_exit_root = "44".repeat(48);
+    let fabricated_exit_root = "55".repeat(48);
+
+    let legacy = consensus_v2_block_ref(&domain, 9, parent.clone(), payload.clone(), state.clone())
+        .expect("legacy block ref");
+    assert!(
+        verify_consensus_v2_bridge_exit_root(&legacy, &committed_exit_root).is_err(),
+        "a legacy finality artifact must not prove any withdrawal packet or exit root"
+    );
+
+    let bound = consensus_v2_block_ref_with_bridge_exit_root(
+        &domain,
+        9,
+        parent,
+        payload,
+        state,
+        committed_exit_root.clone(),
+    )
+    .expect("exit-root-bound block ref");
+    verify_consensus_v2_bridge_exit_root(&bound, &committed_exit_root)
+        .expect("committed exit root must verify");
+    assert!(
+        verify_consensus_v2_bridge_exit_root(&bound, &fabricated_exit_root).is_err(),
+        "a fabricated withdrawal root must not verify under the same finality artifact"
+    );
+}
+
 fn empty_signature(validator: &ConsensusV2Validator) -> ConsensusV2Signature {
     ConsensusV2Signature {
         algorithm_id: ML_DSA_65_ALGORITHM.to_string(),

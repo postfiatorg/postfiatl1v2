@@ -406,10 +406,20 @@ pub fn create_vault_bridge_route_profile_governance(
     )
     .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
     write_amendment_file(&options.amendment_file, &amendment)?;
+    let tier4_finality_bootstrap = options
+        .tier4_finality_bootstrap_file
+        .as_ref()
+        .map(|path| {
+            let raw = read_bounded_json_text_file(path, "Tier-4 finality bootstrap")?;
+            serde_json::from_str::<postfiat_types::EthereumArbitrumFinalityStateV2>(&raw)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+        })
+        .transpose()?;
     let activation = postfiat_types::VaultBridgeRouteProfileActivationV1 {
         schema: postfiat_types::VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
         profile,
         amendment,
+        tier4_finality_bootstrap,
     };
     let batch = build_governance_action_batch_with_vault_bridge_route_profile_activation(
         &genesis,
@@ -431,10 +441,20 @@ pub fn assemble_signed_vault_bridge_route_profile_governance(
     let profile = serde_json::from_str::<postfiat_types::VaultBridgeRouteProfileV1>(&raw)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     let amendment = read_amendment_file(&options.signed_amendment_file)?;
+    let tier4_finality_bootstrap = options
+        .tier4_finality_bootstrap_file
+        .as_ref()
+        .map(|path| {
+            let raw = read_bounded_json_text_file(path, "Tier-4 finality bootstrap")?;
+            serde_json::from_str::<postfiat_types::EthereumArbitrumFinalityStateV2>(&raw)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+        })
+        .transpose()?;
     let activation = postfiat_types::VaultBridgeRouteProfileActivationV1 {
         schema: postfiat_types::VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
         profile,
         amendment,
+        tier4_finality_bootstrap,
     };
     let batch = build_governance_action_batch_with_vault_bridge_route_profile_activation(
         &genesis,

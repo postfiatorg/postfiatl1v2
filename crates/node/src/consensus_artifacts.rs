@@ -10,6 +10,7 @@ impl OwnedBlockEvidence {
             batch_kind: block.header.batch_kind.clone(),
             batch_id: block.header.batch_id.clone(),
             state_root: block.header.state_root.clone(),
+            bridge_exit_root: block.header.bridge_exit_root.clone(),
             receipt_ids: block.receipt_ids.clone(),
             fastpay_pre_state_effects: block.fastpay_pre_state_effects.clone(),
         }
@@ -24,6 +25,7 @@ impl OwnedBlockEvidence {
             batch_kind: proposal.batch_kind.clone(),
             batch_id: proposal.batch_id.clone(),
             state_root: proposal.state_root.clone(),
+            bridge_exit_root: proposal.bridge_exit_root.clone(),
             receipt_ids: proposal.receipt_ids.clone(),
             fastpay_pre_state_effects: proposal.fastpay_pre_state_effects.clone(),
         }
@@ -38,6 +40,7 @@ impl OwnedBlockEvidence {
             batch_kind: &self.batch_kind,
             batch_id: &self.batch_id,
             state_root: &self.state_root,
+            bridge_exit_root: self.bridge_exit_root.as_deref(),
             receipt_ids: &self.receipt_ids,
             fastpay_pre_state_effects: &self.fastpay_pre_state_effects,
         }
@@ -56,6 +59,27 @@ pub(super) fn block_hash(
     evidence: &BlockEvidence<'_>,
     certificate_id: &str,
 ) -> io::Result<String> {
+    if let Some(bridge_exit_root) = evidence.bridge_exit_root {
+        let encoded = serde_json::to_vec(&(
+            "postfiat.block.v3",
+            genesis.chain_id.as_str(),
+            genesis_hash(genesis),
+            genesis.protocol_version,
+            evidence.height,
+            evidence.view,
+            evidence.parent_hash,
+            evidence.proposer,
+            evidence.batch_kind,
+            evidence.batch_id,
+            evidence.state_root,
+            bridge_exit_root,
+            evidence.receipt_ids,
+            certificate_id,
+            evidence.fastpay_pre_state_effects,
+        ))
+        .map_err(invalid_data)?;
+        return Ok(hash_hex("postfiat.block.v3", &encoded));
+    }
     if evidence.fastpay_pre_state_effects.is_empty() {
         let encoded = serde_json::to_vec(&(
             genesis.chain_id.as_str(),
@@ -118,6 +142,7 @@ fn expected_certificate_file_block_hash(
             || proposal.block.height != evidence.height
             || !parent_matches
             || proposal.block.state_root != evidence.state_root
+            || proposal.block.bridge_exit_root.as_deref() != evidence.bridge_exit_root
         {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -1080,6 +1105,26 @@ pub(super) fn validate_block_timeout_vote_set(
 pub(super) fn block_proposal_signature_message(
     proposal: &BlockProposalFile,
 ) -> io::Result<Vec<u8>> {
+    if let Some(bridge_exit_root) = proposal.bridge_exit_root.as_deref() {
+        return serde_json::to_vec(&(
+            "postfiat.block_proposal.signature-message.v3",
+            proposal.chain_id.as_str(),
+            proposal.genesis_hash.as_str(),
+            proposal.protocol_version,
+            proposal.block_height,
+            proposal.view,
+            proposal.parent_hash.as_str(),
+            proposal.proposer.as_str(),
+            proposal.batch_kind.as_str(),
+            proposal.batch_id.as_str(),
+            proposal.payload_hash.as_str(),
+            proposal.state_root.as_str(),
+            bridge_exit_root,
+            proposal.receipt_ids.as_slice(),
+            proposal.fastpay_pre_state_effects.as_slice(),
+        ))
+        .map_err(invalid_data);
+    }
     if !proposal.fastpay_pre_state_effects.is_empty() {
         return serde_json::to_vec(&(
             "postfiat.block_proposal.signature-message.v2",
@@ -1123,6 +1168,32 @@ pub(super) fn block_certificate_vote_message(
     accept: bool,
     registry_root: &str,
 ) -> io::Result<Vec<u8>> {
+    if let Some(bridge_exit_root) = evidence.bridge_exit_root {
+        return serde_json::to_vec(&(
+            "postfiat.block_certificate_vote.message.v3",
+            (
+                genesis.chain_id.as_str(),
+                genesis_hash(genesis),
+                genesis.protocol_version,
+                registry_root,
+                evidence.height,
+                evidence.view,
+                evidence.parent_hash,
+                evidence.proposer,
+                evidence.batch_kind,
+                evidence.batch_id,
+                evidence.state_root,
+                bridge_exit_root,
+            ),
+            (
+                evidence.receipt_ids,
+                evidence.fastpay_pre_state_effects,
+                validator,
+                accept,
+            ),
+        ))
+        .map_err(invalid_data);
+    }
     if !evidence.fastpay_pre_state_effects.is_empty() {
         return serde_json::to_vec(&(
             "postfiat.block_certificate_vote.message.v2",

@@ -2061,7 +2061,12 @@ fn apply_asset_operation(
                     "vault_bridge_deposit_propose transaction kind mismatch".to_string(),
                 ));
             }
-            apply_vault_bridge_deposit_propose(ledger, operation, block_height)
+            apply_vault_bridge_deposit_propose_with_genesis(
+                genesis,
+                ledger,
+                operation,
+                block_height,
+            )
         }
         AssetTransactionOperation::VaultBridgeDepositChallenge(operation) => {
             if transaction.unsigned.transaction_kind

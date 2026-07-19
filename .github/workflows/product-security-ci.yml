@@ -123,7 +123,7 @@ jobs:
           version: v1.7.1
       - name: Offline contract suite
         working-directory: crates/ethereum-contracts
-        run: forge test --no-match-path test/PFTLUniswapOfficialFork.t.sol
+        run: forge test --no-match-path 'test/*Fork.t.sol'
       - name: Official fork test cannot silently pass offline
         working-directory: crates/ethereum-contracts
         shell: bash

@@ -155,6 +155,8 @@ fn deposit_transaction(
                     source_proof_kind: String::new(),
                     source_proof_hash: String::new(),
                     source_public_values_hash: String::new(),
+                    source_proof_bytes: Vec::new(),
+                    source_public_values: Vec::new(),
                     expires_at_height: 1_000,
                 },
             ),
@@ -233,6 +235,7 @@ fn activate_route(
             route.route_epoch,
             route.activation_height,
         ),
+        tier4_finality_bootstrap: None,
     };
     let batch = GovernanceActionBatch::with_vault_bridge_route_profile_activation(
         format!("route-activation-{}", route.route_epoch),
@@ -430,6 +433,7 @@ fn route_profile_record_commits_every_field_and_is_order_independent() {
             first.route_epoch,
             first.activation_height,
         ),
+        tier4_finality_bootstrap: None,
     };
     let record =
         postfiat_types::VaultBridgeRouteProfileRecordV1::new(&activation, 2).expect("route record");
@@ -521,6 +525,7 @@ fn route_profile_record_commits_every_field_and_is_order_independent() {
             second.route_epoch,
             second.activation_height,
         ),
+        tier4_finality_bootstrap: None,
     };
     let second_record = postfiat_types::VaultBridgeRouteProfileRecordV1::new(&second_activation, 3)
         .expect("second route record");
@@ -772,6 +777,7 @@ fn governed_route_state_replays_snapshots_rolls_back_and_reapplies_byte_identica
     create_vault_bridge_route_profile_governance(VaultBridgeRouteProfileGovernanceOptions {
         data_dir: data_dir.clone(),
         profile_file: profile_file.clone(),
+        tier4_finality_bootstrap_file: None,
         validators: vec!["validator-0".to_string()],
         support: vec!["validator-0".to_string()],
         veto_until_height: 0,
@@ -786,6 +792,7 @@ fn governed_route_state_replays_snapshots_rolls_back_and_reapplies_byte_identica
         SignedVaultBridgeRouteProfileGovernanceOptions {
             data_dir: data_dir.clone(),
             profile_file,
+            tier4_finality_bootstrap_file: None,
             signed_amendment_file: signed_route_amendment,
             proposal_slot: 3,
             batch_file: route_batch_file.clone(),
@@ -1059,6 +1066,7 @@ fn route_profile_governance_requires_signed_hash_bound_authorization() {
         create_vault_bridge_route_profile_governance(VaultBridgeRouteProfileGovernanceOptions {
             data_dir: data_dir.clone(),
             profile_file: profile_file.clone(),
+            tier4_finality_bootstrap_file: None,
             validators: vec!["validator-0".to_string()],
             support: vec!["validator-0".to_string()],
             veto_until_height: 0,
@@ -1095,6 +1103,7 @@ fn route_profile_governance_requires_signed_hash_bound_authorization() {
         SignedVaultBridgeRouteProfileGovernanceOptions {
             data_dir: data_dir.clone(),
             profile_file: profile_file.clone(),
+            tier4_finality_bootstrap_file: None,
             signed_amendment_file: signed_amendment_file.clone(),
             proposal_slot: 1,
             batch_file: root.join("route-signed-batch.json"),
@@ -1120,6 +1129,7 @@ fn route_profile_governance_requires_signed_hash_bound_authorization() {
         SignedVaultBridgeRouteProfileGovernanceOptions {
             data_dir,
             profile_file,
+            tier4_finality_bootstrap_file: None,
             signed_amendment_file,
             proposal_slot: 1,
             batch_file: root.join("route-substituted-batch.json"),
@@ -1721,6 +1731,8 @@ fn governed_route_real_anvil_deposit_withdrawal_roundtrip() {
             source_proof_kind: None,
             source_proof_hash: None,
             source_public_values_hash: None,
+            source_proof_file: None,
+            source_public_values_file: None,
         },
         bundle_dir: root.join("deposit-relay"),
         overwrite: false,

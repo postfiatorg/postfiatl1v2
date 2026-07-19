@@ -531,6 +531,8 @@
                 source_proof_kind: None,
                 source_proof_hash: None,
                 source_public_values_hash: None,
+                source_proof_file: None,
+                source_public_values_file: None,
             },
             bundle_dir: bundle_dir.clone(),
             overwrite: false,

@@ -1,0 +1,36 @@
+{
+  "schema": "postfiat-pfusdc-tier4-v3-epoch6-constructor-simulation-v1",
+  "addresses": {
+    "anchor": "0x5495C2EdC3D0F34E352c92CA8cd97761Ad2a1Cb1",
+    "vault": "0xc6E0f9828F7947156A04102D9b72147E4C44589c",
+    "finality_verifier": "0xE469e7d5335e5bEa9c8F2C4BC157243aa37256A2"
+  },
+  "nonces": {
+    "anchor": 22,
+    "vault": 26,
+    "approve": 27,
+    "deposit": 28,
+    "finality_verifier": 29
+  },
+  "runtime_code_hashes": {
+    "anchor": "0xefe877fda2f1fd01177df72bceb08bb961a85a9507a0ac6da51304756f2b9de6",
+    "vault": "0xc146d992b7a6801415a0ca9b311477283698e420a073cd0198c047b08c48b7b4",
+    "finality_verifier": "0x8fb11aa1c93f56c6b58d3868ed76a814c29c1c1cdf7af1552df0c356ee14f3e1"
+  },
+  "runtime_lengths": {
+    "anchor": 2582,
+    "vault": 5002,
+    "finality_verifier": 11319
+  },
+  "constructor_simulations": {
+    "anchor": true,
+    "anchor_final_binding": true,
+    "vault": true,
+    "finality_verifier": true
+  },
+  "input_sha256": "18c3b4dce9a25261dcb32e2d44f20bddf49147d9ec1df7d0a488a3e688363bbf",
+  "manifest_sha256": "b621b912c776c303c044e43cf05c732210e53d3e01ab8787542322a13bd1b141",
+  "route_profile_sha256": "73545802aa0d85ec2a2cb059f65f568fb7623d1b7c558a1a18dbe929bff4e58f",
+  "route_profile_hash": "9fb47a665b5772e2c7dc58367384016b205f0635c55d8d52a1906ded33c845e19e3fa158e3a44bc46950e44031a3c272",
+  "route_binding": "214ec06d5c3deea0178039e0d3aa193f8dd1e1bb2a6298ca2fc50acb5d6650ac"
+}

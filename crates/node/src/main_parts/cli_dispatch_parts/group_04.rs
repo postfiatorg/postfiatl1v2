@@ -805,6 +805,11 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                     support,
                     veto_until_height,
                     profile_file: PathBuf::from(profile_file),
+                    tier4_finality_bootstrap_file: flag_value(
+                        flags,
+                        "--tier4-finality-bootstrap-file",
+                    )
+                    .map(PathBuf::from),
                     amendment_file: PathBuf::from(amendment_file),
                     batch_file: PathBuf::from(batch_file),
                 },
@@ -834,6 +839,11 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                 SignedVaultBridgeRouteProfileGovernanceOptions {
                     data_dir: PathBuf::from(data_dir),
                     profile_file: PathBuf::from(profile_file),
+                    tier4_finality_bootstrap_file: flag_value(
+                        flags,
+                        "--tier4-finality-bootstrap-file",
+                    )
+                    .map(PathBuf::from),
                     signed_amendment_file: PathBuf::from(signed_amendment_file),
                     proposal_slot,
                     batch_file: PathBuf::from(batch_file),
@@ -1364,6 +1374,39 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
             .map_err(|error| format!("blocks failed: {error}"))?;
             let json = serde_json::to_string_pretty(&block_log)
                 .map_err(|error| format!("block serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
+        "pfusdc-egress-witness" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let withdrawal_id = flag_value(flags, "--withdrawal-id")
+                .ok_or("missing --withdrawal-id")?;
+            let witness = pfusdc_egress_witness(PfUsdcEgressWitnessOptions {
+                data_dir: PathBuf::from(data_dir),
+                withdrawal_id: withdrawal_id.to_string(),
+                prior_checkpoint_block_id: flag_value(flags, "--prior-checkpoint").map(str::to_string),
+            })
+            .map_err(|error| format!("pfusdc-egress-witness failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&witness)
+                .map_err(|error| format!("pfUSDC egress witness serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
+        "pfusdc-checkpoint-witness" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let prior_checkpoint_block_id =
+                flag_value(flags, "--prior-checkpoint").ok_or("missing --prior-checkpoint")?;
+            let target_block_id =
+                flag_value(flags, "--target-block").ok_or("missing --target-block")?;
+            let witness = pfusdc_checkpoint_witness(PfUsdcCheckpointWitnessOptions {
+                data_dir: PathBuf::from(data_dir),
+                prior_checkpoint_block_id: prior_checkpoint_block_id.to_string(),
+                target_block_id: target_block_id.to_string(),
+            })
+            .map_err(|error| format!("pfusdc-checkpoint-witness failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&witness).map_err(|error| {
+                format!("pfUSDC checkpoint witness serialization failed: {error}")
+            })?;
             println!("{json}");
             Ok(())
         }

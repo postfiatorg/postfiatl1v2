@@ -10,7 +10,18 @@ publish = false
 [lib]
 path = "src/lib.rs"
 
+[features]
+mldsa-guest-acceleration = [
+  "fips204/precompute-verify-matrix",
+  "fips204/riscv32-verify-arithmetic",
+]
+sp1-cycle-tracking = ["fips204/sp1-cycle-tracking", "dep:sp1-zkvm"]
+
 [dependencies]
 fips204 = { workspace = true }
 sha3 = { workspace = true }
+sp1-zkvm = { version = "=6.3.1", optional = true }
 zeroize = { workspace = true }
+
+[dev-dependencies]
+fips204-reference = { package = "fips204", version = "=0.4.6", default-features = false, features = ["ml-dsa-65"] }

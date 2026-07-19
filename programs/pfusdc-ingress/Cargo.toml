@@ -1,0 +1,41 @@
+[package]
+name = "pfusdc-ingress-program"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "pfusdc-ingress-program"
+path = "src/main.rs"
+
+[dependencies]
+alloy-consensus = "=1.8.3"
+alloy-primitives = { version = "=1.5.7", features = ["sha3-keccak"] }
+alloy-rlp = "=0.3.12"
+alloy-sol-types = "=1.5.7"
+alloy-sol-macro = "=1.5.7"
+alloy-sol-type-parser = "=1.5.7"
+alloy-trie = "=0.9.5"
+helios-consensus-core = { git = "https://github.com/a16z/helios", tag = "0.11.1" }
+postfiat-bridge = { path = "../../crates/bridge" }
+postfiat-types = { path = "../../crates/types" }
+serde = { version = "1.0", features = ["derive"] }
+serde_cbor = "0.11.2"
+sp1-helios-primitives = { git = "https://github.com/succinctlabs/sp1-helios", rev = "b9bdddf8221e31d41075d4a97f9a14ca6df13cf0" }
+sp1-zkvm = "=6.3.1"
+sha3 = "0.10.8"
+tree_hash = "0.10.0"
+
+[workspace]
+
+[patch.crates-io]
+sha2-v0-9-9 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha2", tag = "patch-sha2-0.9.9-sp1-6.0.0" }
+sha2-v0-10-9 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha2", tag = "patch-sha2-0.10.9-sp1-6.0.0" }
+sha3-v0-10-8 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha3", tag = "patch-sha3-0.10.8-sp1-6.0.0" }
+tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", tag = "patch-2.0.2-sp1-6.0.0" }
+bls12_381 = { git = "https://github.com/sp1-patches/bls12_381", tag = "patch-0.8.0-sp1-6.0.0-v2" }
+ethereum_hashing = { git = "https://github.com/ncitron/ethereum_hashing", rev = "7ee70944ed4fabe301551da8c447e4f4ae5e6c35" }

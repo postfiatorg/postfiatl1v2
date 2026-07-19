@@ -1,0 +1,12 @@
+{
+  "egress": {
+    "elf_sha256": "8e2464227d7428d9928871c4a655fd73f6a87879c2e8eae6c0228a5db367f7bd",
+    "program_vkey": "0x00c8d744e19bc828d1b3fb19709d36863d8c5aba14af0ca939eb85fc806f868f"
+  },
+  "ingress": {
+    "elf_sha256": "7c581aa42a196bd5df5a1efc2c4569663744d9b597cc1cd2253e839f9ba2f921",
+    "program_vkey": "0x0033bd140207b97fb2442eb279cc2ce55714be6fbcd66beb325fe7c3786d4dfc"
+  },
+  "schema": "postfiat.pfusdc.tier4_program_info.v1",
+  "sp1_sdk_version": "6.3.1"
+}

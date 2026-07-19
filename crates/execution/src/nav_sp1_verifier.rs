@@ -45,6 +45,46 @@ pub enum NavSp1VerifyError {
     PolicyHashMismatch,
 }
 
+/// Verify a bounded SP1 Groth16 proof without imposing the NAV aggregate
+/// program's ABI. Dedicated bridge programs decode and bind their own public
+/// values after this cryptographic check.
+pub fn verify_bounded_sp1_groth16(
+    profile: &NavProofProfile,
+    expected_verifier_kind: &str,
+    sp1_proof_bytes: &[u8],
+    sp1_public_values: &[u8],
+) -> Result<(), NavSp1VerifyError> {
+    if profile.verifier_kind != expected_verifier_kind {
+        return Err(NavSp1VerifyError::Groth16Invalid);
+    }
+    if sp1_proof_bytes.is_empty() || sp1_public_values.is_empty() {
+        return Err(NavSp1VerifyError::MissingProof);
+    }
+    let max_proof_bytes = if profile.max_proof_bytes == 0 {
+        DEFAULT_MAX_NAV_SP1_PROOF_BYTES
+    } else {
+        profile.max_proof_bytes
+    };
+    let max_public_values_bytes = if profile.max_public_values_bytes == 0 {
+        DEFAULT_MAX_NAV_SP1_PUBLIC_VALUES_BYTES
+    } else {
+        profile.max_public_values_bytes
+    };
+    if sp1_proof_bytes.len() as u64 > max_proof_bytes {
+        return Err(NavSp1VerifyError::ProofTooLarge);
+    }
+    if sp1_public_values.len() as u64 > max_public_values_bytes {
+        return Err(NavSp1VerifyError::PublicValuesTooLarge);
+    }
+    Groth16Verifier::verify(
+        sp1_proof_bytes,
+        sp1_public_values,
+        &profile.sp1_program_vkey,
+        &GROTH16_VK_BYTES,
+    )
+    .map_err(|_| NavSp1VerifyError::Groth16Invalid)
+}
+
 impl NavSp1VerifyError {
     pub fn code(&self) -> &'static str {
         match self {

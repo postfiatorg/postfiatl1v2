@@ -22,6 +22,8 @@ pub const CONSENSUS_V2_TIMEOUT_VOTE_CONTEXT: &[u8] = b"postfiat-l1-v2/consensus-
 
 const CONSENSUS_V2_COMMITTEE_ROOT_DOMAIN: &str = "postfiat.consensus.committee-root.v2";
 const CONSENSUS_V2_BLOCK_ID_DOMAIN: &str = "postfiat.consensus.block-id.v2";
+const CONSENSUS_V2_BRIDGE_EXIT_BLOCK_ID_DOMAIN: &str =
+    "postfiat.consensus.block-id.bridge-exit-root.v1";
 const CONSENSUS_V2_GENESIS_PARENT_ID_DOMAIN: &str = "postfiat.consensus.genesis-parent-id.v2";
 const CONSENSUS_V2_PROPOSAL_ID_DOMAIN: &str = "postfiat.consensus.proposal-id.v2";
 const CONSENSUS_V2_QC_ID_DOMAIN: &str = "postfiat.consensus.qc-id.v2";
@@ -140,7 +142,16 @@ impl ConsensusV2QcGraph {
             .certificates
             .get(&reference.certificate_id)
             .ok_or_else(|| OrderingError::new("consensus v2 QC reference is unresolved"))?;
-        verify_consensus_v2_qc(domain, validators, certificate)?;
+        // `certificates` is private and `insert_verified` is its only mutation
+        // path, so every retained QC has already passed signature, domain, and
+        // committee verification. Re-verifying it for each typed reference is
+        // redundant and makes proof guests repeat the same ML-DSA work.
+        validate_domain_and_committee(domain, validators)?;
+        if certificate.domain != *domain {
+            return Err(OrderingError::new(
+                "consensus v2 QC reference domain mismatch",
+            ));
+        }
         if consensus_v2_qc_ref(certificate)? != *reference {
             return Err(OrderingError::new(
                 "consensus v2 QC reference does not match resolved certificate",
@@ -174,24 +185,68 @@ pub fn consensus_v2_block_ref(
     payload_hash: impl Into<String>,
     state_root: impl Into<String>,
 ) -> Result<ConsensusV2BlockRef, OrderingError> {
+    consensus_v2_block_ref_internal(
+        domain,
+        height,
+        parent_block_id.into(),
+        payload_hash.into(),
+        state_root.into(),
+        None,
+    )
+}
+
+pub fn consensus_v2_block_ref_with_bridge_exit_root(
+    domain: &ConsensusV2Domain,
+    height: u64,
+    parent_block_id: impl Into<String>,
+    payload_hash: impl Into<String>,
+    state_root: impl Into<String>,
+    bridge_exit_root: impl Into<String>,
+) -> Result<ConsensusV2BlockRef, OrderingError> {
+    consensus_v2_block_ref_internal(
+        domain,
+        height,
+        parent_block_id.into(),
+        payload_hash.into(),
+        state_root.into(),
+        Some(bridge_exit_root.into()),
+    )
+}
+
+fn consensus_v2_block_ref_internal(
+    domain: &ConsensusV2Domain,
+    height: u64,
+    parent_block_id: String,
+    payload_hash: String,
+    state_root: String,
+    bridge_exit_root: Option<String>,
+) -> Result<ConsensusV2BlockRef, OrderingError> {
     validate_consensus_v2_domain(domain)?;
     if height == 0 {
         return Err(OrderingError::new(
             "consensus v2 block height must be nonzero",
         ));
     }
-    let parent_block_id = parent_block_id.into();
-    let payload_hash = payload_hash.into();
-    let state_root = state_root.into();
     validate_hash("parent block id", &parent_block_id)?;
     validate_hash("payload hash", &payload_hash)?;
     validate_hash("state root", &state_root)?;
-    let block_id = hash_canonical(CONSENSUS_V2_BLOCK_ID_DOMAIN, |bytes| {
+    if let Some(root) = bridge_exit_root.as_deref() {
+        validate_hash("bridge exit root", root)?;
+    }
+    let block_id_domain = if bridge_exit_root.is_some() {
+        CONSENSUS_V2_BRIDGE_EXIT_BLOCK_ID_DOMAIN
+    } else {
+        CONSENSUS_V2_BLOCK_ID_DOMAIN
+    };
+    let block_id = hash_canonical(block_id_domain, |bytes| {
         append_consensus_v2_domain(bytes, domain);
         append_u64_field(bytes, "height", height);
         append_str_field(bytes, "parent_block_id", &parent_block_id);
         append_str_field(bytes, "payload_hash", &payload_hash);
         append_str_field(bytes, "state_root", &state_root);
+        if let Some(root) = bridge_exit_root.as_deref() {
+            append_str_field(bytes, "bridge_exit_root", root);
+        }
     });
     Ok(ConsensusV2BlockRef {
         height,
@@ -199,7 +254,45 @@ pub fn consensus_v2_block_ref(
         parent_block_id,
         payload_hash,
         state_root,
+        bridge_exit_root,
     })
+}
+
+pub fn verify_consensus_v2_bridge_exit_root(
+    block: &ConsensusV2BlockRef,
+    expected_bridge_exit_root: &str,
+) -> Result<(), OrderingError> {
+    validate_hash("expected bridge exit root", expected_bridge_exit_root)?;
+    match block.bridge_exit_root.as_deref() {
+        Some(actual) if actual == expected_bridge_exit_root => Ok(()),
+        Some(_) => Err(OrderingError::new("consensus v2 bridge exit root mismatch")),
+        None => Err(OrderingError::new(
+            "legacy consensus v2 block does not bind a bridge exit root",
+        )),
+    }
+}
+
+fn recompute_consensus_v2_block_ref(
+    domain: &ConsensusV2Domain,
+    block: &ConsensusV2BlockRef,
+) -> Result<ConsensusV2BlockRef, OrderingError> {
+    match block.bridge_exit_root.as_deref() {
+        Some(root) => consensus_v2_block_ref_with_bridge_exit_root(
+            domain,
+            block.height,
+            block.parent_block_id.clone(),
+            block.payload_hash.clone(),
+            block.state_root.clone(),
+            root.to_string(),
+        ),
+        None => consensus_v2_block_ref(
+            domain,
+            block.height,
+            block.parent_block_id.clone(),
+            block.payload_hash.clone(),
+            block.state_root.clone(),
+        ),
+    }
 }
 
 pub fn consensus_v2_genesis_parent_id(domain: &ConsensusV2Domain) -> Result<String, OrderingError> {
@@ -255,13 +348,7 @@ pub fn verify_consensus_v2_proposal(
             "consensus v2 proposal block height mismatch",
         ));
     }
-    let expected_block = consensus_v2_block_ref(
-        domain,
-        proposal.block.height,
-        proposal.block.parent_block_id.clone(),
-        proposal.block.payload_hash.clone(),
-        proposal.block.state_root.clone(),
-    )?;
+    let expected_block = recompute_consensus_v2_block_ref(domain, &proposal.block)?;
     if expected_block != proposal.block {
         return Err(OrderingError::new(
             "consensus v2 proposal block ID mismatch",
@@ -347,13 +434,7 @@ pub fn verify_consensus_v2_vote(
                 "consensus v2 vote block height mismatch",
             ));
         }
-        let expected = consensus_v2_block_ref(
-            domain,
-            block.height,
-            block.parent_block_id.clone(),
-            block.payload_hash.clone(),
-            block.state_root.clone(),
-        )?;
+        let expected = recompute_consensus_v2_block_ref(domain, block)?;
         if expected != *block {
             return Err(OrderingError::new("consensus v2 vote block ID mismatch"));
         }
@@ -1164,6 +1245,9 @@ fn append_block(bytes: &mut Vec<u8>, block: &ConsensusV2BlockRef) {
     append_str_field(bytes, "block.parent_block_id", &block.parent_block_id);
     append_str_field(bytes, "block.payload_hash", &block.payload_hash);
     append_str_field(bytes, "block.state_root", &block.state_root);
+    if let Some(root) = block.bridge_exit_root.as_deref() {
+        append_str_field(bytes, "block.bridge_exit_root", root);
+    }
 }
 
 fn append_optional_block(bytes: &mut Vec<u8>, block: Option<&ConsensusV2BlockRef>) {

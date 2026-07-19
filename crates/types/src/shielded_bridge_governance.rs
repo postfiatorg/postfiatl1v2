@@ -17,6 +17,8 @@ pub const GOVERNANCE_KIND_ATOMIC_SWAP_ACTIVATION_HEIGHT: &str =
     "atomic_swap_activation_height";
 pub const GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT: &str =
     "replicated_state_v2_activation_height";
+pub const GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT: &str =
+    "bridge_exit_root_activation_height";
 pub const GOVERNANCE_KIND_ATOMIC_SWAP_PAUSE: &str = "atomic_swap_pause";
 pub const GOVERNANCE_KIND_ORCHARD_POOL_PAUSE: &str = "orchard_pool_pause";
 pub const GOVERNANCE_AUTHORITY_MODE_FOUNDATION: u32 = 0;
@@ -699,6 +701,8 @@ pub struct VaultBridgeRouteProfileActivationV1 {
     pub schema: String,
     pub profile: VaultBridgeRouteProfileV1,
     pub amendment: GovernanceAmendment,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tier4_finality_bootstrap: Option<EthereumArbitrumFinalityStateV2>,
 }
 
 impl VaultBridgeRouteProfileActivationV1 {
@@ -707,6 +711,34 @@ impl VaultBridgeRouteProfileActivationV1 {
             return Err("vault bridge route profile activation schema mismatch".to_string());
         }
         self.profile.validate()?;
+        let profile_hash = self.profile.profile_hash()?;
+        match (
+            self.profile.verifier_kind.as_str(),
+            self.tier4_finality_bootstrap.as_ref(),
+        ) {
+            (NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1, Some(state)) => {
+                state.validate()?;
+                if state.route_profile_hash != profile_hash
+                    || state.route_epoch != u64::from(self.profile.route_epoch)
+                    || state.arbitrum_chain_id != self.profile.source_chain_id
+                    || state.vault_address != self.profile.vault_address
+                    || state.vault_runtime_code_hash != self.profile.vault_runtime_code_hash
+                    || state.token_address != self.profile.token_address
+                    || state.token_runtime_code_hash != self.profile.token_runtime_code_hash
+                {
+                    return Err("Tier-4 route finality bootstrap does not match route profile"
+                        .to_string());
+                }
+            }
+            (NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1, None) => {
+                return Err("Tier-4 route activation requires a finality bootstrap".to_string());
+            }
+            (_, Some(_)) => {
+                return Err("non-Tier-4 route activation cannot carry a finality bootstrap"
+                    .to_string());
+            }
+            (_, None) => {}
+        }
         let expected_kind = vault_bridge_route_amendment_kind(&self.profile)?;
         if self.amendment.kind != expected_kind
             || self.amendment.value != self.profile.route_epoch
@@ -995,6 +1027,17 @@ impl GovernanceState {
             .iter()
             .filter(|amendment| {
                 amendment.kind == GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT
+            })
+            .map(|amendment| u64::from(amendment.value))
+            .min()
+    }
+
+    pub fn bridge_exit_root_activation_height(&self) -> Option<u64> {
+        self.amendments
+            .iter()
+            .filter(|amendment| {
+                amendment.kind == GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT
+                    && !amendment.paused
             })
             .map(|amendment| u64::from(amendment.value))
             .min()
@@ -1413,6 +1456,7 @@ mod shielded_bridge_governance_tests {
             schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
             profile: profile.clone(),
             amendment: amendment.clone(),
+            tier4_finality_bootstrap: None,
         };
         let record = VaultBridgeRouteProfileRecordV1::new(&activation, profile.activation_height)
             .expect("route profile record");

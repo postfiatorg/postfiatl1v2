@@ -453,6 +453,11 @@ pub struct VaultBridgeBootstrapBundleOptions {
     pub tolerance_bp: u64,
     pub bridge_observer_min_confirmations: u64,
     pub valuation_policy_hash: String,
+    pub vault_bridge_route_policy_hash: String,
+    pub sp1_program_vkey: String,
+    pub sp1_proof_encoding: String,
+    pub max_proof_bytes: u64,
+    pub max_public_values_bytes: u64,
     pub trust_accounts: Vec<String>,
     pub trust_limit: u64,
     pub trust_reserve_paid: u64,
@@ -494,6 +499,8 @@ pub struct VaultBridgeDepositPlanOptions {
     pub source_proof_kind: Option<String>,
     pub source_proof_hash: Option<String>,
     pub source_public_values_hash: Option<String>,
+    pub source_proof_file: Option<PathBuf>,
+    pub source_public_values_file: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -3435,6 +3442,8 @@ pub struct BlockProposalFile {
     pub batch_id: String,
     pub payload_hash: String,
     pub state_root: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bridge_exit_root: Option<String>,
     pub receipt_count: u64,
     pub receipt_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -3740,6 +3749,7 @@ pub struct VaultBridgeRouteProfileGovernanceOptions {
     pub support: Vec<String>,
     pub veto_until_height: u64,
     pub profile_file: PathBuf,
+    pub tier4_finality_bootstrap_file: Option<PathBuf>,
     pub amendment_file: PathBuf,
     pub batch_file: PathBuf,
 }
@@ -3748,6 +3758,7 @@ pub struct VaultBridgeRouteProfileGovernanceOptions {
 pub struct SignedVaultBridgeRouteProfileGovernanceOptions {
     pub data_dir: PathBuf,
     pub profile_file: PathBuf,
+    pub tier4_finality_bootstrap_file: Option<PathBuf>,
     pub signed_amendment_file: PathBuf,
     pub proposal_slot: u64,
     pub batch_file: PathBuf,

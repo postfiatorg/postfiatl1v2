@@ -347,6 +347,12 @@ pub(super) fn atomic_swap_activation_height_for_chain(
         .or(genesis.atomic_swap_activation_height)
 }
 
+pub(super) fn bridge_exit_root_activation_height_for_chain(
+    governance: &GovernanceState,
+) -> Option<u64> {
+    governance.bridge_exit_root_activation_height()
+}
+
 pub(super) fn asset_execution_compatibility_for_genesis_and_governance(
     genesis: &Genesis,
     governance: &GovernanceState,
@@ -821,10 +827,28 @@ pub(super) fn execute_governance_batch(
                 &activation.profile,
                 &profile_hash,
             )?;
+            if let Some(state) = activation.tier4_finality_bootstrap.as_ref() {
+                if ledger
+                    .ethereum_arbitrum_finality_state(&state.route_profile_hash, state.route_epoch)
+                    .is_some()
+                {
+                    return Err(
+                        "Tier-4 route finality bootstrap already exists for route epoch"
+                            .to_string(),
+                    );
+                }
+            }
             postfiat_types::VaultBridgeRouteProfileRecordV1::new(activation, block_height)
         })();
         match validated {
             Ok(record) => {
+                if let Some(state) = activation.tier4_finality_bootstrap.clone() {
+                    // The validation closure required canonical ledger context;
+                    // therefore an accepted Tier-4 activation must have it.
+                    if let Some(ledger) = ledger.as_deref_mut() {
+                        ledger.ethereum_arbitrum_finality_states.push(state);
+                    }
+                }
                 apply_governance_amendment_with_lifecycle_records(
                     governance,
                     amendment.clone(),
@@ -868,20 +892,23 @@ pub(super) fn validate_vault_bridge_route_profile_against_ledger(
     } else {
         &profile.vault_bridge_route_policy_hash
     };
-    let verifier_contract_matches =
-        if route.verifier_kind == postfiat_types::NAV_PROFILE_VERIFIER_SP1_GROTH16 {
-            profile.valuation_policy_hash == route.verifier_policy_hash
-                && profile.sp1_program_vkey == route.verifier_program_vkey
-                && profile.sp1_proof_encoding == route.verifier_proof_encoding
-                && profile.max_proof_bytes == route.max_proof_bytes
-                && profile.max_public_values_bytes == route.max_public_values_bytes
-        } else {
-            profile.valuation_policy_hash == route_hash
-                && profile.sp1_program_vkey.is_empty()
-                && profile.sp1_proof_encoding.is_empty()
-                && profile.max_proof_bytes == 0
-                && profile.max_public_values_bytes == 0
-        };
+    let verifier_contract_matches = if matches!(
+        route.verifier_kind.as_str(),
+        postfiat_types::NAV_PROFILE_VERIFIER_SP1_GROTH16
+            | postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+    ) {
+        profile.valuation_policy_hash == route.verifier_policy_hash
+            && profile.sp1_program_vkey == route.verifier_program_vkey
+            && profile.sp1_proof_encoding == route.verifier_proof_encoding
+            && profile.max_proof_bytes == route.max_proof_bytes
+            && profile.max_public_values_bytes == route.max_public_values_bytes
+    } else {
+        profile.valuation_policy_hash == route_hash
+            && profile.sp1_program_vkey.is_empty()
+            && profile.sp1_proof_encoding.is_empty()
+            && profile.max_proof_bytes == 0
+            && profile.max_public_values_bytes == 0
+    };
     if profile.source_class != expected_source_class
         || effective_route_policy_hash != route_hash
         || profile.verifier_kind != route.verifier_kind
@@ -923,6 +950,15 @@ pub(super) fn governance_amendment_lifecycle_rejection(
         return Some((
             "invalid_replicated_state_v2_activation_height",
             "replicated-state-v2 activation must be scheduled strictly after the amendment block"
+                .to_string(),
+        ));
+    }
+    if amendment.kind == GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT
+        && u64::from(amendment.value) <= block_height
+    {
+        return Some((
+            "invalid_bridge_exit_root_activation_height",
+            "bridge-exit-root activation must be scheduled strictly after the amendment block"
                 .to_string(),
         ));
     }
@@ -1047,6 +1083,10 @@ pub(super) fn governance_amendment_current_value(governance: &GovernanceState, k
             .unwrap_or(0),
         GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT => governance
             .replicated_state_v2_activation_height()
+            .and_then(|height| u32::try_from(height).ok())
+            .unwrap_or(0),
+        GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT => governance
+            .bridge_exit_root_activation_height()
             .and_then(|height| u32::try_from(height).ok())
             .unwrap_or(0),
         _ => 0,

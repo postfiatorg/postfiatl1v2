@@ -118,7 +118,9 @@ use postfiat_node::{
     vault_bridge_deposit_relay_rpc_bundle, vault_bridge_receipts, vault_bridge_route,
     vault_bridge_status,
     vault_bridge_withdrawal_plan, vault_bridge_withdrawal_relay_bundle,
-    vault_bridge_withdrawal_signature_bundle, verify_block_proposal_equivocation,
+    vault_bridge_withdrawal_signature_bundle, pfusdc_checkpoint_witness,
+    pfusdc_egress_witness,
+    verify_block_proposal_equivocation,
     verify_block_timeout_certificate_file, verify_block_vote_equivocation, verify_blocks,
     verify_bridge, verify_consensus_v2_proposal_matches_block, verify_deployment_manifest,
     verify_governance_amendment_replay_bundle, verify_governance_genesis_bundle,
@@ -178,6 +180,7 @@ use postfiat_node::{
     NavcoinBridgePacketOptions, NavcoinBridgePacketPreflightOptions,
     NavcoinBridgePrimarySubscribeOptions, NavcoinBridgeReceiptReplayOptions,
     NavcoinBridgeRecordForkRehearsalOptions, NavcoinBridgeRecordReturnBurnOptions,
+    PfUsdcCheckpointWitnessOptions, PfUsdcEgressWitnessOptions,
     NavcoinBridgeRefundSourceOptions, NavcoinBridgeReturnBurnRequestOptions,
     NavcoinBridgeRouteInitOptions, NavcoinBridgeRoutesOptions, NavcoinBridgeSupplyStatusOptions,
     NftFeeQuoteOptions, NftInfoOptions, NodeOptions, OfferFeeQuoteOptions, OfferFeeQuoteReport,
@@ -248,9 +251,11 @@ use postfiat_types::{
     DEFAULT_BRIDGE_DOMAIN_ID, DEFAULT_SHIELDED_ASSET_ID, GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED,
     GOVERNANCE_AUTHORITY_MODE_FOUNDATION, GOVERNANCE_KIND_ATOMIC_SWAP_ACTIVATION_HEIGHT,
     GOVERNANCE_KIND_ATOMIC_SWAP_PAUSE, GOVERNANCE_KIND_AUTHORITY_MODE,
+    GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT,
     GOVERNANCE_KIND_BRIDGE_VERIFICATION_ACTIVATION_HEIGHT, GOVERNANCE_KIND_BRIDGE_WITNESS_EPOCH,
     GOVERNANCE_KIND_CRYPTO_POLICY, GOVERNANCE_KIND_ORCHARD_POOL_PAUSE,
     GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT,
+    GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT,
 };
 
 const DEFAULT_DATA_DIR: &str = ".postfiat/node0";
@@ -415,8 +420,10 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "ratify-orchard-pool-pause"
         | "ratify-atomic-swap-pause"
         | "ratify-bridge-verification-activation-height"
+        | "ratify-vault-bridge-route-authority-activation-height"
         | "ratify-atomic-swap-activation-height"
         | "ratify-replicated-state-v2-activation-height"
+        | "ratify-bridge-exit-root-activation-height"
         | "governance-authorization-sign"
         | "governance-amendment-assemble"
         | "ethereum-checkpoint-observe"
@@ -505,6 +512,8 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "issuer_nfts"
         | "receipts"
         | "blocks"
+        | "pfusdc-egress-witness"
+        | "pfusdc-checkpoint-witness"
         | "block-vote"
         | "block-vote-equivocation"
         | "block-vote-equivocation-verify"
