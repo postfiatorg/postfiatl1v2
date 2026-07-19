@@ -1,7 +1,0 @@
-{
-  "elapsed_ms": 29605,
-  "instruction_count": 2030290233,
-  "public_values_bytes": 1486,
-  "schema": "postfiat.pfusdc.egress_execute_report.v1",
-  "witness": "/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/docs/evidence/pfusdc-tier4-egress-live-corrected/witness.json"
-}

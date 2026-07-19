@@ -1,7 +1,0 @@
-{
-  "elapsed_ms": 2537,
-  "instruction_count": 34232974,
-  "public_values_bytes": 1306,
-  "schema": "postfiat.pfusdc.ingress_execute_report.v1",
-  "witness": "/workspace/pfusdc-tier4-v3/input/fresh-epoch6-ingress-witness.json"
-}

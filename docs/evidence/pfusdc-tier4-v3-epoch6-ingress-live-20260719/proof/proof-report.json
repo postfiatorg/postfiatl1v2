@@ -1,8 +1,0 @@
-{
-  "program_vkey": "0x0033bd140207b97fb2442eb279cc2ce55714be6fbcd66beb325fe7c3786d4dfc",
-  "proof_bytes": 356,
-  "proof_mode": "groth16",
-  "public_values_bytes": 1306,
-  "schema": "postfiat.pfusdc.ingress_proof_report.v1",
-  "setup_and_prove_ms": 75149
-}
