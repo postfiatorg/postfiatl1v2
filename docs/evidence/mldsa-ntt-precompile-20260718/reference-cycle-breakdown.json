@@ -1,0 +1,39 @@
+{
+  "cycle_tracker": {
+    "mldsa.decode.public_key": 35532432,
+    "mldsa.decode.signature": 39911866,
+    "mldsa.encode.commitment": 19569420,
+    "mldsa.ntt.forward": 84959784,
+    "mldsa.ntt.inverse": 82923048,
+    "mldsa.pointwise.challenge_t1": 17346888,
+    "mldsa.pointwise.matvec": 65553696,
+    "mldsa.poly.use_hint": 22630119,
+    "mldsa.shake.challenge": 1562552,
+    "mldsa.shake.commitment": 1578564,
+    "mldsa.shake.expand_a": 196832292,
+    "mldsa.shake.message": 2178578,
+    "mldsa.shake.public_key": 3385512,
+    "mldsa.verify.total": 695624363
+  },
+  "elapsed_ms": 21010,
+  "instruction_count": 1425315279,
+  "invocation_tracker": {
+    "mldsa.decode.public_key": 468,
+    "mldsa.decode.signature": 468,
+    "mldsa.encode.commitment": 468,
+    "mldsa.ntt.forward": 1404,
+    "mldsa.ntt.inverse": 468,
+    "mldsa.pointwise.challenge_t1": 468,
+    "mldsa.pointwise.matvec": 468,
+    "mldsa.poly.use_hint": 468,
+    "mldsa.shake.challenge": 468,
+    "mldsa.shake.commitment": 468,
+    "mldsa.shake.expand_a": 468,
+    "mldsa.shake.message": 468,
+    "mldsa.shake.public_key": 468,
+    "mldsa.verify.total": 468
+  },
+  "public_values_bytes": 1486,
+  "schema": "postfiat.pfusdc.egress_execute_report.v1",
+  "witness": "benchmark-inputs/archived-26-block-witness.json"
+}

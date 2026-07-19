@@ -24,6 +24,7 @@ members = [
 exclude = [
     "programs/pfusdc-egress",
     "programs/pfusdc-ingress",
+    "third_party/fips204",
     "tools/pfusdc-tier4-prover",
 ]
 resolver = "2"
@@ -35,7 +36,7 @@ repository = "https://github.com/postfiatorg/postfiatl1v2"
 
 [workspace.dependencies]
 base64 = "0.22"
-fips204 = "0.4.6"
+fips204 = { path = "third_party/fips204", version = "=0.4.6" }
 flate2 = "1"
 incrementalmerkletree = "0.8.2"
 nonempty = "0.11.0"

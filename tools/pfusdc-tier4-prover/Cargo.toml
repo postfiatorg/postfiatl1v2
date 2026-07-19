@@ -5,6 +5,10 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 publish = false
 
+[features]
+sp1-cuda = ["sp1-sdk/cuda"]
+sp1-profiling = ["sp1-sdk/profiling"]
+
 [dependencies]
 anyhow = "1.0"
 alloy = { version = "=1.8.3", default-features = false, features = ["std", "consensus", "rpc-types", "serde", "sha3-keccak"] }
