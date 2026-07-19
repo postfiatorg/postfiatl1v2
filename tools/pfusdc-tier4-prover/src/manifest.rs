@@ -177,8 +177,9 @@ fn build_manifest(input: &DeploymentManifestInputV1) -> Result<Value> {
         bail!("pfUSDC asset configuration is not the Tier-4 v1 bootstrap configuration");
     }
     if input.route.route_epoch == 0
-        || input.route.activation_height <= input.pftl.initial_finalized_height
+        || input.route.activation_height == 0
         || input.route.expires_at_height <= input.route.activation_height
+        || input.route.expires_at_height <= input.pftl.initial_finalized_height
     {
         bail!("route epoch/lifetime is inconsistent with the initial finalized checkpoint");
     }
@@ -744,5 +745,29 @@ mod tests {
         assert!(error
             .to_string()
             .contains("supported Ethereum/Arbitrum Sepolia binding"));
+    }
+
+    #[test]
+    fn manifest_accepts_honest_checkpoint_pinned_after_route_activation() {
+        let mut input = input();
+        input.pftl.initial_finalized_height = 25;
+        input.route.activation_height = 20;
+
+        let pinned = build_manifest(&input).expect("route remains live at pinned checkpoint");
+        assert_eq!(pinned["route_profile"]["profile"]["activation_height"], 20);
+        assert_eq!(pinned["pftl"]["initial_finalized_height"], 25);
+    }
+
+    #[test]
+    fn manifest_rejects_route_expired_at_pinned_checkpoint() {
+        let mut input = input();
+        input.pftl.initial_finalized_height = 25;
+        input.route.activation_height = 20;
+        input.route.expires_at_height = 25;
+
+        let error = build_manifest(&input).expect_err("expired pinned route must fail");
+        assert!(error
+            .to_string()
+            .contains("route epoch/lifetime is inconsistent"));
     }
 }
