@@ -10,6 +10,10 @@ publish = false
 [lib]
 path = "src/lib.rs"
 
+[features]
+mldsa-guest-acceleration = ["postfiat-crypto-provider/mldsa-guest-acceleration"]
+mldsa-cycle-tracking = ["postfiat-crypto-provider/sp1-cycle-tracking"]
+
 [dependencies]
 postfiat-crypto-provider = { path = "../crypto_provider" }
 postfiat-consensus-cobalt = { path = "../consensus_cobalt" }

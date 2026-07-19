@@ -5,6 +5,11 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 publish = false
 
+[features]
+mldsa-guest-acceleration = ["postfiat-pfusdc-proofs/mldsa-guest-acceleration"]
+mldsa-cycle-tracking = ["postfiat-pfusdc-proofs/mldsa-cycle-tracking"]
+default = ["mldsa-guest-acceleration"]
+
 [dependencies]
 postfiat-pfusdc-proofs = { path = "../../crates/pfusdc_proofs" }
 postfiat-types = { path = "../../crates/types" }

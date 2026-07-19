@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf, time::Instant};
+use std::{collections::BTreeMap, fs, path::PathBuf, time::Instant};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -267,6 +267,16 @@ async fn prove_egress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) -
     let client = ProverClient::from_env().await;
     let started = Instant::now();
     let (executed_public_values, report) = client.execute(EGRESS_ELF, stdin.clone()).await?;
+    let cycle_tracker = report
+        .cycle_tracker
+        .iter()
+        .map(|(label, cycles)| (label.clone(), *cycles))
+        .collect::<BTreeMap<_, _>>();
+    let invocation_tracker = report
+        .invocation_tracker
+        .iter()
+        .map(|(label, invocations)| (label.clone(), *invocations))
+        .collect::<BTreeMap<_, _>>();
     let executed = executed_public_values.to_vec();
     if executed != expected_public_values {
         fs::create_dir_all(&output_dir)?;
@@ -303,6 +313,8 @@ async fn prove_egress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) -
             "witness": witness_path,
             "elapsed_ms": started.elapsed().as_millis(),
             "instruction_count": report.total_instruction_count(),
+            "cycle_tracker": cycle_tracker,
+            "invocation_tracker": invocation_tracker,
             "public_values_bytes": executed.len(),
         }))?,
     )?;

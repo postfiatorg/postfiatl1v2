@@ -1,0 +1,9 @@
+{
+  "cycle_tracker": {},
+  "elapsed_ms": 16705,
+  "instruction_count": 1050064162,
+  "invocation_tracker": {},
+  "public_values_bytes": 1486,
+  "schema": "postfiat.pfusdc.egress_execute_report.v1",
+  "witness": "benchmark-inputs/archived-26-block-witness.json"
+}

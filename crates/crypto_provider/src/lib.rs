@@ -3,6 +3,12 @@ use fips204::traits::{KeyGen, SerDes, Signer, Verifier};
 use sha3::{Digest, Sha3_384};
 use zeroize::Zeroizing;
 
+#[cfg(feature = "mldsa-guest-acceleration")]
+use std::{
+    collections::{BTreeMap, VecDeque},
+    sync::{Mutex, OnceLock},
+};
+
 pub const CRATE_PURPOSE: &str = "versioned post-quantum crypto provider interfaces";
 pub const ML_DSA_65_ALGORITHM: &str = "ML-DSA-65";
 pub const ML_DSA_65_PUBLIC_KEY_BYTES: usize = ml_dsa_65::PK_LEN;
@@ -99,16 +105,107 @@ pub fn ml_dsa_65_verify_with_context(
     signature: &[u8],
     context: &[u8],
 ) -> bool {
+    #[cfg(feature = "sp1-cycle-tracking")]
+    sp1_zkvm::io::write(1, b"cycle-tracker-report-start:mldsa.verify.total\n");
+    let verified = (|| {
+        let Ok(public_key_bytes) = public_key_array(public_key) else {
+            return false;
+        };
+        let Ok(signature_bytes) = signature_array(signature) else {
+            return false;
+        };
+        #[cfg(feature = "mldsa-guest-acceleration")]
+        {
+            prepared_ml_dsa_65_verify(public_key_bytes, message, &signature_bytes, context)
+        }
+        #[cfg(not(feature = "mldsa-guest-acceleration"))]
+        {
+            ml_dsa_65_verify_arrays_reference(public_key_bytes, message, &signature_bytes, context)
+        }
+    })();
+    #[cfg(feature = "sp1-cycle-tracking")]
+    sp1_zkvm::io::write(1, b"cycle-tracker-report-end:mldsa.verify.total\n");
+    verified
+}
+
+/// Reference ML-DSA-65 verification path used as the differential oracle and
+/// fail-safe fallback for the guest-only prepared-key acceleration.
+pub fn ml_dsa_65_verify_with_context_reference(
+    public_key: &[u8],
+    message: &[u8],
+    signature: &[u8],
+    context: &[u8],
+) -> bool {
     let Ok(public_key) = public_key_array(public_key) else {
         return false;
     };
     let Ok(signature) = signature_array(signature) else {
         return false;
     };
+    ml_dsa_65_verify_arrays_reference(public_key, message, &signature, context)
+}
+
+fn ml_dsa_65_verify_arrays_reference(
+    public_key: [u8; ml_dsa_65::PK_LEN],
+    message: &[u8],
+    signature: &[u8; ml_dsa_65::SIG_LEN],
+    context: &[u8],
+) -> bool {
     let Ok(public_key) = ml_dsa_65::PublicKey::try_from_bytes(public_key) else {
         return false;
     };
-    public_key.verify(message, &signature, context)
+    public_key.verify(message, signature, context)
+}
+
+#[cfg(feature = "mldsa-guest-acceleration")]
+const ML_DSA_65_PREPARED_CACHE_CAPACITY: usize = 64;
+
+#[cfg(feature = "mldsa-guest-acceleration")]
+struct MlDsa65PreparedCache {
+    entries: BTreeMap<[u8; ml_dsa_65::PK_LEN], ml_dsa_65::PublicKey>,
+    insertion_order: VecDeque<[u8; ml_dsa_65::PK_LEN]>,
+}
+
+#[cfg(feature = "mldsa-guest-acceleration")]
+impl MlDsa65PreparedCache {
+    fn new() -> Self {
+        Self {
+            entries: BTreeMap::new(),
+            insertion_order: VecDeque::new(),
+        }
+    }
+
+    fn prepare(&mut self, public_key: [u8; ml_dsa_65::PK_LEN]) -> Option<&ml_dsa_65::PublicKey> {
+        if !self.entries.contains_key(&public_key) {
+            let prepared = ml_dsa_65::PublicKey::try_from_bytes(public_key).ok()?;
+            if self.entries.len() == ML_DSA_65_PREPARED_CACHE_CAPACITY {
+                if let Some(evicted) = self.insertion_order.pop_front() {
+                    self.entries.remove(&evicted);
+                }
+            }
+            self.insertion_order.push_back(public_key);
+            self.entries.insert(public_key, prepared);
+        }
+        self.entries.get(&public_key)
+    }
+}
+
+#[cfg(feature = "mldsa-guest-acceleration")]
+fn prepared_ml_dsa_65_verify(
+    public_key: [u8; ml_dsa_65::PK_LEN],
+    message: &[u8],
+    signature: &[u8; ml_dsa_65::SIG_LEN],
+    context: &[u8],
+) -> bool {
+    static CACHE: OnceLock<Mutex<MlDsa65PreparedCache>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(MlDsa65PreparedCache::new()));
+    let mut cache = match cache.lock() {
+        Ok(cache) => cache,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    cache
+        .prepare(public_key)
+        .is_some_and(|prepared| prepared.verify(message, signature, context))
 }
 
 pub fn ml_dsa_65_validate_public_key(public_key: &[u8]) -> Result<(), CryptoError> {
@@ -187,6 +284,28 @@ fn signature_array(signature: &[u8]) -> Result<[u8; ml_dsa_65::SIG_LEN], CryptoE
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fips204_reference::ml_dsa_65 as reference_ml_dsa_65;
+    use fips204_reference::traits::{SerDes as ReferenceSerDes, Verifier as ReferenceVerifier};
+
+    fn reference_oracle_verify(
+        public_key: &[u8],
+        message: &[u8],
+        signature: &[u8],
+        context: &[u8],
+    ) -> bool {
+        let Ok(public_key): Result<[u8; reference_ml_dsa_65::PK_LEN], _> = public_key.try_into()
+        else {
+            return false;
+        };
+        let Ok(signature): Result<[u8; reference_ml_dsa_65::SIG_LEN], _> = signature.try_into()
+        else {
+            return false;
+        };
+        let Ok(public_key) = reference_ml_dsa_65::PublicKey::try_from_bytes(public_key) else {
+            return false;
+        };
+        public_key.verify(message, &signature, context)
+    }
 
     #[test]
     fn ml_dsa_65_signs_and_verifies() {
@@ -282,6 +401,192 @@ mod tests {
         );
         assert!(ml_dsa_65_verify(&first.public_key, message, &signature));
         assert!(!ml_dsa_65_verify(&other.public_key, message, &signature));
+    }
+
+    #[test]
+    fn accelerated_verify_matches_fips204_0_4_6_on_valid_and_negative_cases() {
+        for case in 0u8..16 {
+            let mut key_seed = [0u8; 32];
+            for (index, byte) in key_seed.iter_mut().enumerate() {
+                *byte = case
+                    .wrapping_mul(17)
+                    .wrapping_add(u8::try_from(index).unwrap());
+            }
+            let key_pair = ml_dsa_65_keygen_from_seed(&key_seed);
+            let message = (0..(case as usize * 19 + 1))
+                .map(|index| (index as u8).wrapping_mul(29).wrapping_add(case))
+                .collect::<Vec<_>>();
+            let context = (0..case as usize)
+                .map(|index| (index as u8).wrapping_mul(7).wrapping_add(3))
+                .collect::<Vec<_>>();
+            let mut signature_seed = [0u8; 32];
+            signature_seed.fill(case.wrapping_mul(11).wrapping_add(5));
+            let signature = ml_dsa_65_sign_with_context_seed(
+                &key_pair.private_key,
+                &message,
+                &context,
+                &signature_seed,
+            )
+            .expect("deterministic test signature");
+
+            assert!(reference_oracle_verify(
+                &key_pair.public_key,
+                &message,
+                &signature,
+                &context
+            ));
+            assert!(ml_dsa_65_verify_with_context(
+                &key_pair.public_key,
+                &message,
+                &signature,
+                &context
+            ));
+            assert_eq!(
+                ml_dsa_65_verify_with_context(&key_pair.public_key, &message, &signature, &context),
+                ml_dsa_65_verify_with_context_reference(
+                    &key_pair.public_key,
+                    &message,
+                    &signature,
+                    &context
+                )
+            );
+
+            let mut bad_signature = signature.clone();
+            for index in [0, 31, 32, 511, 1024, ML_DSA_65_SIGNATURE_BYTES - 1] {
+                bad_signature[index] ^= 1u8 << (case % 8);
+                let oracle = reference_oracle_verify(
+                    &key_pair.public_key,
+                    &message,
+                    &bad_signature,
+                    &context,
+                );
+                assert_eq!(
+                    ml_dsa_65_verify_with_context(
+                        &key_pair.public_key,
+                        &message,
+                        &bad_signature,
+                        &context
+                    ),
+                    oracle
+                );
+                assert_eq!(
+                    ml_dsa_65_verify_with_context_reference(
+                        &key_pair.public_key,
+                        &message,
+                        &bad_signature,
+                        &context
+                    ),
+                    oracle
+                );
+                bad_signature[index] ^= 1u8 << (case % 8);
+            }
+
+            let mut wrong_message = message.clone();
+            wrong_message.push(case);
+            assert!(!ml_dsa_65_verify_with_context(
+                &key_pair.public_key,
+                &wrong_message,
+                &signature,
+                &context
+            ));
+            assert!(!ml_dsa_65_verify_with_context(
+                &key_pair.public_key,
+                &message,
+                &signature,
+                b"wrong-context"
+            ));
+            assert!(!ml_dsa_65_verify_with_context(
+                &key_pair.public_key[..ML_DSA_65_PUBLIC_KEY_BYTES - 1],
+                &message,
+                &signature,
+                &context
+            ));
+            assert!(!ml_dsa_65_verify_with_context(
+                &key_pair.public_key,
+                &message,
+                &signature[..ML_DSA_65_SIGNATURE_BYTES - 1],
+                &context
+            ));
+        }
+    }
+
+    #[test]
+    fn accelerated_verify_matches_reference_under_deterministic_mutation_fuzz() {
+        let key_pair = ml_dsa_65_keygen_from_seed(&[0x5au8; 32]);
+        let message = b"postfiat deterministic ML-DSA differential mutation corpus";
+        let context = BLOCK_CERTIFICATE_SIGNATURE_CONTEXT;
+        let signature = ml_dsa_65_sign_with_context_seed(
+            &key_pair.private_key,
+            message,
+            context,
+            &[0xa5u8; 32],
+        )
+        .expect("deterministic mutation seed signature");
+        let mut state = 0x9e37_79b9_7f4a_7c15u64;
+        for _ in 0..512 {
+            state ^= state << 7;
+            state ^= state >> 9;
+            state ^= state << 8;
+            let mut candidate_signature = signature.clone();
+            let first = state as usize % candidate_signature.len();
+            let second = state.rotate_left(23) as usize % candidate_signature.len();
+            candidate_signature[first] ^= (state as u8) | 1;
+            candidate_signature[second] ^= (state.rotate_left(11) as u8) | 1;
+
+            let oracle = reference_oracle_verify(
+                &key_pair.public_key,
+                message,
+                &candidate_signature,
+                context,
+            );
+            assert_eq!(
+                ml_dsa_65_verify_with_context(
+                    &key_pair.public_key,
+                    message,
+                    &candidate_signature,
+                    context
+                ),
+                oracle
+            );
+            assert_eq!(
+                ml_dsa_65_verify_with_context_reference(
+                    &key_pair.public_key,
+                    message,
+                    &candidate_signature,
+                    context
+                ),
+                oracle
+            );
+        }
+    }
+
+    #[cfg(feature = "mldsa-guest-acceleration")]
+    #[test]
+    fn prepared_key_cache_has_deterministic_fifo_capacity() {
+        let mut cache = MlDsa65PreparedCache::new();
+        let mut first_key = None;
+        let mut last_key = None;
+        for case in 0..=ML_DSA_65_PREPARED_CACHE_CAPACITY {
+            let mut seed = [0u8; 32];
+            seed[..8].copy_from_slice(&(case as u64).to_le_bytes());
+            seed[8..].fill(0x6d);
+            let key_pair = ml_dsa_65_keygen_from_seed(&seed);
+            let key: [u8; ML_DSA_65_PUBLIC_KEY_BYTES] = key_pair
+                .public_key
+                .try_into()
+                .expect("fixed-size generated public key");
+            assert!(cache.prepare(key).is_some());
+            first_key.get_or_insert(key);
+            last_key = Some(key);
+        }
+
+        assert_eq!(cache.entries.len(), ML_DSA_65_PREPARED_CACHE_CAPACITY);
+        assert_eq!(
+            cache.insertion_order.len(),
+            ML_DSA_65_PREPARED_CACHE_CAPACITY
+        );
+        assert!(!cache.entries.contains_key(&first_key.unwrap()));
+        assert!(cache.entries.contains_key(&last_key.unwrap()));
     }
 
     #[test]

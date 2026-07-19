@@ -1,7 +1,7 @@
 {
   "egress": {
-    "elf_sha256": "8d2d5ce451bbd91c28f8fafcbd12f7bc961c6a4be59de12e246b8cb6734f81e8",
-    "program_vkey": "0x00eaaf9372917c3edf9d6fdf70ff64ae08ba25e13cb1e2b2ab7b6e9585d50cd4"
+    "elf_sha256": "3c7c6ef8d0395ce1ad00dc0b8d84613c44600c433fe4d559e5481649f93078ea",
+    "program_vkey": "0x008b69a0676137455435bbe635752c1a60c29710a4f9160666ea52a0240d1f10"
   },
   "ingress": {
     "elf_sha256": "7c581aa42a196bd5df5a1efc2c4569663744d9b597cc1cd2253e839f9ba2f921",
