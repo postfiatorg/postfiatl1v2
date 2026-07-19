@@ -3,8 +3,9 @@ use std::{fs, path::PathBuf, str::FromStr};
 use alloy::primitives::{keccak256, Address, B256};
 use anyhow::{bail, Context, Result};
 use pfusdc_ingress_program::{
-    ingress_policy_hash_v2, PfUsdcIngressProofPolicyV2, ARBITRUM_SEPOLIA_CHAIN_ID,
-    ARBITRUM_SEPOLIA_ROLLUP_ADDRESS, ETHEREUM_SEPOLIA_CHAIN_ID,
+    ingress_policy_hash_v2, PfUsdcIngressProofPolicyV2, ARBITRUM_ONE_CHAIN_ID,
+    ARBITRUM_ONE_ROLLUP_ADDRESS, ARBITRUM_SEPOLIA_CHAIN_ID, ARBITRUM_SEPOLIA_ROLLUP_ADDRESS,
+    ETHEREUM_MAINNET_CHAIN_ID, ETHEREUM_MAINNET_GENESIS_VALIDATORS_ROOT, ETHEREUM_SEPOLIA_CHAIN_ID,
     ETHEREUM_SEPOLIA_GENESIS_VALIDATORS_ROOT, NITRO_LATEST_CONFIRMED_STORAGE_SLOT,
     PFUSDC_INGRESS_PROOF_POLICY_SCHEMA_V2,
 };
@@ -311,13 +312,14 @@ fn build_manifest(input: &DeploymentManifestInputV1) -> Result<Value> {
         &input.contracts.ingress_anchor_runtime_code_hash,
     )?;
 
-    if input.network.ethereum_chain_id != ETHEREUM_SEPOLIA_CHAIN_ID
-        || ethereum_genesis_validators_root != ETHEREUM_SEPOLIA_GENESIS_VALIDATORS_ROOT
-        || input.network.arbitrum_chain_id != ARBITRUM_SEPOLIA_CHAIN_ID
-        || rollup_address != ARBITRUM_SEPOLIA_ROLLUP_ADDRESS
-        || rollup_slot != NITRO_LATEST_CONFIRMED_STORAGE_SLOT
-    {
-        bail!("network inputs do not match the supported Ethereum/Arbitrum Sepolia binding");
+    if !supported_network_binding(
+        input.network.ethereum_chain_id,
+        ethereum_genesis_validators_root,
+        input.network.arbitrum_chain_id,
+        rollup_address,
+        rollup_slot,
+    ) {
+        bail!("network inputs do not match a supported Ethereum/Arbitrum binding");
     }
     if bridge_address == Address::ZERO
         || rollup_address == Address::ZERO
@@ -642,6 +644,26 @@ fn lower_b256(value: B256) -> String {
     format!("{value:#x}")
 }
 
+fn supported_network_binding(
+    ethereum_chain_id: u64,
+    ethereum_genesis_validators_root: B256,
+    arbitrum_chain_id: u64,
+    arbitrum_rollup_address: Address,
+    rollup_latest_confirmed_storage_slot: B256,
+) -> bool {
+    // Keep this explicit pair allowlist in sync with the ingress guest's
+    // supported_network_binding. Never accept independently mixed networks.
+    rollup_latest_confirmed_storage_slot == NITRO_LATEST_CONFIRMED_STORAGE_SLOT
+        && ((ethereum_chain_id == ETHEREUM_MAINNET_CHAIN_ID
+            && ethereum_genesis_validators_root == ETHEREUM_MAINNET_GENESIS_VALIDATORS_ROOT
+            && arbitrum_chain_id == ARBITRUM_ONE_CHAIN_ID
+            && arbitrum_rollup_address == ARBITRUM_ONE_ROLLUP_ADDRESS)
+            || (ethereum_chain_id == ETHEREUM_SEPOLIA_CHAIN_ID
+                && ethereum_genesis_validators_root == ETHEREUM_SEPOLIA_GENESIS_VALIDATORS_ROOT
+                && arbitrum_chain_id == ARBITRUM_SEPOLIA_CHAIN_ID
+                && arbitrum_rollup_address == ARBITRUM_SEPOLIA_ROLLUP_ADDRESS))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -674,13 +696,13 @@ mod tests {
                 valuation_unit: "USDC".to_string(),
             },
             network: NetworkInputV1 {
-                ethereum_chain_id: 11_155_111,
+                ethereum_chain_id: ETHEREUM_SEPOLIA_CHAIN_ID,
                 ethereum_genesis_validators_root: lower_b256(
                     ETHEREUM_SEPOLIA_GENESIS_VALIDATORS_ROOT,
                 ),
                 ethereum_arbitrum_bridge: "0x38f918d0e9f1b721edaa41302e399fa1b79333a9".to_string(),
                 ethereum_arbitrum_bridge_runtime_code_hash: format!("0x{}", "45".repeat(32)),
-                arbitrum_chain_id: 421_614,
+                arbitrum_chain_id: ARBITRUM_SEPOLIA_CHAIN_ID,
                 arbitrum_rollup: lower_address(ARBITRUM_SEPOLIA_ROLLUP_ADDRESS),
                 arbitrum_rollup_runtime_code_hash: format!("0x{}", "46".repeat(32)),
                 rollup_latest_confirmed_storage_slot: lower_b256(
@@ -729,6 +751,16 @@ mod tests {
         }
     }
 
+    fn use_mainnet_binding(input: &mut DeploymentManifestInputV1) {
+        input.network.ethereum_chain_id = ETHEREUM_MAINNET_CHAIN_ID;
+        input.network.ethereum_genesis_validators_root =
+            lower_b256(ETHEREUM_MAINNET_GENESIS_VALIDATORS_ROOT);
+        input.network.arbitrum_chain_id = ARBITRUM_ONE_CHAIN_ID;
+        input.network.arbitrum_rollup = lower_address(ARBITRUM_ONE_ROLLUP_ADDRESS);
+        input.network.arbitrum_token = "0xaf88d065e77c8cc2239327c5edb3a432268e5831".to_string();
+        input.route.route_id = "pfusdc-tier4-arbitrum-one-v1".to_string();
+    }
+
     #[test]
     fn manifest_derives_cross_bound_route_and_create_addresses() {
         let output = build_manifest(&input()).expect("build manifest");
@@ -759,13 +791,62 @@ mod tests {
     }
 
     #[test]
-    fn manifest_rejects_mixed_network_binding() {
+    fn manifest_rejects_sepolia_ethereum_with_arbitrum_one() {
         let mut input = input();
-        input.network.arbitrum_chain_id = 42_161;
+        input.network.arbitrum_chain_id = ARBITRUM_ONE_CHAIN_ID;
         let error = build_manifest(&input).expect_err("mixed Sepolia/mainnet binding must fail");
         assert!(error
             .to_string()
-            .contains("supported Ethereum/Arbitrum Sepolia binding"));
+            .contains("supported Ethereum/Arbitrum binding"));
+    }
+
+    #[test]
+    fn manifest_accepts_ethereum_mainnet_arbitrum_one_binding() {
+        let mut input = input();
+        use_mainnet_binding(&mut input);
+
+        let output = build_manifest(&input).expect("build mainnet manifest");
+        assert_eq!(
+            output["ingress_policy"]["policy"]["ethereum_chain_id"],
+            ETHEREUM_MAINNET_CHAIN_ID
+        );
+        assert_eq!(
+            output["ingress_policy"]["policy"]["ethereum_genesis_validators_root"],
+            lower_b256(ETHEREUM_MAINNET_GENESIS_VALIDATORS_ROOT)
+        );
+        assert_eq!(
+            output["ingress_policy"]["policy"]["arbitrum_chain_id"],
+            ARBITRUM_ONE_CHAIN_ID
+        );
+        assert_eq!(
+            output["ingress_policy"]["policy"]["arbitrum_rollup_address"],
+            lower_address(ARBITRUM_ONE_ROLLUP_ADDRESS)
+        );
+    }
+
+    #[test]
+    fn manifest_rejects_mainnet_ethereum_with_arbitrum_sepolia() {
+        let mut input = input();
+        input.network.ethereum_chain_id = ETHEREUM_MAINNET_CHAIN_ID;
+        input.network.ethereum_genesis_validators_root =
+            lower_b256(ETHEREUM_MAINNET_GENESIS_VALIDATORS_ROOT);
+
+        let error = build_manifest(&input).expect_err("mixed mainnet/Sepolia binding must fail");
+        assert!(error
+            .to_string()
+            .contains("supported Ethereum/Arbitrum binding"));
+    }
+
+    #[test]
+    fn manifest_rejects_unknown_network_binding() {
+        let mut input = input();
+        use_mainnet_binding(&mut input);
+        input.network.arbitrum_chain_id = 42_170;
+
+        let error = build_manifest(&input).expect_err("unknown network binding must fail");
+        assert!(error
+            .to_string()
+            .contains("supported Ethereum/Arbitrum binding"));
     }
 
     #[test]
