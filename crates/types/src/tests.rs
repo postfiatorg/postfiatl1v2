@@ -2715,6 +2715,7 @@ fn pfusdc_finality_state_requires_retained_ancestry_and_monotonic_advance() {
             "0x{}",
             values.ingress_anchor_runtime_code_hash
         ),
+        fast_ingress_verifier: None,
         latest: initial.clone(),
         retained: vec![initial],
     };

@@ -919,37 +919,6 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
                 .to_string(),
         ));
     }
-    let proof_public_values = ensure_vault_bridge_deposit_source_proof(
-        VaultBridgeDepositSourceProof {
-            genesis: Some(genesis),
-            profile,
-            evidence: &operation.evidence,
-            evidence_root: &expected_root,
-            policy_hash: &operation.policy_hash,
-            source_proof_kind: &operation.source_proof_kind,
-            source_proof_hash: &operation.source_proof_hash,
-            source_public_values_hash: &operation.source_public_values_hash,
-            source_proof_bytes: &operation.source_proof_bytes,
-            source_public_values: &operation.source_public_values,
-        },
-    )?;
-    if let Some(public_values) = proof_public_values {
-        let state = ledger
-            .ethereum_arbitrum_finality_state_mut(
-                &operation.policy_hash,
-                public_values.route_epoch,
-            )
-            .ok_or_else(|| {
-                (
-                    "pfusdc_finality_state_missing",
-                    "proof-native pfUSDC ingress requires a governance-pinned Ethereum/Arbitrum finality state"
-                        .to_string(),
-                )
-            })?;
-        state
-            .verify_and_advance(&public_values)
-            .map_err(|error| ("pfusdc_finality_state_rejected", error))?;
-    }
     if ledger.vault_bridge_deposits.iter().any(|record| {
         record.asset_id == operation.asset_id
             && record.evidence.deposit_id == operation.evidence.deposit_id
@@ -968,6 +937,106 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
             "vault bridge asset bridge deposit evidence is already proposed".to_string(),
         ));
     }
+    let fast_ingress_verifier = ledger
+        .ethereum_arbitrum_finality_states
+        .iter()
+        .find(|state| state.route_profile_hash == operation.policy_hash)
+        .and_then(|state| state.fast_ingress_verifier.as_ref());
+    let proof_public_values = ensure_vault_bridge_deposit_source_proof(
+        VaultBridgeDepositSourceProof {
+            genesis: Some(genesis),
+            profile,
+            evidence: &operation.evidence,
+            evidence_root: &expected_root,
+            policy_hash: &operation.policy_hash,
+            source_proof_kind: &operation.source_proof_kind,
+            source_proof_hash: &operation.source_proof_hash,
+            source_public_values_hash: &operation.source_public_values_hash,
+            source_proof_bytes: &operation.source_proof_bytes,
+            source_public_values: &operation.source_public_values,
+            fast_ingress_verifier,
+        },
+    )?;
+    let mut advanced_finality = None;
+    let mut advanced_campaign = None;
+    if let Some(public_values) = proof_public_values {
+        let mut state = ledger
+            .ethereum_arbitrum_finality_state_mut(
+                &operation.policy_hash,
+                public_values.route_epoch(),
+            )
+            .ok_or_else(|| {
+                (
+                    "pfusdc_finality_state_missing",
+                    "proof-native pfUSDC ingress requires a governance-pinned Ethereum/Arbitrum finality state"
+                        .to_string(),
+                )
+            })?
+            .clone();
+        match public_values {
+            VerifiedIngressPublicValues::Confirmed(values) => {
+                state
+                    .verify_and_advance(&values)
+                    .map_err(|error| ("pfusdc_finality_state_rejected", error))?;
+            }
+            VerifiedIngressPublicValues::Bonded(values) => {
+                state
+                    .verify_and_advance_bonded(&values)
+                    .map_err(|error| ("pfusdc_bonded_finality_state_rejected", error))?;
+                if ledger.fast_ingress_campaigns.iter().any(|campaign| {
+                    campaign
+                        .mints
+                        .iter()
+                        .any(|mint| mint.deposit_key == values.deposit_key)
+                }) {
+                    return Err((
+                        "pfusdc_fast_ingress_global_replay",
+                        "fast-ingress deposit replay key was consumed in another route epoch"
+                            .to_string(),
+                    ));
+                }
+                let global_exposure = ledger.fast_ingress_campaigns.iter().try_fold(
+                    0_u64,
+                    |total, campaign| {
+                        total.checked_add(campaign.exposure_total_atoms).ok_or_else(|| {
+                            (
+                                "pfusdc_fast_ingress_exposure_overflow",
+                                "global fast-ingress exposure overflow".to_string(),
+                            )
+                        })
+                    },
+                )?;
+                if global_exposure
+                    .checked_add(values.amount_atoms)
+                    .ok_or_else(|| {
+                        (
+                            "pfusdc_fast_ingress_exposure_overflow",
+                            "global fast-ingress exposure overflow".to_string(),
+                        )
+                    })?
+                    > values.cap_atoms
+                {
+                    return Err((
+                        "pfusdc_fast_ingress_global_cap_exceeded",
+                        "fast-ingress mint would exceed the global campaign cap".to_string(),
+                    ));
+                }
+                let mut campaign = ledger
+                    .fast_ingress_campaign(&operation.policy_hash, values.route_epoch)
+                    .cloned()
+                    .map(Ok)
+                    .unwrap_or_else(|| {
+                        postfiat_types::FastIngressCampaignStateV1::from_public_values(&values)
+                    })
+                    .map_err(|error| ("pfusdc_fast_ingress_campaign_invalid", error))?;
+                campaign
+                    .accept_escrowed_mint(&values, block_height)
+                    .map_err(|error| ("pfusdc_fast_ingress_escrow_rejected", error))?;
+                advanced_campaign = Some(campaign);
+            }
+        }
+        advanced_finality = Some(state);
+    }
     let record = VaultBridgeDepositRecord::new(
         operation.asset_id.clone(),
         operation.evidence_root.clone(),
@@ -981,6 +1050,27 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
         operation.expires_at_height,
     )
     .map_err(|error| ("bad_vault_bridge_deposit", error))?;
+    if let Some(state) = advanced_finality {
+        let current = ledger
+            .ethereum_arbitrum_finality_state_mut(&state.route_profile_hash, state.route_epoch)
+            .ok_or_else(|| {
+                (
+                    "pfusdc_finality_state_missing",
+                    "proof-native finality state disappeared during commit".to_string(),
+                )
+            })?;
+        *current = state;
+    }
+    if let Some(campaign) = advanced_campaign {
+        if let Some(current) = ledger.fast_ingress_campaign_mut(
+            &campaign.route_profile_hash,
+            campaign.route_epoch,
+        ) {
+            *current = campaign;
+        } else {
+            ledger.fast_ingress_campaigns.push(campaign);
+        }
+    }
     ledger.vault_bridge_deposits.push(record);
     Ok(())
 }
@@ -1409,6 +1499,13 @@ fn apply_vault_bridge_deposit_attest_with_compatibility(
             "vault bridge asset bridge deposit attestation requires pending evidence".to_string(),
         ));
     }
+    if record.source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 {
+        return Err((
+            "pfusdc_fast_ingress_lifecycle_proof_required",
+            "bonded fast ingress cannot be finalized by the legacy height/attestation path"
+                .to_string(),
+        ));
+    }
     if block_height > record.expires_at_height {
         return Err((
             "stale_vault_bridge_deposit",
@@ -1524,6 +1621,13 @@ fn apply_vault_bridge_deposit_finalize_with_compatibility(
                 "vault bridge asset bridge deposit finalize references missing evidence".to_string(),
             )
         })?;
+    if record.source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 {
+        return Err((
+            "pfusdc_fast_ingress_lifecycle_proof_required",
+            "bonded fast ingress cannot be finalized by the legacy height/attestation path"
+                .to_string(),
+        ));
+    }
     if record.status != VAULT_BRIDGE_DEPOSIT_STATUS_PENDING {
         return Err((
             "vault_bridge_deposit_not_pending",
@@ -1560,6 +1664,7 @@ fn apply_vault_bridge_deposit_finalize_with_compatibility(
         source_public_values_hash: &record.source_public_values_hash,
         source_proof_bytes: &[],
         source_public_values: &[],
+        fast_ingress_verifier: None,
     })?;
     match profile.verifier_kind.as_str() {
         NAV_PROFILE_VERIFIER_MULTI_FETCH => {
@@ -1611,7 +1716,8 @@ fn apply_vault_bridge_deposit_finalize_with_compatibility(
             }
         }
         NAV_PROFILE_VERIFIER_SP1_GROTH16
-        | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1 => {}
+        | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+        | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 => {}
         _ => {
             return Err((
                 "unsupported_vault_bridge_deposit_verifier",
@@ -1639,7 +1745,9 @@ fn apply_vault_bridge_deposit_finalize_with_compatibility(
             ));
         }
     }
-    if profile.max_snapshot_age_blocks > 0 {
+    if record.source_proof_kind != NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+        && profile.max_snapshot_age_blocks > 0
+    {
         let stale_height = record
             .submitted_at_height
             .checked_add(profile.max_snapshot_age_blocks)
@@ -1737,7 +1845,9 @@ fn apply_vault_bridge_deposit_claim(
             "vault bridge asset bridge deposit evidence is expired".to_string(),
         ));
     }
-    if profile.max_snapshot_age_blocks > 0 {
+    if record.source_proof_kind != NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+        && profile.max_snapshot_age_blocks > 0
+    {
         let stale_height = record
             .submitted_at_height
             .checked_add(profile.max_snapshot_age_blocks)
@@ -1766,6 +1876,51 @@ fn apply_vault_bridge_deposit_claim(
             "vault_bridge_deposit_amount_mismatch",
             "vault bridge asset bridge deposit claim amount must match finalized vault evidence".to_string(),
         ));
+    }
+
+    let mut claimed_fast_campaign = None;
+    if record.source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 {
+        let mut campaign = ledger
+            .fast_ingress_campaigns
+            .iter()
+            .find(|campaign| campaign.route_profile_hash == record.policy_hash)
+            .cloned()
+            .ok_or_else(|| {
+                (
+                    "pfusdc_fast_ingress_campaign_missing",
+                    "bonded ingress claim is missing its campaign state".to_string(),
+                )
+            })?;
+        let mint = campaign
+            .mints
+            .iter_mut()
+            .find(|mint| mint.deposit_id == record.evidence.deposit_id)
+            .ok_or_else(|| {
+                (
+                    "pfusdc_fast_ingress_mint_missing",
+                    "bonded ingress claim is missing its escrow mint record".to_string(),
+                )
+            })?;
+        if mint.recipient != operation.recipient
+            || mint.amount_atoms != operation.amount_atoms
+            || mint.claimed
+            || !matches!(
+                mint.status.as_str(),
+                postfiat_types::FAST_INGRESS_MINT_STATUS_FINAL
+                    | postfiat_types::FAST_INGRESS_MINT_STATUS_RELEASED_UNCONFIRMED
+            )
+        {
+            return Err((
+                "pfusdc_fast_ingress_escrow_not_releasable",
+                "provisional pfUSDC remains escrowed until an authenticated lifecycle release"
+                    .to_string(),
+            ));
+        }
+        mint.claimed = true;
+        campaign
+            .validate()
+            .map_err(|error| ("pfusdc_fast_ingress_campaign_invalid", error))?;
+        claimed_fast_campaign = Some(campaign);
     }
 
     let recipient = operation.recipient.clone();
@@ -2001,6 +2156,214 @@ fn apply_vault_bridge_deposit_claim(
         recipient_after,
         recipient_required,
     );
+    if let Some(campaign) = claimed_fast_campaign {
+        let current = ledger
+            .fast_ingress_campaign_mut(&campaign.route_profile_hash, campaign.route_epoch)
+            .ok_or_else(|| {
+                (
+                    "pfusdc_fast_ingress_campaign_missing",
+                    "bonded ingress campaign disappeared during claim".to_string(),
+                )
+            })?;
+        *current = campaign;
+    }
+    Ok(())
+}
+
+fn apply_vault_bridge_fast_ingress_lifecycle(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    operation: &VaultBridgeFastIngressLifecycleOperation,
+    block_height: u64,
+) -> Result<(), (&'static str, String)> {
+    let nav_asset = ledger.nav_asset(&operation.asset_id).cloned().ok_or_else(|| {
+        (
+            "missing_nav_asset",
+            "fast-ingress lifecycle asset is not registered".to_string(),
+        )
+    })?;
+    let source_domain = ledger
+        .vault_bridge_deposits
+        .iter()
+        .find(|record| {
+            record.asset_id == operation.asset_id
+                && record.policy_hash == operation.route_profile_hash
+                && record.source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+        })
+        .map(|record| record.evidence.source_domain())
+        .ok_or_else(|| {
+            (
+                "pfusdc_fast_ingress_mint_missing",
+                "fast-ingress lifecycle has no bonded deposit records".to_string(),
+            )
+        })?;
+    let profile = vault_bridge_profile_for_pinned_policy(
+        ledger,
+        &nav_asset,
+        &source_domain,
+        &operation.route_profile_hash,
+    )?;
+    if profile.verifier_kind != NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+        || operation.source_proof_kind != NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+        || postfiat_types::pfusdc_ingress_proof_hash_v1(&operation.source_proof_bytes)
+            != operation.source_proof_hash
+        || postfiat_types::pfusdc_ingress_public_values_hash_v1(
+            &operation.source_public_values,
+        ) != operation.source_public_values_hash
+    {
+        return Err((
+            "pfusdc_fast_ingress_lifecycle_commitment_mismatch",
+            "fast-ingress lifecycle proof commitments do not match the active route".to_string(),
+        ));
+    }
+    let values = postfiat_types::PfUsdcBondedLifecyclePublicValuesV1::from_canonical_bytes(
+        &operation.source_public_values,
+    )
+    .map_err(|error| ("pfusdc_fast_ingress_lifecycle_public_values_invalid", error))?;
+    if values.pftl_chain_id != genesis.chain_id
+        || values.pftl_genesis_hash != genesis_hash(genesis)
+        || values.pftl_protocol_version != genesis.protocol_version
+        || values.route_profile_hash != operation.route_profile_hash
+        || values.source_assertion_id != operation.source_assertion_id
+    {
+        return Err((
+            "pfusdc_fast_ingress_lifecycle_public_values_mismatch",
+            "fast-ingress lifecycle proof does not match chain, route, or assertion".to_string(),
+        ));
+    }
+    let mut finality = ledger
+        .ethereum_arbitrum_finality_state(
+            &operation.route_profile_hash,
+            values.route_epoch,
+        )
+        .cloned()
+        .ok_or_else(|| {
+            (
+                "pfusdc_finality_state_missing",
+                "fast-ingress lifecycle is missing its finality state".to_string(),
+            )
+        })?;
+    let verifier = finality.fast_ingress_verifier.as_ref().ok_or_else(|| {
+        (
+            "pfusdc_fast_ingress_verifier_missing",
+            "fast-ingress lifecycle is missing its governed secondary verifier".to_string(),
+        )
+    })?;
+    if values.manifest_hash != verifier.deployment_manifest_hash
+        || values.verifier_policy_hash != verifier.verifier_policy_hash
+        || verifier.base_route_profile_hash != operation.route_profile_hash
+        || verifier.route_epoch != values.route_epoch
+    {
+        return Err((
+            "pfusdc_fast_ingress_lifecycle_config_mismatch",
+            "fast-ingress lifecycle public values do not match the governed secondary verifier"
+                .to_string(),
+        ));
+    }
+    verify_bounded_sp1_groth16_with_config(
+        &verifier.verifier_kind,
+        NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1,
+        &verifier.verifier_program_vkey,
+        verifier.max_proof_bytes,
+        verifier.max_public_values_bytes,
+        &operation.source_proof_bytes,
+        &operation.source_public_values,
+    )
+    .map_err(|error| (error.code(), error.message()))?;
+    finality
+        .verify_and_advance_bonded_lifecycle(&values)
+        .map_err(|error| ("pfusdc_fast_ingress_lifecycle_finality_rejected", error))?;
+    let mut campaign = ledger
+        .fast_ingress_campaign(&operation.route_profile_hash, values.route_epoch)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                "pfusdc_fast_ingress_campaign_missing",
+                "fast-ingress lifecycle is missing its campaign".to_string(),
+            )
+        })?;
+    if campaign.asset_id != operation.asset_id {
+        return Err((
+            "pfusdc_fast_ingress_asset_mismatch",
+            "fast-ingress lifecycle asset differs from its campaign".to_string(),
+        ));
+    }
+    let reverted = values.update_kind
+        == postfiat_types::PFUSDC_BONDED_LIFECYCLE_UPDATE_REVERTED;
+    if reverted {
+        campaign
+            .apply_reversion(&values)
+            .map_err(|error| ("pfusdc_fast_ingress_reversion_rejected", error))?;
+    } else {
+        campaign
+            .apply_confirmation(&values)
+            .map_err(|error| ("pfusdc_fast_ingress_confirmation_rejected", error))?;
+    }
+    let deposit_ids = campaign
+        .mints
+        .iter()
+        .filter(|mint| mint.source_assertion_id == values.source_assertion_id)
+        .map(|mint| mint.deposit_id.clone())
+        .collect::<std::collections::BTreeSet<_>>();
+    if deposit_ids.is_empty() {
+        return Err((
+            "pfusdc_fast_ingress_mint_missing",
+            "confirmation has no matching escrowed deposits".to_string(),
+        ));
+    }
+    let matching_records = ledger
+        .vault_bridge_deposits
+        .iter()
+        .enumerate()
+        .filter(|(_, record)| {
+            record.asset_id == operation.asset_id
+                && record.policy_hash == operation.route_profile_hash
+                && deposit_ids.contains(&record.evidence.deposit_id)
+        })
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    if matching_records.len() != deposit_ids.len() {
+        return Err((
+            "pfusdc_fast_ingress_deposit_record_mismatch",
+            "confirmation mint/deposit records are incomplete".to_string(),
+        ));
+    }
+    let mut updated_records = Vec::with_capacity(matching_records.len());
+    for index in &matching_records {
+        let mut record = ledger.vault_bridge_deposits[*index].clone();
+        if reverted {
+            record.status = VAULT_BRIDGE_DEPOSIT_STATUS_CHALLENGED.to_string();
+        } else {
+            record.status = VAULT_BRIDGE_DEPOSIT_STATUS_FINALIZED.to_string();
+            record.finalized_at_height = block_height;
+        }
+        record
+            .validate()
+            .map_err(|error| ("bad_vault_bridge_deposit", error))?;
+        updated_records.push((*index, record));
+    }
+    *ledger
+        .ethereum_arbitrum_finality_state_mut(
+            &operation.route_profile_hash,
+            values.route_epoch,
+        )
+        .ok_or_else(|| {
+            (
+                "pfusdc_finality_state_missing",
+                "fast-ingress finality state disappeared during commit".to_string(),
+            )
+        })? = finality;
+    *ledger
+        .fast_ingress_campaign_mut(&operation.route_profile_hash, values.route_epoch)
+        .ok_or_else(|| {
+            (
+                "pfusdc_fast_ingress_campaign_missing",
+                "fast-ingress campaign disappeared during commit".to_string(),
+            )
+        })? = campaign;
+    for (index, record) in updated_records {
+        ledger.vault_bridge_deposits[index] = record;
+    }
     Ok(())
 }
 
@@ -4422,14 +4785,26 @@ struct VaultBridgeDepositSourceProof<'a> {
     source_public_values_hash: &'a str,
     source_proof_bytes: &'a [u8],
     source_public_values: &'a [u8],
+    fast_ingress_verifier: Option<&'a FastIngressVerifierConfigV1>,
+}
+
+enum VerifiedIngressPublicValues {
+    Confirmed(postfiat_types::PfUsdcIngressPublicValuesV3),
+    Bonded(postfiat_types::PfUsdcBondedIngressPublicValuesV1),
+}
+
+impl VerifiedIngressPublicValues {
+    fn route_epoch(&self) -> u64 {
+        match self {
+            Self::Confirmed(values) => values.route_epoch,
+            Self::Bonded(values) => values.route_epoch,
+        }
+    }
 }
 
 fn ensure_vault_bridge_deposit_source_proof(
     proof: VaultBridgeDepositSourceProof<'_>,
-) -> Result<
-    Option<postfiat_types::PfUsdcIngressPublicValuesV3>,
-    (&'static str, String),
-> {
+) -> Result<Option<VerifiedIngressPublicValues>, (&'static str, String)> {
     let VaultBridgeDepositSourceProof {
         genesis,
         profile,
@@ -4441,7 +4816,74 @@ fn ensure_vault_bridge_deposit_source_proof(
         source_public_values_hash,
         source_proof_bytes,
         source_public_values,
+        fast_ingress_verifier,
     } = proof;
+    if source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 {
+        let config = fast_ingress_verifier.ok_or_else(|| {
+            (
+                "pfusdc_fast_ingress_verifier_missing",
+                "bonded ingress requires a governance-pinned secondary verifier configuration"
+                    .to_string(),
+            )
+        })?;
+        if source_proof_hash.is_empty() || source_public_values_hash.is_empty() {
+            return Err((
+                "missing_vault_bridge_bonded_source_proof",
+                "bonded pfUSDC ingress requires its dedicated proof kind and commitments"
+                    .to_string(),
+            ));
+        }
+        let Some(genesis) = genesis else {
+            return Ok(None);
+        };
+        if postfiat_types::pfusdc_ingress_proof_hash_v1(source_proof_bytes)
+            != source_proof_hash
+            || postfiat_types::pfusdc_ingress_public_values_hash_v1(source_public_values)
+                != source_public_values_hash
+        {
+            return Err((
+                "vault_bridge_bonded_source_commitment_mismatch",
+                "bonded ingress proof/public-values commitment mismatch".to_string(),
+            ));
+        }
+        verify_bounded_sp1_groth16_with_config(
+            &config.verifier_kind,
+            NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1,
+            &config.verifier_program_vkey,
+            config.max_proof_bytes,
+            config.max_public_values_bytes,
+            source_proof_bytes,
+            source_public_values,
+        )
+        .map_err(|error| (error.code(), error.message()))?;
+        let public_values =
+            postfiat_types::PfUsdcBondedIngressPublicValuesV1::from_canonical_bytes(
+                source_public_values,
+            )
+            .map_err(|error| ("pfusdc_bonded_public_values_invalid", error))?;
+        if public_values.manifest_hash != config.deployment_manifest_hash
+            || public_values.verifier_policy_hash != config.verifier_policy_hash
+            || public_values.cap_atoms != config.cap_atoms
+            || public_values.age_margin_blocks != config.age_margin_blocks
+            || public_values.asset_id != config.asset_id
+            || public_values.route_profile_hash != config.base_route_profile_hash
+            || public_values.route_epoch != config.route_epoch
+        {
+            return Err((
+                "pfusdc_fast_ingress_config_mismatch",
+                "bonded ingress public values do not match the governed secondary verifier configuration"
+                    .to_string(),
+            ));
+        }
+        ensure_pfusdc_bonded_public_values_match(
+            genesis,
+            evidence,
+            evidence_root,
+            policy_hash,
+            &public_values,
+        )?;
+        return Ok(Some(VerifiedIngressPublicValues::Bonded(public_values)));
+    }
     match profile.verifier_kind.as_str() {
         NAV_PROFILE_VERIFIER_MULTI_FETCH => {
             if !source_proof_kind.is_empty()
@@ -4534,7 +4976,7 @@ fn ensure_vault_bridge_deposit_source_proof(
                 policy_hash,
                 &public_values,
             )?;
-            Ok(Some(public_values))
+            Ok(Some(VerifiedIngressPublicValues::Confirmed(public_values)))
         }
         _ => Err((
             "unsupported_vault_bridge_deposit_verifier",
@@ -4542,6 +4984,51 @@ fn ensure_vault_bridge_deposit_source_proof(
                 .to_string(),
         )),
     }
+}
+
+fn ensure_pfusdc_bonded_public_values_match(
+    genesis: &Genesis,
+    evidence: &VaultBridgeDepositEvidence,
+    evidence_root: &str,
+    policy_hash: &str,
+    values: &postfiat_types::PfUsdcBondedIngressPublicValuesV1,
+) -> Result<(), (&'static str, String)> {
+    let route_epoch = u32::try_from(values.route_epoch).map_err(|_| {
+        (
+            "pfusdc_bonded_route_epoch_invalid",
+            "bonded ingress route epoch exceeds u32".to_string(),
+        )
+    })?;
+    let expected_route_binding = postfiat_types::vault_bridge_route_binding(
+        policy_hash,
+        route_epoch,
+    )
+    .map_err(|error| ("pfusdc_bonded_route_binding_invalid", error))?;
+    let mismatch = values.proof_program_version != 1
+        || values.pftl_chain_id != genesis.chain_id
+        || values.pftl_genesis_hash != genesis_hash(genesis)
+        || values.pftl_protocol_version != genesis.protocol_version
+        || values.route_profile_hash != policy_hash
+        || values.arbitrum_chain_id != evidence.source_chain_id
+        || values.vault_address != evidence.vault_address
+        || values.token_address != evidence.token_address
+        || values.depositor != evidence.depositor
+        || values.pftl_recipient != evidence.pftl_recipient
+        || values.pftl_recipient_hash != evidence.pftl_recipient_hash
+        || values.amount_atoms != evidence.amount_atoms
+        || values.deposit_nonce != evidence.nonce
+        || values.route_binding != evidence.route_binding
+        || values.route_binding != expected_route_binding
+        || values.deposit_id != evidence.deposit_id
+        || values.evidence_root != evidence_root;
+    if mismatch {
+        return Err((
+            "pfusdc_bonded_public_values_mismatch",
+            "bonded pfUSDC public values do not exactly match chain, route, and deposit"
+                .to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn ensure_pfusdc_ingress_public_values_match(

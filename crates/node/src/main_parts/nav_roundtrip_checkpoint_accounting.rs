@@ -1441,6 +1441,7 @@ fn certified_asset_op_source(
         postfiat_types::AssetTransactionOperation::VaultBridgeDepositAttest(operation) => Ok(&operation.attestor),
         postfiat_types::AssetTransactionOperation::VaultBridgeDepositFinalize(operation) => Ok(&operation.finalizer),
         postfiat_types::AssetTransactionOperation::VaultBridgeDepositClaim(operation) => Ok(&operation.claimer),
+        postfiat_types::AssetTransactionOperation::VaultBridgeFastIngressLifecycle(operation) => Ok(&operation.operator),
         postfiat_types::AssetTransactionOperation::VaultBridgeReceiptSubmit(operation) => Ok(&operation.operator),
         postfiat_types::AssetTransactionOperation::VaultBridgeReceiptCount(operation) => Ok(&operation.operator),
         postfiat_types::AssetTransactionOperation::VaultBridgeMintFromReceipts(operation) => Ok(&operation.issuer),

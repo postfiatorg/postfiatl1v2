@@ -1,0 +1,9 @@
+{
+  "base_confirmed_program_vkey": "0x0033bd140207b97fb2442eb279cc2ce55714be6fbcd66beb325fe7c3786d4dfc",
+  "bonded_policy_hash": "f3e08cc305e8a49ee7f62b70ee35635d48742e8a6825daef8bfa0781464bd1c9",
+  "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+  "route_binding": "d790ca64c37df09421bff93549333b74600bb887943b5edefc3b8aa266e1607d",
+  "route_epoch": 1,
+  "route_id": "pfusdc-tier4-arbitrum-one-v1",
+  "schema": "postfiat.pfusdc.bonded_route_info.v1"
+}

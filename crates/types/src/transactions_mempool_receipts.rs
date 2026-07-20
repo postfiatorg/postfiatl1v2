@@ -1277,8 +1277,11 @@ impl VaultBridgeDepositProposeOperation {
                 "vault_bridge_deposit_propose.source_public_values exceeds maximum of {DEFAULT_MAX_NAV_SP1_PUBLIC_VALUES_BYTES}"
             ));
         }
-        let proof_native =
-            self.source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1;
+        let proof_native = matches!(
+            self.source_proof_kind.as_str(),
+            NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+                | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+        );
         if proof_native && (self.source_proof_bytes.is_empty() || self.source_public_values.is_empty())
         {
             return Err("proof-native vault bridge deposit requires proof bytes and public values"
@@ -1449,6 +1452,71 @@ impl VaultBridgeDepositFinalizeOperation {
         format!(
             "finalizer={}\nasset_id={}\nevidence_root={}\n",
             self.finalizer, self.asset_id, self.evidence_root
+        )
+        .into_bytes()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VaultBridgeFastIngressLifecycleOperation {
+    pub operator: String,
+    pub asset_id: String,
+    pub route_profile_hash: String,
+    pub source_assertion_id: String,
+    pub source_proof_kind: String,
+    pub source_proof_hash: String,
+    pub source_public_values_hash: String,
+    pub source_proof_bytes: Vec<u8>,
+    pub source_public_values: Vec<u8>,
+}
+
+impl VaultBridgeFastIngressLifecycleOperation {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_text_field("fast_ingress_lifecycle.operator", &self.operator)?;
+        validate_lower_hex_len(
+            "fast_ingress_lifecycle.asset_id",
+            &self.asset_id,
+            ISSUED_ASSET_ID_HEX_LEN,
+        )?;
+        validate_vault_bridge_policy_hash(
+            "fast_ingress_lifecycle.route_profile_hash",
+            &self.route_profile_hash,
+        )?;
+        validate_lower_hex_len(
+            "fast_ingress_lifecycle.source_assertion_id",
+            &self.source_assertion_id,
+            64,
+        )?;
+        validate_vault_bridge_deposit_source_proof_fields(
+            "fast_ingress_lifecycle",
+            &self.source_proof_kind,
+            &self.source_proof_hash,
+            &self.source_public_values_hash,
+        )?;
+        if self.source_proof_kind != NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+            || self.source_proof_bytes.is_empty()
+            || self.source_public_values.is_empty()
+            || self.source_proof_bytes.len() > DEFAULT_MAX_NAV_SP1_PROOF_BYTES as usize
+            || self.source_public_values.len()
+                > DEFAULT_MAX_NAV_SP1_PUBLIC_VALUES_BYTES as usize
+        {
+            return Err("fast-ingress lifecycle requires a bounded bonded SP1 proof".to_string());
+        }
+        Ok(())
+    }
+
+    fn signing_bytes(&self) -> Vec<u8> {
+        format!(
+            "operator={}\nasset_id={}\nroute_profile_hash={}\nsource_assertion_id={}\nsource_proof_kind={}\nsource_proof_hash={}\nsource_public_values_hash={}\nsource_proof_bytes={}\nsource_public_values={}\n",
+            self.operator,
+            self.asset_id,
+            self.route_profile_hash,
+            self.source_assertion_id,
+            self.source_proof_kind,
+            self.source_proof_hash,
+            self.source_public_values_hash,
+            bytes_to_lower_hex(&self.source_proof_bytes),
+            bytes_to_lower_hex(&self.source_public_values),
         )
         .into_bytes()
     }
@@ -2589,6 +2657,8 @@ pub enum AssetTransactionOperation {
     VaultBridgeDepositFinalize(VaultBridgeDepositFinalizeOperation),
     #[serde(rename = "vault_bridge_deposit_claim")]
     VaultBridgeDepositClaim(VaultBridgeDepositClaimOperation),
+    #[serde(rename = "vault_bridge_fast_ingress_lifecycle")]
+    VaultBridgeFastIngressLifecycle(VaultBridgeFastIngressLifecycleOperation),
     #[serde(rename = "vault_bridge_receipt_submit")]
     VaultBridgeReceiptSubmit(VaultBridgeReceiptSubmitOperation),
     #[serde(rename = "vault_bridge_receipt_count")]
@@ -2694,6 +2764,10 @@ impl<'de> Deserialize<'de> for AssetTransactionOperation {
             "vault_bridge_deposit_claim" => {
                 decode_operation!(VaultBridgeDepositClaimOperation, VaultBridgeDepositClaim)
             }
+            "vault_bridge_fast_ingress_lifecycle" => decode_operation!(
+                VaultBridgeFastIngressLifecycleOperation,
+                VaultBridgeFastIngressLifecycle
+            ),
             "vault_bridge_receipt_submit" => {
                 decode_operation!(VaultBridgeReceiptSubmitOperation, VaultBridgeReceiptSubmit)
             }
@@ -2770,6 +2844,9 @@ impl AssetTransactionOperation {
             Self::VaultBridgeDepositAttest(_) => VAULT_BRIDGE_DEPOSIT_ATTEST_TRANSACTION_KIND,
             Self::VaultBridgeDepositFinalize(_) => VAULT_BRIDGE_DEPOSIT_FINALIZE_TRANSACTION_KIND,
             Self::VaultBridgeDepositClaim(_) => VAULT_BRIDGE_DEPOSIT_CLAIM_TRANSACTION_KIND,
+            Self::VaultBridgeFastIngressLifecycle(_) => {
+                VAULT_BRIDGE_FAST_INGRESS_LIFECYCLE_TRANSACTION_KIND
+            }
             Self::VaultBridgeReceiptSubmit(_) => VAULT_BRIDGE_RECEIPT_SUBMIT_TRANSACTION_KIND,
             Self::VaultBridgeReceiptCount(_) => VAULT_BRIDGE_RECEIPT_COUNT_TRANSACTION_KIND,
             Self::VaultBridgeMintFromReceipts(_) => {
@@ -2817,6 +2894,7 @@ impl AssetTransactionOperation {
             Self::VaultBridgeDepositAttest(operation) => operation.validate(),
             Self::VaultBridgeDepositFinalize(operation) => operation.validate(),
             Self::VaultBridgeDepositClaim(operation) => operation.validate(),
+            Self::VaultBridgeFastIngressLifecycle(operation) => operation.validate(),
             Self::VaultBridgeReceiptSubmit(operation) => operation.validate(),
             Self::VaultBridgeReceiptCount(operation) => operation.validate(),
             Self::VaultBridgeMintFromReceipts(operation) => operation.validate(),
@@ -2866,6 +2944,7 @@ impl AssetTransactionOperation {
             Self::VaultBridgeDepositAttest(operation) => operation.attestor == source,
             Self::VaultBridgeDepositFinalize(operation) => operation.finalizer == source,
             Self::VaultBridgeDepositClaim(operation) => operation.claimer == source,
+            Self::VaultBridgeFastIngressLifecycle(operation) => operation.operator == source,
             Self::VaultBridgeReceiptSubmit(operation) => operation.operator == source,
             Self::VaultBridgeReceiptCount(operation) => operation.operator == source,
             Self::VaultBridgeMintFromReceipts(operation) => operation.issuer == source,
@@ -2948,6 +3027,9 @@ impl AssetTransactionOperation {
                 bytes.extend_from_slice(&operation.signing_bytes())
             }
             Self::VaultBridgeDepositClaim(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::VaultBridgeFastIngressLifecycle(operation) => {
                 bytes.extend_from_slice(&operation.signing_bytes())
             }
             Self::VaultBridgeReceiptSubmit(operation) => {

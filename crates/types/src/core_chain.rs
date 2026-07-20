@@ -39,6 +39,8 @@ pub const VAULT_BRIDGE_DEPOSIT_CHALLENGE_TRANSACTION_KIND: &str = "vault_bridge_
 pub const VAULT_BRIDGE_DEPOSIT_ATTEST_TRANSACTION_KIND: &str = "vault_bridge_deposit_attest";
 pub const VAULT_BRIDGE_DEPOSIT_FINALIZE_TRANSACTION_KIND: &str = "vault_bridge_deposit_finalize";
 pub const VAULT_BRIDGE_DEPOSIT_CLAIM_TRANSACTION_KIND: &str = "vault_bridge_deposit_claim";
+pub const VAULT_BRIDGE_FAST_INGRESS_LIFECYCLE_TRANSACTION_KIND: &str =
+    "vault_bridge_fast_ingress_lifecycle";
 pub const VAULT_BRIDGE_RECEIPT_COUNT_TRANSACTION_KIND: &str = "vault_bridge_receipt_count";
 pub const VAULT_BRIDGE_MINT_FROM_RECEIPTS_TRANSACTION_KIND: &str =
     "vault_bridge_mint_from_receipts";
@@ -154,6 +156,11 @@ pub const NAV_PROFILE_VERIFIER_SP1_GROTH16: &str = "sp1-groth16";
 /// This is deliberately distinct from the NAV aggregate-reserve program.
 pub const NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1: &str =
     "sp1-arbitrum-finality-v1";
+/// Proof-verified ingress rooted in an Ethereum-finalized, still-pending
+/// bonded Arbitrum assertion. This deliberately does not claim settled
+/// Arbitrum finality and coexists with the confirmed-assertion verifier.
+pub const NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1: &str =
+    "sp1-arbitrum-bonded-v1";
 pub const NAV_SP1_PROOF_ENCODING_GROTH16: &str = "groth16";
 pub const DEFAULT_MAX_NAV_SP1_PROOF_BYTES: u64 = 4096;
 pub const DEFAULT_MAX_NAV_SP1_PUBLIC_VALUES_BYTES: u64 = 16384;

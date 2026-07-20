@@ -770,6 +770,124 @@ pub(super) fn execute_governance_batch(
     }
     for activation in &batch.vault_bridge_route_profile_activations {
         let amendment = &activation.amendment;
+        let existing_profile = activation
+            .profile
+            .profile_hash()
+            .ok()
+            .and_then(|profile_hash| {
+                governance
+                    .vault_bridge_route_profiles
+                    .iter()
+                    .find(|existing| existing.profile_hash == profile_hash)
+                    .cloned()
+            });
+        if let Some(existing_profile) = existing_profile {
+            let updated = (|| -> Result<(), String> {
+                activation.validate()?;
+                if existing_profile.profile != activation.profile {
+                    return Err(
+                        "fast-ingress verifier update must preserve the exact route profile"
+                            .to_string(),
+                    );
+                }
+                if governance
+                    .vault_bridge_route_authority_activation_height()
+                    .is_none_or(|height| block_height < height)
+                {
+                    return Err("vault bridge route authority is not active".to_string());
+                }
+                if let Some((code, message)) =
+                    governance_amendment_lifecycle_rejection(amendment, block_height)
+                {
+                    return Err(format!("{code}: {message}"));
+                }
+                if activation.profile.activation_height > block_height {
+                    return Err(
+                        "fast-ingress verifier update cannot commit before route activation"
+                            .to_string(),
+                    );
+                }
+                if governance
+                    .amendments
+                    .iter()
+                    .any(|existing| existing.amendment_id == amendment.amendment_id)
+                {
+                    return Err("vault bridge route amendment already applied".to_string());
+                }
+                let ledger = ledger.as_deref_mut().ok_or_else(|| {
+                    "fast-ingress verifier update requires canonical ledger context".to_string()
+                })?;
+                if !ledger.fast_ingress_campaigns.is_empty()
+                    || ledger.vault_bridge_deposits.iter().any(|deposit| {
+                        deposit.source_proof_kind
+                            == postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+                    })
+                {
+                    return Err(
+                        "fast-ingress verifier cannot change after bonded exposure exists"
+                            .to_string(),
+                    );
+                }
+                let replacement =
+                    activation
+                        .tier4_finality_bootstrap
+                        .as_ref()
+                        .ok_or_else(|| {
+                            "fast-ingress verifier update requires a complete finality state"
+                                .to_string()
+                        })?;
+                let current = ledger
+                    .ethereum_arbitrum_finality_state(
+                        &replacement.route_profile_hash,
+                        replacement.route_epoch,
+                    )
+                    .ok_or_else(|| {
+                        "fast-ingress verifier update target finality state is missing".to_string()
+                    })?
+                    .clone();
+                let replacement_fast =
+                    replacement.fast_ingress_verifier.clone().ok_or_else(|| {
+                        "fast-ingress verifier update is missing its secondary verifier".to_string()
+                    })?;
+                if current.fast_ingress_verifier.as_ref() == Some(&replacement_fast) {
+                    return Err("fast-ingress verifier update is a no-op".to_string());
+                }
+                let mut expected = current.clone();
+                expected.fast_ingress_verifier = Some(replacement_fast.clone());
+                if &expected != replacement {
+                    return Err(
+                        "fast-ingress verifier update may change only the secondary verifier"
+                            .to_string(),
+                    );
+                }
+                let target = ledger
+                    .ethereum_arbitrum_finality_state_mut(
+                        &replacement.route_profile_hash,
+                        replacement.route_epoch,
+                    )
+                    .ok_or_else(|| "fast-ingress verifier update target disappeared".to_string())?;
+                target.fast_ingress_verifier = Some(replacement_fast);
+                apply_governance_amendment_with_lifecycle_records(
+                    governance,
+                    amendment.clone(),
+                    &batch.batch_id,
+                    block_height,
+                );
+                Ok(())
+            })();
+            match updated {
+                Ok(()) => receipts.push(Receipt::accepted(
+                    amendment.amendment_id.clone(),
+                    "vault bridge fast-ingress verifier updated",
+                )),
+                Err(error) => receipts.push(Receipt::rejected(
+                    amendment.amendment_id.clone(),
+                    "vault_bridge_fast_ingress_verifier_update_rejected",
+                    error,
+                )),
+            }
+            continue;
+        }
         let validated = (|| -> Result<postfiat_types::VaultBridgeRouteProfileRecordV1, String> {
             activation.validate()?;
             if governance
@@ -783,9 +901,15 @@ pub(super) fn execute_governance_batch(
             {
                 return Err(format!("{code}: {message}"));
             }
-            if activation.profile.activation_height != block_height {
+            // A profile may be committed after its scheduled activation height when
+            // an earlier activation attempt failed closed.  The route only becomes
+            // usable once this governed record is committed, so accepting it late
+            // cannot make the route active retroactively.  Rejecting late commits
+            // would instead strand immutable EVM route bindings that include the
+            // scheduled height.
+            if activation.profile.activation_height > block_height {
                 return Err(
-                    "vault bridge route profile must be committed at its activation height"
+                    "vault bridge route profile cannot be committed before its activation height"
                         .to_string(),
                 );
             }
@@ -896,6 +1020,7 @@ pub(super) fn validate_vault_bridge_route_profile_against_ledger(
         route.verifier_kind.as_str(),
         postfiat_types::NAV_PROFILE_VERIFIER_SP1_GROTH16
             | postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+            | postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
     ) {
         profile.valuation_policy_hash == route.verifier_policy_hash
             && profile.sp1_program_vkey == route.verifier_program_vkey

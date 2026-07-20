@@ -18,12 +18,13 @@ use sp1_helios_primitives::{
 };
 use tree_hash::TreeHash;
 
+pub mod bonded;
+
 pub const PFUSDC_INGRESS_PROOF_WITNESS_SCHEMA_V2: &str = "postfiat.pfusdc.ingress_proof_witness.v2";
 pub const PFUSDC_INGRESS_PROOF_POLICY_SCHEMA_V2: &str = "postfiat.pfusdc.ingress_proof_policy.v2";
 pub const PFUSDC_INGRESS_PROOF_PROGRAM_VERSION_V3: u32 = 3;
 pub const NITRO_REFERENCE_COMMIT: &str = "a618155919315241665356fe60f3cd00d66d5e46";
-pub const NITRO_CONTRACTS_REFERENCE_COMMIT: &str =
-    "4341b132cfbdcc980ead03765ca5224ff6cb5d97";
+pub const NITRO_CONTRACTS_REFERENCE_COMMIT: &str = "4341b132cfbdcc980ead03765ca5224ff6cb5d97";
 pub const ETHEREUM_MAINNET_CHAIN_ID: u64 = 1;
 pub const ETHEREUM_SEPOLIA_CHAIN_ID: u64 = 11_155_111;
 pub const ARBITRUM_ONE_CHAIN_ID: u64 = 42_161;
@@ -37,8 +38,8 @@ pub const ARBITRUM_SEPOLIA_ROLLUP_ADDRESS: Address = Address::new([
     0x1d, 0x9b, 0x0c, 0xf4,
 ]);
 pub const NITRO_LATEST_CONFIRMED_STORAGE_SLOT: B256 = B256::new([
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0x74,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0x74,
 ]);
 pub const ETHEREUM_MAINNET_GENESIS_VALIDATORS_ROOT: B256 = B256::new([
     0x4b, 0x36, 0x3d, 0xb9, 0x4e, 0x28, 0x61, 0x20, 0xd7, 0x6e, 0xb9, 0x05, 0x34, 0x0f, 0xdd, 0x4e,
@@ -151,7 +152,7 @@ pub fn verify_ingress_witness_v2(
     witness.evidence.validate()?;
     verify_route_and_policy(witness)?;
 
-    let (prior_root, prior_slot, final_root, final_slot, ethereum_state_root) =
+    let (prior_root, prior_slot, final_root, final_slot, ethereum_state_root, _, _) =
         verify_ethereum_finality(&witness.helios, &witness.policy)?;
     verify_account_code(
         ethereum_state_root,
@@ -255,7 +256,7 @@ fn verify_route_and_policy(witness: &PfUsdcIngressProofWitnessV2) -> Result<(), 
 fn verify_ethereum_finality(
     inputs: &ProofInputs,
     policy: &PfUsdcIngressProofPolicyV2,
-) -> Result<(B256, u64, B256, u64, B256), String> {
+) -> Result<(B256, u64, B256, u64, B256, u64, B256), String> {
     if inputs.genesis_root != policy.ethereum_genesis_validators_root
         || !inputs.contract_storage.is_empty()
         || inputs.expected_current_slot != *inputs.finality_update.signature_slot()
@@ -288,7 +289,10 @@ fn verify_ethereum_finality(
     .map_err(|error| format!("invalid Helios finality update: {error}"))?;
     apply_finality_update(&mut store, &inputs.finality_update);
     let final_slot = store.finalized_header.beacon().slot;
-    if final_slot <= prior_slot || !final_slot.is_multiple_of(32) {
+    // A finalized checkpoint may resolve to the most recent occupied beacon
+    // block before an epoch boundary when the boundary slot was missed. Helios
+    // authenticates the checkpoint root; monotonicity is the required invariant.
+    if final_slot <= prior_slot {
         return Err("Ethereum finalized checkpoint did not canonically advance".to_string());
     }
     let final_root: B256 = store.finalized_header.beacon().tree_hash_root();
@@ -302,16 +306,17 @@ fn verify_ethereum_finality(
         final_root,
         final_slot,
         *execution.state_root(),
+        *execution.block_number(),
+        *execution.block_hash(),
     ))
 }
 
 fn supported_network_binding(policy: &PfUsdcIngressProofPolicyV2) -> bool {
-    let common_slot = policy.rollup_latest_confirmed_storage_slot
-        == NITRO_LATEST_CONFIRMED_STORAGE_SLOT;
+    let common_slot =
+        policy.rollup_latest_confirmed_storage_slot == NITRO_LATEST_CONFIRMED_STORAGE_SLOT;
     common_slot
         && ((policy.ethereum_chain_id == ETHEREUM_MAINNET_CHAIN_ID
-            && policy.ethereum_genesis_validators_root
-                == ETHEREUM_MAINNET_GENESIS_VALIDATORS_ROOT
+            && policy.ethereum_genesis_validators_root == ETHEREUM_MAINNET_GENESIS_VALIDATORS_ROOT
             && policy.arbitrum_chain_id == ARBITRUM_ONE_CHAIN_ID
             && policy.arbitrum_rollup_address == ARBITRUM_ONE_ROLLUP_ADDRESS)
             || (policy.ethereum_chain_id == ETHEREUM_SEPOLIA_CHAIN_ID
@@ -381,7 +386,7 @@ fn verify_arbitrum_assertion(
     Ok(assertion_hash)
 }
 
-fn nitro_assertion_hash(assertion: &NitroAssertionWitnessV1) -> B256 {
+pub fn nitro_assertion_hash(assertion: &NitroAssertionWitnessV1) -> B256 {
     let global = NitroGlobalStateV1 {
         bytes32Vals: [assertion.block_hash, assertion.send_root],
         u64Vals: [assertion.inbox_position, assertion.position_in_message],

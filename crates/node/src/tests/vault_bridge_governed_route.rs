@@ -4,7 +4,9 @@ use postfiat_types::{
     vault_bridge_route_amendment_kind, vault_bridge_route_binding,
     vault_bridge_source_root_for_asset, vault_bridge_withdrawal_execution_observation_root,
     Account, AssetCreateOperation, AssetDefinition, AssetTransactionOperation,
-    GovernanceActionBatch, GovernanceAmendment, GovernanceState, NavAssetRegisterOperation,
+    EthereumArbitrumCheckpointV1, EthereumArbitrumFinalityStateV2,
+    FastIngressVerifierConfigV1, GovernanceActionBatch, GovernanceAmendment, GovernanceState,
+    NavAssetRegisterOperation,
     NavAttestorRegisterOperation, NavEpochFinalizeOperation, NavProfileRegisterOperation,
     NavProofProfile, NavReserveAttestOperation, NavReserveSubmitOperation, NavTrackedAsset,
     SignedAssetTransaction, TransactionBatch, TrustLine, UnsignedAssetTransaction,
@@ -16,7 +18,9 @@ use postfiat_types::{
     GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT,
     NAV_ASSET_REGISTER_TRANSACTION_KIND, NAV_ATTESTOR_REGISTER_TRANSACTION_KIND,
     NAV_EPOCH_FINALIZE_TRANSACTION_KIND, NAV_PROFILE_REGISTER_TRANSACTION_KIND,
-    NAV_PROFILE_VERIFIER_MULTI_FETCH, NAV_PROFILE_VERIFIER_SP1_GROTH16,
+    ETHEREUM_ARBITRUM_FINALITY_STATE_SCHEMA_V2,
+    NAV_PROFILE_VERIFIER_MULTI_FETCH, NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1,
+    NAV_PROFILE_VERIFIER_SP1_GROTH16,
     NAV_RESERVE_ATTEST_TRANSACTION_KIND, NAV_RESERVE_SUBMIT_TRANSACTION_KIND,
     NAV_SP1_PROOF_ENCODING_GROTH16, VAULT_BRIDGE_BURN_TO_REDEEM_TRANSACTION_KIND,
     VAULT_BRIDGE_DEPOSIT_FINALIZE_TRANSACTION_KIND, VAULT_BRIDGE_DEPOSIT_PROPOSE_TRANSACTION_KIND,
@@ -169,7 +173,10 @@ fn deposit_transaction(
 
 fn route_ledger(route: &VaultBridgeRouteProfileV1) -> LedgerState {
     let route_hash = route.profile_hash().expect("route hash");
-    let receipt_proven = route.verifier_kind == NAV_PROFILE_VERIFIER_SP1_GROTH16;
+    let receipt_proven = matches!(
+        route.verifier_kind.as_str(),
+        NAV_PROFILE_VERIFIER_SP1_GROTH16 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+    );
     let profile = NavProofProfile::new_with_bridge_observer_min_confirmations(
         "issuer",
         route.verifier_kind.clone(),
@@ -245,6 +252,191 @@ fn activate_route(
         .into_iter()
         .next()
         .expect("route activation receipt")
+}
+
+#[test]
+fn route_profile_may_commit_late_but_never_before_scheduled_activation() {
+    let profile = route(1, 2, "22");
+    let activation = VaultBridgeRouteProfileActivationV1 {
+        schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
+        profile: profile.clone(),
+        amendment: amendment(
+            &vault_bridge_route_amendment_kind(&profile).expect("route amendment kind"),
+            profile.route_epoch,
+            profile.activation_height,
+        ),
+        tier4_finality_bootstrap: None,
+    };
+    let batch = GovernanceActionBatch::with_vault_bridge_route_profile_activation(
+        "late-route-activation",
+        activation,
+    );
+
+    let mut early_governance = GovernanceState::new(1);
+    early_governance.apply(amendment(
+        GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT,
+        1,
+        0,
+    ));
+    let mut early_ledger = route_ledger(&profile);
+    let early = execute_governance_batch(
+        &mut early_governance,
+        Some(&mut early_ledger),
+        &batch,
+        1,
+    )
+    .into_iter()
+    .next()
+    .expect("early receipt");
+    assert!(!early.accepted);
+
+    let mut late_governance = GovernanceState::new(1);
+    late_governance.apply(amendment(
+        GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT,
+        1,
+        0,
+    ));
+    let mut late_ledger = route_ledger(&profile);
+    let late = execute_governance_batch(
+        &mut late_governance,
+        Some(&mut late_ledger),
+        &batch,
+        3,
+    )
+    .into_iter()
+    .next()
+    .expect("late receipt");
+    assert!(late.accepted, "{late:?}");
+    assert_eq!(late_governance.vault_bridge_route_profiles[0].authorized_height, 3);
+}
+
+fn tier4_route(activation_height: u64) -> VaultBridgeRouteProfileV1 {
+    let mut profile = route(1, activation_height, "22");
+    profile.verifier_kind = NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1.to_string();
+    profile.evidence_tier = postfiat_types::VAULT_BRIDGE_EVIDENCE_TIER_RECEIPT_PROVEN.to_string();
+    profile.verifier_policy_hash = "55".repeat(32);
+    profile.verifier_program_vkey = format!("0x{}", "66".repeat(32));
+    profile.verifier_proof_encoding = NAV_SP1_PROOF_ENCODING_GROTH16.to_string();
+    profile.max_proof_bytes = 4_096;
+    profile.max_public_values_bytes = 16_384;
+    profile.min_challenge_bond = 0;
+    profile.min_attestations = 0;
+    profile.minimum_confirmations = 0;
+    profile
+}
+
+fn tier4_state(
+    profile: &VaultBridgeRouteProfileV1,
+    fast_policy_hash: &str,
+) -> EthereumArbitrumFinalityStateV2 {
+    let profile_hash = profile.profile_hash().expect("profile hash");
+    let checkpoint = EthereumArbitrumCheckpointV1 {
+        ethereum_finalized_beacon_root: "77".repeat(32),
+        ethereum_finalized_slot: 32,
+        arbitrum_assertion_hash: "88".repeat(32),
+        assertion_l2_block_hash: "99".repeat(32),
+        assertion_send_root: "aa".repeat(32),
+    };
+    EthereumArbitrumFinalityStateV2 {
+        schema: ETHEREUM_ARBITRUM_FINALITY_STATE_SCHEMA_V2.to_string(),
+        route_profile_hash: profile_hash.clone(),
+        route_epoch: u64::from(profile.route_epoch),
+        ethereum_chain_id: 1,
+        arbitrum_chain_id: profile.source_chain_id,
+        arbitrum_rollup_address: "0x5555555555555555555555555555555555555555".to_string(),
+        arbitrum_rollup_runtime_code_hash: format!("0x{}", "bb".repeat(32)),
+        rollup_latest_confirmed_storage_slot: "cc".repeat(32),
+        vault_address: profile.vault_address.clone(),
+        vault_runtime_code_hash: profile.vault_runtime_code_hash.clone(),
+        token_address: profile.token_address.clone(),
+        token_runtime_code_hash: profile.token_runtime_code_hash.clone(),
+        ethereum_ingress_anchor_address: "0x6666666666666666666666666666666666666666"
+            .to_string(),
+        ethereum_ingress_anchor_runtime_code_hash: format!("0x{}", "dd".repeat(32)),
+        fast_ingress_verifier: Some(FastIngressVerifierConfigV1 {
+            schema: postfiat_types::PFUSDC_FAST_INGRESS_VERIFIER_CONFIG_SCHEMA_V1.to_string(),
+            base_route_profile_hash: profile_hash,
+            route_epoch: u64::from(profile.route_epoch),
+            deployment_manifest_hash: "ee".repeat(32),
+            asset_id: profile.asset_id.clone(),
+            cap_atoms: 5_000_000,
+            age_margin_blocks: 64,
+            verifier_kind: postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+                .to_string(),
+            verifier_policy_hash: fast_policy_hash.to_string(),
+            verifier_program_vkey: format!("0x{}", "ff".repeat(32)),
+            verifier_proof_encoding: NAV_SP1_PROOF_ENCODING_GROTH16.to_string(),
+            max_proof_bytes: 4_096,
+            max_public_values_bytes: 16_384,
+        }),
+        latest: checkpoint.clone(),
+        retained: vec![checkpoint],
+    }
+}
+
+#[test]
+fn governed_fast_ingress_verifier_update_preserves_route_and_finality() {
+    let profile = tier4_route(2);
+    let mut governance = GovernanceState::new(1);
+    governance.apply(amendment(
+        GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT,
+        1,
+        0,
+    ));
+    let mut ledger = route_ledger(&profile);
+    let initial_state = tier4_state(&profile, &"01".repeat(32));
+    let initial_activation = VaultBridgeRouteProfileActivationV1 {
+        schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
+        profile: profile.clone(),
+        amendment: amendment(
+            &vault_bridge_route_amendment_kind(&profile).expect("route kind"),
+            profile.route_epoch,
+            profile.activation_height,
+        ),
+        tier4_finality_bootstrap: Some(initial_state.clone()),
+    };
+    let initial_batch = GovernanceActionBatch::with_vault_bridge_route_profile_activation(
+        "initial-tier4-route",
+        initial_activation,
+    );
+    let initial = execute_governance_batch(&mut governance, Some(&mut ledger), &initial_batch, 2);
+    assert!(initial[0].accepted, "{:?}", initial[0]);
+
+    let mut replacement = tier4_state(&profile, &"02".repeat(32));
+    replacement.latest = initial_state.latest.clone();
+    replacement.retained = initial_state.retained.clone();
+    let mut replacement_amendment = amendment(
+        &vault_bridge_route_amendment_kind(&profile).expect("route kind"),
+        profile.route_epoch,
+        profile.activation_height,
+    );
+    replacement_amendment.amendment_id = "fast-ingress-verifier-update".to_string();
+    let update = VaultBridgeRouteProfileActivationV1 {
+        schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
+        profile: profile.clone(),
+        amendment: replacement_amendment,
+        tier4_finality_bootstrap: Some(replacement),
+    };
+    let update_batch = GovernanceActionBatch::with_vault_bridge_route_profile_activation(
+        "update-tier4-verifier",
+        update,
+    );
+    let receipt = execute_governance_batch(&mut governance, Some(&mut ledger), &update_batch, 3)
+        .into_iter()
+        .next()
+        .expect("update receipt");
+    assert!(receipt.accepted, "{receipt:?}");
+    assert_eq!(governance.vault_bridge_route_profiles.len(), 1);
+    assert_eq!(ledger.ethereum_arbitrum_finality_states.len(), 1);
+    assert_eq!(
+        ledger.ethereum_arbitrum_finality_states[0]
+            .fast_ingress_verifier
+            .as_ref()
+            .expect("updated verifier")
+            .verifier_policy_hash,
+        "02".repeat(32)
+    );
+    assert_eq!(ledger.ethereum_arbitrum_finality_states[0].latest, initial_state.latest);
 }
 
 fn execute_route_candidate(

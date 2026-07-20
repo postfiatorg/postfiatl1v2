@@ -876,6 +876,8 @@ fn nav_roundtrip_live_demo(
             source_proof_kind: options.source_proof_kind.clone(),
             source_proof_hash: options.source_proof_hash.clone(),
             source_public_values_hash: options.source_public_values_hash.clone(),
+            source_proof_file: None,
+            source_public_values_file: None,
             require_local_proposer: options.require_local_proposer,
             require_signed_proposal: options.require_signed_proposal,
             allow_peer_failures: options.allow_peer_failures,

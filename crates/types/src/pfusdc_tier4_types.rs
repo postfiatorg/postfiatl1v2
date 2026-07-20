@@ -479,6 +479,8 @@ pub struct EthereumArbitrumFinalityStateV2 {
     pub token_runtime_code_hash: String,
     pub ethereum_ingress_anchor_address: String,
     pub ethereum_ingress_anchor_runtime_code_hash: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fast_ingress_verifier: Option<FastIngressVerifierConfigV1>,
     pub latest: EthereumArbitrumCheckpointV1,
     pub retained: Vec<EthereumArbitrumCheckpointV1>,
 }
@@ -533,6 +535,16 @@ impl EthereumArbitrumFinalityStateV2 {
             ),
         ] {
             validate_lower_hex_len(field, value.strip_prefix("0x").unwrap_or(value), 64)?;
+        }
+        if let Some(config) = &self.fast_ingress_verifier {
+            config.validate()?;
+            if config.base_route_profile_hash != self.route_profile_hash
+                || config.route_epoch != self.route_epoch
+            {
+                return Err(
+                    "fast-ingress verifier is not bound to its base Tier-4 route".to_string(),
+                );
+            }
         }
         self.latest.validate()?;
         if self.retained.is_empty()
@@ -634,6 +646,118 @@ impl EthereumArbitrumFinalityStateV2 {
         self.validate()
     }
 
+    pub fn verify_and_advance_bonded(
+        &mut self,
+        values: &PfUsdcBondedIngressPublicValuesV1,
+    ) -> Result<(), String> {
+        self.validate()?;
+        let config = self.fast_ingress_verifier.as_ref().ok_or_else(|| {
+            "pfUSDC bonded proof requires a governed secondary verifier".to_string()
+        })?;
+        if values.route_profile_hash != self.route_profile_hash
+            || values.route_epoch != self.route_epoch
+            || values.ethereum_chain_id != self.ethereum_chain_id
+            || values.arbitrum_chain_id != self.arbitrum_chain_id
+            || values.arbitrum_rollup_address != self.arbitrum_rollup_address
+            || values.arbitrum_rollup_runtime_code_hash
+                != self.arbitrum_rollup_runtime_code_hash.trim_start_matches("0x")
+            || values.vault_address != self.vault_address
+            || values.vault_runtime_code_hash
+                != self.vault_runtime_code_hash.trim_start_matches("0x")
+            || values.token_address != self.token_address
+            || values.token_runtime_code_hash
+                != self.token_runtime_code_hash.trim_start_matches("0x")
+            || values.manifest_hash != config.deployment_manifest_hash
+            || values.verifier_policy_hash != config.verifier_policy_hash
+            || values.asset_id != config.asset_id
+            || values.cap_atoms != config.cap_atoms
+            || values.age_margin_blocks != config.age_margin_blocks
+        {
+            return Err("pfUSDC bonded proof does not match its pinned route".to_string());
+        }
+        if !self.recognizes_checkpoint(
+            &values.prior_ethereum_finalized_beacon_root,
+            values.prior_ethereum_finalized_slot,
+        ) {
+            return Err("pfUSDC bonded proof does not start from a retained checkpoint".to_string());
+        }
+        let resulting = EthereumArbitrumCheckpointV1 {
+            ethereum_finalized_beacon_root: values.ethereum_finalized_beacon_root.clone(),
+            ethereum_finalized_slot: values.ethereum_finalized_slot,
+            arbitrum_assertion_hash: values.source_assertion_id.clone(),
+            assertion_l2_block_hash: values.source_assertion_l2_block_hash.clone(),
+            assertion_send_root: values.source_assertion_send_root.clone(),
+        };
+        resulting.validate()?;
+        if let Some(existing) = self.retained.iter().find(|checkpoint| {
+            checkpoint.ethereum_finalized_slot == resulting.ethereum_finalized_slot
+        }) {
+            if existing != &resulting {
+                return Err("pfUSDC bonded proof conflicts with a retained checkpoint".to_string());
+            }
+            return Ok(());
+        }
+        if resulting.ethereum_finalized_slot <= self.latest.ethereum_finalized_slot {
+            return Err("pfUSDC bonded proof checkpoint does not monotonically advance".to_string());
+        }
+        self.retained.push(resulting.clone());
+        if self.retained.len() > MAX_RETAINED_ETHEREUM_ARBITRUM_CHECKPOINTS_V1 {
+            let remove = self.retained.len() - MAX_RETAINED_ETHEREUM_ARBITRUM_CHECKPOINTS_V1;
+            self.retained.drain(..remove);
+        }
+        self.latest = resulting;
+        self.validate()
+    }
+
+    pub fn verify_and_advance_bonded_lifecycle(
+        &mut self,
+        values: &PfUsdcBondedLifecyclePublicValuesV1,
+    ) -> Result<(), String> {
+        self.validate()?;
+        values.validate()?;
+        let config = self.fast_ingress_verifier.as_ref().ok_or_else(|| {
+            "pfUSDC bonded lifecycle requires a governed secondary verifier".to_string()
+        })?;
+        if values.route_profile_hash != self.route_profile_hash
+            || values.route_epoch != self.route_epoch
+            || values.ethereum_chain_id != self.ethereum_chain_id
+            || values.arbitrum_chain_id != self.arbitrum_chain_id
+            || values.arbitrum_rollup_address != self.arbitrum_rollup_address
+            || values.arbitrum_rollup_runtime_code_hash
+                != self.arbitrum_rollup_runtime_code_hash.trim_start_matches("0x")
+            || values.manifest_hash != config.deployment_manifest_hash
+            || values.verifier_policy_hash != config.verifier_policy_hash
+        {
+            return Err("pfUSDC bonded lifecycle proof does not match its route".to_string());
+        }
+        if !self.recognizes_checkpoint(
+            &values.prior_ethereum_finalized_beacon_root,
+            values.prior_ethereum_finalized_slot,
+        ) {
+            return Err("pfUSDC bonded lifecycle proof does not start at a retained checkpoint"
+                .to_string());
+        }
+        let resulting = EthereumArbitrumCheckpointV1 {
+            ethereum_finalized_beacon_root: values.ethereum_finalized_beacon_root.clone(),
+            ethereum_finalized_slot: values.ethereum_finalized_slot,
+            arbitrum_assertion_hash: values.latest_confirmed_assertion_id.clone(),
+            assertion_l2_block_hash: values.latest_confirmed_l2_block_hash.clone(),
+            assertion_send_root: values.latest_confirmed_send_root.clone(),
+        };
+        resulting.validate()?;
+        if resulting.ethereum_finalized_slot <= self.latest.ethereum_finalized_slot {
+            return Err("pfUSDC bonded lifecycle checkpoint does not monotonically advance"
+                .to_string());
+        }
+        self.retained.push(resulting.clone());
+        if self.retained.len() > MAX_RETAINED_ETHEREUM_ARBITRUM_CHECKPOINTS_V1 {
+            let remove = self.retained.len() - MAX_RETAINED_ETHEREUM_ARBITRUM_CHECKPOINTS_V1;
+            self.retained.drain(..remove);
+        }
+        self.latest = resulting;
+        self.validate()
+    }
+
     pub fn state_commitment_bytes(&self) -> Result<Vec<u8>, String> {
         self.validate()?;
         let mut bytes = pfusdc_canonical_prefix(ETHEREUM_ARBITRUM_FINALITY_STATE_SCHEMA_V2);
@@ -687,6 +811,9 @@ impl EthereumArbitrumFinalityStateV2 {
         for checkpoint in &self.retained {
             let checkpoint_bytes = checkpoint.canonical_bytes()?;
             pfusdc_append_field(&mut bytes, 16, &checkpoint_bytes)?;
+        }
+        if let Some(config) = &self.fast_ingress_verifier {
+            pfusdc_append_field(&mut bytes, 17, &config.state_commitment_bytes()?)?;
         }
         Ok(bytes)
     }

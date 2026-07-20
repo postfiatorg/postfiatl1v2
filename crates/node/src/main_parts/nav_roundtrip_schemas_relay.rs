@@ -227,6 +227,8 @@ struct NavRoundtripDepositRelayOptions {
     source_proof_kind: Option<String>,
     source_proof_hash: Option<String>,
     source_public_values_hash: Option<String>,
+    source_proof_file: Option<std::path::PathBuf>,
+    source_public_values_file: Option<std::path::PathBuf>,
     require_local_proposer: bool,
     require_signed_proposal: bool,
     allow_peer_failures: bool,

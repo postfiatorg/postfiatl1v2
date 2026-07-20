@@ -716,7 +716,11 @@ impl VaultBridgeRouteProfileActivationV1 {
             self.profile.verifier_kind.as_str(),
             self.tier4_finality_bootstrap.as_ref(),
         ) {
-            (NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1, Some(state)) => {
+            (
+                NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+                | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1,
+                Some(state),
+            ) => {
                 state.validate()?;
                 if state.route_profile_hash != profile_hash
                     || state.route_epoch != u64::from(self.profile.route_epoch)
@@ -730,7 +734,11 @@ impl VaultBridgeRouteProfileActivationV1 {
                         .to_string());
                 }
             }
-            (NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1, None) => {
+            (
+                NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+                | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1,
+                None,
+            ) => {
                 return Err("Tier-4 route activation requires a finality bootstrap".to_string());
             }
             (_, Some(_)) => {
@@ -768,9 +776,9 @@ impl VaultBridgeRouteProfileRecordV1 {
         authorized_height: u64,
     ) -> Result<Self, String> {
         activation.validate()?;
-        if authorized_height != activation.profile.activation_height {
+        if authorized_height < activation.profile.activation_height {
             return Err(
-                "vault bridge route profile must be recorded at its activation height"
+                "vault bridge route profile cannot be recorded before its activation height"
                     .to_string(),
             );
         }
@@ -792,7 +800,7 @@ impl VaultBridgeRouteProfileRecordV1 {
             return Err("vault bridge route profile record hash mismatch".to_string());
         }
         if self.governance_amendment_id.is_empty()
-            || self.authorized_height != self.profile.activation_height
+            || self.authorized_height < self.profile.activation_height
         {
             return Err("vault bridge route profile record authorization mismatch".to_string());
         }

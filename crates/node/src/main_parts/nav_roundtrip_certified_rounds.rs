@@ -1923,8 +1923,8 @@ fn nav_roundtrip_live_demo_deposit_relay(
                 source_proof_kind: options.source_proof_kind.clone(),
                 source_proof_hash: options.source_proof_hash.clone(),
                 source_public_values_hash: options.source_public_values_hash.clone(),
-                source_proof_file: None,
-                source_public_values_file: None,
+                source_proof_file: options.source_proof_file.clone(),
+                source_public_values_file: options.source_public_values_file.clone(),
             },
             bundle_dir: relay_bundle_dir.clone(),
             overwrite: options.overwrite,
@@ -1934,6 +1934,8 @@ fn nav_roundtrip_live_demo_deposit_relay(
 
     let certified_ops_file = options.artifact_dir.join("deposit-relay.certified-ops.json");
     let certified_ops_request_preexisting = options.resume && certified_ops_file.is_file();
+    let bonded_escrow_admission = options.source_proof_kind.as_deref()
+        == Some(postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1);
     let bundle_adapter_operation_count = if certified_ops_request_preexisting {
         let request = read_certified_asset_ops_request(&certified_ops_file)?;
         validate_certified_asset_ops_request(&request)?;
@@ -1957,7 +1959,19 @@ fn nav_roundtrip_live_demo_deposit_relay(
     if bundle_adapter_operation_count == 0 {
         return Err("deposit relay bundle adapter produced no certified operations".to_string());
     }
-    if !options.claim_deposit && !certified_ops_request_preexisting {
+    if bonded_escrow_admission {
+        let mut request = read_certified_asset_ops_request(&certified_ops_file)?;
+        request.operations.retain(|operation| operation.label == "propose");
+        if request.operations.len() != 1 {
+            return Err(format!(
+                "bonded ingress relay must produce exactly one propose operation, got {}",
+                request.operations.len()
+            ));
+        }
+        validate_certified_asset_ops_request(&request)?;
+        write_json_file(&certified_ops_file, &request_to_json(&request)?)?;
+    }
+    if !options.claim_deposit && !certified_ops_request_preexisting && !bonded_escrow_admission {
         let receipt_operator_key_file = options.receipt_operator_key_file.as_ref().ok_or_else(|| {
             "deposit relay without --claim-deposit requires --issuer-key-file so the finalized bridge deposit can become a counted receipt for NAV primary mint".to_string()
         })?;
@@ -2306,7 +2320,10 @@ fn nav_roundtrip_certify_deposit_relay_stages(
     if !propose_attest_ops.iter().any(|op| op.label == "propose") {
         return Err("deposit relay bundle is missing propose operation".to_string());
     }
-    if !finalize_claim_ops.iter().any(|op| op.label == "finalize") {
+    let propose_only_escrow_admission = finalize_claim_ops.is_empty() && receipt_ops.is_empty();
+    if !propose_only_escrow_admission
+        && !finalize_claim_ops.iter().any(|op| op.label == "finalize")
+    {
         return Err("deposit relay bundle is missing finalize operation".to_string());
     }
     certified_asset_op_add_dependency(
@@ -2323,13 +2340,15 @@ fn nav_roundtrip_certify_deposit_relay_stages(
         "prior_round",
         "finalize requires the proposal from the prior certified propose/attest round",
     )?;
-    certified_asset_op_add_dependency(
-        &mut finalize_claim_ops,
-        "finalize",
-        "attest",
-        "prior_round",
-        "finalize requires the attestation from the prior certified propose/attest round",
-    )?;
+    if propose_attest_ops.iter().any(|op| op.label == "attest") {
+        certified_asset_op_add_dependency(
+            &mut finalize_claim_ops,
+            "finalize",
+            "attest",
+            "prior_round",
+            "finalize requires the attestation from the prior certified propose/attest round",
+        )?;
+    }
     if finalize_claim_ops.iter().any(|op| op.label == "claim") {
         certified_asset_op_add_dependency(
             &mut finalize_claim_ops,
@@ -2397,6 +2416,13 @@ fn nav_roundtrip_certify_deposit_relay_stages(
         &propose_attest_report,
         &staged_dir,
     )?;
+
+    if propose_only_escrow_admission {
+        return Ok((
+            propose_attest_report.clone(),
+            vec![propose_attest_report],
+        ));
+    }
 
     let mut finalize_claim_options = options.clone();
     finalize_claim_options.ops_file = finalize_claim_file;

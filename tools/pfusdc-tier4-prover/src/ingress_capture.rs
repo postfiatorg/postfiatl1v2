@@ -30,6 +30,8 @@ use sp1_helios_primitives::types::{ContractStorage, ProofInputs, StorageSlotWith
 use sp1_helios_primitives::verify_storage_slot_proofs;
 use tree_hash::TreeHash;
 
+pub mod bonded;
+
 const CHECKPOINTS_BEHIND: u64 = 16;
 const MAX_HELIOS_UPDATES: u8 = 8;
 const ARBSYS_ADDRESS: Address = Address::new([
@@ -156,6 +158,12 @@ pub struct FinalityBootstrapArgs {
     pub ethereum_consensus_rpc: String,
     #[arg(long)]
     pub arbitrum_rpc: String,
+    /// Permit an honestly authenticated confirmed checkpoint that predates the
+    /// vault deployment. This is valid only as the retained starting checkpoint
+    /// for the bonded fast-ingress adapter; every accepted target assertion
+    /// still proves the exact vault code and unique deposit storage record.
+    #[arg(long)]
+    pub allow_vault_predeployment_at_confirmed: bool,
     #[arg(long)]
     pub output: PathBuf,
 }
@@ -344,40 +352,44 @@ pub async fn capture_finality_bootstrap(args: FinalityBootstrapArgs) -> Result<(
         "Arbitrum RPC returned a noncanonical asserted block"
     );
     let asserted_l2_block = quantity(asserted_block.header.inner.number);
-    let vault_account = get_account_proof(
-        &rpc,
-        &args.arbitrum_rpc,
-        policy.arbitrum_vault_address,
-        &[],
-        &asserted_l2_block,
-    )
-    .await?;
-    let vault_label = format!(
-        "Arbitrum vault at asserted L2 block {}",
-        asserted_block.header.inner.number
-    );
-    verify_account_code_host(
-        asserted_block.header.inner.state_root,
-        &vault_account,
-        policy.arbitrum_vault_address,
-        policy.arbitrum_vault_runtime_code_hash,
-        &vault_label,
-    )?;
-    let token_account = get_account_proof(
-        &rpc,
-        &args.arbitrum_rpc,
-        policy.arbitrum_token_address,
-        &[],
-        &asserted_l2_block,
-    )
-    .await?;
-    verify_account_code_host(
-        asserted_block.header.inner.state_root,
-        &token_account,
-        policy.arbitrum_token_address,
-        policy.arbitrum_token_runtime_code_hash,
-        "Arbitrum token",
-    )?;
+    if !args.allow_vault_predeployment_at_confirmed {
+        let vault_account = get_account_proof(
+            &rpc,
+            &args.arbitrum_rpc,
+            policy.arbitrum_vault_address,
+            &[],
+            &asserted_l2_block,
+        )
+        .await?;
+        let vault_label = format!(
+            "Arbitrum vault at asserted L2 block {}",
+            asserted_block.header.inner.number
+        );
+        verify_account_code_host(
+            asserted_block.header.inner.state_root,
+            &vault_account,
+            policy.arbitrum_vault_address,
+            policy.arbitrum_vault_runtime_code_hash,
+            &vault_label,
+        )?;
+    }
+    if !args.allow_vault_predeployment_at_confirmed {
+        let token_account = get_account_proof(
+            &rpc,
+            &args.arbitrum_rpc,
+            policy.arbitrum_token_address,
+            &[],
+            &asserted_l2_block,
+        )
+        .await?;
+        verify_account_code_host(
+            asserted_block.header.inner.state_root,
+            &token_account,
+            policy.arbitrum_token_address,
+            policy.arbitrum_token_runtime_code_hash,
+            "Arbitrum token",
+        )?;
+    }
 
     let checkpoint = EthereumArbitrumCheckpointV1 {
         ethereum_finalized_beacon_root: hex32(finality.final_root),
@@ -854,7 +866,7 @@ fn verify_helios_inputs_host(
     apply_finality_update(&mut store, &inputs.finality_update);
     let final_slot = store.finalized_header.beacon().slot;
     anyhow::ensure!(
-        final_slot > prior_slot && final_slot.is_multiple_of(32),
+        final_slot > prior_slot,
         "Ethereum finalized checkpoint did not canonically advance"
     );
     let final_root: B256 = store.finalized_header.beacon().tree_hash_root();
@@ -1230,6 +1242,7 @@ fn finality_state_from_checkpoint(
             "{:#x}",
             policy.ethereum_ingress_anchor_runtime_code_hash
         ),
+        fast_ingress_verifier: None,
         latest: checkpoint.clone(),
         retained: vec![checkpoint],
     };

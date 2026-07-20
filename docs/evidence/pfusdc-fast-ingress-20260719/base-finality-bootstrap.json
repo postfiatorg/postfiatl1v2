@@ -1,0 +1,47 @@
+{
+  "schema": "postfiat.ethereum_arbitrum_finality_state.v2",
+  "route_profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+  "route_epoch": 1,
+  "ethereum_chain_id": 1,
+  "arbitrum_chain_id": 42161,
+  "arbitrum_rollup_address": "0x4dceb440657f21083db8add07665f8ddbe1dcfc0",
+  "arbitrum_rollup_runtime_code_hash": "0x5961c8c303762fe3bdc69d0df28db034e475e46ef4e3582c632eaaa51314ce29",
+  "rollup_latest_confirmed_storage_slot": "0000000000000000000000000000000000000000000000000000000000000074",
+  "vault_address": "0x850e4ceea147f3551c68c2251129e5945d0afb58",
+  "vault_runtime_code_hash": "0x12b566433c726126ba812e5f21510420d6374b137181523e4030028012816fe2",
+  "token_address": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+  "token_runtime_code_hash": "0xad30d819dbc47814b7e6cb837fd7cc57fcb591479a38596ee93de4fc52e8c435",
+  "ethereum_ingress_anchor_address": "0xae9181ca9e2d2f24497111e995ee5f1884b93b9e",
+  "ethereum_ingress_anchor_runtime_code_hash": "0x6d140029c139038a8503ffd7528bf605b056876b59944cd6b558f74a80cae2b8",
+  "fast_ingress_verifier": {
+    "schema": "postfiat.pfusdc.fast_ingress_verifier_config.v1",
+    "base_route_profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+    "route_epoch": 1,
+    "deployment_manifest_hash": "7f8f798746c786dc5b0f5ac9ce396b3374df4a4ef3bbf1cf761183e0fc38aa8e",
+    "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+    "cap_atoms": 5000000,
+    "age_margin_blocks": 64,
+    "verifier_kind": "sp1-arbitrum-bonded-v1",
+    "verifier_policy_hash": "689764ba91130b79b8d7ac4ccd2df5e74973fb8052a29483d3b8b748512b8982",
+    "verifier_program_vkey": "0x00db1d337b7a4808b6f5dab22c90c0f5755a0e465a224e992005b0fa8a20f94e",
+    "verifier_proof_encoding": "groth16",
+    "max_proof_bytes": 4096,
+    "max_public_values_bytes": 16384
+  },
+  "latest": {
+    "ethereum_finalized_beacon_root": "dbca943e5fb860fde7fad579b7d4f5d37c6116cf3f8b500bf4c14b2bcd9551a9",
+    "ethereum_finalized_slot": 14807168,
+    "arbitrum_assertion_hash": "685c2f55b947e249052c0fba3747d38370081883ce1f5d2982d2a2d94d171465",
+    "assertion_l2_block_hash": "f05dded2973f1e12ae6f6bacce7e5151c12fa9d050ed9b4de62c8d6e20120de9",
+    "assertion_send_root": "c6a3e56b1a10d71c34bf1062abadf720ca637d0d98307f20a77f6929d0351c61"
+  },
+  "retained": [
+    {
+      "ethereum_finalized_beacon_root": "dbca943e5fb860fde7fad579b7d4f5d37c6116cf3f8b500bf4c14b2bcd9551a9",
+      "ethereum_finalized_slot": 14807168,
+      "arbitrum_assertion_hash": "685c2f55b947e249052c0fba3747d38370081883ce1f5d2982d2a2d94d171465",
+      "assertion_l2_block_hash": "f05dded2973f1e12ae6f6bacce7e5151c12fa9d050ed9b4de62c8d6e20120de9",
+      "assertion_send_root": "c6a3e56b1a10d71c34bf1062abadf720ca637d0d98307f20a77f6929d0351c61"
+    }
+  ]
+}

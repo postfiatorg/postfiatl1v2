@@ -1301,6 +1301,15 @@ fn account_tx_rows_for_transparent_block(
                 None,
                 None,
             ),
+            AssetTransactionOperation::VaultBridgeFastIngressLifecycle(operation) => (
+                operation.operator.clone(),
+                operation.source_assertion_id.clone(),
+                0,
+                Some(operation.asset_id.clone()),
+                None,
+                None,
+                None,
+            ),
             AssetTransactionOperation::VaultBridgeReceiptSubmit(operation) => (
                 operation.operator.clone(),
                 operation.operator.clone(),

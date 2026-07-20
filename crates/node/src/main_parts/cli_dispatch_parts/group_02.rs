@@ -449,6 +449,13 @@ fn run_cli_group_02(command: &str, flags: &[String]) -> Result<(), String> {
                             "--source-public-values-hash",
                         )
                         .map(str::to_string),
+                        source_proof_file: flag_value(flags, "--source-proof-file")
+                            .map(PathBuf::from),
+                        source_public_values_file: flag_value(
+                            flags,
+                            "--source-public-values-file",
+                        )
+                        .map(PathBuf::from),
                         require_local_proposer: flag_present(flags, "--require-local-proposer"),
                         require_signed_proposal: !flag_present(flags, "--allow-unsigned-proposal"),
                         allow_peer_failures: flag_present(flags, "--allow-peer-failures"),
