@@ -9,6 +9,7 @@ const PFUSDC_BONDED_LIFECYCLE_COMMITMENT_DOMAIN_V1: &str =
     "postfiat.pfusdc.bonded_lifecycle_public_values.commitment.v1";
 pub const PFUSDC_BONDED_LIFECYCLE_UPDATE_CONFIRMED: &str = "CONFIRMED";
 pub const PFUSDC_BONDED_LIFECYCLE_UPDATE_REVERTED: &str = "REVERTED";
+pub const PFUSDC_BONDED_LIFECYCLE_UPDATE_AGE_RELEASED: &str = "AGE_RELEASED";
 pub const PFUSDC_FAST_INGRESS_VERIFIER_CONFIG_SCHEMA_V1: &str =
     "postfiat.pfusdc.fast_ingress_verifier_config.v1";
 
@@ -27,6 +28,8 @@ pub struct FastIngressVerifierConfigV1 {
     pub asset_id: String,
     pub cap_atoms: u64,
     pub age_margin_blocks: u64,
+    #[serde(default)]
+    pub age_release_enabled: bool,
     pub verifier_kind: String,
     pub verifier_policy_hash: String,
     pub verifier_program_vkey: String,
@@ -626,6 +629,58 @@ impl FastIngressCampaignStateV1 {
         Ok(released)
     }
 
+    pub fn apply_age_release(
+        &mut self,
+        values: &PfUsdcBondedLifecyclePublicValuesV1,
+    ) -> Result<u64, String> {
+        self.validate()?;
+        values.validate()?;
+        if !self.age_release_enabled
+            || self.route_profile_hash != values.route_profile_hash
+            || self.route_epoch != values.route_epoch
+            || self.manifest_hash != values.manifest_hash
+            || values.update_kind != PFUSDC_BONDED_LIFECYCLE_UPDATE_AGE_RELEASED
+            || values.age_release_after_blocks != self.age_margin_blocks
+        {
+            return Err("fast-ingress age release does not match its governed campaign".to_string());
+        }
+        let mut released = 0_u64;
+        let mut matched = false;
+        for mint in self
+            .mints
+            .iter_mut()
+            .filter(|mint| mint.source_assertion_id == values.source_assertion_id)
+        {
+            matched = true;
+            match mint.status.as_str() {
+                FAST_INGRESS_MINT_STATUS_ESCROWED => {
+                    mint.status = FAST_INGRESS_MINT_STATUS_RELEASED_UNCONFIRMED.to_string();
+                    released = released
+                        .checked_add(mint.amount_atoms)
+                        .ok_or_else(|| "fast-ingress age-release overflow".to_string())?;
+                }
+                FAST_INGRESS_MINT_STATUS_RELEASED_UNCONFIRMED => {
+                    return Err("fast-ingress age release was already applied".to_string());
+                }
+                FAST_INGRESS_MINT_STATUS_FINAL => {
+                    return Err("confirmed fast-ingress mint does not need age release".to_string());
+                }
+                FAST_INGRESS_MINT_STATUS_REVERTED_ESCROWED
+                | FAST_INGRESS_MINT_STATUS_REVERTED_RELEASED => {
+                    return Err("cannot age-release a reverted fast-ingress assertion".to_string());
+                }
+                _ => return Err("unknown fast-ingress mint status".to_string()),
+            }
+        }
+        if !matched || released == 0 {
+            return Err("fast-ingress age release has no associated escrowed mints".to_string());
+        }
+        // The assertion is still unconfirmed, so exposure stays charged and
+        // cannot be recycled through transfer, swap, burn, or egress.
+        self.validate()?;
+        Ok(released)
+    }
+
     pub fn apply_reversion(
         &mut self,
         values: &PfUsdcBondedLifecyclePublicValuesV1,
@@ -738,6 +793,9 @@ pub struct PfUsdcBondedLifecyclePublicValuesV1 {
     pub latest_confirmed_send_root: String,
     pub common_ancestor_assertion_id: String,
     pub update_kind: String,
+    pub source_assertion_created_at_l1_block: u64,
+    pub age_release_after_blocks: u64,
+    pub source_assertion_age_blocks: u64,
     pub public_values_commitment: String,
 }
 
@@ -773,6 +831,9 @@ impl PfUsdcBondedLifecyclePublicValuesV1 {
             latest_confirmed_send_root: reader.hex(23, 32)?,
             common_ancestor_assertion_id: reader.hex(24, 32)?,
             verifier_policy_hash: reader.hex(25, 32)?,
+            source_assertion_created_at_l1_block: reader.u64(26)?,
+            age_release_after_blocks: reader.u64(27)?,
+            source_assertion_age_blocks: reader.u64(28)?,
             public_values_commitment: String::new(),
         };
         reader.finish()?;
@@ -812,6 +873,9 @@ impl PfUsdcBondedLifecyclePublicValuesV1 {
         pfusdc_append_hex(&mut out, 23, &self.latest_confirmed_send_root)?;
         pfusdc_append_hex(&mut out, 24, &self.common_ancestor_assertion_id)?;
         pfusdc_append_hex(&mut out, 25, &self.verifier_policy_hash)?;
+        pfusdc_append_u64(&mut out, 26, self.source_assertion_created_at_l1_block);
+        pfusdc_append_u64(&mut out, 27, self.age_release_after_blocks);
+        pfusdc_append_u64(&mut out, 28, self.source_assertion_age_blocks);
         Ok(out)
     }
 
@@ -845,6 +909,7 @@ impl PfUsdcBondedLifecyclePublicValuesV1 {
                 self.update_kind.as_str(),
                 PFUSDC_BONDED_LIFECYCLE_UPDATE_CONFIRMED
                     | PFUSDC_BONDED_LIFECYCLE_UPDATE_REVERTED
+                    | PFUSDC_BONDED_LIFECYCLE_UPDATE_AGE_RELEASED
             )
         {
             return Err("pfUSDC bonded lifecycle fields are invalid".to_string());
@@ -874,6 +939,26 @@ impl PfUsdcBondedLifecyclePublicValuesV1 {
             "bonded_lifecycle.rollup_address",
             &self.arbitrum_rollup_address,
         )?;
+        if self.update_kind == PFUSDC_BONDED_LIFECYCLE_UPDATE_AGE_RELEASED {
+            if self.source_assertion_created_at_l1_block == 0
+                || self.age_release_after_blocks < 64
+                || self.source_assertion_age_blocks < self.age_release_after_blocks
+                || self.ethereum_finalized_execution_block_number
+                    < self.source_assertion_created_at_l1_block
+                || self.source_assertion_age_blocks
+                    != self
+                        .ethereum_finalized_execution_block_number
+                        .checked_sub(self.source_assertion_created_at_l1_block)
+                        .ok_or_else(|| "pfUSDC bonded age release underflows".to_string())?
+            {
+                return Err("pfUSDC bonded age-release fields are invalid".to_string());
+            }
+        } else if self.source_assertion_created_at_l1_block != 0
+            || self.age_release_after_blocks != 0
+            || self.source_assertion_age_blocks != 0
+        {
+            return Err("non-age lifecycle proof contains age-release fields".to_string());
+        }
         if check_commitment && self.public_values_commitment != self.expected_commitment()? {
             return Err("pfUSDC bonded lifecycle commitment mismatch".to_string());
         }
@@ -946,6 +1031,7 @@ mod pfusdc_bonded_accounting_tests {
     }
 
     fn lifecycle(kind: &str, common: &str) -> PfUsdcBondedLifecyclePublicValuesV1 {
+        let age_release = kind == PFUSDC_BONDED_LIFECYCLE_UPDATE_AGE_RELEASED;
         let mut values = PfUsdcBondedLifecyclePublicValuesV1 {
             schema: PFUSDC_BONDED_LIFECYCLE_PUBLIC_VALUES_SCHEMA_V1.to_string(),
             proof_program_version: 1,
@@ -961,7 +1047,7 @@ mod pfusdc_bonded_accounting_tests {
             prior_ethereum_finalized_slot: 64,
             ethereum_finalized_beacon_root: "56".repeat(32),
             ethereum_finalized_slot: 96,
-            ethereum_finalized_execution_block_number: 101,
+            ethereum_finalized_execution_block_number: if age_release { 500 } else { 101 },
             ethereum_finalized_execution_block_hash: "57".repeat(32),
             arbitrum_chain_id: 42_161,
             arbitrum_rollup_address: "0x2222222222222222222222222222222222222222".to_string(),
@@ -972,6 +1058,9 @@ mod pfusdc_bonded_accounting_tests {
             latest_confirmed_send_root: "bd".repeat(32),
             common_ancestor_assertion_id: common.repeat(32),
             update_kind: kind.to_string(),
+            source_assertion_created_at_l1_block: if age_release { 100 } else { 0 },
+            age_release_after_blocks: if age_release { 64 } else { 0 },
+            source_assertion_age_blocks: if age_release { 400 } else { 0 },
             public_values_commitment: String::new(),
         };
         values.seal().expect("seal lifecycle values");
@@ -1012,6 +1101,23 @@ mod pfusdc_bonded_accounting_tests {
         assert_eq!(campaign.exposure_total_atoms, 0);
         assert_eq!(campaign.mints[0].status, FAST_INGRESS_MINT_STATUS_FINAL);
         assert!(campaign.apply_confirmation(&confirmation).is_err());
+    }
+
+    #[test]
+    fn age_release_keeps_exposure_charged_and_requires_governed_enablement() {
+        let ingress = ingress("01", 3, 5);
+        let mut campaign = FastIngressCampaignStateV1::from_public_values(&ingress).unwrap();
+        campaign.accept_escrowed_mint(&ingress, 10).unwrap();
+        let release = lifecycle(PFUSDC_BONDED_LIFECYCLE_UPDATE_AGE_RELEASED, "bb");
+        assert!(campaign.apply_age_release(&release).is_err());
+        campaign.age_release_enabled = true;
+        assert_eq!(campaign.apply_age_release(&release).unwrap(), 3);
+        assert_eq!(campaign.exposure_total_atoms, 3);
+        assert_eq!(
+            campaign.mints[0].status,
+            FAST_INGRESS_MINT_STATUS_RELEASED_UNCONFIRMED
+        );
+        assert!(campaign.apply_age_release(&release).is_err());
     }
 
     #[test]

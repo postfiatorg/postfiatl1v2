@@ -2253,6 +2253,9 @@ fn apply_vault_bridge_fast_ingress_lifecycle(
         || values.verifier_policy_hash != verifier.verifier_policy_hash
         || verifier.base_route_profile_hash != operation.route_profile_hash
         || verifier.route_epoch != values.route_epoch
+        || (values.update_kind
+            == postfiat_types::PFUSDC_BONDED_LIFECYCLE_UPDATE_AGE_RELEASED
+            && !verifier.age_release_enabled)
     {
         return Err((
             "pfusdc_fast_ingress_lifecycle_config_mismatch",
@@ -2290,10 +2293,16 @@ fn apply_vault_bridge_fast_ingress_lifecycle(
     }
     let reverted = values.update_kind
         == postfiat_types::PFUSDC_BONDED_LIFECYCLE_UPDATE_REVERTED;
+    let age_released = values.update_kind
+        == postfiat_types::PFUSDC_BONDED_LIFECYCLE_UPDATE_AGE_RELEASED;
     if reverted {
         campaign
             .apply_reversion(&values)
             .map_err(|error| ("pfusdc_fast_ingress_reversion_rejected", error))?;
+    } else if age_released {
+        campaign
+            .apply_age_release(&values)
+            .map_err(|error| ("pfusdc_fast_ingress_age_release_rejected", error))?;
     } else {
         campaign
             .apply_confirmation(&values)

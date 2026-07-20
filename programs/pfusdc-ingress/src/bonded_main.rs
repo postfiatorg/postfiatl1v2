@@ -25,6 +25,12 @@ pub fn main() {
                 .canonical_bytes_without_commitment()
                 .expect("encode bonded-reversion public values")
         }
+        pfusdc_ingress_program::bonded::PfUsdcBondedGuestInputV1::AgeRelease(witness) => {
+            pfusdc_ingress_program::bonded::verify_bonded_age_release_witness_v1(&witness)
+                .expect("verify bonded-age-release witness")
+                .canonical_bytes_without_commitment()
+                .expect("encode bonded-age-release public values")
+        }
     };
     sp1_zkvm::io::commit_slice(&canonical);
 }

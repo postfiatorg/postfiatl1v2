@@ -817,17 +817,6 @@ pub(super) fn execute_governance_batch(
                 let ledger = ledger.as_deref_mut().ok_or_else(|| {
                     "fast-ingress verifier update requires canonical ledger context".to_string()
                 })?;
-                if !ledger.fast_ingress_campaigns.is_empty()
-                    || ledger.vault_bridge_deposits.iter().any(|deposit| {
-                        deposit.source_proof_kind
-                            == postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
-                    })
-                {
-                    return Err(
-                        "fast-ingress verifier cannot change after bonded exposure exists"
-                            .to_string(),
-                    );
-                }
                 let replacement =
                     activation
                         .tier4_finality_bootstrap
@@ -852,6 +841,39 @@ pub(super) fn execute_governance_batch(
                 if current.fast_ingress_verifier.as_ref() == Some(&replacement_fast) {
                     return Err("fast-ingress verifier update is a no-op".to_string());
                 }
+                let has_bonded_exposure = !ledger.fast_ingress_campaigns.is_empty()
+                    || ledger.vault_bridge_deposits.iter().any(|deposit| {
+                        deposit.source_proof_kind
+                            == postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+                    });
+                if has_bonded_exposure {
+                    let current_fast = current.fast_ingress_verifier.as_ref().ok_or_else(|| {
+                        "active bonded exposure is missing its verifier configuration".to_string()
+                    })?;
+                    let mut permitted = current_fast.clone();
+                    permitted.verifier_program_vkey =
+                        replacement_fast.verifier_program_vkey.clone();
+                    permitted.age_release_enabled = replacement_fast.age_release_enabled;
+                    if permitted != replacement_fast
+                        || current_fast.age_release_enabled
+                        || !replacement_fast.age_release_enabled
+                        || ledger.fast_ingress_campaigns.iter().any(|campaign| {
+                            campaign.paused
+                                || campaign.route_profile_hash != replacement.route_profile_hash
+                                || campaign.route_epoch != replacement.route_epoch
+                                || campaign.mints.iter().any(|mint| {
+                                    mint.claimed
+                                        || mint.status
+                                            != postfiat_types::FAST_INGRESS_MINT_STATUS_ESCROWED
+                                })
+                        })
+                    {
+                        return Err(
+                            "post-exposure fast-ingress update may only rotate the vkey and enable age release while every mint remains escrowed"
+                                .to_string(),
+                        );
+                    }
+                }
                 let mut expected = current.clone();
                 expected.fast_ingress_verifier = Some(replacement_fast.clone());
                 if &expected != replacement {
@@ -866,7 +888,14 @@ pub(super) fn execute_governance_batch(
                         replacement.route_epoch,
                     )
                     .ok_or_else(|| "fast-ingress verifier update target disappeared".to_string())?;
-                target.fast_ingress_verifier = Some(replacement_fast);
+                target.fast_ingress_verifier = Some(replacement_fast.clone());
+                if let Some(campaign) = ledger.fast_ingress_campaign_mut(
+                    &replacement.route_profile_hash,
+                    replacement.route_epoch,
+                ) {
+                    campaign.age_release_enabled = replacement_fast.age_release_enabled;
+                    campaign.validate()?;
+                }
                 apply_governance_amendment_with_lifecycle_records(
                     governance,
                     amendment.clone(),

@@ -3,9 +3,11 @@ use std::{collections::BTreeMap, fs, path::PathBuf, time::Instant};
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use pfusdc_ingress_program::bonded::{
-    bonded_ingress_policy_hash_v1, verify_bonded_confirmation_witness_v1,
-    verify_bonded_ingress_witness_v1, PfUsdcBondedConfirmationWitnessV1, PfUsdcBondedGuestInputV1,
-    PfUsdcBondedIngressPolicyV1, PfUsdcBondedIngressWitnessV1, PfUsdcBondedReversionWitnessV1,
+    bonded_ingress_policy_hash_v1, verify_bonded_age_release_witness_v1,
+    verify_bonded_confirmation_witness_v1, verify_bonded_ingress_witness_v1,
+    PfUsdcBondedAgeReleaseWitnessV1, PfUsdcBondedConfirmationWitnessV1,
+    PfUsdcBondedGuestInputV1, PfUsdcBondedIngressPolicyV1, PfUsdcBondedIngressWitnessV1,
+    PfUsdcBondedReversionWitnessV1,
 };
 use pfusdc_ingress_program::{verify_ingress_witness_v2, PfUsdcIngressProofWitnessV2};
 use postfiat_pfusdc_proofs::{verify_checkpoint_witness_v1, verify_egress_witness_v1};
@@ -78,6 +80,8 @@ enum Command {
     BondedConfirmationCapture(ingress_capture::bonded::BondedConfirmationCaptureArgs),
     /// Capture proof that a previously bonded assertion lost to a sibling.
     BondedReversionCapture(ingress_capture::bonded::BondedReversionCaptureArgs),
+    /// Capture a newer finalized snapshot proving short-age eligibility on the unique live branch.
+    BondedAgeReleaseCapture(ingress_capture::bonded::BondedAgeReleaseCaptureArgs),
     /// Capture the governed Ethereum/Arbitrum checkpoint from which ingress must advance.
     FinalityBootstrap(ingress_capture::FinalityBootstrapArgs),
     /// Run the bounded security-field mutation matrix against a captured witness.
@@ -117,6 +121,17 @@ enum Command {
     },
     /// Execute or Groth16-prove a bonded assertion reversion update.
     BondedReversion {
+        #[arg(long)]
+        elf: PathBuf,
+        #[arg(long)]
+        witness: PathBuf,
+        #[arg(long)]
+        output_dir: PathBuf,
+        #[arg(long)]
+        prove: bool,
+    },
+    /// Execute or Groth16-prove a bonded assertion age release.
+    BondedAgeRelease {
         #[arg(long)]
         elf: PathBuf,
         #[arg(long)]
@@ -167,6 +182,9 @@ async fn main() -> Result<()> {
         Command::BondedReversionCapture(capture) => {
             ingress_capture::bonded::capture_reversion(capture).await
         }
+        Command::BondedAgeReleaseCapture(capture) => {
+            ingress_capture::bonded::capture_age_release(capture).await
+        }
         Command::FinalityBootstrap(capture) => {
             ingress_capture::capture_finality_bootstrap(capture).await
         }
@@ -195,6 +213,12 @@ async fn main() -> Result<()> {
             output_dir,
             prove,
         } => prove_bonded_reversion(elf, witness, output_dir, prove).await,
+        Command::BondedAgeRelease {
+            elf,
+            witness,
+            output_dir,
+            prove,
+        } => prove_bonded_age_release(elf, witness, output_dir, prove).await,
         Command::Egress {
             witness,
             output_dir,
@@ -565,6 +589,89 @@ async fn prove_bonded_confirmation(
         )?;
         println!(
             "verified bonded confirmation Groth16 proof; vkey {}",
+            pk.verifying_key().bytes32()
+        );
+    }
+    Ok(())
+}
+
+async fn prove_bonded_age_release(
+    elf_path: PathBuf,
+    witness_path: PathBuf,
+    output_dir: PathBuf,
+    prove: bool,
+) -> Result<()> {
+    #[cfg(debug_assertions)]
+    if prove {
+        anyhow::bail!("Groth16 proving requires a --release build");
+    }
+    let elf_bytes =
+        fs::read(&elf_path).with_context(|| format!("read bonded ELF {}", elf_path.display()))?;
+    let elf = Elf::from(elf_bytes);
+    let witness_bytes = fs::read(&witness_path)
+        .with_context(|| format!("read age-release witness {}", witness_path.display()))?;
+    let witness: PfUsdcBondedAgeReleaseWitnessV1 = serde_json::from_slice(&witness_bytes)
+        .with_context(|| format!("decode age-release witness {}", witness_path.display()))?;
+    let expected = verify_bonded_age_release_witness_v1(&witness)
+        .map_err(|error| anyhow::anyhow!("native age-release verification failed: {error}"))?;
+    let expected_public_values = expected
+        .canonical_bytes_without_commitment()
+        .map_err(|error| anyhow::anyhow!("encode age-release public values: {error}"))?;
+    let mut stdin = SP1Stdin::new();
+    stdin.write_vec(
+        serde_cbor::to_vec(&PfUsdcBondedGuestInputV1::AgeRelease(witness))
+            .context("encode age-release witness as CBOR")?,
+    );
+    let client = ProverClient::from_env().await;
+    let started = Instant::now();
+    let (executed_public_values, report) = client.execute(elf.clone(), stdin.clone()).await?;
+    let executed = executed_public_values.to_vec();
+    anyhow::ensure!(
+        executed == expected_public_values,
+        "SP1 age-release output differs from native public values"
+    );
+    fs::create_dir_all(&output_dir)?;
+    fs::write(output_dir.join("public-values.bin"), &executed)?;
+    fs::write(
+        output_dir.join("execute-report.json"),
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "schema": "postfiat.pfusdc.bonded_age_release_execute_report.v1",
+            "witness": witness_path,
+            "elf_sha256": hex::encode(Sha256::digest(fs::read(&elf_path)?)),
+            "elapsed_ms": started.elapsed().as_millis(),
+            "instruction_count": report.total_instruction_count(),
+            "public_values_bytes": executed.len(),
+        }))?,
+    )?;
+    println!(
+        "bonded age release executed: {} cycles in {} ms",
+        report.total_instruction_count(),
+        started.elapsed().as_millis()
+    );
+    if prove {
+        let setup_started = Instant::now();
+        let pk = client.setup(elf).await?;
+        let proof = client.prove(&pk, stdin).groth16().await?;
+        client.verify(&proof, pk.verifying_key(), None)?;
+        anyhow::ensure!(
+            proof.public_values.to_vec() == expected_public_values,
+            "verified age-release proof contains unexpected public values"
+        );
+        fs::write(output_dir.join("proof.bin"), bincode::serialize(&proof)?)?;
+        fs::write(output_dir.join("proof-calldata.bin"), proof.bytes())?;
+        fs::write(
+            output_dir.join("proof-report.json"),
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "schema": "postfiat.pfusdc.bonded_age_release_proof_report.v1",
+                "program_vkey": pk.verifying_key().bytes32(),
+                "proof_mode": "groth16",
+                "setup_and_prove_ms": setup_started.elapsed().as_millis(),
+                "proof_bytes": proof.bytes().len(),
+                "public_values_bytes": proof.public_values.to_vec().len(),
+            }))?,
+        )?;
+        println!(
+            "verified bonded age-release Groth16 proof; vkey {}",
             pk.verifying_key().bytes32()
         );
     }

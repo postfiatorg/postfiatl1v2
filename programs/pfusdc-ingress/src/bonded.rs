@@ -11,7 +11,8 @@ use postfiat_types::{
     PfUsdcBondedLifecyclePublicValuesV1, VaultBridgeDepositEvidence, VaultBridgeRouteProfileV1,
     NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1, PFUSDC_BONDED_INGRESS_PUBLIC_VALUES_SCHEMA_V1,
     PFUSDC_BONDED_LIFECYCLE_PUBLIC_VALUES_SCHEMA_V1, PFUSDC_BONDED_LIFECYCLE_UPDATE_CONFIRMED,
-    PFUSDC_BONDED_LIFECYCLE_UPDATE_REVERTED, VAULT_BRIDGE_EVIDENCE_TIER_RECEIPT_PROVEN,
+    PFUSDC_BONDED_LIFECYCLE_UPDATE_AGE_RELEASED, PFUSDC_BONDED_LIFECYCLE_UPDATE_REVERTED,
+    VAULT_BRIDGE_EVIDENCE_TIER_RECEIPT_PROVEN,
 };
 
 use crate::{
@@ -173,10 +174,24 @@ pub struct PfUsdcBondedReversionWitnessV1 {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct PfUsdcBondedAgeReleaseWitnessV1 {
+    pub schema: String,
+    /// Original ingress witness with its finality and RollupCore branch proofs
+    /// refreshed at the age-release snapshot. Deposit fields are retained only
+    /// to keep one canonical route/policy carrier and are not re-authorized.
+    pub branch_witness: PfUsdcBondedIngressWitnessV1,
+    /// The already-admitted assertion whose age is being authenticated.
+    pub source_assertion_id: B256,
+    /// Authenticated current latestConfirmed assertion preimage.
+    pub latest_confirmed_assertion: NitroAssertionWitnessV1,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub enum PfUsdcBondedGuestInputV1 {
     Ingress(PfUsdcBondedIngressWitnessV1),
     Confirmation(PfUsdcBondedConfirmationWitnessV1),
     Reversion(PfUsdcBondedReversionWitnessV1),
+    AgeRelease(PfUsdcBondedAgeReleaseWitnessV1),
 }
 
 pub fn verify_bonded_ingress_witness_v1(
@@ -312,6 +327,9 @@ pub fn verify_bonded_confirmation_witness_v1(
         latest_confirmed_send_root: hex32(latest.send_root),
         common_ancestor_assertion_id: hex32(witness.source_assertion_id),
         update_kind: PFUSDC_BONDED_LIFECYCLE_UPDATE_CONFIRMED.to_string(),
+        source_assertion_created_at_l1_block: 0,
+        age_release_after_blocks: 0,
+        source_assertion_age_blocks: 0,
         public_values_commitment: String::new(),
     };
     values.seal()?;
@@ -387,6 +405,93 @@ pub fn verify_bonded_reversion_witness_v1(
         latest_confirmed_send_root: hex32(latest.send_root),
         common_ancestor_assertion_id: hex32(common_ancestor),
         update_kind: PFUSDC_BONDED_LIFECYCLE_UPDATE_REVERTED.to_string(),
+        source_assertion_created_at_l1_block: 0,
+        age_release_after_blocks: 0,
+        source_assertion_age_blocks: 0,
+        public_values_commitment: String::new(),
+    };
+    values.seal()?;
+    values.validate()?;
+    Ok(values)
+}
+
+pub fn verify_bonded_age_release_witness_v1(
+    witness: &PfUsdcBondedAgeReleaseWitnessV1,
+) -> Result<PfUsdcBondedLifecyclePublicValuesV1, String> {
+    let branch_witness = &witness.branch_witness;
+    validate_bounds(branch_witness)?;
+    verify_lifecycle_profile_policy(
+        &witness.schema,
+        &branch_witness.route_profile,
+        &branch_witness.policy,
+    )?;
+    let (
+        prior_root,
+        prior_slot,
+        final_root,
+        final_slot,
+        ethereum_state_root,
+        finalized_execution_block,
+        finalized_execution_block_hash,
+    ) = verify_ethereum_finality(
+        &branch_witness.helios,
+        &confirmed_policy_view(&branch_witness.policy),
+    )?;
+    let branch = verify_bonded_assertion_path(branch_witness, ethereum_state_root)?;
+    if witness.source_assertion_id == B256::ZERO
+        || !branch_witness.assertion_path.iter().any(|item| {
+            nitro_assertion_hash(&item.assertion) == witness.source_assertion_id
+        })
+        || nitro_assertion_hash(&witness.latest_confirmed_assertion)
+            != branch.latest_confirmed_assertion_id
+        || witness.latest_confirmed_assertion.machine_status != 1
+    {
+        return Err(
+            "age release does not authenticate the source on the unique live bonded branch"
+                .to_string(),
+        );
+    }
+    let source = assertion_record(branch_witness, witness.source_assertion_id)?;
+    if source.status != 1 || source.created_at_block == 0 {
+        return Err("age-release source assertion is not pending and bonded".to_string());
+    }
+    let source_age = finalized_execution_block
+        .checked_sub(source.created_at_block)
+        .ok_or_else(|| "age-release finalized block predates source assertion".to_string())?;
+    if source_age < branch_witness.policy.age_margin_blocks {
+        return Err("age-release source assertion has not reached the governed age".to_string());
+    }
+    let mut values = PfUsdcBondedLifecyclePublicValuesV1 {
+        schema: PFUSDC_BONDED_LIFECYCLE_PUBLIC_VALUES_SCHEMA_V1.to_string(),
+        proof_program_version: PFUSDC_BONDED_INGRESS_PROGRAM_VERSION_V1,
+        pftl_chain_id: branch_witness.pftl_chain_id.clone(),
+        pftl_genesis_hash: branch_witness.pftl_genesis_hash.clone(),
+        pftl_protocol_version: branch_witness.pftl_protocol_version,
+        route_profile_hash: branch_witness.route_profile.profile_hash()?,
+        route_epoch: u64::from(branch_witness.route_profile.route_epoch),
+        manifest_hash: hex32(branch_witness.policy.deployment_manifest_hash),
+        verifier_policy_hash: bonded_ingress_policy_hash_v1(&branch_witness.policy),
+        ethereum_chain_id: branch_witness.policy.ethereum_chain_id,
+        prior_ethereum_finalized_beacon_root: hex32(prior_root),
+        prior_ethereum_finalized_slot: prior_slot,
+        ethereum_finalized_beacon_root: hex32(final_root),
+        ethereum_finalized_slot: final_slot,
+        ethereum_finalized_execution_block_number: finalized_execution_block,
+        ethereum_finalized_execution_block_hash: hex32(finalized_execution_block_hash),
+        arbitrum_chain_id: branch_witness.policy.arbitrum_chain_id,
+        arbitrum_rollup_address: evm_address_text(branch_witness.policy.arbitrum_rollup_address),
+        arbitrum_rollup_runtime_code_hash: hex32(
+            branch_witness.policy.arbitrum_rollup_runtime_code_hash,
+        ),
+        source_assertion_id: hex32(witness.source_assertion_id),
+        latest_confirmed_assertion_id: hex32(branch.latest_confirmed_assertion_id),
+        latest_confirmed_l2_block_hash: hex32(witness.latest_confirmed_assertion.block_hash),
+        latest_confirmed_send_root: hex32(witness.latest_confirmed_assertion.send_root),
+        common_ancestor_assertion_id: hex32(branch.latest_confirmed_assertion_id),
+        update_kind: PFUSDC_BONDED_LIFECYCLE_UPDATE_AGE_RELEASED.to_string(),
+        source_assertion_created_at_l1_block: source.created_at_block,
+        age_release_after_blocks: branch_witness.policy.age_margin_blocks,
+        source_assertion_age_blocks: source_age,
         public_values_commitment: String::new(),
     };
     values.seal()?;

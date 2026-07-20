@@ -5,7 +5,8 @@ use postfiat_types::{
     vault_bridge_source_root_for_asset, vault_bridge_withdrawal_execution_observation_root,
     Account, AssetCreateOperation, AssetDefinition, AssetTransactionOperation,
     EthereumArbitrumCheckpointV1, EthereumArbitrumFinalityStateV2,
-    FastIngressVerifierConfigV1, GovernanceActionBatch, GovernanceAmendment, GovernanceState,
+    FastIngressCampaignStateV1, FastIngressMintRecordV1, FastIngressVerifierConfigV1,
+    GovernanceActionBatch, GovernanceAmendment, GovernanceState,
     NavAssetRegisterOperation,
     NavAttestorRegisterOperation, NavEpochFinalizeOperation, NavProfileRegisterOperation,
     NavProofProfile, NavReserveAttestOperation, NavReserveSubmitOperation, NavTrackedAsset,
@@ -361,6 +362,7 @@ fn tier4_state(
             asset_id: profile.asset_id.clone(),
             cap_atoms: 5_000_000,
             age_margin_blocks: 64,
+            age_release_enabled: false,
             verifier_kind: postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
                 .to_string(),
             verifier_policy_hash: fast_policy_hash.to_string(),
@@ -437,6 +439,110 @@ fn governed_fast_ingress_verifier_update_preserves_route_and_finality() {
         "02".repeat(32)
     );
     assert_eq!(ledger.ethereum_arbitrum_finality_states[0].latest, initial_state.latest);
+}
+
+#[test]
+fn governed_age_release_enablement_preserves_existing_escrow_and_cap() {
+    let profile = tier4_route(2);
+    let profile_hash = profile.profile_hash().expect("profile hash");
+    let mut governance = GovernanceState::new(1);
+    governance.apply(amendment(
+        GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT,
+        1,
+        0,
+    ));
+    let mut ledger = route_ledger(&profile);
+    let initial_state = tier4_state(&profile, &"01".repeat(32));
+    let initial_activation = VaultBridgeRouteProfileActivationV1 {
+        schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
+        profile: profile.clone(),
+        amendment: amendment(
+            &vault_bridge_route_amendment_kind(&profile).expect("route kind"),
+            profile.route_epoch,
+            profile.activation_height,
+        ),
+        tier4_finality_bootstrap: Some(initial_state.clone()),
+    };
+    let initial_batch = GovernanceActionBatch::with_vault_bridge_route_profile_activation(
+        "initial-tier4-route-age",
+        initial_activation,
+    );
+    assert!(execute_governance_batch(
+        &mut governance,
+        Some(&mut ledger),
+        &initial_batch,
+        2,
+    )[0]
+        .accepted);
+    ledger.fast_ingress_campaigns.push(FastIngressCampaignStateV1 {
+        schema: postfiat_types::FAST_INGRESS_CAMPAIGN_SCHEMA_V1.to_string(),
+        route_profile_hash: profile_hash.clone(),
+        route_epoch: u64::from(profile.route_epoch),
+        manifest_hash: "ee".repeat(32),
+        asset_id: profile.asset_id.clone(),
+        cap_atoms: 5_000_000,
+        age_margin_blocks: 64,
+        age_release_enabled: false,
+        exposure_total_atoms: 1,
+        paused: false,
+        mints: vec![FastIngressMintRecordV1 {
+            mint_id: "10".repeat(32),
+            deposit_key: "11".repeat(32),
+            source_chain_id: profile.source_chain_id,
+            vault_address: profile.vault_address.clone(),
+            deposit_id: "12".repeat(32),
+            amount_atoms: 1,
+            recipient: "pf-holder".to_string(),
+            route_id: profile.route_id.clone(),
+            route_epoch: u64::from(profile.route_epoch),
+            source_assertion_id: "13".repeat(32),
+            initial_latest_confirmed_assertion_id: "14".repeat(32),
+            source_l1_block_hash: "15".repeat(32),
+            source_l2_block_hash: "16".repeat(32),
+            accepted_height: 2,
+            status: postfiat_types::FAST_INGRESS_MINT_STATUS_ESCROWED.to_string(),
+            claimed: false,
+        }],
+    });
+    ledger.fast_ingress_campaigns[0]
+        .validate()
+        .expect("valid escrow campaign");
+
+    let mut replacement = initial_state;
+    let replacement_fast = replacement
+        .fast_ingress_verifier
+        .as_mut()
+        .expect("fast verifier");
+    replacement_fast.verifier_program_vkey = format!("0x{}", "17".repeat(32));
+    replacement_fast.age_release_enabled = true;
+    let mut replacement_amendment = amendment(
+        &vault_bridge_route_amendment_kind(&profile).expect("route kind"),
+        profile.route_epoch,
+        profile.activation_height,
+    );
+    replacement_amendment.amendment_id = "enable-age-release-after-escrow".to_string();
+    let update = VaultBridgeRouteProfileActivationV1 {
+        schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
+        profile,
+        amendment: replacement_amendment,
+        tier4_finality_bootstrap: Some(replacement),
+    };
+    let receipt = execute_governance_batch(
+        &mut governance,
+        Some(&mut ledger),
+        &GovernanceActionBatch::with_vault_bridge_route_profile_activation(
+            "enable-age-release",
+            update,
+        ),
+        3,
+    )
+    .into_iter()
+    .next()
+    .expect("update receipt");
+    assert!(receipt.accepted, "{receipt:?}");
+    assert!(ledger.fast_ingress_campaigns[0].age_release_enabled);
+    assert_eq!(ledger.fast_ingress_campaigns[0].exposure_total_atoms, 1);
+    assert_eq!(ledger.fast_ingress_campaigns[0].cap_atoms, 5_000_000);
 }
 
 fn execute_route_candidate(

@@ -3,9 +3,11 @@ use alloy_rlp::Encodable;
 use alloy_sol_types::sol;
 use clap::Args;
 use pfusdc_ingress_program::bonded::{
-    verify_bonded_confirmation_witness_v1, verify_bonded_ingress_witness_v1,
+    verify_bonded_age_release_witness_v1, verify_bonded_confirmation_witness_v1,
+    verify_bonded_ingress_witness_v1,
     BondedAssertionPathItemV1, NitroAssertionConfigWitnessV1, PfUsdcBondedConfirmationWitnessV1,
-    PfUsdcBondedIngressPolicyV1, PfUsdcBondedIngressWitnessV1, PfUsdcBondedReversionWitnessV1,
+    PfUsdcBondedAgeReleaseWitnessV1, PfUsdcBondedIngressPolicyV1,
+    PfUsdcBondedIngressWitnessV1, PfUsdcBondedReversionWitnessV1,
 };
 use pfusdc_ingress_program::{
     NITRO_LATEST_CONFIRMED_STORAGE_SLOT, PFUSDC_INGRESS_PROOF_POLICY_SCHEMA_V2,
@@ -94,6 +96,22 @@ pub struct BondedReversionCaptureArgs {
     pub pftl_genesis_hash: String,
     #[arg(long)]
     pub pftl_protocol_version: u32,
+    #[arg(long)]
+    pub output: PathBuf,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct BondedAgeReleaseCaptureArgs {
+    #[arg(long)]
+    pub ingress_witness: PathBuf,
+    #[arg(long)]
+    pub prior_finality_state: PathBuf,
+    #[arg(long)]
+    pub ethereum_rpc: String,
+    #[arg(long)]
+    pub ethereum_consensus_rpc: String,
+    #[arg(long)]
+    pub source_assertion_id: String,
     #[arg(long)]
     pub output: PathBuf,
 }
@@ -402,6 +420,214 @@ pub async fn capture(args: BondedIngressCaptureArgs) -> Result<()> {
         values.source_assertion_id,
         values.source_assertion_created_at_l1_block,
         values.source_assertion_l2_block_hash
+    );
+    Ok(())
+}
+
+pub async fn capture_age_release(args: BondedAgeReleaseCaptureArgs) -> Result<()> {
+    let mut branch_witness: PfUsdcBondedIngressWitnessV1 = read_json(&args.ingress_witness)?;
+    let finality_state: EthereumArbitrumFinalityStateV2 = read_json(&args.prior_finality_state)?;
+    let source_assertion_id: B256 = args
+        .source_assertion_id
+        .parse()
+        .context("--source-assertion-id must be bytes32")?;
+    let profile_hash = branch_witness
+        .route_profile
+        .profile_hash()
+        .map_err(|error| anyhow!(error))?;
+    validate_bonded_route_config(
+        &branch_witness.route_profile,
+        &branch_witness.policy,
+        &finality_state,
+        &profile_hash,
+    )?;
+    let rpc = RpcClient::new()?;
+    let confirmed_policy = host_finality_policy(&branch_witness.policy, &finality_state)?;
+    let helios = capture_helios_inputs(
+        &rpc,
+        &confirmed_policy,
+        &args.ethereum_consensus_rpc,
+        Some(&finality_state.latest),
+    )
+    .await?;
+    let verified_finality = verify_helios_inputs_host(&helios, &confirmed_policy)?;
+    let ethereum_block = quantity(verified_finality.execution_block_number);
+    let policy = &branch_witness.policy;
+
+    let count_bytes = eth_call(
+        &rpc,
+        &args.ethereum_rpc,
+        policy.arbitrum_rollup_address,
+        stakerCountCall {}.abi_encode(),
+        &ethereum_block,
+    )
+    .await?;
+    let count = stakerCountCall::abi_decode_returns(&count_bytes).context("decode stakerCount")?;
+    anyhow::ensure!(count == 1, "age release requires one active Rollup staker");
+    let staker_bytes = eth_call(
+        &rpc,
+        &args.ethereum_rpc,
+        policy.arbitrum_rollup_address,
+        getStakerAddressCall { stakerNum: 0 }.abi_encode(),
+        &ethereum_block,
+    )
+    .await?;
+    let source_staker = getStakerAddressCall::abi_decode_returns(&staker_bytes)
+        .context("decode getStakerAddress")?;
+    let latest_staked_bytes = eth_call(
+        &rpc,
+        &args.ethereum_rpc,
+        policy.arbitrum_rollup_address,
+        latestStakedAssertionCall {
+            staker: source_staker,
+        }
+        .abi_encode(),
+        &ethereum_block,
+    )
+    .await?;
+    let latest_staked = latestStakedAssertionCall::abi_decode_returns(&latest_staked_bytes)
+        .context("decode latestStakedAssertion")?;
+    let confirmed_bytes = eth_call(
+        &rpc,
+        &args.ethereum_rpc,
+        policy.arbitrum_rollup_address,
+        latestConfirmedCall {}.abi_encode(),
+        &ethereum_block,
+    )
+    .await?;
+    let latest_confirmed = latestConfirmedCall::abi_decode_returns(&confirmed_bytes)
+        .context("decode latestConfirmed")?;
+    anyhow::ensure!(latest_confirmed != B256::ZERO, "Rollup latestConfirmed is zero");
+
+    let mut reversed = Vec::new();
+    let mut cursor = latest_staked;
+    while cursor != latest_confirmed {
+        anyhow::ensure!(
+            reversed.len() < 256,
+            "age-release assertion path exceeds guest bound"
+        );
+        let item = capture_bonded_assertion_item(
+            &rpc,
+            &args.ethereum_rpc,
+            policy.arbitrum_rollup_address,
+            cursor,
+            &ethereum_block,
+        )
+        .await?;
+        cursor = item.assertion.parent_assertion_hash;
+        reversed.push(item);
+    }
+    reversed.reverse();
+    anyhow::ensure!(
+        reversed.iter().any(|item| {
+            pfusdc_ingress_program::nitro_assertion_hash(&item.assertion)
+                == source_assertion_id
+        }),
+        "source assertion is no longer on the unique live bonded branch"
+    );
+    let latest_confirmed_assertion = capture_bonded_assertion_item(
+        &rpc,
+        &args.ethereum_rpc,
+        policy.arbitrum_rollup_address,
+        latest_confirmed,
+        &ethereum_block,
+    )
+    .await?
+    .assertion;
+
+    let staker_base = address_mapping_slot(source_staker, policy.rollup_staker_map_slot);
+    let staker_list_item = keccak256(policy.rollup_staker_list_slot.as_slice());
+    let mut rollup_slots = vec![
+        policy.rollup_primary_implementation_slot,
+        policy.rollup_secondary_implementation_slot,
+        policy.rollup_paused_storage_slot,
+        policy.rollup_chain_config_storage_slot,
+        policy.rollup_assertion_config_storage_slot,
+        policy.rollup_base_stake_storage_slot,
+        policy.rollup_wasm_module_root_storage_slot,
+        policy.rollup_challenge_config_storage_slot,
+        policy.rollup_stake_token_storage_slot,
+        policy.rollup_latest_confirmed_storage_slot,
+        policy.rollup_staker_list_slot,
+        staker_list_item,
+        staker_base,
+        add_slot(staker_base, 1)?,
+        add_slot(staker_base, 2)?,
+        policy.rollup_validator_policy_storage_slot,
+    ];
+    let confirmed_base = mapping_slot(latest_confirmed, policy.rollup_assertions_mapping_slot);
+    rollup_slots.push(confirmed_base);
+    rollup_slots.push(add_slot(confirmed_base, 1)?);
+    for item in &reversed {
+        let assertion_id = pfusdc_ingress_program::nitro_assertion_hash(&item.assertion);
+        let base = mapping_slot(assertion_id, policy.rollup_assertions_mapping_slot);
+        rollup_slots.push(base);
+        rollup_slots.push(add_slot(base, 1)?);
+    }
+    let rollup_storage = get_account_proof(
+        &rpc,
+        &args.ethereum_rpc,
+        policy.arbitrum_rollup_address,
+        &rollup_slots,
+        &ethereum_block,
+    )
+    .await?;
+    let rollup_admin_implementation_account = get_account_proof(
+        &rpc,
+        &args.ethereum_rpc,
+        policy.rollup_admin_implementation_address,
+        &[],
+        &ethereum_block,
+    )
+    .await?;
+    let rollup_user_implementation_account = get_account_proof(
+        &rpc,
+        &args.ethereum_rpc,
+        policy.rollup_user_implementation_address,
+        &[],
+        &ethereum_block,
+    )
+    .await?;
+    let challenge_manager_account = get_account_proof(
+        &rpc,
+        &args.ethereum_rpc,
+        policy.challenge_manager_address,
+        &[policy.challenge_manager_implementation_slot],
+        &ethereum_block,
+    )
+    .await?;
+    let challenge_manager_implementation_account = get_account_proof(
+        &rpc,
+        &args.ethereum_rpc,
+        policy.challenge_manager_implementation_address,
+        &[],
+        &ethereum_block,
+    )
+    .await?;
+
+    branch_witness.helios = helios;
+    branch_witness.rollup_storage = rollup_storage;
+    branch_witness.rollup_admin_implementation_account = rollup_admin_implementation_account;
+    branch_witness.rollup_user_implementation_account = rollup_user_implementation_account;
+    branch_witness.challenge_manager_account = challenge_manager_account;
+    branch_witness.challenge_manager_implementation_account =
+        challenge_manager_implementation_account;
+    branch_witness.source_staker = source_staker;
+    branch_witness.assertion_path = reversed;
+    let witness = PfUsdcBondedAgeReleaseWitnessV1 {
+        schema: pfusdc_ingress_program::bonded::PFUSDC_BONDED_INGRESS_WITNESS_SCHEMA_V1.to_string(),
+        branch_witness,
+        source_assertion_id,
+        latest_confirmed_assertion,
+    };
+    let values = verify_bonded_age_release_witness_v1(&witness)
+        .map_err(|error| anyhow!("captured age release failed native verification: {error}"))?;
+    write_new_json(&args.output, &witness)?;
+    println!(
+        "captured age release for assertion {} at age {} blocks (threshold {})",
+        values.source_assertion_id,
+        values.source_assertion_age_blocks,
+        values.age_release_after_blocks
     );
     Ok(())
 }
