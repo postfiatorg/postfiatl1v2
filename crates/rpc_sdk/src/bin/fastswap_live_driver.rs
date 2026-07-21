@@ -38,25 +38,30 @@ fn main() -> Result<(), String> {
     let signed_path = PathBuf::from(flag(&args, "--signed-intent")?);
     let session_path = PathBuf::from(flag(&args, "--session")?);
     let output_path = PathBuf::from(flag(&args, "--output")?);
-    if session_path.exists() || output_path.exists() {
-        return Err("session/output already exists; refusing a second live drive".to_owned());
+    if output_path.exists() {
+        return Err("terminal output already exists; reconcile it instead of driving again".to_owned());
     }
     let committee: FastSwapCommitteeV1 = read_json(&committee_path)?;
     committee
         .validate()
         .map_err(|error| format!("invalid committee: {error:?}"))?;
     let endpoints: BTreeMap<String, String> = read_json(&endpoints_path)?;
-    let signed: SignedFastSwapIntentV1 = read_json(&signed_path)?;
     let transport = TcpFastSwapTransportV1::new(endpoints, Duration::from_secs(30))?;
 
-    let preview_started = Instant::now();
-    let expected_effects = preview_fastswap(&signed, &committee, &transport)
-        .map_err(|error| format!("FastSwap preview failed: {error:?}"))?;
-    let preview_ms = preview_started.elapsed().as_millis() as u64;
-    let mut session =
-        FastSwapWalletSessionV1::new(SwapSettlementModeV1::FastSwapV1, signed, expected_effects)
-            .map_err(|error| format!("FastSwap session failed: {error:?}"))?;
-    persist(&session_path, &session)?;
+    let (mut session, preview_ms) = if session_path.exists() {
+        (read_json::<FastSwapWalletSessionV1>(&session_path)?, 0)
+    } else {
+        let signed: SignedFastSwapIntentV1 = read_json(&signed_path)?;
+        let preview_started = Instant::now();
+        let expected_effects = preview_fastswap(&signed, &committee, &transport)
+            .map_err(|error| format!("FastSwap preview failed: {error:?}"))?;
+        let preview_ms = preview_started.elapsed().as_millis() as u64;
+        let session =
+            FastSwapWalletSessionV1::new(SwapSettlementModeV1::FastSwapV1, signed, expected_effects)
+                .map_err(|error| format!("FastSwap session failed: {error:?}"))?;
+        persist(&session_path, &session)?;
+        (session, preview_ms)
+    };
 
     let settlement_started = Instant::now();
     let _terminal = drive_fastswap_three_wave(&mut session, &committee, &transport, |current| {
