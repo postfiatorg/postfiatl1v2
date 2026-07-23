@@ -5178,9 +5178,19 @@ fn validate_vault_bridge_reserve_packet_fields(
         vault_bridge_route_policy_hash(profile),
     )?;
 
-    let expected_verified_net_assets =
+    let counted_value =
         vault_bridge_counted_value_for_asset(&ledger.vault_bridge_bucket_states, &operation.asset_id)
             .map_err(|error| ("bad_vault_bridge_buckets", error))?;
+    let finalized_unclaimed_sp1_backing =
+        finalized_unclaimed_sp1_backing_for_asset(ledger, profile, &operation.asset_id)?;
+    let expected_verified_net_assets = counted_value
+        .checked_add(finalized_unclaimed_sp1_backing)
+        .ok_or_else(|| {
+            (
+                "vault_bridge_verified_net_assets_overflow",
+                "vault bridge counted value plus finalized SP1 backing overflowed".to_string(),
+            )
+        })?;
     if operation.verified_net_assets != expected_verified_net_assets {
         return Err((
             "vault_bridge_verified_net_assets_mismatch",
@@ -5188,11 +5198,21 @@ fn validate_vault_bridge_reserve_packet_fields(
                 .to_string(),
         ));
     }
-    let expected_circulating_supply = issued_asset_supply(ledger, &operation.asset_id)?;
-    if operation.circulating_supply != expected_circulating_supply {
+    let current_supply = issued_asset_supply(ledger, &operation.asset_id)?;
+    let maximum_proof_backed_supply = current_supply
+        .checked_add(finalized_unclaimed_sp1_backing)
+        .ok_or_else(|| {
+            (
+                "vault_bridge_circulating_supply_overflow",
+                "issued supply plus finalized SP1 backing overflowed".to_string(),
+            )
+        })?;
+    if operation.circulating_supply < current_supply
+        || operation.circulating_supply > maximum_proof_backed_supply
+    {
         return Err((
             "vault_bridge_circulating_supply_mismatch",
-            "vault bridge asset reserve packet circulating_supply must equal issued vault bridge asset supply".to_string(),
+            "vault bridge reserve packet circulating_supply must be at least current issued supply and may lead it only by finalized, unclaimed SP1-backed deposits".to_string(),
         ));
     }
     let expected_source_root =
@@ -5206,6 +5226,61 @@ fn validate_vault_bridge_reserve_packet_fields(
         ));
     }
     Ok(())
+}
+
+fn finalized_unclaimed_sp1_backing_for_asset(
+    ledger: &LedgerState,
+    profile: &NavProofProfile,
+    asset_id: &str,
+) -> Result<u64, (&'static str, String)> {
+    let source_domain = profile
+        .source_class
+        .strip_prefix(VAULT_BRIDGE_PROFILE_SOURCE_CLASS_PREFIX)
+        .unwrap_or_default();
+    let route_policy_hash = vault_bridge_route_policy_hash(profile);
+    let mut total = 0_u64;
+    for record in ledger.vault_bridge_deposits.iter().filter(|record| {
+        record.asset_id == asset_id
+            && record.status == VAULT_BRIDGE_DEPOSIT_STATUS_FINALIZED
+            && record.source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+            && record.policy_hash == route_policy_hash
+            && record.evidence.source_domain() == source_domain
+    }) {
+        let consumer_id = format!("vault_bridge_deposit_claim:{}", record.evidence_root);
+        if ledger
+            .vault_bridge_allocations
+            .iter()
+            .any(|allocation| allocation.consumer_id == consumer_id)
+        {
+            continue;
+        }
+        let releasable = ledger.fast_ingress_campaigns.iter().any(|campaign| {
+            campaign.route_profile_hash == record.policy_hash
+                && campaign.mints.iter().any(|mint| {
+                    mint.deposit_id == record.evidence.deposit_id
+                        && mint.recipient == record.evidence.pftl_recipient
+                        && mint.amount_atoms == record.evidence.amount_atoms
+                        && !mint.claimed
+                        && matches!(
+                            mint.status.as_str(),
+                            postfiat_types::FAST_INGRESS_MINT_STATUS_FINAL
+                                | postfiat_types::FAST_INGRESS_MINT_STATUS_RELEASED_UNCONFIRMED
+                        )
+                })
+        });
+        if !releasable {
+            continue;
+        }
+        total = total
+            .checked_add(record.evidence.amount_atoms)
+            .ok_or_else(|| {
+                (
+                    "vault_bridge_sp1_backing_overflow",
+                    "finalized unclaimed SP1 backing overflowed".to_string(),
+                )
+            })?;
+    }
+    Ok(total)
 }
 
 /// Deterministic challenge-bond resolution at finalization. For every
