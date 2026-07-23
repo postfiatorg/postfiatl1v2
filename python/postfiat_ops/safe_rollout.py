@@ -640,7 +640,13 @@ def create_backup(args: argparse.Namespace, runner: Runner) -> dict[str, Any]:
     row = _entry_by_id(inventory, canary)
     release_id, entries = copy_entries(Path(state["stage_report"]), canary)
     binary = next(entry.source for entry in entries if entry.target.name == "postfiat-node")
-    remote_dir = PurePosixPath("/var/lib/postfiat/pre-rollout-snapshots") / f"{release_id}-{canary}"
+    binary_sha256 = sha256_file(binary)
+    snapshot_root = PurePosixPath("/var/lib/postfiat/pre-rollout-snapshots")
+    remote_dir = snapshot_root / f"{release_id}-{canary}-finalized-checkpoint"
+    remote_candidate = snapshot_root / f".{release_id}-{canary}.candidate-postfiat-node"
+    remote_candidate_incoming = snapshot_root / (
+        f".{release_id}-{canary}.candidate-postfiat-node.incoming"
+    )
     if PurePosixPath("/var/lib/postfiat/pre-rollout-snapshots") not in remote_dir.parents:
         raise SafetyError("backup destination escaped the dedicated snapshot directory")
     target = _ssh_target(row, str(state["ssh_user"]))
@@ -648,19 +654,42 @@ def create_backup(args: argparse.Namespace, runner: Runner) -> dict[str, Any]:
     backup_lock = PurePosixPath("/var/lib/postfiat/pre-rollout-snapshots") / (
         f".{release_id}-{canary}.lock"
     )
+    runner.run(
+        [
+            "ssh",
+            "-o",
+            "BatchMode=yes",
+            target,
+            "install",
+            "-d",
+            "-o",
+            "postfiat",
+            "-g",
+            "postfiat",
+            "-m",
+            "0750",
+            str(snapshot_root),
+        ]
+    )
+    runner.run(["scp", "-q", str(binary), f"{target}:{remote_candidate_incoming}"])
     remote_script = (
         "set -eu\n"
         "install -d -o postfiat -g postfiat -m 0750 /var/lib/postfiat/pre-rollout-snapshots\n"
         f"mkdir {shlex.quote(str(backup_lock))}\n"
         f"trap 'rmdir {shlex.quote(str(backup_lock))}' EXIT\n"
         f"test ! -e {shlex.quote(str(remote_dir))}\n"
+        f"test \"$(sha256sum {shlex.quote(str(remote_candidate_incoming))} | cut -d' ' -f1)\" = {shlex.quote(binary_sha256)}\n"
+        f"chmod 0755 {shlex.quote(str(remote_candidate_incoming))}\n"
+        f"mv -T {shlex.quote(str(remote_candidate_incoming))} {shlex.quote(str(remote_candidate))}\n"
+        f"test \"$(sha256sum {shlex.quote(str(remote_candidate))} | cut -d' ' -f1)\" = {shlex.quote(binary_sha256)}\n"
         f"active_pid=$(systemctl show --property=MainPID --value {shlex.quote(service_name)})\n"
         "case \"$active_pid\" in ''|*[!0-9]*|0) exit 97;; esac\n"
         "active_binary=$(readlink -f \"/proc/$active_pid/exe\")\n"
         "case \"$active_binary\" in /opt/postfiat/releases/*/postfiat-node) ;; *) exit 98;; esac\n"
         "test -x \"$active_binary\"\n"
-        "\"$active_binary\" "
-        f"snapshot-export --data-dir /var/lib/postfiat/{canary} --snapshot-dir {shlex.quote(str(remote_dir))}\n"
+        f"{shlex.quote(str(remote_candidate))} "
+        f"snapshot-export-finalized-checkpoint --data-dir /var/lib/postfiat/{canary} "
+        f"--snapshot-dir {shlex.quote(str(remote_dir))}\n"
     )
     runner.run(["ssh", "-o", "BatchMode=yes", target, "bash", "-s"], input_text=remote_script)
     unsigned = args.evidence_dir / "backup-unsigned"
@@ -671,7 +700,7 @@ def create_backup(args: argparse.Namespace, runner: Runner) -> dict[str, Any]:
     runner.run(
         [
             str(binary),
-            "snapshot-export-signed",
+            "snapshot-export-signed-finalized-checkpoint",
             "--data-dir",
             str(unsigned),
             "--snapshot-dir",
@@ -684,7 +713,7 @@ def create_backup(args: argparse.Namespace, runner: Runner) -> dict[str, Any]:
     runner.run(
         [
             str(binary),
-            "snapshot-import-signed",
+            "snapshot-import-signed-finalized-checkpoint",
             "--data-dir",
             str(verify_dir),
             "--snapshot-dir",
@@ -696,11 +725,15 @@ def create_backup(args: argparse.Namespace, runner: Runner) -> dict[str, Any]:
         ]
     )
     verification = runner.run(
-        [str(binary), "verify-state", "--data-dir", str(verify_dir)]
+        [str(binary), "verify-finalized-checkpoint", "--data-dir", str(verify_dir)]
     )
     report = json.loads(verification.stdout)
     if report.get("verified") is not True:
-        raise SafetyError("signed pre-rollout backup did not pass verify-state")
+        raise SafetyError(
+            "signed pre-rollout backup did not pass finalized-checkpoint verification"
+        )
+    verification_report_file = args.evidence_dir / "finalized-checkpoint-verification.json"
+    atomic_write_json(verification_report_file, report)
     chain_tip = json.loads((verify_dir / "chain_tip.json").read_text(encoding="utf-8"))
     state_root = str(chain_tip.get("state_root", ""))
     if not state_root:
@@ -713,6 +746,15 @@ def create_backup(args: argparse.Namespace, runner: Runner) -> dict[str, Any]:
         "remote_unsigned_snapshot": str(remote_dir),
         "signed_snapshot": str(signed.resolve()),
         "signed_manifest_sha256": sha256_file(manifest),
+        "candidate_binary_sha256": binary_sha256,
+        "verification_basis": report.get("verification_basis"),
+        "consensus_v2_activation_height": report.get(
+            "consensus_v2_activation_height"
+        ),
+        "certificate_id": report.get("certificate_id"),
+        "finalized_checkpoint_verification_sha256": sha256_file(
+            verification_report_file
+        ),
         "height": chain_tip.get("height"),
         "tip": chain_tip.get("block_hash", ""),
         "state_root": state_root,

@@ -44,21 +44,31 @@ class FakeRunner:
         self.calls.append((args, input_text))
         if args[0] == "scp" and "-r" in args:
             Path(args[-1]).mkdir(parents=True, exist_ok=False)
-        if "snapshot-export-signed" in args:
+        if "snapshot-export-signed-finalized-checkpoint" in args:
             destination = Path(args[args.index("--snapshot-dir") + 1])
             destination.mkdir(parents=True, exist_ok=False)
             (destination / "snapshot.signed-manifest.json").write_text(
                 '{"schema":"test"}\n', encoding="utf-8"
             )
-        if "snapshot-import-signed" in args:
+        if "snapshot-import-signed-finalized-checkpoint" in args:
             destination = Path(args[args.index("--data-dir") + 1])
             destination.mkdir(parents=True, exist_ok=False)
             (destination / "chain_tip.json").write_text(
                 '{"height":600,"block_hash":"tip-a","state_root":"root-a"}\n',
                 encoding="utf-8",
             )
-        if "verify-state" in args:
-            return completed(args, '{"verified":true,"state_root":"root-a"}\n')
+        if "verify-finalized-checkpoint" in args:
+            return completed(
+                args,
+                json.dumps(
+                    {
+                        "verified": True,
+                        "verification_basis": "consensus-v2-finalized-checkpoint",
+                        "consensus_v2_activation_height": 1,
+                        "certificate_id": "certificate-a",
+                    }
+                ),
+            )
         if args[0] == "ssh" and input_text and "validate-local-keys" in input_text:
             validator_id = f"validator-{int(args[3].rsplit('.', 1)[-1]) - 1}"
             return completed(
@@ -387,8 +397,9 @@ class SafeRolloutTests(unittest.TestCase):
         self.assertTrue(state["backup"]["verified"])
         self.assertEqual("root-a", state["backup"]["state_root"])
         flattened = [argument for call, _ in runner.calls for argument in call]
-        self.assertIn("snapshot-export-signed", flattened)
-        self.assertIn("snapshot-import-signed", flattened)
+        self.assertIn("snapshot-export-signed-finalized-checkpoint", flattened)
+        self.assertIn("snapshot-import-signed-finalized-checkpoint", flattened)
+        self.assertIn("verify-finalized-checkpoint", flattened)
         remote_scripts = [
             script for call, script in runner.calls if call[0] == "ssh" and script
         ]
@@ -406,6 +417,11 @@ class SafeRolloutTests(unittest.TestCase):
         self.assertNotIn(
             f"/opt/postfiat/releases/{self.release_id}/postfiat-node",
             remote_scripts[0],
+        )
+        self.assertIn("snapshot-export-finalized-checkpoint", remote_scripts[0])
+        self.assertEqual(
+            "consensus-v2-finalized-checkpoint",
+            state["backup"]["verification_basis"],
         )
 
     @patch("postfiat_ops.safe_rollout.fleet_convergence")

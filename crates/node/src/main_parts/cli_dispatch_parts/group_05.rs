@@ -764,8 +764,7 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                     source_proof_hash: flag_value(flags, "--source-proof-hash").map(str::to_string),
                     source_public_values_hash: flag_value(flags, "--source-public-values-hash")
                         .map(str::to_string),
-                    source_proof_file: flag_value(flags, "--source-proof-file")
-                        .map(PathBuf::from),
+                    source_proof_file: flag_value(flags, "--source-proof-file").map(PathBuf::from),
                     source_public_values_file: flag_value(flags, "--source-public-values-file")
                         .map(PathBuf::from),
                 },
@@ -821,11 +820,8 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                             .map(str::to_string),
                         source_proof_file: flag_value(flags, "--source-proof-file")
                             .map(PathBuf::from),
-                        source_public_values_file: flag_value(
-                            flags,
-                            "--source-public-values-file",
-                        )
-                        .map(PathBuf::from),
+                        source_public_values_file: flag_value(flags, "--source-public-values-file")
+                            .map(PathBuf::from),
                     },
                     bundle_dir: PathBuf::from(bundle_dir),
                     overwrite: flag_present(flags, "--overwrite"),
@@ -2561,6 +2557,26 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "snapshot-export-signed-finalized-checkpoint" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let snapshot_dir =
+                flag_value(flags, "--snapshot-dir").ok_or("missing --snapshot-dir")?;
+            let publisher_key_file =
+                flag_value(flags, "--publisher-key-file").ok_or("missing --publisher-key-file")?;
+            let manifest =
+                export_signed_snapshot_from_finalized_checkpoint(SignedSnapshotExportOptions {
+                    data_dir: PathBuf::from(data_dir),
+                    snapshot_dir: PathBuf::from(snapshot_dir),
+                    publisher_key_file: PathBuf::from(publisher_key_file),
+                })
+                .map_err(|error| {
+                    format!("snapshot-export-signed-finalized-checkpoint failed: {error}")
+                })?;
+            let json = serde_json::to_string_pretty(&manifest)
+                .map_err(|error| format!("signed snapshot serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
         "snapshot-import-signed" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let snapshot_dir =
@@ -2581,6 +2597,29 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             print!("{json}");
             Ok(())
         }
+        "snapshot-import-signed-finalized-checkpoint" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let snapshot_dir =
+                flag_value(flags, "--snapshot-dir").ok_or("missing --snapshot-dir")?;
+            let trusted_publisher_key_file = flag_value(flags, "--trusted-publisher-key-file")
+                .ok_or("missing --trusted-publisher-key-file")?;
+            let node_id = flag_value(flags, "--node-id").map(str::to_string);
+            let report =
+                import_signed_snapshot_from_finalized_checkpoint(SignedSnapshotImportOptions {
+                    data_dir: PathBuf::from(data_dir),
+                    snapshot_dir: PathBuf::from(snapshot_dir),
+                    trusted_publisher_key_file: PathBuf::from(trusted_publisher_key_file),
+                    node_id,
+                })
+                .map_err(|error| {
+                    format!("snapshot-import-signed-finalized-checkpoint failed: {error}")
+                })?;
+            let json = report.to_json().map_err(|error| {
+                format!("signed snapshot import report serialization failed: {error}")
+            })?;
+            print!("{json}");
+            Ok(())
+        }
         "snapshot-export" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let snapshot_dir =
@@ -2590,6 +2629,20 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                 snapshot_dir: PathBuf::from(snapshot_dir),
             })
             .map_err(|error| format!("snapshot-export failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&manifest)
+                .map_err(|error| format!("snapshot manifest serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
+        "snapshot-export-finalized-checkpoint" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let snapshot_dir =
+                flag_value(flags, "--snapshot-dir").ok_or("missing --snapshot-dir")?;
+            let manifest = export_snapshot_from_finalized_checkpoint(SnapshotExportOptions {
+                data_dir: PathBuf::from(data_dir),
+                snapshot_dir: PathBuf::from(snapshot_dir),
+            })
+            .map_err(|error| format!("snapshot-export-finalized-checkpoint failed: {error}"))?;
             let json = serde_json::to_string_pretty(&manifest)
                 .map_err(|error| format!("snapshot manifest serialization failed: {error}"))?;
             println!("{json}");
@@ -2610,6 +2663,18 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                 .to_json()
                 .map_err(|error| format!("snapshot import report serialization failed: {error}"))?;
             print!("{json}");
+            Ok(())
+        }
+        "verify-finalized-checkpoint" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let report = verify_finalized_checkpoint(NodeOptions {
+                data_dir: PathBuf::from(data_dir),
+            })
+            .map_err(|error| format!("verify-finalized-checkpoint failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&report).map_err(|error| {
+                format!("checkpoint verification serialization failed: {error}")
+            })?;
+            println!("{json}");
             Ok(())
         }
         "rpc" => run_rpc(flags),

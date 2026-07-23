@@ -815,10 +815,14 @@ fn print_usage() {
   postfiat-node bridge-batch-resume [--data-dir PATH] [--domain-id ID] --batch-file PATH
   postfiat-node apply-bridge-batch [--data-dir PATH] --batch-file PATH [--certificate-file PATH]
   postfiat-node snapshot-export [--data-dir PATH] --snapshot-dir PATH
+  postfiat-node snapshot-export-finalized-checkpoint [--data-dir PATH] --snapshot-dir PATH
   postfiat-node snapshot-import [--data-dir PATH] --snapshot-dir PATH [--node-id ID]
   postfiat-node snapshot-publisher-key-export --publisher-key-file PATH --public-key-file PATH
   postfiat-node snapshot-export-signed [--data-dir PATH] --snapshot-dir PATH --publisher-key-file PATH
+  postfiat-node snapshot-export-signed-finalized-checkpoint [--data-dir PATH] --snapshot-dir PATH --publisher-key-file PATH
   postfiat-node snapshot-import-signed [--data-dir PATH] --snapshot-dir PATH --trusted-publisher-key-file PATH [--node-id ID]
+  postfiat-node snapshot-import-signed-finalized-checkpoint [--data-dir PATH] --snapshot-dir PATH --trusted-publisher-key-file PATH [--node-id ID]
+  postfiat-node verify-finalized-checkpoint [--data-dir PATH]
   postfiat-node deployment-publisher-key-create --publisher-key-file PATH
   postfiat-node deployment-publisher-key-export --publisher-key-file PATH --public-key-file PATH
   postfiat-node deployment-validator-units-stage --release-id ID --topology-file PATH --binary-file PATH --swap-circuit-metadata-file PATH --private-egress-circuit-metadata-file PATH --output-dir PATH
