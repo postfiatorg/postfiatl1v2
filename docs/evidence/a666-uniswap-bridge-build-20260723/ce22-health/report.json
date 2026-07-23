@@ -1,0 +1,564 @@
+{
+  "checks": {
+    "all_endpoints_ok": true,
+    "all_nodes_running": true,
+    "all_read_only": true,
+    "chain_consistent": true,
+    "doctor_ok": true,
+    "endpoint_count": 6,
+    "genesis_consistent": true,
+    "height_lag": 0,
+    "height_lag_within_threshold": true,
+    "protocol_version_consistent": true,
+    "registry_root_consistent": true,
+    "write_capable_allowed": true
+  },
+  "doctor_ok": true,
+  "endpoint_count": 6,
+  "endpoints": [
+    {
+      "methods": [
+        {
+          "latency_ms": 602.929025888443,
+          "method": "status",
+          "ok": true,
+          "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-0/status.request.json",
+          "response_bytes": 4196,
+          "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-0/status.response.json",
+          "summary": {
+            "block_height": 290,
+            "block_tip_hash": "4788c7a3b7c7e545ebfb6cecac5b0cb021bce0da5a4370fd9e035257e48a19a5d23e22487afff64b1bf5504596243a08",
+            "chain_id": "postfiat-wan-devnet-2",
+            "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+            "mempool_pending": 0,
+            "node_id": "validator-0",
+            "protocol_version": 1,
+            "status": "running",
+            "validator_count": 6
+          }
+        },
+        {
+          "latency_ms": 709.9956646561623,
+          "method": "server_info",
+          "ok": true,
+          "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-0/server-info.request.json",
+          "response_bytes": 1759,
+          "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-0/server-info.response.json",
+          "summary": {
+            "chain_id": "postfiat-wan-devnet-2",
+            "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+            "node_id": "validator-0",
+            "protocol_version": 1,
+            "schema": "postfiat-server-info-v1",
+            "status": "running"
+          }
+        },
+        {
+          "latency_ms": 1195.1263174414635,
+          "method": "validators",
+          "ok": true,
+          "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-0/validators.request.json",
+          "response_bytes": 24481,
+          "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-0/validators.response.json",
+          "summary": {
+            "chain_id": "postfiat-wan-devnet-2",
+            "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+            "protocol_version": 1,
+            "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+            "schema": "postfiat-validators-v1",
+            "validator_count": 6
+          }
+        }
+      ],
+      "summary": {
+        "assets": {},
+        "block_height": 290,
+        "block_tip_hash": "4788c7a3b7c7e545ebfb6cecac5b0cb021bce0da5a4370fd9e035257e48a19a5d23e22487afff64b1bf5504596243a08",
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+        "host": "127.0.0.1",
+        "label": "validator-0",
+        "mempool_pending": 0,
+        "node_id": "validator-0",
+        "node_status": "running",
+        "ok": true,
+        "orchard_pool": {
+          "available": false,
+          "ok": null,
+          "passed": null,
+          "pool_id": null
+        },
+        "port": 28650,
+        "protocol_version": 1,
+        "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+        "validator_count": 6,
+        "write_posture": "read_only"
+      },
+      "write_probe": {
+        "error_code": "rpc_method_not_allowed",
+        "latency_ms": 536.5757867693901,
+        "ok": true,
+        "posture": "read_only",
+        "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-0/write-posture.request.json",
+        "response_bytes": 360,
+        "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-0/write-posture.response.json"
+      }
+    },
+    {
+      "methods": [
+        {
+          "latency_ms": 648.0817571282387,
+          "method": "status",
+          "ok": true,
+          "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-1/status.request.json",
+          "response_bytes": 4196,
+          "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-1/status.response.json",
+          "summary": {
+            "block_height": 290,
+            "block_tip_hash": "4788c7a3b7c7e545ebfb6cecac5b0cb021bce0da5a4370fd9e035257e48a19a5d23e22487afff64b1bf5504596243a08",
+            "chain_id": "postfiat-wan-devnet-2",
+            "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+            "mempool_pending": 0,
+            "node_id": "validator-1",
+            "protocol_version": 1,
+            "status": "running",
+            "validator_count": 6
+          }
+        },
+        {
+          "latency_ms": 764.5018175244331,
+          "method": "server_info",
+          "ok": true,
+          "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-1/server-info.request.json",
+          "response_bytes": 1759,
+          "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-1/server-info.response.json",
+          "summary": {
+            "chain_id": "postfiat-wan-devnet-2",
+            "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+            "node_id": "validator-1",
+            "protocol_version": 1,
+            "schema": "postfiat-server-info-v1",
+            "status": "running"
+          }
+        },
+        {
+          "latency_ms": 1232.0500686764717,
+          "method": "validators",
+          "ok": true,
+          "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-1/validators.request.json",
+          "response_bytes": 24481,
+          "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-1/validators.response.json",
+          "summary": {
+            "chain_id": "postfiat-wan-devnet-2",
+            "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+            "protocol_version": 1,
+            "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+            "schema": "postfiat-validators-v1",
+            "validator_count": 6
+          }
+        }
+      ],
+      "summary": {
+        "assets": {},
+        "block_height": 290,
+        "block_tip_hash": "4788c7a3b7c7e545ebfb6cecac5b0cb021bce0da5a4370fd9e035257e48a19a5d23e22487afff64b1bf5504596243a08",
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+        "host": "127.0.0.1",
+        "label": "validator-1",
+        "mempool_pending": 0,
+        "node_id": "validator-1",
+        "node_status": "running",
+        "ok": true,
+        "orchard_pool": {
+          "available": false,
+          "ok": null,
+          "passed": null,
+          "pool_id": null
+        },
+        "port": 28651,
+        "protocol_version": 1,
+        "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+        "validator_count": 6,
+        "write_posture": "read_only"
+      },
+      "write_probe": {
+        "error_code": "rpc_method_not_allowed",
+        "latency_ms": 647.1723541617393,
+        "ok": true,
+        "posture": "read_only",
+        "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-1/write-posture.request.json",
+        "response_bytes": 360,
+        "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-1/write-posture.response.json"
+      }
+    },
+    {
+      "methods": [
+        {
+          "latency_ms": 5.153194069862366,
+          "method": "status",
+          "ok": true,
+          "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-2/status.request.json",
+          "response_bytes": 4196,
+          "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-2/status.response.json",
+          "summary": {
+            "block_height": 290,
+            "block_tip_hash": "4788c7a3b7c7e545ebfb6cecac5b0cb021bce0da5a4370fd9e035257e48a19a5d23e22487afff64b1bf5504596243a08",
+            "chain_id": "postfiat-wan-devnet-2",
+            "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+            "mempool_pending": 0,
+            "node_id": "validator-2",
+            "protocol_version": 1,
+            "status": "running",
+            "validator_count": 6
+          }
+        },
+        {
+          "latency_ms": 237.83276230096817,
+          "method": "server_info",
+          "ok": true,
+          "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-2/server-info.request.json",
+          "response_bytes": 1759,
+          "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-2/server-info.response.json",
+          "summary": {
+            "chain_id": "postfiat-wan-devnet-2",
+            "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+            "node_id": "validator-2",
+            "protocol_version": 1,
+            "schema": "postfiat-server-info-v1",
+            "status": "running"
+          }
+        },
+        {
+          "latency_ms": 28.700292110443115,
+          "method": "validators",
+          "ok": true,
+          "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-2/validators.request.json",
+          "response_bytes": 24481,
+          "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-2/validators.response.json",
+          "summary": {
+            "chain_id": "postfiat-wan-devnet-2",
+            "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+            "protocol_version": 1,
+            "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+            "schema": "postfiat-validators-v1",
+            "validator_count": 6
+          }
+        }
+      ],
+      "summary": {
+        "assets": {},
+        "block_height": 290,
+        "block_tip_hash": "4788c7a3b7c7e545ebfb6cecac5b0cb021bce0da5a4370fd9e035257e48a19a5d23e22487afff64b1bf5504596243a08",
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+        "host": "127.0.0.1",
+        "label": "validator-2",
+        "mempool_pending": 0,
+        "node_id": "validator-2",
+        "node_status": "running",
+        "ok": true,
+        "orchard_pool": {
+          "available": false,
+          "ok": null,
+          "passed": null,
+          "pool_id": null
+        },
+        "port": 28652,
+        "protocol_version": 1,
+        "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+        "validator_count": 6,
+        "write_posture": "read_only"
+      },
+      "write_probe": {
+        "error_code": "rpc_method_not_allowed",
+        "latency_ms": 45.26926577091217,
+        "ok": true,
+        "posture": "read_only",
+        "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-2/write-posture.request.json",
+        "response_bytes": 360,
+        "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-2/write-posture.response.json"
+      }
+    },
+    {
+      "methods": [
+        {
+          "latency_ms": 673.5472232103348,
+          "method": "status",
+          "ok": true,
+          "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-3/status.request.json",
+          "response_bytes": 4196,
+          "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-3/status.response.json",
+          "summary": {
+            "block_height": 290,
+            "block_tip_hash": "4788c7a3b7c7e545ebfb6cecac5b0cb021bce0da5a4370fd9e035257e48a19a5d23e22487afff64b1bf5504596243a08",
+            "chain_id": "postfiat-wan-devnet-2",
+            "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+            "mempool_pending": 0,
+            "node_id": "validator-3",
+            "protocol_version": 1,
+            "status": "running",
+            "validator_count": 6
+          }
+        },
+        {
+          "latency_ms": 927.1515905857086,
+          "method": "server_info",
+          "ok": true,
+          "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-3/server-info.request.json",
+          "response_bytes": 1759,
+          "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-3/server-info.response.json",
+          "summary": {
+            "chain_id": "postfiat-wan-devnet-2",
+            "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+            "node_id": "validator-3",
+            "protocol_version": 1,
+            "schema": "postfiat-server-info-v1",
+            "status": "running"
+          }
+        },
+        {
+          "latency_ms": 1462.2579514980316,
+          "method": "validators",
+          "ok": true,
+          "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-3/validators.request.json",
+          "response_bytes": 24481,
+          "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-3/validators.response.json",
+          "summary": {
+            "chain_id": "postfiat-wan-devnet-2",
+            "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+            "protocol_version": 1,
+            "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+            "schema": "postfiat-validators-v1",
+            "validator_count": 6
+          }
+        }
+      ],
+      "summary": {
+        "assets": {},
+        "block_height": 290,
+        "block_tip_hash": "4788c7a3b7c7e545ebfb6cecac5b0cb021bce0da5a4370fd9e035257e48a19a5d23e22487afff64b1bf5504596243a08",
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+        "host": "127.0.0.1",
+        "label": "validator-3",
+        "mempool_pending": 0,
+        "node_id": "validator-3",
+        "node_status": "running",
+        "ok": true,
+        "orchard_pool": {
+          "available": false,
+          "ok": null,
+          "passed": null,
+          "pool_id": null
+        },
+        "port": 28653,
+        "protocol_version": 1,
+        "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+        "validator_count": 6,
+        "write_posture": "read_only"
+      },
+      "write_probe": {
+        "error_code": "rpc_method_not_allowed",
+        "latency_ms": 864.052340388298,
+        "ok": true,
+        "posture": "read_only",
+        "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-3/write-posture.request.json",
+        "response_bytes": 360,
+        "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-3/write-posture.response.json"
+      }
+    },
+    {
+      "methods": [
+        {
+          "latency_ms": 808.0354630947113,
+          "method": "status",
+          "ok": true,
+          "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-4/status.request.json",
+          "response_bytes": 4196,
+          "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-4/status.response.json",
+          "summary": {
+            "block_height": 290,
+            "block_tip_hash": "4788c7a3b7c7e545ebfb6cecac5b0cb021bce0da5a4370fd9e035257e48a19a5d23e22487afff64b1bf5504596243a08",
+            "chain_id": "postfiat-wan-devnet-2",
+            "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+            "mempool_pending": 0,
+            "node_id": "validator-4",
+            "protocol_version": 1,
+            "status": "running",
+            "validator_count": 6
+          }
+        },
+        {
+          "latency_ms": 739.7155985236168,
+          "method": "server_info",
+          "ok": true,
+          "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-4/server-info.request.json",
+          "response_bytes": 1759,
+          "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-4/server-info.response.json",
+          "summary": {
+            "chain_id": "postfiat-wan-devnet-2",
+            "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+            "node_id": "validator-4",
+            "protocol_version": 1,
+            "schema": "postfiat-server-info-v1",
+            "status": "running"
+          }
+        },
+        {
+          "latency_ms": 1229.8149093985558,
+          "method": "validators",
+          "ok": true,
+          "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-4/validators.request.json",
+          "response_bytes": 24481,
+          "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-4/validators.response.json",
+          "summary": {
+            "chain_id": "postfiat-wan-devnet-2",
+            "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+            "protocol_version": 1,
+            "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+            "schema": "postfiat-validators-v1",
+            "validator_count": 6
+          }
+        }
+      ],
+      "summary": {
+        "assets": {},
+        "block_height": 290,
+        "block_tip_hash": "4788c7a3b7c7e545ebfb6cecac5b0cb021bce0da5a4370fd9e035257e48a19a5d23e22487afff64b1bf5504596243a08",
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+        "host": "127.0.0.1",
+        "label": "validator-4",
+        "mempool_pending": 0,
+        "node_id": "validator-4",
+        "node_status": "running",
+        "ok": true,
+        "orchard_pool": {
+          "available": false,
+          "ok": null,
+          "passed": null,
+          "pool_id": null
+        },
+        "port": 28654,
+        "protocol_version": 1,
+        "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+        "validator_count": 6,
+        "write_posture": "read_only"
+      },
+      "write_probe": {
+        "error_code": "rpc_method_not_allowed",
+        "latency_ms": 834.6743658185005,
+        "ok": true,
+        "posture": "read_only",
+        "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-4/write-posture.request.json",
+        "response_bytes": 360,
+        "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-4/write-posture.response.json"
+      }
+    },
+    {
+      "methods": [
+        {
+          "latency_ms": 4.462666809558868,
+          "method": "status",
+          "ok": true,
+          "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-5/status.request.json",
+          "response_bytes": 4196,
+          "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-5/status.response.json",
+          "summary": {
+            "block_height": 290,
+            "block_tip_hash": "4788c7a3b7c7e545ebfb6cecac5b0cb021bce0da5a4370fd9e035257e48a19a5d23e22487afff64b1bf5504596243a08",
+            "chain_id": "postfiat-wan-devnet-2",
+            "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+            "mempool_pending": 0,
+            "node_id": "validator-5",
+            "protocol_version": 1,
+            "status": "running",
+            "validator_count": 6
+          }
+        },
+        {
+          "latency_ms": 196.01060450077057,
+          "method": "server_info",
+          "ok": true,
+          "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-5/server-info.request.json",
+          "response_bytes": 1759,
+          "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-5/server-info.response.json",
+          "summary": {
+            "chain_id": "postfiat-wan-devnet-2",
+            "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+            "node_id": "validator-5",
+            "protocol_version": 1,
+            "schema": "postfiat-server-info-v1",
+            "status": "running"
+          }
+        },
+        {
+          "latency_ms": 30.152179300785065,
+          "method": "validators",
+          "ok": true,
+          "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-5/validators.request.json",
+          "response_bytes": 24481,
+          "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-5/validators.response.json",
+          "summary": {
+            "chain_id": "postfiat-wan-devnet-2",
+            "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+            "protocol_version": 1,
+            "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+            "schema": "postfiat-validators-v1",
+            "validator_count": 6
+          }
+        }
+      ],
+      "summary": {
+        "assets": {},
+        "block_height": 290,
+        "block_tip_hash": "4788c7a3b7c7e545ebfb6cecac5b0cb021bce0da5a4370fd9e035257e48a19a5d23e22487afff64b1bf5504596243a08",
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+        "host": "127.0.0.1",
+        "label": "validator-5",
+        "mempool_pending": 0,
+        "node_id": "validator-5",
+        "node_status": "running",
+        "ok": true,
+        "orchard_pool": {
+          "available": false,
+          "ok": null,
+          "passed": null,
+          "pool_id": null
+        },
+        "port": 28655,
+        "protocol_version": 1,
+        "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+        "validator_count": 6,
+        "write_posture": "read_only"
+      },
+      "write_probe": {
+        "error_code": "rpc_method_not_allowed",
+        "latency_ms": 46.73293977975845,
+        "ok": true,
+        "posture": "read_only",
+        "request_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-5/write-posture.request.json",
+        "response_bytes": 360,
+        "response_file": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw/validator-5/write-posture.response.json"
+      }
+    }
+  ],
+  "generated_utc": "2026-07-23T21:39:38Z",
+  "git": {
+    "dirty": true,
+    "revision": "28fd6efcce5b5b1b45aabdb681a5d412ebe1f0d9"
+  },
+  "height_lag_threshold": 0,
+  "log_dir": "docs/evidence/a666-uniswap-bridge-build-20260723/ce22-health/raw",
+  "method_count": 3,
+  "methods": [
+    "status",
+    "server_info",
+    "validators"
+  ],
+  "response_byte_cap": 1048576,
+  "schema": "postfiat-testnet-rpc-doctor-v1",
+  "timeout_seconds": 8.0
+}

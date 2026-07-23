@@ -431,6 +431,23 @@ function create(runtime) {
         const launchConfigDigest = nodeLaunchConfigDigest && /^[0-9a-f]{96}$/i.test(nodeLaunchConfigDigest)
             ? nodeLaunchConfigDigest.toLowerCase()
             : null;
+        const actionLabels = [
+            {
+                action: 'primary_pftl_mint',
+                label: 'Primary issuance',
+                description: 'Creates new a666 supply at the finalized pre-inflow NAV.',
+            },
+            {
+                action: 'bridge_export_wa666',
+                label: 'Bridge export → wA666',
+                description: 'Moves issued a666 supply to Ethereum as wA666.',
+            },
+            {
+                action: 'uniswap_trade',
+                label: 'Uniswap trade',
+                description: 'Buys or sells existing wA666 at the AMM price.',
+            },
+        ];
 
         return {
             route_id: routeId,
@@ -471,6 +488,7 @@ function create(runtime) {
             legacy_a651_uniswap_pool_id: LEGACY_A651_UNISWAP_POOL_ID,
             ethereum_usdc_token: ETHEREUM_USDC_TOKEN,
             max_live_usd: Number.isFinite(NAVSWAP_MAX_LIVE_USD) ? NAVSWAP_MAX_LIVE_USD : 100,
+            action_labels: actionLabels,
         };
     }
 
@@ -2214,6 +2232,7 @@ function create(runtime) {
                     route_supply_cap_atoms: bridge.route_supply_cap_atoms,
                     supply_cap_remaining_atoms: bridge.supply_cap_remaining_atoms,
                     packet_notional_cap_atoms: bridge.packet_notional_cap_atoms,
+                    action_labels: bridge.action_labels,
                     status: bridge.legacy_pool_selected
                         ? 'disabled_legacy_pool_rejected'
                         : uniswapBeta.status,

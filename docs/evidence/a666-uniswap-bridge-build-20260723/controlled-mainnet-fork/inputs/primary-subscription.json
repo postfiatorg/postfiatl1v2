@@ -1,0 +1,12 @@
+{
+  "route_id": "pftl-a666-ce22-ethereum-wA666-usdc-controlled-20260723-v1",
+  "source_wallet": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "settlement_asset_id": "02c46d6cfe175b3d4f65bc5613e318869faf092028f7b8cfd18fb2916ea34955e0181279a863524669f031f84b675d7b",
+  "subscription_nonce": "7171717171717171717171717171717171717171717171717171717171717171",
+  "quote": {
+    "settlement_value_atoms": 100020,
+    "nav_price_settlement_atoms_per_nav_atom": 1,
+    "pricing_nav_epoch": 1,
+    "pricing_reserve_packet_hash": "b57db27f8e60dbf2216d2936db69acf1484f17a6e22e9b79b30b9c42b72911398e34498e54a63fb0b8c7da9d1b19ed70"
+  }
+}

@@ -268,6 +268,7 @@
             packet_notional_cap_atoms: ledger.packet_notional_cap_atoms,
             latest_finalized_nav_epoch: ledger.latest_finalized_nav_epoch,
             return_finality_blocks: ledger.return_finality_blocks,
+            live_value_enabled: false,
             ethereum_verification_policy: None,
             authorized_valid_supply_atoms: ledger.authorized_valid_supply_atoms,
             pftl_spendable_supply_atoms: ledger.pftl_spendable_supply_atoms,

@@ -2708,6 +2708,7 @@
                 packet_notional_cap_atoms: 500_000,
                 latest_finalized_nav_epoch: 0,
                 return_finality_blocks: 12,
+                live_value_enabled: false,
                 ethereum_verification_policy: None,
             }),
         );
@@ -2851,6 +2852,7 @@
                 packet_notional_cap_atoms: 500_000,
                 latest_finalized_nav_epoch: 7,
                 return_finality_blocks: 12,
+                live_value_enabled: false,
                 ethereum_verification_policy: None,
             }),
         );
@@ -2882,6 +2884,7 @@
                 packet_notional_cap_atoms: 500_000,
                 latest_finalized_nav_epoch: 6,
                 return_finality_blocks: 12,
+                live_value_enabled: false,
                 ethereum_verification_policy: None,
             }),
         );
@@ -2913,26 +2916,37 @@
                 packet_notional_cap_atoms: 500_000,
                 latest_finalized_nav_epoch: 7,
                 return_finality_blocks: 12,
+                live_value_enabled: false,
                 ethereum_verification_policy: None,
             }),
         );
-        let before_live_route_init = ledger.clone();
+        let mut controlled_route_ledger = ledger.clone();
         let live_receipt = super::execute_asset_transaction(
             &genesis,
-            &mut ledger,
+            &mut controlled_route_ledger,
             &route_init,
             8,
         );
-        assert!(!live_receipt.accepted);
-        assert_eq!(
-            live_receipt.code,
-            "pftl_uniswap_ethereum_trust_class_mismatch"
-        );
-        assert_eq!(ledger, before_live_route_init);
+        assert!(live_receipt.accepted, "{live_receipt:?}");
+        let controlled_route = controlled_route_ledger
+            .pftl_uniswap_route(&route_id)
+            .expect("strict controlled rehearsal route");
+        assert_eq!(controlled_route.route_trust_class, "CONTROLLED");
+        assert!(!controlled_route.live_value_enabled);
+        assert!(controlled_route.ethereum_verification_policy.is_none());
+        let mut forbidden_controlled_live_value =
+            match route_init.unsigned.operation.clone() {
+                AssetTransactionOperation::PftlUniswapRouteInit(operation) => operation,
+                _ => unreachable!("route-init operation"),
+            };
+        forbidden_controlled_live_value.live_value_enabled = true;
+        assert!(forbidden_controlled_live_value
+            .validate()
+            .expect_err("CONTROLLED public live value must fail closed")
+            .contains("cannot enable public live value"));
 
-        // A live route is admitted only when its verification policy resolves
-        // to an exact governed committee on this chain. This exercises the
-        // shipping asset-transaction boundary, not just the policy helper.
+        // A public live-value route is admitted only when its verification
+        // policy resolves to an exact governed committee on this chain.
         let authority_keys = (0_u8..4)
             .map(|index| ml_dsa_65_keygen_from_seed(&[0x91 + index; 32]))
             .collect::<Vec<_>>();
@@ -2997,6 +3011,7 @@
                 packet_notional_cap_atoms: 500_000,
                 latest_finalized_nav_epoch: 7,
                 return_finality_blocks: 12,
+                live_value_enabled: true,
                 ethereum_verification_policy: Some(policy),
             }),
         );
@@ -3648,7 +3663,7 @@
         );
         assert_eq!(restarted_consumed_ledger, before_refund_after_consume);
 
-        let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(&genesis, &mut ledger, &route_init, 8);
+        let receipt = super::execute_asset_transaction(&genesis, &mut ledger, &route_init, 8);
         assert!(receipt.accepted, "{receipt:?}");
         assert_eq!(ledger.pftl_uniswap_receipts.len(), 1);
         assert_eq!(
@@ -3907,7 +3922,7 @@
         assert_eq!(receipt.code, "pftl_uniswap_route_paused");
         assert_eq!(paused_subscribe_ledger, before_paused_subscribe);
 
-        let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(&genesis, &mut ledger, &subscribe, 9);
+        let receipt = super::execute_asset_transaction(&genesis, &mut ledger, &subscribe, 9);
         assert!(receipt.accepted, "{receipt:?}");
         assert_eq!(
             ledger
@@ -3956,8 +3971,10 @@
                 amount_atoms: 40,
                 destination_deadline_seconds: 1_800,
                 refund_delay_blocks: 3,
-                ethereum_packet_digest: None,
-                ethereum_packet_schema_version: None,
+                ethereum_packet_digest: Some("65".repeat(32)),
+                ethereum_packet_schema_version: Some(
+                    PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V1,
+                ),
             }),
         );
         let mut paused_export_ledger = ledger.clone();
@@ -3978,7 +3995,7 @@
         assert_eq!(receipt.code, "pftl_uniswap_route_paused");
         assert_eq!(paused_export_ledger, before_paused_export);
 
-        let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(&genesis, &mut ledger, &export, 10);
+        let receipt = super::execute_asset_transaction(&genesis, &mut ledger, &export, 10);
         assert!(receipt.accepted, "{receipt:?}");
         assert_eq!(
             ledger
@@ -4071,17 +4088,9 @@
                 external_event_proof: None,
             }),
         );
-        let before_live_refund = refund_ledger.clone();
         let live_refund_receipt =
             super::execute_asset_transaction(&genesis, &mut refund_ledger, &refund, 13);
-        assert!(!live_refund_receipt.accepted);
-        assert_eq!(
-            live_refund_receipt.code,
-            "pftl_uniswap_ethereum_trust_class_mismatch"
-        );
-        assert_eq!(refund_ledger, before_live_refund);
-        let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(&genesis, &mut refund_ledger, &refund, 13);
-        assert!(receipt.accepted, "{receipt:?}");
+        assert!(live_refund_receipt.accepted, "{live_refund_receipt:?}");
         assert_eq!(
             refund_ledger
                 .trustline_for_account_asset(&subscriber, &native_nav_asset_id)
@@ -4243,7 +4252,8 @@
                 },
             ),
         );
-        let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(&genesis, &mut ledger, &destination_consume, 14);
+        let receipt =
+            super::execute_asset_transaction(&genesis, &mut ledger, &destination_consume, 14);
         assert!(receipt.accepted, "{receipt:?}");
         {
             let route = ledger
@@ -4358,17 +4368,9 @@
                 external_event_proof: None,
             }),
         );
-        let before_live_return_import = ledger.clone();
         let live_return_receipt =
             super::execute_asset_transaction(&genesis, &mut ledger, &return_import, 23);
-        assert!(!live_return_receipt.accepted);
-        assert_eq!(
-            live_return_receipt.code,
-            "pftl_uniswap_ethereum_trust_class_mismatch"
-        );
-        assert_eq!(ledger, before_live_return_import);
-        let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(&genesis, &mut ledger, &return_import, 23);
-        assert!(receipt.accepted, "{receipt:?}");
+        assert!(live_return_receipt.accepted, "{live_return_receipt:?}");
         assert_eq!(
             ledger
                 .trustline_for_account_asset(&subscriber, &native_nav_asset_id)
@@ -4423,7 +4425,8 @@
                     packet_notional_cap_atoms: 500_000,
                     latest_finalized_nav_epoch: 7,
                     return_finality_blocks: 12,
-                ethereum_verification_policy: None,
+                    live_value_enabled: false,
+                    ethereum_verification_policy: None,
                 }),
             );
             let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
@@ -4458,6 +4461,7 @@
                 packet_notional_cap_atoms: 500_000,
                 latest_finalized_nav_epoch: 7,
                 return_finality_blocks: 12,
+                live_value_enabled: false,
                 ethereum_verification_policy: None,
             }),
         );

@@ -1,0 +1,9 @@
+{
+  "id": "a666-zero-epoch-finalize-quote",
+  "method": "asset_fee_quote",
+  "params": {
+    "operation_json": "{\"operation\":\"nav_epoch_finalize\",\"issuer\":\"pffcb93d9f87a843a8aa34e1adf241f5d58143e81b\",\"asset_id\":\"300bf48a63a94770b6e67817f88cd1abf77e7f592a061e15682d7fd9973260af4c2e631e32df3c2c402b7d2fe272a293\",\"epoch\":1,\"reserve_packet_hash\":\"b57dc2b7b39b2a1449bfc810f0a90d279ae2f5d3ce19652c9a966a89ede84d92fd0b5433a9d9a10e030654701a09ed70\"}",
+    "source": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b"
+  },
+  "version": "postfiat-local-rpc-v1"
+}

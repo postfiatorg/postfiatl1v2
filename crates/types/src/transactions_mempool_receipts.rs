@@ -2151,6 +2151,12 @@ pub struct PftlUniswapRouteInitOperation {
     pub packet_notional_cap_atoms: u64,
     pub latest_finalized_nav_epoch: u64,
     pub return_finality_blocks: u64,
+    /// Whether wallets may route public live value through this route.
+    ///
+    /// Controlled rehearsal routes must keep this false. The consensus state
+    /// machine may still exercise their capped, operator-attested transitions.
+    #[serde(default, skip_serializing_if = "pftl_uniswap_false")]
+    pub live_value_enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ethereum_verification_policy: Option<EthereumRouteVerificationPolicyV1>,
 }
@@ -2168,6 +2174,12 @@ impl PftlUniswapRouteInitOperation {
             "pftl_uniswap_route_init.route_trust_class",
             &self.route_trust_class,
         )?;
+        if self.route_trust_class == "CONTROLLED" && self.live_value_enabled {
+            return Err(
+                "pftl_uniswap_route_init CONTROLLED trust class cannot enable public live value"
+                    .to_string(),
+            );
+        }
         validate_lower_hex_len(
             "pftl_uniswap_route_init.native_nav_asset_id",
             &self.native_nav_asset_id,
@@ -2233,6 +2245,9 @@ impl PftlUniswapRouteInitOperation {
             self.return_finality_blocks
         )
         .into_bytes();
+        if self.live_value_enabled {
+            bytes.extend_from_slice(b"live_value_enabled=true\n");
+        }
         if let Some(policy) = &self.ethereum_verification_policy {
             bytes.extend_from_slice(
                 format!(
@@ -2250,6 +2265,10 @@ impl PftlUniswapRouteInitOperation {
         }
         bytes
     }
+}
+
+fn pftl_uniswap_false(value: &bool) -> bool {
+    !*value
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

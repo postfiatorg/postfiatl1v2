@@ -881,6 +881,7 @@ mod tests {
                 packet_notional_cap_atoms: 100,
                 latest_finalized_nav_epoch: 1,
                 return_finality_blocks: 12,
+                live_value_enabled: true,
                 ethereum_verification_policy: Some(EthereumRouteVerificationPolicyV1 {
                     authority_epoch: 1,
                     committee_root: FastSwapCommitteeRootV1([0x41; 48]),

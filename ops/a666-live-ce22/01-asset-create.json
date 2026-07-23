@@ -1,0 +1,24 @@
+{
+  "schema": "postfiat-certified-asset-ops-request-v1",
+  "operations": [
+    {
+      "label": "a666-asset-create",
+      "source": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+      "key_file": "/home/postfiat/.pft/venue/orchard-mirror/navswap-fast-live/keys/a651-issuer.json",
+      "operation": {
+        "operation": "asset_create",
+        "issuer": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+        "code": "a666",
+        "version": 1,
+        "precision": 6,
+        "display_name": "Bridge-aware NAVCoin a666",
+        "max_supply": 1000000000000,
+        "requires_authorization": false,
+        "freeze_enabled": true,
+        "clawback_enabled": false
+      },
+      "dependencies": []
+    }
+  ]
+}
+

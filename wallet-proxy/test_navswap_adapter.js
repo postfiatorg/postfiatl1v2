@@ -1173,6 +1173,11 @@ function testUniswapHandoffControlledBetaCapabilityAndRunPacket() {
     assert.strictEqual(route.route_supply_cap_atoms, 100000000);
     assert.strictEqual(route.supply_cap_remaining_atoms, 99999000);
     assert.strictEqual(route.packet_notional_cap_atoms, 1000000);
+    assert.deepStrictEqual(route.action_labels.map((item) => item.label), [
+      'Primary issuance',
+      'Bridge export → wA666',
+      'Uniswap trade',
+    ]);
     assert.strictEqual(route.privacy.label, 'CONTROLLED beta');
     assert.match(route.privacy.warning, /Public routing is disabled/);
     assertNoTrustlessDisplay(route);
@@ -1197,6 +1202,7 @@ function testUniswapHandoffControlledBetaCapabilityAndRunPacket() {
     assert.strictEqual(quote.route_supply_cap_atoms, 100000000);
     assert.strictEqual(quote.supply_cap_remaining_atoms, 99999000);
     assert.strictEqual(quote.packet_notional_cap_atoms, 1000000);
+    assert.deepStrictEqual(quote.action_labels, route.action_labels);
     assert.strictEqual(quote.mint_and_swap_uniswap.execution_enabled, false);
     assert.strictEqual(quote.mint_and_swap_uniswap.route_family, 'composite_primary_mint_to_ethereum_venue');
     assertNoTrustlessDisplay(quote);
@@ -1219,6 +1225,7 @@ function testUniswapHandoffControlledBetaCapabilityAndRunPacket() {
     assert.strictEqual(run.run_packet.route_supply_cap_atoms, 100000000);
     assert.strictEqual(run.run_packet.supply_cap_remaining_atoms, 99999000);
     assert.strictEqual(run.run_packet.packet_notional_cap_atoms, 1000000);
+    assert.deepStrictEqual(run.run_packet.action_labels, route.action_labels);
     assert.match(run.run_packet.route_config_digest, /^[0-9a-f]{96}$/);
     assert.ok(run.run_packet.terminal_states.includes('source_refundable_after_timeout'));
     assertNoTrustlessDisplay(run);

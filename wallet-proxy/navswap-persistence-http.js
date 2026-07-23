@@ -973,6 +973,7 @@ function create(runtime) {
                     route_supply_cap_atoms: bridge.route_supply_cap_atoms,
                     supply_cap_remaining_atoms: bridge.supply_cap_remaining_atoms,
                     packet_notional_cap_atoms: bridge.packet_notional_cap_atoms,
+                    action_labels: bridge.action_labels,
                     failure_behavior: bridge.failure_behavior,
                     mint_and_swap_uniswap: quote.mint_and_swap_uniswap,
                     quote_binding_hash: quote.quote_binding_hash,

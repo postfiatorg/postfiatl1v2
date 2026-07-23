@@ -1,0 +1,47 @@
+{
+  "schema": "postfiat-navcoin-bridge-launch-config-template-v1",
+  "route_id": "pftl-a666-ce22-ethereum-wA666-usdc-controlled-20260723-v1",
+  "route_config_digest": "ae558831a5a0c80bd8788c2289ea70ff10ba49a72274b8df026fea8855e27c59d5b612091f9efa3a8d1db9b5e4c197dc",
+  "launch_config_digest": "25bbbdf0d52ee0781a38f39873b3353668b09f13de8debab5abafac34b8eeb4a321e97dc9263659801bfc2e3083d57d0",
+  "output_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/controlled-mainnet-fork-rerun/pftl-uniswap-launch-config.json",
+  "launch_config": {
+    "schema": "postfiat-pftl-uniswap-launch-config-v1",
+    "route_id": "pftl-a666-ce22-ethereum-wA666-usdc-controlled-20260723-v1",
+    "route_config_digest": "ae558831a5a0c80bd8788c2289ea70ff10ba49a72274b8df026fea8855e27c59d5b612091f9efa3a8d1db9b5e4c197dc",
+    "route_trust_class": "CONTROLLED",
+    "native_nav_asset_id": "300bf48a63a94770b6e67817f88cd1abf77e7f592a061e15682d7fd9973260af4c2e631e32df3c2c402b7d2fe272a293",
+    "settlement_asset_id": "02c46d6cfe175b3d4f65bc5613e318869faf092028f7b8cfd18fb2916ea34955e0181279a863524669f031f84b675d7b",
+    "wrapped_navcoin_token": "0x5376b6db31573b8cd56d3c38d249d3382537307c",
+    "usdc_token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+    "handoff_controller": "0x9954b8aa5fbaf1e8e939ae063d5016d60ff1e50a",
+    "receipt_verifier": "0x5189a8e6dce42f5722813a95c18f0d914f76a7b2",
+    "settlement_adapter": "0xb42f3f8e73bcd6fc85281f26e0067bca4bc30b3e",
+    "official_uniswap": {
+      "chain_id": 1,
+      "deployments_source_url": "https://developers.uniswap.org/docs/protocols/v4/deployments",
+      "deployments_table_hash": "d2d4b87bafe27c1cf07d4af5698b1a3766b351e219769d652dea2bd85213e2ab",
+      "checked_at_utc": "2026-07-01T00:00:00Z",
+      "pool_manager": "0x000000000004444c5dc75cB358380D2e3dE08A90",
+      "position_manager": "0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e",
+      "universal_router": "0x66a9893cC07D91D95644AEDD05D03f95E1dBA8Af",
+      "permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+      "state_view": "0x7fFE42C4a5DEeA5b0fec41C94C136Cf115597227"
+    },
+    "uniswap_pool_key_hash": "b992b3761ff7038efe6ee4c17e7212503c44c6ef8c3e7915b654645f9470b3cf",
+    "uniswap_pool_id": "0xb992b3761ff7038efe6ee4c17e7212503c44c6ef8c3e7915b654645f9470b3cf",
+    "seed": {
+      "pricing_nav_epoch": 1,
+      "pricing_reserve_packet_hash": "b57db27f8e60dbf2216d2936db69acf1484f17a6e22e9b79b30b9c42b72911398e34498e54a63fb0b8c7da9d1b19ed70",
+      "seed_usdc_atoms": 100000,
+      "seed_wrapped_navcoin_atoms": 100000,
+      "nav_price_settlement_atoms_per_nav_atom": 1,
+      "tick_lower": -887270,
+      "tick_upper": 887270,
+      "fee_pips": 500,
+      "lp_recipient": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+      "position_recipient": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+      "lp_custody_policy": "controlled_fork_rehearsal_lp"
+    },
+    "fork_rehearsal_required": true
+  }
+}

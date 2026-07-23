@@ -4174,8 +4174,24 @@ fn validate_navcoin_bridge_route_status_row(
     validate_navcoin_bridge_route_family_field(route, "route_family")?;
     lower_hex_field(route, "route_config_digest", 96)?;
     validate_route_trust_class_field(route, "route_trust_class")?;
-    bool_field(route, "route_live")?;
-    bool_field(route, "paused")?;
+    let trust_class = string_field(route, "route_trust_class")?;
+    expect_string_eq(route, "movement_model", "burn_mint")?;
+    clean_string_field(route, "refund_model")?;
+    let live_value_enabled = bool_field(route, "live_value_enabled")?;
+    let route_live = bool_field(route, "route_live")?;
+    let paused = bool_field(route, "paused")?;
+    if trust_class == "CONTROLLED" && live_value_enabled {
+        return Err(invalid_result(
+            "live_value_enabled",
+            "CONTROLLED routes cannot enable public live-value routing",
+        ));
+    }
+    if route_live != (live_value_enabled && !paused && trust_class != "DISABLED") {
+        return Err(invalid_result(
+            "route_live",
+            "route_live does not match live-value, pause, and trust-class gates",
+        ));
+    }
     lower_hex_field(route, "native_nav_asset_id", 96)?;
     lower_hex_field(route, "settlement_asset_id", ISSUED_ASSET_ID_HEX_LEN)?;
     validate_evm_address_field(route, "wrapped_navcoin_token")?;
@@ -4300,7 +4316,7 @@ fn validate_route_trust_class_field(
     let found = string_field(value, path)?;
     if matches!(
         found,
-        "CONTROLLED" | "OPTIMISTIC" | "TRUSTLESS_FINALITY" | "DISABLED"
+        "CONTROLLED" | "OPTIMISTIC" | "TRUSTLESS_FINALITY" | "BFT_CHECKPOINT" | "DISABLED"
     ) {
         Ok(())
     } else {

@@ -970,7 +970,18 @@ fn pftl_uniswap_consensus_route_status_row(
         route_family: route.route_family.clone(),
         route_config_digest: route.route_config_digest.clone(),
         route_trust_class: route.route_trust_class.clone(),
-        route_live: !route.paused && route.route_trust_class != ROUTE_TRUST_CLASS_DISABLED,
+        movement_model: "burn_mint".to_string(),
+        refund_model: if route.route_trust_class
+            == postfiat_bridge::ROUTE_TRUST_CLASS_BFT_CHECKPOINT
+        {
+            "checkpoint_verified".to_string()
+        } else {
+            "operator_attested_non_consumption".to_string()
+        },
+        live_value_enabled: route.live_value_enabled,
+        route_live: !route.paused
+            && route.live_value_enabled
+            && route.route_trust_class != ROUTE_TRUST_CLASS_DISABLED,
         paused: route.paused,
         native_nav_asset_id: route.native_nav_asset_id.clone(),
         settlement_asset_id: route.settlement_asset_id.clone(),

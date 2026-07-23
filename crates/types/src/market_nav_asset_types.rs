@@ -2255,6 +2255,9 @@ pub struct PftlUniswapConsensusRouteState {
     pub packet_notional_cap_atoms: u64,
     pub latest_finalized_nav_epoch: u64,
     pub return_finality_blocks: u64,
+    /// Public live-value routing gate. Controlled rehearsals keep this false.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub live_value_enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ethereum_verification_policy: Option<EthereumRouteVerificationPolicyV1>,
     pub authorized_valid_supply_atoms: u64,
@@ -2289,6 +2292,12 @@ impl PftlUniswapConsensusRouteState {
             VAULT_BRIDGE_HEX_HASH_LEN,
         )?;
         validate_text_field("pftl_uniswap_route.route_trust_class", &self.route_trust_class)?;
+        if self.route_trust_class == "CONTROLLED" && self.live_value_enabled {
+            return Err(
+                "pftl_uniswap_route CONTROLLED trust class cannot enable public live value"
+                    .to_string(),
+            );
+        }
         validate_lower_hex_len(
             "pftl_uniswap_route.native_nav_asset_id",
             &self.native_nav_asset_id,

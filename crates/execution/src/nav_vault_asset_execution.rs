@@ -3167,6 +3167,7 @@ fn apply_pftl_uniswap_route_init(
         packet_notional_cap_atoms: operation.packet_notional_cap_atoms,
         latest_finalized_nav_epoch: native_nav_asset.finalized_epoch,
         return_finality_blocks: operation.return_finality_blocks,
+        live_value_enabled: operation.live_value_enabled,
         ethereum_verification_policy: operation.ethereum_verification_policy.clone(),
         authorized_valid_supply_atoms: 0,
         pftl_spendable_supply_atoms: 0,
@@ -4233,7 +4234,7 @@ fn pftl_uniswap_absent_route_hash(route_id: &str) -> String {
 
 pub fn pftl_uniswap_route_state_hash(route: &PftlUniswapConsensusRouteState) -> String {
     let mut preimage = format!(
-        "route_id={}\nroute_family={}\nroute_config_digest={}\nroute_trust_class={}\nnative_nav_asset_id={}\nsettlement_asset_id={}\nhandoff_controller={}\nsettlement_adapter={}\nwrapped_navcoin_token={}\nethereum_chain_id={}\nroute_supply_cap_atoms={}\npacket_notional_cap_atoms={}\nlatest_finalized_nav_epoch={}\nreturn_finality_blocks={}\nauthorized_valid_supply_atoms={}\npftl_spendable_supply_atoms={}\nethereum_spendable_supply_atoms={}\nother_registered_venue_supply_atoms={}\noutstanding_bridge_claims_atoms={}\npending_return_import_claims_atoms={}\nsettlement_reserve_atoms={}\npaused={}\n",
+        "route_id={}\nroute_family={}\nroute_config_digest={}\nroute_trust_class={}\nnative_nav_asset_id={}\nsettlement_asset_id={}\nhandoff_controller={}\nsettlement_adapter={}\nwrapped_navcoin_token={}\nethereum_chain_id={}\nroute_supply_cap_atoms={}\npacket_notional_cap_atoms={}\nlatest_finalized_nav_epoch={}\nreturn_finality_blocks={}\n",
         route.route_id,
         route.route_family,
         route.route_config_digest,
@@ -4248,6 +4249,12 @@ pub fn pftl_uniswap_route_state_hash(route: &PftlUniswapConsensusRouteState) -> 
         route.packet_notional_cap_atoms,
         route.latest_finalized_nav_epoch,
         route.return_finality_blocks,
+    );
+    if route.live_value_enabled {
+        preimage.push_str("live_value_enabled=true\n");
+    }
+    preimage.push_str(&format!(
+        "authorized_valid_supply_atoms={}\npftl_spendable_supply_atoms={}\nethereum_spendable_supply_atoms={}\nother_registered_venue_supply_atoms={}\noutstanding_bridge_claims_atoms={}\npending_return_import_claims_atoms={}\nsettlement_reserve_atoms={}\npaused={}\n",
         route.authorized_valid_supply_atoms,
         route.pftl_spendable_supply_atoms,
         route.ethereum_spendable_supply_atoms,
@@ -4256,7 +4263,7 @@ pub fn pftl_uniswap_route_state_hash(route: &PftlUniswapConsensusRouteState) -> 
         route.pending_return_import_claims_atoms,
         route.settlement_reserve_atoms,
         route.paused,
-    );
+    ));
     if let Some(policy) = &route.ethereum_verification_policy {
         preimage.push_str(&format!(
             "ethereum_policy.authority_epoch={}\nethereum_policy.committee_root={}\nethereum_policy.minimum_confirmations={}\nethereum_policy.handoff_controller_code_hash={}\nethereum_policy.wrapped_navcoin_code_hash={}\n",

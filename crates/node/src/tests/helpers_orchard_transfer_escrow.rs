@@ -1711,6 +1711,7 @@
                 packet_notional_cap_atoms: 100,
                 latest_finalized_nav_epoch: 0,
                 return_finality_blocks: 12,
+                live_value_enabled: false,
                 ethereum_verification_policy: None,
                 authorized_valid_supply_atoms: 25,
                 pftl_spendable_supply_atoms: 0,
