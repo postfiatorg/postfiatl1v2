@@ -1,0 +1,44 @@
+[Unit]
+Description=PostFiat L1 RPC validator-1
+After=network-online.target postfiat-validator-1.service
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=postfiat
+Group=postfiat
+EnvironmentFile=/etc/postfiat/releases/open-source-consensus-viewlock-b04c595e/validator-1.rpc.env
+ExecStartPre=+/usr/bin/install -d -o postfiat -g postfiat -m 0700 /var/lib/postfiat/validator-1/finality-artifacts
+ExecStartPre=/usr/bin/rm -f /var/lib/postfiat/validator-1/readiness/rpc.ready.json
+ExecStartPre=/opt/postfiat/releases/open-source-consensus-viewlock-b04c595e/postfiat-node deployment-manifest-verify --manifest-file /etc/postfiat/releases/open-source-consensus-viewlock-b04c595e/deployment-manifest.json --trusted-publisher-key-file /etc/postfiat/releases/open-source-consensus-viewlock-b04c595e/deployment.public.json --validator-id validator-1 --validator-bindings-file /etc/postfiat/releases/open-source-consensus-viewlock-b04c595e/validator-1.bindings.json --runtime-binary-file /opt/postfiat/releases/open-source-consensus-viewlock-b04c595e/postfiat-node --runtime-topology-file /etc/postfiat/releases/open-source-consensus-viewlock-b04c595e/topology.json --runtime-swap-circuit-metadata-file /etc/postfiat/releases/open-source-consensus-viewlock-b04c595e/swap.metadata.json --runtime-private-egress-circuit-metadata-file /etc/postfiat/releases/open-source-consensus-viewlock-b04c595e/private-egress.metadata.json
+ExecStart=/opt/postfiat/releases/open-source-consensus-viewlock-b04c595e/postfiat-node rpc-serve --unsafe-devnet-json-storage --data-dir /var/lib/postfiat/validator-1 --spool-dir /var/lib/postfiat/validator-1/runtime/rpc-spool --ready-file /var/lib/postfiat/validator-1/readiness/rpc.ready.json --bind-host 127.0.0.1 --port 27651 --max-requests 10000 --timeout-ms 30000 --child-timeout-ms 30000 --event-log /var/log/postfiat/validator-1/rpc-events.ndjson --allow-mempool-submit-finality --finality-topology /etc/postfiat/releases/open-source-consensus-viewlock-b04c595e/topology.json --finality-key-file /var/lib/postfiat/validator-1/validator_keys.json --finality-proposal-key-file /var/lib/postfiat/validator-1/validator_keys.json --finality-artifact-root /var/lib/postfiat/validator-1/finality-artifacts --finality-timeout-ms 30000 --finality-send-retries 16 --finality-retry-backoff-ms 250 --finality-quorum-early-full-propagation --keep-alive
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/lib/postfiat/validator-1 /var/log/postfiat/validator-1
+UMask=0077
+LimitNOFILE=65536
+LimitCORE=0
+TasksMax=1024
+KillMode=control-group
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+StandardOutput=append:/var/log/postfiat/validator-1/rpc-stdout.log
+StandardError=append:/var/log/postfiat/validator-1/rpc-stderr.log
+
+[Install]
+WantedBy=multi-user.target

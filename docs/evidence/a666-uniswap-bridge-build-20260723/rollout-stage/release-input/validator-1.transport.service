@@ -1,0 +1,43 @@
+[Unit]
+Description=PostFiat L1 validator validator-1
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=postfiat
+Group=postfiat
+EnvironmentFile=/etc/postfiat/releases/open-source-consensus-viewlock-b04c595e/validator-1.transport.env
+ExecStartPre=/usr/bin/rm -f /var/lib/postfiat/validator-1/readiness/transport-validator.ready.json
+ExecStartPre=/opt/postfiat/releases/open-source-consensus-viewlock-b04c595e/postfiat-node deployment-manifest-verify --manifest-file /etc/postfiat/releases/open-source-consensus-viewlock-b04c595e/deployment-manifest.json --trusted-publisher-key-file /etc/postfiat/releases/open-source-consensus-viewlock-b04c595e/deployment.public.json --validator-id validator-1 --validator-bindings-file /etc/postfiat/releases/open-source-consensus-viewlock-b04c595e/validator-1.bindings.json --runtime-binary-file /opt/postfiat/releases/open-source-consensus-viewlock-b04c595e/postfiat-node --runtime-topology-file /etc/postfiat/releases/open-source-consensus-viewlock-b04c595e/topology.json --runtime-swap-circuit-metadata-file /etc/postfiat/releases/open-source-consensus-viewlock-b04c595e/swap.metadata.json --runtime-private-egress-circuit-metadata-file /etc/postfiat/releases/open-source-consensus-viewlock-b04c595e/private-egress.metadata.json
+ExecStart=/opt/postfiat/releases/open-source-consensus-viewlock-b04c595e/postfiat-node transport-validator-serve --unsafe-devnet-file-signer --unsafe-devnet-json-storage --data-dir /var/lib/postfiat/validator-1 --topology /etc/postfiat/releases/open-source-consensus-viewlock-b04c595e/topology.json --key-file /var/lib/postfiat/validator-1/validator_keys.json --vote-dir /var/lib/postfiat/validator-1/transport_votes --bind-host 10.77.0.2 --max-connections 10000 --timeout-ms 900000 --event-log /var/log/postfiat/validator-1/transport-validator-events.ndjson
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/lib/postfiat/validator-1 /var/log/postfiat/validator-1
+UMask=0077
+LimitNOFILE=65536
+LimitCORE=0
+TasksMax=1024
+KillMode=control-group
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+StandardOutput=append:/var/log/postfiat/validator-1/stdout.log
+StandardError=append:/var/log/postfiat/validator-1/stderr.log
+
+[Install]
+WantedBy=multi-user.target

@@ -50,10 +50,10 @@ struct V4SwapData {
     uint256 amountIn;
 }
 
-/// @notice Fork-only helper that initializes and seeds a hookless official Uniswap v4 pool.
-/// @dev This is an evidence harness, not a public production controller. It mirrors the
-///      already deployed StakeHub launch helper path and keeps the Gate 3 fork mechanics
-///      reproducible inside this repository.
+/// @notice Controlled-stage helper for a hookless official Uniswap v4 pool.
+/// @dev Initialization is separate from seeding so a persistent staging pool can be
+///      created before canonical bridge-export inventory exists. This is an evidence
+///      harness, not a public production controller.
 contract PFTLUniswapV4LaunchHelper {
     uint24 public constant FEE = 500;
     int24 public constant TICK_SPACING = 10;
@@ -97,11 +97,50 @@ contract PFTLUniswapV4LaunchHelper {
         onlyOwner
         returns (bytes32 id, uint128 liquidity, uint160 sqrtPriceX96)
     {
+        (id, sqrtPriceX96) = _initialize(wrappedToken, usdcToken, wrappedAmountMax, usdcAmountMax);
+        liquidity = _seed(wrappedToken, usdcToken, wrappedAmountMax, usdcAmountMax, sqrtPriceX96);
+    }
+
+    function initializePool(address wrappedToken, address usdcToken, uint256 wrappedAmount, uint256 usdcAmount)
+        external
+        onlyOwner
+        returns (bytes32 id, uint160 sqrtPriceX96)
+    {
+        return _initialize(wrappedToken, usdcToken, wrappedAmount, usdcAmount);
+    }
+
+    function seedExistingPool(
+        address wrappedToken,
+        address usdcToken,
+        uint256 wrappedAmountMax,
+        uint256 usdcAmountMax,
+        uint160 sqrtPriceX96
+    ) external onlyOwner returns (bytes32 id, uint128 liquidity) {
+        liquidity = _seed(wrappedToken, usdcToken, wrappedAmountMax, usdcAmountMax, sqrtPriceX96);
+        id = poolId(poolKey(wrappedToken, usdcToken));
+    }
+
+    function _initialize(address wrappedToken, address usdcToken, uint256 wrappedAmount, uint256 usdcAmount)
+        private
+        returns (bytes32 id, uint160 sqrtPriceX96)
+    {
+        if (wrappedAmount == 0 || usdcAmount == 0) revert BadAmount();
+        PoolKeyV4Harness memory key = poolKey(wrappedToken, usdcToken);
+        sqrtPriceX96 = initialSqrtPriceX96(wrappedToken, usdcToken, wrappedAmount, usdcAmount);
+        poolManager.initialize(key, sqrtPriceX96);
+        id = poolId(key);
+        emit PoolInitialized(id, wrappedToken, usdcToken, sqrtPriceX96);
+    }
+
+    function _seed(
+        address wrappedToken,
+        address usdcToken,
+        uint256 wrappedAmountMax,
+        uint256 usdcAmountMax,
+        uint160 sqrtPriceX96
+    ) private returns (uint128 liquidity) {
         if (wrappedAmountMax == 0 || usdcAmountMax == 0) revert BadAmount();
         PoolKeyV4Harness memory key = poolKey(wrappedToken, usdcToken);
-        sqrtPriceX96 = initialSqrtPriceX96(wrappedToken, usdcToken, wrappedAmountMax, usdcAmountMax);
-        poolManager.initialize(key, sqrtPriceX96);
-        emit PoolInitialized(poolId(key), wrappedToken, usdcToken, sqrtPriceX96);
 
         uint256 amount0Max = key.currency0 == wrappedToken ? wrappedAmountMax : usdcAmountMax;
         uint256 amount1Max = key.currency0 == wrappedToken ? usdcAmountMax : wrappedAmountMax;
@@ -119,8 +158,7 @@ contract PFTLUniswapV4LaunchHelper {
         params[1] = abi.encode(key.currency0, key.currency1);
         positionManager.modifyLiquidities(abi.encode(actions, params), block.timestamp + 600);
 
-        id = poolId(key);
-        emit LiquiditySeeded(id, liquidity, amount0Max, amount1Max);
+        emit LiquiditySeeded(poolId(key), liquidity, amount0Max, amount1Max);
     }
 
     function poolKey(address tokenA, address tokenB) public pure returns (PoolKeyV4Harness memory key) {
