@@ -1247,6 +1247,33 @@ pub(super) fn governance_amendment_current_value(governance: &GovernanceState, k
     }
 }
 
+fn governance_amendment_has_materialized_current_value(kind: &str) -> bool {
+    matches!(
+        kind,
+        GOVERNANCE_KIND_VALIDATOR_SET
+            | GOVERNANCE_KIND_CRYPTO_POLICY
+            | GOVERNANCE_KIND_BRIDGE_WITNESS_EPOCH
+            | GOVERNANCE_KIND_AUTHORITY_MODE
+            | GOVERNANCE_KIND_ORCHARD_POOL_PAUSE
+            | GOVERNANCE_KIND_ATOMIC_SWAP_PAUSE
+            | GOVERNANCE_KIND_BRIDGE_VERIFICATION_ACTIVATION_HEIGHT
+            | GOVERNANCE_KIND_ATOMIC_SWAP_ACTIVATION_HEIGHT
+            | GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT
+            | GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT
+    )
+}
+
+fn recorded_superseded_current_value(kind: &str, superseded_value: u32) -> u32 {
+    if governance_amendment_has_materialized_current_value(kind) {
+        superseded_value
+    } else {
+        // The v1 lifecycle-record constructor deliberately records the
+        // materialized runtime value. Extension kinds that are represented
+        // only by their ordered amendments therefore record zero.
+        0
+    }
+}
+
 pub(super) fn governance_agent_dry_run_rejection(
     governance: &GovernanceState,
     dry_run: &GovernanceAgentDryRunAmendment,
@@ -1982,7 +2009,8 @@ pub(super) fn verify_governance_amendment_supersession_record_for_domain(
     }
     let can_replay_previous_value =
         record.kind != GOVERNANCE_KIND_VALIDATOR_SET || can_replay_validator_set_previous_value;
-    if can_replay_previous_value && record.previous_value != superseded.value {
+    let expected_previous_value = recorded_superseded_current_value(&record.kind, superseded.value);
+    if can_replay_previous_value && record.previous_value != expected_previous_value {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "governance amendment supersession record previous value mismatch",
@@ -2156,7 +2184,9 @@ pub(super) fn verify_governance_amendment_rollback_record_for_domain(
     }
     let can_replay_previous_value =
         record.kind != GOVERNANCE_KIND_VALIDATOR_SET || can_replay_validator_set_previous_value;
-    if can_replay_previous_value && record.previous_value != rolled_back.value {
+    let expected_previous_value =
+        recorded_superseded_current_value(&record.kind, rolled_back.value);
+    if can_replay_previous_value && record.previous_value != expected_previous_value {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "governance amendment rollback record previous value mismatch",

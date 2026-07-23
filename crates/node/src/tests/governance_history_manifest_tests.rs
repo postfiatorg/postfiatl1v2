@@ -3298,3 +3298,70 @@
 
         fs::remove_dir_all(data_dir).expect("cleanup legacy governance identity test");
     }
+
+    #[test]
+    fn verifies_extension_kind_supersession_previous_value_as_constructor_recorded() {
+        let genesis = Genesis::new("postfiat-governance-extension-supersession");
+        let domain_genesis_hash = genesis_hash(&genesis);
+        let amendment = |id: &str, value: u32| GovernanceAmendment {
+            amendment_id: id.to_string(),
+            chain_id: genesis.chain_id.clone(),
+            genesis_hash: domain_genesis_hash.clone(),
+            protocol_version: genesis.protocol_version,
+            instance_id: format!("instance-{id}"),
+            proposal_id: format!("proposal-{id}"),
+            certificate_id: format!("certificate-{id}"),
+            proposer: "validator-0".to_string(),
+            validators: vec!["validator-0".to_string()],
+            quorum: 1,
+            kind: postfiat_types::GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT
+                .to_string(),
+            value,
+            activation_height: 0,
+            veto_until_height: 0,
+            paused: false,
+            support: vec!["validator-0".to_string()],
+            votes: Vec::new(),
+            signed_authorizations: Vec::new(),
+        };
+        let first = amendment("extension-first", 62);
+        let second = amendment("extension-second", 62);
+        let mut governance = GovernanceState::new(1);
+        apply_governance_amendment_with_lifecycle_records(
+            &mut governance,
+            first,
+            "batch-first",
+            1,
+        );
+        apply_governance_amendment_with_lifecycle_records(
+            &mut governance,
+            second,
+            "batch-second",
+            2,
+        );
+
+        let record = governance
+            .amendment_supersession_records
+            .first()
+            .expect("extension supersession record");
+        assert_eq!(0, record.previous_value);
+        assert_eq!(62, governance.amendments[0].value);
+        verify_governance_amendment_supersession_records(&genesis, &governance)
+            .expect("constructor-produced extension supersession must verify");
+
+        let mut incompatible = governance;
+        incompatible.amendment_supersession_records[0].previous_value = 62;
+        incompatible.amendment_supersession_records[0].supersession_record_id =
+            governance_amendment_supersession_record_id(
+                &incompatible.amendment_supersession_records[0],
+            );
+        let error =
+            verify_governance_amendment_supersession_records(&genesis, &incompatible)
+                .expect_err("non-constructor previous value must fail closed");
+        assert!(
+            error
+                .to_string()
+                .contains("supersession record previous value mismatch"),
+            "{error}"
+        );
+    }

@@ -325,7 +325,23 @@ def query_vultr_inventory(
     return verified
 
 
-def _fleet_convergence_once(inventory: Sequence[InventoryEntry]) -> dict[str, Any]:
+def rpc_tunnel_endpoints(
+    inventory: Sequence[InventoryEntry], base_port: int | None
+) -> dict[str, tuple[str, int]] | None:
+    if base_port is None:
+        return None
+    if base_port < 1024 or base_port + len(inventory) - 1 > 65535:
+        raise SafetyError("RPC tunnel base port must map the fleet within 1024..65535")
+    return {
+        entry.validator_id: ("127.0.0.1", base_port + index)
+        for index, entry in enumerate(inventory)
+    }
+
+
+def _fleet_convergence_once(
+    inventory: Sequence[InventoryEntry],
+    endpoints: dict[str, tuple[str, int]] | None = None,
+) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     for index, entry in enumerate(inventory):
         request = {
@@ -334,7 +350,12 @@ def _fleet_convergence_once(inventory: Sequence[InventoryEntry]) -> dict[str, An
             "method": "status",
             "params": {},
         }
-        with socket.create_connection((entry.host, entry.rpc_port), timeout=10) as connection:
+        endpoint = (
+            endpoints[entry.validator_id]
+            if endpoints is not None
+            else (entry.host, entry.rpc_port)
+        )
+        with socket.create_connection(endpoint, timeout=10) as connection:
             stream = connection.makefile("rwb")
             stream.write((json.dumps(request, separators=(",", ":")) + "\n").encode())
             stream.flush()
@@ -371,11 +392,16 @@ def _fleet_convergence_once(inventory: Sequence[InventoryEntry]) -> dict[str, An
     }
 
 
-def fleet_convergence(inventory: Sequence[InventoryEntry]) -> dict[str, Any]:
+def fleet_convergence(
+    inventory: Sequence[InventoryEntry],
+    endpoints: dict[str, tuple[str, int]] | None = None,
+) -> dict[str, Any]:
     """Wait only for transient RPC reachability; never retry bad ledger data."""
     for attempt in range(FLEET_CONVERGENCE_RETRY_ATTEMPTS):
         try:
-            return _fleet_convergence_once(inventory)
+            if endpoints is None:
+                return _fleet_convergence_once(inventory)
+            return _fleet_convergence_once(inventory, endpoints)
         except OSError:
             if attempt + 1 == FLEET_CONVERGENCE_RETRY_ATTEMPTS:
                 raise
@@ -388,13 +414,9 @@ def verify_remote_committee_rosters(
     inventory: Sequence[InventoryEntry],
     user: str,
 ) -> list[dict[str, Any]]:
-    """Fail closed unless every running validator has the exact active key roster.
-
-    The current devnet signer file also supplies certificate-verification material.
-    A node with only its own record can sign but cannot verify a quorum certificate,
-    so this check must run before a rolling deployment mutates any host.
-    """
+    """Fail closed unless each split signer matches one complete active registry."""
     expected_count = len(inventory)
+    expected_ids = [row.validator_id for row in inventory]
     reports: list[dict[str, Any]] = []
     for row in inventory:
         service = f"postfiat-{row.validator_id}.service"
@@ -406,8 +428,60 @@ def verify_remote_committee_rosters(
             "active_binary=$(readlink -f \"/proc/$active_pid/exe\")\n"
             "case \"$active_binary\" in /opt/postfiat/releases/*/postfiat-node) ;; *) exit 98;; esac\n"
             "test -x \"$active_binary\"\n"
-            f"\"$active_binary\" validate-local-keys --data-dir {shlex.quote(data_dir)} "
-            f"--validators {expected_count}\n"
+            f"python3 - \"$active_binary\" {shlex.quote(data_dir)} "
+            f"{shlex.quote(row.validator_id)} {expected_count} <<'PY'\n"
+            "import json\n"
+            "import pathlib\n"
+            "import subprocess\n"
+            "import sys\n"
+            "binary, data_dir, node_id, expected_raw = sys.argv[1:]\n"
+            "expected = int(expected_raw)\n"
+            "local = json.loads(subprocess.run(\n"
+            "    [binary, 'validate-local-keys', '--data-dir', data_dir,\n"
+            "     '--validators', str(expected), '--local-only'],\n"
+            "    check=True, capture_output=True, text=True,\n"
+            ").stdout)\n"
+            "registry_response = json.loads(subprocess.run(\n"
+            "    [binary, 'rpc', '--method', 'validators', '--data-dir', data_dir],\n"
+            "    check=True, capture_output=True, text=True,\n"
+            ").stdout)\n"
+            "registry = registry_response.get('result', {})\n"
+            "private_file = json.loads(\n"
+            "    (pathlib.Path(data_dir) / 'validator_keys.json').read_text()\n"
+            ")\n"
+            "private_records = private_file.get('validators', [])\n"
+            "registry_records = registry.get('validators', [])\n"
+            "local_record = next(\n"
+            "    (record for record in private_records if record.get('node_id') == node_id),\n"
+            "    None,\n"
+            ")\n"
+            "registry_record = next(\n"
+            "    (record for record in registry_records if record.get('node_id') == node_id),\n"
+            "    None,\n"
+            ")\n"
+            "report = {\n"
+            "    'schema': 'postfiat-safe-rollout-committee-roster-v1',\n"
+            "    'node_id': node_id,\n"
+            "    'local_signer_valid': (\n"
+            "        local.get('validator_keys_valid') is True\n"
+            "        and local.get('validator_key_permissions_valid') is True\n"
+            "        and local.get('validator_key_count') == 1\n"
+            "        and local.get('required_validator_count') == 1\n"
+            "    ),\n"
+            "    'local_signer_matches_registry': (\n"
+            "        local_record is not None\n"
+            "        and registry_record is not None\n"
+            "        and local_record.get('public_key_hex')\n"
+            "            == registry_record.get('public_key_hex')\n"
+            "    ),\n"
+            "    'registry_root': registry.get('registry_root'),\n"
+            "    'registry_validator_count': registry.get('validator_count'),\n"
+            "    'registry_validator_ids': [\n"
+            "        record.get('node_id') for record in registry_records\n"
+            "    ],\n"
+            "}\n"
+            "print(json.dumps(report, sort_keys=True))\n"
+            "PY\n"
         )
         result = runner.run(
             ["ssh", "-o", "BatchMode=yes", _ssh_target(row, user), "bash", "-s"],
@@ -420,12 +494,12 @@ def verify_remote_committee_rosters(
                 f"committee-roster validation returned invalid JSON for {row.validator_id}"
             ) from error
         expected = {
-            "schema": "postfiat-local-key-validation-v1",
+            "schema": "postfiat-safe-rollout-committee-roster-v1",
             "node_id": row.validator_id,
-            "validator_keys_valid": True,
-            "validator_key_permissions_valid": True,
-            "validator_key_count": expected_count,
-            "required_validator_count": expected_count,
+            "local_signer_valid": True,
+            "local_signer_matches_registry": True,
+            "registry_validator_count": expected_count,
+            "registry_validator_ids": expected_ids,
         }
         observed = {key: report.get(key) for key in expected}
         if observed != expected:
@@ -434,6 +508,10 @@ def verify_remote_committee_rosters(
                 f"expected {expected}, observed {observed}"
             )
         reports.append(observed)
+        reports[-1]["registry_root"] = report.get("registry_root")
+    roots = {report.get("registry_root") for report in reports}
+    if None in roots or "" in roots or len(roots) != 1:
+        raise SafetyError(f"validator registry roots are incomplete or divergent: {roots}")
     return reports
 
 
@@ -503,7 +581,9 @@ def preflight(args: argparse.Namespace, runner: Runner) -> dict[str, Any]:
         raise SafetyError(f"rollout state already exists: {args.state_file}")
     inventory = parse_inventory(args.inventory_file)
     cloud = query_vultr_inventory(inventory, args.vultr_api_key_file)
-    convergence = fleet_convergence(inventory)
+    rpc_tunnel_base_port = getattr(args, "rpc_tunnel_base_port", None)
+    endpoints = rpc_tunnel_endpoints(inventory, rpc_tunnel_base_port)
+    convergence = fleet_convergence(inventory, endpoints)
     committee_rosters = verify_remote_committee_rosters(
         runner, inventory, args.ssh_user
     )
@@ -527,6 +607,7 @@ def preflight(args: argparse.Namespace, runner: Runner) -> dict[str, Any]:
         "inventory_file": str(args.inventory_file.resolve()),
         "inventory_file_sha256": sha256_file(args.inventory_file),
         "ssh_user": args.ssh_user,
+        "rpc_tunnel_base_port": rpc_tunnel_base_port,
         "canary_validator_id": args.canary_validator_id,
         "order": order,
         "applied": [],
@@ -716,7 +797,10 @@ def apply_next(args: argparse.Namespace, runner: Runner) -> dict[str, Any]:
     status = json.loads(result.stdout)
     if status.get("mempool_pending") != 0:
         raise SafetyError(f"{validator_id} restarted with a non-empty mempool")
-    convergence = fleet_convergence(inventory)
+    endpoints = rpc_tunnel_endpoints(
+        inventory, state.get("rpc_tunnel_base_port")
+    )
+    convergence = fleet_convergence(inventory, endpoints)
     state["applied"].append(validator_id)
     state.setdefault("apply_reports", {})[validator_id] = {
         "completed_unix": int(time.time()),
@@ -744,6 +828,14 @@ def parser() -> argparse.ArgumentParser:
     preflight_parser.add_argument("--state-file", type=Path, required=True)
     preflight_parser.add_argument("--canary-validator-id", default="validator-1")
     preflight_parser.add_argument("--ssh-user", default="root")
+    preflight_parser.add_argument(
+        "--rpc-tunnel-base-port",
+        type=int,
+        help=(
+            "use existing localhost RPC tunnels base..base+5 for convergence "
+            "while retaining canonical inventory hosts for cloud and SSH checks"
+        ),
+    )
     backup_parser = subparsers.add_parser("backup")
     backup_parser.add_argument("--state-file", type=Path, required=True)
     backup_parser.add_argument("--evidence-dir", type=Path, required=True)
