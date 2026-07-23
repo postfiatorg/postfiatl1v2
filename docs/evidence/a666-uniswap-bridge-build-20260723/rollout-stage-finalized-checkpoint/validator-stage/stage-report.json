@@ -1,0 +1,60 @@
+{
+  "schema": "postfiat.deployment_validator_unit_stage.v1",
+  "release_id": "a666-finalized-checkpoint-8949759",
+  "rootfs_dir": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs",
+  "binary_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/opt/postfiat/releases/a666-finalized-checkpoint-8949759/postfiat-node",
+  "topology_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/postfiat/releases/a666-finalized-checkpoint-8949759/topology.json",
+  "swap_circuit_metadata_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/postfiat/releases/a666-finalized-checkpoint-8949759/swap.metadata.json",
+  "private_egress_circuit_metadata_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/postfiat/releases/a666-finalized-checkpoint-8949759/private-egress.metadata.json",
+  "signing_bindings_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/validator-bindings.signing.json",
+  "validators": [
+    {
+      "validator_id": "validator-0",
+      "rpc_unit_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/systemd/system/postfiat-validator-0-rpc.service",
+      "rpc_environment_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/postfiat/releases/a666-finalized-checkpoint-8949759/validator-0.rpc.env",
+      "transport_unit_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/systemd/system/postfiat-validator-0.service",
+      "transport_environment_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/postfiat/releases/a666-finalized-checkpoint-8949759/validator-0.transport.env",
+      "runtime_bindings_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/postfiat/releases/a666-finalized-checkpoint-8949759/validator-0.bindings.json"
+    },
+    {
+      "validator_id": "validator-1",
+      "rpc_unit_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/systemd/system/postfiat-validator-1-rpc.service",
+      "rpc_environment_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/postfiat/releases/a666-finalized-checkpoint-8949759/validator-1.rpc.env",
+      "transport_unit_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/systemd/system/postfiat-validator-1.service",
+      "transport_environment_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/postfiat/releases/a666-finalized-checkpoint-8949759/validator-1.transport.env",
+      "runtime_bindings_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/postfiat/releases/a666-finalized-checkpoint-8949759/validator-1.bindings.json"
+    },
+    {
+      "validator_id": "validator-2",
+      "rpc_unit_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/systemd/system/postfiat-validator-2-rpc.service",
+      "rpc_environment_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/postfiat/releases/a666-finalized-checkpoint-8949759/validator-2.rpc.env",
+      "transport_unit_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/systemd/system/postfiat-validator-2.service",
+      "transport_environment_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/postfiat/releases/a666-finalized-checkpoint-8949759/validator-2.transport.env",
+      "runtime_bindings_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/postfiat/releases/a666-finalized-checkpoint-8949759/validator-2.bindings.json"
+    },
+    {
+      "validator_id": "validator-3",
+      "rpc_unit_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/systemd/system/postfiat-validator-3-rpc.service",
+      "rpc_environment_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/postfiat/releases/a666-finalized-checkpoint-8949759/validator-3.rpc.env",
+      "transport_unit_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/systemd/system/postfiat-validator-3.service",
+      "transport_environment_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/postfiat/releases/a666-finalized-checkpoint-8949759/validator-3.transport.env",
+      "runtime_bindings_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/postfiat/releases/a666-finalized-checkpoint-8949759/validator-3.bindings.json"
+    },
+    {
+      "validator_id": "validator-4",
+      "rpc_unit_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/systemd/system/postfiat-validator-4-rpc.service",
+      "rpc_environment_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/postfiat/releases/a666-finalized-checkpoint-8949759/validator-4.rpc.env",
+      "transport_unit_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/systemd/system/postfiat-validator-4.service",
+      "transport_environment_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/postfiat/releases/a666-finalized-checkpoint-8949759/validator-4.transport.env",
+      "runtime_bindings_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/postfiat/releases/a666-finalized-checkpoint-8949759/validator-4.bindings.json"
+    },
+    {
+      "validator_id": "validator-5",
+      "rpc_unit_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/systemd/system/postfiat-validator-5-rpc.service",
+      "rpc_environment_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/postfiat/releases/a666-finalized-checkpoint-8949759/validator-5.rpc.env",
+      "transport_unit_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/systemd/system/postfiat-validator-5.service",
+      "transport_environment_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/postfiat/releases/a666-finalized-checkpoint-8949759/validator-5.transport.env",
+      "runtime_bindings_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/rollout-stage-finalized-checkpoint/validator-stage/rootfs/etc/postfiat/releases/a666-finalized-checkpoint-8949759/validator-5.bindings.json"
+    }
+  ]
+}
