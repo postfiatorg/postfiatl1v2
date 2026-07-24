@@ -1,0 +1,137 @@
+name: ${PFTL_LIGHTNING_PROJECT:-pftl-lightning-regtest}
+
+x-lnd-common: &lnd-common
+  image: lightninglabs/lnd:v0.20.1-beta@sha256:fb30ea34d1ea26dfbae3d96db495174c8c594daa40ccf5d7b5a21723ac3b7f54
+  platform: linux/amd64
+  user: "${PFTL_DEMO_UID:?set PFTL_DEMO_UID}:${PFTL_DEMO_GID:?set PFTL_DEMO_GID}"
+  depends_on:
+    bitcoind:
+      condition: service_healthy
+  restart: unless-stopped
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  stop_grace_period: 30s
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,size=16m
+  networks:
+    lightning-regtest: {}
+  expose:
+    - "9735"
+    - "10009"
+  healthcheck:
+    test:
+      - CMD
+      - /bin/lncli
+      - --lnddir=/data/lnd
+      - --network=regtest
+      - getinfo
+    interval: 3s
+    timeout: 3s
+    retries: 60
+    start_period: 5s
+
+services:
+  bitcoind:
+    image: pftl/bitcoin-core-regtest:31.1
+    platform: linux/amd64
+    build:
+      context: ./bitcoin-core
+      dockerfile: Dockerfile
+      network: default
+    command:
+      - -conf=/etc/bitcoin/bitcoin.conf
+      - -datadir=/bitcoin
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+    volumes:
+      - bitcoin-data:/bitcoin
+      - ./config/bitcoin.conf:/etc/bitcoin/bitcoin.conf:ro
+    networks:
+      lightning-regtest:
+        ipv4_address: 172.30.24.10
+    expose:
+      - "28332"
+      - "28333"
+    healthcheck:
+      test:
+        - CMD
+        - /usr/local/bin/bitcoin-cli
+        - -conf=/etc/bitcoin/bitcoin.conf
+        - -datadir=/bitcoin
+        - getblockchaininfo
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 2s
+
+  lnd-user:
+    <<: *lnd-common
+    command:
+      - --configfile=/etc/lnd/lnd.conf
+      - --lnddir=/data/lnd
+      - --alias=pftl-demo-user
+      - "--color=#33ccff"
+      - --tlsextradomain=lnd-user
+      - --tlsextraip=172.30.24.11
+    volumes:
+      - ${PFTL_LN_STATE_DIR:?set PFTL_LN_STATE_DIR}/lnd-user:/data/lnd
+      - ./config/lnd-common.conf:/etc/lnd/lnd.conf:ro
+    networks:
+      lightning-regtest:
+        ipv4_address: 172.30.24.11
+
+  lnd-coordinator:
+    <<: *lnd-common
+    command:
+      - --configfile=/etc/lnd/lnd.conf
+      - --lnddir=/data/lnd
+      - --alias=pftl-demo-coordinator
+      - "--color=#ff9933"
+      - --tlsextradomain=lnd-coordinator
+      - --tlsextraip=172.30.24.12
+    volumes:
+      - ${PFTL_LN_STATE_DIR:?set PFTL_LN_STATE_DIR}/lnd-coordinator:/data/lnd
+      - ./config/lnd-common.conf:/etc/lnd/lnd.conf:ro
+    networks:
+      lightning-regtest:
+        ipv4_address: 172.30.24.12
+
+  lnd-router:
+    <<: *lnd-common
+    command:
+      - --configfile=/etc/lnd/lnd.conf
+      - --lnddir=/data/lnd
+      - --alias=pftl-demo-router
+      - "--color=#66dd66"
+      - --tlsextradomain=lnd-router
+      - --tlsextraip=172.30.24.13
+    volumes:
+      - ${PFTL_LN_STATE_DIR:?set PFTL_LN_STATE_DIR}/lnd-router:/data/lnd
+      - ./config/lnd-common.conf:/etc/lnd/lnd.conf:ro
+    networks:
+      lightning-regtest:
+        ipv4_address: 172.30.24.13
+
+networks:
+  lightning-regtest:
+    name: ${PFTL_LIGHTNING_PROJECT:-pftl-lightning-regtest}-internal
+    driver: bridge
+    internal: true
+    attachable: false
+    ipam:
+      config:
+        - subnet: 172.30.24.0/24
+
+volumes:
+  bitcoin-data:
+    name: ${PFTL_LIGHTNING_PROJECT:-pftl-lightning-regtest}-bitcoin-data

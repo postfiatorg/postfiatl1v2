@@ -1,0 +1,1067 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ENV_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "$ENV_ROOT/../../.." && pwd)"
+COMPOSE_FILE="$ENV_ROOT/compose.yml"
+
+LND_VERSION="v0.20.1-beta"
+LND_IMAGE="lightninglabs/lnd:v0.20.1-beta@sha256:fb30ea34d1ea26dfbae3d96db495174c8c594daa40ccf5d7b5a21723ac3b7f54"
+BITCOIN_VERSION="31.1"
+BITCOIN_IMAGE="pftl/bitcoin-core-regtest:31.1"
+BITCOIN_ARCHIVE_SHA256="b80d9c3e04da78fb6f0569685673418cf686fadba9042d926d13fb87ff503f9e"
+GRPC_PYTHON_IMAGE="pftl/lnd-python-grpc:v0.20.1-beta"
+
+PFTL_LIGHTNING_PROJECT="${PFTL_LIGHTNING_PROJECT:-pftl-lightning-regtest}"
+if [[ ! "$PFTL_LIGHTNING_PROJECT" =~ ^[a-z0-9][a-z0-9_-]*$ ]]; then
+  echo "invalid PFTL_LIGHTNING_PROJECT: $PFTL_LIGHTNING_PROJECT" >&2
+  exit 2
+fi
+export PFTL_LIGHTNING_PROJECT
+
+PFTL_LN_STATE_DIR="${PFTL_LN_STATE_DIR:-$ENV_ROOT/.state}"
+if [[ "$PFTL_LN_STATE_DIR" != /* ]]; then
+  PFTL_LN_STATE_DIR="$PWD/$PFTL_LN_STATE_DIR"
+fi
+if [[ "$PFTL_LN_STATE_DIR" == "/" || "$PFTL_LN_STATE_DIR" == "$HOME" ]]; then
+  echo "refusing unsafe PFTL_LN_STATE_DIR: $PFTL_LN_STATE_DIR" >&2
+  exit 2
+fi
+export PFTL_LN_STATE_DIR
+export PFTL_DEMO_UID="${PFTL_DEMO_UID:-$(id -u)}"
+export PFTL_DEMO_GID="${PFTL_DEMO_GID:-$(id -g)}"
+
+NETWORK_NAME="${PFTL_LIGHTNING_PROJECT}-internal"
+BITCOIN_IP="172.30.24.10"
+LND_USER_IP="172.30.24.11"
+LND_COORDINATOR_IP="172.30.24.12"
+LND_ROUTER_IP="172.30.24.13"
+SETUP_DIR="$PFTL_LN_STATE_DIR/setup"
+EVIDENCE_ROOT="$PFTL_LN_STATE_DIR/evidence"
+HOST_BIN_DIR="$PFTL_LN_STATE_DIR/bin"
+HOST_LNCLI="$HOST_BIN_DIR/lncli"
+
+log() {
+  printf '[lightning-regtest] %s\n' "$*" >&2
+}
+
+die() {
+  log "ERROR: $*"
+  exit 1
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
+}
+
+prepare_state() {
+  install -d -m 0700 \
+    "$PFTL_LN_STATE_DIR" \
+    "$PFTL_LN_STATE_DIR/lnd-user" \
+    "$PFTL_LN_STATE_DIR/lnd-coordinator" \
+    "$PFTL_LN_STATE_DIR/lnd-router" \
+    "$SETUP_DIR" \
+    "$EVIDENCE_ROOT" \
+    "$HOST_BIN_DIR"
+}
+
+compose() {
+  docker compose \
+    --project-directory "$ENV_ROOT" \
+    --file "$COMPOSE_FILE" \
+    "$@"
+}
+
+service_container_id() {
+  compose ps --quiet "$1"
+}
+
+bitcoin_cli() {
+  compose exec -T bitcoind \
+    /usr/local/bin/bitcoin-cli \
+    -conf=/etc/bitcoin/bitcoin.conf \
+    -datadir=/bitcoin \
+    "$@"
+}
+
+miner_cli() {
+  bitcoin_cli -rpcwallet=miner "$@"
+}
+
+validate_node() {
+  case "$1" in
+    user|coordinator|router) ;;
+    *) die "node must be one of: user, coordinator, router" ;;
+  esac
+}
+
+lnd_cli() {
+  local node="$1"
+  shift
+  validate_node "$node"
+  compose exec -T "lnd-$node" \
+    /bin/lncli \
+    --lnddir=/data/lnd \
+    --network=regtest \
+    "$@"
+}
+
+node_ip() {
+  case "$1" in
+    user) printf '%s\n' "$LND_USER_IP" ;;
+    coordinator) printf '%s\n' "$LND_COORDINATOR_IP" ;;
+    router) printf '%s\n' "$LND_ROUTER_IP" ;;
+    *) die "node must be one of: user, coordinator, router" ;;
+  esac
+}
+
+host_lnd_cli() {
+  local node="$1"
+  shift
+  validate_node "$node"
+  [[ -x "$HOST_LNCLI" ]] || die "host lncli is not installed"
+  "$HOST_LNCLI" \
+    --network=regtest \
+    --rpcserver="$(node_ip "$node"):10009" \
+    --tlscertpath="$PFTL_LN_STATE_DIR/lnd-$node/tls.cert" \
+    --macaroonpath="$PFTL_LN_STATE_DIR/lnd-$node/data/chain/bitcoin/regtest/admin.macaroon" \
+    "$@"
+}
+
+install_host_lncli() {
+  local expected_sha current_sha container_id
+  expected_sha="$(docker run --rm --network=none \
+    --entrypoint=/usr/bin/sha256sum "$LND_IMAGE" /bin/lncli |
+    awk '{print $1}')"
+  current_sha=""
+  if [[ -f "$HOST_LNCLI" ]]; then
+    current_sha="$(sha256sum "$HOST_LNCLI" | awk '{print $1}')"
+  fi
+  if [[ "$current_sha" == "$expected_sha" ]]; then
+    return 0
+  fi
+  container_id="$(docker create "$LND_IMAGE")"
+  if ! docker cp "$container_id:/bin/lncli" "$HOST_LNCLI"; then
+    docker rm "$container_id" >/dev/null 2>&1 || true
+    die "failed to extract verified lncli"
+  fi
+  docker rm "$container_id" >/dev/null
+  chmod 0700 "$HOST_LNCLI"
+  [[ "$(sha256sum "$HOST_LNCLI" | awk '{print $1}')" == "$expected_sha" ]] ||
+    die "extracted lncli digest mismatch"
+}
+
+wait_for_bitcoin() {
+  local attempt
+  for attempt in $(seq 1 90); do
+    if bitcoin_cli getblockchaininfo >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  compose logs --no-color --tail 80 bitcoind >&2 || true
+  die "Bitcoin Core did not become RPC-ready"
+}
+
+wait_for_lnd() {
+  local node="$1"
+  local attempt
+  for attempt in $(seq 1 120); do
+    if lnd_cli "$node" getinfo >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  compose logs --no-color --tail 80 "lnd-$node" >&2 || true
+  die "lnd-$node did not become RPC-ready"
+}
+
+wait_for_lnd_chain_sync() {
+  local node attempt
+  for node in user coordinator router; do
+    for attempt in $(seq 1 90); do
+      if lnd_cli "$node" getinfo 2>/dev/null |
+        jq -e '.chains == [{"chain":"bitcoin","network":"regtest"}] and .synced_to_chain == true' \
+          >/dev/null; then
+        break
+      fi
+      sleep 2
+    done
+    if [[ "$attempt" == "90" ]] &&
+      ! lnd_cli "$node" getinfo |
+        jq -e '.chains == [{"chain":"bitcoin","network":"regtest"}] and .synced_to_chain == true' \
+          >/dev/null; then
+      die "lnd-$node did not synchronize to Bitcoin regtest"
+    fi
+  done
+}
+
+image_verification_fingerprint() {
+  local lnd_id bitcoin_id grpc_python_id
+  lnd_id="$(docker image inspect "$LND_IMAGE" --format '{{.Id}}' 2>/dev/null || true)"
+  bitcoin_id="$(docker image inspect "$BITCOIN_IMAGE" --format '{{.Id}}' 2>/dev/null || true)"
+  grpc_python_id="$(
+    docker image inspect "$GRPC_PYTHON_IMAGE" --format '{{.Id}}' 2>/dev/null || true
+  )"
+  printf '%s\n%s\n%s\n%s\n%s\n%s\n' \
+    "$LND_IMAGE" "$lnd_id" \
+    "$BITCOIN_IMAGE" "$bitcoin_id" \
+    "$GRPC_PYTHON_IMAGE" "$grpc_python_id" |
+    sha256sum |
+    awk '{print $1}'
+}
+
+verify_images() {
+  local force="${1:-}"
+  local marker="$SETUP_DIR/image-verification.json"
+  local fingerprint bitcoin_dockerfile_sha grpc_python_source_sha
+
+  prepare_state
+  bitcoin_dockerfile_sha="$(
+    sha256sum "$ENV_ROOT/bitcoin-core/Dockerfile" | awk '{print $1}'
+  )"
+  grpc_python_source_sha="$(
+    sha256sum \
+      "$ENV_ROOT/python-grpc/Dockerfile" \
+      "$ENV_ROOT/python-grpc/requirements-build.txt" \
+      "$ENV_ROOT/python-grpc/requirements-runtime.txt" \
+      "$ENV_ROOT/python-grpc/pftl_lnd_grpc.py" \
+      "$ENV_ROOT/python-grpc/smoke.py" |
+      sha256sum |
+      awk '{print $1}'
+  )"
+  log "pulling pinned LND image and checking verified Bitcoin Core image"
+  if [[ "$force" == "--force" ]] ||
+    ! docker image inspect "$LND_IMAGE" >/dev/null 2>&1; then
+    docker pull "$LND_IMAGE" >/dev/null
+  else
+    log "pinned LND image is present locally"
+  fi
+  if [[ "$force" == "--force" ]] ||
+    ! docker image inspect "$BITCOIN_IMAGE" >/dev/null 2>&1 ||
+    [[ ! -f "$marker" ]] ||
+    ! jq -e --arg source_sha "$bitcoin_dockerfile_sha" \
+      '.bitcoin_core.dockerfile_sha256 == $source_sha' "$marker" >/dev/null; then
+    compose build bitcoind
+  else
+    log "Bitcoin Core build context matches verified image cache"
+  fi
+  if [[ "$force" == "--force" ]] ||
+    ! docker image inspect "$GRPC_PYTHON_IMAGE" >/dev/null 2>&1 ||
+    [[ ! -f "$marker" ]] ||
+    ! jq -e --arg source_sha "$grpc_python_source_sha" \
+      '.grpc_python.source_sha256 == $source_sha' "$marker" >/dev/null; then
+    docker build \
+      --file "$ENV_ROOT/python-grpc/Dockerfile" \
+      --tag "$GRPC_PYTHON_IMAGE" \
+      "$ENV_ROOT/python-grpc"
+  else
+    log "Python gRPC runtime source matches verified image cache"
+  fi
+
+  fingerprint="$(image_verification_fingerprint)"
+  if [[ "$force" != "--force" ]] &&
+    [[ -f "$marker" ]] &&
+    jq -e --arg fingerprint "$fingerprint" \
+      '.verified == true and .fingerprint == $fingerprint' "$marker" >/dev/null; then
+    install_host_lncli
+    log "image verification cache matches current image IDs"
+    return 0
+  fi
+
+  local log_file="$EVIDENCE_ROOT/image-verification.log"
+  {
+    echo "Bitcoin Core runtime version:"
+    docker run --rm --network=none \
+      --entrypoint=/usr/local/bin/bitcoind "$BITCOIN_IMAGE" -version
+    echo
+    echo "LND runtime version:"
+    docker run --rm --network=none \
+      --entrypoint=/bin/lnd "$LND_IMAGE" --version
+    echo
+    echo "LND release signature and binary verification:"
+    # This is an image-supply-chain check, run before the isolated service
+    # topology starts. It needs GitHub release access and is cached by image ID.
+    docker run --rm \
+      --entrypoint=/verify-install.sh "$LND_IMAGE" "$LND_VERSION"
+    echo
+    echo "Pinned Python gRPC/protobuf imports:"
+    docker run --rm --network=none "$GRPC_PYTHON_IMAGE" -c \
+      'import grpc, lightning_pb2, lightning_pb2_grpc, router_pb2, router_pb2_grpc; print(grpc.__version__)'
+  } 2>&1 | tee "$log_file"
+
+  docker run --rm --network=none \
+    --entrypoint=/usr/local/bin/bitcoind "$BITCOIN_IMAGE" -version |
+    grep -F "v${BITCOIN_VERSION}" >/dev/null ||
+    die "Bitcoin Core image version mismatch"
+  docker run --rm --network=none \
+    --entrypoint=/bin/lnd "$LND_IMAGE" --version |
+    grep -F "$LND_VERSION" >/dev/null ||
+    die "LND image version mismatch"
+
+  local temp_marker
+  temp_marker="$(mktemp "$SETUP_DIR/image-verification.XXXXXX")"
+  jq -n \
+    --arg checked_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg fingerprint "$fingerprint" \
+    --arg lnd_image "$LND_IMAGE" \
+    --arg lnd_image_id "$(docker image inspect "$LND_IMAGE" --format '{{.Id}}')" \
+    --arg bitcoin_image "$BITCOIN_IMAGE" \
+    --arg bitcoin_image_id "$(docker image inspect "$BITCOIN_IMAGE" --format '{{.Id}}')" \
+    --arg bitcoin_archive_sha256 "$BITCOIN_ARCHIVE_SHA256" \
+    --arg bitcoin_dockerfile_sha256 "$bitcoin_dockerfile_sha" \
+    --arg grpc_python_image "$GRPC_PYTHON_IMAGE" \
+    --arg grpc_python_image_id "$(docker image inspect "$GRPC_PYTHON_IMAGE" --format '{{.Id}}')" \
+    --arg grpc_python_source_sha256 "$grpc_python_source_sha" \
+    '{
+      verified: true,
+      checked_at: $checked_at,
+      fingerprint: $fingerprint,
+      lnd: {image: $lnd_image, image_id: $lnd_image_id},
+      bitcoin_core: {
+        image: $bitcoin_image,
+        image_id: $bitcoin_image_id,
+        official_archive_sha256: $bitcoin_archive_sha256,
+        dockerfile_sha256: $bitcoin_dockerfile_sha256
+      },
+      grpc_python: {
+        image: $grpc_python_image,
+        image_id: $grpc_python_image_id,
+        source_sha256: $grpc_python_source_sha256,
+        lnd_proto_version: "v0.20.1-beta"
+      }
+    }' >"$temp_marker"
+  chmod 0600 "$temp_marker"
+  mv "$temp_marker" "$marker"
+  install_host_lncli
+}
+
+lint_config() {
+  require_command bash
+  require_command docker
+  require_command jq
+  require_command sha256sum
+  prepare_state
+
+  bash -n "$ENV_ROOT/envctl"
+  bash -n "$REPO_ROOT/scripts/lightning-navcoin-regtest-env"
+  bash -n "$REPO_ROOT/scripts/lightning-navcoin-regtest-env-lint"
+  python3 -c 'import ast, pathlib, sys; [ast.parse(pathlib.Path(p).read_text()) for p in sys.argv[1:]]' \
+    "$ENV_ROOT/python-grpc/pftl_lnd_grpc.py" \
+    "$ENV_ROOT/python-grpc/smoke.py"
+  compose config --quiet
+
+  local config_json
+  config_json="$(compose config --format json)"
+  jq -e '
+    .networks["lightning-regtest"].internal == true and
+    .networks["lightning-regtest"].ipam.config[0].subnet == "172.30.24.0/24" and
+    ((.services.bitcoind.ports // []) | length == 0) and
+    ((.services["lnd-user"].ports // []) | length == 0) and
+    ((.services["lnd-coordinator"].ports // []) | length == 0) and
+    ((.services["lnd-router"].ports // []) | length == 0)
+  ' <<<"$config_json" >/dev/null ||
+    die "compose config has a published port or an unexpected runtime network"
+
+  grep -Eq '^chain=regtest$' "$ENV_ROOT/config/bitcoin.conf" ||
+    die "Bitcoin config is not pinned to regtest"
+  grep -Eq '^connect=0$' "$ENV_ROOT/config/bitcoin.conf" ||
+    die "Bitcoin config does not disable outbound peers"
+  grep -Eq '^dnsseed=0$' "$ENV_ROOT/config/bitcoin.conf" ||
+    die "Bitcoin config does not disable DNS seeds"
+  grep -Eq '^bitcoin\.regtest=true$' "$ENV_ROOT/config/lnd-common.conf" ||
+    die "LND config is not pinned to regtest"
+  grep -Eq '^nobootstrap=true$' "$ENV_ROOT/config/lnd-common.conf" ||
+    die "LND config does not disable network bootstrap"
+  grep -Eq '^accept-amp=false$' "$ENV_ROOT/config/lnd-common.conf" ||
+    die "LND config does not reject AMP"
+
+  log "lint GREEN: regtest-only, unpublished static internal endpoints, AMP disabled"
+}
+
+assert_runtime_isolation() {
+  local internal
+  internal="$(docker network inspect "$NETWORK_NAME" --format '{{.Internal}}' 2>/dev/null)" ||
+    die "runtime network not found: $NETWORK_NAME"
+  [[ "$internal" == "true" ]] || die "runtime network is not internal"
+
+  local service cid networks port_bindings
+  for service in bitcoind lnd-user lnd-coordinator lnd-router; do
+    cid="$(service_container_id "$service")"
+    [[ -n "$cid" ]] || die "service is not running: $service"
+    networks="$(docker inspect "$cid" |
+      jq -r '.[0].NetworkSettings.Networks | keys | join(" ")')"
+    [[ "$networks" == "$NETWORK_NAME" ]] ||
+      die "$service is attached outside the internal network: $networks"
+    port_bindings="$(docker inspect "$cid" |
+      jq -r '.[0].NetworkSettings.Ports
+        | [to_entries[] | .value[]? | .HostIp]
+        | unique
+        | join(" ")')"
+    [[ -z "$port_bindings" ]] ||
+      die "$service publishes a host port: $port_bindings"
+    docker exec "$cid" /bin/sh -ec \
+      'if awk '"'"'NR > 1 && $2 == "00000000" { found = 1 } END { exit(found ? 0 : 1) }'"'"' /proc/net/route; then exit 42; fi' ||
+      die "$service unexpectedly has a default network route"
+  done
+
+  [[ "$(docker inspect "$(service_container_id bitcoind)" |
+    jq -r --arg network "$NETWORK_NAME" \
+      '.[0].NetworkSettings.Networks[$network].IPAddress')" == "$BITCOIN_IP" ]] ||
+    die "Bitcoin Core static bridge IP mismatch"
+
+  [[ "$(bitcoin_cli getblockchaininfo | jq -r .chain)" == "regtest" ]] ||
+    die "Bitcoin Core network mismatch"
+  [[ "$(bitcoin_cli getconnectioncount)" == "0" ]] ||
+    die "Bitcoin Core unexpectedly has a P2P connection"
+
+  local node
+  for node in user coordinator router; do
+    lnd_cli "$node" getinfo |
+      jq -e '.chains == [{"chain":"bitcoin","network":"regtest"}]' >/dev/null ||
+      die "lnd-$node network mismatch"
+    compose exec -T "lnd-$node" /bin/sh -ec \
+      'if timeout 2 nc -z 1.1.1.1 53 >/dev/null 2>&1; then exit 42; else exit 0; fi' ||
+      die "lnd-$node unexpectedly reached an external address"
+    [[ "$(docker inspect "$(service_container_id "lnd-$node")" |
+      jq -r --arg network "$NETWORK_NAME" \
+        '.[0].NetworkSettings.Networks[$network].IPAddress')" == "$(node_ip "$node")" ]] ||
+      die "lnd-$node static bridge IP mismatch"
+    host_lnd_cli "$node" getinfo |
+      jq -e '.chains == [{"chain":"bitcoin","network":"regtest"}]' >/dev/null ||
+      die "host direct gRPC check failed for lnd-$node"
+  done
+  log "runtime isolation GREEN: internal-only bridge, direct host gRPC, no Bitcoin peers or egress"
+}
+
+start_stack() {
+  lint_config
+  verify_images
+  prepare_state
+  compose up -d
+  wait_for_bitcoin
+  wait_for_lnd user
+  wait_for_lnd coordinator
+  wait_for_lnd router
+  assert_runtime_isolation
+}
+
+ensure_miner_wallet() {
+  if bitcoin_cli listwallets | jq -e 'index("miner") != null' >/dev/null; then
+    return 0
+  fi
+  if bitcoin_cli listwalletdir |
+    jq -e 'any(.wallets[]?; .name == "miner")' >/dev/null; then
+    bitcoin_cli loadwallet miner >/dev/null
+  else
+    bitcoin_cli createwallet miner >/dev/null
+  fi
+}
+
+init_stack() {
+  start_stack
+  ensure_miner_wallet
+  log "initialized synthetic regtest stack"
+}
+
+mine_blocks() {
+  local blocks="${1:-1}"
+  [[ "$blocks" =~ ^[0-9]+$ ]] || die "block count must be an integer"
+  ((blocks >= 1 && blocks <= 1000)) ||
+    die "block count must be between 1 and 1000"
+  init_stack
+  local address
+  address="$(miner_cli getnewaddress "pftl-demo-miner" bech32)"
+  miner_cli generatetoaddress "$blocks" "$address"
+  wait_for_lnd_chain_sync
+}
+
+fund_lnd_wallets() {
+  init_stack
+
+  local miner_balance
+  miner_balance="$(miner_cli getbalance)"
+  if ! jq -e '. >= 4' <<<"$miner_balance" >/dev/null; then
+    log "mining 101 blocks for mature synthetic coinbase inventory"
+    local mining_address
+    mining_address="$(miner_cli getnewaddress "pftl-demo-coinbase" bech32)"
+    miner_cli generatetoaddress 101 "$mining_address" >/dev/null
+  fi
+
+  wait_for_lnd_chain_sync
+  local node total address txid
+  local funding='[]'
+  local prior_funding='[]'
+  if [[ -f "$SETUP_DIR/funding.json" ]]; then
+    prior_funding="$(jq '.new_transactions // []' "$SETUP_DIR/funding.json")"
+  fi
+  local sent=0
+  for node in user coordinator router; do
+    total="$(lnd_cli "$node" walletbalance | jq -r '.total_balance | tonumber')"
+    if ((total >= 50000000)); then
+      log "lnd-$node already has synthetic on-chain funds; skipping"
+      continue
+    fi
+    address="$(lnd_cli "$node" newaddress p2wkh | jq -r .address)"
+    [[ "$address" =~ ^bcrt1 ]] || die "lnd-$node returned a non-regtest address"
+    txid="$(miner_cli sendtoaddress "$address" 1.0)"
+    funding="$(jq \
+      --arg node "$node" \
+      --arg address "$address" \
+      --arg txid "$txid" \
+      '. + [{node:$node,address:$address,txid:$txid,amount_sat:100000000}]' \
+      <<<"$funding")"
+    sent=1
+  done
+
+  if ((sent == 1)); then
+    local confirm_address
+    confirm_address="$(miner_cli getnewaddress "pftl-demo-confirm" bech32)"
+    miner_cli generatetoaddress 6 "$confirm_address" >/dev/null
+    wait_for_lnd_chain_sync
+  fi
+
+  local balances='[]'
+  for node in user coordinator router; do
+    total="$(lnd_cli "$node" walletbalance | jq -r '.confirmed_balance | tonumber')"
+    ((total >= 50000000)) ||
+      die "lnd-$node funding did not confirm"
+    balances="$(jq \
+      --arg node "$node" \
+      --argjson confirmed_balance_sat "$total" \
+      '. + [{node:$node,confirmed_balance_sat:$confirmed_balance_sat}]' \
+      <<<"$balances")"
+  done
+
+  if (($(jq 'length' <<<"$prior_funding") == 0)) &&
+    (($(jq 'length' <<<"$funding") == 0)); then
+    # Recover an interrupted/missing setup journal from each LND wallet's
+    # finalized regtest transaction history without sending again.
+    for node in user coordinator router; do
+      local recovered_txid
+      recovered_txid="$(lnd_cli "$node" listchaintxns |
+        jq -r '
+          [
+            .transactions[]?
+            | select((.amount | tonumber) >= 50000000)
+            | select(.num_confirmations > 0)
+          ]
+          | sort_by(.block_height)
+          | first
+          | .tx_hash // empty
+        ')"
+      [[ -n "$recovered_txid" ]] ||
+        die "could not recover finalized funding transaction for lnd-$node"
+      funding="$(jq \
+        --arg node "$node" \
+        --arg txid "$recovered_txid" \
+        '. + [{
+          node:$node,
+          txid:$txid,
+          amount_sat:100000000,
+          recovered_from_finalized_lnd_history:true
+        }]' <<<"$funding")"
+    done
+  fi
+
+  local temp_record
+  temp_record="$(mktemp "$SETUP_DIR/funding.XXXXXX")"
+  jq -n \
+    --arg recorded_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --argjson prior_transactions "$prior_funding" \
+    --argjson new_transactions "$funding" \
+    --argjson balances "$balances" \
+    '{
+      network:"regtest",
+      synthetic_only:true,
+      recorded_at:$recorded_at,
+      new_transactions:($prior_transactions + $new_transactions),
+      balances:$balances
+    }' >"$temp_record"
+  chmod 0600 "$temp_record"
+  mv "$temp_record" "$SETUP_DIR/funding.json"
+  log "synthetic LND wallets funded"
+}
+
+peer_pubkey() {
+  lnd_cli "$1" getinfo | jq -r .identity_pubkey
+}
+
+connect_peer() {
+  local from="$1"
+  local to="$2"
+  local to_pub
+  to_pub="$(peer_pubkey "$to")"
+  if lnd_cli "$from" listpeers |
+    jq -e --arg pub "$to_pub" 'any(.peers[]?; .pub_key == $pub)' >/dev/null; then
+    return 0
+  fi
+  lnd_cli "$from" connect "${to_pub}@lnd-${to}:9735" --perm --timeout=15s >/dev/null
+}
+
+channel_or_pending_exists() {
+  local from="$1"
+  local remote_pub="$2"
+  lnd_cli "$from" listchannels |
+    jq -e --arg pub "$remote_pub" 'any(.channels[]?; .remote_pubkey == $pub)' \
+      >/dev/null &&
+    return 0
+  lnd_cli "$from" pendingchannels |
+    jq -e --arg pub "$remote_pub" \
+      'any(.pending_open_channels[]?; .channel.remote_node_pub == $pub)' \
+      >/dev/null
+}
+
+open_channel_if_absent() {
+  local from="$1"
+  local to="$2"
+  local to_pub record
+  to_pub="$(peer_pubkey "$to")"
+  if channel_or_pending_exists "$from" "$to_pub"; then
+    log "channel lnd-$from -> lnd-$to already exists or is pending"
+    return 1
+  fi
+  record="$SETUP_DIR/channel-open-${from}-${to}.json"
+  lnd_cli "$from" openchannel \
+    --node_key="$to_pub" \
+    --local_amt=2000000 \
+    --push_amt=600000 \
+    --sat_per_vbyte=1 \
+    --min_confs=1 \
+    --memo="synthetic-pftl-demo-${from}-${to}" >"$record"
+  chmod 0600 "$record"
+  log "submitted channel lnd-$from -> lnd-$to"
+  return 0
+}
+
+pending_channel_count() {
+  local total=0 node count
+  for node in user coordinator router; do
+    count="$(lnd_cli "$node" pendingchannels |
+      jq '[.pending_open_channels[]?] | length')"
+    total=$((total + count))
+  done
+  printf '%s\n' "$total"
+}
+
+channel_active_with() {
+  local node="$1"
+  local remote_pub="$2"
+  lnd_cli "$node" listchannels |
+    jq -e --arg pub "$remote_pub" \
+      'any(.channels[]?; .remote_pubkey == $pub and .active == true)' \
+      >/dev/null
+}
+
+wait_for_topology() {
+  local user_pub router_pub coordinator_pub attempt
+  user_pub="$(peer_pubkey user)"
+  router_pub="$(peer_pubkey router)"
+  coordinator_pub="$(peer_pubkey coordinator)"
+  for attempt in $(seq 1 120); do
+    if channel_active_with user "$router_pub" &&
+      channel_active_with router "$user_pub" &&
+      channel_active_with router "$coordinator_pub" &&
+      channel_active_with coordinator "$router_pub"; then
+      return 0
+    fi
+    sleep 2
+  done
+  die "two-hop LND channel topology did not become active"
+}
+
+wait_for_graph_convergence() {
+  local node attempt
+  for node in user coordinator; do
+    for attempt in $(seq 1 60); do
+      if (($(lnd_cli "$node" describegraph | jq '.edges | length') >= 2)); then
+        break
+      fi
+      sleep 1
+    done
+    if (($(lnd_cli "$node" describegraph | jq '.edges | length') < 2)); then
+      die "lnd-$node did not learn the complete two-channel graph"
+    fi
+  done
+}
+
+setup_channels() {
+  fund_lnd_wallets
+  connect_peer user router
+  connect_peer router coordinator
+  # A channel-less direct peer link makes graph gossip deterministic while all
+  # value still traverses the two channels through lnd-router.
+  connect_peer user coordinator
+
+  local opened=0
+  if open_channel_if_absent user router; then
+    opened=1
+  fi
+  if open_channel_if_absent router coordinator; then
+    opened=1
+  fi
+
+  if ((opened == 1)) || (($(pending_channel_count) > 0)); then
+    local confirm_address
+    confirm_address="$(miner_cli getnewaddress "pftl-demo-channel-confirm" bech32)"
+    miner_cli generatetoaddress 6 "$confirm_address" >/dev/null
+    wait_for_lnd_chain_sync
+  fi
+  wait_for_topology
+  wait_for_graph_convergence
+  assert_runtime_isolation
+  log "channel topology GREEN: user <-> router <-> coordinator"
+}
+
+smoke_payments() {
+  setup_channels
+  local invoice result forward_summary reverse_summary
+
+  invoice="$(lnd_cli coordinator addinvoice \
+    --amt=1000 \
+    --memo="synthetic-user-to-coordinator-smoke" |
+    jq -r .payment_request)"
+  result="$(lnd_cli user payinvoice \
+    --force \
+    --fee_limit=20 \
+    --timeout=30s \
+    --cltv_limit=288 \
+    --json \
+    "$invoice")"
+  jq -e '.status == "SUCCEEDED"' <<<"$result" >/dev/null ||
+    die "user -> coordinator smoke payment failed"
+  jq -e '
+    any(.htlcs[]?;
+      .status == "SUCCEEDED" and (.route.hops | length) == 2
+    )
+  ' <<<"$result" >/dev/null ||
+    die "user -> coordinator payment did not traverse exactly two hops"
+  forward_summary="$(jq '{
+    direction:"user_to_coordinator",
+    payment_hash,
+    value_sat,
+    fee_sat,
+    status,
+    failure_reason,
+    htlc_count:(.htlcs | length),
+    successful_routes:[
+      .htlcs[]?
+      | select(.status == "SUCCEEDED")
+      | [.route.hops[] | {chan_id,pub_key,amt_to_forward_msat}]
+    ]
+  }' <<<"$result")"
+
+  invoice="$(lnd_cli user addinvoice \
+    --amt=1000 \
+    --memo="synthetic-coordinator-to-user-smoke" |
+    jq -r .payment_request)"
+  result="$(lnd_cli coordinator payinvoice \
+    --force \
+    --fee_limit=20 \
+    --timeout=30s \
+    --cltv_limit=288 \
+    --json \
+    "$invoice")"
+  jq -e '.status == "SUCCEEDED"' <<<"$result" >/dev/null ||
+    die "coordinator -> user smoke payment failed"
+  jq -e '
+    any(.htlcs[]?;
+      .status == "SUCCEEDED" and (.route.hops | length) == 2
+    )
+  ' <<<"$result" >/dev/null ||
+    die "coordinator -> user payment did not traverse exactly two hops"
+  reverse_summary="$(jq '{
+    direction:"coordinator_to_user",
+    payment_hash,
+    value_sat,
+    fee_sat,
+    status,
+    failure_reason,
+    htlc_count:(.htlcs | length),
+    successful_routes:[
+      .htlcs[]?
+      | select(.status == "SUCCEEDED")
+      | [.route.hops[] | {chan_id,pub_key,amt_to_forward_msat}]
+    ]
+  }' <<<"$result")"
+
+  local temp_record
+  temp_record="$(mktemp "$SETUP_DIR/lightning-smoke.XXXXXX")"
+  jq -n \
+    --arg recorded_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --argjson forward "$forward_summary" \
+    --argjson reverse "$reverse_summary" \
+    '{
+      schema:"postfiat.lightning_regtest.payment_smoke.v1",
+      network:"regtest",
+      synthetic_only:true,
+      recorded_at:$recorded_at,
+      payments:[$forward,$reverse]
+    }' >"$temp_record"
+  chmod 0600 "$temp_record"
+  mv "$temp_record" "$SETUP_DIR/lightning-smoke.json"
+  log "two-hop bidirectional Lightning smoke payments GREEN"
+}
+
+status_json() {
+  wait_for_bitcoin
+  local bitcoin user coordinator router
+  bitcoin="$(bitcoin_cli getblockchaininfo)"
+  user="$(lnd_cli user getinfo)"
+  coordinator="$(lnd_cli coordinator getinfo)"
+  router="$(lnd_cli router getinfo)"
+  jq -n \
+    --arg project "$PFTL_LIGHTNING_PROJECT" \
+    --arg network "$NETWORK_NAME" \
+    --argjson bitcoin "$bitcoin" \
+    --argjson user "$user" \
+    --argjson coordinator "$coordinator" \
+    --argjson router "$router" \
+    '{
+      project:$project,
+      runtime_network:$network,
+      bitcoin:{
+        chain:$bitcoin.chain,
+        blocks:$bitcoin.blocks,
+        bestblockhash:$bitcoin.bestblockhash,
+        initialblockdownload:$bitcoin.initialblockdownload
+      },
+      lnd:{
+        user:{
+          pubkey:$user.identity_pubkey,
+          block_height:$user.block_height,
+          synced_to_chain:$user.synced_to_chain,
+          active_channels:$user.num_active_channels,
+          peers:$user.num_peers
+        },
+        coordinator:{
+          pubkey:$coordinator.identity_pubkey,
+          block_height:$coordinator.block_height,
+          synced_to_chain:$coordinator.synced_to_chain,
+          active_channels:$coordinator.num_active_channels,
+          peers:$coordinator.num_peers
+        },
+        router:{
+          pubkey:$router.identity_pubkey,
+          block_height:$router.block_height,
+          synced_to_chain:$router.synced_to_chain,
+          active_channels:$router.num_active_channels,
+          peers:$router.num_peers
+        }
+      }
+    }'
+}
+
+show_status() {
+  compose ps >&2
+  wait_for_lnd user
+  wait_for_lnd coordinator
+  wait_for_lnd router
+  assert_runtime_isolation
+  status_json
+}
+
+show_credentials() {
+  local node
+  init_stack
+  for node in user coordinator router; do
+    [[ -r "$PFTL_LN_STATE_DIR/lnd-$node/tls.cert" ]] ||
+      die "missing TLS certificate for lnd-$node"
+    [[ -r "$PFTL_LN_STATE_DIR/lnd-$node/data/chain/bitcoin/regtest/admin.macaroon" ]] ||
+      die "missing admin macaroon for lnd-$node"
+  done
+  jq -n \
+    --arg state_dir "$PFTL_LN_STATE_DIR" \
+    '{
+      network:"regtest",
+      synthetic_only:true,
+      endpoints:{
+        user:{
+          grpc:"172.30.24.11:10009",
+          tls_cert:($state_dir + "/lnd-user/tls.cert"),
+          admin_macaroon:($state_dir + "/lnd-user/data/chain/bitcoin/regtest/admin.macaroon")
+        },
+        coordinator:{
+          grpc:"172.30.24.12:10009",
+          tls_cert:($state_dir + "/lnd-coordinator/tls.cert"),
+          admin_macaroon:($state_dir + "/lnd-coordinator/data/chain/bitcoin/regtest/admin.macaroon")
+        },
+        router:{
+          grpc:"172.30.24.13:10009",
+          tls_cert:($state_dir + "/lnd-router/tls.cert"),
+          admin_macaroon:($state_dir + "/lnd-router/data/chain/bitcoin/regtest/admin.macaroon")
+        }
+      }
+    }'
+}
+
+run_grpc_python() {
+  [[ $# -gt 0 ]] || die "grpc-python requires Python arguments"
+  init_stack
+  docker run --rm \
+    --network "$NETWORK_NAME" \
+    --read-only \
+    --cap-drop=ALL \
+    --security-opt=no-new-privileges:true \
+    --user "$PFTL_DEMO_UID:$PFTL_DEMO_GID" \
+    --tmpfs /tmp:rw,noexec,nosuid,nodev,size=16m \
+    --volume "$PFTL_LN_STATE_DIR:/state:ro" \
+    --volume "$REPO_ROOT:/workspace:ro" \
+    --workdir /workspace \
+    --env PFTL_LN_STATE_DIR=/state \
+    --env PYTHONPATH=/opt/pftl-lnd-grpc:/workspace \
+    "$GRPC_PYTHON_IMAGE" "$@"
+}
+
+grpc_python_smoke() {
+  run_grpc_python /opt/pftl-lnd-grpc/smoke.py
+}
+
+capture_evidence() {
+  setup_channels
+  local destination="${1:-$EVIDENCE_ROOT/$(date -u +%Y%m%dT%H%M%SZ)}"
+  if [[ "$destination" != /* ]]; then
+    destination="$PWD/$destination"
+  fi
+  [[ "$destination" != "/" && "$destination" != "$HOME" ]] ||
+    die "refusing unsafe evidence destination"
+  install -d -m 0700 "$destination"
+
+  status_json >"$destination/status.json"
+  bitcoin_cli getblockchaininfo >"$destination/bitcoin-blockchain.json"
+  bitcoin_cli getnetworkinfo >"$destination/bitcoin-network.json"
+  bitcoin_cli getmempoolinfo >"$destination/bitcoin-mempool.json"
+  compose ps --format json | jq -s . >"$destination/compose-ps.json"
+  docker network inspect "$NETWORK_NAME" >"$destination/runtime-network.json"
+
+  local node service cid
+  for service in bitcoind lnd-user lnd-coordinator lnd-router; do
+    cid="$(service_container_id "$service")"
+    docker exec "$cid" /bin/sh -c 'cat /proc/net/route' \
+      >"$destination/${service}-kernel-routes.txt"
+  done
+  for node in user coordinator router; do
+    lnd_cli "$node" getinfo >"$destination/lnd-${node}-getinfo.json"
+    lnd_cli "$node" walletbalance >"$destination/lnd-${node}-walletbalance.json"
+    lnd_cli "$node" listchaintxns >"$destination/lnd-${node}-chain-transactions.json"
+    lnd_cli "$node" listchannels >"$destination/lnd-${node}-channels.json"
+    lnd_cli "$node" pendingchannels >"$destination/lnd-${node}-pending.json"
+    lnd_cli "$node" listpeers >"$destination/lnd-${node}-peers.json"
+    lnd_cli "$node" describegraph >"$destination/lnd-${node}-graph.json"
+  done
+
+  [[ ! -f "$SETUP_DIR/funding.json" ]] ||
+    cp "$SETUP_DIR/funding.json" "$destination/setup-funding.json"
+  for node in user-router router-coordinator; do
+    [[ ! -f "$SETUP_DIR/channel-open-${node}.json" ]] ||
+      cp "$SETUP_DIR/channel-open-${node}.json" \
+        "$destination/setup-channel-${node}.json"
+  done
+  cp "$SETUP_DIR/image-verification.json" "$destination/image-verification.json"
+  [[ ! -f "$SETUP_DIR/lightning-smoke.json" ]] ||
+    cp "$SETUP_DIR/lightning-smoke.json" \
+      "$destination/setup-lightning-smoke.json"
+  grpc_python_smoke >"$destination/grpc-python-smoke.json"
+
+  {
+    printf 'git_commit=%s\n' "$(git -C "$REPO_ROOT" rev-parse HEAD)"
+    printf 'bitcoin_core_version=%s\n' "$BITCOIN_VERSION"
+    printf 'bitcoin_core_archive_sha256=%s\n' "$BITCOIN_ARCHIVE_SHA256"
+    printf 'lnd_version=%s\n' "$LND_VERSION"
+    printf 'lnd_image=%s\n' "$LND_IMAGE"
+    printf 'captured_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'claim=fully synthetic regtest; no real BTC; no external runtime connectivity\n'
+  } >"$destination/manifest.txt"
+
+  {
+    echo "This bundle intentionally excludes TLS private keys, macaroons,"
+    echo "wallet seeds, invoice preimages, and service logs."
+    echo "All balances and transactions are synthetic Bitcoin regtest state."
+  } >"$destination/README.txt"
+
+  (
+    cd "$destination"
+    find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 |
+      sort -z |
+      xargs -0 sha256sum >SHA256SUMS
+  )
+  log "evidence captured at $destination"
+  printf '%s\n' "$destination"
+}
+
+stop_stack() {
+  prepare_state
+  compose stop
+  log "services stopped; synthetic chain and wallet state retained"
+}
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/lightning-navcoin-regtest-env <command> [arguments]
+
+Commands:
+  lint                   Validate scripts and fail-closed regtest configuration.
+  images [--force]       Build/verify Bitcoin Core and verify the pinned LND release.
+  init                   Start services and initialize the synthetic miner wallet.
+  start                  Start or resume the isolated four-container stack.
+  fund                   Mine synthetic blocks and fund all three LND wallets.
+  channels               Establish user <-> router <-> coordinator channels.
+  smoke                  Run 1,000-sat two-hop payments in both directions.
+  status                 Verify isolation/network identity and print status JSON.
+  mine [count]           Mine 1..1000 synthetic regtest blocks.
+  bitcoin-cli ARGS...    Run bitcoin-cli against the local regtest node.
+  lncli NODE ARGS...     Run lncli for user, coordinator, or router.
+  host-lncli NODE ARGS... Run the verified host client over direct bridge gRPC.
+  grpc-python ARGS...     Run Python with pinned LND stubs on the internal network.
+  grpc-smoke              Test TLS+macaroon gRPC to all three LND nodes.
+  credentials            Print local gRPC endpoints and credential file paths.
+  evidence [directory]   Capture a redacted, checksummed environment evidence bundle.
+  stop                   Stop services without deleting chain or wallet state.
+
+The stack is synthetic and regtest-only. It never contacts Bitcoin or
+Lightning public peers; image verification is the sole pre-start network use.
+EOF
+}
+
+main() {
+  require_command docker
+  require_command jq
+  prepare_state
+  local command="${1:-}"
+  if [[ $# -gt 0 ]]; then
+    shift
+  fi
+  case "$command" in
+    lint) lint_config "$@" ;;
+    images) verify_images "$@" ;;
+    init) init_stack "$@" ;;
+    start) start_stack "$@" ;;
+    fund) fund_lnd_wallets "$@" ;;
+    channels) setup_channels "$@" ;;
+    smoke) smoke_payments "$@" ;;
+    status) show_status "$@" ;;
+    mine) mine_blocks "$@" ;;
+    bitcoin-cli) bitcoin_cli "$@" ;;
+    lncli)
+      [[ $# -ge 2 ]] || die "lncli requires NODE and an lncli command"
+      local node="$1"
+      shift
+      lnd_cli "$node" "$@"
+      ;;
+    host-lncli)
+      [[ $# -ge 2 ]] || die "host-lncli requires NODE and an lncli command"
+      local node="$1"
+      shift
+      host_lnd_cli "$node" "$@"
+      ;;
+    grpc-python) run_grpc_python "$@" ;;
+    grpc-smoke) grpc_python_smoke "$@" ;;
+    credentials) show_credentials "$@" ;;
+    evidence) capture_evidence "$@" ;;
+    stop) stop_stack "$@" ;;
+    help|-h|--help|"") usage ;;
+    *) usage >&2; die "unknown command: $command" ;;
+  esac
+}
+
+main "$@"
