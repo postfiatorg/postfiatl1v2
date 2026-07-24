@@ -1,0 +1,2 @@
+xrpl-py==5.0.0
+cryptography==41.0.7

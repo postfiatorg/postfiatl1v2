@@ -1,0 +1,57 @@
+{
+  "schema": "postfiat.xrpl_navcoin.nazgul_handoff.v1",
+  "status": "ready",
+  "claim": "non-custodial, conditionally-atomic, coordinator-trusted timing",
+  "worktree": "/home/postfiat/repos/pftl-xrpl-navcoin-demo-20260724",
+  "branch": "pftl-xrpl-navcoin-demo-20260724",
+  "xrpl": {
+    "network": "Testnet",
+    "rpc": "https://s.altnet.rippletest.net:51234",
+    "user": "rU8Z7RUkfieVfkJByUHZzY2rjHnN5UpSaZ",
+    "coordinator": "rGds7t5RyoFcqJFz1PRhUuZevyzoAzUuQi"
+  },
+  "pftl": {
+    "chain_id": "local-pftl-proven-nav-v2-20260724",
+    "rpc": [
+      "tcp://127.0.0.1:31660",
+      "tcp://127.0.0.1:31661",
+      "tcp://127.0.0.1:31662",
+      "tcp://127.0.0.1:31663",
+      "tcp://127.0.0.1:31664",
+      "tcp://127.0.0.1:31665"
+    ],
+    "binary_revision": "ae3c53c9",
+    "binary_sha256": "006167226531582cf81666dded004f26707beedc2ce3fa850caf5b0b82fd22e7",
+    "asset_id": "f912599013445352dc064b8b07be3815db5f494eff7e7097b2d6a72ff333bbfcaf51954e35fe28558525541f5fb945b5",
+    "height": 12,
+    "state_root": "ef9aaf435ea209a4ac1da9b4d82ad403b924d83cceab025529c7259824c0b2a3c4606f2f97dc8f85a1e072829824b468",
+    "nav_per_unit_usd_e8": 1035074022,
+    "verified_net_assets_usd_e8": 3105222068834
+  },
+  "evidence": {
+    "report": "/home/postfiat/tmp/pftl-xrpl-navcoin-20260724/public/evidence/live-demo-report.json",
+    "independent_verification": "/home/postfiat/tmp/pftl-xrpl-navcoin-20260724/public/evidence/independent-verification.json",
+    "result": "PASS",
+    "xrpl_validated_transactions": 6,
+    "pftl_target_escrows": {
+      "finished": [
+        "aa71e0371853a47be6879c096609b4236d5c897088af6f8c2ac20382424032a7bf183fc567134a1615aabfcbaf34373b",
+        "3b1c381e6bc28747b842e8763b04bb7d8768a6090da7b4e395c34fcc4f0fa522c156a4e2a8a5729625aff514c58f340c"
+      ],
+      "canceled": [
+        "2ff436b28d5952acdb5c380fb8b54fdf20693c7840174c6cd71715cdc50b1b55435a25a87e228d5bd2e0955d82303ad1"
+      ]
+    },
+    "xrpl_happy_finish_transactions": [
+      "B705FC75671B3B3A168DABFB4FE858438E95BE0A13BB1A1D3045C730B1E8096A",
+      "5AF1806F985DA7E0A4F81F9992BC589883F53DF885FDF4BCCD1220498D467AFA"
+    ],
+    "xrpl_refund_cancel_transaction": "253C1DD9E58B1069EB1FC94B1273DEE57DBE738EE6CBE0E2098E2B9254D0061E"
+  },
+  "safety": {
+    "mainnet": false,
+    "real_money": false,
+    "ce22_mutated": false,
+    "gpu_required": false
+  }
+}

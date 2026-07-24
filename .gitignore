@@ -11,6 +11,7 @@ site/
 .venv-docs/
 .docs-site-password
 .venv-vast/
+.venv-xrpl-nav/
 
 # Local editor and generated agent output
 .cursor/
