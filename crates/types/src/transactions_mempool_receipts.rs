@@ -3446,6 +3446,7 @@ impl EscrowCreateOperation {
             &self.condition,
             MAX_ESCROW_CONDITION_BYTES,
         )?;
+        validate_escrow_condition(&self.condition)?;
         if self.condition.is_empty() && self.finish_after == 0 && self.cancel_after == 0 {
             return Err(
                 "escrow_create must declare condition, finish_after, or cancel_after".to_string(),

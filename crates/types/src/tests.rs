@@ -801,6 +801,35 @@ fn ledger_escrow_state_rejects_duplicates_and_malformed_objects() {
 }
 
 #[test]
+fn preimage_sha256_escrow_condition_uses_canonical_crypto_conditions_encoding() {
+    let preimage = std::array::from_fn::<_, 32, _>(|index| index as u8);
+    let condition = preimage_sha256_condition(&preimage);
+    let fulfillment = preimage_sha256_fulfillment(&preimage);
+
+    assert_eq!(condition.len(), 78);
+    assert!(condition.starts_with(PREIMAGE_SHA256_CONDITION_HEX_PREFIX));
+    assert!(condition.ends_with(PREIMAGE_SHA256_CONDITION_HEX_SUFFIX));
+    assert_eq!(fulfillment.len(), 72);
+    assert!(fulfillment.starts_with(PREIMAGE_SHA256_FULFILLMENT_HEX_PREFIX));
+    assert!(escrow_fulfillment_satisfies(&condition, &fulfillment).expect("valid condition"));
+
+    let mut wrong_preimage = preimage;
+    wrong_preimage[31] ^= 1;
+    assert!(!escrow_fulfillment_satisfies(
+        &condition,
+        &preimage_sha256_fulfillment(&wrong_preimage),
+    )
+    .expect("well-formed wrong fulfillment"));
+    assert!(escrow_fulfillment_satisfies(&condition, "not-a-fulfillment").is_err());
+    assert!(validate_escrow_condition(&format!(
+        "{PREIMAGE_SHA256_CONDITION_HEX_PREFIX}{}000000",
+        "00".repeat(32),
+    ))
+    .is_err());
+    assert!(escrow_fulfillment_satisfies("legacy-secret", "legacy-secret").unwrap());
+}
+
+#[test]
 fn ledger_state_preserves_legacy_empty_serialization() {
     let ledger = LedgerState::empty();
     let json = serde_json::to_string(&ledger).expect("serialize ledger");

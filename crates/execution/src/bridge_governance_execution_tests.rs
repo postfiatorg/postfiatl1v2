@@ -1580,6 +1580,9 @@
     #[test]
     fn escrow_transactions_lock_finish_cancel_and_reject_replay() {
         let genesis = Genesis::new("postfiat-local");
+        let preimage = [0x42_u8; 32];
+        let condition = postfiat_types::preimage_sha256_condition(&preimage);
+        let fulfillment = postfiat_types::preimage_sha256_fulfillment(&preimage);
         let owner_key = ml_dsa_65_keygen().expect("owner keygen");
         let recipient_key = ml_dsa_65_keygen().expect("recipient keygen");
         let owner = address_from_public_key(&owner_key.public_key);
@@ -1609,7 +1612,7 @@
                 recipient: recipient.clone(),
                 asset_id: NATIVE_PFT_ESCROW_ASSET_ID.to_string(),
                 amount: 50,
-                condition: "secret".to_string(),
+                condition: condition.clone(),
                 finish_after: 2,
                 cancel_after: 5,
             }),
@@ -1645,7 +1648,7 @@
                 escrow_id: first_escrow_id.clone(),
                 owner: owner.clone(),
                 recipient: recipient.clone(),
-                fulfillment: "secret".to_string(),
+                fulfillment: fulfillment.clone(),
             }),
         );
         let before_early_finish = ledger.clone();
@@ -1664,7 +1667,7 @@
                 escrow_id: first_escrow_id.clone(),
                 owner: owner.clone(),
                 recipient: recipient.clone(),
-                fulfillment: "wrong".to_string(),
+                fulfillment: postfiat_types::preimage_sha256_fulfillment(&[0x43_u8; 32]),
             }),
         );
         let before_wrong_fulfillment = ledger.clone();
@@ -1683,7 +1686,7 @@
                 escrow_id: first_escrow_id.clone(),
                 owner: owner.clone(),
                 recipient: recipient.clone(),
-                fulfillment: "secret".to_string(),
+                fulfillment: fulfillment.clone(),
             }),
         );
         let finish_fee = finish.unsigned.fee;

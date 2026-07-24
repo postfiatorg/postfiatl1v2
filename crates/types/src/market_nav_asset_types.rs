@@ -1751,6 +1751,7 @@ impl Escrow {
             &self.condition,
             MAX_ESCROW_CONDITION_BYTES,
         )?;
+        validate_escrow_condition(&self.condition)?;
         if self.condition.is_empty() && self.finish_after == 0 && self.cancel_after == 0 {
             return Err("escrow must declare condition, finish_after, or cancel_after".to_string());
         }
@@ -1790,6 +1791,104 @@ pub fn escrow_condition_hash(condition: &str) -> Result<String, String> {
         ESCROW_CONDITION_HASH_DOMAIN,
         condition.as_bytes(),
     ))
+}
+
+/// Build the canonical Crypto-Conditions PREIMAGE-SHA-256 condition used by
+/// XRPL escrow. This profile is limited to Lightning's 32-byte preimages.
+pub fn preimage_sha256_condition(preimage: &[u8; 32]) -> String {
+    let fingerprint = Sha256::digest(preimage);
+    format!(
+        "{PREIMAGE_SHA256_CONDITION_HEX_PREFIX}{}{PREIMAGE_SHA256_CONDITION_HEX_SUFFIX}",
+        bytes_to_hex(fingerprint.as_slice()),
+    )
+}
+
+/// Build the canonical PREIMAGE-SHA-256 fulfillment. The encoded fulfillment
+/// contains the 32-byte preimage in cleartext.
+pub fn preimage_sha256_fulfillment(preimage: &[u8; 32]) -> String {
+    format!(
+        "{PREIMAGE_SHA256_FULFILLMENT_HEX_PREFIX}{}",
+        bytes_to_hex(preimage),
+    )
+}
+
+fn escrow_preimage_sha256_fingerprint(condition: &str) -> Result<Option<[u8; 32]>, String> {
+    if !condition
+        .get(..PREIMAGE_SHA256_CONDITION_HEX_PREFIX.len())
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(PREIMAGE_SHA256_CONDITION_HEX_PREFIX))
+    {
+        return Ok(None);
+    }
+    let expected_len = PREIMAGE_SHA256_CONDITION_HEX_PREFIX.len()
+        + 64
+        + PREIMAGE_SHA256_CONDITION_HEX_SUFFIX.len();
+    if condition.len() != expected_len
+        || !condition
+            .get(condition.len() - PREIMAGE_SHA256_CONDITION_HEX_SUFFIX.len()..)
+            .is_some_and(|suffix| suffix.eq_ignore_ascii_case(PREIMAGE_SHA256_CONDITION_HEX_SUFFIX))
+    {
+        return Err("invalid PREIMAGE-SHA-256 escrow condition encoding".to_string());
+    }
+    decode_escrow_hex_32(
+        &condition[PREIMAGE_SHA256_CONDITION_HEX_PREFIX.len()
+            ..PREIMAGE_SHA256_CONDITION_HEX_PREFIX.len() + 64],
+    )
+    .map(Some)
+    .ok_or_else(|| "invalid PREIMAGE-SHA-256 escrow condition fingerprint".to_string())
+}
+
+fn escrow_preimage_sha256_preimage(fulfillment: &str) -> Result<[u8; 32], String> {
+    let expected_len = PREIMAGE_SHA256_FULFILLMENT_HEX_PREFIX.len() + 64;
+    if fulfillment.len() != expected_len
+        || !fulfillment
+            .get(..PREIMAGE_SHA256_FULFILLMENT_HEX_PREFIX.len())
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(PREIMAGE_SHA256_FULFILLMENT_HEX_PREFIX))
+    {
+        return Err("invalid PREIMAGE-SHA-256 escrow fulfillment encoding".to_string());
+    }
+    decode_escrow_hex_32(&fulfillment[PREIMAGE_SHA256_FULFILLMENT_HEX_PREFIX.len()..])
+        .ok_or_else(|| "invalid PREIMAGE-SHA-256 escrow fulfillment preimage".to_string())
+}
+
+fn decode_escrow_hex_32(value: &str) -> Option<[u8; 32]> {
+    if value.len() != 64 || !value.is_ascii() {
+        return None;
+    }
+    let bytes = value.as_bytes();
+    let mut decoded = [0_u8; 32];
+    for (index, output) in decoded.iter_mut().enumerate() {
+        let high = escrow_hex_nibble(bytes[index * 2])?;
+        let low = escrow_hex_nibble(bytes[index * 2 + 1])?;
+        *output = (high << 4) | low;
+    }
+    Some(decoded)
+}
+
+fn escrow_hex_nibble(value: u8) -> Option<u8> {
+    match value {
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        b'A'..=b'F' => Some(value - b'A' + 10),
+        _ => None,
+    }
+}
+
+pub fn validate_escrow_condition(condition: &str) -> Result<(), String> {
+    escrow_preimage_sha256_fingerprint(condition).map(|_| ())
+}
+
+/// Evaluate an escrow fulfillment. Legacy opaque conditions retain exact
+/// string matching; PREIMAGE-SHA-256 conditions verify the disclosed preimage.
+pub fn escrow_fulfillment_satisfies(
+    condition: &str,
+    fulfillment: &str,
+) -> Result<bool, String> {
+    let Some(expected) = escrow_preimage_sha256_fingerprint(condition)? else {
+        return Ok(fulfillment == condition);
+    };
+    let preimage = escrow_preimage_sha256_preimage(fulfillment)?;
+    let actual = Sha256::digest(preimage);
+    Ok(actual.as_slice() == expected)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

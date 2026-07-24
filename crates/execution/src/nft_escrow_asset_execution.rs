@@ -330,7 +330,10 @@ fn apply_escrow_operation(
                     format!("escrow cannot finish before height {}", escrow.finish_after),
                 ));
             }
-            if !escrow.condition.is_empty() && operation.fulfillment != escrow.condition {
+            if !escrow.condition.is_empty()
+                && !escrow_fulfillment_satisfies(&escrow.condition, &operation.fulfillment)
+                    .map_err(|error| ("invalid_escrow_fulfillment", error))?
+            {
                 return Err((
                     "escrow_condition_unsatisfied",
                     "escrow fulfillment does not satisfy condition".to_string(),

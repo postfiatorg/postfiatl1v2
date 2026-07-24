@@ -3,7 +3,7 @@ use postfiat_crypto_provider::{
     ML_DSA_65_ALGORITHM,
 };
 use postfiat_types::{
-    escrow_id, market_ops_asset_id, market_ops_evidence_root, market_ops_reserve_packet_hash,
+    escrow_fulfillment_satisfies, escrow_id, market_ops_asset_id, market_ops_evidence_root, market_ops_reserve_packet_hash,
     market_ops_supply_packet_hash, nav_redemption_id, nft_id, offer_id,
     pftl_uniswap_non_consumption_proof_hash, pftl_uniswap_return_burn_id_from_fields,
     vault_bridge_deposit_evidence_root, vault_bridge_deposit_observation_root,
