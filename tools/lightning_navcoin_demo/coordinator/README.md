@@ -48,6 +48,12 @@ effects remain at-least-once: adapters must submit/query using the durable
 `effect_key`, because SQLite cannot make a remote LND or PFTL call exactly
 once.
 
+`CoordinatorService.mark_ln_settled(..., effect_key=...,
+finish_operation=...)` commits the learned preimage, `LN_SETTLED`, and the
+`PFTL_ESCROW_FINISH` intent in one SQLite transaction. The E2E runner must use
+that form before submitting a finish; omitting both finish arguments remains
+available only for observers that never own the finish action.
+
 The settled-payment result also reports every terminal LND HTLC route's
 `total_time_lock` as `payer_htlc_expiries`; the harness uses the maximum value
 as `B_pay_exp` evidence for its cross-ledger margin check.

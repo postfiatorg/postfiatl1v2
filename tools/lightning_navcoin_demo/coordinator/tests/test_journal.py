@@ -13,6 +13,7 @@ from tools.lightning_navcoin_demo.coordinator.journal import (
     ExposureLimits,
     IdempotencyConflict,
     InvalidTransition,
+    JournalError,
     SecretMaterialRejected,
     SideEffectSpec,
     SwapState,
@@ -388,12 +389,20 @@ class ServiceTests(unittest.TestCase):
                 )
                 self.assertEqual(actions[0].pending_effect_keys, ("create:60",))
 
-    def test_learned_preimage_and_ln_settled_edge_commit_together(self) -> None:
+    def test_learned_preimage_state_and_finish_intent_commit_together(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "service-secret.sqlite3"
             envelope = envelope_for(61, direction="pftl_to_lightning")
             swap_id = envelope["quote"]["swap_id"]
             secret = secret_for(61)
+            finish_operation = {
+                "escrow_id": envelope["quote"]["expected_escrow_id"],
+                "secret_ref": "invoice_preimage",
+            }
+            settlement_evidence = {
+                "payment_hash": envelope["quote"]["payment_hash"],
+                "status": "SUCCEEDED",
+            }
             with CoordinatorJournal(
                 path, ExposureLimits(1_000_000, 1_000_000)
             ) as journal:
@@ -404,26 +413,40 @@ class ServiceTests(unittest.TestCase):
                     effect_key="create:61",
                     operation={"escrow_id": envelope["quote"]["expected_escrow_id"]},
                 )
+                journal.record_side_effect_attempt(
+                    "create:61",
+                    "create:61:accepted",
+                    "SUCCEEDED",
+                    result={"accepted": True},
+                )
                 service.mark_lock_final(
                     swap_id, finality_evidence={"accepted": True}
                 )
                 service.mark_ln_in_flight(
                     swap_id,
-                    payment_evidence={"payment_hash": envelope["quote"]["payment_hash"]},
+                    payment_evidence={
+                        "payment_hash": envelope["quote"]["payment_hash"]
+                    },
                     effect_key="ln-pay:61",
                     payment_request={"invoice": envelope["quote"]["invoice"]},
                 )
+                journal.record_side_effect_attempt(
+                    "ln-pay:61",
+                    "ln-pay:61:settled",
+                    "SUCCEEDED",
+                    result={"status": "SUCCEEDED"},
+                )
                 service.mark_ln_settled(
                     swap_id,
-                    settlement_evidence={
-                        "payment_hash": envelope["quote"]["payment_hash"],
-                        "status": "SUCCEEDED",
-                    },
+                    settlement_evidence=settlement_evidence,
                     learned_secret=secret,
+                    effect_key="finish:61",
+                    finish_operation=finish_operation,
                 )
             with CoordinatorJournal(
                 path, ExposureLimits(1_000_000, 1_000_000)
             ) as restarted:
+                service = CoordinatorService(restarted)
                 self.assertEqual(
                     restarted.get_swap(swap_id)["state"], SwapState.LN_SETTLED.value
                 )
@@ -433,3 +456,84 @@ class ServiceTests(unittest.TestCase):
                     ).reveal_for_protocol(),
                     secret.reveal_for_protocol(),
                 )
+                pending = restarted.pending_side_effects()
+                self.assertEqual(
+                    [(effect["effect_key"], effect["kind"]) for effect in pending],
+                    [("finish:61", "PFTL_ESCROW_FINISH")],
+                )
+                self.assertEqual(pending[0]["payload"], finish_operation)
+
+                # Crash/restart replay cannot duplicate state, secret, or intent.
+                replayed = service.mark_ln_settled(
+                    swap_id,
+                    settlement_evidence=settlement_evidence,
+                    learned_secret=secret,
+                    effect_key="finish:61",
+                    finish_operation=finish_operation,
+                )
+                self.assertEqual(replayed["state_version"], 4)
+                self.assertEqual(len(restarted.pending_side_effects()), 1)
+                self.assertNotIn(
+                    secret.protocol_hex(),
+                    json.dumps(restarted.export_public_audit(), sort_keys=True),
+                )
+
+    def test_finish_intent_collision_rolls_back_secret_and_ln_settled(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "service-finish-rollback.sqlite3"
+            envelope = envelope_for(62, direction="pftl_to_lightning")
+            swap_id = envelope["quote"]["swap_id"]
+            secret = secret_for(62)
+            with CoordinatorJournal(
+                path, ExposureLimits(1_000_000, 1_000_000)
+            ) as journal:
+                service = CoordinatorService(journal)
+                service.admit_quote("principal", envelope)
+                service.mark_lock_submitted(
+                    swap_id,
+                    effect_key="create:62",
+                    operation={"escrow_id": envelope["quote"]["expected_escrow_id"]},
+                )
+                service.mark_lock_final(
+                    swap_id, finality_evidence={"accepted": True}
+                )
+                service.mark_ln_in_flight(
+                    swap_id,
+                    payment_evidence={
+                        "payment_hash": envelope["quote"]["payment_hash"]
+                    },
+                    effect_key="collision:62",
+                    payment_request={"invoice": envelope["quote"]["invoice"]},
+                )
+                with self.assertRaises(IdempotencyConflict):
+                    service.mark_ln_settled(
+                        swap_id,
+                        settlement_evidence={"status": "SUCCEEDED"},
+                        learned_secret=secret,
+                        effect_key="collision:62",
+                        finish_operation={
+                            "escrow_id": envelope["quote"]["expected_escrow_id"],
+                            "secret_ref": "invoice_preimage",
+                        },
+                    )
+                self.assertEqual(
+                    journal.get_swap(swap_id)["state"],
+                    SwapState.LN_IN_FLIGHT.value,
+                )
+                with self.assertRaises(JournalError):
+                    journal.load_secret(swap_id, "invoice_preimage")
+                self.assertEqual(len(journal.events(swap_id)), 4)
+
+    def test_finish_intent_arguments_are_all_or_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "service-finish-args.sqlite3"
+            with CoordinatorJournal(
+                path, ExposureLimits(1_000_000, 1_000_000)
+            ) as journal:
+                service = CoordinatorService(journal)
+                with self.assertRaises(ValueError):
+                    service.mark_ln_settled(
+                        "unused",
+                        settlement_evidence={},
+                        effect_key="finish:unused",
+                    )

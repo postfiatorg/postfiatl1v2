@@ -100,12 +100,26 @@ class CoordinatorService:
         *,
         settlement_evidence: Mapping[str, Any],
         learned_secret: SecretPreimage | None = None,
+        effect_key: str | None = None,
+        finish_operation: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
+        if (effect_key is None) != (finish_operation is None):
+            raise ValueError(
+                "PFTL finish intent requires both effect_key and finish_operation"
+            )
+        finish_effect = (
+            None
+            if effect_key is None
+            else SideEffectSpec(
+                effect_key, "PFTL_ESCROW_FINISH", finish_operation
+            )
+        )
         return self.journal.advance(
             swap_id,
             SwapState.LN_SETTLED,
             f"state:{swap_id}:ln_settled",
             evidence=settlement_evidence,
+            side_effect=finish_effect,
             secret_write=(
                 None
                 if learned_secret is None
