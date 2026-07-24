@@ -20,6 +20,7 @@ FULFILLMENT_PREFIX = "a0228020"
 PAYMENT_HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 PFTL_HASH_RE = re.compile(r"^[0-9a-f]{96}$")
 PFTL_ADDRESS_RE = re.compile(r"^pf[0-9a-f]{40}$")
+ESCROW_CONDITION_HASH_DOMAIN = b"postfiat.escrow_condition_hash.v1"
 
 REQUIRED_QUOTE_CLASSES = {
     "custody_class": "NON_CUSTODIAL_HASHLOCK",
@@ -91,6 +92,17 @@ def verify_fulfillment(condition: Any, fulfillment: Any) -> bool:
     fingerprint = decode_preimage_sha256_condition(condition)
     preimage = decode_preimage_sha256_fulfillment(fulfillment)
     return hashlib.sha256(preimage).hexdigest() == fingerprint
+
+
+def escrow_condition_hash(condition: Any) -> str:
+    """Match the consensus-side condition commitment exposed by escrow_info."""
+
+    condition_text = _text(condition, "condition")
+    digest = hashlib.sha3_384()
+    digest.update(ESCROW_CONDITION_HASH_DOMAIN)
+    digest.update(b"\x00")
+    digest.update(condition_text.encode("utf-8"))
+    return digest.hexdigest()
 
 
 def _feature_is_amp(key: Any, value: Any) -> bool:
@@ -362,7 +374,7 @@ def validate_pftl_lock_views(
         "recipient": quote.get("pftl_recipient"),
         "asset_id": quote.get("pftl_asset_id"),
         "amount": quote.get("pftl_amount_atoms"),
-        "condition": quote.get("condition"),
+        "condition_hash": escrow_condition_hash(quote.get("condition")),
         "finish_after": quote.get("finish_after"),
         "cancel_after": quote.get("cancel_after"),
         "state": "open",

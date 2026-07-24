@@ -277,6 +277,9 @@ class SyntheticDemo:
         self.service = CoordinatorService(self.journal)
         self.test_vectors: list[dict[str, str]] = []
         self.results: dict[str, Any] = {}
+        self.initial_pftl_supply: int | None = None
+        self.initial_user_atoms: int | None = None
+        self.initial_coordinator_atoms: int | None = None
 
     def close(self) -> None:
         self.journal.close()
@@ -368,6 +371,13 @@ class SyntheticDemo:
         envelope.validate()
         if snapshot["agreeing_validator_count"] != 6:
             raise DemoFailure("PFTL preflight is not converged 6/6")
+        self.initial_pftl_supply = int(snapshot["outstanding_supply"])
+        self.initial_user_atoms = _issued_balance(
+            snapshot, self.devnet.manifest["roles"]["user"]["address"]
+        )
+        self.initial_coordinator_atoms = _issued_balance(
+            snapshot, self.devnet.manifest["roles"]["coordinator"]["address"]
+        )
         if snapshot["rows"][0]["asset"]["asset"].get("freeze_enabled") is not False:
             raise DemoFailure("test asset is unexpectedly freezable")
         bitcoin = _json_command(
@@ -474,7 +484,7 @@ class SyntheticDemo:
         )
         current = self._snapshot()
         cancel_after = int(current["finalized_height"]) + cancel_offset
-        condition = encode_condition(payment_hash(secret))
+        condition = encode_condition(bytes.fromhex(invoice.payment_hash))
         plan = self.devnet.plan_create(
             owner_role=owner_role,
             recipient_role=recipient_role,
@@ -611,6 +621,21 @@ class SyntheticDemo:
             effect_key=effect_key,
             expected_escrow_id=context.escrow_id,
         )
+        retry_height = int(self.devnet.statuses()[0]["block_height"])
+        retried_effect = self.devnet.submit_create(
+            owner_role=owner_role,
+            recipient_role=recipient_role,
+            amount=int(context.quote["pftl_amount_atoms"]),
+            condition=str(context.quote["condition"]),
+            cancel_after=int(context.quote["cancel_after"]),
+            effect_key=effect_key,
+            expected_escrow_id=context.escrow_id,
+        )
+        if (
+            retried_effect != effect
+            or int(self.devnet.statuses()[0]["block_height"]) != retry_height
+        ):
+            raise DemoFailure("PFTL create idempotent retry changed consensus")
         self.journal.record_side_effect_attempt(
             effect_key,
             f"{effect_key}:attempt:1",
@@ -641,6 +666,10 @@ class SyntheticDemo:
         artifact = {
             "effect": effect,
             "finality": finality,
+            "idempotent_retry": {
+                "same_effect": True,
+                "no_new_height": True,
+            },
             "exact_delta": delta,
             "before": before,
             "after": after,
@@ -862,6 +891,20 @@ class SyntheticDemo:
             expected_condition=str(context.quote["condition"]),
             effect_key=finish_effect_key,
         )
+        retry_height = int(self.devnet.statuses()[0]["block_height"])
+        retried_effect = self.devnet.submit_finish(
+            owner_role=owner_role,
+            recipient_role=recipient_role,
+            escrow_id=context.escrow_id,
+            fulfillment=fulfillment,
+            expected_condition=str(context.quote["condition"]),
+            effect_key=finish_effect_key,
+        )
+        if (
+            retried_effect != effect
+            or int(self.devnet.statuses()[0]["block_height"]) != retry_height
+        ):
+            raise DemoFailure("PFTL finish idempotent retry changed consensus")
         self.journal.record_side_effect_attempt(
             finish_effect_key,
             f"{finish_effect_key}:attempt:1",
@@ -901,6 +944,10 @@ class SyntheticDemo:
             "pftl": {
                 "effect": effect,
                 "finality": finality,
+                "idempotent_retry": {
+                    "same_effect": True,
+                    "no_new_height": True,
+                },
                 "exact_delta": pftl_delta,
                 "before": before_finish,
                 "after": after_finish,
@@ -1738,6 +1785,37 @@ class SyntheticDemo:
         self.evidence.write_json("coordinator/public-audit.json", audit)
         self.evidence.write_test_vectors(self.test_vectors)
         final_pftl = self._snapshot()
+        if (
+            self.initial_pftl_supply is None
+            or int(final_pftl["outstanding_supply"])
+            != self.initial_pftl_supply
+            or int(final_pftl["open_escrow_total"]) != 0
+            or final_pftl["supply_conservation_verified"] is not True
+        ):
+            raise DemoFailure("terminal PFTL issued-asset conservation failed")
+        final_user_atoms = _issued_balance(
+            final_pftl, self.devnet.manifest["roles"]["user"]["address"]
+        )
+        final_coordinator_atoms = _issued_balance(
+            final_pftl,
+            self.devnet.manifest["roles"]["coordinator"]["address"],
+        )
+        expected_user_delta = (
+            FLOW_A_ATOMS + CRASH_RECOVERY_ATOMS - FLOW_B_ATOMS
+        )
+        if (
+            self.initial_user_atoms is None
+            or self.initial_coordinator_atoms is None
+            or final_user_atoms - self.initial_user_atoms != expected_user_delta
+            or final_coordinator_atoms - self.initial_coordinator_atoms
+            != -expected_user_delta
+        ):
+            raise DemoFailure("terminal participant asset deltas are not exact")
+        lightning_user_principal_delta_msat = (
+            -FLOW_A_MSAT - CRASH_RECOVERY_MSAT + FLOW_B_MSAT
+        )
+        if expected_user_delta + lightning_user_principal_delta_msat != 0:
+            raise DemoFailure("cross-ledger principal conservation failed")
         final_channels = _channel_state(self.lnd)
         summary = {
             "result": "PASS",
@@ -1785,6 +1863,10 @@ class SyntheticDemo:
                 "binary_git_revision": self.devnet.manifest["binary"][
                     "git_revision"
                 ],
+                "participant_exact_deltas": {
+                    "user_atoms": expected_user_delta,
+                    "coordinator_atoms": -expected_user_delta,
+                },
             },
             "lightning": {
                 "network": "regtest",
@@ -1800,6 +1882,13 @@ class SyntheticDemo:
                 "journal": "SQLite WAL + synchronous FULL",
                 "active_exposure_atoms": 0,
                 "pending_side_effects": 0,
+            },
+            "cross_ledger_principal": {
+                "user_pftl_delta_atoms": expected_user_delta,
+                "user_lightning_delta_msat_excluding_fees": (
+                    lightning_user_principal_delta_msat
+                ),
+                "sum_at_one_atom_per_msat": 0,
             },
         }
         self.evidence.write_json("99-terminal-summary.json", summary)

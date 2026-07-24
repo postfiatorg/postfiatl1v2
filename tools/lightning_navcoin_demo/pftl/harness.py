@@ -1897,8 +1897,18 @@ class PftlDevnet:
         operation = {"operation": operation_name}
         for field in fields:
             if field not in unsigned:
-                raise HarnessError(f"finalized replay payload is missing {field}")
-            operation[field] = unsigned[field]
+                defaults = {
+                    "condition": "",
+                    "finish_after": 0,
+                    "cancel_after": 0,
+                }
+                if field not in defaults:
+                    raise HarnessError(
+                        f"finalized replay payload is missing {field}"
+                    )
+                operation[field] = defaults[field]
+            else:
+                operation[field] = unsigned[field]
 
         source = unsigned.get("source")
         signer_role = next(
