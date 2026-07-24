@@ -1809,6 +1809,247 @@
     }
 
     #[test]
+    fn ethereum_ingress_consensus_binding_rejects_route_manifest_and_domain_mutations() {
+        let recipient = "pf-ethereum-ingress-consensus-test".to_string();
+        let mut evidence = VaultBridgeDepositEvidence {
+            source_chain_id: ETHEREUM_SEPOLIA_CHAIN_ID,
+            vault_address: "0x12f2e6ed1fd447c0eec77ca5890ec7edcb973d22".to_string(),
+            token_address: "0x1c7d4b196cb0c7b01d743fbc6116a902379c7238".to_string(),
+            depositor: "0x3333333333333333333333333333333333333333".to_string(),
+            pftl_recipient_hash: vault_bridge_pftl_recipient_hash(&recipient)
+                .expect("recipient hash"),
+            pftl_recipient: recipient,
+            amount_atoms: 10,
+            nonce: "44".repeat(32),
+            route_binding: "55".repeat(32),
+            deposit_id: String::new(),
+            block_hash: "66".repeat(32),
+            tx_hash: "77".repeat(32),
+            log_index: 0,
+        };
+        evidence.deposit_id = vault_bridge_deposit_id(&evidence).expect("deposit id");
+        let evidence_root =
+            vault_bridge_deposit_evidence_root(&evidence).expect("evidence root");
+        let route_policy_hash = "88".repeat(48);
+        let profile = NavProofProfile::new(
+            "operator",
+            NAV_PROFILE_VERIFIER_SP1_GROTH16,
+            format!("vault_bridge:{}", evidence.source_domain()),
+            7_200,
+            1,
+            7_200,
+            7_200,
+            0,
+            0,
+            0,
+            postfiat_types::SP1_ETHEREUM_FINALITY_SEPOLIA_P0_MANIFEST_HASH,
+            postfiat_types::SP1_ETHEREUM_FINALITY_SEPOLIA_P0_PROGRAM_VKEY,
+            NAV_SP1_PROOF_ENCODING_GROTH16,
+            DEFAULT_MAX_NAV_SP1_PROOF_BYTES,
+            DEFAULT_MAX_NAV_SP1_PUBLIC_VALUES_BYTES,
+        )
+        .expect("SP1 profile")
+        .with_vault_bridge_route_policy_hash(route_policy_hash.clone())
+        .expect("route-bound profile");
+        let values = postfiat_types::PfUsdcEthereumIngressPublicValuesV1 {
+            schema: postfiat_types::PFUSDC_ETHEREUM_INGRESS_PUBLIC_VALUES_SCHEMA_V1.to_string(),
+            route_id: VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1.to_string(),
+            source_chain_id: evidence.source_chain_id,
+            prior_finalized_beacon_root: "01".repeat(32),
+            prior_finalized_slot: 100,
+            finalized_beacon_root: "02".repeat(32),
+            finalized_slot: 132,
+            finalized_execution_block_hash: evidence.block_hash.clone(),
+            finalized_execution_block_number: 1_000,
+            execution_state_root: "03".repeat(32),
+            vault_address: evidence.vault_address.clone(),
+            vault_runtime_code_hash: "04".repeat(32),
+            token_address: evidence.token_address.clone(),
+            token_runtime_code_hash: "05".repeat(32),
+            depositor: evidence.depositor.clone(),
+            pftl_recipient: evidence.pftl_recipient.clone(),
+            pftl_recipient_hash: evidence.pftl_recipient_hash.clone(),
+            amount_atoms: evidence.amount_atoms,
+            nonce: evidence.nonce.clone(),
+            route_binding: evidence.route_binding.clone(),
+            deposit_id: evidence.deposit_id.clone(),
+            evidence_root: evidence_root.clone(),
+            manifest_hash:
+                postfiat_types::SP1_ETHEREUM_FINALITY_SEPOLIA_P0_MANIFEST_HASH.to_string(),
+            deposit_nullifier: "06".repeat(32),
+            total_obligations_atoms: "10".to_string(),
+            vault_token_balance_atoms: "10".to_string(),
+        };
+        values.validate().expect("public values");
+        ensure_ethereum_ingress_public_values_match(
+            &profile,
+            &evidence,
+            &evidence_root,
+            &route_policy_hash,
+            &values,
+        )
+        .expect("exact route binding");
+        let generic_kind_bypass = ensure_vault_bridge_deposit_source_proof(
+            VaultBridgeDepositSourceProof {
+                genesis: None,
+                profile: &profile,
+                evidence: &evidence,
+                evidence_root: &evidence_root,
+                policy_hash: &route_policy_hash,
+                source_proof_kind: NAV_PROFILE_VERIFIER_SP1_GROTH16,
+                source_proof_hash: &"aa".repeat(48),
+                source_public_values_hash: &"bb".repeat(48),
+                source_proof_bytes: &[],
+                source_public_values: &[],
+                fast_ingress_verifier: None,
+            },
+        )
+        .expect_err("generic SP1 kind must not bypass Ethereum finality verification");
+        assert_eq!(
+            generic_kind_bypass.0,
+            "ethereum_ingress_source_proof_kind_required"
+        );
+
+        let mut wrong_route = values.clone();
+        wrong_route.route_id = VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1.to_string();
+        assert!(ensure_ethereum_ingress_public_values_match(
+            &profile,
+            &evidence,
+            &evidence_root,
+            &route_policy_hash,
+            &wrong_route,
+        )
+        .is_err());
+        let mut wrong_manifest = values.clone();
+        wrong_manifest.manifest_hash = "07".repeat(32);
+        assert!(ensure_ethereum_ingress_public_values_match(
+            &profile,
+            &evidence,
+            &evidence_root,
+            &route_policy_hash,
+            &wrong_manifest,
+        )
+        .is_err());
+        let mut wrong_domain = evidence.clone();
+        wrong_domain.vault_address = "0x9999999999999999999999999999999999999999".to_string();
+        assert!(ensure_ethereum_ingress_public_values_match(
+            &profile,
+            &wrong_domain,
+            &evidence_root,
+            &route_policy_hash,
+            &values,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn ethereum_backed_claim_grows_cap_and_converges_across_six_replicas() {
+        let genesis = Genesis::new("postfiat-ethereum-cap-growth-test");
+        let issuer = "pf-ethereum-cap-growth-issuer".to_string();
+        let recipient = "pf-ethereum-cap-growth-recipient".to_string();
+        let asset = AssetDefinition::new(&genesis.chain_id, &issuer, "PFUSDC", 1, 6)
+            .expect("asset");
+        let amount_atoms = 2_000_000;
+        let mut evidence = VaultBridgeDepositEvidence {
+            source_chain_id: ETHEREUM_MAINNET_CHAIN_ID,
+            vault_address: "0x1111111111111111111111111111111111111111".to_string(),
+            token_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48".to_string(),
+            depositor: "0x3333333333333333333333333333333333333333".to_string(),
+            pftl_recipient_hash: vault_bridge_pftl_recipient_hash(&recipient)
+                .expect("recipient hash"),
+            pftl_recipient: recipient.clone(),
+            amount_atoms,
+            nonce: "44".repeat(32),
+            route_binding: "55".repeat(32),
+            deposit_id: String::new(),
+            block_hash: "66".repeat(32),
+            tx_hash: "77".repeat(32),
+            log_index: 0,
+        };
+        evidence.deposit_id = vault_bridge_deposit_id(&evidence).expect("deposit id");
+        let evidence_root =
+            vault_bridge_deposit_evidence_root(&evidence).expect("evidence root");
+        let route_policy_hash = "88".repeat(48);
+        let profile = NavProofProfile::new(
+            issuer.clone(),
+            NAV_PROFILE_VERIFIER_SP1_GROTH16,
+            format!("vault_bridge:{}", evidence.source_domain()),
+            7_200,
+            1,
+            7_200,
+            7_200,
+            0,
+            0,
+            0,
+            "99".repeat(32),
+            format!("0x{}", "aa".repeat(32)),
+            NAV_SP1_PROOF_ENCODING_GROTH16,
+            DEFAULT_MAX_NAV_SP1_PROOF_BYTES,
+            DEFAULT_MAX_NAV_SP1_PUBLIC_VALUES_BYTES,
+        )
+        .expect("profile")
+        .with_vault_bridge_route_policy_hash(route_policy_hash.clone())
+        .expect("route profile");
+        let nav_asset = NavTrackedAsset::new(
+            asset.asset_id.clone(),
+            issuer.clone(),
+            issuer.clone(),
+            profile.profile_id.clone(),
+            "USDC_ATOMS",
+            issuer.clone(),
+        )
+        .expect("NAV asset");
+        let mut deposit = VaultBridgeDepositRecord::new_with_source_nullifier(
+            asset.asset_id.clone(),
+            evidence_root.clone(),
+            evidence,
+            route_policy_hash.clone(),
+            SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1,
+            "bb".repeat(48),
+            "cc".repeat(48),
+            "dd".repeat(32),
+            "proof-proposer",
+            10,
+            10_000,
+        )
+        .expect("deposit");
+        deposit.status = VAULT_BRIDGE_DEPOSIT_STATUS_FINALIZED.to_string();
+        deposit.finalized_at_height = 11;
+        deposit.validate().expect("finalized deposit");
+
+        let mut initial = LedgerState::new(vec![Account::new(recipient.clone(), 10_000, None)]);
+        initial.asset_definitions.push(asset.clone());
+        initial.nav_proof_profiles.push(profile);
+        initial.nav_assets.push(nav_asset);
+        initial.vault_bridge_deposits.push(deposit);
+        let claim = VaultBridgeDepositClaimOperation {
+            claimer: recipient.clone(),
+            asset_id: asset.asset_id.clone(),
+            evidence_root,
+            policy_hash: route_policy_hash,
+            recipient: recipient.clone(),
+            amount_atoms,
+        };
+
+        let mut replicas = Vec::new();
+        for mut replica in std::iter::repeat_with(|| initial.clone()).take(6) {
+            apply_vault_bridge_deposit_claim(&genesis, &mut replica, &claim, 20)
+                .expect("proof-bounded claim");
+            assert_eq!(replica.nav_assets[0].circulating_supply, amount_atoms);
+            assert_eq!(replica.nav_assets[0].finalized_epoch, 1);
+            assert_eq!(
+                replica
+                    .trustline_for_account_asset(&recipient, &asset.asset_id)
+                    .expect("recipient trustline")
+                    .balance,
+                amount_atoms
+            );
+            replicas.push(replica);
+        }
+        assert!(replicas.windows(2).all(|pair| pair[0] == pair[1]));
+    }
+
+    #[test]
     fn vault_bridge_challenged_bridge_deposit_cannot_be_counted() {
         let genesis = Genesis::new("postfiat-local");
         let issuer_key = ml_dsa_65_keygen().expect("issuer keygen");

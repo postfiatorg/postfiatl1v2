@@ -1281,6 +1281,7 @@ impl VaultBridgeDepositProposeOperation {
             self.source_proof_kind.as_str(),
             NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
                 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+                | SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1
         );
         if proof_native && (self.source_proof_bytes.is_empty() || self.source_public_values.is_empty())
         {

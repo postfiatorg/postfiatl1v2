@@ -959,27 +959,42 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
     )?;
     let mut advanced_finality = None;
     let mut advanced_campaign = None;
+    let mut source_nullifier = String::new();
     if let Some(public_values) = proof_public_values {
-        let mut state = ledger
-            .ethereum_arbitrum_finality_state_mut(
-                &operation.policy_hash,
-                public_values.route_epoch(),
-            )
-            .ok_or_else(|| {
-                (
-                    "pfusdc_finality_state_missing",
-                    "proof-native pfUSDC ingress requires a governance-pinned Ethereum/Arbitrum finality state"
-                        .to_string(),
-                )
-            })?
-            .clone();
         match public_values {
             VerifiedIngressPublicValues::Confirmed(values) => {
+                let mut state = ledger
+                    .ethereum_arbitrum_finality_state_mut(
+                        &operation.policy_hash,
+                        values.route_epoch,
+                    )
+                    .ok_or_else(|| {
+                        (
+                            "pfusdc_finality_state_missing",
+                            "proof-native pfUSDC ingress requires a governance-pinned Ethereum/Arbitrum finality state"
+                                .to_string(),
+                        )
+                    })?
+                    .clone();
                 state
                     .verify_and_advance(&values)
                     .map_err(|error| ("pfusdc_finality_state_rejected", error))?;
+                advanced_finality = Some(state);
             }
             VerifiedIngressPublicValues::Bonded(values) => {
+                let mut state = ledger
+                    .ethereum_arbitrum_finality_state_mut(
+                        &operation.policy_hash,
+                        values.route_epoch,
+                    )
+                    .ok_or_else(|| {
+                        (
+                            "pfusdc_finality_state_missing",
+                            "proof-native pfUSDC ingress requires a governance-pinned Ethereum/Arbitrum finality state"
+                                .to_string(),
+                        )
+                    })?
+                    .clone();
                 state
                     .verify_and_advance_bonded(&values)
                     .map_err(|error| ("pfusdc_bonded_finality_state_rejected", error))?;
@@ -1033,11 +1048,25 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
                     .accept_escrowed_mint(&values, block_height)
                     .map_err(|error| ("pfusdc_fast_ingress_escrow_rejected", error))?;
                 advanced_campaign = Some(campaign);
+                advanced_finality = Some(state);
+            }
+            VerifiedIngressPublicValues::Ethereum { nullifier } => {
+                source_nullifier = nullifier;
             }
         }
-        advanced_finality = Some(state);
     }
-    let record = VaultBridgeDepositRecord::new(
+    if !source_nullifier.is_empty()
+        && ledger
+            .vault_bridge_deposits
+            .iter()
+            .any(|record| record.source_nullifier == source_nullifier)
+    {
+        return Err((
+            "duplicate_vault_bridge_source_nullifier",
+            "Ethereum ingress source nullifier is already recorded".to_string(),
+        ));
+    }
+    let record = VaultBridgeDepositRecord::new_with_source_nullifier(
         operation.asset_id.clone(),
         operation.evidence_root.clone(),
         operation.evidence.clone(),
@@ -1045,6 +1074,7 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
         operation.source_proof_kind.clone(),
         operation.source_proof_hash.clone(),
         operation.source_public_values_hash.clone(),
+        source_nullifier,
         operation.proposer.clone(),
         block_height,
         operation.expires_at_height,
@@ -1946,6 +1976,63 @@ fn apply_vault_bridge_deposit_claim(
             ));
         }
     }
+    let proof_bounded_cap_checkpoint =
+        if record.source_proof_kind == SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1
+            && supply_after_claim > nav_asset.circulating_supply
+        {
+            let route_id = match record.evidence.source_chain_id {
+                ETHEREUM_MAINNET_CHAIN_ID => VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1,
+                ETHEREUM_SEPOLIA_CHAIN_ID => VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1,
+                _ => {
+                    return Err((
+                        "ethereum_ingress_source_chain_unsupported",
+                        "Ethereum cap growth uses an unregistered source chain".to_string(),
+                    ));
+                }
+            };
+            let ethereum_backing = ledger
+                .vault_bridge_route_backing(&operation.asset_id)
+                .map_err(|error| ("bad_route_backing", error))?
+                .into_iter()
+                .find(|row| row.route_id == route_id)
+                .ok_or_else(|| {
+                    (
+                        "missing_ethereum_route_backing",
+                        "Ethereum cap growth requires finalized route-indexed backing".to_string(),
+                    )
+                })?;
+            let ceiling = nav_asset
+                .circulating_supply
+                .checked_add(
+                    ethereum_backing
+                        .finalized_unclaimed()
+                        .map_err(|error| ("bad_route_backing", error))?,
+                )
+                .ok_or_else(|| {
+                    (
+                        "nav_cap_overflow",
+                        "proof-bounded NAV cap overflow".to_string(),
+                    )
+                })?;
+            if supply_after_claim > ceiling {
+                return Err((
+                    "proof_bounded_nav_cap_exceeded",
+                    "claim exceeds finalized unclaimed Ethereum SP1 backing".to_string(),
+                ));
+            }
+            Some(
+                proof_bounded_nav_cap_checkpoint_hash(
+                    &operation.asset_id,
+                    route_id,
+                    &record.evidence_root,
+                    nav_asset.circulating_supply,
+                    supply_after_claim,
+                )
+                .map_err(|error| ("bad_proof_bounded_nav_checkpoint", error))?,
+            )
+        } else {
+            None
+        };
 
     let recipient_index = issued_asset_credit_recipient_line_index(
         ledger,
@@ -2166,6 +2253,26 @@ fn apply_vault_bridge_deposit_claim(
                 )
             })?;
         *current = campaign;
+    }
+    if let Some(checkpoint_hash) = proof_bounded_cap_checkpoint {
+        let nav_asset = ledger.nav_asset_mut(&operation.asset_id).ok_or_else(|| {
+            (
+                "missing_nav_asset",
+                "NAV asset disappeared during cap growth".to_string(),
+            )
+        })?;
+        nav_asset.circulating_supply = supply_after_claim;
+        nav_asset.finalized_epoch = nav_asset.finalized_epoch.checked_add(1).ok_or_else(|| {
+            (
+                "nav_epoch_overflow",
+                "proof-bounded NAV epoch overflow".to_string(),
+            )
+        })?;
+        nav_asset.finalized_reserve_packet_hash = checkpoint_hash;
+        nav_asset.finalized_at_height = block_height;
+        nav_asset
+            .validate()
+            .map_err(|error| ("bad_nav_asset", error))?;
     }
     Ok(())
 }
@@ -4827,18 +4934,11 @@ struct VaultBridgeDepositSourceProof<'a> {
     fast_ingress_verifier: Option<&'a FastIngressVerifierConfigV1>,
 }
 
+#[derive(Debug)]
 enum VerifiedIngressPublicValues {
     Confirmed(postfiat_types::PfUsdcIngressPublicValuesV3),
     Bonded(postfiat_types::PfUsdcBondedIngressPublicValuesV1),
-}
-
-impl VerifiedIngressPublicValues {
-    fn route_epoch(&self) -> u64 {
-        match self {
-            Self::Confirmed(values) => values.route_epoch,
-            Self::Bonded(values) => values.route_epoch,
-        }
-    }
+    Ethereum { nullifier: String },
 }
 
 fn ensure_vault_bridge_deposit_source_proof(
@@ -4857,6 +4957,74 @@ fn ensure_vault_bridge_deposit_source_proof(
         source_public_values,
         fast_ingress_verifier,
     } = proof;
+    let ethereum_finality_route = profile
+        .source_class
+        .strip_prefix(VAULT_BRIDGE_PROFILE_SOURCE_CLASS_PREFIX)
+        .and_then(parse_vault_bridge_source_domain_parts)
+        .map(|(chain_id, _, _)| {
+            matches!(
+                chain_id,
+                ETHEREUM_MAINNET_CHAIN_ID | ETHEREUM_SEPOLIA_CHAIN_ID
+            )
+        })
+        .unwrap_or(false);
+    if profile.verifier_kind == NAV_PROFILE_VERIFIER_SP1_GROTH16
+        && ethereum_finality_route
+        && source_proof_kind != SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1
+    {
+        return Err((
+            "ethereum_ingress_source_proof_kind_required",
+            "Ethereum ingress routes require sp1-ethereum-finality-v1 proof material"
+                .to_string(),
+        ));
+    }
+    if source_proof_kind == SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1 {
+        if profile.verifier_kind != NAV_PROFILE_VERIFIER_SP1_GROTH16
+            || source_proof_hash.is_empty()
+            || source_public_values_hash.is_empty()
+            || source_proof_bytes.is_empty()
+            || source_public_values.is_empty()
+        {
+            return Err((
+                "missing_ethereum_ingress_source_proof",
+                "Ethereum-finality deposits require a sp1-groth16 profile and complete proof material".to_string(),
+            ));
+        }
+        let Some(_genesis) = genesis else {
+            return Ok(None);
+        };
+        if postfiat_types::pfusdc_ingress_proof_hash_v1(source_proof_bytes)
+            != source_proof_hash
+            || postfiat_types::pfusdc_ingress_public_values_hash_v1(source_public_values)
+                != source_public_values_hash
+        {
+            return Err((
+                "ethereum_ingress_source_commitment_mismatch",
+                "Ethereum ingress proof commitments do not match supplied bytes".to_string(),
+            ));
+        }
+        verify_bounded_sp1_groth16(
+            profile,
+            NAV_PROFILE_VERIFIER_SP1_GROTH16,
+            source_proof_bytes,
+            source_public_values,
+        )
+        .map_err(|error| (error.code(), error.message()))?;
+        let values = postfiat_types::PfUsdcEthereumIngressPublicValuesV1::from_canonical_bytes(
+            source_public_values,
+        )
+        .map_err(|error| ("ethereum_ingress_public_values_invalid", error))?;
+        ensure_ethereum_ingress_public_values_match(
+            profile,
+            evidence,
+            evidence_root,
+            policy_hash,
+            &values,
+        )?;
+        return Ok(Some(VerifiedIngressPublicValues::Ethereum {
+            nullifier: values.deposit_nullifier,
+        }));
+    }
     if source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 {
         let config = fast_ingress_verifier.ok_or_else(|| {
             (
@@ -5023,6 +5191,53 @@ fn ensure_vault_bridge_deposit_source_proof(
                 .to_string(),
         )),
     }
+}
+
+fn ensure_ethereum_ingress_public_values_match(
+    profile: &NavProofProfile,
+    evidence: &VaultBridgeDepositEvidence,
+    evidence_root: &str,
+    policy_hash: &str,
+    values: &postfiat_types::PfUsdcEthereumIngressPublicValuesV1,
+) -> Result<(), (&'static str, String)> {
+    let expected_source_class = format!(
+        "{VAULT_BRIDGE_PROFILE_SOURCE_CLASS_PREFIX}erc20_bridge_vault:{}:{}:{}",
+        evidence.source_chain_id, evidence.vault_address, evidence.token_address
+    );
+    let expected_route_id = match evidence.source_chain_id {
+        ETHEREUM_MAINNET_CHAIN_ID => VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1,
+        ETHEREUM_SEPOLIA_CHAIN_ID => VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1,
+        _ => {
+            return Err((
+                "ethereum_ingress_source_chain_unsupported",
+                "Ethereum ingress proof uses an unregistered source chain".to_string(),
+            ));
+        }
+    };
+    let mismatch = profile.source_class != expected_source_class
+        || values.route_id != expected_route_id
+        || profile.valuation_policy_hash != values.manifest_hash
+        || (!profile.vault_bridge_route_policy_hash.is_empty()
+            && profile.vault_bridge_route_policy_hash != policy_hash)
+        || values.source_chain_id != evidence.source_chain_id
+        || values.vault_address != evidence.vault_address
+        || values.token_address != evidence.token_address
+        || values.depositor != evidence.depositor
+        || values.pftl_recipient != evidence.pftl_recipient
+        || values.pftl_recipient_hash != evidence.pftl_recipient_hash
+        || values.amount_atoms != evidence.amount_atoms
+        || values.nonce != evidence.nonce
+        || values.route_binding != evidence.route_binding
+        || values.deposit_id != evidence.deposit_id
+        || values.finalized_execution_block_hash != evidence.block_hash
+        || values.evidence_root != evidence_root;
+    if mismatch {
+        return Err((
+            "ethereum_ingress_public_values_mismatch",
+            "proof-verified Ethereum ingress values do not match the governed route and deposit evidence".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn ensure_pfusdc_bonded_public_values_match(

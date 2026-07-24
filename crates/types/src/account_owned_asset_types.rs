@@ -1392,6 +1392,10 @@ pub struct VaultBridgeDepositRecord {
     pub source_proof_hash: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub source_public_values_hash: String,
+    /// Route-domain-separated nullifier authenticated by proof public values.
+    /// Empty only for legacy/non-proof-native records.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source_nullifier: String,
     pub proposer: String,
     pub status: String,
     pub submitted_at_height: u64,
@@ -1417,6 +1421,35 @@ impl VaultBridgeDepositRecord {
         submitted_at_height: u64,
         expires_at_height: u64,
     ) -> Result<Self, String> {
+        Self::new_with_source_nullifier(
+            asset_id,
+            evidence_root,
+            evidence,
+            policy_hash,
+            source_proof_kind,
+            source_proof_hash,
+            source_public_values_hash,
+            "",
+            proposer,
+            submitted_at_height,
+            expires_at_height,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_source_nullifier(
+        asset_id: impl Into<String>,
+        evidence_root: impl Into<String>,
+        evidence: VaultBridgeDepositEvidence,
+        policy_hash: impl Into<String>,
+        source_proof_kind: impl Into<String>,
+        source_proof_hash: impl Into<String>,
+        source_public_values_hash: impl Into<String>,
+        source_nullifier: impl Into<String>,
+        proposer: impl Into<String>,
+        submitted_at_height: u64,
+        expires_at_height: u64,
+    ) -> Result<Self, String> {
         let record = Self {
             asset_id: asset_id.into(),
             evidence_root: evidence_root.into(),
@@ -1425,6 +1458,7 @@ impl VaultBridgeDepositRecord {
             source_proof_kind: source_proof_kind.into(),
             source_proof_hash: source_proof_hash.into(),
             source_public_values_hash: source_public_values_hash.into(),
+            source_nullifier: source_nullifier.into(),
             proposer: proposer.into(),
             status: VAULT_BRIDGE_DEPOSIT_STATUS_PENDING.to_string(),
             submitted_at_height,
@@ -1467,6 +1501,18 @@ impl VaultBridgeDepositRecord {
             &self.source_proof_hash,
             &self.source_public_values_hash,
         )?;
+        if self.source_proof_kind == SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1 {
+            validate_lower_hex_len(
+                "vault_bridge_deposit_record.source_nullifier",
+                &self.source_nullifier,
+                64,
+            )?;
+        } else if !self.source_nullifier.is_empty() {
+            return Err(
+                "vault_bridge_deposit_record.source_nullifier is only valid for Ethereum-finality proofs"
+                    .to_string(),
+            );
+        }
         validate_text_field("vault_bridge_deposit_record.proposer", &self.proposer)?;
         validate_vault_bridge_deposit_status(&self.status)?;
         if self.attestations.len() > MAX_NAV_ATTESTATIONS_PER_PACKET {
@@ -1827,6 +1873,51 @@ impl VaultBridgeBucketState {
                     .to_string(),
             );
         }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VaultBridgeRouteBackingStateV1 {
+    pub route_id: String,
+    pub asset_id: String,
+    pub deposits_verified: u64,
+    pub claims_minted: u64,
+    pub withdrawals_reserved: u64,
+    pub withdrawals_paid: u64,
+}
+
+impl VaultBridgeRouteBackingStateV1 {
+    pub fn finalized_unclaimed(&self) -> Result<u64, String> {
+        self.deposits_verified.checked_sub(self.claims_minted)
+            .ok_or_else(|| "route claims exceed verified deposits".to_string())
+    }
+
+    pub fn finalized_unspent(&self) -> Result<u64, String> {
+        self.deposits_verified
+            .checked_sub(self.withdrawals_paid)
+            .ok_or_else(|| "route paid withdrawals exceed verified deposits".to_string())
+    }
+
+    pub fn available_withdrawal_liquidity(&self) -> Result<u64, String> {
+        self.finalized_unspent()?
+            .checked_sub(self.withdrawals_reserved.saturating_sub(self.withdrawals_paid))
+            .ok_or_else(|| "route withdrawal reservations exceed unspent backing".to_string())
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        validate_text_field("vault_bridge_route_backing.route_id", &self.route_id)?;
+        validate_lower_hex_len(
+            "vault_bridge_route_backing.asset_id",
+            &self.asset_id,
+            ISSUED_ASSET_ID_HEX_LEN,
+        )?;
+        self.finalized_unclaimed()?;
+        self.finalized_unspent()?;
+        if self.withdrawals_paid > self.withdrawals_reserved {
+            return Err("route paid withdrawals exceed reserved withdrawals".to_string());
+        }
+        self.available_withdrawal_liquidity()?;
         Ok(())
     }
 }

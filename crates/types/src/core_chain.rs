@@ -161,6 +161,28 @@ pub const NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1: &str =
 /// Arbitrum finality and coexists with the confirmed-assertion verifier.
 pub const NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1: &str =
     "sp1-arbitrum-bonded-v1";
+/// Proof kind for an Ethereum-finalized execution-state deposit proof. The
+/// profile verifier remains `sp1-groth16`; this route-specific discriminator
+/// prevents Arbitrum/Ethereum vkey and public-value reuse.
+pub const SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1: &str =
+    "sp1-ethereum-finality-v1";
+pub const ETHEREUM_MAINNET_CHAIN_ID: u64 = 1;
+pub const ETHEREUM_SEPOLIA_CHAIN_ID: u64 = 11_155_111;
+pub const ARBITRUM_ONE_CHAIN_ID: u64 = 42_161;
+pub const VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1: &str =
+    "ethereum-mainnet-usdc-v1";
+pub const VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1: &str =
+    "ethereum-sepolia-usdc-v1";
+/// Banked P0 Sepolia verifier identity. This is test-route material only; a
+/// mainnet deployment must register a separately built and audited program.
+pub const SP1_ETHEREUM_FINALITY_SEPOLIA_P0_PROGRAM_VKEY: &str =
+    "0x0077f479ed28535dbb5035f455a875334bae7d5a1eaa7c22c6f070a404eab31f";
+pub const SP1_ETHEREUM_FINALITY_SEPOLIA_P0_MANIFEST_HASH: &str =
+    "dc409b424e7627b936d81a16d2fc8f4c17e21a108d654be6b992e552d7b0c6d3";
+pub const VAULT_BRIDGE_ROUTE_ARBITRUM_ONE_USDC_V1: &str =
+    "arbitrum-one-usdc-v1";
+pub const PROOF_BOUNDED_NAV_CAP_CHECKPOINT_DOMAIN_V1: &str =
+    "postfiat.nav.proof_bounded_cap_checkpoint.v1";
 pub const NAV_SP1_PROOF_ENCODING_GROTH16: &str = "groth16";
 pub const DEFAULT_MAX_NAV_SP1_PROOF_BYTES: u64 = 4096;
 pub const DEFAULT_MAX_NAV_SP1_PUBLIC_VALUES_BYTES: u64 = 16384;

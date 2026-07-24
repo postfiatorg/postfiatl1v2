@@ -4,6 +4,8 @@ pub const PFUSDC_EGRESS_PUBLIC_VALUES_SCHEMA_V1: &str =
     "postfiat.pfusdc.egress_public_values.v1";
 pub const PFUSDC_CHECKPOINT_PUBLIC_VALUES_SCHEMA_V1: &str =
     "postfiat.pfusdc.checkpoint_public_values.v1";
+pub const PFUSDC_ETHEREUM_INGRESS_PUBLIC_VALUES_SCHEMA_V1: &str =
+    "postfiat.pfusdc.ethereum_ingress_public_values.v1";
 pub const BRIDGE_EXIT_LEAF_SCHEMA_V1: &str = "postfiat.bridge_exit_leaf.v1";
 pub const BRIDGE_EXIT_ACCEPTED_RECEIPT_CODE: &str = "accepted";
 
@@ -25,6 +27,93 @@ const BRIDGE_EXIT_NODE_DOMAIN_V1: &str = "postfiat.bridge_exit_tree.node.v1";
 const PFUSDC_TIER4_CANONICAL_MAGIC: &[u8] = b"PFTL-PFUSDC-TIER4";
 const PFUSDC_MAX_TEXT_BYTES: usize = 256;
 const BRIDGE_EXIT_MAX_LEAVES_PER_BLOCK_V1: usize = 4096;
+
+/// Consensus-decoded public values for `sp1-ethereum-finality-v1`.
+/// The proof authenticates Ethereum finality, code hashes, state/storage
+/// inclusion, the permanent deposit record, and 1:1 vault backing.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PfUsdcEthereumIngressPublicValuesV1 {
+    pub schema: String,
+    pub route_id: String,
+    pub source_chain_id: u64,
+    pub prior_finalized_beacon_root: String,
+    pub prior_finalized_slot: u64,
+    pub finalized_beacon_root: String,
+    pub finalized_slot: u64,
+    pub finalized_execution_block_hash: String,
+    pub finalized_execution_block_number: u64,
+    pub execution_state_root: String,
+    pub vault_address: String,
+    pub vault_runtime_code_hash: String,
+    pub token_address: String,
+    pub token_runtime_code_hash: String,
+    pub depositor: String,
+    pub pftl_recipient: String,
+    pub pftl_recipient_hash: String,
+    pub amount_atoms: u64,
+    pub nonce: String,
+    pub route_binding: String,
+    pub deposit_id: String,
+    pub evidence_root: String,
+    pub manifest_hash: String,
+    pub deposit_nullifier: String,
+    pub total_obligations_atoms: String,
+    pub vault_token_balance_atoms: String,
+}
+
+impl PfUsdcEthereumIngressPublicValuesV1 {
+    pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, String> {
+        let values: Self = serde_cbor::from_slice(bytes)
+            .map_err(|error| format!("Ethereum ingress public values CBOR decode failed: {error}"))?;
+        values.validate()?;
+        let canonical = serde_cbor::to_vec(&values)
+            .map_err(|error| format!("Ethereum ingress public values CBOR encode failed: {error}"))?;
+        if canonical != bytes {
+            return Err("Ethereum ingress public values are not canonical CBOR".to_string());
+        }
+        Ok(values)
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if self.schema != PFUSDC_ETHEREUM_INGRESS_PUBLIC_VALUES_SCHEMA_V1 {
+            return Err("Ethereum ingress public values schema mismatch".to_string());
+        }
+        if self.route_id.is_empty() || self.source_chain_id == 0 || self.amount_atoms == 0 {
+            return Err("Ethereum ingress route, chain, and amount must be nonzero".to_string());
+        }
+        if self.finalized_slot <= self.prior_finalized_slot
+            || self.finalized_execution_block_number == 0
+        {
+            return Err("Ethereum ingress finality must advance".to_string());
+        }
+        validate_evm_address_text("ethereum_ingress.vault_address", &self.vault_address)?;
+        validate_evm_address_text("ethereum_ingress.token_address", &self.token_address)?;
+        validate_evm_address_text("ethereum_ingress.depositor", &self.depositor)?;
+        pfusdc_validate_hex_fields(&[
+            ("ethereum_ingress.prior_finalized_beacon_root", &self.prior_finalized_beacon_root, 64),
+            ("ethereum_ingress.finalized_beacon_root", &self.finalized_beacon_root, 64),
+            ("ethereum_ingress.finalized_execution_block_hash", &self.finalized_execution_block_hash, 64),
+            ("ethereum_ingress.execution_state_root", &self.execution_state_root, 64),
+            ("ethereum_ingress.vault_runtime_code_hash", &self.vault_runtime_code_hash, 64),
+            ("ethereum_ingress.token_runtime_code_hash", &self.token_runtime_code_hash, 64),
+            ("ethereum_ingress.pftl_recipient_hash", &self.pftl_recipient_hash, 64),
+            ("ethereum_ingress.nonce", &self.nonce, 64),
+            ("ethereum_ingress.route_binding", &self.route_binding, 64),
+            ("ethereum_ingress.deposit_id", &self.deposit_id, 64),
+            ("ethereum_ingress.evidence_root", &self.evidence_root, 96),
+            ("ethereum_ingress.manifest_hash", &self.manifest_hash, 64),
+            ("ethereum_ingress.deposit_nullifier", &self.deposit_nullifier, 64),
+        ])?;
+        let obligations = self.total_obligations_atoms.parse::<u128>()
+            .map_err(|_| "Ethereum ingress obligations are not an integer".to_string())?;
+        let balance = self.vault_token_balance_atoms.parse::<u128>()
+            .map_err(|_| "Ethereum ingress token balance is not an integer".to_string())?;
+        if obligations < u128::from(self.amount_atoms) || balance < obligations {
+            return Err("Ethereum ingress backing is insufficient".to_string());
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BridgeExitLeafV1 {

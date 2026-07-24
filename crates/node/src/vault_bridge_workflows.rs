@@ -623,6 +623,50 @@ pub fn vault_bridge_deposit_plan(
             ));
         }
         (computed_proof_hash, computed_public_values_hash)
+    } else if source_proof_kind == SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1 {
+        if source_proof_bytes.is_empty() || source_public_values.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Ethereum-finality route requires proof and public-values files",
+            ));
+        }
+        let computed_proof_hash = postfiat_types::pfusdc_ingress_proof_hash_v1(&source_proof_bytes);
+        let computed_public_values_hash =
+            postfiat_types::pfusdc_ingress_public_values_hash_v1(&source_public_values);
+        if (!provided_source_proof_hash.is_empty()
+            && provided_source_proof_hash != computed_proof_hash)
+            || (!provided_source_public_values_hash.is_empty()
+                && provided_source_public_values_hash != computed_public_values_hash)
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Ethereum-finality proof/public-values file commitment mismatch",
+            ));
+        }
+        let public_values =
+            postfiat_types::PfUsdcEthereumIngressPublicValuesV1::from_canonical_bytes(
+                &source_public_values,
+            )
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+        if public_values.source_chain_id != evidence.source_chain_id
+            || public_values.vault_address != evidence.vault_address
+            || public_values.token_address != evidence.token_address
+            || public_values.depositor != evidence.depositor
+            || public_values.pftl_recipient != evidence.pftl_recipient
+            || public_values.pftl_recipient_hash != evidence.pftl_recipient_hash
+            || public_values.amount_atoms != evidence.amount_atoms
+            || public_values.nonce != evidence.nonce
+            || public_values.route_binding != evidence.route_binding
+            || public_values.deposit_id != evidence.deposit_id
+            || public_values.finalized_execution_block_hash != evidence.block_hash
+            || public_values.evidence_root != evidence_root
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Ethereum-finality public values do not match the canonical vault deposit receipt",
+            ));
+        }
+        (computed_proof_hash, computed_public_values_hash)
     } else if source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 {
         if source_proof_bytes.is_empty() || source_public_values.is_empty() {
             return Err(io::Error::new(
@@ -682,7 +726,7 @@ pub fn vault_bridge_deposit_plan(
     } else {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            format!("--source-proof-kind is not a supported vault-bridge proof kind"),
+            "--source-proof-kind is not a supported vault-bridge proof kind",
         ));
     };
 

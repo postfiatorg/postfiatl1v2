@@ -23,11 +23,14 @@ use postfiat_types::{
     NAV_PROFILE_VERIFIER_MULTI_FETCH, NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1,
     NAV_PROFILE_VERIFIER_SP1_GROTH16,
     NAV_RESERVE_ATTEST_TRANSACTION_KIND, NAV_RESERVE_SUBMIT_TRANSACTION_KIND,
-    NAV_SP1_PROOF_ENCODING_GROTH16, VAULT_BRIDGE_BURN_TO_REDEEM_TRANSACTION_KIND,
+    NAV_SP1_PROOF_ENCODING_GROTH16, SP1_ETHEREUM_FINALITY_SEPOLIA_P0_MANIFEST_HASH,
+    SP1_ETHEREUM_FINALITY_SEPOLIA_P0_PROGRAM_VKEY,
+    VAULT_BRIDGE_BURN_TO_REDEEM_TRANSACTION_KIND,
     VAULT_BRIDGE_DEPOSIT_FINALIZE_TRANSACTION_KIND, VAULT_BRIDGE_DEPOSIT_PROPOSE_TRANSACTION_KIND,
     VAULT_BRIDGE_EVIDENCE_TIER_INDEPENDENTLY_OBSERVED, VAULT_BRIDGE_REDEEM_SETTLE_TRANSACTION_KIND,
     VAULT_BRIDGE_REDEMPTION_STATE_SETTLED, VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1,
-    VAULT_BRIDGE_ROUTE_PROFILE_SCHEMA_V1, VAULT_BRIDGE_UNIT,
+    VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1, VAULT_BRIDGE_ROUTE_PROFILE_SCHEMA_V1,
+    VAULT_BRIDGE_UNIT,
 };
 
 use super::*;
@@ -109,6 +112,40 @@ fn route(epoch: u32, activation_height: u64, vault_hash_byte: &str) -> VaultBrid
         min_challenge_bond: 1,
         min_attestations: 2,
         minimum_confirmations: 64,
+        activation_height,
+        expires_at_height: activation_height + 10_000,
+    }
+}
+
+fn ethereum_sepolia_p0_route(activation_height: u64) -> VaultBridgeRouteProfileV1 {
+    VaultBridgeRouteProfileV1 {
+        schema: VAULT_BRIDGE_ROUTE_PROFILE_SCHEMA_V1.to_string(),
+        route_id: VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1.to_string(),
+        asset_id: "21".repeat(48),
+        source_chain_id: 11_155_111,
+        vault_address: "0x12f2e6ed1fd447c0eec77ca5890ec7edcb973d22".to_string(),
+        vault_runtime_code_hash:
+            "0x9d627d3fc54ebdcbe1f5d48b21fbf231eac08a48a204734756342b2ba88245ed"
+                .to_string(),
+        token_address: "0x1c7d4b196cb0c7b01d743fbc6116a902379c7238".to_string(),
+        token_runtime_code_hash:
+            "0xcd3f29e2ea9c61dadd48bfeaf8b2884b6de9dfee7bf45329452c4c33d0868ceb"
+                .to_string(),
+        route_epoch: 1,
+        verifier_kind: NAV_PROFILE_VERIFIER_SP1_GROTH16.to_string(),
+        evidence_tier: postfiat_types::VAULT_BRIDGE_EVIDENCE_TIER_RECEIPT_PROVEN.to_string(),
+        verifier_policy_hash: SP1_ETHEREUM_FINALITY_SEPOLIA_P0_MANIFEST_HASH.to_string(),
+        verifier_program_vkey: SP1_ETHEREUM_FINALITY_SEPOLIA_P0_PROGRAM_VKEY.to_string(),
+        verifier_proof_encoding: NAV_SP1_PROOF_ENCODING_GROTH16.to_string(),
+        max_proof_bytes: postfiat_types::DEFAULT_MAX_NAV_SP1_PROOF_BYTES,
+        max_public_values_bytes: postfiat_types::DEFAULT_MAX_NAV_SP1_PUBLIC_VALUES_BYTES,
+        max_snapshot_age_blocks: 7_200,
+        challenge_window_blocks: 1,
+        max_epoch_gap_blocks: 7_200,
+        settle_deadline_blocks: 7_200,
+        min_challenge_bond: 0,
+        min_attestations: 0,
+        minimum_confirmations: 0,
         activation_height,
         expires_at_height: activation_height + 10_000,
     }
@@ -569,6 +606,66 @@ fn execute_route_candidate(
     .into_iter()
     .next()
     .expect("one route receipt")
+}
+
+#[test]
+fn ethereum_p0_route_registration_converges_on_six_replicas_and_rejects_substitution() {
+    let route = ethereum_sepolia_p0_route(2);
+    route.validate().expect("banked Ethereum P0 route");
+    let initial_ledger = route_ledger(&route);
+    let mut replicas = Vec::new();
+    for _ in 0..6 {
+        let mut governance = GovernanceState::new(1);
+        governance.apply(amendment(
+            GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT,
+            route.activation_height as u32,
+            0,
+        ));
+        let mut ledger = initial_ledger.clone();
+        let receipt = activate_route(&mut governance, &mut ledger, &route);
+        assert!(receipt.accepted, "{receipt:?}");
+        let active = governance
+            .active_vault_bridge_route_profile(&route.asset_id, route.activation_height)
+            .expect("active Ethereum P0 route");
+        assert_eq!(active.profile, route);
+        replicas.push((governance, ledger));
+    }
+    assert!(replicas.windows(2).all(|pair| pair[0] == pair[1]));
+
+    for mutated in [
+        {
+            let mut value = route.clone();
+            value.verifier_program_vkey = format!("0x{}", "ee".repeat(32));
+            value
+        },
+        {
+            let mut value = route.clone();
+            value.verifier_policy_hash = "ef".repeat(32);
+            value
+        },
+        {
+            let mut value = route.clone();
+            value.source_chain_id = 1;
+            value
+        },
+        {
+            let mut value = route.clone();
+            value.vault_address = "0x9999999999999999999999999999999999999999".to_string();
+            value
+        },
+    ] {
+        let mut governance = GovernanceState::new(1);
+        governance.apply(amendment(
+            GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT,
+            route.activation_height as u32,
+            0,
+        ));
+        let mut ledger = initial_ledger.clone();
+        let before = (governance.clone(), ledger.clone());
+        let receipt = activate_route(&mut governance, &mut ledger, &mutated);
+        assert!(!receipt.accepted, "mutated route unexpectedly activated: {mutated:?}");
+        assert_eq!((governance, ledger), before, "rejection mutated state");
+    }
 }
 
 #[test]

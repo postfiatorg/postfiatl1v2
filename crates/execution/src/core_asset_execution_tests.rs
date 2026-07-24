@@ -266,6 +266,7 @@
             source_proof_kind: NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1.to_string(),
             source_proof_hash: "92".repeat(32),
             source_public_values_hash: "93".repeat(32),
+            source_nullifier: String::new(),
             proposer: issuer,
             status: VAULT_BRIDGE_DEPOSIT_STATUS_FINALIZED.to_string(),
             submitted_at_height: 10,

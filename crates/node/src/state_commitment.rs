@@ -2059,6 +2059,13 @@ pub(super) fn append_vault_bridge_deposit_record(
         &format!("{prefix}.source_public_values_hash"),
         &record.source_public_values_hash,
     );
+    if !record.source_nullifier.is_empty() {
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.source_nullifier"),
+            &record.source_nullifier,
+        );
+    }
     append_canonical_str(bytes, &format!("{prefix}.proposer"), &record.proposer);
     append_canonical_str(bytes, &format!("{prefix}.status"), &record.status);
     append_canonical_u64(

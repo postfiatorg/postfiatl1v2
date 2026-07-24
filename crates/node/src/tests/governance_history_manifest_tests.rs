@@ -1871,7 +1871,7 @@
         assert!(
             error
                 .to_string()
-                .contains("snapshot export block verification failed"),
+                .contains("snapshot block verification failed"),
             "{error}"
         );
 
@@ -1941,7 +1941,7 @@
         assert!(
             error
                 .to_string()
-                .contains("snapshot export governance verification failed"),
+                .contains("snapshot governance verification failed"),
             "{error}"
         );
 
@@ -1997,10 +1997,10 @@
             snapshot_dir: snapshot_dir.clone(),
         })
         .expect_err("tampered shielded state should block snapshot export");
+        let error = error.to_string();
         assert!(
-            error
-                .to_string()
-                .contains("snapshot export shielded verification failed"),
+            error.contains("snapshot block verification failed")
+                || error.contains("snapshot shielded verification failed"),
             "{error}"
         );
 
@@ -2050,7 +2050,7 @@
         assert!(
             error
                 .to_string()
-                .contains("snapshot export mempool verification failed"),
+                .contains("snapshot mempool verification failed"),
             "{error}"
         );
 

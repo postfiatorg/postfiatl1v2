@@ -38,6 +38,32 @@ pub fn market_ops_supply_packet_hash(
     ))
 }
 
+pub fn proof_bounded_nav_cap_checkpoint_hash(
+    asset_id: &str,
+    route_id: &str,
+    evidence_root: &str,
+    prior_cap: u64,
+    new_cap: u64,
+) -> Result<String, String> {
+    validate_lower_hex_len("proof_bounded_nav_cap.asset_id", asset_id, ISSUED_ASSET_ID_HEX_LEN)?;
+    validate_text_field("proof_bounded_nav_cap.route_id", route_id)?;
+    validate_lower_hex_len(
+        "proof_bounded_nav_cap.evidence_root",
+        evidence_root,
+        VAULT_BRIDGE_HEX_HASH_LEN,
+    )?;
+    if new_cap <= prior_cap {
+        return Err("proof-bounded NAV cap must increase".to_string());
+    }
+    let preimage = format!(
+        "asset_id={asset_id}\nroute_id={route_id}\nevidence_root={evidence_root}\nprior_cap={prior_cap}\nnew_cap={new_cap}\n"
+    );
+    Ok(hash_hex_domain(
+        PROOF_BOUNDED_NAV_CAP_CHECKPOINT_DOMAIN_V1,
+        preimage.as_bytes(),
+    ))
+}
+
 pub fn market_ops_evidence_root(
     discount_observations: &[MarketOpsVenueObservation],
     premium_observations: &[MarketOpsVenueObservation],
@@ -1186,6 +1212,7 @@ pub fn validate_vault_bridge_deposit_source_proof_fields(
         NAV_PROFILE_VERIFIER_SP1_GROTH16
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+            | SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1
     ) {
         return Err(format!(
             "{prefix}.source_proof_kind is not a supported SP1 bridge proof"
@@ -2538,6 +2565,69 @@ pub struct LedgerState {
 }
 
 impl LedgerState {
+    pub fn vault_bridge_route_backing(
+        &self,
+        asset_id: &str,
+    ) -> Result<Vec<VaultBridgeRouteBackingStateV1>, String> {
+        let mut routes = BTreeMap::<String, VaultBridgeRouteBackingStateV1>::new();
+        for deposit in self.vault_bridge_deposits.iter().filter(|record| {
+            record.asset_id == asset_id && record.status == VAULT_BRIDGE_DEPOSIT_STATUS_FINALIZED
+        }) {
+            let Some(route_id) = vault_bridge_route_id_for_source(
+                &deposit.source_proof_kind,
+                deposit.evidence.source_chain_id,
+            ) else {
+                continue;
+            };
+            let row = routes.entry(route_id.to_string()).or_insert_with(|| {
+                VaultBridgeRouteBackingStateV1 {
+                    route_id: route_id.to_string(),
+                    asset_id: asset_id.to_string(),
+                    deposits_verified: 0,
+                    claims_minted: 0,
+                    withdrawals_reserved: 0,
+                    withdrawals_paid: 0,
+                }
+            });
+            row.deposits_verified = row.deposits_verified
+                .checked_add(deposit.evidence.amount_atoms)
+                .ok_or_else(|| "route verified backing overflow".to_string())?;
+            if let Some(receipt) = self.vault_bridge_receipts.iter().find(|receipt| {
+                receipt.asset_id == asset_id
+                    && receipt.bridge_deposit_evidence.as_ref() == Some(&deposit.evidence)
+            }) {
+                row.claims_minted = row.claims_minted
+                    .checked_add(receipt.allocated_value_atoms)
+                    .ok_or_else(|| "route claimed backing overflow".to_string())?;
+            }
+        }
+        for redemption in self.vault_bridge_redemptions.iter().filter(|r| r.asset_id == asset_id) {
+            let Some(bucket) = self.vault_bridge_bucket(&redemption.bucket_id) else { continue; };
+            let route_id = self.vault_bridge_deposits.iter().find(|deposit| {
+                deposit.asset_id == asset_id
+                    && deposit.policy_hash == bucket.policy_hash
+                    && deposit.evidence.source_domain() == bucket.source_domain
+            })
+            .and_then(|deposit| {
+                vault_bridge_route_id_for_source(
+                    &deposit.source_proof_kind,
+                    deposit.evidence.source_chain_id,
+                )
+            });
+            if let Some(route_id) = route_id {
+                if let Some(row) = routes.get_mut(route_id) {
+                    row.withdrawals_reserved = row.withdrawals_reserved.checked_add(redemption.amount_atoms)
+                        .ok_or_else(|| "route withdrawal reserve overflow".to_string())?;
+                    row.withdrawals_paid = row.withdrawals_paid.checked_add(redemption.settled_atoms)
+                        .ok_or_else(|| "route paid withdrawal overflow".to_string())?;
+                }
+            }
+        }
+        let values = routes.into_values().collect::<Vec<_>>();
+        for row in &values { row.validate()?; }
+        Ok(values)
+    }
+
     pub fn new(accounts: Vec<Account>) -> Self {
         Self {
             accounts,
@@ -3200,6 +3290,7 @@ impl LedgerState {
         }
 
         let mut vault_bridge_deposit_keys = BTreeSet::new();
+        let mut vault_bridge_source_nullifiers = BTreeSet::new();
         for record in &self.vault_bridge_deposits {
             record.validate()?;
             let key = (record.asset_id.clone(), record.evidence_root.clone());
@@ -3207,6 +3298,14 @@ impl LedgerState {
                 return Err(format!(
                     "duplicate vault_bridge bridge deposit `{}` for asset `{}`",
                     record.evidence_root, record.asset_id
+                ));
+            }
+            if !record.source_nullifier.is_empty()
+                && !vault_bridge_source_nullifiers.insert(record.source_nullifier.clone())
+            {
+                return Err(format!(
+                    "duplicate vault_bridge source nullifier `{}`",
+                    record.source_nullifier
                 ));
             }
             if !assets_by_id.contains_key(&record.asset_id) {
@@ -3564,5 +3663,27 @@ impl LedgerState {
             }
         }
         Ok(())
+    }
+}
+
+fn vault_bridge_route_id_for_source(
+    source_proof_kind: &str,
+    source_chain_id: u64,
+) -> Option<&'static str> {
+    match (source_proof_kind, source_chain_id) {
+        (SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1, ETHEREUM_MAINNET_CHAIN_ID) => {
+            Some(VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1)
+        }
+        (SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1, ETHEREUM_SEPOLIA_CHAIN_ID) => {
+            Some(VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1)
+        }
+        (
+            NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+            | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1,
+            ARBITRUM_ONE_CHAIN_ID,
+        ) => {
+            Some(VAULT_BRIDGE_ROUTE_ARBITRUM_ONE_USDC_V1)
+        }
+        _ => None,
     }
 }
