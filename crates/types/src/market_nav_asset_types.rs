@@ -1812,39 +1812,76 @@ pub fn preimage_sha256_fulfillment(preimage: &[u8; 32]) -> String {
     )
 }
 
-fn escrow_preimage_sha256_fingerprint(condition: &str) -> Result<Option<[u8; 32]>, String> {
-    if !condition
-        .get(..PREIMAGE_SHA256_CONDITION_HEX_PREFIX.len())
-        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(PREIMAGE_SHA256_CONDITION_HEX_PREFIX))
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EscrowConditionProfile {
+    LegacyOpaque,
+    PreimageSha256 { fingerprint: [u8; 32] },
+}
+
+fn looks_like_typed_crypto_condition(condition: &str) -> bool {
+    let bytes = condition.as_bytes();
+    if bytes.len() >= 2
+        && bytes[0].eq_ignore_ascii_case(&b'a')
+        && bytes[1].eq_ignore_ascii_case(&b'0')
     {
-        return Ok(None);
+        return true;
+    }
+    if bytes.len() < 2
+        || bytes.len() % 2 != 0
+        || !bytes.iter().all(|byte| escrow_hex_nibble(*byte).is_some())
+    {
+        return false;
+    }
+    match (escrow_hex_nibble(bytes[0]), escrow_hex_nibble(bytes[1])) {
+        (Some(high), Some(low)) => ((high << 4) | low) & 0xe0 == 0xa0,
+        _ => false,
+    }
+}
+
+pub fn escrow_condition_profile(condition: &str) -> Result<EscrowConditionProfile, String> {
+    if !looks_like_typed_crypto_condition(condition) {
+        return Ok(EscrowConditionProfile::LegacyOpaque);
+    }
+    if condition.bytes().any(|byte| byte.is_ascii_uppercase()) {
+        return Err("PREIMAGE-SHA-256 escrow condition must use canonical lowercase hex".to_string());
     }
     let expected_len = PREIMAGE_SHA256_CONDITION_HEX_PREFIX.len()
         + 64
         + PREIMAGE_SHA256_CONDITION_HEX_SUFFIX.len();
-    if condition.len() != expected_len
-        || !condition
-            .get(condition.len() - PREIMAGE_SHA256_CONDITION_HEX_SUFFIX.len()..)
-            .is_some_and(|suffix| suffix.eq_ignore_ascii_case(PREIMAGE_SHA256_CONDITION_HEX_SUFFIX))
-    {
+    if condition.len() != expected_len {
         return Err("invalid PREIMAGE-SHA-256 escrow condition encoding".to_string());
     }
-    decode_escrow_hex_32(
+    if !condition.starts_with(PREIMAGE_SHA256_CONDITION_HEX_PREFIX) {
+        return Err("unsupported escrow crypto-condition type; expected PREIMAGE-SHA-256".to_string());
+    }
+    if !condition.ends_with(PREIMAGE_SHA256_CONDITION_HEX_SUFFIX) {
+        return Err("non-canonical PREIMAGE-SHA-256 escrow condition encoding".to_string());
+    }
+    let fingerprint = decode_escrow_hex_32(
         &condition[PREIMAGE_SHA256_CONDITION_HEX_PREFIX.len()
             ..PREIMAGE_SHA256_CONDITION_HEX_PREFIX.len() + 64],
     )
-    .map(Some)
-    .ok_or_else(|| "invalid PREIMAGE-SHA-256 escrow condition fingerprint".to_string())
+    .ok_or_else(|| "invalid PREIMAGE-SHA-256 escrow condition fingerprint".to_string())?;
+    Ok(EscrowConditionProfile::PreimageSha256 { fingerprint })
 }
 
 fn escrow_preimage_sha256_preimage(fulfillment: &str) -> Result<[u8; 32], String> {
+    if fulfillment.is_empty() {
+        return Err("PREIMAGE-SHA-256 escrow fulfillment must not be empty".to_string());
+    }
+    if fulfillment.bytes().any(|byte| byte.is_ascii_uppercase()) {
+        return Err(
+            "PREIMAGE-SHA-256 escrow fulfillment must use canonical lowercase hex".to_string(),
+        );
+    }
     let expected_len = PREIMAGE_SHA256_FULFILLMENT_HEX_PREFIX.len() + 64;
-    if fulfillment.len() != expected_len
-        || !fulfillment
-            .get(..PREIMAGE_SHA256_FULFILLMENT_HEX_PREFIX.len())
-            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(PREIMAGE_SHA256_FULFILLMENT_HEX_PREFIX))
-    {
+    if fulfillment.len() != expected_len {
         return Err("invalid PREIMAGE-SHA-256 escrow fulfillment encoding".to_string());
+    }
+    if !fulfillment.starts_with(PREIMAGE_SHA256_FULFILLMENT_HEX_PREFIX) {
+        return Err(
+            "unsupported escrow crypto-fulfillment type; expected PREIMAGE-SHA-256".to_string(),
+        );
     }
     decode_escrow_hex_32(&fulfillment[PREIMAGE_SHA256_FULFILLMENT_HEX_PREFIX.len()..])
         .ok_or_else(|| "invalid PREIMAGE-SHA-256 escrow fulfillment preimage".to_string())
@@ -1874,7 +1911,7 @@ fn escrow_hex_nibble(value: u8) -> Option<u8> {
 }
 
 pub fn validate_escrow_condition(condition: &str) -> Result<(), String> {
-    escrow_preimage_sha256_fingerprint(condition).map(|_| ())
+    escrow_condition_profile(condition).map(|_| ())
 }
 
 /// Evaluate an escrow fulfillment. Legacy opaque conditions retain exact
@@ -1883,12 +1920,14 @@ pub fn escrow_fulfillment_satisfies(
     condition: &str,
     fulfillment: &str,
 ) -> Result<bool, String> {
-    let Some(expected) = escrow_preimage_sha256_fingerprint(condition)? else {
-        return Ok(fulfillment == condition);
-    };
-    let preimage = escrow_preimage_sha256_preimage(fulfillment)?;
-    let actual = Sha256::digest(preimage);
-    Ok(actual.as_slice() == expected)
+    match escrow_condition_profile(condition)? {
+        EscrowConditionProfile::LegacyOpaque => Ok(fulfillment == condition),
+        EscrowConditionProfile::PreimageSha256 { fingerprint } => {
+            let preimage = escrow_preimage_sha256_preimage(fulfillment)?;
+            let actual = Sha256::digest(preimage);
+            Ok(actual.as_slice() == fingerprint)
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

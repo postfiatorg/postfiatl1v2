@@ -1,6 +1,9 @@
     #[test]
     fn issued_asset_escrow_locks_finishes_cancels_and_counts_locked_supply() {
         let genesis = Genesis::new("postfiat-local");
+        let preimage = [0x51_u8; 32];
+        let condition = postfiat_types::preimage_sha256_condition(&preimage);
+        let fulfillment = postfiat_types::preimage_sha256_fulfillment(&preimage);
         let issuer_key = ml_dsa_65_keygen().expect("issuer keygen");
         let owner_key = ml_dsa_65_keygen().expect("owner keygen");
         let recipient_key = ml_dsa_65_keygen().expect("recipient keygen");
@@ -39,7 +42,7 @@
                 display_name: "Issued Escrow Test".to_string(),
                 max_supply: Some(120),
                 requires_authorization: false,
-                freeze_enabled: true,
+                freeze_enabled: false,
                 clawback_enabled: false,
             }),
         );
@@ -117,7 +120,7 @@
                 recipient: recipient.clone(),
                 asset_id: asset_id.clone(),
                 amount: 30,
-                condition: "issued-secret".to_string(),
+                condition: condition.clone(),
                 finish_after: 2,
                 cancel_after: 5,
             }),
@@ -193,7 +196,7 @@
                 escrow_id: first_escrow_id.clone(),
                 owner: owner.clone(),
                 recipient: recipient.clone(),
-                fulfillment: "issued-secret".to_string(),
+                fulfillment: fulfillment.clone(),
             }),
         );
         let receipt = execute_escrow_transaction(&genesis, &mut ledger, &finish, 2);
@@ -226,9 +229,9 @@
                 recipient: recipient.clone(),
                 asset_id: asset_id.clone(),
                 amount: 20,
-                condition: String::new(),
+                condition: condition.clone(),
                 finish_after: 0,
-                cancel_after: 4,
+                cancel_after: 5,
             }),
         );
         let receipt = execute_escrow_transaction(&genesis, &mut ledger, &create_cancelable, 3);
@@ -274,7 +277,7 @@
                 owner: owner.clone(),
             }),
         );
-        let receipt = execute_escrow_transaction(&genesis, &mut ledger, &cancel, 4);
+        let receipt = execute_escrow_transaction(&genesis, &mut ledger, &cancel, 5);
         assert!(receipt.accepted, "{receipt:?}");
         assert_eq!(
             ledger

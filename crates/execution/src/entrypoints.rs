@@ -3,7 +3,8 @@ use postfiat_crypto_provider::{
     ML_DSA_65_ALGORITHM,
 };
 use postfiat_types::{
-    escrow_fulfillment_satisfies, escrow_id, market_ops_asset_id, market_ops_evidence_root, market_ops_reserve_packet_hash,
+    escrow_condition_profile, escrow_fulfillment_satisfies, escrow_id, market_ops_asset_id,
+    market_ops_evidence_root, market_ops_reserve_packet_hash,
     market_ops_supply_packet_hash, nav_redemption_id, nft_id, offer_id,
     pftl_uniswap_non_consumption_proof_hash, pftl_uniswap_return_burn_id_from_fields,
     vault_bridge_deposit_evidence_root, vault_bridge_deposit_observation_root,
@@ -91,8 +92,10 @@ use postfiat_types::{
     VAULT_BRIDGE_RECEIPT_STATUS_RETIRED, VAULT_BRIDGE_RECEIPT_SUBMIT_TRANSACTION_KIND,
     VAULT_BRIDGE_REDEEM_SETTLE_TRANSACTION_KIND, VAULT_BRIDGE_REDEMPTION_STATE_PENDING,
     VAULT_BRIDGE_REDEMPTION_STATE_SETTLED, VAULT_BRIDGE_UNIT, TRANSFER_TRANSACTION_KIND,
-    TRUST_SET_TRANSACTION_KIND,
+    TRUST_SET_TRANSACTION_KIND, EscrowConditionProfile, PREIMAGE_SHA256_MIN_CLAIM_WINDOW_BLOCKS,
 };
+#[cfg(test)]
+use postfiat_types::{MAX_ESCROW_CONDITION_BYTES, MAX_ESCROW_FULFILLMENT_BYTES};
 
 pub const CRATE_PURPOSE: &str = "deterministic state transition and receipts";
 pub const MIN_TRANSFER_FEE: u64 = 1;

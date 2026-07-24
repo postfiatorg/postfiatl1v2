@@ -70,6 +70,7 @@ pub const ESCROW_CONDITION_HASH_DOMAIN: &str = "postfiat.escrow_condition_hash.v
 pub const PREIMAGE_SHA256_CONDITION_HEX_PREFIX: &str = "a0258020";
 pub const PREIMAGE_SHA256_CONDITION_HEX_SUFFIX: &str = "810120";
 pub const PREIMAGE_SHA256_FULFILLMENT_HEX_PREFIX: &str = "a0228020";
+pub const PREIMAGE_SHA256_MIN_CLAIM_WINDOW_BLOCKS: u64 = 2;
 pub const ATOMIC_SETTLEMENT_TEMPLATE_ID_DOMAIN: &str = "postfiat.atomic_settlement_template_id.v1";
 pub const OFFER_ID_DOMAIN: &str = "postfiat.offer_id.v1";
 pub const NAV_RESERVE_PACKET_ID_DOMAIN: &str = "postfiat.nav_reserve_packet_id.v1";

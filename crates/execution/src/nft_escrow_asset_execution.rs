@@ -259,6 +259,36 @@ fn apply_escrow_operation(
                     format!("escrow `{escrow_id}` already exists"),
                 ));
             }
+            if matches!(
+                escrow_condition_profile(&operation.condition)
+                    .map_err(|error| ("bad_escrow_condition", error))?,
+                EscrowConditionProfile::PreimageSha256 { .. }
+            ) {
+                if operation.cancel_after == 0 {
+                    return Err((
+                        "escrow_cancel_after_required",
+                        "PREIMAGE-SHA-256 escrow requires a nonzero cancel_after height"
+                            .to_string(),
+                    ));
+                }
+                let minimum_cancel_after = block_height
+                    .checked_add(PREIMAGE_SHA256_MIN_CLAIM_WINDOW_BLOCKS)
+                    .ok_or_else(|| {
+                        (
+                            "escrow_claim_window_too_short",
+                            "PREIMAGE-SHA-256 escrow claim window overflows block height"
+                                .to_string(),
+                        )
+                    })?;
+                if operation.cancel_after < minimum_cancel_after {
+                    return Err((
+                        "escrow_claim_window_too_short",
+                        format!(
+                            "PREIMAGE-SHA-256 escrow cancel_after must be at least height {minimum_cancel_after}"
+                        ),
+                    ));
+                }
+            }
             if operation.asset_id == NATIVE_PFT_ESCROW_ASSET_ID {
                 let owner = ledger.account_mut(&operation.owner).ok_or_else(|| {
                     (
@@ -328,6 +358,15 @@ fn apply_escrow_operation(
                 return Err((
                     "escrow_finish_too_early",
                     format!("escrow cannot finish before height {}", escrow.finish_after),
+                ));
+            }
+            if escrow.cancel_after != 0 && block_height >= escrow.cancel_after {
+                return Err((
+                    "escrow_finish_expired",
+                    format!(
+                        "escrow cannot finish at or after cancel_after height {}",
+                        escrow.cancel_after
+                    ),
                 ));
             }
             if !escrow.condition.is_empty()

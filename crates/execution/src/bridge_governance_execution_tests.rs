@@ -1703,6 +1703,29 @@
             ESCROW_STATE_FINISHED
         );
 
+        let before_duplicate_finish = ledger.clone();
+        let receipt = execute_escrow_transaction(&genesis, &mut ledger, &finish, 3);
+        assert!(!receipt.accepted);
+        assert_eq!(receipt.code, "bad_sequence");
+        assert_eq!(ledger, before_duplicate_finish);
+        let fresh_duplicate_finish = signed_escrow_transaction_with_minimum_fee(
+            &genesis,
+            &ledger,
+            &recipient_key,
+            ESCROW_FINISH_TRANSACTION_KIND,
+            2,
+            EscrowTransactionOperation::EscrowFinish(EscrowFinishOperation {
+                escrow_id: first_escrow_id.clone(),
+                owner: owner.clone(),
+                recipient: recipient.clone(),
+                fulfillment: fulfillment.clone(),
+            }),
+        );
+        let receipt = execute_escrow_transaction(&genesis, &mut ledger, &fresh_duplicate_finish, 3);
+        assert!(!receipt.accepted);
+        assert_eq!(receipt.code, "escrow_not_open");
+        assert_eq!(ledger, before_duplicate_finish);
+
         let cancel_finished = signed_escrow_transaction_with_minimum_fee(
             &genesis,
             &ledger,
@@ -1782,9 +1805,240 @@
                 .state,
             ESCROW_STATE_CANCELED
         );
+        let before_duplicate_cancel = ledger.clone();
+        let receipt = execute_escrow_transaction(&genesis, &mut ledger, &cancel, 4);
+        assert!(!receipt.accepted);
+        assert_eq!(receipt.code, "bad_sequence");
+        assert_eq!(ledger, before_duplicate_cancel);
+        let fresh_duplicate_cancel = signed_escrow_transaction_with_minimum_fee(
+            &genesis,
+            &ledger,
+            &owner_key,
+            ESCROW_CANCEL_TRANSACTION_KIND,
+            4,
+            EscrowTransactionOperation::EscrowCancel(EscrowCancelOperation {
+                escrow_id: second_escrow_id.clone(),
+                owner: owner.clone(),
+            }),
+        );
+        let receipt =
+            execute_escrow_transaction(&genesis, &mut ledger, &fresh_duplicate_cancel, 4);
+        assert!(!receipt.accepted);
+        assert_eq!(receipt.code, "escrow_not_open");
+        assert_eq!(ledger, before_duplicate_cancel);
         ledger
             .validate_escrow_state(&genesis.chain_id)
             .expect("valid escrow state");
+    }
+
+    #[test]
+    fn preimage_sha256_escrow_rejects_malformed_and_enforces_exclusive_expiry() {
+        let genesis = Genesis::new("postfiat-local");
+        let owner_key = ml_dsa_65_keygen().expect("owner keygen");
+        let recipient_key = ml_dsa_65_keygen().expect("recipient keygen");
+        let owner = address_from_public_key(&owner_key.public_key);
+        let recipient = address_from_public_key(&recipient_key.public_key);
+        let preimage = [0x61_u8; 32];
+        let condition = postfiat_types::preimage_sha256_condition(&preimage);
+        let fulfillment = postfiat_types::preimage_sha256_fulfillment(&preimage);
+        let mut ledger = LedgerState::new(vec![
+            Account::new(owner.clone(), 10_000, Some(bytes_to_hex(&owner_key.public_key))),
+            Account::new(
+                recipient.clone(),
+                10_000,
+                Some(bytes_to_hex(&recipient_key.public_key)),
+            ),
+        ]);
+
+        for (cancel_after, expected_code) in [
+            (0, "escrow_cancel_after_required"),
+            (1, "escrow_claim_window_too_short"),
+            (2, "escrow_claim_window_too_short"),
+        ] {
+            let create = signed_escrow_transaction_with_minimum_fee(
+                &genesis,
+                &ledger,
+                &owner_key,
+                ESCROW_CREATE_TRANSACTION_KIND,
+                1,
+                EscrowTransactionOperation::EscrowCreate(EscrowCreateOperation {
+                    owner: owner.clone(),
+                    recipient: recipient.clone(),
+                    asset_id: NATIVE_PFT_ESCROW_ASSET_ID.to_string(),
+                    amount: 100,
+                    condition: condition.clone(),
+                    finish_after: 0,
+                    cancel_after,
+                }),
+            );
+            let before = ledger.clone();
+            let receipt = execute_escrow_transaction(&genesis, &mut ledger, &create, 1);
+            assert!(!receipt.accepted);
+            assert_eq!(receipt.code, expected_code);
+            assert_eq!(ledger, before);
+        }
+
+        let malformed_conditions = [
+            condition.to_uppercase(),
+            format!("a1258020{}810120", "00".repeat(32)),
+            format!("a0258120{}810120", "00".repeat(32)),
+            format!("a0258020{}810121", "00".repeat(32)),
+            format!("a0258020{}810120", "00".repeat(31)),
+            "x".repeat(MAX_ESCROW_CONDITION_BYTES + 1),
+        ];
+        for malformed in malformed_conditions {
+            let create = signed_escrow_transaction_with_minimum_fee(
+                &genesis,
+                &ledger,
+                &owner_key,
+                ESCROW_CREATE_TRANSACTION_KIND,
+                1,
+                EscrowTransactionOperation::EscrowCreate(EscrowCreateOperation {
+                    owner: owner.clone(),
+                    recipient: recipient.clone(),
+                    asset_id: NATIVE_PFT_ESCROW_ASSET_ID.to_string(),
+                    amount: 100,
+                    condition: malformed,
+                    finish_after: 0,
+                    cancel_after: 4,
+                }),
+            );
+            let before = ledger.clone();
+            let receipt = execute_escrow_transaction(&genesis, &mut ledger, &create, 1);
+            assert!(!receipt.accepted);
+            assert_eq!(receipt.code, "bad_escrow_transaction_envelope");
+            assert_eq!(ledger, before);
+        }
+
+        let escrow_id = escrow_id(&genesis.chain_id, &owner, 1).expect("escrow id");
+        let create = signed_escrow_transaction_with_minimum_fee(
+            &genesis,
+            &ledger,
+            &owner_key,
+            ESCROW_CREATE_TRANSACTION_KIND,
+            1,
+            EscrowTransactionOperation::EscrowCreate(EscrowCreateOperation {
+                owner: owner.clone(),
+                recipient: recipient.clone(),
+                asset_id: NATIVE_PFT_ESCROW_ASSET_ID.to_string(),
+                amount: 100,
+                condition: condition.clone(),
+                finish_after: 0,
+                cancel_after: 4,
+            }),
+        );
+        assert!(execute_escrow_transaction(&genesis, &mut ledger, &create, 1).accepted);
+        let before_duplicate_create = ledger.clone();
+        let receipt = execute_escrow_transaction(&genesis, &mut ledger, &create, 2);
+        assert!(!receipt.accepted);
+        assert_eq!(receipt.code, "bad_sequence");
+        assert_eq!(ledger, before_duplicate_create);
+
+        let malformed_fulfillments = [
+            (String::new(), "invalid_escrow_fulfillment"),
+            (fulfillment.to_uppercase(), "invalid_escrow_fulfillment"),
+            (
+                format!("a1228020{}", "00".repeat(32)),
+                "invalid_escrow_fulfillment",
+            ),
+            (
+                format!("a021801f{}", "00".repeat(31)),
+                "invalid_escrow_fulfillment",
+            ),
+            (
+                "x".repeat(MAX_ESCROW_FULFILLMENT_BYTES + 1),
+                "bad_escrow_transaction_envelope",
+            ),
+        ];
+        for (malformed, expected_code) in malformed_fulfillments {
+            let finish = signed_escrow_transaction_with_minimum_fee(
+                &genesis,
+                &ledger,
+                &recipient_key,
+                ESCROW_FINISH_TRANSACTION_KIND,
+                1,
+                EscrowTransactionOperation::EscrowFinish(EscrowFinishOperation {
+                    escrow_id: escrow_id.clone(),
+                    owner: owner.clone(),
+                    recipient: recipient.clone(),
+                    fulfillment: malformed,
+                }),
+            );
+            let before = ledger.clone();
+            let receipt = execute_escrow_transaction(&genesis, &mut ledger, &finish, 2);
+            assert!(!receipt.accepted);
+            assert_eq!(receipt.code, expected_code);
+            assert_eq!(ledger, before);
+        }
+
+        let wrong = signed_escrow_transaction_with_minimum_fee(
+            &genesis,
+            &ledger,
+            &recipient_key,
+            ESCROW_FINISH_TRANSACTION_KIND,
+            1,
+            EscrowTransactionOperation::EscrowFinish(EscrowFinishOperation {
+                escrow_id: escrow_id.clone(),
+                owner: owner.clone(),
+                recipient: recipient.clone(),
+                fulfillment: postfiat_types::preimage_sha256_fulfillment(&[0x62_u8; 32]),
+            }),
+        );
+        let before_wrong = ledger.clone();
+        let receipt = execute_escrow_transaction(&genesis, &mut ledger, &wrong, 2);
+        assert!(!receipt.accepted);
+        assert_eq!(receipt.code, "escrow_condition_unsatisfied");
+        assert_eq!(ledger, before_wrong);
+
+        let cancel = signed_escrow_transaction_with_minimum_fee(
+            &genesis,
+            &ledger,
+            &owner_key,
+            ESCROW_CANCEL_TRANSACTION_KIND,
+            2,
+            EscrowTransactionOperation::EscrowCancel(EscrowCancelOperation {
+                escrow_id: escrow_id.clone(),
+                owner: owner.clone(),
+            }),
+        );
+        let before_early_cancel = ledger.clone();
+        let receipt = execute_escrow_transaction(&genesis, &mut ledger, &cancel, 3);
+        assert!(!receipt.accepted);
+        assert_eq!(receipt.code, "escrow_cancel_too_early");
+        assert_eq!(ledger, before_early_cancel);
+
+        let late_finish = signed_escrow_transaction_with_minimum_fee(
+            &genesis,
+            &ledger,
+            &recipient_key,
+            ESCROW_FINISH_TRANSACTION_KIND,
+            1,
+            EscrowTransactionOperation::EscrowFinish(EscrowFinishOperation {
+                escrow_id: escrow_id.clone(),
+                owner: owner.clone(),
+                recipient: recipient.clone(),
+                fulfillment: fulfillment.clone(),
+            }),
+        );
+        for height in [4, 5] {
+            let before = ledger.clone();
+            let receipt = execute_escrow_transaction(&genesis, &mut ledger, &late_finish, height);
+            assert!(!receipt.accepted);
+            assert_eq!(receipt.code, "escrow_finish_expired");
+            assert_eq!(ledger, before);
+        }
+
+        let receipt = execute_escrow_transaction(&genesis, &mut ledger, &cancel, 4);
+        assert!(receipt.accepted, "{receipt:?}");
+        assert_eq!(
+            ledger.escrow(&escrow_id).expect("canceled escrow").state,
+            ESCROW_STATE_CANCELED
+        );
+        let before_finish_canceled = ledger.clone();
+        let receipt = execute_escrow_transaction(&genesis, &mut ledger, &late_finish, 5);
+        assert!(!receipt.accepted);
+        assert_eq!(receipt.code, "escrow_not_open");
+        assert_eq!(ledger, before_finish_canceled);
     }
 
     #[test]

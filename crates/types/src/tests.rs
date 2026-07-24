@@ -806,11 +806,22 @@ fn preimage_sha256_escrow_condition_uses_canonical_crypto_conditions_encoding() 
     let condition = preimage_sha256_condition(&preimage);
     let fulfillment = preimage_sha256_fulfillment(&preimage);
 
-    assert_eq!(condition.len(), 78);
-    assert!(condition.starts_with(PREIMAGE_SHA256_CONDITION_HEX_PREFIX));
-    assert!(condition.ends_with(PREIMAGE_SHA256_CONDITION_HEX_SUFFIX));
-    assert_eq!(fulfillment.len(), 72);
-    assert!(fulfillment.starts_with(PREIMAGE_SHA256_FULFILLMENT_HEX_PREFIX));
+    assert_eq!(
+        condition,
+        "a0258020630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd810120"
+    );
+    assert_eq!(
+        fulfillment,
+        "a0228020000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+    );
+    assert_eq!(
+        preimage_sha256_condition(&[0_u8; 32]),
+        "a025802066687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925810120"
+    );
+    assert!(matches!(
+        escrow_condition_profile(&condition).expect("typed profile"),
+        EscrowConditionProfile::PreimageSha256 { .. }
+    ));
     assert!(escrow_fulfillment_satisfies(&condition, &fulfillment).expect("valid condition"));
 
     let mut wrong_preimage = preimage;
@@ -820,13 +831,55 @@ fn preimage_sha256_escrow_condition_uses_canonical_crypto_conditions_encoding() 
         &preimage_sha256_fulfillment(&wrong_preimage),
     )
     .expect("well-formed wrong fulfillment"));
-    assert!(escrow_fulfillment_satisfies(&condition, "not-a-fulfillment").is_err());
+    for malformed in [
+        String::new(),
+        "not-a-fulfillment".to_string(),
+        fulfillment.to_uppercase(),
+        format!("a1228020{}", "00".repeat(32)),
+        format!("a021801f{}", "00".repeat(31)),
+    ] {
+        assert!(
+            escrow_fulfillment_satisfies(&condition, &malformed).is_err(),
+            "malformed fulfillment accepted: {malformed}"
+        );
+    }
+    for malformed in [
+        condition.to_uppercase(),
+        format!("a1258020{}810120", "00".repeat(32)),
+        format!("a0258120{}810120", "00".repeat(32)),
+        format!("a0258020{}810121", "00".repeat(32)),
+        format!("a0258020{}", "00".repeat(31)),
+    ] {
+        assert!(
+            validate_escrow_condition(&malformed).is_err(),
+            "malformed condition accepted: {malformed}"
+        );
+    }
     assert!(validate_escrow_condition(&format!(
         "{PREIMAGE_SHA256_CONDITION_HEX_PREFIX}{}000000",
         "00".repeat(32),
     ))
     .is_err());
     assert!(escrow_fulfillment_satisfies("legacy-secret", "legacy-secret").unwrap());
+    assert!(!escrow_fulfillment_satisfies("legacy-secret", "LEGACY-SECRET").unwrap());
+
+    let oversized_condition = EscrowCreateOperation {
+        owner: "pfowner".to_string(),
+        recipient: "pfrecipient".to_string(),
+        asset_id: "PFT".to_string(),
+        amount: 1,
+        condition: "x".repeat(MAX_ESCROW_CONDITION_BYTES + 1),
+        finish_after: 0,
+        cancel_after: 10,
+    };
+    assert!(oversized_condition.validate().is_err());
+    let oversized_fulfillment = EscrowFinishOperation {
+        escrow_id: "0".repeat(ESCROW_ID_HEX_LEN),
+        owner: "pfowner".to_string(),
+        recipient: "pfrecipient".to_string(),
+        fulfillment: "x".repeat(MAX_ESCROW_FULFILLMENT_BYTES + 1),
+    };
+    assert!(oversized_fulfillment.validate().is_err());
 }
 
 #[test]
