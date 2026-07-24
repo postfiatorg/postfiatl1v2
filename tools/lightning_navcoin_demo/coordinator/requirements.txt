@@ -1,3 +1,3 @@
 # Runtime public-key quote signatures. LND gRPC/generated modules are supplied
 # by the fully synthetic environment image, not imported by the core package.
-cryptography>=41.0.7,<44
+cryptography==41.0.7
