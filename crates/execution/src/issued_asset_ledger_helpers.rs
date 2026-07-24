@@ -658,10 +658,12 @@ pub fn issued_asset_supply(
         )
     })?;
     let mut route_ids = std::collections::BTreeSet::new();
-    let external_bridge_supply = ledger
+    let pftl_uniswap_route_custody_supply = ledger
         .pftl_uniswap_routes
         .iter()
-        .filter(|route| route.native_nav_asset_id == asset_id)
+        .filter(|route| {
+            route.native_nav_asset_id == asset_id || route.settlement_asset_id == asset_id
+        })
         .try_fold(0_u64, |total, route| {
             if !route_ids.insert(route.route_id.as_str()) {
                 return Err((
@@ -669,24 +671,45 @@ pub fn issued_asset_supply(
                     format!("duplicate PFTL-Uniswap route `{}`", route.route_id),
                 ));
             }
-            let route_external = route
-                .outstanding_bridge_claims_atoms
-                .checked_add(route.pending_return_import_claims_atoms)
-                .and_then(|value| value.checked_add(route.ethereum_spendable_supply_atoms))
-                .and_then(|value| value.checked_add(route.other_registered_venue_supply_atoms))
-                .ok_or_else(|| {
-                    (
-                        "issued_supply_overflow",
-                        format!(
-                            "issued asset external bridge supply overflowed for route `{}`",
-                            route.route_id
-                        ),
-                    )
-                })?;
-            total.checked_add(route_external).ok_or_else(|| {
+            let native_external = if route.native_nav_asset_id == asset_id {
+                route
+                    .outstanding_bridge_claims_atoms
+                    .checked_add(route.pending_return_import_claims_atoms)
+                    .and_then(|value| value.checked_add(route.ethereum_spendable_supply_atoms))
+                    .and_then(|value| value.checked_add(route.other_registered_venue_supply_atoms))
+                    .ok_or_else(|| {
+                        (
+                            "issued_supply_overflow",
+                            format!(
+                                "issued asset external bridge supply overflowed for route `{}`",
+                                route.route_id
+                            ),
+                        )
+                    })?
+            } else {
+                0
+            };
+            let settlement_reserve = if route.settlement_asset_id == asset_id {
+                route.settlement_reserve_atoms
+            } else {
+                0
+            };
+            let route_custody =
+                native_external
+                    .checked_add(settlement_reserve)
+                    .ok_or_else(|| {
+                        (
+                            "issued_supply_overflow",
+                            format!(
+                                "issued asset route custody overflowed for route `{}`",
+                                route.route_id
+                            ),
+                        )
+                    })?;
+            total.checked_add(route_custody).ok_or_else(|| {
                 (
                     "issued_supply_overflow",
-                    "issued asset external bridge supply total overflowed".to_string(),
+                    "issued asset PFTL-Uniswap route custody total overflowed".to_string(),
                 )
             })
         })?;
@@ -694,7 +717,7 @@ pub fn issued_asset_supply(
         .checked_add(open_escrow_supply)
         .and_then(|supply| supply.checked_add(open_offer_supply))
         .and_then(|supply| supply.checked_add(fast_lane_reserve_supply))
-        .and_then(|supply| supply.checked_add(external_bridge_supply))
+        .and_then(|supply| supply.checked_add(pftl_uniswap_route_custody_supply))
         .ok_or_else(|| {
             (
                 "issued_supply_overflow",

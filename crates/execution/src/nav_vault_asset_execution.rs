@@ -3285,6 +3285,36 @@ fn apply_pftl_uniswap_primary_subscribe(
             "primary subscription would exceed route supply cap".to_string(),
         ));
     }
+    // Pricing above is bound to the finalized pre-inflow NAV snapshot. The
+    // paid fill grows its issued-supply accounting bound by exactly the atoms
+    // minted in this same transition; it does not create unbacked headroom.
+    let native_circulating_supply_after = native_nav_asset
+        .circulating_supply
+        .checked_add(minted_nav_atoms)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_nav_supply_overflow",
+                "primary subscription NAV circulating supply would overflow".to_string(),
+            )
+        })?;
+    let settlement_reserve_after = route
+        .settlement_reserve_atoms
+        .checked_add(settlement_debit_atoms)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_reserve_overflow",
+                "settlement reserve would overflow".to_string(),
+            )
+        })?;
+    let pftl_spendable_supply_after = route
+        .pftl_spendable_supply_atoms
+        .checked_add(minted_nav_atoms)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_supply_overflow",
+                "PFTL spendable route supply would overflow".to_string(),
+            )
+        })?;
     debit_issued_asset_balance(
         ledger,
         &operation.subscriber,
@@ -3306,33 +3336,26 @@ fn apply_pftl_uniswap_primary_subscribe(
         .primary_subscription_nonces
         .insert(operation.subscription_nonce.clone(), operation.subscriber.clone());
     next_route.authorized_valid_supply_atoms = supply_after;
-    next_route.pftl_spendable_supply_atoms = next_route
-        .pftl_spendable_supply_atoms
-        .checked_add(minted_nav_atoms)
-        .ok_or_else(|| {
-            (
-                "pftl_uniswap_supply_overflow",
-                "PFTL spendable route supply would overflow".to_string(),
-            )
-        })?;
+    next_route.pftl_spendable_supply_atoms = pftl_spendable_supply_after;
     pftl_uniswap_credit_native_route_balance(
         &mut next_route,
         &operation.subscriber,
         minted_nav_atoms,
     )?;
-    next_route.settlement_reserve_atoms = next_route
-        .settlement_reserve_atoms
-        .checked_add(settlement_debit_atoms)
-        .ok_or_else(|| {
-            (
-                "pftl_uniswap_reserve_overflow",
-                "settlement reserve would overflow".to_string(),
-            )
-        })?;
+    next_route.settlement_reserve_atoms = settlement_reserve_after;
     next_route
         .validate()
         .map_err(|error| ("bad_pftl_uniswap_route", error))?;
     let state_after_hash = pftl_uniswap_route_state_hash(&next_route);
+    ledger
+        .nav_asset_mut(&next_route.native_nav_asset_id)
+        .ok_or_else(|| {
+            (
+                "missing_pftl_uniswap_nav_asset",
+                "primary subscription native NAV asset disappeared before commit".to_string(),
+            )
+        })?
+        .circulating_supply = native_circulating_supply_after;
     ledger.pftl_uniswap_routes[route_index] = next_route;
     append_pftl_uniswap_consensus_receipt(
         ledger,

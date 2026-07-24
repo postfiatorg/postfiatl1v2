@@ -3924,6 +3924,16 @@
 
         let receipt = super::execute_asset_transaction(&genesis, &mut ledger, &subscribe, 9);
         assert!(receipt.accepted, "{receipt:?}");
+        let native_nav_after_subscription = ledger
+            .nav_asset(&native_nav_asset_id)
+            .expect("native NAV asset after subscription");
+        assert_eq!(native_nav_after_subscription.finalized_epoch, 7);
+        assert_eq!(native_nav_after_subscription.nav_per_unit, 7_000_000);
+        assert_eq!(
+            native_nav_after_subscription.finalized_reserve_packet_hash,
+            pricing_reserve_packet_hash
+        );
+        assert_eq!(native_nav_after_subscription.circulating_supply, 100);
         assert_eq!(
             ledger
                 .trustline_for_account_asset(&subscriber, &settlement_asset_id)
@@ -3953,7 +3963,89 @@
                 Some(100)
             );
         }
+        assert_eq!(
+            issued_asset_supply(&ledger, &native_nav_asset_id)
+                .expect("native issued supply after primary fill"),
+            100
+        );
+        assert_eq!(
+            issued_asset_supply(&ledger, &settlement_asset_id)
+                .expect("settlement issued supply after reserve custody move"),
+            1_000
+        );
         assert_eq!(ledger.pftl_uniswap_receipts.len(), 2);
+
+        let duplicate_subscribe = signed_asset_transaction_with_minimum_fee(
+            &genesis,
+            &ledger,
+            &subscriber_key,
+            PFTL_UNISWAP_PRIMARY_SUBSCRIBE_TRANSACTION_KIND,
+            4,
+            subscribe.unsigned.operation.clone(),
+        );
+        let before_duplicate_subscribe = ledger.clone();
+        let receipt =
+            super::execute_asset_transaction(&genesis, &mut ledger, &duplicate_subscribe, 10);
+        assert!(!receipt.accepted);
+        assert_eq!(receipt.code, "duplicate_pftl_uniswap_subscription_nonce");
+        assert_eq!(ledger, before_duplicate_subscribe);
+
+        let mut capped_ledger = ledger.clone();
+        capped_ledger
+            .pftl_uniswap_route_mut(&route_id)
+            .expect("route to cap")
+            .route_supply_cap_atoms = 100;
+        let capped_subscribe = signed_asset_transaction_with_minimum_fee(
+            &genesis,
+            &capped_ledger,
+            &subscriber_key,
+            PFTL_UNISWAP_PRIMARY_SUBSCRIBE_TRANSACTION_KIND,
+            4,
+            AssetTransactionOperation::PftlUniswapPrimarySubscribe(
+                PftlUniswapPrimarySubscribeOperation {
+                    subscriber: subscriber.clone(),
+                    route_id: route_id.clone(),
+                    settlement_asset_id: settlement_asset_id.clone(),
+                    subscription_nonce: "45".repeat(32),
+                    settlement_value_atoms: 7,
+                    nav_price_settlement_atoms_per_nav_atom: 7,
+                    pricing_nav_epoch: 7,
+                    pricing_reserve_packet_hash: pricing_reserve_packet_hash.clone(),
+                },
+            ),
+        );
+        let before_capped_subscribe = capped_ledger.clone();
+        let receipt =
+            super::execute_asset_transaction(&genesis, &mut capped_ledger, &capped_subscribe, 10);
+        assert!(!receipt.accepted);
+        assert_eq!(receipt.code, "pftl_uniswap_route_supply_cap_exceeded");
+        assert_eq!(capped_ledger, before_capped_subscribe);
+
+        let malformed_subscribe = signed_asset_transaction_with_minimum_fee(
+            &genesis,
+            &ledger,
+            &subscriber_key,
+            PFTL_UNISWAP_PRIMARY_SUBSCRIBE_TRANSACTION_KIND,
+            4,
+            AssetTransactionOperation::PftlUniswapPrimarySubscribe(
+                PftlUniswapPrimarySubscribeOperation {
+                    subscriber: subscriber.clone(),
+                    route_id: route_id.clone(),
+                    settlement_asset_id: settlement_asset_id.clone(),
+                    subscription_nonce: "46".repeat(32),
+                    settlement_value_atoms: 6,
+                    nav_price_settlement_atoms_per_nav_atom: 7,
+                    pricing_nav_epoch: 7,
+                    pricing_reserve_packet_hash: pricing_reserve_packet_hash.clone(),
+                },
+            ),
+        );
+        let before_malformed_subscribe = ledger.clone();
+        let receipt =
+            super::execute_asset_transaction(&genesis, &mut ledger, &malformed_subscribe, 10);
+        assert!(!receipt.accepted);
+        assert_eq!(receipt.code, "subscription_mints_zero_nav");
+        assert_eq!(ledger, before_malformed_subscribe);
 
         let packet_hash = "66".repeat(48);
         let export = signed_asset_transaction_with_minimum_fee(

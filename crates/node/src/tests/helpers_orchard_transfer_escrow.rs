@@ -27,8 +27,9 @@
         EscrowCreateOperation, EscrowFinishOperation, EscrowTransactionOperation,
         IssuedPaymentOperation, NftBurnOperation, NftMintOperation, NftTransferOperation,
         OfferCancelOperation, OfferCreateOperation, OfferTransactionOperation,
-        SignedEscrowTransaction, SignedNftTransaction, SignedOfferTransaction, TrustSetOperation,
-        UnsignedEscrowTransaction, UnsignedNftTransaction, UnsignedOfferTransaction,
+        PftlUniswapPrimarySubscribeOperation, SignedEscrowTransaction, SignedNftTransaction,
+        SignedOfferTransaction, TrustSetOperation, UnsignedEscrowTransaction,
+        UnsignedNftTransaction, UnsignedOfferTransaction,
         ASSET_BURN_TRANSACTION_KIND, ASSET_CLAWBACK_TRANSACTION_KIND, ASSET_CREATE_TRANSACTION_KIND,
         DEFAULT_SHIELDED_ASSET_ID, ESCROW_CANCEL_TRANSACTION_KIND, ESCROW_CREATE_TRANSACTION_KIND,
         ESCROW_FINISH_TRANSACTION_KIND, ESCROW_STATE_CANCELED, ESCROW_STATE_FINISHED,
@@ -36,7 +37,8 @@
         NFT_COLLECTION_FLAG_BURN_LOCKED, NFT_COLLECTION_FLAG_TRANSFER_LOCKED,
         NFT_FLAG_TRANSFERABLE, NFT_MINT_TRANSACTION_KIND, NFT_TRANSFER_TRANSACTION_KIND,
         OFFER_CANCEL_TRANSACTION_KIND, OFFER_CREATE_TRANSACTION_KIND, OFFER_OBJECT_RESERVE,
-        OFFER_STATE_CANCELED, OFFER_STATE_FILLED, OFFER_STATE_OPEN, TRUST_SET_TRANSACTION_KIND,
+        OFFER_STATE_CANCELED, OFFER_STATE_FILLED, OFFER_STATE_OPEN,
+        PFTL_UNISWAP_PRIMARY_SUBSCRIBE_TRANSACTION_KIND, TRUST_SET_TRANSACTION_KIND,
     };
 
     use super::*;
@@ -1559,6 +1561,230 @@
                 .contains("exceeds finalized NAV circulating supply"),
             "{error}"
         );
+    }
+
+    #[test]
+    fn zero_supply_primary_fill_passes_global_issued_supply_admission_atomically() {
+        let genesis = Genesis::new("postfiat-primary-fill-global-admission");
+        let governance = GovernanceState::new(1);
+        let issuer_key = ml_dsa_65_keygen_from_seed(&[0xb1; 32]);
+        let subscriber_key = ml_dsa_65_keygen_from_seed(&[0xb2; 32]);
+        let issuer = address_from_public_key(&issuer_key.public_key);
+        let subscriber = address_from_public_key(&subscriber_key.public_key);
+
+        let mut settlement =
+            AssetDefinition::new(&genesis.chain_id, &issuer, "PFUSDC", 1, 6)
+                .expect("settlement asset");
+        settlement.max_supply = Some(1_000_000);
+        let mut native = AssetDefinition::new(&genesis.chain_id, &issuer, "A666", 1, 6)
+            .expect("native NAV asset");
+        native.max_supply = Some(1_000_000);
+
+        let mut settlement_line = TrustLine::new(
+            &subscriber,
+            &issuer,
+            settlement.asset_id.clone(),
+            1_000_000,
+            TRUSTLINE_STATE_EXPANSION_FEE,
+        )
+        .expect("settlement trustline");
+        settlement_line.balance = 200_000;
+        settlement_line.authorized = true;
+        let mut native_line = TrustLine::new(
+            &subscriber,
+            &issuer,
+            native.asset_id.clone(),
+            1_000_000,
+            TRUSTLINE_STATE_EXPANSION_FEE,
+        )
+        .expect("native trustline");
+        native_line.authorized = true;
+
+        let mut settlement_nav = NavTrackedAsset::new(
+            settlement.asset_id.clone(),
+            issuer.clone(),
+            issuer.clone(),
+            "pfusdc-backed",
+            "USDC",
+            issuer.clone(),
+        )
+        .expect("settlement NAV asset");
+        settlement_nav.finalized_epoch = 1;
+        settlement_nav.nav_per_unit = 1_000_000;
+        settlement_nav.circulating_supply = 200_000;
+        settlement_nav.finalized_reserve_packet_hash = "91".repeat(48);
+        settlement_nav.finalized_at_height = 1;
+
+        let mut native_nav = NavTrackedAsset::new(
+            native.asset_id.clone(),
+            issuer.clone(),
+            issuer.clone(),
+            "a666-primary-fill",
+            "USDC",
+            issuer.clone(),
+        )
+        .expect("native NAV asset");
+        native_nav.finalized_epoch = 1;
+        native_nav.nav_per_unit = 1_000_000;
+        native_nav.circulating_supply = 0;
+        native_nav.finalized_reserve_packet_hash = "92".repeat(48);
+        native_nav.finalized_at_height = 1;
+
+        let route_id = "a666-controlled-primary-fill".to_string();
+        let route = PftlUniswapConsensusRouteState {
+            route_id: route_id.clone(),
+            route_family: postfiat_types::PFTL_UNISWAP_ROUTE_FAMILY_PRIMARY_MINT.to_string(),
+            route_config_digest: "93".repeat(48),
+            route_trust_class: "CONTROLLED".to_string(),
+            native_nav_asset_id: native.asset_id.clone(),
+            settlement_asset_id: settlement.asset_id.clone(),
+            handoff_controller: "0x1111111111111111111111111111111111111111".to_string(),
+            settlement_adapter: "0x2222222222222222222222222222222222222222".to_string(),
+            wrapped_navcoin_token: "0x3333333333333333333333333333333333333333".to_string(),
+            ethereum_chain_id: 11_155_111,
+            route_supply_cap_atoms: 1_000_000,
+            packet_notional_cap_atoms: 1_000_000,
+            latest_finalized_nav_epoch: 1,
+            return_finality_blocks: 12,
+            live_value_enabled: false,
+            ethereum_verification_policy: None,
+            authorized_valid_supply_atoms: 0,
+            pftl_spendable_supply_atoms: 0,
+            native_spendable_balances_atoms: std::collections::BTreeMap::new(),
+            ethereum_spendable_supply_atoms: 0,
+            other_registered_venue_supply_atoms: 0,
+            outstanding_bridge_claims_atoms: 0,
+            pending_return_import_claims_atoms: 0,
+            settlement_reserve_atoms: 0,
+            primary_subscription_nonces: std::collections::BTreeMap::new(),
+            export_packets: std::collections::BTreeMap::new(),
+            export_nonces: std::collections::BTreeMap::new(),
+            return_imports: std::collections::BTreeMap::new(),
+            paused: false,
+        };
+        route.validate().expect("zero-supply route");
+
+        let mut ledger = LedgerState::new(vec![
+            Account::new(
+                issuer.clone(),
+                10_000_000,
+                Some(bytes_to_hex(&issuer_key.public_key)),
+            ),
+            Account::new(
+                subscriber.clone(),
+                10_000_000,
+                Some(bytes_to_hex(&subscriber_key.public_key)),
+            ),
+        ]);
+        ledger.asset_definitions = vec![settlement.clone(), native.clone()];
+        ledger.trustlines = vec![settlement_line, native_line];
+        ledger.nav_assets = vec![settlement_nav, native_nav];
+        ledger.pftl_uniswap_routes.push(route);
+
+        verify_global_issued_asset_supply_caps(&ledger, &ShieldedState::empty())
+            .expect("zero native supply and backed settlement supply admit");
+        let subscribe = signed_asset_transaction_for_test(
+            &genesis,
+            &ledger,
+            &subscriber,
+            &bytes_to_hex(&subscriber_key.public_key),
+            &bytes_to_hex(&subscriber_key.private_key),
+            PFTL_UNISWAP_PRIMARY_SUBSCRIBE_TRANSACTION_KIND,
+            1,
+            AssetTransactionOperation::PftlUniswapPrimarySubscribe(
+                PftlUniswapPrimarySubscribeOperation {
+                    subscriber: subscriber.clone(),
+                    route_id: route_id.clone(),
+                    settlement_asset_id: settlement.asset_id.clone(),
+                    subscription_nonce: "94".repeat(32),
+                    settlement_value_atoms: 200_000,
+                    nav_price_settlement_atoms_per_nav_atom: 1,
+                    pricing_nav_epoch: 1,
+                    pricing_reserve_packet_hash: "92".repeat(48),
+                },
+            ),
+        );
+
+        let canonical_before_cap_rejection = ledger.clone();
+        let mut over_cap_candidate = ledger.clone();
+        over_cap_candidate
+            .asset_definitions
+            .iter_mut()
+            .find(|definition| definition.asset_id == native.asset_id)
+            .expect("native definition for cap test")
+            .max_supply = Some(200_000);
+        let mut hidden_pool = OrchardPoolState::empty(ASSET_ORCHARD_POOL_ID_V1);
+        hidden_pool.asset_orchard_balances.push(AssetOrchardAssetBalance {
+            asset_id: native.asset_id.clone(),
+            ingress_total: 1,
+            egress_total: 0,
+            live_total: 1,
+        });
+        let mut over_cap_shielded = ShieldedState::empty();
+        over_cap_shielded.orchard = Some(hidden_pool);
+        let execution_receipt =
+            execute_asset_transaction(&genesis, &mut over_cap_candidate, &subscribe, 2);
+        assert!(execution_receipt.accepted, "{execution_receipt:?}");
+        let cap_error = verify_global_issued_asset_supply_caps(
+            &over_cap_candidate,
+            &over_cap_shielded,
+        )
+        .expect_err("global max-supply admission must reject hidden custody above the cap");
+        assert!(
+            cap_error.to_string().contains("issued asset supply cap exceeded"),
+            "{cap_error}"
+        );
+        assert_eq!(ledger, canonical_before_cap_rejection);
+
+        let receipt = execute_asset_transaction(&genesis, &mut ledger, &subscribe, 2);
+        assert!(receipt.accepted, "{receipt:?}");
+        assert_eq!(
+            ledger
+                .trustline_for_account_asset(&subscriber, &settlement.asset_id)
+                .expect("settlement trustline after fill")
+                .balance,
+            0
+        );
+        assert_eq!(
+            ledger
+                .trustline_for_account_asset(&subscriber, &native.asset_id)
+                .expect("native trustline after fill")
+                .balance,
+            200_000
+        );
+        assert_eq!(
+            ledger
+                .nav_asset(&native.asset_id)
+                .expect("native NAV after fill")
+                .circulating_supply,
+            200_000
+        );
+        let route = ledger
+            .pftl_uniswap_route(&route_id)
+            .expect("route after primary fill");
+        assert_eq!(route.settlement_reserve_atoms, 200_000);
+        assert_eq!(route.authorized_valid_supply_atoms, 200_000);
+        assert_eq!(
+            global_issued_asset_supply(&ledger, &ShieldedState::empty(), &settlement.asset_id)
+                .expect("settlement global supply"),
+            200_000
+        );
+        assert_eq!(
+            global_issued_asset_supply(&ledger, &ShieldedState::empty(), &native.asset_id)
+                .expect("native global supply"),
+            200_000
+        );
+        verify_global_issued_asset_supply_caps(&ledger, &ShieldedState::empty())
+            .expect("real zero-supply fill must pass global issued-supply admission");
+        replicated_state_root(
+            &genesis,
+            &governance,
+            &ledger,
+            &[],
+            &ShieldedState::empty(),
+            &BridgeState::empty(),
+        )
+        .expect("post-fill state must pass the production commitment boundary");
     }
 
     #[test]
