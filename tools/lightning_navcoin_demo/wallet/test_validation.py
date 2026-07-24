@@ -154,7 +154,7 @@ def validator_view(index: int = 0) -> dict:
                 "escrow_id": q["expected_escrow_id"],
                 "owner": OWNER,
                 "recipient": recipient,
-                "fulfillment": "a0228020" + ("00" * 32),
+                "fulfillment": "<redacted>",
             },
         },
     }

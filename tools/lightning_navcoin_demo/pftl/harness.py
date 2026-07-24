@@ -2236,6 +2236,15 @@ class PftlDevnet:
                         "fulfillment": "a0228020" + ("00" * 32),
                     },
                 )
+                operation = finish_fee_quote.get("operation")
+                if isinstance(operation, dict) and "fulfillment" in operation:
+                    finish_fee_quote = {
+                        **finish_fee_quote,
+                        "operation": {
+                            **operation,
+                            "fulfillment": "<redacted>",
+                        },
+                    }
             row: dict[str, Any] = {
                 "node_id": f"validator-{index}",
                 "status": status,
