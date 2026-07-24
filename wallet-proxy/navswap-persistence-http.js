@@ -1797,6 +1797,7 @@ function create(runtime) {
                 request_body_too_large: 413,
                 unsupported_bridge_route: 404,
                 bridge_job_binding_conflict: 409,
+                bridge_job_busy: 503,
                 trustless_ingress_unavailable: 503,
             };
             sendJson(req, res, errorStatuses[error.code] || 400, {
