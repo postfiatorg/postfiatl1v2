@@ -16,6 +16,7 @@ SCHEMA = "postfiat.lightning_navcoin_demo.evidence.v1"
 REDACTED = "<redacted>"
 CANONICAL_PREIMAGE_RE = re.compile(r"^[0-9a-f]{64}$")
 SECRET_FIELD_MARKERS = (
+    "secret",
     "preimage",
     "fulfillment",
     "seed",

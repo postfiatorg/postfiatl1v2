@@ -441,6 +441,8 @@ def verify_binary(
     binary: str | Path,
     *,
     expected_revision: str,
+    expected_binary_sha256: str | None = None,
+    expected_wallet_sdk_sha256: str | None = None,
     run_semantic_probe: bool = True,
 ) -> dict[str, Any]:
     """Verify provenance and hardened escrow behavior.
@@ -482,6 +484,25 @@ def verify_binary(
         raise BinaryGateError(
             f"node build revision mismatch: expected {expected}, observed {observed}"
         )
+    observed_binary_sha256 = _sha256_file(path)
+    observed_wallet_sdk_sha256 = _sha256_file(sdk_path)
+    for label, expected_sha, observed_sha in (
+        ("node binary", expected_binary_sha256, observed_binary_sha256),
+        ("wallet SDK", expected_wallet_sdk_sha256, observed_wallet_sdk_sha256),
+    ):
+        if expected_sha is None:
+            continue
+        normalized = expected_sha.strip().lower()
+        if (
+            len(normalized) != 64
+            or any(character not in "0123456789abcdef" for character in normalized)
+        ):
+            raise BinaryGateError(f"expected {label} SHA-256 is not canonical")
+        if normalized != observed_sha:
+            raise BinaryGateError(
+                f"{label} SHA-256 mismatch: expected {normalized}, "
+                f"observed {observed_sha}"
+            )
 
     help_result = subprocess.run(
         [str(path), "--help"],
@@ -504,12 +525,19 @@ def verify_binary(
         )
 
     semantic = _semantic_probe(path) if run_semantic_probe else None
+    if (
+        _sha256_file(path) != observed_binary_sha256
+        or _sha256_file(sdk_path) != observed_wallet_sdk_sha256
+    ):
+        raise BinaryGateError("hardened binary pair changed during verification")
     return {
         "schema": "postfiat.lightning.pftl_binary_gate.v1",
         "binary": str(path),
-        "binary_sha256": _sha256_file(path),
+        "binary_sha256": observed_binary_sha256,
         "wallet_sdk": str(sdk_path),
-        "wallet_sdk_sha256": _sha256_file(sdk_path),
+        "wallet_sdk_sha256": observed_wallet_sdk_sha256,
+        "expected_binary_sha256": expected_binary_sha256,
+        "expected_wallet_sdk_sha256": expected_wallet_sdk_sha256,
         "expected_git_revision": expected,
         "observed_git_revision": observed,
         "build_profile": status.get("build_profile"),

@@ -30,13 +30,16 @@ scripts/lightning-navcoin-regtest-env channels
 
 POSTFIAT_NODE_BIN=/absolute/path/to/postfiat-node \
 POSTFIAT_NODE_GIT_REV=<committed-revision> \
+POSTFIAT_NODE_SHA256=<node-sha256> \
+POSTFIAT_RPC_SDK_SHA256=<adjacent-sdk-sha256> \
 scripts/lightning-navcoin-demo all \
   --pftl-root /absolute/local/path/pftl-lightning-six \
   --evidence-dir /absolute/empty/path/lightning-navcoin-evidence
 ```
 
-`all` gates the binary by reported revision, SHA-256, adjacent SDK SHA-256, and
-a fresh semantic probe before initializing the six-validator devnet. It then
+`all` gates the binary by reported revision, caller-pinned node and adjacent
+SDK SHA-256, and a fresh semantic probe before initializing the six-validator
+devnet. It then
 runs:
 
 - Lightning → PFTL and PFTL → Lightning happy paths;

@@ -83,6 +83,7 @@ def decoded_invoice() -> dict:
 
 def validator_view(index: int = 0) -> dict:
     q = quote()
+    recipient = q["pftl_recipient"]
     return {
         "node_id": f"validator-{index}",
         "status": {
@@ -113,6 +114,47 @@ def validator_view(index: int = 0) -> dict:
                 "requires_authorization": False,
                 "freeze_enabled": False,
                 "clawback_enabled": False,
+            },
+        },
+        "accounts": {
+            recipient: {
+                "account": recipient,
+                "asset_id": q["pftl_asset_id"],
+                "lines": [
+                    {
+                        "account": recipient,
+                        "asset_id": q["pftl_asset_id"],
+                        "authorized": True,
+                        "balance": 100,
+                        "frozen": False,
+                        "limit": 1_000_000_000,
+                    }
+                ],
+            }
+        },
+        "native_accounts": {
+            recipient: {
+                "address": recipient,
+                "balance": 10_000,
+                "sequence": 7,
+            }
+        },
+        "finish_fee_quote": {
+            "schema": "postfiat-escrow-fee-quote-v1",
+            "source": recipient,
+            "transaction_kind": "escrow_finish",
+            "sender_balance": 10_000,
+            "sender_sequence": 7,
+            "sequence": 8,
+            "minimum_fee": 23,
+            "account_reserve": 10,
+            "sender_meets_reserve_after_fee": True,
+            "operation": {
+                "operation": "escrow_finish",
+                "escrow_id": q["expected_escrow_id"],
+                "owner": OWNER,
+                "recipient": recipient,
+                "fulfillment": "a0228020" + ("00" * 32),
             },
         },
     }
@@ -200,8 +242,30 @@ class PftlViewTests(unittest.TestCase):
         six = [validator_view(index) for index in range(6)]
         result = validate_pftl_lock_views(quote(), six, policy=policy)
         self.assertEqual(result.available_validators, 6)
+        self.assertGreaterEqual(result.recipient_asset_headroom, result.amount_atoms)
+        self.assertGreater(
+            result.recipient_native_balance,
+            result.finish_minimum_fee,
+        )
         result = validate_pftl_lock_views(quote(), six[:5], policy=policy)
         self.assertEqual(result.available_validators, 5)
+
+    def test_finish_capacity_is_required_before_lightning_payment(self) -> None:
+        policy = TimelockPolicy()
+        full = [validator_view(index) for index in range(6)]
+        for view in full:
+            line = view["accounts"][RECIPIENT]["lines"][0]
+            line["balance"] = line["limit"]
+        with self.assertRaisesRegex(ValidationError, "headroom"):
+            validate_pftl_lock_views(quote(), full, policy=policy)
+
+        fee_starved = [validator_view(index) for index in range(6)]
+        for view in fee_starved:
+            view["native_accounts"][RECIPIENT]["balance"] = 32
+            view["finish_fee_quote"]["sender_balance"] = 32
+            view["finish_fee_quote"]["sender_meets_reserve_after_fee"] = False
+        with self.assertRaisesRegex(ValidationError, "native PFT"):
+            validate_pftl_lock_views(quote(), fee_starved, policy=policy)
 
     def test_four_divergence_freeze_and_short_window_reject(self) -> None:
         policy = TimelockPolicy()

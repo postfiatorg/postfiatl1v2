@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -13,6 +14,7 @@ from typing import Any, Mapping, Sequence
 from .coordinator.journal import CoordinatorJournal, ExposureLimits, SwapState
 from .coordinator.protocol import SecretPreimage
 from .coordinator.service import CoordinatorService
+from .lightning import DirectLncliGrpc
 
 
 CRASH_EXIT = 86
@@ -191,6 +193,86 @@ def crash_service_transition(
         limits=limits,
         request_path=request_path,
     )
+
+
+def _lightning_payment_worker(
+    *,
+    env_script: Path,
+    request_path: Path,
+) -> None:
+    request = json.loads(request_path.read_text())
+    payment = DirectLncliGrpc(env_script).pay_invoice(
+        str(request["node"]),
+        str(request["payment_request"]),
+        fee_limit_sat=int(request["fee_limit_sat"]),
+        max_total_cltv_delta=int(request["max_total_cltv_delta"]),
+        timeout_seconds=int(request["timeout_seconds"]),
+    )
+    if (
+        payment.status != "SUCCEEDED"
+        or payment.payment_preimage is None
+        or payment.payment_hash != request["payment_hash"]
+    ):
+        raise RuntimeError("outgoing Lightning crash worker did not settle")
+    # Deliberately discard the result and die before touching the SQLite
+    # journal. Recovery must query the payer's LND by durable payment hash.
+    os._exit(CRASH_EXIT)
+
+
+def crash_after_outgoing_lightning_payment(
+    *,
+    root: Path,
+    env_script: Path,
+    node: str,
+    payment_request: str,
+    payment_hash: str,
+    fee_limit_sat: int,
+    max_total_cltv_delta: int,
+    timeout_seconds: int,
+) -> dict[str, Any]:
+    request_path = root / "outgoing-lightning-payment.request.json"
+    _write_private_json(
+        request_path,
+        {
+            "node": node,
+            "payment_request": payment_request,
+            "payment_hash": payment_hash,
+            "fee_limit_sat": fee_limit_sat,
+            "max_total_cltv_delta": max_total_cltv_delta,
+            "timeout_seconds": timeout_seconds,
+        },
+    )
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "tools.lightning_navcoin_demo.crash_matrix",
+            "lightning-payment-worker",
+            "--env-script",
+            str(env_script),
+            "--request",
+            str(request_path),
+        ],
+        cwd=Path(__file__).resolve().parents[2],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=float(timeout_seconds) + 60,
+    )
+    if completed.returncode != CRASH_EXIT:
+        raise RuntimeError(
+            "outgoing Lightning crash worker failed; "
+            f"rc={completed.returncode}; "
+            f"stderr_bytes={len(completed.stderr)}; "
+            f"stderr_sha256={hashlib.sha256(completed.stderr).hexdigest()}"
+        )
+    return {
+        "process_exit": completed.returncode,
+        "unclean_exit": True,
+        "journal_updated_after_payment": False,
+        "recovery_key": "payment_hash",
+        "payment_hash": payment_hash,
+    }
 
 
 def _run_path(
@@ -397,6 +479,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     worker.add_argument("--per-principal-atoms", required=True, type=int)
     worker.add_argument("--aggregate-atoms", required=True, type=int)
     worker.add_argument("--request", type=Path)
+    lightning_worker = subparsers.add_parser("lightning-payment-worker")
+    lightning_worker.add_argument("--env-script", required=True, type=Path)
+    lightning_worker.add_argument("--request", required=True, type=Path)
     arguments = parser.parse_args(argv)
     if arguments.command == "worker":
         _worker(
@@ -407,6 +492,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             event_key=arguments.event_key,
             per_principal_atoms=arguments.per_principal_atoms,
             aggregate_atoms=arguments.aggregate_atoms,
+            request_path=arguments.request,
+        )
+    elif arguments.command == "lightning-payment-worker":
+        _lightning_payment_worker(
+            env_script=arguments.env_script,
             request_path=arguments.request,
         )
     return 0

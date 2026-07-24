@@ -301,21 +301,43 @@ class PftlEscrowView:
     asset_id: str
     amount_atoms: int
     cancel_after: int
+    recipient_asset_balance: int
+    recipient_asset_headroom: int
+    recipient_native_balance: int
+    finish_minimum_fee: int
 
 
 def _normalized_validator_view(
     view: Mapping[str, Any],
     quote: Mapping[str, Any],
-) -> tuple[int, str, str, Mapping[str, Any], Mapping[str, Any]]:
+) -> tuple[
+    int,
+    str,
+    str,
+    Mapping[str, Any],
+    Mapping[str, Any],
+    Mapping[str, Any],
+    Mapping[str, Any],
+    Mapping[str, Any],
+]:
     status = view.get("status")
     escrow_report = view.get("escrow")
     asset_report = view.get("asset")
+    account_reports = view.get("accounts")
+    native_accounts = view.get("native_accounts")
+    finish_fee_quote = view.get("finish_fee_quote")
     if not isinstance(status, Mapping):
         raise ValidationError("validator view is missing status")
     if not isinstance(escrow_report, Mapping):
         raise ValidationError("validator view is missing escrow")
     if not isinstance(asset_report, Mapping):
         raise ValidationError("validator view is missing asset")
+    if not isinstance(account_reports, Mapping):
+        raise ValidationError("validator view is missing issued-asset accounts")
+    if not isinstance(native_accounts, Mapping):
+        raise ValidationError("validator view is missing native accounts")
+    if not isinstance(finish_fee_quote, Mapping):
+        raise ValidationError("validator view is missing finish fee quote")
     if status.get("chain_id") != quote.get("pftl_chain_id"):
         raise ValidationError("PFTL chain id mismatch")
     if status.get("genesis_hash") != quote.get("pftl_genesis_hash"):
@@ -335,7 +357,16 @@ def _normalized_validator_view(
         raise ValidationError("escrow_info does not contain an escrow")
     if not isinstance(asset, Mapping):
         raise ValidationError("asset_info does not contain an asset")
-    return height, tip_hash, state_root, escrow, asset
+    return (
+        height,
+        tip_hash,
+        state_root,
+        escrow,
+        asset,
+        account_reports,
+        native_accounts,
+        finish_fee_quote,
+    )
 
 
 def validate_pftl_lock_views(
@@ -362,7 +393,10 @@ def validate_pftl_lock_views(
         raise ValidationError("quote exceeds the wallet's maximum total CLTV delta")
 
     normalized = [_normalized_validator_view(view, quote) for view in validator_views]
-    heads = {(height, tip_hash, root) for height, tip_hash, root, _, _ in normalized}
+    heads = {
+        (height, tip_hash, root)
+        for height, tip_hash, root, *_ in normalized
+    }
     if len(heads) != 1:
         raise ValidationError("PFTL validators are not converged")
     height, tip_hash, state_root = next(iter(heads))
@@ -380,7 +414,25 @@ def validate_pftl_lock_views(
         "state": "open",
     }
     canonical_escrow: tuple[tuple[str, Any], ...] | None = None
-    for _, _, _, escrow, asset in normalized:
+    recipient = _text(quote.get("pftl_recipient"), "pftl_recipient")
+    asset_id = _text(quote.get("pftl_asset_id"), "pftl_asset_id")
+    amount_atoms = _integer(
+        quote.get("pftl_amount_atoms"), "pftl_amount_atoms", minimum=1
+    )
+    recipient_balance: int | None = None
+    recipient_headroom: int | None = None
+    recipient_native_balance: int | None = None
+    finish_minimum_fee: int | None = None
+    for (
+        _,
+        _,
+        _,
+        escrow,
+        asset,
+        account_reports,
+        native_accounts,
+        fee_quote,
+    ) in normalized:
         for field, expected_value in expected.items():
             if escrow.get(field) != expected_value:
                 raise ValidationError(f"finalized escrow {field} does not match quote")
@@ -395,6 +447,81 @@ def validate_pftl_lock_views(
             if asset.get(flag) is not False:
                 raise ValidationError(f"demo test asset must have {flag}=false")
 
+        account_report = account_reports.get(recipient)
+        if not isinstance(account_report, Mapping):
+            raise ValidationError("recipient issued-asset account is absent")
+        lines = account_report.get("lines")
+        if not isinstance(lines, list):
+            raise ValidationError("recipient trustline list is malformed")
+        matching_lines = [
+            line
+            for line in lines
+            if isinstance(line, Mapping) and line.get("asset_id") == asset_id
+        ]
+        if len(matching_lines) != 1:
+            raise ValidationError("recipient must have exactly one matching trustline")
+        line = matching_lines[0]
+        if line.get("authorized") is not True or line.get("frozen") is not False:
+            raise ValidationError("recipient trustline is not movable")
+        balance = _integer(line.get("balance"), "recipient trustline balance")
+        limit = _integer(line.get("limit"), "recipient trustline limit", minimum=1)
+        if limit < balance or limit - balance < amount_atoms:
+            raise ValidationError("recipient trustline lacks finish headroom")
+
+        native_account = native_accounts.get(recipient)
+        if not isinstance(native_account, Mapping):
+            raise ValidationError("recipient native account is absent")
+        if native_account.get("address") != recipient:
+            raise ValidationError("recipient native account address mismatch")
+        native_balance = _integer(
+            native_account.get("balance"), "recipient native balance"
+        )
+        native_sequence = _integer(
+            native_account.get("sequence"), "recipient native sequence"
+        )
+        minimum_fee = _integer(
+            fee_quote.get("minimum_fee"), "finish minimum fee", minimum=1
+        )
+        account_reserve = _integer(
+            fee_quote.get("account_reserve"), "finish account reserve"
+        )
+        if (
+            fee_quote.get("schema") != "postfiat-escrow-fee-quote-v1"
+            or fee_quote.get("source") != recipient
+            or fee_quote.get("transaction_kind") != "escrow_finish"
+            or fee_quote.get("sender_balance") != native_balance
+            or fee_quote.get("sender_sequence") != native_sequence
+            or fee_quote.get("sequence") != native_sequence + 1
+            or fee_quote.get("sender_meets_reserve_after_fee") is not True
+            or native_balance < minimum_fee + account_reserve
+        ):
+            raise ValidationError("recipient lacks native PFT for finish and reserve")
+        fee_operation = fee_quote.get("operation")
+        if (
+            not isinstance(fee_operation, Mapping)
+            or fee_operation.get("operation") != "escrow_finish"
+            or fee_operation.get("escrow_id") != escrow_id
+            or fee_operation.get("owner") != quote.get("pftl_owner")
+            or fee_operation.get("recipient") != recipient
+        ):
+            raise ValidationError("finish fee quote is not bound to the escrow")
+
+        current = (balance, limit - balance, native_balance, minimum_fee)
+        if recipient_balance is None:
+            (
+                recipient_balance,
+                recipient_headroom,
+                recipient_native_balance,
+                finish_minimum_fee,
+            ) = current
+        elif current != (
+            recipient_balance,
+            recipient_headroom,
+            recipient_native_balance,
+            finish_minimum_fee,
+        ):
+            raise ValidationError("validators disagree on recipient finish capacity")
+
     cancel_after = _integer(quote.get("cancel_after"), "cancel_after", minimum=1)
     required_blocks = policy.required_pftl_blocks()
     if cancel_after - height < required_blocks:
@@ -408,9 +535,21 @@ def validate_pftl_lock_views(
         tip_hash=tip_hash,
         state_root=state_root,
         escrow_id=escrow_id,
-        asset_id=_text(quote.get("pftl_asset_id"), "pftl_asset_id"),
-        amount_atoms=_integer(
-            quote.get("pftl_amount_atoms"), "pftl_amount_atoms", minimum=1
-        ),
+        asset_id=asset_id,
+        amount_atoms=amount_atoms,
         cancel_after=cancel_after,
+        recipient_asset_balance=(
+            recipient_balance if recipient_balance is not None else 0
+        ),
+        recipient_asset_headroom=(
+            recipient_headroom if recipient_headroom is not None else 0
+        ),
+        recipient_native_balance=(
+            recipient_native_balance
+            if recipient_native_balance is not None
+            else 0
+        ),
+        finish_minimum_fee=(
+            finish_minimum_fee if finish_minimum_fee is not None else 0
+        ),
     )

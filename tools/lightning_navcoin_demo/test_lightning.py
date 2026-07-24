@@ -50,7 +50,7 @@ class FakeExecutor:
                 "add_index": "7",
                 "payment_addr": "22" * 32,
             }
-        if arguments[0] == "payinvoice":
+        if arguments[0] in {"payinvoice", "trackpayment"}:
             if self.failed:
                 return {
                     "payment_hash": HASH,
@@ -118,6 +118,17 @@ class DirectLncliGrpcTests(unittest.TestCase):
         )
         self.assertEqual(
             payment.public_response["htlcs"][0]["preimage"], "<redacted>"
+        )
+        tracked = self.client.track_payment("user", HASH)
+        self.assertEqual(tracked.status, "SUCCEEDED")
+        self.assertEqual(tracked.payment_hash, HASH)
+        self.assertEqual(
+            tracked.payment_preimage.reveal_for_protocol(),
+            SECRET.reveal_for_protocol(),
+        )
+        self.assertEqual(
+            self.executor.calls[-1][1],
+            ("trackpayment", "--json", HASH),
         )
 
     def test_receiver_generated_invoice_does_not_export_a_secret(self) -> None:

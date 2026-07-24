@@ -36,6 +36,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--expected-revision",
         default=os.environ.get("POSTFIAT_NODE_GIT_REV"),
     )
+    probe.add_argument(
+        "--expected-binary-sha256",
+        default=os.environ.get("POSTFIAT_NODE_SHA256"),
+    )
+    probe.add_argument(
+        "--expected-wallet-sdk-sha256",
+        default=os.environ.get("POSTFIAT_RPC_SDK_SHA256"),
+    )
     probe.add_argument("--output", type=Path)
 
     initialize = subparsers.add_parser(
@@ -48,6 +56,14 @@ def build_parser() -> argparse.ArgumentParser:
     initialize.add_argument(
         "--expected-revision",
         default=os.environ.get("POSTFIAT_NODE_GIT_REV"),
+    )
+    initialize.add_argument(
+        "--expected-binary-sha256",
+        default=os.environ.get("POSTFIAT_NODE_SHA256"),
+    )
+    initialize.add_argument(
+        "--expected-wallet-sdk-sha256",
+        default=os.environ.get("POSTFIAT_RPC_SDK_SHA256"),
     )
     initialize.add_argument(
         "--chain-id", default="local-postfiat-lightning-navcoin-demo"
@@ -94,6 +110,8 @@ def main(argv: list[str] | None = None) -> int:
                     args.expected_revision,
                     "--expected-revision or POSTFIAT_NODE_GIT_REV",
                 ),
+                expected_binary_sha256=args.expected_binary_sha256,
+                expected_wallet_sdk_sha256=args.expected_wallet_sdk_sha256,
             )
             if args.output:
                 args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -109,6 +127,8 @@ def main(argv: list[str] | None = None) -> int:
                     args.expected_revision,
                     "--expected-revision or POSTFIAT_NODE_GIT_REV",
                 ),
+                expected_binary_sha256=args.expected_binary_sha256,
+                expected_wallet_sdk_sha256=args.expected_wallet_sdk_sha256,
                 chain_id=args.chain_id,
                 p2p_base_port=args.p2p_base_port,
                 rpc_base_port=args.rpc_base_port,

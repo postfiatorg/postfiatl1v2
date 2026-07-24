@@ -861,6 +861,86 @@ show_status() {
   status_json
 }
 
+attestation_json() {
+  init_stack
+  assert_runtime_isolation
+  local status images containers host_lncli_sha source_sha signature_log_sha
+  local signature_count repo_commit repo_clean
+  status="$(status_json)"
+  images="$(cat "$SETUP_DIR/image-verification.json")"
+  host_lncli_sha="$(sha256sum "$HOST_LNCLI" | awk '{print $1}')"
+  source_sha="$(
+    sha256sum \
+      "$ENV_ROOT/compose.yml" \
+      "$ENV_ROOT/config/bitcoin.conf" \
+      "$ENV_ROOT/config/lnd-common.conf" \
+      "$ENV_ROOT/envctl" |
+      sha256sum |
+      awk '{print $1}'
+  )"
+  signature_log_sha="$(
+    sha256sum "$EVIDENCE_ROOT/image-verification.log" | awk '{print $1}'
+  )"
+  signature_count="$(
+    grep -c 'Signature for .* appears valid' \
+      "$EVIDENCE_ROOT/image-verification.log"
+  )"
+  repo_commit="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+  repo_clean=true
+  if [[ -n "$(git -C "$REPO_ROOT" status --porcelain --untracked-files=normal)" ]]; then
+    repo_clean=false
+  fi
+  containers="$(
+    for service in bitcoind lnd-user lnd-coordinator lnd-router; do
+      docker inspect "$(service_container_id "$service")" |
+        jq -c --arg service "$service" '.[0] | {
+          service:$service,
+          container_id:.Id,
+          image_id:.Image,
+          network_mode:.HostConfig.NetworkMode,
+          published_ports:[
+            .NetworkSettings.Ports
+            | to_entries[]
+            | .value[]?
+            | {host_ip:.HostIp,host_port:.HostPort}
+          ]
+        }'
+    done | jq -s .
+  )"
+  jq -n \
+    --argjson status "$status" \
+    --argjson images "$images" \
+    --argjson containers "$containers" \
+    --arg host_lncli_sha256 "$host_lncli_sha" \
+    --arg source_sha256 "$source_sha" \
+    --arg signature_log_sha256 "$signature_log_sha" \
+    --argjson valid_lnd_release_signatures "$signature_count" \
+    --arg repo_commit "$repo_commit" \
+    --argjson repo_clean "$repo_clean" \
+    '{
+      schema:"postfiat.lightning_regtest.runtime_attestation.v1",
+      synthetic_only:true,
+      status:$status,
+      runtime_isolation:{
+        verified:true,
+        docker_network_internal:true,
+        default_routes_present:false,
+        published_ports_present:false,
+        bitcoin_peer_connections:0,
+        external_connectivity:false
+      },
+      images:$images,
+      lnd_release_verification:{
+        valid_signature_count:$valid_lnd_release_signatures,
+        verification_log_sha256:$signature_log_sha256
+      },
+      host_lncli_sha256:$host_lncli_sha256,
+      environment_source_sha256:$source_sha256,
+      harness_source:{git_commit:$repo_commit,git_clean:$repo_clean},
+      containers:$containers
+    }'
+}
+
 show_credentials() {
   local node
   init_stack
@@ -1014,6 +1094,7 @@ Commands:
   host-lncli NODE ARGS... Run the verified host client over direct bridge gRPC.
   grpc-python ARGS...     Run Python with pinned LND stubs on the internal network.
   grpc-smoke              Test TLS+macaroon gRPC to all three LND nodes.
+  attestation             Print image, source, and no-egress runtime attestation.
   credentials            Print local gRPC endpoints and credential file paths.
   evidence [directory]   Capture a redacted, checksummed environment evidence bundle.
   stop                   Stop services without deleting chain or wallet state.
@@ -1040,6 +1121,7 @@ main() {
     channels) setup_channels "$@" ;;
     smoke) smoke_payments "$@" ;;
     status) show_status "$@" ;;
+    attestation) attestation_json "$@" ;;
     mine) mine_blocks "$@" ;;
     bitcoin-cli) bitcoin_cli "$@" ;;
     lncli)

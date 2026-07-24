@@ -119,6 +119,19 @@ def _assert_secret_free_public(value: Any, path: str = "$") -> None:
             _assert_secret_free_public(child, f"{path}[{index}]")
 
 
+def _command_audit_label(command: Sequence[str]) -> str:
+    encoded = json.dumps(
+        list(command),
+        ensure_ascii=True,
+        separators=(",", ":"),
+    ).encode("ascii")
+    executable = Path(command[0]).name if command else "<empty>"
+    return (
+        f"executable={executable}; argv_count={len(command)}; "
+        f"argv_sha256={hashlib.sha256(encoded).hexdigest()}"
+    )
+
+
 def _run_json_value(
     command: Sequence[str],
     *,
@@ -137,15 +150,18 @@ def _run_json_value(
         timeout=timeout,
     )
     if completed.returncode != 0:
+        stderr_bytes = completed.stderr.encode("utf-8", errors="replace")
         raise HarnessError(
-            f"command failed ({completed.returncode}): {' '.join(command)}\n"
-            f"{completed.stderr.strip()}"
+            f"command failed ({completed.returncode}); "
+            f"{_command_audit_label(command)}; "
+            f"stderr_bytes={len(stderr_bytes)}; "
+            f"stderr_sha256={hashlib.sha256(stderr_bytes).hexdigest()}"
         )
     try:
         value = json.loads(completed.stdout)
     except json.JSONDecodeError as error:
         raise HarnessError(
-            f"command returned non-JSON output: {' '.join(command)}"
+            f"command returned non-JSON output; {_command_audit_label(command)}"
         ) from error
     return value
 
@@ -159,7 +175,9 @@ def _run_json(
 ) -> dict[str, Any]:
     value = _run_json_value(command, cwd=cwd, env=env, timeout=timeout)
     if not isinstance(value, dict):
-        raise HarnessError(f"command JSON is not an object: {' '.join(command)}")
+        raise HarnessError(
+            f"command JSON is not an object; {_command_audit_label(command)}"
+        )
     return value
 
 
@@ -253,6 +271,15 @@ class PftlDevnet:
         observed_sha = self._sha256_binary()
         if observed_sha != manifest["binary"]["sha256"]:
             raise HarnessError("POSTFIAT_NODE_BIN content changed since initialization")
+        sdk = self.binary.with_name("postfiat-rpc-sdk")
+        if (
+            not sdk.is_file()
+            or not os.access(sdk, os.X_OK)
+            or _sha256_file(sdk) != manifest["binary"]["wallet_sdk_sha256"]
+        ):
+            raise HarnessError(
+                "adjacent postfiat-rpc-sdk changed since initialization"
+            )
 
     @classmethod
     def initialize(
@@ -261,6 +288,8 @@ class PftlDevnet:
         *,
         binary: str | Path,
         expected_revision: str,
+        expected_binary_sha256: str | None = None,
+        expected_wallet_sdk_sha256: str | None = None,
         chain_id: str = "local-postfiat-lightning-navcoin-demo",
         p2p_base_port: int = 29660,
         rpc_base_port: int = 30660,
@@ -288,6 +317,8 @@ class PftlDevnet:
             gate = verify_binary(
                 binary,
                 expected_revision=expected_revision,
+                expected_binary_sha256=expected_binary_sha256,
+                expected_wallet_sdk_sha256=expected_wallet_sdk_sha256,
                 run_semantic_probe=True,
             )
         except BinaryGateError as error:
@@ -2183,6 +2214,28 @@ class PftlDevnet:
         rows: list[dict[str, Any]] = []
         for index, client in enumerate(clients):
             status = client.status()
+            escrow_report = (
+                client.escrow_info(escrow_id) if escrow_id else None
+            )
+            finish_fee_quote = None
+            if (
+                isinstance(escrow_report, dict)
+                and isinstance(escrow_report.get("escrow"), dict)
+            ):
+                escrow = escrow_report["escrow"]
+                finish_fee_quote = client.escrow_fee_quote(
+                    str(escrow["recipient"]),
+                    {
+                        "operation": "escrow_finish",
+                        "owner": escrow["owner"],
+                        "recipient": escrow["recipient"],
+                        "escrow_id": escrow["escrow_id"],
+                        # Fee sizing depends on the canonical fixed-width
+                        # fulfillment, not its secret value. This placeholder
+                        # is never signed or submitted.
+                        "fulfillment": "a0228020" + ("00" * 32),
+                    },
+                )
             row: dict[str, Any] = {
                 "node_id": f"validator-{index}",
                 "status": status,
@@ -2195,7 +2248,11 @@ class PftlDevnet:
                     else client.account(account)
                     for account in accounts
                 },
-                "escrow": client.escrow_info(escrow_id) if escrow_id else None,
+                "native_accounts": {
+                    account: client.account(account) for account in accounts
+                },
+                "escrow": escrow_report,
+                "finish_fee_quote": finish_fee_quote,
                 "receipts": client.receipts(tx_id=tx_id, limit=2) if tx_id else None,
             }
             rows.append(row)
@@ -2207,7 +2264,9 @@ class PftlDevnet:
                 "root": row["status"]["state_root"],
                 "asset": row["asset"],
                 "accounts": row["accounts"],
+                "native_accounts": row["native_accounts"],
                 "escrow": row["escrow"],
+                "finish_fee_quote": row["finish_fee_quote"],
                 "receipts": row["receipts"],
             }
             return json.dumps(public, sort_keys=True, separators=(",", ":"))

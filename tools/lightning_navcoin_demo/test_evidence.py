@@ -95,6 +95,8 @@ class EvidenceBundleTests(unittest.TestCase):
             bundle = EvidenceBundle(Path(directory), "test-run")
             with self.assertRaises(EvidenceError):
                 bundle.record("unsafe", {"payment_preimage": "0" * 64})
+            with self.assertRaises(EvidenceError):
+                bundle.record("unsafe", {"secret": "0" * 64})
 
     def test_nonempty_root_and_post_finalize_extra_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

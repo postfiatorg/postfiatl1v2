@@ -332,18 +332,58 @@ class DirectLncliGrpc:
             payment_request,
             timeout=float(timeout_seconds) + 30,
         )
+        return self._payment_result(
+            response,
+            expected_payment_hash=facts.payment_hash.hex(),
+        )
+
+    def track_payment(
+        self,
+        node: str,
+        payment_hash_hex: str,
+        *,
+        timeout_seconds: int = 30,
+    ) -> PaymentResult:
+        """Reconcile an already-started payer-side payment by its durable hash."""
+
+        payment_hash_hex = _hex32(payment_hash_hex, "payment_hash")
+        if timeout_seconds <= 0:
+            raise ValueError("payment tracking timeout must be positive")
+        response = self._call(
+            node,
+            "trackpayment",
+            "--json",
+            payment_hash_hex,
+            timeout=float(timeout_seconds) + 5,
+        )
+        return self._payment_result(
+            response,
+            expected_payment_hash=payment_hash_hex,
+        )
+
+    @staticmethod
+    def _payment_result(
+        response: Mapping[str, Any],
+        *,
+        expected_payment_hash: str,
+    ) -> PaymentResult:
         status = str(response.get("status", ""))
         observed_hash = _hex32(
-            response.get("payment_hash", facts.payment_hash.hex()),
+            response.get("payment_hash", expected_payment_hash),
             "payment_hash",
         )
-        if observed_hash != facts.payment_hash.hex():
-            raise LightningTransportError("payment response hash differs from invoice")
+        if observed_hash != expected_payment_hash:
+            raise LightningTransportError(
+                "payment response hash differs from expected payment"
+            )
         preimage: SecretPreimage | None = None
         raw_preimage = response.get("payment_preimage")
         if raw_preimage not in (None, "", "0" * 64):
             preimage = SecretPreimage.from_hex(_hex32(raw_preimage, "payment_preimage"))
-            if hashlib.sha256(preimage.reveal_for_protocol()).digest() != facts.payment_hash:
+            if (
+                hashlib.sha256(preimage.reveal_for_protocol()).hexdigest()
+                != expected_payment_hash
+            ):
                 raise LightningTransportError("settled preimage does not satisfy invoice")
         if status == "SUCCEEDED" and preimage is None:
             raise LightningTransportError("successful payment did not reveal a preimage")
