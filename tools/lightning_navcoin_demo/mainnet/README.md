@@ -92,10 +92,12 @@ public key, set that one release pin, commit the clean release, rebuild the
 production UI manifest, and rerun `bootstrap`. Do not learn or replace this
 pin from a coordinator response at runtime.
 
-`export-grpc` copies only the digest-checked LND v0.20.1 generated Python
-modules from the pinned local build image. `dry-status` works before wallet
-creation and records the explicit `NON_EXISTING`/`HOLD` state without creating
-a seed, invoice, channel, or address.
+`export-grpc` verifies the LND v0.20.1 image's exact rootfs layer digests,
+source labels, platform, and every exported module digest. It creates but never
+starts a temporary container, then uses `docker cp`; no image-supplied process
+executes during export. `dry-status` works before wallet creation and records
+the explicit `NON_EXISTING`/`HOLD` state without creating a seed, invoice,
+channel, or address.
 
 The coordinator uses an immutable `v2` Python environment with hash-pinned
 wheels, including `cryptography==49.0.0`. Startup verifies the exact installed

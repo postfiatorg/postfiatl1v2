@@ -6,7 +6,7 @@ COMPOSE_FILE="$MAINNET_DIR/compose.yml"
 STATE_DIR="${PFTL_LN_MAINNET_STATE_DIR:-/home/postfiat/.pft/lightning-navcoin-mainnet}"
 PROJECT="${PFTL_LIGHTNING_MAINNET_PROJECT:-pftl-lightning-mainnet}"
 GRPC_PORT="${PFTL_LN_MAINNET_GRPC_PORT:-11009}"
-GRPC_IMAGE_ID="sha256:fc27fb4f0a5bd9f2950c1930360f2ef3d23ebbf38aac3c2a0a362919b56f14b2"
+GRPC_IMAGE="pftl/lnd-python-grpc:v0.20.1-beta"
 MACAROON_CONTAINER_PATH="/data/lnd/data/chain/bitcoin/mainnet/lightning-navcoin-receive-only.macaroon"
 MACAROON_HOST_PATH="$STATE_DIR/lnd/data/chain/bitcoin/mainnet/lightning-navcoin-receive-only.macaroon"
 MACAROON_VERIFIER="$MAINNET_DIR/../real_value/macaroon_verifier.py"
@@ -132,18 +132,64 @@ case "${1:-}" in
     grpc_dir="$STATE_DIR/lnd-grpc-v0.20.1"
     install -d -m 700 "$grpc_dir"
     export_dir="$(mktemp -d "$STATE_DIR/.lnd-grpc-export.XXXXXX")"
+    export_container=""
     cleanup_export() {
+      if [[ "$export_container" =~ ^[0-9a-f]{64}$ ]]; then
+        docker rm "$export_container" >/dev/null 2>&1 || true
+      fi
       find "$export_dir" -type f -delete 2>/dev/null || true
       rmdir "$export_dir" 2>/dev/null || true
     }
     trap cleanup_export EXIT
-    docker image inspect "$GRPC_IMAGE_ID" >/dev/null
-    docker run --rm \
-      --user "$PFTL_MAINNET_UID:$PFTL_MAINNET_GID" \
-      --volume "$export_dir:/out" \
-      --entrypoint sh \
-      "$GRPC_IMAGE_ID" \
-      -c 'cp /opt/pftl-lnd-grpc/__init__.py /opt/pftl-lnd-grpc/lightning_pb2.py /opt/pftl-lnd-grpc/lightning_pb2_grpc.py /opt/pftl-lnd-grpc/router_pb2.py /opt/pftl-lnd-grpc/router_pb2_grpc.py /out/'
+    image_metadata="$(docker image inspect "$GRPC_IMAGE")"
+    python3 - "$image_metadata" <<'PY'
+import json
+import sys
+
+images = json.loads(sys.argv[1])
+if not isinstance(images, list) or len(images) != 1:
+    raise SystemExit("generated LND image inspection returned an invalid result")
+image = images[0]
+labels = (image.get("Config") or {}).get("Labels") or {}
+expected_labels = {
+    "org.opencontainers.image.version": "v0.20.1-beta",
+    "org.opencontainers.image.revision": (
+        "db479a6d4cf7bd00817f8ce9bad2f57d81933b0b408364dc3f9c1e94682a27d3"
+    ),
+    "org.opencontainers.image.source": (
+        "https://github.com/lightningnetwork/lnd/tree/v0.20.1-beta/lnrpc"
+    ),
+}
+expected_layers = [
+    "sha256:81f823b9617547261c907396f63f770deaa554748ff739bedfa650e3bb74595a",
+    "sha256:ce33c9de66cdd02adfc5d2c90060519f50596db724128d3d1ff45f50f00b864b",
+    "sha256:c2b26ec5a1949f5c91508a243e07b92ed88a4540c285156784dfb7b55b2ccb56",
+    "sha256:03944bf5bf4e36dc438f56c82f5c5e564205edaac4a03c55f997febff27597c0",
+    "sha256:f24a9cd50379686d7c8be70df886cdc9e5614a37c2e78c1f5fb011afdfd7015b",
+    "sha256:e87a3761a759c57a39ad6918ccc348070e51a85cb415f23631968cf661fb857f",
+    "sha256:4bc488c4657a024d77e1f4b31f9c4e61aa3da82ab1cae3f627a6f6bc71e3359a",
+    "sha256:8c69d5129f9f8e8b290ccb226e6912aaf7cc9547a55e91716be37a0446327433",
+]
+if image.get("Os") != "linux" or image.get("Architecture") != "amd64":
+    raise SystemExit("generated LND image platform is not reviewed linux/amd64")
+if any(labels.get(key) != value for key, value in expected_labels.items()):
+    raise SystemExit("generated LND image labels do not match the reviewed source")
+if (image.get("RootFS") or {}).get("Layers") != expected_layers:
+    raise SystemExit("generated LND image rootfs layers do not match the reviewed build")
+PY
+    # Create but never start the reviewed image. docker cp extracts the exact
+    # hash-pinned rootfs bytes without executing any image-supplied process.
+    export_container="$(
+      docker create --network none --entrypoint /bin/true "$GRPC_IMAGE"
+    )"
+    for module in \
+      __init__.py lightning_pb2.py lightning_pb2_grpc.py \
+      router_pb2.py router_pb2_grpc.py
+    do
+      docker cp \
+        "$export_container:/opt/pftl-lnd-grpc/$module" \
+        "$export_dir/$module"
+    done
     python3 - "$export_dir" <<'PY'
 import hashlib
 from pathlib import Path
@@ -151,6 +197,7 @@ import sys
 
 root = Path(sys.argv[1])
 expected = {
+    "__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "lightning_pb2.py": "638d62e3e1faf48be6b9172e2472d650e4127207597741b9cedd52732f14cde7",
     "lightning_pb2_grpc.py": "09b22f3a7ed4d3369726a8d3a2e9ebf174ba4e2b94da4ba1cb3068af33c4d9b8",
     "router_pb2.py": "829e72a81f07f020ebab1e12a01fe1460f187b17166aaa1bbe30b51b54fe900a",
