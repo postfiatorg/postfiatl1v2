@@ -140,7 +140,8 @@ scripts/lightning-navcoin-mainnet-coordinator authorize \
 
 The coordinator has no LSP create-order or payment command. Before an operator
 manually creates any external liquidity order, reserve its maximum cost from
-the same durable `$5/run`, `$20/lifetime` budget:
+the same durable, permit-capped `$40/action`, `$50/lifetime` budget. The
+current Magma setup remains separately capped at `$5` by its one-use permit:
 
 ```bash
 chmod 600 /absolute/path/to/liquidity-setup-permit.json

@@ -1,4 +1,4 @@
-"""Durable, conservative ≤$5/run and ≤$20 lifetime real-value budget."""
+"""Durable, permit-capped ≤$40/action and ≤$50 lifetime real-value budget."""
 
 from __future__ import annotations
 

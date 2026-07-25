@@ -20,8 +20,10 @@ TRUST_CLASS = "CONTROLLED"
 ATOMICITY_CLAIM = (
     "non-custodial, conditionally-atomic, COORDINATOR-TRUSTED timing"
 )
-MAX_DEMO_PER_RUN_USD_E8 = 5 * 100_000_000
-MAX_DEMO_LIFETIME_USD_E8 = 20 * 100_000_000
+# Founder-authorized real-value envelope. Every actual expenditure still
+# requires its own exact, one-use nazgul permit; these are only outer bounds.
+MAX_DEMO_PER_RUN_USD_E8 = 40 * 100_000_000
+MAX_DEMO_LIFETIME_USD_E8 = 50 * 100_000_000
 MAX_PRICE_AGE_SECONDS = 300
 MAX_QUOTE_LIFETIME_SECONDS = 300
 MSAT_PER_BTC = 100_000_000_000

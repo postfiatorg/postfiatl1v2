@@ -455,7 +455,7 @@ class LiquidityBudgetCliTests(unittest.TestCase):
             self.assertEqual(budget.summary()["spent_count"], 0)
 
     def test_lifetime_cap_and_terminal_evidence_are_fail_closed(self) -> None:
-        # Four $5 reservations exhaust the entire founder-authorized lifetime.
+        # Four $5 reservations exhaust this fixture's configured lifetime.
         for index in range(4):
             permit = liquidity_authorization(
                 route=self.route,

@@ -27,8 +27,17 @@ NOW = 1_800_000_000
 class RealValuePolicyTests(unittest.TestCase):
     def test_policy_hard_caps_and_nonfreezable_gate(self) -> None:
         value = policy_mapping()
-        value["max_per_run_usd_e8"] = 500_000_001
+        value["max_per_run_usd_e8"] = 4_000_000_001
         with self.assertRaisesRegex(RealValuePolicyError, "per-run cap"):
+            RealValuePolicy.from_mapping(value)
+        value = policy_mapping()
+        value["max_per_run_usd_e8"] = 4_000_000_000
+        value["max_lifetime_usd_e8"] = 5_000_000_000
+        amended = RealValuePolicy.from_mapping(value)
+        self.assertEqual(amended.max_per_run_usd_e8, 4_000_000_000)
+        self.assertEqual(amended.max_lifetime_usd_e8, 5_000_000_000)
+        value["max_lifetime_usd_e8"] = 5_000_000_001
+        with self.assertRaisesRegex(RealValuePolicyError, "lifetime cap"):
             RealValuePolicy.from_mapping(value)
         value = policy_mapping()
         value["require_non_freezable"] = False

@@ -125,7 +125,7 @@ Do not create or pay an LSP order until all of these are green:
 4. a non-freezable/non-clawback NAVcoin with proven epoch/hash and inventory;
 5. a fresh operator-reviewed BTC/USD observation;
 6. a nazgul-signed, single-use `LIQUIDITY_SETUP` authorization whose maximum
-   cost fits the remaining `<= $20` lifetime budget.
+   cost fits the remaining `<= $50` lifetime budget.
 
 Reserve that permit before any manual external order with
 `lightning-navcoin-mainnet-coordinator liquidity-reserve`. The fail-closed
@@ -145,6 +145,11 @@ already-initiated HODL payment then has a hard six-hour settlement grace from
 actual initiation. This does not relax swap quote or BTC-price freshness
 bounds. Exact cost ceilings, single-use authorization, full-ceiling
 accounting, and ambiguity-as-reserved remain unchanged.
+
+The founder-authorized outer envelope is `$50` lifetime and `$40` for any one
+separately authorized action. These are not standing spend permissions. Each
+liquidity setup or swap still requires its own exact one-use nazgul signature;
+the current Magma setup remains independently capped at `$5`.
 
 Magma's order response must be reviewed before payment. The service cannot
 compel an LSP to open a channel; channel funding outpoint, confirmations,
