@@ -89,7 +89,13 @@ def default_client_factory(endpoint: str) -> Any:
         sys.path.insert(0, str(python_root))
     from postfiat_rpc.client import PostFiatRpcClient
 
-    return PostFiatRpcClient(endpoint, timeout_seconds=8)
+    # Audited transaction reads replay the finalized block log.  The
+    # persistent six-validator demo can legitimately take longer than the
+    # ordinary state-read budget once its block archive grows, so allow the
+    # read to finish rather than misclassifying a committed effect as absent.
+    # This changes transport patience only; all six identity, inclusion, and
+    # receipt checks below remain mandatory.
+    return PostFiatRpcClient(endpoint, timeout_seconds=30)
 
 
 def _uint(value: Any, name: str, *, minimum: int = 0) -> int:
