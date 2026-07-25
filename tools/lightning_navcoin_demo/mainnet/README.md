@@ -137,12 +137,13 @@ remains reserved. The exact artifact contract and commands are documented in
 `COORDINATOR-CLI.md`.
 
 Liquidity setup payments must be initiated before the signed permit's
-policy-bounded expiry, which may not exceed five minutes. An already-initiated
-HODL payment then has a separate hard six-hour settlement grace so a
-provider-funded channel can reach its reviewed confirmation depth. This does
-not relax swap quote or BTC-price freshness bounds. Exact cost ceilings,
-single-use authorization, full-ceiling accounting, and
-ambiguity-as-reserved remain unchanged.
+liquidity-specific expiry, which may not exceed 15 minutes. This offline
+authorization horizon is separate from the unchanged five-minute maximum for
+executable swap quotes. An already-initiated HODL payment then has a separate
+hard six-hour settlement grace so a provider-funded channel can reach its
+reviewed confirmation depth. This does not relax swap quote or BTC-price
+freshness bounds. Exact cost ceilings, single-use authorization,
+full-ceiling accounting, and ambiguity-as-reserved remain unchanged.
 
 Magma's order response must be reviewed before payment. The service cannot
 compel an LSP to open a channel; channel funding outpoint, confirmations,

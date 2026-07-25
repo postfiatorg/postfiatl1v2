@@ -13,6 +13,7 @@ from ..cli import build_parser
 from ..composition import CompositionError, SecureStatePaths
 from ..liquidity_budget import (
     LIQUIDITY_EVIDENCE_SCHEMA,
+    MAX_LIQUIDITY_INITIATION_HORIZON_SECONDS,
     MAX_LIQUIDITY_SETTLEMENT_GRACE_SECONDS,
     LiquidityBudgetError,
     mark_liquidity_setup_spent,
@@ -253,29 +254,33 @@ class LiquidityBudgetCliTests(unittest.TestCase):
     def test_liquidity_has_a_short_start_and_bounded_settlement_grace(
         self,
     ) -> None:
+        self.assertEqual(MAX_LIQUIDITY_INITIATION_HORIZON_SECONDS, 15 * 60)
         self.assertEqual(MAX_LIQUIDITY_SETTLEMENT_GRACE_SECONDS, 6 * 60 * 60)
+        # The swap quote limit remains independent and shorter.
         self.assertEqual(self.route.max_quote_lifetime_seconds, 120)
 
-        start_at_policy_boundary = liquidity_authorization(
+        start_at_liquidity_boundary = liquidity_authorization(
             route=self.route,
-            expires_unix=NOW + self.route.max_quote_lifetime_seconds,
+            expires_unix=NOW + MAX_LIQUIDITY_INITIATION_HORIZON_SECONDS,
         )
         reserved = self._reserve(
             suffix="start-boundary",
-            authorization=start_at_policy_boundary,
+            authorization=start_at_liquidity_boundary,
         )
         self.assertEqual(
             reserved["authorization_expires_unix"],
-            NOW + self.route.max_quote_lifetime_seconds,
+            NOW + MAX_LIQUIDITY_INITIATION_HORIZON_SECONDS,
         )
 
         late_start_authority = liquidity_authorization(
             route=self.route,
             suffix="late-start-authority",
-            expires_unix=NOW + self.route.max_quote_lifetime_seconds + 1,
+            expires_unix=(
+                NOW + MAX_LIQUIDITY_INITIATION_HORIZON_SECONDS + 1
+            ),
         )
         with self.assertRaisesRegex(
-            LiquidityBudgetError, "lifetime exceeds policy"
+            LiquidityBudgetError, "hard initiation horizon"
         ):
             self._reserve(
                 suffix="late-start-authority",

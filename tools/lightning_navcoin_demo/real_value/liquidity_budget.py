@@ -65,10 +65,12 @@ HEX_32 = re.compile(r"^[0-9a-f]{64}$")
 COMPRESSED_PUBKEY = re.compile(r"^(02|03)[0-9a-f]{64}$")
 CHANNEL_POINT = re.compile(r"^[0-9a-f]{64}:(?:0|[1-9][0-9]{0,9})$")
 MAX_PUBLIC_INPUT_BYTES = 64 * 1024
-# An authorized liquidity payment must still start inside the policy's
-# at-most-five-minute decision window. Once started, an external HODL payment
-# may wait for channel confirmations under this separate, hard settlement
-# grace.
+# Liquidity setup has a distinct initiation horizon because its offline
+# authorization ceremony is separate from executable swap quotes. Swap quotes
+# remain capped by MAX_QUOTE_LIFETIME_SECONDS in policy.py.
+MAX_LIQUIDITY_INITIATION_HORIZON_SECONDS = 15 * 60
+# Once started, an external HODL payment may wait for channel confirmations
+# under this separate, hard settlement grace.
 MAX_LIQUIDITY_SETTLEMENT_GRACE_SECONDS = 6 * 60 * 60
 
 
@@ -183,9 +185,12 @@ def _require_liquidity_authorization(
         (authorization.swap_id, "setup_id"),
     ):
         _hex32(value, name)
-    if authorization.expires_unix - now_unix > policy.max_quote_lifetime_seconds:
+    if (
+        authorization.expires_unix - now_unix
+        > MAX_LIQUIDITY_INITIATION_HORIZON_SECONDS
+    ):
         raise LiquidityBudgetError(
-            "liquidity authorization lifetime exceeds policy"
+            "liquidity authorization exceeds the hard initiation horizon"
         )
     priced_ceiling = msat_to_usd_e8_ceil(
         authorization.maximum_all_in_msat,
