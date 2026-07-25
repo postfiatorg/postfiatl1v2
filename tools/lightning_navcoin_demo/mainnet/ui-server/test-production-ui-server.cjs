@@ -249,6 +249,64 @@ test("release manifest pins every production byte and rejects tampering", () => 
   );
 });
 
+test("unchanged UI bytes can be released under a new clean source pin", () => {
+  const fixture = initializeFakeReleaseRepo();
+  const dist = path.join(temporaryDirectory(), "dist");
+  fs.mkdirSync(path.join(dist, "assets"), { recursive: true });
+  fs.writeFileSync(
+    path.join(dist, "index.html"),
+    "<!doctype html><script type=\"module\" src=\"/assets/main-abcdefgh.js\"></script>",
+  );
+  fs.writeFileSync(
+    path.join(dist, "assets/main-abcdefgh.js"),
+    "console.log('production');",
+  );
+  const output = path.join(temporaryDirectory(), "artifacts");
+  fs.mkdirSync(output, { mode: 0o700 });
+  const first = createRelease({
+    repoRoot: fixture.root,
+    sourceReleasePath: fixture.sourceRelease,
+    distPath: dist,
+    outputRoot: output,
+  });
+
+  fs.writeFileSync(
+    path.join(fixture.root, "tools/lightning_navcoin_demo/audit-note.txt"),
+    "reviewed source-only change\n",
+  );
+  execFileSync("git", ["add", "."], { cwd: fixture.root });
+  execFileSync("git", ["commit", "-qm", "source-only change"], {
+    cwd: fixture.root,
+  });
+  const commit = execFileSync(
+    "git",
+    ["rev-parse", "HEAD^{commit}"],
+    { cwd: fixture.root, encoding: "utf8" },
+  ).trim();
+  const tree = execFileSync(
+    "git",
+    ["rev-parse", "HEAD^{tree}"],
+    { cwd: fixture.root, encoding: "utf8" },
+  ).trim();
+  const source = JSON.parse(fs.readFileSync(fixture.sourceRelease, "utf8"));
+  source.git_commit = commit;
+  source.git_tree = tree;
+  fs.writeFileSync(fixture.sourceRelease, JSON.stringify(source));
+  fs.chmodSync(fixture.sourceRelease, 0o600);
+
+  const second = createRelease({
+    repoRoot: fixture.root,
+    sourceReleasePath: fixture.sourceRelease,
+    distPath: dist,
+    outputRoot: output,
+  });
+  assert.equal(first.dist_tree_sha256, second.dist_tree_sha256);
+  assert.notEqual(first.manifest_sha256, second.manifest_sha256);
+  assert.notEqual(first.manifest_path, second.manifest_path);
+  assert.equal(fs.existsSync(first.manifest_path), true);
+  assert.equal(fs.existsSync(second.manifest_path), true);
+});
+
 test("production inventory rejects Vite dev and source-map artifacts", () => {
   const root = temporaryDirectory();
   fs.writeFileSync(path.join(root, "index.html"), "<script src=\"/@vite/client\"></script>");

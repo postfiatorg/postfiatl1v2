@@ -448,10 +448,15 @@ function createRelease({
   const manifestBytes = Buffer.from(`${canonicalJson(manifestValue)}\n`, "ascii");
   const manifestSha256 = sha256(manifestBytes);
   const root = ensurePrivateDirectory(outputRoot);
-  const releasesRoot = path.join(root, "wallet-ui-releases");
-  fs.mkdirSync(releasesRoot, { mode: 0o700 });
-  fs.chmodSync(releasesRoot, 0o700);
-  const releasePath = path.join(releasesRoot, manifestValue.dist_tree_sha256);
+  const releasesRoot = ensurePrivateDirectory(
+    path.join(root, "wallet-ui-releases"),
+  );
+  // The source-release pin is part of the manifest even when the built UI
+  // bytes are unchanged.  Keying only by the dist tree would collide when an
+  // unrelated reviewed source change advances HEAD, and would either discard
+  // provenance or require overwriting the prior release.  The full manifest
+  // digest is immutable and uniquely binds both source and served bytes.
+  const releasePath = path.join(releasesRoot, manifestSha256);
 
   if (!fs.existsSync(releasePath)) {
     const temporary = fs.mkdtempSync(path.join(releasesRoot, ".release-"));
