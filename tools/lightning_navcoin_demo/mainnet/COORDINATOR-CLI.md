@@ -156,13 +156,15 @@ at that price and must fit inside its signed USD ceiling. The command only
 writes `RESERVED` to SQLite; it does not connect to an LSP, create an order,
 pay an invoice, load a PFTL signer, or move value.
 
-The external payment must be initiated before the signed permit's
-liquidity-specific expiry, which may not exceed 15 minutes. This offline
-authorization horizon is separate from the unchanged five-minute maximum for
-executable swap quotes. A terminal-evidence v2 record carries the initiation
-timestamp, and an already-initiated HODL payment has a separate hard six-hour
-settlement grace for channel confirmations. The grace does not extend
-initiation authority or the swap quote limit.
+The signed liquidity permit may expire at most one hour after verification to
+permit an offline review/signing round trip. Reservation requires at least 15
+minutes remaining, then narrows payment-start authority to 15 minutes after
+the durable reservation (or the signed expiry, if earlier). This is separate
+from the unchanged five-minute maximum for executable swap quotes. A
+terminal-evidence v2 record carries the initiation timestamp, and an
+already-initiated HODL payment has a hard six-hour settlement grace from
+actual initiation. The grace does not extend initiation authority or the swap
+quote limit.
 
 After the external invoice is independently proven `SUCCEEDED` and its funded
 channel is confirmed, active, and has positive inbound capacity, record one

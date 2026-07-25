@@ -75,6 +75,7 @@ MAX_PUBLIC_INPUT_BYTES = 64 * 1024
 MAX_LIQUIDITY_INITIATION_HORIZON_SECONDS = (
     MAX_LIQUIDITY_AUTHORIZATION_LIFETIME_SECONDS
 )
+LIQUIDITY_POST_RESERVATION_INITIATION_SECONDS = 15 * 60
 # Once started, an external HODL payment may wait for channel confirmations
 # under this separate, hard settlement grace.
 MAX_LIQUIDITY_SETTLEMENT_GRACE_SECONDS = 6 * 60 * 60
@@ -198,6 +199,13 @@ def _require_liquidity_authorization(
         raise LiquidityBudgetError(
             "liquidity authorization exceeds the hard initiation horizon"
         )
+    if (
+        authorization.expires_unix - now_unix
+        < LIQUIDITY_POST_RESERVATION_INITIATION_SECONDS
+    ):
+        raise LiquidityBudgetError(
+            "liquidity authorization has insufficient remaining initiation time"
+        )
     priced_ceiling = msat_to_usd_e8_ceil(
         authorization.maximum_all_in_msat,
         price.btc_usd_e8,
@@ -246,6 +254,16 @@ def reserve_liquidity_setup(
                 "liquidity authorization is no longer an active reservation"
             )
         summary = budget.summary()
+    post_reservation_deadline = (
+        reservation["created_unix"]
+        + LIQUIDITY_POST_RESERVATION_INITIATION_SECONDS
+    )
+    if post_reservation_deadline > (1 << 63) - 1:
+        raise LiquidityBudgetError("liquidity initiation deadline overflows uint63")
+    payment_initiation_deadline = min(
+        reservation["expires_unix"],
+        post_reservation_deadline,
+    )
     return {
         "schema": "postfiat.lightning_liquidity_setup_reservation.v1",
         "status": "RESERVED",
@@ -259,6 +277,7 @@ def reserve_liquidity_setup(
         ),
         "ceiling_usd_e8": reservation["max_all_in_usd_e8"],
         "authorization_expires_unix": reservation["expires_unix"],
+        "payment_initiation_deadline_unix": payment_initiation_deadline,
         "remaining_lifetime_usd_e8": summary["remaining_usd_e8"],
         "manual_external_order_permitted": True,
         "order_created_by_command": False,
@@ -349,6 +368,16 @@ def _validate_terminal_evidence(
     if initiated > reservation["expires_unix"]:
         raise LiquidityBudgetError(
             "external payment initiated after authorization expiry"
+        )
+    post_reservation_deadline = (
+        reservation["created_unix"]
+        + LIQUIDITY_POST_RESERVATION_INITIATION_SECONDS
+    )
+    if post_reservation_deadline > (1 << 63) - 1:
+        raise LiquidityBudgetError("liquidity initiation deadline overflows uint63")
+    if initiated > post_reservation_deadline:
+        raise LiquidityBudgetError(
+            "external payment exceeded the post-reservation initiation window"
         )
     if settled < initiated:
         raise LiquidityBudgetError(

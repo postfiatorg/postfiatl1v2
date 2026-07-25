@@ -17,6 +17,7 @@ from ..cli import build_parser
 from ..composition import CompositionError, SecureStatePaths
 from ..liquidity_budget import (
     LIQUIDITY_EVIDENCE_SCHEMA,
+    LIQUIDITY_POST_RESERVATION_INITIATION_SECONDS,
     MAX_LIQUIDITY_INITIATION_HORIZON_SECONDS,
     MAX_LIQUIDITY_SETTLEMENT_GRACE_SECONDS,
     LiquidityBudgetError,
@@ -37,7 +38,7 @@ def liquidity_authorization(
     direction: str = "not_applicable",
     principal_msat: int = 100_000,
     max_all_in_usd_e8: int = 20_000_000,
-    expires_unix: int = NOW + 60,
+    expires_unix: int = NOW + 15 * 60,
 ) -> dict[str, object]:
     setup_id = hashlib.sha256(f"liquidity-setup:{suffix}".encode()).hexdigest()
     return sign_value_authorization(
@@ -258,7 +259,11 @@ class LiquidityBudgetCliTests(unittest.TestCase):
     def test_liquidity_has_a_short_start_and_bounded_settlement_grace(
         self,
     ) -> None:
-        self.assertEqual(MAX_LIQUIDITY_INITIATION_HORIZON_SECONDS, 15 * 60)
+        self.assertEqual(MAX_LIQUIDITY_INITIATION_HORIZON_SECONDS, 60 * 60)
+        self.assertEqual(
+            LIQUIDITY_POST_RESERVATION_INITIATION_SECONDS,
+            15 * 60,
+        )
         self.assertEqual(MAX_LIQUIDITY_SETTLEMENT_GRACE_SECONDS, 6 * 60 * 60)
         # The swap quote limit remains independent and shorter.
         self.assertEqual(self.route.max_quote_lifetime_seconds, 120)
@@ -274,6 +279,10 @@ class LiquidityBudgetCliTests(unittest.TestCase):
         self.assertEqual(
             reserved["authorization_expires_unix"],
             NOW + MAX_LIQUIDITY_INITIATION_HORIZON_SECONDS,
+        )
+        self.assertEqual(
+            reserved["payment_initiation_deadline_unix"],
+            NOW + LIQUIDITY_POST_RESERVATION_INITIATION_SECONDS,
         )
 
         late_start_authority = liquidity_authorization(
@@ -298,6 +307,20 @@ class LiquidityBudgetCliTests(unittest.TestCase):
             self._reserve(
                 suffix="late-start-authority",
                 authorization=late_start_authority,
+            )
+        insufficient_start_authority = liquidity_authorization(
+            route=self.route,
+            suffix="insufficient-start-authority",
+            expires_unix=(
+                NOW + LIQUIDITY_POST_RESERVATION_INITIATION_SECONDS - 1
+            ),
+        )
+        with self.assertRaisesRegex(
+            LiquidityBudgetError, "insufficient remaining initiation time"
+        ):
+            self._reserve(
+                suffix="insufficient-start-authority",
+                authorization=insufficient_start_authority,
             )
         with RealValueBudget(self.paths.budget, self.route) as budget:
             self.assertEqual(budget.summary()["reserved_count"], 1)
@@ -368,6 +391,39 @@ class LiquidityBudgetCliTests(unittest.TestCase):
                 now_unix=late_initiation["observed_at_unix"],
             )
 
+        long_authority = liquidity_authorization(
+            route=self.route,
+            suffix="post-reservation-late",
+            expires_unix=NOW + MAX_LIQUIDITY_INITIATION_HORIZON_SECONDS,
+        )
+        post_reservation_late = self._reserve(
+            suffix="post-reservation-late",
+            authorization=long_authority,
+        )
+        late_after_reservation = terminal_evidence(post_reservation_late)
+        late_after_reservation["payment_initiated_at_unix"] = (
+            NOW + LIQUIDITY_POST_RESERVATION_INITIATION_SECONDS + 1
+        )
+        late_after_reservation["payment_settled_at_unix"] = (
+            late_after_reservation["payment_initiated_at_unix"]
+        )
+        late_after_reservation["observed_at_unix"] = (
+            late_after_reservation["payment_settled_at_unix"]
+        )
+        late_after_reservation_path = (
+            self.paths.config_dir / "post-reservation-late.json"
+        )
+        self._write(late_after_reservation_path, late_after_reservation)
+        with self.assertRaisesRegex(
+            LiquidityBudgetError, "post-reservation initiation window"
+        ):
+            mark_liquidity_setup_spent(
+                state_dir=self.root,
+                policy_path=self.policy_path,
+                evidence_path=late_after_reservation_path,
+                now_unix=late_after_reservation["observed_at_unix"],
+            )
+
         settled_late = self._reserve(suffix="settled-late")
         late_settlement = terminal_evidence(settled_late)
         late_settlement["payment_settled_at_unix"] = (
@@ -390,7 +446,7 @@ class LiquidityBudgetCliTests(unittest.TestCase):
                 now_unix=late_settlement["observed_at_unix"],
             )
         with RealValueBudget(self.paths.budget, self.route) as budget:
-            self.assertEqual(budget.summary()["reserved_count"], 3)
+            self.assertEqual(budget.summary()["reserved_count"], 4)
             self.assertEqual(budget.summary()["spent_count"], 0)
 
     def test_lifetime_cap_and_terminal_evidence_are_fail_closed(self) -> None:
