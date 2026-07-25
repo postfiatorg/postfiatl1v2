@@ -192,6 +192,11 @@ class LiquidityBudgetCliTests(unittest.TestCase):
                 now_unix=NOW + 32,
             )
 
+    def test_reserved_liquidity_setup_is_not_swap_recovery_work(self) -> None:
+        self._reserve()
+        with RealValueBudget(self.paths.budget, self.route) as budget:
+            self.assertEqual(budget.reserved_swap_ids(), ())
+
     def test_requires_armed_policy_clean_release_and_owner_only_inputs(self) -> None:
         dry_path = self.paths.config_dir / "dry-policy.json"
         self._write(dry_path, policy_mapping(mode="DRY_RUN"))

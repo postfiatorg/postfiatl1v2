@@ -505,7 +505,7 @@ class RealValueBudget:
         return None if row is None else self._row(row)
 
     def reserved_swap_ids(self, *, limit: int = 256) -> tuple[str, ...]:
-        """Return bounded durable work whose value authorization is still open."""
+        """Return bounded durable swap work whose authorization is still open."""
 
         if type(limit) is not int or limit < 1 or limit > 4096:
             raise BudgetError("reserved authorization scan limit is invalid")
@@ -513,7 +513,7 @@ class RealValueBudget:
             rows = self._connection.execute(
                 """
                 SELECT swap_id FROM authorizations
-                WHERE state = 'RESERVED'
+                WHERE state = 'RESERVED' AND category = 'SWAP'
                 ORDER BY created_unix, authorization_id
                 LIMIT ?
                 """,
