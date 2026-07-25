@@ -47,7 +47,10 @@ from .pricing import FixedNavPricing, NavQuoteTerms
 
 MIN_FINAL_CLTV_DELTA = 144
 MAX_TOTAL_CLTV_DELTA = 288
-QUOTE_LIFETIME_SECONDS = 120
+# Use the full policy-allowed signing/execution window. The payable invoice is
+# still clipped to the independently pinned price-valid-until boundary below,
+# so this does not extend price staleness.
+QUOTE_LIFETIME_SECONDS = 300
 # Dedicated-chain conservative policy window. This deliberately does not
 # convert Bitcoin CLTV into PFTL blocks: there is no consensus-authenticated
 # cross-chain clock. The 100-block quote/submission allowance is small relative

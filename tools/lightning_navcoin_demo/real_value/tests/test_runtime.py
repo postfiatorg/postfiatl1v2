@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import tempfile
 import threading
 import unittest
@@ -1011,6 +1012,38 @@ class RuntimeTests(unittest.TestCase):
         refreshed = self.runtime.refresh_onramp(created["swap_id"])
         self.assertEqual(refreshed["state"], SwapState.PFTL_LOCK_FINAL.value)
         self.assertIn("lightning", refreshed)
+
+    def test_onramp_uses_full_policy_window_but_never_outlives_price(self) -> None:
+        route = replace(
+            self.route,
+            max_price_age_seconds=300,
+            max_quote_lifetime_seconds=300,
+        )
+        lnd = FakeLnd(route)
+        observer = FakeObserver(route)
+        runtime = MainnetCoordinatorRuntime(
+            policy=route,
+            price=price(observed_at_unix=NOW - 250),
+            lnd=lnd,
+            pftl_observer=observer,
+            pftl_backend=FakeBackend(observer),
+            journal=self.journal,
+            budget=self.budget,
+            quote_signer=QUOTE_SIGNER,
+            clock=lambda: NOW,
+        )
+        created = runtime.create_quote(
+            {
+                "direction": "lightning_to_pftl",
+                "amount_msat": AMOUNT_MSAT,
+                "wallet_address": USER,
+                "client_request_id": "de" * 32,
+            }
+        )
+        quote = self.journal.get_swap(created["swap_id"])["signed_quote"]["quote"]
+        self.assertEqual(quote["invoice_expiry_unix"], NOW + 50)
+        self.assertEqual(quote["quote_expires_unix"], NOW + 50)
+        self.assertEqual(quote["latest_lightning_start_unix"], NOW + 50)
 
     def test_onramp_authorization_must_cover_full_invoice_payability(self) -> None:
         created = self.runtime.create_quote(
