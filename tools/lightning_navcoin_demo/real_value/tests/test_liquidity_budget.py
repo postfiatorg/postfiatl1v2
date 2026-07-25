@@ -292,11 +292,9 @@ class LiquidityBudgetCliTests(unittest.TestCase):
     def test_confirmed_hodl_payment_may_settle_inside_grace(self) -> None:
         reserved = self._reserve()
         terminal = terminal_evidence(reserved)
-        terminal["payment_initiated_at_unix"] = reserved[
-            "authorization_expires_unix"
-        ]
+        terminal["payment_initiated_at_unix"] = NOW + 10
         terminal["payment_settled_at_unix"] = (
-            reserved["authorization_expires_unix"]
+            terminal["payment_initiated_at_unix"]
             + MAX_LIQUIDITY_SETTLEMENT_GRACE_SECONDS
         )
         terminal["observed_at_unix"] = terminal["payment_settled_at_unix"]
@@ -360,7 +358,7 @@ class LiquidityBudgetCliTests(unittest.TestCase):
         settled_late = self._reserve(suffix="settled-late")
         late_settlement = terminal_evidence(settled_late)
         late_settlement["payment_settled_at_unix"] = (
-            settled_late["authorization_expires_unix"]
+            late_settlement["payment_initiated_at_unix"]
             + MAX_LIQUIDITY_SETTLEMENT_GRACE_SECONDS
             + 1
         )

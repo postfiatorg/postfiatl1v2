@@ -349,8 +349,7 @@ def _validate_terminal_evidence(
             "external payment settled before it was initiated"
         )
     settlement_deadline = (
-        reservation["expires_unix"]
-        + MAX_LIQUIDITY_SETTLEMENT_GRACE_SECONDS
+        initiated + MAX_LIQUIDITY_SETTLEMENT_GRACE_SECONDS
     )
     if settlement_deadline > (1 << 63) - 1:
         raise LiquidityBudgetError("liquidity settlement deadline overflows uint63")
