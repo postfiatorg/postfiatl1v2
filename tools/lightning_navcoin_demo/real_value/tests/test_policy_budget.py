@@ -70,6 +70,12 @@ class RealValuePolicyTests(unittest.TestCase):
         value["max_quote_lifetime_seconds"] = 301
         with self.assertRaisesRegex(RealValuePolicyError, "quote_lifetime.*hard"):
             RealValuePolicy.from_mapping(value)
+        value = policy_mapping()
+        value["authorization_public_key_hex"] = value[
+            "quote_signer_public_key_hex"
+        ]
+        with self.assertRaisesRegex(RealValuePolicyError, "keys must be distinct"):
+            RealValuePolicy.from_mapping(value)
 
     def test_proven_nav_sha384_quote_and_exact_rate_are_required(self) -> None:
         route = policy()

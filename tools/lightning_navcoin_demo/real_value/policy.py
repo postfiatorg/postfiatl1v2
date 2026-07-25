@@ -294,6 +294,20 @@ class RealValuePolicy:
             raise RealValuePolicyError(
                 "max_quote_lifetime_seconds exceeds the hard mainnet-demo bound"
             )
+        quote_signer_public_key_hex = _hex(
+            value["quote_signer_public_key_hex"],
+            "quote_signer_public_key_hex",
+            HEX_32,
+        )
+        authorization_public_key_hex = _hex(
+            value["authorization_public_key_hex"],
+            "authorization_public_key_hex",
+            HEX_32,
+        )
+        if authorization_public_key_hex == quote_signer_public_key_hex:
+            raise RealValuePolicyError(
+                "authorization and quote signer keys must be distinct"
+            )
         return cls(
             policy_id=_hex(value["policy_id"], "policy_id", HEX_32),
             mode=mode,
@@ -301,16 +315,8 @@ class RealValuePolicy:
             expected_lnd_pubkey=_hex(
                 value["expected_lnd_pubkey"], "expected_lnd_pubkey", HEX_33
             ),
-            quote_signer_public_key_hex=_hex(
-                value["quote_signer_public_key_hex"],
-                "quote_signer_public_key_hex",
-                HEX_32,
-            ),
-            authorization_public_key_hex=_hex(
-                value["authorization_public_key_hex"],
-                "authorization_public_key_hex",
-                HEX_32,
-            ),
+            quote_signer_public_key_hex=quote_signer_public_key_hex,
+            authorization_public_key_hex=authorization_public_key_hex,
             pftl_chain_id=_text(value["pftl_chain_id"], "pftl_chain_id", maximum=128),
             pftl_genesis_hash=_hex(
                 value["pftl_genesis_hash"], "pftl_genesis_hash", HEX_48

@@ -13,6 +13,7 @@ from ..cli import build_parser
 from ..composition import CompositionError, SecureStatePaths
 from ..liquidity_budget import (
     LIQUIDITY_EVIDENCE_SCHEMA,
+    MAX_LIQUIDITY_SETTLEMENT_GRACE_SECONDS,
     LiquidityBudgetError,
     mark_liquidity_setup_spent,
     reserve_liquidity_setup,
@@ -31,6 +32,7 @@ def liquidity_authorization(
     direction: str = "not_applicable",
     principal_msat: int = 100_000,
     max_all_in_usd_e8: int = 20_000_000,
+    expires_unix: int = NOW + 60,
 ) -> dict[str, object]:
     setup_id = hashlib.sha256(f"liquidity-setup:{suffix}".encode()).hexdigest()
     return sign_value_authorization(
@@ -49,7 +51,7 @@ def liquidity_authorization(
             "principal_msat": principal_msat,
             "max_fee_msat": 10_000,
             "max_all_in_usd_e8": max_all_in_usd_e8,
-            "expires_unix": NOW + 60,
+            "expires_unix": expires_unix,
             "authorized_by": "nazgul",
         },
         AUTH_SIGNER,
@@ -74,6 +76,7 @@ def terminal_evidence(
         "payment_status": "SUCCEEDED",
         "payment_hash": "ab" * 32,
         "actual_cost_msat": actual_cost_msat,
+        "payment_initiated_at_unix": NOW + 10,
         "payment_settled_at_unix": NOW + 20,
         "channel_active": True,
         "channel_point": f"{'cd' * 32}:1",
@@ -246,6 +249,114 @@ class LiquidityBudgetCliTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(LiquidityBudgetError, "USD ceiling"):
             self._reserve(authorization=underpriced)
+
+    def test_liquidity_has_a_short_start_and_bounded_settlement_grace(
+        self,
+    ) -> None:
+        self.assertEqual(MAX_LIQUIDITY_SETTLEMENT_GRACE_SECONDS, 6 * 60 * 60)
+        self.assertEqual(self.route.max_quote_lifetime_seconds, 120)
+
+        start_at_policy_boundary = liquidity_authorization(
+            route=self.route,
+            expires_unix=NOW + self.route.max_quote_lifetime_seconds,
+        )
+        reserved = self._reserve(
+            suffix="start-boundary",
+            authorization=start_at_policy_boundary,
+        )
+        self.assertEqual(
+            reserved["authorization_expires_unix"],
+            NOW + self.route.max_quote_lifetime_seconds,
+        )
+
+        late_start_authority = liquidity_authorization(
+            route=self.route,
+            suffix="late-start-authority",
+            expires_unix=NOW + self.route.max_quote_lifetime_seconds + 1,
+        )
+        with self.assertRaisesRegex(
+            LiquidityBudgetError, "lifetime exceeds policy"
+        ):
+            self._reserve(
+                suffix="late-start-authority",
+                authorization=late_start_authority,
+            )
+        with RealValueBudget(self.paths.budget, self.route) as budget:
+            self.assertEqual(budget.summary()["reserved_count"], 1)
+
+    def test_confirmed_hodl_payment_may_settle_inside_grace(self) -> None:
+        reserved = self._reserve()
+        terminal = terminal_evidence(reserved)
+        terminal["payment_initiated_at_unix"] = reserved[
+            "authorization_expires_unix"
+        ]
+        terminal["payment_settled_at_unix"] = (
+            reserved["authorization_expires_unix"]
+            + MAX_LIQUIDITY_SETTLEMENT_GRACE_SECONDS
+        )
+        terminal["observed_at_unix"] = terminal["payment_settled_at_unix"]
+        evidence_path = self.paths.config_dir / "delayed-terminal.json"
+        self._write(evidence_path, terminal)
+        spent = mark_liquidity_setup_spent(
+            state_dir=self.root,
+            policy_path=self.policy_path,
+            evidence_path=evidence_path,
+            now_unix=terminal["observed_at_unix"],
+        )
+        self.assertEqual(spent["status"], "SPENT")
+        self.assertEqual(
+            spent["charged_ceiling_usd_e8"],
+            reserved["ceiling_usd_e8"],
+        )
+
+    def test_late_initiation_or_settlement_remains_reserved(self) -> None:
+        initiated_late = self._reserve(suffix="initiated-late")
+        late_initiation = terminal_evidence(initiated_late)
+        late_initiation["payment_initiated_at_unix"] = (
+            initiated_late["authorization_expires_unix"] + 1
+        )
+        late_initiation["payment_settled_at_unix"] = late_initiation[
+            "payment_initiated_at_unix"
+        ]
+        late_initiation["observed_at_unix"] = late_initiation[
+            "payment_settled_at_unix"
+        ]
+        initiation_path = self.paths.config_dir / "late-initiation.json"
+        self._write(initiation_path, late_initiation)
+        with self.assertRaisesRegex(
+            LiquidityBudgetError, "initiated after authorization expiry"
+        ):
+            mark_liquidity_setup_spent(
+                state_dir=self.root,
+                policy_path=self.policy_path,
+                evidence_path=initiation_path,
+                now_unix=late_initiation["observed_at_unix"],
+            )
+
+        settled_late = self._reserve(suffix="settled-late")
+        late_settlement = terminal_evidence(settled_late)
+        late_settlement["payment_settled_at_unix"] = (
+            settled_late["authorization_expires_unix"]
+            + MAX_LIQUIDITY_SETTLEMENT_GRACE_SECONDS
+            + 1
+        )
+        late_settlement["observed_at_unix"] = late_settlement[
+            "payment_settled_at_unix"
+        ]
+        settlement_path = self.paths.config_dir / "late-settlement.json"
+        self._write(settlement_path, late_settlement)
+        with self.assertRaisesRegex(
+            LiquidityBudgetError, "bounded settlement grace"
+        ):
+            mark_liquidity_setup_spent(
+                state_dir=self.root,
+                policy_path=self.policy_path,
+                evidence_path=settlement_path,
+                now_unix=late_settlement["observed_at_unix"],
+            )
+        with RealValueBudget(self.paths.budget, self.route) as budget:
+            self.assertEqual(budget.summary()["reserved_count"], 2)
+            self.assertEqual(budget.summary()["spent_count"], 0)
 
     def test_lifetime_cap_and_terminal_evidence_are_fail_closed(self) -> None:
         # Four $5 reservations exhaust the entire founder-authorized lifetime.

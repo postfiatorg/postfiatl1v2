@@ -156,6 +156,13 @@ at that price and must fit inside its signed USD ceiling. The command only
 writes `RESERVED` to SQLite; it does not connect to an LSP, create an order,
 pay an invoice, load a PFTL signer, or move value.
 
+The external payment must be initiated before the signed permit's
+policy-bounded expiry, which may not exceed five minutes. A terminal-evidence
+v2 record carries that initiation timestamp, and an already-initiated HODL
+payment has a separate hard six-hour settlement grace for channel
+confirmations. The grace does not extend initiation authority or the swap
+quote limit.
+
 After the external invoice is independently proven `SUCCEEDED` and its funded
 channel is confirmed, active, and has positive inbound capacity, record one
 owner-only public terminal-evidence JSON and charge the **entire authorized
@@ -180,7 +187,7 @@ observed public evidence):
 
 ```json
 {
-  "schema": "postfiat.lightning_liquidity_setup_terminal_evidence.v1",
+  "schema": "postfiat.lightning_liquidity_setup_terminal_evidence.v2",
   "authorization_id": "<64 lowercase hex>",
   "policy_id": "<64 lowercase hex>",
   "setup_id": "<64 lowercase hex>",
@@ -192,6 +199,7 @@ observed public evidence):
   "payment_status": "SUCCEEDED",
   "payment_hash": "<64 lowercase hex>",
   "actual_cost_msat": 1,
+  "payment_initiated_at_unix": 1,
   "payment_settled_at_unix": 1,
   "channel_active": true,
   "channel_point": "<funding-txid>:<output-index>",

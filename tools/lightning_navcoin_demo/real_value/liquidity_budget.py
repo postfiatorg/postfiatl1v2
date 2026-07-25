@@ -34,7 +34,7 @@ from .policy import (
 
 
 LIQUIDITY_EVIDENCE_SCHEMA = (
-    "postfiat.lightning_liquidity_setup_terminal_evidence.v1"
+    "postfiat.lightning_liquidity_setup_terminal_evidence.v2"
 )
 LIQUIDITY_EVIDENCE_FIELDS = frozenset(
     {
@@ -50,6 +50,7 @@ LIQUIDITY_EVIDENCE_FIELDS = frozenset(
         "payment_status",
         "payment_hash",
         "actual_cost_msat",
+        "payment_initiated_at_unix",
         "payment_settled_at_unix",
         "channel_active",
         "channel_point",
@@ -64,6 +65,11 @@ HEX_32 = re.compile(r"^[0-9a-f]{64}$")
 COMPRESSED_PUBKEY = re.compile(r"^(02|03)[0-9a-f]{64}$")
 CHANNEL_POINT = re.compile(r"^[0-9a-f]{64}:(?:0|[1-9][0-9]{0,9})$")
 MAX_PUBLIC_INPUT_BYTES = 64 * 1024
+# An authorized liquidity payment must still start inside the policy's
+# at-most-five-minute decision window. Once started, an external HODL payment
+# may wait for channel confirmations under this separate, hard settlement
+# grace.
+MAX_LIQUIDITY_SETTLEMENT_GRACE_SECONDS = 6 * 60 * 60
 
 
 class LiquidityBudgetError(RealValuePolicyError):
@@ -301,6 +307,11 @@ def _validate_terminal_evidence(
     actual_cost_msat = _uint63(
         value["actual_cost_msat"], "actual_cost_msat", minimum=1
     )
+    initiated = _uint63(
+        value["payment_initiated_at_unix"],
+        "payment_initiated_at_unix",
+        minimum=1,
+    )
     settled = _uint63(
         value["payment_settled_at_unix"],
         "payment_settled_at_unix",
@@ -320,9 +331,23 @@ def _validate_terminal_evidence(
         raise LiquidityBudgetError(
             "observed liquidity cost exceeds the signed msat ceiling"
         )
-    if settled > reservation["expires_unix"]:
+    if initiated > reservation["expires_unix"]:
         raise LiquidityBudgetError(
-            "external payment settled after authorization expiry"
+            "external payment initiated after authorization expiry"
+        )
+    if settled < initiated:
+        raise LiquidityBudgetError(
+            "external payment settled before it was initiated"
+        )
+    settlement_deadline = (
+        reservation["expires_unix"]
+        + MAX_LIQUIDITY_SETTLEMENT_GRACE_SECONDS
+    )
+    if settlement_deadline > (1 << 63) - 1:
+        raise LiquidityBudgetError("liquidity settlement deadline overflows uint63")
+    if settled > settlement_deadline:
+        raise LiquidityBudgetError(
+            "external payment exceeded the bounded settlement grace"
         )
     if observed < settled or observed > now_unix:
         raise LiquidityBudgetError("liquidity evidence timestamps are inconsistent")

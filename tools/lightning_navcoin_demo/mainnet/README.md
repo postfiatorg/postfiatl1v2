@@ -136,6 +136,14 @@ full ceiling. There is no ambiguity-release command: an unresolved outcome
 remains reserved. The exact artifact contract and commands are documented in
 `COORDINATOR-CLI.md`.
 
+Liquidity setup payments must be initiated before the signed permit's
+policy-bounded expiry, which may not exceed five minutes. An already-initiated
+HODL payment then has a separate hard six-hour settlement grace so a
+provider-funded channel can reach its reviewed confirmation depth. This does
+not relax swap quote or BTC-price freshness bounds. Exact cost ceilings,
+single-use authorization, full-ceiling accounting, and
+ambiguity-as-reserved remain unchanged.
+
 Magma's order response must be reviewed before payment. The service cannot
 compel an LSP to open a channel; channel funding outpoint, confirmations,
 active state, and reserve-adjusted inbound capacity must be independently
