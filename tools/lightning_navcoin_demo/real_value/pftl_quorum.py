@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -710,46 +711,105 @@ class PftlQuorumObserver:
         }
 
     def receipt(self, tx_id: str) -> dict[str, Any]:
-        """Read one literal finalized receipt, accepted or rejected, six-of-six."""
+        """Read one inclusion-bound finalized receipt, six-of-six.
+
+        The receipts RPC is a current-state sidecar and does not identify the
+        block that applied the transaction.  The audited tx RPC replays the
+        block log and returns the transaction's inclusion block.  Use that
+        block identity here so a later, unrelated finalized transition cannot
+        silently rebind an old receipt to the current state root.
+        """
 
         try:
-            rows = [
-                {
+            def read_finality(client: Any) -> dict[str, Any]:
+                return {
                     "status_before": client.status(),
-                    "receipts": client.receipts(tx_id=tx_id, limit=2),
+                    "finality": client.tx(tx_id, audit_block_log=True),
                     "status_after": client.status(),
                 }
-                for client in self._clients
-            ]
+
+            with ThreadPoolExecutor(
+                max_workers=len(self._clients),
+                thread_name_prefix="pftl-receipt",
+            ) as executor:
+                rows = list(executor.map(read_finality, self._clients))
         except Exception as error:
             raise PftlQuorumError("PFTL receipt quorum read failed") from error
         normalized: list[dict[str, Any]] = []
         node_ids: set[str] = set()
         for row in rows:
-            receipts = row["receipts"]
-            if not isinstance(receipts, Sequence) or len(receipts) != 1:
-                raise PftlQuorumError("expected exactly one receipt per validator")
-            receipt = receipts[0]
-            if not isinstance(receipt, Mapping) or receipt.get("tx_id") != tx_id:
-                raise PftlQuorumError("receipt tx id mismatch")
             identity = self._validate_status_sandwich(
                 row["status_before"],
                 row["status_after"],
                 node_ids,
                 read_label="receipt",
             )
+            finality = row["finality"]
+            if not isinstance(finality, Mapping):
+                raise PftlQuorumError("PFTL transaction finality is malformed")
+            block = finality.get("block")
+            header = block.get("header") if isinstance(block, Mapping) else None
+            receipt_ids = (
+                block.get("receipt_ids") if isinstance(block, Mapping) else None
+            )
+            receipt = finality.get("receipt")
+            if (
+                finality.get("schema") != "postfiat-tx-finality-v1"
+                or finality.get("tx_id") != tx_id
+                or finality.get("confirmed") is not True
+                or finality.get("block_log_verified") is not True
+                or finality.get("verification_mode") != "full-block-replay"
+                or finality.get("chain_id") != self.policy.pftl_chain_id
+                or finality.get("genesis_hash") != self.policy.pftl_genesis_hash
+                or finality.get("protocol_version") != 1
+                or not isinstance(header, Mapping)
+                or not isinstance(receipt, Mapping)
+                or receipt.get("tx_id") != tx_id
+                or not isinstance(receipt_ids, Sequence)
+                or isinstance(receipt_ids, (str, bytes, bytearray))
+                or list(receipt_ids).count(tx_id) != 1
+                or finality.get("receipt_count") != len(receipt_ids)
+                or finality.get("receipt_index") != list(receipt_ids).index(tx_id)
+            ):
+                raise PftlQuorumError(
+                    "PFTL transaction lacks exact full-block finality"
+                )
+            inclusion_height = _uint(
+                header.get("height"), "receipt inclusion height", minimum=1
+            )
+            inclusion_tip = _text(
+                header.get("block_hash"), "receipt inclusion block hash"
+            )
+            inclusion_root = _text(
+                header.get("state_root"), "receipt inclusion state root"
+            )
+            if (
+                inclusion_height > identity["height"]
+                or (
+                    inclusion_height == identity["height"]
+                    and (
+                        inclusion_tip != identity["tip"]
+                        or inclusion_root != identity["root"]
+                    )
+                )
+            ):
+                raise PftlQuorumError(
+                    "PFTL transaction inclusion is not on the finalized view"
+                )
             normalized.append(
                 {
-                    "height": identity["height"],
-                    "tip": identity["tip"],
-                    "root": identity["root"],
+                    "height": inclusion_height,
+                    "tip": inclusion_tip,
+                    "root": inclusion_root,
                     "accepted": receipt.get("accepted"),
                     "code": receipt.get("code"),
-                    "receipt": dict(receipt),
+                    "receipt_count": len(receipt_ids),
                 }
             )
         if len({self._canonical_route_view(row) for row in normalized}) != 1:
-            raise PftlQuorumError("PFTL receipt/root views are not converged six-of-six")
+            raise PftlQuorumError(
+                "PFTL receipt inclusion views are not converged six-of-six"
+            )
         return {
             "schema": "postfiat.lightning_pftl_receipt_quorum.v1",
             "tx_id": tx_id,
@@ -758,6 +818,8 @@ class PftlQuorumObserver:
             "height": normalized[0]["height"],
             "block_tip_hash": normalized[0]["tip"],
             "state_root": normalized[0]["root"],
+            "receipt_count": normalized[0]["receipt_count"],
+            "verification_mode": "full-block-replay",
             "agreeing_validator_count": 6,
             "validator_count": 6,
         }

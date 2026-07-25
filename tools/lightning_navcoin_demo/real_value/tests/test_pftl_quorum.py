@@ -16,6 +16,9 @@ class FakeClient:
         self.node_id = f"validator-{self.index}"
         self.chain_id = self.route.pftl_chain_id
         self.escrow_state = "open"
+        self.receipt_height = self.height
+        self.receipt_tip = "aa" * 48
+        self.receipt_root = "bb" * 48
 
     def status(self) -> dict[str, object]:
         return {
@@ -92,6 +95,7 @@ class FakeClient:
                 "condition_hash": "ee" * 48,
                 "finish_after": 0,
                 "cancel_after": 900,
+                "created_height": self.height,
                 "state": self.escrow_state,
             }
         }
@@ -119,9 +123,35 @@ class FakeClient:
             "operation": operation,
         }
 
-    def receipts(self, *, tx_id: str, limit: int) -> list[dict[str, object]]:
-        self.assert_limit = limit
-        return [{"tx_id": tx_id, "accepted": True, "code": "accepted"}]
+    def tx(
+        self, tx_id: str, *, audit_block_log: bool = False
+    ) -> dict[str, object]:
+        assert audit_block_log is True
+        return {
+            "schema": "postfiat-tx-finality-v1",
+            "tx_id": tx_id,
+            "confirmed": True,
+            "block_log_verified": True,
+            "verification_mode": "full-block-replay",
+            "chain_id": self.route.pftl_chain_id,
+            "genesis_hash": self.route.pftl_genesis_hash,
+            "protocol_version": 1,
+            "receipt_count": 1,
+            "receipt_index": 0,
+            "receipt": {
+                "tx_id": tx_id,
+                "accepted": True,
+                "code": "accepted",
+            },
+            "block": {
+                "header": {
+                    "height": self.receipt_height,
+                    "block_hash": self.receipt_tip,
+                    "state_root": self.receipt_root,
+                },
+                "receipt_ids": [tx_id],
+            },
+        }
 
 
 class PftlQuorumTests(unittest.TestCase):
@@ -171,6 +201,7 @@ class PftlQuorumTests(unittest.TestCase):
         receipt = self.observer.receipt("12" * 48)
         self.assertIs(receipt["accepted"], True)
         self.assertEqual(receipt["code"], "accepted")
+        self.assertEqual(receipt["verification_mode"], "full-block-replay")
         for client in self.clients.values():
             client.escrow_state = "finished"
         finished = self.observer.finished_escrow(
@@ -186,6 +217,17 @@ class PftlQuorumTests(unittest.TestCase):
             },
         )
         self.assertEqual(finished["state"], "finished")
+
+    def test_receipt_identity_stays_bound_to_its_inclusion_block(self) -> None:
+        for client in self.clients.values():
+            client.receipt_height = 41
+            client.receipt_tip = "91" * 48
+            client.receipt_root = "92" * 48
+        receipt = self.observer.receipt("12" * 48)
+        self.assertEqual(receipt["height"], 41)
+        self.assertEqual(receipt["block_tip_hash"], "91" * 48)
+        self.assertEqual(receipt["state_root"], "92" * 48)
+        self.assertEqual(receipt["receipt_count"], 1)
 
     def test_divergence_and_freeze_fail_closed(self) -> None:
         self.clients[self.route.pftl_rpc_endpoints[5]].height = 43
