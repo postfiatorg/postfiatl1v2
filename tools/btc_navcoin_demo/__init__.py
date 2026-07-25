@@ -1,1 +1,1 @@
-"""Bitcoin Signet ↔ hardened PFTL NAVcoin HTLC demonstration."""
+"""Bitcoin regtest ↔ hardened PFTL NAVcoin HTLC demonstration."""

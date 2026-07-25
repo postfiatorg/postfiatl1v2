@@ -8,9 +8,11 @@ import {
   buildRefund,
   buildSplit,
   extractClaimPreimage,
+  initWallets,
 } from './bitcoin_htlc.mjs'
 
-const runtimeRoot = '/home/postfiat/tmp/pftl-btc-navcoin-20260725'
+const runtimeRoot = '/home/postfiat/tmp/pftl-btc-navcoin-regtest-unit-20260725'
+initWallets(runtimeRoot)
 const secret = '42'.repeat(32)
 const digest = createHash('sha256')
   .update(Buffer.from(secret, 'hex'))

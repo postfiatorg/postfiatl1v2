@@ -14,7 +14,7 @@
 ## Operational assumptions
 
 - Both parties monitor both ledgers and can submit before their safety margin.
-- Signet block production and fee inclusion remain live.
+- The local Bitcoin Core regtest process remains live and mines requested blocks.
 - PFTL finality and Bitcoin confirmations are observed before the second lock.
 - The first timeout is long enough relative to the second timeout despite
   unrelated block clocks.

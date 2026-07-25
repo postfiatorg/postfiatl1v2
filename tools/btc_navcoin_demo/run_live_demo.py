@@ -1,4 +1,4 @@
-"""Execute BTC Signet ↔ NAVcoin happy paths, refund, and adversarial probes."""
+"""Execute Bitcoin regtest ↔ NAVcoin happy paths and adversarial probes."""
 
 from __future__ import annotations
 
@@ -9,10 +9,8 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-import time
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from decimal import Decimal
 
 from tools.xrpl_navcoin_demo.accounting import (
     PrincipalState,
@@ -36,9 +34,11 @@ NODE = Path("/home/postfiat/.nvm/versions/node/v22.23.1/bin/node")
 BITCOIN_CLI = Path(
     "/home/postfiat/tmp/bitcoin-core-31.0-download/bitcoin-31.0/bin/bitcoin-cli"
 )
-BITCOIN_DATADIR = Path("/home/postfiat/tmp/pftl-btc-navcoin-20260725/bitcoin")
+BITCOIN_DATADIR = Path(
+    "/home/postfiat/tmp/pftl-btc-navcoin-regtest-v2-20260725/bitcoin"
+)
 OPS = Path(__file__).with_name("btc_ops.mjs")
-ESPLORA = "https://mempool.space/signet/api"
+MINER_WALLET = "pftl-regtest-miner"
 EXPECTED_PFTL_BINARY_SHA256 = (
     "006167226531582cf81666dded004f26707beedc2ce3fa850caf5b0b82fd22e7"
 )
@@ -81,7 +81,7 @@ def core(*arguments: str, check: bool = True) -> subprocess.CompletedProcess[str
     return subprocess.run(
         [
             str(BITCOIN_CLI),
-            "-signet",
+            "-regtest",
             f"-datadir={BITCOIN_DATADIR}",
             *arguments,
         ],
@@ -96,94 +96,116 @@ def core_json(*arguments: str) -> Any:
     return json.loads(core(*arguments).stdout)
 
 
-def esplora(path: str, *, raw: bool = False) -> Any:
-    request = Request(f"{ESPLORA}/{path.lstrip('/')}", headers={"User-Agent": "postfiat-testnet-demo/1"})
-    try:
-        with urlopen(request, timeout=30) as response:
-            payload = response.read()
-    except (HTTPError, URLError) as error:
-        raise RuntimeError(f"Signet Esplora request failed for {path}: {error}") from error
-    return payload.hex() if raw else json.loads(payload)
+def wallet(*arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            str(BITCOIN_CLI),
+            "-regtest",
+            f"-datadir={BITCOIN_DATADIR}",
+            f"-rpcwallet={MINER_WALLET}",
+            *arguments,
+        ],
+        check=check,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
 
 
-def wait_for_sync(timeout_seconds: int = 7_200) -> dict[str, Any]:
-    deadline = time.monotonic() + timeout_seconds
-    while True:
-        status = core_json("getblockchaininfo")
-        if (
-            status["chain"] == "signet"
-            and not status["initialblockdownload"]
-            and status["blocks"] == status["headers"]
-        ):
-            return status
-        if time.monotonic() >= deadline:
-            raise TimeoutError("Bitcoin Signet node did not synchronize")
-        time.sleep(10)
+def wallet_json(*arguments: str) -> Any:
+    return json.loads(wallet(*arguments).stdout)
 
 
-def wait_for_faucet(address: str, timeout_seconds: int = 7_200) -> dict[str, Any]:
-    deadline = time.monotonic() + timeout_seconds
-    while True:
-        try:
-            utxos = esplora(f"address/{address}/utxo")
-        except RuntimeError:
-            if time.monotonic() >= deadline:
-                raise TimeoutError("Signet faucet UTXO did not arrive")
-            time.sleep(20)
-            continue
-        confirmed = [
-            item
-            for item in utxos
-            if item.get("status", {}).get("confirmed") and int(item["value"]) >= 100_000
-        ]
-        if confirmed:
-            item = sorted(confirmed, key=lambda value: (value["txid"], value["vout"]))[0]
-            return {
-                "schema": "postfiat.bitcoin_signet_faucet_utxo.v1",
-                "network": "signet",
-                "faucet": "https://signetfaucet.com",
-                "address": address,
-                "txid": item["txid"],
-                "vout": int(item["vout"]),
-                "valueSats": int(item["value"]),
-                "status": item["status"],
-            }
-        if time.monotonic() >= deadline:
-            raise TimeoutError("Signet faucet UTXO did not arrive")
-        time.sleep(20)
+def wallet_text(*arguments: str) -> str:
+    return wallet(*arguments).stdout.strip()
 
 
-def wait_confirmed(txid: str, timeout_seconds: int = 7_200) -> dict[str, Any]:
-    deadline = time.monotonic() + timeout_seconds
-    while True:
-        try:
-            transaction = esplora(f"tx/{txid}")
-        except RuntimeError:
-            if time.monotonic() >= deadline:
-                raise TimeoutError(f"Signet transaction {txid} did not confirm")
-            time.sleep(20)
-            continue
-        if transaction["status"].get("confirmed"):
-            raw_hex = bytes.fromhex(
-                esplora(f"tx/{txid}/hex", raw=True)
-            ).decode().strip()
-            if transaction["txid"] != txid:
-                raise AssertionError("Esplora returned an unexpected txid")
-            return {"transaction": transaction, "raw_tx": raw_hex}
-        if time.monotonic() >= deadline:
-            raise TimeoutError(f"Signet transaction {txid} did not confirm")
-        time.sleep(20)
+def ensure_miner_wallet() -> str:
+    loaded = core_json("listwallets")
+    if MINER_WALLET not in loaded:
+        known = {
+            item["name"] for item in core_json("listwalletdir").get("wallets", [])
+        }
+        if MINER_WALLET in known:
+            core_json("loadwallet", MINER_WALLET)
+        else:
+            core_json("createwallet", MINER_WALLET)
+    return wallet_text("getnewaddress", "regtest-mining", "bech32")
 
 
-def wait_height(height: int, timeout_seconds: int = 7_200) -> dict[str, Any]:
-    deadline = time.monotonic() + timeout_seconds
-    while True:
-        status = core_json("getblockchaininfo")
-        if int(status["blocks"]) >= height:
-            return status
-        if time.monotonic() >= deadline:
-            raise TimeoutError(f"Signet did not reach block {height}")
-        time.sleep(20)
+def mine_blocks(count: int) -> list[str]:
+    if count < 1:
+        return []
+    return core_json("generatetoaddress", str(count), ensure_miner_wallet())
+
+
+def sats(value: Any) -> int:
+    return int(Decimal(str(value)) * Decimal(100_000_000))
+
+
+def ensure_regtest_funding(evidence: Path, address: str) -> dict[str, Any]:
+    path = evidence / "regtest-funding-utxo.json"
+    if path.is_file():
+        existing = read_json(path)
+        if core_json(
+            "gettxout", existing["txid"], str(existing["vout"]), "true"
+        ) is not None:
+            return existing
+    height = int(core_json("getblockcount"))
+    if height < 101:
+        mine_blocks(101 - height)
+    txid = wallet_text("sendtoaddress", address, "0.001")
+    block_hash = mine_blocks(1)[0]
+    transaction = core_json("getrawtransaction", txid, "true", block_hash)
+    matches = [
+        item
+        for item in transaction["vout"]
+        if item["scriptPubKey"].get("address") == address
+        and sats(item["value"]) == 100_000
+    ]
+    if len(matches) != 1:
+        raise AssertionError("regtest funding transaction has unexpected outputs")
+    record = {
+        "schema": "postfiat.bitcoin_regtest_funding_utxo.v1",
+        "network": "regtest",
+        "source": "self-mined Bitcoin Core regtest",
+        "address": address,
+        "txid": txid,
+        "vout": int(matches[0]["n"]),
+        "valueSats": 100_000,
+        "status": {
+            "confirmed": True,
+            "block_hash": block_hash,
+            "block_height": core_json("getblockheader", block_hash)["height"],
+        },
+    }
+    write_json(path, record)
+    return record
+
+
+def confirm_regtest(txid: str) -> dict[str, Any]:
+    block_hash = mine_blocks(1)[0]
+    transaction = core_json("getrawtransaction", txid, "true", block_hash)
+    raw_hex = core("getrawtransaction", txid, "false", block_hash).stdout.strip()
+    block_height = core_json("getblockheader", block_hash)["height"]
+    return {
+        "transaction": {
+            "txid": txid,
+            "status": {
+                "confirmed": transaction["confirmations"] >= 1,
+                "block_hash": block_hash,
+                "block_height": block_height,
+            },
+        },
+        "raw_tx": raw_hex,
+    }
+
+
+def wait_height(height: int) -> dict[str, Any]:
+    current = int(core_json("getblockcount"))
+    if current < height:
+        mine_blocks(height - current)
+    return core_json("getblockchaininfo")
 
 
 def save_built(bitcoin_evidence: Path, label: str, value: dict[str, Any]) -> Path:
@@ -202,18 +224,18 @@ def broadcast_and_confirm(
     submitted = btc("broadcast", str(path))
     if submitted["txid"] != built["txid"]:
         raise AssertionError(f"{label} broadcast txid mismatch")
-    confirmed = wait_confirmed(built["txid"])
+    confirmed = confirm_regtest(built["txid"])
     if confirmed["raw_tx"] != built["raw_tx"]:
         raise AssertionError(f"{label} public raw transaction mismatch")
     record = {
-        "schema": "postfiat.bitcoin_signet_confirmed_transaction.v1",
+        "schema": "postfiat.bitcoin_regtest_confirmed_transaction.v1",
         "label": label,
-        "network": "signet",
+        "network": "regtest",
         "txid": built["txid"],
         "preflight": preflight,
         "broadcast": submitted,
-        "explorer": confirmed,
-        "explorer_url": f"https://mempool.space/signet/tx/{built['txid']}",
+        "core": confirmed,
+        "rpc_endpoint": "http://127.0.0.1:18443",
     }
     record_path = bitcoin_evidence / f"{label}.confirmed.json"
     write_json(record_path, record)
@@ -308,19 +330,20 @@ def main() -> int:
         raise AssertionError("hardened PFTL binary hash mismatch")
 
     accounts = btc("init", str(runtime_root))
-    bitcoin_status = wait_for_sync()
+    bitcoin_status = core_json("getblockchaininfo")
+    if bitcoin_status["chain"] != "regtest":
+        raise AssertionError("Bitcoin Core is not on regtest")
     user_btc = accounts["accounts"]["user"]
     coordinator_btc = accounts["accounts"]["coordinator"]
-    faucet_utxo = wait_for_faucet(user_btc["address"])
-    write_json(evidence / "faucet-utxo.json", faucet_utxo)
+    funding_utxo = ensure_regtest_funding(evidence, user_btc["address"])
 
     split = btc(
         "split",
         str(runtime_root),
-        str(evidence / "faucet-utxo.json"),
+        str(evidence / "regtest-funding-utxo.json"),
     )
     split_record, _ = broadcast_and_confirm(
-        bitcoin_evidence, "00-faucet-split", split
+        bitcoin_evidence, "00-funding-split", split
     )
 
     allocations = {
@@ -344,7 +367,7 @@ def main() -> int:
         0o600,
     )
     report: dict[str, Any] = {
-        "schema": "postfiat.bitcoin_signet_navcoin.live_demo.v1",
+        "schema": "postfiat.bitcoin_regtest_navcoin.live_demo.v1",
         "result": "IN_PROGRESS",
         "claim": "non-custodial, conditionally-atomic",
         "reference_lane": {
@@ -356,21 +379,22 @@ def main() -> int:
             "nazgul_verified": True,
         },
         "value_disclaimer": (
-            "Bitcoin Signet faucet sats and isolated PFTL devnet NAVcoin only; "
+            "Self-mined Bitcoin regtest sats and isolated PFTL devnet NAVcoin only; "
             "no mainnet or real value"
         ),
         "networks": {
             "bitcoin": {
-                "network": "signet",
+                "network": "regtest",
                 "core_version": core_json("getnetworkinfo")["subversion"],
                 "tip_at_start": {
                     "height": bitcoin_status["blocks"],
                     "hash": bitcoin_status["bestblockhash"],
                 },
-                "esplora": ESPLORA,
+                "rpc_endpoint": "http://127.0.0.1:18443",
                 "user": user_btc,
                 "coordinator": coordinator_btc,
-                "faucet_txid": faucet_utxo["txid"],
+                "funding_source": funding_utxo["source"],
+                "funding_txid": funding_utxo["txid"],
                 "split_txid": split["txid"],
             },
             "pftl": {
@@ -773,13 +797,13 @@ def main() -> int:
         + off_btc_lock["change_sats"]
         + off_btc_claim["output_value_sats"]
     )
-    if faucet_utxo["valueSats"] != final_controlled + sum(fees):
+    if funding_utxo["valueSats"] != final_controlled + sum(fees):
         raise AssertionError("Bitcoin exact satoshi conservation failed")
     report["conservation"] = {
-        "faucet_input_sats": faucet_utxo["valueSats"],
+        "funding_input_sats": funding_utxo["valueSats"],
         "final_user_coordinator_controlled_sats": final_controlled,
         "miner_fee_sats": sum(fees),
-        "equation": "faucet_input = final_controlled + miner_fees",
+        "equation": "funding_input = final_controlled + miner_fees",
         "bitcoin_exact": True,
         "navcoin_total_atoms": final_nav[1].total,
         "navcoin_exact": True,

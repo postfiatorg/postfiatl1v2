@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 import * as bitcoin from 'bitcoinjs-lib'
 import { htlcScript } from './bitcoin_htlc.mjs'
 
-const NETWORK = bitcoin.networks.testnet
+const NETWORK = bitcoin.networks.regtest
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'))
@@ -16,7 +16,7 @@ function sha256(bytes) {
 }
 
 function txFromEvidence(record, expectedTxid) {
-  const raw = record.explorer.raw_tx
+  const raw = record.core.raw_tx
   if (typeof raw !== 'string' || !/^[0-9a-f]+$/.test(raw)) {
     throw new Error(`transaction ${expectedTxid} has invalid raw hex`)
   }
@@ -25,8 +25,8 @@ function txFromEvidence(record, expectedTxid) {
     throw new Error(`transaction ${expectedTxid} has a txid mismatch`)
   }
   if (
-    !record.explorer.transaction.status.confirmed ||
-    record.explorer.transaction.txid !== expectedTxid
+    !record.core.transaction.status.confirmed ||
+    record.core.transaction.txid !== expectedTxid
   ) {
     throw new Error(`transaction ${expectedTxid} is not confirmed`)
   }
@@ -141,35 +141,6 @@ function verifyRefund(scenario, lockResult) {
   return true
 }
 
-async function publicTransactionMatches(record) {
-  let lastError
-  for (let attempt = 1; attempt <= 5; attempt += 1) {
-    try {
-      const response = await fetch(
-        `https://mempool.space/signet/api/tx/${record.txid}/hex`,
-      )
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-      const raw = (await response.text()).trim()
-      if (raw !== record.explorer.raw_tx) {
-        throw new Error(
-          `public Signet raw transaction mismatch for ${record.txid}`,
-        )
-      }
-      return
-    } catch (error) {
-      lastError = error
-      if (attempt < 5) {
-        await new Promise((resolve) => setTimeout(resolve, attempt * 1_000))
-      }
-    }
-  }
-  throw new Error(
-    `public Signet lookup failed for ${record.txid}: ${lastError.message}`,
-  )
-}
-
 async function main() {
   const [reportPath] = process.argv.slice(2)
   if (!reportPath) {
@@ -177,11 +148,11 @@ async function main() {
   }
   const report = readJson(reportPath)
   if (
-    report.schema !== 'postfiat.bitcoin_signet_navcoin.live_demo.v1' ||
+    report.schema !== 'postfiat.bitcoin_regtest_navcoin.live_demo.v1' ||
     report.result !== 'PASS' ||
-    report.networks.bitcoin.network !== 'signet'
+    report.networks.bitcoin.network !== 'regtest'
   ) {
-    throw new Error('live report is not a PASS Bitcoin Signet report')
+    throw new Error('live report is not a PASS Bitcoin regtest report')
   }
   const accounts = report.networks.bitcoin
   const scenarios = report.scenarios
@@ -220,14 +191,14 @@ async function main() {
   const splitRecord = readJson(
     reportPath.replace(
       'live-demo-report.json',
-      'bitcoin/00-faucet-split.confirmed.json',
+      'bitcoin/00-funding-split.confirmed.json',
     ),
   )
   txFromEvidence(splitRecord, report.networks.bitcoin.split_txid)
   const splitBuilt = readJson(
     reportPath.replace(
       'live-demo-report.json',
-      'bitcoin/00-faucet-split.built.json',
+      'bitcoin/00-funding-split.built.json',
     ),
   )
   if (
@@ -236,15 +207,14 @@ async function main() {
       splitBuilt.outputs.reduce((sum, output) => sum + output.value_sats, 0) +
         splitBuilt.fee_sats
   ) {
-    throw new Error('faucet split conservation failed')
+    throw new Error('funding split conservation failed')
   }
   publicRecords.push(splitRecord)
-  await Promise.all(publicRecords.map(publicTransactionMatches))
 
   const conservation = report.conservation
   if (
     !conservation.bitcoin_exact ||
-    conservation.faucet_input_sats !==
+    conservation.funding_input_sats !==
       conservation.final_user_coordinator_controlled_sats +
         conservation.miner_fee_sats
   ) {
@@ -260,11 +230,11 @@ async function main() {
   process.stdout.write(
     `${JSON.stringify(
       {
-        network: 'signet',
+        network: 'regtest',
         confirmed_transactions: publicRecords.map((record) => record.txid),
         public_preimages_authenticated: preimages.length,
         refund_preimage_revealed: false,
-        faucet_input_sats: conservation.faucet_input_sats,
+        funding_input_sats: conservation.funding_input_sats,
         final_controlled_sats:
           conservation.final_user_coordinator_controlled_sats,
         miner_fee_sats: conservation.miner_fee_sats,

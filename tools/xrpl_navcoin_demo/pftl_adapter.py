@@ -162,11 +162,22 @@ class HardenedPftl:
                 "100",
             ]
         )
+        unsigned = signed["unsigned"]
         matching = [
             row
             for row in history["rows"]
-            if row.get("sequence") == signed["unsigned"]["sequence"]
-            and row.get("transaction_kind") == signed["unsigned"]["transaction_kind"]
+            if row.get("sequence") == unsigned["sequence"]
+            and row.get("transaction_kind") == unsigned["transaction_kind"]
+            and (
+                (
+                    unsigned["transaction_kind"] == "escrow_create"
+                    and row.get("from") == source
+                )
+                or (
+                    unsigned["transaction_kind"] != "escrow_create"
+                    and row.get("escrow_id") == unsigned.get("escrow_id")
+                )
+            )
         ]
         if len(matching) != 1 or not matching[0].get("accepted"):
             raise PftlError(f"{label}: certified transaction not found in account history")

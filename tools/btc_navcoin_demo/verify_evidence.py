@@ -1,4 +1,4 @@
-"""Independent verifier for the Bitcoin Signet/NAVcoin evidence bundle."""
+"""Independent verifier for the Bitcoin regtest/NAVcoin evidence bundle."""
 
 from __future__ import annotations
 
@@ -24,7 +24,9 @@ NODE = Path("/home/postfiat/.nvm/versions/node/v22.23.1/bin/node")
 BITCOIN_CLI = Path(
     "/home/postfiat/tmp/bitcoin-core-31.0-download/bitcoin-31.0/bin/bitcoin-cli"
 )
-BITCOIN_DATADIR = Path("/home/postfiat/tmp/pftl-btc-navcoin-20260725/bitcoin")
+BITCOIN_DATADIR = Path(
+    "/home/postfiat/tmp/pftl-btc-navcoin-regtest-v2-20260725/bitcoin"
+)
 BITCOIN_VERIFIER = Path(__file__).with_name("verify_bitcoin_evidence.mjs")
 BTC_OPS = Path(__file__).with_name("btc_ops.mjs")
 EXPECTED_BINARY_SHA256 = (
@@ -60,7 +62,7 @@ def core_json(*arguments: str) -> Any:
     completed = subprocess.run(
         [
             str(BITCOIN_CLI),
-            "-signet",
+            "-regtest",
             f"-datadir={BITCOIN_DATADIR}",
             *arguments,
         ],
@@ -81,7 +83,7 @@ def main() -> int:
     report_path = evidence / "live-demo-report.json"
     report = read_json(report_path)
     if (
-        report["schema"] != "postfiat.bitcoin_signet_navcoin.live_demo.v1"
+        report["schema"] != "postfiat.bitcoin_regtest_navcoin.live_demo.v1"
         or report["result"] != "PASS"
         or report["claim"] != "non-custodial, conditionally-atomic"
     ):
@@ -90,13 +92,13 @@ def main() -> int:
     bitcoin = run_json([str(NODE), str(BITCOIN_VERIFIER), str(report_path)])
     chain = core_json("getblockchaininfo")
     if (
-        chain["chain"] != "signet"
+        chain["chain"] != "regtest"
         or chain["initialblockdownload"]
         or chain["blocks"] != chain["headers"]
     ):
         raise AssertionError("independent Bitcoin Core node is not synchronized")
 
-    # Ask the locally validating Signet node for a merkle inclusion proof for
+    # Ask the locally validating regtest node for a merkle inclusion proof for
     # each evidence transaction in its independently validated block.
     block_proofs = {}
     for txid in bitcoin["confirmed_transactions"]:
@@ -111,14 +113,14 @@ def main() -> int:
         )
         if record is None:
             raise AssertionError(f"missing confirmed record for {txid}")
-        block_hash = record["explorer"]["transaction"]["status"]["block_hash"]
+        block_hash = record["core"]["transaction"]["status"]["block_hash"]
         header = core_json("getblockheader", block_hash)
         if header["hash"] != block_hash or header["confirmations"] < 1:
-            raise AssertionError(f"Signet block {block_hash} is not active")
+            raise AssertionError(f"regtest block {block_hash} is not active")
         proof = subprocess.run(
             [
                 str(BITCOIN_CLI),
-                "-signet",
+                "-regtest",
                 f"-datadir={BITCOIN_DATADIR}",
                 "gettxoutproof",
                 json.dumps([txid]),
@@ -131,7 +133,7 @@ def main() -> int:
         ).stdout.strip()
         verified = core_json("verifytxoutproof", proof)
         if verified != [txid]:
-            raise AssertionError(f"Signet merkle proof failed for {txid}")
+            raise AssertionError(f"regtest merkle proof failed for {txid}")
         block_proofs[txid] = {
             "block_hash": block_hash,
             "block_height": header["height"],
@@ -245,7 +247,7 @@ def main() -> int:
         raise AssertionError("late claim is no longer rejected")
 
     result = {
-        "schema": "postfiat.bitcoin_signet_navcoin.independent_verification.v1",
+        "schema": "postfiat.bitcoin_regtest_navcoin.independent_verification.v1",
         "result": "PASS",
         "claim": report["claim"],
         "reference_lane": report["reference_lane"],
@@ -295,7 +297,7 @@ def main() -> int:
     write_json(
         manifest_path,
         {
-            "schema": "postfiat.bitcoin_signet_navcoin.evidence_manifest.v1",
+            "schema": "postfiat.bitcoin_regtest_navcoin.evidence_manifest.v1",
             "artifact_count": len(artifacts),
             "artifacts": artifacts,
         },

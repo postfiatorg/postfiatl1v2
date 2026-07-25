@@ -13,11 +13,11 @@ import { ECPairFactory } from 'ecpair'
 
 bitcoin.initEccLib(ecc)
 const ECPair = ECPairFactory(ecc)
-const NETWORK = bitcoin.networks.testnet
+const NETWORK = bitcoin.networks.regtest
 const DEFAULT_CORE =
   '/home/postfiat/tmp/bitcoin-core-31.0-download/bitcoin-31.0/bin/bitcoin-cli'
 const DEFAULT_DATADIR =
-  '/home/postfiat/tmp/pftl-btc-navcoin-20260725/bitcoin'
+  '/home/postfiat/tmp/pftl-btc-navcoin-regtest-v2-20260725/bitcoin'
 const LOCK_FEE_SATS = 500n
 const SPEND_FEE_SATS = 500n
 const SPLIT_FEE_SATS = 1000n
@@ -190,8 +190,8 @@ export function initWallets(runtimeRootInput) {
       const keyPair = ECPair.makeRandom({ network: NETWORK, rng: randomBytes })
       const payment = paymentForKey(keyPair)
       record = {
-        schema: 'postfiat.bitcoin_signet_wallet.private.v1',
-        network: 'signet',
+        schema: 'postfiat.bitcoin_regtest_wallet.private.v1',
+        network: 'regtest',
         role,
         address: payment.address,
         pubkey: Buffer.from(keyPair.publicKey).toString('hex'),
@@ -206,43 +206,43 @@ export function initWallets(runtimeRootInput) {
     }
   }
   const output = {
-    schema: 'postfiat.bitcoin_signet_accounts.v1',
-    network: 'signet',
+    schema: 'postfiat.bitcoin_regtest_accounts.v1',
+    network: 'regtest',
     accounts: publicAccounts,
   }
-  writeJson(join(runtimeRoot, 'public', 'bitcoin-signet-accounts.json'), output)
+  writeJson(join(runtimeRoot, 'public', 'bitcoin-regtest-accounts.json'), output)
   return output
 }
 
-export function buildSplit(runtimeRootInput, faucetUtxo) {
+export function buildSplit(runtimeRootInput, fundingUtxo) {
   const runtimeRoot = resolve(runtimeRootInput)
   const user = loadWallet(runtimeRoot, 'user')
   const coordinator = loadWallet(runtimeRoot, 'coordinator')
-  assertHex(faucetUtxo.txid, 32, 'faucet txid')
-  assertUint(faucetUtxo.vout, 'faucet vout')
-  assertUint(faucetUtxo.valueSats, 'faucet value')
-  const input = BigInt(faucetUtxo.valueSats)
+  assertHex(fundingUtxo.txid, 32, 'funding txid')
+  assertUint(fundingUtxo.vout, 'funding vout')
+  assertUint(fundingUtxo.valueSats, 'funding value')
+  const input = BigInt(fundingUtxo.valueSats)
   const allocation = 25_000n
   const allocated = allocation * 3n
   const change = input - allocated - SPLIT_FEE_SATS
   if (change < 546n) {
-    throw new Error('faucet UTXO is too small for three scenario allocations')
+    throw new Error('funding UTXO is too small for three scenario allocations')
   }
   const psbt = new bitcoin.Psbt({ network: NETWORK })
-  psbt.addInput({ hash: faucetUtxo.txid, index: faucetUtxo.vout })
+  psbt.addInput({ hash: fundingUtxo.txid, index: fundingUtxo.vout })
   psbt.addOutput({ address: user.record.address, value: allocation })
   psbt.addOutput({ address: coordinator.record.address, value: allocation })
   psbt.addOutput({ address: user.record.address, value: allocation })
   psbt.addOutput({ address: user.record.address, value: change })
-  signP2wpkhInput(psbt, 0, user, faucetUtxo.valueSats)
+  signP2wpkhInput(psbt, 0, user, fundingUtxo.valueSats)
   psbt.finalizeAllInputs()
   const tx = psbt.extractTransaction()
   return {
-    schema: 'postfiat.bitcoin_signet_split.v1',
-    network: 'signet',
+    schema: 'postfiat.bitcoin_regtest_split.v1',
+    network: 'regtest',
     raw_tx: tx.toHex(),
     txid: tx.getId(),
-    input: faucetUtxo,
+    input: fundingUtxo,
     outputs: [
       { role: 'user', scenario: 'btc_to_nav', vout: 0, value_sats: 25_000 },
       {
@@ -261,7 +261,7 @@ export function buildSplit(runtimeRootInput, faucetUtxo) {
     ],
     fee_sats: Number(SPLIT_FEE_SATS),
     conservation:
-      faucetUtxo.valueSats === Number(allocated + change + SPLIT_FEE_SATS),
+      fundingUtxo.valueSats === Number(allocated + change + SPLIT_FEE_SATS),
   }
 }
 
@@ -294,8 +294,8 @@ export function buildLock(runtimeRootInput, request) {
   psbt.finalizeAllInputs()
   const tx = psbt.extractTransaction()
   return {
-    schema: 'postfiat.bitcoin_signet_p2wsh_htlc.v1',
-    network: 'signet',
+    schema: 'postfiat.bitcoin_regtest_p2wsh_htlc.v1',
+    network: 'regtest',
     scenario: request.scenario,
     owner: request.owner,
     recipient: request.recipient,
@@ -319,7 +319,7 @@ export function buildLock(runtimeRootInput, request) {
 }
 
 function loadLock(runtimeRoot, lock) {
-  if (lock.network !== 'signet') throw new Error('HTLC is not on signet')
+  if (lock.network !== 'regtest') throw new Error('HTLC is not on regtest')
   const owner = loadWallet(runtimeRoot, lock.owner)
   const recipient = loadWallet(runtimeRoot, lock.recipient)
   const witnessScript = htlcScript({
@@ -366,8 +366,8 @@ export function buildClaim(runtimeRootInput, lock, preimageHex) {
     loaded.witnessScript,
   ])
   return {
-    schema: 'postfiat.bitcoin_signet_htlc_claim.v1',
-    network: 'signet',
+    schema: 'postfiat.bitcoin_regtest_htlc_claim.v1',
+    network: 'regtest',
     lock_txid: lock.txid,
     raw_tx: tx.toHex(),
     txid: tx.getId(),
@@ -405,8 +405,8 @@ export function buildRefund(runtimeRootInput, lock) {
     loaded.witnessScript,
   ])
   return {
-    schema: 'postfiat.bitcoin_signet_htlc_refund.v1',
-    network: 'signet',
+    schema: 'postfiat.bitcoin_regtest_htlc_refund.v1',
+    network: 'regtest',
     lock_txid: lock.txid,
     lock_height: lock.lock_height,
     raw_tx: tx.toHex(),
@@ -440,7 +440,7 @@ function coreCommand(args) {
   const datadir = process.env.BITCOIN_DATADIR || DEFAULT_DATADIR
   const completed = spawnSync(
     binary,
-    ['-signet', `-datadir=${datadir}`, ...args],
+    ['-regtest', `-datadir=${datadir}`, ...args],
     {
       encoding: 'utf8',
       maxBuffer: 4 * 1024 * 1024,
@@ -462,7 +462,7 @@ function coreCommand(args) {
 
 export function coreStatus() {
   const chain = coreCommand(['getblockchaininfo'])
-  if (chain.chain !== 'signet') throw new Error('Bitcoin Core is not on signet')
+  if (chain.chain !== 'regtest') throw new Error('Bitcoin Core is not on regtest')
   return chain
 }
 
@@ -478,7 +478,7 @@ export function broadcast(rawTx) {
   const preflight = testMempool(rawTx)
   if (!preflight.allowed) {
     throw new Error(
-      `signet transaction rejected: ${preflight['reject-reason'] || 'unknown'}`,
+      `regtest transaction rejected: ${preflight['reject-reason'] || 'unknown'}`,
     )
   }
   const txid = coreCommand(['sendrawtransaction', rawTx])

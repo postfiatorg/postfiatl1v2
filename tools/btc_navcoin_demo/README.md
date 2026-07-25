@@ -1,4 +1,4 @@
-# Bitcoin Signet ↔ proven-NAV NAVcoin HTLC lane
+# Bitcoin regtest ↔ proven-NAV NAVcoin HTLC lane
 
 This lane follows the nazgul-verified XRP lane's evidence format while replacing
 XRPL native escrow with a Bitcoin P2WSH contract:
@@ -20,9 +20,8 @@ The demonstrated claim is:
 
 ## Test-only networks
 
-- Bitcoin Core `v31.0.0`, default public Signet
-- Faucet: `https://signetfaucet.com`
-- Public explorer: `https://mempool.space/signet`
+- Bitcoin Core `v31.0.0`, isolated regtest at `http://127.0.0.1:18443`
+- Funding: locally mined regtest coinbase, then an exact 100,000-sat funding UTXO
 - Hardened PFTL devnet: `tcp://127.0.0.1:31660` through `:31665`
 - Hardened revision: `ae3c53c9`
 - NAVcoin:
@@ -45,29 +44,29 @@ claim otherwise.
 
 ## Run and independently verify
 
-The live runner waits for a fully synchronized Signet node and confirmed faucet
-UTXO before mutating either ledger:
+The live runner creates an isolated Core wallet, mines regtest maturity blocks,
+and creates an exact confirmed funding UTXO before mutating either ledger:
 
 ```bash
 python3 -m tools.btc_navcoin_demo.run_live_demo \
-  --runtime-root /home/postfiat/tmp/pftl-btc-navcoin-20260725
+  --runtime-root /home/postfiat/tmp/pftl-btc-navcoin-regtest-v2-20260725
 ```
 
-Independent verification re-fetches public Signet transaction bytes, validates
-the P2WSH scripts and witness preimages, obtains merkle inclusion proofs from the
-locally validating Bitcoin Core node, compares all six PFTL ledgers, checks the
+Independent verification reads transaction bytes back from Bitcoin Core,
+validates the P2WSH scripts and witness preimages, obtains merkle inclusion
+proofs from the regtest node, compares all six PFTL ledgers, checks the
 proven-NAV checkpoint, terminal escrow states, and exact satoshi/NAVcoin
 conservation:
 
 ```bash
 python3 -m tools.btc_navcoin_demo.verify_evidence \
-  --runtime-root /home/postfiat/tmp/pftl-btc-navcoin-20260725
+  --runtime-root /home/postfiat/tmp/pftl-btc-navcoin-regtest-v2-20260725
 ```
 
 The output is:
 
 ```text
-/home/postfiat/tmp/pftl-btc-navcoin-20260725/public/evidence/independent-verification.json
+/home/postfiat/tmp/pftl-btc-navcoin-regtest-v2-20260725/public/evidence/independent-verification.json
 ```
 
 The reference XRP bundle is:
