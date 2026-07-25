@@ -199,9 +199,10 @@ def _signed_transaction_id(signed: Mapping[str, Any]) -> str:
         "fee",
         "sequence",
     )
-    for field in (*required_unsigned, *_operation_fields(kind)):
+    for field in required_unsigned:
         if field not in unsigned:
             raise PftlBackendError(f"signed escrow transaction lacks {field}")
+    operation_view = _operation_view(unsigned)
     header = (
         "postfiat.escrow_transaction.v1\n"
         f"chain_id={unsigned['chain_id']}\n"
@@ -216,34 +217,34 @@ def _signed_transaction_id(signed: Mapping[str, Any]) -> str:
         f"operation={kind}\n"
     )
     if kind == "escrow_create":
-        condition = unsigned["condition"]
+        condition = operation_view["condition"]
         if type(condition) is not str:
             raise PftlBackendError("signed escrow condition is not a string")
         operation = (
-            f"owner={unsigned['owner']}\n"
-            f"recipient={unsigned['recipient']}\n"
-            f"asset_id={unsigned['asset_id']}\n"
-            f"amount={unsigned['amount']}\n"
+            f"owner={operation_view['owner']}\n"
+            f"recipient={operation_view['recipient']}\n"
+            f"asset_id={operation_view['asset_id']}\n"
+            f"amount={operation_view['amount']}\n"
             f"condition_bytes={len(condition.encode('utf-8'))}\n"
             f"condition={condition}\n"
-            f"finish_after={unsigned['finish_after']}\n"
-            f"cancel_after={unsigned['cancel_after']}\n"
+            f"finish_after={operation_view['finish_after']}\n"
+            f"cancel_after={operation_view['cancel_after']}\n"
         )
     elif kind == "escrow_finish":
-        fulfillment = unsigned["fulfillment"]
+        fulfillment = operation_view["fulfillment"]
         if type(fulfillment) is not str:
             raise PftlBackendError("signed escrow fulfillment is not a string")
         operation = (
-            f"escrow_id={unsigned['escrow_id']}\n"
-            f"owner={unsigned['owner']}\n"
-            f"recipient={unsigned['recipient']}\n"
+            f"escrow_id={operation_view['escrow_id']}\n"
+            f"owner={operation_view['owner']}\n"
+            f"recipient={operation_view['recipient']}\n"
             f"fulfillment_bytes={len(fulfillment.encode('utf-8'))}\n"
             f"fulfillment={fulfillment}\n"
         )
     else:
         operation = (
-            f"escrow_id={unsigned['escrow_id']}\n"
-            f"owner={unsigned['owner']}\n"
+            f"escrow_id={operation_view['escrow_id']}\n"
+            f"owner={operation_view['owner']}\n"
         )
     algorithm = signed.get("algorithm_id")
     public_key = signed.get("public_key_hex")
@@ -904,10 +905,7 @@ class PersistentHandoffPftlBackend:
         unsigned = value.get("unsigned")
         if not isinstance(unsigned, Mapping):
             raise PftlBackendError("signed escrow transaction has no unsigned body")
-        operation_view = {
-            field: unsigned.get(field)
-            for field in _operation_fields(_operation_kind(operation))
-        }
+        operation_view = _operation_view(unsigned)
         if (
             unsigned.get("chain_id") != self.handoff.chain_id
             or unsigned.get("genesis_hash") != self.handoff.genesis_hash
@@ -918,7 +916,7 @@ class PersistentHandoffPftlBackend:
             or unsigned.get("transaction_kind") != _operation_kind(operation)
             or unsigned.get("signature_algorithm_id") != "ML-DSA-65"
             or value.get("algorithm_id") != "ML-DSA-65"
-            or _canonical(operation_view) != _canonical(operation)
+            or _canonical(operation_view) != _canonical(_operation_view(operation))
         ):
             raise PftlBackendError("signer output does not match the pinned quote")
         return value, _signed_transaction_id(value)

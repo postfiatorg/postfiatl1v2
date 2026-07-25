@@ -947,6 +947,12 @@ class BackendTests(unittest.TestCase):
                     quote = json.loads(quote_path.read_text())
                     result = quote["result"]
                     operation = result["operation"]
+                    # Rust serde omits the default zero-valued finish_after.
+                    serialized_operation = {
+                        key: value
+                        for key, value in operation.items()
+                        if not (key == "finish_after" and value == 0)
+                    }
                     unsigned = {
                         "chain_id": result["chain_id"],
                         "genesis_hash": result["genesis_hash"],
@@ -957,7 +963,7 @@ class BackendTests(unittest.TestCase):
                         "source": result["source"],
                         "fee": result["minimum_fee"],
                         "sequence": result["sequence"],
-                        **operation,
+                        **serialized_operation,
                     }
                     signed = {
                         "unsigned": unsigned,
