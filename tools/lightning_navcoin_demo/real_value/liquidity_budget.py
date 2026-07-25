@@ -17,7 +17,11 @@ import stat
 import time
 from typing import Any, Mapping
 
-from .authorization import ValueAuthorization, verify_value_authorization
+from .authorization import (
+    MAX_LIQUIDITY_AUTHORIZATION_LIFETIME_SECONDS,
+    ValueAuthorization,
+    verify_value_authorization,
+)
 from .budget import RealValueBudget
 from .composition import (
     SecureStatePaths,
@@ -68,7 +72,9 @@ MAX_PUBLIC_INPUT_BYTES = 64 * 1024
 # Liquidity setup has a distinct initiation horizon because its offline
 # authorization ceremony is separate from executable swap quotes. Swap quotes
 # remain capped by MAX_QUOTE_LIFETIME_SECONDS in policy.py.
-MAX_LIQUIDITY_INITIATION_HORIZON_SECONDS = 15 * 60
+MAX_LIQUIDITY_INITIATION_HORIZON_SECONDS = (
+    MAX_LIQUIDITY_AUTHORIZATION_LIFETIME_SECONDS
+)
 # Once started, an external HODL payment may wait for channel confirmations
 # under this separate, hard settlement grace.
 MAX_LIQUIDITY_SETTLEMENT_GRACE_SECONDS = 6 * 60 * 60

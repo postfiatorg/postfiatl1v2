@@ -23,6 +23,7 @@ from .policy import MainnetQuoteView, RealValuePolicy, RealValuePolicyError
 AUTHORIZATION_SCHEMA = "postfiat.lightning_value_authorization.v1"
 AUTHORIZATION_DOMAIN = b"postfiat.lightning_value_authorization.v1\x00"
 AUTHORIZATION_ALGORITHM = "Ed25519"
+MAX_LIQUIDITY_AUTHORIZATION_LIFETIME_SECONDS = 15 * 60
 AUTHORIZATION_FIELDS = frozenset(
     {
         "schema",
@@ -203,6 +204,14 @@ def verify_value_authorization(
         raise ValueAuthorizationError("now_unix must be a nonnegative integer")
     if value["expires_unix"] <= now:
         raise ValueAuthorizationError("authorization is expired")
+    if (
+        value["category"] == "LIQUIDITY_SETUP"
+        and value["expires_unix"] - now
+        > MAX_LIQUIDITY_AUTHORIZATION_LIFETIME_SECONDS
+    ):
+        raise ValueAuthorizationError(
+            "liquidity authorization exceeds the hard initiation horizon"
+        )
     if value["policy_id"] != policy.policy_id:
         raise ValueAuthorizationError("authorization policy id mismatch")
     if value["max_fee_msat"] > policy.max_fee_msat:

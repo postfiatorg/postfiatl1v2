@@ -7,7 +7,11 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from ..authorization import sign_value_authorization
+from ..authorization import (
+    ValueAuthorizationError,
+    sign_value_authorization,
+    verify_value_authorization,
+)
 from ..budget import RealValueBudget
 from ..cli import build_parser
 from ..composition import CompositionError, SecureStatePaths
@@ -280,7 +284,16 @@ class LiquidityBudgetCliTests(unittest.TestCase):
             ),
         )
         with self.assertRaisesRegex(
-            LiquidityBudgetError, "hard initiation horizon"
+            ValueAuthorizationError, "hard initiation horizon"
+        ):
+            verify_value_authorization(
+                late_start_authority,
+                self.route,
+                quote=None,
+                now_unix=NOW,
+            )
+        with self.assertRaisesRegex(
+            ValueAuthorizationError, "hard initiation horizon"
         ):
             self._reserve(
                 suffix="late-start-authority",
