@@ -310,6 +310,25 @@ class LiquidityBudgetCliTests(unittest.TestCase):
         )
 
     def test_late_initiation_or_settlement_remains_reserved(self) -> None:
+        initiated_before_reservation = self._reserve(
+            suffix="initiated-before-reservation"
+        )
+        premature_initiation = terminal_evidence(initiated_before_reservation)
+        premature_initiation["payment_initiated_at_unix"] = NOW - 1
+        premature_initiation["payment_settled_at_unix"] = NOW + 1
+        premature_initiation["observed_at_unix"] = NOW + 2
+        premature_path = self.paths.config_dir / "premature-initiation.json"
+        self._write(premature_path, premature_initiation)
+        with self.assertRaisesRegex(
+            LiquidityBudgetError, "before durable reservation"
+        ):
+            mark_liquidity_setup_spent(
+                state_dir=self.root,
+                policy_path=self.policy_path,
+                evidence_path=premature_path,
+                now_unix=premature_initiation["observed_at_unix"],
+            )
+
         initiated_late = self._reserve(suffix="initiated-late")
         late_initiation = terminal_evidence(initiated_late)
         late_initiation["payment_initiated_at_unix"] = (
@@ -355,7 +374,7 @@ class LiquidityBudgetCliTests(unittest.TestCase):
                 now_unix=late_settlement["observed_at_unix"],
             )
         with RealValueBudget(self.paths.budget, self.route) as budget:
-            self.assertEqual(budget.summary()["reserved_count"], 2)
+            self.assertEqual(budget.summary()["reserved_count"], 3)
             self.assertEqual(budget.summary()["spent_count"], 0)
 
     def test_lifetime_cap_and_terminal_evidence_are_fail_closed(self) -> None:

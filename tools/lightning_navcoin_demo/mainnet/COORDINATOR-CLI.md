@@ -175,12 +175,14 @@ scripts/lightning-navcoin-mainnet-coordinator liquidity-mark-spent \
 ```
 
 The strict
-`postfiat.lightning_liquidity_setup_terminal_evidence.v1` object binds the
-authorization, policy and setup IDs to provider, successful payment hash and
-settlement time, canonical channel point, remote public key, capacity,
-positive inbound, confirmations, actual cost, and observation time. Its
-payment must have settled before the signed permit expired, and actual msat
-cost may not exceed the signed ceiling.
+`postfiat.lightning_liquidity_setup_terminal_evidence.v2` object binds the
+authorization, policy and setup IDs to provider, successful payment hash,
+initiation and settlement times, canonical channel point, remote public key,
+capacity, positive inbound, confirmations, actual cost, and observation time.
+Its payment must have started after the durable reservation and no later than
+the signed permit expiry. Once started, it must settle within the separate
+six-hour liquidity horizon. Actual msat cost may not exceed the signed
+ceiling.
 
 It has exactly this field set (replace every example value with independently
 observed public evidence):

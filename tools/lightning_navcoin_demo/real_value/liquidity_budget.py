@@ -331,6 +331,10 @@ def _validate_terminal_evidence(
         raise LiquidityBudgetError(
             "observed liquidity cost exceeds the signed msat ceiling"
         )
+    if initiated < reservation["created_unix"]:
+        raise LiquidityBudgetError(
+            "external payment initiated before durable reservation"
+        )
     if initiated > reservation["expires_unix"]:
         raise LiquidityBudgetError(
             "external payment initiated after authorization expiry"
