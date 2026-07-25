@@ -160,7 +160,7 @@ function statusPayload(overrides = {}) {
       hold_reasons: [],
       lightning_network: 'bitcoin',
       trust_class: 'CONTROLLED',
-      atomicity_claim: 'non-custodial, conditionally atomic, COORDINATOR-TRUSTED timing',
+      atomicity_claim: 'non-custodial, conditionally-atomic, COORDINATOR-TRUSTED timing',
       quote_signer_public_key_hex:
         LIGHTNING_NAVCOIN_RELEASE_PINS.quoteSignerPublicKeyHex,
       lnd: {

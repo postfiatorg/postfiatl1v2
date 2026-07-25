@@ -2,7 +2,7 @@
 
 This process keeps the executable claim bounded to:
 
-> non-custodial, conditionally atomic, COORDINATOR-TRUSTED timing
+> non-custodial, conditionally-atomic, COORDINATOR-TRUSTED timing
 
 It does not create an LND wallet, acquire liquidity, sign a nazgul permit, or
 alter PFTL consensus.

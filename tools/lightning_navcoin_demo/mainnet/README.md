@@ -6,7 +6,7 @@ purchase liquidity, pay an invoice, or touch PFTL consensus.
 
 The executable claim remains:
 
-> non-custodial, conditionally atomic, COORDINATOR-TRUSTED timing
+> non-custodial, conditionally-atomic, COORDINATOR-TRUSTED timing
 
 PFTL height and Bitcoin height are not a shared consensus clock. The
 coordinator is trusted to enforce the cross-ledger margin and remain live.

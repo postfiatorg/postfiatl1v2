@@ -15,7 +15,7 @@ class FakeFacade:
             "ok": True,
             "mode": "DRY_RUN",
             "trust_class": "CONTROLLED",
-            "claim": "non-custodial, conditionally atomic, COORDINATOR-TRUSTED timing",
+            "claim": "non-custodial, conditionally-atomic, COORDINATOR-TRUSTED timing",
             "hold_reasons": ["pftl_handoff_missing"],
         }
 

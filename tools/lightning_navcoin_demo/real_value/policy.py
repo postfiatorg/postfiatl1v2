@@ -18,7 +18,7 @@ POLICY_SCHEMA = "postfiat.lightning_real_value_policy.v2"
 PRICE_SCHEMA = "postfiat.lightning_btc_price_observation.v1"
 TRUST_CLASS = "CONTROLLED"
 ATOMICITY_CLAIM = (
-    "non-custodial, conditionally atomic, COORDINATOR-TRUSTED timing"
+    "non-custodial, conditionally-atomic, COORDINATOR-TRUSTED timing"
 )
 MAX_DEMO_PER_RUN_USD_E8 = 5 * 100_000_000
 MAX_DEMO_LIFETIME_USD_E8 = 20 * 100_000_000

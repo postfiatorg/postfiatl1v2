@@ -12,7 +12,7 @@ export const LIGHTNING_NAVCOIN_STATUS_SCHEMA = 'postfiat.lightning_navcoin.statu
 export const LIGHTNING_SUBMARINE_QUOTE_SCHEMA = 'postfiat.lightning_submarine_quote.v1';
 export const LIGHTNING_TO_PFTL = 'lightning_to_pftl';
 export const PFTL_TO_LIGHTNING = 'pftl_to_lightning';
-export const CONTROLLED_CLAIM = 'non-custodial, conditionally atomic, COORDINATOR-TRUSTED timing';
+export const CONTROLLED_CLAIM = 'non-custodial, conditionally-atomic, COORDINATOR-TRUSTED timing';
 
 const CONDITION_PREFIX = 'a0258020';
 const CONDITION_SUFFIX = '810120';
