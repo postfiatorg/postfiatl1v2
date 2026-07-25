@@ -1820,7 +1820,7 @@ class SyntheticDemo:
         self.results["live_crash_recovery"] = result
         return context
 
-    def chaos(self, contexts: Sequence[QuoteContext]) -> None:
+    def chaos(self) -> None:
         outage = self.devnet.advance_height(
             effect_key=f"chaos-one-validator-down-{int(time.time_ns())}",
             one_validator_down=True,
@@ -1847,10 +1847,37 @@ class SyntheticDemo:
             / "demo-runs"
             / f"coordinator-crash-matrix-{int(time.time_ns())}"
         )
+        # The preceding live consensus/refund cases intentionally take longer
+        # than the coordinator's short quote-admission window.  Generate
+        # dedicated, still-bounded quotes immediately before the journal-only
+        # crash matrix instead of reusing already-consumed or expired flow
+        # quotes.  These quotes are never submitted to PFTL or paid on LN.
+        crash_happy = self._new_quote(
+            "chaos-journal-happy",
+            direction="pftl_to_lightning",
+            invoice_node="user",
+            payer_node="coordinator",
+            owner_role="user",
+            recipient_role="coordinator",
+            amount_msat=REFUND_MSAT,
+            amount_atoms=REFUND_ATOMS,
+            cancel_offset=SAFE_PFTL_CANCEL_OFFSET,
+        )
+        crash_refund = self._new_quote(
+            "chaos-journal-refund",
+            direction="lightning_to_pftl",
+            invoice_node="coordinator",
+            payer_node="user",
+            owner_role="coordinator",
+            recipient_role="user",
+            amount_msat=REFUND_MSAT,
+            amount_atoms=REFUND_ATOMS,
+            cancel_offset=SAFE_PFTL_CANCEL_OFFSET,
+        )
         crash = run_crash_matrix(
             crash_root,
-            happy_signed_quote=contexts[1].signed_quote,
-            refund_signed_quote=contexts[-1].signed_quote,
+            happy_signed_quote=crash_happy.signed_quote,
+            refund_signed_quote=crash_refund.signed_quote,
             limits=ExposureLimits(100_000_000, 250_000_000),
         )
         public_crash = {
@@ -2020,12 +2047,12 @@ class SyntheticDemo:
 
     def run(self) -> Path:
         self.preflight()
-        flow_a = self.flow_a()
-        flow_b = self.flow_b()
+        self.flow_a()
+        self.flow_b()
         self.live_crash_recovery()
-        refund = self.refund_and_adversarial()
+        self.refund_and_adversarial()
         self.lightning_adversarial()
-        self.chaos((flow_a, flow_b, refund))
+        self.chaos()
         return self.finalize()
 
 
