@@ -846,7 +846,9 @@ class MainnetCoordinatorRuntime:
         lock = self.pftl_observer.user_finish_capacity(
             quote["expected_escrow_id"], expected=expected
         )
-        snapshot_after = self.pftl_observer.route_snapshot()
+        snapshot_after = self.pftl_observer.route_snapshot(
+            finalized_effect_tx_id=effect.tx_id
+        )
         expected_inventory_after = (
             inventory_before - quote["pftl_amount_atoms"]
         )
@@ -1570,7 +1572,9 @@ class MainnetCoordinatorRuntime:
         lock = self.pftl_observer.open_escrow(
             quote["expected_escrow_id"], expected=expected
         )
-        route_after_lock = self.pftl_observer.route_snapshot()
+        route_after_lock = self.pftl_observer.route_snapshot(
+            finalized_effect_tx_id=tx_id
+        )
         if (
             route_after_lock.height < lock["height"]
             or route_after_lock.state_root != lock["state_root"]
@@ -1694,7 +1698,9 @@ class MainnetCoordinatorRuntime:
             or wallet_before < 0
         ):
             raise RuntimeError("on-ramp lock route baseline is malformed")
-        route_after = self.pftl_observer.route_snapshot()
+        route_after = self.pftl_observer.route_snapshot(
+            finalized_effect_tx_id=tx_id
+        )
         expected_wallet_after = wallet_before + quote["pftl_amount_atoms"]
         if (
             expected_wallet_after > (1 << 63) - 1
@@ -1957,7 +1963,9 @@ class MainnetCoordinatorRuntime:
         terminal = self.pftl_observer.canceled_escrow(
             quote["expected_escrow_id"], expected=expected
         )
-        route_after = self.pftl_observer.route_snapshot()
+        route_after = self.pftl_observer.route_snapshot(
+            finalized_effect_tx_id=canceled.tx_id
+        )
         if route_after.height < terminal["height"]:
             raise RuntimeError("post-cancel inventory view predates finality")
         expected_inventory = inventory_before + quote["pftl_amount_atoms"]
@@ -2147,7 +2155,9 @@ class MainnetCoordinatorRuntime:
             or wallet_before < 0
         ):
             raise RuntimeError("off-ramp lock route baseline is malformed")
-        route_after = self.pftl_observer.route_snapshot()
+        route_after = self.pftl_observer.route_snapshot(
+            finalized_effect_tx_id=tx_id
+        )
         expected_wallet_after = wallet_before + quote["pftl_amount_atoms"]
         if (
             expected_wallet_after > (1 << 63) - 1
@@ -2615,7 +2625,9 @@ class MainnetCoordinatorRuntime:
         terminal = self.pftl_observer.finished_escrow(
             quote["expected_escrow_id"], expected=expected
         )
-        route_after = self.pftl_observer.route_snapshot()
+        route_after = self.pftl_observer.route_snapshot(
+            finalized_effect_tx_id=finish.tx_id
+        )
         expected_inventory_after = (
             inventory_before + quote["pftl_amount_atoms"]
         )

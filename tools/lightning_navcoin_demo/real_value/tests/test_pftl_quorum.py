@@ -19,6 +19,7 @@ class FakeClient:
         self.receipt_height = self.height
         self.receipt_tip = "aa" * 48
         self.receipt_root = "bb" * 48
+        self.mempool_tx_id: str | None = None
 
     def status(self) -> dict[str, object]:
         return {
@@ -27,7 +28,7 @@ class FakeClient:
             "validator_count": 6,
             "node_id": self.node_id,
             "status": "running",
-            "mempool_pending": 0,
+            "mempool_pending": 0 if self.mempool_tx_id is None else 1,
             "block_height": self.height,
             "block_tip_hash": "aa" * 48,
             "state_root": "bb" * 48,
@@ -54,6 +55,16 @@ class FakeClient:
                     "halted": False,
                 }
             ],
+        }
+
+    def mempool_status(self) -> dict[str, object]:
+        return {
+            "pending": [],
+            "pending_escrow_transactions": (
+                []
+                if self.mempool_tx_id is None
+                else [{"tx_id": self.mempool_tx_id}]
+            ),
         }
 
     def asset_info(self, asset_id: str) -> dict[str, object]:
@@ -237,6 +248,19 @@ class PftlQuorumTests(unittest.TestCase):
         self.clients[self.route.pftl_rpc_endpoints[2]].freeze_enabled = True
         with self.assertRaisesRegex(PftlQuorumError, "block delivery"):
             self.observer.route_snapshot()
+
+    def test_post_effect_snapshot_allows_only_the_finalized_tx_stale_view(
+        self,
+    ) -> None:
+        tx_id = "12" * 48
+        self.clients[self.route.pftl_rpc_endpoints[5]].mempool_tx_id = tx_id
+        route = self.observer.route_snapshot(finalized_effect_tx_id=tx_id)
+        self.assertEqual(route.agreeing_validator_count, 6)
+
+    def test_post_effect_snapshot_rejects_a_different_pending_tx(self) -> None:
+        self.clients[self.route.pftl_rpc_endpoints[5]].mempool_tx_id = "13" * 48
+        with self.assertRaisesRegex(PftlQuorumError, "mempool must be empty"):
+            self.observer.route_snapshot(finalized_effect_tx_id="12" * 48)
 
     def test_asset_precision_is_pinned_six_of_six(self) -> None:
         original = self.clients[self.route.pftl_rpc_endpoints[4]].asset_info

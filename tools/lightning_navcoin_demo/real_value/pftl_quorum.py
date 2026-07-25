@@ -146,7 +146,11 @@ class PftlQuorumObserver:
             client_factory(endpoint) for endpoint in policy.pftl_rpc_endpoints
         )
 
-    def _read_route(self, client: Any) -> dict[str, Any]:
+    def _read_route(
+        self,
+        client: Any,
+        finalized_effect_tx_id: str | None,
+    ) -> dict[str, Any]:
         status_before = client.status()
         asset = client.asset_info(self.policy.pftl_asset_id)
         lines = client.account_lines(
@@ -161,6 +165,11 @@ class PftlQuorumObserver:
             limit=8,
         )
         user_native = client.account(self.policy.pftl_user_address)
+        mempool = (
+            client.mempool_status()
+            if finalized_effect_tx_id is not None
+            else None
+        )
         status_after = client.status()
         return {
             "status_before": status_before,
@@ -170,6 +179,7 @@ class PftlQuorumObserver:
             "native": native,
             "user_lines": user_lines,
             "user_native": user_native,
+            "mempool": mempool,
         }
 
     def _validate_nav_profile(self, status: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -276,11 +286,52 @@ class PftlQuorumObserver:
             allow_nan=False,
         )
 
-    def route_snapshot(self) -> PftlRouteSnapshot:
+    @staticmethod
+    def _mempool_is_empty_or_only_finalized_effect(
+        status_before: Mapping[str, Any],
+        status_after: Mapping[str, Any],
+        mempool: Any,
+        finalized_effect_tx_id: str | None,
+    ) -> bool:
+        counts = (
+            _uint(status_before.get("mempool_pending", 0), "mempool_pending"),
+            _uint(status_after.get("mempool_pending", 0), "mempool_pending"),
+        )
+        if counts == (0, 0):
+            return True
+        if (
+            finalized_effect_tx_id is None
+            or len(finalized_effect_tx_id) != 96
+            or any(character not in "0123456789abcdef" for character in finalized_effect_tx_id)
+            or counts != (1, 1)
+            or not isinstance(mempool, Mapping)
+        ):
+            return False
+        pending: list[Mapping[str, Any]] = []
+        for value in mempool.values():
+            if not isinstance(value, list):
+                continue
+            for item in value:
+                if not isinstance(item, Mapping):
+                    return False
+                pending.append(item)
+        return (
+            len(pending) == 1
+            and pending[0].get("tx_id") == finalized_effect_tx_id
+        )
+
+    def route_snapshot(
+        self,
+        *,
+        finalized_effect_tx_id: str | None = None,
+    ) -> PftlRouteSnapshot:
         """Require exact six-of-six identity, root, asset, NAV, and inventory."""
 
         try:
-            rows = [self._read_route(client) for client in self._clients]
+            rows = [
+                self._read_route(client, finalized_effect_tx_id)
+                for client in self._clients
+            ]
         except Exception as error:
             raise PftlQuorumError("one or more PFTL RPC reads failed") from error
         if len(rows) != self.policy.minimum_pftl_validators:
@@ -297,17 +348,11 @@ class PftlQuorumObserver:
                 node_ids,
                 read_label="route",
             )
-            if (
-                _uint(
-                    status_before.get("mempool_pending", 0),
-                    "mempool_pending",
-                )
-                != 0
-                or _uint(
-                    status_after.get("mempool_pending", 0),
-                    "mempool_pending",
-                )
-                != 0
+            if not self._mempool_is_empty_or_only_finalized_effect(
+                status_before,
+                status_after,
+                row["mempool"],
+                finalized_effect_tx_id,
             ):
                 raise PftlQuorumError("PFTL mempool must be empty for real-value preflight")
 

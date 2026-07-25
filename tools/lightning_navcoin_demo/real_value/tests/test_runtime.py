@@ -212,7 +212,12 @@ class FakeObserver:
         self.onramp_finish_applied = False
         self.offramp_cancel_applied = False
 
-    def route_snapshot(self) -> PftlRouteSnapshot:
+    def route_snapshot(
+        self,
+        *,
+        finalized_effect_tx_id: str | None = None,
+    ) -> PftlRouteSnapshot:
+        del finalized_effect_tx_id
         return PftlRouteSnapshot(
             height=self.height,
             block_tip_hash="aa" * 48,
