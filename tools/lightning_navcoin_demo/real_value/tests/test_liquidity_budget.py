@@ -17,6 +17,7 @@ from ..cli import build_parser
 from ..composition import CompositionError, SecureStatePaths
 from ..liquidity_budget import (
     LIQUIDITY_EVIDENCE_SCHEMA,
+    LIQUIDITY_MIN_REMAINING_INITIATION_SECONDS,
     LIQUIDITY_POST_RESERVATION_INITIATION_SECONDS,
     MAX_LIQUIDITY_INITIATION_HORIZON_SECONDS,
     MAX_LIQUIDITY_SETTLEMENT_GRACE_SECONDS,
@@ -38,7 +39,7 @@ def liquidity_authorization(
     direction: str = "not_applicable",
     principal_msat: int = 100_000,
     max_all_in_usd_e8: int = 20_000_000,
-    expires_unix: int = NOW + 15 * 60,
+    expires_unix: int = NOW + 30 * 60,
 ) -> dict[str, object]:
     setup_id = hashlib.sha256(f"liquidity-setup:{suffix}".encode()).hexdigest()
     return sign_value_authorization(
@@ -259,10 +260,14 @@ class LiquidityBudgetCliTests(unittest.TestCase):
     def test_liquidity_has_a_short_start_and_bounded_settlement_grace(
         self,
     ) -> None:
-        self.assertEqual(MAX_LIQUIDITY_INITIATION_HORIZON_SECONDS, 60 * 60)
+        self.assertEqual(MAX_LIQUIDITY_INITIATION_HORIZON_SECONDS, 4 * 60 * 60)
+        self.assertEqual(
+            LIQUIDITY_MIN_REMAINING_INITIATION_SECONDS,
+            30 * 60,
+        )
         self.assertEqual(
             LIQUIDITY_POST_RESERVATION_INITIATION_SECONDS,
-            15 * 60,
+            60 * 60,
         )
         self.assertEqual(MAX_LIQUIDITY_SETTLEMENT_GRACE_SECONDS, 6 * 60 * 60)
         # The swap quote limit remains independent and shorter.
@@ -282,7 +287,7 @@ class LiquidityBudgetCliTests(unittest.TestCase):
         )
         self.assertEqual(
             reserved["payment_initiation_deadline_unix"],
-            NOW + LIQUIDITY_POST_RESERVATION_INITIATION_SECONDS,
+                NOW + LIQUIDITY_POST_RESERVATION_INITIATION_SECONDS,
         )
 
         late_start_authority = liquidity_authorization(
@@ -312,7 +317,7 @@ class LiquidityBudgetCliTests(unittest.TestCase):
             route=self.route,
             suffix="insufficient-start-authority",
             expires_unix=(
-                NOW + LIQUIDITY_POST_RESERVATION_INITIATION_SECONDS - 1
+                NOW + LIQUIDITY_MIN_REMAINING_INITIATION_SECONDS - 1
             ),
         )
         with self.assertRaisesRegex(

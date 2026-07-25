@@ -136,9 +136,9 @@ full ceiling. There is no ambiguity-release command: an unresolved outcome
 remains reserved. The exact artifact contract and commands are documented in
 `COORDINATOR-CLI.md`.
 
-Liquidity permits may expire at most one hour after verification to permit an
-offline review/signing round trip. Reservation requires at least 15 minutes
-remaining, then narrows payment-start authority to 15 minutes after the
+Liquidity permits may expire at most four hours after verification to permit
+an offline review/signing round trip. Reservation requires at least 30 minutes
+remaining, then narrows payment-start authority to one hour after the
 durable reservation (or the signed expiry, if earlier). This is separate from
 the unchanged five-minute maximum for executable swap quotes. An
 already-initiated HODL payment then has a hard six-hour settlement grace from

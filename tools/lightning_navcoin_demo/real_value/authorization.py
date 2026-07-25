@@ -25,7 +25,7 @@ AUTHORIZATION_DOMAIN = b"postfiat.lightning_value_authorization.v1\x00"
 AUTHORIZATION_ALGORITHM = "Ed25519"
 # The signed permit may span an offline review/signing round trip, but the
 # payment-start authority is separately narrowed after durable reservation.
-MAX_LIQUIDITY_AUTHORIZATION_LIFETIME_SECONDS = 60 * 60
+MAX_LIQUIDITY_AUTHORIZATION_LIFETIME_SECONDS = 4 * 60 * 60
 AUTHORIZATION_FIELDS = frozenset(
     {
         "schema",

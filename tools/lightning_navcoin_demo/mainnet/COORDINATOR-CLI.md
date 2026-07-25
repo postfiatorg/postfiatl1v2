@@ -156,9 +156,9 @@ at that price and must fit inside its signed USD ceiling. The command only
 writes `RESERVED` to SQLite; it does not connect to an LSP, create an order,
 pay an invoice, load a PFTL signer, or move value.
 
-The signed liquidity permit may expire at most one hour after verification to
-permit an offline review/signing round trip. Reservation requires at least 15
-minutes remaining, then narrows payment-start authority to 15 minutes after
+The signed liquidity permit may expire at most four hours after verification
+to permit an offline review/signing round trip. Reservation requires at least
+30 minutes remaining, then narrows payment-start authority to one hour after
 the durable reservation (or the signed expiry, if earlier). This is separate
 from the unchanged five-minute maximum for executable swap quotes. A
 terminal-evidence v2 record carries the initiation timestamp, and an

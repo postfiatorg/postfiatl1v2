@@ -75,7 +75,8 @@ MAX_PUBLIC_INPUT_BYTES = 64 * 1024
 MAX_LIQUIDITY_INITIATION_HORIZON_SECONDS = (
     MAX_LIQUIDITY_AUTHORIZATION_LIFETIME_SECONDS
 )
-LIQUIDITY_POST_RESERVATION_INITIATION_SECONDS = 15 * 60
+LIQUIDITY_MIN_REMAINING_INITIATION_SECONDS = 30 * 60
+LIQUIDITY_POST_RESERVATION_INITIATION_SECONDS = 60 * 60
 # Once started, an external HODL payment may wait for channel confirmations
 # under this separate, hard settlement grace.
 MAX_LIQUIDITY_SETTLEMENT_GRACE_SECONDS = 6 * 60 * 60
@@ -201,7 +202,7 @@ def _require_liquidity_authorization(
         )
     if (
         authorization.expires_unix - now_unix
-        < LIQUIDITY_POST_RESERVATION_INITIATION_SECONDS
+        < LIQUIDITY_MIN_REMAINING_INITIATION_SECONDS
     ):
         raise LiquidityBudgetError(
             "liquidity authorization has insufficient remaining initiation time"
