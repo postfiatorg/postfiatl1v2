@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+STATE_DIR="${PFTL_LN_MAINNET_STATE_DIR:-/home/postfiat/.pft/lightning-navcoin-mainnet}"
+case "$STATE_DIR" in
+  /*) ;;
+  *)
+    echo "mainnet state directory must be absolute: $STATE_DIR" >&2
+    exit 2
+    ;;
+esac
+CANONICAL_STATE_DIR="$(realpath -m -- "$STATE_DIR")"
+if [[ "$CANONICAL_STATE_DIR" != "$STATE_DIR" ]]; then
+  echo "mainnet state directory must be canonical and symlink-free: $STATE_DIR" >&2
+  exit 2
+fi
+RUNTIME_DIR="$STATE_DIR/coordinator-python-runtime-v2"
+VENV_DIR="$RUNTIME_DIR/venv"
+PROTO_DIR="$STATE_DIR/lnd-grpc-v0.20.1"
+REQUIREMENTS="$REPO_ROOT/tools/lightning_navcoin_demo/mainnet/coordinator-runtime/requirements.txt"
+ENVCTL="$REPO_ROOT/tools/lightning_navcoin_demo/mainnet/envctl"
+SOURCE_TARGETS=(
+  tools/lightning_navcoin_demo
+  scripts/lightning-navcoin-mainnet-coordinator
+  scripts/lightning-navcoin-mainnet-env
+  python/postfiat_rpc
+  wallet-web
+)
+
+case "$STATE_DIR" in
+  /|/home|/home/postfiat|/home/postfiat/repos)
+    echo "refusing broad mainnet state directory: $STATE_DIR" >&2
+    exit 2
+    ;;
+esac
+
+requirements_sha() {
+  sha256sum "$REQUIREMENTS" | awk '{print $1}'
+}
+
+verify_runtime() {
+  expected="$(requirements_sha)"
+  if [[ ! -x "$VENV_DIR/bin/python" ]] ||
+     [[ ! -f "$RUNTIME_DIR/.requirements.sha256" ]] ||
+     [[ "$(tr -d '\n' <"$RUNTIME_DIR/.requirements.sha256")" != "$expected" ]]
+  then
+    echo "coordinator runtime absent or pin changed; run: $0 bootstrap" >&2
+    exit 2
+  fi
+  "$VENV_DIR/bin/python" - <<'PY'
+import cryptography
+import google.protobuf
+import grpc
+
+expected = {
+    "cryptography": "49.0.0",
+    "protobuf": "7.35.1",
+    "grpcio": "1.83.0",
+}
+observed = {
+    "cryptography": cryptography.__version__,
+    "protobuf": google.protobuf.__version__,
+    "grpcio": grpc.__version__,
+}
+if observed != expected:
+    raise SystemExit(f"coordinator dependency version mismatch: {observed!r}")
+PY
+}
+
+record_source_pin() {
+  commit="$(git -C "$REPO_ROOT" rev-parse --verify 'HEAD^{commit}')"
+  tree="$(git -C "$REPO_ROOT" rev-parse --verify 'HEAD^{tree}')"
+  dirty="$(git -C "$REPO_ROOT" status \
+    --porcelain=v1 \
+    --untracked-files=all \
+    -- "${SOURCE_TARGETS[@]}")"
+  clean=false
+  if [[ -z "$dirty" ]]; then
+    clean=true
+  fi
+  pin_temp="$(mktemp "$RUNTIME_DIR/.source-release.XXXXXX")"
+  SOURCE_PIN_COMMIT="$commit" \
+  SOURCE_PIN_TREE="$tree" \
+  SOURCE_PIN_CLEAN="$clean" \
+  "$VENV_DIR/bin/python" - "$pin_temp" <<'PY'
+import json
+import os
+from pathlib import Path
+import sys
+
+target = Path(sys.argv[1])
+value = {
+    "schema": "postfiat.lightning_coordinator_source_release.v1",
+    "git_commit": os.environ["SOURCE_PIN_COMMIT"],
+    "git_tree": os.environ["SOURCE_PIN_TREE"],
+    "clean": os.environ["SOURCE_PIN_CLEAN"] == "true",
+    "targets": [
+        "tools/lightning_navcoin_demo",
+        "scripts/lightning-navcoin-mainnet-coordinator",
+        "scripts/lightning-navcoin-mainnet-env",
+        "python/postfiat_rpc",
+        "wallet-web",
+    ],
+}
+target.write_text(
+    json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n",
+    encoding="ascii",
+)
+PY
+  chmod 600 "$pin_temp"
+  mv -- "$pin_temp" "$RUNTIME_DIR/source-release.json"
+}
+
+bootstrap() {
+  install -d -m 700 "$STATE_DIR"
+  if [[ -e "$RUNTIME_DIR" ]]; then
+    verify_runtime
+  else
+    umask 077
+    build_dir="$(mktemp -d "$STATE_DIR/.coordinator-runtime.XXXXXX")"
+    cleanup_build() {
+      case "${build_dir:-}" in
+        "$STATE_DIR"/.coordinator-runtime.*)
+          rm -rf -- "$build_dir"
+          ;;
+      esac
+    }
+    trap cleanup_build EXIT
+    python3 -m venv "$build_dir/venv"
+    "$build_dir/venv/bin/python" -m pip install \
+      --disable-pip-version-check \
+      --no-cache-dir \
+      --only-binary=:all: \
+      --require-hashes \
+      -r "$REQUIREMENTS"
+    requirements_sha >"$build_dir/.requirements.sha256"
+    chmod 600 "$build_dir/.requirements.sha256"
+    mv -- "$build_dir" "$RUNTIME_DIR"
+    build_dir=
+    trap - EXIT
+    verify_runtime
+  fi
+  PFTL_LN_MAINNET_STATE_DIR="$STATE_DIR" "$ENVCTL" export-grpc >/dev/null
+  record_source_pin
+  printf '%s\n' "$RUNTIME_DIR"
+}
+
+case "${1:-}" in
+  bootstrap)
+    bootstrap
+    ;;
+  "")
+    echo "usage: $0 {bootstrap|prepare|dry-check|serve|authorize|liquidity-reserve|liquidity-mark-spent} [options]" >&2
+    exit 2
+    ;;
+  *)
+    verify_runtime
+    if [[ ! -d "$PROTO_DIR" ]]; then
+      echo "generated LND modules absent; run: $0 bootstrap" >&2
+      exit 2
+    fi
+    if [[ "$1" == "serve" ]]; then
+      PFTL_LN_MAINNET_STATE_DIR="$STATE_DIR" \
+        "$ENVCTL" verify-macaroon >/dev/null
+    fi
+    export PYTHONDONTWRITEBYTECODE=1
+    export PYTHONUNBUFFERED=1
+    export PYTHONPATH="$REPO_ROOT:$PROTO_DIR"
+    exec "$VENV_DIR/bin/python" \
+      -m tools.lightning_navcoin_demo.real_value.cli \
+      "$@"
+    ;;
+esac

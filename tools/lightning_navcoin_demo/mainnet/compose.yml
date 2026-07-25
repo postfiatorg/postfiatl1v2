@@ -1,0 +1,36 @@
+name: ${PFTL_LIGHTNING_MAINNET_PROJECT:-pftl-lightning-mainnet}
+
+services:
+  lnd-coordinator:
+    image: lightninglabs/lnd:v0.20.1-beta@sha256:fb30ea34d1ea26dfbae3d96db495174c8c594daa40ccf5d7b5a21723ac3b7f54
+    platform: linux/amd64
+    user: "${PFTL_MAINNET_UID:?set PFTL_MAINNET_UID}:${PFTL_MAINNET_GID:?set PFTL_MAINNET_GID}"
+    command:
+      - --configfile=/etc/lnd/lnd.conf
+      - --lnddir=/data/lnd
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 60s
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m
+    volumes:
+      - ${PFTL_LN_MAINNET_STATE_DIR:?set PFTL_LN_MAINNET_STATE_DIR}/lnd:/data/lnd
+      - ${PFTL_LN_MAINNET_STATE_DIR:?set PFTL_LN_MAINNET_STATE_DIR}/secrets/wallet-password:/run/secrets/wallet-password:ro
+      - ./config/mainnet-lnd.conf:/etc/lnd/lnd.conf:ro
+    ports:
+      - "127.0.0.1:${PFTL_LN_MAINNET_GRPC_PORT:-11009}:10009"
+    healthcheck:
+      test:
+        - CMD
+        - /bin/lncli
+        - --lnddir=/data/lnd
+        - --network=mainnet
+        - getinfo
+      interval: 15s
+      timeout: 8s
+      retries: 240
+      start_period: 30s

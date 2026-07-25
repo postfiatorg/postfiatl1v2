@@ -488,6 +488,20 @@ fund_lnd_wallets() {
     miner_cli generatetoaddress 101 "$mining_address" >/dev/null
   fi
 
+  # After an idempotent container restart LND can be at the exact Bitcoin tip
+  # while synced_to_chain remains false until it receives a fresh block
+  # notification. Produce a synthetic heartbeat block before the strict sync
+  # gate; this environment is regtest-only and the miner wallet is initialized
+  # above.
+  if ! lnd_cli user getinfo |
+    jq -e '.synced_to_chain == true' >/dev/null; then
+    local heartbeat_address
+    heartbeat_address="$(
+      miner_cli getnewaddress "pftl-demo-sync-heartbeat" bech32
+    )"
+    miner_cli generatetoaddress 1 "$heartbeat_address" >/dev/null
+  fi
+
   wait_for_lnd_chain_sync
   local node total address txid
   local funding='[]'

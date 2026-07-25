@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 from pathlib import Path
 import tempfile
 import threading
@@ -78,6 +79,26 @@ class JournalTests(unittest.TestCase):
         return CoordinatorJournal(
             self.path, self.limits if limits is None else limits, clock_ns=self.clock
         )
+
+    def test_secret_storage_permissions_are_owner_only(self) -> None:
+        self.path.parent.chmod(0o777)
+        with self.open() as journal:
+            journal.create_swap(
+                "user-a",
+                envelope_for(0),
+                secret=secret_for(0),
+            )
+            self.assertEqual(
+                os.stat(self.path.parent).st_mode & 0o777,
+                0o700,
+            )
+            for path in (
+                self.path,
+                Path(f"{self.path}-wal"),
+                Path(f"{self.path}-shm"),
+            ):
+                if path.exists():
+                    self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
 
     def test_crash_restart_at_every_happy_path_transition(self) -> None:
         envelope = envelope_for(0)
@@ -300,6 +321,69 @@ class JournalTests(unittest.TestCase):
             with self.assertRaises(IdempotencyConflict):
                 journal.create_swap("principal-b", second)
 
+    def test_expired_new_quote_rejects_without_mutation(self) -> None:
+        expired = quote_for(32)
+        expired["quote_expires_unix"] = 1
+        expired["latest_lightning_start_unix"] = 1
+        expired["invoice_expiry_unix"] = 2
+        envelope = sign_quote(
+            expired, Ed25519Signer.from_private_bytes(TEST_SIGNING_SEED)
+        )
+        clock = lambda: 2_000_000_000
+        with CoordinatorJournal(
+            self.path,
+            self.limits,
+            clock_ns=clock,
+        ) as journal:
+            before = journal.export_public_audit()
+            with self.assertRaisesRegex(JournalError, "expired quote"):
+                journal.create_swap("principal-a", envelope)
+            self.assertEqual(journal.export_public_audit(), before)
+
+    def test_pre_value_terminal_states_release_exposure_fail_closed(self) -> None:
+        for index, target in enumerate(
+            (SwapState.QUOTE_EXPIRED, SwapState.ABORTED_NO_VALUE), start=33
+        ):
+            path = Path(self.temporary.name) / f"pre-value-{index}.sqlite3"
+            with CoordinatorJournal(
+                path, self.limits, clock_ns=self.clock
+            ) as journal:
+                envelope = envelope_for(index)
+                swap_id = envelope["quote"]["swap_id"]
+                journal.create_swap("principal-a", envelope)
+                journal.advance(
+                    swap_id,
+                    target,
+                    f"terminal:{index}",
+                    evidence={"value_moved": False},
+                )
+                self.assertEqual(journal.exposure()["active_atoms"], 0)
+                self.assertEqual(journal.recoverable_swaps(), [])
+
+        path = Path(self.temporary.name) / "lock-failed.sqlite3"
+        with CoordinatorJournal(path, self.limits, clock_ns=self.clock) as journal:
+            envelope = envelope_for(35)
+            swap_id = envelope["quote"]["swap_id"]
+            journal.create_swap("principal-a", envelope)
+            journal.advance(
+                swap_id,
+                SwapState.PFTL_LOCK_SUBMITTED,
+                "lock-submitted",
+                evidence={"intent_durable": True},
+            )
+            journal.advance(
+                swap_id,
+                SwapState.LOCK_FAILED,
+                "lock-failed",
+                evidence={
+                    "accepted": False,
+                    "mutation_free": True,
+                    "code": "rejected",
+                },
+            )
+            self.assertEqual(journal.exposure()["active_atoms"], 0)
+            self.assertEqual(journal.recoverable_swaps(), [])
+
     def test_refund_branch_from_in_flight_is_durable_and_releases_exposure(self) -> None:
         envelope = envelope_for(40)
         swap_id = envelope["quote"]["swap_id"]
@@ -368,7 +452,9 @@ class ServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "service.sqlite3"
             with CoordinatorJournal(
-                path, ExposureLimits(1_000_000, 1_000_000)
+                path,
+                ExposureLimits(1_000_000, 1_000_000),
+                clock_ns=lambda: 1_000_000,
             ) as journal:
                 service = CoordinatorService(journal)
                 envelope = envelope_for(60)
@@ -404,7 +490,9 @@ class ServiceTests(unittest.TestCase):
                 "status": "SUCCEEDED",
             }
             with CoordinatorJournal(
-                path, ExposureLimits(1_000_000, 1_000_000)
+                path,
+                ExposureLimits(1_000_000, 1_000_000),
+                clock_ns=lambda: 1_000_000,
             ) as journal:
                 service = CoordinatorService(journal)
                 service.admit_quote("principal", envelope)
@@ -444,7 +532,9 @@ class ServiceTests(unittest.TestCase):
                     finish_operation=finish_operation,
                 )
             with CoordinatorJournal(
-                path, ExposureLimits(1_000_000, 1_000_000)
+                path,
+                ExposureLimits(1_000_000, 1_000_000),
+                clock_ns=lambda: 1_000_000,
             ) as restarted:
                 service = CoordinatorService(restarted)
                 self.assertEqual(
@@ -485,7 +575,9 @@ class ServiceTests(unittest.TestCase):
             swap_id = envelope["quote"]["swap_id"]
             secret = secret_for(62)
             with CoordinatorJournal(
-                path, ExposureLimits(1_000_000, 1_000_000)
+                path,
+                ExposureLimits(1_000_000, 1_000_000),
+                clock_ns=lambda: 1_000_000,
             ) as journal:
                 service = CoordinatorService(journal)
                 service.admit_quote("principal", envelope)

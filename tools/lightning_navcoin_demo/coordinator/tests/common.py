@@ -25,20 +25,26 @@ def quote_for(
     *,
     amount_atoms: int = 200_000,
     direction: str = "lightning_to_pftl",
+    now_unix: int | None = None,
 ) -> dict[str, object]:
     secret = secret_for(index)
     digest = payment_hash(secret)
+    quote_expires_unix = 1_700_000_300 if now_unix is None else now_unix + 300
+    latest_lightning_start_unix = (
+        1_700_000_600 if now_unix is None else now_unix + 600
+    )
+    invoice_expiry_unix = 1_700_000_900 if now_unix is None else now_unix + 900
     return {
         "schema": "postfiat.lightning_submarine_quote.v1",
         "swap_id": hashlib.sha256(f"swap-{index}".encode()).hexdigest(),
-        "quote_expires_unix": 1_700_000_300,
+        "quote_expires_unix": quote_expires_unix,
         "direction": direction,
         "payment_hash": digest.hex(),
         "lightning_network": "regtest",
         "invoice": f"lnbcrt-fixed-test-invoice-{index}",
         "invoice_payee": "02" + "11" * 32,
         "invoice_amount_msat": amount_atoms * 10,
-        "invoice_expiry_unix": 1_700_000_900,
+        "invoice_expiry_unix": invoice_expiry_unix,
         "min_final_cltv_delta": 144,
         "max_total_cltv_delta": 288,
         "pftl_chain_id": "pftl-local-six",
@@ -55,7 +61,7 @@ def quote_for(
         "condition": encode_condition(digest),
         "finish_after": 0,
         "cancel_after": 500,
-        "latest_lightning_start_unix": 1_700_000_600,
+        "latest_lightning_start_unix": latest_lightning_start_unix,
         "rate_numerator": 100,
         "rate_denominator": 1,
         "coordinator_fee_atoms": 10,
@@ -73,8 +79,14 @@ def envelope_for(
     *,
     amount_atoms: int = 200_000,
     direction: str = "lightning_to_pftl",
+    now_unix: int | None = None,
 ) -> dict[str, object]:
     return sign_quote(
-        quote_for(index, amount_atoms=amount_atoms, direction=direction),
+        quote_for(
+            index,
+            amount_atoms=amount_atoms,
+            direction=direction,
+            now_unix=now_unix,
+        ),
         Ed25519Signer.from_private_bytes(TEST_SIGNING_SEED),
     )

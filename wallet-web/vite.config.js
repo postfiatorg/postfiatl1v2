@@ -7,6 +7,8 @@ const require = createRequire(import.meta.url);
 const pkg = require('./package.json');
 const fastSwapDemoToken = process.env.FASTSWAP_DEMO_API_TOKEN || '';
 const fastSwapDemoBackend = process.env.FASTSWAP_DEMO_BACKEND_URL || 'http://127.0.0.1:18830';
+const lightningNavcoinBackend = process.env.LIGHTNING_NAVCOIN_BACKEND_URL || 'http://127.0.0.1:18831';
+const lightningNavcoinToken = process.env.LIGHTNING_NAVCOIN_API_TOKEN || '';
 
 const CSP_VALUE = "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://127.0.0.1:8080 ws://localhost:8080 http://127.0.0.1:8789 http://localhost:8789;";
 
@@ -39,6 +41,14 @@ const httpsCert = httpsKeyPath && httpsCertPath && existsSync(httpsKeyPath) && e
 
 export default defineConfig({
   plugins: [react(), cspMetaPlugin()],
+  resolve: {
+    // @atomiqlabs/bolt11 uses safe-buffer. Resolve the browser implementation
+    // explicitly so the production invoice verifier never receives Vite's
+    // empty Node-core compatibility stub.
+    alias: {
+      buffer: require.resolve('buffer/'),
+    },
+  },
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkg.version),
   },
@@ -67,6 +77,13 @@ export default defineConfig({
         target: fastSwapDemoBackend,
         changeOrigin: true,
         headers: { 'x-fastswap-demo-token': fastSwapDemoToken },
+      },
+      '/api/lightning-navcoin': {
+        target: lightningNavcoinBackend,
+        changeOrigin: false,
+        ...(lightningNavcoinToken
+          ? { headers: { Authorization: `Bearer ${lightningNavcoinToken}` } }
+          : {}),
       },
     },
     // No CSP header in dev — Vite needs inline scripts for HMR/react-refresh

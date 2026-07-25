@@ -21,11 +21,13 @@ import NavList from './components/NavList.jsx';
 import NavDetail from './components/NavDetail.jsx';
 import More from './components/More.jsx';
 import FastSwapDemo from './components/FastSwapDemo.jsx';
+import LightningNavcoin from './components/LightningNavcoin.jsx';
 
 const PROXY_AUTH_SESSION_KEY = 'postfiat.wallet_proxy_api_token';
 
 const NAV_ITEMS = [
   { id: 'wallet', label: 'Wallet' }, { id: 'fastswap', label: 'Buy a651' },
+  { id: 'lightning', label: 'Lightning', mobileLabel: 'LN/NAV', badge: '₿' },
   { id: 'send', label: 'Send' }, { id: 'swap', label: 'Swap' },
   { id: 'bridge', label: 'Bridge' },
   { id: 'nav', label: 'NavCoins' }, { id: 'more', label: 'More' },
@@ -514,7 +516,7 @@ export default function App() {
           </button>
           {NAV_ITEMS.map((x) => (
             <button key={x.id} className={`pf-nav${isOn(tab, x.id) ? ' on' : ''}`} onClick={() => go(x.id)}>
-              <span className="pf-nav-badge">{x.label[0]}</span>{x.label}
+              <span className="pf-nav-badge">{x.badge || x.label[0]}</span>{x.label}
             </button>
           ))}
           <button className="pf-nav" onClick={handleLock} style={{ color: 'var(--dim)' }}>
@@ -598,6 +600,15 @@ export default function App() {
           {tab === 'fastswap' && (
             <FastSwapDemo walletAddress={walletAddress} />
           )}
+          {tab === 'lightning' && (
+            <LightningNavcoin
+              rpc={rpc}
+              txBuilder={txBuilder}
+              backupJson={backupJson}
+              address={walletAddress}
+              onToast={showToast}
+            />
+          )}
           {tab === 'bridge' && (
             <Bridge
               address={walletAddress}
@@ -646,8 +657,8 @@ export default function App() {
           <nav className="pf-bottomnav">
             {NAV_ITEMS.map((x) => (
               <button key={x.id} className={`pf-bnav${isOn(tab, x.id) ? ' on' : ''}`} onClick={() => go(x.id)}>
-                <span className="pf-bnav-badge">{x.label[0]}</span>
-                <span className="pf-bnav-l">{x.label}</span>
+                <span className="pf-bnav-badge">{x.badge || x.label[0]}</span>
+                <span className="pf-bnav-l">{x.mobileLabel || x.label}</span>
               </button>
             ))}
           </nav>

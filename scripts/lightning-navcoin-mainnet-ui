@@ -1,0 +1,388 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+STATE_DIR="${PFTL_LN_MAINNET_STATE_DIR:-/home/postfiat/.pft/lightning-navcoin-mainnet}"
+UI_SERVER_DIR="$REPO_ROOT/tools/lightning_navcoin_demo/mainnet/ui-server"
+UI_SERVER="$UI_SERVER_DIR/production-ui-server.cjs"
+SOURCE_RELEASE="$STATE_DIR/coordinator-python-runtime-v2/source-release.json"
+COORDINATOR_TOKEN="$STATE_DIR/coordinator-secrets/api-session.token"
+PFTL_PROXY_TOKEN="${PFTL_LN_PFTL_PROXY_TOKEN_FILE:-$STATE_DIR/coordinator-secrets/wallet-proxy.token}"
+ARTIFACT_ROOT="$STATE_DIR/coordinator-artifacts"
+UI_HOST="127.0.0.1"
+UI_PORT="${PFTL_LN_UI_PORT:-18832}"
+COORDINATOR_URL="${PFTL_LN_COORDINATOR_URL:-http://127.0.0.1:18831}"
+PFTL_PROXY_URL="${PFTL_LN_PFTL_PROXY_URL:-ws://127.0.0.1:8080}"
+
+case "$STATE_DIR" in
+  /*) ;;
+  *)
+    echo "mainnet state directory must be absolute: $STATE_DIR" >&2
+    exit 2
+    ;;
+esac
+CANONICAL_STATE_DIR="$(realpath -m -- "$STATE_DIR")"
+if [[ "$CANONICAL_STATE_DIR" != "$STATE_DIR" ]]; then
+  echo "mainnet state directory must be canonical and symlink-free: $STATE_DIR" >&2
+  exit 2
+fi
+case "$STATE_DIR" in
+  /|/home|/home/postfiat|/home/postfiat/repos)
+    echo "refusing broad mainnet state directory: $STATE_DIR" >&2
+    exit 2
+    ;;
+esac
+if [[ ! "$UI_PORT" =~ ^[1-9][0-9]{0,4}$ ]] ||
+   (( UI_PORT < 1 || UI_PORT > 65535 )); then
+  echo "PFTL_LN_UI_PORT must be a canonical TCP port" >&2
+  exit 2
+fi
+
+runtime_lock_sha() {
+  sha256sum "$UI_SERVER_DIR/package-lock.json" | awk '{print $1}'
+}
+
+verify_runtime() {
+  if [[ ! -d "$UI_SERVER_DIR/node_modules/ws" ]]; then
+    echo "production UI runtime is absent; run: $0 bootstrap" >&2
+    exit 2
+  fi
+  (
+    cd -- "$UI_SERVER_DIR"
+    node - <<'NODE'
+const fs = require('fs');
+const expected = require('./package-lock.json');
+const installed = require('./node_modules/ws/package.json');
+if (
+  expected.lockfileVersion !== 3
+  || expected.packages?.['node_modules/ws']?.version !== '8.21.1'
+  || installed.name !== 'ws'
+  || installed.version !== '8.21.1'
+) {
+  throw new Error('production UI WebSocket runtime is not the locked ws 8.21.1');
+}
+NODE
+  )
+}
+
+preexec_verified_server() {
+  manifest="$1"
+  manifest_sha="$2"
+  python3 - \
+    "$manifest" \
+    "$manifest_sha" \
+    "$UI_SERVER" \
+    "$REPO_ROOT/wallet-web/package-lock.json" \
+    "$UI_SERVER_DIR/node_modules/ws" \
+    "$ARTIFACT_ROOT" <<'PY'
+import hashlib
+import json
+import os
+from pathlib import Path
+import stat
+import sys
+import tempfile
+
+manifest_path = Path(sys.argv[1])
+manifest_sha = sys.argv[2]
+server_path = Path(sys.argv[3])
+package_lock_path = Path(sys.argv[4])
+ws_root = Path(sys.argv[5])
+artifact_root = Path(sys.argv[6])
+
+def digest(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+def reject_duplicates(pairs):
+    value = {}
+    for key, child in pairs:
+        if key in value:
+            raise ValueError(f"duplicate JSON field: {key}")
+        value[key] = child
+    return value
+
+def regular_bytes(
+    candidate: Path,
+    label: str,
+    maximum: int,
+    *,
+    private: bool = False,
+) -> bytes:
+    absolute = Path(os.path.abspath(candidate))
+    if candidate.resolve(strict=True) != absolute:
+        raise ValueError(f"{label} must be canonical and symlink-free")
+    metadata = candidate.lstat()
+    if not stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
+        raise ValueError(f"{label} must be a regular file")
+    if private and metadata.st_mode & 0o077:
+        raise ValueError(f"{label} must be mode 0600")
+    if metadata.st_size < 1 or metadata.st_size > maximum:
+        raise ValueError(f"{label} has an invalid size")
+    value = candidate.read_bytes()
+    if len(value) != metadata.st_size:
+        raise ValueError(f"{label} changed while being read")
+    return value
+
+if len(manifest_sha) != 64 or any(c not in "0123456789abcdef" for c in manifest_sha):
+    raise SystemExit("PFTL_LN_UI_MANIFEST_SHA256 must be canonical lowercase SHA-256")
+manifest_bytes = regular_bytes(manifest_path, "UI manifest", 512 * 1024)
+if digest(manifest_bytes) != manifest_sha:
+    raise SystemExit("UI manifest does not match the reviewed SHA-256")
+try:
+    manifest = json.loads(
+        manifest_bytes.decode("ascii"),
+        object_pairs_hook=reject_duplicates,
+        parse_constant=lambda value: (_ for _ in ()).throw(
+            ValueError(f"non-finite JSON value: {value}")
+        ),
+    )
+except (UnicodeError, json.JSONDecodeError, ValueError) as error:
+    raise SystemExit("UI manifest is not strict ASCII JSON") from error
+if (
+    not isinstance(manifest, dict)
+    or manifest.get("schema") != "postfiat.lightning_wallet_ui_release.v1"
+):
+    raise SystemExit("unsupported UI manifest schema")
+
+server_bytes = regular_bytes(server_path, "production UI server", 2 * 1024 * 1024)
+if digest(server_bytes) != manifest.get("production_ui_server_sha256"):
+    raise SystemExit("production UI server does not match the reviewed manifest")
+lock_bytes = regular_bytes(package_lock_path, "wallet package lock", 8 * 1024 * 1024)
+if digest(lock_bytes) != manifest.get("wallet_package_lock_sha256"):
+    raise SystemExit("wallet package lock does not match the reviewed manifest")
+
+ws_metadata = ws_root.lstat()
+if not stat.S_ISDIR(ws_metadata.st_mode) or stat.S_ISLNK(ws_metadata.st_mode):
+    raise SystemExit("installed ws runtime must be a real directory")
+ws_files = []
+for current_root, directory_names, file_names in os.walk(ws_root, followlinks=False):
+    directory_names.sort()
+    file_names.sort()
+    current = Path(current_root)
+    for name in directory_names:
+        if (current / name).is_symlink():
+            raise SystemExit("installed ws runtime contains a symlink")
+    for name in file_names:
+        candidate = current / name
+        if candidate.is_symlink() or not candidate.is_file():
+            raise SystemExit("installed ws runtime contains a non-file")
+        relative = candidate.relative_to(ws_root).as_posix()
+        value = candidate.read_bytes()
+        ws_files.append((relative, len(value), digest(value), value))
+ws_files.sort(key=lambda row: row[0])
+tree = hashlib.sha256()
+for relative, size, file_digest, _value in ws_files:
+    tree.update(relative.encode("utf-8"))
+    tree.update(b"\0")
+    tree.update(str(size).encode("ascii"))
+    tree.update(b"\0")
+    tree.update(file_digest.encode("ascii"))
+    tree.update(b"\n")
+ws_evidence = manifest.get("websocket_runtime")
+if (
+    not isinstance(ws_evidence, dict)
+    or ws_evidence.get("name") != "ws"
+    or ws_evidence.get("version") != "8.21.1"
+    or ws_evidence.get("tree_sha256") != tree.hexdigest()
+):
+    raise SystemExit("installed ws runtime does not match the reviewed manifest")
+
+artifact_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+artifact_absolute = Path(os.path.abspath(artifact_root))
+artifact_metadata = artifact_root.lstat()
+if (
+    artifact_root.resolve(strict=True) != artifact_absolute
+    or not stat.S_ISDIR(artifact_metadata.st_mode)
+    or stat.S_ISLNK(artifact_metadata.st_mode)
+    or artifact_metadata.st_uid not in {0, os.geteuid()}
+):
+    raise SystemExit("UI artifact root must be canonical and symlink-free")
+if artifact_metadata.st_mode & 0o077:
+    raise SystemExit("UI artifact root must be owner-only")
+
+verified_runtime = artifact_root / f"verified-ui-node-runtime-{manifest_sha}"
+expected_runtime_inventory = [
+    (relative, size, file_digest)
+    for relative, size, file_digest, _value in ws_files
+]
+if verified_runtime.exists():
+    runtime_metadata = verified_runtime.lstat()
+    if (
+        verified_runtime.resolve(strict=True)
+        != Path(os.path.abspath(verified_runtime))
+        or not stat.S_ISDIR(runtime_metadata.st_mode)
+        or stat.S_ISLNK(runtime_metadata.st_mode)
+        or runtime_metadata.st_mode & 0o077
+    ):
+        raise SystemExit("verified UI runtime must be an owner-only real directory")
+    observed_runtime_inventory = []
+    runtime_ws = verified_runtime / "node_modules" / "ws"
+    for current_root, directory_names, file_names in os.walk(
+        runtime_ws,
+        followlinks=False,
+    ):
+        directory_names.sort()
+        file_names.sort()
+        current = Path(current_root)
+        current_metadata = current.lstat()
+        if (
+            stat.S_ISLNK(current_metadata.st_mode)
+            or current_metadata.st_mode & 0o077
+        ):
+            raise SystemExit("verified UI runtime directory permissions changed")
+        for name in directory_names:
+            candidate = current / name
+            metadata = candidate.lstat()
+            if stat.S_ISLNK(metadata.st_mode) or metadata.st_mode & 0o077:
+                raise SystemExit("verified UI runtime directory changed")
+        for name in file_names:
+            candidate = current / name
+            metadata = candidate.lstat()
+            if (
+                stat.S_ISLNK(metadata.st_mode)
+                or not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_mode & 0o077
+            ):
+                raise SystemExit("verified UI runtime file changed")
+            relative = candidate.relative_to(runtime_ws).as_posix()
+            value = candidate.read_bytes()
+            observed_runtime_inventory.append(
+                (relative, len(value), digest(value))
+            )
+    observed_runtime_inventory.sort(key=lambda row: row[0])
+    if observed_runtime_inventory != expected_runtime_inventory:
+        raise SystemExit("verified UI runtime no longer matches the manifest")
+else:
+    temporary_runtime = Path(tempfile.mkdtemp(
+        prefix=".verified-ui-runtime-",
+        dir=artifact_root,
+    ))
+    try:
+        runtime_ws = temporary_runtime / "node_modules" / "ws"
+        runtime_ws.mkdir(mode=0o700, parents=True)
+        for relative, _size, _file_digest, value in ws_files:
+            target = runtime_ws.joinpath(*relative.split("/"))
+            target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            os.chmod(target.parent, 0o700)
+            descriptor = os.open(
+                target,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+            )
+            with os.fdopen(descriptor, "wb", closefd=True) as output:
+                output.write(value)
+        os.replace(temporary_runtime, verified_runtime)
+    finally:
+        if temporary_runtime.exists():
+            for current_root, directory_names, file_names in os.walk(
+                temporary_runtime,
+                topdown=False,
+            ):
+                current = Path(current_root)
+                for name in file_names:
+                    (current / name).unlink()
+                for name in directory_names:
+                    (current / name).rmdir()
+            temporary_runtime.rmdir()
+
+verified_path = artifact_root / f"verified-production-ui-server-{manifest_sha}.cjs"
+if verified_path.exists():
+    if regular_bytes(
+        verified_path,
+        "verified production UI server copy",
+        2 * 1024 * 1024,
+        private=True,
+    ) != server_bytes:
+        raise SystemExit("existing verified UI server copy has changed")
+else:
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=".verified-ui-server-",
+        dir=artifact_root,
+    )
+    temporary_path = Path(temporary_name)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "wb", closefd=True) as output:
+            output.write(server_bytes)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary_path, verified_path)
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
+print(verified_path)
+PY
+}
+
+bootstrap() {
+  install -d -m 700 "$STATE_DIR" "$ARTIFACT_ROOT"
+  (
+    cd -- "$UI_SERVER_DIR"
+    npm ci \
+      --ignore-scripts \
+      --no-audit \
+      --no-fund \
+      --omit=dev
+  )
+  verify_runtime
+  printf '%s\n' "production UI runtime lock $(runtime_lock_sha)"
+}
+
+release() {
+  verify_runtime
+  if [[ ! -f "$SOURCE_RELEASE" ]]; then
+    echo "clean coordinator source release is absent; bootstrap the coordinator after commit" >&2
+    exit 2
+  fi
+  (
+    cd -- "$REPO_ROOT/wallet-web"
+    npm ci --ignore-scripts --no-audit --no-fund
+    npm run build
+  )
+  umask 077
+  exec node "$UI_SERVER" release \
+    --repo-root "$REPO_ROOT" \
+    --source-release "$SOURCE_RELEASE" \
+    --dist "$REPO_ROOT/wallet-web/dist" \
+    --output-root "$ARTIFACT_ROOT"
+}
+
+serve() {
+  verify_runtime
+  manifest="${PFTL_LN_UI_MANIFEST_PATH:-}"
+  manifest_sha="${PFTL_LN_UI_MANIFEST_SHA256:-}"
+  if [[ -z "$manifest" || -z "$manifest_sha" ]]; then
+    echo "serve requires reviewed PFTL_LN_UI_MANIFEST_PATH and PFTL_LN_UI_MANIFEST_SHA256" >&2
+    exit 2
+  fi
+  verified_server="$(preexec_verified_server "$manifest" "$manifest_sha")"
+  export NODE_PATH="$ARTIFACT_ROOT/verified-ui-node-runtime-$manifest_sha/node_modules"
+  exec node "$verified_server" serve \
+    --repo-root "$REPO_ROOT" \
+    --source-release "$SOURCE_RELEASE" \
+    --manifest "$manifest" \
+    --manifest-sha256 "$manifest_sha" \
+    --coordinator-token-file "$COORDINATOR_TOKEN" \
+    --pftl-proxy-token-file "$PFTL_PROXY_TOKEN" \
+    --coordinator-url "$COORDINATOR_URL" \
+    --pftl-proxy-url "$PFTL_PROXY_URL" \
+    --host "$UI_HOST" \
+    --port "$UI_PORT"
+}
+
+case "${1:-}" in
+  bootstrap)
+    bootstrap
+    ;;
+  release)
+    release
+    ;;
+  serve)
+    serve
+    ;;
+  *)
+    echo "usage: $0 {bootstrap|release|serve}" >&2
+    exit 2
+    ;;
+esac

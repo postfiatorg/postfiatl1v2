@@ -222,7 +222,7 @@ def validate_quote(quote: Mapping[str, Any]) -> dict[str, Any]:
     nav_hash = detached["nav_reserve_packet_hash"]
     if nav_hash:
         detached["nav_reserve_packet_hash"] = _lower_hex(
-            nav_hash, "nav_reserve_packet_hash", 32
+            nav_hash, "nav_reserve_packet_hash", 48
         )
     elif detached["nav_epoch"] != 0:
         raise QuoteValidationError("nonzero nav_epoch requires a reserve packet hash")

@@ -1,0 +1,250 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MAINNET_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+COMPOSE_FILE="$MAINNET_DIR/compose.yml"
+STATE_DIR="${PFTL_LN_MAINNET_STATE_DIR:-/home/postfiat/.pft/lightning-navcoin-mainnet}"
+PROJECT="${PFTL_LIGHTNING_MAINNET_PROJECT:-pftl-lightning-mainnet}"
+GRPC_PORT="${PFTL_LN_MAINNET_GRPC_PORT:-11009}"
+GRPC_IMAGE_ID="sha256:4daee456cb6814d5c350da635bda3904f33adfbed7d9d691cdf1cd843fe8ba2a"
+MACAROON_CONTAINER_PATH="/data/lnd/data/chain/bitcoin/mainnet/lightning-navcoin-receive-only.macaroon"
+MACAROON_HOST_PATH="$STATE_DIR/lnd/data/chain/bitcoin/mainnet/lightning-navcoin-receive-only.macaroon"
+MACAROON_VERIFIER="$MAINNET_DIR/../real_value/macaroon_verifier.py"
+
+case "$STATE_DIR" in
+  /|/home|/home/postfiat|/home/postfiat/repos)
+    echo "refusing broad mainnet state directory: $STATE_DIR" >&2
+    exit 2
+    ;;
+esac
+
+export PFTL_LN_MAINNET_STATE_DIR="$STATE_DIR"
+export PFTL_LIGHTNING_MAINNET_PROJECT="$PROJECT"
+export PFTL_LN_MAINNET_GRPC_PORT="$GRPC_PORT"
+export PFTL_MAINNET_UID
+export PFTL_MAINNET_GID
+PFTL_MAINNET_UID="$(id -u)"
+PFTL_MAINNET_GID="$(id -g)"
+
+compose() {
+  docker compose --project-name "$PROJECT" --file "$COMPOSE_FILE" "$@"
+}
+
+prepare() {
+  install -d -m 700 "$STATE_DIR" "$STATE_DIR/lnd" "$STATE_DIR/secrets"
+  if [[ ! -e "$STATE_DIR/secrets/wallet-password" ]]; then
+    umask 077
+    openssl rand -hex 32 >"$STATE_DIR/secrets/wallet-password"
+  fi
+  chmod 600 "$STATE_DIR/secrets/wallet-password"
+  printf '%s\n' "$STATE_DIR"
+}
+
+verify_auto_unlock() {
+  compose restart lnd-coordinator >/dev/null
+  info=""
+  for _attempt in $(seq 1 60); do
+    if info="$(compose exec -T lnd-coordinator \
+      lncli --lnddir=/data/lnd --network=mainnet getinfo 2>/dev/null)"
+    then
+      break
+    fi
+    sleep 2
+  done
+  if [[ -z "$info" ]]; then
+    echo "LND did not auto-unlock after restart; the wallet password may not match the pinned password file" >&2
+    return 1
+  fi
+  python3 - "$info" <<'PY'
+import json
+import sys
+
+info = json.loads(sys.argv[1])
+expected_version = "0.20.1-beta commit=v0.20.1-beta"
+expected_commit = "848b72ce96eb68fa90fd4336523ca4c59bddcd4c"
+chains = info.get("chains")
+if (
+    info.get("version") != expected_version
+    or info.get("commit_hash") != expected_commit
+    or chains != [{"chain": "bitcoin", "network": "mainnet"}]
+):
+    raise SystemExit("auto-unlocked LND does not match the reviewed mainnet release")
+print(json.dumps({
+    "schema": "postfiat.lightning_mainnet_auto_unlock_check.v1",
+    "ok": True,
+    "value_moved": False,
+    "wallet_auto_unlock_verified_after_restart": True,
+    "network": "mainnet",
+    "identity_pubkey": info.get("identity_pubkey"),
+    "version": info["version"],
+    "commit_hash": info["commit_hash"],
+}, sort_keys=True, indent=2))
+PY
+}
+
+verify_macaroon() {
+  if [[ ! -f "$MACAROON_HOST_PATH" || -L "$MACAROON_HOST_PATH" ]]; then
+    echo "canonical receive-only macaroon is absent or not a regular file" >&2
+    return 1
+  fi
+  printed="$(compose exec -T lnd-coordinator \
+    lncli --lnddir=/data/lnd --network=mainnet printmacaroon \
+    --macaroon_file="$MACAROON_CONTAINER_PATH")"
+  printf '%s\n' "$printed" |
+    python3 "$MACAROON_VERIFIER" "$MACAROON_HOST_PATH"
+}
+
+case "${1:-}" in
+  prepare)
+    prepare
+    ;;
+  start)
+    prepare >/dev/null
+    compose up -d lnd-coordinator
+    ;;
+  init-wallet)
+    prepare >/dev/null
+    compose up -d lnd-coordinator
+    echo "Interactive mainnet wallet creation follows. Record the aezeed offline; it is never captured by this script." >&2
+    echo "CRITICAL: at both wallet-password prompts, enter the EXACT contents of $STATE_DIR/secrets/wallet-password." >&2
+    echo "Do not invent a different password: that mounted file is LND's restart auto-unlock credential." >&2
+    compose exec lnd-coordinator \
+      lncli --lnddir=/data/lnd --network=mainnet create
+    verify_auto_unlock
+    ;;
+  verify-auto-unlock)
+    prepare >/dev/null
+    verify_auto_unlock
+    ;;
+  bake-macaroon)
+    compose exec -T lnd-coordinator \
+      lncli --lnddir=/data/lnd --network=mainnet bakemacaroon \
+      info:read offchain:read invoices:read invoices:write \
+      --save_to="$MACAROON_CONTAINER_PATH" >/dev/null
+    chmod 600 "$MACAROON_HOST_PATH"
+    verify_macaroon
+    ;;
+  verify-macaroon)
+    verify_macaroon
+    ;;
+  export-grpc)
+    prepare >/dev/null
+    grpc_dir="$STATE_DIR/lnd-grpc-v0.20.1"
+    install -d -m 700 "$grpc_dir"
+    export_dir="$(mktemp -d "$STATE_DIR/.lnd-grpc-export.XXXXXX")"
+    cleanup_export() {
+      find "$export_dir" -type f -delete 2>/dev/null || true
+      rmdir "$export_dir" 2>/dev/null || true
+    }
+    trap cleanup_export EXIT
+    docker image inspect "$GRPC_IMAGE_ID" >/dev/null
+    docker run --rm \
+      --user "$PFTL_MAINNET_UID:$PFTL_MAINNET_GID" \
+      --volume "$export_dir:/out" \
+      --entrypoint sh \
+      "$GRPC_IMAGE_ID" \
+      -c 'cp /opt/pftl-lnd-grpc/__init__.py /opt/pftl-lnd-grpc/lightning_pb2.py /opt/pftl-lnd-grpc/lightning_pb2_grpc.py /opt/pftl-lnd-grpc/router_pb2.py /opt/pftl-lnd-grpc/router_pb2_grpc.py /out/'
+    python3 - "$export_dir" <<'PY'
+import hashlib
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+expected = {
+    "lightning_pb2.py": "638d62e3e1faf48be6b9172e2472d650e4127207597741b9cedd52732f14cde7",
+    "lightning_pb2_grpc.py": "09b22f3a7ed4d3369726a8d3a2e9ebf174ba4e2b94da4ba1cb3068af33c4d9b8",
+    "router_pb2.py": "829e72a81f07f020ebab1e12a01fe1460f187b17166aaa1bbe30b51b54fe900a",
+    "router_pb2_grpc.py": "e016b031ec3dfdd05b749818f24ed8945bc775ee6b7711decf9cfe5a6523b09b",
+}
+for name, digest in expected.items():
+    observed = hashlib.sha256((root / name).read_bytes()).hexdigest()
+    if observed != digest:
+        raise SystemExit(f"generated LND module digest mismatch: {name}")
+PY
+    for module in \
+      __init__.py lightning_pb2.py lightning_pb2_grpc.py \
+      router_pb2.py router_pb2_grpc.py
+    do
+      install -m 600 "$export_dir/$module" "$grpc_dir/$module"
+    done
+    printf '%s\n' "$grpc_dir"
+    ;;
+  dry-status)
+    prepare >/dev/null
+    container_id="$(compose ps -q lnd-coordinator)"
+    if [[ -z "$container_id" ]]; then
+      printf '%s\n' '{"ok":false,"reason":"mainnet_lnd_container_absent"}'
+      exit 1
+    fi
+    lnd_state="$(compose exec -T lnd-coordinator \
+      lncli --lnddir=/data/lnd --network=mainnet state)"
+    container_state="$(docker inspect \
+      --format '{{json .State}}' "$container_id")"
+    python3 - "$STATE_DIR" "$lnd_state" "$container_state" "$GRPC_PORT" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+lnd_state = json.loads(sys.argv[2]).get("state")
+container = json.loads(sys.argv[3])
+grpc_port = int(sys.argv[4])
+wallet = root / "lnd/data/chain/bitcoin/mainnet/wallet.db"
+macaroon = root / "lnd/data/chain/bitcoin/mainnet/lightning-navcoin-receive-only.macaroon"
+backup = root / "lnd/channel.backup"
+print(json.dumps({
+    "schema": "postfiat.lightning_mainnet_locked_dry_status.v1",
+    "ok": True,
+    "value_moved": False,
+    "network": "mainnet",
+    "lnd_wallet_state": lnd_state,
+    "wallet_created": wallet.exists(),
+    "receive_only_macaroon_baked": macaroon.exists(),
+    "static_channel_backup_present": backup.exists(),
+    "container_running": container.get("Running") is True,
+    "container_health": (container.get("Health") or {}).get("Status"),
+    "grpc_loopback_port": grpc_port,
+    "ready_for_real_value": False,
+    "hold_reasons": [
+        "wallet_initialization_requires_interactive_seed_custody",
+        "lnd_identity_sync_and_liquidity_not_yet_available",
+        "nazgul_dust_authorization_absent",
+    ],
+}, sort_keys=True, indent=2))
+PY
+    ;;
+  status)
+    info="$(compose exec -T lnd-coordinator \
+      lncli --lnddir=/data/lnd --network=mainnet getinfo)"
+    channels="$(compose exec -T lnd-coordinator \
+      lncli --lnddir=/data/lnd --network=mainnet listchannels)"
+    python3 - "$info" "$channels" <<'PY'
+import json
+import sys
+
+info = json.loads(sys.argv[1])
+channels = json.loads(sys.argv[2]).get("channels", [])
+active = [row for row in channels if row.get("active") is True]
+print(json.dumps({
+    "schema": "postfiat.lightning_mainnet_node_status.v1",
+    "network": info.get("chains", [{}])[0].get("network"),
+    "version": info.get("version"),
+    "commit_hash": info.get("commit_hash"),
+    "identity_pubkey": info.get("identity_pubkey"),
+    "block_height": int(info.get("block_height", 0)),
+    "synced_to_chain": info.get("synced_to_chain") is True,
+    "synced_to_graph": info.get("synced_to_graph") is True,
+    "active_channels": len(active),
+    "inbound_sat": sum(int(row.get("remote_balance", 0)) for row in active),
+    "outbound_sat": sum(int(row.get("local_balance", 0)) for row in active),
+}, sort_keys=True, indent=2))
+PY
+    ;;
+  stop)
+    compose stop lnd-coordinator
+    ;;
+  *)
+    echo "usage: $0 {prepare|start|init-wallet|verify-auto-unlock|bake-macaroon|verify-macaroon|export-grpc|dry-status|status|stop}" >&2
+    exit 2
+    ;;
+esac

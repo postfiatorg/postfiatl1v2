@@ -14,8 +14,10 @@ from enum import Enum
 import hashlib
 import hmac
 import json
+import os
 from pathlib import Path
 import sqlite3
+import stat
 import threading
 import time
 from typing import Any, Callable, Iterator, Mapping
@@ -68,7 +70,10 @@ class SecretMaterialRejected(JournalError):
 
 class SwapState(str, Enum):
     QUOTED = "QUOTED"
+    QUOTE_EXPIRED = "QUOTE_EXPIRED"
+    ABORTED_NO_VALUE = "ABORTED_NO_VALUE"
     PFTL_LOCK_SUBMITTED = "PFTL_LOCK_SUBMITTED"
+    LOCK_FAILED = "LOCK_FAILED"
     PFTL_LOCK_FINAL = "PFTL_LOCK_FINAL"
     LN_IN_FLIGHT = "LN_IN_FLIGHT"
     LN_SETTLED = "LN_SETTLED"
@@ -78,11 +83,32 @@ class SwapState(str, Enum):
 
 
 TERMINAL_STATES = frozenset(
-    {SwapState.PFTL_FINISH_FINAL, SwapState.PFTL_CANCEL_FINAL}
+    {
+        SwapState.QUOTE_EXPIRED,
+        SwapState.ABORTED_NO_VALUE,
+        SwapState.LOCK_FAILED,
+        SwapState.PFTL_FINISH_FINAL,
+        SwapState.PFTL_CANCEL_FINAL,
+    }
 )
 LEGAL_TRANSITIONS: dict[SwapState, frozenset[SwapState]] = {
-    SwapState.QUOTED: frozenset({SwapState.PFTL_LOCK_SUBMITTED}),
-    SwapState.PFTL_LOCK_SUBMITTED: frozenset({SwapState.PFTL_LOCK_FINAL}),
+    SwapState.QUOTED: frozenset(
+        {
+            SwapState.QUOTE_EXPIRED,
+            SwapState.ABORTED_NO_VALUE,
+            SwapState.PFTL_LOCK_SUBMITTED,
+        }
+    ),
+    SwapState.QUOTE_EXPIRED: frozenset(),
+    SwapState.ABORTED_NO_VALUE: frozenset(),
+    SwapState.PFTL_LOCK_SUBMITTED: frozenset(
+        {
+            SwapState.ABORTED_NO_VALUE,
+            SwapState.LOCK_FAILED,
+            SwapState.PFTL_LOCK_FINAL,
+        }
+    ),
+    SwapState.LOCK_FAILED: frozenset(),
     SwapState.PFTL_LOCK_FINAL: frozenset(
         {SwapState.LN_IN_FLIGHT, SwapState.REFUND_ELIGIBLE}
     ),
@@ -123,6 +149,22 @@ class SideEffectSpec:
     def __post_init__(self) -> None:
         _bounded_identifier(self.effect_key, "effect_key")
         _bounded_identifier(self.kind, "side-effect kind")
+
+
+@dataclass(frozen=True, repr=False)
+class QuoteIntent:
+    request_id: str
+    created: bool
+    invoice_preimage: SecretPreimage | None
+    completed_swap_id: str | None
+
+    def __repr__(self) -> str:
+        return (
+            "QuoteIntent("
+            f"request_id={self.request_id!r}, created={self.created!r}, "
+            "invoice_preimage=<redacted>, "
+            f"completed_swap_id={self.completed_swap_id!r})"
+        )
 
 
 def _bounded_identifier(value: Any, field: str, *, maximum: int = 256) -> str:
@@ -245,6 +287,11 @@ class CoordinatorJournal:
         if str(self.path) == ":memory:":
             raise ValueError("durable journal requires a filesystem path")
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        if self.path.parent.is_symlink() or not self.path.parent.is_dir():
+            raise JournalError("journal parent must be a real directory")
+        self.path.parent.chmod(0o700)
+        if self.path.is_symlink():
+            raise JournalError("journal database may not be a symbolic link")
         self.limits = limits
         self._clock_ns = clock_ns
         self._lock = threading.RLock()
@@ -265,11 +312,32 @@ class CoordinatorJournal:
             self._connection.close()
             raise JournalError("SQLite WAL mode is required")
         self._connection.execute("PRAGMA synchronous = FULL")
+        self._secure_storage_permissions()
         self._initialize_schema()
+        self._secure_storage_permissions()
+
+    def _secure_storage_permissions(self) -> None:
+        """Keep the secret-bearing database and SQLite sidecars owner-only."""
+
+        for path in (
+            self.path,
+            Path(f"{self.path}-wal"),
+            Path(f"{self.path}-shm"),
+        ):
+            try:
+                metadata = os.lstat(path)
+            except FileNotFoundError:
+                continue
+            if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+                raise JournalError(
+                    f"journal storage path is not a regular file: {path.name}"
+                )
+            os.chmod(path, 0o600, follow_symlinks=False)
 
     def close(self) -> None:
         with self._lock:
             if self._connection is not None:
+                self._secure_storage_permissions()
                 self._connection.execute("PRAGMA wal_checkpoint(FULL)")
                 self._connection.close()
                 self._connection = None  # type: ignore[assignment]
@@ -291,6 +359,8 @@ class CoordinatorJournal:
             except BaseException:
                 connection.execute("ROLLBACK")
                 raise
+            finally:
+                self._secure_storage_permissions()
 
     def _initialize_schema(self) -> None:
         with self._lock:
@@ -353,6 +423,13 @@ class CoordinatorJournal:
                     result_json BLOB NOT NULL,
                     created_ns INTEGER NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS side_effect_checkpoints (
+                    checkpoint_key TEXT PRIMARY KEY,
+                    effect_key TEXT NOT NULL REFERENCES side_effects(effect_key),
+                    request_hash TEXT NOT NULL,
+                    evidence_json BLOB NOT NULL,
+                    created_ns INTEGER NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS principal_exposure (
                     principal TEXT PRIMARY KEY,
                     active_atoms INTEGER NOT NULL CHECK(active_atoms >= 0),
@@ -373,6 +450,15 @@ class CoordinatorJournal:
                     created_ns INTEGER NOT NULL,
                     PRIMARY KEY(swap_id, secret_name)
                 );
+                CREATE TABLE IF NOT EXISTS quote_intents (
+                    request_id TEXT PRIMARY KEY,
+                    request_hash TEXT NOT NULL,
+                    request_json BLOB NOT NULL,
+                    invoice_preimage BLOB,
+                    completed_swap_id TEXT REFERENCES swaps(swap_id),
+                    created_ns INTEGER NOT NULL,
+                    updated_ns INTEGER NOT NULL
+                );
                 CREATE INDEX IF NOT EXISTS swaps_state_idx ON swaps(state);
                 CREATE INDEX IF NOT EXISTS events_swap_idx
                     ON events(swap_id, event_ordinal);
@@ -391,6 +477,107 @@ class CoordinatorJournal:
             quick_check = connection.execute("PRAGMA quick_check").fetchone()[0]
             if quick_check != "ok":
                 raise JournalCorruption(f"SQLite quick_check failed: {quick_check}")
+
+    def reserve_quote_intent(
+        self,
+        request_id: str,
+        request: Mapping[str, Any],
+        *,
+        create_invoice_preimage: bool,
+    ) -> QuoteIntent:
+        """Persist request identity and any invoice secret before calling LND."""
+
+        request_id = _bounded_identifier(request_id, "request_id")
+        request_json = _canonical_public_json(request)
+        request_hash = _request_hash(request)
+        now = self._clock_ns()
+        with self._transaction() as connection:
+            existing = connection.execute(
+                "SELECT * FROM quote_intents WHERE request_id = ?",
+                (request_id,),
+            ).fetchone()
+            if existing is not None:
+                if (
+                    existing["request_hash"] != request_hash
+                    or bytes(existing["request_json"]) != request_json
+                ):
+                    raise IdempotencyConflict(
+                        "quote request id was reused with different content"
+                    )
+                raw = existing["invoice_preimage"]
+                if create_invoice_preimage != (raw is not None):
+                    raise IdempotencyConflict(
+                        "quote request direction changed secret requirements"
+                    )
+                return QuoteIntent(
+                    request_id=request_id,
+                    created=False,
+                    invoice_preimage=(
+                        None if raw is None else SecretPreimage(bytes(raw))
+                    ),
+                    completed_swap_id=existing["completed_swap_id"],
+                )
+            secret = (
+                SecretPreimage.generate() if create_invoice_preimage else None
+            )
+            connection.execute(
+                """
+                INSERT INTO quote_intents(
+                    request_id, request_hash, request_json, invoice_preimage,
+                    completed_swap_id, created_ns, updated_ns
+                ) VALUES(?, ?, ?, ?, NULL, ?, ?)
+                """,
+                (
+                    request_id,
+                    request_hash,
+                    request_json,
+                    (
+                        None
+                        if secret is None
+                        else secret.reveal_for_protocol()
+                    ),
+                    now,
+                    now,
+                ),
+            )
+            return QuoteIntent(
+                request_id=request_id,
+                created=True,
+                invoice_preimage=secret,
+                completed_swap_id=None,
+            )
+
+    def complete_quote_intent(self, request_id: str, swap_id: str) -> None:
+        request_id = _bounded_identifier(request_id, "request_id")
+        swap_id = _bounded_identifier(swap_id, "swap_id")
+        if request_id != swap_id:
+            raise IdempotencyConflict("quote intent must complete to its request id")
+        now = self._clock_ns()
+        with self._transaction() as connection:
+            intent = connection.execute(
+                "SELECT completed_swap_id FROM quote_intents WHERE request_id = ?",
+                (request_id,),
+            ).fetchone()
+            if intent is None:
+                raise JournalError("quote intent is absent")
+            if intent["completed_swap_id"] not in (None, swap_id):
+                raise IdempotencyConflict(
+                    "quote intent was completed by another swap"
+                )
+            swap = connection.execute(
+                "SELECT swap_id FROM swaps WHERE swap_id = ?",
+                (swap_id,),
+            ).fetchone()
+            if swap is None:
+                raise JournalError("cannot complete quote intent before swap admission")
+            connection.execute(
+                """
+                UPDATE quote_intents
+                SET completed_swap_id = ?, updated_ns = ?
+                WHERE request_id = ?
+                """,
+                (swap_id, now, request_id),
+            )
 
     def create_swap(
         self,
@@ -450,6 +637,8 @@ class CoordinatorJournal:
                         connection, swap_id, secret_name, secret, now=now
                     )
                 return self._swap_row(existing)
+            if quote["quote_expires_unix"] * 1_000_000_000 <= now:
+                raise JournalError("cannot admit an expired quote")
 
             principal_row = connection.execute(
                 "SELECT active_atoms, active_swaps FROM principal_exposure "
@@ -699,6 +888,130 @@ class CoordinatorJournal:
                 raise JournalCorruption("advanced swap is absent")
             return self._swap_row(updated)
 
+    def abort_unattempted_side_effect(
+        self,
+        swap_id: str,
+        effect_key: str,
+        event_key: str,
+        *,
+        evidence: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Atomically abort a never-attempted PFTL create and release exposure.
+
+        This narrow operation exists so an expired, unauthorized quote cannot
+        consume admission exposure forever. It cannot classify a transport
+        ambiguity: the side effect must still be PENDING with exactly zero
+        attempts, and no external call is made by this method.
+        """
+
+        swap_id = _bounded_identifier(swap_id, "swap_id")
+        effect_key = _bounded_identifier(effect_key, "effect_key")
+        event_key = _bounded_identifier(event_key, "event_key")
+        evidence_json = _canonical_public_json(evidence)
+        request_hash = _request_hash(
+            {
+                "swap_id": swap_id,
+                "effect_key": effect_key,
+                "target": SwapState.ABORTED_NO_VALUE.value,
+                "evidence_sha256": hashlib.sha256(evidence_json).hexdigest(),
+            }
+        )
+        now = self._clock_ns()
+        with self._transaction() as connection:
+            prior = connection.execute(
+                "SELECT request_hash FROM events WHERE event_key = ?",
+                (event_key,),
+            ).fetchone()
+            if prior is not None:
+                if prior["request_hash"] != request_hash:
+                    raise IdempotencyConflict(
+                        "abort event key was reused with different evidence"
+                    )
+                row = connection.execute(
+                    "SELECT * FROM swaps WHERE swap_id = ?", (swap_id,)
+                ).fetchone()
+                if row is None:
+                    raise JournalCorruption("abort event refers to missing swap")
+                return self._swap_row(row)
+
+            row = connection.execute(
+                "SELECT * FROM swaps WHERE swap_id = ?", (swap_id,)
+            ).fetchone()
+            if row is None:
+                raise JournalError("unknown swap")
+            if SwapState(row["state"]) is not SwapState.PFTL_LOCK_SUBMITTED:
+                raise InvalidTransition(
+                    "only a submitted, unattempted lock intent can be aborted"
+                )
+            effect = connection.execute(
+                "SELECT * FROM side_effects WHERE effect_key = ?",
+                (effect_key,),
+            ).fetchone()
+            if (
+                effect is None
+                or effect["swap_id"] != swap_id
+                or effect["kind"] != "PFTL_ESCROW_CREATE"
+            ):
+                raise JournalCorruption("PFTL create intent is absent or mismatched")
+            if effect["status"] != "PENDING" or int(effect["attempt_count"]) != 0:
+                raise InvalidTransition(
+                    "PFTL create may not be aborted after any submission attempt"
+                )
+            self._assert_no_known_secret_tx(
+                connection, swap_id, evidence_json
+            )
+            next_version = int(row["state_version"]) + 1
+            connection.execute(
+                """
+                UPDATE side_effects
+                SET status = 'FAILED_TERMINAL', updated_ns = ?
+                WHERE effect_key = ? AND status = 'PENDING' AND attempt_count = 0
+                """,
+                (now, effect_key),
+            )
+            connection.execute(
+                """
+                INSERT INTO events(
+                    event_key, swap_id, event_ordinal, from_state, to_state,
+                    request_hash, evidence_json, created_ns
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event_key,
+                    swap_id,
+                    next_version,
+                    SwapState.PFTL_LOCK_SUBMITTED.value,
+                    SwapState.ABORTED_NO_VALUE.value,
+                    request_hash,
+                    evidence_json,
+                    now,
+                ),
+            )
+            cursor = connection.execute(
+                """
+                UPDATE swaps
+                SET state = ?, state_version = ?, updated_ns = ?
+                WHERE swap_id = ? AND state = ? AND state_version = ?
+                """,
+                (
+                    SwapState.ABORTED_NO_VALUE.value,
+                    next_version,
+                    now,
+                    swap_id,
+                    SwapState.PFTL_LOCK_SUBMITTED.value,
+                    row["state_version"],
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise JournalCorruption("abort compare-and-set failed")
+            self._release_exposure_tx(connection, row)
+            updated = connection.execute(
+                "SELECT * FROM swaps WHERE swap_id = ?", (swap_id,)
+            ).fetchone()
+            if updated is None:
+                raise JournalCorruption("aborted swap is absent")
+            return self._swap_row(updated)
+
     def _insert_side_effect_tx(
         self,
         connection: sqlite3.Connection,
@@ -837,6 +1150,104 @@ class CoordinatorJournal:
                 raise JournalCorruption("updated side effect is absent")
             return self._side_effect_row(updated)
 
+    def record_side_effect_checkpoint(
+        self,
+        effect_key: str,
+        checkpoint_key: str,
+        *,
+        evidence: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Persist one immutable pre-effect observation.
+
+        This is used when an exact post-effect delta must be measured against a
+        just-in-time consensus snapshot.  Reusing a key with different evidence
+        fails closed instead of silently moving the baseline.
+        """
+
+        effect_key = _bounded_identifier(effect_key, "effect_key")
+        checkpoint_key = _bounded_identifier(checkpoint_key, "checkpoint_key")
+        evidence_json = _canonical_public_json(evidence)
+        request_hash = _request_hash(
+            {
+                "effect_key": effect_key,
+                "evidence_sha256": hashlib.sha256(evidence_json).hexdigest(),
+            }
+        )
+        now = self._clock_ns()
+        with self._transaction() as connection:
+            effect = connection.execute(
+                "SELECT effect_key, swap_id FROM side_effects WHERE effect_key = ?",
+                (effect_key,),
+            ).fetchone()
+            if effect is None:
+                raise JournalError("unknown side effect")
+            self._assert_no_known_secret_tx(
+                connection, effect["swap_id"], evidence_json
+            )
+            existing = connection.execute(
+                """
+                SELECT effect_key, request_hash, evidence_json, created_ns
+                FROM side_effect_checkpoints WHERE checkpoint_key = ?
+                """,
+                (checkpoint_key,),
+            ).fetchone()
+            if existing is not None:
+                if (
+                    existing["effect_key"] != effect_key
+                    or existing["request_hash"] != request_hash
+                ):
+                    raise IdempotencyConflict(
+                        "checkpoint key was reused for different evidence"
+                    )
+                return {
+                    "checkpoint_key": checkpoint_key,
+                    "effect_key": effect_key,
+                    "evidence": json.loads(
+                        bytes(existing["evidence_json"]).decode("ascii")
+                    ),
+                    "created_ns": int(existing["created_ns"]),
+                }
+            connection.execute(
+                """
+                INSERT INTO side_effect_checkpoints(
+                    checkpoint_key, effect_key, request_hash,
+                    evidence_json, created_ns
+                ) VALUES(?, ?, ?, ?, ?)
+                """,
+                (
+                    checkpoint_key,
+                    effect_key,
+                    request_hash,
+                    evidence_json,
+                    now,
+                ),
+            )
+            return {
+                "checkpoint_key": checkpoint_key,
+                "effect_key": effect_key,
+                "evidence": dict(evidence),
+                "created_ns": now,
+            }
+
+    def side_effect_checkpoint(self, checkpoint_key: str) -> dict[str, Any] | None:
+        checkpoint_key = _bounded_identifier(checkpoint_key, "checkpoint_key")
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT checkpoint_key, effect_key, evidence_json, created_ns
+                FROM side_effect_checkpoints WHERE checkpoint_key = ?
+                """,
+                (checkpoint_key,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "checkpoint_key": row["checkpoint_key"],
+            "effect_key": row["effect_key"],
+            "evidence": json.loads(bytes(row["evidence_json"]).decode("ascii")),
+            "created_ns": int(row["created_ns"]),
+        }
+
     @staticmethod
     def _assert_no_known_secret_tx(
         connection: sqlite3.Connection, swap_id: str, public_json: bytes
@@ -969,13 +1380,33 @@ class CoordinatorJournal:
             raise JournalError("unknown swap")
         return self._swap_row(row)
 
-    def recoverable_swaps(self) -> list[dict[str, Any]]:
-        terminal_values = tuple(state.value for state in TERMINAL_STATES)
+    def side_effect(self, swap_id: str, kind: str) -> dict[str, Any] | None:
+        """Read the unique side effect of ``kind`` for one swap."""
+
+        swap_id = _bounded_identifier(swap_id, "swap_id")
+        kind = _bounded_identifier(kind, "kind", maximum=64)
         with self._lock:
             rows = self._connection.execute(
                 """
+                SELECT * FROM side_effects
+                WHERE swap_id = ? AND kind = ?
+                ORDER BY created_ns, effect_key
+                LIMIT 2
+                """,
+                (swap_id, kind),
+            ).fetchall()
+        if len(rows) > 1:
+            raise JournalCorruption("duplicate side-effect kind for swap")
+        return None if not rows else self._side_effect_row(rows[0])
+
+    def recoverable_swaps(self) -> list[dict[str, Any]]:
+        terminal_values = tuple(state.value for state in TERMINAL_STATES)
+        placeholders = ", ".join("?" for _ in terminal_values)
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
                 SELECT * FROM swaps
-                WHERE state NOT IN (?, ?)
+                WHERE state NOT IN ({placeholders})
                 ORDER BY created_ns, swap_id
                 """,
                 terminal_values,

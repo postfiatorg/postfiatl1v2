@@ -63,6 +63,66 @@ class CoordinatorService:
             side_effect=SideEffectSpec(effect_key, "PFTL_ESCROW_CREATE", operation),
         )
 
+    def mark_quote_expired(
+        self, swap_id: str, *, expiry_evidence: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        return self.journal.advance(
+            swap_id,
+            SwapState.QUOTE_EXPIRED,
+            f"state:{swap_id}:quote_expired",
+            evidence=expiry_evidence,
+        )
+
+    def mark_aborted_no_value(
+        self, swap_id: str, *, abort_evidence: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        if abort_evidence.get("value_moved") is not False:
+            raise ValueError("no-value abort requires literal value_moved=false")
+        return self.journal.advance(
+            swap_id,
+            SwapState.ABORTED_NO_VALUE,
+            f"state:{swap_id}:aborted_no_value",
+            evidence=abort_evidence,
+        )
+
+    def abort_unattempted_lock(
+        self,
+        swap_id: str,
+        *,
+        effect_key: str,
+        abort_evidence: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        if (
+            abort_evidence.get("value_moved") is not False
+            or abort_evidence.get("pftl_submission_attempts") != 0
+        ):
+            raise ValueError(
+                "unattempted lock abort requires zero attempts and no value"
+            )
+        return self.journal.abort_unattempted_side_effect(
+            swap_id,
+            effect_key,
+            f"state:{swap_id}:expired_unattempted_abort",
+            evidence=abort_evidence,
+        )
+
+    def mark_lock_failed(
+        self, swap_id: str, *, rejection_evidence: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        if (
+            rejection_evidence.get("accepted") is not False
+            or rejection_evidence.get("mutation_free") is not True
+        ):
+            raise ValueError(
+                "lock failure requires literal accepted=false and mutation_free=true"
+            )
+        return self.journal.advance(
+            swap_id,
+            SwapState.LOCK_FAILED,
+            f"state:{swap_id}:lock_failed",
+            evidence=rejection_evidence,
+        )
+
     def mark_lock_final(
         self, swap_id: str, *, finality_evidence: Mapping[str, Any]
     ) -> dict[str, Any]:

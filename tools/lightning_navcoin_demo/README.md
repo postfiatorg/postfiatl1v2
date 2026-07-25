@@ -16,6 +16,12 @@ public endpoints, `ce22`, the wrong asset symbol, fewer or more than three LND
 nodes, and fewer or more than six PFTL validators. The PFTL adapter consumes an
 externally built hardened node binary; this branch does not modify consensus.
 
+The fail-closed mainnet graduation surfaces live under `real_value/`, and the
+dedicated LND deployment is documented in `mainnet/README.md`. They do not
+relax or reuse the synthetic safety envelope. Mainnet value remains disabled
+until the exact LND, PFTL, NAV, liquidity, budget, and signed-authorization
+gates pass.
+
 ## Run
 
 Prerequisites are Docker, Compose, Python 3.12, and the pinned Python package in
@@ -67,8 +73,12 @@ scripts/lightning-navcoin-demo verify-evidence \
 Run the offline suite:
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
-  -s tools/lightning_navcoin_demo -p 'test*.py' -v
+mapfile -t lightning_test_modules < <(
+  find tools/lightning_navcoin_demo -type f -name 'test*.py' -printf '%p\n' |
+    sort | sed 's#/#.#g; s#\.py$##'
+)
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
+  "${lightning_test_modules[@]}" -v
 ```
 
 ## Claim boundary

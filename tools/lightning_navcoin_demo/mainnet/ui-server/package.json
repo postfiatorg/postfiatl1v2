@@ -1,0 +1,13 @@
+{
+  "name": "postfiat-lightning-navcoin-production-ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pinned loopback-only production UI server for the Lightning/NAVcoin demo",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test test-production-ui-server.cjs"
+  },
+  "dependencies": {
+    "ws": "8.21.1"
+  }
+}
