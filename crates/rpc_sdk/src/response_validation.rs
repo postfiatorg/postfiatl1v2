@@ -3918,12 +3918,72 @@ fn validate_navcoin_bridge_claims_result(result: &Value) -> Result<(), RpcRespon
 fn validate_navcoin_bridge_supply_status_result(
     result: &Value,
 ) -> Result<(), RpcResponseValidationError> {
-    expect_string_eq(result, "schema", "postfiat-pftl-uniswap-supply-status-v1")?;
+    let schema = string_field(result, "schema")?;
+    if schema != "postfiat-pftl-uniswap-supply-status-v1"
+        && schema != "postfiat-pftl-uniswap-supply-status-v2"
+    {
+        return Err(invalid_result(
+            "schema",
+            "expected a supported PFTL-Uniswap supply-status schema",
+        ));
+    }
+    if schema == "postfiat-pftl-uniswap-supply-status-v2" {
+        if nonzero_u32_field(result, "route_schema_version")? != 2 {
+            return Err(invalid_result(
+                "route_schema_version",
+                "v2 supply status requires route schema version 2",
+            ));
+        }
+        nonzero_u64_field(result, "route_epoch")?;
+        lower_hex_field(result, "policy_hash", 96)?;
+        nonzero_u64_field(result, "policy_epoch")?;
+        if nonzero_u32_field(result, "issue_multiplier_bps")? != 10_050
+            || nonzero_u32_field(result, "redeem_multiplier_bps")? != 9_995
+        {
+            return Err(invalid_result(
+                "primary_market_multiplier_bps",
+                "v2 supply status has unexpected a666 issue/redemption multipliers",
+            ));
+        }
+        let outbound = string_field(result, "outbound_verification_class")?;
+        let return_class = string_field(result, "return_verification_class")?;
+        if outbound != "TRUSTLESS_FINALITY" || return_class != "BFT_CHECKPOINT" {
+            return Err(invalid_result(
+                "directional_verification_class",
+                "v2 a666 route requires TRUSTLESS_FINALITY outbound and BFT_CHECKPOINT return",
+            ));
+        }
+        u64_field(result, "issue_capacity_remaining_atoms")?;
+        u64_field(result, "redeem_capacity_remaining_atoms")?;
+        nonzero_u64_field(result, "max_order_atoms")?;
+        nonzero_u64_field(result, "min_order_atoms")?;
+        nonzero_u64_field(result, "policy_valid_from_height")?;
+        nonzero_u64_field(result, "policy_expires_at_height")?;
+        nonzero_u64_field(result, "max_nav_age_blocks")?;
+        nonzero_u64_field(result, "pricing_nav_epoch")?;
+        lower_hex_field(result, "pricing_reserve_packet_hash", 96)?;
+        u64_field(result, "non_nav_spread_atoms")?;
+        u64_field(result, "active_reservation_count")?;
+        u64_field(result, "active_reservation_atoms")?;
+        u64_field(result, "export_entitlement_count")?;
+        u64_field(result, "export_entitlement_atoms")?;
+        u64_field(result, "wrapped_exposure_atoms")?;
+        u64_field(result, "committed_wrapped_exposure_atoms")?;
+        u64_field(result, "available_export_capacity_atoms")?;
+        u64_field(result, "available_issue_atoms")?;
+        u64_field(result, "available_redeem_atoms")?;
+        u64_field(result, "reserve_backed_redeem_atoms")?;
+    }
     clean_string_field(result, "route_id")?;
     lower_hex_field(result, "route_config_digest", 96)?;
+    clean_string_field(result, "route_trust_class")?;
     lower_hex_field(result, "native_nav_asset_id", 96)?;
     lower_hex_field(result, "settlement_asset_id", ISSUED_ASSET_ID_HEX_LEN)?;
+    validate_evm_address_field(result, "handoff_controller")?;
     validate_evm_address_field(result, "wrapped_navcoin_token")?;
+    nonzero_u64_field(result, "ethereum_chain_id")?;
+    bool_field(result, "live_value_enabled")?;
+    bool_field(result, "paused")?;
     let authorized = u64_field(result, "authorized_valid_supply_atoms")?;
     let pftl = u64_field(result, "pftl_spendable_supply_atoms")?;
     let native_balance_count = u64_field(result, "native_spendable_balance_count")?;

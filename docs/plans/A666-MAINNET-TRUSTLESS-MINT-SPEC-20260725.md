@@ -2,7 +2,9 @@
 
 **Date:** 2026-07-25
 **Priority:** P0
-**Status:** approved direction; implementation not started as a unified program
+**Status:** superseded by
+`A666-END-TO-END-MAINNET-PRIMARY-ISSUANCE-SPEC-20260727.md`; retained as
+historical program direction
 **Supersedes in part:** the Arbitrum vault domain in
 `PFUSDC-TIER4-IMPLEMENTATION-PLAN-20260717.md` (see Section 2)
 **Companion:** `PFUSDC-TIER4-CLOCK-CRITICAL-HANDOFF-20260718.md` (gate model retained)
@@ -291,9 +293,9 @@ WS1 (rollout hold) ──> WS3 (NAV lane bound) ──> WS6 (bands live)
 
 1. NAV epoch cadence and all WS3 freshness/deadman knobs.
 2. Launch band and caps (current: 1.005 / 0.9995, 2M each side).
-3. Mainnet funding authorization for deployment gas, seed liquidity, and
-   redemption buffer (Sepolia launch precedent: pool seed + buffer as
-   separate allocations).
+3. Mainnet funding authorization for deployment gas, opening reserve
+   contribution, and seed liquidity. No separate redemption buffer is
+   required; subscription-funded NAV reserve principal funds redemption.
 4. Prover operations: who runs SP1 proving, budget, and cadence.
 5. Audit scope for mainnet contracts before real-value activation.
 6. Any Tron light-client commitment (WS9).

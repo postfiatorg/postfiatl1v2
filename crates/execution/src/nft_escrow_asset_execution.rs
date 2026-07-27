@@ -2234,6 +2234,22 @@ fn apply_asset_operation(
             }
             apply_pftl_uniswap_route_init(genesis, ledger, operation, block_height)
         }
+        AssetTransactionOperation::PftlUniswapRouteInitV2(operation) => {
+            if transaction.unsigned.transaction_kind
+                != PFTL_UNISWAP_ROUTE_INIT_V2_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "pftl_uniswap_route_init_v2 transaction kind mismatch".to_string(),
+                ));
+            }
+            if !compatibility.allow_unverified_pftl_uniswap_bridge_replay {
+                crate::pftl_uniswap_ethereum_verification::verify_live_route_initialization_v2(
+                    genesis, ledger, operation,
+                )?;
+            }
+            apply_pftl_uniswap_route_init_v2(genesis, ledger, operation, block_height)
+        }
         AssetTransactionOperation::PftlUniswapPrimarySubscribe(operation) => {
             if transaction.unsigned.transaction_kind != PFTL_UNISWAP_PRIMARY_SUBSCRIBE_TRANSACTION_KIND {
                 return Err((
@@ -2253,6 +2269,94 @@ fn apply_asset_operation(
                 )?;
             }
             apply_pftl_uniswap_primary_subscribe(genesis, ledger, operation, block_height)
+        }
+        AssetTransactionOperation::PftlUniswapOrderReserve(operation) => {
+            if transaction.unsigned.transaction_kind
+                != PFTL_UNISWAP_ORDER_RESERVE_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "pftl_uniswap_order_reserve transaction kind mismatch".to_string(),
+                ));
+            }
+            apply_pftl_uniswap_order_reserve(ledger, operation, block_height)
+        }
+        AssetTransactionOperation::PftlUniswapOrderRelease(operation) => {
+            if transaction.unsigned.transaction_kind
+                != PFTL_UNISWAP_ORDER_RELEASE_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "pftl_uniswap_order_release transaction kind mismatch".to_string(),
+                ));
+            }
+            apply_pftl_uniswap_order_release(ledger, operation, block_height)
+        }
+        AssetTransactionOperation::PftlUniswapPrimarySubscribeV2(operation) => {
+            if transaction.unsigned.transaction_kind
+                != PFTL_UNISWAP_PRIMARY_SUBSCRIBE_V2_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "pftl_uniswap_primary_subscribe_v2 transaction kind mismatch".to_string(),
+                ));
+            }
+            let route = ledger.pftl_uniswap_route(&operation.route_id).ok_or_else(|| {
+                (
+                    "missing_pftl_uniswap_route",
+                    format!("PFTL-Uniswap route `{}` is missing", operation.route_id),
+                )
+            })?;
+            if !compatibility.allow_unverified_pftl_uniswap_bridge_replay {
+                crate::pftl_uniswap_ethereum_verification::verify_live_route_reference(
+                    genesis, ledger, route,
+                )?;
+            }
+            apply_pftl_uniswap_primary_subscribe_v2(ledger, operation, block_height)
+        }
+        AssetTransactionOperation::PftlUniswapRedemptionFund(operation) => {
+            if transaction.unsigned.transaction_kind
+                != PFTL_UNISWAP_REDEMPTION_FUND_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "pftl_uniswap_redemption_fund transaction kind mismatch".to_string(),
+                ));
+            }
+            apply_pftl_uniswap_redemption_fund(ledger, operation, block_height)
+        }
+        AssetTransactionOperation::PftlUniswapPrimaryRedeem(operation) => {
+            if transaction.unsigned.transaction_kind
+                != PFTL_UNISWAP_PRIMARY_REDEEM_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "pftl_uniswap_primary_redeem transaction kind mismatch".to_string(),
+                ));
+            }
+            apply_pftl_uniswap_primary_redeem(ledger, operation, block_height)
+        }
+        AssetTransactionOperation::PftlUniswapRouteEpochAdvance(operation) => {
+            if transaction.unsigned.transaction_kind
+                != PFTL_UNISWAP_ROUTE_EPOCH_ADVANCE_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "pftl_uniswap_route_epoch_advance transaction kind mismatch".to_string(),
+                ));
+            }
+            apply_pftl_uniswap_route_epoch_advance(ledger, operation, block_height)
+        }
+        AssetTransactionOperation::PftlUniswapRoutePause(operation) => {
+            if transaction.unsigned.transaction_kind
+                != PFTL_UNISWAP_ROUTE_PAUSE_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "pftl_uniswap_route_pause transaction kind mismatch".to_string(),
+                ));
+            }
+            apply_pftl_uniswap_route_pause(ledger, operation, block_height)
         }
         AssetTransactionOperation::PftlUniswapExportDebit(operation) => {
             if transaction.unsigned.transaction_kind != PFTL_UNISWAP_EXPORT_DEBIT_TRANSACTION_KIND {

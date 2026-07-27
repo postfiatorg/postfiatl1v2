@@ -3,6 +3,11 @@
 > Companion evidence record to [`docs/specs/otc-swaps-mvp-guide.md`](../specs/otc-swaps-mvp-guide.md).
 > Status: **FUNCTIONAL MVP PROVEN** on live Arbitrum One + the `postfiat-wan-devnet`.
 
+Terminology clarification: the evidence directory retains its historical OTC
+name. Flows 3–5 prove primary subscription/redemption symmetry, not a
+secondary purchase from dealer inventory. The separate a651↔a652 transfer is
+the secondary swap.
+
 ## Environment
 
 - **Source chain:** Arbitrum One. Bridged token: native USDC (`0xaf88d065e77c8cC2239327C5EDb3A432268e5831`). Operating wallet: StakeHub EVM account.

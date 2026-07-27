@@ -1,0 +1,19 @@
+{
+  "accepted": true,
+  "confirmed": true,
+  "end_block_tip_hash": "ea024763a82fa15ffcc83ea637d5f26bf42b5b5a16390bab7270dc707ac2f9973db0bc05736dba5f9c2adf2798ea6a65",
+  "end_height": 340,
+  "end_mempool_pending": 0,
+  "end_state_root": "07ce25a9eba203c3d8ffc4f4239d5938e3dd05069d8b1c0a404c01ed0014354f947e9d7a2df23cb55dbb78299f71b5e0",
+  "fleet_converged": true,
+  "label": "a666-v2-opening-holder-trust",
+  "round_ok": false,
+  "schema": "postfiat-a666-ce22-finality-operation-v1",
+  "source": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "start_height": 339,
+  "start_state_root": "d0156665ad2b409a5299c7ac2bc97803d777caa352490acce9d85d0e11c59c9450476a82d9368bc4b881deea05dc5a6e",
+  "transaction_kind": "trust_set",
+  "trust_class": "CONTROLLED",
+  "tx_id": "08424a059598e292bd3f5a6ffdc8fe13c0e20278f1c7db3bbcc0e4f77a3b81335bffeffafa76de54f0ab354f097f2abe",
+  "validator_count": 6
+}

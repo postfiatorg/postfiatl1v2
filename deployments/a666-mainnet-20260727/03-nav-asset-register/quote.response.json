@@ -1,0 +1,44 @@
+{
+  "error": null,
+  "events": [
+    {
+      "event_type": "asset_fee_quote",
+      "message": "asset transaction fee quoted",
+      "subject": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b"
+    }
+  ],
+  "id": "a666-v2-nav-asset-register-quote",
+  "ok": true,
+  "result": {
+    "account_reserve": 10,
+    "asset_weight_bytes": 11369,
+    "base_asset_fee": 23,
+    "chain_id": "postfiat-wan-devnet-2",
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "mempool_pending_for_sender": 0,
+    "minimum_fee": 43,
+    "operation": {
+      "asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+      "issuer": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+      "operation": "nav_asset_register",
+      "proof_profile": "8c0244fe0cfb216fb5ab471d0c9e060a5c8ba052b5a29952d6e7aad76b24523af2b7e0ed82885c11d2c6308ddfcc9118",
+      "redemption_account": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+      "reserve_operator": "pfd0c86d9084915e1fefd22eab891806397d5a5937",
+      "valuation_unit": "USDC"
+    },
+    "protocol_version": 1,
+    "schema": "postfiat-asset-fee-quote-v1",
+    "sender_balance": 28905261,
+    "sender_balance_after_fee": 28905218,
+    "sender_meets_reserve_after_fee": true,
+    "sender_sequence": 59,
+    "sequence": 60,
+    "sequence_source": "ledger_mempool",
+    "source": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+    "state_expansion_fee": 20,
+    "transaction_kind": "nav_asset_register",
+    "transfer_fee_byte_quantum": 512,
+    "transfer_fee_per_quantum": 1
+  },
+  "version": "postfiat-local-rpc-v1"
+}

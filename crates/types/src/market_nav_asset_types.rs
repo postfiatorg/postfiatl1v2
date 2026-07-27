@@ -2149,9 +2149,220 @@ impl OfferIndexes {
 pub const PFTL_UNISWAP_ROUTE_FAMILY_PRIMARY_MINT: &str = "primary_pftl_mint";
 pub const PFTL_UNISWAP_EXPORT_STATUS_SOURCE_DEBITED: &str = "source_debited";
 pub const PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V1: u32 = 1;
+pub const PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V2: u32 = 2;
 pub const PFTL_UNISWAP_EXPORT_STATUS_DESTINATION_CONSUMED: &str = "destination_consumed";
 pub const PFTL_UNISWAP_EXPORT_STATUS_SOURCE_REFUNDED: &str = "source_refunded";
 pub const PFTL_UNISWAP_RETURN_STATUS_IMPORTED: &str = "imported";
+pub const PFTL_UNISWAP_ROUTE_SCHEMA_V2: u32 = 2;
+pub const PFTL_UNISWAP_ORDER_STATUS_RESERVED: &str = "reserved";
+pub const PFTL_UNISWAP_ORDER_STATUS_CONSUMED: &str = "consumed";
+pub const PFTL_UNISWAP_ORDER_STATUS_RELEASED: &str = "released";
+pub const PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY: &str = "TRUSTLESS_FINALITY";
+pub const PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT: &str = "BFT_CHECKPOINT";
+pub const PFTL_UNISWAP_BPS_DENOMINATOR: u32 = 10_000;
+pub const PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS: u32 = 10_050;
+pub const PFTL_UNISWAP_A666_REDEEM_MULTIPLIER_BPS: u32 = 9_995;
+
+pub fn pftl_uniswap_keccak_commitment48(field: &str, value: &str) -> Result<String, String> {
+    let decoded = decode_lower_hex_exact(field, value, 48)?;
+    Ok(bytes_to_hex(&Keccak256::digest(decoded)))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PftlUniswapPrimaryMarketPolicyV2 {
+    pub policy_hash: String,
+    pub policy_epoch: u64,
+    pub issue_multiplier_bps: u32,
+    pub redeem_multiplier_bps: u32,
+    pub issue_capacity_atoms: u64,
+    pub redeem_capacity_atoms: u64,
+    pub max_order_atoms: u64,
+    pub min_order_atoms: u64,
+    pub valid_from_height: u64,
+    pub expires_at_height: u64,
+    pub max_nav_age_blocks: u64,
+    pub pricing_nav_epoch: u64,
+    pub pricing_reserve_packet_hash: String,
+}
+
+impl PftlUniswapPrimaryMarketPolicyV2 {
+    pub fn computed_hash(&self) -> String {
+        let preimage = format!(
+            "policy_epoch={}\nissue_multiplier_bps={}\nredeem_multiplier_bps={}\nissue_capacity_atoms={}\nredeem_capacity_atoms={}\nmax_order_atoms={}\nmin_order_atoms={}\nvalid_from_height={}\nexpires_at_height={}\nmax_nav_age_blocks={}\npricing_nav_epoch={}\npricing_reserve_packet_hash={}\n",
+            self.policy_epoch,
+            self.issue_multiplier_bps,
+            self.redeem_multiplier_bps,
+            self.issue_capacity_atoms,
+            self.redeem_capacity_atoms,
+            self.max_order_atoms,
+            self.min_order_atoms,
+            self.valid_from_height,
+            self.expires_at_height,
+            self.max_nav_age_blocks,
+            self.pricing_nav_epoch,
+            self.pricing_reserve_packet_hash,
+        );
+        bytes_to_hex(&hash48(
+            b"postfiat.pftl_uniswap.primary_market_policy.v2",
+            preimage.as_bytes(),
+        ))
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        validate_lower_hex_len(
+            "pftl_uniswap_primary_policy.policy_hash",
+            &self.policy_hash,
+            VAULT_BRIDGE_HEX_HASH_LEN,
+        )?;
+        validate_lower_hex_len(
+            "pftl_uniswap_primary_policy.pricing_reserve_packet_hash",
+            &self.pricing_reserve_packet_hash,
+            NAV_RESERVE_PACKET_ID_HEX_LEN,
+        )?;
+        if self.policy_epoch == 0
+            || self.issue_capacity_atoms == 0
+            || self.redeem_capacity_atoms == 0
+            || self.max_order_atoms == 0
+            || self.min_order_atoms == 0
+            || self.valid_from_height == 0
+            || self.expires_at_height <= self.valid_from_height
+            || self.max_nav_age_blocks == 0
+            || self.pricing_nav_epoch == 0
+        {
+            return Err(
+                "pftl_uniswap_primary_policy epoch, capacity, order, validity, and pricing fields must be nonzero and ordered"
+                    .to_string(),
+            );
+        }
+        if self.min_order_atoms > self.max_order_atoms
+            || self.max_order_atoms > self.issue_capacity_atoms
+            || self.max_order_atoms > self.redeem_capacity_atoms
+        {
+            return Err(
+                "pftl_uniswap_primary_policy order bounds must fit issue and redemption capacity"
+                    .to_string(),
+            );
+        }
+        if self.issue_multiplier_bps < PFTL_UNISWAP_BPS_DENOMINATOR
+            || self.redeem_multiplier_bps > PFTL_UNISWAP_BPS_DENOMINATOR
+            || self.redeem_multiplier_bps == 0
+        {
+            return Err(
+                "pftl_uniswap_primary_policy issue must be at or above NAV and redemption must be in (0, NAV]"
+                    .to_string(),
+            );
+        }
+        if self.policy_hash != self.computed_hash() {
+            return Err(
+                "pftl_uniswap_primary_policy policy_hash does not match canonical policy fields"
+                    .to_string(),
+            );
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PftlUniswapOrderReservationV2 {
+    pub reservation_id: String,
+    pub subscriber: String,
+    pub ethereum_recipient: String,
+    pub route_epoch: u64,
+    pub policy_epoch: u64,
+    pub policy_hash: String,
+    pub mint_amount_atoms: u64,
+    pub max_settlement_value_atoms: u64,
+    pub created_at_height: u64,
+    pub expires_at_height: u64,
+    pub status: String,
+}
+
+impl PftlUniswapOrderReservationV2 {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_lower_hex_len(
+            "pftl_uniswap_order_reservation.reservation_id",
+            &self.reservation_id,
+            VAULT_BRIDGE_HEX_HASH_LEN,
+        )?;
+        validate_text_field(
+            "pftl_uniswap_order_reservation.subscriber",
+            &self.subscriber,
+        )?;
+        validate_evm_address_text(
+            "pftl_uniswap_order_reservation.ethereum_recipient",
+            &self.ethereum_recipient,
+        )?;
+        validate_lower_hex_len(
+            "pftl_uniswap_order_reservation.policy_hash",
+            &self.policy_hash,
+            VAULT_BRIDGE_HEX_HASH_LEN,
+        )?;
+        if self.route_epoch == 0
+            || self.policy_epoch == 0
+            || self.mint_amount_atoms == 0
+            || self.max_settlement_value_atoms == 0
+            || self.created_at_height == 0
+            || self.expires_at_height <= self.created_at_height
+        {
+            return Err(
+                "pftl_uniswap_order_reservation epoch, amount, value, and height fields must be nonzero and ordered"
+                    .to_string(),
+            );
+        }
+        match self.status.as_str() {
+            PFTL_UNISWAP_ORDER_STATUS_RESERVED
+            | PFTL_UNISWAP_ORDER_STATUS_CONSUMED
+            | PFTL_UNISWAP_ORDER_STATUS_RELEASED => Ok(()),
+            _ => Err("unsupported pftl_uniswap order reservation status".to_string()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PftlUniswapExportEntitlementV2 {
+    pub reservation_id: String,
+    pub subscriber: String,
+    pub ethereum_recipient: String,
+    pub route_epoch: u64,
+    pub policy_epoch: u64,
+    pub policy_hash: String,
+    pub remaining_amount_atoms: u64,
+    pub expires_at_height: u64,
+}
+
+impl PftlUniswapExportEntitlementV2 {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_lower_hex_len(
+            "pftl_uniswap_export_entitlement.reservation_id",
+            &self.reservation_id,
+            VAULT_BRIDGE_HEX_HASH_LEN,
+        )?;
+        validate_text_field(
+            "pftl_uniswap_export_entitlement.subscriber",
+            &self.subscriber,
+        )?;
+        validate_evm_address_text(
+            "pftl_uniswap_export_entitlement.ethereum_recipient",
+            &self.ethereum_recipient,
+        )?;
+        validate_lower_hex_len(
+            "pftl_uniswap_export_entitlement.policy_hash",
+            &self.policy_hash,
+            VAULT_BRIDGE_HEX_HASH_LEN,
+        )?;
+        if self.route_epoch == 0
+            || self.policy_epoch == 0
+            || self.remaining_amount_atoms == 0
+            || self.expires_at_height == 0
+        {
+            return Err(
+                "pftl_uniswap_export_entitlement epoch, amount, and expiry must be nonzero"
+                    .to_string(),
+            );
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PftlUniswapConsensusExportPacket {
@@ -2160,6 +2371,8 @@ pub struct PftlUniswapConsensusExportPacket {
     pub source_wallet: String,
     pub ethereum_recipient: String,
     pub amount_atoms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settlement_value_atoms: Option<u64>,
     pub source_height: u64,
     pub destination_deadline_seconds: u64,
     pub refund_not_before_height: u64,
@@ -2168,6 +2381,12 @@ pub struct PftlUniswapConsensusExportPacket {
     pub ethereum_packet_digest: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ethereum_packet_schema_version: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_epoch: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reservation_id: Option<String>,
 }
 
 impl PftlUniswapConsensusExportPacket {
@@ -2191,12 +2410,36 @@ impl PftlUniswapConsensusExportPacket {
                     .to_string(),
             );
         }
+        if self.route_epoch == Some(0) {
+            return Err("pftl_uniswap_export_packet.route_epoch must be nonzero".to_string());
+        }
+        if let Some(policy_hash) = &self.policy_hash {
+            validate_lower_hex_len(
+                "pftl_uniswap_export_packet.policy_hash",
+                policy_hash,
+                VAULT_BRIDGE_HEX_HASH_LEN,
+            )?;
+        }
+        if self.route_epoch.is_some() != self.policy_hash.is_some() {
+            return Err(
+                "pftl_uniswap_export_packet route epoch and policy hash must be present together"
+                    .to_string(),
+            );
+        }
+        if let Some(reservation_id) = &self.reservation_id {
+            validate_lower_hex_len(
+                "pftl_uniswap_export_packet.reservation_id",
+                reservation_id,
+                VAULT_BRIDGE_HEX_HASH_LEN,
+            )?;
+        }
         validate_text_field("pftl_uniswap_export_packet.source_wallet", &self.source_wallet)?;
         validate_evm_address_text(
             "pftl_uniswap_export_packet.ethereum_recipient",
             &self.ethereum_recipient,
         )?;
         if self.amount_atoms == 0
+            || self.settlement_value_atoms == Some(0)
             || self.source_height == 0
             || self.destination_deadline_seconds == 0
             || self.refund_not_before_height == 0
@@ -2218,6 +2461,146 @@ impl PftlUniswapConsensusExportPacket {
             | PFTL_UNISWAP_EXPORT_STATUS_SOURCE_REFUNDED => Ok(()),
             _ => Err("unsupported pftl_uniswap export packet status".to_string()),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PftlUniswapMintPacketV2 {
+    pub route_config_digest: String,
+    pub source_packet_hash: String,
+    pub reservation_id: String,
+    pub source_receipt_hash: String,
+    pub source_receipt_root: String,
+    pub settlement_asset_id: String,
+    pub native_nav_asset_id: String,
+    pub pricing_reserve_packet_hash: String,
+    /// Keccak-256 of the canonical 48-byte PFTL policy hash.
+    pub policy_hash_commitment: String,
+    pub route_epoch: u64,
+    pub pricing_nav_epoch: u64,
+    pub deadline_seconds: u64,
+    pub nonce: String,
+    pub destination_chain_id: u64,
+    pub destination_controller: String,
+    pub wrapped_token: String,
+    pub ethereum_recipient: String,
+    pub mint_amount_atoms: u64,
+    pub settlement_value_atoms: u64,
+}
+
+impl PftlUniswapMintPacketV2 {
+    pub fn validate(&self) -> Result<(), String> {
+        for (field, value) in [
+            ("route_config_digest", &self.route_config_digest),
+            ("source_packet_hash", &self.source_packet_hash),
+            ("reservation_id", &self.reservation_id),
+            ("source_receipt_hash", &self.source_receipt_hash),
+            ("source_receipt_root", &self.source_receipt_root),
+            ("settlement_asset_id", &self.settlement_asset_id),
+            ("native_nav_asset_id", &self.native_nav_asset_id),
+            (
+                "pricing_reserve_packet_hash",
+                &self.pricing_reserve_packet_hash,
+            ),
+        ] {
+            validate_lower_hex_len(
+                &format!("pftl_uniswap_mint_packet_v2.{field}"),
+                value,
+                VAULT_BRIDGE_HEX_HASH_LEN,
+            )?;
+        }
+        validate_lower_hex_len(
+            "pftl_uniswap_mint_packet_v2.policy_hash_commitment",
+            &self.policy_hash_commitment,
+            64,
+        )?;
+        validate_lower_hex_len("pftl_uniswap_mint_packet_v2.nonce", &self.nonce, 64)?;
+        for (field, value) in [
+            ("destination_controller", &self.destination_controller),
+            ("wrapped_token", &self.wrapped_token),
+            ("ethereum_recipient", &self.ethereum_recipient),
+        ] {
+            validate_evm_address_text(
+                &format!("pftl_uniswap_mint_packet_v2.{field}"),
+                value,
+            )?;
+        }
+        if self.route_epoch == 0
+            || self.pricing_nav_epoch == 0
+            || self.deadline_seconds == 0
+            || self.destination_chain_id == 0
+            || self.mint_amount_atoms == 0
+            || self.settlement_value_atoms == 0
+        {
+            return Err(
+                "pftl_uniswap_mint_packet_v2 epoch, deadline, chain, and amount fields must be nonzero"
+                    .to_string(),
+            );
+        }
+        Ok(())
+    }
+
+    /// Matches `PFTLUniswapPrimaryMarketV2._packetDigest`.
+    ///
+    /// Receipt hashes are deliberately excluded: the source export commits
+    /// this digest before the export receipt exists. The receipt verifier
+    /// binds the resulting receipt/root to this digest separately.
+    pub fn evm_digest(&self) -> Result<String, String> {
+        self.validate()?;
+        let mut packed = Vec::with_capacity(32 * 14 + 8 * 3 + 20 * 3);
+        packed.extend_from_slice(&Keccak256::digest(
+            b"postfiat.pftl_uniswap.mint_packet.v2",
+        ));
+        for (field, value) in [
+            ("route_config_digest", &self.route_config_digest),
+            ("source_packet_hash", &self.source_packet_hash),
+            ("reservation_id", &self.reservation_id),
+            ("settlement_asset_id", &self.settlement_asset_id),
+            ("native_nav_asset_id", &self.native_nav_asset_id),
+            (
+                "pricing_reserve_packet_hash",
+                &self.pricing_reserve_packet_hash,
+            ),
+        ] {
+            let decoded = decode_lower_hex_exact(
+                &format!("pftl_uniswap_mint_packet_v2.{field}"),
+                value,
+                48,
+            )?;
+            packed.extend_from_slice(&Keccak256::digest(decoded));
+        }
+        packed.extend_from_slice(&decode_lower_hex_exact(
+            "pftl_uniswap_mint_packet_v2.policy_hash_commitment",
+            &self.policy_hash_commitment,
+            32,
+        )?);
+        packed.extend_from_slice(&self.route_epoch.to_be_bytes());
+        packed.extend_from_slice(&self.pricing_nav_epoch.to_be_bytes());
+        packed.extend_from_slice(&self.deadline_seconds.to_be_bytes());
+        packed.extend_from_slice(&decode_lower_hex_exact(
+            "pftl_uniswap_mint_packet_v2.nonce",
+            &self.nonce,
+            32,
+        )?);
+        packed.extend_from_slice(&[0_u8; 24]);
+        packed.extend_from_slice(&self.destination_chain_id.to_be_bytes());
+        packed.extend_from_slice(&decode_evm_address_20(
+            "pftl_uniswap_mint_packet_v2.destination_controller",
+            &self.destination_controller,
+        )?);
+        packed.extend_from_slice(&decode_evm_address_20(
+            "pftl_uniswap_mint_packet_v2.wrapped_token",
+            &self.wrapped_token,
+        )?);
+        packed.extend_from_slice(&decode_evm_address_20(
+            "pftl_uniswap_mint_packet_v2.ethereum_recipient",
+            &self.ethereum_recipient,
+        )?);
+        packed.extend_from_slice(&[0_u8; 24]);
+        packed.extend_from_slice(&self.mint_amount_atoms.to_be_bytes());
+        packed.extend_from_slice(&[0_u8; 24]);
+        packed.extend_from_slice(&self.settlement_value_atoms.to_be_bytes());
+        Ok(bytes_to_hex(&Keccak256::digest(packed)))
     }
 }
 
@@ -2267,6 +2650,128 @@ impl PftlUniswapConsensusReturnImport {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PftlUniswapRouteV2State {
+    pub route_schema_version: u32,
+    pub route_epoch: u64,
+    pub outbound_verification_class: String,
+    pub return_verification_class: String,
+    pub primary_market_policy: PftlUniswapPrimaryMarketPolicyV2,
+    pub issue_capacity_used_atoms: u64,
+    pub redeem_capacity_used_atoms: u64,
+    /// Issue and redemption spread retained outside counted NAV reserves.
+    /// Redemption principal is paid from `settlement_reserve_atoms`, which is
+    /// funded by the same subscriptions that create a666 supply.
+    pub non_nav_spread_atoms: u64,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub active_reservations: BTreeMap<String, PftlUniswapOrderReservationV2>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub export_entitlements: BTreeMap<String, PftlUniswapExportEntitlementV2>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub terminal_reservations: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub redemption_nonces: BTreeMap<String, String>,
+}
+
+impl PftlUniswapRouteV2State {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.route_schema_version != PFTL_UNISWAP_ROUTE_SCHEMA_V2 || self.route_epoch == 0 {
+            return Err(
+                "pftl_uniswap_route_v2 schema version must be 2 and route epoch must be nonzero"
+                    .to_string(),
+            );
+        }
+        if self.outbound_verification_class != PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY
+            || self.return_verification_class != PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT
+        {
+            return Err(
+                "pftl_uniswap_route_v2 requires TRUSTLESS_FINALITY outbound and BFT_CHECKPOINT return verification"
+                    .to_string(),
+            );
+        }
+        self.primary_market_policy.validate()?;
+        if self.issue_capacity_used_atoms > self.primary_market_policy.issue_capacity_atoms
+            || self.redeem_capacity_used_atoms
+                > self.primary_market_policy.redeem_capacity_atoms
+        {
+            return Err(
+                "pftl_uniswap_route_v2 used capacity exceeds the active policy".to_string(),
+            );
+        }
+        if self.active_reservations.len() > MAX_PFTL_UNISWAP_ROUTE_ENTRIES
+            || self.export_entitlements.len() > MAX_PFTL_UNISWAP_ROUTE_ENTRIES
+            || self.terminal_reservations.len() > MAX_PFTL_UNISWAP_ROUTE_ENTRIES
+            || self.redemption_nonces.len() > MAX_PFTL_UNISWAP_ROUTE_ENTRIES
+        {
+            return Err(
+                "pftl_uniswap_route_v2 indexed state exceeds bounded route entry limit".to_string(),
+            );
+        }
+        let reserved = self.active_reservations.iter().try_fold(
+            0_u64,
+            |sum, (reservation_id, reservation)| {
+                reservation.validate()?;
+                if reservation_id != &reservation.reservation_id
+                    || reservation.status != PFTL_UNISWAP_ORDER_STATUS_RESERVED
+                    || reservation.route_epoch != self.route_epoch
+                    || reservation.policy_epoch != self.primary_market_policy.policy_epoch
+                    || reservation.policy_hash != self.primary_market_policy.policy_hash
+                {
+                    return Err(
+                        "pftl_uniswap_route_v2 active reservation is not pinned to the active route and policy"
+                            .to_string(),
+                    );
+                }
+                sum.checked_add(reservation.mint_amount_atoms).ok_or_else(|| {
+                    "pftl_uniswap_route_v2 reserved capacity sum overflow".to_string()
+                })
+            },
+        )?;
+        let committed_issue = self
+            .issue_capacity_used_atoms
+            .checked_add(reserved)
+            .ok_or_else(|| "pftl_uniswap_route_v2 issue capacity overflow".to_string())?;
+        if committed_issue > self.primary_market_policy.issue_capacity_atoms {
+            return Err(
+                "pftl_uniswap_route_v2 used plus reserved issue capacity exceeds policy"
+                    .to_string(),
+            );
+        }
+        for (reservation_id, entitlement) in &self.export_entitlements {
+            entitlement.validate()?;
+            if reservation_id != &entitlement.reservation_id
+                || entitlement.route_epoch != self.route_epoch
+                || entitlement.policy_epoch != self.primary_market_policy.policy_epoch
+                || entitlement.policy_hash != self.primary_market_policy.policy_hash
+            {
+                return Err(
+                    "pftl_uniswap_route_v2 export entitlement is not pinned to the active route and policy"
+                        .to_string(),
+                );
+            }
+        }
+        for (reservation_id, status) in &self.terminal_reservations {
+            validate_lower_hex_len(
+                "pftl_uniswap_route_v2.terminal_reservation_id",
+                reservation_id,
+                VAULT_BRIDGE_HEX_HASH_LEN,
+            )?;
+            if status != PFTL_UNISWAP_ORDER_STATUS_CONSUMED
+                && status != PFTL_UNISWAP_ORDER_STATUS_RELEASED
+            {
+                return Err(
+                    "pftl_uniswap_route_v2 terminal reservation status is invalid".to_string(),
+                );
+            }
+        }
+        for (nonce, owner) in &self.redemption_nonces {
+            validate_lower_hex_len("pftl_uniswap_route_v2.redemption_nonce", nonce, 64)?;
+            validate_text_field("pftl_uniswap_route_v2.redemption_owner", owner)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PftlUniswapConsensusRouteState {
     pub route_id: String,
     pub route_family: String,
@@ -2305,6 +2810,8 @@ pub struct PftlUniswapConsensusRouteState {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub return_imports: BTreeMap<String, PftlUniswapConsensusReturnImport>,
     pub paused: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub v2: Option<PftlUniswapRouteV2State>,
 }
 
 impl PftlUniswapConsensusRouteState {
@@ -2393,6 +2900,15 @@ impl PftlUniswapConsensusRouteState {
                 return Err("pftl_uniswap_route return import key mismatch".to_string());
             }
         }
+        if let Some(v2) = &self.v2 {
+            v2.validate()?;
+            if self.route_trust_class != v2.return_verification_class {
+                return Err(
+                    "pftl_uniswap_route v2 legacy trust class must mirror return verification class"
+                        .to_string(),
+                );
+            }
+        }
         let pftl_side = self
             .pftl_spendable_supply_atoms
             .checked_add(self.outstanding_bridge_claims_atoms)
@@ -2405,6 +2921,39 @@ impl PftlUniswapConsensusRouteState {
         if live_supply != self.authorized_valid_supply_atoms {
             return Err(
                 "pftl_uniswap_route live supply must equal authorized valid supply".to_string(),
+            );
+        }
+        let capped_exposure = if self.v2.is_some() {
+            self.ethereum_spendable_supply_atoms
+                .checked_add(self.outstanding_bridge_claims_atoms)
+                .ok_or_else(|| {
+                    "pftl_uniswap_route wrapped exposure accounting overflow".to_string()
+                })?
+        } else {
+            self.authorized_valid_supply_atoms
+        };
+        let reserved_export = self.v2.as_ref().map_or(Ok(0_u64), |v2| {
+            v2.active_reservations
+                .values()
+                .map(|reservation| reservation.mint_amount_atoms)
+                .chain(
+                    v2.export_entitlements
+                        .values()
+                        .map(|entitlement| entitlement.remaining_amount_atoms),
+                )
+                .try_fold(0_u64, |sum, amount| {
+                    sum.checked_add(amount).ok_or_else(|| {
+                        "pftl_uniswap_route reserved export exposure overflow".to_string()
+                    })
+                })
+        })?;
+        if capped_exposure
+            .checked_add(reserved_export)
+            .is_none_or(|committed| committed > self.route_supply_cap_atoms)
+        {
+            return Err(
+                "pftl_uniswap_route net wrapped plus reserved export exposure exceeds route supply cap"
+                    .to_string(),
             );
         }
         let native_sum = self
@@ -2422,6 +2971,189 @@ impl PftlUniswapConsensusRouteState {
         }
         Ok(())
     }
+}
+
+/// Canonical commitment to the complete PFTL-Uniswap route state.
+///
+/// This lives in the types crate so consensus execution and proof guests use
+/// one byte-for-byte implementation of the state commitment.
+pub fn pftl_uniswap_route_state_hash(route: &PftlUniswapConsensusRouteState) -> String {
+    let mut preimage = format!(
+        "route_id={}\nroute_family={}\nroute_config_digest={}\nroute_trust_class={}\nnative_nav_asset_id={}\nsettlement_asset_id={}\nhandoff_controller={}\nsettlement_adapter={}\nwrapped_navcoin_token={}\nethereum_chain_id={}\nroute_supply_cap_atoms={}\npacket_notional_cap_atoms={}\nlatest_finalized_nav_epoch={}\nreturn_finality_blocks={}\n",
+        route.route_id,
+        route.route_family,
+        route.route_config_digest,
+        route.route_trust_class,
+        route.native_nav_asset_id,
+        route.settlement_asset_id,
+        route.handoff_controller,
+        route.settlement_adapter,
+        route.wrapped_navcoin_token,
+        route.ethereum_chain_id,
+        route.route_supply_cap_atoms,
+        route.packet_notional_cap_atoms,
+        route.latest_finalized_nav_epoch,
+        route.return_finality_blocks,
+    );
+    if route.live_value_enabled {
+        preimage.push_str("live_value_enabled=true\n");
+    }
+    preimage.push_str(&format!(
+        "authorized_valid_supply_atoms={}\npftl_spendable_supply_atoms={}\nethereum_spendable_supply_atoms={}\nother_registered_venue_supply_atoms={}\noutstanding_bridge_claims_atoms={}\npending_return_import_claims_atoms={}\nsettlement_reserve_atoms={}\npaused={}\n",
+        route.authorized_valid_supply_atoms,
+        route.pftl_spendable_supply_atoms,
+        route.ethereum_spendable_supply_atoms,
+        route.other_registered_venue_supply_atoms,
+        route.outstanding_bridge_claims_atoms,
+        route.pending_return_import_claims_atoms,
+        route.settlement_reserve_atoms,
+        route.paused,
+    ));
+    if let Some(policy) = &route.ethereum_verification_policy {
+        preimage.push_str(&format!(
+            "ethereum_policy.authority_epoch={}\nethereum_policy.committee_root={}\nethereum_policy.minimum_confirmations={}\nethereum_policy.handoff_controller_code_hash={}\nethereum_policy.wrapped_navcoin_code_hash={}\n",
+            policy.authority_epoch,
+            bytes_to_hex(&policy.committee_root.0),
+            policy.minimum_confirmations,
+            bytes_to_hex(&policy.handoff_controller_code_hash),
+            bytes_to_hex(&policy.wrapped_navcoin_code_hash),
+        ));
+    }
+    if let Some(v2) = &route.v2 {
+        let policy = &v2.primary_market_policy;
+        preimage.push_str(&format!(
+            "v2.route_schema_version={}\nv2.route_epoch={}\nv2.outbound_verification_class={}\nv2.return_verification_class={}\nv2.policy_hash={}\nv2.policy_epoch={}\nv2.issue_multiplier_bps={}\nv2.redeem_multiplier_bps={}\nv2.issue_capacity_atoms={}\nv2.redeem_capacity_atoms={}\nv2.max_order_atoms={}\nv2.min_order_atoms={}\nv2.valid_from_height={}\nv2.expires_at_height={}\nv2.max_nav_age_blocks={}\nv2.pricing_nav_epoch={}\nv2.pricing_reserve_packet_hash={}\nv2.issue_capacity_used_atoms={}\nv2.redeem_capacity_used_atoms={}\nv2.non_nav_spread_atoms={}\n",
+            v2.route_schema_version,
+            v2.route_epoch,
+            v2.outbound_verification_class,
+            v2.return_verification_class,
+            policy.policy_hash,
+            policy.policy_epoch,
+            policy.issue_multiplier_bps,
+            policy.redeem_multiplier_bps,
+            policy.issue_capacity_atoms,
+            policy.redeem_capacity_atoms,
+            policy.max_order_atoms,
+            policy.min_order_atoms,
+            policy.valid_from_height,
+            policy.expires_at_height,
+            policy.max_nav_age_blocks,
+            policy.pricing_nav_epoch,
+            policy.pricing_reserve_packet_hash,
+            v2.issue_capacity_used_atoms,
+            v2.redeem_capacity_used_atoms,
+            v2.non_nav_spread_atoms,
+        ));
+        for (reservation_id, reservation) in &v2.active_reservations {
+            preimage.push_str(&format!(
+                "v2.reservation.{reservation_id}.subscriber={}\nv2.reservation.{reservation_id}.ethereum_recipient={}\nv2.reservation.{reservation_id}.route_epoch={}\nv2.reservation.{reservation_id}.policy_epoch={}\nv2.reservation.{reservation_id}.policy_hash={}\nv2.reservation.{reservation_id}.mint_amount_atoms={}\nv2.reservation.{reservation_id}.max_settlement_value_atoms={}\nv2.reservation.{reservation_id}.created_at_height={}\nv2.reservation.{reservation_id}.expires_at_height={}\nv2.reservation.{reservation_id}.status={}\n",
+                reservation.subscriber,
+                reservation.ethereum_recipient,
+                reservation.route_epoch,
+                reservation.policy_epoch,
+                reservation.policy_hash,
+                reservation.mint_amount_atoms,
+                reservation.max_settlement_value_atoms,
+                reservation.created_at_height,
+                reservation.expires_at_height,
+                reservation.status,
+            ));
+        }
+        for (reservation_id, status) in &v2.terminal_reservations {
+            preimage.push_str(&format!(
+                "v2.terminal_reservation.{reservation_id}={status}\n"
+            ));
+        }
+        for (reservation_id, entitlement) in &v2.export_entitlements {
+            preimage.push_str(&format!(
+                "v2.export_entitlement.{reservation_id}.subscriber={}\nv2.export_entitlement.{reservation_id}.ethereum_recipient={}\nv2.export_entitlement.{reservation_id}.route_epoch={}\nv2.export_entitlement.{reservation_id}.policy_epoch={}\nv2.export_entitlement.{reservation_id}.policy_hash={}\nv2.export_entitlement.{reservation_id}.remaining_amount_atoms={}\nv2.export_entitlement.{reservation_id}.expires_at_height={}\n",
+                entitlement.subscriber,
+                entitlement.ethereum_recipient,
+                entitlement.route_epoch,
+                entitlement.policy_epoch,
+                entitlement.policy_hash,
+                entitlement.remaining_amount_atoms,
+                entitlement.expires_at_height,
+            ));
+        }
+        for (nonce, owner) in &v2.redemption_nonces {
+            preimage.push_str(&format!("v2.redemption_nonce.{nonce}={owner}\n"));
+        }
+    }
+    for (wallet, amount) in &route.native_spendable_balances_atoms {
+        preimage.push_str(&format!("native_balance.{wallet}={amount}\n"));
+    }
+    for (nonce, wallet) in &route.primary_subscription_nonces {
+        preimage.push_str(&format!("primary_nonce.{nonce}={wallet}\n"));
+    }
+    for (packet_hash, packet) in &route.export_packets {
+        preimage.push_str(&format!(
+            "export_packet.{packet_hash}.nonce={}\nexport_packet.{packet_hash}.source_wallet={}\nexport_packet.{packet_hash}.ethereum_recipient={}\nexport_packet.{packet_hash}.amount_atoms={}\nexport_packet.{packet_hash}.source_height={}\nexport_packet.{packet_hash}.destination_deadline_seconds={}\nexport_packet.{packet_hash}.refund_not_before_height={}\nexport_packet.{packet_hash}.status={}\n",
+            packet.nonce,
+            packet.source_wallet,
+            packet.ethereum_recipient,
+            packet.amount_atoms,
+            packet.source_height,
+            packet.destination_deadline_seconds,
+            packet.refund_not_before_height,
+            packet.status,
+        ));
+        if let Some(settlement_value_atoms) = packet.settlement_value_atoms {
+            preimage.push_str(&format!(
+                "export_packet.{packet_hash}.settlement_value_atoms={settlement_value_atoms}\n"
+            ));
+        }
+        if let Some(packet_digest) = &packet.ethereum_packet_digest {
+            preimage.push_str(&format!(
+                "export_packet.{packet_hash}.ethereum_packet_digest={packet_digest}\n"
+            ));
+        }
+        if let Some(schema_version) = packet.ethereum_packet_schema_version {
+            preimage.push_str(&format!(
+                "export_packet.{packet_hash}.ethereum_packet_schema_version={schema_version}\n"
+            ));
+        }
+        if let Some(route_epoch) = packet.route_epoch {
+            preimage.push_str(&format!(
+                "export_packet.{packet_hash}.route_epoch={route_epoch}\n"
+            ));
+        }
+        if let Some(policy_hash) = &packet.policy_hash {
+            preimage.push_str(&format!(
+                "export_packet.{packet_hash}.policy_hash={policy_hash}\n"
+            ));
+        }
+        if let Some(reservation_id) = &packet.reservation_id {
+            preimage.push_str(&format!(
+                "export_packet.{packet_hash}.reservation_id={reservation_id}\n"
+            ));
+        }
+    }
+    for (nonce, packet_hash) in &route.export_nonces {
+        preimage.push_str(&format!("export_nonce.{nonce}={packet_hash}\n"));
+    }
+    for (burn_hash, burn) in &route.return_imports {
+        preimage.push_str(&format!(
+            "return_import.{burn_hash}.ethereum_chain_id={}\nreturn_import.{burn_hash}.bridge_controller={}\nreturn_import.{burn_hash}.wrapped_navcoin_token={}\nreturn_import.{burn_hash}.native_nav_asset_id={}\nreturn_import.{burn_hash}.ethereum_sender={}\nreturn_import.{burn_hash}.pftl_recipient={}\nreturn_import.{burn_hash}.amount_atoms={}\nreturn_import.{burn_hash}.return_nonce={}\nreturn_import.{burn_hash}.burn_height={}\nreturn_import.{burn_hash}.finalized_height={}\nreturn_import.{burn_hash}.status={}\n",
+            burn.ethereum_chain_id,
+            burn.bridge_controller,
+            burn.wrapped_navcoin_token,
+            burn.native_nav_asset_id,
+            burn.ethereum_sender,
+            burn.pftl_recipient,
+            burn.amount_atoms,
+            burn.return_nonce,
+            burn.burn_height,
+            burn.finalized_height,
+            burn.status,
+        ));
+    }
+    let domain = if route.v2.is_some() {
+        b"postfiat.pftl_uniswap.consensus_route_state.v2".as_slice()
+    } else {
+        b"postfiat.pftl_uniswap.consensus_route_state.v1".as_slice()
+    };
+    bytes_to_hex(&hash48(domain, preimage.as_bytes()))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2451,7 +3183,10 @@ impl PftlUniswapConsensusReceipt {
         )?;
         match self.transition.as_str() {
             "route_init" | "primary_subscription" | "export_debit" | "destination_consume"
-            | "source_refunded" | "return_imported" => {}
+            | "source_refunded" | "return_imported" | "order_reserved" | "order_released"
+            | "redemption_funded" | "primary_redeemed" | "route_epoch_advanced"
+            | "route_paused" | "route_resumed" => {}
+            "export_entitlement_released" => {}
             _ => return Err("unsupported pftl_uniswap receipt transition".to_string()),
         }
         validate_text_field("pftl_uniswap_receipt.route_id", &self.route_id)?;
@@ -2484,6 +3219,238 @@ impl PftlUniswapConsensusReceipt {
         }
         Ok(())
     }
+}
+
+pub fn pftl_uniswap_consensus_receipt_computed_hash(
+    receipt: &PftlUniswapConsensusReceipt,
+) -> String {
+    let preimage = format!(
+        "transition={}\nroute_id={}\nstate_before_hash={}\nstate_after_hash={}\npacket_hash={}\nburn_event_hash={}\nwallet={}\namount_atoms={}\nblock_height={}\n",
+        receipt.transition,
+        receipt.route_id,
+        receipt.state_before_hash,
+        receipt.state_after_hash,
+        receipt.packet_hash.as_deref().unwrap_or(""),
+        receipt.burn_event_hash.as_deref().unwrap_or(""),
+        receipt.wallet.as_deref().unwrap_or(""),
+        receipt
+            .amount_atoms
+            .map_or_else(String::new, |amount| amount.to_string()),
+        receipt.block_height,
+    );
+    bytes_to_hex(&hash48(
+        b"postfiat.pftl_uniswap.consensus_receipt.v1",
+        preimage.as_bytes(),
+    ))
+}
+
+pub fn pftl_uniswap_consensus_receipt_root(
+    receipts: &[PftlUniswapConsensusReceipt],
+) -> Result<String, String> {
+    if receipts.is_empty() || receipts.len() > MAX_PFTL_UNISWAP_RECEIPTS {
+        return Err(
+            "pftl_uniswap receipt root requires a nonempty bounded receipt set".to_string(),
+        );
+    }
+    let hashes = receipts
+        .iter()
+        .map(|receipt| {
+            receipt.validate()?;
+            if receipt.receipt_hash != pftl_uniswap_consensus_receipt_computed_hash(receipt) {
+                return Err("pftl_uniswap receipt hash does not match receipt fields".to_string());
+            }
+            Ok(receipt.receipt_hash.clone())
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    pftl_uniswap_consensus_receipt_root_from_hashes(&hashes)
+}
+
+pub fn pftl_uniswap_consensus_receipt_root_from_hashes(
+    receipt_hashes: &[String],
+) -> Result<String, String> {
+    if receipt_hashes.is_empty() || receipt_hashes.len() > MAX_PFTL_UNISWAP_RECEIPTS {
+        return Err(
+            "pftl_uniswap receipt root requires a nonempty bounded receipt set".to_string(),
+        );
+    }
+    let mut hashes = receipt_hashes.to_vec();
+    for hash in &hashes {
+        validate_lower_hex_len(
+            "pftl_uniswap_receipt_root.receipt_hash",
+            hash,
+            VAULT_BRIDGE_HEX_HASH_LEN,
+        )?;
+    }
+    hashes.sort_unstable();
+    if hashes.windows(2).any(|window| window[0] == window[1]) {
+        return Err("pftl_uniswap receipt root contains duplicate receipts".to_string());
+    }
+    let mut level = hashes
+        .iter()
+        .map(|hash| pftl_uniswap_receipt_merkle_leaf(hash))
+        .collect::<Result<Vec<_>, _>>()?;
+    while level.len() > 1 {
+        let mut next = Vec::with_capacity(level.len().div_ceil(2));
+        for pair in level.chunks(2) {
+            let right = pair.get(1).unwrap_or(&pair[0]);
+            next.push(pftl_uniswap_receipt_merkle_node(&pair[0], right));
+        }
+        level = next;
+    }
+    Ok(bytes_to_hex(&level[0]))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PftlUniswapReceiptMerkleStepV1 {
+    pub sibling_hash: String,
+    pub sibling_is_left: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PftlUniswapReceiptMerkleProofV1 {
+    pub leaf_index: u32,
+    pub leaf_count: u32,
+    pub steps: Vec<PftlUniswapReceiptMerkleStepV1>,
+}
+
+pub fn pftl_uniswap_consensus_receipt_merkle_proof(
+    receipt_hashes: &[String],
+    target_receipt_hash: &str,
+) -> Result<PftlUniswapReceiptMerkleProofV1, String> {
+    if receipt_hashes.is_empty() || receipt_hashes.len() > MAX_PFTL_UNISWAP_RECEIPTS {
+        return Err("pftl_uniswap receipt proof requires a nonempty bounded set".to_string());
+    }
+    let mut hashes = receipt_hashes.to_vec();
+    for hash in &hashes {
+        validate_lower_hex_len(
+            "pftl_uniswap_receipt_proof.receipt_hash",
+            hash,
+            VAULT_BRIDGE_HEX_HASH_LEN,
+        )?;
+    }
+    hashes.sort_unstable();
+    if hashes.windows(2).any(|window| window[0] == window[1]) {
+        return Err("pftl_uniswap receipt proof contains duplicate receipts".to_string());
+    }
+    let mut index = hashes
+        .binary_search_by(|hash| hash.as_str().cmp(target_receipt_hash))
+        .map_err(|_| "target receipt is absent from receipt accumulator".to_string())?;
+    let leaf_index = u32::try_from(index)
+        .map_err(|_| "pftl_uniswap receipt proof leaf index overflow".to_string())?;
+    let leaf_count = u32::try_from(hashes.len())
+        .map_err(|_| "pftl_uniswap receipt proof leaf count overflow".to_string())?;
+    let mut level = hashes
+        .iter()
+        .map(|hash| pftl_uniswap_receipt_merkle_leaf(hash))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut steps = Vec::new();
+    while level.len() > 1 {
+        let sibling_index = if index % 2 == 0 {
+            if index + 1 < level.len() {
+                index + 1
+            } else {
+                index
+            }
+        } else {
+            index - 1
+        };
+        steps.push(PftlUniswapReceiptMerkleStepV1 {
+            sibling_hash: bytes_to_hex(&level[sibling_index]),
+            sibling_is_left: sibling_index < index,
+        });
+        let mut next = Vec::with_capacity(level.len().div_ceil(2));
+        for pair in level.chunks(2) {
+            let right = pair.get(1).unwrap_or(&pair[0]);
+            next.push(pftl_uniswap_receipt_merkle_node(&pair[0], right));
+        }
+        index /= 2;
+        level = next;
+    }
+    Ok(PftlUniswapReceiptMerkleProofV1 {
+        leaf_index,
+        leaf_count,
+        steps,
+    })
+}
+
+pub fn verify_pftl_uniswap_consensus_receipt_merkle_proof(
+    expected_root: &str,
+    receipt_hash: &str,
+    proof: &PftlUniswapReceiptMerkleProofV1,
+) -> Result<(), String> {
+    validate_lower_hex_len(
+        "pftl_uniswap_receipt_proof.expected_root",
+        expected_root,
+        VAULT_BRIDGE_HEX_HASH_LEN,
+    )?;
+    if proof.leaf_count == 0
+        || usize::try_from(proof.leaf_count)
+            .ok()
+            .is_none_or(|count| count > MAX_PFTL_UNISWAP_RECEIPTS)
+        || proof.leaf_index >= proof.leaf_count
+    {
+        return Err("pftl_uniswap receipt proof has invalid leaf bounds".to_string());
+    }
+    let expected_steps = if proof.leaf_count <= 1 {
+        0
+    } else {
+        (u32::BITS - (proof.leaf_count - 1).leading_zeros()) as usize
+    };
+    if proof.steps.len() != expected_steps {
+        return Err("pftl_uniswap receipt proof has non-canonical depth".to_string());
+    }
+    let mut current = pftl_uniswap_receipt_merkle_leaf(receipt_hash)?;
+    let mut index = proof.leaf_index as usize;
+    let mut width = proof.leaf_count as usize;
+    for step in &proof.steps {
+        let sibling = decode_lower_hex_exact(
+            "pftl_uniswap_receipt_proof.sibling_hash",
+            &step.sibling_hash,
+            48,
+        )?;
+        let mut sibling_array = [0_u8; 48];
+        sibling_array.copy_from_slice(&sibling);
+        let expected_left = index % 2 == 1;
+        if step.sibling_is_left != expected_left {
+            return Err("pftl_uniswap receipt proof has invalid sibling direction".to_string());
+        }
+        if index.is_multiple_of(2) && index + 1 >= width && sibling_array != current {
+            return Err("pftl_uniswap receipt proof has invalid duplicated odd leaf".to_string());
+        }
+        current = if step.sibling_is_left {
+            pftl_uniswap_receipt_merkle_node(&sibling_array, &current)
+        } else {
+            pftl_uniswap_receipt_merkle_node(&current, &sibling_array)
+        };
+        index /= 2;
+        width = width.div_ceil(2);
+    }
+    if bytes_to_hex(&current) != expected_root {
+        return Err("pftl_uniswap receipt proof root mismatch".to_string());
+    }
+    Ok(())
+}
+
+fn pftl_uniswap_receipt_merkle_leaf(receipt_hash: &str) -> Result<[u8; 48], String> {
+    let hash = decode_lower_hex_exact(
+        "pftl_uniswap_receipt_merkle.receipt_hash",
+        receipt_hash,
+        48,
+    )?;
+    Ok(hash48(
+        b"postfiat.pftl_uniswap.receipt_merkle_leaf.v1",
+        &hash,
+    ))
+}
+
+fn pftl_uniswap_receipt_merkle_node(left: &[u8; 48], right: &[u8; 48]) -> [u8; 48] {
+    let mut preimage = [0_u8; 96];
+    preimage[..48].copy_from_slice(left);
+    preimage[48..].copy_from_slice(right);
+    hash48(
+        b"postfiat.pftl_uniswap.receipt_merkle_node.v1",
+        &preimage,
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

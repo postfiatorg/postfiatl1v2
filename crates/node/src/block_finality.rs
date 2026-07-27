@@ -1391,6 +1391,78 @@ fn account_tx_rows_for_transparent_block(
                 None,
                 None,
             ),
+            AssetTransactionOperation::PftlUniswapRouteInitV2(operation) => (
+                operation.operator.clone(),
+                operation.route_id.clone(),
+                0,
+                Some(operation.native_nav_asset_id.clone()),
+                None,
+                None,
+                None,
+            ),
+            AssetTransactionOperation::PftlUniswapOrderReserve(operation) => (
+                operation.subscriber.clone(),
+                operation.route_id.clone(),
+                operation.mint_amount_atoms,
+                None,
+                None,
+                None,
+                None,
+            ),
+            AssetTransactionOperation::PftlUniswapOrderRelease(operation) => (
+                operation.releaser.clone(),
+                operation.route_id.clone(),
+                0,
+                None,
+                None,
+                None,
+                None,
+            ),
+            AssetTransactionOperation::PftlUniswapPrimarySubscribeV2(operation) => (
+                operation.subscriber.clone(),
+                operation.route_id.clone(),
+                operation.settlement_value_atoms,
+                Some(operation.settlement_asset_id.clone()),
+                None,
+                None,
+                None,
+            ),
+            AssetTransactionOperation::PftlUniswapRedemptionFund(operation) => (
+                operation.funder.clone(),
+                operation.route_id.clone(),
+                operation.amount_atoms,
+                Some(operation.settlement_asset_id.clone()),
+                None,
+                None,
+                None,
+            ),
+            AssetTransactionOperation::PftlUniswapPrimaryRedeem(operation) => (
+                operation.owner.clone(),
+                operation.settlement_recipient.clone(),
+                operation.nav_amount_atoms,
+                None,
+                None,
+                None,
+                None,
+            ),
+            AssetTransactionOperation::PftlUniswapRouteEpochAdvance(operation) => (
+                operation.operator.clone(),
+                operation.route_id.clone(),
+                0,
+                None,
+                None,
+                None,
+                None,
+            ),
+            AssetTransactionOperation::PftlUniswapRoutePause(operation) => (
+                operation.operator.clone(),
+                operation.route_id.clone(),
+                0,
+                None,
+                None,
+                None,
+                None,
+            ),
             AssetTransactionOperation::PftlUniswapExportDebit(operation) => (
                 operation.owner.clone(),
                 operation.ethereum_recipient.clone(),
@@ -2594,6 +2666,7 @@ mod block_proposal_vote_lock_tests {
                 batch_id: format!("batch-{view}"),
                 state_root: "state".to_string(),
                 bridge_exit_root: None,
+                pftl_uniswap_receipt_root: None,
                 receipt_ids: Vec::new(),
                 fastpay_pre_state_effects: Vec::new(),
             },
@@ -3944,6 +4017,16 @@ fn validate_block_proposal_file(proposal: &BlockProposalFile, genesis: &Genesis)
             "block proposal receipt count mismatch",
         ));
     }
+    if let Some(root) = &proposal.pftl_uniswap_receipt_root {
+        validate_lower_hex_len("block_proposal.pftl_uniswap_receipt_root", root, 96)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        if !consensus_v2_active_at(genesis, proposal.block_height) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "PFTL-Uniswap receipt roots require consensus v2 finality",
+            ));
+        }
+    }
     validate_fastpay_pre_state_effects(&proposal.fastpay_pre_state_effects)?;
     if let Some(signature) = proposal.signature.as_ref() {
         if signature.signer.is_empty()
@@ -4010,6 +4093,7 @@ mod bridge_exit_root_activation_tests {
             payload_hash: "33".repeat(48),
             state_root: "44".repeat(48),
             bridge_exit_root: root,
+            pftl_uniswap_receipt_root: None,
             receipt_count: 0,
             receipt_ids: Vec::new(),
             fastpay_pre_state_effects: Vec::new(),
@@ -4231,6 +4315,7 @@ fn block_proposal_hash(proposal: &BlockProposalFile) -> io::Result<String> {
         payload_hash: proposal.payload_hash.as_str(),
         state_root: proposal.state_root.as_str(),
         bridge_exit_root: proposal.bridge_exit_root.as_deref(),
+        pftl_uniswap_receipt_root: proposal.pftl_uniswap_receipt_root.as_deref(),
         receipt_ids: &proposal.receipt_ids,
         fastpay_pre_state_effects: &proposal.fastpay_pre_state_effects,
     })
@@ -4357,6 +4442,7 @@ fn block_proposal_hash_from_evidence(
         payload_hash,
         state_root: evidence.state_root,
         bridge_exit_root: evidence.bridge_exit_root,
+        pftl_uniswap_receipt_root: evidence.pftl_uniswap_receipt_root,
         receipt_ids: evidence.receipt_ids,
         fastpay_pre_state_effects: evidence.fastpay_pre_state_effects,
     })
@@ -4375,11 +4461,34 @@ struct BlockProposalHashInput<'a> {
     payload_hash: &'a str,
     state_root: &'a str,
     bridge_exit_root: Option<&'a str>,
+    pftl_uniswap_receipt_root: Option<&'a str>,
     receipt_ids: &'a [String],
     fastpay_pre_state_effects: &'a [postfiat_types::FastPayVersionFenceV1],
 }
 
 fn block_proposal_hash_fields(fields: BlockProposalHashInput<'_>) -> io::Result<String> {
+    if let Some(pftl_uniswap_receipt_root) = fields.pftl_uniswap_receipt_root {
+        let encoded = serde_json::to_vec(&(
+            "postfiat.block_proposal.v4",
+            fields.chain_id,
+            fields.genesis_hash,
+            fields.protocol_version,
+            fields.block_height,
+            fields.view,
+            fields.parent_hash,
+            fields.proposer,
+            fields.batch_kind,
+            fields.batch_id,
+            fields.payload_hash,
+            fields.state_root,
+            fields.bridge_exit_root,
+            pftl_uniswap_receipt_root,
+            fields.receipt_ids,
+            fields.fastpay_pre_state_effects,
+        ))
+        .map_err(invalid_data)?;
+        return Ok(hash_hex("postfiat.block_proposal.v4", &encoded));
+    }
     if let Some(bridge_exit_root) = fields.bridge_exit_root {
         let encoded = serde_json::to_vec(&(
             "postfiat.block_proposal.v3",

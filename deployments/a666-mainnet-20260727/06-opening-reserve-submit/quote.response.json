@@ -1,0 +1,17 @@
+{
+  "error": {
+    "code": "rpc_protocol_error",
+    "message": "rpc request param `operation_json` must not exceed 4096 bytes"
+  },
+  "events": [
+    {
+      "event_type": "rpc_serve",
+      "message": "remote rpc request rejected",
+      "subject": "rpc_protocol_error"
+    }
+  ],
+  "id": "a666-v2-opening-reserve-submit-quote",
+  "ok": false,
+  "result": null,
+  "version": "postfiat-local-rpc-v1"
+}

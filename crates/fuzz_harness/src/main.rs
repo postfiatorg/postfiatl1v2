@@ -1618,6 +1618,7 @@ fn issued_supply_fixture(
             export_nonces: std::collections::BTreeMap::new(),
             return_imports: std::collections::BTreeMap::new(),
             paused: false,
+            v2: None,
         });
 
     let mut pool = OrchardPoolState::empty(format!("issued-fuzz-pool-{iteration}"));

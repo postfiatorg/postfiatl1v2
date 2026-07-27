@@ -1,0 +1,35 @@
+{
+  "schema": "postfiat-certified-asset-ops-request-v1",
+  "operations": [
+    {
+      "label": "a666-v2-nav-profile-register",
+      "source": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+      "key_file": "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/faucet-key.json",
+      "dependencies": [
+        {
+          "label": "a666-v2-asset-create",
+          "mode": "prior_round",
+          "reason": "the A666 v2 asset definition finalized at height 337"
+        }
+      ],
+      "operation": {
+        "operation": "nav_profile_register",
+        "registrant": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+        "verifier_kind": "sp1-groth16",
+        "source_class": "stakehub-six-leg-reserves-v2",
+        "max_snapshot_age_blocks": 900,
+        "challenge_window_blocks": 1,
+        "max_epoch_gap_blocks": 128,
+        "settle_deadline_blocks": 256,
+        "min_challenge_bond": 0,
+        "min_attestations": 0,
+        "tolerance_bp": 0,
+        "valuation_policy_hash": "a13553ba6f1a48dbe02dbc34de4d8faed1afa962dc2d2b29ff6f0c6b7ac6fd5c",
+        "sp1_program_vkey": "0x00f96064937f05d891b13a80667bdf5ecd62a7d5ed245724ab294bad311a2164",
+        "sp1_proof_encoding": "groth16",
+        "max_proof_bytes": 4096,
+        "max_public_values_bytes": 16384
+      }
+    }
+  ]
+}

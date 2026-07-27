@@ -2690,6 +2690,81 @@ fn vault_bridge_withdrawal_packet_evm_digest_matches_solidity_abi_vector() {
 }
 
 #[test]
+fn pftl_uniswap_receipt_merkle_proof_is_bounded_and_tamper_evident() {
+    let mut receipts = (1_u64..=5)
+        .map(|height| {
+            let mut receipt = PftlUniswapConsensusReceipt {
+                receipt_hash: "00".repeat(48),
+                transition: "export_debit".to_string(),
+                route_id: "a666-mainnet".to_string(),
+                state_before_hash: format!("{:096x}", height),
+                state_after_hash: format!("{:096x}", height + 10),
+                packet_hash: Some(format!("{:096x}", height + 20)),
+                burn_event_hash: None,
+                wallet: Some("bob".to_string()),
+                amount_atoms: Some(250_000_000_000),
+                block_height: height,
+            };
+            receipt.receipt_hash = pftl_uniswap_consensus_receipt_computed_hash(&receipt);
+            receipt
+        })
+        .collect::<Vec<_>>();
+    receipts.reverse();
+    let root = pftl_uniswap_consensus_receipt_root(&receipts).expect("root");
+    let hashes = receipts
+        .iter()
+        .map(|receipt| receipt.receipt_hash.clone())
+        .collect::<Vec<_>>();
+    for target in &hashes {
+        let proof =
+            pftl_uniswap_consensus_receipt_merkle_proof(&hashes, target).expect("proof");
+        assert!(proof.steps.len() <= 3);
+        verify_pftl_uniswap_consensus_receipt_merkle_proof(&root, target, &proof)
+            .expect("valid proof");
+        let mut tampered = proof;
+        tampered.steps[0].sibling_hash = "ff".repeat(48);
+        assert!(
+            verify_pftl_uniswap_consensus_receipt_merkle_proof(&root, target, &tampered).is_err()
+        );
+    }
+}
+
+#[test]
+fn pftl_uniswap_mint_packet_v2_digest_is_stable_and_receipt_independent() {
+    let mut packet = PftlUniswapMintPacketV2 {
+        route_config_digest: "11".repeat(48),
+        source_packet_hash: "22".repeat(48),
+        reservation_id: "aa".repeat(48),
+        source_receipt_hash: "33".repeat(48),
+        source_receipt_root: "44".repeat(48),
+        settlement_asset_id: "55".repeat(48),
+        native_nav_asset_id: "66".repeat(48),
+        pricing_reserve_packet_hash: "77".repeat(48),
+        policy_hash_commitment: "88".repeat(32),
+        route_epoch: 7,
+        pricing_nav_epoch: 9,
+        deadline_seconds: 1_800_000_000,
+        nonce: "99".repeat(32),
+        destination_chain_id: 1,
+        destination_controller: "0x1111111111111111111111111111111111111111".to_string(),
+        wrapped_token: "0x2222222222222222222222222222222222222222".to_string(),
+        ethereum_recipient: "0x3333333333333333333333333333333333333333".to_string(),
+        mint_amount_atoms: 250_000_000_000,
+        settlement_value_atoms: 251_250_000_000,
+    };
+    let digest = packet.evm_digest().expect("digest");
+    assert_eq!(
+        digest,
+        "a8bfc40472aed2c1cc514509249c8d0477962a41f262545dd53e24550d8c67c3"
+    );
+    packet.source_receipt_hash = "aa".repeat(48);
+    packet.source_receipt_root = "bb".repeat(48);
+    assert_eq!(packet.evm_digest().expect("digest"), digest);
+    packet.reservation_id = "ab".repeat(48);
+    assert_ne!(packet.evm_digest().expect("digest"), digest);
+}
+
+#[test]
 fn nav_mint_vault_bridge_settlement_signing_bytes_are_optional_and_committed() {
     let legacy = NavMintAtNavOperation {
         issuer: "pfissuer000000000000000000000000000000000".to_string(),

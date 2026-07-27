@@ -1232,6 +1232,7 @@ pub(super) fn transport_hot_finality_reports(
             batch_id: proposal.batch_id.clone(),
             state_root: proposal.state_root.clone(),
             bridge_exit_root: proposal.bridge_exit_root.clone(),
+            pftl_uniswap_receipt_root: proposal.pftl_uniswap_receipt_root.clone(),
             receipt_count: proposal.receipt_count,
             certificate_id: certificate.certificate_id.clone(),
             certificate: certificate.certificate.clone(),

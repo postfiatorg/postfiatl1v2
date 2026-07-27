@@ -11,6 +11,7 @@ pub(super) fn dummy_block_record(height: u64) -> BlockRecord {
             batch_id: format!("batch-{height}"),
             state_root: format!("state-root-{height}"),
             bridge_exit_root: None,
+            pftl_uniswap_receipt_root: None,
             receipt_count: 0,
             certificate_id: format!("certificate-{height}"),
             certificate: BlockCertificate {
@@ -3651,6 +3652,7 @@ fn status_recovers_pending_ordered_commit_delta_journal() {
             batch_id: archive_entry.batch_id.clone(),
             state_root: "delta-state-root".to_string(),
             bridge_exit_root: None,
+            pftl_uniswap_receipt_root: None,
             receipt_count: 0,
             certificate_id: "delta-certificate-id".to_string(),
             certificate: BlockCertificate {

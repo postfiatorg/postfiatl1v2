@@ -3114,11 +3114,11 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         2,
         AssetTransactionOperation::AssetCreate(AssetCreateOperation {
             issuer: issuer.clone(),
-            code: "A651".to_string(),
-            version: 1,
+            code: "A666".to_string(),
+            version: 2,
             precision: 6,
-            display_name: "NAV Coin a651".to_string(),
-            max_supply: Some(1_000_000),
+            display_name: "NAV Coin a666".to_string(),
+            max_supply: None,
             requires_authorization: false,
             freeze_enabled: true,
             clawback_enabled: false,
@@ -3537,7 +3537,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
             latest_finalized_nav_epoch: 7,
             return_finality_blocks: 12,
             live_value_enabled: true,
-            ethereum_verification_policy: Some(policy),
+            ethereum_verification_policy: Some(policy.clone()),
         }),
     );
     let verified_receipt = super::execute_asset_transaction(
@@ -3596,6 +3596,8 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
             export_nonce: "17".repeat(32),
             ethereum_recipient: "0x4444444444444444444444444444444444444444".to_string(),
             amount_atoms: 40,
+            reservation_id: None,
+            settlement_value_atoms: None,
             destination_deadline_seconds: 1_800,
             refund_delay_blocks: 3,
             ethereum_packet_digest: Some("30".repeat(32)),
@@ -4143,6 +4145,18 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
 
     let receipt = super::execute_asset_transaction(&genesis, &mut ledger, &route_init, 8);
     assert!(receipt.accepted, "{receipt:?}");
+    // Upgrade this legacy fixture to the governed checkpoint policy before it
+    // exercises live-value operations. Production CONTROLLED routes remain
+    // fail-closed, as asserted above.
+    ledger.fastswap_committees.push(authority.clone());
+    let legacy_route = ledger
+        .pftl_uniswap_routes
+        .iter_mut()
+        .find(|route| route.route_id == route_id)
+        .expect("legacy fixture route");
+    legacy_route.route_trust_class = PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT.to_string();
+    legacy_route.ethereum_verification_policy = Some(policy);
+    legacy_route.live_value_enabled = true;
     assert_eq!(ledger.pftl_uniswap_receipts.len(), 1);
     assert_eq!(
         ledger
@@ -4561,6 +4575,8 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
             export_nonce: "77".repeat(32),
             ethereum_recipient: "0x4444444444444444444444444444444444444444".to_string(),
             amount_atoms: 40,
+            reservation_id: None,
+            settlement_value_atoms: None,
             destination_deadline_seconds: 1_800,
             refund_delay_blocks: 3,
             ethereum_packet_digest: Some("65".repeat(32)),
@@ -4684,8 +4700,12 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
             external_event_proof: None,
         }),
     );
-    let live_refund_receipt =
-        super::execute_asset_transaction(&genesis, &mut refund_ledger, &refund, 13);
+    let live_refund_receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut refund_ledger,
+        &refund,
+        13,
+    );
     assert!(live_refund_receipt.accepted, "{live_refund_receipt:?}");
     assert_eq!(
         refund_ledger
@@ -4856,7 +4876,12 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
             },
         ),
     );
-    let receipt = super::execute_asset_transaction(&genesis, &mut ledger, &destination_consume, 14);
+    let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut ledger,
+        &destination_consume,
+        14,
+    );
     assert!(receipt.accepted, "{receipt:?}");
     {
         let route = ledger
@@ -4976,8 +5001,12 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
             external_event_proof: None,
         }),
     );
-    let live_return_receipt =
-        super::execute_asset_transaction(&genesis, &mut ledger, &return_import, 23);
+    let live_return_receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut ledger,
+        &return_import,
+        23,
+    );
     assert!(live_return_receipt.accepted, "{live_return_receipt:?}");
     assert_eq!(
         ledger
@@ -5008,13 +5037,534 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         assert_eq!(imported.amount_atoms, 40);
     }
     assert_eq!(ledger.pftl_uniswap_receipts.len(), 5);
-    for route_number in 2_u64..=8 {
+
+    let operator_settlement_trust = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &operator_key,
+        TRUST_SET_TRANSACTION_KIND,
+        ledger.account(&operator).expect("operator").sequence + 1,
+        AssetTransactionOperation::TrustSet(TrustSetOperation {
+            account: operator.clone(),
+            issuer: issuer.clone(),
+            asset_id: settlement_asset_id.clone(),
+            limit: 2_000,
+            authorized: false,
+            frozen: false,
+            reserve_paid: TRUSTLINE_STATE_EXPANSION_FEE,
+        }),
+    );
+    let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut ledger,
+        &operator_settlement_trust,
+        24,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let fund_operator = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &issuer_key,
+        ISSUED_PAYMENT_TRANSACTION_KIND,
+        ledger.account(&issuer).expect("issuer").sequence + 1,
+        AssetTransactionOperation::IssuedPayment(IssuedPaymentOperation {
+            from: issuer.clone(),
+            to: operator.clone(),
+            issuer: issuer.clone(),
+            asset_id: settlement_asset_id.clone(),
+            amount: 800,
+        }),
+    );
+    let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut ledger,
+        &fund_operator,
+        24,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+
+    let mut primary_policy = PftlUniswapPrimaryMarketPolicyV2 {
+        policy_hash: String::new(),
+        policy_epoch: 1,
+        issue_multiplier_bps: PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS,
+        redeem_multiplier_bps: PFTL_UNISWAP_A666_REDEEM_MULTIPLIER_BPS,
+        issue_capacity_atoms: 800,
+        redeem_capacity_atoms: 800,
+        max_order_atoms: 400,
+        min_order_atoms: 1,
+        valid_from_height: 24,
+        expires_at_height: 100,
+        max_nav_age_blocks: 100,
+        pricing_nav_epoch: 7,
+        pricing_reserve_packet_hash: pricing_reserve_packet_hash.clone(),
+    };
+    primary_policy.policy_hash = primary_policy.computed_hash();
+    let v2_route_id = "pftl-uniswap-a666-v2".to_string();
+    let v2_route_operation = PftlUniswapRouteInitV2Operation {
+        operator: operator.clone(),
+        route_id: v2_route_id.clone(),
+        route_config_digest: "b1".repeat(48),
+        native_nav_asset_id: native_nav_asset_id.clone(),
+        settlement_asset_id: settlement_asset_id.clone(),
+        opening_inventory_atoms: 0,
+        opening_inventory_holder: String::new(),
+        handoff_controller: "0x1111111111111111111111111111111111111111".to_string(),
+        settlement_adapter: "0x2222222222222222222222222222222222222222".to_string(),
+        wrapped_navcoin_token: "0x3333333333333333333333333333333333333333".to_string(),
+        ethereum_chain_id: 1,
+        route_supply_cap_atoms: 800,
+        packet_notional_cap_atoms: 100,
+        latest_finalized_nav_epoch: 7,
+        return_finality_blocks: 12,
+        route_epoch: 1,
+        outbound_verification_class: PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY.to_string(),
+        return_verification_class: PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT.to_string(),
+        live_value_enabled: false,
+        ethereum_verification_policy: EthereumRouteVerificationPolicyV1 {
+            authority_epoch: 1,
+            committee_root: FastSwapCommitteeRootV1([0xb2; 48]),
+            minimum_confirmations: 12,
+            handoff_controller_code_hash: [0xb3; 32],
+            wrapped_navcoin_code_hash: [0xb4; 32],
+        },
+        primary_market_policy: primary_policy.clone(),
+    };
+
+    // A fresh production route can adopt already-minted NAV only when the
+    // proof-backed circulating supply, issued supply, and one movable holder
+    // balance are exactly the same amount.
+    let mut opening_inventory_ledger = ledger.clone();
+    opening_inventory_ledger.pftl_uniswap_routes.clear();
+    opening_inventory_ledger.pftl_uniswap_receipts.clear();
+    let mut opening_operation = v2_route_operation.clone();
+    opening_operation.route_id = "pftl-uniswap-a666-opening-inventory".to_string();
+    opening_operation.opening_inventory_atoms = 100;
+    opening_operation.opening_inventory_holder = subscriber.clone();
+    let opening_route_init = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &opening_inventory_ledger,
+        &operator_key,
+        PFTL_UNISWAP_ROUTE_INIT_V2_TRANSACTION_KIND,
+        opening_inventory_ledger
+            .account(&operator)
+            .expect("operator")
+            .sequence
+            + 1,
+        AssetTransactionOperation::PftlUniswapRouteInitV2(opening_operation.clone()),
+    );
+    let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut opening_inventory_ledger,
+        &opening_route_init,
+        24,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let opening_route = opening_inventory_ledger
+        .pftl_uniswap_route(&opening_operation.route_id)
+        .expect("opening inventory route");
+    assert_eq!(opening_route.authorized_valid_supply_atoms, 100);
+    assert_eq!(opening_route.pftl_spendable_supply_atoms, 100);
+    assert_eq!(
+        opening_route
+            .native_spendable_balances_atoms
+            .get(&subscriber),
+        Some(&100)
+    );
+
+    let mut mismatched_opening_ledger = ledger.clone();
+    mismatched_opening_ledger.pftl_uniswap_routes.clear();
+    mismatched_opening_ledger.pftl_uniswap_receipts.clear();
+    let mut mismatched_opening_operation = opening_operation.clone();
+    mismatched_opening_operation.route_id = "pftl-uniswap-a666-bad-opening".to_string();
+    mismatched_opening_operation.opening_inventory_atoms = 99;
+    let mismatched_opening_init = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &mismatched_opening_ledger,
+        &operator_key,
+        PFTL_UNISWAP_ROUTE_INIT_V2_TRANSACTION_KIND,
+        mismatched_opening_ledger
+            .account(&operator)
+            .expect("operator")
+            .sequence
+            + 1,
+        AssetTransactionOperation::PftlUniswapRouteInitV2(mismatched_opening_operation),
+    );
+    let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut mismatched_opening_ledger,
+        &mismatched_opening_init,
+        24,
+    );
+    assert!(!receipt.accepted);
+    assert_eq!(
+        receipt.code,
+        "pftl_uniswap_opening_inventory_supply_mismatch"
+    );
+
+    let double_count_init = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &operator_key,
+        PFTL_UNISWAP_ROUTE_INIT_V2_TRANSACTION_KIND,
+        ledger.account(&operator).expect("operator").sequence + 1,
+        AssetTransactionOperation::PftlUniswapRouteInitV2(opening_operation),
+    );
+    let mut double_count_ledger = ledger.clone();
+    let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut double_count_ledger,
+        &double_count_init,
+        24,
+    );
+    assert!(!receipt.accepted);
+    assert_eq!(
+        receipt.code,
+        "pftl_uniswap_opening_inventory_double_count"
+    );
+
+    let v2_route_init = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &operator_key,
+        PFTL_UNISWAP_ROUTE_INIT_V2_TRANSACTION_KIND,
+        ledger.account(&operator).expect("operator").sequence + 1,
+        AssetTransactionOperation::PftlUniswapRouteInitV2(v2_route_operation),
+    );
+    let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut ledger,
+        &v2_route_init,
+        24,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+
+    let unfunded_reserve = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &subscriber_key,
+        PFTL_UNISWAP_ORDER_RESERVE_TRANSACTION_KIND,
+        ledger.account(&subscriber).expect("subscriber").sequence + 1,
+        AssetTransactionOperation::PftlUniswapOrderReserve(
+            PftlUniswapOrderReserveOperation {
+                subscriber: subscriber.clone(),
+                route_id: v2_route_id.clone(),
+                reservation_id: "b0".repeat(48),
+                ethereum_recipient: "0x4444444444444444444444444444444444444444"
+                    .to_string(),
+                route_epoch: 1,
+                policy_epoch: 1,
+                policy_hash: primary_policy.policy_hash.clone(),
+                mint_amount_atoms: 40,
+                max_settlement_value_atoms: 282,
+                expires_at_height: 30,
+            },
+        ),
+    );
+    let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut ledger,
+        &unfunded_reserve,
+        24,
+    );
+    assert!(!receipt.accepted);
+    assert_eq!(receipt.code, "pftl_uniswap_route_paused");
+
+    // The legacy funding operation remains decodable for protocol
+    // compatibility, but v2 rejects it: subscription principal funds
+    // redemption and no separate liquidity bucket exists.
+    let retired_liquidity_fund = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &operator_key,
+        PFTL_UNISWAP_REDEMPTION_FUND_TRANSACTION_KIND,
+        ledger.account(&operator).expect("operator").sequence + 1,
+        AssetTransactionOperation::PftlUniswapRedemptionFund(
+            PftlUniswapRedemptionFundOperation {
+                funder: operator.clone(),
+                route_id: v2_route_id.clone(),
+                settlement_asset_id: settlement_asset_id.clone(),
+                funding_nonce: "b5".repeat(32),
+                amount_atoms: 800,
+            },
+        ),
+    );
+    let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut ledger,
+        &retired_liquidity_fund,
+        24,
+    );
+    assert!(!receipt.accepted, "{receipt:?}");
+    assert_eq!(receipt.code, "pftl_uniswap_redemption_fund_retired");
+
+    primary_policy.policy_epoch = 2;
+    primary_policy.policy_hash = primary_policy.computed_hash();
+    let activate_route = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &operator_key,
+        PFTL_UNISWAP_ROUTE_EPOCH_ADVANCE_TRANSACTION_KIND,
+        ledger.account(&operator).expect("operator").sequence + 1,
+        AssetTransactionOperation::PftlUniswapRouteEpochAdvance(
+            PftlUniswapRouteEpochAdvanceOperation {
+                operator: operator.clone(),
+                route_id: v2_route_id.clone(),
+                prior_route_epoch: 1,
+                next_route_epoch: 2,
+                next_route_config_digest: "b2".repeat(48),
+                live_value_enabled: true,
+                next_primary_market_policy: primary_policy.clone(),
+            },
+        ),
+    );
+    let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut ledger,
+        &activate_route,
+        24,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+
+    let reservation_id = "b6".repeat(48);
+    let reserve = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &subscriber_key,
+        PFTL_UNISWAP_ORDER_RESERVE_TRANSACTION_KIND,
+        ledger.account(&subscriber).expect("subscriber").sequence + 1,
+        AssetTransactionOperation::PftlUniswapOrderReserve(
+            PftlUniswapOrderReserveOperation {
+                subscriber: subscriber.clone(),
+                route_id: v2_route_id.clone(),
+                reservation_id: reservation_id.clone(),
+                ethereum_recipient: "0x4444444444444444444444444444444444444444"
+                    .to_string(),
+                route_epoch: 2,
+                policy_epoch: 2,
+                policy_hash: primary_policy.policy_hash.clone(),
+                mint_amount_atoms: 40,
+                max_settlement_value_atoms: 282,
+                expires_at_height: 30,
+            },
+        ),
+    );
+    ledger
+        .pftl_uniswap_routes
+        .iter_mut()
+        .find(|route| route.route_id == v2_route_id)
+        .expect("v2 route")
+        .live_value_enabled = false;
+    let disabled_receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut ledger,
+        &reserve,
+        24,
+    );
+    assert!(!disabled_receipt.accepted);
+    assert_eq!(disabled_receipt.code, "pftl_uniswap_route_paused");
+    ledger
+        .pftl_uniswap_routes
+        .iter_mut()
+        .find(|route| route.route_id == v2_route_id)
+        .expect("v2 route")
+        .live_value_enabled = true;
+    let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut ledger,
+        &reserve,
+        24,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+
+    let subscribe_v2 = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &subscriber_key,
+        PFTL_UNISWAP_PRIMARY_SUBSCRIBE_V2_TRANSACTION_KIND,
+        ledger.account(&subscriber).expect("subscriber").sequence + 1,
+        AssetTransactionOperation::PftlUniswapPrimarySubscribeV2(
+            PftlUniswapPrimarySubscribeV2Operation {
+                subscriber: subscriber.clone(),
+                route_id: v2_route_id.clone(),
+                reservation_id: reservation_id.clone(),
+                subscription_nonce: "b7".repeat(32),
+                settlement_asset_id: settlement_asset_id.clone(),
+                settlement_value_atoms: 282,
+                pricing_nav_epoch: 7,
+                pricing_reserve_packet_hash: pricing_reserve_packet_hash.clone(),
+            },
+        ),
+    );
+    let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut ledger,
+        &subscribe_v2,
+        25,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+
+    let redeem_v2 = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &subscriber_key,
+        PFTL_UNISWAP_PRIMARY_REDEEM_TRANSACTION_KIND,
+        ledger.account(&subscriber).expect("subscriber").sequence + 1,
+        AssetTransactionOperation::PftlUniswapPrimaryRedeem(
+            PftlUniswapPrimaryRedeemOperation {
+                owner: subscriber.clone(),
+                settlement_recipient: subscriber.clone(),
+                route_id: v2_route_id.clone(),
+                redemption_nonce: "b8".repeat(32),
+                nav_amount_atoms: 10,
+                min_settlement_value_atoms: 69,
+                route_epoch: 2,
+                policy_epoch: 2,
+                policy_hash: primary_policy.policy_hash.clone(),
+                pricing_nav_epoch: 7,
+                pricing_reserve_packet_hash: pricing_reserve_packet_hash.clone(),
+                expires_at_height: 30,
+            },
+        ),
+    );
+    let pause_route = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &operator_key,
+        PFTL_UNISWAP_ROUTE_PAUSE_TRANSACTION_KIND,
+        ledger.account(&operator).expect("operator").sequence + 1,
+        AssetTransactionOperation::PftlUniswapRoutePause(PftlUniswapRoutePauseOperation {
+            operator: operator.clone(),
+            route_id: v2_route_id.clone(),
+            paused: true,
+        }),
+    );
+    let pause_receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut ledger,
+        &pause_route,
+        26,
+    );
+    assert!(pause_receipt.accepted, "{pause_receipt:?}");
+    let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut ledger,
+        &redeem_v2,
+        26,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let resume_route = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &operator_key,
+        PFTL_UNISWAP_ROUTE_PAUSE_TRANSACTION_KIND,
+        ledger.account(&operator).expect("operator").sequence + 1,
+        AssetTransactionOperation::PftlUniswapRoutePause(PftlUniswapRoutePauseOperation {
+            operator: operator.clone(),
+            route_id: v2_route_id.clone(),
+            paused: false,
+        }),
+    );
+    let resume_receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut ledger,
+        &resume_route,
+        26,
+    );
+    assert!(resume_receipt.accepted, "{resume_receipt:?}");
+    {
+        let route = ledger
+            .pftl_uniswap_route(&v2_route_id)
+            .expect("v2 primary route");
+        let v2 = route.v2.as_ref().expect("v2 route state");
+        assert_eq!(route.authorized_valid_supply_atoms, 30);
+        assert_eq!(route.settlement_reserve_atoms, 210);
+        assert_eq!(v2.issue_capacity_used_atoms, 40);
+        assert_eq!(v2.redeem_capacity_used_atoms, 10);
+        assert_eq!(v2.non_nav_spread_atoms, 3);
+        assert_eq!(
+            v2.terminal_reservations.get(&reservation_id).map(String::as_str),
+            Some(PFTL_UNISWAP_ORDER_STATUS_CONSUMED)
+        );
+    }
+    let export_packet_hash = "b9".repeat(48);
+    let export_nonce = "ba".repeat(32);
+    let export_recipient = "0x4444444444444444444444444444444444444444".to_string();
+    let export_digest = {
+        let route = ledger
+            .pftl_uniswap_route(&v2_route_id)
+            .expect("v2 route for packet");
+        let v2 = route.v2.as_ref().expect("v2");
+        PftlUniswapMintPacketV2 {
+            route_config_digest: route.route_config_digest.clone(),
+            source_packet_hash: export_packet_hash.clone(),
+            reservation_id: reservation_id.clone(),
+            source_receipt_hash: "01".repeat(48),
+            source_receipt_root: "02".repeat(48),
+            settlement_asset_id: route.settlement_asset_id.clone(),
+            native_nav_asset_id: route.native_nav_asset_id.clone(),
+            pricing_reserve_packet_hash: primary_policy.pricing_reserve_packet_hash.clone(),
+            policy_hash_commitment: postfiat_types::pftl_uniswap_keccak_commitment48(
+                "policy",
+                &primary_policy.policy_hash,
+            )
+            .expect("policy commitment"),
+            route_epoch: v2.route_epoch,
+            pricing_nav_epoch: primary_policy.pricing_nav_epoch,
+            deadline_seconds: 1_800,
+            nonce: export_nonce.clone(),
+            destination_chain_id: route.ethereum_chain_id,
+            destination_controller: route.handoff_controller.clone(),
+            wrapped_token: route.wrapped_navcoin_token.clone(),
+            ethereum_recipient: export_recipient.clone(),
+            mint_amount_atoms: 20,
+            settlement_value_atoms: 141,
+        }
+        .evm_digest()
+        .expect("v2 packet digest")
+    };
+    let export_v2 = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &subscriber_key,
+        PFTL_UNISWAP_EXPORT_DEBIT_TRANSACTION_KIND,
+        ledger.account(&subscriber).expect("subscriber").sequence + 1,
+        AssetTransactionOperation::PftlUniswapExportDebit(PftlUniswapExportDebitOperation {
+            owner: subscriber.clone(),
+            route_id: v2_route_id.clone(),
+            packet_hash: export_packet_hash.clone(),
+            export_nonce,
+            ethereum_recipient: export_recipient,
+            amount_atoms: 20,
+            reservation_id: Some(reservation_id.clone()),
+            settlement_value_atoms: Some(141),
+            destination_deadline_seconds: 1_800,
+            refund_delay_blocks: 3,
+            ethereum_packet_digest: Some(export_digest),
+            ethereum_packet_schema_version: Some(PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V2),
+        }),
+    );
+    let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut ledger,
+        &export_v2,
+        27,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    assert_eq!(
+        ledger
+            .pftl_uniswap_route(&v2_route_id)
+            .expect("v2 route after export")
+            .outstanding_bridge_claims_atoms,
+        20
+    );
+
+    for route_number in 2_u64..=7 {
         let extra_route_init = signed_asset_transaction_with_minimum_fee(
             &genesis,
             &ledger,
             &operator_key,
             PFTL_UNISWAP_ROUTE_INIT_TRANSACTION_KIND,
-            route_number + 3,
+            ledger.account(&operator).expect("operator").sequence + 1,
             AssetTransactionOperation::PftlUniswapRouteInit(PftlUniswapRouteInitOperation {
                 operator: operator.clone(),
                 route_id: format!("pftl-uniswap-a651-{route_number}"),
@@ -5049,7 +5599,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         &ledger,
         &operator_key,
         PFTL_UNISWAP_ROUTE_INIT_TRANSACTION_KIND,
-        12,
+        ledger.account(&operator).expect("operator").sequence + 1,
         AssetTransactionOperation::PftlUniswapRouteInit(PftlUniswapRouteInitOperation {
             operator: operator.clone(),
             route_id: "pftl-uniswap-a651-over-cap".to_string(),
@@ -5083,4 +5633,151 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
     ledger
         .validate_asset_state(&genesis.chain_id)
         .expect("valid PFTL-Uniswap consensus asset state");
+}
+
+#[test]
+fn pftl_uniswap_v2_fixed_point_spreads_round_against_the_protocol() {
+    assert_eq!(
+        checked_mul_div_ceil(
+            1_000_000,
+            PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS,
+            PFTL_UNISWAP_BPS_DENOMINATOR,
+        )
+        .expect("issue price"),
+        1_005_000
+    );
+    assert_eq!(
+        checked_mul_div_floor(
+            1_000_000,
+            PFTL_UNISWAP_A666_REDEEM_MULTIPLIER_BPS,
+            PFTL_UNISWAP_BPS_DENOMINATOR,
+        )
+        .expect("redemption price"),
+        999_500
+    );
+    assert_eq!(
+        checked_mul_div_ceil(
+            1,
+            PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS,
+            PFTL_UNISWAP_BPS_DENOMINATOR,
+        )
+        .expect("ceil one atom"),
+        2
+    );
+    assert_eq!(
+        checked_mul_div_floor(
+            1,
+            PFTL_UNISWAP_A666_REDEEM_MULTIPLIER_BPS,
+            PFTL_UNISWAP_BPS_DENOMINATOR,
+        )
+        .expect("floor one atom"),
+        0
+    );
+}
+
+#[test]
+fn pftl_uniswap_v2_state_binds_directional_trust_capacity_and_non_nav_spread() {
+    let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        policy_hash: String::new(),
+        policy_epoch: 1,
+        issue_multiplier_bps: PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS,
+        redeem_multiplier_bps: PFTL_UNISWAP_A666_REDEEM_MULTIPLIER_BPS,
+        issue_capacity_atoms: 2_000_000_000_000,
+        redeem_capacity_atoms: 2_000_000_000_000,
+        max_order_atoms: 1_000_000_000_000,
+        min_order_atoms: 1_000_000,
+        valid_from_height: 10,
+        expires_at_height: 1_000,
+        max_nav_age_blocks: 100,
+        pricing_nav_epoch: 7,
+        pricing_reserve_packet_hash: "92".repeat(48),
+    };
+    policy.policy_hash = policy.computed_hash();
+    let policy_hash = policy.policy_hash.clone();
+    let mut route = PftlUniswapConsensusRouteState {
+        route_id: "a666-mainnet-v2".to_string(),
+        route_family: PFTL_UNISWAP_ROUTE_FAMILY_PRIMARY_MINT.to_string(),
+        route_config_digest: "93".repeat(48),
+        route_trust_class: PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT.to_string(),
+        native_nav_asset_id: "94".repeat(48),
+        settlement_asset_id: "95".repeat(48),
+        handoff_controller: "0x1111111111111111111111111111111111111111".to_string(),
+        settlement_adapter: "0x2222222222222222222222222222222222222222".to_string(),
+        wrapped_navcoin_token: "0x3333333333333333333333333333333333333333".to_string(),
+        ethereum_chain_id: 1,
+        route_supply_cap_atoms: 2_000_000_000_000,
+        packet_notional_cap_atoms: 250_000_000_000,
+        latest_finalized_nav_epoch: 7,
+        return_finality_blocks: 12,
+        live_value_enabled: true,
+        ethereum_verification_policy: None,
+        authorized_valid_supply_atoms: 0,
+        pftl_spendable_supply_atoms: 0,
+        native_spendable_balances_atoms: std::collections::BTreeMap::new(),
+        ethereum_spendable_supply_atoms: 0,
+        other_registered_venue_supply_atoms: 0,
+        outstanding_bridge_claims_atoms: 0,
+        pending_return_import_claims_atoms: 0,
+        settlement_reserve_atoms: 0,
+        primary_subscription_nonces: std::collections::BTreeMap::new(),
+        export_packets: std::collections::BTreeMap::new(),
+        export_nonces: std::collections::BTreeMap::new(),
+        return_imports: std::collections::BTreeMap::new(),
+        paused: false,
+        v2: Some(PftlUniswapRouteV2State {
+            route_schema_version: PFTL_UNISWAP_ROUTE_SCHEMA_V2,
+            route_epoch: 1,
+            outbound_verification_class:
+                PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY.to_string(),
+            return_verification_class: PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT.to_string(),
+            primary_market_policy: policy,
+            issue_capacity_used_atoms: 0,
+            redeem_capacity_used_atoms: 0,
+            non_nav_spread_atoms: 0,
+            active_reservations: std::collections::BTreeMap::new(),
+            export_entitlements: std::collections::BTreeMap::new(),
+            terminal_reservations: std::collections::BTreeMap::new(),
+            redemption_nonces: std::collections::BTreeMap::new(),
+        }),
+    };
+    route.validate().expect("valid governed v2 route");
+    let baseline_hash = pftl_uniswap_route_state_hash(&route);
+
+    route
+        .v2
+        .as_mut()
+        .expect("v2")
+        .active_reservations
+        .insert(
+            "96".repeat(48),
+            PftlUniswapOrderReservationV2 {
+                reservation_id: "96".repeat(48),
+                subscriber: "bob".to_string(),
+                ethereum_recipient: "0x4444444444444444444444444444444444444444".to_string(),
+                route_epoch: 1,
+                policy_epoch: 1,
+                policy_hash,
+                mint_amount_atoms: 1_000_000_000_000,
+                max_settlement_value_atoms: 1_005_000_000_000,
+                created_at_height: 10,
+                expires_at_height: 20,
+                status: PFTL_UNISWAP_ORDER_STATUS_RESERVED.to_string(),
+            },
+        );
+    route.validate().expect("one maximum order fits");
+    assert_ne!(baseline_hash, pftl_uniswap_route_state_hash(&route));
+
+    route.v2.as_mut().expect("v2").issue_capacity_used_atoms = 1_000_000_000_001;
+    assert!(route
+        .validate()
+        .expect_err("reserved plus used capacity must fail")
+        .contains("used plus reserved"));
+
+    route.v2.as_mut().expect("v2").issue_capacity_used_atoms = 0;
+    route.v2.as_mut().expect("v2").outbound_verification_class =
+        PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT.to_string();
+    assert!(route
+        .validate()
+        .expect_err("outbound direction may not degrade")
+        .contains("TRUSTLESS_FINALITY"));
 }

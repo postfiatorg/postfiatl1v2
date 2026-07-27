@@ -5,6 +5,167 @@
 orc panes idle/stopped. This document is sufficient to resume with a fresh
 hierarchy or a single agent. Read it completely before touching anything.
 
+## Program history and binding product requirements — 2026-07-27
+
+This section records the product lineage that led to the Ethereum-mainnet
+pfUSDC rail and the downstream a666 requirement. It is the canonical
+interpretation of the campaign. The `NO a666 work` statement in Section 1
+scoped the pfUSDC campaign acceptance test; it does not mean that pfUSDC alone
+is the end-user product.
+
+### 1. Arbitrum was attempted and rejected because trustless finality took about six days
+
+The first Tier-4 pfUSDC design used canonical USDC on Arbitrum One. PFTL would
+verify the deposit output in an Arbitrum Nitro assertion `sendRoot`, then prove
+that the assertion was confirmed under finalized Ethereum state. This was the
+correct no-trust boundary, but a Nitro assertion required approximately 6.4
+days to become usable under that boundary.
+
+That delay made the route commercially unusable against the required
+25-minute user journey. The Arbitrum attempt therefore failed as a product
+route even though its proof architecture was technically coherent. Arbitrum
+is deprecated as a pfUSDC ingress domain: do not register or activate a new
+Arbitrum route profile. Historical Arbitrum balances remain explicitly
+accounted for as legacy conservation terms, not usable capacity.
+
+Source design:
+`docs/plans/PFUSDC-TIER4-IMPLEMENTATION-PLAN-20260717.md`. Deprecation
+decision:
+`docs/plans/A666-MAINNET-TRUSTLESS-MINT-SPEC-20260725.md`.
+
+### 2. Ethereum-mainnet pfUSDC was subsequently implemented and succeeded
+
+The replacement rail starts with canonical Ethereum-mainnet USDC:
+
+```text
+Ethereum USDC approval and vault deposit
+  -> finalized Ethereum evidence
+  -> SP1 Groth16 ingress proof
+  -> PFTL proposal/finalization
+  -> spendable pfUSDC credited to the named PFTL recipient
+```
+
+This path succeeded with real mainnet USDC and the six-validator PFTL fleet:
+
+- The 25 USDC campaign completed the entire ingress, PFTL transfer/privacy,
+  burn, proof, and mainnet withdrawal round trip with exact conservation and
+  replay rejection. Its first run was functionally correct but took
+  2h45m48s, so it failed the latency requirement.
+- The replacement 1 USDC run completed deposit inclusion through withdrawal
+  inclusion in 20m12s, passing the 25-minute requirement with 4m48s of
+  margin.
+
+Observed Ethereum cost to move USDC into spendable PFTL pfUSDC was:
+
+| Mainnet run | Approval gas | Deposit gas | Total ETH | USD at campaign-pinned $1,874.50/ETH |
+|---|---:|---:|---:|---:|
+| 25 USDC functional run | 55,570 | 215,669 | 0.000015740899 ETH | about $0.03 |
+| 1 USDC latency run | 55,558 | 215,645 | 0.000081604399 ETH | about $0.15 |
+
+The gas amount was approximately 271,000 in both runs; the ETH cost varied
+with the mainnet gas price. These figures cover the user's ERC-20 approval and
+vault deposit. They exclude off-chain proof-generation compute, contract
+deployment, and the later Ethereum withdrawal. Deposit gas is substantially
+amount-independent, so a larger USDC principal should be in the same gas class,
+subject to the live gas price and exact transaction path.
+
+Canonical evidence:
+`docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/closing/campaign-summary.json`,
+`docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/deposit/deposit-result.json`,
+`docs/evidence/pfusdc-eth-mainnet-latency-20260727-run2/roundtrip-summary.json`,
+`docs/evidence/pfusdc-eth-mainnet-latency-20260727-run2/deposit/deposit-result.json`,
+and
+`docs/evidence/pfusdc-eth-mainnet-latency-20260727-run2/latency-gate.json`.
+
+### 3. pfUSDC must increase NAVCoin supply; it must not buy finite OTC inventory
+
+The large-capacity product is primary issuance, not an OTC swap against
+Alex's existing NAVCoin inventory. Bob must not have to find Alex, negotiate
+with Alex, or consume a finite offer of pre-existing a666 in exchange for
+pfUSDC.
+
+The required state transition is:
+
+```text
+verified pfUSDC deposit
+  -> user-signed primary subscription at finalized pre-inflow NAV
+  -> pfUSDC base value debited into counted reserve; spread separately booked
+  -> authorized valid a666 supply increased
+  -> Bob's spendable a666 balance increased atomically
+```
+
+At NAV = $1.00 and a mint price of `NAV x 1.005`, Bob pays 100,500 USDC
+to create 100,000 new a666. The 100,000-USDC base value becomes counted NAV
+reserve and the 500-USDC spread is separately accounted outside NAV assets,
+so reserve value and liability grow together without changing the stated
+$1.00 NAV. The amount does not traverse an AMM curve. A 30,000 USD Uniswap
+pool must not constrain a 100,000 USD primary subscription.
+
+Exporting the result to Ethereum is a representation move, not a second
+economic issuance: PFTL a666 is debited or made unspendable before the exact
+amount of wA666 can be minted. The cross-venue conservation identity must
+remain true after every transition.
+
+Binding capacity requirement:
+
+- support at least 2,000,000 a666 of posted primary mint capacity;
+- support a 100,000 a666 export in one packet or one atomic batch with the
+  same all-or-nothing guarantee;
+- derive available mint capacity from proven backing and policy caps, never
+  from Uniswap liquidity or issuer inventory; and
+- support the inverse primary redemption, which retires NAVCoin supply and
+  releases the corresponding settlement value under the posted redemption
+  band.
+
+The settlement principal used by that redemption is the base pfUSDC value
+contributed through primary subscriptions and held in NAV reserve custody.
+The 2,000,000-a666 redemption-capacity parameter is a policy ceiling, not a
+requirement to prefund a second 2,000,000-pfUSDC redemption inventory.
+
+The current controlled configuration does not meet this requirement. With six
+decimal places, its 10,000,000-atom route cap is 10 a666, its
+1,000,000-atom packet cap is 1 a666, and the current native asset definition's
+1,000,000,000,000-atom maximum is 1,000,000 a666. Those are test-era limits.
+Production must use a fresh a666 asset version with `max_supply` absent
+(`None`), plus a production route whose active exposure and packet caps
+support the posted facility. The 2,000,000-a666 number is a governed,
+proof-backed issuance/redemption capacity, not a permanent lifetime supply
+ceiling. The binding design is
+`A666-END-TO-END-MAINNET-PRIMARY-ISSUANCE-SPEC-20260727.md`.
+
+### 4. a651 is legacy; a new mainnet wA666/USDC pool is required and does not yet exist
+
+The Ethereum-mainnet a651 token and a651/USDC Uniswap v4 pool are real legacy
+deployments. They were launched as a standalone Ethereum venue seeded near
+NAV. They were never a trustless bridge from the PFTL a651 supply ledger:
+the legacy `NavBridgeController` used owner-authorized burn-here/mint-there
+operations and did not verify PFTL finality. A later read-only StateView check
+reported zero pool-specific liquidity.
+
+The a651 token, controller, and pool must remain historical and
+inspection-only. They must not be relabeled, repointed, or used as a fallback
+for the a666 product.
+
+The required Ethereum venue is a new bridge-aware ERC-20 representation,
+`wA666`, paired with canonical mainnet USDC in a new Uniswap pool. Its seed
+wA666 must come from a valid PFTL primary subscription followed by a verified
+export; it must not come from an unexplained manual Ethereum mint.
+
+**Current mainnet status: NOT DEPLOYED.** There is no persistent public
+Ethereum-mainnet wA666 token/controller and no live mainnet wA666/USDC or
+a666/USDC Uniswap pool. Controlled local/fork rehearsals and a controlled
+Sepolia stack exist, but they are not mainnet deployments and are not a
+trustless public route.
+
+The new pool is a price anchor and secondary venue. Large acquisition must use
+the primary issuance path in Section 3 and deliver wA666 directly to Bob's
+mainnet address without forcing the 100,000 USD order through the pool.
+
+Canonical legacy record: `docs/navcoins/uniswap-pool.md`. Replacement
+architecture and current gate record:
+`docs/plans/pftl-uniswap-bridge-redeployment-spec.md` and
+`docs/plans/A666-END-TO-END-MAINNET-PRIMARY-ISSUANCE-SPEC-20260727.md`.
+
 ## Private pfUSDC send acceptance closure — 2026-07-27
 
 **Status: COMPLETE / PASS.**

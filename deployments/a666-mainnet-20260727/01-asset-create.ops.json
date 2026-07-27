@@ -1,0 +1,23 @@
+{
+  "schema": "postfiat-certified-asset-ops-request-v1",
+  "operations": [
+    {
+      "label": "a666-v2-asset-create",
+      "source": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+      "key_file": "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/faucet-key.json",
+      "dependencies": [],
+      "operation": {
+        "operation": "asset_create",
+        "issuer": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+        "code": "A666",
+        "version": 2,
+        "precision": 6,
+        "display_name": "Post Fiat NAVCoin a666",
+        "max_supply": null,
+        "requires_authorization": true,
+        "freeze_enabled": true,
+        "clawback_enabled": false
+      }
+    }
+  ]
+}

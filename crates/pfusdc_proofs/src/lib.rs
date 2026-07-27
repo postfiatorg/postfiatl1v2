@@ -39,7 +39,7 @@ pub fn verify_egress_witness_v1(
         .bridge_exit_root
         .as_ref()
         .ok_or_else(|| "withdrawal block has no bridge-exit root".to_string())?;
-    let segment = verify_finality_segment(
+    let segment = verify_pftl_finality_segment_v1(
         &witness.chain_id,
         &witness.genesis_hash,
         witness.protocol_version,
@@ -50,7 +50,7 @@ pub fn verify_egress_witness_v1(
         &witness.committee,
     )?;
     let committed_block = segment.committed_block;
-    let validator_set = segment.validator_set;
+    let committee_root = segment.committee_root;
 
     if !witness.receipt.accepted
         || witness.receipt.code != BRIDGE_EXIT_ACCEPTED_RECEIPT_CODE
@@ -132,7 +132,7 @@ pub fn verify_egress_witness_v1(
         prior_checkpoint_block_id: witness.prior_checkpoint_block_id.clone(),
         resulting_checkpoint_block_id: committed_block.block_id.clone(),
         committee_epoch: witness.committee_epoch,
-        committee_root: validator_set.committee_root.clone(),
+        committee_root,
         // When a transition is proved this carries the starting committee
         // root. The EVM verifier binds it to its stored trust anchor; the SP1
         // proof binds every transition from that root to `committee_root`.
@@ -178,7 +178,7 @@ pub fn verify_checkpoint_witness_v1(
     if witness.schema != PFUSDC_CHECKPOINT_PROOF_WITNESS_SCHEMA_V1 {
         return Err("wrong pfUSDC checkpoint witness schema".to_string());
     }
-    let segment = verify_finality_segment(
+    let segment = verify_pftl_finality_segment_v1(
         &witness.chain_id,
         &witness.genesis_hash,
         witness.protocol_version,
@@ -198,7 +198,7 @@ pub fn verify_checkpoint_witness_v1(
         prior_checkpoint_block_id: witness.prior_checkpoint_block_id.clone(),
         resulting_checkpoint_block_id: committed.block_id.clone(),
         committee_epoch: witness.committee_epoch,
-        committee_root: segment.validator_set.committee_root,
+        committee_root: segment.committee_root,
         committee_transition_commitment: segment.transition_start_root,
         finalized_block_height: committed.height,
         finalized_block_view: witness.block.header.view,
@@ -212,14 +212,15 @@ pub fn verify_checkpoint_witness_v1(
     Ok(values)
 }
 
-struct VerifiedFinalitySegment {
-    committed_block: ConsensusV2BlockRef,
-    validator_set: ConsensusV2ValidatorSet,
-    transition_start_root: String,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerifiedPftlFinalityV1 {
+    pub committed_block: ConsensusV2BlockRef,
+    pub committee_root: String,
+    pub transition_start_root: String,
 }
 
 #[allow(clippy::too_many_arguments)]
-fn verify_finality_segment(
+pub fn verify_pftl_finality_segment_v1(
     chain_id: &str,
     genesis_hash: &str,
     protocol_version: u32,
@@ -228,7 +229,7 @@ fn verify_finality_segment(
     target_block: &postfiat_types::BlockRecord,
     target_committee_epoch: u64,
     target_committee: &[ValidatorRegistryEntry],
-) -> Result<VerifiedFinalitySegment, String> {
+) -> Result<VerifiedPftlFinalityV1, String> {
     let mut cursor = prior_checkpoint_block_id.to_string();
     let mut expected_committee: Option<(
         u64,
@@ -318,9 +319,9 @@ fn verify_finality_segment(
     if committed_block.parent_block_id != cursor {
         return Err("finality segment does not start at the prior checkpoint".to_string());
     }
-    Ok(VerifiedFinalitySegment {
+    Ok(VerifiedPftlFinalityV1 {
         committed_block,
-        validator_set,
+        committee_root: validator_set.committee_root,
         transition_start_root,
     })
 }
@@ -360,6 +361,7 @@ fn verify_finalized_ancestry_block(
         || committed.parent_block_id != header.parent_hash
         || committed.state_root != header.state_root
         || committed.bridge_exit_root != header.bridge_exit_root
+        || committed.pftl_uniswap_receipt_root != header.pftl_uniswap_receipt_root
         || committed.block_id != header.block_hash
     {
         return Err("ancestry precommit QC does not exactly bind block header".to_string());
@@ -423,6 +425,7 @@ fn verify_finalized_block(
         || committed.parent_block_id != header.parent_hash
         || committed.state_root != header.state_root
         || committed.bridge_exit_root != header.bridge_exit_root
+        || committed.pftl_uniswap_receipt_root != header.pftl_uniswap_receipt_root
         || committed.block_id != header.block_hash
         || committed.block_id != commit.proposal.block.block_id
         || commit.proposal.round.height != header.height

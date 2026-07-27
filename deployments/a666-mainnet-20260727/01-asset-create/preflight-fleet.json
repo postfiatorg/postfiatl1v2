@@ -1,0 +1,47 @@
+{
+  "block_tip_hash": "58f552afb1b83bf80614833e0119e13285d74912e1b0d87b61262853a89430b0479c58c315c38e8332c5028d22bb2c5a",
+  "height": 336,
+  "label": "a666-v2-asset-create",
+  "mempool_pending": 0,
+  "nodes": [
+    {
+      "height": 336,
+      "node_id": "validator-0",
+      "port": 28650,
+      "state_root": "f92bfc1aefab2f75e31960bafee0643631a6b9a6e74179c319820de9d434bd893358e227feb02938ecef016b5ee48afd"
+    },
+    {
+      "height": 336,
+      "node_id": "validator-1",
+      "port": 28651,
+      "state_root": "f92bfc1aefab2f75e31960bafee0643631a6b9a6e74179c319820de9d434bd893358e227feb02938ecef016b5ee48afd"
+    },
+    {
+      "height": 336,
+      "node_id": "validator-2",
+      "port": 28652,
+      "state_root": "f92bfc1aefab2f75e31960bafee0643631a6b9a6e74179c319820de9d434bd893358e227feb02938ecef016b5ee48afd"
+    },
+    {
+      "height": 336,
+      "node_id": "validator-3",
+      "port": 28653,
+      "state_root": "f92bfc1aefab2f75e31960bafee0643631a6b9a6e74179c319820de9d434bd893358e227feb02938ecef016b5ee48afd"
+    },
+    {
+      "height": 336,
+      "node_id": "validator-4",
+      "port": 28654,
+      "state_root": "f92bfc1aefab2f75e31960bafee0643631a6b9a6e74179c319820de9d434bd893358e227feb02938ecef016b5ee48afd"
+    },
+    {
+      "height": 336,
+      "node_id": "validator-5",
+      "port": 28655,
+      "state_root": "f92bfc1aefab2f75e31960bafee0643631a6b9a6e74179c319820de9d434bd893358e227feb02938ecef016b5ee48afd"
+    }
+  ],
+  "schema": "postfiat-a666-ce22-finality-preflight-v1",
+  "state_root": "f92bfc1aefab2f75e31960bafee0643631a6b9a6e74179c319820de9d434bd893358e227feb02938ecef016b5ee48afd",
+  "validator_count": 6
+}

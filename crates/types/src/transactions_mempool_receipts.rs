@@ -2335,6 +2335,548 @@ impl PftlUniswapPrimarySubscribeOperation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PftlUniswapRouteInitV2Operation {
+    pub operator: String,
+    pub route_id: String,
+    pub route_config_digest: String,
+    pub native_nav_asset_id: String,
+    pub settlement_asset_id: String,
+    /// Existing proof-backed NAV supply placed under this route at creation.
+    /// Zero is valid only when the asset has no untracked issued supply.
+    #[serde(default)]
+    pub opening_inventory_atoms: u64,
+    /// PFTL holder whose entire balance becomes the opening route inventory.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub opening_inventory_holder: String,
+    pub handoff_controller: String,
+    pub settlement_adapter: String,
+    pub wrapped_navcoin_token: String,
+    pub ethereum_chain_id: u64,
+    pub route_supply_cap_atoms: u64,
+    pub packet_notional_cap_atoms: u64,
+    pub latest_finalized_nav_epoch: u64,
+    pub return_finality_blocks: u64,
+    pub route_epoch: u64,
+    pub outbound_verification_class: String,
+    pub return_verification_class: String,
+    pub live_value_enabled: bool,
+    pub ethereum_verification_policy: EthereumRouteVerificationPolicyV1,
+    pub primary_market_policy: PftlUniswapPrimaryMarketPolicyV2,
+}
+
+impl PftlUniswapRouteInitV2Operation {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_text_field("pftl_uniswap_route_init_v2.operator", &self.operator)?;
+        validate_text_field("pftl_uniswap_route_init_v2.route_id", &self.route_id)?;
+        validate_lower_hex_len(
+            "pftl_uniswap_route_init_v2.route_config_digest",
+            &self.route_config_digest,
+            VAULT_BRIDGE_HEX_HASH_LEN,
+        )?;
+        validate_lower_hex_len(
+            "pftl_uniswap_route_init_v2.native_nav_asset_id",
+            &self.native_nav_asset_id,
+            ISSUED_ASSET_ID_HEX_LEN,
+        )?;
+        validate_lower_hex_len(
+            "pftl_uniswap_route_init_v2.settlement_asset_id",
+            &self.settlement_asset_id,
+            ISSUED_ASSET_ID_HEX_LEN,
+        )?;
+        if self.native_nav_asset_id == self.settlement_asset_id {
+            return Err(
+                "pftl_uniswap_route_init_v2 native and settlement assets must differ".to_string(),
+            );
+        }
+        if self.opening_inventory_atoms == 0 {
+            if !self.opening_inventory_holder.is_empty() {
+                return Err(
+                    "pftl_uniswap_route_init_v2 zero opening inventory requires an empty holder"
+                        .to_string(),
+                );
+            }
+        } else {
+            validate_text_field(
+                "pftl_uniswap_route_init_v2.opening_inventory_holder",
+                &self.opening_inventory_holder,
+            )?;
+            if self.opening_inventory_atoms > self.route_supply_cap_atoms {
+                return Err(
+                    "pftl_uniswap_route_init_v2 opening inventory exceeds the route supply cap"
+                        .to_string(),
+                );
+            }
+        }
+        validate_evm_address_text(
+            "pftl_uniswap_route_init_v2.handoff_controller",
+            &self.handoff_controller,
+        )?;
+        validate_evm_address_text(
+            "pftl_uniswap_route_init_v2.settlement_adapter",
+            &self.settlement_adapter,
+        )?;
+        validate_evm_address_text(
+            "pftl_uniswap_route_init_v2.wrapped_navcoin_token",
+            &self.wrapped_navcoin_token,
+        )?;
+        self.primary_market_policy.validate()?;
+        self.ethereum_verification_policy
+            .validate()
+            .map_err(|error| format!("pftl_uniswap_route_init_v2 policy: {error:?}"))?;
+        if self.ethereum_chain_id == 0
+            || self.route_supply_cap_atoms == 0
+            || self.packet_notional_cap_atoms == 0
+            || self.latest_finalized_nav_epoch == 0
+            || self.return_finality_blocks == 0
+            || self.route_epoch == 0
+        {
+            return Err(
+                "pftl_uniswap_route_init_v2 chain, caps, epochs, and finality must be nonzero"
+                    .to_string(),
+            );
+        }
+        if self.outbound_verification_class != PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY
+            || self.return_verification_class != PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT
+        {
+            return Err(
+                "pftl_uniswap_route_init_v2 requires TRUSTLESS_FINALITY outbound and BFT_CHECKPOINT return verification"
+                .to_string(),
+            );
+        }
+        if self.live_value_enabled {
+            return Err(
+                "pftl_uniswap_route_init_v2 must create the production route with live value disabled"
+                    .to_string(),
+            );
+        }
+        if self.primary_market_policy.issue_multiplier_bps
+            != PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS
+            || self.primary_market_policy.redeem_multiplier_bps
+                != PFTL_UNISWAP_A666_REDEEM_MULTIPLIER_BPS
+            || self.route_supply_cap_atoms
+                != self.primary_market_policy.issue_capacity_atoms
+            || self.primary_market_policy.issue_capacity_atoms
+                != self.primary_market_policy.redeem_capacity_atoms
+            || self
+                .packet_notional_cap_atoms
+                .checked_mul(4)
+                .is_none_or(|amount| amount != self.primary_market_policy.max_order_atoms)
+            || self
+                .primary_market_policy
+                .max_order_atoms
+                .checked_mul(2)
+                .is_none_or(|amount| amount != self.primary_market_policy.issue_capacity_atoms)
+        {
+            return Err(
+                "pftl_uniswap_route_init_v2 must use the governed a666 1.005/0.9995 pricing and 4-packet/2-order capacity ratios"
+                    .to_string(),
+            );
+        }
+        Ok(())
+    }
+
+    fn signing_bytes(&self) -> Vec<u8> {
+        let ethereum_policy_commitment = bytes_to_hex(&hash48(
+            b"postfiat.ethereum.route-verification-policy.v1",
+            &[
+                self.ethereum_verification_policy
+                    .authority_epoch
+                    .to_be_bytes()
+                    .as_slice(),
+                self.ethereum_verification_policy.committee_root.0.as_slice(),
+                self.ethereum_verification_policy
+                    .minimum_confirmations
+                    .to_be_bytes()
+                    .as_slice(),
+                self.ethereum_verification_policy
+                    .handoff_controller_code_hash
+                    .as_slice(),
+                self.ethereum_verification_policy
+                    .wrapped_navcoin_code_hash
+                    .as_slice(),
+            ]
+            .concat(),
+        ));
+        format!(
+            "operator={}\nroute_id={}\nroute_family={}\nroute_schema_version={}\nroute_config_digest={}\nnative_nav_asset_id={}\nsettlement_asset_id={}\nopening_inventory_atoms={}\nopening_inventory_holder={}\nhandoff_controller={}\nsettlement_adapter={}\nwrapped_navcoin_token={}\nethereum_chain_id={}\nroute_supply_cap_atoms={}\npacket_notional_cap_atoms={}\nlatest_finalized_nav_epoch={}\nreturn_finality_blocks={}\nroute_epoch={}\noutbound_verification_class={}\nreturn_verification_class={}\nlive_value_enabled={}\nethereum_verification_policy_commitment={}\nprimary_market_policy_hash={}\n",
+            self.operator,
+            self.route_id,
+            PFTL_UNISWAP_ROUTE_FAMILY_PRIMARY_MINT,
+            PFTL_UNISWAP_ROUTE_SCHEMA_V2,
+            self.route_config_digest,
+            self.native_nav_asset_id,
+            self.settlement_asset_id,
+            self.opening_inventory_atoms,
+            self.opening_inventory_holder,
+            self.handoff_controller,
+            self.settlement_adapter,
+            self.wrapped_navcoin_token,
+            self.ethereum_chain_id,
+            self.route_supply_cap_atoms,
+            self.packet_notional_cap_atoms,
+            self.latest_finalized_nav_epoch,
+            self.return_finality_blocks,
+            self.route_epoch,
+            self.outbound_verification_class,
+            self.return_verification_class,
+            self.live_value_enabled,
+            ethereum_policy_commitment,
+            self.primary_market_policy.policy_hash,
+        )
+        .into_bytes()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PftlUniswapOrderReserveOperation {
+    pub subscriber: String,
+    pub route_id: String,
+    pub reservation_id: String,
+    pub ethereum_recipient: String,
+    pub route_epoch: u64,
+    pub policy_epoch: u64,
+    pub policy_hash: String,
+    pub mint_amount_atoms: u64,
+    pub max_settlement_value_atoms: u64,
+    pub expires_at_height: u64,
+}
+
+impl PftlUniswapOrderReserveOperation {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_text_field("pftl_uniswap_order_reserve.subscriber", &self.subscriber)?;
+        validate_text_field("pftl_uniswap_order_reserve.route_id", &self.route_id)?;
+        validate_lower_hex_len(
+            "pftl_uniswap_order_reserve.reservation_id",
+            &self.reservation_id,
+            VAULT_BRIDGE_HEX_HASH_LEN,
+        )?;
+        validate_evm_address_text(
+            "pftl_uniswap_order_reserve.ethereum_recipient",
+            &self.ethereum_recipient,
+        )?;
+        validate_lower_hex_len(
+            "pftl_uniswap_order_reserve.policy_hash",
+            &self.policy_hash,
+            VAULT_BRIDGE_HEX_HASH_LEN,
+        )?;
+        if self.route_epoch == 0
+            || self.policy_epoch == 0
+            || self.mint_amount_atoms == 0
+            || self.max_settlement_value_atoms == 0
+            || self.expires_at_height == 0
+        {
+            return Err(
+                "pftl_uniswap_order_reserve epoch, amount, value, and expiry fields must be nonzero"
+                    .to_string(),
+            );
+        }
+        Ok(())
+    }
+
+    fn signing_bytes(&self) -> Vec<u8> {
+        format!(
+            "subscriber={}\nroute_id={}\nreservation_id={}\nethereum_recipient={}\nroute_epoch={}\npolicy_epoch={}\npolicy_hash={}\nmint_amount_atoms={}\nmax_settlement_value_atoms={}\nexpires_at_height={}\n",
+            self.subscriber,
+            self.route_id,
+            self.reservation_id,
+            self.ethereum_recipient,
+            self.route_epoch,
+            self.policy_epoch,
+            self.policy_hash,
+            self.mint_amount_atoms,
+            self.max_settlement_value_atoms,
+            self.expires_at_height,
+        )
+        .into_bytes()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PftlUniswapOrderReleaseOperation {
+    pub releaser: String,
+    pub route_id: String,
+    pub reservation_id: String,
+}
+
+impl PftlUniswapOrderReleaseOperation {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_text_field("pftl_uniswap_order_release.releaser", &self.releaser)?;
+        validate_text_field("pftl_uniswap_order_release.route_id", &self.route_id)?;
+        validate_lower_hex_len(
+            "pftl_uniswap_order_release.reservation_id",
+            &self.reservation_id,
+            VAULT_BRIDGE_HEX_HASH_LEN,
+        )
+    }
+
+    fn signing_bytes(&self) -> Vec<u8> {
+        format!(
+            "releaser={}\nroute_id={}\nreservation_id={}\n",
+            self.releaser, self.route_id, self.reservation_id
+        )
+        .into_bytes()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PftlUniswapPrimarySubscribeV2Operation {
+    pub subscriber: String,
+    pub route_id: String,
+    pub reservation_id: String,
+    pub subscription_nonce: String,
+    pub settlement_asset_id: String,
+    pub settlement_value_atoms: u64,
+    pub pricing_nav_epoch: u64,
+    pub pricing_reserve_packet_hash: String,
+}
+
+impl PftlUniswapPrimarySubscribeV2Operation {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_text_field(
+            "pftl_uniswap_primary_subscribe_v2.subscriber",
+            &self.subscriber,
+        )?;
+        validate_text_field(
+            "pftl_uniswap_primary_subscribe_v2.route_id",
+            &self.route_id,
+        )?;
+        validate_lower_hex_len(
+            "pftl_uniswap_primary_subscribe_v2.reservation_id",
+            &self.reservation_id,
+            VAULT_BRIDGE_HEX_HASH_LEN,
+        )?;
+        validate_lower_hex_len(
+            "pftl_uniswap_primary_subscribe_v2.subscription_nonce",
+            &self.subscription_nonce,
+            64,
+        )?;
+        validate_lower_hex_len(
+            "pftl_uniswap_primary_subscribe_v2.settlement_asset_id",
+            &self.settlement_asset_id,
+            ISSUED_ASSET_ID_HEX_LEN,
+        )?;
+        validate_lower_hex_len(
+            "pftl_uniswap_primary_subscribe_v2.pricing_reserve_packet_hash",
+            &self.pricing_reserve_packet_hash,
+            NAV_RESERVE_PACKET_ID_HEX_LEN,
+        )?;
+        if self.settlement_value_atoms == 0 || self.pricing_nav_epoch == 0 {
+            return Err(
+                "pftl_uniswap_primary_subscribe_v2 value and NAV epoch must be nonzero"
+                    .to_string(),
+            );
+        }
+        Ok(())
+    }
+
+    fn signing_bytes(&self) -> Vec<u8> {
+        format!(
+            "subscriber={}\nroute_id={}\nreservation_id={}\nsubscription_nonce={}\nsettlement_asset_id={}\nsettlement_value_atoms={}\npricing_nav_epoch={}\npricing_reserve_packet_hash={}\n",
+            self.subscriber,
+            self.route_id,
+            self.reservation_id,
+            self.subscription_nonce,
+            self.settlement_asset_id,
+            self.settlement_value_atoms,
+            self.pricing_nav_epoch,
+            self.pricing_reserve_packet_hash,
+        )
+        .into_bytes()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PftlUniswapRedemptionFundOperation {
+    pub funder: String,
+    pub route_id: String,
+    pub settlement_asset_id: String,
+    pub funding_nonce: String,
+    pub amount_atoms: u64,
+}
+
+impl PftlUniswapRedemptionFundOperation {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_text_field("pftl_uniswap_redemption_fund.funder", &self.funder)?;
+        validate_text_field("pftl_uniswap_redemption_fund.route_id", &self.route_id)?;
+        validate_lower_hex_len(
+            "pftl_uniswap_redemption_fund.settlement_asset_id",
+            &self.settlement_asset_id,
+            ISSUED_ASSET_ID_HEX_LEN,
+        )?;
+        validate_lower_hex_len(
+            "pftl_uniswap_redemption_fund.funding_nonce",
+            &self.funding_nonce,
+            64,
+        )?;
+        if self.amount_atoms == 0 {
+            return Err("pftl_uniswap_redemption_fund amount must be nonzero".to_string());
+        }
+        Ok(())
+    }
+
+    fn signing_bytes(&self) -> Vec<u8> {
+        format!(
+            "funder={}\nroute_id={}\nsettlement_asset_id={}\nfunding_nonce={}\namount_atoms={}\n",
+            self.funder,
+            self.route_id,
+            self.settlement_asset_id,
+            self.funding_nonce,
+            self.amount_atoms,
+        )
+        .into_bytes()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PftlUniswapPrimaryRedeemOperation {
+    pub owner: String,
+    pub settlement_recipient: String,
+    pub route_id: String,
+    pub redemption_nonce: String,
+    pub nav_amount_atoms: u64,
+    pub min_settlement_value_atoms: u64,
+    pub route_epoch: u64,
+    pub policy_epoch: u64,
+    pub policy_hash: String,
+    pub pricing_nav_epoch: u64,
+    pub pricing_reserve_packet_hash: String,
+    pub expires_at_height: u64,
+}
+
+impl PftlUniswapPrimaryRedeemOperation {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_text_field("pftl_uniswap_primary_redeem.owner", &self.owner)?;
+        validate_text_field(
+            "pftl_uniswap_primary_redeem.settlement_recipient",
+            &self.settlement_recipient,
+        )?;
+        validate_text_field("pftl_uniswap_primary_redeem.route_id", &self.route_id)?;
+        validate_lower_hex_len(
+            "pftl_uniswap_primary_redeem.redemption_nonce",
+            &self.redemption_nonce,
+            64,
+        )?;
+        validate_lower_hex_len(
+            "pftl_uniswap_primary_redeem.policy_hash",
+            &self.policy_hash,
+            VAULT_BRIDGE_HEX_HASH_LEN,
+        )?;
+        validate_lower_hex_len(
+            "pftl_uniswap_primary_redeem.pricing_reserve_packet_hash",
+            &self.pricing_reserve_packet_hash,
+            NAV_RESERVE_PACKET_ID_HEX_LEN,
+        )?;
+        if self.nav_amount_atoms == 0
+            || self.min_settlement_value_atoms == 0
+            || self.route_epoch == 0
+            || self.policy_epoch == 0
+            || self.pricing_nav_epoch == 0
+            || self.expires_at_height == 0
+        {
+            return Err(
+                "pftl_uniswap_primary_redeem amount, epochs, minimum output, and expiry must be nonzero"
+                    .to_string(),
+            );
+        }
+        Ok(())
+    }
+
+    fn signing_bytes(&self) -> Vec<u8> {
+        format!(
+            "owner={}\nsettlement_recipient={}\nroute_id={}\nredemption_nonce={}\nnav_amount_atoms={}\nmin_settlement_value_atoms={}\nroute_epoch={}\npolicy_epoch={}\npolicy_hash={}\npricing_nav_epoch={}\npricing_reserve_packet_hash={}\nexpires_at_height={}\n",
+            self.owner,
+            self.settlement_recipient,
+            self.route_id,
+            self.redemption_nonce,
+            self.nav_amount_atoms,
+            self.min_settlement_value_atoms,
+            self.route_epoch,
+            self.policy_epoch,
+            self.policy_hash,
+            self.pricing_nav_epoch,
+            self.pricing_reserve_packet_hash,
+            self.expires_at_height,
+        )
+        .into_bytes()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PftlUniswapRouteEpochAdvanceOperation {
+    pub operator: String,
+    pub route_id: String,
+    pub prior_route_epoch: u64,
+    pub next_route_epoch: u64,
+    pub next_route_config_digest: String,
+    pub live_value_enabled: bool,
+    pub next_primary_market_policy: PftlUniswapPrimaryMarketPolicyV2,
+}
+
+impl PftlUniswapRouteEpochAdvanceOperation {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_text_field(
+            "pftl_uniswap_route_epoch_advance.operator",
+            &self.operator,
+        )?;
+        validate_text_field(
+            "pftl_uniswap_route_epoch_advance.route_id",
+            &self.route_id,
+        )?;
+        validate_lower_hex_len(
+            "pftl_uniswap_route_epoch_advance.next_route_config_digest",
+            &self.next_route_config_digest,
+            VAULT_BRIDGE_HEX_HASH_LEN,
+        )?;
+        self.next_primary_market_policy.validate()?;
+        if self.prior_route_epoch == 0
+            || self.next_route_epoch != self.prior_route_epoch.saturating_add(1)
+        {
+            return Err(
+                "pftl_uniswap_route_epoch_advance next route epoch must increment prior epoch by one"
+                    .to_string(),
+            );
+        }
+        Ok(())
+    }
+
+    fn signing_bytes(&self) -> Vec<u8> {
+        format!(
+            "operator={}\nroute_id={}\nprior_route_epoch={}\nnext_route_epoch={}\nnext_route_config_digest={}\nlive_value_enabled={}\nnext_primary_market_policy_hash={}\n",
+            self.operator,
+            self.route_id,
+            self.prior_route_epoch,
+            self.next_route_epoch,
+            self.next_route_config_digest,
+            self.live_value_enabled,
+            self.next_primary_market_policy.policy_hash,
+        )
+        .into_bytes()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PftlUniswapRoutePauseOperation {
+    pub operator: String,
+    pub route_id: String,
+    pub paused: bool,
+}
+
+impl PftlUniswapRoutePauseOperation {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_text_field("pftl_uniswap_route_pause.operator", &self.operator)?;
+        validate_text_field("pftl_uniswap_route_pause.route_id", &self.route_id)
+    }
+
+    fn signing_bytes(&self) -> Vec<u8> {
+        format!(
+            "operator={}\nroute_id={}\npaused={}\n",
+            self.operator, self.route_id, self.paused,
+        )
+        .into_bytes()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PftlUniswapExportDebitOperation {
     pub owner: String,
     pub route_id: String,
@@ -2342,6 +2884,10 @@ pub struct PftlUniswapExportDebitOperation {
     pub export_nonce: String,
     pub ethereum_recipient: String,
     pub amount_atoms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reservation_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settlement_value_atoms: Option<u64>,
     pub destination_deadline_seconds: u64,
     pub refund_delay_blocks: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2359,6 +2905,13 @@ impl PftlUniswapExportDebitOperation {
             &self.packet_hash,
             VAULT_BRIDGE_HEX_HASH_LEN,
         )?;
+        if let Some(reservation_id) = &self.reservation_id {
+            validate_lower_hex_len(
+                "pftl_uniswap_export_debit.reservation_id",
+                reservation_id,
+                VAULT_BRIDGE_HEX_HASH_LEN,
+            )?;
+        }
         validate_lower_hex_len(
             "pftl_uniswap_export_debit.export_nonce",
             &self.export_nonce,
@@ -2382,6 +2935,7 @@ impl PftlUniswapExportDebitOperation {
             &self.ethereum_recipient,
         )?;
         if self.amount_atoms == 0
+            || self.settlement_value_atoms == Some(0)
             || self.destination_deadline_seconds == 0
             || self.refund_delay_blocks == 0
         {
@@ -2406,6 +2960,14 @@ impl PftlUniswapExportDebitOperation {
             self.refund_delay_blocks
         )
         .into_bytes();
+        if let Some(settlement_value_atoms) = self.settlement_value_atoms {
+            bytes.extend_from_slice(
+                format!("settlement_value_atoms={settlement_value_atoms}\n").as_bytes(),
+            );
+        }
+        if let Some(reservation_id) = &self.reservation_id {
+            bytes.extend_from_slice(format!("reservation_id={reservation_id}\n").as_bytes());
+        }
         if let Some(packet_digest) = &self.ethereum_packet_digest {
             bytes.extend_from_slice(
                 format!("ethereum_packet_digest={packet_digest}\n").as_bytes(),
@@ -2697,6 +3259,22 @@ pub enum AssetTransactionOperation {
     PftlUniswapRouteInit(PftlUniswapRouteInitOperation),
     #[serde(rename = "pftl_uniswap_primary_subscribe")]
     PftlUniswapPrimarySubscribe(PftlUniswapPrimarySubscribeOperation),
+    #[serde(rename = "pftl_uniswap_route_init_v2")]
+    PftlUniswapRouteInitV2(PftlUniswapRouteInitV2Operation),
+    #[serde(rename = "pftl_uniswap_order_reserve")]
+    PftlUniswapOrderReserve(PftlUniswapOrderReserveOperation),
+    #[serde(rename = "pftl_uniswap_order_release")]
+    PftlUniswapOrderRelease(PftlUniswapOrderReleaseOperation),
+    #[serde(rename = "pftl_uniswap_primary_subscribe_v2")]
+    PftlUniswapPrimarySubscribeV2(PftlUniswapPrimarySubscribeV2Operation),
+    #[serde(rename = "pftl_uniswap_redemption_fund")]
+    PftlUniswapRedemptionFund(PftlUniswapRedemptionFundOperation),
+    #[serde(rename = "pftl_uniswap_primary_redeem")]
+    PftlUniswapPrimaryRedeem(PftlUniswapPrimaryRedeemOperation),
+    #[serde(rename = "pftl_uniswap_route_epoch_advance")]
+    PftlUniswapRouteEpochAdvance(PftlUniswapRouteEpochAdvanceOperation),
+    #[serde(rename = "pftl_uniswap_route_pause")]
+    PftlUniswapRoutePause(PftlUniswapRoutePauseOperation),
     #[serde(rename = "pftl_uniswap_export_debit")]
     PftlUniswapExportDebit(PftlUniswapExportDebitOperation),
     #[serde(rename = "pftl_uniswap_destination_consume")]
@@ -2818,6 +3396,34 @@ impl<'de> Deserialize<'de> for AssetTransactionOperation {
                 PftlUniswapPrimarySubscribeOperation,
                 PftlUniswapPrimarySubscribe
             ),
+            "pftl_uniswap_route_init_v2" => {
+                decode_operation!(PftlUniswapRouteInitV2Operation, PftlUniswapRouteInitV2)
+            }
+            "pftl_uniswap_order_reserve" => {
+                decode_operation!(PftlUniswapOrderReserveOperation, PftlUniswapOrderReserve)
+            }
+            "pftl_uniswap_order_release" => {
+                decode_operation!(PftlUniswapOrderReleaseOperation, PftlUniswapOrderRelease)
+            }
+            "pftl_uniswap_primary_subscribe_v2" => decode_operation!(
+                PftlUniswapPrimarySubscribeV2Operation,
+                PftlUniswapPrimarySubscribeV2
+            ),
+            "pftl_uniswap_redemption_fund" => decode_operation!(
+                PftlUniswapRedemptionFundOperation,
+                PftlUniswapRedemptionFund
+            ),
+            "pftl_uniswap_primary_redeem" => decode_operation!(
+                PftlUniswapPrimaryRedeemOperation,
+                PftlUniswapPrimaryRedeem
+            ),
+            "pftl_uniswap_route_epoch_advance" => decode_operation!(
+                PftlUniswapRouteEpochAdvanceOperation,
+                PftlUniswapRouteEpochAdvance
+            ),
+            "pftl_uniswap_route_pause" => {
+                decode_operation!(PftlUniswapRoutePauseOperation, PftlUniswapRoutePause)
+            }
             "pftl_uniswap_export_debit" => {
                 decode_operation!(PftlUniswapExportDebitOperation, PftlUniswapExportDebit)
             }
@@ -2880,6 +3486,20 @@ impl AssetTransactionOperation {
             }
             Self::PftlUniswapRouteInit(_) => PFTL_UNISWAP_ROUTE_INIT_TRANSACTION_KIND,
             Self::PftlUniswapPrimarySubscribe(_) => PFTL_UNISWAP_PRIMARY_SUBSCRIBE_TRANSACTION_KIND,
+            Self::PftlUniswapRouteInitV2(_) => PFTL_UNISWAP_ROUTE_INIT_V2_TRANSACTION_KIND,
+            Self::PftlUniswapOrderReserve(_) => PFTL_UNISWAP_ORDER_RESERVE_TRANSACTION_KIND,
+            Self::PftlUniswapOrderRelease(_) => PFTL_UNISWAP_ORDER_RELEASE_TRANSACTION_KIND,
+            Self::PftlUniswapPrimarySubscribeV2(_) => {
+                PFTL_UNISWAP_PRIMARY_SUBSCRIBE_V2_TRANSACTION_KIND
+            }
+            Self::PftlUniswapRedemptionFund(_) => {
+                PFTL_UNISWAP_REDEMPTION_FUND_TRANSACTION_KIND
+            }
+            Self::PftlUniswapPrimaryRedeem(_) => PFTL_UNISWAP_PRIMARY_REDEEM_TRANSACTION_KIND,
+            Self::PftlUniswapRouteEpochAdvance(_) => {
+                PFTL_UNISWAP_ROUTE_EPOCH_ADVANCE_TRANSACTION_KIND
+            }
+            Self::PftlUniswapRoutePause(_) => PFTL_UNISWAP_ROUTE_PAUSE_TRANSACTION_KIND,
             Self::PftlUniswapExportDebit(_) => PFTL_UNISWAP_EXPORT_DEBIT_TRANSACTION_KIND,
             Self::PftlUniswapDestinationConsume(_) => {
                 PFTL_UNISWAP_DESTINATION_CONSUME_TRANSACTION_KIND
@@ -2924,6 +3544,14 @@ impl AssetTransactionOperation {
             Self::VaultBridgeNavSubscriptionAllocate(operation) => operation.validate(),
             Self::PftlUniswapRouteInit(operation) => operation.validate(),
             Self::PftlUniswapPrimarySubscribe(operation) => operation.validate(),
+            Self::PftlUniswapRouteInitV2(operation) => operation.validate(),
+            Self::PftlUniswapOrderReserve(operation) => operation.validate(),
+            Self::PftlUniswapOrderRelease(operation) => operation.validate(),
+            Self::PftlUniswapPrimarySubscribeV2(operation) => operation.validate(),
+            Self::PftlUniswapRedemptionFund(operation) => operation.validate(),
+            Self::PftlUniswapPrimaryRedeem(operation) => operation.validate(),
+            Self::PftlUniswapRouteEpochAdvance(operation) => operation.validate(),
+            Self::PftlUniswapRoutePause(operation) => operation.validate(),
             Self::PftlUniswapExportDebit(operation) => operation.validate(),
             Self::PftlUniswapDestinationConsume(operation) => operation.validate(),
             Self::PftlUniswapRefundSource(operation) => operation.validate(),
@@ -2988,6 +3616,14 @@ impl AssetTransactionOperation {
             }
             Self::PftlUniswapRouteInit(operation) => operation.operator == source,
             Self::PftlUniswapPrimarySubscribe(operation) => operation.subscriber == source,
+            Self::PftlUniswapRouteInitV2(operation) => operation.operator == source,
+            Self::PftlUniswapOrderReserve(operation) => operation.subscriber == source,
+            Self::PftlUniswapOrderRelease(operation) => operation.releaser == source,
+            Self::PftlUniswapPrimarySubscribeV2(operation) => operation.subscriber == source,
+            Self::PftlUniswapRedemptionFund(operation) => operation.funder == source,
+            Self::PftlUniswapPrimaryRedeem(operation) => operation.owner == source,
+            Self::PftlUniswapRouteEpochAdvance(operation) => operation.operator == source,
+            Self::PftlUniswapRoutePause(operation) => operation.operator == source,
             Self::PftlUniswapExportDebit(operation) => operation.owner == source,
             Self::PftlUniswapDestinationConsume(operation) => operation.operator == source,
             Self::PftlUniswapRefundSource(operation) => operation.operator == source,
@@ -3077,6 +3713,30 @@ impl AssetTransactionOperation {
                 bytes.extend_from_slice(&operation.signing_bytes())
             }
             Self::PftlUniswapPrimarySubscribe(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::PftlUniswapRouteInitV2(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::PftlUniswapOrderReserve(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::PftlUniswapOrderRelease(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::PftlUniswapPrimarySubscribeV2(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::PftlUniswapRedemptionFund(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::PftlUniswapPrimaryRedeem(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::PftlUniswapRouteEpochAdvance(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::PftlUniswapRoutePause(operation) => {
                 bytes.extend_from_slice(&operation.signing_bytes())
             }
             Self::PftlUniswapExportDebit(operation) => {

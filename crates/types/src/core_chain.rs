@@ -51,6 +51,17 @@ pub const VAULT_BRIDGE_NAV_SUBSCRIPTION_ALLOCATE_TRANSACTION_KIND: &str =
     "vault_bridge_nav_subscription_allocate";
 pub const PFTL_UNISWAP_ROUTE_INIT_TRANSACTION_KIND: &str = "pftl_uniswap_route_init";
 pub const PFTL_UNISWAP_PRIMARY_SUBSCRIBE_TRANSACTION_KIND: &str = "pftl_uniswap_primary_subscribe";
+pub const PFTL_UNISWAP_ROUTE_INIT_V2_TRANSACTION_KIND: &str = "pftl_uniswap_route_init_v2";
+pub const PFTL_UNISWAP_ORDER_RESERVE_TRANSACTION_KIND: &str = "pftl_uniswap_order_reserve";
+pub const PFTL_UNISWAP_ORDER_RELEASE_TRANSACTION_KIND: &str = "pftl_uniswap_order_release";
+pub const PFTL_UNISWAP_PRIMARY_SUBSCRIBE_V2_TRANSACTION_KIND: &str =
+    "pftl_uniswap_primary_subscribe_v2";
+pub const PFTL_UNISWAP_REDEMPTION_FUND_TRANSACTION_KIND: &str =
+    "pftl_uniswap_redemption_fund";
+pub const PFTL_UNISWAP_PRIMARY_REDEEM_TRANSACTION_KIND: &str = "pftl_uniswap_primary_redeem";
+pub const PFTL_UNISWAP_ROUTE_EPOCH_ADVANCE_TRANSACTION_KIND: &str =
+    "pftl_uniswap_route_epoch_advance";
+pub const PFTL_UNISWAP_ROUTE_PAUSE_TRANSACTION_KIND: &str = "pftl_uniswap_route_pause";
 pub const PFTL_UNISWAP_EXPORT_DEBIT_TRANSACTION_KIND: &str = "pftl_uniswap_export_debit";
 pub const PFTL_UNISWAP_DESTINATION_CONSUME_TRANSACTION_KIND: &str =
     "pftl_uniswap_destination_consume";
@@ -512,6 +523,8 @@ pub struct BlockHeader {
     pub state_root: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bridge_exit_root: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pftl_uniswap_receipt_root: Option<String>,
     pub receipt_count: u64,
     pub certificate_id: String,
     pub certificate: BlockCertificate,

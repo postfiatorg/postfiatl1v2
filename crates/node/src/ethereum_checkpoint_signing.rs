@@ -975,6 +975,7 @@ mod tests {
             export_nonces: BTreeMap::new(),
             return_imports: BTreeMap::new(),
             paused: false,
+            v2: None,
         };
         let mut ledger = LedgerState::empty();
         ledger.pftl_uniswap_routes.push(route);
@@ -1432,6 +1433,7 @@ mod tests {
                 export_nonces: BTreeMap::new(),
                 return_imports: BTreeMap::new(),
                 paused: false,
+                v2: None,
             });
         ledger
             .validate_asset_state(&genesis.chain_id)
@@ -1481,6 +1483,8 @@ mod tests {
                 export_nonce: "64".repeat(32),
                 ethereum_recipient: format!("0x{}", "44".repeat(20)),
                 amount_atoms: 40,
+                reservation_id: None,
+                settlement_value_atoms: None,
                 destination_deadline_seconds: 1_800,
                 refund_delay_blocks: 3,
                 ethereum_packet_digest: Some(bytes_to_hex(&consumed_packet_digest)),
@@ -1512,6 +1516,8 @@ mod tests {
                 export_nonce: "67".repeat(32),
                 ethereum_recipient: format!("0x{}", "45".repeat(20)),
                 amount_atoms: 10,
+                reservation_id: None,
+                settlement_value_atoms: None,
                 destination_deadline_seconds: 1_800,
                 refund_delay_blocks: 3,
                 ethereum_packet_digest: Some(bytes_to_hex(&refunded_packet_digest)),

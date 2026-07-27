@@ -3444,6 +3444,8 @@ pub struct BlockProposalFile {
     pub state_root: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bridge_exit_root: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pftl_uniswap_receipt_root: Option<String>,
     pub receipt_count: u64,
     pub receipt_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

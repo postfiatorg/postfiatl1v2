@@ -243,12 +243,16 @@
                         source_wallet: packet.source_wallet.clone(),
                         ethereum_recipient: packet.ethereum_recipient.clone(),
                         amount_atoms: packet.amount_atoms,
+                        reservation_id: None,
+                        settlement_value_atoms: None,
                         source_height: packet.source_height,
                         destination_deadline_seconds: packet.destination_deadline_seconds,
                         refund_not_before_height: packet.refund_not_before_height,
                         status: status.to_string(),
                         ethereum_packet_digest: None,
                         ethereum_packet_schema_version: None,
+                        route_epoch: None,
+                        policy_hash: None,
                     },
                 )
             })
@@ -283,6 +287,7 @@
             export_nonces: ledger.export_nonces.clone(),
             return_imports: std::collections::BTreeMap::new(),
             paused: ledger.paused,
+            v2: None,
         }
     }
 

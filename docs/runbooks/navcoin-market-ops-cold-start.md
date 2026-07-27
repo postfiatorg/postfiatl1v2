@@ -7,6 +7,11 @@ This playbook starts a NAVCoin market-operations venue conservatively. It does
 not create a redemption path. PFTL publishes NAV and bounded market-operation
 caps; Ethereum contracts enforce accepted envelopes and expiry.
 
+This is an optional secondary-market facility only. Its alignment reserve is
+not NAV backing, primary-subscription inventory, or primary-redemption
+principal. Primary issue/redeem accounting is defined separately in
+[`docs/navcoins/primary-market-accounting.md`](../navcoins/primary-market-accounting.md).
+
 The conservative launch parameters are pinned in
 `docs/examples/navcoin-market-ops-initial-parameters.json`.
 

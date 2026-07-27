@@ -5,6 +5,8 @@
     clippy::unnecessary_map_or
 )]
 
+pub use postfiat_types::pftl_uniswap_route_state_hash;
+
 include!("entrypoints.rs");
 include!("fees_offer_planning.rs");
 pub mod market_policy {

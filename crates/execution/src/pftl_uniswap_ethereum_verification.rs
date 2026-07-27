@@ -8,10 +8,39 @@ use postfiat_types::{
     FastSwapOpaqueHashV1, Genesis, LedgerState, PftlUniswapConsensusExportPacket,
     PftlUniswapConsensusRouteState, PftlUniswapDestinationConsumeOperation,
     PftlUniswapRefundSourceOperation, PftlUniswapReturnImportOperation,
-    PftlUniswapRouteInitOperation,
+    PftlUniswapRouteInitOperation, PftlUniswapRouteInitV2Operation,
 };
 
 type ExecutionError = (&'static str, String);
+
+pub(crate) fn verify_live_route_initialization_v2(
+    genesis: &Genesis,
+    ledger: &LedgerState,
+    operation: &PftlUniswapRouteInitV2Operation,
+) -> Result<(), ExecutionError> {
+    if operation.outbound_verification_class
+        != postfiat_types::PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY
+        || operation.return_verification_class
+            != postfiat_types::PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT
+        || !operation.live_value_enabled
+    {
+        return Err((
+            "pftl_uniswap_v2_trust_class_mismatch",
+            "v2 live route requires trustless-finality outbound and BFT-checkpoint return verification"
+                .to_string(),
+        ));
+    }
+    if u64::from(operation.ethereum_verification_policy.minimum_confirmations)
+        != operation.return_finality_blocks
+    {
+        return Err((
+            "pftl_uniswap_ethereum_policy_finality_mismatch",
+            "v2 return finality blocks must match the governed Ethereum verification policy"
+                .to_string(),
+        ));
+    }
+    committee_for_policy(genesis, ledger, &operation.ethereum_verification_policy).map(|_| ())
+}
 
 pub(crate) fn verify_live_route_initialization(
     genesis: &Genesis,
@@ -107,9 +136,20 @@ pub(crate) fn verify_live_export(
         .ethereum_packet_digest
         .as_ref()
         .ok_or_else(missing_external_verification)?;
-    if operation.ethereum_packet_schema_version
-        != Some(postfiat_types::PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V1)
-    {
+    let expected_schema = if let Some(v2) = &route.v2 {
+        if v2.outbound_verification_class
+            != postfiat_types::PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY
+        {
+            return Err((
+                "pftl_uniswap_outbound_trust_class_mismatch",
+                "v2 live export requires TRUSTLESS_FINALITY outbound verification".to_string(),
+            ));
+        }
+        postfiat_types::PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V2
+    } else {
+        postfiat_types::PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V1
+    };
+    if operation.ethereum_packet_schema_version != Some(expected_schema) {
         return Err((
             "pftl_uniswap_ethereum_packet_schema_mismatch",
             "live export requires the exact supported Ethereum packet schema version".to_string(),

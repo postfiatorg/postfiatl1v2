@@ -20,6 +20,54 @@ The current PFTL position is: do not bootstrap parallel fake a651 assets for
 proof runs. Use the real registered WAN devnet a651 when proving the NAVCoin
 round trip.
 
+## a666 and wA666
+
+`a666` is the replacement PFTL-native NAVCoin lineage for the trustless
+large-capacity primary subscription product. `wA666` is the required
+bridge-aware Ethereum representation. It must be minted only after the
+corresponding native PFTL a666 has been debited or made unspendable and the
+PFTL export has been accepted through the route's disclosed finality verifier.
+
+| Context | Status | Notes |
+|---|---|---|
+| PFTL WAN devnet | Native a666 exists; primary subscription and bridge-accounting primitives have been exercised. | This is the intended canonical NAV and authorized-supply ledger. Current controlled route caps are not production capacity. |
+| Ethereum Sepolia | Controlled wA666 stack and route evidence exist. | Controlled testing only; the route is not a trustless mainnet product. |
+| Ethereum mainnet | **Not deployed as a persistent public product.** | There is no live public wA666 token/controller and no live wA666/USDC or a666/USDC Uniswap pool. Mainnet-fork rehearsals are not deployments. |
+
+The required primary acquisition flow is:
+
+```text
+verified pfUSDC
+  -> user-signed primary subscription
+  -> new native a666 issued at finalized pre-inflow NAV plus posted spread
+  -> supply-conserving PFTL export
+  -> wA666 delivered on Ethereum mainnet
+```
+
+This flow must support large subscriptions independently of pool depth. For
+example, at a $1.00 NAV and a `1.005` mint multiplier, 100,500 USDC creates
+100,000 new a666 before export. The 100,000-USDC base value enters counted NAV
+reserves and the 500-USDC spread is separately accounted outside NAV assets,
+preserving the stated $1.00 NAV. A small Uniswap pool is a price anchor and
+secondary venue, not the inventory source for that acquisition.
+
+The binding launch direction is at least 2,000,000 a666 of posted primary mint
+capacity and at least 100,000 a666 in one export packet or atomic export batch.
+Available capacity must be bounded by proven backing and policy caps, not
+issuer inventory or AMM liquidity. Redemption performs the inverse economic
+transition: retire NAVCoin supply and release settlement value under the
+posted redemption policy. This posted capacity is not a permanent supply
+ceiling; production a666 must be created with `max_supply` absent (`None`) so
+verified subscriptions and redemptions can expand and contract supply.
+
+The current six-decimal controlled configuration is not production capacity:
+its route cap is 10 a666, its packet cap is 1 a666, and its native asset
+maximum is 1,000,000 a666. Because there is no safe in-place asset-definition
+update that removes that test maximum, production must use a fresh asset
+version and asset ID with no static maximum, plus production route/packet
+limits. See
+`../plans/A666-END-TO-END-MAINNET-PRIMARY-ISSUANCE-SPEC-20260727.md`.
+
 ## Ethereum a651 and Uniswap
 
 The Ethereum mainnet a651 launch produced a live ERC-20 token and a Uniswap v4
@@ -51,8 +99,13 @@ Launch configuration:
 | Proven portfolio NAV | $23,648.69 |
 | Pool liquidity | 676.57 a651 + $4,000.00 USDC |
 | Pool fee | 100 bps |
-| Redemption buffer | $990 USDC |
+| Legacy a651 controller redemption allocation | $990 USDC |
 | Smoke swap | $1 USDC |
+
+The `$990` allocation describes the historical, Ethereum-native a651 launch
+controller. It is not the canonical NAVCoin primary-redemption model and must
+not be carried into a666. a666 redemption releases subscription-funded NAV
+reserve principal as it retires supply.
 
 The Arbitrum and Base venue token reps above were deployed on Ethereum as
 registry representatives. They are not live Arbitrum/Base a651 bridge

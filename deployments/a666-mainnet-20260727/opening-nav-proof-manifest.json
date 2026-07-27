@@ -1,0 +1,16 @@
+{
+  "asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+  "attestor_root": "d6df5a3e0000a87ae9da3386f8433a7a082a5230a89cc28fc235edacb74639c60501ff6d5850870f3e7eaa5d29f46ae6",
+  "circulating_supply_atoms": 31386197455,
+  "epoch": 1,
+  "nav_per_unit_usd_1e8": 100000000,
+  "policy_hash": "a13553ba6f1a48dbe02dbc34de4d8faed1afa962dc2d2b29ff6f0c6b7ac6fd5c",
+  "profile_id": "8c0244fe0cfb216fb5ab471d0c9e060a5c8ba052b5a29952d6e7aad76b24523af2b7e0ed82885c11d2c6308ddfcc9118",
+  "program_vkey": "0x00f96064937f05d891b13a80667bdf5ecd62a7d5ed245724ab294bad311a2164",
+  "proof_sha256": "c5db9bfa11fc09781f2e87d28a370b9d98b113bc740276897dfbb7ea00e7c56c",
+  "public_values_sha256": "e6d784099e01212c0f5df4143f867606e0b80d0eac91d14a8bce9ffbd1bca26a",
+  "reserve_packet_hash": "c8bbb35b7b0eb4a567f04945eb977b3fe5dc539cd7d845f1266d39959eb301ffbe263ebec9ceb985ef09370f314e5b3e",
+  "schema": "postfiat-a666-opening-nav-proof-manifest-v1",
+  "source_root": "efb46c1a55754f1f3ca8cd69a1e24f80dd03583943fff1d028ca9f8c6d192e2c0d09b71cddcbbbbcd78da1794cf257a0",
+  "verified_net_assets_usd_1e8": 3138619745591
+}

@@ -2673,6 +2673,206 @@ pub(super) fn append_pftl_uniswap_route(
         route.settlement_reserve_atoms,
     );
     append_canonical_bool(bytes, &format!("{prefix}.paused"), route.paused);
+    if let Some(v2) = &route.v2 {
+        append_canonical_bool(
+            bytes,
+            &format!("{prefix}.live_value_enabled"),
+            route.live_value_enabled,
+        );
+        if let Some(ethereum_policy) = &route.ethereum_verification_policy {
+            append_canonical_u64(
+                bytes,
+                &format!("{prefix}.ethereum_policy.authority_epoch"),
+                ethereum_policy.authority_epoch,
+            );
+            append_canonical_str(
+                bytes,
+                &format!("{prefix}.ethereum_policy.committee_root"),
+                &postfiat_crypto_provider::bytes_to_hex(&ethereum_policy.committee_root.0),
+            );
+            append_canonical_u32(
+                bytes,
+                &format!("{prefix}.ethereum_policy.minimum_confirmations"),
+                ethereum_policy.minimum_confirmations,
+            );
+            append_canonical_str(
+                bytes,
+                &format!("{prefix}.ethereum_policy.handoff_controller_code_hash"),
+                &postfiat_crypto_provider::bytes_to_hex(
+                    &ethereum_policy.handoff_controller_code_hash,
+                ),
+            );
+            append_canonical_str(
+                bytes,
+                &format!("{prefix}.ethereum_policy.wrapped_navcoin_code_hash"),
+                &postfiat_crypto_provider::bytes_to_hex(&ethereum_policy.wrapped_navcoin_code_hash),
+            );
+        }
+        append_canonical_u32(
+            bytes,
+            &format!("{prefix}.v2.route_schema_version"),
+            v2.route_schema_version,
+        );
+        append_canonical_u64(bytes, &format!("{prefix}.v2.route_epoch"), v2.route_epoch);
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.v2.outbound_verification_class"),
+            &v2.outbound_verification_class,
+        );
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.v2.return_verification_class"),
+            &v2.return_verification_class,
+        );
+        let policy = &v2.primary_market_policy;
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.v2.policy_hash"),
+            &policy.policy_hash,
+        );
+        append_canonical_u64(
+            bytes,
+            &format!("{prefix}.v2.policy_epoch"),
+            policy.policy_epoch,
+        );
+        append_canonical_u32(
+            bytes,
+            &format!("{prefix}.v2.issue_multiplier_bps"),
+            policy.issue_multiplier_bps,
+        );
+        append_canonical_u32(
+            bytes,
+            &format!("{prefix}.v2.redeem_multiplier_bps"),
+            policy.redeem_multiplier_bps,
+        );
+        for (label, value) in [
+            ("issue_capacity_atoms", policy.issue_capacity_atoms),
+            ("redeem_capacity_atoms", policy.redeem_capacity_atoms),
+            ("max_order_atoms", policy.max_order_atoms),
+            ("min_order_atoms", policy.min_order_atoms),
+            ("valid_from_height", policy.valid_from_height),
+            ("expires_at_height", policy.expires_at_height),
+            ("max_nav_age_blocks", policy.max_nav_age_blocks),
+            ("pricing_nav_epoch", policy.pricing_nav_epoch),
+            ("issue_capacity_used_atoms", v2.issue_capacity_used_atoms),
+            ("redeem_capacity_used_atoms", v2.redeem_capacity_used_atoms),
+            ("non_nav_spread_atoms", v2.non_nav_spread_atoms),
+        ] {
+            append_canonical_u64(bytes, &format!("{prefix}.v2.{label}"), value);
+        }
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.v2.pricing_reserve_packet_hash"),
+            &policy.pricing_reserve_packet_hash,
+        );
+        append_canonical_usize(
+            bytes,
+            &format!("{prefix}.v2.active_reservation_count"),
+            v2.active_reservations.len(),
+        );
+        for reservation in v2.active_reservations.values() {
+            append_canonical_str(
+                bytes,
+                &format!("{prefix}.v2.reservation.id"),
+                &reservation.reservation_id,
+            );
+            append_canonical_str(
+                bytes,
+                &format!("{prefix}.v2.reservation.subscriber"),
+                &reservation.subscriber,
+            );
+            append_canonical_str(
+                bytes,
+                &format!("{prefix}.v2.reservation.ethereum_recipient"),
+                &reservation.ethereum_recipient,
+            );
+            append_canonical_u64(
+                bytes,
+                &format!("{prefix}.v2.reservation.route_epoch"),
+                reservation.route_epoch,
+            );
+            append_canonical_u64(
+                bytes,
+                &format!("{prefix}.v2.reservation.policy_epoch"),
+                reservation.policy_epoch,
+            );
+            append_canonical_str(
+                bytes,
+                &format!("{prefix}.v2.reservation.policy_hash"),
+                &reservation.policy_hash,
+            );
+            append_canonical_u64(
+                bytes,
+                &format!("{prefix}.v2.reservation.mint_amount_atoms"),
+                reservation.mint_amount_atoms,
+            );
+            append_canonical_u64(
+                bytes,
+                &format!("{prefix}.v2.reservation.max_settlement_value_atoms"),
+                reservation.max_settlement_value_atoms,
+            );
+            append_canonical_u64(
+                bytes,
+                &format!("{prefix}.v2.reservation.created_at_height"),
+                reservation.created_at_height,
+            );
+            append_canonical_u64(
+                bytes,
+                &format!("{prefix}.v2.reservation.expires_at_height"),
+                reservation.expires_at_height,
+            );
+        }
+        for (reservation_id, status) in &v2.terminal_reservations {
+            append_canonical_str(
+                bytes,
+                &format!("{prefix}.v2.terminal_reservation.id"),
+                reservation_id,
+            );
+            append_canonical_str(
+                bytes,
+                &format!("{prefix}.v2.terminal_reservation.status"),
+                status,
+            );
+        }
+        append_canonical_usize(
+            bytes,
+            &format!("{prefix}.v2.export_entitlement_count"),
+            v2.export_entitlements.len(),
+        );
+        for entitlement in v2.export_entitlements.values() {
+            for (label, value) in [
+                ("id", entitlement.reservation_id.as_str()),
+                ("subscriber", entitlement.subscriber.as_str()),
+                (
+                    "ethereum_recipient",
+                    entitlement.ethereum_recipient.as_str(),
+                ),
+                ("policy_hash", entitlement.policy_hash.as_str()),
+            ] {
+                append_canonical_str(
+                    bytes,
+                    &format!("{prefix}.v2.export_entitlement.{label}"),
+                    value,
+                );
+            }
+            for (label, value) in [
+                ("route_epoch", entitlement.route_epoch),
+                ("policy_epoch", entitlement.policy_epoch),
+                ("remaining_amount_atoms", entitlement.remaining_amount_atoms),
+                ("expires_at_height", entitlement.expires_at_height),
+            ] {
+                append_canonical_u64(
+                    bytes,
+                    &format!("{prefix}.v2.export_entitlement.{label}"),
+                    value,
+                );
+            }
+        }
+        for (nonce, owner) in &v2.redemption_nonces {
+            append_canonical_str(bytes, &format!("{prefix}.v2.redemption_nonce"), nonce);
+            append_canonical_str(bytes, &format!("{prefix}.v2.redemption_owner"), owner);
+        }
+    }
 
     append_canonical_usize(
         bytes,
@@ -2773,6 +2973,32 @@ pub(super) fn append_pftl_uniswap_export_packet(
         packet.refund_not_before_height,
     );
     append_canonical_str(bytes, &format!("{prefix}.status"), &packet.status);
+    if let Some(route_epoch) = packet.route_epoch {
+        if let Some(settlement_value_atoms) = packet.settlement_value_atoms {
+            append_canonical_u64(
+                bytes,
+                &format!("{prefix}.settlement_value_atoms"),
+                settlement_value_atoms,
+            );
+        }
+        if let Some(digest) = &packet.ethereum_packet_digest {
+            append_canonical_str(bytes, &format!("{prefix}.ethereum_packet_digest"), digest);
+        }
+        if let Some(schema) = packet.ethereum_packet_schema_version {
+            append_canonical_u32(
+                bytes,
+                &format!("{prefix}.ethereum_packet_schema_version"),
+                schema,
+            );
+        }
+        append_canonical_u64(bytes, &format!("{prefix}.route_epoch"), route_epoch);
+        if let Some(policy_hash) = &packet.policy_hash {
+            append_canonical_str(bytes, &format!("{prefix}.policy_hash"), policy_hash);
+        }
+        if let Some(reservation_id) = &packet.reservation_id {
+            append_canonical_str(bytes, &format!("{prefix}.reservation_id"), reservation_id);
+        }
+    }
 }
 
 pub(super) fn append_pftl_uniswap_return_import(

@@ -45,6 +45,9 @@ pub struct ConsensusV2BlockRef {
     /// original block-ID and signing encodings.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bridge_exit_root: Option<String>,
+    /// Cumulative v2 PFTL-Uniswap receipt accumulator committed by this block.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pftl_uniswap_receipt_root: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

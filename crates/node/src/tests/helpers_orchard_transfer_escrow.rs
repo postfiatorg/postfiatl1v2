@@ -1635,7 +1635,7 @@
             route_id: route_id.clone(),
             route_family: postfiat_types::PFTL_UNISWAP_ROUTE_FAMILY_PRIMARY_MINT.to_string(),
             route_config_digest: "93".repeat(48),
-            route_trust_class: "CONTROLLED".to_string(),
+            route_trust_class: "BFT_CHECKPOINT".to_string(),
             native_nav_asset_id: native.asset_id.clone(),
             settlement_asset_id: settlement.asset_id.clone(),
             handoff_controller: "0x1111111111111111111111111111111111111111".to_string(),
@@ -1646,7 +1646,7 @@
             packet_notional_cap_atoms: 1_000_000,
             latest_finalized_nav_epoch: 1,
             return_finality_blocks: 12,
-            live_value_enabled: false,
+            live_value_enabled: true,
             ethereum_verification_policy: None,
             authorized_valid_supply_atoms: 0,
             pftl_spendable_supply_atoms: 0,
@@ -1661,6 +1661,7 @@
             export_nonces: std::collections::BTreeMap::new(),
             return_imports: std::collections::BTreeMap::new(),
             paused: false,
+            v2: None,
         };
         route.validate().expect("zero-supply route");
 
@@ -1722,8 +1723,13 @@
         });
         let mut over_cap_shielded = ShieldedState::empty();
         over_cap_shielded.orchard = Some(hidden_pool);
-        let execution_receipt =
-            execute_asset_transaction(&genesis, &mut over_cap_candidate, &subscribe, 2);
+        let execution_receipt = execute_asset_transaction_with_compatibility(
+            &genesis,
+            &mut over_cap_candidate,
+            &subscribe,
+            2,
+            AssetExecutionCompatibility::wan_devnet_legacy_replay(),
+        );
         assert!(execution_receipt.accepted, "{execution_receipt:?}");
         let cap_error = verify_global_issued_asset_supply_caps(
             &over_cap_candidate,
@@ -1736,7 +1742,13 @@
         );
         assert_eq!(ledger, canonical_before_cap_rejection);
 
-        let receipt = execute_asset_transaction(&genesis, &mut ledger, &subscribe, 2);
+        let receipt = execute_asset_transaction_with_compatibility(
+            &genesis,
+            &mut ledger,
+            &subscribe,
+            2,
+            AssetExecutionCompatibility::wan_devnet_legacy_replay(),
+        );
         assert!(receipt.accepted, "{receipt:?}");
         assert_eq!(
             ledger
@@ -1952,6 +1964,7 @@
                 export_nonces: std::collections::BTreeMap::new(),
                 return_imports: std::collections::BTreeMap::new(),
                 paused: false,
+                v2: None,
             });
 
         let mut pool = OrchardPoolState::empty(ASSET_ORCHARD_POOL_ID_V1);

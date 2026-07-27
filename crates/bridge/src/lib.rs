@@ -219,6 +219,10 @@ pub struct PftlUniswapExportPacketState {
     pub source_wallet: String,
     pub ethereum_recipient: String,
     pub amount_atoms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settlement_value_atoms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reservation_id: Option<String>,
     pub source_height: u64,
     pub destination_deadline_seconds: u64,
     pub refund_not_before_height: u64,
@@ -415,9 +419,14 @@ pub struct PftlUniswapSupplyStatusReport {
     pub schema: String,
     pub route_id: String,
     pub route_config_digest: String,
+    pub route_trust_class: String,
     pub native_nav_asset_id: String,
     pub settlement_asset_id: String,
+    pub handoff_controller: String,
     pub wrapped_navcoin_token: String,
+    pub ethereum_chain_id: u64,
+    pub live_value_enabled: bool,
+    pub paused: bool,
     pub native_spendable_balances: Vec<PftlUniswapNativeBalanceRow>,
     pub native_spendable_balance_count: u64,
     pub native_spendable_balance_limit: u64,
@@ -434,6 +443,62 @@ pub struct PftlUniswapSupplyStatusReport {
     pub supply_cap_remaining_atoms: u64,
     pub packet_notional_cap_atoms: u64,
     pub settlement_reserve_atoms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_schema_version: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_epoch: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outbound_verification_class: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub return_verification_class: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_epoch: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issue_multiplier_bps: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub redeem_multiplier_bps: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_order_atoms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_order_atoms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_valid_from_height: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_expires_at_height: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_nav_age_blocks: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pricing_nav_epoch: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pricing_reserve_packet_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issue_capacity_remaining_atoms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub redeem_capacity_remaining_atoms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub non_nav_spread_atoms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_reservation_count: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_reservation_atoms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub export_entitlement_count: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub export_entitlement_atoms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wrapped_exposure_atoms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub committed_wrapped_exposure_atoms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub available_export_capacity_atoms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub available_issue_atoms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub available_redeem_atoms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reserve_backed_redeem_atoms: Option<u64>,
     pub invariant_holds: bool,
     pub ledger_hash: String,
 }
@@ -477,6 +542,10 @@ pub struct PftlUniswapExportPacketStatusRow {
     pub source_wallet: String,
     pub ethereum_recipient: String,
     pub amount_atoms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settlement_value_atoms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reservation_id: Option<String>,
     pub source_height: u64,
     pub destination_deadline_seconds: u64,
     pub refund_not_before_height: u64,
@@ -1772,9 +1841,14 @@ pub fn pftl_uniswap_bridge_supply_status(
         schema: "postfiat-pftl-uniswap-supply-status-v1".to_string(),
         route_id: ledger.route_id.clone(),
         route_config_digest: ledger.route_config_digest.clone(),
+        route_trust_class: ledger.route_trust_class.clone(),
         native_nav_asset_id: ledger.native_nav_asset_id.clone(),
         settlement_asset_id: ledger.settlement_asset_id.clone(),
+        handoff_controller: ledger.handoff_controller.clone(),
         wrapped_navcoin_token: ledger.wrapped_navcoin_token.clone(),
+        ethereum_chain_id: ledger.ethereum_chain_id,
+        live_value_enabled: !ledger.paused,
+        paused: ledger.paused,
         native_spendable_balances: pftl_uniswap_native_balance_rows(
             &ledger.native_spendable_balances_atoms,
             PFTL_UNISWAP_STATUS_MAX_ROWS,
@@ -1795,6 +1869,34 @@ pub fn pftl_uniswap_bridge_supply_status(
         supply_cap_remaining_atoms,
         packet_notional_cap_atoms: ledger.packet_notional_cap_atoms,
         settlement_reserve_atoms: ledger.settlement_reserve_atoms,
+        route_schema_version: None,
+        route_epoch: None,
+        outbound_verification_class: None,
+        return_verification_class: None,
+        policy_hash: None,
+        policy_epoch: None,
+        issue_multiplier_bps: None,
+        redeem_multiplier_bps: None,
+        max_order_atoms: None,
+        min_order_atoms: None,
+        policy_valid_from_height: None,
+        policy_expires_at_height: None,
+        max_nav_age_blocks: None,
+        pricing_nav_epoch: None,
+        pricing_reserve_packet_hash: None,
+        issue_capacity_remaining_atoms: None,
+        redeem_capacity_remaining_atoms: None,
+        non_nav_spread_atoms: None,
+        active_reservation_count: None,
+        active_reservation_atoms: None,
+        export_entitlement_count: None,
+        export_entitlement_atoms: None,
+        wrapped_exposure_atoms: None,
+        committed_wrapped_exposure_atoms: None,
+        available_export_capacity_atoms: None,
+        available_issue_atoms: None,
+        available_redeem_atoms: None,
+        reserve_backed_redeem_atoms: None,
         invariant_holds: live_supply_sum_atoms == ledger.authorized_valid_supply_atoms,
         ledger_hash: pftl_uniswap_bridge_ledger_hash(ledger)?,
     })
@@ -2243,6 +2345,8 @@ pub fn pftl_uniswap_export_debit(
         source_wallet: request.source_wallet,
         ethereum_recipient: request.ethereum_recipient,
         amount_atoms: request.amount_atoms,
+        settlement_value_atoms: None,
+        reservation_id: None,
         source_height: request.source_height,
         destination_deadline_seconds: request.destination_deadline_seconds,
         refund_not_before_height: request.refund_not_before_height,
@@ -2816,6 +2920,8 @@ fn pftl_uniswap_export_packet_status_row(
         source_wallet: packet.source_wallet.clone(),
         ethereum_recipient: packet.ethereum_recipient.clone(),
         amount_atoms: packet.amount_atoms,
+        settlement_value_atoms: None,
+        reservation_id: None,
         source_height: packet.source_height,
         destination_deadline_seconds: packet.destination_deadline_seconds,
         refund_not_before_height: packet.refund_not_before_height,
@@ -3322,6 +3428,8 @@ fn validate_pftl_uniswap_export_request(
         source_wallet: request.source_wallet.clone(),
         ethereum_recipient: request.ethereum_recipient.clone(),
         amount_atoms: request.amount_atoms,
+        settlement_value_atoms: None,
+        reservation_id: None,
         source_height: request.source_height,
         destination_deadline_seconds: request.destination_deadline_seconds,
         refund_not_before_height: request.refund_not_before_height,

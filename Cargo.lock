@@ -1772,6 +1772,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "postfiat-pftl-uniswap-proofs"
+version = "0.1.0"
+dependencies = [
+ "postfiat-crypto-provider",
+ "postfiat-pfusdc-proofs",
+ "postfiat-types",
+ "serde",
+ "sha3 0.11.0",
+]
+
+[[package]]
 name = "postfiat-pfusdc-proofs"
 version = "0.1.0"
 dependencies = [

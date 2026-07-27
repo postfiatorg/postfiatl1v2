@@ -24,6 +24,8 @@ const CONSENSUS_V2_COMMITTEE_ROOT_DOMAIN: &str = "postfiat.consensus.committee-r
 const CONSENSUS_V2_BLOCK_ID_DOMAIN: &str = "postfiat.consensus.block-id.v2";
 const CONSENSUS_V2_BRIDGE_EXIT_BLOCK_ID_DOMAIN: &str =
     "postfiat.consensus.block-id.bridge-exit-root.v1";
+const CONSENSUS_V2_PFTL_UNISWAP_BLOCK_ID_DOMAIN: &str =
+    "postfiat.consensus.block-id.pftl-uniswap-receipt-root.v1";
 const CONSENSUS_V2_GENESIS_PARENT_ID_DOMAIN: &str = "postfiat.consensus.genesis-parent-id.v2";
 const CONSENSUS_V2_PROPOSAL_ID_DOMAIN: &str = "postfiat.consensus.proposal-id.v2";
 const CONSENSUS_V2_QC_ID_DOMAIN: &str = "postfiat.consensus.qc-id.v2";
@@ -192,6 +194,7 @@ pub fn consensus_v2_block_ref(
         payload_hash.into(),
         state_root.into(),
         None,
+        None,
     )
 }
 
@@ -210,6 +213,27 @@ pub fn consensus_v2_block_ref_with_bridge_exit_root(
         payload_hash.into(),
         state_root.into(),
         Some(bridge_exit_root.into()),
+        None,
+    )
+}
+
+pub fn consensus_v2_block_ref_with_commitment_roots(
+    domain: &ConsensusV2Domain,
+    height: u64,
+    parent_block_id: impl Into<String>,
+    payload_hash: impl Into<String>,
+    state_root: impl Into<String>,
+    bridge_exit_root: Option<String>,
+    pftl_uniswap_receipt_root: impl Into<String>,
+) -> Result<ConsensusV2BlockRef, OrderingError> {
+    consensus_v2_block_ref_internal(
+        domain,
+        height,
+        parent_block_id.into(),
+        payload_hash.into(),
+        state_root.into(),
+        bridge_exit_root,
+        Some(pftl_uniswap_receipt_root.into()),
     )
 }
 
@@ -220,6 +244,7 @@ fn consensus_v2_block_ref_internal(
     payload_hash: String,
     state_root: String,
     bridge_exit_root: Option<String>,
+    pftl_uniswap_receipt_root: Option<String>,
 ) -> Result<ConsensusV2BlockRef, OrderingError> {
     validate_consensus_v2_domain(domain)?;
     if height == 0 {
@@ -233,7 +258,12 @@ fn consensus_v2_block_ref_internal(
     if let Some(root) = bridge_exit_root.as_deref() {
         validate_hash("bridge exit root", root)?;
     }
-    let block_id_domain = if bridge_exit_root.is_some() {
+    if let Some(root) = pftl_uniswap_receipt_root.as_deref() {
+        validate_hash("PFTL-Uniswap receipt root", root)?;
+    }
+    let block_id_domain = if pftl_uniswap_receipt_root.is_some() {
+        CONSENSUS_V2_PFTL_UNISWAP_BLOCK_ID_DOMAIN
+    } else if bridge_exit_root.is_some() {
         CONSENSUS_V2_BRIDGE_EXIT_BLOCK_ID_DOMAIN
     } else {
         CONSENSUS_V2_BLOCK_ID_DOMAIN
@@ -247,6 +277,9 @@ fn consensus_v2_block_ref_internal(
         if let Some(root) = bridge_exit_root.as_deref() {
             append_str_field(bytes, "bridge_exit_root", root);
         }
+        if let Some(root) = pftl_uniswap_receipt_root.as_deref() {
+            append_str_field(bytes, "pftl_uniswap_receipt_root", root);
+        }
     });
     Ok(ConsensusV2BlockRef {
         height,
@@ -255,6 +288,7 @@ fn consensus_v2_block_ref_internal(
         payload_hash,
         state_root,
         bridge_exit_root,
+        pftl_uniswap_receipt_root,
     })
 }
 
@@ -276,6 +310,17 @@ fn recompute_consensus_v2_block_ref(
     domain: &ConsensusV2Domain,
     block: &ConsensusV2BlockRef,
 ) -> Result<ConsensusV2BlockRef, OrderingError> {
+    if let Some(root) = block.pftl_uniswap_receipt_root.as_deref() {
+        return consensus_v2_block_ref_with_commitment_roots(
+            domain,
+            block.height,
+            block.parent_block_id.clone(),
+            block.payload_hash.clone(),
+            block.state_root.clone(),
+            block.bridge_exit_root.clone(),
+            root.to_string(),
+        );
+    }
     match block.bridge_exit_root.as_deref() {
         Some(root) => consensus_v2_block_ref_with_bridge_exit_root(
             domain,
@@ -1247,6 +1292,9 @@ fn append_block(bytes: &mut Vec<u8>, block: &ConsensusV2BlockRef) {
     append_str_field(bytes, "block.state_root", &block.state_root);
     if let Some(root) = block.bridge_exit_root.as_deref() {
         append_str_field(bytes, "block.bridge_exit_root", root);
+    }
+    if let Some(root) = block.pftl_uniswap_receipt_root.as_deref() {
+        append_str_field(bytes, "block.pftl_uniswap_receipt_root", root);
     }
 }
 

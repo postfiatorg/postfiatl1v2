@@ -29,6 +29,7 @@ in the proof profile and replayable from the packet.
 | NAVCoin | The asset class and protocol pattern: proof profile, reserve packet, supply discipline, mint/redeem controls, and market-operation limits. | Implemented on PFTL devnet paths, with proof-profile and bridge work in progress. |
 | a651 | The first named NAVCoin instance for the proven six-leg reserve portfolio. | Registered and exercised on the PFTL WAN devnet; also launched on Ethereum as a live a651/USDC venue/representation with the caveats in [Assets And Venues](assets-and-venues.md). |
 | a652 | A second NAVCoin instance used to prove cross-NAVCoin swap mechanics. | WAN devnet evidence only, not a production public asset. |
+| a666 | The production-target NAVCoin lineage for large, low-slippage primary subscriptions, symmetric primary redemption, and proof-backed Ethereum representation. | Implementation/deployment candidate; not yet a persistent public mainnet product. |
 | pfUSDC | A PFTL-side, source-labeled vault-bridge receipt used as countable cash for NAVCoin settlement. | Implemented through the generic vault-bridge/NAV profile path; not a separate hardcoded stablecoin subsystem. |
 
 ## What the proof does and does not prove
@@ -73,13 +74,17 @@ entering or leaving the shielded pool.
 
 ## Reading order
 
-1. [Proof-of-Reserve Primitives](reserve-primitives.md) explains proof profiles,
+1. [Canonical Primary-Market Accounting](primary-market-accounting.md)
+   defines the adopted subscription, redemption, capacity, fee, bridge, and
+   market-support invariants.
+2. [Proof-of-Reserve Primitives](reserve-primitives.md) explains proof profiles,
    reserve packets, attestors, challenges, and the native NAV transaction path.
-2. [a651 Uniswap Pool](uniswap-pool.md) documents the live Ethereum a651/USDC
+3. [a651 Uniswap Pool](uniswap-pool.md) documents the live Ethereum a651/USDC
    Uniswap v4 venue, pool id, addresses, launch configuration, and caveats.
-3. [Assets And Venues](assets-and-venues.md) documents a651, a652, pfUSDC, the
+4. [Assets And Venues](assets-and-venues.md) documents a651, a652, a666,
+   pfUSDC, the
    Ethereum/Uniswap a651 venue, and the bridge/market-operation contracts.
-4. [PFTL Tools](pftl-tools.md) maps the scripts, CLI commands, Python modules,
+5. [PFTL Tools](pftl-tools.md) maps the scripts, CLI commands, Python modules,
    and Solidity contracts to the evidence they produce.
-5. [Reference Posts](references.md) links the public NAVCoin series and the
+6. [Reference Posts](references.md) links the public NAVCoin series and the
    deeper local implementation documents.

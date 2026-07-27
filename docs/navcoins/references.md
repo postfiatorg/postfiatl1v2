@@ -11,10 +11,10 @@ then map those claims to the local PFTL implementation.
 | [Minting a651: One Portfolio, Many Access Venues](https://postfiat.org/blog/navcoin-ethereum/) | Defines a651 as one NAVCoin instance and separates global backing from local access venues. |
 | [Proof of Disclosed Leverage](https://postfiat.org/blog/proof-of-leverage/) | Documents the SP1 reserve-evidence primitive and its limits: disclosed account set, not global solvency. |
 | [NAVCoin Counterparty Risk](https://postfiat.org/blog/navcoin-counterparty-risk/) | Treats venue/source credit risk as an explicit field instead of hiding it behind reserve totals. |
-| [NAVCoin Collateralization Without Spot Redemption](https://postfiat.org/blog/navcoin-collateralization/) | Defines bounded market operations, PFTL-finalized envelopes, and Uniswap venue evidence without promising standing spot redemption. |
+| [NAVCoin Collateralization, Primary Issuance, and Redemption](https://postfiat.org/blog/navcoin-collateralization/) | Defines the adopted symmetric primary accounting: counted reserve value and supply grow together on subscription and contract together on redemption; optional market support remains separate. |
 | [pfUSDC: Source-Labeled Cash Receipts for NAVCoin](https://postfiat.org/blog/pfusdc/) | Explains why PFTL must label, finalize, haircut, and allocate cash claims before using them in NAVCoin settlement. |
 | [Private NAV Subscriptions and OTC Swaps](https://postfiat.org/research/private-nav-otc-swaps/) | Defines the private subscription and secondary OTC design target, including the auditability/privacy tradeoff. |
-| [pfUSDC x NAVCoin: A Proven End-to-End OTC Swap MVP](https://postfiat.org/blog/navcoin-otc-mvp-proven/) | Reports the live Arbitrum plus PFTL WAN devnet round trip, including pfUSDC bridge-in/out, a651 primary mint/exit, and a651/a652 swap evidence. |
+| [pfUSDC x NAVCoin: A Proven Primary Subscription and Redemption MVP](https://postfiat.org/blog/navcoin-otc-mvp-proven/) | Reports the live Arbitrum plus PFTL WAN devnet round trip, including pfUSDC bridge-in/out, a651 primary mint/redemption, and separate a651/a652 secondary-swap evidence. |
 | [Heavy ZK: Circuit Anatomy and Prover Optimization for Shielded NAVCoin Swaps](https://postfiat.org/research/heavy-zk-optimization-v2/) | Explains the Asset-Orchard shielded swap circuit, measured prover costs, and optimization path. |
 
 ## Hosted L1 docs

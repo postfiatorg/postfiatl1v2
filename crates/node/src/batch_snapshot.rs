@@ -47,6 +47,19 @@ pub(super) fn build_block_proposal_from_state<T: Serialize>(
         plan.receipts,
         block_height,
     )?;
+    let pftl_uniswap_receipt_root = if plan
+        .ledger
+        .pftl_uniswap_routes
+        .iter()
+        .any(|route| route.v2.is_some())
+    {
+        Some(
+            postfiat_types::pftl_uniswap_consensus_receipt_root(&plan.ledger.pftl_uniswap_receipts)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?,
+        )
+    } else {
+        None
+    };
     Ok(BlockProposalFile {
         schema: BLOCK_PROPOSAL_FILE_SCHEMA.to_string(),
         chain_id: plan.genesis.chain_id.clone(),
@@ -61,6 +74,7 @@ pub(super) fn build_block_proposal_from_state<T: Serialize>(
         payload_hash,
         state_root,
         bridge_exit_root,
+        pftl_uniswap_receipt_root,
         receipt_count: receipt_ids.len() as u64,
         receipt_ids,
         fastpay_pre_state_effects: plan.fastpay_pre_state_effects,

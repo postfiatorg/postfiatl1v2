@@ -1,0 +1,9 @@
+{
+  "id": "a666-v2-opening-holder-authorize-quote",
+  "method": "asset_fee_quote",
+  "params": {
+    "operation_json": "{\"operation\":\"trust_set\",\"account\":\"pfab9b9228942e5c529633a13aa271d5297bec6353\",\"issuer\":\"pffcb93d9f87a843a8aa34e1adf241f5d58143e81b\",\"asset_id\":\"521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c\",\"limit\":10000000000000,\"authorized\":true,\"frozen\":false,\"reserve_paid\":10}",
+    "source": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b"
+  },
+  "version": "postfiat-local-rpc-v1"
+}

@@ -37,14 +37,16 @@ NAV policy described in [Proof-of-Reserve Primitives](reserve-primitives.md).
 | Proven portfolio NAV | $23,648.69 |
 | NAV per unit | $5.912 |
 | Initial pool liquidity | 676.57 a651 + $4,000.00 USDC |
-| Redemption buffer | $990 USDC |
+| Legacy controller redemption allocation | $990 USDC |
 | Smoke swap | $1 USDC |
 | Total USDC drawn for launch | $4,991 of $5,000 |
 
 The launch used a 4,000 unit genesis supply so the per-unit NAV stayed near
-$5.912. The pool USDC and redemption buffer are separate allocations. Pool depth
-is not counted as the backing of only the pool tokens; every valid a651 unit
-references the same verified reserve portfolio.
+$5.912. The pool USDC and legacy controller redemption allocation were
+separate launch allocations. This is historical a651 implementation detail,
+not the adopted a666 model. Pool depth is not backing, and a666 primary
+redemption releases subscription-funded NAV reserve principal while retiring
+the matching supply.
 
 ## Read-only inspection - 2026-06-29
 
@@ -115,7 +117,7 @@ and launch orchestration around the pool.
 | `StakeHub/zk/contracts/src/navcoin/NavCoin.sol` | ERC-20-compatible a651 venue token with controller-gated mint/burn, pause, quarantine, venue id, and allocation-registry binding. |
 | `StakeHub/zk/contracts/src/navcoin/NavProofAdapter.sol` | Reads `StakeHubLeverageVerifier.latest()`, checks schema/mode/program vkey/policy hash/freshness, computes `verifiedNetAssetsUsdE8`, global supply, and NAV per unit. |
 | `StakeHub/zk/contracts/src/navcoin/NavAllocationRegistry.sol` | Defines venue ids, 80/10/10 Ethereum/Arbitrum/Base allocation caps, active venue tokens, current global supply, and allocation policy hash. |
-| `StakeHub/zk/contracts/src/navcoin/NavMintRedeemController.sol` | Operator-gated primary mint/redeem against fresh NAV snapshots, fees, epoch limits, redemption buffer, and USDC settlement. |
+| `StakeHub/zk/contracts/src/navcoin/NavMintRedeemController.sol` | Historical a651 operator-gated mint/redeem controller using an inventory-funded USDC allocation. It is not the canonical a666 primary-market implementation. |
 | `StakeHub/zk/contracts/src/navcoin/NavBridgeController.sol` | Supply controller for primary mint/burn and specified owner-only burn-here/mint-there flows. It is not a live cross-chain a651 bridge. |
 | `StakeHub/zk/contracts/src/navcoin/NavCoinV4LaunchHelper.sol` | Real Uniswap v4 launch helper: computes the `PoolKey`, initializes the pool at NAV, seeds liquidity through PositionManager, and runs smoke swaps through PoolManager unlock. |
 | `StakeHub/zk/contracts/script/NavCoinUniswapV4DryRun.s.sol` | Fork/dry-run math, mock v4 pool manager, mock position manager, and helper functions for pool id, sqrt price, and implied NAV checks. |

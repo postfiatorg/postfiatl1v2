@@ -1723,6 +1723,7 @@ pub(super) struct HistoricalBlockReplay {
     pub(super) parent_hash: String,
     pub(super) state_root: String,
     pub(super) bridge_exit_root: Option<String>,
+    pub(super) pftl_uniswap_receipt_root: Option<String>,
     pub(super) receipt_ids: Vec<String>,
 }
 
@@ -1735,6 +1736,7 @@ pub(crate) fn historical_block_replay_from_file(path: &Path) -> io::Result<Histo
         parent_hash: block.header.parent_hash,
         state_root: block.header.state_root,
         bridge_exit_root: block.header.bridge_exit_root,
+        pftl_uniswap_receipt_root: block.header.pftl_uniswap_receipt_root,
         receipt_ids: block.receipt_ids,
     })
 }
@@ -2112,6 +2114,30 @@ pub(super) fn prepare_ordered_commit_timed<T: Serialize>(
             "historical replay bridge exit root does not match recomputed exits",
         ));
     }
+    let recomputed_pftl_uniswap_receipt_root = if plan
+        .ledger
+        .pftl_uniswap_routes
+        .iter()
+        .any(|route| route.v2.is_some())
+    {
+        Some(
+            postfiat_types::pftl_uniswap_consensus_receipt_root(&plan.ledger.pftl_uniswap_receipts)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?,
+        )
+    } else {
+        None
+    };
+    let evidence_pftl_uniswap_receipt_root = historical_replay
+        .map(|replay| replay.pftl_uniswap_receipt_root.clone())
+        .unwrap_or_else(|| recomputed_pftl_uniswap_receipt_root.clone());
+    if historical_replay.is_some()
+        && evidence_pftl_uniswap_receipt_root != recomputed_pftl_uniswap_receipt_root
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "historical replay PFTL-Uniswap receipt root does not match recomputed receipts",
+        ));
+    }
 
     let block_evidence = BlockEvidence {
         height,
@@ -2122,6 +2148,7 @@ pub(super) fn prepare_ordered_commit_timed<T: Serialize>(
         batch_id: plan.batch_id,
         state_root: evidence_state_root.as_str(),
         bridge_exit_root: evidence_bridge_exit_root.as_deref(),
+        pftl_uniswap_receipt_root: evidence_pftl_uniswap_receipt_root.as_deref(),
         receipt_ids: &receipt_ids,
         fastpay_pre_state_effects: plan.fastpay_pre_state_effects,
     };
@@ -2202,6 +2229,7 @@ pub(super) fn prepare_ordered_commit_timed<T: Serialize>(
             || commit.proposal.block.payload_hash != payload_hash
             || commit.proposal.block.state_root != evidence_state_root
             || commit.proposal.block.bridge_exit_root != evidence_bridge_exit_root
+            || commit.proposal.block.pftl_uniswap_receipt_root != evidence_pftl_uniswap_receipt_root
             || commit.precommit_qc.phase != postfiat_types::ConsensusV2Phase::Precommit
             || commit.precommit_qc.block.as_ref() != Some(&commit.proposal.block)
         {
@@ -2233,6 +2261,7 @@ pub(super) fn prepare_ordered_commit_timed<T: Serialize>(
             batch_id: plan.batch_id.to_string(),
             state_root: evidence_state_root,
             bridge_exit_root: evidence_bridge_exit_root,
+            pftl_uniswap_receipt_root: evidence_pftl_uniswap_receipt_root,
             receipt_count: receipt_ids.len() as u64,
             certificate_id,
             certificate,
@@ -2808,6 +2837,7 @@ pub(super) struct BlockEvidence<'a> {
     pub(super) batch_id: &'a str,
     pub(super) state_root: &'a str,
     pub(super) bridge_exit_root: Option<&'a str>,
+    pub(super) pftl_uniswap_receipt_root: Option<&'a str>,
     pub(super) receipt_ids: &'a [String],
     pub(super) fastpay_pre_state_effects: &'a [postfiat_types::FastPayVersionFenceV1],
 }
@@ -2823,6 +2853,7 @@ impl<'a> BlockEvidence<'a> {
             batch_id: &block.header.batch_id,
             state_root: &block.header.state_root,
             bridge_exit_root: block.header.bridge_exit_root.as_deref(),
+            pftl_uniswap_receipt_root: block.header.pftl_uniswap_receipt_root.as_deref(),
             receipt_ids: &block.receipt_ids,
             fastpay_pre_state_effects: &block.fastpay_pre_state_effects,
         }
@@ -2838,6 +2869,7 @@ pub(super) struct OwnedBlockEvidence {
     pub(super) batch_id: String,
     pub(super) state_root: String,
     pub(super) bridge_exit_root: Option<String>,
+    pub(super) pftl_uniswap_receipt_root: Option<String>,
     pub(super) receipt_ids: Vec<String>,
     pub(super) fastpay_pre_state_effects: Vec<postfiat_types::FastPayVersionFenceV1>,
 }

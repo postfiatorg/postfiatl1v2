@@ -2515,6 +2515,65 @@
     }
 
     #[test]
+    fn asset_rpc_limits_admit_consensus_bounded_sp1_packets() {
+        let proof_bearing_operation =
+            asset_fee_quote_request("asset-sp1", "pfissuer", "x".repeat(8 * 1024), None);
+        validate_request(
+            &proof_bearing_operation,
+            Some("asset-sp1"),
+            Some(RpcRequestKind::AssetFeeQuote),
+        )
+        .expect("proof-bearing asset operation must exceed the generic 4 KiB cap");
+
+        let oversized_operation = asset_fee_quote_request(
+            "asset-sp1-too-large",
+            "pfissuer",
+            "x".repeat(MAX_RPC_ASSET_OPERATION_JSON_BYTES + 1),
+            None,
+        );
+        assert!(matches!(
+            validate_request(
+                &oversized_operation,
+                Some("asset-sp1-too-large"),
+                Some(RpcRequestKind::AssetFeeQuote),
+            ),
+            Err(RpcRequestValidationError::Protocol(
+                RpcProtocolError::ParamStringTooLong { key, max_bytes }
+            )) if key == "operation_json" && max_bytes == MAX_RPC_ASSET_OPERATION_JSON_BYTES
+        ));
+
+        let proof_bearing_signed_asset = RpcRequest::new(
+            "signed-asset-sp1",
+            METHOD_MEMPOOL_SUBMIT_SIGNED_ASSET_TRANSACTION,
+            json!({
+                "signed_asset_transaction_json":
+                    "x".repeat(MAX_RPC_SIGNED_TRANSFER_JSON_BYTES + 1)
+            }),
+        );
+        proof_bearing_signed_asset
+            .validate_protocol()
+            .expect("signed proof-bearing asset envelope must exceed the generic signed cap");
+
+        let oversized_signed_asset = RpcRequest::new(
+            "signed-asset-sp1-too-large",
+            METHOD_MEMPOOL_SUBMIT_SIGNED_ASSET_TRANSACTION,
+            json!({
+                "signed_asset_transaction_json":
+                    "x".repeat(MAX_RPC_SIGNED_ASSET_TRANSACTION_JSON_BYTES + 1)
+            }),
+        );
+        assert_eq!(
+            oversized_signed_asset
+                .validate_protocol()
+                .expect_err("signed asset envelope must retain an explicit cap"),
+            RpcProtocolError::ParamStringTooLong {
+                key: "signed_asset_transaction_json".to_string(),
+                max_bytes: MAX_RPC_SIGNED_ASSET_TRANSACTION_JSON_BYTES,
+            }
+        );
+    }
+
+    #[test]
     fn request_file_helpers_reject_invalid_protocol() {
         let path = std::env::temp_dir().join(format!(
             "postfiat-rpc-sdk-request-{}-{}.json",
@@ -4430,9 +4489,14 @@
                 "schema": "postfiat-pftl-uniswap-supply-status-v1",
                 "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
                 "route_config_digest": hex96,
+                "route_trust_class": "CONTROLLED",
                 "native_nav_asset_id": hex96,
                 "settlement_asset_id": hex96,
+                "handoff_controller": "0x2222222222222222222222222222222222222222",
                 "wrapped_navcoin_token": "0x1111111111111111111111111111111111111111",
+                "ethereum_chain_id": 1,
+                "live_value_enabled": true,
+                "paused": false,
                 "authorized_valid_supply_atoms": 300,
                 "pftl_spendable_supply_atoms": 150,
                 "native_spendable_balances": [
@@ -4472,9 +4536,14 @@
                 "schema": "postfiat-pftl-uniswap-supply-status-v1",
                 "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
                 "route_config_digest": hex96,
+                "route_trust_class": "CONTROLLED",
                 "native_nav_asset_id": hex96,
                 "settlement_asset_id": hex96,
+                "handoff_controller": "0x2222222222222222222222222222222222222222",
                 "wrapped_navcoin_token": "0x1111111111111111111111111111111111111111",
+                "ethereum_chain_id": 1,
+                "live_value_enabled": true,
+                "paused": false,
                 "authorized_valid_supply_atoms": 325,
                 "pftl_spendable_supply_atoms": 175,
                 "native_spendable_balances": [

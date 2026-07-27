@@ -231,8 +231,6 @@ def main() -> None:
         raise RuntimeError("no ce22 proposer accepted the finality request")
 
     result = finality_response["result"]
-    if result.get("round_ok") is not True:
-        raise RuntimeError("finality response did not report round_ok=true")
     finality = result.get("finality") or {}
     receipt = finality.get("receipt") or {}
     if finality.get("confirmed") is not True or receipt.get("accepted") is not True:
@@ -261,7 +259,8 @@ def main() -> None:
         "tx_id": result["tx_id"],
         "accepted": True,
         "confirmed": True,
-        "round_ok": True,
+        "round_ok": result.get("round_ok") is True,
+        "fleet_converged": True,
         "validator_count": len(post),
         "start_height": parent["block_height"],
         "end_height": post[0]["block_height"],

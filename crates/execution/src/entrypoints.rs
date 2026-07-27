@@ -23,8 +23,15 @@ use postfiat_types::{
     OfferCreateOperation, OfferFillReceipt, OfferTransactionOperation, PftlUniswapConsensusExportPacket,
     PftlUniswapConsensusReceipt, PftlUniswapConsensusReturnImport, PftlUniswapConsensusRouteState,
     PftlUniswapDestinationConsumeOperation, PftlUniswapExportDebitOperation,
-    PftlUniswapPrimarySubscribeOperation, PftlUniswapRefundSourceOperation,
-    PftlUniswapReturnImportOperation, PftlUniswapRouteInitOperation, VaultBridgeAllocation,
+    PftlUniswapExportEntitlementV2, PftlUniswapMintPacketV2,
+    PftlUniswapOrderReleaseOperation, PftlUniswapOrderReservationV2,
+    PftlUniswapOrderReserveOperation, PftlUniswapPrimaryRedeemOperation,
+    PftlUniswapPrimarySubscribeOperation, PftlUniswapPrimarySubscribeV2Operation,
+    PftlUniswapRedemptionFundOperation, PftlUniswapRefundSourceOperation,
+    PftlUniswapReturnImportOperation, PftlUniswapRouteEpochAdvanceOperation,
+    PftlUniswapRoutePauseOperation,
+    PftlUniswapRouteInitOperation, PftlUniswapRouteInitV2Operation, PftlUniswapRouteV2State,
+    VaultBridgeAllocation,
     VaultBridgeBucketImpairOperation, VaultBridgeBucketState, VaultBridgeBurnToRedeemOperation,
     VaultBridgeDepositAttestOperation, VaultBridgeDepositAttestation, VaultBridgeDepositEvidence,
     VaultBridgeDepositObservation,
@@ -64,9 +71,17 @@ use postfiat_types::{
     PFTL_UNISWAP_DESTINATION_CONSUME_TRANSACTION_KIND, PFTL_UNISWAP_EXPORT_DEBIT_TRANSACTION_KIND,
     PFTL_UNISWAP_EXPORT_STATUS_DESTINATION_CONSUMED, PFTL_UNISWAP_EXPORT_STATUS_SOURCE_DEBITED,
     PFTL_UNISWAP_EXPORT_STATUS_SOURCE_REFUNDED, PFTL_UNISWAP_PRIMARY_SUBSCRIBE_TRANSACTION_KIND,
+    PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V2,
+    PFTL_UNISWAP_ORDER_RELEASE_TRANSACTION_KIND, PFTL_UNISWAP_ORDER_RESERVE_TRANSACTION_KIND,
+    PFTL_UNISWAP_ORDER_STATUS_CONSUMED, PFTL_UNISWAP_ORDER_STATUS_RELEASED,
+    PFTL_UNISWAP_ORDER_STATUS_RESERVED, PFTL_UNISWAP_PRIMARY_REDEEM_TRANSACTION_KIND,
+    PFTL_UNISWAP_PRIMARY_SUBSCRIBE_V2_TRANSACTION_KIND,
+    PFTL_UNISWAP_REDEMPTION_FUND_TRANSACTION_KIND,
     PFTL_UNISWAP_REFUND_SOURCE_TRANSACTION_KIND, PFTL_UNISWAP_RETURN_IMPORT_TRANSACTION_KIND,
     PFTL_UNISWAP_RETURN_STATUS_IMPORTED, PFTL_UNISWAP_ROUTE_FAMILY_PRIMARY_MINT,
-    PFTL_UNISWAP_ROUTE_INIT_TRANSACTION_KIND,
+    PFTL_UNISWAP_ROUTE_EPOCH_ADVANCE_TRANSACTION_KIND, PFTL_UNISWAP_ROUTE_INIT_TRANSACTION_KIND,
+    PFTL_UNISWAP_ROUTE_INIT_V2_TRANSACTION_KIND, PFTL_UNISWAP_ROUTE_PAUSE_TRANSACTION_KIND,
+    PFTL_UNISWAP_ROUTE_SCHEMA_V2,
     VAULT_BRIDGE_ALLOCATION_PURPOSE_NAV_SUBSCRIPTION, VAULT_BRIDGE_ALLOCATION_PURPOSE_REDEMPTION,
     VAULT_BRIDGE_ALLOCATION_PURPOSE_SUPPLY,
     VAULT_BRIDGE_DEPOSIT_ATTEST_TRANSACTION_KIND,
@@ -92,6 +107,14 @@ use postfiat_types::{
     VAULT_BRIDGE_REDEEM_SETTLE_TRANSACTION_KIND, VAULT_BRIDGE_REDEMPTION_STATE_PENDING,
     VAULT_BRIDGE_REDEMPTION_STATE_SETTLED, VAULT_BRIDGE_UNIT, TRANSFER_TRANSACTION_KIND,
     TRUST_SET_TRANSACTION_KIND,
+};
+
+#[cfg(test)]
+use postfiat_types::{
+    PftlUniswapPrimaryMarketPolicyV2, PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS,
+    PFTL_UNISWAP_A666_REDEEM_MULTIPLIER_BPS, PFTL_UNISWAP_BPS_DENOMINATOR,
+    PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT,
+    PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY,
 };
 
 pub const CRATE_PURPOSE: &str = "deterministic state transition and receipts";

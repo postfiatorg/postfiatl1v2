@@ -65,10 +65,12 @@ cadence plan that achieves it.
 | # | Item | Needed value |
 |---|---|---|
 | 1 | Deployment gas funding | ETH amount + funding address |
-| 2 | Redemption buffer | USDC amount held for floor redemptions |
-| 3 | SP1 prover operations | who runs proving, hardware budget, cadence |
-| 4 | Audit scope | which mainnet contracts, internal vs external, timing |
-| 5 | Controlled-run size | USDC amount for the first live round trip |
+| 2 | SP1 prover operations | who runs proving, hardware budget, cadence |
+| 3 | Audit scope | which mainnet contracts, internal vs external, timing |
+| 4 | Controlled-run size | USDC amount for the first live round trip |
+
+pfUSDC egress releases the USDC locked by pfUSDC ingress; it does not require
+a second redemption buffer.
 
 ## 4. Explicit non-goals of this cutover
 

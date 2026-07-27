@@ -81,7 +81,7 @@ fn vault_bridge_atoms_to_nav_value(
     })
 }
 
-fn required_vault_bridge_settlement_atoms(
+pub fn required_vault_bridge_settlement_atoms(
     amount_atoms: u64,
     nav_asset_precision: u8,
     nav_per_unit: u64,
@@ -3405,6 +3405,7 @@ fn apply_pftl_uniswap_route_init(
         export_nonces: std::collections::BTreeMap::new(),
         return_imports: std::collections::BTreeMap::new(),
         paused: false,
+        v2: None,
     };
     route
         .validate()
@@ -3595,6 +3596,1134 @@ fn apply_pftl_uniswap_primary_subscribe(
     Ok(())
 }
 
+fn apply_pftl_uniswap_route_init_v2(
+    _genesis: &Genesis,
+    ledger: &mut LedgerState,
+    operation: &PftlUniswapRouteInitV2Operation,
+    block_height: u64,
+) -> Result<(), (&'static str, String)> {
+    if ledger.pftl_uniswap_route(&operation.route_id).is_some() {
+        return Err((
+            "duplicate_pftl_uniswap_route",
+            "PFTL-Uniswap route already exists in consensus state".to_string(),
+        ));
+    }
+    let native_nav_asset = ensure_pftl_uniswap_native_asset_policy(
+        ledger,
+        &operation.native_nav_asset_id,
+        &operation.operator,
+    )?;
+    if operation.latest_finalized_nav_epoch != native_nav_asset.finalized_epoch
+        || operation.primary_market_policy.pricing_nav_epoch != native_nav_asset.finalized_epoch
+        || operation.primary_market_policy.pricing_reserve_packet_hash
+            != native_nav_asset.finalized_reserve_packet_hash
+    {
+        return Err((
+            "pftl_uniswap_route_epoch_mismatch",
+            "v2 route and primary policy must pin the ledger finalized NAV epoch and reserve packet"
+                .to_string(),
+        ));
+    }
+    ensure_pftl_uniswap_route_capacity(ledger, &native_nav_asset.issuer)?;
+    let native_definition = ledger
+        .asset_definition(&operation.native_nav_asset_id)
+        .ok_or_else(|| {
+            (
+                "missing_native_nav_asset",
+                "PFTL-Uniswap v2 native NAV asset definition is missing".to_string(),
+            )
+        })?;
+    let settlement_definition = ledger
+        .asset_definition(&operation.settlement_asset_id)
+        .ok_or_else(|| {
+            (
+                "missing_settlement_asset",
+                "PFTL-Uniswap v2 settlement asset definition is missing".to_string(),
+            )
+        })?;
+    if native_definition.precision != 6 || settlement_definition.precision != 6 {
+        return Err((
+            "pftl_uniswap_v2_precision_mismatch",
+            "a666 v2 route requires six-decimal native and settlement assets".to_string(),
+        ));
+    }
+    if native_definition.code != "A666"
+        || native_definition.version != 2
+        || native_definition.max_supply.is_some()
+    {
+        return Err((
+            "pftl_uniswap_v2_asset_policy_mismatch",
+            "production v2 route requires the six-decimal A666 v2 asset with no permanent max supply"
+                .to_string(),
+        ));
+    }
+    let issued_supply = issued_asset_supply(ledger, &operation.native_nav_asset_id)?;
+    let existing_native_route = ledger
+        .pftl_uniswap_routes
+        .iter()
+        .any(|route| route.native_nav_asset_id == operation.native_nav_asset_id);
+    let mut opening_balances = std::collections::BTreeMap::new();
+    if operation.opening_inventory_atoms == 0 {
+        if !existing_native_route
+            && (issued_supply != 0 || native_nav_asset.circulating_supply != 0)
+        {
+            return Err((
+                "pftl_uniswap_untracked_opening_supply",
+                "a fresh v2 route must inventory all existing proof-backed NAV supply"
+                    .to_string(),
+            ));
+        }
+    } else {
+        if existing_native_route {
+            return Err((
+                "pftl_uniswap_opening_inventory_double_count",
+                "opening inventory cannot be attached when another route already tracks the native NAV asset"
+                    .to_string(),
+            ));
+        }
+        if issued_supply != operation.opening_inventory_atoms
+            || native_nav_asset.circulating_supply != operation.opening_inventory_atoms
+        {
+            return Err((
+                "pftl_uniswap_opening_inventory_supply_mismatch",
+                "opening inventory must equal both issued supply and proof-backed NAV circulating supply"
+                    .to_string(),
+            ));
+        }
+        let opening_line = ledger
+            .trustline_for_account_asset(
+                &operation.opening_inventory_holder,
+                &operation.native_nav_asset_id,
+            )
+            .ok_or_else(|| {
+                (
+                    "pftl_uniswap_opening_inventory_missing",
+                    "opening inventory holder has no native NAV trustline".to_string(),
+                )
+            })?;
+        if opening_line.balance != operation.opening_inventory_atoms
+            || (native_definition.requires_authorization && !opening_line.authorized)
+            || opening_line.frozen
+        {
+            return Err((
+                "pftl_uniswap_opening_inventory_balance_mismatch",
+                "opening holder must own the full movable proof-backed NAV supply".to_string(),
+            ));
+        }
+        opening_balances.insert(
+            operation.opening_inventory_holder.clone(),
+            operation.opening_inventory_atoms,
+        );
+    }
+    let state_before_hash = pftl_uniswap_absent_route_hash(&operation.route_id);
+    let route = PftlUniswapConsensusRouteState {
+        route_id: operation.route_id.clone(),
+        route_family: PFTL_UNISWAP_ROUTE_FAMILY_PRIMARY_MINT.to_string(),
+        route_config_digest: operation.route_config_digest.clone(),
+        route_trust_class: operation.return_verification_class.clone(),
+        native_nav_asset_id: operation.native_nav_asset_id.clone(),
+        settlement_asset_id: operation.settlement_asset_id.clone(),
+        handoff_controller: operation.handoff_controller.clone(),
+        settlement_adapter: operation.settlement_adapter.clone(),
+        wrapped_navcoin_token: operation.wrapped_navcoin_token.clone(),
+        ethereum_chain_id: operation.ethereum_chain_id,
+        route_supply_cap_atoms: operation.route_supply_cap_atoms,
+        packet_notional_cap_atoms: operation.packet_notional_cap_atoms,
+        latest_finalized_nav_epoch: native_nav_asset.finalized_epoch,
+        return_finality_blocks: operation.return_finality_blocks,
+        live_value_enabled: operation.live_value_enabled,
+        ethereum_verification_policy: Some(operation.ethereum_verification_policy.clone()),
+        authorized_valid_supply_atoms: operation.opening_inventory_atoms,
+        pftl_spendable_supply_atoms: operation.opening_inventory_atoms,
+        native_spendable_balances_atoms: opening_balances,
+        ethereum_spendable_supply_atoms: 0,
+        other_registered_venue_supply_atoms: 0,
+        outstanding_bridge_claims_atoms: 0,
+        pending_return_import_claims_atoms: 0,
+        settlement_reserve_atoms: 0,
+        primary_subscription_nonces: std::collections::BTreeMap::new(),
+        export_packets: std::collections::BTreeMap::new(),
+        export_nonces: std::collections::BTreeMap::new(),
+        return_imports: std::collections::BTreeMap::new(),
+        paused: false,
+        v2: Some(PftlUniswapRouteV2State {
+            route_schema_version: PFTL_UNISWAP_ROUTE_SCHEMA_V2,
+            route_epoch: operation.route_epoch,
+            outbound_verification_class: operation.outbound_verification_class.clone(),
+            return_verification_class: operation.return_verification_class.clone(),
+            primary_market_policy: operation.primary_market_policy.clone(),
+            issue_capacity_used_atoms: 0,
+            redeem_capacity_used_atoms: 0,
+            non_nav_spread_atoms: 0,
+            active_reservations: std::collections::BTreeMap::new(),
+            export_entitlements: std::collections::BTreeMap::new(),
+            terminal_reservations: std::collections::BTreeMap::new(),
+            redemption_nonces: std::collections::BTreeMap::new(),
+        }),
+    };
+    route
+        .validate()
+        .map_err(|error| ("bad_pftl_uniswap_route", error))?;
+    let state_after_hash = pftl_uniswap_route_state_hash(&route);
+    ledger.pftl_uniswap_routes.push(route);
+    append_pftl_uniswap_consensus_receipt(
+        ledger,
+        PftlUniswapReceiptPlan {
+            transition: "route_init",
+            route_id: &operation.route_id,
+            state_before_hash,
+            state_after_hash,
+            packet_hash: None,
+            burn_event_hash: None,
+            wallet: Some(operation.operator.clone()),
+            amount_atoms: None,
+            block_height,
+        },
+    )
+}
+
+fn checked_mul_div_ceil(
+    value: u64,
+    multiplier: u32,
+    denominator: u32,
+) -> Result<u64, (&'static str, String)> {
+    let numerator = u128::from(value)
+        .checked_mul(u128::from(multiplier))
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_pricing_overflow",
+                "primary-market multiplier would overflow".to_string(),
+            )
+        })?;
+    let denominator = u128::from(denominator);
+    let result = numerator
+        .checked_add(denominator - 1)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_pricing_overflow",
+                "primary-market rounding would overflow".to_string(),
+            )
+        })?
+        / denominator;
+    u64::try_from(result).map_err(|_| {
+        (
+            "pftl_uniswap_pricing_overflow",
+            "primary-market result exceeds u64".to_string(),
+        )
+    })
+}
+
+fn checked_mul_div_floor(
+    value: u64,
+    multiplier: u32,
+    denominator: u32,
+) -> Result<u64, (&'static str, String)> {
+    let result = u128::from(value)
+        .checked_mul(u128::from(multiplier))
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_pricing_overflow",
+                "primary-market multiplier would overflow".to_string(),
+            )
+        })?
+        / u128::from(denominator);
+    u64::try_from(result).map_err(|_| {
+        (
+            "pftl_uniswap_pricing_overflow",
+            "primary-market result exceeds u64".to_string(),
+        )
+    })
+}
+
+fn pftl_uniswap_v2_base_value(
+    ledger: &LedgerState,
+    route: &PftlUniswapConsensusRouteState,
+    nav_asset: &NavTrackedAsset,
+    nav_amount_atoms: u64,
+) -> Result<u64, (&'static str, String)> {
+    let native_definition = ledger
+        .asset_definition(&route.native_nav_asset_id)
+        .ok_or_else(|| {
+            (
+                "missing_native_nav_asset",
+                "PFTL-Uniswap native asset definition is missing".to_string(),
+            )
+        })?;
+    let settlement_definition = ledger
+        .asset_definition(&route.settlement_asset_id)
+        .ok_or_else(|| {
+            (
+                "missing_settlement_asset",
+                "PFTL-Uniswap settlement asset definition is missing".to_string(),
+            )
+        })?;
+    let settlement_nav_asset = ledger
+        .nav_asset(&route.settlement_asset_id)
+        .ok_or_else(|| {
+            (
+                "missing_pftl_uniswap_settlement_nav_asset",
+                "PFTL-Uniswap settlement asset must be NAV-registered".to_string(),
+            )
+        })?;
+    required_vault_bridge_settlement_atoms(
+        nav_amount_atoms,
+        native_definition.precision,
+        nav_asset.nav_per_unit,
+        &nav_asset.valuation_unit,
+        &settlement_nav_asset.valuation_unit,
+        settlement_definition.precision,
+    )
+}
+
+fn apply_pftl_uniswap_order_reserve(
+    ledger: &mut LedgerState,
+    operation: &PftlUniswapOrderReserveOperation,
+    block_height: u64,
+) -> Result<(), (&'static str, String)> {
+    let route_index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
+    let mut next_route = ledger.pftl_uniswap_routes[route_index].clone();
+    ensure_pftl_uniswap_route_live(&next_route)?;
+    let state_before_hash = pftl_uniswap_route_state_hash(&next_route);
+    let pricing_nav_asset =
+        pftl_uniswap_pricing_nav_asset(ledger, &next_route, block_height)?;
+    let quoted_base = pftl_uniswap_v2_base_value(
+        ledger,
+        &next_route,
+        &pricing_nav_asset,
+        operation.mint_amount_atoms,
+    )?;
+    let issue_multiplier_bps = next_route
+        .v2
+        .as_ref()
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_v2_required",
+                "order reservations require a v2 route".to_string(),
+            )
+        })?
+        .primary_market_policy
+        .issue_multiplier_bps;
+    let quoted_due = checked_mul_div_ceil(
+        quoted_base,
+        issue_multiplier_bps,
+        postfiat_types::PFTL_UNISWAP_BPS_DENOMINATOR,
+    )?;
+    let v2 = next_route.v2.as_mut().ok_or_else(|| {
+        (
+            "pftl_uniswap_v2_required",
+            "order reservations require a v2 route".to_string(),
+        )
+    })?;
+    let policy = &v2.primary_market_policy;
+    if block_height < policy.valid_from_height || block_height > policy.expires_at_height {
+        return Err((
+            "pftl_uniswap_policy_inactive",
+            "primary-market policy is not active at this height".to_string(),
+        ));
+    }
+    if operation.route_epoch != v2.route_epoch
+        || operation.policy_epoch != policy.policy_epoch
+        || operation.policy_hash != policy.policy_hash
+    {
+        return Err((
+            "pftl_uniswap_reservation_policy_mismatch",
+            "reservation is not pinned to the active route and policy".to_string(),
+        ));
+    }
+    if operation.mint_amount_atoms < policy.min_order_atoms
+        || operation.mint_amount_atoms > policy.max_order_atoms
+        || operation.expires_at_height <= block_height
+        || operation.expires_at_height > policy.expires_at_height
+        || operation.expires_at_height.saturating_sub(block_height) > 2_048
+    {
+        return Err((
+            "pftl_uniswap_reservation_bounds",
+            "reservation amount or expiry is outside active policy bounds".to_string(),
+        ));
+    }
+    let subscriber_commitment_count = v2
+        .active_reservations
+        .values()
+        .filter(|reservation| reservation.subscriber == operation.subscriber)
+        .count()
+        .saturating_add(
+            v2.export_entitlements
+                .values()
+                .filter(|entitlement| entitlement.subscriber == operation.subscriber)
+                .count(),
+        );
+    if subscriber_commitment_count >= 4 {
+        return Err((
+            "pftl_uniswap_wallet_reservation_limit",
+            "subscriber already has the maximum of four active reservations or export entitlements"
+                .to_string(),
+        ));
+    }
+    if v2.active_reservations.contains_key(&operation.reservation_id)
+        || v2
+            .terminal_reservations
+            .contains_key(&operation.reservation_id)
+    {
+        return Err((
+            "duplicate_pftl_uniswap_reservation",
+            "reservation identifier has already been used".to_string(),
+        ));
+    }
+    let reserved_atoms = v2.active_reservations.values().try_fold(0_u64, |sum, row| {
+        sum.checked_add(row.mint_amount_atoms).ok_or_else(|| {
+            (
+                "pftl_uniswap_capacity_overflow",
+                "reserved issue capacity would overflow".to_string(),
+            )
+        })
+    })?;
+    let committed = v2
+        .issue_capacity_used_atoms
+        .checked_add(reserved_atoms)
+        .and_then(|amount| amount.checked_add(operation.mint_amount_atoms))
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_capacity_overflow",
+                "committed issue capacity would overflow".to_string(),
+            )
+        })?;
+    if committed > policy.issue_capacity_atoms {
+        return Err((
+            "pftl_uniswap_issue_capacity_exceeded",
+            "reservation would exceed primary issue capacity".to_string(),
+        ));
+    }
+    if operation.max_settlement_value_atoms < quoted_due {
+        return Err((
+            "pftl_uniswap_reservation_underfunded",
+            "reservation maximum is below the deterministic policy quote".to_string(),
+        ));
+    }
+    // The signed maximum is held immediately. This makes reservations
+    // sybil-resistant and guarantees the later subscription can settle
+    // without an operator or a second value authorization.
+    debit_issued_asset_balance(
+        ledger,
+        &operation.subscriber,
+        &next_route.settlement_asset_id,
+        operation.max_settlement_value_atoms,
+        "PFTL-Uniswap order reservation escrow",
+    )?;
+    v2.active_reservations.insert(
+        operation.reservation_id.clone(),
+        PftlUniswapOrderReservationV2 {
+            reservation_id: operation.reservation_id.clone(),
+            subscriber: operation.subscriber.clone(),
+            ethereum_recipient: operation.ethereum_recipient.clone(),
+            route_epoch: operation.route_epoch,
+            policy_epoch: operation.policy_epoch,
+            policy_hash: operation.policy_hash.clone(),
+            mint_amount_atoms: operation.mint_amount_atoms,
+            max_settlement_value_atoms: operation.max_settlement_value_atoms,
+            created_at_height: block_height,
+            expires_at_height: operation.expires_at_height,
+            status: PFTL_UNISWAP_ORDER_STATUS_RESERVED.to_string(),
+        },
+    );
+    next_route
+        .validate()
+        .map_err(|error| ("bad_pftl_uniswap_route", error))?;
+    let state_after_hash = pftl_uniswap_route_state_hash(&next_route);
+    ledger.pftl_uniswap_routes[route_index] = next_route;
+    append_pftl_uniswap_consensus_receipt(
+        ledger,
+        PftlUniswapReceiptPlan {
+            transition: "order_reserved",
+            route_id: &operation.route_id,
+            state_before_hash,
+            state_after_hash,
+            packet_hash: Some(operation.reservation_id.clone()),
+            burn_event_hash: None,
+            wallet: Some(operation.subscriber.clone()),
+            amount_atoms: Some(operation.mint_amount_atoms),
+            block_height,
+        },
+    )
+}
+
+fn apply_pftl_uniswap_order_release(
+    ledger: &mut LedgerState,
+    operation: &PftlUniswapOrderReleaseOperation,
+    block_height: u64,
+) -> Result<(), (&'static str, String)> {
+    let route_index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
+    let mut next_route = ledger.pftl_uniswap_routes[route_index].clone();
+    let state_before_hash = pftl_uniswap_route_state_hash(&next_route);
+    let v2 = next_route.v2.as_mut().ok_or_else(|| {
+        (
+            "pftl_uniswap_v2_required",
+            "order release requires a v2 route".to_string(),
+        )
+    })?;
+    let (transition, owner, amount_atoms, escrow_refund) =
+        if let Some(reservation) = v2.active_reservations.get(&operation.reservation_id).cloned() {
+            if operation.releaser != reservation.subscriber
+                && block_height <= reservation.expires_at_height
+            {
+                return Err((
+                    "unauthorized_pftl_uniswap_reservation_release",
+                    "only the subscriber may release before expiry".to_string(),
+                ));
+            }
+            v2.active_reservations.remove(&operation.reservation_id);
+            v2.terminal_reservations.insert(
+                operation.reservation_id.clone(),
+                PFTL_UNISWAP_ORDER_STATUS_RELEASED.to_string(),
+            );
+            (
+                "order_released",
+                reservation.subscriber,
+                reservation.mint_amount_atoms,
+                Some(reservation.max_settlement_value_atoms),
+            )
+        } else if let Some(entitlement) =
+            v2.export_entitlements.get(&operation.reservation_id).cloned()
+        {
+            if operation.releaser != entitlement.subscriber
+                && block_height <= entitlement.expires_at_height
+            {
+                return Err((
+                    "unauthorized_pftl_uniswap_reservation_release",
+                    "only the subscriber may release export capacity before expiry".to_string(),
+                ));
+            }
+            v2.export_entitlements.remove(&operation.reservation_id);
+            (
+                "export_entitlement_released",
+                entitlement.subscriber,
+                entitlement.remaining_amount_atoms,
+                None,
+            )
+        } else {
+            return Err((
+                "missing_pftl_uniswap_reservation",
+                "active reservation or export entitlement does not exist".to_string(),
+            ));
+        };
+    if let Some(refund_atoms) = escrow_refund {
+        credit_issued_asset_balance(
+            ledger,
+            &owner,
+            &next_route.settlement_asset_id,
+            refund_atoms,
+            "PFTL-Uniswap released reservation refund",
+        )?;
+    }
+    next_route
+        .validate()
+        .map_err(|error| ("bad_pftl_uniswap_route", error))?;
+    let state_after_hash = pftl_uniswap_route_state_hash(&next_route);
+    ledger.pftl_uniswap_routes[route_index] = next_route;
+    append_pftl_uniswap_consensus_receipt(
+        ledger,
+        PftlUniswapReceiptPlan {
+            transition,
+            route_id: &operation.route_id,
+            state_before_hash,
+            state_after_hash,
+            packet_hash: Some(operation.reservation_id.clone()),
+            burn_event_hash: None,
+            wallet: Some(operation.releaser.clone()),
+            amount_atoms: Some(amount_atoms),
+            block_height,
+        },
+    )
+}
+
+fn apply_pftl_uniswap_primary_subscribe_v2(
+    ledger: &mut LedgerState,
+    operation: &PftlUniswapPrimarySubscribeV2Operation,
+    block_height: u64,
+) -> Result<(), (&'static str, String)> {
+    let route_index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
+    let route = ledger.pftl_uniswap_routes[route_index].clone();
+    ensure_pftl_uniswap_route_live(&route)?;
+    if route.settlement_asset_id != operation.settlement_asset_id
+        || route
+            .primary_subscription_nonces
+            .contains_key(&operation.subscription_nonce)
+    {
+        return Err((
+            "pftl_uniswap_subscription_binding",
+            "settlement asset must match and subscription nonce must be unused".to_string(),
+        ));
+    }
+    let v2 = route.v2.as_ref().ok_or_else(|| {
+        (
+            "pftl_uniswap_v2_required",
+            "v2 subscription requires a v2 route".to_string(),
+        )
+    })?;
+    let reservation = v2
+        .active_reservations
+        .get(&operation.reservation_id)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                "missing_pftl_uniswap_reservation",
+                "v2 subscription requires an active reservation".to_string(),
+            )
+        })?;
+    if reservation.subscriber != operation.subscriber || block_height > reservation.expires_at_height
+    {
+        return Err((
+            "pftl_uniswap_reservation_owner_or_expiry",
+            "reservation owner must match and reservation must be unexpired".to_string(),
+        ));
+    }
+    let policy = &v2.primary_market_policy;
+    let nav_asset = pftl_uniswap_pricing_nav_asset(ledger, &route, block_height)?;
+    if operation.pricing_nav_epoch != nav_asset.finalized_epoch
+        || operation.pricing_nav_epoch != policy.pricing_nav_epoch
+        || operation.pricing_reserve_packet_hash != nav_asset.finalized_reserve_packet_hash
+        || operation.pricing_reserve_packet_hash != policy.pricing_reserve_packet_hash
+    {
+        return Err((
+            "pftl_uniswap_pricing_binding_mismatch",
+            "subscription must match the policy-pinned finalized NAV packet".to_string(),
+        ));
+    }
+    let policy_fresh_until = nav_asset
+        .finalized_at_height
+        .checked_add(policy.max_nav_age_blocks)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_pricing_height_overflow",
+                "policy NAV freshness height would overflow".to_string(),
+            )
+        })?;
+    if block_height > policy_fresh_until {
+        return Err((
+            "stale_pftl_uniswap_policy_pricing",
+            "policy-pinned NAV is older than the policy freshness limit".to_string(),
+        ));
+    }
+    let base_value =
+        pftl_uniswap_v2_base_value(ledger, &route, &nav_asset, reservation.mint_amount_atoms)?;
+    let settlement_due = checked_mul_div_ceil(
+        base_value,
+        policy.issue_multiplier_bps,
+        postfiat_types::PFTL_UNISWAP_BPS_DENOMINATOR,
+    )?;
+    if operation.settlement_value_atoms != settlement_due
+        || settlement_due > reservation.max_settlement_value_atoms
+    {
+        return Err((
+            "pftl_uniswap_subscription_slippage",
+            "settlement debit does not equal deterministic policy price or exceeds reservation maximum"
+                .to_string(),
+        ));
+    }
+    let spread = settlement_due.checked_sub(base_value).ok_or_else(|| {
+        (
+            "pftl_uniswap_pricing_underflow",
+            "issue settlement is below base NAV".to_string(),
+        )
+    })?;
+    let supply_after = route
+        .authorized_valid_supply_atoms
+        .checked_add(reservation.mint_amount_atoms)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_supply_overflow",
+                "v2 subscription supply would overflow".to_string(),
+            )
+        })?;
+    let circulating_after = nav_asset
+        .circulating_supply
+        .checked_add(reservation.mint_amount_atoms)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_nav_supply_overflow",
+                "v2 subscription NAV supply would overflow".to_string(),
+            )
+        })?;
+    let reservation_refund = reservation
+        .max_settlement_value_atoms
+        .checked_sub(settlement_due)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_reservation_underflow",
+                "reservation escrow is below settlement due".to_string(),
+            )
+        })?;
+    if reservation_refund != 0 {
+        credit_issued_asset_balance(
+            ledger,
+            &operation.subscriber,
+            &operation.settlement_asset_id,
+            reservation_refund,
+            "PFTL-Uniswap subscription reservation refund",
+        )?;
+    }
+    credit_issued_asset_balance(
+        ledger,
+        &operation.subscriber,
+        &route.native_nav_asset_id,
+        reservation.mint_amount_atoms,
+        "PFTL-Uniswap v2 subscription NAV credit",
+    )?;
+    let mut next_route = route;
+    let state_before_hash = pftl_uniswap_route_state_hash(&next_route);
+    next_route.primary_subscription_nonces.insert(
+        operation.subscription_nonce.clone(),
+        operation.subscriber.clone(),
+    );
+    next_route.authorized_valid_supply_atoms = supply_after;
+    next_route.pftl_spendable_supply_atoms = next_route
+        .pftl_spendable_supply_atoms
+        .checked_add(reservation.mint_amount_atoms)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_supply_overflow",
+                "v2 PFTL spendable supply would overflow".to_string(),
+            )
+        })?;
+    next_route.settlement_reserve_atoms = next_route
+        .settlement_reserve_atoms
+        .checked_add(base_value)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_reserve_overflow",
+                "v2 settlement NAV reserve would overflow".to_string(),
+            )
+        })?;
+    pftl_uniswap_credit_native_route_balance(
+        &mut next_route,
+        &operation.subscriber,
+        reservation.mint_amount_atoms,
+    )?;
+    let next_v2 = next_route.v2.as_mut().expect("v2 route checked above");
+    next_v2.active_reservations.remove(&operation.reservation_id);
+    next_v2.terminal_reservations.insert(
+        operation.reservation_id.clone(),
+        PFTL_UNISWAP_ORDER_STATUS_CONSUMED.to_string(),
+    );
+    next_v2.export_entitlements.insert(
+        operation.reservation_id.clone(),
+        PftlUniswapExportEntitlementV2 {
+            reservation_id: operation.reservation_id.clone(),
+            subscriber: reservation.subscriber.clone(),
+            ethereum_recipient: reservation.ethereum_recipient.clone(),
+            route_epoch: reservation.route_epoch,
+            policy_epoch: reservation.policy_epoch,
+            policy_hash: reservation.policy_hash.clone(),
+            remaining_amount_atoms: reservation.mint_amount_atoms,
+            expires_at_height: reservation.expires_at_height,
+        },
+    );
+    next_v2.issue_capacity_used_atoms = next_v2
+        .issue_capacity_used_atoms
+        .checked_add(reservation.mint_amount_atoms)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_capacity_overflow",
+                "v2 used issue capacity would overflow".to_string(),
+            )
+        })?;
+    next_v2.non_nav_spread_atoms = next_v2
+        .non_nav_spread_atoms
+        .checked_add(spread)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_spread_overflow",
+                "v2 non-NAV issue spread would overflow".to_string(),
+            )
+        })?;
+    next_route
+        .validate()
+        .map_err(|error| ("bad_pftl_uniswap_route", error))?;
+    let state_after_hash = pftl_uniswap_route_state_hash(&next_route);
+    ledger
+        .nav_asset_mut(&next_route.native_nav_asset_id)
+        .ok_or_else(|| {
+            (
+                "missing_pftl_uniswap_nav_asset",
+                "v2 subscription native NAV asset disappeared".to_string(),
+            )
+        })?
+        .circulating_supply = circulating_after;
+    ledger.pftl_uniswap_routes[route_index] = next_route;
+    append_pftl_uniswap_consensus_receipt(
+        ledger,
+        PftlUniswapReceiptPlan {
+            transition: "primary_subscription",
+            route_id: &operation.route_id,
+            state_before_hash,
+            state_after_hash,
+            packet_hash: Some(operation.reservation_id.clone()),
+            burn_event_hash: None,
+            wallet: Some(operation.subscriber.clone()),
+            amount_atoms: Some(reservation.mint_amount_atoms),
+            block_height,
+        },
+    )
+}
+
+fn apply_pftl_uniswap_redemption_fund(
+    _ledger: &mut LedgerState,
+    _operation: &PftlUniswapRedemptionFundOperation,
+    _block_height: u64,
+) -> Result<(), (&'static str, String)> {
+    Err((
+        "pftl_uniswap_redemption_fund_retired",
+        "separate redemption funding is retired; primary redemption releases subscription-funded NAV reserve principal"
+            .to_string(),
+    ))
+}
+
+fn apply_pftl_uniswap_primary_redeem(
+    ledger: &mut LedgerState,
+    operation: &PftlUniswapPrimaryRedeemOperation,
+    block_height: u64,
+) -> Result<(), (&'static str, String)> {
+    let route_index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
+    let route = ledger.pftl_uniswap_routes[route_index].clone();
+    // Inbound pause/disable is not an escape hatch from redemption. Policy
+    // freshness, supply, and subscription-funded reserve principal remain
+    // fail-closed while users can exit.
+    let v2 = route.v2.as_ref().ok_or_else(|| {
+        (
+            "pftl_uniswap_v2_required",
+            "primary redemption requires a v2 route".to_string(),
+        )
+    })?;
+    let policy = &v2.primary_market_policy;
+    if block_height > operation.expires_at_height
+        || block_height < policy.valid_from_height
+        || block_height > policy.expires_at_height
+        || operation.route_epoch != v2.route_epoch
+        || operation.policy_epoch != policy.policy_epoch
+        || operation.policy_hash != policy.policy_hash
+        || operation.nav_amount_atoms < policy.min_order_atoms
+        || operation.nav_amount_atoms > policy.max_order_atoms
+        || v2.redemption_nonces.contains_key(&operation.redemption_nonce)
+    {
+        return Err((
+            "pftl_uniswap_redemption_policy_mismatch",
+            "redemption expiry, policy binding, amount, or nonce is invalid".to_string(),
+        ));
+    }
+    let redeemed_after = v2
+        .redeem_capacity_used_atoms
+        .checked_add(operation.nav_amount_atoms)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_capacity_overflow",
+                "redemption capacity would overflow".to_string(),
+            )
+        })?;
+    if redeemed_after > policy.redeem_capacity_atoms {
+        return Err((
+            "pftl_uniswap_redeem_capacity_exceeded",
+            "redemption exceeds active policy capacity".to_string(),
+        ));
+    }
+    let nav_asset = pftl_uniswap_pricing_nav_asset(ledger, &route, block_height)?;
+    if operation.pricing_nav_epoch != nav_asset.finalized_epoch
+        || operation.pricing_nav_epoch != policy.pricing_nav_epoch
+        || operation.pricing_reserve_packet_hash != nav_asset.finalized_reserve_packet_hash
+        || operation.pricing_reserve_packet_hash != policy.pricing_reserve_packet_hash
+    {
+        return Err((
+            "pftl_uniswap_pricing_binding_mismatch",
+            "redemption must match the policy-pinned finalized NAV packet".to_string(),
+        ));
+    }
+    let base_value =
+        pftl_uniswap_v2_base_value(ledger, &route, &nav_asset, operation.nav_amount_atoms)?;
+    let settlement_output = checked_mul_div_floor(
+        base_value,
+        policy.redeem_multiplier_bps,
+        postfiat_types::PFTL_UNISWAP_BPS_DENOMINATOR,
+    )?;
+    if settlement_output < operation.min_settlement_value_atoms
+        || route.settlement_reserve_atoms < base_value
+    {
+        return Err((
+            "pftl_uniswap_redemption_unavailable",
+            "redemption output or subscription-funded NAV reserve principal is insufficient"
+                .to_string(),
+        ));
+    }
+    let spread = base_value.checked_sub(settlement_output).ok_or_else(|| {
+        (
+            "pftl_uniswap_pricing_underflow",
+            "redemption output exceeds base NAV".to_string(),
+        )
+    })?;
+    debit_issued_asset_balance(
+        ledger,
+        &operation.owner,
+        &route.native_nav_asset_id,
+        operation.nav_amount_atoms,
+        "PFTL-Uniswap primary redemption NAV debit",
+    )?;
+    credit_issued_asset_balance(
+        ledger,
+        &operation.settlement_recipient,
+        &route.settlement_asset_id,
+        settlement_output,
+        "PFTL-Uniswap primary redemption settlement credit",
+    )?;
+    let mut next_route = route;
+    let state_before_hash = pftl_uniswap_route_state_hash(&next_route);
+    pftl_uniswap_debit_native_route_balance(
+        &mut next_route,
+        &operation.owner,
+        operation.nav_amount_atoms,
+    )?;
+    next_route.authorized_valid_supply_atoms = next_route
+        .authorized_valid_supply_atoms
+        .checked_sub(operation.nav_amount_atoms)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_supply_underflow",
+                "redemption exceeds route authorized supply".to_string(),
+            )
+        })?;
+    next_route.pftl_spendable_supply_atoms = next_route
+        .pftl_spendable_supply_atoms
+        .checked_sub(operation.nav_amount_atoms)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_supply_underflow",
+                "redemption exceeds route PFTL spendable supply".to_string(),
+            )
+        })?;
+    next_route.settlement_reserve_atoms = next_route
+        .settlement_reserve_atoms
+        .checked_sub(base_value)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_reserve_underflow",
+                "redemption exceeds route settlement reserve".to_string(),
+            )
+        })?;
+    let next_v2 = next_route.v2.as_mut().expect("v2 route checked above");
+    next_v2.redeem_capacity_used_atoms = redeemed_after;
+    next_v2.non_nav_spread_atoms = next_v2
+        .non_nav_spread_atoms
+        .checked_add(spread)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_spread_overflow",
+                "redemption spread would overflow non-NAV fee custody".to_string(),
+            )
+        })?;
+    next_v2.redemption_nonces.insert(
+        operation.redemption_nonce.clone(),
+        operation.owner.clone(),
+    );
+    next_route
+        .validate()
+        .map_err(|error| ("bad_pftl_uniswap_route", error))?;
+    let circulating_after = nav_asset
+        .circulating_supply
+        .checked_sub(operation.nav_amount_atoms)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_nav_supply_underflow",
+                "redemption exceeds NAV circulating supply".to_string(),
+            )
+        })?;
+    let state_after_hash = pftl_uniswap_route_state_hash(&next_route);
+    ledger
+        .nav_asset_mut(&next_route.native_nav_asset_id)
+        .ok_or_else(|| {
+            (
+                "missing_pftl_uniswap_nav_asset",
+                "redemption native NAV asset disappeared".to_string(),
+            )
+        })?
+        .circulating_supply = circulating_after;
+    ledger.pftl_uniswap_routes[route_index] = next_route;
+    append_pftl_uniswap_consensus_receipt(
+        ledger,
+        PftlUniswapReceiptPlan {
+            transition: "primary_redeemed",
+            route_id: &operation.route_id,
+            state_before_hash,
+            state_after_hash,
+            packet_hash: None,
+            burn_event_hash: None,
+            wallet: Some(operation.owner.clone()),
+            amount_atoms: Some(operation.nav_amount_atoms),
+            block_height,
+        },
+    )
+}
+
+fn apply_pftl_uniswap_route_epoch_advance(
+    ledger: &mut LedgerState,
+    operation: &PftlUniswapRouteEpochAdvanceOperation,
+    block_height: u64,
+) -> Result<(), (&'static str, String)> {
+    let route_index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
+    let mut next_route = ledger.pftl_uniswap_routes[route_index].clone();
+    ensure_pftl_uniswap_native_asset_policy(
+        ledger,
+        &next_route.native_nav_asset_id,
+        &operation.operator,
+    )?;
+    let current_nav = ledger
+        .nav_asset(&next_route.native_nav_asset_id)
+        .ok_or_else(|| {
+            (
+                "missing_nav_asset",
+                "route epoch advance native NAV asset is missing".to_string(),
+            )
+        })?;
+    if operation.next_primary_market_policy.pricing_nav_epoch != current_nav.finalized_epoch
+        || operation
+            .next_primary_market_policy
+            .pricing_reserve_packet_hash
+            != current_nav.finalized_reserve_packet_hash
+        || block_height < operation.next_primary_market_policy.valid_from_height
+        || block_height > operation.next_primary_market_policy.expires_at_height
+    {
+        return Err((
+            "pftl_uniswap_route_epoch_nav_mismatch",
+            "next route epoch must pin the current finalized NAV packet and an active policy"
+                .to_string(),
+        ));
+    }
+    let state_before_hash = pftl_uniswap_route_state_hash(&next_route);
+    let v2 = next_route.v2.as_mut().ok_or_else(|| {
+        (
+            "pftl_uniswap_v2_required",
+            "route epoch advance requires a v2 route".to_string(),
+        )
+    })?;
+    if operation.prior_route_epoch != v2.route_epoch
+        || operation.next_route_epoch != v2.route_epoch.saturating_add(1)
+        || operation.next_primary_market_policy.policy_epoch
+            != v2.primary_market_policy.policy_epoch.saturating_add(1)
+        || !v2.active_reservations.is_empty()
+        || !v2.export_entitlements.is_empty()
+    {
+        return Err((
+            "pftl_uniswap_route_epoch_advance_blocked",
+            "epoch must increment active route/policy and requires no active reservations or export entitlements"
+                .to_string(),
+        ));
+    }
+    if operation.next_primary_market_policy.issue_multiplier_bps
+        != postfiat_types::PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS
+        || operation.next_primary_market_policy.redeem_multiplier_bps
+            != postfiat_types::PFTL_UNISWAP_A666_REDEEM_MULTIPLIER_BPS
+        || operation.next_primary_market_policy.issue_capacity_atoms
+            != next_route.route_supply_cap_atoms
+        || operation.next_primary_market_policy.redeem_capacity_atoms
+            != next_route.route_supply_cap_atoms
+        || operation
+            .next_primary_market_policy
+            .max_order_atoms
+            .checked_mul(2)
+            .is_none_or(|amount| amount != next_route.route_supply_cap_atoms)
+        || next_route
+            .packet_notional_cap_atoms
+            .checked_mul(4)
+            .is_none_or(|amount| {
+                amount != operation.next_primary_market_policy.max_order_atoms
+            })
+    {
+        return Err((
+            "pftl_uniswap_route_epoch_policy_mismatch",
+            "next policy must retain governed a666 pricing and capacity ratios".to_string(),
+        ));
+    }
+    v2.route_epoch = operation.next_route_epoch;
+    v2.primary_market_policy = operation.next_primary_market_policy.clone();
+    v2.issue_capacity_used_atoms = 0;
+    v2.redeem_capacity_used_atoms = 0;
+    // Reservation identifiers are epoch/policy-bound, so terminal entries can
+    // be pruned at the boundary without enabling same-epoch replay.
+    v2.terminal_reservations.clear();
+    next_route.route_config_digest = operation.next_route_config_digest.clone();
+    next_route.latest_finalized_nav_epoch = operation.next_primary_market_policy.pricing_nav_epoch;
+    next_route.live_value_enabled = operation.live_value_enabled;
+    next_route
+        .validate()
+        .map_err(|error| ("bad_pftl_uniswap_route", error))?;
+    let state_after_hash = pftl_uniswap_route_state_hash(&next_route);
+    ledger.pftl_uniswap_routes[route_index] = next_route;
+    append_pftl_uniswap_consensus_receipt(
+        ledger,
+        PftlUniswapReceiptPlan {
+            transition: "route_epoch_advanced",
+            route_id: &operation.route_id,
+            state_before_hash,
+            state_after_hash,
+            packet_hash: None,
+            burn_event_hash: None,
+            wallet: Some(operation.operator.clone()),
+            amount_atoms: None,
+            block_height,
+        },
+    )
+}
+
+fn apply_pftl_uniswap_route_pause(
+    ledger: &mut LedgerState,
+    operation: &PftlUniswapRoutePauseOperation,
+    block_height: u64,
+) -> Result<(), (&'static str, String)> {
+    let route_index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
+    let mut next_route = ledger.pftl_uniswap_routes[route_index].clone();
+    ensure_pftl_uniswap_native_asset_policy(
+        ledger,
+        &next_route.native_nav_asset_id,
+        &operation.operator,
+    )?;
+    if next_route.paused == operation.paused {
+        return Err((
+            "pftl_uniswap_route_pause_noop",
+            "route pause state already equals the requested value".to_string(),
+        ));
+    }
+    if !operation.paused {
+        if !next_route.live_value_enabled {
+            return Err((
+                "pftl_uniswap_route_resume_disabled",
+                "route cannot resume while live value is disabled".to_string(),
+            ));
+        }
+        pftl_uniswap_pricing_nav_asset(ledger, &next_route, block_height)?;
+    }
+
+    let state_before_hash = pftl_uniswap_route_state_hash(&next_route);
+    next_route.paused = operation.paused;
+    next_route
+        .validate()
+        .map_err(|error| ("bad_pftl_uniswap_route", error))?;
+    let state_after_hash = pftl_uniswap_route_state_hash(&next_route);
+    ledger.pftl_uniswap_routes[route_index] = next_route;
+    append_pftl_uniswap_consensus_receipt(
+        ledger,
+        PftlUniswapReceiptPlan {
+            transition: if operation.paused {
+                "route_paused"
+            } else {
+                "route_resumed"
+            },
+            route_id: &operation.route_id,
+            state_before_hash,
+            state_after_hash,
+            packet_hash: None,
+            burn_event_hash: None,
+            wallet: Some(operation.operator.clone()),
+            amount_atoms: None,
+            block_height,
+        },
+    )
+}
+
 fn apply_pftl_uniswap_export_debit(
     _genesis: &Genesis,
     ledger: &mut LedgerState,
@@ -3604,6 +4733,31 @@ fn apply_pftl_uniswap_export_debit(
     let route_index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
     let route = ledger.pftl_uniswap_routes[route_index].clone();
     ensure_pftl_uniswap_route_live(&route)?;
+    if let Some(v2) = &route.v2 {
+        let reservation_id = operation.reservation_id.as_ref().ok_or_else(|| {
+            (
+                "pftl_uniswap_export_entitlement_required",
+                "v2 export must reference its reserved order".to_string(),
+            )
+        })?;
+        let entitlement = v2.export_entitlements.get(reservation_id).ok_or_else(|| {
+            (
+                "missing_pftl_uniswap_export_entitlement",
+                "v2 export reservation has no remaining export entitlement".to_string(),
+            )
+        })?;
+        if entitlement.subscriber != operation.owner
+            || entitlement.ethereum_recipient != operation.ethereum_recipient
+            || entitlement.remaining_amount_atoms < operation.amount_atoms
+            || block_height > entitlement.expires_at_height
+        {
+            return Err((
+                "pftl_uniswap_export_entitlement_mismatch",
+                "v2 export owner, recipient, amount, or expiry does not match its reservation"
+                    .to_string(),
+            ));
+        }
+    }
     if route.export_packets.contains_key(&operation.packet_hash) {
         return Err((
             "duplicate_pftl_uniswap_export_packet",
@@ -3621,6 +4775,82 @@ fn apply_pftl_uniswap_export_debit(
             "pftl_uniswap_packet_cap_exceeded",
             "export debit amount exceeds route packet cap".to_string(),
         ));
+    }
+    let wrapped_exposure_after = route
+        .ethereum_spendable_supply_atoms
+        .checked_add(route.outstanding_bridge_claims_atoms)
+        .and_then(|amount| amount.checked_add(operation.amount_atoms))
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_exposure_overflow",
+                "net wrapped exposure would overflow".to_string(),
+            )
+        })?;
+    if wrapped_exposure_after > route.route_supply_cap_atoms {
+        return Err((
+            "pftl_uniswap_route_supply_cap_exceeded",
+            "export would exceed net wrapped exposure cap".to_string(),
+        ));
+    }
+    if let Some(v2) = &route.v2 {
+        let nav_asset = pftl_uniswap_pricing_nav_asset(ledger, &route, block_height)?;
+        let base_value =
+            pftl_uniswap_v2_base_value(ledger, &route, &nav_asset, operation.amount_atoms)?;
+        let settlement_value = checked_mul_div_ceil(
+            base_value,
+            v2.primary_market_policy.issue_multiplier_bps,
+            postfiat_types::PFTL_UNISWAP_BPS_DENOMINATOR,
+        )?;
+        let policy_hash_commitment = postfiat_types::pftl_uniswap_keccak_commitment48(
+            "pftl_uniswap_export.policy_hash",
+            &v2.primary_market_policy.policy_hash,
+        )
+        .map_err(|error| ("bad_pftl_uniswap_export_packet", error))?;
+        let digest_packet = PftlUniswapMintPacketV2 {
+            route_config_digest: route.route_config_digest.clone(),
+            source_packet_hash: operation.packet_hash.clone(),
+            reservation_id: operation.reservation_id.clone().ok_or_else(|| {
+                (
+                    "pftl_uniswap_export_v2_missing_reservation",
+                    "v2 export requires a capacity reservation".to_string(),
+                )
+            })?,
+            // Receipt fields are validated for shape but intentionally do not
+            // enter the pre-receipt digest.
+            source_receipt_hash: "01".repeat(48),
+            source_receipt_root: "02".repeat(48),
+            settlement_asset_id: route.settlement_asset_id.clone(),
+            native_nav_asset_id: route.native_nav_asset_id.clone(),
+            pricing_reserve_packet_hash: v2
+                .primary_market_policy
+                .pricing_reserve_packet_hash
+                .clone(),
+            policy_hash_commitment,
+            route_epoch: v2.route_epoch,
+            pricing_nav_epoch: v2.primary_market_policy.pricing_nav_epoch,
+            deadline_seconds: operation.destination_deadline_seconds,
+            nonce: operation.export_nonce.clone(),
+            destination_chain_id: route.ethereum_chain_id,
+            destination_controller: route.handoff_controller.clone(),
+            wrapped_token: route.wrapped_navcoin_token.clone(),
+            ethereum_recipient: operation.ethereum_recipient.clone(),
+            mint_amount_atoms: operation.amount_atoms,
+            settlement_value_atoms: settlement_value,
+        };
+        let expected_digest = digest_packet
+            .evm_digest()
+            .map_err(|error| ("bad_pftl_uniswap_export_packet", error))?;
+        if operation.settlement_value_atoms != Some(settlement_value)
+            || operation.ethereum_packet_schema_version
+                != Some(PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V2)
+            || operation.ethereum_packet_digest.as_deref() != Some(expected_digest.as_str())
+        {
+            return Err((
+                "pftl_uniswap_export_v2_binding_mismatch",
+                "v2 export must carry the consensus-derived settlement value, schema, and EVM digest"
+                    .to_string(),
+            ));
+        }
     }
     if operation.amount_atoms > route.pftl_spendable_supply_atoms {
         return Err((
@@ -3662,12 +4892,19 @@ fn apply_pftl_uniswap_export_debit(
         source_wallet: operation.owner.clone(),
         ethereum_recipient: operation.ethereum_recipient.clone(),
         amount_atoms: operation.amount_atoms,
+        settlement_value_atoms: operation.settlement_value_atoms,
         source_height: block_height,
         destination_deadline_seconds: operation.destination_deadline_seconds,
         refund_not_before_height,
         status: PFTL_UNISWAP_EXPORT_STATUS_SOURCE_DEBITED.to_string(),
         ethereum_packet_digest: operation.ethereum_packet_digest.clone(),
         ethereum_packet_schema_version: operation.ethereum_packet_schema_version,
+        route_epoch: route.v2.as_ref().map(|v2| v2.route_epoch),
+        policy_hash: route
+            .v2
+            .as_ref()
+            .map(|v2| v2.primary_market_policy.policy_hash.clone()),
+        reservation_id: operation.reservation_id.clone(),
     };
     packet
         .validate()
@@ -3698,6 +4935,35 @@ fn apply_pftl_uniswap_export_debit(
                 "outstanding bridge claims would overflow".to_string(),
             )
         })?;
+    if let Some(reservation_id) = &operation.reservation_id {
+        let next_v2 = next_route.v2.as_mut().ok_or_else(|| {
+            (
+                "pftl_uniswap_v2_required",
+                "export reservation may only be used by a v2 route".to_string(),
+            )
+        })?;
+        let remaining = next_v2
+            .export_entitlements
+            .get(reservation_id)
+            .expect("v2 export entitlement checked above")
+            .remaining_amount_atoms
+            .checked_sub(operation.amount_atoms)
+            .ok_or_else(|| {
+                (
+                    "pftl_uniswap_export_entitlement_underflow",
+                    "export exceeds reserved entitlement".to_string(),
+                )
+            })?;
+        if remaining == 0 {
+            next_v2.export_entitlements.remove(reservation_id);
+        } else {
+            next_v2
+                .export_entitlements
+                .get_mut(reservation_id)
+                .expect("entitlement exists")
+                .remaining_amount_atoms = remaining;
+        }
+    }
     next_route.export_nonces.insert(
         operation.export_nonce.clone(),
         operation.packet_hash.clone(),
@@ -4146,10 +5412,10 @@ fn pftl_uniswap_route_index(
 fn ensure_pftl_uniswap_route_live(
     route: &PftlUniswapConsensusRouteState,
 ) -> Result<(), (&'static str, String)> {
-    if route.paused {
+    if route.paused || !route.live_value_enabled {
         return Err((
             "pftl_uniswap_route_paused",
-            "PFTL-Uniswap route is paused".to_string(),
+            "PFTL-Uniswap route is paused or live value is disabled".to_string(),
         ));
     }
     Ok(())
@@ -4484,7 +5750,10 @@ fn pftl_uniswap_absent_route_hash(route_id: &str) -> String {
     )
 }
 
-pub fn pftl_uniswap_route_state_hash(route: &PftlUniswapConsensusRouteState) -> String {
+#[allow(dead_code)]
+fn pftl_uniswap_route_state_hash_legacy_reference(
+    route: &PftlUniswapConsensusRouteState,
+) -> String {
     let mut preimage = format!(
         "route_id={}\nroute_family={}\nroute_config_digest={}\nroute_trust_class={}\nnative_nav_asset_id={}\nsettlement_asset_id={}\nhandoff_controller={}\nsettlement_adapter={}\nwrapped_navcoin_token={}\nethereum_chain_id={}\nroute_supply_cap_atoms={}\npacket_notional_cap_atoms={}\nlatest_finalized_nav_epoch={}\nreturn_finality_blocks={}\n",
         route.route_id,
@@ -4526,6 +5795,55 @@ pub fn pftl_uniswap_route_state_hash(route: &PftlUniswapConsensusRouteState) -> 
             bytes_to_hex(&policy.wrapped_navcoin_code_hash),
         ));
     }
+    if let Some(v2) = &route.v2 {
+        let policy = &v2.primary_market_policy;
+        preimage.push_str(&format!(
+            "v2.route_schema_version={}\nv2.route_epoch={}\nv2.outbound_verification_class={}\nv2.return_verification_class={}\nv2.policy_hash={}\nv2.policy_epoch={}\nv2.issue_multiplier_bps={}\nv2.redeem_multiplier_bps={}\nv2.issue_capacity_atoms={}\nv2.redeem_capacity_atoms={}\nv2.max_order_atoms={}\nv2.min_order_atoms={}\nv2.valid_from_height={}\nv2.expires_at_height={}\nv2.max_nav_age_blocks={}\nv2.pricing_nav_epoch={}\nv2.pricing_reserve_packet_hash={}\nv2.issue_capacity_used_atoms={}\nv2.redeem_capacity_used_atoms={}\nv2.non_nav_spread_atoms={}\n",
+            v2.route_schema_version,
+            v2.route_epoch,
+            v2.outbound_verification_class,
+            v2.return_verification_class,
+            policy.policy_hash,
+            policy.policy_epoch,
+            policy.issue_multiplier_bps,
+            policy.redeem_multiplier_bps,
+            policy.issue_capacity_atoms,
+            policy.redeem_capacity_atoms,
+            policy.max_order_atoms,
+            policy.min_order_atoms,
+            policy.valid_from_height,
+            policy.expires_at_height,
+            policy.max_nav_age_blocks,
+            policy.pricing_nav_epoch,
+            policy.pricing_reserve_packet_hash,
+            v2.issue_capacity_used_atoms,
+            v2.redeem_capacity_used_atoms,
+            v2.non_nav_spread_atoms,
+        ));
+        for (reservation_id, reservation) in &v2.active_reservations {
+            preimage.push_str(&format!(
+                "v2.reservation.{reservation_id}.subscriber={}\nv2.reservation.{reservation_id}.ethereum_recipient={}\nv2.reservation.{reservation_id}.route_epoch={}\nv2.reservation.{reservation_id}.policy_epoch={}\nv2.reservation.{reservation_id}.policy_hash={}\nv2.reservation.{reservation_id}.mint_amount_atoms={}\nv2.reservation.{reservation_id}.max_settlement_value_atoms={}\nv2.reservation.{reservation_id}.created_at_height={}\nv2.reservation.{reservation_id}.expires_at_height={}\nv2.reservation.{reservation_id}.status={}\n",
+                reservation.subscriber,
+                reservation.ethereum_recipient,
+                reservation.route_epoch,
+                reservation.policy_epoch,
+                reservation.policy_hash,
+                reservation.mint_amount_atoms,
+                reservation.max_settlement_value_atoms,
+                reservation.created_at_height,
+                reservation.expires_at_height,
+                reservation.status,
+            ));
+        }
+        for (reservation_id, status) in &v2.terminal_reservations {
+            preimage.push_str(&format!(
+                "v2.terminal_reservation.{reservation_id}={status}\n"
+            ));
+        }
+        for (nonce, owner) in &v2.redemption_nonces {
+            preimage.push_str(&format!("v2.redemption_nonce.{nonce}={owner}\n"));
+        }
+    }
     for (wallet, amount) in &route.native_spendable_balances_atoms {
         preimage.push_str(&format!("native_balance.{wallet}={amount}\n"));
     }
@@ -4544,6 +5862,11 @@ pub fn pftl_uniswap_route_state_hash(route: &PftlUniswapConsensusRouteState) -> 
             packet.refund_not_before_height,
             packet.status,
         ));
+        if let Some(settlement_value_atoms) = packet.settlement_value_atoms {
+            preimage.push_str(&format!(
+                "export_packet.{packet_hash}.settlement_value_atoms={settlement_value_atoms}\n"
+            ));
+        }
         if let Some(packet_digest) = &packet.ethereum_packet_digest {
             preimage.push_str(&format!(
                 "export_packet.{packet_hash}.ethereum_packet_digest={packet_digest}\n"
@@ -4552,6 +5875,16 @@ pub fn pftl_uniswap_route_state_hash(route: &PftlUniswapConsensusRouteState) -> 
         if let Some(schema_version) = packet.ethereum_packet_schema_version {
             preimage.push_str(&format!(
                 "export_packet.{packet_hash}.ethereum_packet_schema_version={schema_version}\n"
+            ));
+        }
+        if let Some(route_epoch) = packet.route_epoch {
+            preimage.push_str(&format!(
+                "export_packet.{packet_hash}.route_epoch={route_epoch}\n"
+            ));
+        }
+        if let Some(policy_hash) = &packet.policy_hash {
+            preimage.push_str(&format!(
+                "export_packet.{packet_hash}.policy_hash={policy_hash}\n"
             ));
         }
     }
@@ -4574,10 +5907,12 @@ pub fn pftl_uniswap_route_state_hash(route: &PftlUniswapConsensusRouteState) -> 
             burn.status,
         ));
     }
-    hash_hex(
-        "postfiat.pftl_uniswap.consensus_route_state.v1",
-        preimage.as_bytes(),
-    )
+    let domain = if route.v2.is_some() {
+        "postfiat.pftl_uniswap.consensus_route_state.v2"
+    } else {
+        "postfiat.pftl_uniswap.consensus_route_state.v1"
+    };
+    hash_hex(domain, preimage.as_bytes())
 }
 
 fn pftl_uniswap_consensus_receipt_hash(plan: &PftlUniswapReceiptPlan<'_>) -> String {

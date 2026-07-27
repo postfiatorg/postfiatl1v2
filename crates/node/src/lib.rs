@@ -81,9 +81,10 @@ use postfiat_execution::{
     offer_transaction_match_fee, offer_transaction_state_expansion_fee, offer_transaction_tx_id,
     offer_transaction_weight_bytes, offer_transaction_will_create_residual_offer,
     payment_v2_state_expansion_fee, payment_v2_tx_id, payment_v2_weight_bytes,
-    pftl_uniswap_route_state_hash, transfer_state_expansion_fee, transfer_tx_id,
-    transfer_weight_bytes, validate_atomic_swap_market_binding, AssetExecutionCompatibility,
-    ACCOUNT_RESERVE, FEE_COLLECTOR_ADDRESS, MIN_TRANSFER_FEE, TRANSFER_ACCOUNT_CREATION_FEE,
+    pftl_uniswap_route_state_hash, required_vault_bridge_settlement_atoms,
+    transfer_state_expansion_fee, transfer_tx_id, transfer_weight_bytes,
+    validate_atomic_swap_market_binding, AssetExecutionCompatibility, ACCOUNT_RESERVE,
+    FEE_COLLECTOR_ADDRESS, MIN_TRANSFER_FEE, TRANSFER_ACCOUNT_CREATION_FEE,
     TRANSFER_FEE_BYTE_QUANTUM, TRANSFER_FEE_PER_QUANTUM,
 };
 #[cfg(test)]

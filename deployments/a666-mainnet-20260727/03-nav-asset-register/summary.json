@@ -1,0 +1,19 @@
+{
+  "accepted": true,
+  "confirmed": true,
+  "end_block_tip_hash": "93f30e462ac8ed07996d3211b0d1d0a26d2ab17287c517d3b1dd8ee3df19e6f26c9d3c28aedb625821c36ceb863d3012",
+  "end_height": 339,
+  "end_mempool_pending": 0,
+  "end_state_root": "d0156665ad2b409a5299c7ac2bc97803d777caa352490acce9d85d0e11c59c9450476a82d9368bc4b881deea05dc5a6e",
+  "fleet_converged": true,
+  "label": "a666-v2-nav-asset-register",
+  "round_ok": false,
+  "schema": "postfiat-a666-ce22-finality-operation-v1",
+  "source": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+  "start_height": 338,
+  "start_state_root": "d781a7c4a762b407dcfada1292dc9ec575d114a1d63b892c3151d602026788b73629a62a058aadb8417f50fd7742a1c0",
+  "transaction_kind": "nav_asset_register",
+  "trust_class": "CONTROLLED",
+  "tx_id": "ea8d72bf6a4897bde4884a096130e8bc9f44e480807e5e65244e52cde28a01fcb84927ccd36de9c57e9740896563b4cf",
+  "validator_count": 6
+}

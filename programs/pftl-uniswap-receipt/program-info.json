@@ -1,0 +1,22 @@
+{
+  "schema": "postfiat-sp1-program-info-v1",
+  "program": "pftl-uniswap-receipt-program",
+  "sp1_version": "6.3.1",
+  "build_command": "PATH=$HOME/.sp1/bin:$PATH cargo prove build --locked --output-directory elf",
+  "elf_path": "elf/pftl-uniswap-receipt-program",
+  "elf_sha256": "495e46273337ce4ff035177825a605cc389ad82c05ead11d4874e349ba22cc3a",
+  "program_vkey": "0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9",
+  "cargo_lock_sha256": "e904251d4b160bf80e7d7d3d09fbfe490a6470107fbc95280439471c7b476caa",
+  "cargo_toml_sha256": "4f48987cde3ba5d35b5a1fd0b1484230075ec469c274180abb31130bfcd648a8",
+  "proof_modes": [
+    {
+      "kind": "receipt",
+      "public_values_bytes": 1120
+    },
+    {
+      "kind": "checkpoint",
+      "public_values_bytes": 256
+    }
+  ],
+  "proof_status": "elf_and_vkey_derived_no_groth16_proof_generated"
+}

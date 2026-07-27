@@ -178,6 +178,12 @@ pub const MAX_RPC_REQUEST_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_RPC_PARAM_NAME_BYTES: usize = 64;
 pub const MAX_RPC_PARAM_STRING_BYTES: usize = 4096;
 pub const MAX_RPC_SIGNED_TRANSFER_JSON_BYTES: usize = 64 * 1024;
+/// An asset operation can carry the consensus-bounded SP1 Groth16 proof and
+/// public-values byte arrays. Their JSON representation is larger than the
+/// binary payload, so keep a separate bounded quote limit.
+pub const MAX_RPC_ASSET_OPERATION_JSON_BYTES: usize = 96 * 1024;
+/// Signed asset envelopes add ML-DSA material to the proof-bearing operation.
+pub const MAX_RPC_SIGNED_ASSET_TRANSACTION_JSON_BYTES: usize = 128 * 1024;
 pub const MAX_RPC_FASTPAY_JSON_BYTES: usize = 64 * 1024;
 pub const MAX_RPC_ORCHARD_ACTION_JSON_BYTES: usize = 48 * 1024;
 pub const MAX_RPC_ORCHARD_DEPOSIT_JSON_BYTES: usize = 48 * 1024;
@@ -2308,9 +2314,12 @@ fn validate_protocol_string_len(field: &'static str, value: &str) -> Result<(), 
 }
 
 fn max_rpc_param_string_bytes(method: &str, key: &str) -> usize {
-    if key == "signed_transfer_json"
+    if key == "operation_json" {
+        MAX_RPC_ASSET_OPERATION_JSON_BYTES
+    } else if key == "signed_asset_transaction_json" {
+        MAX_RPC_SIGNED_ASSET_TRANSACTION_JSON_BYTES
+    } else if key == "signed_transfer_json"
         || key == "signed_payment_v2_json"
-        || key == "signed_asset_transaction_json"
         || key == "signed_escrow_transaction_json"
         || key == "signed_nft_transaction_json"
         || key == "signed_atomic_swap_transaction_json"

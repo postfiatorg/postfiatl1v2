@@ -66,6 +66,56 @@ fn consensus_v2_commit_must_bind_the_exact_bridge_exit_root() {
     );
 }
 
+#[test]
+fn consensus_v2_signatures_bind_the_exact_pftl_uniswap_receipt_root() {
+    let (validators, keys) = committee(4);
+    let domain = domain(&validators);
+    let committed_root = "66".repeat(48);
+    let fabricated_root = "77".repeat(48);
+    let block = consensus_v2_block_ref_with_commitment_roots(
+        &domain,
+        9,
+        "11".repeat(48),
+        "22".repeat(48),
+        "33".repeat(48),
+        None,
+        committed_root,
+    )
+    .expect("receipt-root-bound block");
+    let round = ConsensusV2Round { height: 9, view: 0 };
+    let proposal = signed_proposal(
+        &domain,
+        &validators,
+        &keys,
+        round,
+        block.clone(),
+        None,
+        None,
+    );
+    verify_consensus_v2_proposal(
+        &domain,
+        &validators,
+        &proposal,
+        None,
+        &ConsensusV2QcGraph::default(),
+    )
+    .expect("root-bound proposal");
+
+    let mut tampered = proposal;
+    tampered.block.pftl_uniswap_receipt_root = Some(fabricated_root);
+    assert!(
+        verify_consensus_v2_proposal(
+            &domain,
+            &validators,
+            &tampered,
+            None,
+            &ConsensusV2QcGraph::default(),
+        )
+        .is_err(),
+        "mutating the finalized receipt root must invalidate the proposal signature"
+    );
+}
+
 fn empty_signature(validator: &ConsensusV2Validator) -> ConsensusV2Signature {
     ConsensusV2Signature {
         algorithm_id: ML_DSA_65_ALGORITHM.to_string(),

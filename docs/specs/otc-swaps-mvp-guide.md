@@ -1,9 +1,15 @@
 # NAVCoin OTC Swaps — End-to-End MVP Guide
 
-> Status: **active spec.** Supersedes the speed-first framing. This is the canonical
-> guide the build agent (and reviewers) execute against.
+> Status: **historical MVP execution spec.** The evidence remains valid, but
+> [`docs/navcoins/primary-market-accounting.md`](../navcoins/primary-market-accounting.md)
+> now controls economic terminology and a666 behavior.
 > Owner: Post Fiat founder. Repo of record: `postfiatl1v2`. Cross-repo docs also land
 > in `StakeHub`.
+
+The campaign name used “OTC” broadly. Economically, its pfUSDC subscription
+and exit flows are primary issuance and primary redemption: reserve value and
+supply grow and contract together. Only transfers of existing NAVCoin
+inventory are secondary OTC swaps.
 
 ## Purpose
 

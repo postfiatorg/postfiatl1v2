@@ -902,6 +902,7 @@ mod tests {
                 export_nonces: BTreeMap::new(),
                 return_imports: BTreeMap::new(),
                 paused: false,
+                v2: None,
             });
         NodeStore::new(&root)
             .write_ledger(&ledger)

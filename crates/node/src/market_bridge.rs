@@ -896,7 +896,7 @@ pub fn navcoin_bridge_supply_status(
                         ),
                     )
                 })?;
-            pftl_uniswap_consensus_supply_status(route)
+            pftl_uniswap_consensus_supply_status(&ledger, route)
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
             let ledgers = read_pftl_uniswap_bridge_ledgers(&options.data_dir)?;
@@ -936,13 +936,26 @@ fn pftl_uniswap_consensus_route_status_row(
     route
         .validate()
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let capped_exposure_atoms = if route.v2.is_some() {
+        route
+            .ethereum_spendable_supply_atoms
+            .checked_add(route.outstanding_bridge_claims_atoms)
+    } else {
+        Some(route.authorized_valid_supply_atoms)
+    }
+    .ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "PFTL-Uniswap consensus route exposure overflow",
+        )
+    })?;
     let supply_cap_remaining_atoms = route
         .route_supply_cap_atoms
-        .checked_sub(route.authorized_valid_supply_atoms)
+        .checked_sub(capped_exposure_atoms)
         .ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
-                "PFTL-Uniswap consensus route supply exceeds route cap",
+                "PFTL-Uniswap consensus route exposure exceeds route cap",
             )
         })?;
     let outstanding_export_packet_count = route
@@ -1063,6 +1076,8 @@ fn pftl_uniswap_consensus_export_packet_status_row(
         source_wallet: packet.source_wallet.clone(),
         ethereum_recipient: packet.ethereum_recipient.clone(),
         amount_atoms: packet.amount_atoms,
+        settlement_value_atoms: packet.settlement_value_atoms,
+        reservation_id: packet.reservation_id.clone(),
         source_height: packet.source_height,
         destination_deadline_seconds: packet.destination_deadline_seconds,
         refund_not_before_height: packet.refund_not_before_height,
@@ -1072,6 +1087,7 @@ fn pftl_uniswap_consensus_export_packet_status_row(
 }
 
 fn pftl_uniswap_consensus_supply_status(
+    ledger: &LedgerState,
     route: &PftlUniswapConsensusRouteState,
 ) -> io::Result<PftlUniswapSupplyStatusReport> {
     route
@@ -1089,13 +1105,26 @@ fn pftl_uniswap_consensus_supply_status(
                 "PFTL-Uniswap consensus route live supply sum overflow",
             )
         })?;
+    let capped_exposure_atoms = if route.v2.is_some() {
+        route
+            .ethereum_spendable_supply_atoms
+            .checked_add(route.outstanding_bridge_claims_atoms)
+    } else {
+        Some(route.authorized_valid_supply_atoms)
+    }
+    .ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "PFTL-Uniswap consensus route exposure overflow",
+        )
+    })?;
     let supply_cap_remaining_atoms = route
         .route_supply_cap_atoms
-        .checked_sub(route.authorized_valid_supply_atoms)
+        .checked_sub(capped_exposure_atoms)
         .ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
-                "PFTL-Uniswap consensus route supply exceeds route cap",
+                "PFTL-Uniswap consensus route exposure exceeds route cap",
             )
         })?;
     let native_spendable_balance_sum_atoms = route
@@ -1120,13 +1149,88 @@ fn pftl_uniswap_consensus_supply_status(
         })
         .collect::<Vec<_>>();
     native_spendable_balances.sort_by(|left, right| left.wallet.cmp(&right.wallet));
+    let v2 = route.v2.as_ref();
+    let active_reservation_atoms = v2.map(|state| {
+        state
+            .active_reservations
+            .values()
+            .fold(0_u64, |sum, reservation| {
+                sum.saturating_add(reservation.mint_amount_atoms)
+            })
+    });
+    let export_entitlement_atoms = v2.map(|state| {
+        state
+            .export_entitlements
+            .values()
+            .fold(0_u64, |sum, entitlement| {
+                sum.saturating_add(entitlement.remaining_amount_atoms)
+            })
+    });
+    let committed_wrapped_exposure_atoms = v2.map(|_| {
+        capped_exposure_atoms
+            .saturating_add(active_reservation_atoms.unwrap_or_default())
+            .saturating_add(export_entitlement_atoms.unwrap_or_default())
+    });
+    let available_export_capacity_atoms = v2.map(|_| {
+        if route.paused || !route.live_value_enabled {
+            0
+        } else {
+            route
+                .route_supply_cap_atoms
+                .saturating_sub(committed_wrapped_exposure_atoms.unwrap_or_default())
+        }
+    });
+    let issue_capacity_remaining_atoms = v2.map(|state| {
+        state
+            .primary_market_policy
+            .issue_capacity_atoms
+            .saturating_sub(state.issue_capacity_used_atoms)
+            .saturating_sub(active_reservation_atoms.unwrap_or_default())
+    });
+    let redeem_capacity_remaining_atoms = v2.map(|state| {
+        state
+            .primary_market_policy
+            .redeem_capacity_atoms
+            .saturating_sub(state.redeem_capacity_used_atoms)
+    });
+    let reserve_backed_nav_atoms = v2
+        .map(|state| {
+            pftl_uniswap_reserve_backed_nav_atoms(
+                ledger,
+                route,
+                state.primary_market_policy.max_order_atoms,
+            )
+        })
+        .transpose()?;
+    let available_issue_atoms = v2.map(|state| {
+        issue_capacity_remaining_atoms
+            .unwrap_or_default()
+            .min(available_export_capacity_atoms.unwrap_or_default())
+            .min(state.primary_market_policy.max_order_atoms)
+    });
+    let available_redeem_atoms = v2.map(|state| {
+        redeem_capacity_remaining_atoms
+            .unwrap_or_default()
+            .min(state.primary_market_policy.max_order_atoms)
+            .min(route.pftl_spendable_supply_atoms)
+            .min(reserve_backed_nav_atoms.unwrap_or_default())
+    });
     Ok(PftlUniswapSupplyStatusReport {
-        schema: "postfiat-pftl-uniswap-supply-status-v1".to_string(),
+        schema: if v2.is_some() {
+            "postfiat-pftl-uniswap-supply-status-v2".to_string()
+        } else {
+            "postfiat-pftl-uniswap-supply-status-v1".to_string()
+        },
         route_id: route.route_id.clone(),
         route_config_digest: route.route_config_digest.clone(),
+        route_trust_class: route.route_trust_class.clone(),
         native_nav_asset_id: route.native_nav_asset_id.clone(),
         settlement_asset_id: route.settlement_asset_id.clone(),
+        handoff_controller: route.handoff_controller.clone(),
         wrapped_navcoin_token: route.wrapped_navcoin_token.clone(),
+        ethereum_chain_id: route.ethereum_chain_id,
+        live_value_enabled: route.live_value_enabled,
+        paused: route.paused,
         native_spendable_balances,
         native_spendable_balance_count: native_spendable_balance_count as u64,
         native_spendable_balance_limit: PFTL_UNISWAP_STATUS_MAX_ROWS as u64,
@@ -1144,9 +1248,85 @@ fn pftl_uniswap_consensus_supply_status(
         supply_cap_remaining_atoms,
         packet_notional_cap_atoms: route.packet_notional_cap_atoms,
         settlement_reserve_atoms: route.settlement_reserve_atoms,
+        route_schema_version: v2.map(|state| state.route_schema_version),
+        route_epoch: v2.map(|state| state.route_epoch),
+        outbound_verification_class: v2.map(|state| state.outbound_verification_class.clone()),
+        return_verification_class: v2.map(|state| state.return_verification_class.clone()),
+        policy_hash: v2.map(|state| state.primary_market_policy.policy_hash.clone()),
+        policy_epoch: v2.map(|state| state.primary_market_policy.policy_epoch),
+        issue_multiplier_bps: v2.map(|state| state.primary_market_policy.issue_multiplier_bps),
+        redeem_multiplier_bps: v2.map(|state| state.primary_market_policy.redeem_multiplier_bps),
+        max_order_atoms: v2.map(|state| state.primary_market_policy.max_order_atoms),
+        min_order_atoms: v2.map(|state| state.primary_market_policy.min_order_atoms),
+        policy_valid_from_height: v2.map(|state| state.primary_market_policy.valid_from_height),
+        policy_expires_at_height: v2.map(|state| state.primary_market_policy.expires_at_height),
+        max_nav_age_blocks: v2.map(|state| state.primary_market_policy.max_nav_age_blocks),
+        pricing_nav_epoch: v2.map(|state| state.primary_market_policy.pricing_nav_epoch),
+        pricing_reserve_packet_hash: v2.map(|state| {
+            state
+                .primary_market_policy
+                .pricing_reserve_packet_hash
+                .clone()
+        }),
+        issue_capacity_remaining_atoms,
+        redeem_capacity_remaining_atoms,
+        non_nav_spread_atoms: v2.map(|state| state.non_nav_spread_atoms),
+        active_reservation_count: v2.map(|state| state.active_reservations.len() as u64),
+        active_reservation_atoms,
+        export_entitlement_count: v2.map(|state| state.export_entitlements.len() as u64),
+        export_entitlement_atoms,
+        wrapped_exposure_atoms: v2.map(|_| capped_exposure_atoms),
+        committed_wrapped_exposure_atoms,
+        available_export_capacity_atoms,
+        available_issue_atoms,
+        available_redeem_atoms,
+        reserve_backed_redeem_atoms: reserve_backed_nav_atoms,
         invariant_holds: live_supply_sum_atoms == route.authorized_valid_supply_atoms,
         ledger_hash: pftl_uniswap_route_state_hash(route),
     })
+}
+
+fn pftl_uniswap_reserve_backed_nav_atoms(
+    ledger: &LedgerState,
+    route: &PftlUniswapConsensusRouteState,
+    maximum_atoms: u64,
+) -> io::Result<u64> {
+    let native_definition = ledger
+        .asset_definition(&route.native_nav_asset_id)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing native NAV asset"))?;
+    let settlement_definition = ledger
+        .asset_definition(&route.settlement_asset_id)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing settlement asset"))?;
+    let native_nav = ledger
+        .nav_asset(&route.native_nav_asset_id)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing native NAV state"))?;
+    let settlement_nav = ledger
+        .nav_asset(&route.settlement_asset_id)
+        .ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "missing settlement NAV state")
+        })?;
+    let required = |amount_atoms| {
+        required_vault_bridge_settlement_atoms(
+            amount_atoms,
+            native_definition.precision,
+            native_nav.nav_per_unit,
+            &native_nav.valuation_unit,
+            &settlement_nav.valuation_unit,
+            settlement_definition.precision,
+        )
+        .map_err(|(_, message)| io::Error::new(io::ErrorKind::InvalidData, message))
+    };
+    let mut low = 0_u64;
+    let mut high = maximum_atoms;
+    while low < high {
+        let middle = low + (high - low).div_ceil(2);
+        if required(middle)? <= route.settlement_reserve_atoms {
+            low = middle;
+        } else {
+            high = middle - 1;
+        }
+    }
+    Ok(low)
 }
 
 pub fn navcoin_bridge_receipt_replay(
