@@ -1,12 +1,15 @@
 # a666 v2 Mainnet Primary-Market Deployment
 
-**Status:** no-broadcast implementation runbook  
+**Status:** executed through empty-pool initialization; proof-backed export,
+seeding, and public activation remain pending
 **Canonical spec:** `docs/plans/A666-END-TO-END-MAINNET-PRIMARY-ISSUANCE-SPEC-20260727.md`
 
-This runbook prepares and rehearses the production a666 v2 stack. It does not
-authorize a mainnet transaction, customer-principal movement, redemption
-execution, opening-reserve funding, or LP funding. Omit `--broadcast` until the production deployment
-owner has approved the frozen manifest and exact transaction package.
+This runbook records the production a666 v2 launch sequence. The native asset,
+StakeHub NAV, paused Ethereum stack, and empty hookless Uniswap pool were
+deployed on 2026-07-27 under explicit production-owner authorization. It does
+not authorize further customer-principal movement, redemption execution, or LP
+funding. Omit `--broadcast` for the remaining steps until the production owner
+has approved the frozen manifest and exact transaction package.
 
 ## 1. Required frozen inputs
 

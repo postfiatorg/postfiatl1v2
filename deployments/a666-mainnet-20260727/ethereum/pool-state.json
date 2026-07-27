@@ -1,0 +1,61 @@
+{
+  "agent": {
+    "spent_today_usd_before": 44.28,
+    "unlocked": true
+  },
+  "balance_wei_after": 300434204500611355,
+  "balance_wei_before": 300437760256175391,
+  "block_number_preflight": 25626969,
+  "block_number_verified": 25626970,
+  "calldata": "0x6276cbbe000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48000000000000000000000000ee4c92edb03efdd9b519339edc19ad70c69a9be500000000000000000000000000000000000000000000000000000000000001f4000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000",
+  "chain_id": 1,
+  "deployer": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+  "end_nonce": 177,
+  "gas_estimate": 51925,
+  "initial_nav_usd_1e8": 100000000,
+  "initial_sqrt_price_x96": 79228162514264337593543950336,
+  "nonce": 176,
+  "phase": "initialized-empty",
+  "pool_id": "0xc5f1e4b5bb07c0718eddcc3d102dc751b8953ec25bb05cdc14d95419d4d16e98",
+  "pool_key": {
+    "currency0": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "currency1": "0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5",
+    "fee": 500,
+    "hooks": "0x0000000000000000000000000000000000000000",
+    "tick_spacing": 10
+  },
+  "pool_manager": "0x000000000004444c5dc75cB358380D2e3dE08A90",
+  "post_state": {
+    "controller_mint_paused": true,
+    "liquidity": 0,
+    "slot0": [
+      79228162514264337593543950336,
+      0,
+      0,
+      500
+    ],
+    "wrapped_total_supply": 0
+  },
+  "pre_state": {
+    "controller_mint_paused": true,
+    "liquidity": 0,
+    "slot0": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "wrapped_total_supply": 0
+  },
+  "rpc": "https://ethereum-rpc.publicnode.com",
+  "schema": "postfiat-a666-uniswap-mainnet-pool-v1",
+  "state_view": "0x7fFE42C4a5DEeA5b0feC41C94C136Cf115597227",
+  "transaction": {
+    "block_number": 25626970,
+    "gas_used": 51532,
+    "status": 1,
+    "tx": "0xfbd64d619516722b7e3d7dea09fb20b633301d4a49c32f0246aab891d3bb016f"
+  },
+  "usdc": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+  "wrapped_token": "0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5"
+}

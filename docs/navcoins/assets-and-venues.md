@@ -32,7 +32,7 @@ PFTL export has been accepted through the route's disclosed finality verifier.
 |---|---|---|
 | PFTL WAN fleet | **Production a666 v2 and its opening StakeHub NAV are finalized.** | Asset `521c…74b6` has no permanent maximum supply. Epoch one marks `$1.00` per unit and `31,386.197455 a666` outstanding against `$31,386.19745591` verified net assets. The public issue/export route is not active. |
 | Ethereum Sepolia | Controlled wA666 stack and route evidence exist. | Controlled testing only; the route is not a trustless mainnet product. |
-| Ethereum mainnet | **wA666, verifier, controller, and a651 migration contracts are deployed but paused.** | wA666 is `0xeE4C…9bE5`; total supply is zero and controller minting is paused. No wA666/USDC pool is initialized, so this is not yet a public acquisition route. |
+| Ethereum mainnet | **wA666 contracts and the hookless v4 pool are deployed; issuance and liquidity remain paused.** | wA666 is `0xeE4C…9bE5`; pool `0xc5f1…6e98` is initialized at `$1.00` with fee `500`, but total supply and pool liquidity are zero. This is not yet a public acquisition route. |
 
 The required primary acquisition flow is:
 

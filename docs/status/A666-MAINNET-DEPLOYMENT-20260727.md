@@ -1,8 +1,8 @@
 # A666 Mainnet Deployment Status
 
 **As of:** 2026-07-27
-**Status:** native A666 and StakeHub NAV finalized; Ethereum contracts
-deployed and paused; public issue/export/Uniswap route not live
+**Status:** native A666 and StakeHub NAV finalized; Ethereum contracts and
+empty Uniswap pool deployed; public issue/export and seeded venue not live
 
 ## What is deployed
 
@@ -59,6 +59,23 @@ The seven Ethereum transactions are recorded in
 `../../deployments/a666-mainnet-20260727/ethereum/deployment-state.json`.
 Deployment spent `0.000360365542428692 ETH`.
 
+The hookless wA666/USDC Uniswap v4 pool is also initialized:
+
+| Pool item | Value |
+|---|---|
+| Pool ID | `0xc5f1e4b5bb07c0718eddcc3d102dc751b8953ec25bb05cdc14d95419d4d16e98` |
+| PoolManager | `0x000000000004444c5dc75cB358380D2e3dE08A90` |
+| Pair ordering | mainnet USDC / wA666 |
+| Fee / tick spacing / hooks | `500` / `10` / none |
+| Initial price | Q96, `$1.00` per wA666 |
+| Initialization transaction | `0xfbd64d619516722b7e3d7dea09fb20b633301d4a49c32f0246aab891d3bb016f` |
+| Block | `25,626,970` |
+| Current liquidity | `0` |
+
+Initialization did not mint or transfer either token. It spent
+`0.000003555755564036 ETH` and left the controller paused, wrapped supply at
+zero, and pool liquidity at zero.
+
 ## What is not live
 
 This deployment does not yet let Bob turn USDC into spendable wA666:
@@ -66,7 +83,7 @@ This deployment does not yet let Bob turn USDC into spendable wA666:
 - no production PFTL primary issue/export route is active;
 - the Ethereum controller is paused and has minted no wA666;
 - the migration has no exported wA666 inventory;
-- the wA666/USDC Uniswap v4 pool is not initialized; and
+- the initialized wA666/USDC pool has no liquidity and cannot trade; and
 - the route receipt guest has a pinned ELF/vkey but still needs a genuine
   Groth16 proof and acceptance campaign.
 
@@ -86,9 +103,8 @@ mint.
    proven amount to its designated Ethereum recipient.
 4. Exercise the ownerless a651 migration and reconcile old burns, new releases,
    rounding dust, and total supply.
-5. Initialize and seed the wA666/USDC pool only from proved wA666 plus available
-   USDC; record the pool ID
-   `0xc5f1e4b5bb07c0718eddcc3d102dc751b8953ec25bb05cdc14d95419d4d16e98`.
+5. Seed the initialized wA666/USDC pool only from proved wA666 plus available
+   USDC, and record the position NFT, owner, ticks, and exact token amounts.
 6. Pass conservation, replay, invalid-proof, capacity, and 25-minute
    end-to-end latency gates before unpausing public issuance.
 
@@ -104,3 +120,5 @@ mint.
   `../../deployments/a666-mainnet-20260727/08-opening-nav-mint/`
 - Ethereum deployment/readback:
   `../../deployments/a666-mainnet-20260727/ethereum/deployment-state.json`
+- Uniswap pool initialization/readback:
+  `../../deployments/a666-mainnet-20260727/ethereum/pool-state.json`
