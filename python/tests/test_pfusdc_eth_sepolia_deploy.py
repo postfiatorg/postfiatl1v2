@@ -31,17 +31,26 @@ class SepoliaDeployAuthorizationTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
+        self.original_repository_root = DEPLOY.REPOSITORY_ROOT
+        DEPLOY.REPOSITORY_ROOT = self.root
         self.manifest_path = self.root / "manifest.json"
         self.evidence_dir = self.root / "evidence"
         self.write_manifest()
 
     def tearDown(self):
+        DEPLOY.REPOSITORY_ROOT = self.original_repository_root
         self.tmp.cleanup()
 
     def artifact(self, contract: str, nonce: int, address: str) -> dict:
-        relative = f"crates/ethereum-contracts/out/{contract}.sol/{contract}.json"
-        path = REPO / relative
-        artifact = json.loads(path.read_text(encoding="utf-8"))
+        relative = f"artifacts/{contract}.json"
+        path = self.root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        artifact = {
+            "abi": [],
+            "bytecode": {"object": "60006000"},
+            "deployedBytecode": {"object": "6000"},
+        }
+        path.write_text(json.dumps(artifact), encoding="utf-8")
         return {
             "contract": contract,
             "address": address,

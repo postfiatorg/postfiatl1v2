@@ -24,7 +24,7 @@ sys.modules[SPEC.name] = DEPLOY
 SPEC.loader.exec_module(DEPLOY)
 
 MANIFEST = REPO / "deployments/pfusdc-eth-mainnet-20260726/manifest.mainnet-epoch3.json"
-AUTHORIZATION = REPO / "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/reviews/auditor-authorization.mainnet-epoch3.snaga-fallback.json"
+AUTHORIZATION = REPO / "python/tests/fixtures/pfusdc-mainnet-epoch3-fallback-authorization.json"
 
 
 def manifest_document() -> dict:
