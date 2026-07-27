@@ -6,7 +6,7 @@
     "crates/privacy_orchard/src/asset_orchard.rs": "0e311ffca9c97096d270124ccdcb8a8010b4d4fad0c053ec10f2fc1dd06d158e",
     "crates/privacy_orchard/src/asset_orchard_circuit.rs": "806d3ce4d6c8cf34c2d99813093683ca38ecf6578992b9096219c0aefe779748",
     "crates/privacy_orchard/src/verify.rs": "7b1bdf76dd5093aa8a938c597c9516c1a956571b214b04db6cf4cb7b234a64b1",
-    "crates/execution/src/nav_sp1_verifier.rs": "28a89483d259f9cf033bcc8aa47a8dc8f1caa8c17896a0a036ddb52bade4aed2",
+    "crates/execution/src/nav_sp1_verifier.rs": "4ec31cf5e29e921b94ef2112c6384733ae5861bed0bc83e8a1aa3a5724185385",
     "crates/proofs/src/lib.rs": "6ad08dd265fc25958daf6e0ae3d55bbecaa13cdebdcafc9739c2d682d0eb4527"
   },
   "systems": [
