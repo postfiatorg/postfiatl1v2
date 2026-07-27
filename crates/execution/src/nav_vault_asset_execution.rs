@@ -4733,29 +4733,49 @@ fn apply_pftl_uniswap_export_debit(
     let route_index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
     let route = ledger.pftl_uniswap_routes[route_index].clone();
     ensure_pftl_uniswap_route_live(&route)?;
+    let mut effective_reservation_id = operation.reservation_id.clone();
     if let Some(v2) = &route.v2 {
-        let reservation_id = operation.reservation_id.as_ref().ok_or_else(|| {
-            (
-                "pftl_uniswap_export_entitlement_required",
-                "v2 export must reference its reserved order".to_string(),
-            )
-        })?;
-        let entitlement = v2.export_entitlements.get(reservation_id).ok_or_else(|| {
-            (
-                "missing_pftl_uniswap_export_entitlement",
-                "v2 export reservation has no remaining export entitlement".to_string(),
-            )
-        })?;
-        if entitlement.subscriber != operation.owner
-            || entitlement.ethereum_recipient != operation.ethereum_recipient
-            || entitlement.remaining_amount_atoms < operation.amount_atoms
-            || block_height > entitlement.expires_at_height
-        {
-            return Err((
-                "pftl_uniswap_export_entitlement_mismatch",
-                "v2 export owner, recipient, amount, or expiry does not match its reservation"
-                    .to_string(),
-            ));
+        if let Some(reservation_id) = operation.reservation_id.as_ref() {
+            let entitlement = v2.export_entitlements.get(reservation_id).ok_or_else(|| {
+                (
+                    "missing_pftl_uniswap_export_entitlement",
+                    "v2 export reservation has no remaining export entitlement".to_string(),
+                )
+            })?;
+            if entitlement.subscriber != operation.owner
+                || entitlement.ethereum_recipient != operation.ethereum_recipient
+                || entitlement.remaining_amount_atoms < operation.amount_atoms
+                || block_height > entitlement.expires_at_height
+            {
+                return Err((
+                    "pftl_uniswap_export_entitlement_mismatch",
+                    "v2 export owner, recipient, amount, or expiry does not match its reservation"
+                        .to_string(),
+                ));
+            }
+        } else {
+            let opening_inventory_export = v2.issue_capacity_used_atoms == 0
+                && v2.active_reservations.is_empty()
+                && v2.export_entitlements.is_empty()
+                && route.native_spendable_balances_atoms.len() == 1
+                && route
+                    .native_spendable_balances_atoms
+                    .get(&operation.owner)
+                    .is_some_and(|balance| *balance == route.pftl_spendable_supply_atoms)
+                && operation.amount_atoms == route.pftl_spendable_supply_atoms
+                && route.pftl_spendable_supply_atoms == route.authorized_valid_supply_atoms;
+            if !opening_inventory_export {
+                return Err((
+                    "pftl_uniswap_export_entitlement_required",
+                    "v2 export must reference its reserved order; only the complete pre-issuance opening inventory may export without one"
+                        .to_string(),
+                ));
+            }
+            // The destination packet format requires a unique 48-byte
+            // reservation binding. Opening inventory is not a paid
+            // subscription, so bind its packet hash as a synthetic,
+            // single-use reservation identifier instead.
+            effective_reservation_id = Some(operation.packet_hash.clone());
         }
     }
     if route.export_packets.contains_key(&operation.packet_hash) {
@@ -4809,10 +4829,11 @@ fn apply_pftl_uniswap_export_debit(
         let digest_packet = PftlUniswapMintPacketV2 {
             route_config_digest: route.route_config_digest.clone(),
             source_packet_hash: operation.packet_hash.clone(),
-            reservation_id: operation.reservation_id.clone().ok_or_else(|| {
+            reservation_id: effective_reservation_id.clone().ok_or_else(|| {
                 (
                     "pftl_uniswap_export_v2_missing_reservation",
-                    "v2 export requires a capacity reservation".to_string(),
+                    "v2 export requires a paid reservation or opening-inventory binding"
+                        .to_string(),
                 )
             })?,
             // Receipt fields are validated for shape but intentionally do not
@@ -4904,7 +4925,7 @@ fn apply_pftl_uniswap_export_debit(
             .v2
             .as_ref()
             .map(|v2| v2.primary_market_policy.policy_hash.clone()),
-        reservation_id: operation.reservation_id.clone(),
+        reservation_id: effective_reservation_id,
     };
     packet
         .validate()

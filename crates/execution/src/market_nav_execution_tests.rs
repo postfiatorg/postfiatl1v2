@@ -5165,6 +5165,145 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         Some(&100)
     );
 
+    // The proof-backed opening inventory predates primary-market orders, so it
+    // has no paid-order reservation. Permit exactly one export of the complete
+    // opening balance, while continuing to reject partial reservation-free
+    // exports.
+    opening_inventory_ledger
+        .pftl_uniswap_route_mut(&opening_operation.route_id)
+        .expect("opening inventory route to activate")
+        .live_value_enabled = true;
+    let partial_opening_export = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &opening_inventory_ledger,
+        &subscriber_key,
+        PFTL_UNISWAP_EXPORT_DEBIT_TRANSACTION_KIND,
+        opening_inventory_ledger
+            .account(&subscriber)
+            .expect("subscriber")
+            .sequence
+            + 1,
+        AssetTransactionOperation::PftlUniswapExportDebit(
+            PftlUniswapExportDebitOperation {
+                owner: subscriber.clone(),
+                route_id: opening_operation.route_id.clone(),
+                packet_hash: "c0".repeat(48),
+                export_nonce: "c1".repeat(32),
+                ethereum_recipient: "0x4444444444444444444444444444444444444444"
+                    .to_string(),
+                amount_atoms: 99,
+                reservation_id: None,
+                settlement_value_atoms: Some(697),
+                destination_deadline_seconds: 1_800,
+                refund_delay_blocks: 3,
+                ethereum_packet_digest: Some("c2".repeat(32)),
+                ethereum_packet_schema_version: Some(
+                    PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V2,
+                ),
+            },
+        ),
+    );
+    let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut opening_inventory_ledger,
+        &partial_opening_export,
+        24,
+    );
+    assert!(!receipt.accepted);
+    assert_eq!(
+        receipt.code,
+        "pftl_uniswap_export_entitlement_required"
+    );
+
+    let opening_packet_hash = "c3".repeat(48);
+    let opening_export_nonce = "c4".repeat(32);
+    let opening_export_recipient =
+        "0x4444444444444444444444444444444444444444".to_string();
+    let opening_export_digest = {
+        let route = opening_inventory_ledger
+            .pftl_uniswap_route(&opening_operation.route_id)
+            .expect("opening inventory route for packet");
+        let v2 = route.v2.as_ref().expect("opening inventory v2 state");
+        PftlUniswapMintPacketV2 {
+            route_config_digest: route.route_config_digest.clone(),
+            source_packet_hash: opening_packet_hash.clone(),
+            reservation_id: opening_packet_hash.clone(),
+            source_receipt_hash: "01".repeat(48),
+            source_receipt_root: "02".repeat(48),
+            settlement_asset_id: route.settlement_asset_id.clone(),
+            native_nav_asset_id: route.native_nav_asset_id.clone(),
+            pricing_reserve_packet_hash: primary_policy.pricing_reserve_packet_hash.clone(),
+            policy_hash_commitment: postfiat_types::pftl_uniswap_keccak_commitment48(
+                "policy",
+                &primary_policy.policy_hash,
+            )
+            .expect("policy commitment"),
+            route_epoch: v2.route_epoch,
+            pricing_nav_epoch: primary_policy.pricing_nav_epoch,
+            deadline_seconds: 1_800,
+            nonce: opening_export_nonce.clone(),
+            destination_chain_id: route.ethereum_chain_id,
+            destination_controller: route.handoff_controller.clone(),
+            wrapped_token: route.wrapped_navcoin_token.clone(),
+            ethereum_recipient: opening_export_recipient.clone(),
+            mint_amount_atoms: 100,
+            settlement_value_atoms: 704,
+        }
+        .evm_digest()
+        .expect("opening inventory packet digest")
+    };
+    let opening_export = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &opening_inventory_ledger,
+        &subscriber_key,
+        PFTL_UNISWAP_EXPORT_DEBIT_TRANSACTION_KIND,
+        opening_inventory_ledger
+            .account(&subscriber)
+            .expect("subscriber")
+            .sequence
+            + 1,
+        AssetTransactionOperation::PftlUniswapExportDebit(
+            PftlUniswapExportDebitOperation {
+                owner: subscriber.clone(),
+                route_id: opening_operation.route_id.clone(),
+                packet_hash: opening_packet_hash.clone(),
+                export_nonce: opening_export_nonce,
+                ethereum_recipient: opening_export_recipient,
+                amount_atoms: 100,
+                reservation_id: None,
+                settlement_value_atoms: Some(704),
+                destination_deadline_seconds: 1_800,
+                refund_delay_blocks: 3,
+                ethereum_packet_digest: Some(opening_export_digest),
+                ethereum_packet_schema_version: Some(
+                    PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V2,
+                ),
+            },
+        ),
+    );
+    let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut opening_inventory_ledger,
+        &opening_export,
+        24,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let opening_route = opening_inventory_ledger
+        .pftl_uniswap_route(&opening_operation.route_id)
+        .expect("opening inventory route after export");
+    assert_eq!(opening_route.pftl_spendable_supply_atoms, 0);
+    assert_eq!(opening_route.outstanding_bridge_claims_atoms, 100);
+    assert!(opening_route.native_spendable_balances_atoms.is_empty());
+    assert_eq!(
+        opening_route
+            .export_packets
+            .get(&opening_packet_hash)
+            .expect("opening inventory packet")
+            .reservation_id
+            .as_deref(),
+        Some(opening_packet_hash.as_str())
+    );
+
     let mut mismatched_opening_ledger = ledger.clone();
     mismatched_opening_ledger.pftl_uniswap_routes.clear();
     mismatched_opening_ledger.pftl_uniswap_receipts.clear();
