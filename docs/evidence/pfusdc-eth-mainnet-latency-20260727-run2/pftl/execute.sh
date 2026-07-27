@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-fleet=/home/postfiat/repos/wan-vultr-all-fleet.txt
-ssh_key=/home/postfiat/.ssh/id_ed25519
+: "${PFTL_FLEET_FILE:?set PFTL_FLEET_FILE to the validator inventory}"
+: "${PFTL_SSH_KEY:?set PFTL_SSH_KEY to the fleet SSH identity}"
+fleet=$PFTL_FLEET_FILE
+ssh_key=$PFTL_SSH_KEY
 v1=$(awk '$1=="validator-1"{print $2}' "$fleet")
 v2=$(awk '$1=="validator-2"{print $2}' "$fleet")
 v3=$(awk '$1=="validator-3"{print $2}' "$fleet")
