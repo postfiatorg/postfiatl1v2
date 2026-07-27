@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 
 from web3 import Web3
@@ -94,9 +95,9 @@ def main() -> None:
 
     recipient_before = int(token.functions.balanceOf(RECIPIENT).call())
     vault_before = int(token.functions.balanceOf(VAULT_ADDRESS).call())
-    if recipient_before != 0 or vault_before != AMOUNT:
+    if vault_before < AMOUNT:
         raise RuntimeError(
-            f"unexpected pre-withdraw balances: recipient={recipient_before}, vault={vault_before}"
+            f"vault cannot cover withdrawal: required={AMOUNT}, vault={vault_before}"
         )
     if vault.functions.consumedWithdrawalIdCommitment(withdrawal_commitment).call():
         raise RuntimeError("withdrawal commitment is already consumed")
@@ -111,7 +112,7 @@ def main() -> None:
     status = call({"op": "status"})
     if not status or not status.get("ok") or not status.get("unlocked"):
         raise RuntimeError("StakeHub is unavailable or locked")
-    session_id = "pfusdc-mainnet-epoch4-egress-20260726"
+    session_id = f"pfusdc-mainnet-epoch4-egress-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}"
     call({"op": "close_launch_session", "session_id": session_id})
     opened = call(
         {
@@ -165,9 +166,7 @@ def main() -> None:
     recipient_after = int(token.functions.balanceOf(RECIPIENT).call())
     vault_after = int(token.functions.balanceOf(VAULT_ADDRESS).call())
     if recipient_after - recipient_before != AMOUNT or vault_before - vault_after != AMOUNT:
-        raise RuntimeError("withdrawal did not produce exact 25 USDC deltas")
-    if vault_after != 0 or recipient_after != AMOUNT:
-        raise RuntimeError("terminal vault/recipient balances are not exact")
+        raise RuntimeError("withdrawal did not produce the exact configured USDC deltas")
     if not vault.functions.consumedWithdrawalIdCommitment(withdrawal_commitment).call():
         raise RuntimeError("withdrawal commitment was not consumed")
     if not vault.functions.consumedBurnTxIdCommitment(burn_commitment).call():

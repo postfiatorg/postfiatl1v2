@@ -5,10 +5,59 @@
 orc panes idle/stopped. This document is sufficient to resume with a fresh
 hierarchy or a single agent. Read it completely before touching anything.
 
+## Latency acceptance closure — 2026-07-27
+
+**Campaign status: COMPLETE / PASS.**
+
+The replacement live Ethereum-mainnet round trip passed every required gate:
+
+- Route: Ethereum USDC -> PFTL pfUSDC -> Ethereum USDC.
+- Amount: 1,000,000 atoms (1 USDC).
+- Deposit inclusion: block 25,624,516 at Unix timestamp 1,785,159,767.
+- Withdrawal inclusion: block 25,624,616 at Unix timestamp 1,785,160,979.
+- End-to-end elapsed time: 1,212 seconds (20m12s).
+- Maximum permitted time: 1,500 seconds (25m).
+- Margin: 288 seconds (4m48s).
+- Ethereum finality ingress proof, PFTL propose/finalize/claim/burn, egress
+  proof, exact USDC deltas, replay rejection, six-validator convergence, empty
+  mempools, and conservation delta-zero: `PASS`.
+
+Canonical evidence:
+`docs/evidence/pfusdc-eth-mainnet-latency-20260727-run2/roundtrip-summary.json`
+and
+`docs/evidence/pfusdc-eth-mainnet-latency-20260727-run2/latency-gate.json`.
+
+## Latency acceptance correction — 2026-07-27
+
+**Historical status before the replacement run: FUNCTIONAL PASS / LATENCY
+FAIL.**
+
+The completion update below correctly records proof validity, exact value
+movement, replay rejection, fleet convergence, and conservation. It did not
+measure the required end-to-end latency and therefore must not be read as full
+campaign acceptance.
+
+- Required boundary: Ethereum deposit inclusion through Ethereum withdrawal
+  inclusion.
+- Required maximum: 1,500 seconds (25 minutes).
+- Observed deposit: block 25,619,777 at Unix timestamp 1,785,102,719.
+- Observed withdrawal: block 25,620,606 at Unix timestamp 1,785,112,667.
+- Observed elapsed time: 9,948 seconds (2h45m48s).
+- Correct verdict: latency `FAIL`.
+
+Canonical correction:
+`docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/closing/latency-gate-20260727.json`.
+The fail-closed checker is `scripts/pfusdc-mainnet-latency-gate.py`.
+
+The next attempt must pass the pre-deposit checkpoint-freshness gate, use the
+CUDA prover path, and receive a `PASS` from the checker before the campaign or
+release is described as complete.
+
 ## Completion update — 2026-07-27
 
-**Campaign status: COMPLETE / PASS.** The recovery procedure below is retained
-as historical context and must not be replayed.
+**Historical functional status: COMPLETE / PASS.** This predates the latency
+acceptance correction above. The recovery procedure below is retained as
+historical context and must not be replayed.
 
 - Corrected epoch-4 vault and verifier deployed at
   `0x8583409ddbac984ec195dfa06a21103d92403c1e` and
@@ -53,6 +102,8 @@ Acceptance: per-leg wall-clock to spendable, exact balance deltas, proof cost
 balances, conservation delta-zero (Section 6). NO navswaps, NO a666 work.
 **Venue is Ethereum MAINNET with live USDC** (Sauron order ~02:55Z).
 Arbitrum is deprecated forever; never register an Arbitrum route profile.
+The full Ethereum deposit-inclusion to withdrawal-inclusion wall clock must be
+at most 1,500 seconds.
 
 ## 2. Hard constraints from Sauron
 
