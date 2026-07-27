@@ -5,6 +5,43 @@
 orc panes idle/stopped. This document is sufficient to resume with a fresh
 hierarchy or a single agent. Read it completely before touching anything.
 
+## Private pfUSDC send acceptance closure — 2026-07-27
+
+**Status: COMPLETE / PASS.**
+
+A real 100,000-atom (0.1 pfUSDC) private send finalized on the six-validator
+PFTL fleet:
+
+- H334 shielded 100,000 transparent pfUSDC into an Asset-Orchard note owned by
+  wallet A.
+- H335 shielded a 100,000-atom a651 helper note owned by wallet A.
+- H336 consumed both input nullifiers and created an exact 100,000-atom
+  pfUSDC note recoverable and spendable only by distinct wallet B. The a651
+  helper value remained an unspent, spendable private note controlled by
+  wallet A.
+- An exact replay of the finalized batch was rejected as already applied.
+- All six validators converged at H336 on one tip and one state root with
+  empty mempools.
+- The public action contains no raw asset ID, amount, sender, recipient, memo,
+  spending key, or recipient seed. Stable asset tags and the 1:1 pricing claim
+  remain public by current circuit design.
+
+This test uses the existing fixed two-input/two-output Asset-Orchard swap
+circuit as a narrow private-send construction: a same-value a651 helper note
+occupies the second input/output slot while pfUSDC moves from wallet A to
+wallet B. It proves the requested live pfUSDC movement and conservation, but
+does not replace the planned general one-input typed-transfer primitive.
+Ingress remains a public boundary.
+
+Cold proof construction took about 7m56s. The finalized H336 consensus round
+took 34.03s total and reported 27.52s client-visible finality.
+
+Canonical evidence:
+`docs/evidence/pfusdc-private-send-20260727-pfusdc-private-send-01/gate.json`,
+`private-send-verification.json`, `fleet-attestation.json`, and the hashed
+public action/batch in the same directory. The resumable fail-closed harness is
+`scripts/pfusdc-private-send-live`.
+
 ## Latency acceptance closure — 2026-07-27
 
 **Campaign status: COMPLETE / PASS.**
