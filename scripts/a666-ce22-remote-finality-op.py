@@ -16,14 +16,6 @@ from typing import Any
 
 
 EXPECTED_VALIDATORS = 6
-PROPOSER_HOSTS = {
-    "validator-0": "64.176.220.75",
-    "validator-1": "95.179.184.122",
-    "validator-2": "66.42.48.39",
-    "validator-3": "149.28.63.106",
-    "validator-4": "95.179.179.206",
-    "validator-5": "45.32.110.170",
-}
 REMOTE_BINARY = (
     "/opt/postfiat/releases/open-source-consensus-viewlock-b04c595e/postfiat-node"
 )
@@ -46,12 +38,29 @@ def run(command: list[str], *, capture: bool = False) -> subprocess.CompletedPro
     return subprocess.run(command, check=True, text=True, capture_output=capture)
 
 
+def load_proposer_hosts(path: Path) -> dict[str, str]:
+    value = json.loads(path.read_text())
+    expected = {f"validator-{index}" for index in range(EXPECTED_VALIDATORS)}
+    if not isinstance(value, dict) or set(value) != expected:
+        raise RuntimeError("proposer hosts file must map exactly validator-0 through validator-5")
+    if any(
+        not isinstance(host, str)
+        or not host
+        or any(character.isspace() for character in host)
+        or "@" in host
+        for host in value.values()
+    ):
+        raise RuntimeError("proposer hosts file contains an invalid SSH host")
+    return value
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--ops-file", type=Path, required=True)
     parser.add_argument("--artifact-dir", type=Path, required=True)
     parser.add_argument("--node-bin", type=Path, required=True)
     parser.add_argument("--remote-runner", type=Path, required=True)
+    parser.add_argument("--proposer-hosts-file", type=Path, required=True)
     parser.add_argument(
         "--ports",
         default="28650,28651,28652,28653,28654,28655",
@@ -63,6 +72,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    proposer_hosts = load_proposer_hosts(args.proposer_hosts_file)
     rpc = load_rpc_helpers(Path(__file__).resolve().parent)
     ports = [int(value) for value in args.ports.split(",")]
     if len(ports) != EXPECTED_VALIDATORS:
@@ -143,7 +153,7 @@ def main() -> None:
             "ssh",
             "-o",
             "BatchMode=yes",
-            f"root@{PROPOSER_HOSTS['validator-0']}",
+            f"root@{proposer_hosts['validator-0']}",
             REMOTE_BINARY,
             "block-proposer",
             "--unsafe-devnet-json-storage",
@@ -158,9 +168,9 @@ def main() -> None:
     )
     proposer_report = json.loads(proposer_probe.stdout)
     proposer = proposer_report["proposer"]
-    if proposer not in PROPOSER_HOSTS:
+    if proposer not in proposer_hosts:
         raise RuntimeError(f"unknown elected proposer: {proposer}")
-    host = PROPOSER_HOSTS[proposer]
+    host = proposer_hosts[proposer]
     index = proposer.rsplit("-", 1)[1]
     data_dir = f"/var/lib/postfiat/validator-{index}"
     key_path = f"{data_dir}/validator_keys.json"

@@ -15,6 +15,11 @@ async function main() {
   const ports = [];
   const seenValidatorIds = new Set();
   const applyAttempts = new Map();
+  let releaseSlowFirstReply;
+  let slowFirstReplySent = false;
+  const slowFirstReplyGate = new Promise(resolve => {
+    releaseSlowFirstReply = resolve;
+  });
 
   for (let i = 0; i < VALIDATOR_COUNT; i += 1) {
     const validatorId = `validator-${i}`;
@@ -34,30 +39,38 @@ async function main() {
           const failFirstReplication = request.method === 'owned_apply_v3'
             && i === 5
             && applyAttempts.get(validatorId) === 1;
-          setTimeout(() => socket.write(`${JSON.stringify({
-            version: 'postfiat-local-rpc-v1',
-            id: request.id,
-            ok: !failFirstReplication,
-            result: request.method === 'status' ? {
-              block_height: 100,
-              block_tip_hash: 'tip',
-              state_root: 'root',
-              validator_id: validatorId,
-              validator_count: VALIDATOR_COUNT,
-              chain_id: 'postfiat-wan-devnet',
-            } : failFirstReplication ? null : {
-              schema: 'postfiat-fastpay-apply-ack-v1',
-              validator_id: validatorId,
-              lock_id: 'lock',
-              certificate_digest: 'certificate',
-              terminal_state_digest: 'terminal',
-            },
-            error: failFirstReplication ? {
-              code: 'owned_apply_v3_failed',
-              message: 'temporary replication failure',
-            } : null,
-            events: [],
-          })}\n`), delay);
+          const sendReply = () => {
+            if (failFirstReplication) slowFirstReplySent = true;
+            socket.write(`${JSON.stringify({
+              version: 'postfiat-local-rpc-v1',
+              id: request.id,
+              ok: !failFirstReplication,
+              result: request.method === 'status' ? {
+                block_height: 100,
+                block_tip_hash: 'tip',
+                state_root: 'root',
+                validator_id: validatorId,
+                validator_count: VALIDATOR_COUNT,
+                chain_id: 'postfiat-wan-devnet',
+              } : failFirstReplication ? null : {
+                schema: 'postfiat-fastpay-apply-ack-v1',
+                validator_id: validatorId,
+                lock_id: 'lock',
+                certificate_digest: 'certificate',
+                terminal_state_digest: 'terminal',
+              },
+              error: failFirstReplication ? {
+                code: 'owned_apply_v3_failed',
+                message: 'temporary replication failure',
+              } : null,
+              events: [],
+            })}\n`);
+          };
+          if (failFirstReplication) {
+            slowFirstReplyGate.then(sendReply);
+          } else {
+            setTimeout(sendReply, delay);
+          }
         }
       });
     });
@@ -93,14 +106,12 @@ async function main() {
       signature_hex: `sig-${i}`,
     })),
   };
-  const started = Date.now();
   const response = await broadcastFastpayMutation({
     version: 'postfiat-local-rpc-v1',
     id: 'v3-certificate-finality',
     method: 'owned_apply_v3',
     params: { cert_json: JSON.stringify(cert) },
   });
-  const duration = Date.now() - started;
 
   assert.strictEqual(response.ok, true);
   assert.strictEqual(response.result.certificate_final, true);
@@ -110,7 +121,12 @@ async function main() {
     Array.from({ length: 5 }, (_, i) => `validator-${i}`),
     'compact finality must carry a distinct signed apply-ack quorum',
   );
-  assert.ok(duration < 150, `v3 critical path waited beyond apply quorum: ${duration}ms`);
+  assert.strictEqual(
+    slowFirstReplySent,
+    false,
+    'v3 critical path must return at quorum while the sixth reply is withheld',
+  );
+  releaseSlowFirstReply();
 
   await new Promise(resolve => setTimeout(resolve, 750));
   assert.deepStrictEqual(

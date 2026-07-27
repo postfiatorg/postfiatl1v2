@@ -57,6 +57,7 @@ Set these parameters outside the runbook; paths are references, not secrets.
 export NODE_BIN=/absolute/path/to/postfiat-node
 export FINALITY_RUNNER=/absolute/path/to/a666-ce22-remote-finality-op.py
 export REMOTE_ROUND_RUNNER=/absolute/path/to/a666-remote-sync-round.py
+export PROPOSER_HOSTS_FILE=/existing/secret-safe/proposer-hosts.json
 export OUT=/absolute/path/to/lane-b-run
 export DATA_DIR=/absolute/path/to/validator-data
 export SOURCE_CHAIN_RPC_URL=https://approved-source-rpc.example
@@ -88,6 +89,7 @@ tunnel as finality.
 test -r "$PROPOSER_KEY_FILE"
 test -r "$FINALIZER_KEY_FILE"
 test -r "$CLAIMER_KEY_FILE"
+test -r "$PROPOSER_HOSTS_FILE"
 test -s "$SOURCE_RECEIPT_FILE"
 test -s "$SOURCE_PROOF_FILE"
 test -s "$SOURCE_PUBLIC_VALUES_FILE"
@@ -160,7 +162,8 @@ submit_stage() {
     --ops-file "$OUT/${stage}.unsigned.json" \
     --artifact-dir "$OUT/${stage}" \
     --node-bin "$NODE_BIN" \
-    --remote-runner "$REMOTE_ROUND_RUNNER"
+    --remote-runner "$REMOTE_ROUND_RUNNER" \
+    --proposer-hosts-file "$PROPOSER_HOSTS_FILE"
 }
 ```
 

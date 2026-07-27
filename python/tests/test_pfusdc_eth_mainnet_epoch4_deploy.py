@@ -17,12 +17,20 @@ SPEC.loader.exec_module(DEPLOY)
 
 
 class MainnetEpoch4DeployTests(unittest.TestCase):
-    def test_active_manifest_and_artifacts_validate_offline(self):
+    def test_active_manifest_scope_and_create_addresses_are_pinned(self):
         manifest = DEPLOY.D._load_json(DEPLOY.MANIFEST)
-        artifacts = DEPLOY.validate_offline_manifest(DEPLOY.MANIFEST, manifest)
+        DEPLOY.validate_scope(manifest)
+        artifacts = {
+            item["contract"]: item for item in manifest["contracts"]["artifacts"]
+        }
+        deployer = manifest["deployer"]["address"]
         self.assertEqual(
-            set(artifacts),
-            {"PFTLFinalityVerifierV1", "ERC20BridgeVaultL1"},
+            DEPLOY.D.create_address(deployer, DEPLOY.VERIFIER_NONCE),
+            artifacts["PFTLFinalityVerifierV1"]["address"],
+        )
+        self.assertEqual(
+            DEPLOY.D.create_address(deployer, DEPLOY.VAULT_NONCE),
+            artifacts["ERC20BridgeVaultL1"]["address"],
         )
 
     def test_epoch3_manifest_is_not_accepted_by_epoch4_driver(self):

@@ -7,12 +7,12 @@ from pathlib import Path
 
 from web3 import Web3
 
-sys.path.insert(0, "/home/postfiat/repos/StakeHub")
+HERE = Path(__file__).resolve().parent
+REPO = HERE.parents[5]
+sys.path.insert(0, str(REPO.parent / "StakeHub"))
 from stakehub.agentd import call
 
 
-HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[5]
 PROOF_DIR = HERE / "h316-h325-proof"
 RESULT = HERE / "h316-h325-advance.json"
 RPC = "https://ethereum-rpc.publicnode.com"

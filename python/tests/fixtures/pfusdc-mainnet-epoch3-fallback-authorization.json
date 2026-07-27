@@ -1,0 +1,11 @@
+{
+  "schema": "postfiat.pfusdc.mainnet_epoch3_auditor_authorization.v1",
+  "auditor": "offline-test-auditor",
+  "timestamp_utc": "2026-07-26T04:01Z",
+  "verdict": "PASS",
+  "rows": "68/68",
+  "c8": "15/15",
+  "authorized_manifest_sha256": "bf769e122a66274facd39023b3939e963cba4518044b22e4537bc351479471c2",
+  "audit_log": "offline-test-fixture",
+  "audit_log_sha256": "720256dbe8a76fe5c24d41acbbed11e34f7e4461e8f9cac81cf8ddb0a14d2e3f"
+}

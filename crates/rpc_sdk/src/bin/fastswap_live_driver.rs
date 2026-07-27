@@ -39,7 +39,9 @@ fn main() -> Result<(), String> {
     let session_path = PathBuf::from(flag(&args, "--session")?);
     let output_path = PathBuf::from(flag(&args, "--output")?);
     if output_path.exists() {
-        return Err("terminal output already exists; reconcile it instead of driving again".to_owned());
+        return Err(
+            "terminal output already exists; reconcile it instead of driving again".to_owned(),
+        );
     }
     let committee: FastSwapCommitteeV1 = read_json(&committee_path)?;
     committee
@@ -56,9 +58,12 @@ fn main() -> Result<(), String> {
         let expected_effects = preview_fastswap(&signed, &committee, &transport)
             .map_err(|error| format!("FastSwap preview failed: {error:?}"))?;
         let preview_ms = preview_started.elapsed().as_millis() as u64;
-        let session =
-            FastSwapWalletSessionV1::new(SwapSettlementModeV1::FastSwapV1, signed, expected_effects)
-                .map_err(|error| format!("FastSwap session failed: {error:?}"))?;
+        let session = FastSwapWalletSessionV1::new(
+            SwapSettlementModeV1::FastSwapV1,
+            signed,
+            expected_effects,
+        )
+        .map_err(|error| format!("FastSwap session failed: {error:?}"))?;
         persist(&session_path, &session)?;
         (session, preview_ms)
     };

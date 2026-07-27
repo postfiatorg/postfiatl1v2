@@ -4,7 +4,7 @@
     {
       "label": "a666-holder-trust",
       "source": "pfab9b9228942e5c529633a13aa271d5297bec6353",
-      "key_file": "/home/postfiat/.pft/venue/orchard-mirror/navswap-fast-live/keys/holder.json",
+      "key_file": "/existing/secret-safe/holder.json",
       "operation": {
         "operation": "trust_set",
         "account": "pfab9b9228942e5c529633a13aa271d5297bec6353",
@@ -25,4 +25,3 @@
     }
   ]
 }
-

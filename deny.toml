@@ -8,6 +8,7 @@ all-features = true
 
 [advisories]
 ignore = [
+  { id = "RUSTSEC-2021-0127", reason = "serde_cbor is the pinned consensus wire codec for pfUSDC guest and host inputs. The advisory is unmaintained-only, with no vulnerability reported; changing encoders requires cross-guest byte-compatibility vectors and a separately gated migration. Migrate to ciborium or minicbor by 2026-08-31." },
   { id = "RUSTSEC-2021-0139", reason = "ansi_term is logging-only through SP1 slop-utils/tracing-forest; active Groth16 verification does not call the logger. Remove with the next SP1 release by 2026-08-31." },
   { id = "RUSTSEC-2025-0141", reason = "bincode is inherited from SP1 6.3.1. The active Groth16 verifier uses bounded proof/public-value inputs and known-good vectors; compressed proof deserialization is not exposed. Replace with the upstream SP1 migration by 2026-08-31." },
   { id = "RUSTSEC-2026-0173", reason = "proc-macro-error2 is a compile-time-only Orchard 0.14/getset dependency. Orchard 0.15 changes consensus proof encodings and requires a separately gated migration; migrate by 2026-08-31." },

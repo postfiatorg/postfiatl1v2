@@ -20,14 +20,111 @@ SPEC.loader.exec_module(MODULE)
 
 class H314ResidualGateTests(unittest.TestCase):
     def test_nonce68_mapping_is_live_verified_from_rev6_immutable_input(self) -> None:
-        config = MODULE.load_config(
-            ROOT / "docs/evidence/pfusdc-eth-campaign-20260725/lane-b/conservation-h314/gate-config.json"
-        )
-        _, _, route = MODULE.rev6_route(config)
-        mapping = MODULE.validate_live_verified_lineage(
-            config, route, {"vault_interface_abi_class": "camel_case_v2"}
-        )
-        self.assertEqual(config["pins"]["vault_interface_lineage"], mapping)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+
+            def write(name: str, value: dict) -> dict[str, str]:
+                path = root / name
+                path.write_text(json.dumps(value), encoding="utf-8")
+                return {"path": str(path), "sha256": MODULE.sha256_file(path)}
+
+            route = {
+                "route_id": "ethereum-sepolia-usdc-v1",
+                "route_epoch": 2,
+                "vault_address": "0x1111111111111111111111111111111111111111",
+                "vault_runtime_code_hash": "0x" + "22" * 32,
+            }
+            manifest = write("manifest.json", {"route": route})
+            manifest_lineage = write(
+                "manifest-lineage.json",
+                {
+                    "current_revision": {
+                        "route_epoch": 2,
+                        "manifest": {"sha256": manifest["sha256"]},
+                    }
+                },
+            )
+            readback = write(
+                "readback.json",
+                {
+                    "manifest_digests": {
+                        "pre_broadcast_input_sha256": manifest["sha256"]
+                    },
+                    "readback": {
+                        "vault_runtime_code_hash": route["vault_runtime_code_hash"]
+                    },
+                },
+            )
+            interface_lineage = write(
+                "interface-lineage.json",
+                {
+                    "entries": [
+                        {
+                            "runtime_code_hash": route["vault_runtime_code_hash"],
+                            "abi_class": "camel_case_v2",
+                            "source_manifest_path": manifest["path"],
+                            "source_manifest_sha256": manifest["sha256"],
+                            "deployment_revision_label": "rev6-generated-nonce67-68",
+                            "verification_status": "live_verified",
+                        }
+                    ]
+                },
+            )
+            opening = write(
+                "opening.json",
+                {
+                    "height": 310,
+                    "components": {
+                        "V": "6000020",
+                        "S": "1000000",
+                        "D": "0",
+                        "B": "10",
+                        "R": "0",
+                    },
+                    "rhs": "1000010",
+                    "residual_atoms": "5000010",
+                },
+            )
+            inert = write("inert.json", {})
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "schema": MODULE.SCHEMA,
+                        "target_height": 314,
+                        "asset_id": "asset",
+                        "phase2_proof_schema": "proof",
+                        "h310_baseline": {
+                            "components": {
+                                "V": "6000020",
+                                "S": "1000000",
+                                "D": "0",
+                                "B": "10",
+                                "R": "0",
+                            },
+                            "rhs": "1000010",
+                            "residual_atoms": "5000010",
+                        },
+                        "pins": {
+                            "checker_source": inert,
+                            "checker_tests": inert,
+                            "h310_identity": opening,
+                            "vault_interface_lineage": interface_lineage,
+                            "rev6_prebroadcast_manifest": manifest,
+                            "rev6_lineage": manifest_lineage,
+                            "rev6_deployment_readback": readback,
+                            "legacy_finding": inert,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config = MODULE.load_config(config_path)
+            _, _, parsed_route = MODULE.rev6_route(config)
+            mapping = MODULE.validate_live_verified_lineage(
+                config, parsed_route, {"vault_interface_abi_class": "camel_case_v2"}
+            )
+            self.assertEqual(config["pins"]["vault_interface_lineage"], mapping)
 
     def test_missing_phase2_proof_fails_before_subprocess(self) -> None:
         config = ROOT / "docs/evidence/pfusdc-eth-campaign-20260725/lane-b/conservation-h314/gate-config.json"

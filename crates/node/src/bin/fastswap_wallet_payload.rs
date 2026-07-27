@@ -1,10 +1,8 @@
 use postfiat_crypto_provider::{hash_bytes, hex_to_bytes};
 use postfiat_types::{
-    FastAssetIdV1, FastLaneDepositV1, FastLanePrimaryOperationV1,
-    FastLanePrimaryTransactionV1, FastObjectIdV1, FastObjectKeyV1,
-    SignedFastLaneDepositV1,
-    FastSwapGovernanceBootstrapPayloadV1, FastSwapIntentV1, FastSwapPartyV1,
-    FastSwapRfqHashV1,
+    FastAssetIdV1, FastLaneDepositV1, FastLanePrimaryOperationV1, FastLanePrimaryTransactionV1,
+    FastObjectIdV1, FastObjectKeyV1, FastSwapGovernanceBootstrapPayloadV1, FastSwapIntentV1,
+    FastSwapPartyV1, FastSwapRfqHashV1, SignedFastLaneDepositV1,
 };
 use std::env;
 use std::fs;
@@ -22,8 +20,8 @@ fn flag(args: &[String], name: &str) -> Result<String, String> {
 
 fn read_payload(path: &Path) -> Result<FastSwapGovernanceBootstrapPayloadV1, String> {
     let bytes = fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?;
-    let payload: FastSwapGovernanceBootstrapPayloadV1 = serde_json::from_slice(&bytes)
-        .map_err(|error| format!("{}: {error}", path.display()))?;
+    let payload: FastSwapGovernanceBootstrapPayloadV1 =
+        serde_json::from_slice(&bytes).map_err(|error| format!("{}: {error}", path.display()))?;
     payload
         .validate_payload()
         .map_err(|error| format!("invalid bootstrap payload: {error:?}"))?;
@@ -99,7 +97,14 @@ fn primary(args: &[String]) -> Result<(), String> {
         .tx_id()
         .map_err(|error| format!("primary transaction validation: {error:?}"))?;
     write_private(&PathBuf::from(flag(args, "--output")?), &value)?;
-    println!("{}", tx_id.0.iter().map(|byte| format!("{byte:02x}")).collect::<String>());
+    println!(
+        "{}",
+        tx_id
+            .0
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    );
     Ok(())
 }
 
@@ -193,7 +198,9 @@ fn intent(args: &[String]) -> Result<(), String> {
     let expires_at_height = flag(args, "--expires-at-height")?
         .parse::<u64>()
         .map_err(|_| "--expires-at-height must be a u64".to_owned())?;
-    if expires_at_height < policy.valid_from_height || expires_at_height > policy.valid_through_height {
+    if expires_at_height < policy.valid_from_height
+        || expires_at_height > policy.valid_through_height
+    {
         return Err("intent expiry is outside the governed policy window".to_owned());
     }
     let rfq: [u8; 48] = hash_bytes(

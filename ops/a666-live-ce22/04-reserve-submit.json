@@ -4,7 +4,7 @@
     {
       "label": "a666-zero-reserve-submit",
       "source": "pfd0c86d9084915e1fefd22eab891806397d5a5937",
-      "key_file": "/home/postfiat/.pft/venue/orchard-mirror/navswap-fast-live/keys/reserve.json",
+      "key_file": "/existing/secret-safe/reserve.json",
       "operation": {
         "operation": "nav_reserve_submit",
         "issuer": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
@@ -37,4 +37,3 @@
     }
   ]
 }
-
