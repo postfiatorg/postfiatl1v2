@@ -1,0 +1,106 @@
+{
+  "schema": "postfiat.pfusdc.eth_sepolia_manifest_lineage.v1",
+  "created_utc": "2026-07-25T22:10Z",
+  "revisions": [
+    {
+      "revision": "rev1-nonce61-62-invalid",
+      "manifest": {
+        "path": "deployments/pfusdc-eth-sepolia-20260725/manifest.rev1-nonce61-62-invalid.json",
+        "sha256": "3f761ae35cfdefeb0ef6ccec08fe38bf96c5af20b9db4d9aae2eaef7b2bdd3d2"
+      },
+      "route_profile": {
+        "path": "deployments/pfusdc-eth-sepolia-20260725/route-profile.rev1-nonce61-62-invalid.json",
+        "sha256": "083f683bc21b0fac15a44e7b8f06163172672356fd45fac43ed6391800d60f36"
+      },
+      "status": "preserved-unregistered-invalid",
+      "frozen_utc": "2026-07-25T21:58Z"
+    },
+    {
+      "revision": "rev2-nonce63-64-frozen",
+      "manifest": {
+        "path": "deployments/pfusdc-eth-sepolia-20260725/manifest.rev2-nonce63-64-frozen.json",
+        "sha256": "d3a3b78e21f1b8fbe43aee3c55eaf13be2d67114f0f9b8808687bd1a4a684703"
+      },
+      "route_profile": {
+        "path": "deployments/pfusdc-eth-sepolia-20260725/route-profile.rev2-nonce63-64-frozen.json",
+        "sha256": "eeddbbcaf67c0ed5ec1bab2dff3e0e4d64b335720823528d19f1fd926b3c64b2"
+      },
+      "status": "superseded-unregistered-by-rev3",
+      "frozen_utc": "2026-07-25T22:10Z"
+    },
+    {
+      "revision": "rev3-activity-h310-nonce63-64-frozen",
+      "manifest": {
+        "path": "deployments/pfusdc-eth-sepolia-20260725/manifest.rev3-activity-h310-nonce63-64-frozen.json",
+        "sha256": "2f4603b1acf1e46b31cdc0f809d491c286e1625d5d53d1ee887ef14a91af36c2"
+      },
+      "route_profile": {
+        "path": "deployments/pfusdc-eth-sepolia-20260725/route-profile.rev3-activity-h310-nonce63-64-frozen.json",
+        "sha256": "0951fb0e9750805efcbaebc7d30d9d48495ee020c72590fc6ac659facda548d6"
+      },
+      "status": "superseded-unregistered-by-rev4",
+      "frozen_utc": "2026-07-25T22:23Z"
+    },
+    {
+      "revision": "rev4-activity-h312-nonce65-66-frozen",
+      "created_utc": "2026-07-26T00:06Z",
+      "manifest_path": "deployments/pfusdc-eth-sepolia-20260725/manifest.rev4-activity-h312-nonce65-66-frozen.json",
+      "manifest_sha256": "69b411b7767370b1fe61f2ef90d50cd2a339b4f56d7b48fb3a783449debd9e04",
+      "route_profile_path": "deployments/pfusdc-eth-sepolia-20260725/route-profile.rev4-activity-h312-nonce65-66-frozen.json",
+      "route_profile_sha256": "21bb72aaf6ece97c85297d5637f1f5cff6fdf373e749e195c96c31f19bc31440",
+      "activation_height": 314,
+      "route_epoch": 2,
+      "h_strike": 312,
+      "route_profile_hash": "81596feb0992ab86caf77fbe8cc911d24ab9c190012144a2a0b88cd70bce8815152ba341cac0d49869268901bb035bb4",
+      "route_binding": "ca1142a9eaaa4d73220d77c469d7ef4c3dd80b70aae59002f45f822e7faa8253",
+      "route_profile_hash_commitment": "0x854705cb7e0f5553a69bf915f49baa7a1de15f4726e50d202c09ccc4c751cd7d",
+      "policy_hash": "e69c25308a314240e99cad5fcf2ce402c365b7d182f5d60c8cc12d0ac9ba27fb",
+      "supersedes": "rev3",
+      "supersession_reason": "rev3 epoch-1 H312 route registration rejected in execution (execution_actions.rs:958-973 epoch monotonicity); never registered. rev4 advances route_epoch to 2 with nonce-65/66 vault and recomputed policy hash (main.rs:603-620).",
+      "cadence_classification_sha256": "1742bf0daca91eb1c98c1d22aebd56694eca0a05ce1296dd54b6ad2e215f734b",
+      "activity_driven_activation_sequence_sha256": "c261e260edcee1b883fa9cf0129dd7d5c069b638244e4c04d0e55b0c34ca0dec"
+    }
+  ],
+  "supersession": {
+    "from": "rev1-nonce61-62-invalid",
+    "to": "rev2-nonce63-64-frozen",
+    "reason": "runtime-hash rebinding; vault has no verifier setter \u2014 deployed runtime code embeds constructor immutables, invalidating rev1 profile commitment and vault/verifier binding",
+    "registration_rule": "route registration must cite rev2 manifest+profile paths and SHA-256 above; rev1 files are immutable and never overwritten"
+  },
+  "quarantine": {
+    "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-c/deploy/quarantine-nonce61-62.json",
+    "sha256": "1b0fff951b814fae9932f6bae523519ea6659d64a11d63629ba0a445fc215168"
+  },
+  "cadence_classification": {
+    "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-c/deploy/cadence-classification.json",
+    "sha256": "1742bf0daca91eb1c98c1d22aebd56694eca0a05ce1296dd54b6ad2e215f734b",
+    "case": "case_3",
+    "h_strike": 310,
+    "activation_height": 312
+  },
+  "supersession_latest": {
+    "from": "rev2-nonce63-64-frozen",
+    "to": "rev3-activity-h310-nonce63-64-frozen",
+    "reason": "dispatch #232 single authorized re-strike: activation_height 400 -> H_strike+2=312 (activity-driven case-3 ruling); policy hash, ELF hashes, vkeys unchanged; registration cites rev3 by path+sha256",
+    "manifest_sha256_rev3": "2f4603b1acf1e46b31cdc0f809d491c286e1625d5d53d1ee887ef14a91af36c2"
+  },
+  "pinned_evidence": {
+    "cadence_classification": {
+      "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-c/deploy/cadence-classification.json",
+      "sha256": "1742bf0daca91eb1c98c1d22aebd56694eca0a05ce1296dd54b6ad2e215f734b"
+    },
+    "activity_driven_activation_sequence": {
+      "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-c/deploy/activity-driven-activation-sequence.md",
+      "sha256": "c261e260edcee1b883fa9cf0129dd7d5c069b638244e4c04d0e55b0c34ca0dec"
+    },
+    "strike_height": {
+      "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-c/deploy/strike-height.json",
+      "sha256": "8021542ad56ca60f180ee888e2d9f444318659ceac0d55f687716b57b57c1db1"
+    }
+  },
+  "activity_driven_activation_sequence": {
+    "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-c/deploy/activity-driven-activation-sequence.md",
+    "sha256": "c261e260edcee1b883fa9cf0129dd7d5c069b638244e4c04d0e55b0c34ca0dec"
+  },
+  "current_revision": "rev4-activity-h312-nonce65-66-frozen"
+}

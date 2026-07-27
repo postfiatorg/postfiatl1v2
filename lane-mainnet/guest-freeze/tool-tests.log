@@ -1,0 +1,7 @@
+test tests::mainnet_tool_rejects_sepolia_network_tuple ... ok
+test tests::route_profile_rejects_bad_activation_window ... ok
+test tests::resumable_state_is_atomic_and_round_trips ... ok
+test tests::resumable_state_rejects_deployment_or_schema_substitution ... ok
+test tests::resumable_artifact_hash_and_audit_tampering_fail_closed ... ok
+test tests::route_profile_rejects_arbitrum_markers ... ok
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

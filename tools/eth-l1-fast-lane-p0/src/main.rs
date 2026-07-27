@@ -22,6 +22,8 @@ use pfusdc_eth_ingress_program::{
 };
 use postfiat_types::{
     vault_bridge_deposit_id, vault_bridge_pftl_recipient_hash, VaultBridgeDepositEvidence,
+    VaultBridgeRouteProfileV1, NAV_PROFILE_VERIFIER_SP1_GROTH16, NAV_SP1_PROOF_ENCODING_GROTH16,
+    VAULT_BRIDGE_EVIDENCE_TIER_RECEIPT_PROVEN, VAULT_BRIDGE_ROUTE_PROFILE_SCHEMA_V1,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -96,6 +98,51 @@ enum Command {
         foreign_elf: PathBuf,
         #[arg(long)]
         output: PathBuf,
+    },
+    /// Build the canonical Ethereum Sepolia L1 route profile (chain 11155111),
+    /// rejecting any Arbitrum marker or foreign chain id. Prints the profile
+    /// JSON, its governed profile hash, and the route binding.
+    RouteProfile {
+        /// pfUSDC issued-asset id this route credits.
+        #[arg(long)]
+        asset_id: String,
+        /// Deployed ERC20BridgeVaultV2 address on Ethereum Sepolia.
+        #[arg(long)]
+        vault_address: String,
+        /// Keccak-256 of the deployed vault runtime code.
+        #[arg(long)]
+        vault_runtime_code_hash: String,
+        /// Keccak-256 of the deployed token runtime code.
+        #[arg(long)]
+        token_runtime_code_hash: String,
+        /// Frozen pfusdc-eth-ingress SP1 program verifying key (0x-prefixed).
+        #[arg(long)]
+        ingress_program_vkey: String,
+        /// Ingress policy hash committed by proof public values.
+        #[arg(long)]
+        verifier_policy_hash: String,
+        #[arg(long, default_value_t = 1)]
+        route_epoch: u32,
+        #[arg(long, default_value_t = 900)]
+        max_snapshot_age_blocks: u64,
+        #[arg(long, default_value_t = 64)]
+        challenge_window_blocks: u64,
+        #[arg(long, default_value_t = 128)]
+        max_epoch_gap_blocks: u64,
+        #[arg(long, default_value_t = 256)]
+        settle_deadline_blocks: u64,
+        #[arg(long, default_value_t = 1)]
+        min_challenge_bond: u64,
+        #[arg(long, default_value_t = 4096)]
+        max_proof_bytes: u64,
+        #[arg(long, default_value_t = 4096)]
+        max_public_values_bytes: u64,
+        #[arg(long, default_value_t = 0)]
+        activation_height: u64,
+        #[arg(long, default_value_t = 0)]
+        expires_at_height: u64,
+        #[arg(long)]
+        output: Option<PathBuf>,
     },
     ProgramInfo,
 }
@@ -230,6 +277,43 @@ async fn main() -> Result<()> {
             foreign_elf,
             output,
         } => cross_vkey_audit(&proof, &foreign_elf, &output).await,
+        Command::RouteProfile {
+            asset_id,
+            vault_address,
+            vault_runtime_code_hash,
+            token_runtime_code_hash,
+            ingress_program_vkey,
+            verifier_policy_hash,
+            route_epoch,
+            max_snapshot_age_blocks,
+            challenge_window_blocks,
+            max_epoch_gap_blocks,
+            settle_deadline_blocks,
+            min_challenge_bond,
+            max_proof_bytes,
+            max_public_values_bytes,
+            activation_height,
+            expires_at_height,
+            output,
+        } => route_profile(
+            asset_id,
+            vault_address,
+            vault_runtime_code_hash,
+            token_runtime_code_hash,
+            ingress_program_vkey,
+            verifier_policy_hash,
+            route_epoch,
+            max_snapshot_age_blocks,
+            challenge_window_blocks,
+            max_epoch_gap_blocks,
+            settle_deadline_blocks,
+            min_challenge_bond,
+            max_proof_bytes,
+            max_public_values_bytes,
+            activation_height,
+            expires_at_height,
+            output,
+        ),
         Command::ProgramInfo => program_info().await,
     }
 }
@@ -650,6 +734,110 @@ async fn program_info() -> Result<()> {
     Ok(())
 }
 
+const ARBITRUM_MARKER: &str = "arbitrum";
+const ARBITRUM_SEPOLIA_REJECTED_CHAIN_ID: u64 = 421_614;
+
+/// Fail closed when any route-profile input carries an Arbitrum marker or a
+/// non-Ethereum-Sepolia chain binding. Lane C scope is Ethereum Sepolia
+/// (chain id 11155111) only.
+fn reject_arbitrum_scope(label: &str, value: &str) -> Result<()> {
+    if value.to_ascii_lowercase().contains(ARBITRUM_MARKER) {
+        bail!("{label} carries a forbidden Arbitrum marker");
+    }
+    Ok(())
+}
+
+fn route_profile(
+    asset_id: String,
+    vault_address: String,
+    vault_runtime_code_hash: String,
+    token_runtime_code_hash: String,
+    ingress_program_vkey: String,
+    verifier_policy_hash: String,
+    route_epoch: u32,
+    max_snapshot_age_blocks: u64,
+    challenge_window_blocks: u64,
+    max_epoch_gap_blocks: u64,
+    settle_deadline_blocks: u64,
+    min_challenge_bond: u64,
+    max_proof_bytes: u64,
+    max_public_values_bytes: u64,
+    activation_height: u64,
+    expires_at_height: u64,
+    output: Option<PathBuf>,
+) -> Result<()> {
+    reject_arbitrum_scope("route_id", ROUTE_ID)?;
+    reject_arbitrum_scope("asset_id", &asset_id)?;
+    reject_arbitrum_scope("verifier_policy_hash", &verifier_policy_hash)?;
+    let vault_address = with_0x(&strip0x(&vault_address));
+    let vault_runtime_code_hash = with_0x(&strip0x(&vault_runtime_code_hash));
+    let token_runtime_code_hash = with_0x(&strip0x(&token_runtime_code_hash));
+    let ingress_program_vkey = with_0x(&strip0x(&ingress_program_vkey));
+    let verifier_policy_hash = strip0x(&verifier_policy_hash);
+    for (label, value) in [
+        ("vault_runtime_code_hash", vault_runtime_code_hash.as_str()),
+        ("token_runtime_code_hash", token_runtime_code_hash.as_str()),
+        ("ingress_program_vkey", ingress_program_vkey.as_str()),
+        ("verifier_policy_hash", verifier_policy_hash.as_str()),
+    ] {
+        let hex_part = value.strip_prefix("0x").unwrap_or(value);
+        if hex_part.len() != 64 || !hex_part.bytes().all(|b| b.is_ascii_hexdigit()) {
+            bail!("{label} must be 32-byte hex");
+        }
+    }
+    let vault_address_hex = vault_address.strip_prefix("0x").unwrap_or(&vault_address);
+    if vault_address_hex.len() != 40 || !vault_address_hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        bail!("vault_address must be 20-byte hex");
+    }
+    if expires_at_height <= activation_height {
+        bail!("expires_at_height must follow activation_height");
+    }
+    let profile = VaultBridgeRouteProfileV1 {
+        schema: VAULT_BRIDGE_ROUTE_PROFILE_SCHEMA_V1.to_string(),
+        route_id: ROUTE_ID.to_string(),
+        asset_id,
+        source_chain_id: SEPOLIA_CHAIN_ID,
+        vault_address: vault_address.to_lowercase(),
+        vault_runtime_code_hash: vault_runtime_code_hash.to_lowercase(),
+        token_address: USDC.to_lowercase(),
+        token_runtime_code_hash: token_runtime_code_hash.to_lowercase(),
+        route_epoch,
+        verifier_kind: NAV_PROFILE_VERIFIER_SP1_GROTH16.to_string(),
+        evidence_tier: VAULT_BRIDGE_EVIDENCE_TIER_RECEIPT_PROVEN.to_string(),
+        verifier_policy_hash,
+        verifier_program_vkey: ingress_program_vkey,
+        verifier_proof_encoding: NAV_SP1_PROOF_ENCODING_GROTH16.to_string(),
+        max_proof_bytes,
+        max_public_values_bytes,
+        max_snapshot_age_blocks,
+        challenge_window_blocks,
+        max_epoch_gap_blocks,
+        settle_deadline_blocks,
+        min_challenge_bond,
+        min_attestations: 0,
+        minimum_confirmations: 0,
+        activation_height,
+        expires_at_height,
+    };
+    profile.validate().map_err(anyhow::Error::msg)?;
+    if profile.source_chain_id == ARBITRUM_SEPOLIA_REJECTED_CHAIN_ID {
+        bail!("Arbitrum Sepolia chain id is outside Lane C scope");
+    }
+    let profile_hash = profile.profile_hash().map_err(anyhow::Error::msg)?;
+    let document = json!({
+        "route_profile": profile,
+        "route_profile_hash": profile_hash,
+        "route_binding": postfiat_types::vault_bridge_route_binding(&profile_hash, route_epoch)
+            .map_err(anyhow::Error::msg)?,
+    });
+    let bytes = serde_json::to_vec_pretty(&document)?;
+    if let Some(path) = output {
+        write_atomic(&path, &bytes)?;
+    }
+    println!("{}", String::from_utf8(bytes)?);
+    Ok(())
+}
+
 async fn cross_vkey_audit(proof_path: &Path, foreign_elf_path: &Path, output: &Path) -> Result<()> {
     let proof: SP1ProofWithPublicValues = bincode::deserialize(&fs::read(proof_path)?)?;
     let foreign_elf = fs::read(foreign_elf_path)?;
@@ -927,5 +1115,59 @@ mod tests {
         write_atomic(&audit, b"not-json").expect("write corrupt audit");
         assert!(validate_audit(&audit).is_err());
         fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    fn valid_route_profile_args() -> (String, String, String, String, String, String) {
+        (
+            "02".repeat(48),
+            "aa".repeat(20),
+            "bb".repeat(32),
+            "cc".repeat(32),
+            format!("0x{}", "dd".repeat(32)),
+            "ee".repeat(32),
+        )
+    }
+
+    #[test]
+    fn route_profile_rejects_arbitrum_markers() {
+        let (asset_id, vault, vault_hash, token_hash, vkey, policy) = valid_route_profile_args();
+        let base = |asset: String, pol: String| {
+            route_profile(
+                asset,
+                vault.clone(),
+                vault_hash.clone(),
+                token_hash.clone(),
+                vkey.clone(),
+                pol,
+                1,
+                900,
+                64,
+                128,
+                256,
+                1,
+                4096,
+                4096,
+                10,
+                20,
+                None,
+            )
+        };
+        if let Err(error) = base(asset_id.clone(), policy.clone()) {
+            panic!("valid route profile rejected: {error}");
+        }
+        assert!(base(format!("{asset_id}-arbitrum"), policy.clone()).is_err());
+        assert!(base(asset_id.clone(), format!("{policy}-Arbitrum")).is_err());
+        assert!(reject_arbitrum_scope("route_id", "arbitrum-sepolia-usdc-v1").is_err());
+        assert!(reject_arbitrum_scope("route_id", ROUTE_ID).is_ok());
+    }
+
+    #[test]
+    fn route_profile_rejects_bad_activation_window() {
+        let (asset_id, vault, vault_hash, token_hash, vkey, policy) = valid_route_profile_args();
+        assert!(route_profile(
+            asset_id, vault, vault_hash, token_hash, vkey, policy, 1, 900, 64, 128, 256, 1, 4096,
+            4096, 20, 20, None,
+        )
+        .is_err());
     }
 }

@@ -1,0 +1,36 @@
+{
+ "schema": "postfiat.pfusdc.mainnet_funding_reconciliation.v1",
+ "utc": "2026-07-26T03:33Z",
+ "deposit_atoms": 100000000,
+ "balance_atoms": 3461712789,
+ "balance_usdc": 3461.712789,
+ "remaining_after_deposit_atoms": 3361712789,
+ "classification": "stale rounded snapshot \u2014 the >=3,462.49 figure predates an authorized 1,000,000-atom (1.00 USDC) outbound transfer from the deployer at block 25598898 (2026-07-24T00:05:47Z, tx 0x4dbbd1df4007b2fab591eba9b3c4c9a82c72df9c57131f4d643ae826e416fe51, status 1) to 0xc4922d64a24675e16e1586e3e3aa56c06fabe907. That single known movement fully explains the 777,211-atom delta (3,462.49 rounded snapshot \u2212 1.00 USDC transfer \u2248 3,461.49; exact current 3,461.712789 consistent with the unrounded snapshot 3,462.712789). NO unexplained post-dispatch transfer exists in the last 50,000 blocks; it is the ONLY mainnet-USDC transfer involving the deployer in that window.",
+ "last_inbound_transfer": "none in last 50,000 blocks",
+ "last_outbound_transfer": {
+  "block": 25598898,
+  "tx": "0x4dbbd1df4007b2fab591eba9b3c4c9a82c72df9c57131f4d643ae826e416fe51",
+  "atoms": 1000000,
+  "to": "0xc4922d64a24675e16e1586e3e3aa56c06fabe907",
+  "status": 1,
+  "ts_utc": "2026-07-24T00:05:47Z"
+ },
+ "unexpected_post_dispatch_transfer": false,
+ "funding_gate_correction": "operative gate is balance >= exact 100,000,000-atom deposit (gas is paid in ETH, not USDC); 3,462.49 was a stale rounded snapshot, not an acceptance minimum",
+ "fees": {
+  "block": 25614283,
+  "base_fee_wei": 52168187,
+  "base_fee_gwei": 0.052168187,
+  "priority_wei": 100000,
+  "gas_price_wei": 52268187,
+  "gas_price_gwei": 0.052268187,
+  "chosen_max_fee_gwei": 0.304336374
+ },
+ "eth_usd": 1874.5,
+ "projected_gas_units": 4244392,
+ "projected_gas_usd_current": 0.42,
+ "projected_gas_usd_max": 2.42,
+ "budget_stop_usd": 130,
+ "budget_ceiling_usd": 150,
+ "verdict": "PASS \u2014 funds cover exact deposit; gas projection far below stop; no STOP finding"
+}

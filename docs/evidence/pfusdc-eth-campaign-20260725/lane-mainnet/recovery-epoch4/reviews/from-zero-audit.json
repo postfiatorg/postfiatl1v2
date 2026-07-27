@@ -1,0 +1,39 @@
+{
+  "checks": {
+    "artifact_and_bytecode_hashes": "PASS",
+    "contract_guest_storage": "PASS",
+    "create_nonce_address_derivation": "PASS",
+    "deploy_consumer_ast": "PASS",
+    "initial_checkpoint_h316": "PASS",
+    "live_mainnet_nonce_157_no_pending": "PASS",
+    "pftl_payloads_c8_key_free": "PASS",
+    "predicted_addresses_empty": "PASS",
+    "profile_policy_binding_commitment": "PASS",
+    "scope_chain_revision": "PASS",
+    "vault_runtime_with_immutables": "PASS",
+    "verifier_runtime_with_immutables": "PASS"
+  },
+  "manifest_path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/pfusdc-eth-mainnet-20260726-epoch4/manifest.mainnet-epoch4.json",
+  "manifest_sha256": "d3fad46f9c8ee5fa2c064e3a35ed8dd0b5b1f9909f9e3f155bf804ede2330d8e",
+  "planned_deployments": {
+    "vault": {
+      "address": "0x8583409ddbac984ec195dfa06a21103d92403c1e",
+      "nonce": 158
+    },
+    "verifier": {
+      "address": "0xa77d5af456ef212303e31727b6ca4888cd771e2c",
+      "nonce": 157
+    }
+  },
+  "recomputed": {
+    "checkpoint_commitment": "0xc13413daa58b7beaecc2eabf873f4b507e81e457a58c37a77170cccb59cdceff",
+    "profile_hash": "928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81",
+    "route_binding": "f062a7b19a33ab9674457b0fd7b8c98a42f43c240806e3a25ef035da3fa643f3",
+    "route_commitment": "0xb41465ac4cd30bbe132a66c1953815940f720796574edf7c8107a4ae3306c743",
+    "route_policy": "03580838ff28bb30ab62ffbe7a4b774afcf6a6a166c737e77cd37f593ac0ef7d",
+    "vault_runtime": "0xc6dbb722c23bfc841624bb909fcb54d84a65a2ea6ece96e2a28bf61d5dea6d05",
+    "verifier_runtime": "0x76cdda8bd779e35010b9cb666061d0e3759392476687d87d785662d398708c4a"
+  },
+  "schema": "postfiat.pfusdc.mainnet_epoch4_from_zero_audit.v1",
+  "status": "PASS"
+}

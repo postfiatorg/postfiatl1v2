@@ -1,0 +1,43 @@
+{
+  "c8": "15/15",
+  "contains_key_material": false,
+  "h317": {
+    "height": 317,
+    "operation_count": 2,
+    "order": [
+      "nav_profile_register",
+      "nav_asset_bind"
+    ],
+    "payload": "h317-bind-ops.public.json",
+    "sha256": "d268f76d899dcfab7430a0dc37bca347fa30d29cd7820f936592f3be866a16a0"
+  },
+  "h318": {
+    "activation_height": 318,
+    "height": 318,
+    "operation_count": 1,
+    "payload": "h318-register-ops.public.json",
+    "route_epoch": 4,
+    "route_id": "ethereum-mainnet-usdc-v1",
+    "sha256": "f79421f4d68f46943fc448480b8e8d6130d7a6034925909dfe61debd3084ed8c"
+  },
+  "schema": "postfiat.pfusdc.epoch4_public_payload_summary.v1",
+  "source_provenance": {
+    "c8": {
+      "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/package/consumer-c8-simulation.log",
+      "sha256": "a09536aa84ecf3425c650f383a2c057f8a389ccb1f9734f4e6fd3528f8ef0616"
+    },
+    "nav_bind": {
+      "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/package/planned-nav-bind.mainnet-epoch4.json",
+      "sha256": "221d12b6c740bda3c8028b28180428ed582a855b15d7f791e8e84255b0cd4e7b"
+    },
+    "nav_profile": {
+      "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/package/planned-nav-profile.mainnet-epoch4.json",
+      "sha256": "5535f602ec48722a7748ab2fd78d0251863cee5c8e41d2d665369ecc5f0e05e8"
+    },
+    "route_registration": {
+      "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/package/route-registration.mainnet-epoch4.json",
+      "sha256": "501961bde679ea78b0e538b452d406b8334c8ee84b5b6e6b341b51334f420f1f"
+    }
+  },
+  "verdict": "PASS"
+}

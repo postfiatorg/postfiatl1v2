@@ -1,0 +1,2 @@
+b4e487042abeee91e0ea4c7526db5d4c93a95649a50ea1430a3a7c16597cebfa  programs/pfusdc-eth-ingress/elf/pfusdc-eth-ingress-program
+0e59a0cf7723b9028aaa4c57f9e9c0da72119a552d62a5577223ba7b2df222d3  programs/pfusdc-eth-mainnet-ingress/elf/pfusdc-eth-mainnet-ingress-program

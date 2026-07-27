@@ -658,12 +658,28 @@ pub fn vault_bridge_deposit_plan(
             || public_values.nonce != evidence.nonce
             || public_values.route_binding != evidence.route_binding
             || public_values.deposit_id != evidence.deposit_id
-            || public_values.finalized_execution_block_hash != evidence.block_hash
-            || public_values.evidence_root != evidence_root
         {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "Ethereum-finality public values do not match the canonical vault deposit receipt",
+            ));
+        }
+        // The Ethereum-finality guest authenticates the deposit's permanent
+        // storage record under a later finalized execution-state root. Its
+        // evidence coordinate is therefore that finalized block, not the
+        // original receipt block. The guest's storage-native evidence has no
+        // receipt-log position and canonically commits log index zero.
+        evidence.block_hash = public_values.finalized_execution_block_hash.clone();
+        evidence.log_index = 0;
+        evidence
+            .validate()
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+        evidence_root = vault_bridge_deposit_evidence_root(&evidence)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        if public_values.evidence_root != evidence_root {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Ethereum-finality public values commit a different vault deposit evidence root",
             ));
         }
         (computed_proof_hash, computed_public_values_hash)

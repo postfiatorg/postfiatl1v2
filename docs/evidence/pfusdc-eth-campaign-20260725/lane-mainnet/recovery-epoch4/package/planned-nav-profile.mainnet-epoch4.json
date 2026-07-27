@@ -1,0 +1,24 @@
+{
+  "nav_proof_profile": {
+    "bridge_observer_min_confirmations": 0,
+    "challenge_window_blocks": 64,
+    "max_epoch_gap_blocks": 128,
+    "max_proof_bytes": 4096,
+    "max_public_values_bytes": 4096,
+    "max_snapshot_age_blocks": 900,
+    "min_attestations": 0,
+    "min_challenge_bond": 1,
+    "schema": "postfiat.nav_proof_profile.v1",
+    "settle_deadline_blocks": 256,
+    "source_class": "vault_bridge:erc20_bridge_vault:1:0x8583409ddbac984ec195dfa06a21103d92403c1e:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+    "sp1_program_vkey": "0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e",
+    "sp1_proof_encoding": "groth16",
+    "tolerance_bp": 10,
+    "valuation_policy_hash": "03580838ff28bb30ab62ffbe7a4b774afcf6a6a166c737e77cd37f593ac0ef7d",
+    "vault_bridge_route_policy_hash": "928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81",
+    "verifier_kind": "sp1-groth16"
+  },
+  "revision": "mainnet-epoch4",
+  "schema": "postfiat.pfusdc.planned_nav_profile.v1",
+  "stage": "H315-bind"
+}

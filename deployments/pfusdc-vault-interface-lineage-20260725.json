@@ -1,0 +1,22 @@
+{
+  "schema": "postfiat.pfusdc.vault_interface_lineage.v1",
+  "version": 1,
+  "entries": [
+    {
+      "runtime_code_hash": "0x12b566433c726126ba812e5f21510420d6374b137181523e4030028012816fe2",
+      "abi_class": "camel_case_v2",
+      "source_manifest_path": "docs/evidence/pfusdc-fast-ingress-20260719/deployment-manifest.json",
+      "source_manifest_sha256": "7f8f798746c786dc5b0f5ac9ce396b3374df4a4ef3bbf1cf761183e0fc38aa8e",
+      "deployment_revision_label": "pfusdc-tier4-arbitrum-one-v2",
+      "verification_status": "live_verified"
+    },
+    {
+      "runtime_code_hash": "0x4229aaa000168f82d842313d81d867f0350a2c05e5d49eaa9654da84039e8727",
+      "abi_class": "camel_case_v2",
+      "source_manifest_path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-c/rev6-execution/01-sepolia-deploy/manifest.pre-broadcast.sha256-6686ae9f67dcdc79c5e5a504015e92c8a68743a81bfbf341e79f25125b3e0243.json",
+      "source_manifest_sha256": "6686ae9f67dcdc79c5e5a504015e92c8a68743a81bfbf341e79f25125b3e0243",
+      "deployment_revision_label": "rev6-generated-nonce67-68",
+      "verification_status": "live_verified"
+    }
+  ]
+}

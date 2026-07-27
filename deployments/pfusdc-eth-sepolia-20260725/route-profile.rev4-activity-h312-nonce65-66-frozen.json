@@ -1,0 +1,32 @@
+{
+  "schema": "postfiat.vault_bridge.route_profile_document.v1",
+  "route_profile": {
+    "activation_height": 314,
+    "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+    "challenge_window_blocks": 64,
+    "evidence_tier": "receipt-proven",
+    "expires_at_height": 1000000,
+    "max_epoch_gap_blocks": 128,
+    "max_proof_bytes": 4096,
+    "max_public_values_bytes": 4096,
+    "max_snapshot_age_blocks": 900,
+    "min_attestations": 0,
+    "min_challenge_bond": 1,
+    "minimum_confirmations": 0,
+    "route_epoch": 2,
+    "route_id": "ethereum-sepolia-usdc-v1",
+    "schema": "postfiat.vault_bridge.route_profile.v1",
+    "settle_deadline_blocks": 256,
+    "source_chain_id": 11155111,
+    "token_address": "0x1c7d4b196cb0c7b01d743fbc6116a902379c7238",
+    "token_runtime_code_hash": "0xcd3f29e2ea9c61dadd48bfeaf8b2884b6de9dfee7bf45329452c4c33d0868ceb",
+    "vault_address": "0x48317aa089a674506e92cc64734b721175dfef79",
+    "vault_runtime_code_hash": "0x4229aaa000168f82d842313d81d867f0350a2c05e5d49eaa9654da84039e8727",
+    "verifier_kind": "sp1-groth16",
+    "verifier_policy_hash": "e69c25308a314240e99cad5fcf2ce402c365b7d182f5d60c8cc12d0ac9ba27fb",
+    "verifier_program_vkey": "0x003ff49296c108d2173f71a8a0d217d8a09b333c04876a6e0758d412d54dce4c",
+    "verifier_proof_encoding": "groth16"
+  },
+  "route_profile_hash": "81596feb0992ab86caf77fbe8cc911d24ab9c190012144a2a0b88cd70bce8815152ba341cac0d49869268901bb035bb4",
+  "route_binding": "ca1142a9eaaa4d73220d77c469d7ef4c3dd80b70aae59002f45f822e7faa8253"
+}

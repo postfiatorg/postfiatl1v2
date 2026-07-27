@@ -1,0 +1,7 @@
+{
+  "elapsed_ms": 4575,
+  "instruction_count": 155942743,
+  "public_values_bytes": 586,
+  "schema": "postfiat.pfusdc.checkpoint_execute_report.v1",
+  "witness": "/home/postfiat/tmp/pfusdc-orchard-handoff.eBYeZF/checkpoint-h316-h325.json"
+}

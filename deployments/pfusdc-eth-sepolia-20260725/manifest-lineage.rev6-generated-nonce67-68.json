@@ -1,0 +1,104 @@
+{
+  "current_revision": {
+    "activation_height": 314,
+    "manifest": {
+      "path": "deployments/pfusdc-eth-sepolia-20260725/manifest.rev6-generated-nonce67-68.json",
+      "sha256": "6686ae9f67dcdc79c5e5a504015e92c8a68743a81bfbf341e79f25125b3e0243"
+    },
+    "revision": "rev6-generated-nonce67-68",
+    "route_binding": "4b3a1d4fa97fc14302fae5a33ffd68c2838f50a7545136e665ee9e1e6e0a0ab1",
+    "route_epoch": 2,
+    "route_profile": {
+      "path": "deployments/pfusdc-eth-sepolia-20260725/route-profile.rev6-generated-nonce67-68.json",
+      "sha256": "c7d6ca1d01b47f037db4ff5bc4f8dbb8176fc769ecf876cb2a11e9330c2a7a39"
+    },
+    "route_profile_hash": "9a608601ded54a4892b28184a4505ac5fe6c94c926966115a893fb5ad360283c805b49572f382fcfaac83ced17e05001",
+    "route_profile_hash_commitment": "0x14fc232975fb738f45e2b377921bf8424d8e6ec8ebada478e051779444a7cd57",
+    "schedule": {
+      "bind_height": 313,
+      "claim_height": 315,
+      "note": "PFTL remains at H312; schedule unchanged and still admissible",
+      "registration_activation_height": 314
+    },
+    "status": "generated-not-deployed"
+  },
+  "history": [
+    {
+      "reason": "runtime-hash rebinding; vault has no verifier setter; never registered",
+      "revision": "rev1-nonce61-62-invalid",
+      "status": "preserved-unregistered-invalid"
+    },
+    {
+      "reason": "superseded before registration by the epoch-1 H312 attempt",
+      "revision": "rev2-nonce63-64-frozen",
+      "status": "preserved-unregistered"
+    },
+    {
+      "activation_height": 312,
+      "binding": "3d8618e65c5e95d0badf2870d10eb8c5a1fec96e53e22eb925b41898f516aaf1",
+      "commitment": "0xa1cf3d3a427498e60ad2e9ae7b011cd9c28e4d469c75e01de63aa4c80442ac3d",
+      "nonce_63_verifier": "0x16603cfb9df15e56d35ed8301174c6aab0e5c80d",
+      "nonce_64_vault": "0x9321beac017993ac8f7f1ba4f28ce90690ac7b0f",
+      "policy_hash": "f3ad67ac43abb7216aed7518709c269eb49cb23251075e0b12843b5c16728caf",
+      "profile_hash": "6b2003fb81e44b43348dec3b88eef23df642e29232ba264f50c1dcb83af5da2b51400a30b7e418c9502dd1c43229858f",
+      "reason": "epoch-1 H312 registration was rejected by monotonic route admission; never registered",
+      "revision": "rev3-activity-h310-nonce63-64-frozen",
+      "status": "superseded-unregistered"
+    },
+    {
+      "reason": "contradictory hand-assembled package superseded by deterministic generated revision",
+      "revision": "rev4-activity-h312-nonce65-66-frozen",
+      "status": "superseded-unregistered"
+    },
+    {
+      "addresses": {
+        "nonce_65_verifier": "0xbaa4533a43ff9a12cf0fa2fecc074b88b6077a34",
+        "nonce_66_vault": "0x48317aa089a674506e92cc64734b721175dfef79"
+      },
+      "audited_manifest": {
+        "path": "deployments/pfusdc-eth-sepolia-20260725/manifest.rev5-generated-nonce65-66.json",
+        "sha256": "61f309924c2b5894a519e1f1849033bd5c31252d15f3068937741cd5c34430f5"
+      },
+      "readback": [
+        {
+          "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-c/rev5-execution/02-readback/full-immutable-readback-raw.json",
+          "sha256": "e82e100a730c739d03d0242b89534f6a69e543cd1078fafff901cef11f90e0ab"
+        },
+        {
+          "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-c/rev5-execution/02-readback/getcode-vault-raw.json",
+          "sha256": "73146da8b285b82e20097fb814830398a70cf992d1ef717269f4fef5c93c7686"
+        },
+        {
+          "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-c/rev5-execution/02-readback/getcode-verifier-raw.json",
+          "sha256": "774b7a289efc0718e9df015bd6dfc1dafe3d2dc20d79104c985c7dfe9485c484"
+        },
+        {
+          "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-c/rev5-execution/02-readback/verifier-commitment-raw.json",
+          "sha256": "9124ee4b4ed0c0bc8136afecd7b1c82dce87b7fda9069873b05848e1357c8581"
+        },
+        {
+          "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-c/rev5-execution/02-readback/vault-finality-verifier-raw.json",
+          "sha256": "22d5ba93eb3933725c8fc5d51646d5ad060ed61d4c6d37390d17b6cd24375445"
+        }
+      ],
+      "reason": "WrongBinding: verifier immutable vaultRuntimeCodeHash used the unlinked artifact hash",
+      "receipts": [
+        {
+          "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-c/rev5-execution/02-readback/receipt-b9a7c0ae2dc05eb2c7f6998d5fd6fa8332af9fd83b725447e4c566c52e9f702f.json",
+          "sha256": "cf10bd8d29cf8c733f6d4063067f1275623ce20df210f33bc05e037ca7db38a7"
+        },
+        {
+          "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-c/rev5-execution/02-readback/receipt-ca5010d907b6111fb0649fe0c1d2235f4e2fbd0d371162bfc31e598acd07956c.json",
+          "sha256": "5f160f05d24bc26a51b773d469ad8dae6d170f087dcf3480348a9d1e061ae65e"
+        }
+      ],
+      "revision": "rev5-generated-nonce65-66",
+      "status": "deployed-unregistered-invalid",
+      "working_manifest": {
+        "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-c/rev5-execution/01-sepolia-deploy/manifest.deploy-working.json",
+        "sha256": "aa69331fc47bccc245749d982df0d8389f22f66fb8678fb3a806f36a505e50f2"
+      }
+    }
+  ],
+  "schema": "postfiat.pfusdc.eth_sepolia_manifest_lineage.v2"
+}

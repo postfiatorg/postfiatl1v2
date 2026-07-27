@@ -98,11 +98,15 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             let source_rpc_url =
                 flag_value(flags, "--source-rpc-url").ok_or("missing --source-rpc-url")?;
             let cast_binary = flag_value(flags, "--cast-bin").unwrap_or("cast");
+            let vault_interface_lineage_manifest =
+                flag_value(flags, "--vault-interface-lineage-manifest")
+                    .ok_or("missing --vault-interface-lineage-manifest")?;
             let report = vault_bridge_conservation_audit(VaultBridgeConservationOptions {
                 data_dir: PathBuf::from(data_dir),
                 asset_id: asset_id.to_string(),
                 source_rpc_url: source_rpc_url.to_string(),
                 cast_binary: PathBuf::from(cast_binary),
+                vault_interface_lineage_manifest: PathBuf::from(vault_interface_lineage_manifest),
             })
             .map_err(|error| format!("vault-bridge-conservation-audit failed: {error}"))?;
             let json = serde_json::to_string_pretty(&report).map_err(|error| {

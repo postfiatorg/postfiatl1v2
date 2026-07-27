@@ -1,0 +1,52 @@
+{
+  "current_revision": {
+    "activation_height": 316,
+    "manifest": {
+      "path": "deployments/pfusdc-eth-mainnet-20260726/manifest.mainnet-epoch3.json",
+      "sha256": "bf769e122a66274facd39023b3939e963cba4518044b22e4537bc351479471c2"
+    },
+    "revision": "mainnet-epoch3",
+    "route_binding": "206b718f29bb42a6d7b39cea3b0da45805aa0b8b069304de135a1ea69b553f54",
+    "route_epoch": 3,
+    "route_profile": {
+      "path": "deployments/pfusdc-eth-mainnet-20260726/route-profile.mainnet-epoch3.json",
+      "sha256": "8a5362de7cf744012e84c6ed9b91a0be08172f7360e37fe7ca67c8460b0ef9fd"
+    },
+    "route_profile_hash": "1893c6d363122314268131211a96866aaf4c0af5a89f7a8b08a6b323811dc9d50073ff5e956bc7f5421cfe1fca205016",
+    "route_profile_hash_commitment": "0x718cb24da2699d04aaa642a03573e7eb1b459652652975244ea7422f8276ae2b",
+    "schedule": {
+      "bind_height": 315,
+      "registration_activation_height": 316
+    },
+    "status": "generated-not-deployed"
+  },
+  "history": [
+    {
+      "egress_status": "pinned_resolvable",
+      "ingress_status": "superseded",
+      "route_epoch": 2,
+      "route_id": "ethereum-sepolia-usdc-v1",
+      "source": {
+        "path": "deployments/pfusdc-eth-sepolia-20260725/manifest-lineage.rev6-generated-nonce67-68.json",
+        "sha256": "a2b3313e13c0051a254bad56e5268c90b71093635a683b51a8d8e82bd692c03a"
+      },
+      "status": "superseded_ingress_pinned_egress_resolvable"
+    },
+    {
+      "egress_status": "pinned_resolvable",
+      "ingress_status": "superseded",
+      "route_epoch": 1,
+      "route_id": "pfusdc-tier4-arbitrum-one-v1",
+      "source": {
+        "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-b/conservation-current/scratch/run-5ed3c8d275504797a16c4130844c504d/snapshot/governance.json",
+        "sha256": "a8a8e668e784abfdc9ef9fa3faddcea3f9ab2bbc56078868848e6e64e134f5d4"
+      },
+      "status": "superseded_ingress_pinned_egress_resolvable"
+    }
+  ],
+  "preserved_egress_lineage": {
+    "description": "Frozen PFTL egress lineage remains available for proof-native exits; it is not an active ingress route.",
+    "sepolia_epoch2_lineage_path": "deployments/pfusdc-eth-sepolia-20260725/manifest-lineage.rev6-generated-nonce67-68.json"
+  },
+  "schema": "postfiat.pfusdc.eth_mainnet_manifest_lineage.v1"
+}

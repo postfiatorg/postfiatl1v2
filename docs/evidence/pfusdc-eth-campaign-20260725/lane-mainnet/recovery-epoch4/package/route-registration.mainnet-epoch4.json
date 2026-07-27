@@ -1,0 +1,11 @@
+{
+  "activation_height": 318,
+  "height": 318,
+  "route_binding": "f062a7b19a33ab9674457b0fd7b8c98a42f43c240806e3a25ef035da3fa643f3",
+  "route_epoch": 4,
+  "route_id": "ethereum-mainnet-usdc-v1",
+  "route_profile_file": "deployments/pfusdc-eth-mainnet-20260726-epoch4/route-profile.mainnet-epoch4.json",
+  "route_profile_hash": "928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81",
+  "route_profile_hash_commitment": "0xb41465ac4cd30bbe132a66c1953815940f720796574edf7c8107a4ae3306c743",
+  "schema": "postfiat.vault_bridge.route_registration_payload.v1"
+}

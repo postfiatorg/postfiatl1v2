@@ -1,0 +1,57 @@
+{
+  "contract_guest_storage_cross_check": {
+    "contract_source_sha256": "0ccced8deed6a10d1ec631c7b78cfa14dcf5b5490cf50a9ca4bfcd1cdc6aa08a",
+    "guest_source_sha256": "2a4973e8d602c3b6a724913c191c1de7425e1566cd63df6155b3e0a77986d16a",
+    "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/contract-guest-storage-cross-check.json",
+    "sha256": "cdf363de3b0b8337b6e1b885e9ea69f904ec1eea2aee719b1cad6e56d7dedca1"
+  },
+  "hashes": {
+    "binding": "f062a7b19a33ab9674457b0fd7b8c98a42f43c240806e3a25ef035da3fa643f3",
+    "commitment": "0xb41465ac4cd30bbe132a66c1953815940f720796574edf7c8107a4ae3306c743",
+    "policy": "03580838ff28bb30ab62ffbe7a4b774afcf6a6a166c737e77cd37f593ac0ef7d",
+    "profile": "928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81",
+    "vault_runtime": "0xc6dbb722c23bfc841624bb909fcb54d84a65a2ea6ece96e2a28bf61d5dea6d05",
+    "verifier_runtime": "0x76cdda8bd779e35010b9cb666061d0e3759392476687d87d785662d398708c4a"
+  },
+  "input_tuple_sha256": "83e38ed66d31e6e5a608d0ec9a2860962fc0712beb4c2b13310085004a05475b",
+  "outputs": {
+    "bind": {
+      "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/package/planned-nav-bind.mainnet-epoch4.json",
+      "sha256": "221d12b6c740bda3c8028b28180428ed582a855b15d7f791e8e84255b0cd4e7b"
+    },
+    "consumer": {
+      "path": "deployments/pfusdc-eth-mainnet-20260726-epoch4/deploy-consumer.mainnet-epoch4.json",
+      "sha256": "fbf0e9721f8a7abbc4f602e8eb850a39e680b6894580a2f333b4d94fc2846e33"
+    },
+    "lineage": {
+      "path": "deployments/pfusdc-eth-mainnet-20260726-epoch4/manifest-lineage.mainnet-epoch4.json",
+      "sha256": "5d391713e4a37ffa642435cb2d6b751c05bd2fd7bbecc15ca0a63c2ac64eb803"
+    },
+    "manifest": {
+      "path": "deployments/pfusdc-eth-mainnet-20260726-epoch4/manifest.mainnet-epoch4.json",
+      "sha256": "d3fad46f9c8ee5fa2c064e3a35ed8dd0b5b1f9909f9e3f155bf804ede2330d8e"
+    },
+    "nav": {
+      "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/package/planned-nav-profile.mainnet-epoch4.json",
+      "sha256": "5535f602ec48722a7748ab2fd78d0251863cee5c8e41d2d665369ecc5f0e05e8"
+    },
+    "registration": {
+      "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/package/route-registration.mainnet-epoch4.json",
+      "sha256": "501961bde679ea78b0e538b452d406b8334c8ee84b5b6e6b341b51334f420f1f"
+    },
+    "route": {
+      "path": "deployments/pfusdc-eth-mainnet-20260726-epoch4/route-profile.mainnet-epoch4.json",
+      "sha256": "0148b6858b086662b90097e2f5fa754b7bd36082a6b7fc6fdd86776b352ccae0"
+    }
+  },
+  "plan": {
+    "bind_height": 317,
+    "registration_activation_height": 318
+  },
+  "predicted_addresses": {
+    "vault": "0x8583409ddbac984ec195dfa06a21103d92403c1e",
+    "verifier": "0xa77d5af456ef212303e31727b6ca4888cd771e2c"
+  },
+  "schema": "postfiat.pfusdc.mainnet_epoch4_package_summary.v1",
+  "zero_deviation": true
+}

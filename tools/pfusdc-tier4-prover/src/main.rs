@@ -5,9 +5,8 @@ use clap::{Parser, Subcommand};
 use pfusdc_ingress_program::bonded::{
     bonded_ingress_policy_hash_v1, verify_bonded_age_release_witness_v1,
     verify_bonded_confirmation_witness_v1, verify_bonded_ingress_witness_v1,
-    PfUsdcBondedAgeReleaseWitnessV1, PfUsdcBondedConfirmationWitnessV1,
-    PfUsdcBondedGuestInputV1, PfUsdcBondedIngressPolicyV1, PfUsdcBondedIngressWitnessV1,
-    PfUsdcBondedReversionWitnessV1,
+    PfUsdcBondedAgeReleaseWitnessV1, PfUsdcBondedConfirmationWitnessV1, PfUsdcBondedGuestInputV1,
+    PfUsdcBondedIngressPolicyV1, PfUsdcBondedIngressWitnessV1, PfUsdcBondedReversionWitnessV1,
 };
 use pfusdc_ingress_program::{verify_ingress_witness_v2, PfUsdcIngressProofWitnessV2};
 use postfiat_pfusdc_proofs::{verify_checkpoint_witness_v1, verify_egress_witness_v1};
@@ -141,7 +140,7 @@ enum Command {
         #[arg(long)]
         prove: bool,
     },
-    /// Execute or Plonk-prove a canonical PFTL egress witness.
+    /// Execute or Groth16-prove a canonical PFTL egress witness.
     Egress {
         #[arg(long)]
         witness: PathBuf,
@@ -764,7 +763,7 @@ async fn prove_bonded_reversion(
 async fn prove_egress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) -> Result<()> {
     #[cfg(debug_assertions)]
     if prove {
-        anyhow::bail!("Plonk proving requires a --release build");
+        anyhow::bail!("Groth16 proving requires a --release build");
     }
     let witness_bytes = fs::read(&witness_path)
         .with_context(|| format!("read egress witness {}", witness_path.display()))?;
@@ -842,11 +841,11 @@ async fn prove_egress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) -
     if prove {
         let setup_started = Instant::now();
         let pk = client.setup(EGRESS_ELF).await?;
-        let proof = client.prove(&pk, stdin).plonk().await?;
+        let proof = client.prove(&pk, stdin).groth16().await?;
         client.verify(&proof, pk.verifying_key(), None)?;
         anyhow::ensure!(
             proof.public_values.to_vec() == expected_public_values,
-            "verified Plonk proof contains unexpected public values"
+            "verified Groth16 proof contains unexpected public values"
         );
         fs::write(output_dir.join("proof.bin"), bincode::serialize(&proof)?)?;
         fs::write(output_dir.join("proof-calldata.bin"), proof.bytes())?;
@@ -855,14 +854,14 @@ async fn prove_egress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) -
             serde_json::to_vec_pretty(&serde_json::json!({
                 "schema": "postfiat.pfusdc.egress_proof_report.v1",
                 "program_vkey": pk.verifying_key().bytes32(),
-                "proof_mode": "plonk",
+                "proof_mode": "groth16",
                 "setup_and_prove_ms": setup_started.elapsed().as_millis(),
                 "proof_bytes": proof.bytes().len(),
                 "public_values_bytes": proof.public_values.to_vec().len(),
             }))?,
         )?;
         println!(
-            "verified Plonk proof; vkey {}",
+            "verified Groth16 proof; vkey {}",
             pk.verifying_key().bytes32()
         );
     }

@@ -1,0 +1,69 @@
+[
+  {
+    "case": "non_finalized_or_orphaned_block",
+    "rejected": true
+  },
+  {
+    "case": "wrong_chain_id",
+    "rejected": true
+  },
+  {
+    "case": "wrong_vault",
+    "rejected": true
+  },
+  {
+    "case": "wrong_token",
+    "rejected": true
+  },
+  {
+    "case": "changed_code_hash",
+    "rejected": true
+  },
+  {
+    "case": "forged_log_without_state",
+    "rejected": true
+  },
+  {
+    "case": "wrong_state_root",
+    "rejected": true
+  },
+  {
+    "case": "wrong_state_slot",
+    "rejected": true
+  },
+  {
+    "case": "mutated_amount",
+    "rejected": true
+  },
+  {
+    "case": "mutated_recipient",
+    "rejected": true
+  },
+  {
+    "case": "mutated_depositor",
+    "rejected": true
+  },
+  {
+    "case": "mutated_nonce",
+    "rejected": true
+  },
+  {
+    "case": "mutated_route",
+    "rejected": true
+  },
+  {
+    "case": "duplicate_deposit_id",
+    "layer": "idempotent admission replay guard",
+    "rejected": true
+  },
+  {
+    "case": "duplicate_evidence_root",
+    "layer": "idempotent admission replay guard",
+    "rejected": true
+  },
+  {
+    "case": "duplicate_nullifier",
+    "layer": "idempotent admission replay guard",
+    "rejected": true
+  }
+]

@@ -1,0 +1,57 @@
+{
+  "contract_source": "crates/ethereum-contracts/src/ERC20BridgeVaultL1.sol",
+  "contract_source_sha256": "0ccced8deed6a10d1ec631c7b78cfa14dcf5b5490cf50a9ca4bfcd1cdc6aa08a",
+  "decode_simulation": "PASS",
+  "guest_source": "programs/pfusdc-eth-mainnet-ingress/src/lib.rs",
+  "guest_source_sha256": "2a4973e8d602c3b6a724913c191c1de7425e1566cd63df6155b3e0a77986d16a",
+  "layout": {
+    "deposit_mapping": {
+      "key": "bytes32",
+      "slot": "1"
+    },
+    "deposit_record_bytes": 128,
+    "deposit_record_members": [
+      [
+        "depositor",
+        "0",
+        0,
+        "address",
+        "20"
+      ],
+      [
+        "amount",
+        "0",
+        20,
+        "uint96",
+        "12"
+      ],
+      [
+        "recipientHash",
+        "1",
+        0,
+        "bytes32",
+        "32"
+      ],
+      [
+        "routeBinding",
+        "2",
+        0,
+        "bytes32",
+        "32"
+      ],
+      [
+        "nonce",
+        "3",
+        0,
+        "bytes32",
+        "32"
+      ]
+    ],
+    "obligations": {
+      "slot": "0",
+      "type": "uint256"
+    }
+  },
+  "schema": "postfiat.pfusdc.contract_guest_storage_cross_check.v1",
+  "status": "PASS"
+}
