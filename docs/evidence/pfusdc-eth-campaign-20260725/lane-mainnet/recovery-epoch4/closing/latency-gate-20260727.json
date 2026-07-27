@@ -1,0 +1,14 @@
+{
+  "conservation_acceptance": "PASS",
+  "deposit_timestamp": 1785102719,
+  "elapsed_seconds": 9948,
+  "end_event": "ethereum_withdrawal_inclusion",
+  "functional_acceptance": "PASS",
+  "gate": "full_roundtrip_latency",
+  "maximum_seconds": 1500,
+  "replay_acceptance": "PASS",
+  "schema": "postfiat.pfusdc.ethereum_mainnet_latency_gate.v1",
+  "start_event": "ethereum_deposit_inclusion",
+  "verdict": "FAIL",
+  "withdrawal_timestamp": 1785112667
+}

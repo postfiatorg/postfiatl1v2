@@ -1,0 +1,9 @@
+{
+  "checkpoint_lag_blocks": 0,
+  "ethereum_verifier_height": 330,
+  "gate": "predeposit_checkpoint_freshness",
+  "maximum_checkpoint_lag_blocks": 1,
+  "pftl_tip_height": 330,
+  "schema": "postfiat.pfusdc.ethereum_mainnet_latency_gate.v1",
+  "verdict": "PASS"
+}

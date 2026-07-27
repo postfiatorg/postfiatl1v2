@@ -1,0 +1,87 @@
+{
+  "agent_close_session": {
+    "ok": true
+  },
+  "agent_open_session": {
+    "ok": true
+  },
+  "amount_atoms": 1000000,
+  "approve": {
+    "block_number": 25624342,
+    "effective_gas_price_wei": 133671395,
+    "gas_used": 55558,
+    "response": {
+      "charged_usd": 11.0,
+      "gas_used": 55558,
+      "ok": true,
+      "tx": "86b2748e17da2602b01629e73ba8d7587dc762e88b8ec084cee2a6a0e6dcf0e4",
+      "value_wei": 0
+    },
+    "tx_hash": "0x86b2748e17da2602b01629e73ba8d7587dc762e88b8ec084cee2a6a0e6dcf0e4"
+  },
+  "chain_id": 1,
+  "deposit": {
+    "block_hash": "1ed8775996ecfd7657f5cbf211c4cd0d2a5a79f56fbf7db8dcef3143fea12817",
+    "block_number": 25624343,
+    "effective_gas_price_wei": 133115866,
+    "gas_used": 215657,
+    "log_index": 565,
+    "response": {
+      "charged_usd": 10.0,
+      "gas_used": 215657,
+      "ok": true,
+      "tx": "316c5693ac4d20e11897d46ea851bd84d5ca6aa1394e320de6578ea74712a236",
+      "value_wei": 0
+    },
+    "transaction_index": 168,
+    "tx_hash": "0x316c5693ac4d20e11897d46ea851bd84d5ca6aa1394e320de6578ea74712a236"
+  },
+  "deposit_calldata": "0x2391b45700000000000000000000000000000000000000000000000000000000000f42400000000000000000000000000000000000000000000000000000000000000080c7c0d5222f43f2c8bef13e0b22527b21ebe052613344829aec9193876977be3ef062a7b19a33ab9674457b0fd7b8c98a42f43c240806e3a25ef035da3fa643f3000000000000000000000000000000000000000000000000000000000000002a70663233643838333133303161613163636536666464376266346132646232616561643136313962613800000000000000000000000000000000000000000000",
+  "deposit_calldata_sha256": "acf9c6e74c2375b4160b62249e10d267ce17627c6d50df88d8d4b2d81df630ed",
+  "deposit_record": {
+    "amount_atoms": 1000000,
+    "depositor": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+    "nonce": "0xc7c0d5222f43f2c8bef13e0b22527b21ebe052613344829aec9193876977be3e",
+    "recipient_hash": "0x74abe9bdfafd4ca959cc7a501d590babdbd9520a3efe493e2172db3b4be5d0d5",
+    "route_binding": "0xf062a7b19a33ab9674457b0fd7b8c98a42f43c240806e3a25ef035da3fa643f3"
+  },
+  "depositor": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+  "event": {
+    "amount_atoms": 1000000,
+    "deposit_id": "0x42e64173aa1b3c408960c0328ce90d7f1587d78c024bf9defa6ec53ebb79a764",
+    "depositor": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+    "nonce": "0xc7c0d5222f43f2c8bef13e0b22527b21ebe052613344829aec9193876977be3e",
+    "pftl_recipient": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+    "recipient_hash": "0x74abe9bdfafd4ca959cc7a501d590babdbd9520a3efe493e2172db3b4be5d0d5",
+    "route_binding": "0xf062a7b19a33ab9674457b0fd7b8c98a42f43c240806e3a25ef035da3fa643f3",
+    "source_chain_id": 1,
+    "token": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "vault": "0x8583409dDbaC984Ec195dfA06a21103D92403c1E"
+  },
+  "manifest_sha256": "6f6763b4031fac5f3e8f952752499e21cbb2f9d737b4c025855d957057dbc908",
+  "nonce": "0xc7c0d5222f43f2c8bef13e0b22527b21ebe052613344829aec9193876977be3e",
+  "pftl_recipient": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "post_state": {
+    "allowance_atoms": 0,
+    "total_obligations_atoms": 1000000,
+    "vault_usdc_atoms": 1000000,
+    "wallet_eth_wei": 301160152400225321,
+    "wallet_usdc_atoms": 3335712789
+  },
+  "pre_state": {
+    "allowance_atoms": 0,
+    "total_obligations_atoms": 0,
+    "vault_usdc_atoms": 0,
+    "wallet_eth_wei": 301196286283902693,
+    "wallet_usdc_atoms": 3336712789
+  },
+  "predicted_deposit_id": "0x42e64173aa1b3c408960c0328ce90d7f1587d78c024bf9defa6ec53ebb79a764",
+  "recipient_hash": "0x74abe9bdfafd4ca959cc7a501d590babdbd9520a3efe493e2172db3b4be5d0d5",
+  "route_binding": "0xf062a7b19a33ab9674457b0fd7b8c98a42f43c240806e3a25ef035da3fa643f3",
+  "schema": "postfiat.pfusdc.mainnet_epoch4_deposit.v1",
+  "session_id": "pfusdc-mainnet-epoch4-deposit-20260727T130756Z",
+  "usdc": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+  "vault": "0x8583409ddbac984ec195dfa06a21103d92403c1e",
+  "verdict": "PASS",
+  "verifier": "0xa77d5af456ef212303e31727b6ca4888cd771e2c"
+}

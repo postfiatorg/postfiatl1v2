@@ -1,0 +1,59 @@
+{
+  "schema": "postfiat-certified-asset-ops-report-v1",
+  "request_schema": "postfiat-certified-asset-ops-request-v1",
+  "data_dir": "/var/lib/postfiat/validator-3",
+  "topology_file": "/etc/postfiat/releases/pfusdc-eth-l1-f30d368/topology.json",
+  "artifact_dir": "/var/lib/postfiat/validator-3/pfusdc-latency-h333-burn",
+  "operation_count": 1,
+  "max_transactions": 1,
+  "allow_existing_mempool": false,
+  "prepare_only": false,
+  "batch_only": false,
+  "start_height": 332,
+  "start_state_root": "608151e2a109dbec0e4811d6d742dd4b5e66d7c238a322e200055f45eacec3ec8a0858d3a4213b82dd76d37c37f8d345",
+  "start_mempool_pending": 0,
+  "end_height": 333,
+  "end_state_root": "5294d24a2d270be999974dde094d3d6a45a08fb998d1c300768bb2981a1d8d77b2a7256b388e682fb57f6ea8c49b904f",
+  "end_mempool_pending": 0,
+  "operations": [
+    {
+      "label": "burn-to-redeem",
+      "source": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+      "transaction_kind": "vault_bridge_burn_to_redeem",
+      "operation_file": "/var/lib/postfiat/validator-3/pfusdc-latency-h333-burn/burn-to-redeem/operation.json",
+      "quote_file": "/var/lib/postfiat/validator-3/pfusdc-latency-h333-burn/burn-to-redeem/quote.json",
+      "signed_file": "/var/lib/postfiat/validator-3/pfusdc-latency-h333-burn/burn-to-redeem/signed.json",
+      "submit_file": "/var/lib/postfiat/validator-3/pfusdc-latency-h333-burn/burn-to-redeem/submit.json",
+      "tx_id": "824a6b0b2a5847f39f7b6acfa0c035d0501e3afdcf2b5733da8995834a0bb098a2f1549c603df282add501b93d44461c",
+      "sequence": 40,
+      "fee": 23,
+      "timings_ms": {
+        "prepare_ms": 0.063667,
+        "quote_ms": 7.79347,
+        "sign_ms": 2.431359,
+        "submit_ms": 18.011255000000002
+      }
+    }
+  ],
+  "dependency_report": {
+    "declared_dependency_count": 0,
+    "same_round_dependency_count": 0,
+    "prior_round_dependency_count": 0,
+    "same_round_batch_eligible": true,
+    "candidate_batch_classes": [],
+    "replay_equivalence_required": false,
+    "live_round_compression_ready": true,
+    "live_round_compression_blockers": [],
+    "declarations": []
+  },
+  "batch_file": "/var/lib/postfiat/validator-3/pfusdc-latency-h333-burn/peer-certified-mempool-round/mempool-batch.json",
+  "round_artifact_dir": "/var/lib/postfiat/validator-3/pfusdc-latency-h333-burn/peer-certified-mempool-round",
+  "round_ok": true,
+  "timings_ms": {
+    "total_ms": 29067.226337,
+    "preflight_ms": 11.558713,
+    "operations_ms": 28.898119,
+    "certify_ms": 29020.270535000003,
+    "final_status_ms": 6.133349
+  }
+}

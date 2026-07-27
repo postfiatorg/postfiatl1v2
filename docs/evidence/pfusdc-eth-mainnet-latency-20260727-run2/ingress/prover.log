@@ -1,0 +1,67 @@
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624452
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624452
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624452
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624452
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624452
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624452
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624452
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624452
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624452
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624452
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624452
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624452
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624484
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624484
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624484
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624484
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624484
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624484
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624484
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624484
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624484
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624484
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624484
+waiting for Ethereum mainnet finality: deposit block 25624516, finalized 25624484
+captured finalized Ethereum mainnet deposit block 25624516 under finalized block 25624516; deposit 4586bd382915fe1ccafe007bb5d062a4a414578b6e852610b06514ff747a37ad
+all 16 adversarial cases rejected
+Running sp1-gpu-server 6.3.1 with device 0
+Setting environment variables took 80.463µs
+Reading R1CS took 18.880755256s
+Reading proving key took 3.46276063s
+Reading witness file took 998.259µs
+Deserializing JSON data took 21.615962ms
+Generating witness took 851.2559ms
+[90m13:57:30[0m DBG constraint system solver done [36mnbConstraints=[0m15972262 [36mtook=[0m13369.332142
+[90m13:58:07[0m DBG prover done [36macceleration=[0mnone [36mbackend=[0mgroth16 [36mcurve=[0mbn254 [36mnbConstraints=[0m15972262 [36mtook=[0m36885.693632
+Generating proof took 50.255766569s
+[90m13:58:07[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m13:58:07[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m13:58:07[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m13:58:07[0m DBG verifier done [36mbackend=[0mgroth16 [36mcurve=[0mbn254 [36mtook=[0m3.170293
+{"elf_sha256":"0e59a0cf7723b9028aaa4c57f9e9c0da72119a552d62a5577223ba7b2df222d3","execute_ms":119708,"instruction_count":32249396,"program_vkey":"0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e","proof_bytes":356,"public_values_bytes":1650,"schema":"postfiat.eth_l1_fast_lane_p0_proof_report.v1","serialized_proof_bytes":3344,"setup_and_groth16_ms":117348}
+Running sp1-gpu-server 6.3.1 with device 0
+Error: CudaClientError: Failed to write the request: Os { code: 32, kind: BrokenPipe, message: "Broken pipe" }
+Command exited with non-zero status 1
+	Command being timed: "/workspace/postfiatl1v2/tools/pfusdc-tier4-prover/target/release/eth-l1-mainnet-fast-lane-p0 run --deployment /workspace/live-latency/run2-deployment.json --work-dir /workspace/live-latency/run2-ingress --wait-seconds 1800"
+	User time (seconds): 12.54
+	System time (seconds): 2.35
+	Percent of CPU this job got: 1%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 14:54.60
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 410100
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 70550
+	Minor (reclaiming a frame) page faults: 172149
+	Voluntary context switches: 90547
+	Involuntary context switches: 116
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 400
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 1

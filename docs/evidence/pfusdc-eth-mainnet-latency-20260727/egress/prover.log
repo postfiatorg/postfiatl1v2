@@ -1,0 +1,39 @@
+Running sp1-gpu-server 6.3.1 with device 0
+egress witness executed: 88374676 cycles in 3753 ms
+Setting environment variables took 431.19µs
+Reading R1CS took 19.281114502s
+Reading proving key took 3.513827199s
+Reading witness file took 1.013135ms
+Deserializing JSON data took 22.059183ms
+Generating witness took 1.024865324s
+[90m13:36:23[0m DBG constraint system solver done [36mnbConstraints=[0m15972262 [36mtook=[0m13906.168832
+[90m13:36:59[0m DBG prover done [36macceleration=[0mnone [36mbackend=[0mgroth16 [36mcurve=[0mbn254 [36mnbConstraints=[0m15972262 [36mtook=[0m36748.621324
+Generating proof took 50.655593378s
+[90m13:36:59[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m13:36:59[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m13:36:59[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m13:36:59[0m DBG verifier done [36mbackend=[0mgroth16 [36mcurve=[0mbn254 [36mtook=[0m3.147318
+verified Groth16 proof; vkey 0x007a22f1b8a47814a027ee0af8086a6f5f6ae4af0530dc7ffb2acac2da617834
+	Command being timed: "/workspace/postfiatl1v2/tools/pfusdc-tier4-prover/target/release/pfusdc-tier4-prover egress --witness /workspace/live-latency/egress/witness.json --output-dir /workspace/live-latency/egress/proof --prove"
+	User time (seconds): 4.44
+	System time (seconds): 0.87
+	Percent of CPU this job got: 3%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 2:15.16
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 464676
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 87525
+	Minor (reclaiming a frame) page faults: 106526
+	Voluntary context switches: 1789
+	Involuntary context switches: 19
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 48
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

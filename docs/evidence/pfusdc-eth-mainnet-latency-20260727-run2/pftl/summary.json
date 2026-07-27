@@ -1,0 +1,7 @@
+{
+  "schema": "postfiat.pfusdc.ethereum_mainnet_latency_pftl.v1",
+  "verdict": "PASS",
+  "finalized_height": 333,
+  "redemption_id": "3ed7407ef01db1eff254611e995fb15e7f015fcc20d9a5e930cbc033ee13f355fad36603e4e21e22ecdf08f0d9a6ea95",
+  "amount_atoms": 1000000
+}
