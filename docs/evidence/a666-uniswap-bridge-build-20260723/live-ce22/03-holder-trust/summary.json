@@ -1,0 +1,21 @@
+{
+  "accepted": true,
+  "all_sends_verified": true,
+  "confirmed": true,
+  "end_block_tip_hash": "8f70f71faa179bf3a605f880a8ab519ff611626f8616c54469cb6edcf5c1e19cb05413425b17a386319f48e5ab9f2b1e",
+  "end_height": 293,
+  "end_mempool_pending": 0,
+  "end_state_root": "75160597525042d497cc8e4f3d143b6a7736bb3ee93df66db85d93f3745f4803c4b3f662d508c1fd77300bc8473fac26",
+  "label": "a666-holder-trust",
+  "proposer": "validator-5",
+  "round_ok": true,
+  "schema": "postfiat-a666-ce22-remote-finality-operation-v1",
+  "source": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "start_height": 292,
+  "start_state_root": "e3378694bb364d24580b3b010a6048c9048b78f1f543fcb76083a4c2a816d88f63eb81a4933f6564e856c785acffeb00",
+  "transaction_kind": "trust_set",
+  "trust_class": "CONTROLLED",
+  "tx_id": "10efa0bc91e5ad76c876fc0676ef731785e8229024fdcc98bb63b4f74506260683e4aff8d28e3fb49873782656d59ea3",
+  "validator_count": 6,
+  "vote_count": 5
+}

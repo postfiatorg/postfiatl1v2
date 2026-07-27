@@ -1,0 +1,10 @@
+{
+  "schema": "postfiat-navcoin-bridge-fork-rehearsal-record-v1",
+  "route_id": "pftl-a666-ce22-ethereum-wA666-usdc-controlled-20260723-v1",
+  "route_config_digest": "ae558831a5a0c80bd8788c2289ea70ff10ba49a72274b8df026fea8855e27c59d5b612091f9efa3a8d1db9b5e4c197dc",
+  "launch_config_digest": "25bbbdf0d52ee0781a38f39873b3353668b09f13de8debab5abafac34b8eeb4a321e97dc9263659801bfc2e3083d57d0",
+  "rehearsal_id": "gate3-controlled-fork-2026-07-01",
+  "rehearsal_evidence_digest": "0dac806dcda5fb60536bc3ed21a310a668dc2600b3b513fa9efcc79ea3f67a58101846a2066ebe95ba6e5bafb3267ffe",
+  "evidence_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/controlled-mainnet-fork-rerun/sidecar/pftl_uniswap_fork_rehearsals.json",
+  "evidence_count": 1
+}

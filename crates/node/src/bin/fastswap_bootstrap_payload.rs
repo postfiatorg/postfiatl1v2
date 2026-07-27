@@ -12,13 +12,6 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const PFUSDC_ASSET_ID: &str =
-    "34ce77d07099872d5691ead3842bfb3d6cc8678ff62cc68d887dad7f8645128351e72b9ae76f88ed1854a5e8d3372c8b";
-const A651_ASSET_ID: &str =
-    "8584aa713209eb8253293c891f7269e35841f004080e06414db019f868610e9cb57dfb7aca3d51427fbe369b6ebde127";
-const MARKET_ENVELOPE_HASH: &str =
-    "c281435501ebcc921eacd263f588ae5f24ba7225929b850f36980e4544d88b3618a1396674872812ead659376dbadec7";
-
 #[derive(Deserialize)]
 struct ChainTip {
     chain_id: String,
@@ -45,6 +38,12 @@ struct Options {
     tip: PathBuf,
     activation_height: u64,
     valid_through_height: u64,
+    asset_0_id: String,
+    asset_1_id: String,
+    price_numerator: u128,
+    price_denominator: u128,
+    nav_epoch: u64,
+    market_envelope_hash: String,
     output: PathBuf,
 }
 
@@ -70,6 +69,18 @@ fn parse_options() -> Result<Options, String> {
         valid_through_height: required_flag(&args, "--valid-through-height")?
             .parse()
             .map_err(|_| "--valid-through-height must be a u64".to_owned())?,
+        asset_0_id: required_flag(&args, "--asset-0-id")?,
+        asset_1_id: required_flag(&args, "--asset-1-id")?,
+        price_numerator: required_flag(&args, "--price-numerator")?
+            .parse()
+            .map_err(|_| "--price-numerator must be a u128".to_owned())?,
+        price_denominator: required_flag(&args, "--price-denominator")?
+            .parse()
+            .map_err(|_| "--price-denominator must be a u128".to_owned())?,
+        nav_epoch: required_flag(&args, "--nav-epoch")?
+            .parse()
+            .map_err(|_| "--nav-epoch must be a u64".to_owned())?,
+        market_envelope_hash: required_flag(&args, "--market-envelope-hash")?,
         output: PathBuf::from(required_flag(&args, "--output")?),
     })
 }
@@ -161,7 +172,7 @@ fn main() -> Result<(), String> {
         .map_err(|error| format!("committee: {error:?}"))?;
 
     let mut rules =
-        [PFUSDC_ASSET_ID, A651_ASSET_ID]
+        [options.asset_0_id.as_str(), options.asset_1_id.as_str()]
             .into_iter()
             .map(|asset_id_hex| {
                 let definition = ledger
@@ -196,8 +207,8 @@ fn main() -> Result<(), String> {
             .collect::<Result<Vec<_>, String>>()?;
     rules.sort_by_key(|rule| rule.rule_hash().expect("validated asset rule"));
 
-    let pfusdc_id = FastAssetIdV1(fixed48(PFUSDC_ASSET_ID, "pfUSDC asset id")?);
-    let a651_id = FastAssetIdV1(fixed48(A651_ASSET_ID, "a651 asset id")?);
+    let asset_0_id = FastAssetIdV1(fixed48(&options.asset_0_id, "asset 0 id")?);
+    let asset_1_id = FastAssetIdV1(fixed48(&options.asset_1_id, "asset 1 id")?);
     let rule_hash = |asset_id: FastAssetIdV1| -> Result<FastAssetRuleHashV1, String> {
         rules
             .iter()
@@ -216,18 +227,16 @@ fn main() -> Result<(), String> {
         domain: chain,
         policy_epoch: 1,
         policy_hash: FastSwapPolicyHashV1::ZERO,
-        pair_asset_0: pfusdc_id,
-        pair_asset_1: a651_id,
-        asset_rule_hash_0: rule_hash(pfusdc_id)?,
-        asset_rule_hash_1: rule_hash(a651_id)?,
-        // Exact certified epoch-59 NAV is 820102177 pfUSDC atoms per 1e8 a651 atoms.
-        // With pfUSDC as party-0, this reciprocal computes party-1 a651 atoms.
-        price_numerator: 100_000_000,
-        price_denominator: 820_102_177,
+        pair_asset_0: asset_0_id,
+        pair_asset_1: asset_1_id,
+        asset_rule_hash_0: rule_hash(asset_0_id)?,
+        asset_rule_hash_1: rule_hash(asset_1_id)?,
+        price_numerator: options.price_numerator,
+        price_denominator: options.price_denominator,
         rounding: FastSwapQuoteRoundingV1::Down,
-        nav_epoch: 59,
+        nav_epoch: options.nav_epoch,
         market_envelope_hash: FastSwapMarketEnvelopeHashV1(fixed48(
-            MARKET_ENVELOPE_HASH,
+            &options.market_envelope_hash,
             "market envelope hash",
         )?),
         valid_from_height: options.activation_height,

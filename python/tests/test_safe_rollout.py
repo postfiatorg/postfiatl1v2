@@ -18,6 +18,7 @@ from postfiat_ops.safe_rollout import (
     copy_entries,
     create_backup,
     fleet_convergence,
+    rpc_tunnel_endpoints,
     next_validator,
     parse_inventory,
     preflight,
@@ -43,33 +44,46 @@ class FakeRunner:
         self.calls.append((args, input_text))
         if args[0] == "scp" and "-r" in args:
             Path(args[-1]).mkdir(parents=True, exist_ok=False)
-        if "snapshot-export-signed" in args:
+        if "snapshot-export-signed-finalized-checkpoint" in args:
             destination = Path(args[args.index("--snapshot-dir") + 1])
             destination.mkdir(parents=True, exist_ok=False)
             (destination / "snapshot.signed-manifest.json").write_text(
                 '{"schema":"test"}\n', encoding="utf-8"
             )
-        if "snapshot-import-signed" in args:
+        if "snapshot-import-signed-finalized-checkpoint" in args:
             destination = Path(args[args.index("--data-dir") + 1])
             destination.mkdir(parents=True, exist_ok=False)
             (destination / "chain_tip.json").write_text(
                 '{"height":600,"block_hash":"tip-a","state_root":"root-a"}\n',
                 encoding="utf-8",
             )
-        if "verify-state" in args:
-            return completed(args, '{"verified":true,"state_root":"root-a"}\n')
-        if args[0] == "ssh" and input_text and " validate-local-keys " in input_text:
+        if "verify-finalized-checkpoint" in args:
+            return completed(
+                args,
+                json.dumps(
+                    {
+                        "verified": True,
+                        "verification_basis": "consensus-v2-finalized-checkpoint",
+                        "consensus_v2_activation_height": 1,
+                        "certificate_id": "certificate-a",
+                    }
+                ),
+            )
+        if args[0] == "ssh" and input_text and "validate-local-keys" in input_text:
             validator_id = f"validator-{int(args[3].rsplit('.', 1)[-1]) - 1}"
             return completed(
                 args,
                 json.dumps(
                     {
-                        "schema": "postfiat-local-key-validation-v1",
+                        "schema": "postfiat-safe-rollout-committee-roster-v1",
                         "node_id": validator_id,
-                        "validator_keys_valid": True,
-                        "validator_key_permissions_valid": True,
-                        "validator_key_count": 6,
-                        "required_validator_count": 6,
+                        "local_signer_valid": True,
+                        "local_signer_matches_registry": True,
+                        "registry_root": "registry-a",
+                        "registry_validator_count": 6,
+                        "registry_validator_ids": [
+                            f"validator-{index}" for index in range(6)
+                        ],
                     }
                 ),
             )
@@ -272,6 +286,19 @@ class SafeRolloutTests(unittest.TestCase):
             fleet_convergence([])
         mock_sleep.assert_not_called()
 
+    def test_rpc_tunnel_endpoints_are_explicit_localhost_only(self) -> None:
+        inventory = parse_inventory(self.inventory)
+        self.assertEqual(
+            {
+                f"validator-{index}": ("127.0.0.1", 28650 + index)
+                for index in range(6)
+            },
+            rpc_tunnel_endpoints(inventory, 28650),
+        )
+        self.assertIsNone(rpc_tunnel_endpoints(inventory, None))
+        with self.assertRaisesRegex(SafetyError, "1024..65535"):
+            rpc_tunnel_endpoints(inventory, 65531)
+
     def test_preflight_rejects_one_node_with_incomplete_committee_roster(self) -> None:
         class IncompleteRosterRunner(FakeRunner):
             def run(self, argv, *, input_text=None, capture=True):
@@ -280,11 +307,11 @@ class SafeRolloutTests(unittest.TestCase):
                 if (
                     args[0] == "ssh"
                     and input_text
-                    and " validate-local-keys " in input_text
+                    and "validate-local-keys" in input_text
                     and args[3] == "root@192.0.2.1"
                 ):
                     report = json.loads(result.stdout)
-                    report["validator_key_count"] = 1
+                    report["registry_validator_count"] = 1
                     return completed(args, json.dumps(report))
                 return result
 
@@ -298,7 +325,10 @@ class SafeRolloutTests(unittest.TestCase):
 
         reports = verify_remote_committee_rosters(FakeRunner(), inventory, "root")
         self.assertEqual(6, len(reports))
-        self.assertTrue(all(report["validator_key_count"] == 6 for report in reports))
+        self.assertTrue(
+            all(report["registry_validator_count"] == 6 for report in reports)
+        )
+        self.assertEqual({"registry-a"}, {report["registry_root"] for report in reports})
 
     @patch("postfiat_ops.safe_rollout.query_vultr_inventory")
     @patch("postfiat_ops.safe_rollout.fleet_convergence")
@@ -325,6 +355,7 @@ class SafeRolloutTests(unittest.TestCase):
         self.assertEqual(0, state["preflight"]["deletion_count"])
         self.assertEqual("validator-1", state["order"][0])
         self.assertEqual([], state["applied"])
+        self.assertIsNone(state["rpc_tunnel_base_port"])
 
     def test_backup_is_mandatory_signed_and_verified_before_apply(self) -> None:
         state_file = self.root / "rollout-state.json"
@@ -366,8 +397,9 @@ class SafeRolloutTests(unittest.TestCase):
         self.assertTrue(state["backup"]["verified"])
         self.assertEqual("root-a", state["backup"]["state_root"])
         flattened = [argument for call, _ in runner.calls for argument in call]
-        self.assertIn("snapshot-export-signed", flattened)
-        self.assertIn("snapshot-import-signed", flattened)
+        self.assertIn("snapshot-export-signed-finalized-checkpoint", flattened)
+        self.assertIn("snapshot-import-signed-finalized-checkpoint", flattened)
+        self.assertIn("verify-finalized-checkpoint", flattened)
         remote_scripts = [
             script for call, script in runner.calls if call[0] == "ssh" and script
         ]
@@ -385,6 +417,11 @@ class SafeRolloutTests(unittest.TestCase):
         self.assertNotIn(
             f"/opt/postfiat/releases/{self.release_id}/postfiat-node",
             remote_scripts[0],
+        )
+        self.assertIn("snapshot-export-finalized-checkpoint", remote_scripts[0])
+        self.assertEqual(
+            "consensus-v2-finalized-checkpoint",
+            state["backup"]["verification_basis"],
         )
 
     @patch("postfiat_ops.safe_rollout.fleet_convergence")

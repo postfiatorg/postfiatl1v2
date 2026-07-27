@@ -12,6 +12,10 @@ path = "src/lib.rs"
 name = "pfusdc-ingress-program"
 path = "src/main.rs"
 
+[[bin]]
+name = "pfusdc-ingress-bonded-program"
+path = "src/bonded_main.rs"
+
 [dependencies]
 alloy-consensus = "=1.8.3"
 alloy-primitives = { version = "=1.5.7", features = ["sha3-keccak"] }

@@ -1,0 +1,8 @@
+BASE_DEPLOY_SCRIPT: /home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/pfusdc-eth-mainnet-deploy.py
+EPOCH4_DEPLOY_SCRIPT: /home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/pfusdc-eth-mainnet-epoch4-deploy.py
+AST_MANIFEST_PATH_COUNT: 6
+VERIFIER_CONSTRUCTOR: MATCH
+VAULT_CONSTRUCTOR: MATCH
+VAULT_RUNTIME: MATCH
+INITIAL_CHECKPOINT: H316
+DEPLOY_CONSUMER_SCHEMA: PASS

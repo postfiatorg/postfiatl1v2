@@ -650,10 +650,19 @@ fn merge_appended_block(blocks: &mut BlockLog, block: BlockRecord) -> io::Result
 
 fn merge_appended_receipt(receipts: &mut Vec<Receipt>, receipt: Receipt) -> io::Result<()> {
     if let Some(existing) = receipts
-        .iter()
+        .iter_mut()
         .find(|existing| existing.tx_id == receipt.tx_id)
     {
         if existing == &receipt {
+            return Ok(());
+        }
+        // A rejected governance operation can be retried with the same stable
+        // amendment id after its fail-closed precondition is satisfied.  The
+        // later accepted receipt is the terminal result for that operation.
+        // Never permit an accepted result to be replaced or two conflicting
+        // results with the same acceptance status.
+        if !existing.accepted && receipt.accepted {
+            *existing = receipt;
             return Ok(());
         }
         return Err(io::Error::new(
@@ -1056,6 +1065,27 @@ mod tests {
             .read_receipts()
             .expect_err("conflicting receipt append must fail");
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn receipt_append_log_allows_rejected_operation_to_reach_terminal_acceptance() {
+        let dir = unique_test_dir("postfiat-storage-receipt-retry-test");
+        let store = NodeStore::new(&dir);
+        let rejected = sample_receipt("amendment-1", "tecPRECONDITION");
+        let accepted = sample_receipt("amendment-1", "tesSUCCESS");
+        store
+            .write_receipts(&[rejected])
+            .expect("write rejected receipt");
+        store
+            .append_receipt_record(&accepted)
+            .expect("append accepted retry");
+
+        assert_eq!(
+            store.read_receipts().expect("read terminal acceptance"),
+            vec![accepted]
+        );
 
         fs::remove_dir_all(dir).expect("cleanup");
     }

@@ -623,12 +623,126 @@ pub fn vault_bridge_deposit_plan(
             ));
         }
         (computed_proof_hash, computed_public_values_hash)
+    } else if source_proof_kind == SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1 {
+        if source_proof_bytes.is_empty() || source_public_values.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Ethereum-finality route requires proof and public-values files",
+            ));
+        }
+        let computed_proof_hash = postfiat_types::pfusdc_ingress_proof_hash_v1(&source_proof_bytes);
+        let computed_public_values_hash =
+            postfiat_types::pfusdc_ingress_public_values_hash_v1(&source_public_values);
+        if (!provided_source_proof_hash.is_empty()
+            && provided_source_proof_hash != computed_proof_hash)
+            || (!provided_source_public_values_hash.is_empty()
+                && provided_source_public_values_hash != computed_public_values_hash)
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Ethereum-finality proof/public-values file commitment mismatch",
+            ));
+        }
+        let public_values =
+            postfiat_types::PfUsdcEthereumIngressPublicValuesV1::from_canonical_bytes(
+                &source_public_values,
+            )
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+        if public_values.source_chain_id != evidence.source_chain_id
+            || public_values.vault_address != evidence.vault_address
+            || public_values.token_address != evidence.token_address
+            || public_values.depositor != evidence.depositor
+            || public_values.pftl_recipient != evidence.pftl_recipient
+            || public_values.pftl_recipient_hash != evidence.pftl_recipient_hash
+            || public_values.amount_atoms != evidence.amount_atoms
+            || public_values.nonce != evidence.nonce
+            || public_values.route_binding != evidence.route_binding
+            || public_values.deposit_id != evidence.deposit_id
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Ethereum-finality public values do not match the canonical vault deposit receipt",
+            ));
+        }
+        // The Ethereum-finality guest authenticates the deposit's permanent
+        // storage record under a later finalized execution-state root. Its
+        // evidence coordinate is therefore that finalized block, not the
+        // original receipt block. The guest's storage-native evidence has no
+        // receipt-log position and canonically commits log index zero.
+        evidence.block_hash = public_values.finalized_execution_block_hash.clone();
+        evidence.log_index = 0;
+        evidence
+            .validate()
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+        evidence_root = vault_bridge_deposit_evidence_root(&evidence)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        if public_values.evidence_root != evidence_root {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Ethereum-finality public values commit a different vault deposit evidence root",
+            ));
+        }
+        (computed_proof_hash, computed_public_values_hash)
+    } else if source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 {
+        if source_proof_bytes.is_empty() || source_public_values.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "bonded proof-native route requires proof and public-values files",
+            ));
+        }
+        let computed_proof_hash = postfiat_types::pfusdc_ingress_proof_hash_v1(&source_proof_bytes);
+        let computed_public_values_hash =
+            postfiat_types::pfusdc_ingress_public_values_hash_v1(&source_public_values);
+        if (!provided_source_proof_hash.is_empty()
+            && provided_source_proof_hash != computed_proof_hash)
+            || (!provided_source_public_values_hash.is_empty()
+                && provided_source_public_values_hash != computed_public_values_hash)
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "bonded proof/public-values file commitment mismatch",
+            ));
+        }
+        let public_values =
+            postfiat_types::PfUsdcBondedIngressPublicValuesV1::from_canonical_bytes(
+                &source_public_values,
+            )
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+        if public_values.route_profile_hash != options.policy_hash
+            || public_values.arbitrum_chain_id != evidence.source_chain_id
+            || public_values.vault_address != evidence.vault_address
+            || public_values.token_address != evidence.token_address
+            || public_values.depositor != evidence.depositor
+            || public_values.pftl_recipient != evidence.pftl_recipient
+            || public_values.pftl_recipient_hash != evidence.pftl_recipient_hash
+            || public_values.amount_atoms != evidence.amount_atoms
+            || public_values.deposit_nonce != evidence.nonce
+            || public_values.route_binding != evidence.route_binding
+            || public_values.deposit_id != evidence.deposit_id
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "bonded public values do not match the canonical vault deposit receipt",
+            ));
+        }
+        // The bonded proof authorizes the deposit from the unique storage
+        // record and exposes the authenticated assertion coordinates in its
+        // public values.  Keep the receipt coordinates solely as the original
+        // witness/debug metadata committed by `evidence_root`; replacing them
+        // with assertion coordinates would create a different root than the
+        // guest proved.  Replay protection is independently global on
+        // (chain, vault, deposit_id), never on these receipt coordinates.
+        if evidence_root != public_values.evidence_root {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "bonded public values commit a different evidence root",
+            ));
+        }
+        (computed_proof_hash, computed_public_values_hash)
     } else {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            format!(
-                "--source-proof-kind must be {NAV_PROFILE_VERIFIER_SP1_GROTH16} or {NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1}"
-            ),
+            "--source-proof-kind is not a supported vault-bridge proof kind",
         ));
     };
 

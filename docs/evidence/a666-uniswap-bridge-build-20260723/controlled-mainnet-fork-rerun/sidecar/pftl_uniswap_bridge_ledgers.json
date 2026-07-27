@@ -1,0 +1,71 @@
+[
+  {
+    "schema": "postfiat-pftl-uniswap-bridge-ledger-v1",
+    "route_id": "pftl-a666-ce22-ethereum-wA666-usdc-controlled-20260723-v1",
+    "route_config_digest": "ae558831a5a0c80bd8788c2289ea70ff10ba49a72274b8df026fea8855e27c59d5b612091f9efa3a8d1db9b5e4c197dc",
+    "route_trust_class": "CONTROLLED",
+    "native_nav_asset_id": "300bf48a63a94770b6e67817f88cd1abf77e7f592a061e15682d7fd9973260af4c2e631e32df3c2c402b7d2fe272a293",
+    "settlement_asset_id": "02c46d6cfe175b3d4f65bc5613e318869faf092028f7b8cfd18fb2916ea34955e0181279a863524669f031f84b675d7b",
+    "handoff_controller": "0x9954b8aa5fbaf1e8e939ae063d5016d60ff1e50a",
+    "settlement_adapter": "0xb42f3f8e73bcd6fc85281f26e0067bca4bc30b3e",
+    "wrapped_navcoin_token": "0x5376b6db31573b8cd56d3c38d249d3382537307c",
+    "ethereum_chain_id": 1,
+    "route_supply_cap_atoms": 10000000,
+    "packet_notional_cap_atoms": 200000,
+    "latest_finalized_nav_epoch": 1,
+    "return_finality_blocks": 64,
+    "authorized_valid_supply_atoms": 100020,
+    "pftl_spendable_supply_atoms": 0,
+    "native_spendable_balances_atoms": {},
+    "ethereum_spendable_supply_atoms": 0,
+    "other_registered_venue_supply_atoms": 0,
+    "outstanding_bridge_claims_atoms": 100020,
+    "pending_return_import_claims_atoms": 0,
+    "settlement_reserve_atoms": 100020,
+    "primary_subscription_nonces": {
+      "7171717171717171717171717171717171717171717171717171717171717171": "pfab9b9228942e5c529633a13aa271d5297bec6353"
+    },
+    "export_packets": {
+      "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1": {
+        "packet_hash": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "nonce": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+        "source_wallet": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+        "ethereum_recipient": "0xa0d7127e6512166318d6fbdd21bb872af2b6d9d9",
+        "amount_atoms": 100000,
+        "source_height": 10,
+        "destination_deadline_seconds": 1924992000,
+        "refund_not_before_height": 20,
+        "status": "SourceDebited"
+      },
+      "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2": {
+        "packet_hash": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+        "nonce": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+        "source_wallet": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+        "ethereum_recipient": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+        "amount_atoms": 10,
+        "source_height": 11,
+        "destination_deadline_seconds": 1924992000,
+        "refund_not_before_height": 21,
+        "status": "SourceDebited"
+      },
+      "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3": {
+        "packet_hash": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+        "nonce": "b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3",
+        "source_wallet": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+        "ethereum_recipient": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+        "amount_atoms": 10,
+        "source_height": 12,
+        "destination_deadline_seconds": 1924992000,
+        "refund_not_before_height": 22,
+        "status": "SourceDebited"
+      }
+    },
+    "export_nonces": {
+      "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+      "b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3"
+    },
+    "return_burns": {},
+    "paused": false
+  }
+]

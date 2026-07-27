@@ -1,0 +1,141 @@
+{
+  "schema": "postfiat.pfusdc.h316_opening_residual.v1",
+  "verdict": "PASS",
+  "h316_gate": "PASS",
+  "height": 316,
+  "tip": "f7abc6a0a4a18a261c36a28bbaf0631ec77f9dd7dfe53545b8e4ffff40c67f9238a2b37e923bc81393e5cef84c56fd0c",
+  "state_root": "69ed9a62643112b9f9acfbd90df35bdf894f55b9d71e2a7c101d9902a4d5a4caba6f254d40675c1bc9332aeb06190e3f",
+  "h316_summary": {
+    "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/pftl-execution/02-h316-register/h316-summary.json",
+    "sha256": "d60a248c0e07e2c5453ec553310c2cc52f1a1f9e9374d66f54bd4bedcc83746a",
+    "verdict": "PASS",
+    "payload_sha256": "bf7d560d798d59922f20e49bb9ac077e9d84edbbc9d0b0d98a79dfb4d83f89f8",
+    "epoch": 3,
+    "activation_height": 316,
+    "c8": "15/15",
+    "six_hosts_converged": true,
+    "ingress_negatives": {
+      "sepolia": "PASS",
+      "arbitrum": "PASS"
+    },
+    "pinned_egress_resolvable": {
+      "sepolia": true,
+      "arbitrum": true
+    }
+  },
+  "h316_finality": {
+    "certificate": {
+      "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/pftl-execution/02-h316-register/fleet-artifacts-v4/artifacts/block-certificate.json",
+      "sha256": "a2ee4f567dcb413af5c88625b26fd841b191de76aad9e39b3d78533cdafce32f",
+      "height": 316,
+      "certificate_id": "a4b6f6bb47801b8d65764953a5e10450c82a38e7dc38035f613d1b304f8b288777d01fdf4d675459e8b0e43457102d8f",
+      "quorum": 5,
+      "validator_count": 6,
+      "vote_count": 6
+    },
+    "six_host_post_submit_glob": "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/pftl-execution/02-h316-register/post-submit-validator-*.json",
+    "mempool_pending": 0,
+    "active_route_readback": {
+      "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/pftl-execution/02-h316-register/active-route-readback.json",
+      "sha256": "4d53358fccfdba2a45f9c887f5eea4a9c7eba0528a695ef27e605bc66e321f1c",
+      "route_id": "ethereum-mainnet-usdc-v1",
+      "route_epoch": 3,
+      "activation_height": 316
+    },
+    "negative_route_replay": {
+      "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/pftl-execution/02-h316-register/negative-route-replay.log",
+      "sha256": "1ed764e2ca11f815e25e81195bff913a29d40a965d668549b12bc53e81de3c0e",
+      "verdict": "PASS"
+    }
+  },
+  "sources": {
+    "signed_snapshot_import": {
+      "method": "finalized-checkpoint export, local signed export, signed import, and finalized-checkpoint verification",
+      "snapshot_signed_manifest_sha256": "7aa6005f023f1ab98607e42bf8a912d3a2ad5a098942106f634e23ec10f0a3f1",
+      "import_status_sha256": "6ffb9ae54e7e199e3d1cbdbd6b2eb6ed622bee5d8e84d4c1fd6584dd23b5f188",
+      "checkpoint_verification_sha256": "f1bec8ec56f947d661291d2fae8fb8908ddc6c66bdd3c0b43f10c8a4d060f900",
+      "verified": true
+    },
+    "pftl_term_extraction": {
+      "method": "postfiat-node vault-bridge-status against the verified H316 signed import; same status extraction used for the H310/H314 bracket",
+      "status_sha256": "122ea42183203cde39fbc6c2ef6f13499d888c699a77fd71e9ea7670c4f8e9e9",
+      "issued_supply_atoms": 1000010,
+      "counted_value_atoms": 1000010,
+      "unallocated_counted_capacity_atoms": 0,
+      "bucket": {
+        "outstanding_vault_bridge_atoms": 1000000,
+        "nav_subscription_allocations_atoms": 0,
+        "redemption_queue_atoms": 10,
+        "other_allocations_atoms": 0
+      },
+      "redemptions": {
+        "pending_count": 1,
+        "pending_atoms": 10,
+        "unreleased_atoms": 0
+      }
+    },
+    "arbitrum_legacy": {
+      "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-b/conservation-h314/direct-arbitrum-legacy-read/result.json",
+      "sha256": "132455d29a55062b95f5c07f6768ce4f0945d59711edad8196422c3739ff472d",
+      "classification": "deprecated-Arbitrum-legacy",
+      "atoms": 6000020
+    },
+    "sepolia_stranded": {
+      "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-b/diagnostics/h315-deposit-formula-20260726/recovery-math.md",
+      "sha256": "9206850b7b0178aa016325e5817794d351ba4a08277d80323f9079ff90686324",
+      "classification": "reversed-binding stranded vault balance",
+      "atoms": 357559
+    },
+    "mainnet_vault": {
+      "method": "read-only eth_chainId, eth_blockNumber, then canonical USDC balanceOf(vault) at that block",
+      "endpoint": "https://ethereum-rpc.publicnode.com",
+      "chain_id": 1,
+      "block_number": 25617246,
+      "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "vault": "0x47d54874a708c4bf25ffd547f61f695fff940af9",
+      "raw_balance_return": "0",
+      "atoms": 0
+    }
+  },
+  "terms": {
+    "V": {
+      "atoms": 6357579,
+      "components": {
+        "arbitrum_legacy_v": 6000020,
+        "sepolia_stranded_v": 357559,
+        "mainnet_v": 0
+      }
+    },
+    "S": 1000000,
+    "D": 0,
+    "B": 10,
+    "R": 0,
+    "rhs": 1000010,
+    "formula": "V - (S + D + B - R)"
+  },
+  "arbitrum_legacy_v": 6000020,
+  "sepolia_stranded_v": 357559,
+  "mainnet_v": 0,
+  "residual": 5357569,
+  "pre_mainnet_residual": 5357569,
+  "pre_deposit_delta": 0,
+  "registration_term_delta": {
+    "V": 0,
+    "S": 0,
+    "D": 0,
+    "B": 0,
+    "R": 0
+  },
+  "local_multi_route_audit": {
+    "status": "execution_blocked",
+    "reason": "single-RPC audit rejects mixed governed source chains; no generalized adapter was introduced",
+    "effect_on_this_bracket": "none; PFTL terms come from the verified signed-import local status and legacy/Sepolia terms are the explicitly pinned line items required by this gate"
+  },
+  "V": 6357579,
+  "S": 1000000,
+  "D": 0,
+  "B": 10,
+  "R": 0,
+  "rhs": 1000010,
+  "closing_delta_zero_baseline": 5357569
+}

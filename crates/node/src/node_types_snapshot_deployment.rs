@@ -49,6 +49,24 @@ pub struct SignedSnapshotImportOptions {
     pub node_id: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FinalizedCheckpointVerificationReport {
+    pub schema: String,
+    pub verified: bool,
+    pub verification_basis: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub protocol_version: u32,
+    pub consensus_v2_activation_height: u64,
+    pub checkpoint_height: u64,
+    pub checkpoint_block_hash: String,
+    pub checkpoint_state_root: String,
+    pub certificate_id: String,
+    pub committee_epoch: u64,
+    pub validator_count: usize,
+    pub quorum: usize,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SnapshotPublisherKeyExportOptions {
     pub publisher_key_file: PathBuf,

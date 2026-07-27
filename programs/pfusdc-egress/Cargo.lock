@@ -751,6 +751,7 @@ name = "postfiat-types"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_cbor",
  "serde_json",
  "sha3 0.11.0",
 ]

@@ -18,10 +18,26 @@ pub(crate) fn verify_live_route_initialization(
     ledger: &LedgerState,
     operation: &PftlUniswapRouteInitOperation,
 ) -> Result<(), ExecutionError> {
+    if operation.route_trust_class == postfiat_bridge::ROUTE_TRUST_CLASS_CONTROLLED {
+        if operation.live_value_enabled {
+            return Err((
+                "pftl_uniswap_controlled_live_value_forbidden",
+                "CONTROLLED routes are rehearsal-only and cannot enable public live-value routing"
+                    .to_string(),
+            ));
+        }
+        if operation.ethereum_verification_policy.is_some() {
+            return Err((
+                "pftl_uniswap_controlled_policy_forbidden",
+                "CONTROLLED routes must not claim a checkpoint-verification policy".to_string(),
+            ));
+        }
+        return Ok(());
+    }
     if operation.route_trust_class != postfiat_bridge::ROUTE_TRUST_CLASS_BFT_CHECKPOINT {
         return Err((
             "pftl_uniswap_ethereum_trust_class_mismatch",
-            "live checkpoint-verified routes must declare the BFT_CHECKPOINT trust class"
+            "strict routes must declare CONTROLLED rehearsal or BFT_CHECKPOINT trust class"
                 .to_string(),
         ));
     }
@@ -50,10 +66,20 @@ pub(crate) fn verify_live_route_reference(
     ledger: &LedgerState,
     route: &PftlUniswapConsensusRouteState,
 ) -> Result<(), ExecutionError> {
+    if route.route_trust_class == postfiat_bridge::ROUTE_TRUST_CLASS_CONTROLLED {
+        if route.live_value_enabled || route.ethereum_verification_policy.is_some() {
+            return Err((
+                "pftl_uniswap_controlled_route_policy_mismatch",
+                "CONTROLLED route state must disable public live value and omit checkpoint policy"
+                    .to_string(),
+            ));
+        }
+        return Ok(());
+    }
     if route.route_trust_class != postfiat_bridge::ROUTE_TRUST_CLASS_BFT_CHECKPOINT {
         return Err((
             "pftl_uniswap_ethereum_trust_class_mismatch",
-            "live checkpoint-verified route state does not declare BFT_CHECKPOINT".to_string(),
+            "strict route state is neither CONTROLLED rehearsal nor BFT_CHECKPOINT".to_string(),
         ));
     }
     let policy = route
@@ -100,6 +126,11 @@ pub(crate) fn verify_destination_consume(
     operation: &PftlUniswapDestinationConsumeOperation,
 ) -> Result<(), ExecutionError> {
     verify_live_route_reference(genesis, ledger, route)?;
+    if route.route_trust_class == postfiat_bridge::ROUTE_TRUST_CLASS_CONTROLLED {
+        // Operator authorization, finality-depth arithmetic, packet status,
+        // replay protection, and supply movement remain consensus enforced.
+        return Ok(());
+    }
     let (checkpoint, log) = verified_external_log(
         genesis,
         ledger,
@@ -155,6 +186,11 @@ pub(crate) fn verify_source_refund(
     operation: &PftlUniswapRefundSourceOperation,
 ) -> Result<(), ExecutionError> {
     verify_live_route_reference(genesis, ledger, route)?;
+    if route.route_trust_class == postfiat_bridge::ROUTE_TRUST_CLASS_CONTROLLED {
+        // The state transition also binds the canonical non-consumption
+        // commitment; Ethereum inclusion is deliberately not claimed here.
+        return Ok(());
+    }
     let (_checkpoint, log) = verified_external_log(
         genesis,
         ledger,
@@ -194,6 +230,10 @@ pub(crate) fn verify_return_import(
     operation: &PftlUniswapReturnImportOperation,
 ) -> Result<(), ExecutionError> {
     verify_live_route_reference(genesis, ledger, route)?;
+    if route.route_trust_class == postfiat_bridge::ROUTE_TRUST_CLASS_CONTROLLED {
+        // Controlled return imports are issuer/reserve-operator attested.
+        return Ok(());
+    }
     let (checkpoint, log) = verified_external_log(
         genesis,
         ledger,

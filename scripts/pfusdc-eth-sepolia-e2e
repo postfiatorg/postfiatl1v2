@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+# pfUSDC Ethereum Sepolia L1 fast-lane E2E (Lane C, route ethereum-sepolia-usdc-v1).
+#
+# Six stages: deposit -> credit -> transparent send -> Orchard shielded send
+# -> burn -> withdrawal to a different Ethereum recipient. Checkpoint/resume
+# via a JSON state file; mismatched manifest/input hashes fail closed.
+# Signing material is only ever referenced by file path / vault label and
+# loaded with command substitution at use time; it is never logged.
+#
+# Usage:
+#   scripts/pfusdc-eth-sepolia-e2e \
+#       --manifest deployments/pfusdc-eth-sepolia-20260725/manifest.json \
+#       --state <workdir>/e2e-state.json \
+#       --recipient-b <pftl-account> --recipient-c <pftl-account> \
+#       --withdraw-recipient <evm-address> \
+#       [--key-file <path>] [--vault-label <name>] [--stage <name>|--resume]
+set -euo pipefail
+
+SCHEMA="postfiat.pfusdc.eth_sepolia_e2e_state.v1"
+ROUTE_ID="ethereum-sepolia-usdc-v1"
+SOURCE_CHAIN_ID=11155111
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+EVIDENCE_ROOT="$REPO_ROOT/docs/evidence/pfusdc-eth-campaign-20260725/lane-c"
+
+MANIFEST=""
+STATE=""
+RECIPIENT_B=""
+RECIPIENT_C=""
+WITHDRAW_RECIPIENT=""
+KEY_FILE=""
+VAULT_LABEL=""
+ONLY_STAGE=""
+RESUME=0
+
+die() { echo "E2E-FAIL: $*" >&2; exit 1; }
+log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"; }
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --manifest) MANIFEST="$2"; shift 2 ;;
+    --state) STATE="$2"; shift 2 ;;
+    --recipient-b) RECIPIENT_B="$2"; shift 2 ;;
+    --recipient-c) RECIPIENT_C="$2"; shift 2 ;;
+    --withdraw-recipient) WITHDRAW_RECIPIENT="$2"; shift 2 ;;
+    --key-file) KEY_FILE="$2"; shift 2 ;;
+    --vault-label) VAULT_LABEL="$2"; shift 2 ;;
+    --stage) ONLY_STAGE="$2"; shift 2 ;;
+    --resume) RESUME=1; shift ;;
+    *) die "unknown argument $1" ;;
+  esac
+done
+
+[ -n "$MANIFEST" ] || die "--manifest required"
+[ -n "$STATE" ] || die "--state required"
+[ -f "$MANIFEST" ] || die "manifest $MANIFEST missing"
+
+# --- fail-closed scope guards ------------------------------------------------
+if grep -qi "arbitrum" "$MANIFEST"; then
+  die "manifest carries an Arbitrum marker; Lane C is Ethereum Sepolia only"
+fi
+chain_id="$(python3 -c "import json;print(json.load(open('$MANIFEST'))['network']['source_chain_id'])")"
+[ "$chain_id" = "$SOURCE_CHAIN_ID" ] || die "manifest source_chain_id $chain_id != $SOURCE_CHAIN_ID"
+
+MANIFEST_SHA256="$(sha256sum "$MANIFEST" | cut -d' ' -f1)"
+INGRESS_ELF="$REPO_ROOT/$(python3 -c "import json;print(json.load(open('$MANIFEST'))['programs']['ingress']['elf_path'])")"
+EGRESS_ELF="$REPO_ROOT/$(python3 -c "import json;print(json.load(open('$MANIFEST'))['programs']['egress']['elf_path'])")"
+INGRESS_SHA256="$(python3 -c "import json;print(json.load(open('$MANIFEST'))['programs']['ingress']['elf_sha256'])")"
+EGRESS_SHA256="$(python3 -c "import json;print(json.load(open('$MANIFEST'))['programs']['egress']['elf_sha256'])")"
+
+[ "$(sha256sum "$INGRESS_ELF" | cut -d' ' -f1)" = "$INGRESS_SHA256" ] || die "ingress ELF hash mismatch vs manifest"
+[ "$(sha256sum "$EGRESS_ELF" | cut -d' ' -f1)" = "$EGRESS_SHA256" ] || die "egress ELF hash mismatch vs manifest"
+
+# --- checkpoint/resume state --------------------------------------------------
+init_state() {
+  mkdir -p "$(dirname "$STATE")"
+  cat > "$STATE" <<JSON
+{
+  "schema": "$SCHEMA",
+  "route_id": "$ROUTE_ID",
+  "source_chain_id": $SOURCE_CHAIN_ID,
+  "manifest_sha256": "$MANIFEST_SHA256",
+  "lifecycle_release_required": false,
+  "lifecycle_release": "not_applicable",
+  "credit_state": null,
+  "stages": {},
+  "conservation": {}
+}
+JSON
+}
+
+load_state() {
+  [ -f "$STATE" ] || return 1
+  python3 - "$STATE" "$SCHEMA" "$MANIFEST_SHA256" <<'PY'
+import json, sys
+state = json.load(open(sys.argv[1]))
+if state.get("schema") != sys.argv[2]:
+    sys.exit("state schema mismatch")
+if state.get("manifest_sha256") != sys.argv[3]:
+    sys.exit("state manifest hash mismatch; refusing to resume across inputs")
+PY
+}
+
+record_stage() {
+  local stage="$1" field="$2" value="$3"
+  python3 - "$STATE" "$stage" "$field" "$value" <<'PY'
+import json, sys
+path, stage, field, value = sys.argv[1:5]
+state = json.load(open(path))
+state["stages"].setdefault(stage, {})[field] = value
+json.dump(state, open(path, "w"), indent=2)
+PY
+}
+
+stage_done() {
+  python3 - "$STATE" "$1" <<'PY' 2>/dev/null
+import json, sys
+state = json.load(open(sys.argv[1]))
+sys.exit(0 if state["stages"].get(sys.argv[2], {}).get("status") == "done" else 1)
+PY
+}
+
+now_ms() { date +%s%3N; }
+
+run_stage() {
+  local stage="$1"
+  if [ "$RESUME" = 1 ] && stage_done "$stage"; then
+    log "stage $stage already done; skipping (resume)"
+    return 0
+  fi
+  log "stage $stage start"
+  record_stage "$stage" started_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  record_stage "$stage" started_ms "$(now_ms)"
+  "stage_$stage"
+  record_stage "$stage" ended_ms "$(now_ms)"
+  record_stage "$stage" ended_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  record_stage "$stage" status "done"
+  log "stage $stage done"
+}
+
+# --- stage implementations (require live lane inputs; fail closed otherwise) --
+require_lane_inputs() {
+  [ -n "$RECIPIENT_B" ] || die "--recipient-b required for live stages"
+  [ -n "$RECIPIENT_C" ] || die "--recipient-c required for live stages"
+  [ -n "$WITHDRAW_RECIPIENT" ] || die "--withdraw-recipient required for live stages"
+  if [ "$WITHDRAW_RECIPIENT" = "$RECIPIENT_B" ] || [ "$WITHDRAW_RECIPIENT" = "$RECIPIENT_C" ]; then
+    die "withdraw recipient must differ from transfer recipients"
+  fi
+}
+
+stage_deposit() {
+  require_lane_inputs
+  die "live deposit stage requires Lane A/B fleet green + deployed vault; see runbook"
+}
+stage_credit() { require_lane_inputs; die "credit stage gated on fleet activation"; }
+stage_transparent_send() { require_lane_inputs; die "transparent send gated on credit"; }
+stage_orchard_send() { require_lane_inputs; die "orchard send gated on credit"; }
+stage_burn() { require_lane_inputs; die "burn gated on transfers"; }
+stage_withdrawal() { require_lane_inputs; die "withdrawal gated on burn"; }
+
+# --- driver -------------------------------------------------------------------
+if [ ! -f "$STATE" ]; then
+  init_state
+else
+  load_state || die "state file failed schema/manifest validation"
+fi
+
+STAGES="deposit credit transparent_send orchard_send burn withdrawal"
+for stage in $STAGES; do
+  if [ -n "$ONLY_STAGE" ] && [ "$ONLY_STAGE" != "$stage" ]; then
+    continue
+  fi
+  run_stage "$stage"
+done
+
+log "E2E complete: state at $STATE"

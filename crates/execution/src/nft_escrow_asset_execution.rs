@@ -2120,6 +2120,22 @@ fn apply_asset_operation(
             }
             apply_vault_bridge_deposit_claim(genesis, ledger, operation, block_height)
         }
+        AssetTransactionOperation::VaultBridgeFastIngressLifecycle(operation) => {
+            if transaction.unsigned.transaction_kind
+                != VAULT_BRIDGE_FAST_INGRESS_LIFECYCLE_TRANSACTION_KIND
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "vault_bridge_fast_ingress_lifecycle transaction kind mismatch".to_string(),
+                ));
+            }
+            apply_vault_bridge_fast_ingress_lifecycle(
+                genesis,
+                ledger,
+                operation,
+                block_height,
+            )
+        }
         AssetTransactionOperation::VaultBridgeReceiptSubmit(operation) => {
             if transaction.unsigned.transaction_kind != VAULT_BRIDGE_RECEIPT_SUBMIT_TRANSACTION_KIND {
                 return Err((

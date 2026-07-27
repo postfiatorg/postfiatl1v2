@@ -38,6 +38,32 @@ pub fn market_ops_supply_packet_hash(
     ))
 }
 
+pub fn proof_bounded_nav_cap_checkpoint_hash(
+    asset_id: &str,
+    route_id: &str,
+    evidence_root: &str,
+    prior_cap: u64,
+    new_cap: u64,
+) -> Result<String, String> {
+    validate_lower_hex_len("proof_bounded_nav_cap.asset_id", asset_id, ISSUED_ASSET_ID_HEX_LEN)?;
+    validate_text_field("proof_bounded_nav_cap.route_id", route_id)?;
+    validate_lower_hex_len(
+        "proof_bounded_nav_cap.evidence_root",
+        evidence_root,
+        VAULT_BRIDGE_HEX_HASH_LEN,
+    )?;
+    if new_cap <= prior_cap {
+        return Err("proof-bounded NAV cap must increase".to_string());
+    }
+    let preimage = format!(
+        "asset_id={asset_id}\nroute_id={route_id}\nevidence_root={evidence_root}\nprior_cap={prior_cap}\nnew_cap={new_cap}\n"
+    );
+    Ok(hash_hex_domain(
+        PROOF_BOUNDED_NAV_CAP_CHECKPOINT_DOMAIN_V1,
+        preimage.as_bytes(),
+    ))
+}
+
 pub fn market_ops_evidence_root(
     discount_observations: &[MarketOpsVenueObservation],
     premium_observations: &[MarketOpsVenueObservation],
@@ -519,6 +545,7 @@ impl NavProofProfile {
             self.verifier_kind.as_str(),
             NAV_PROFILE_VERIFIER_SP1_GROTH16
                 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+                | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
         )
             && self.valuation_policy_hash.is_empty()
         {
@@ -536,6 +563,7 @@ impl NavProofProfile {
                 self.verifier_kind.as_str(),
                 NAV_PROFILE_VERIFIER_SP1_GROTH16
                     | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+                    | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
             ) {
                 NAV_SP1_POLICY_HASH_HEX_LEN
             } else {
@@ -728,7 +756,9 @@ fn nav_proof_profile_id_with_route_policy(
     }
     if matches!(
         verifier_kind,
-        NAV_PROFILE_VERIFIER_SP1_GROTH16 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+        NAV_PROFILE_VERIFIER_SP1_GROTH16
+            | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+            | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
     ) && valuation_policy_hash.is_empty()
     {
         return Err("nav_profile.valuation_policy_hash is required for sp1-groth16".to_string());
@@ -757,7 +787,9 @@ fn validate_nav_profile_sp1_fields(
 ) -> Result<(), String> {
     if matches!(
         verifier_kind,
-        NAV_PROFILE_VERIFIER_SP1_GROTH16 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+        NAV_PROFILE_VERIFIER_SP1_GROTH16
+            | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+            | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
     ) {
         if sp1_program_vkey.is_empty() {
             return Err("nav_profile.sp1_program_vkey is required for sp1-groth16".to_string());
@@ -791,9 +823,10 @@ fn validate_nav_profile_verifier_kind(verifier_kind: &str) -> Result<(), String>
         | NAV_PROFILE_VERIFIER_PLACEHOLDER
         | NAV_PROFILE_VERIFIER_MULTI_FETCH
         | NAV_PROFILE_VERIFIER_SP1_GROTH16
-        | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1 => Ok(()),
+        | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+        | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 => Ok(()),
         _ => Err(format!(
-            "nav_profile.verifier_kind must be one of [{NAV_PROFILE_VERIFIER_LEDGER_TRANSPARENT}, {NAV_PROFILE_VERIFIER_PLACEHOLDER}, {NAV_PROFILE_VERIFIER_MULTI_FETCH}, {NAV_PROFILE_VERIFIER_SP1_GROTH16}, {NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1}], got {verifier_kind}"
+            "nav_profile.verifier_kind is unsupported: {verifier_kind}"
         )),
     }
 }
@@ -1176,10 +1209,13 @@ pub fn validate_vault_bridge_deposit_source_proof_fields(
     validate_text_field(&format!("{prefix}.source_proof_kind"), source_proof_kind)?;
     if !matches!(
         source_proof_kind,
-        NAV_PROFILE_VERIFIER_SP1_GROTH16 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+        NAV_PROFILE_VERIFIER_SP1_GROTH16
+            | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+            | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+            | SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1
     ) {
         return Err(format!(
-            "{prefix}.source_proof_kind must be {NAV_PROFILE_VERIFIER_SP1_GROTH16} or {NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1}"
+            "{prefix}.source_proof_kind is not a supported SP1 bridge proof"
         ));
     }
     validate_lower_hex_len(
@@ -2246,6 +2282,9 @@ pub struct PftlUniswapConsensusRouteState {
     pub packet_notional_cap_atoms: u64,
     pub latest_finalized_nav_epoch: u64,
     pub return_finality_blocks: u64,
+    /// Public live-value routing gate. Controlled rehearsals keep this false.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub live_value_enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ethereum_verification_policy: Option<EthereumRouteVerificationPolicyV1>,
     pub authorized_valid_supply_atoms: u64,
@@ -2280,6 +2319,12 @@ impl PftlUniswapConsensusRouteState {
             VAULT_BRIDGE_HEX_HASH_LEN,
         )?;
         validate_text_field("pftl_uniswap_route.route_trust_class", &self.route_trust_class)?;
+        if self.route_trust_class == "CONTROLLED" && self.live_value_enabled {
+            return Err(
+                "pftl_uniswap_route CONTROLLED trust class cannot enable public live value"
+                    .to_string(),
+            );
+        }
         validate_lower_hex_len(
             "pftl_uniswap_route.native_nav_asset_id",
             &self.native_nav_asset_id,
@@ -2515,9 +2560,74 @@ pub struct LedgerState {
     pub fastswap_activation_height: Option<u64>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ethereum_arbitrum_finality_states: Vec<EthereumArbitrumFinalityStateV2>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fast_ingress_campaigns: Vec<FastIngressCampaignStateV1>,
 }
 
 impl LedgerState {
+    pub fn vault_bridge_route_backing(
+        &self,
+        asset_id: &str,
+    ) -> Result<Vec<VaultBridgeRouteBackingStateV1>, String> {
+        let mut routes = BTreeMap::<String, VaultBridgeRouteBackingStateV1>::new();
+        for deposit in self.vault_bridge_deposits.iter().filter(|record| {
+            record.asset_id == asset_id && record.status == VAULT_BRIDGE_DEPOSIT_STATUS_FINALIZED
+        }) {
+            let Some(route_id) = vault_bridge_route_id_for_source(
+                &deposit.source_proof_kind,
+                deposit.evidence.source_chain_id,
+            ) else {
+                continue;
+            };
+            let row = routes.entry(route_id.to_string()).or_insert_with(|| {
+                VaultBridgeRouteBackingStateV1 {
+                    route_id: route_id.to_string(),
+                    asset_id: asset_id.to_string(),
+                    deposits_verified: 0,
+                    claims_minted: 0,
+                    withdrawals_reserved: 0,
+                    withdrawals_paid: 0,
+                }
+            });
+            row.deposits_verified = row.deposits_verified
+                .checked_add(deposit.evidence.amount_atoms)
+                .ok_or_else(|| "route verified backing overflow".to_string())?;
+            if let Some(receipt) = self.vault_bridge_receipts.iter().find(|receipt| {
+                receipt.asset_id == asset_id
+                    && receipt.bridge_deposit_evidence.as_ref() == Some(&deposit.evidence)
+            }) {
+                row.claims_minted = row.claims_minted
+                    .checked_add(receipt.allocated_value_atoms)
+                    .ok_or_else(|| "route claimed backing overflow".to_string())?;
+            }
+        }
+        for redemption in self.vault_bridge_redemptions.iter().filter(|r| r.asset_id == asset_id) {
+            let Some(bucket) = self.vault_bridge_bucket(&redemption.bucket_id) else { continue; };
+            let route_id = self.vault_bridge_deposits.iter().find(|deposit| {
+                deposit.asset_id == asset_id
+                    && deposit.policy_hash == bucket.policy_hash
+                    && deposit.evidence.source_domain() == bucket.source_domain
+            })
+            .and_then(|deposit| {
+                vault_bridge_route_id_for_source(
+                    &deposit.source_proof_kind,
+                    deposit.evidence.source_chain_id,
+                )
+            });
+            if let Some(route_id) = route_id {
+                if let Some(row) = routes.get_mut(route_id) {
+                    row.withdrawals_reserved = row.withdrawals_reserved.checked_add(redemption.amount_atoms)
+                        .ok_or_else(|| "route withdrawal reserve overflow".to_string())?;
+                    row.withdrawals_paid = row.withdrawals_paid.checked_add(redemption.settled_atoms)
+                        .ok_or_else(|| "route paid withdrawal overflow".to_string())?;
+                }
+            }
+        }
+        let values = routes.into_values().collect::<Vec<_>>();
+        for row in &values { row.validate()?; }
+        Ok(values)
+    }
+
     pub fn new(accounts: Vec<Account>) -> Self {
         Self {
             accounts,
@@ -2556,6 +2666,7 @@ impl LedgerState {
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
+            fast_ingress_campaigns: Vec::new(),
         }
     }
 
@@ -2601,6 +2712,7 @@ impl LedgerState {
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
+            fast_ingress_campaigns: Vec::new(),
         }
     }
 
@@ -2647,6 +2759,7 @@ impl LedgerState {
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
+            fast_ingress_campaigns: Vec::new(),
         }
     }
 
@@ -2688,6 +2801,7 @@ impl LedgerState {
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
+            fast_ingress_campaigns: Vec::new(),
         }
     }
 
@@ -2734,6 +2848,7 @@ impl LedgerState {
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
+            fast_ingress_campaigns: Vec::new(),
         }
     }
 
@@ -2775,6 +2890,7 @@ impl LedgerState {
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
+            fast_ingress_campaigns: Vec::new(),
         }
     }
 
@@ -2899,6 +3015,26 @@ impl LedgerState {
             .find(|state| {
                 state.route_profile_hash == route_profile_hash && state.route_epoch == route_epoch
             })
+    }
+
+    pub fn fast_ingress_campaign(
+        &self,
+        route_profile_hash: &str,
+        route_epoch: u64,
+    ) -> Option<&FastIngressCampaignStateV1> {
+        self.fast_ingress_campaigns.iter().find(|state| {
+            state.route_profile_hash == route_profile_hash && state.route_epoch == route_epoch
+        })
+    }
+
+    pub fn fast_ingress_campaign_mut(
+        &mut self,
+        route_profile_hash: &str,
+        route_epoch: u64,
+    ) -> Option<&mut FastIngressCampaignStateV1> {
+        self.fast_ingress_campaigns.iter_mut().find(|state| {
+            state.route_profile_hash == route_profile_hash && state.route_epoch == route_epoch
+        })
     }
 
     pub fn nav_attestor(&self, address: &str) -> Option<&NavAttestor> {
@@ -3154,6 +3290,7 @@ impl LedgerState {
         }
 
         let mut vault_bridge_deposit_keys = BTreeSet::new();
+        let mut vault_bridge_source_nullifiers = BTreeSet::new();
         for record in &self.vault_bridge_deposits {
             record.validate()?;
             let key = (record.asset_id.clone(), record.evidence_root.clone());
@@ -3161,6 +3298,14 @@ impl LedgerState {
                 return Err(format!(
                     "duplicate vault_bridge bridge deposit `{}` for asset `{}`",
                     record.evidence_root, record.asset_id
+                ));
+            }
+            if !record.source_nullifier.is_empty()
+                && !vault_bridge_source_nullifiers.insert(record.source_nullifier.clone())
+            {
+                return Err(format!(
+                    "duplicate vault_bridge source nullifier `{}`",
+                    record.source_nullifier
                 ));
             }
             if !assets_by_id.contains_key(&record.asset_id) {
@@ -3381,6 +3526,22 @@ impl LedgerState {
                     .to_string());
             }
         }
+        let mut fast_campaign_route_epochs = BTreeSet::new();
+        let mut fast_ingress_deposit_keys = BTreeSet::new();
+        for state in &self.fast_ingress_campaigns {
+            state.validate()?;
+            if !fast_campaign_route_epochs
+                .insert((state.route_profile_hash.clone(), state.route_epoch))
+            {
+                return Err("duplicate pfUSDC fast-ingress campaign route epoch".to_string());
+            }
+            for mint in &state.mints {
+                if !fast_ingress_deposit_keys.insert(mint.deposit_key.clone()) {
+                    return Err("pfUSDC fast-ingress deposit key is reused across route epochs"
+                        .to_string());
+                }
+            }
+        }
         let mut asset_ids = BTreeSet::new();
         let assets_by_id = self
             .asset_definitions
@@ -3502,5 +3663,27 @@ impl LedgerState {
             }
         }
         Ok(())
+    }
+}
+
+fn vault_bridge_route_id_for_source(
+    source_proof_kind: &str,
+    source_chain_id: u64,
+) -> Option<&'static str> {
+    match (source_proof_kind, source_chain_id) {
+        (SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1, ETHEREUM_MAINNET_CHAIN_ID) => {
+            Some(VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1)
+        }
+        (SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1, ETHEREUM_SEPOLIA_CHAIN_ID) => {
+            Some(VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1)
+        }
+        (
+            NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+            | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1,
+            ARBITRUM_ONE_CHAIN_ID,
+        ) => {
+            Some(VAULT_BRIDGE_ROUTE_ARBITRUM_ONE_USDC_V1)
+        }
+        _ => None,
     }
 }

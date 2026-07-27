@@ -15,7 +15,8 @@
         EscrowCancelOperation, EscrowCreateOperation, EscrowFinishOperation,
         EthereumCheckpointCertificateV1, EthereumCheckpointVoteV1,
         EthereumExternalEventProofV1, EthereumFinalizedCheckpointV1, EthereumReceiptProofV1,
-        EthereumRouteVerificationPolicyV1, FastAssetIdV1, FastLaneReserveBalanceV1,
+        EthereumRouteVerificationPolicyV1, FastAssetIdV1, FastIngressCampaignStateV1,
+        FastIngressMintRecordV1, FastLaneReserveBalanceV1,
         FastSwapChainDomainV1, FastSwapCommitteeDomainV1, FastSwapCommitteeRootV1,
         FastSwapCommitteeV1, FastSwapOpaqueHashV1, FastSwapValidatorV1, IssuedPaymentOperation,
         LedgerState,
@@ -34,7 +35,8 @@
         PftlUniswapReturnImportOperation, PftlUniswapRouteInitOperation,
         VaultBridgeDepositEvidence, VaultBridgeDepositAttestOperation, VaultBridgeDepositChallengeOperation,
         VaultBridgeDepositClaimOperation, VaultBridgeDepositFinalizeOperation,
-        VaultBridgeDepositObservation, VaultBridgeDepositProposeOperation, VaultBridgeBucketImpairOperation,
+        VaultBridgeDepositObservation, VaultBridgeDepositProposeOperation, VaultBridgeDepositRecord,
+        VaultBridgeBucketImpairOperation,
         VaultBridgeBurnToRedeemOperation, VaultBridgeMintFromReceiptsOperation,
         VaultBridgeNavSubscriptionAllocateOperation, VaultBridgeReceiptCountOperation,
         VaultBridgeReceiptSubmitOperation, VaultBridgeRedeemSettleOperation,
@@ -47,7 +49,8 @@
         VAULT_BRIDGE_ALLOCATION_PURPOSE_SUPPLY,
         MARKET_OPS_FINALIZE_TRANSACTION_KIND, MARKET_OPS_POLICY_REGISTER_TRANSACTION_KIND,
         NAV_PROFILE_VERIFIER_MULTI_FETCH,
-        NAV_PROFILE_VERIFIER_PLACEHOLDER, NAV_PROFILE_VERIFIER_SP1_GROTH16,
+        NAV_PROFILE_VERIFIER_PLACEHOLDER, NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1,
+        NAV_PROFILE_VERIFIER_SP1_GROTH16,
         NFT_COLLECTION_FLAG_BURN_LOCKED,
         NAV_SP1_PROOF_ENCODING_GROTH16, NFT_COLLECTION_FLAG_TRANSFER_LOCKED,
         NFT_FLAG_TRANSFERABLE, OFFER_CANCEL_TRANSACTION_KIND, OFFER_CREATE_TRANSACTION_KIND,
@@ -68,7 +71,7 @@
         VAULT_BRIDGE_RECEIPT_STATUS_IMPAIRED, VAULT_BRIDGE_RECEIPT_SUBMIT_TRANSACTION_KIND,
         VAULT_BRIDGE_RECEIPT_STATUS_COUNTED, VAULT_BRIDGE_REDEEM_SETTLE_TRANSACTION_KIND, VAULT_BRIDGE_REDEMPTION_STATE_PENDING,
         VAULT_BRIDGE_REDEMPTION_STATE_SETTLED, VAULT_BRIDGE_UNIT, vault_bridge_source_root_for_asset,
-        NavTrackedAsset,
+        NavTrackedAsset, FAST_INGRESS_CAMPAIGN_SCHEMA_V1, FAST_INGRESS_MINT_STATUS_FINAL,
         ETHEREUM_CHECKPOINT_SCHEMA_V1, ETHEREUM_CHECKPOINT_VOTE_CONTEXT_V1,
         PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V1,
         PFTL_UNISWAP_EXPORT_STATUS_SOURCE_DEBITED,
@@ -222,6 +225,102 @@
         };
         evidence.deposit_id = vault_bridge_deposit_id(&evidence).expect("deposit id");
         evidence
+    }
+
+    #[test]
+    fn vault_bridge_cap_leads_supply_only_for_finalized_unclaimed_sp1_backing() {
+        let issuer = "issuer".to_string();
+        let policy_hash = "42".repeat(48);
+        let evidence = vault_bridge_evidence(10, "91");
+        let source_domain = evidence.source_domain();
+        let profile = postfiat_types::NavProofProfile::new(
+            issuer.clone(),
+            NAV_PROFILE_VERIFIER_MULTI_FETCH,
+            format!("vault_bridge:{source_domain}"),
+            100,
+            1,
+            100,
+            0,
+            0,
+            1,
+            0,
+            policy_hash.clone(),
+            "",
+            "",
+            0,
+            0,
+        )
+        .expect("vault bridge profile");
+        let asset = AssetDefinition::new("postfiat-local", &issuer, "pfUSDC", 1, 6)
+            .expect("vault bridge asset");
+        let asset_id = asset.asset_id.clone();
+        let evidence_root =
+            vault_bridge_deposit_evidence_root(&evidence).expect("deposit evidence root");
+        let mut ledger = LedgerState::new(Vec::new());
+        ledger.asset_definitions.push(asset);
+        ledger.vault_bridge_deposits.push(VaultBridgeDepositRecord {
+            asset_id: asset_id.clone(),
+            evidence_root,
+            evidence: evidence.clone(),
+            policy_hash: policy_hash.clone(),
+            source_proof_kind: NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1.to_string(),
+            source_proof_hash: "92".repeat(32),
+            source_public_values_hash: "93".repeat(32),
+            source_nullifier: String::new(),
+            proposer: issuer,
+            status: VAULT_BRIDGE_DEPOSIT_STATUS_FINALIZED.to_string(),
+            submitted_at_height: 10,
+            finalized_at_height: 12,
+            expires_at_height: 100,
+            challenger: String::new(),
+            challenge_hash: String::new(),
+            challenge_bond: 0,
+            attestations: Vec::new(),
+        });
+        ledger
+            .fast_ingress_campaigns
+            .push(FastIngressCampaignStateV1 {
+                schema: FAST_INGRESS_CAMPAIGN_SCHEMA_V1.to_string(),
+                route_profile_hash: policy_hash,
+                route_epoch: 1,
+                manifest_hash: "94".repeat(32),
+                asset_id: asset_id.clone(),
+                cap_atoms: 10,
+                age_margin_blocks: 1,
+                age_release_enabled: false,
+                exposure_total_atoms: 10,
+                paused: false,
+                mints: vec![FastIngressMintRecordV1 {
+                    mint_id: "95".repeat(32),
+                    deposit_key: "96".repeat(32),
+                    source_chain_id: evidence.source_chain_id,
+                    vault_address: evidence.vault_address.clone(),
+                    deposit_id: evidence.deposit_id.clone(),
+                    amount_atoms: evidence.amount_atoms,
+                    recipient: evidence.pftl_recipient.clone(),
+                    route_id: "pfusdc-tier4-arbitrum-one-v1".to_string(),
+                    route_epoch: 1,
+                    source_assertion_id: "97".repeat(32),
+                    initial_latest_confirmed_assertion_id: "98".repeat(32),
+                    source_l1_block_hash: "99".repeat(32),
+                    source_l2_block_hash: "9a".repeat(32),
+                    accepted_height: 10,
+                    status: FAST_INGRESS_MINT_STATUS_FINAL.to_string(),
+                    claimed: false,
+                }],
+            });
+
+        assert_eq!(
+            finalized_unclaimed_sp1_backing_for_asset(&ledger, &profile, &asset_id)
+                .expect("proof-backed cap lead"),
+            10
+        );
+        ledger.fast_ingress_campaigns[0].mints[0].claimed = true;
+        assert_eq!(
+            finalized_unclaimed_sp1_backing_for_asset(&ledger, &profile, &asset_id)
+                .expect("claimed deposit excluded"),
+            0
+        );
     }
 
     #[test]

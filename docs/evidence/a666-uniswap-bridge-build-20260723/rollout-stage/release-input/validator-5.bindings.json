@@ -1,0 +1,20 @@
+{
+  "schema": "postfiat.deployment_validator_bindings.v1",
+  "validators": [
+    {
+      "validator_id": "validator-5",
+      "services": [
+        {
+          "service_id": "rpc",
+          "service_unit_file": "/etc/systemd/system/postfiat-validator-5-rpc.service",
+          "environment_file": "/etc/postfiat/releases/open-source-consensus-viewlock-b04c595e/validator-5.rpc.env"
+        },
+        {
+          "service_id": "transport",
+          "service_unit_file": "/etc/systemd/system/postfiat-validator-5.service",
+          "environment_file": "/etc/postfiat/releases/open-source-consensus-viewlock-b04c595e/validator-5.transport.env"
+        }
+      ]
+    }
+  ]
+}

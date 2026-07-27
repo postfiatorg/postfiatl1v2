@@ -1,0 +1,28 @@
+{
+  "schema": "postfiat-certified-asset-ops-request-v1",
+  "operations": [
+    {
+      "label": "a666-holder-trust",
+      "source": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+      "key_file": "/home/postfiat/.pft/venue/orchard-mirror/navswap-fast-live/keys/holder.json",
+      "operation": {
+        "operation": "trust_set",
+        "account": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+        "issuer": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+        "asset_id": "300bf48a63a94770b6e67817f88cd1abf77e7f592a061e15682d7fd9973260af4c2e631e32df3c2c402b7d2fe272a293",
+        "limit": 100000000,
+        "authorized": false,
+        "frozen": false,
+        "reserve_paid": 10
+      },
+      "dependencies": [
+        {
+          "label": "a666-asset-create",
+          "mode": "prior_round",
+          "reason": "the issued asset definition must be finalized before trustline creation"
+        }
+      ]
+    }
+  ]
+}
+

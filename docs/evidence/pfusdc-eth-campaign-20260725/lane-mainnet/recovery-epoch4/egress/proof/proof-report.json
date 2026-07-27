@@ -1,0 +1,8 @@
+{
+  "program_vkey": "0x007a22f1b8a47814a027ee0af8086a6f5f6ae4af0530dc7ffb2acac2da617834",
+  "proof_bytes": 356,
+  "proof_mode": "groth16",
+  "public_values_bytes": 1486,
+  "schema": "postfiat.pfusdc.egress_proof_report.v1",
+  "setup_and_prove_ms": 907776
+}

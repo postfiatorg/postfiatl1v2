@@ -62,16 +62,15 @@ fn vault_bridge_atoms_to_nav_value(
         valuation_unit_scale(nav_valuation_unit, settlement_asset_precision),
         valuation_unit_scale(settlement_valuation_unit, settlement_asset_precision),
     ) {
-        (Some(nav_scale), Some(settlement_scale)) if nav_scale != settlement_scale => amount_atoms
-            .checked_mul(nav_scale)
-            .ok_or_else(|| {
+        (Some(nav_scale), Some(settlement_scale)) if nav_scale != settlement_scale => {
+            amount_atoms.checked_mul(nav_scale).ok_or_else(|| {
                 (
                     "nav_subscription_overlay_overflow",
                     "nav subscription overlay valuation-scale conversion would overflow"
                         .to_string(),
                 )
-            })?
-            / settlement_scale,
+            })? / settlement_scale
+        }
         _ => amount_atoms,
     };
     u64::try_from(value).map_err(|_| {
@@ -127,15 +126,12 @@ fn required_vault_bridge_settlement_atoms(
         }
         _ => (raw, nav_asset_scale),
     };
-    let required = numerator
-        .checked_add(denominator - 1)
-        .ok_or_else(|| {
-            (
-                "nav_settlement_overflow",
-                "nav settlement valuation-scale rounding would overflow".to_string(),
-            )
-        })?
-        / denominator;
+    let required = numerator.checked_add(denominator - 1).ok_or_else(|| {
+        (
+            "nav_settlement_overflow",
+            "nav settlement valuation-scale rounding would overflow".to_string(),
+        )
+    })? / denominator;
     u64::try_from(required).map_err(|_| {
         (
             "nav_settlement_overflow",
@@ -208,12 +204,14 @@ fn nav_subscription_reserve_overlay(
                         .to_string(),
                 )
             })?;
-        let bucket = ledger.vault_bridge_bucket(&allocation.bucket_id).ok_or_else(|| {
-            (
-                "missing_vault_bridge_bucket",
-                "nav subscription overlay references missing settlement bucket".to_string(),
-            )
-        })?;
+        let bucket = ledger
+            .vault_bridge_bucket(&allocation.bucket_id)
+            .ok_or_else(|| {
+                (
+                    "missing_vault_bridge_bucket",
+                    "nav subscription overlay references missing settlement bucket".to_string(),
+                )
+            })?;
         if bucket.asset_id != allocation.asset_id {
             return Err((
                 "vault_bridge_bucket_asset_mismatch",
@@ -223,12 +221,14 @@ fn nav_subscription_reserve_overlay(
         if bucket.status != VAULT_BRIDGE_BUCKET_STATUS_ACTIVE {
             continue;
         }
-        let receipt = ledger.vault_bridge_receipt(&allocation.receipt_id).ok_or_else(|| {
-            (
-                "missing_vault_bridge_receipt",
-                "nav subscription overlay references missing receipt".to_string(),
-            )
-        })?;
+        let receipt = ledger
+            .vault_bridge_receipt(&allocation.receipt_id)
+            .ok_or_else(|| {
+                (
+                    "missing_vault_bridge_receipt",
+                    "nav subscription overlay references missing receipt".to_string(),
+                )
+            })?;
         if receipt.asset_id != allocation.asset_id
             || receipt.bucket_id != allocation.bucket_id
             || receipt.status != VAULT_BRIDGE_RECEIPT_STATUS_COUNTED
@@ -331,7 +331,8 @@ fn apply_nav_redeem_vault_bridge_settlement(
         .ok_or_else(|| {
             (
                 "missing_vault_bridge_nav_asset",
-                "nav redeem vault bridge settlement asset is not registered as a NAV asset".to_string(),
+                "nav redeem vault bridge settlement asset is not registered as a NAV asset"
+                    .to_string(),
             )
         })?;
     let settlement_asset = ledger
@@ -409,7 +410,8 @@ fn apply_nav_redeem_vault_bridge_settlement(
     if allocation.retired_at_height == 0 {
         return Err((
             "vault_bridge_allocation_not_retired",
-            "nav redeem vault bridge settlement requires a retired nav_subscription allocation".to_string(),
+            "nav redeem vault bridge settlement requires a retired nav_subscription allocation"
+                .to_string(),
         ));
     }
     let release_capacity = allocation
@@ -467,7 +469,11 @@ fn apply_nav_redeem_vault_bridge_settlement(
         &bucket.source_domain,
         &bucket.policy_hash,
     )?;
-    ensure_vault_bridge_source_policy(settlement_profile, &bucket.source_domain, &bucket.policy_hash)?;
+    ensure_vault_bridge_source_policy(
+        settlement_profile,
+        &bucket.source_domain,
+        &bucket.policy_hash,
+    )?;
     if bucket.nav_subscription_allocations_atoms < release_atoms {
         return Err((
             "vault_bridge_bucket_underflow",
@@ -528,9 +534,9 @@ fn apply_nav_redeem_vault_bridge_settlement(
             if ledger
                 .vault_bridge_allocation(&top_up_allocation.allocation_id)
                 .is_some()
-                || top_up_plan.iter().any(|(_, _, planned)| {
-                    planned.allocation_id == top_up_allocation.allocation_id
-                })
+                || top_up_plan
+                    .iter()
+                    .any(|(_, _, planned)| planned.allocation_id == top_up_allocation.allocation_id)
             {
                 return Err((
                     "duplicate_vault_bridge_allocation",
@@ -652,10 +658,7 @@ fn nav_sp1_subscription_source_root(
                 "nav subscription overlay value would overflow SP1 base assets".to_string(),
             )
         })?;
-    let sp1_public_values_hash = hash_hex(
-        "postfiat.nav_sp1_public_values.v1",
-        sp1_public_values,
-    );
+    let sp1_public_values_hash = hash_hex("postfiat.nav_sp1_public_values.v1", sp1_public_values);
     let preimage = format!(
         "asset_id={}\nprofile_id={}\nprofile_source_class_bytes={}\nprofile_source_class={}\npolicy_hash={}\nsp1_public_values_hash={}\nsp1_verified_net_assets={}\nsubscription_overlay_source_root={}\nsubscription_overlay_value_nav_units={}\ntotal_verified_net_assets={}\n",
         nav_asset.asset_id,
@@ -687,7 +690,8 @@ fn apply_nav_mint_vault_bridge_settlement(
         .ok_or_else(|| {
             (
                 "missing_vault_bridge_nav_asset",
-                "nav mint vault bridge asset settlement asset is not registered as a NAV asset".to_string(),
+                "nav mint vault bridge asset settlement asset is not registered as a NAV asset"
+                    .to_string(),
             )
         })?;
     let settlement_asset = ledger
@@ -801,17 +805,23 @@ fn apply_nav_mint_vault_bridge_settlement(
         &bucket.source_domain,
         &bucket.policy_hash,
     )?;
-    ensure_vault_bridge_source_policy(settlement_profile, &bucket.source_domain, &bucket.policy_hash)?;
+    ensure_vault_bridge_source_policy(
+        settlement_profile,
+        &bucket.source_domain,
+        &bucket.policy_hash,
+    )?;
     bucket
         .validate()
         .map_err(|error| ("bad_vault_bridge_bucket", error))?;
 
-    let receipt = ledger.vault_bridge_receipt(&allocation.receipt_id).ok_or_else(|| {
-        (
-            "missing_vault_bridge_receipt",
-            "nav mint vault bridge asset allocation references missing receipt".to_string(),
-        )
-    })?;
+    let receipt = ledger
+        .vault_bridge_receipt(&allocation.receipt_id)
+        .ok_or_else(|| {
+            (
+                "missing_vault_bridge_receipt",
+                "nav mint vault bridge asset allocation references missing receipt".to_string(),
+            )
+        })?;
     if receipt.asset_id != operation.settlement_asset_id
         || receipt.bucket_id != operation.settlement_bucket_id
         || receipt.status != VAULT_BRIDGE_RECEIPT_STATUS_COUNTED
@@ -836,25 +846,33 @@ fn apply_vault_bridge_receipt_submit(
     operation: &VaultBridgeReceiptSubmitOperation,
     block_height: u64,
 ) -> Result<(), (&'static str, String)> {
-    let nav_asset = ledger.nav_asset(&operation.asset_id).cloned().ok_or_else(|| {
-        (
-            "missing_nav_asset",
-            format!("vault bridge asset asset `{}` is not registered as a NAV asset", operation.asset_id),
-        )
-    })?;
+    let nav_asset = ledger
+        .nav_asset(&operation.asset_id)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                "missing_nav_asset",
+                format!(
+                    "vault bridge asset asset `{}` is not registered as a NAV asset",
+                    operation.asset_id
+                ),
+            )
+        })?;
     ensure_vault_bridge_asset_policy(ledger, &nav_asset, &operation.operator)?;
     let profile = vault_bridge_profile_for_asset(ledger, &nav_asset)?;
     ensure_vault_bridge_source_policy(profile, &operation.source_domain, &operation.policy_hash)?;
     if operation.claim_type != VAULT_BRIDGE_CLAIM_TYPE_BRIDGE_DEPOSIT {
         return Err((
             "unsupported_vault_bridge_claim_type",
-            "vault bridge asset receipts must be backed by a bridge_deposit vault event".to_string(),
+            "vault bridge asset receipts must be backed by a bridge_deposit vault event"
+                .to_string(),
         ));
     }
     if operation.expires_at_height == 0 || operation.expires_at_height <= block_height {
         return Err((
             "vault_bridge_receipt_expired",
-            "vault bridge asset receipt expiry must be greater than the current block height".to_string(),
+            "vault bridge asset receipt expiry must be greater than the current block height"
+                .to_string(),
         ));
     }
 
@@ -890,15 +908,18 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
     operation: &VaultBridgeDepositProposeOperation,
     block_height: u64,
 ) -> Result<(), (&'static str, String)> {
-    let nav_asset = ledger.nav_asset(&operation.asset_id).cloned().ok_or_else(|| {
-        (
-            "missing_nav_asset",
-            format!(
-                "vault bridge asset bridge deposit asset `{}` is not registered as a NAV asset",
-                operation.asset_id
-            ),
-        )
-    })?;
+    let nav_asset = ledger
+        .nav_asset(&operation.asset_id)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                "missing_nav_asset",
+                format!(
+                    "vault bridge asset bridge deposit asset `{}` is not registered as a NAV asset",
+                    operation.asset_id
+                ),
+            )
+        })?;
     let profile = vault_bridge_profile_for_asset(ledger, &nav_asset)?;
     let source_domain = operation.evidence.source_domain();
     ensure_vault_bridge_deposit_admission_hygiene(profile, &operation.evidence)?;
@@ -919,37 +940,6 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
                 .to_string(),
         ));
     }
-    let proof_public_values = ensure_vault_bridge_deposit_source_proof(
-        VaultBridgeDepositSourceProof {
-            genesis: Some(genesis),
-            profile,
-            evidence: &operation.evidence,
-            evidence_root: &expected_root,
-            policy_hash: &operation.policy_hash,
-            source_proof_kind: &operation.source_proof_kind,
-            source_proof_hash: &operation.source_proof_hash,
-            source_public_values_hash: &operation.source_public_values_hash,
-            source_proof_bytes: &operation.source_proof_bytes,
-            source_public_values: &operation.source_public_values,
-        },
-    )?;
-    if let Some(public_values) = proof_public_values {
-        let state = ledger
-            .ethereum_arbitrum_finality_state_mut(
-                &operation.policy_hash,
-                public_values.route_epoch,
-            )
-            .ok_or_else(|| {
-                (
-                    "pfusdc_finality_state_missing",
-                    "proof-native pfUSDC ingress requires a governance-pinned Ethereum/Arbitrum finality state"
-                        .to_string(),
-                )
-            })?;
-        state
-            .verify_and_advance(&public_values)
-            .map_err(|error| ("pfusdc_finality_state_rejected", error))?;
-    }
     if ledger.vault_bridge_deposits.iter().any(|record| {
         record.asset_id == operation.asset_id
             && record.evidence.deposit_id == operation.evidence.deposit_id
@@ -968,7 +958,138 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
             "vault bridge asset bridge deposit evidence is already proposed".to_string(),
         ));
     }
-    let record = VaultBridgeDepositRecord::new(
+    let fast_ingress_verifier = ledger
+        .ethereum_arbitrum_finality_states
+        .iter()
+        .find(|state| state.route_profile_hash == operation.policy_hash)
+        .and_then(|state| state.fast_ingress_verifier.as_ref());
+    let proof_public_values =
+        ensure_vault_bridge_deposit_source_proof(VaultBridgeDepositSourceProof {
+            genesis: Some(genesis),
+            profile,
+            evidence: &operation.evidence,
+            evidence_root: &expected_root,
+            policy_hash: &operation.policy_hash,
+            source_proof_kind: &operation.source_proof_kind,
+            source_proof_hash: &operation.source_proof_hash,
+            source_public_values_hash: &operation.source_public_values_hash,
+            source_proof_bytes: &operation.source_proof_bytes,
+            source_public_values: &operation.source_public_values,
+            fast_ingress_verifier,
+        })?;
+    let mut advanced_finality = None;
+    let mut advanced_campaign = None;
+    let mut source_nullifier = String::new();
+    if let Some(public_values) = proof_public_values {
+        match public_values {
+            VerifiedIngressPublicValues::Confirmed(values) => {
+                let mut state = ledger
+                    .ethereum_arbitrum_finality_state_mut(
+                        &operation.policy_hash,
+                        values.route_epoch,
+                    )
+                    .ok_or_else(|| {
+                        (
+                            "pfusdc_finality_state_missing",
+                            "proof-native pfUSDC ingress requires a governance-pinned Ethereum/Arbitrum finality state"
+                                .to_string(),
+                        )
+                    })?
+                    .clone();
+                state
+                    .verify_and_advance(&values)
+                    .map_err(|error| ("pfusdc_finality_state_rejected", error))?;
+                advanced_finality = Some(state);
+            }
+            VerifiedIngressPublicValues::Bonded(values) => {
+                let mut state = ledger
+                    .ethereum_arbitrum_finality_state_mut(
+                        &operation.policy_hash,
+                        values.route_epoch,
+                    )
+                    .ok_or_else(|| {
+                        (
+                            "pfusdc_finality_state_missing",
+                            "proof-native pfUSDC ingress requires a governance-pinned Ethereum/Arbitrum finality state"
+                                .to_string(),
+                        )
+                    })?
+                    .clone();
+                state
+                    .verify_and_advance_bonded(&values)
+                    .map_err(|error| ("pfusdc_bonded_finality_state_rejected", error))?;
+                if ledger.fast_ingress_campaigns.iter().any(|campaign| {
+                    campaign
+                        .mints
+                        .iter()
+                        .any(|mint| mint.deposit_key == values.deposit_key)
+                }) {
+                    return Err((
+                        "pfusdc_fast_ingress_global_replay",
+                        "fast-ingress deposit replay key was consumed in another route epoch"
+                            .to_string(),
+                    ));
+                }
+                let global_exposure =
+                    ledger
+                        .fast_ingress_campaigns
+                        .iter()
+                        .try_fold(0_u64, |total, campaign| {
+                            total
+                                .checked_add(campaign.exposure_total_atoms)
+                                .ok_or_else(|| {
+                                    (
+                                        "pfusdc_fast_ingress_exposure_overflow",
+                                        "global fast-ingress exposure overflow".to_string(),
+                                    )
+                                })
+                        })?;
+                if global_exposure
+                    .checked_add(values.amount_atoms)
+                    .ok_or_else(|| {
+                        (
+                            "pfusdc_fast_ingress_exposure_overflow",
+                            "global fast-ingress exposure overflow".to_string(),
+                        )
+                    })?
+                    > values.cap_atoms
+                {
+                    return Err((
+                        "pfusdc_fast_ingress_global_cap_exceeded",
+                        "fast-ingress mint would exceed the global campaign cap".to_string(),
+                    ));
+                }
+                let mut campaign = ledger
+                    .fast_ingress_campaign(&operation.policy_hash, values.route_epoch)
+                    .cloned()
+                    .map(Ok)
+                    .unwrap_or_else(|| {
+                        postfiat_types::FastIngressCampaignStateV1::from_public_values(&values)
+                    })
+                    .map_err(|error| ("pfusdc_fast_ingress_campaign_invalid", error))?;
+                campaign
+                    .accept_escrowed_mint(&values, block_height)
+                    .map_err(|error| ("pfusdc_fast_ingress_escrow_rejected", error))?;
+                advanced_campaign = Some(campaign);
+                advanced_finality = Some(state);
+            }
+            VerifiedIngressPublicValues::Ethereum { nullifier } => {
+                source_nullifier = nullifier;
+            }
+        }
+    }
+    if !source_nullifier.is_empty()
+        && ledger
+            .vault_bridge_deposits
+            .iter()
+            .any(|record| record.source_nullifier == source_nullifier)
+    {
+        return Err((
+            "duplicate_vault_bridge_source_nullifier",
+            "Ethereum ingress source nullifier is already recorded".to_string(),
+        ));
+    }
+    let record = VaultBridgeDepositRecord::new_with_source_nullifier(
         operation.asset_id.clone(),
         operation.evidence_root.clone(),
         operation.evidence.clone(),
@@ -976,11 +1097,32 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
         operation.source_proof_kind.clone(),
         operation.source_proof_hash.clone(),
         operation.source_public_values_hash.clone(),
+        source_nullifier,
         operation.proposer.clone(),
         block_height,
         operation.expires_at_height,
     )
     .map_err(|error| ("bad_vault_bridge_deposit", error))?;
+    if let Some(state) = advanced_finality {
+        let current = ledger
+            .ethereum_arbitrum_finality_state_mut(&state.route_profile_hash, state.route_epoch)
+            .ok_or_else(|| {
+                (
+                    "pfusdc_finality_state_missing",
+                    "proof-native finality state disappeared during commit".to_string(),
+                )
+            })?;
+        *current = state;
+    }
+    if let Some(campaign) = advanced_campaign {
+        if let Some(current) =
+            ledger.fast_ingress_campaign_mut(&campaign.route_profile_hash, campaign.route_epoch)
+        {
+            *current = campaign;
+        } else {
+            ledger.fast_ingress_campaigns.push(campaign);
+        }
+    }
     ledger.vault_bridge_deposits.push(record);
     Ok(())
 }
@@ -992,12 +1134,7 @@ fn apply_vault_bridge_deposit_propose(
     block_height: u64,
 ) -> Result<(), (&'static str, String)> {
     let genesis = Genesis::new("postfiat-execution-test");
-    apply_vault_bridge_deposit_propose_with_genesis(
-        &genesis,
-        ledger,
-        operation,
-        block_height,
-    )
+    apply_vault_bridge_deposit_propose_with_genesis(&genesis, ledger, operation, block_height)
 }
 
 fn ensure_vault_bridge_deposit_admission_hygiene(
@@ -1212,8 +1349,12 @@ fn verify_vault_bridge_withdrawal_attestation_signature(
             "vault bridge withdrawal observer account has no public key".to_string(),
         )
     })?;
-    let public_key = hex_to_bytes(public_key_hex)
-        .map_err(|error| ("bad_vault_bridge_withdrawal_attestor_key", error.to_string()))?;
+    let public_key = hex_to_bytes(public_key_hex).map_err(|error| {
+        (
+            "bad_vault_bridge_withdrawal_attestor_key",
+            error.to_string(),
+        )
+    })?;
     let signature = hex_to_bytes(&attestation.signature_hex)
         .map_err(|error| ("bad_vault_bridge_withdrawal_signature", error.to_string()))?;
     if !ml_dsa_65_verify(
@@ -1275,7 +1416,8 @@ fn apply_vault_bridge_deposit_challenge(
         .ok_or_else(|| {
             (
                 "missing_vault_bridge_deposit",
-                "vault bridge asset bridge deposit challenge references missing evidence".to_string(),
+                "vault bridge asset bridge deposit challenge references missing evidence"
+                    .to_string(),
             )
         })?;
     if record.status == VAULT_BRIDGE_DEPOSIT_STATUS_FINALIZED {
@@ -1290,12 +1432,16 @@ fn apply_vault_bridge_deposit_challenge(
             "vault bridge asset bridge deposit evidence is already challenged".to_string(),
         ));
     }
-    let nav_asset = ledger.nav_asset(&operation.asset_id).cloned().ok_or_else(|| {
-        (
-            "missing_nav_asset",
-            "vault bridge asset bridge deposit challenge references missing NAV asset".to_string(),
-        )
-    })?;
+    let nav_asset = ledger
+        .nav_asset(&operation.asset_id)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                "missing_nav_asset",
+                "vault bridge asset bridge deposit challenge references missing NAV asset"
+                    .to_string(),
+            )
+        })?;
     let profile = vault_bridge_profile_for_pinned_policy(
         ledger,
         &nav_asset,
@@ -1303,6 +1449,13 @@ fn apply_vault_bridge_deposit_challenge(
         &record.policy_hash,
     )?
     .clone();
+    if vault_bridge_source_proof_is_consensus_verified(&record.source_proof_kind) {
+        return Err((
+            "vault_bridge_deposit_consensus_verified",
+            "cryptographically verified vault bridge deposits are verified by consensus at proposal and are not challengeable"
+                .to_string(),
+        ));
+    }
     if profile.challenge_window_blocks == 0 {
         return Err((
             "vault_bridge_deposit_not_challengeable",
@@ -1379,7 +1532,7 @@ fn apply_vault_bridge_deposit_attest(
     ledger: &mut LedgerState,
     operation: &VaultBridgeDepositAttestOperation,
     block_height: u64,
- ) -> Result<(), (&'static str, String)> {
+) -> Result<(), (&'static str, String)> {
     apply_vault_bridge_deposit_attest_with_compatibility(
         ledger,
         operation,
@@ -1400,7 +1553,8 @@ fn apply_vault_bridge_deposit_attest_with_compatibility(
         .ok_or_else(|| {
             (
                 "missing_vault_bridge_deposit",
-                "vault bridge asset bridge deposit attestation references missing evidence".to_string(),
+                "vault bridge asset bridge deposit attestation references missing evidence"
+                    .to_string(),
             )
         })?;
     if record.status != VAULT_BRIDGE_DEPOSIT_STATUS_PENDING {
@@ -1409,18 +1563,29 @@ fn apply_vault_bridge_deposit_attest_with_compatibility(
             "vault bridge asset bridge deposit attestation requires pending evidence".to_string(),
         ));
     }
+    if record.source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 {
+        return Err((
+            "pfusdc_fast_ingress_lifecycle_proof_required",
+            "bonded fast ingress cannot be finalized by the legacy height/attestation path"
+                .to_string(),
+        ));
+    }
     if block_height > record.expires_at_height {
         return Err((
             "stale_vault_bridge_deposit",
             "vault bridge asset bridge deposit evidence is expired".to_string(),
         ));
     }
-    let nav_asset = ledger.nav_asset(&operation.asset_id).cloned().ok_or_else(|| {
-        (
-            "missing_nav_asset",
-            "vault bridge asset bridge deposit attestation references missing NAV asset".to_string(),
-        )
-    })?;
+    let nav_asset = ledger
+        .nav_asset(&operation.asset_id)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                "missing_nav_asset",
+                "vault bridge asset bridge deposit attestation references missing NAV asset"
+                    .to_string(),
+            )
+        })?;
     let profile = vault_bridge_profile_for_pinned_policy(
         ledger,
         &nav_asset,
@@ -1437,7 +1602,8 @@ fn apply_vault_bridge_deposit_attest_with_compatibility(
     if ledger.nav_attestor(&operation.attestor).is_none() {
         return Err((
             "unregistered_nav_attestor",
-            "vault bridge asset bridge deposit attestation requires a registered attestor".to_string(),
+            "vault bridge asset bridge deposit attestation requires a registered attestor"
+                .to_string(),
         ));
     }
     if profile.bridge_observer_min_confirmations > 0
@@ -1500,7 +1666,7 @@ fn apply_vault_bridge_deposit_finalize(
     ledger: &mut LedgerState,
     operation: &VaultBridgeDepositFinalizeOperation,
     block_height: u64,
- ) -> Result<(), (&'static str, String)> {
+) -> Result<(), (&'static str, String)> {
     apply_vault_bridge_deposit_finalize_with_compatibility(
         ledger,
         operation,
@@ -1521,9 +1687,17 @@ fn apply_vault_bridge_deposit_finalize_with_compatibility(
         .ok_or_else(|| {
             (
                 "missing_vault_bridge_deposit",
-                "vault bridge asset bridge deposit finalize references missing evidence".to_string(),
+                "vault bridge asset bridge deposit finalize references missing evidence"
+                    .to_string(),
             )
         })?;
+    if record.source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 {
+        return Err((
+            "pfusdc_fast_ingress_lifecycle_proof_required",
+            "bonded fast ingress cannot be finalized by the legacy height/attestation path"
+                .to_string(),
+        ));
+    }
     if record.status != VAULT_BRIDGE_DEPOSIT_STATUS_PENDING {
         return Err((
             "vault_bridge_deposit_not_pending",
@@ -1536,19 +1710,27 @@ fn apply_vault_bridge_deposit_finalize_with_compatibility(
             "vault bridge asset bridge deposit evidence is expired".to_string(),
         ));
     }
-    let nav_asset = ledger.nav_asset(&operation.asset_id).cloned().ok_or_else(|| {
-        (
-            "missing_nav_asset",
-            "vault bridge asset bridge deposit finalize references missing NAV asset".to_string(),
-        )
-    })?;
+    let nav_asset = ledger
+        .nav_asset(&operation.asset_id)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                "missing_nav_asset",
+                "vault bridge asset bridge deposit finalize references missing NAV asset"
+                    .to_string(),
+            )
+        })?;
     let profile = vault_bridge_profile_for_pinned_policy(
         ledger,
         &nav_asset,
         &record.evidence.source_domain(),
         &record.policy_hash,
     )?;
-    ensure_vault_bridge_source_policy(profile, &record.evidence.source_domain(), &record.policy_hash)?;
+    ensure_vault_bridge_source_policy(
+        profile,
+        &record.evidence.source_domain(),
+        &record.policy_hash,
+    )?;
     ensure_vault_bridge_deposit_source_proof(VaultBridgeDepositSourceProof {
         genesis: None,
         profile,
@@ -1560,6 +1742,7 @@ fn apply_vault_bridge_deposit_finalize_with_compatibility(
         source_public_values_hash: &record.source_public_values_hash,
         source_proof_bytes: &[],
         source_public_values: &[],
+        fast_ingress_verifier: None,
     })?;
     match profile.verifier_kind.as_str() {
         NAV_PROFILE_VERIFIER_MULTI_FETCH => {
@@ -1593,7 +1776,11 @@ fn apply_vault_bridge_deposit_finalize_with_compatibility(
             if profile.bridge_observer_min_confirmations > 0
                 && compatibility.bridge_verification_rules_active(block_height)
             {
-                for attestation in record.attestations.iter().filter(|attestation| attestation.pass) {
+                for attestation in record
+                    .attestations
+                    .iter()
+                    .filter(|attestation| attestation.pass)
+                {
                     let observation = attestation.observation.as_ref().ok_or_else(|| {
                         (
                             "vault_bridge_deposit_observation_missing",
@@ -1611,7 +1798,8 @@ fn apply_vault_bridge_deposit_finalize_with_compatibility(
             }
         }
         NAV_PROFILE_VERIFIER_SP1_GROTH16
-        | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1 => {}
+        | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+        | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 => {}
         _ => {
             return Err((
                 "unsupported_vault_bridge_deposit_verifier",
@@ -1620,7 +1808,9 @@ fn apply_vault_bridge_deposit_finalize_with_compatibility(
             ));
         }
     }
-    if profile.challenge_window_blocks > 0 {
+    if profile.challenge_window_blocks > 0
+        && !vault_bridge_source_proof_is_consensus_verified(&record.source_proof_kind)
+    {
         let finalizable_height = record
             .submitted_at_height
             .checked_add(profile.challenge_window_blocks)
@@ -1639,7 +1829,9 @@ fn apply_vault_bridge_deposit_finalize_with_compatibility(
             ));
         }
     }
-    if profile.max_snapshot_age_blocks > 0 {
+    if record.source_proof_kind != NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+        && profile.max_snapshot_age_blocks > 0
+    {
         let stale_height = record
             .submitted_at_height
             .checked_add(profile.max_snapshot_age_blocks)
@@ -1652,7 +1844,8 @@ fn apply_vault_bridge_deposit_finalize_with_compatibility(
         if block_height > stale_height {
             return Err((
                 "stale_vault_bridge_deposit",
-                "vault bridge asset bridge deposit evidence exceeds profile max snapshot age".to_string(),
+                "vault bridge asset bridge deposit evidence exceeds profile max snapshot age"
+                    .to_string(),
             ));
         }
     }
@@ -1699,7 +1892,8 @@ fn apply_vault_bridge_deposit_claim(
     if asset.issuer != nav_asset.issuer {
         return Err((
             "asset_issuer_mismatch",
-            "vault bridge asset bridge deposit claim asset issuer does not match NAV asset issuer".to_string(),
+            "vault bridge asset bridge deposit claim asset issuer does not match NAV asset issuer"
+                .to_string(),
         ));
     }
     let record = ledger
@@ -1720,7 +1914,8 @@ fn apply_vault_bridge_deposit_claim(
     if record.status != VAULT_BRIDGE_DEPOSIT_STATUS_FINALIZED {
         return Err((
             "vault_bridge_deposit_not_finalized",
-            "vault bridge asset bridge deposit claim requires finalized vault event evidence".to_string(),
+            "vault bridge asset bridge deposit claim requires finalized vault event evidence"
+                .to_string(),
         ));
     }
     if record.policy_hash != operation.policy_hash {
@@ -1730,14 +1925,20 @@ fn apply_vault_bridge_deposit_claim(
                 .to_string(),
         ));
     }
-    ensure_vault_bridge_source_policy(profile, &record.evidence.source_domain(), &operation.policy_hash)?;
+    ensure_vault_bridge_source_policy(
+        profile,
+        &record.evidence.source_domain(),
+        &operation.policy_hash,
+    )?;
     if block_height > record.expires_at_height {
         return Err((
             "stale_vault_bridge_deposit",
             "vault bridge asset bridge deposit evidence is expired".to_string(),
         ));
     }
-    if profile.max_snapshot_age_blocks > 0 {
+    if record.source_proof_kind != NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+        && profile.max_snapshot_age_blocks > 0
+    {
         let stale_height = record
             .submitted_at_height
             .checked_add(profile.max_snapshot_age_blocks)
@@ -1750,29 +1951,83 @@ fn apply_vault_bridge_deposit_claim(
         if block_height > stale_height {
             return Err((
                 "stale_vault_bridge_deposit",
-                "vault bridge asset bridge deposit evidence exceeds profile max snapshot age".to_string(),
+                "vault bridge asset bridge deposit evidence exceeds profile max snapshot age"
+                    .to_string(),
             ));
         }
     }
 
-    if operation.recipient != record.evidence.pftl_recipient {
+    let issuer_delegated_ethereum_claim = record.source_proof_kind
+        == SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1
+        && record.evidence.pftl_recipient == nav_asset.issuer
+        && operation.claimer == nav_asset.issuer
+        && operation.recipient != nav_asset.issuer;
+    if operation.recipient != record.evidence.pftl_recipient && !issuer_delegated_ethereum_claim {
         return Err((
             "vault_bridge_deposit_recipient_mismatch",
-            "vault bridge asset bridge deposit claim recipient must match finalized vault evidence".to_string(),
+            "vault bridge asset bridge deposit claim recipient must match finalized vault evidence; only the bound issuer may delegate a consensus-verified Ethereum claim to a holder"
+                .to_string(),
         ));
     }
     if operation.amount_atoms != record.evidence.amount_atoms {
         return Err((
             "vault_bridge_deposit_amount_mismatch",
-            "vault bridge asset bridge deposit claim amount must match finalized vault evidence".to_string(),
+            "vault bridge asset bridge deposit claim amount must match finalized vault evidence"
+                .to_string(),
         ));
+    }
+
+    let mut claimed_fast_campaign = None;
+    if record.source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 {
+        let mut campaign = ledger
+            .fast_ingress_campaigns
+            .iter()
+            .find(|campaign| campaign.route_profile_hash == record.policy_hash)
+            .cloned()
+            .ok_or_else(|| {
+                (
+                    "pfusdc_fast_ingress_campaign_missing",
+                    "bonded ingress claim is missing its campaign state".to_string(),
+                )
+            })?;
+        let mint = campaign
+            .mints
+            .iter_mut()
+            .find(|mint| mint.deposit_id == record.evidence.deposit_id)
+            .ok_or_else(|| {
+                (
+                    "pfusdc_fast_ingress_mint_missing",
+                    "bonded ingress claim is missing its escrow mint record".to_string(),
+                )
+            })?;
+        if mint.recipient != operation.recipient
+            || mint.amount_atoms != operation.amount_atoms
+            || mint.claimed
+            || !matches!(
+                mint.status.as_str(),
+                postfiat_types::FAST_INGRESS_MINT_STATUS_FINAL
+                    | postfiat_types::FAST_INGRESS_MINT_STATUS_RELEASED_UNCONFIRMED
+            )
+        {
+            return Err((
+                "pfusdc_fast_ingress_escrow_not_releasable",
+                "provisional pfUSDC remains escrowed until an authenticated lifecycle release"
+                    .to_string(),
+            ));
+        }
+        mint.claimed = true;
+        campaign
+            .validate()
+            .map_err(|error| ("pfusdc_fast_ingress_campaign_invalid", error))?;
+        claimed_fast_campaign = Some(campaign);
     }
 
     let recipient = operation.recipient.clone();
     if recipient == nav_asset.issuer {
         return Err((
             "unsupported_issuer_mint",
-            "vault bridge asset bridge deposit recipient must be a holder trustline account".to_string(),
+            "vault bridge asset bridge deposit recipient must be a holder trustline account"
+                .to_string(),
         ));
     }
     let claim_amount = operation.amount_atoms;
@@ -1787,10 +2042,68 @@ fn apply_vault_bridge_deposit_claim(
         if supply_after_claim > max_supply {
             return Err((
                 "issued_supply_cap_exceeded",
-                "vault bridge asset bridge deposit claim exceeds issued asset max_supply".to_string(),
+                "vault bridge asset bridge deposit claim exceeds issued asset max_supply"
+                    .to_string(),
             ));
         }
     }
+    let proof_bounded_cap_checkpoint = if record.source_proof_kind
+        == SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1
+        && supply_after_claim > nav_asset.circulating_supply
+    {
+        let route_id = match record.evidence.source_chain_id {
+            ETHEREUM_MAINNET_CHAIN_ID => VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1,
+            ETHEREUM_SEPOLIA_CHAIN_ID => VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1,
+            _ => {
+                return Err((
+                    "ethereum_ingress_source_chain_unsupported",
+                    "Ethereum cap growth uses an unregistered source chain".to_string(),
+                ));
+            }
+        };
+        let ethereum_backing = ledger
+            .vault_bridge_route_backing(&operation.asset_id)
+            .map_err(|error| ("bad_route_backing", error))?
+            .into_iter()
+            .find(|row| row.route_id == route_id)
+            .ok_or_else(|| {
+                (
+                    "missing_ethereum_route_backing",
+                    "Ethereum cap growth requires finalized route-indexed backing".to_string(),
+                )
+            })?;
+        let ceiling = nav_asset
+            .circulating_supply
+            .checked_add(
+                ethereum_backing
+                    .finalized_unclaimed()
+                    .map_err(|error| ("bad_route_backing", error))?,
+            )
+            .ok_or_else(|| {
+                (
+                    "nav_cap_overflow",
+                    "proof-bounded NAV cap overflow".to_string(),
+                )
+            })?;
+        if supply_after_claim > ceiling {
+            return Err((
+                "proof_bounded_nav_cap_exceeded",
+                "claim exceeds finalized unclaimed Ethereum SP1 backing".to_string(),
+            ));
+        }
+        Some(
+            proof_bounded_nav_cap_checkpoint_hash(
+                &operation.asset_id,
+                route_id,
+                &record.evidence_root,
+                nav_asset.circulating_supply,
+                supply_after_claim,
+            )
+            .map_err(|error| ("bad_proof_bounded_nav_checkpoint", error))?,
+        )
+    } else {
+        None
+    };
 
     let recipient_index = issued_asset_credit_recipient_line_index(
         ledger,
@@ -1903,7 +2216,10 @@ fn apply_vault_bridge_deposit_claim(
         block_height,
     )
     .map_err(|error| ("bad_vault_bridge_allocation", error))?;
-    if ledger.vault_bridge_allocation(&allocation.allocation_id).is_some() {
+    if ledger
+        .vault_bridge_allocation(&allocation.allocation_id)
+        .is_some()
+    {
         return Err((
             "duplicate_vault_bridge_allocation",
             "vault bridge asset bridge deposit claim allocation already exists".to_string(),
@@ -1919,7 +2235,8 @@ fn apply_vault_bridge_deposit_claim(
     } else if receipt_was_counted {
         return Err((
             "missing_vault_bridge_bucket",
-            "counted vault bridge asset bridge deposit receipt is missing its source bucket".to_string(),
+            "counted vault bridge asset bridge deposit receipt is missing its source bucket"
+                .to_string(),
         ));
     } else {
         VaultBridgeBucketState::new(
@@ -1936,7 +2253,8 @@ fn apply_vault_bridge_deposit_claim(
     {
         return Err((
             "vault_bridge_bucket_mismatch",
-            "vault bridge asset bridge deposit claim bucket metadata does not match receipt".to_string(),
+            "vault bridge asset bridge deposit claim bucket metadata does not match receipt"
+                .to_string(),
         ));
     }
     if bucket_after.status != VAULT_BRIDGE_BUCKET_STATUS_ACTIVE {
@@ -1946,23 +2264,29 @@ fn apply_vault_bridge_deposit_claim(
         ));
     }
     if !receipt_was_counted {
-        bucket_after.gross_receipt_atoms =
-            bucket_after.gross_receipt_atoms.checked_add(claim_amount).ok_or_else(|| {
+        bucket_after.gross_receipt_atoms = bucket_after
+            .gross_receipt_atoms
+            .checked_add(claim_amount)
+            .ok_or_else(|| {
                 (
                     "vault_bridge_bucket_overflow",
                     "vault bridge asset bucket gross receipt atoms would overflow".to_string(),
                 )
             })?;
-        bucket_after.counted_value_atoms =
-            bucket_after.counted_value_atoms.checked_add(claim_amount).ok_or_else(|| {
+        bucket_after.counted_value_atoms = bucket_after
+            .counted_value_atoms
+            .checked_add(claim_amount)
+            .ok_or_else(|| {
                 (
                     "vault_bridge_bucket_overflow",
                     "vault bridge asset bucket counted value atoms would overflow".to_string(),
                 )
             })?;
     }
-    bucket_after.outstanding_vault_bridge_atoms =
-        bucket_after.outstanding_vault_bridge_atoms.checked_add(claim_amount).ok_or_else(|| {
+    bucket_after.outstanding_vault_bridge_atoms = bucket_after
+        .outstanding_vault_bridge_atoms
+        .checked_add(claim_amount)
+        .ok_or_else(|| {
             (
                 "vault_bridge_bucket_overflow",
                 "vault bridge asset bucket outstanding supply would overflow".to_string(),
@@ -1973,11 +2297,14 @@ fn apply_vault_bridge_deposit_claim(
         .validate()
         .map_err(|error| ("bad_vault_bridge_bucket", error))?;
 
-    receipt_after.allocated_value_atoms =
-        receipt_after.allocated_value_atoms.checked_add(claim_amount).ok_or_else(|| {
+    receipt_after.allocated_value_atoms = receipt_after
+        .allocated_value_atoms
+        .checked_add(claim_amount)
+        .ok_or_else(|| {
             (
                 "vault_bridge_receipt_overflow",
-                "vault bridge asset bridge deposit receipt allocated value would overflow".to_string(),
+                "vault bridge asset bridge deposit receipt allocated value would overflow"
+                    .to_string(),
             )
         })?;
     receipt_after
@@ -2001,6 +2328,237 @@ fn apply_vault_bridge_deposit_claim(
         recipient_after,
         recipient_required,
     );
+    if let Some(campaign) = claimed_fast_campaign {
+        let current = ledger
+            .fast_ingress_campaign_mut(&campaign.route_profile_hash, campaign.route_epoch)
+            .ok_or_else(|| {
+                (
+                    "pfusdc_fast_ingress_campaign_missing",
+                    "bonded ingress campaign disappeared during claim".to_string(),
+                )
+            })?;
+        *current = campaign;
+    }
+    if let Some(checkpoint_hash) = proof_bounded_cap_checkpoint {
+        let nav_asset = ledger.nav_asset_mut(&operation.asset_id).ok_or_else(|| {
+            (
+                "missing_nav_asset",
+                "NAV asset disappeared during cap growth".to_string(),
+            )
+        })?;
+        nav_asset.circulating_supply = supply_after_claim;
+        nav_asset.finalized_epoch = nav_asset.finalized_epoch.checked_add(1).ok_or_else(|| {
+            (
+                "nav_epoch_overflow",
+                "proof-bounded NAV epoch overflow".to_string(),
+            )
+        })?;
+        nav_asset.finalized_reserve_packet_hash = checkpoint_hash;
+        nav_asset.finalized_at_height = block_height;
+        nav_asset
+            .validate()
+            .map_err(|error| ("bad_nav_asset", error))?;
+    }
+    Ok(())
+}
+
+fn apply_vault_bridge_fast_ingress_lifecycle(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    operation: &VaultBridgeFastIngressLifecycleOperation,
+    block_height: u64,
+) -> Result<(), (&'static str, String)> {
+    let nav_asset = ledger
+        .nav_asset(&operation.asset_id)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                "missing_nav_asset",
+                "fast-ingress lifecycle asset is not registered".to_string(),
+            )
+        })?;
+    let source_domain = ledger
+        .vault_bridge_deposits
+        .iter()
+        .find(|record| {
+            record.asset_id == operation.asset_id
+                && record.policy_hash == operation.route_profile_hash
+                && record.source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+        })
+        .map(|record| record.evidence.source_domain())
+        .ok_or_else(|| {
+            (
+                "pfusdc_fast_ingress_mint_missing",
+                "fast-ingress lifecycle has no bonded deposit records".to_string(),
+            )
+        })?;
+    let profile = vault_bridge_profile_for_pinned_policy(
+        ledger,
+        &nav_asset,
+        &source_domain,
+        &operation.route_profile_hash,
+    )?;
+    if profile.verifier_kind != NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+        || operation.source_proof_kind != NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+        || postfiat_types::pfusdc_ingress_proof_hash_v1(&operation.source_proof_bytes)
+            != operation.source_proof_hash
+        || postfiat_types::pfusdc_ingress_public_values_hash_v1(&operation.source_public_values)
+            != operation.source_public_values_hash
+    {
+        return Err((
+            "pfusdc_fast_ingress_lifecycle_commitment_mismatch",
+            "fast-ingress lifecycle proof commitments do not match the active route".to_string(),
+        ));
+    }
+    let values = postfiat_types::PfUsdcBondedLifecyclePublicValuesV1::from_canonical_bytes(
+        &operation.source_public_values,
+    )
+    .map_err(|error| ("pfusdc_fast_ingress_lifecycle_public_values_invalid", error))?;
+    if values.pftl_chain_id != genesis.chain_id
+        || values.pftl_genesis_hash != genesis_hash(genesis)
+        || values.pftl_protocol_version != genesis.protocol_version
+        || values.route_profile_hash != operation.route_profile_hash
+        || values.source_assertion_id != operation.source_assertion_id
+    {
+        return Err((
+            "pfusdc_fast_ingress_lifecycle_public_values_mismatch",
+            "fast-ingress lifecycle proof does not match chain, route, or assertion".to_string(),
+        ));
+    }
+    let mut finality = ledger
+        .ethereum_arbitrum_finality_state(&operation.route_profile_hash, values.route_epoch)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                "pfusdc_finality_state_missing",
+                "fast-ingress lifecycle is missing its finality state".to_string(),
+            )
+        })?;
+    let verifier = finality.fast_ingress_verifier.as_ref().ok_or_else(|| {
+        (
+            "pfusdc_fast_ingress_verifier_missing",
+            "fast-ingress lifecycle is missing its governed secondary verifier".to_string(),
+        )
+    })?;
+    if values.manifest_hash != verifier.deployment_manifest_hash
+        || values.verifier_policy_hash != verifier.verifier_policy_hash
+        || verifier.base_route_profile_hash != operation.route_profile_hash
+        || verifier.route_epoch != values.route_epoch
+        || (values.update_kind == postfiat_types::PFUSDC_BONDED_LIFECYCLE_UPDATE_AGE_RELEASED
+            && !verifier.age_release_enabled)
+    {
+        return Err((
+            "pfusdc_fast_ingress_lifecycle_config_mismatch",
+            "fast-ingress lifecycle public values do not match the governed secondary verifier"
+                .to_string(),
+        ));
+    }
+    verify_bounded_sp1_groth16_with_config(
+        &verifier.verifier_kind,
+        NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1,
+        &verifier.verifier_program_vkey,
+        verifier.max_proof_bytes,
+        verifier.max_public_values_bytes,
+        &operation.source_proof_bytes,
+        &operation.source_public_values,
+    )
+    .map_err(|error| (error.code(), error.message()))?;
+    finality
+        .verify_and_advance_bonded_lifecycle(&values)
+        .map_err(|error| ("pfusdc_fast_ingress_lifecycle_finality_rejected", error))?;
+    let mut campaign = ledger
+        .fast_ingress_campaign(&operation.route_profile_hash, values.route_epoch)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                "pfusdc_fast_ingress_campaign_missing",
+                "fast-ingress lifecycle is missing its campaign".to_string(),
+            )
+        })?;
+    if campaign.asset_id != operation.asset_id {
+        return Err((
+            "pfusdc_fast_ingress_asset_mismatch",
+            "fast-ingress lifecycle asset differs from its campaign".to_string(),
+        ));
+    }
+    let reverted = values.update_kind == postfiat_types::PFUSDC_BONDED_LIFECYCLE_UPDATE_REVERTED;
+    let age_released =
+        values.update_kind == postfiat_types::PFUSDC_BONDED_LIFECYCLE_UPDATE_AGE_RELEASED;
+    if reverted {
+        campaign
+            .apply_reversion(&values)
+            .map_err(|error| ("pfusdc_fast_ingress_reversion_rejected", error))?;
+    } else if age_released {
+        campaign
+            .apply_age_release(&values)
+            .map_err(|error| ("pfusdc_fast_ingress_age_release_rejected", error))?;
+    } else {
+        campaign
+            .apply_confirmation(&values)
+            .map_err(|error| ("pfusdc_fast_ingress_confirmation_rejected", error))?;
+    }
+    let deposit_ids = campaign
+        .mints
+        .iter()
+        .filter(|mint| mint.source_assertion_id == values.source_assertion_id)
+        .map(|mint| mint.deposit_id.clone())
+        .collect::<std::collections::BTreeSet<_>>();
+    if deposit_ids.is_empty() {
+        return Err((
+            "pfusdc_fast_ingress_mint_missing",
+            "confirmation has no matching escrowed deposits".to_string(),
+        ));
+    }
+    let matching_records = ledger
+        .vault_bridge_deposits
+        .iter()
+        .enumerate()
+        .filter(|(_, record)| {
+            record.asset_id == operation.asset_id
+                && record.policy_hash == operation.route_profile_hash
+                && deposit_ids.contains(&record.evidence.deposit_id)
+        })
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    if matching_records.len() != deposit_ids.len() {
+        return Err((
+            "pfusdc_fast_ingress_deposit_record_mismatch",
+            "confirmation mint/deposit records are incomplete".to_string(),
+        ));
+    }
+    let mut updated_records = Vec::with_capacity(matching_records.len());
+    for index in &matching_records {
+        let mut record = ledger.vault_bridge_deposits[*index].clone();
+        if reverted {
+            record.status = VAULT_BRIDGE_DEPOSIT_STATUS_CHALLENGED.to_string();
+        } else {
+            record.status = VAULT_BRIDGE_DEPOSIT_STATUS_FINALIZED.to_string();
+            record.finalized_at_height = block_height;
+        }
+        record
+            .validate()
+            .map_err(|error| ("bad_vault_bridge_deposit", error))?;
+        updated_records.push((*index, record));
+    }
+    *ledger
+        .ethereum_arbitrum_finality_state_mut(&operation.route_profile_hash, values.route_epoch)
+        .ok_or_else(|| {
+            (
+                "pfusdc_finality_state_missing",
+                "fast-ingress finality state disappeared during commit".to_string(),
+            )
+        })? = finality;
+    *ledger
+        .fast_ingress_campaign_mut(&operation.route_profile_hash, values.route_epoch)
+        .ok_or_else(|| {
+            (
+                "pfusdc_fast_ingress_campaign_missing",
+                "fast-ingress campaign disappeared during commit".to_string(),
+            )
+        })? = campaign;
+    for (index, record) in updated_records {
+        ledger.vault_bridge_deposits[index] = record;
+    }
     Ok(())
 }
 
@@ -2009,12 +2567,18 @@ fn apply_vault_bridge_receipt_count(
     operation: &VaultBridgeReceiptCountOperation,
     block_height: u64,
 ) -> Result<(), (&'static str, String)> {
-    let nav_asset = ledger.nav_asset(&operation.asset_id).cloned().ok_or_else(|| {
-        (
-            "missing_nav_asset",
-            format!("vault bridge asset asset `{}` is not registered as a NAV asset", operation.asset_id),
-        )
-    })?;
+    let nav_asset = ledger
+        .nav_asset(&operation.asset_id)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                "missing_nav_asset",
+                format!(
+                    "vault bridge asset asset `{}` is not registered as a NAV asset",
+                    operation.asset_id
+                ),
+            )
+        })?;
     ensure_vault_bridge_asset_policy(ledger, &nav_asset, &operation.operator)?;
     let receipt_index = ledger
         .vault_bridge_receipts
@@ -2072,7 +2636,8 @@ fn apply_vault_bridge_receipt_count(
     if operation.evidence_root != expected_evidence_root {
         return Err((
             "vault_bridge_deposit_evidence_root_mismatch",
-            "vault bridge asset count evidence_root must match the stored bridge deposit evidence".to_string(),
+            "vault bridge asset count evidence_root must match the stored bridge deposit evidence"
+                .to_string(),
         ));
     }
     let finalized_bridge_deposit = ledger
@@ -2080,7 +2645,8 @@ fn apply_vault_bridge_receipt_count(
         .ok_or_else(|| {
             (
                 "vault_bridge_deposit_not_finalized",
-                "vault bridge asset count requires a finalized bridge deposit evidence record".to_string(),
+                "vault bridge asset count requires a finalized bridge deposit evidence record"
+                    .to_string(),
             )
         })?;
     if finalized_bridge_deposit.status != VAULT_BRIDGE_DEPOSIT_STATUS_FINALIZED {
@@ -2092,7 +2658,8 @@ fn apply_vault_bridge_receipt_count(
     if finalized_bridge_deposit.policy_hash != operation.policy_hash {
         return Err((
             "vault_bridge_deposit_policy_mismatch",
-            "vault bridge asset bridge deposit policy hash does not match count operation".to_string(),
+            "vault bridge asset bridge deposit policy hash does not match count operation"
+                .to_string(),
         ));
     }
     if finalized_bridge_deposit.evidence != *bridge_evidence {
@@ -2145,7 +2712,8 @@ fn apply_vault_bridge_receipt_count(
         {
             return Err((
                 "vault_bridge_bucket_mismatch",
-                "vault bridge asset receipt bucket metadata does not match existing bucket".to_string(),
+                "vault bridge asset receipt bucket metadata does not match existing bucket"
+                    .to_string(),
             ));
         }
         if bucket.status != VAULT_BRIDGE_BUCKET_STATUS_ACTIVE {
@@ -2177,7 +2745,8 @@ fn apply_vault_bridge_receipt_count(
 
     ledger.vault_bridge_receipts[receipt_index].haircut_bps = operation.haircut_bps;
     ledger.vault_bridge_receipts[receipt_index].counted_value_atoms = counted_value_atoms;
-    ledger.vault_bridge_receipts[receipt_index].status = VAULT_BRIDGE_RECEIPT_STATUS_COUNTED.to_string();
+    ledger.vault_bridge_receipts[receipt_index].status =
+        VAULT_BRIDGE_RECEIPT_STATUS_COUNTED.to_string();
     if ledger.vault_bridge_receipts[receipt_index].finalized_at_height == 0 {
         ledger.vault_bridge_receipts[receipt_index].finalized_at_height = block_height;
     }
@@ -2202,12 +2771,18 @@ fn apply_vault_bridge_mint_from_receipts(
     operation: &VaultBridgeMintFromReceiptsOperation,
     block_height: u64,
 ) -> Result<(), (&'static str, String)> {
-    let nav_asset = ledger.nav_asset(&operation.asset_id).cloned().ok_or_else(|| {
-        (
-            "missing_nav_asset",
-            format!("vault bridge asset asset `{}` is not registered as a NAV asset", operation.asset_id),
-        )
-    })?;
+    let nav_asset = ledger
+        .nav_asset(&operation.asset_id)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                "missing_nav_asset",
+                format!(
+                    "vault bridge asset asset `{}` is not registered as a NAV asset",
+                    operation.asset_id
+                ),
+            )
+        })?;
     ensure_vault_bridge_asset_policy(ledger, &nav_asset, &operation.issuer)?;
     ensure_nav_asset_live_for_epoch(
         ledger,
@@ -2227,12 +2802,14 @@ fn apply_vault_bridge_mint_from_receipts(
             )
         })?;
     let current_supply = issued_asset_supply(ledger, &operation.asset_id)?;
-    let supply_after_mint = current_supply.checked_add(operation.amount_atoms).ok_or_else(|| {
-        (
-            "issued_supply_overflow",
-            "vault bridge asset mint would overflow issued supply".to_string(),
-        )
-    })?;
+    let supply_after_mint = current_supply
+        .checked_add(operation.amount_atoms)
+        .ok_or_else(|| {
+            (
+                "issued_supply_overflow",
+                "vault bridge asset mint would overflow issued supply".to_string(),
+            )
+        })?;
     if let Some(max_supply) = asset.max_supply {
         if supply_after_mint > max_supply {
             return Err((
@@ -2312,7 +2889,8 @@ fn apply_vault_bridge_mint_from_receipts(
         if receipt.asset_id != operation.asset_id || receipt.bucket_id != operation.bucket_id {
             return Err((
                 "vault_bridge_receipt_bucket_mismatch",
-                "vault bridge asset mint receipt must belong to operation asset and bucket".to_string(),
+                "vault bridge asset mint receipt must belong to operation asset and bucket"
+                    .to_string(),
             ));
         }
         if receipt.status != VAULT_BRIDGE_RECEIPT_STATUS_COUNTED {
@@ -2344,7 +2922,10 @@ fn apply_vault_bridge_mint_from_receipts(
             block_height,
         )
         .map_err(|error| ("bad_vault_bridge_allocation", error))?;
-        if ledger.vault_bridge_allocation(&allocation.allocation_id).is_some() {
+        if ledger
+            .vault_bridge_allocation(&allocation.allocation_id)
+            .is_some()
+        {
             return Err((
                 "duplicate_vault_bridge_allocation",
                 "vault bridge asset allocation already exists".to_string(),
@@ -2378,8 +2959,10 @@ fn apply_vault_bridge_mint_from_receipts(
 
     for (receipt_index, take, allocation) in receipt_takes {
         let receipt = &mut ledger.vault_bridge_receipts[receipt_index];
-        receipt.allocated_value_atoms =
-            receipt.allocated_value_atoms.checked_add(take).ok_or_else(|| {
+        receipt.allocated_value_atoms = receipt
+            .allocated_value_atoms
+            .checked_add(take)
+            .ok_or_else(|| {
                 (
                     "vault_bridge_receipt_overflow",
                     "vault bridge asset receipt allocated value would overflow".to_string(),
@@ -2402,7 +2985,7 @@ fn apply_vault_bridge_nav_subscription_allocate(
     signed_source: &str,
     operation: &VaultBridgeNavSubscriptionAllocateOperation,
     block_height: u64,
- ) -> Result<(), (&'static str, String)> {
+) -> Result<(), (&'static str, String)> {
     apply_vault_bridge_nav_subscription_allocate_with_compatibility(
         genesis,
         ledger,
@@ -2424,7 +3007,8 @@ fn apply_vault_bridge_nav_subscription_allocate_with_compatibility(
     if ledger.nav_asset(&operation.nav_asset_id).is_none() {
         return Err((
             "missing_nav_asset",
-            "vault bridge asset nav subscription allocation references missing NAV asset".to_string(),
+            "vault bridge asset nav subscription allocation references missing NAV asset"
+                .to_string(),
         ));
     }
     let settlement_nav_asset = ledger
@@ -2451,20 +3035,23 @@ fn apply_vault_bridge_nav_subscription_allocate_with_compatibility(
         .ok_or_else(|| {
             (
                 "missing_vault_bridge_bucket",
-                "vault bridge asset nav subscription allocation references missing source bucket".to_string(),
+                "vault bridge asset nav subscription allocation references missing source bucket"
+                    .to_string(),
             )
         })?;
     let bucket = ledger.vault_bridge_bucket_states[bucket_index].clone();
     if bucket.asset_id != operation.settlement_asset_id {
         return Err((
             "vault_bridge_bucket_asset_mismatch",
-            "vault bridge asset nav subscription bucket does not belong to settlement asset".to_string(),
+            "vault bridge asset nav subscription bucket does not belong to settlement asset"
+                .to_string(),
         ));
     }
     if bucket.status != VAULT_BRIDGE_BUCKET_STATUS_ACTIVE {
         return Err((
             "vault_bridge_bucket_not_active",
-            "vault bridge asset nav subscription allocation requires an active source bucket".to_string(),
+            "vault bridge asset nav subscription allocation requires an active source bucket"
+                .to_string(),
         ));
     }
     ensure_vault_bridge_source_policy(profile, &bucket.source_domain, &bucket.policy_hash)?;
@@ -2476,7 +3063,8 @@ fn apply_vault_bridge_nav_subscription_allocate_with_compatibility(
         .ok_or_else(|| {
             (
                 "missing_vault_bridge_receipt",
-                "vault bridge asset nav subscription allocation references missing receipt".to_string(),
+                "vault bridge asset nav subscription allocation references missing receipt"
+                    .to_string(),
             )
         })?;
     let receipt = ledger.vault_bridge_receipts[receipt_index].clone();
@@ -2627,7 +3215,10 @@ fn apply_vault_bridge_nav_subscription_allocate_with_compatibility(
             block_height,
         )
         .map_err(|error| ("bad_vault_bridge_allocation", error))?;
-        if ledger.vault_bridge_allocation(&allocation.allocation_id).is_some() {
+        if ledger
+            .vault_bridge_allocation(&allocation.allocation_id)
+            .is_some()
+        {
             return Err((
                 "duplicate_vault_bridge_allocation",
                 "vault bridge asset nav subscription allocation already exists".to_string(),
@@ -2666,7 +3257,8 @@ fn apply_vault_bridge_nav_subscription_allocate_with_compatibility(
             .ok_or_else(|| {
                 (
                     "vault_bridge_allocation_overflow",
-                    "vault bridge asset supply allocation released atoms would overflow".to_string(),
+                    "vault bridge asset supply allocation released atoms would overflow"
+                        .to_string(),
                 )
             })?;
         ledger.vault_bridge_allocations[supply_allocation_index].released_atoms = released_after;
@@ -2705,7 +3297,10 @@ fn apply_vault_bridge_nav_subscription_allocate_with_compatibility(
         block_height,
     )
     .map_err(|error| ("bad_vault_bridge_allocation", error))?;
-    if ledger.vault_bridge_allocation(&allocation.allocation_id).is_some() {
+    if ledger
+        .vault_bridge_allocation(&allocation.allocation_id)
+        .is_some()
+    {
         return Err((
             "duplicate_vault_bridge_allocation",
             "vault bridge asset nav subscription allocation already exists".to_string(),
@@ -2727,8 +3322,8 @@ fn apply_vault_bridge_nav_subscription_allocate_with_compatibility(
         .validate()
         .map_err(|error| ("bad_vault_bridge_bucket", error))?;
 
-    ledger.vault_bridge_receipts[receipt_index].allocated_value_atoms = ledger.vault_bridge_receipts
-        [receipt_index]
+    ledger.vault_bridge_receipts[receipt_index].allocated_value_atoms = ledger
+        .vault_bridge_receipts[receipt_index]
         .allocated_value_atoms
         .checked_add(operation.settlement_amount_atoms)
         .ok_or_else(|| {
@@ -2795,6 +3390,7 @@ fn apply_pftl_uniswap_route_init(
         packet_notional_cap_atoms: operation.packet_notional_cap_atoms,
         latest_finalized_nav_epoch: native_nav_asset.finalized_epoch,
         return_finality_blocks: operation.return_finality_blocks,
+        live_value_enabled: operation.live_value_enabled,
         ethereum_verification_policy: operation.ethereum_verification_policy.clone(),
         authorized_valid_supply_atoms: 0,
         pftl_spendable_supply_atoms: 0,
@@ -2888,15 +3484,12 @@ fn apply_pftl_uniswap_primary_subscribe(
                 .to_string(),
         ));
     }
-    let settlement_debit_atoms =
-        minted_nav_atoms
-            .checked_mul(derived_price)
-            .ok_or_else(|| {
-                (
-                    "pftl_uniswap_settlement_overflow",
-                    "primary subscription settlement debit would overflow".to_string(),
-                )
-            })?;
+    let settlement_debit_atoms = minted_nav_atoms.checked_mul(derived_price).ok_or_else(|| {
+        (
+            "pftl_uniswap_settlement_overflow",
+            "primary subscription settlement debit would overflow".to_string(),
+        )
+    })?;
     let supply_after = route
         .authorized_valid_supply_atoms
         .checked_add(minted_nav_atoms)
@@ -2912,6 +3505,36 @@ fn apply_pftl_uniswap_primary_subscribe(
             "primary subscription would exceed route supply cap".to_string(),
         ));
     }
+    // Pricing above is bound to the finalized pre-inflow NAV snapshot. The
+    // paid fill grows its issued-supply accounting bound by exactly the atoms
+    // minted in this same transition; it does not create unbacked headroom.
+    let native_circulating_supply_after = native_nav_asset
+        .circulating_supply
+        .checked_add(minted_nav_atoms)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_nav_supply_overflow",
+                "primary subscription NAV circulating supply would overflow".to_string(),
+            )
+        })?;
+    let settlement_reserve_after = route
+        .settlement_reserve_atoms
+        .checked_add(settlement_debit_atoms)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_reserve_overflow",
+                "settlement reserve would overflow".to_string(),
+            )
+        })?;
+    let pftl_spendable_supply_after = route
+        .pftl_spendable_supply_atoms
+        .checked_add(minted_nav_atoms)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_supply_overflow",
+                "PFTL spendable route supply would overflow".to_string(),
+            )
+        })?;
     debit_issued_asset_balance(
         ledger,
         &operation.subscriber,
@@ -2929,37 +3552,31 @@ fn apply_pftl_uniswap_primary_subscribe(
 
     let mut next_route = route;
     let state_before_hash = pftl_uniswap_route_state_hash(&next_route);
-    next_route
-        .primary_subscription_nonces
-        .insert(operation.subscription_nonce.clone(), operation.subscriber.clone());
+    next_route.primary_subscription_nonces.insert(
+        operation.subscription_nonce.clone(),
+        operation.subscriber.clone(),
+    );
     next_route.authorized_valid_supply_atoms = supply_after;
-    next_route.pftl_spendable_supply_atoms = next_route
-        .pftl_spendable_supply_atoms
-        .checked_add(minted_nav_atoms)
-        .ok_or_else(|| {
-            (
-                "pftl_uniswap_supply_overflow",
-                "PFTL spendable route supply would overflow".to_string(),
-            )
-        })?;
+    next_route.pftl_spendable_supply_atoms = pftl_spendable_supply_after;
     pftl_uniswap_credit_native_route_balance(
         &mut next_route,
         &operation.subscriber,
         minted_nav_atoms,
     )?;
-    next_route.settlement_reserve_atoms = next_route
-        .settlement_reserve_atoms
-        .checked_add(settlement_debit_atoms)
-        .ok_or_else(|| {
-            (
-                "pftl_uniswap_reserve_overflow",
-                "settlement reserve would overflow".to_string(),
-            )
-        })?;
+    next_route.settlement_reserve_atoms = settlement_reserve_after;
     next_route
         .validate()
         .map_err(|error| ("bad_pftl_uniswap_route", error))?;
     let state_after_hash = pftl_uniswap_route_state_hash(&next_route);
+    ledger
+        .nav_asset_mut(&next_route.native_nav_asset_id)
+        .ok_or_else(|| {
+            (
+                "missing_pftl_uniswap_nav_asset",
+                "primary subscription native NAV asset disappeared before commit".to_string(),
+            )
+        })?
+        .circulating_supply = native_circulating_supply_after;
     ledger.pftl_uniswap_routes[route_index] = next_route;
     append_pftl_uniswap_consensus_receipt(
         ledger,
@@ -3081,9 +3698,10 @@ fn apply_pftl_uniswap_export_debit(
                 "outstanding bridge claims would overflow".to_string(),
             )
         })?;
-    next_route
-        .export_nonces
-        .insert(operation.export_nonce.clone(), operation.packet_hash.clone());
+    next_route.export_nonces.insert(
+        operation.export_nonce.clone(),
+        operation.packet_hash.clone(),
+    );
     next_route
         .export_packets
         .insert(operation.packet_hash.clone(), packet);
@@ -3326,7 +3944,10 @@ fn apply_pftl_uniswap_return_import(
         &route.native_nav_asset_id,
         &operation.operator,
     )?;
-    if route.return_imports.contains_key(&operation.burn_event_hash) {
+    if route
+        .return_imports
+        .contains_key(&operation.burn_event_hash)
+    {
         return Err((
             "duplicate_pftl_uniswap_return_import",
             "return burn event hash already exists".to_string(),
@@ -3554,12 +4175,17 @@ fn ensure_pftl_uniswap_native_asset_policy(
                 .to_string(),
         ));
     }
-    let asset = ledger.asset_definition(&nav_asset.asset_id).ok_or_else(|| {
-        (
-            "missing_native_nav_asset",
-            format!("PFTL-Uniswap route native asset `{}` is missing", nav_asset.asset_id),
-        )
-    })?;
+    let asset = ledger
+        .asset_definition(&nav_asset.asset_id)
+        .ok_or_else(|| {
+            (
+                "missing_native_nav_asset",
+                format!(
+                    "PFTL-Uniswap route native asset `{}` is missing",
+                    nav_asset.asset_id
+                ),
+            )
+        })?;
     if asset.issuer != nav_asset.issuer {
         return Err((
             "asset_issuer_mismatch",
@@ -3612,7 +4238,10 @@ fn pftl_uniswap_pricing_nav_asset(
     if nav_asset.halted {
         return Err((
             "pftl_uniswap_nav_asset_halted",
-            format!("PFTL-Uniswap native NAV asset is halted: {}", nav_asset.halt_reason),
+            format!(
+                "PFTL-Uniswap native NAV asset is halted: {}",
+                nav_asset.halt_reason
+            ),
         ));
     }
     if nav_asset.finalized_epoch == 0
@@ -3621,8 +4250,7 @@ fn pftl_uniswap_pricing_nav_asset(
     {
         return Err((
             "pftl_uniswap_nav_not_finalized",
-            "PFTL-Uniswap primary subscription requires a finalized NAV reserve packet"
-                .to_string(),
+            "PFTL-Uniswap primary subscription requires a finalized NAV reserve packet".to_string(),
         ));
     }
     if nav_asset.finalized_at_height == 0 {
@@ -3656,15 +4284,17 @@ fn pftl_uniswap_price_settlement_atoms_per_nav_atom(
     route: &PftlUniswapConsensusRouteState,
     native_nav_asset: &NavTrackedAsset,
 ) -> Result<u64, (&'static str, String)> {
-    let native_asset = ledger.asset_definition(&route.native_nav_asset_id).ok_or_else(|| {
-        (
-            "missing_native_nav_asset",
-            format!(
-                "PFTL-Uniswap route native asset `{}` is missing",
-                route.native_nav_asset_id
-            ),
-        )
-    })?;
+    let native_asset = ledger
+        .asset_definition(&route.native_nav_asset_id)
+        .ok_or_else(|| {
+            (
+                "missing_native_nav_asset",
+                format!(
+                    "PFTL-Uniswap route native asset `{}` is missing",
+                    route.native_nav_asset_id
+                ),
+            )
+        })?;
     let settlement_asset = ledger
         .asset_definition(&route.settlement_asset_id)
         .ok_or_else(|| {
@@ -3765,13 +4395,8 @@ fn credit_issued_asset_balance(
             format!("{context}: asset `{asset_id}` is missing"),
         )
     })?;
-    let to_index = issued_asset_credit_recipient_line_index(
-        ledger,
-        &asset,
-        account,
-        amount_atoms,
-        context,
-    )?;
+    let to_index =
+        issued_asset_credit_recipient_line_index(ledger, &asset, account, amount_atoms, context)?;
     let (recipient_after, required_limit) =
         prepare_issued_asset_credit(ledger, &asset, account, to_index, amount_atoms, context)?;
     let supply_after = issued_asset_supply(ledger, asset_id)?
@@ -3861,7 +4486,7 @@ fn pftl_uniswap_absent_route_hash(route_id: &str) -> String {
 
 pub fn pftl_uniswap_route_state_hash(route: &PftlUniswapConsensusRouteState) -> String {
     let mut preimage = format!(
-        "route_id={}\nroute_family={}\nroute_config_digest={}\nroute_trust_class={}\nnative_nav_asset_id={}\nsettlement_asset_id={}\nhandoff_controller={}\nsettlement_adapter={}\nwrapped_navcoin_token={}\nethereum_chain_id={}\nroute_supply_cap_atoms={}\npacket_notional_cap_atoms={}\nlatest_finalized_nav_epoch={}\nreturn_finality_blocks={}\nauthorized_valid_supply_atoms={}\npftl_spendable_supply_atoms={}\nethereum_spendable_supply_atoms={}\nother_registered_venue_supply_atoms={}\noutstanding_bridge_claims_atoms={}\npending_return_import_claims_atoms={}\nsettlement_reserve_atoms={}\npaused={}\n",
+        "route_id={}\nroute_family={}\nroute_config_digest={}\nroute_trust_class={}\nnative_nav_asset_id={}\nsettlement_asset_id={}\nhandoff_controller={}\nsettlement_adapter={}\nwrapped_navcoin_token={}\nethereum_chain_id={}\nroute_supply_cap_atoms={}\npacket_notional_cap_atoms={}\nlatest_finalized_nav_epoch={}\nreturn_finality_blocks={}\n",
         route.route_id,
         route.route_family,
         route.route_config_digest,
@@ -3876,6 +4501,12 @@ pub fn pftl_uniswap_route_state_hash(route: &PftlUniswapConsensusRouteState) -> 
         route.packet_notional_cap_atoms,
         route.latest_finalized_nav_epoch,
         route.return_finality_blocks,
+    );
+    if route.live_value_enabled {
+        preimage.push_str("live_value_enabled=true\n");
+    }
+    preimage.push_str(&format!(
+        "authorized_valid_supply_atoms={}\npftl_spendable_supply_atoms={}\nethereum_spendable_supply_atoms={}\nother_registered_venue_supply_atoms={}\noutstanding_bridge_claims_atoms={}\npending_return_import_claims_atoms={}\nsettlement_reserve_atoms={}\npaused={}\n",
         route.authorized_valid_supply_atoms,
         route.pftl_spendable_supply_atoms,
         route.ethereum_spendable_supply_atoms,
@@ -3884,7 +4515,7 @@ pub fn pftl_uniswap_route_state_hash(route: &PftlUniswapConsensusRouteState) -> 
         route.pending_return_import_claims_atoms,
         route.settlement_reserve_atoms,
         route.paused,
-    );
+    ));
     if let Some(policy) = &route.ethereum_verification_policy {
         preimage.push_str(&format!(
             "ethereum_policy.authority_epoch={}\nethereum_policy.committee_root={}\nethereum_policy.minimum_confirmations={}\nethereum_policy.handoff_controller_code_hash={}\nethereum_policy.wrapped_navcoin_code_hash={}\n",
@@ -3976,12 +4607,18 @@ fn apply_vault_bridge_burn_to_redeem(
     block_height: u64,
     compatibility: AssetExecutionCompatibility,
 ) -> Result<(), (&'static str, String)> {
-    let nav_asset = ledger.nav_asset(&operation.asset_id).cloned().ok_or_else(|| {
-        (
-            "missing_nav_asset",
-            format!("vault bridge asset asset `{}` is not registered as a NAV asset", operation.asset_id),
-        )
-    })?;
+    let nav_asset = ledger
+        .nav_asset(&operation.asset_id)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                "missing_nav_asset",
+                format!(
+                    "vault bridge asset asset `{}` is not registered as a NAV asset",
+                    operation.asset_id
+                ),
+            )
+        })?;
     if nav_asset.issuer != operation.issuer {
         return Err((
             "vault_bridge_issuer_mismatch",
@@ -4006,14 +4643,13 @@ fn apply_vault_bridge_burn_to_redeem(
                 format!("asset `{}` does not exist", operation.asset_id),
             )
         })?;
-    let owner_index = trustline_index(ledger, &operation.owner, &operation.asset_id).ok_or_else(
-        || {
+    let owner_index =
+        trustline_index(ledger, &operation.owner, &operation.asset_id).ok_or_else(|| {
             (
                 "missing_trustline",
                 "vault bridge asset redemption owner has no trustline for asset".to_string(),
             )
-        },
-    )?;
+        })?;
     ensure_line_can_move(&asset, &ledger.trustlines[owner_index])?;
     if ledger.trustlines[owner_index].balance < operation.amount_atoms {
         return Err((
@@ -4036,14 +4672,17 @@ fn apply_vault_bridge_burn_to_redeem(
     if bucket.asset_id != operation.asset_id {
         return Err((
             "vault_bridge_bucket_asset_mismatch",
-            "vault bridge asset burn-to-redeem bucket does not belong to operation asset".to_string(),
+            "vault bridge asset burn-to-redeem bucket does not belong to operation asset"
+                .to_string(),
         ));
     }
-    if bucket.status != VAULT_BRIDGE_BUCKET_STATUS_ACTIVE && bucket.status != VAULT_BRIDGE_BUCKET_STATUS_IMPAIRED
+    if bucket.status != VAULT_BRIDGE_BUCKET_STATUS_ACTIVE
+        && bucket.status != VAULT_BRIDGE_BUCKET_STATUS_IMPAIRED
     {
         return Err((
             "vault_bridge_bucket_not_active",
-            "vault bridge asset burn-to-redeem requires an active or impaired source bucket".to_string(),
+            "vault bridge asset burn-to-redeem requires an active or impaired source bucket"
+                .to_string(),
         ));
     }
     let profile = vault_bridge_profile_for_pinned_policy(
@@ -4084,8 +4723,10 @@ fn apply_vault_bridge_burn_to_redeem(
             vault_bridge_withdrawal_packet_legacy_domainless_hash(&redemption.withdrawal_packet)
                 .map_err(|error| ("bad_vault_bridge_redemption", error))?;
         redemption.withdrawal_packet_evm_digest =
-            vault_bridge_withdrawal_packet_legacy_domainless_evm_digest(&redemption.withdrawal_packet)
-                .map_err(|error| ("bad_vault_bridge_redemption", error))?;
+            vault_bridge_withdrawal_packet_legacy_domainless_evm_digest(
+                &redemption.withdrawal_packet,
+            )
+            .map_err(|error| ("bad_vault_bridge_redemption", error))?;
         redemption
             .validate_for_chain(&genesis.chain_id)
             .map_err(|error| ("bad_vault_bridge_redemption", error))?;
@@ -4138,7 +4779,7 @@ fn apply_vault_bridge_redeem_settle(
     ledger: &mut LedgerState,
     operation: &VaultBridgeRedeemSettleOperation,
     block_height: u64,
- ) -> Result<(), (&'static str, String)> {
+) -> Result<(), (&'static str, String)> {
     apply_vault_bridge_redeem_settle_with_compatibility(
         ledger,
         operation,
@@ -4153,12 +4794,18 @@ fn apply_vault_bridge_redeem_settle_with_compatibility(
     block_height: u64,
     compatibility: AssetExecutionCompatibility,
 ) -> Result<(), (&'static str, String)> {
-    let nav_asset = ledger.nav_asset(&operation.asset_id).cloned().ok_or_else(|| {
-        (
-            "missing_nav_asset",
-            format!("vault bridge asset asset `{}` is not registered as a NAV asset", operation.asset_id),
-        )
-    })?;
+    let nav_asset = ledger
+        .nav_asset(&operation.asset_id)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                "missing_nav_asset",
+                format!(
+                    "vault bridge asset asset `{}` is not registered as a NAV asset",
+                    operation.asset_id
+                ),
+            )
+        })?;
     if nav_asset.issuer != operation.issuer_or_redemption_account
         && nav_asset.redemption_account != operation.issuer_or_redemption_account
     {
@@ -4235,7 +4882,9 @@ fn apply_vault_bridge_redeem_settle_with_compatibility(
         block_height,
         compatibility,
     )?;
-    if ledger.vault_bridge_bucket_states[bucket_index].redemption_queue_atoms < operation.settled_atoms {
+    if ledger.vault_bridge_bucket_states[bucket_index].redemption_queue_atoms
+        < operation.settled_atoms
+    {
         return Err((
             "vault_bridge_bucket_underflow",
             "vault bridge asset settlement exceeds bucket redemption queue".to_string(),
@@ -4252,21 +4901,23 @@ fn apply_vault_bridge_redeem_settle_with_compatibility(
             )
         })?;
 
-    ledger.vault_bridge_bucket_states[bucket_index].redemption_queue_atoms -= operation.settled_atoms;
+    ledger.vault_bridge_bucket_states[bucket_index].redemption_queue_atoms -=
+        operation.settled_atoms;
     ledger.vault_bridge_bucket_states[bucket_index].counted_value_atoms = counted_value_after;
     ledger.vault_bridge_bucket_states[bucket_index].last_updated_height = block_height;
     let claim_atoms_after = ledger.vault_bridge_bucket_states[bucket_index]
         .allocated_atoms()
         .map_err(|error| ("bad_vault_bridge_bucket", error))?;
-    ledger.vault_bridge_bucket_states[bucket_index].impairment_factor_bps = if claim_atoms_after == 0 {
-        10_000
-    } else {
-        vault_bridge_policy::bucket_factor_bps(
-            ledger.vault_bridge_bucket_states[bucket_index].counted_value_atoms,
-            claim_atoms_after,
-        )
-        .map_err(|error| (error.code(), error.message().to_string()))?
-    };
+    ledger.vault_bridge_bucket_states[bucket_index].impairment_factor_bps =
+        if claim_atoms_after == 0 {
+            10_000
+        } else {
+            vault_bridge_policy::bucket_factor_bps(
+                ledger.vault_bridge_bucket_states[bucket_index].counted_value_atoms,
+                claim_atoms_after,
+            )
+            .map_err(|error| (error.code(), error.message().to_string()))?
+        };
     ledger.vault_bridge_bucket_states[bucket_index]
         .validate()
         .map_err(|error| ("bad_vault_bridge_bucket", error))?;
@@ -4283,12 +4934,10 @@ fn apply_vault_bridge_redeem_settle_with_compatibility(
         })?;
     redemption.settlement_receipt_hash = operation.settlement_receipt_hash.clone();
     for attestation in &operation.withdrawal_observations {
-        if !redemption
-            .withdrawal_observations
-            .iter()
-            .any(|stored| stored.attestor == attestation.attestor
-                && stored.observation_root == attestation.observation_root)
-        {
+        if !redemption.withdrawal_observations.iter().any(|stored| {
+            stored.attestor == attestation.attestor
+                && stored.observation_root == attestation.observation_root
+        }) {
             redemption.withdrawal_observations.push(attestation.clone());
         }
     }
@@ -4306,15 +4955,18 @@ fn apply_vault_bridge_bucket_impair(
     operation: &VaultBridgeBucketImpairOperation,
     block_height: u64,
 ) -> Result<(), (&'static str, String)> {
-    let nav_asset = ledger.nav_asset(&operation.asset_id).cloned().ok_or_else(|| {
-        (
-            "missing_nav_asset",
-            format!(
-                "vault bridge asset asset `{}` is not registered as a NAV asset",
-                operation.asset_id
-            ),
-        )
-    })?;
+    let nav_asset = ledger
+        .nav_asset(&operation.asset_id)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                "missing_nav_asset",
+                format!(
+                    "vault bridge asset asset `{}` is not registered as a NAV asset",
+                    operation.asset_id
+                ),
+            )
+        })?;
     ensure_vault_bridge_asset_policy(ledger, &nav_asset, &operation.operator)?;
     let bucket_index = ledger
         .vault_bridge_bucket_states
@@ -4352,7 +5004,8 @@ fn apply_vault_bridge_bucket_impair(
     {
         return Err((
             "vault_bridge_bucket_not_impairable",
-            "vault bridge asset impairment requires an active, impaired, or paused bucket".to_string(),
+            "vault bridge asset impairment requires an active, impaired, or paused bucket"
+                .to_string(),
         ));
     }
     if operation.updated_counted_value_atoms > bucket.counted_value_atoms {
@@ -4394,11 +5047,9 @@ fn apply_vault_bridge_bucket_impair(
         .map_err(|error| ("bad_vault_bridge_bucket", error))?;
 
     ledger.vault_bridge_bucket_states[bucket_index] = bucket_after;
-    for receipt in ledger
-        .vault_bridge_receipts
-        .iter_mut()
-        .filter(|receipt| receipt.asset_id == operation.asset_id && receipt.bucket_id == operation.bucket_id)
-    {
+    for receipt in ledger.vault_bridge_receipts.iter_mut().filter(|receipt| {
+        receipt.asset_id == operation.asset_id && receipt.bucket_id == operation.bucket_id
+    }) {
         if receipt.status != VAULT_BRIDGE_RECEIPT_STATUS_REJECTED
             && receipt.status != VAULT_BRIDGE_RECEIPT_STATUS_RETIRED
         {
@@ -4409,6 +5060,13 @@ fn apply_vault_bridge_bucket_impair(
         }
     }
     Ok(())
+}
+
+fn vault_bridge_source_proof_is_consensus_verified(source_proof_kind: &str) -> bool {
+    matches!(
+        source_proof_kind,
+        SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+    )
 }
 
 struct VaultBridgeDepositSourceProof<'a> {
@@ -4422,14 +5080,19 @@ struct VaultBridgeDepositSourceProof<'a> {
     source_public_values_hash: &'a str,
     source_proof_bytes: &'a [u8],
     source_public_values: &'a [u8],
+    fast_ingress_verifier: Option<&'a FastIngressVerifierConfigV1>,
+}
+
+#[derive(Debug)]
+enum VerifiedIngressPublicValues {
+    Confirmed(postfiat_types::PfUsdcIngressPublicValuesV3),
+    Bonded(postfiat_types::PfUsdcBondedIngressPublicValuesV1),
+    Ethereum { nullifier: String },
 }
 
 fn ensure_vault_bridge_deposit_source_proof(
     proof: VaultBridgeDepositSourceProof<'_>,
-) -> Result<
-    Option<postfiat_types::PfUsdcIngressPublicValuesV3>,
-    (&'static str, String),
-> {
+) -> Result<Option<VerifiedIngressPublicValues>, (&'static str, String)> {
     let VaultBridgeDepositSourceProof {
         genesis,
         profile,
@@ -4441,7 +5104,147 @@ fn ensure_vault_bridge_deposit_source_proof(
         source_public_values_hash,
         source_proof_bytes,
         source_public_values,
+        fast_ingress_verifier,
     } = proof;
+    let ethereum_finality_route = profile
+        .source_class
+        .strip_prefix(VAULT_BRIDGE_PROFILE_SOURCE_CLASS_PREFIX)
+        .and_then(parse_vault_bridge_source_domain_parts)
+        .map(|(chain_id, _, _)| {
+            matches!(
+                chain_id,
+                ETHEREUM_MAINNET_CHAIN_ID | ETHEREUM_SEPOLIA_CHAIN_ID
+            )
+        })
+        .unwrap_or(false);
+    if profile.verifier_kind == NAV_PROFILE_VERIFIER_SP1_GROTH16
+        && ethereum_finality_route
+        && source_proof_kind != SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1
+    {
+        return Err((
+            "ethereum_ingress_source_proof_kind_required",
+            "Ethereum ingress routes require sp1-ethereum-finality-v1 proof material".to_string(),
+        ));
+    }
+    if source_proof_kind == SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1 {
+        if profile.verifier_kind != NAV_PROFILE_VERIFIER_SP1_GROTH16
+            || source_proof_hash.is_empty()
+            || source_public_values_hash.is_empty()
+        {
+            return Err((
+                "missing_ethereum_ingress_source_proof",
+                "Ethereum-finality deposits require a sp1-groth16 profile and committed proof material".to_string(),
+            ));
+        }
+        // Proposal execution verifies the complete proof and public values,
+        // then consensus retains only their commitments in the deposit record.
+        // Finalization must validate those committed fields without demanding
+        // the discarded proof bytes again.
+        let Some(_genesis) = genesis else {
+            return Ok(None);
+        };
+        if source_proof_bytes.is_empty() || source_public_values.is_empty() {
+            return Err((
+                "missing_ethereum_ingress_source_proof",
+                "Ethereum-finality deposit proposals require complete proof material".to_string(),
+            ));
+        }
+        if postfiat_types::pfusdc_ingress_proof_hash_v1(source_proof_bytes) != source_proof_hash
+            || postfiat_types::pfusdc_ingress_public_values_hash_v1(source_public_values)
+                != source_public_values_hash
+        {
+            return Err((
+                "ethereum_ingress_source_commitment_mismatch",
+                "Ethereum ingress proof commitments do not match supplied bytes".to_string(),
+            ));
+        }
+        verify_bounded_sp1_groth16(
+            profile,
+            NAV_PROFILE_VERIFIER_SP1_GROTH16,
+            source_proof_bytes,
+            source_public_values,
+        )
+        .map_err(|error| (error.code(), error.message()))?;
+        let values = postfiat_types::PfUsdcEthereumIngressPublicValuesV1::from_canonical_bytes(
+            source_public_values,
+        )
+        .map_err(|error| ("ethereum_ingress_public_values_invalid", error))?;
+        ensure_ethereum_ingress_public_values_match(
+            profile,
+            evidence,
+            evidence_root,
+            policy_hash,
+            &values,
+        )?;
+        return Ok(Some(VerifiedIngressPublicValues::Ethereum {
+            nullifier: values.deposit_nullifier,
+        }));
+    }
+    if source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 {
+        let config = fast_ingress_verifier.ok_or_else(|| {
+            (
+                "pfusdc_fast_ingress_verifier_missing",
+                "bonded ingress requires a governance-pinned secondary verifier configuration"
+                    .to_string(),
+            )
+        })?;
+        if source_proof_hash.is_empty() || source_public_values_hash.is_empty() {
+            return Err((
+                "missing_vault_bridge_bonded_source_proof",
+                "bonded pfUSDC ingress requires its dedicated proof kind and commitments"
+                    .to_string(),
+            ));
+        }
+        let Some(genesis) = genesis else {
+            return Ok(None);
+        };
+        if postfiat_types::pfusdc_ingress_proof_hash_v1(source_proof_bytes) != source_proof_hash
+            || postfiat_types::pfusdc_ingress_public_values_hash_v1(source_public_values)
+                != source_public_values_hash
+        {
+            return Err((
+                "vault_bridge_bonded_source_commitment_mismatch",
+                "bonded ingress proof/public-values commitment mismatch".to_string(),
+            ));
+        }
+        verify_bounded_sp1_groth16_with_config(
+            &config.verifier_kind,
+            NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1,
+            &config.verifier_program_vkey,
+            config.max_proof_bytes,
+            config.max_public_values_bytes,
+            source_proof_bytes,
+            source_public_values,
+        )
+        .map_err(|error| (error.code(), error.message()))?;
+        let public_values =
+            postfiat_types::PfUsdcBondedIngressPublicValuesV1::from_canonical_bytes(
+                source_public_values,
+            )
+            .map_err(|error| ("pfusdc_bonded_public_values_invalid", error))?;
+        if public_values.manifest_hash != config.deployment_manifest_hash
+            || public_values.verifier_policy_hash != config.verifier_policy_hash
+            || public_values.cap_atoms != config.cap_atoms
+            || public_values.age_margin_blocks != config.age_margin_blocks
+            || public_values.asset_id != config.asset_id
+            || public_values.route_profile_hash != config.base_route_profile_hash
+            || public_values.route_epoch != config.route_epoch
+        {
+            return Err((
+                "pfusdc_fast_ingress_config_mismatch",
+                "bonded ingress public values do not match the governed secondary verifier configuration"
+                    .to_string(),
+            ));
+        }
+        ensure_pfusdc_bonded_public_values_match(
+            genesis,
+            evidence,
+            evidence_root,
+            policy_hash,
+            &public_values,
+        )?;
+        return Ok(Some(VerifiedIngressPublicValues::Bonded(public_values)));
+    }
     match profile.verifier_kind.as_str() {
         NAV_PROFILE_VERIFIER_MULTI_FETCH => {
             if !source_proof_kind.is_empty()
@@ -4534,7 +5337,7 @@ fn ensure_vault_bridge_deposit_source_proof(
                 policy_hash,
                 &public_values,
             )?;
-            Ok(Some(public_values))
+            Ok(Some(VerifiedIngressPublicValues::Confirmed(public_values)))
         }
         _ => Err((
             "unsupported_vault_bridge_deposit_verifier",
@@ -4542,6 +5345,96 @@ fn ensure_vault_bridge_deposit_source_proof(
                 .to_string(),
         )),
     }
+}
+
+fn ensure_ethereum_ingress_public_values_match(
+    profile: &NavProofProfile,
+    evidence: &VaultBridgeDepositEvidence,
+    evidence_root: &str,
+    policy_hash: &str,
+    values: &postfiat_types::PfUsdcEthereumIngressPublicValuesV1,
+) -> Result<(), (&'static str, String)> {
+    let expected_source_class = format!(
+        "{VAULT_BRIDGE_PROFILE_SOURCE_CLASS_PREFIX}erc20_bridge_vault:{}:{}:{}",
+        evidence.source_chain_id, evidence.vault_address, evidence.token_address
+    );
+    let expected_route_id = match evidence.source_chain_id {
+        ETHEREUM_MAINNET_CHAIN_ID => VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1,
+        ETHEREUM_SEPOLIA_CHAIN_ID => VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1,
+        _ => {
+            return Err((
+                "ethereum_ingress_source_chain_unsupported",
+                "Ethereum ingress proof uses an unregistered source chain".to_string(),
+            ));
+        }
+    };
+    let mismatch = profile.source_class != expected_source_class
+        || values.route_id != expected_route_id
+        || profile.valuation_policy_hash != values.manifest_hash
+        || (!profile.vault_bridge_route_policy_hash.is_empty()
+            && profile.vault_bridge_route_policy_hash != policy_hash)
+        || values.source_chain_id != evidence.source_chain_id
+        || values.vault_address != evidence.vault_address
+        || values.token_address != evidence.token_address
+        || values.depositor != evidence.depositor
+        || values.pftl_recipient != evidence.pftl_recipient
+        || values.pftl_recipient_hash != evidence.pftl_recipient_hash
+        || values.amount_atoms != evidence.amount_atoms
+        || values.nonce != evidence.nonce
+        || values.route_binding != evidence.route_binding
+        || values.deposit_id != evidence.deposit_id
+        || values.finalized_execution_block_hash != evidence.block_hash
+        || values.evidence_root != evidence_root;
+    if mismatch {
+        return Err((
+            "ethereum_ingress_public_values_mismatch",
+            "proof-verified Ethereum ingress values do not match the governed route and deposit evidence".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn ensure_pfusdc_bonded_public_values_match(
+    genesis: &Genesis,
+    evidence: &VaultBridgeDepositEvidence,
+    evidence_root: &str,
+    policy_hash: &str,
+    values: &postfiat_types::PfUsdcBondedIngressPublicValuesV1,
+) -> Result<(), (&'static str, String)> {
+    let route_epoch = u32::try_from(values.route_epoch).map_err(|_| {
+        (
+            "pfusdc_bonded_route_epoch_invalid",
+            "bonded ingress route epoch exceeds u32".to_string(),
+        )
+    })?;
+    let expected_route_binding =
+        postfiat_types::vault_bridge_route_binding(policy_hash, route_epoch)
+            .map_err(|error| ("pfusdc_bonded_route_binding_invalid", error))?;
+    let mismatch = values.proof_program_version != 1
+        || values.pftl_chain_id != genesis.chain_id
+        || values.pftl_genesis_hash != genesis_hash(genesis)
+        || values.pftl_protocol_version != genesis.protocol_version
+        || values.route_profile_hash != policy_hash
+        || values.arbitrum_chain_id != evidence.source_chain_id
+        || values.vault_address != evidence.vault_address
+        || values.token_address != evidence.token_address
+        || values.depositor != evidence.depositor
+        || values.pftl_recipient != evidence.pftl_recipient
+        || values.pftl_recipient_hash != evidence.pftl_recipient_hash
+        || values.amount_atoms != evidence.amount_atoms
+        || values.deposit_nonce != evidence.nonce
+        || values.route_binding != evidence.route_binding
+        || values.route_binding != expected_route_binding
+        || values.deposit_id != evidence.deposit_id
+        || values.evidence_root != evidence_root;
+    if mismatch {
+        return Err((
+            "pfusdc_bonded_public_values_mismatch",
+            "bonded pfUSDC public values do not exactly match chain, route, and deposit"
+                .to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn ensure_pfusdc_ingress_public_values_match(
@@ -4557,11 +5450,9 @@ fn ensure_pfusdc_ingress_public_values_match(
             "pfUSDC ingress route epoch exceeds the governed u32 range".to_string(),
         )
     })?;
-    let expected_route_binding = postfiat_types::vault_bridge_route_binding(
-        policy_hash,
-        route_epoch,
-    )
-    .map_err(|error| ("pfusdc_ingress_route_binding_invalid", error))?;
+    let expected_route_binding =
+        postfiat_types::vault_bridge_route_binding(policy_hash, route_epoch)
+            .map_err(|error| ("pfusdc_ingress_route_binding_invalid", error))?;
     let expected_genesis_hash = genesis_hash(genesis);
     let mismatch = values.proof_program_version != 3
         || values.pftl_chain_id != genesis.chain_id
@@ -4611,12 +5502,14 @@ fn ensure_vault_bridge_asset_registration(
     ledger: &LedgerState,
     nav_asset: &NavTrackedAsset,
 ) -> Result<(), (&'static str, String)> {
-    let asset = ledger.asset_definition(&nav_asset.asset_id).ok_or_else(|| {
-        (
-            "missing_asset",
-            format!("asset `{}` does not exist", nav_asset.asset_id),
-        )
-    })?;
+    let asset = ledger
+        .asset_definition(&nav_asset.asset_id)
+        .ok_or_else(|| {
+            (
+                "missing_asset",
+                format!("asset `{}` does not exist", nav_asset.asset_id),
+            )
+        })?;
     if asset.issuer != nav_asset.issuer {
         return Err((
             "asset_issuer_mismatch",
@@ -4675,9 +5568,21 @@ fn validate_vault_bridge_reserve_packet_fields(
         vault_bridge_route_policy_hash(profile),
     )?;
 
-    let expected_verified_net_assets =
-        vault_bridge_counted_value_for_asset(&ledger.vault_bridge_bucket_states, &operation.asset_id)
-            .map_err(|error| ("bad_vault_bridge_buckets", error))?;
+    let counted_value = vault_bridge_counted_value_for_asset(
+        &ledger.vault_bridge_bucket_states,
+        &operation.asset_id,
+    )
+    .map_err(|error| ("bad_vault_bridge_buckets", error))?;
+    let finalized_unclaimed_sp1_backing =
+        finalized_unclaimed_sp1_backing_for_asset(ledger, profile, &operation.asset_id)?;
+    let expected_verified_net_assets = counted_value
+        .checked_add(finalized_unclaimed_sp1_backing)
+        .ok_or_else(|| {
+        (
+            "vault_bridge_verified_net_assets_overflow",
+            "vault bridge counted value plus finalized SP1 backing overflowed".to_string(),
+        )
+    })?;
     if operation.verified_net_assets != expected_verified_net_assets {
         return Err((
             "vault_bridge_verified_net_assets_mismatch",
@@ -4685,11 +5590,21 @@ fn validate_vault_bridge_reserve_packet_fields(
                 .to_string(),
         ));
     }
-    let expected_circulating_supply = issued_asset_supply(ledger, &operation.asset_id)?;
-    if operation.circulating_supply != expected_circulating_supply {
+    let current_supply = issued_asset_supply(ledger, &operation.asset_id)?;
+    let maximum_proof_backed_supply = current_supply
+        .checked_add(finalized_unclaimed_sp1_backing)
+        .ok_or_else(|| {
+            (
+                "vault_bridge_circulating_supply_overflow",
+                "issued supply plus finalized SP1 backing overflowed".to_string(),
+            )
+        })?;
+    if operation.circulating_supply < current_supply
+        || operation.circulating_supply > maximum_proof_backed_supply
+    {
         return Err((
             "vault_bridge_circulating_supply_mismatch",
-            "vault bridge asset reserve packet circulating_supply must equal issued vault bridge asset supply".to_string(),
+            "vault bridge reserve packet circulating_supply must be at least current issued supply and may lead it only by finalized, unclaimed SP1-backed deposits".to_string(),
         ));
     }
     let expected_source_root =
@@ -4703,6 +5618,61 @@ fn validate_vault_bridge_reserve_packet_fields(
         ));
     }
     Ok(())
+}
+
+fn finalized_unclaimed_sp1_backing_for_asset(
+    ledger: &LedgerState,
+    profile: &NavProofProfile,
+    asset_id: &str,
+) -> Result<u64, (&'static str, String)> {
+    let source_domain = profile
+        .source_class
+        .strip_prefix(VAULT_BRIDGE_PROFILE_SOURCE_CLASS_PREFIX)
+        .unwrap_or_default();
+    let route_policy_hash = vault_bridge_route_policy_hash(profile);
+    let mut total = 0_u64;
+    for record in ledger.vault_bridge_deposits.iter().filter(|record| {
+        record.asset_id == asset_id
+            && record.status == VAULT_BRIDGE_DEPOSIT_STATUS_FINALIZED
+            && record.source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+            && record.policy_hash == route_policy_hash
+            && record.evidence.source_domain() == source_domain
+    }) {
+        let consumer_id = format!("vault_bridge_deposit_claim:{}", record.evidence_root);
+        if ledger
+            .vault_bridge_allocations
+            .iter()
+            .any(|allocation| allocation.consumer_id == consumer_id)
+        {
+            continue;
+        }
+        let releasable = ledger.fast_ingress_campaigns.iter().any(|campaign| {
+            campaign.route_profile_hash == record.policy_hash
+                && campaign.mints.iter().any(|mint| {
+                    mint.deposit_id == record.evidence.deposit_id
+                        && mint.recipient == record.evidence.pftl_recipient
+                        && mint.amount_atoms == record.evidence.amount_atoms
+                        && !mint.claimed
+                        && matches!(
+                            mint.status.as_str(),
+                            postfiat_types::FAST_INGRESS_MINT_STATUS_FINAL
+                                | postfiat_types::FAST_INGRESS_MINT_STATUS_RELEASED_UNCONFIRMED
+                        )
+                })
+        });
+        if !releasable {
+            continue;
+        }
+        total = total
+            .checked_add(record.evidence.amount_atoms)
+            .ok_or_else(|| {
+                (
+                    "vault_bridge_sp1_backing_overflow",
+                    "finalized unclaimed SP1 backing overflowed".to_string(),
+                )
+            })?;
+    }
+    Ok(total)
 }
 
 /// Deterministic challenge-bond resolution at finalization. For every
@@ -4725,8 +5695,8 @@ fn resolve_nav_challenge_bonds(
         {
             continue;
         }
-        let challenger_was_right = packet.epoch == finalized_epoch
-            && packet.reserve_packet_hash != finalized_packet_hash;
+        let challenger_was_right =
+            packet.epoch == finalized_epoch && packet.reserve_packet_hash != finalized_packet_hash;
         let recipient = if challenger_was_right {
             packet.challenger.clone()
         } else {
@@ -4822,12 +5792,15 @@ fn finalize_market_ops_envelope(
         ));
     }
 
-    let nav_asset = ledger.nav_asset(&operation.asset_id).cloned().ok_or_else(|| {
-        (
-            "missing_nav_asset",
-            format!("nav asset `{}` does not exist", operation.asset_id),
-        )
-    })?;
+    let nav_asset = ledger
+        .nav_asset(&operation.asset_id)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                "missing_nav_asset",
+                format!("nav asset `{}` does not exist", operation.asset_id),
+            )
+        })?;
     if nav_asset.issuer != operation.issuer {
         return Err((
             "nav_issuer_mismatch",
@@ -4888,8 +5861,7 @@ fn finalize_market_ops_envelope(
         })?;
     ensure_market_ops_packets_fresh(ledger, &nav_asset, &packet, block_height)?;
 
-    let expected_envelope =
-        recompute_market_ops_envelope(&operation.asset_id, &packet, operation)?;
+    let expected_envelope = recompute_market_ops_envelope(&operation.asset_id, &packet, operation)?;
     if expected_envelope != operation.envelope {
         return Err((
             "market_ops_envelope_mismatch",
@@ -4995,11 +5967,9 @@ fn recompute_market_ops_envelope(
     )
     .map_err(|error| ("market_ops_policy_error", format!("{error}")))?;
 
-    let evidence_root = market_ops_evidence_root(
-        &inputs.discount_observations,
-        &inputs.premium_observations,
-    )
-    .map_err(|error| ("bad_market_ops_evidence", error))?;
+    let evidence_root =
+        market_ops_evidence_root(&inputs.discount_observations, &inputs.premium_observations)
+            .map_err(|error| ("bad_market_ops_evidence", error))?;
     if evidence_root != operation.envelope.evidence_root {
         return Err((
             "invalid_market_ops_evidence_root",
@@ -5024,11 +5994,10 @@ fn recompute_market_ops_envelope(
         u128::from(window_seconds),
     )
     .map_err(|error| ("market_ops_policy_error", format!("{error}")))?;
-    let discount_response_bps =
-        crate::market_policy::compute_discount_response_bps(
-            discount_metrics.response_curve_metrics(),
-        )
-        .map_err(|error| ("market_ops_policy_error", format!("{error}")))?;
+    let discount_response_bps = crate::market_policy::compute_discount_response_bps(
+        discount_metrics.response_curve_metrics(),
+    )
+    .map_err(|error| ("market_ops_policy_error", format!("{error}")))?;
     let reserve_cap = crate::market_policy::compute_reserve_deploy_cap(
         operation.envelope.funded_alignment_reserve_usd_e8,
         discount_response_bps,
@@ -5043,11 +6012,10 @@ fn recompute_market_ops_envelope(
         u128::from(window_seconds),
     )
     .map_err(|error| ("market_ops_policy_error", format!("{error}")))?;
-    let premium_response_bps =
-        crate::market_policy::compute_premium_response_bps(
-            premium_metrics.response_curve_metrics(),
-        )
-        .map_err(|error| ("market_ops_policy_error", format!("{error}")))?;
+    let premium_response_bps = crate::market_policy::compute_premium_response_bps(
+        premium_metrics.response_curve_metrics(),
+    )
+    .map_err(|error| ("market_ops_policy_error", format!("{error}")))?;
     let mint_cap = crate::market_policy::compute_mint_cap(
         valid_global_supply_atoms,
         premium_response_bps,
@@ -5069,14 +6037,15 @@ fn recompute_market_ops_envelope(
     expected.nav_floor_usd_e8 = nav_floor.nav_floor_usd_e8;
     expected.valid_global_supply_atoms = valid_global_supply_atoms;
     expected.verified_net_assets_usd_e8 = verified_net_assets_usd_e8;
-    expected.required_alignment_reserve_usd_e8 =
-        alignment.required_alignment_reserve_next_usd_e8;
+    expected.required_alignment_reserve_usd_e8 = alignment.required_alignment_reserve_next_usd_e8;
     expected.max_reserve_deploy_usd_e8 = reserve_cap.reserve_deploy_cap_usd_e8;
     expected.max_mint_atoms = mint_cap.mint_cap_atoms;
     Ok(expected)
 }
 
-fn to_alignment_params(params: &MarketOpsAlignmentParams) -> crate::market_policy::AlignmentReserveParams {
+fn to_alignment_params(
+    params: &MarketOpsAlignmentParams,
+) -> crate::market_policy::AlignmentReserveParams {
     crate::market_policy::AlignmentReserveParams {
         policy_min_usd_e8: params.policy_min_usd_e8,
         min_alignment_bps: u128::from(params.min_alignment_bps),

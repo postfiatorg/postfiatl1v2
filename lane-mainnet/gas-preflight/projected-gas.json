@@ -1,0 +1,127 @@
+{
+ "schema": "postfiat.pfusdc.mainnet_gas_preflight.v1",
+ "utc": "2026-07-26T03:05Z",
+ "chain": {
+  "chain_id": 1,
+  "rpc": "https://ethereum-rpc.publicnode.com"
+ },
+ "block": {
+  "number": 25614161,
+  "timestamp": 1785035159
+ },
+ "deployer": {
+  "address": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+  "nonce": 153,
+  "eth_wei": 302036778198167631,
+  "eth": 0.30203677819816765,
+  "usdc_atoms": 3461712789,
+  "usdc": 3461.712789,
+  "gates": {
+   "chain_eq_1": true,
+   "eth_gte_0.302": true,
+   "usdc_gte_3462.49": false,
+   "note": "USDC 3461.712789 is 0.777211 USDC (777,211 atoms) SHORT of the 3,462.49 gate"
+  }
+ },
+ "fees": {
+  "base_fee_wei": 41408457,
+  "base_fee_gwei": 0.041408457,
+  "suggested_priority_wei": 159074,
+  "suggested_priority_gwei": 0.000159074,
+  "gas_price_wei": 41567531,
+  "gas_price_gwei": 0.041567531,
+  "chosen_max_fee_wei": 282816914,
+  "chosen_max_fee_gwei": 0.282816914,
+  "chosen_priority_gwei": 0.2
+ },
+ "eth_usd": {
+  "value": 1874.5,
+  "source": "Uniswap V4 ETH/USDC fee-3000 ts-60 mainnet pool via official StateView 0x7fFE42C4a5DEeA5b0feC41C94C136Cf115597227 (same official Uniswap deployment family pinned in docs/evidence/a666-uniswap-bridge-build-20260723/sepolia-persistent/state.json)",
+  "pool_id": "dce6394339af00981949f5f3baf27e3610c76326a700af57e4b3e3ae4977f78d",
+  "sqrtPriceX96": "3430219841514950527239133",
+  "liquidity": "2137817980104021168",
+  "block": 25614157
+ },
+ "transaction_table": [
+  {
+   "tx": "verifier deploy (PFTLFinalityVerifierV1)",
+   "gas_units": 2630575,
+   "basis": "measured: Sepolia nonce-67 deploy tx c60ed31a block 11351298",
+   "cost_at_current_eth": 0.000109,
+   "cost_at_current_usd": 0.2,
+   "cost_at_maxfee_eth": 0.000744,
+   "cost_at_maxfee_usd": 1.39
+  },
+  {
+   "tx": "vault deploy (ERC20BridgeVaultL1)",
+   "gas_units": 1028817,
+   "basis": "measured: Sepolia nonce-68 deploy tx e0e7d41d block 11351299",
+   "cost_at_current_eth": 4.3e-05,
+   "cost_at_current_usd": 0.08,
+   "cost_at_maxfee_eth": 0.000291,
+   "cost_at_maxfee_usd": 0.55
+  },
+  {
+   "tx": "USDC approve exact 100,000,000 atoms",
+   "gas_units": 55000,
+   "basis": "ceiling: typical ERC20 approve 44k-56k (cold slot)",
+   "cost_at_current_eth": 2e-06,
+   "cost_at_current_usd": 0.0,
+   "cost_at_maxfee_eth": 1.6e-05,
+   "cost_at_maxfee_usd": 0.03
+  },
+  {
+   "tx": "depositV2 100,000,000 atoms",
+   "gas_units": 110000,
+   "basis": "ceiling: measured Sepolia depositV2 103,242 gas + headroom",
+   "cost_at_current_eth": 5e-06,
+   "cost_at_current_usd": 0.01,
+   "cost_at_maxfee_eth": 3.1e-05,
+   "cost_at_maxfee_usd": 0.06
+  },
+  {
+   "tx": "withdrawWithProof (proof-native)",
+   "gas_units": 420000,
+   "basis": "ceiling: Groth16 verify + storage + transfer, est 350k-420k",
+   "cost_at_current_eth": 1.7e-05,
+   "cost_at_current_usd": 0.03,
+   "cost_at_maxfee_eth": 0.000119,
+   "cost_at_maxfee_usd": 0.22
+  }
+ ],
+ "projected": {
+  "cumulative_gas_units": 4244392,
+  "cumulative_at_current": {
+   "wei": 176428896036152,
+   "eth": 0.000176,
+   "usd": 0.33
+  },
+  "cumulative_at_max_fee": {
+   "wei": 1200385847246288,
+   "eth": 0.0012,
+   "usd": 2.25
+  },
+  "budget_hard_ceiling_usd": 150,
+  "budget_stop_usd": 130,
+  "headroom_at_current_usd": 129.67,
+  "headroom_at_max_fee_usd": 127.75
+ },
+ "value_at_risk": {
+  "deposit_atoms": 100000000,
+  "deposit_usd": 100.0,
+  "gas_budget_usd": 150,
+  "total_usd": 250.0,
+  "cap_usd": 250
+ },
+ "verdict": {
+  "budget_within_stop_at_current": true,
+  "budget_ok": true,
+  "chain_gate": true,
+  "eth_gate": true,
+  "usdc_gate": false,
+  "overall": "PASS-PENDING-AUDIT",
+  "blockers": [
+   "canonical-USDC balance 3,461.712789 is 777,211 atoms below the >=3,462.49 USDC gate"
+  ]
+ }
+}

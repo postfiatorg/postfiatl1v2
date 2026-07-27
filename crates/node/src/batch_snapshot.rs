@@ -1179,55 +1179,312 @@ fn bridge_witness_signature_seed(message: &[u8]) -> io::Result<[u8; 32]> {
     })
 }
 
-pub fn export_snapshot(options: SnapshotExportOptions) -> io::Result<SnapshotManifest> {
-    let report = status(NodeOptions {
-        data_dir: options.data_dir.clone(),
-    })?;
-    verify_governance(NodeOptions {
-        data_dir: options.data_dir.clone(),
-    })
-    .map_err(|error| {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SnapshotVerificationBasis {
+    FullHistory,
+    FinalizedCheckpoint,
+}
+
+pub fn verify_finalized_checkpoint(
+    options: NodeOptions,
+) -> io::Result<FinalizedCheckpointVerificationReport> {
+    let store = NodeStore::new(&options.data_dir);
+    recover_ordered_commit_journal(&store)?;
+    let genesis = store.read_genesis()?;
+    let activation_height = genesis.consensus_v2_activation_height.ok_or_else(|| {
         io::Error::new(
-            error.kind(),
-            format!("snapshot export governance verification failed: {error}"),
+            io::ErrorKind::InvalidData,
+            "finalized-checkpoint verification requires a committed consensus v2 activation height",
         )
     })?;
+    let chain_tip = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?;
+    if chain_tip.height < activation_height {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "finalized checkpoint height {} is below consensus v2 activation height {activation_height}",
+                chain_tip.height
+            ),
+        ));
+    }
+    let blocks = store.read_blocks()?;
+    let checkpoint = blocks.blocks.last().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "finalized-checkpoint verification requires a retained certified tip block",
+        )
+    })?;
+    if checkpoint.header.height != chain_tip.height
+        || checkpoint.header.block_hash != chain_tip.block_hash
+        || checkpoint.header.state_root != chain_tip.state_root
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "retained finalized checkpoint does not match the durable chain tip",
+        ));
+    }
+    let current_state_root = current_replicated_state_root(&store, &genesis)?;
+    if current_state_root != chain_tip.state_root {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "finalized checkpoint state root {} does not match current replicated state root {current_state_root}",
+                chain_tip.state_root
+            ),
+        ));
+    }
+    let ordered_batches = store.read_ordered_batches()?;
+    let receipts = store.read_receipts()?;
+    if chain_tip.ordered_batch_count != ordered_batches.len() as u64 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "finalized checkpoint ordered-batch count {} does not match durable chain-tip count {}",
+                ordered_batches.len(),
+                chain_tip.ordered_batch_count
+            ),
+        ));
+    }
+    // The durable tip counter records raw receipt journal appends. Legacy
+    // rejected-then-accepted retries intentionally collapse to one canonical
+    // receipt in `read_receipts`, so the raw counter may be greater. It must
+    // never be smaller than the canonical set, and every receipt referenced by
+    // the finalized checkpoint is still required exactly once below.
+    if chain_tip.receipt_count < receipts.len() as u64 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "finalized checkpoint canonical receipt count {} exceeds durable chain-tip journal count {}",
+                receipts.len(),
+                chain_tip.receipt_count
+            ),
+        ));
+    }
+    if ordered_batches.last().map(String::as_str) != Some(checkpoint.header.batch_id.as_str()) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "finalized checkpoint batch id does not match the last ordered batch",
+        ));
+    }
+    if checkpoint.header.receipt_count != checkpoint.receipt_ids.len() as u64 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "finalized checkpoint receipt count does not match its receipt id list",
+        ));
+    }
+    let receipt_counts =
+        receipts
+            .iter()
+            .fold(HashMap::<&str, usize>::new(), |mut counts, receipt| {
+                *counts.entry(receipt.tx_id.as_str()).or_default() += 1;
+                counts
+            });
+    for receipt_id in &checkpoint.receipt_ids {
+        if receipt_counts
+            .get(receipt_id.as_str())
+            .copied()
+            .unwrap_or_default()
+            != 1
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "finalized checkpoint references missing or duplicate receipt `{receipt_id}`"
+                ),
+            ));
+        }
+    }
+
+    let archive = store.read_batch_archive()?;
+    let archive_entry = archive
+        .find(&checkpoint.header.batch_kind, &checkpoint.header.batch_id)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "finalized checkpoint payload is absent from the batch archive",
+            )
+        })?;
+    let payload_hash = batch_archive_payload_hash(
+        &genesis,
+        &archive_entry.batch_kind,
+        &archive_entry.batch_id,
+        &archive_entry.payload_json,
+    )?;
+    if archive_entry.payload_hash != payload_hash {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "finalized checkpoint archived payload hash mismatch",
+        ));
+    }
+    verify_archived_payload(&genesis, checkpoint, archive_entry)?;
+
+    let governance = store.read_governance()?;
+    let validator_ids = active_validator_ids(&governance)?;
+    let validator_registry =
+        read_validator_registry_file(&store.data_dir().join(VALIDATOR_REGISTRY_FILE))?;
+    validate_validator_registry_for_count(&validator_registry, governance.active_validator_count)?;
+    verify_block_certificate_evidence(&genesis, checkpoint, &validator_registry, &validator_ids)?;
+    let validators = validator_ids
+        .iter()
+        .map(|validator_id| {
+            let record = validator_registry_record(&validator_registry, validator_id)?;
+            Ok(postfiat_ordering_fast::ConsensusV2Validator {
+                validator_id: validator_id.clone(),
+                public_key_hex: record.public_key_hex.clone(),
+            })
+        })
+        .collect::<io::Result<Vec<_>>>()?;
+    let validators = postfiat_ordering_fast::ConsensusV2ValidatorSet::try_new(validators)
+        .map_err(invalid_data)?;
+    let committee_epoch = 1u64
+        .checked_add(
+            governance
+                .validator_registry_updates
+                .iter()
+                .filter(|update| update.activation_height < checkpoint.header.height)
+                .count() as u64,
+        )
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "finalized checkpoint committee epoch overflow",
+            )
+        })?;
+    let domain = postfiat_ordering_fast::consensus_v2_domain(
+        genesis.chain_id.clone(),
+        genesis_hash(&genesis),
+        genesis.protocol_version,
+        committee_epoch,
+        &validators,
+    );
+    let commit = checkpoint
+        .header
+        .consensus_v2_commit
+        .as_ref()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "activated finalized checkpoint is missing its consensus v2 commit",
+            )
+        })?;
+    let committed = postfiat_ordering_fast::verify_consensus_v2_commit(
+        &domain,
+        &validators,
+        commit,
+        &postfiat_ordering_fast::ConsensusV2QcGraph::default(),
+    )
+    .map_err(invalid_data)?;
+    let expected_parent =
+        if checkpoint.header.height == 1 && checkpoint.header.parent_hash == "genesis" {
+            consensus_v2_genesis_parent_id(&domain).map_err(invalid_data)?
+        } else {
+            checkpoint.header.parent_hash.clone()
+        };
+    if committed.height != checkpoint.header.height
+        || committed.parent_block_id != expected_parent
+        || committed.payload_hash != payload_hash
+        || committed.state_root != checkpoint.header.state_root
+        || committed.bridge_exit_root != checkpoint.header.bridge_exit_root
+        || committed.block_id != checkpoint.header.block_hash
+        || commit.proposal.proposer != checkpoint.header.proposer
+        || commit.proposal.round.view != checkpoint.header.view
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "consensus v2 finality certificate does not bind the exact checkpoint block and state",
+        ));
+    }
+
+    Ok(FinalizedCheckpointVerificationReport {
+        schema: "postfiat.finalized_checkpoint_verification.v1".to_string(),
+        verified: true,
+        verification_basis: "consensus-v2-finalized-checkpoint".to_string(),
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        protocol_version: genesis.protocol_version,
+        consensus_v2_activation_height: activation_height,
+        checkpoint_height: checkpoint.header.height,
+        checkpoint_block_hash: checkpoint.header.block_hash.clone(),
+        checkpoint_state_root: checkpoint.header.state_root.clone(),
+        certificate_id: checkpoint.header.certificate_id.clone(),
+        committee_epoch,
+        validator_count: validator_ids.len(),
+        quorum: checkpoint.header.certificate.quorum,
+    })
+}
+
+fn verify_snapshot_source(data_dir: &Path, basis: SnapshotVerificationBasis) -> io::Result<()> {
+    match basis {
+        SnapshotVerificationBasis::FullHistory => {
+            verify_governance(NodeOptions {
+                data_dir: data_dir.to_path_buf(),
+            })
+            .map_err(|error| {
+                io::Error::new(
+                    error.kind(),
+                    format!("snapshot governance verification failed: {error}"),
+                )
+            })?;
+            verify_blocks(NodeOptions {
+                data_dir: data_dir.to_path_buf(),
+            })
+            .map_err(|error| {
+                io::Error::new(
+                    error.kind(),
+                    format!("snapshot block verification failed: {error}"),
+                )
+            })?;
+        }
+        SnapshotVerificationBasis::FinalizedCheckpoint => {
+            verify_finalized_checkpoint(NodeOptions {
+                data_dir: data_dir.to_path_buf(),
+            })
+            .map_err(|error| {
+                io::Error::new(
+                    error.kind(),
+                    format!("snapshot finalized-checkpoint verification failed: {error}"),
+                )
+            })?;
+        }
+    }
     verify_bridge(NodeOptions {
-        data_dir: options.data_dir.clone(),
+        data_dir: data_dir.to_path_buf(),
     })
     .map_err(|error| {
         io::Error::new(
             error.kind(),
-            format!("snapshot export bridge verification failed: {error}"),
+            format!("snapshot bridge verification failed: {error}"),
         )
     })?;
     verify_shielded(NodeOptions {
-        data_dir: options.data_dir.clone(),
+        data_dir: data_dir.to_path_buf(),
     })
     .map_err(|error| {
         io::Error::new(
             error.kind(),
-            format!("snapshot export shielded verification failed: {error}"),
+            format!("snapshot shielded verification failed: {error}"),
         )
     })?;
     verify_mempool(NodeOptions {
-        data_dir: options.data_dir.clone(),
+        data_dir: data_dir.to_path_buf(),
     })
     .map_err(|error| {
         io::Error::new(
             error.kind(),
-            format!("snapshot export mempool verification failed: {error}"),
+            format!("snapshot mempool verification failed: {error}"),
         )
     })?;
-    verify_blocks(NodeOptions {
+    Ok(())
+}
+
+fn export_snapshot_with_basis(
+    options: SnapshotExportOptions,
+    basis: SnapshotVerificationBasis,
+) -> io::Result<SnapshotManifest> {
+    let report = status(NodeOptions {
         data_dir: options.data_dir.clone(),
-    })
-    .map_err(|error| {
-        io::Error::new(
-            error.kind(),
-            format!("snapshot export block verification failed: {error}"),
-        )
     })?;
+    verify_snapshot_source(&options.data_dir, basis)?;
     let snapshot_dir = options.snapshot_dir;
     std::fs::create_dir_all(&snapshot_dir)?;
     let store = NodeStore::new(&options.data_dir);
@@ -1257,6 +1514,16 @@ pub fn export_snapshot(options: SnapshotExportOptions) -> io::Result<SnapshotMan
     };
     write_snapshot_manifest(&snapshot_dir.join(SNAPSHOT_MANIFEST_FILE), &manifest)?;
     Ok(manifest)
+}
+
+pub fn export_snapshot(options: SnapshotExportOptions) -> io::Result<SnapshotManifest> {
+    export_snapshot_with_basis(options, SnapshotVerificationBasis::FullHistory)
+}
+
+pub fn export_snapshot_from_finalized_checkpoint(
+    options: SnapshotExportOptions,
+) -> io::Result<SnapshotManifest> {
+    export_snapshot_with_basis(options, SnapshotVerificationBasis::FinalizedCheckpoint)
 }
 
 fn signed_snapshot_manifest_payload(signed: &SignedSnapshotManifest) -> io::Result<Vec<u8>> {
@@ -1355,6 +1622,13 @@ pub fn export_snapshot_publisher_public_key(
 pub fn export_signed_snapshot(
     options: SignedSnapshotExportOptions,
 ) -> io::Result<SignedSnapshotManifest> {
+    export_signed_snapshot_with_basis(options, SnapshotVerificationBasis::FullHistory)
+}
+
+fn export_signed_snapshot_with_basis(
+    options: SignedSnapshotExportOptions,
+    basis: SnapshotVerificationBasis,
+) -> io::Result<SignedSnapshotManifest> {
     let publisher_key = read_key_file(&options.publisher_key_file)?;
     let source_status = status(NodeOptions {
         data_dir: options.data_dir.clone(),
@@ -1364,10 +1638,13 @@ pub fn export_signed_snapshot(
         .blocks
         .last()
         .map(|block| block.header.certificate_id.clone());
-    let manifest = export_snapshot(SnapshotExportOptions {
-        data_dir: options.data_dir,
-        snapshot_dir: options.snapshot_dir.clone(),
-    })?;
+    let manifest = export_snapshot_with_basis(
+        SnapshotExportOptions {
+            data_dir: options.data_dir,
+            snapshot_dir: options.snapshot_dir.clone(),
+        },
+        basis,
+    )?;
     let mut signed = SignedSnapshotManifest {
         schema: SIGNED_SNAPSHOT_MANIFEST_SCHEMA.to_string(),
         publisher: publisher_key.address,
@@ -1403,7 +1680,20 @@ pub fn export_signed_snapshot(
     Ok(signed)
 }
 
+pub fn export_signed_snapshot_from_finalized_checkpoint(
+    options: SignedSnapshotExportOptions,
+) -> io::Result<SignedSnapshotManifest> {
+    export_signed_snapshot_with_basis(options, SnapshotVerificationBasis::FinalizedCheckpoint)
+}
+
 pub fn import_signed_snapshot(options: SignedSnapshotImportOptions) -> io::Result<StatusReport> {
+    import_signed_snapshot_with_basis(options, SnapshotVerificationBasis::FullHistory)
+}
+
+fn import_signed_snapshot_with_basis(
+    options: SignedSnapshotImportOptions,
+    basis: SnapshotVerificationBasis,
+) -> io::Result<StatusReport> {
     let signed: SignedSnapshotManifest = read_json_file(
         &options.snapshot_dir.join(SIGNED_SNAPSHOT_MANIFEST_FILE),
         "signed snapshot manifest",
@@ -1420,11 +1710,20 @@ pub fn import_signed_snapshot(options: SignedSnapshotImportOptions) -> io::Resul
             "unsigned snapshot manifest does not match signed manifest",
         ));
     }
-    import_snapshot(SnapshotImportOptions {
-        data_dir: options.data_dir,
-        snapshot_dir: options.snapshot_dir,
-        node_id: options.node_id,
-    })
+    import_snapshot_with_basis(
+        SnapshotImportOptions {
+            data_dir: options.data_dir,
+            snapshot_dir: options.snapshot_dir,
+            node_id: options.node_id,
+        },
+        basis,
+    )
+}
+
+pub fn import_signed_snapshot_from_finalized_checkpoint(
+    options: SignedSnapshotImportOptions,
+) -> io::Result<StatusReport> {
+    import_signed_snapshot_with_basis(options, SnapshotVerificationBasis::FinalizedCheckpoint)
 }
 
 pub(super) fn sha256_file_hex(path: &Path, label: &str) -> io::Result<String> {
@@ -2623,7 +2922,10 @@ fn snapshot_json_bytes<T: Serialize + ?Sized>(value: &T) -> io::Result<Vec<u8>> 
     Ok(format!("{json}\n").into_bytes())
 }
 
-pub fn import_snapshot(options: SnapshotImportOptions) -> io::Result<StatusReport> {
+fn import_snapshot_with_basis(
+    options: SnapshotImportOptions,
+    basis: SnapshotVerificationBasis,
+) -> io::Result<StatusReport> {
     let manifest = read_snapshot_manifest(&options.snapshot_dir.join(SNAPSHOT_MANIFEST_FILE))?;
     let data_dir = options.data_dir;
     if manifest.snapshot_version != SNAPSHOT_VERSION
@@ -2783,47 +3085,16 @@ pub fn import_snapshot(options: SnapshotImportOptions) -> io::Result<StatusRepor
             ),
         ));
     }
-    verify_governance(NodeOptions {
-        data_dir: data_dir.clone(),
-    })
-    .map_err(|error| {
-        io::Error::new(
-            error.kind(),
-            format!("snapshot import governance verification failed: {error}"),
-        )
-    })?;
-    verify_bridge(NodeOptions {
-        data_dir: data_dir.clone(),
-    })
-    .map_err(|error| {
-        io::Error::new(
-            error.kind(),
-            format!("snapshot import bridge verification failed: {error}"),
-        )
-    })?;
-    verify_shielded(NodeOptions {
-        data_dir: data_dir.clone(),
-    })
-    .map_err(|error| {
-        io::Error::new(
-            error.kind(),
-            format!("snapshot import shielded verification failed: {error}"),
-        )
-    })?;
-    verify_mempool(NodeOptions {
-        data_dir: data_dir.clone(),
-    })
-    .map_err(|error| {
-        io::Error::new(
-            error.kind(),
-            format!("snapshot import mempool verification failed: {error}"),
-        )
-    })?;
-    verify_blocks(NodeOptions { data_dir }).map_err(|error| {
-        io::Error::new(
-            error.kind(),
-            format!("snapshot import block verification failed: {error}"),
-        )
-    })?;
+    verify_snapshot_source(&data_dir, basis)?;
     Ok(restored)
+}
+
+pub fn import_snapshot(options: SnapshotImportOptions) -> io::Result<StatusReport> {
+    import_snapshot_with_basis(options, SnapshotVerificationBasis::FullHistory)
+}
+
+pub fn import_snapshot_from_finalized_checkpoint(
+    options: SnapshotImportOptions,
+) -> io::Result<StatusReport> {
+    import_snapshot_with_basis(options, SnapshotVerificationBasis::FinalizedCheckpoint)
 }

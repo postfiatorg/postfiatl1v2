@@ -1,0 +1,9 @@
+{
+  "id": "a666-asset-create-quote",
+  "method": "asset_fee_quote",
+  "params": {
+    "operation_json": "{\"operation\":\"asset_create\",\"issuer\":\"pffcb93d9f87a843a8aa34e1adf241f5d58143e81b\",\"code\":\"a666\",\"version\":1,\"precision\":6,\"display_name\":\"Bridge-aware NAVCoin a666\",\"max_supply\":1000000000000,\"requires_authorization\":false,\"freeze_enabled\":true,\"clawback_enabled\":false}",
+    "source": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b"
+  },
+  "version": "postfiat-local-rpc-v1"
+}

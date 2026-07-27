@@ -1,0 +1,17 @@
+{
+  "schema": "postfiat.pfusdc.checkpoint_proof_report.v1",
+  "proof_mode": "groth16",
+  "sp1_sdk_version": "6.3.1",
+  "elf_sha256": "c36e8afcba15b3a733e2845e593ab5c4b8068d0e0d74662493d28e478e1ef5a4",
+  "program_vkey": "0x007a22f1b8a47814a027ee0af8086a6f5f6ae4af0530dc7ffb2acac2da617834",
+  "instruction_count": 155942743,
+  "elapsed_ms": 1661684,
+  "peak_rss_kb": 107427804,
+  "proof_bytes": 356,
+  "serialized_proof_bytes": 2280,
+  "public_values_bytes": 586,
+  "witness_sha256": "16daccb494d76abd9ad3f2c063beab012749ef04762a8d0905b203b21a7b7ec2",
+  "proof_sha256": "5b4b7dd845515a6fedc692a40bd0ce71e81594b859ccfd3c76ff40347fd21d2a",
+  "proof_calldata_sha256": "0c0391d4985a708b6811a17d7ae393701cca744340ba1f515fb281f7532bcdde",
+  "public_values_sha256": "d2decf29e5d2fa7565d1938570ead2dd27ce1dd423ecdd5255e658415d0e51a4"
+}

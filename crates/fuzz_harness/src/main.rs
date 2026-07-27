@@ -1599,6 +1599,7 @@ fn issued_supply_fixture(
             packet_notional_cap_atoms: u64::MAX,
             latest_finalized_nav_epoch: 1,
             return_finality_blocks: 1,
+            live_value_enabled: false,
             ethereum_verification_policy: None,
             authorized_valid_supply_atoms: outstanding_value
                 .checked_add(return_value)

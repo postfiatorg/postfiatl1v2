@@ -1,0 +1,60 @@
+{
+  "schema": "postfiat.pfusdc_transferable_inventory.v1",
+  "observed_checkpoint": {
+    "height": 296,
+    "block_hash": "7bea52c025b519ed3c1f60cf9c3afd1fa11416b063b1dd40998ec9ef655da514c084790a2d45a1a9a656e4eca500bf22",
+    "state_root": "ae09bfefa1b870c3aacda61913c850d836395b3e6bb74c00bf62e5c28445634a8b267cd74b896f228af625ecbf418296",
+    "verification_basis": "consensus-v2-finalized-checkpoint"
+  },
+  "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "target_holder": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "finalized_nav": {
+    "epoch": 9,
+    "circulating_supply_atoms": 10,
+    "nav_per_unit": 1000000,
+    "finalized_at_height": 290,
+    "halted": false
+  },
+  "transparent": {
+    "trustline_count": 7,
+    "positive_balance_count": 0,
+    "total_balance_atoms": 0,
+    "target_balance_atoms": 0
+  },
+  "orchard": {
+    "ingress_total_atoms": 80,
+    "egress_total_atoms": 80,
+    "live_total_atoms": 0
+  },
+  "vault_bridge_bucket": {
+    "counted_value_atoms": 10,
+    "outstanding_vault_bridge_atoms": 0,
+    "nav_subscription_allocations_atoms": 0,
+    "redemption_queue_atoms": 10,
+    "other_allocations_atoms": 0,
+    "status": "active",
+    "last_updated_height": 290
+  },
+  "redemptions": {
+    "total": 13,
+    "settled": 12,
+    "pending": 1,
+    "pending_redemption": {
+      "redemption_id": "316ccbb79d8778a1cbae5e8e68103c30ec6690e314eb5e8c1eb4aa453bc16f11b057aa3119b52edb76eca2e4c057d4d7",
+      "owner": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+      "amount_atoms": 10,
+      "settled_atoms": 0,
+      "state": "pending"
+    }
+  },
+  "transferable_atoms_found": 0,
+  "mint_attempted": false,
+  "transfer_attempted": false,
+  "funded": false,
+  "legitimate_next_path": "new backed dust bridge-in, or the founder-authorized finalizing five-dollar bridge-in",
+  "source_hashes": {
+    "ledger_json_sha256": "a64908896c5fc0d7135a2d87db251d6924e220ee5959c7a1bd76f71fb028086c",
+    "shielded_json_sha256": "975b989851a6ace748dc08aadfa60d764781a018f8b710874fc46cdbb7671111",
+    "checkpoint_report_sha256": "182775a6123944f65e974c5a80ee417019766b72d8ecf858505228b840db03c2"
+  }
+}

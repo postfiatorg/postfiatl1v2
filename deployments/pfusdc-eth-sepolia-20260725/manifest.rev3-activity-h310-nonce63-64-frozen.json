@@ -1,0 +1,239 @@
+{
+  "schema": "postfiat.pfusdc.eth_sepolia_deployment_manifest.v1",
+  "deployment_id": "pfusdc-eth-sepolia-20260725",
+  "lane": "lane-c",
+  "created_utc": "2026-07-25",
+  "source": {
+    "repository": "https://github.com/postfiatorg/postfiatl1v2.git",
+    "commit": "f30d3683ab7dd5065598b4944bbd918a210b04d4",
+    "worktree": "a666-eth-fast-lane-combined-20260724",
+    "toolchain": {
+      "rustc": "1.95.0",
+      "cargo_prove_sp1": "cfb5544 2026-06-08",
+      "sp1_sdk": "6.3.1",
+      "sp1_guest_toolchain": "rustc 1.94.0-dev (+succinct)",
+      "forge": "1.7.1",
+      "solc": "0.8.24+commit.e11b9ed9",
+      "evm_version": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "metadata_bytecode_hash": "ipfs"
+    }
+  },
+  "programs": {
+    "proof_encoding": "groth16",
+    "max_proof_bytes": 4096,
+    "max_public_values_bytes": 4096,
+    "ingress": {
+      "name": "pfusdc-eth-ingress-program",
+      "elf_path": "programs/pfusdc-eth-ingress/elf/pfusdc-eth-ingress-program",
+      "elf_sha256": "b4e487042abeee91e0ea4c7526db5d4c93a95649a50ea1430a3a7c16597cebfa",
+      "program_vkey": "0x003ff49296c108d2173f71a8a0d217d8a09b333c04876a6e0758d412d54dce4c",
+      "route_id": "ethereum-sepolia-usdc-v1",
+      "proof_kind": "sp1-ethereum-finality-v1",
+      "program_info_evidence": "docs/evidence/pfusdc-eth-campaign-20260725/lane-c/ingress-program-info.json"
+    },
+    "egress": {
+      "name": "pfusdc-egress-program",
+      "elf_path": "programs/pfusdc-egress/elf/pfusdc-egress-program",
+      "elf_sha256": "c36e8afcba15b3a733e2845e593ab5c4b8068d0e0d74662493d28e478e1ef5a4",
+      "program_vkey": "0x007a22f1b8a47814a027ee0af8086a6f5f6ae4af0530dc7ffb2acac2da617834",
+      "program_info_evidence": "docs/evidence/pfusdc-eth-campaign-20260725/lane-c/egress-program-info.json"
+    }
+  },
+  "network": {
+    "source_chain_id": 11155111,
+    "source_chain_name": "ethereum-sepolia",
+    "genesis_validators_root": "0xd8ea171f3c94aea21ebc42a1ed61052acf3f9209c00e4efbaaddac09ed9b8078",
+    "execution_rpc_default": "https://ethereum-sepolia-rpc.publicnode.com",
+    "beacon_rpc_default": "https://ethereum-sepolia-beacon-api.publicnode.com",
+    "token": {
+      "symbol": "USDC",
+      "address": "0x1c7d4b196cb0c7b01d743fbc6116a902379c7238",
+      "kind": "canonical-circle-sepolia-usdc",
+      "runtime_code_hash": "0xcd3f29e2ea9c61dadd48bfeaf8b2884b6de9dfee7bf45329452c4c33d0868ceb",
+      "decimals": 6
+    },
+    "sp1_verifier_gateway": {
+      "address": "0x3b6041173b80e77f038f3f2c0f9744f04837185e",
+      "runtime_code_hash": "0xdcba737cf430260fdbc8010a56d97a9f29e64465155819e74d75da8f95eb24ed"
+    }
+  },
+  "contracts": {
+    "compiler": "0.8.24+commit.e11b9ed9",
+    "evm_version": "cancun",
+    "artifacts": [
+      {
+        "contract": "ERC20BridgeVaultV2",
+        "path": "crates/ethereum-contracts/out/ERC20BridgeVaultV2.sol/ERC20BridgeVaultV2.json",
+        "artifact_sha256": "bf3eb8bc7bc985d9bdaf9c28da4396933c7f26c62f385357377e3dfeb240ff99",
+        "creation_bytecode_keccak256": "0x38ce311f0b75a423c6ed08a1779bd7f8435a0186ea6460a27f1af28074d3402f",
+        "unlinked_deployed_bytecode_keccak256": "0x5c7b7fa199b587f9ab2703a17378f6fd1642426681d951920129cd2b6bfc2c2c",
+        "address": null,
+        "deploy_tx_hash": null
+      },
+      {
+        "contract": "PFTLFinalityVerifierV1",
+        "path": "crates/ethereum-contracts/out/PFTLFinalityVerifierV1.sol/PFTLFinalityVerifierV1.json",
+        "artifact_sha256": "120011e62437ab8c34de239485a8bac2dc7b06ca96f264d30202f5d0de14c956",
+        "creation_bytecode_keccak256": "0xfa916a7257b8d7cfc3430905517a859c0849dbed577a709e9610591bf53a5512",
+        "unlinked_deployed_bytecode_keccak256": "0x602fb08220e87656e2a7c98b8d862bdbc62a1d75220c22a61d3227bb856ac367",
+        "address": "0x0e6bc50cae0f6f791a305ebd08bda06215c6e8c3",
+        "deploy_tx_hash": "0968430870ace33cb21bd82450861a639d44eb766f1b2085943e9f197c5ff983",
+        "precomputed_create_nonce": 61,
+        "deploy_block": 11350354,
+        "deploy_gas_used": 2630575,
+        "deployed_runtime_code_keccak256": "0x4c8e2ce19efd6aa2d0a1e2f38492f57dc6dcb27f1a3aa26f3f3b2800a710bea6"
+      },
+      {
+        "contract": "ERC20BridgeVaultL1",
+        "path": "crates/ethereum-contracts/out/ERC20BridgeVaultL1.sol/ERC20BridgeVaultL1.json",
+        "artifact_sha256": "5dc614b32ac05c6e54402c8e28ffc507406ccac257f624df6a52e49ef50865e3",
+        "creation_bytecode_keccak256": "0xc8a3103226a7db7382136f74b27ed417175bd0ce0a6e88d3feb3f497da59449a",
+        "unlinked_deployed_bytecode_keccak256": "0x5d5698e559dc9cfe8b374ae88fd49b9811ea7b66ed8f3b4b11f8a85a5ccc1edf",
+        "address": "0x4fe8bd65515bdecb30ada3e6d2c4de989b25056f",
+        "deploy_tx_hash": "33e1e2e749e9833717b3203df5bd79eca22ecb8f558a70956180291e294f7571",
+        "precomputed_create_nonce": 62,
+        "note": "direct Ethereum L1 vault; deposit event is the sole ingress evidence (no L2->L1 hop)",
+        "deploy_block": 11350355,
+        "deploy_gas_used": 1028817,
+        "deployed_runtime_code_keccak256": "0x4229aaa000168f82d842313d81d867f0350a2c05e5d49eaa9654da84039e8727"
+      }
+    ]
+  },
+  "deployer": {
+    "address": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+    "preflight": {
+      "eth_balance_wei": 4169428792778620461,
+      "usdc_balance_atoms": 357559,
+      "nonce": 61,
+      "checked_rpc": "https://ethereum-sepolia-rpc.publicnode.com"
+    }
+  },
+  "route": {
+    "route_id": "ethereum-sepolia-usdc-v1",
+    "source_proof_kind": "sp1-ethereum-finality-v1",
+    "verifier_kind": "sp1-groth16",
+    "evidence_tier": "receipt-proven",
+    "lifecycle_release_required": false,
+    "lifecycle_release": "not_applicable",
+    "activation_rule": "pfUSDC binding must be submitted before route activation height; activation is no-downgrade and fails closed; submit only after Lane A fleet green",
+    "registration_status": "prepared-not-submitted-awaiting-height-row-audit-pass",
+    "lifecycle_release_basis": {
+      "claim_fn": "apply_vault_bridge_deposit_claim",
+      "claim_fn_loc": "crates/execution/src/nav_vault_asset_execution.rs:1813",
+      "escrow_branch": "claimed_fast_campaign",
+      "escrow_branch_loc": "crates/execution/src/nav_vault_asset_execution.rs:1911",
+      "escrow_branch_gate_const": "bonded fast-ingress verifier kind (name withheld for lane scope; see source location)",
+      "cap_check_loc": "crates/execution/src/nav_vault_asset_execution.rs:1977-2032",
+      "semantics": "mint-not-inventory; sp1-ethereum-finality-v1 credits spendable atoms directly with no escrow phase"
+    },
+    "receipt_proven_zero_knobs": {
+      "min_attestations": 0,
+      "minimum_confirmations": 0,
+      "status": "pending-spec-section-8-signoff",
+      "activation_hold": "route must not be activated until spec \u00a78 sign-off lands"
+    },
+    "route_profile_file": "deployments/pfusdc-eth-sepolia-20260725/route-profile.rev3-activity-h310-nonce63-64-frozen.json",
+    "route_profile_hash": "6b2003fb81e44b43348dec3b88eef23df642e29232ba264f50c1dcb83af5da2b51400a30b7e418c9502dd1c43229858f",
+    "route_binding": "3d8618e65c5e95d0badf2870d10eb8c5a1fec96e53e22eb925b41898f516aaf1",
+    "activation_height": 312,
+    "expires_at_height": 1000000,
+    "policy_hash": "f3ad67ac43abb7216aed7518709c269eb49cb23251075e0b12843b5c16728caf",
+    "policy_hash_semantics": "P0 tool guest manifest_hash: keccak256('postfiat.ethereum-sepolia-usdc-v1.p0\\0' || vault || token || creation_bytecode_hash_utf8); recomputed at capture time from live chain readback; the deployment-manifest file hash is NOT used",
+    "route_profile_frozen_on": "rev3 pinned-H re-strike 2026-07-25T22:23Z per dispatch #232; H_strike=310 (6/6 validators, mempool empty); activation_height=H_strike+2=312; M_safety=0 code-forced; policy hash/ELF/vkeys unchanged",
+    "pre_deployment_profile_hashes": {
+      "route_profile_hash": "d22e39e5df4ec6eada62f21a385f2f28f2e397ef044f4d1ee7832c69f3e287faee915d277a707d7a23c329df6f24b3e7",
+      "route_binding": "af6f5fee7ce0067ae39d6338eab4f037695d185f8e3ca72aec871b9f72b5d13c",
+      "policy_hash": "47778f085cbe7ac64c446eb0c50a5c1750067aefbbdc294f4bb25b8a65065f1e",
+      "vault_runtime_code_hash": "0x5d5698e559dc9cfe8b374ae88fd49b9811ea7b66ed8f3b4b11f8a85a5ccc1edf",
+      "invalidated_by": "dispatch #145: deployed runtime code embeds constructor immutables; unregistered profile rebound to deployed hashes"
+    },
+    "vault_runtime_code_hash": "0x4229aaa000168f82d842313d81d867f0350a2c05e5d49eaa9654da84039e8727",
+    "rev1_nonce62_profile_hashes": {
+      "route_profile_hash": "cf63e7afe3704a01cf55bcc495a854dc07746f5292cbbc02ee29e691ec6d9676c95ac27c83b611ca95af33eb26925bb1",
+      "route_binding": "f70d7baea9d5551c7a6dad29299d9484c5671448526a45875af3c74a81c2a01c",
+      "policy_hash": "d0ae856223881dc48bcd4c6b9f0f2f72f41e571be30ae128fcdf90cf848cff3f",
+      "vault_runtime_code_hash": "0x4229aaa000168f82d842313d81d867f0350a2c05e5d49eaa9654da84039e8727",
+      "vault_address": "0x4fe8bd65515bdecb30ada3e6d2c4de989b25056f",
+      "invalidated_by": "dispatch #160: vault finalityVerifier has no setter; bound pair redeployed at nonces 63/64"
+    },
+    "vault_address": "0x9321beac017993ac8f7f1ba4f28ce90690ac7b0f",
+    "rev2_nonce64_profile_hashes": {
+      "route_profile_hash": "5600774564f78e3e046224263c31dbc386b216bbef52e46136542d066019b70a17403aa1ffc107c01ec39710ee4813fe",
+      "route_binding": "6a830e366dc6ab13ca4ac2ff622175c1ee9c25c03af03f425626a6d6e722596e",
+      "route_profile_hash_commitment": "0x98d136efbfb25928c2948642beead6f847213f039028496d3e3f8edc88491ae2",
+      "activation_height": 400,
+      "superseded_by": "rev3-activity-h310: dispatch #232 pinned-H re-strike; only activation_height changed (400 -> 312)"
+    }
+  },
+  "status": "rebound-planned-not-deployed",
+  "pftl": {
+    "chain_id": "postfiat-wan-devnet-2",
+    "chain_id_hash": "0xe61f64cfb4299057c29b1c1dbf031c81beeb1b016878f4a087824eaa14c2cc00",
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "genesis_hash_commitment": "0x396aceff4e14037223cc2781a3197c8eef78f44903b4e00d2e5441abec789418",
+    "protocol_version": 1,
+    "route_profile_hash": "6b2003fb81e44b43348dec3b88eef23df642e29232ba264f50c1dcb83af5da2b51400a30b7e418c9502dd1c43229858f",
+    "route_profile_hash_commitment": "0xa1cf3d3a427498e60ad2e9ae7b011cd9c28e4d469c75e01de63aa4c80442ac3d",
+    "route_epoch": 1,
+    "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+    "asset_id_commitment": "0x24e5fe4c65497dff08ec93064e5eb76e23c61992e7ec2c946136334a28eab403",
+    "vault_runtime_code_hash_placeholder": "0x5d5698e559dc9cfe8b374ae88fd49b9811ea7b66ed8f3b4b11f8a85a5ccc1edf",
+    "initial_checkpoint_commitment": "0x7fc75207d9a01db202e1436a192106a5e269d7685236b6506bb8022e7be6b61c",
+    "initial_finalized_height": 310,
+    "initial_committee_root_commitment": "0x88276f3a3cc8672f03bcbec69fdafad8f21daaa075ee08e2e7c9881f67279f3d",
+    "checkpoint_note": "fresh verifier checkpoint captured immediately before egress witness capture per dispatch #4 step 7; initial checkpoint values filled at deployment time from six-of-six fleet state",
+    "checkpoint_block_hash": "44637346d8d43b4784e15358d331d214ea123cda2709c95e71adddc6e71c7095e32851d4a4fd45306dca9858df2c0474",
+    "deployed_route_profile_hash": "6b2003fb81e44b43348dec3b88eef23df642e29232ba264f50c1dcb83af5da2b51400a30b7e418c9502dd1c43229858f",
+    "deployed_route_profile_hash_commitment": "0xa1cf3d3a427498e60ad2e9ae7b011cd9c28e4d469c75e01de63aa4c80442ac3d",
+    "deployed_vault_runtime_code_hash": "0x4229aaa000168f82d842313d81d867f0350a2c05e5d49eaa9654da84039e8727",
+    "deployed_route_binding": "3d8618e65c5e95d0badf2870d10eb8c5a1fec96e53e22eb925b41898f516aaf1",
+    "deployed_policy_hash": "f3ad67ac43abb7216aed7518709c269eb49cb23251075e0b12843b5c16728caf",
+    "verifier_rebinding_required": "resolved-by-rev3-redeploy: nonce-63 verifier constructor pins rev3 commitment 0xa1cf3d3a427498e60ad2e9ae7b011cd9c28e4d469c75e01de63aa4c80442ac3d; nonce-64 vault pins nonce-63 verifier",
+    "strike_height": 310,
+    "expected_bind_height": 311,
+    "expected_registration_activation_height": 312,
+    "expected_claim_height": 313,
+    "rev1_predeployment_route_profile_hash": "d22e39e5df4ec6eada62f21a385f2f28f2e397ef044f4d1ee7832c69f3e287faee915d277a707d7a23c329df6f24b3e7",
+    "rev1_predeployment_route_profile_hash_commitment": "0x3c331d9f560507eb9b9047b6b200dc0da8e18213359e09dfabc1d0116025cd6f"
+  },
+  "deployed_utc": "2026-07-25T21:58:50Z",
+  "revision": "rev3-activity-h310-nonce63-64-frozen",
+  "quarantine": [
+    {
+      "contract": "PFTLFinalityVerifierV1",
+      "nonce": 61,
+      "address": "0x0e6bc50cae0f6f791a305ebd08bda06215c6e8c3",
+      "deploy_tx_hash": "0968430870ace33cb21bd82450861a639d44eb766f1b2085943e9f197c5ff983",
+      "deploy_block": 11350354,
+      "status": "preserved-unregistered-invalid",
+      "reason": "runtime-hash rebinding; immutably pinned to invalidated pre-deployment route profile commitment"
+    },
+    {
+      "contract": "ERC20BridgeVaultL1",
+      "nonce": 62,
+      "address": "0x4fe8bd65515bdecb30ada3e6d2c4de989b25056f",
+      "deploy_tx_hash": "33e1e2e749e9833717b3203df5bd79eca22ecb8f558a70956180291e294f7571",
+      "deploy_block": 11350355,
+      "status": "preserved-unregistered-invalid",
+      "reason": "runtime-hash rebinding; vault has no verifier setter (finalityVerifier storage permanently references nonce-61 verifier)"
+    }
+  ],
+  "planned_deployments_rev2": [
+    {
+      "contract": "PFTLFinalityVerifierV1",
+      "nonce": 63,
+      "expected_address": "0x16603Cfb9DF15e56D35ED8301174C6AAb0e5C80D",
+      "constructor_plan": "docs/evidence/pfusdc-eth-campaign-20260725/lane-c/deploy/rebound-predeploy-plan.json"
+    },
+    {
+      "contract": "ERC20BridgeVaultL1",
+      "nonce": 64,
+      "expected_address": "0x9321beAc017993Ac8F7f1BA4f28ce90690Ac7B0F",
+      "constructor_plan": "docs/evidence/pfusdc-eth-campaign-20260725/lane-c/deploy/rebound-predeploy-plan.json"
+    }
+  ]
+}

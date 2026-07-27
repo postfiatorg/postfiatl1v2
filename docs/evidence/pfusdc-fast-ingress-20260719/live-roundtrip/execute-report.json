@@ -1,0 +1,8 @@
+{
+  "elapsed_ms": 2772,
+  "elf_sha256": "4bc27a6de7f4b1c8b27adea8127f826eef47dc600b0576d27b927a776e2f0df1",
+  "instruction_count": 62450185,
+  "public_values_bytes": 1598,
+  "schema": "postfiat.pfusdc.bonded_ingress_execute_report.v1",
+  "witness": "/workspace/pfusdc-fast-ingress/input/bonded-witness-v2.json"
+}

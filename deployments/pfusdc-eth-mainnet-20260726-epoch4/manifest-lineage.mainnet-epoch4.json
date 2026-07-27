@@ -1,0 +1,65 @@
+{
+  "current_revision": {
+    "activation_height": 318,
+    "manifest": {
+      "path": "deployments/pfusdc-eth-mainnet-20260726-epoch4/manifest.mainnet-epoch4.json",
+      "sha256": "d3fad46f9c8ee5fa2c064e3a35ed8dd0b5b1f9909f9e3f155bf804ede2330d8e"
+    },
+    "revision": "mainnet-epoch4",
+    "route_binding": "f062a7b19a33ab9674457b0fd7b8c98a42f43c240806e3a25ef035da3fa643f3",
+    "route_epoch": 4,
+    "route_profile": {
+      "path": "deployments/pfusdc-eth-mainnet-20260726-epoch4/route-profile.mainnet-epoch4.json",
+      "sha256": "0148b6858b086662b90097e2f5fa754b7bd36082a6b7fc6fdd86776b352ccae0"
+    },
+    "route_profile_hash": "928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81",
+    "route_profile_hash_commitment": "0xb41465ac4cd30bbe132a66c1953815940f720796574edf7c8107a4ae3306c743",
+    "schedule": {
+      "bind_height": 317,
+      "registration_activation_height": 318
+    },
+    "status": "generated-not-deployed"
+  },
+  "history": [
+    {
+      "egress_status": "pinned_resolvable",
+      "ingress_status": "superseded_storage_incompatible",
+      "quarantine_reason": "vault did not persist the frozen ingress guest record",
+      "route_epoch": 3,
+      "route_id": "ethereum-mainnet-usdc-v1",
+      "source": {
+        "path": "deployments/pfusdc-eth-mainnet-20260726/manifest-lineage.mainnet-epoch3.json",
+        "sha256": "5662eb861961a828b227c42f944809a1a80396b27a73737a8dbccb9dbcc1265a"
+      },
+      "status": "superseded_ingress_pinned_egress_resolvable"
+    },
+    {
+      "egress_status": "pinned_resolvable",
+      "ingress_status": "superseded",
+      "route_epoch": 2,
+      "route_id": "ethereum-sepolia-usdc-v1",
+      "source": {
+        "path": "deployments/pfusdc-eth-sepolia-20260725/manifest-lineage.rev6-generated-nonce67-68.json",
+        "sha256": "a2b3313e13c0051a254bad56e5268c90b71093635a683b51a8d8e82bd692c03a"
+      },
+      "status": "superseded_ingress_pinned_egress_resolvable"
+    },
+    {
+      "egress_status": "pinned_resolvable",
+      "ingress_status": "superseded",
+      "route_epoch": 1,
+      "route_id": "pfusdc-tier4-arbitrum-one-v1",
+      "source": {
+        "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-b/conservation-current/scratch/run-5ed3c8d275504797a16c4130844c504d/snapshot/governance.json",
+        "sha256": "a8a8e668e784abfdc9ef9fa3faddcea3f9ab2bbc56078868848e6e64e134f5d4"
+      },
+      "status": "superseded_ingress_pinned_egress_resolvable"
+    }
+  ],
+  "preserved_egress_lineage": {
+    "description": "Frozen PFTL egress lineage remains available for proof-native exits; it is not an active ingress route.",
+    "mainnet_epoch3_lineage_path": "deployments/pfusdc-eth-mainnet-20260726/manifest-lineage.mainnet-epoch3.json",
+    "sepolia_epoch2_lineage_path": "deployments/pfusdc-eth-sepolia-20260725/manifest-lineage.rev6-generated-nonce67-68.json"
+  },
+  "schema": "postfiat.pfusdc.eth_mainnet_manifest_lineage.v1"
+}

@@ -1,0 +1,51 @@
+{
+  "operations": [
+    {
+      "dependencies": [],
+      "key_file": "/var/lib/postfiat/validator-5/fast-ingress-live/pfusdc-issuer-key.json",
+      "label": "h317-nav-profile-register",
+      "operation": {
+        "challenge_window_blocks": 64,
+        "max_epoch_gap_blocks": 128,
+        "max_proof_bytes": 4096,
+        "max_public_values_bytes": 4096,
+        "max_snapshot_age_blocks": 900,
+        "min_attestations": 0,
+        "min_challenge_bond": 1,
+        "operation": "nav_profile_register",
+        "registrant": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "settle_deadline_blocks": 256,
+        "source_class": "vault_bridge:erc20_bridge_vault:1:0x8583409ddbac984ec195dfa06a21103d92403c1e:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "sp1_program_vkey": "0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e",
+        "sp1_proof_encoding": "groth16",
+        "tolerance_bp": 10,
+        "valuation_policy_hash": "03580838ff28bb30ab62ffbe7a4b774afcf6a6a166c737e77cd37f593ac0ef7d",
+        "vault_bridge_route_policy_hash": "928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81",
+        "verifier_kind": "sp1-groth16"
+      },
+      "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8"
+    },
+    {
+      "dependencies": [
+        {
+          "label": "h317-nav-profile-register",
+          "mode": "same_round",
+          "reason": "pfUSDC binds the epoch-4 NAV profile registered earlier in the ordered H317 asset batch"
+        }
+      ],
+      "key_file": "/var/lib/postfiat/validator-5/fast-ingress-live/pfusdc-issuer-key.json",
+      "label": "h317-nav-asset-bind",
+      "operation": {
+        "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+        "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "operation": "nav_asset_register",
+        "proof_profile": "765f2d6b5cf9025f4070629d0585bf50585e36dde88baa68146dabf739de2433945027d7b616fabd92b6bcd7048dda89",
+        "redemption_account": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "reserve_operator": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "valuation_unit": "USDC"
+      },
+      "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8"
+    }
+  ],
+  "schema": "postfiat-certified-asset-ops-request-v1"
+}

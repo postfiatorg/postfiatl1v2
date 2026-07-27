@@ -54,21 +54,44 @@ pub fn verify_bounded_sp1_groth16(
     sp1_proof_bytes: &[u8],
     sp1_public_values: &[u8],
 ) -> Result<(), NavSp1VerifyError> {
-    if profile.verifier_kind != expected_verifier_kind {
+    verify_bounded_sp1_groth16_with_config(
+        &profile.verifier_kind,
+        expected_verifier_kind,
+        &profile.sp1_program_vkey,
+        profile.max_proof_bytes,
+        profile.max_public_values_bytes,
+        sp1_proof_bytes,
+        sp1_public_values,
+    )
+}
+
+/// Verify a bounded SP1 Groth16 proof against a secondary verifier authority
+/// that is not the route profile's primary verifier. This lets fast ingress
+/// coexist with the immutable Tier-4 confirmed-ingress/egress route binding.
+pub fn verify_bounded_sp1_groth16_with_config(
+    verifier_kind: &str,
+    expected_verifier_kind: &str,
+    sp1_program_vkey: &str,
+    configured_max_proof_bytes: u64,
+    configured_max_public_values_bytes: u64,
+    sp1_proof_bytes: &[u8],
+    sp1_public_values: &[u8],
+) -> Result<(), NavSp1VerifyError> {
+    if verifier_kind != expected_verifier_kind {
         return Err(NavSp1VerifyError::Groth16Invalid);
     }
     if sp1_proof_bytes.is_empty() || sp1_public_values.is_empty() {
         return Err(NavSp1VerifyError::MissingProof);
     }
-    let max_proof_bytes = if profile.max_proof_bytes == 0 {
+    let max_proof_bytes = if configured_max_proof_bytes == 0 {
         DEFAULT_MAX_NAV_SP1_PROOF_BYTES
     } else {
-        profile.max_proof_bytes
+        configured_max_proof_bytes
     };
-    let max_public_values_bytes = if profile.max_public_values_bytes == 0 {
+    let max_public_values_bytes = if configured_max_public_values_bytes == 0 {
         DEFAULT_MAX_NAV_SP1_PUBLIC_VALUES_BYTES
     } else {
-        profile.max_public_values_bytes
+        configured_max_public_values_bytes
     };
     if sp1_proof_bytes.len() as u64 > max_proof_bytes {
         return Err(NavSp1VerifyError::ProofTooLarge);
@@ -79,7 +102,7 @@ pub fn verify_bounded_sp1_groth16(
     Groth16Verifier::verify(
         sp1_proof_bytes,
         sp1_public_values,
-        &profile.sp1_program_vkey,
+        sp1_program_vkey,
         &GROTH16_VK_BYTES,
     )
     .map_err(|_| NavSp1VerifyError::Groth16Invalid)

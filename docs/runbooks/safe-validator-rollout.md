@@ -15,9 +15,13 @@ remote destination, an rsync option, or a deletion operation.
 - Preflight verifies all six signed validator bindings locally, freezes hashes
   of the stage report and inventory, reconciles every instance ID/IP/region
   against the owning Vultr account, obtains six converged live RPC statuses,
-  runs the active binary's exact full-committee key validation on every node,
-  and records an exact create/update/unchanged diff. Deletions are not a valid
-  diff action.
+  verifies every node's split local signer against the same complete active
+  public validator registry, and records an exact create/update/unchanged
+  diff. Deletions are not a valid diff action.
+- Fleets whose RPC listeners are intentionally private may pass
+  `--rpc-tunnel-base-port PORT` after establishing six localhost tunnels at
+  `PORT..PORT+5`. Cloud reconciliation and SSH checks continue to use the
+  canonical inventory hosts; only read-only convergence RPC uses the tunnels.
 - Backup is a mandatory state transition. It exports from the canary without
   stopping services, explicitly copies the snapshot locally, signs it without
   moving the publisher private key to a validator, re-imports it under the

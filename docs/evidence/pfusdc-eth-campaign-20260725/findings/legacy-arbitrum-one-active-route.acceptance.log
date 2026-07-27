@@ -1,0 +1,31 @@
+14:- located with `rg -l 'pfusdc-tier4-arbitrum-one-v1' docs/evidence/pfusdc-eth-campaign-20260725`
+19:<a id="verifier-classification"></a>
+21:## verifier-classification
+28:| `.vault_bridge_route_profiles[0].profile.route_id` | `pfusdc-tier4-arbitrum-one-v1` |
+30:| `.vault_bridge_route_profiles[0].profile.verifier_program_vkey` | `0x0033bd140207b97fb2442eb279cc2ce55714be6fbcd66beb325fe7c3786d4dfc` |
+39:| `.vault_bridge_route_profiles[0].profile.source_chain_id` | `42161` |
+40:| `.vault_bridge_route_profiles[0].profile.vault_address` | `0x850e4ceea147f3551c68c2251129e5945d0afb58` |
+57:`verifier_policy_hash`, a `0x`-prefixed 32-byte `verifier_program_vkey`, and
+63:(Arbitrum One `42161` accepts only `sp1-arbitrum-finality-v1` /
+68:<a id="coexistence-mechanics"></a>
+70:## coexistence-mechanics
+85:2. **Can ingress transact now?** Yes, on this route, subject to proof material.
+86:   New ingress is bound to the *active* profile: `crates/node/src/execution_actions.rs:131`
+94:   ce22 tip the Arbitrum One route is the live ingress route for asset
+97:3. **Can egress transact now?** Yes, and it stays possible after any future
+98:   rebinding, because egress resolves the *pinned* profile rather than the active
+102:   and the redemption/egress paths do the same —
+103:   `crates/node/src/pfusdc_tier4.rs:104-107` (Tier-4 egress witness) and
+106:   ingress must use the active route, while an already-pinned deposit or
+133:6. **Supersession / rebinding when pfUSDC is bound to Ethereum** — supersession is
+146:   `.amendment_supersession_records` carry `kind`
+151:   higher epoch, new ingress moves to Ethereum automatically and Arbitrum ingress
+156:<a id="legacy-lineage-figures"></a>
+158:## legacy-lineage-figures
+166:| Route id | `pfusdc-tier4-arbitrum-one-v1` | snapshot `.vault_bridge_route_profiles[0].profile.route_id` |
+167:| Source chain | `42161` (Arbitrum One) | snapshot `.profile.source_chain_id` |
+168:| Vault address | `0x850e4ceea147f3551c68c2251129e5945d0afb58` | snapshot `.profile.vault_address` |
+171:| Native USDC backing | `5,999,000` atoms | campaign input, independently verified; not re-read here |
+173:| Circulating pfUSDC | `1,000,010` atoms | campaign input, independently verified; not re-read here |
+176:(`#verifier-classification`, `#coexistence-mechanics`,
+177:`#legacy-lineage-figures`) from the checker and runbook instead of duplicating any

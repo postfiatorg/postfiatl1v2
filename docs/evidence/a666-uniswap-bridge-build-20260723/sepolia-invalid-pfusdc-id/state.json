@@ -1,0 +1,122 @@
+{
+  "addresses": {
+    "bridge_controller": "0x046da4F73C1c6Be429600CF98eC13FE437A6F60d",
+    "launch_helper": "0x54fD443B3faD8f1A2Bb26d15aF4755C712Cd7f29",
+    "receipt_verifier": "0x30cA9073f36ee60AE4F4684E9363EB7C6a9e9b09",
+    "replay_registry": "0x5f984ccddc961E667BD461ef37B01247076C7F00",
+    "settlement_adapter": "0xa45d9C39486B99DD7C9C59a26B20Ef7d287cC834",
+    "v4_router": "0xE469e7d5335e5bEa9c8F2C4BC157243aa37256A2",
+    "wrapped_navcoin": "0xc6E0f9828F7947156A04102D9b72147E4C44589c"
+  },
+  "chain_id": 11155111,
+  "deployments": {
+    "bridge_controller": "1da6cb3eba20e5fffac8b309fd1c19fc2ced0b77ed1c129831e0b8d9e39e59d8",
+    "launch_helper": "c0600a02d32c8e9f37ed4331c1adc71865391574d19e509d684bcc9bddcbce03",
+    "receipt_verifier": "774214ee8243afbc669bddd606c1e80ddb1562b816458e5d731f8cd8cfc7407c",
+    "replay_registry": "b6531754579700a5c8a0149ff1662895a925272a17660136a9792eeded07155c",
+    "settlement_adapter": "66dda6e0b5e8c43f7f7db7d4b724e9e1c4b67188b9ba01fd5531a927ba02b9e6",
+    "v4_router": "d35adfcfb248a0c9aaecc1524850935156fe729983294f4e25290e6ba91db998",
+    "wrapped_navcoin": "091021d71e681572d92612335b0dd0b31f22eac38cc35478853af088a2e7484d"
+  },
+  "official_uniswap": {
+    "permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    "pool_manager": "0xE03A1074c86CFeDd5C142C4F04F1a1536e203543",
+    "position_manager": "0x429ba70129df741B2Ca2a85BC3A2a3328e5c09b4",
+    "state_view": "0xE1Dd9c3fA50EDB962E442f60DfBc432e24537E4C",
+    "universal_router": "0x3A9D48AB9751398BbFa63ad67599Bb04e4BdF98b"
+  },
+  "owner": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+  "pool_id": "0xdc593e485538adbe87255b5adfa9a1f14b62531a0562a4aef5f0fca32f3aac7b",
+  "pool_initialized": true,
+  "pool_sqrt_price_x96": 79228162514264337593543950336,
+  "readback": {
+    "adapter": {
+      "controller": "0x046da4F73C1c6Be429600CF98eC13FE437A6F60d",
+      "controller_locked": true,
+      "pool_id": "0xdc593e485538adbe87255b5adfa9a1f14b62531a0562a4aef5f0fca32f3aac7b",
+      "token_in": "0xc6E0f9828F7947156A04102D9b72147E4C44589c",
+      "token_out": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
+    },
+    "addresses": {
+      "bridge_controller": "0x046da4F73C1c6Be429600CF98eC13FE437A6F60d",
+      "launch_helper": "0x54fD443B3faD8f1A2Bb26d15aF4755C712Cd7f29",
+      "receipt_verifier": "0x30cA9073f36ee60AE4F4684E9363EB7C6a9e9b09",
+      "replay_registry": "0x5f984ccddc961E667BD461ef37B01247076C7F00",
+      "settlement_adapter": "0xa45d9C39486B99DD7C9C59a26B20Ef7d287cC834",
+      "v4_router": "0xE469e7d5335e5bEa9c8F2C4BC157243aa37256A2",
+      "wrapped_navcoin": "0xc6E0f9828F7947156A04102D9b72147E4C44589c"
+    },
+    "block_number": 11336739,
+    "chain_id": 11155111,
+    "controller": {
+      "outstanding_minted_atoms": 0,
+      "owner": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+      "paused": false,
+      "pool_id": "0xdc593e485538adbe87255b5adfa9a1f14b62531a0562a4aef5f0fca32f3aac7b",
+      "route_config_digest": "0xf9e5c496b5c3fb5bd58fb1f703f256eb4b2eceba1dde3f36b73e1689194dd1c3121f4c94e7ddde5d47bca8eb0d225268",
+      "route_trust_class": "0x0ba94982feb4e1d59699dfed9f506d98fcf4c20e55fd2b27de21e9408d2cbb93",
+      "verifier_trust_class": "0x0ba94982feb4e1d59699dfed9f506d98fcf4c20e55fd2b27de21e9408d2cbb93"
+    },
+    "pool_id": "0xdc593e485538adbe87255b5adfa9a1f14b62531a0562a4aef5f0fca32f3aac7b",
+    "pool_slot0": {
+      "lp_fee": 500,
+      "protocol_fee": 0,
+      "sqrt_price_x96": 79228162514264337593543950336,
+      "tick": 0
+    },
+    "replay_controller_authorized": true,
+    "route_config_digest": "f9e5c496b5c3fb5bd58fb1f703f256eb4b2eceba1dde3f36b73e1689194dd1c3121f4c94e7ddde5d47bca8eb0d225268",
+    "schema": "postfiat-a666-sepolia-readback-v1",
+    "trust_class": "CONTROLLED",
+    "verifier": {
+      "owner": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+      "route_trust_class": "0x0ba94982feb4e1d59699dfed9f506d98fcf4c20e55fd2b27de21e9408d2cbb93"
+    },
+    "wrapped": {
+      "controller": "0x046da4F73C1c6Be429600CF98eC13FE437A6F60d",
+      "controller_locked": true,
+      "decimals": 6,
+      "name": "Wrapped a666 CONTROLLED",
+      "owner": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+      "symbol": "wA666",
+      "total_supply": 0
+    }
+  },
+  "route_config": {
+    "failure_behavior": "refund_unconsumed_pftl_packet",
+    "handoff_controller": "0x046da4F73C1c6Be429600CF98eC13FE437A6F60d",
+    "lp_custody_policy": "controlled_sepolia_canonical_export_lp",
+    "lp_recipient": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+    "native_nav_asset_id": "300bf48a63a94770b6e67817f88cd1abf77e7f592a061e15682d7fd9973260af4c2e631e32df3c2c402b7d2fe272a293",
+    "packet_notional_cap_atoms": 1000000,
+    "route_family": "primary_pftl_mint",
+    "route_id": "pftl-a666-ce22-sepolia-wA666-usdc-controlled-20260723-v1",
+    "route_supply_cap_atoms": 10000000,
+    "route_trust_class": "CONTROLLED",
+    "router": "0xE469e7d5335e5bEa9c8F2C4BC157243aa37256A2",
+    "schema": "postfiat-pftl-uniswap-route-config-v1",
+    "seed_nav_epoch": 1,
+    "seed_usdc_atoms": 100000,
+    "seed_wrapped_navcoin_atoms": 100000,
+    "settlement_adapter": "0xa45d9C39486B99DD7C9C59a26B20Ef7d287cC834",
+    "settlement_asset_id": "02c46d6cfe175b3d4f65bc5613e318869faf092028f7b8cfd18fb2916ea34955e0181279a863524669f031f84b675d7b",
+    "uniswap_pool_id_or_path": "0xdc593e485538adbe87255b5adfa9a1f14b62531a0562a4aef5f0fca32f3aac7b",
+    "verifier_mode": "controlled-attestation-v1",
+    "wrapped_navcoin_token": "0xc6E0f9828F7947156A04102D9b72147E4C44589c"
+  },
+  "route_config_digest": "f9e5c496b5c3fb5bd58fb1f703f256eb4b2eceba1dde3f36b73e1689194dd1c3121f4c94e7ddde5d47bca8eb0d225268",
+  "route_path_hash": "0xe611bce824a566b20103c572e41a2de470167c878b3ebd9c51bbda4f62912033",
+  "rpc": "https://ethereum-sepolia-rpc.publicnode.com",
+  "schema": "postfiat-a666-sepolia-deployment-state-v1",
+  "setup_transactions": {
+    "adapter_lock_controller": "02c10c4ef2f7e32d56957d21ef1ac10dbf1dbf3724130c1e70f1b282222fc293",
+    "adapter_set_controller": "df50807375b776711f89d4471fe8d3fddd0e31a01382a15864546d7810fb4125",
+    "initialize_uniswap_v4_pool": "e3caf6fe8b2f91dad18ec6b50e19e8d17075efc974f94989026a55ce808cea68",
+    "replay_authorize_controller": "787573e83ecab162b4785b955f9c4b2880524e862cde34730c0457162e05bbc8",
+    "wrapped_lock_controller": "0e783d01ff8d1b21aa5414a3a3cc6797bdd06925ee73f5d1823b09e415d10f98",
+    "wrapped_set_controller": "c412c1a0c2c8036af589a370e204d098aa84ffd4719f6b14dfe350928033266a"
+  },
+  "start_nonce": 26,
+  "trust_class": "CONTROLLED",
+  "usdc": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
+}

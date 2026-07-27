@@ -30,7 +30,10 @@ fn local_transfer_builder_rejects_exhausted_sequence_without_panicking() {
     .expect_err("exhausted sequence must fail closed");
 
     assert_eq!(error.kind(), io::ErrorKind::InvalidData);
-    assert!(error.to_string().contains("sequence is exhausted"), "{error}");
+    assert!(
+        error.to_string().contains("sequence is exhausted"),
+        "{error}"
+    );
     assert_eq!(ledger, before);
 }
 
@@ -201,9 +204,8 @@ fn init_then_run_once() {
     let mut mismatched_validator_keys = expanded_validator_keys.clone();
     mismatched_validator_keys.validators[0].public_key_hex =
         expanded_validator_keys.validators[1].public_key_hex.clone();
-    let mismatched_validator_keys_json =
-        serde_json::to_string_pretty(&mismatched_validator_keys)
-            .expect("mismatched validator key json");
+    let mismatched_validator_keys_json = serde_json::to_string_pretty(&mismatched_validator_keys)
+        .expect("mismatched validator key json");
     atomic_write(
         &validator_key_path,
         format!("{mismatched_validator_keys_json}\n"),
@@ -497,7 +499,10 @@ fn init_then_run_once() {
         account_history.rows[0].to_address,
         pending.transfer.unsigned.to
     );
-    assert_eq!(account_history.rows[0].amount, pending.transfer.unsigned.amount);
+    assert_eq!(
+        account_history.rows[0].amount,
+        pending.transfer.unsigned.amount
+    );
     assert_eq!(account_history.rows[0].fee, pending.transfer.unsigned.fee);
     assert_eq!(
         account_history.rows[0].sequence,
@@ -542,7 +547,10 @@ fn init_then_run_once() {
     assert!(index_status.index_present);
     assert!(index_status.index_usable);
     assert_eq!(index_status.reason, None);
-    assert_eq!(index_status.indexed_row_count, index_build.indexed_row_count);
+    assert_eq!(
+        index_status.indexed_row_count,
+        index_build.indexed_row_count
+    );
     assert_eq!(index_status.tip_hash, index_build.tip_hash);
 
     let indexed_account_history = account_tx(AccountTxQueryOptions {
@@ -629,7 +637,10 @@ fn init_then_run_once() {
     assert_eq!(metrics.consensus.recent_certificate_window_blocks, 2);
     assert_eq!(metrics.consensus.recent_certificate_vote_count, 2);
     assert_eq!(metrics.consensus.local_recent_certificate_vote_count, 2);
-    assert_eq!(metrics.consensus.local_recent_certificate_participation_ppm, 1_000_000);
+    assert_eq!(
+        metrics.consensus.local_recent_certificate_participation_ppm,
+        1_000_000
+    );
     assert!(metrics.observed_unix_ms > 0);
     assert_eq!(metrics.ordering.block_height, 2);
     assert_eq!(metrics.ordering.ordered_batch_count, 2);
@@ -663,9 +674,7 @@ fn init_then_run_once() {
         SNAPSHOT_FILES.len() as u64
     );
     assert!(metrics.storage.filesystem_total_bytes > 0);
-    assert!(
-        metrics.storage.filesystem_available_bytes <= metrics.storage.filesystem_total_bytes
-    );
+    assert!(metrics.storage.filesystem_available_bytes <= metrics.storage.filesystem_total_bytes);
     assert!(metrics.storage.filesystem_available_ppm <= 1_000_000);
     assert_eq!(metrics.proofs.last_verify_micros, 0);
     record_local_proof_verify_latency(&NodeStore::new(&data_dir), 12.345)
@@ -958,8 +967,7 @@ fn init_then_run_once() {
             .contains("governance amendment domain mismatch"),
         "{governance_amendment_domain_error}"
     );
-    let tampered_governance_vote_file =
-        data_dir.join("validator-set-amendment-vote-tampered.json");
+    let tampered_governance_vote_file = data_dir.join("validator-set-amendment-vote-tampered.json");
     let mut tampered_governance_vote = governance_amendment.clone();
     tampered_governance_vote.votes[0].vote_id = "tampered-cobalt-vote".to_string();
     write_amendment_file(&tampered_governance_vote_file, &tampered_governance_vote)
@@ -988,11 +996,8 @@ fn init_then_run_once() {
     let tampered_governance_batch_file = data_dir.join("governance-batch-tampered.json");
     let mut tampered_governance_batch = governance_batch.clone();
     tampered_governance_batch.batch_id = "tampered-governance-batch-id".to_string();
-    write_governance_action_batch_file(
-        &tampered_governance_batch_file,
-        &tampered_governance_batch,
-    )
-    .expect("write tampered governance batch");
+    write_governance_action_batch_file(&tampered_governance_batch_file, &tampered_governance_batch)
+        .expect("write tampered governance batch");
     let governance_batch_id_error = apply_unsigned_governance_fixture_for_test(ApplyBatchOptions {
         data_dir: data_dir.clone(),
         batch_file: tampered_governance_batch_file,
@@ -1050,13 +1055,11 @@ fn init_then_run_once() {
             .contains("requires --trust-graph-root"),
         "{nonuniform_missing_root}"
     );
-    let nonuniform_canonical_evidence = verify_governance_with_options(
-        GovernanceVerifyOptions {
-            data_dir: data_dir.clone(),
-            cobalt_mode: "non-uniform".to_string(),
-            trust_graph_root: Some("a".repeat(96)),
-        },
-    )
+    let nonuniform_canonical_evidence = verify_governance_with_options(GovernanceVerifyOptions {
+        data_dir: data_dir.clone(),
+        cobalt_mode: "non-uniform".to_string(),
+        trust_graph_root: Some("a".repeat(96)),
+    })
     .expect_err("non-uniform mode rejects canonical governance evidence");
     assert!(
         nonuniform_canonical_evidence
@@ -1401,8 +1404,7 @@ fn signed_snapshot_roundtrip_rejects_tampering_and_preserves_signer_isolation() 
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let data_dir =
-        std::env::temp_dir().join(format!("postfiat-signed-snapshot-source-{unique}"));
+    let data_dir = std::env::temp_dir().join(format!("postfiat-signed-snapshot-source-{unique}"));
     let snapshot_dir =
         std::env::temp_dir().join(format!("postfiat-signed-snapshot-artifact-{unique}"));
     let restored_dir =
@@ -1419,15 +1421,12 @@ fn signed_snapshot_roundtrip_rejects_tampering_and_preserves_signer_isolation() 
 
     let publisher_key_file = data_dir.join("snapshot-publisher.private.json");
     let publisher_key = create_dev_key_file().expect("create snapshot publisher key");
-    write_key_file(&publisher_key_file, &publisher_key)
-        .expect("write snapshot publisher key");
+    write_key_file(&publisher_key_file, &publisher_key).expect("write snapshot publisher key");
     let trusted_key_file = data_dir.join("snapshot-publisher.public.json");
-    let trusted = export_snapshot_publisher_public_key(
-        SnapshotPublisherKeyExportOptions {
-            publisher_key_file: publisher_key_file.clone(),
-            public_key_file: trusted_key_file.clone(),
-        },
-    )
+    let trusted = export_snapshot_publisher_public_key(SnapshotPublisherKeyExportOptions {
+        publisher_key_file: publisher_key_file.clone(),
+        public_key_file: trusted_key_file.clone(),
+    })
     .expect("export trusted snapshot publisher key");
     let signed = export_signed_snapshot(SignedSnapshotExportOptions {
         data_dir: data_dir.clone(),
@@ -1473,7 +1472,10 @@ fn signed_snapshot_roundtrip_rejects_tampering_and_preserves_signer_isolation() 
         node_id: Some("validator-rejected".to_string()),
     })
     .expect_err("tampered signed snapshot must fail");
-    assert!(error.to_string().contains("signature verification"), "{error}");
+    assert!(
+        error.to_string().contains("signature verification"),
+        "{error}"
+    );
 
     atomic_write(&signed_file, original).expect("restore signed manifest");
     for path in [data_dir, snapshot_dir, restored_dir, rejected_dir] {
@@ -1522,11 +1524,8 @@ fn snapshot_v5_restores_only_never_activated_consensus_v2_genesis() {
     ] {
         std::fs::remove_file(legacy_snapshot.join(name)).expect("remove v6-only artifact");
     }
-    write_snapshot_manifest(
-        &legacy_snapshot.join(SNAPSHOT_MANIFEST_FILE),
-        &manifest,
-    )
-    .expect("write v5 manifest");
+    write_snapshot_manifest(&legacy_snapshot.join(SNAPSHOT_MANIFEST_FILE), &manifest)
+        .expect("write v5 manifest");
     import_snapshot(SnapshotImportOptions {
         data_dir: legacy_restored,
         snapshot_dir: legacy_snapshot,
@@ -1639,6 +1638,232 @@ fn snapshot_import_rejects_nonempty_destination_before_any_mutation() {
 }
 
 #[test]
+fn finalized_checkpoint_snapshot_accepts_certified_legacy_governance_anomaly_and_rejects_tampering()
+{
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let root =
+        std::env::temp_dir().join(format!("postfiat-finalized-checkpoint-snapshot-{unique}"));
+    let data_dir = root.join("source");
+    let snapshot_dir = root.join("snapshot");
+    init_consensus_v2(InitConsensusV2Options {
+        data_dir: data_dir.clone(),
+        chain_id: "postfiat-finalized-checkpoint-test".to_string(),
+        node_id: "validator-0".to_string(),
+        validator_count: 1,
+        activation_height: 1,
+    })
+    .expect("init activated source");
+
+    let store = NodeStore::new(&data_dir);
+    let genesis = store.read_genesis().expect("genesis");
+    let mut governance = store.read_governance().expect("governance");
+    governance
+        .amendment_supersession_records
+        .push(GovernanceAmendmentSupersessionRecord {
+            schema: "postfiat-governance-amendment-supersession-v1".to_string(),
+            supersession_record_id: "legacy-finalized-anomaly".to_string(),
+            superseded_amendment_id: "legacy-missing-first".to_string(),
+            superseding_amendment_id: "legacy-missing-second".to_string(),
+            chain_id: genesis.chain_id.clone(),
+            genesis_hash: genesis_hash(&genesis),
+            protocol_version: genesis.protocol_version,
+            batch_id: "legacy-governance-batch".to_string(),
+            kind: "legacy-extension-kind".to_string(),
+            previous_value: 62,
+            new_value: 63,
+            supersession_height: 0,
+        });
+    store
+        .write_governance(&governance)
+        .expect("persist legacy anomaly before finality");
+
+    let batch_file = root.join("batch.json");
+    create_transfer_batch(BatchTransferOptions {
+        data_dir: data_dir.clone(),
+        key_file: None,
+        to: "pffinalizedcheckpointrecipient000000000000001".to_string(),
+        amount: 1,
+        batch_file: batch_file.clone(),
+    })
+    .expect("create transfer batch");
+    let proposal_file = root.join("proposal.json");
+    let proposal = propose_batch(BatchProposalOptions {
+        data_dir: data_dir.clone(),
+        verify_block_log: false,
+        batch_kind: None,
+        batch_file: batch_file.clone(),
+        proposal_file: proposal_file.clone(),
+        view: Some(0),
+        timeout_certificate_file: None,
+        key_file: Some(data_dir.join(VALIDATOR_KEYS_FILE)),
+        validator_id: Some("validator-0".to_string()),
+    })
+    .expect("propose anomaly-bearing state");
+    let vote_file = root.join("vote.json");
+    create_block_vote(BlockVoteOptions {
+        data_dir: data_dir.clone(),
+        verify_block_log: false,
+        key_file: data_dir.join(VALIDATOR_KEYS_FILE),
+        validator_id: Some("validator-0".to_string()),
+        batch_file: Some(batch_file.clone()),
+        proposal_file: Some(proposal_file.clone()),
+        timeout_certificate_file: None,
+        block_height: Some(1),
+        vote_file: vote_file.clone(),
+    })
+    .expect("create transport certificate vote");
+    let certificate_file = root.join("certificate.json");
+    let mut certificate = aggregate_block_certificate(BlockCertificateOptions {
+        data_dir: data_dir.clone(),
+        verify_block_log: false,
+        batch_file: Some(batch_file.clone()),
+        proposal_file: Some(proposal_file),
+        timeout_certificate_file: None,
+        block_height: Some(1),
+        vote_files: vec![vote_file],
+        certificate_file: certificate_file.clone(),
+    })
+    .expect("aggregate transport certificate");
+
+    let consensus_proposal = create_consensus_v2_proposal_for_block(
+        &data_dir,
+        &proposal,
+        None,
+        &data_dir.join(VALIDATOR_KEYS_FILE),
+    )
+    .expect("create consensus v2 proposal");
+    let prepare_vote = create_consensus_v2_prepare_vote(
+        &data_dir,
+        &consensus_proposal,
+        None,
+        &data_dir.join(VALIDATOR_KEYS_FILE),
+        "validator-0",
+    )
+    .expect("prepare vote");
+    let prepare_qc = certify_and_persist_consensus_v2_votes(
+        &data_dir,
+        consensus_proposal.round,
+        postfiat_types::ConsensusV2Phase::Prepare,
+        Some(consensus_proposal.block.clone()),
+        vec![prepare_vote],
+    )
+    .expect("prepare QC");
+    let precommit_vote = create_consensus_v2_precommit_vote(
+        &data_dir,
+        &prepare_qc,
+        &data_dir.join(VALIDATOR_KEYS_FILE),
+        "validator-0",
+    )
+    .expect("precommit vote");
+    let precommit_qc = certify_and_persist_consensus_v2_votes(
+        &data_dir,
+        consensus_proposal.round,
+        postfiat_types::ConsensusV2Phase::Precommit,
+        Some(consensus_proposal.block.clone()),
+        vec![precommit_vote],
+    )
+    .expect("precommit QC");
+    certificate.consensus_v2_commit = Some(
+        assemble_consensus_v2_commit(
+            &data_dir,
+            &proposal,
+            consensus_proposal,
+            None,
+            prepare_qc,
+            precommit_qc,
+        )
+        .expect("assemble consensus v2 commit"),
+    );
+    write_block_certificate_file(&certificate_file, &certificate)
+        .expect("write complete external certificate");
+    apply_batch(ApplyBatchOptions {
+        data_dir: data_dir.clone(),
+        batch_file,
+        certificate_file: Some(certificate_file),
+    })
+    .expect("finalize anomaly-bearing state");
+
+    verify_governance(NodeOptions {
+        data_dir: data_dir.clone(),
+    })
+    .expect_err("full legacy governance replay must still reject the anomaly");
+    let checkpoint = verify_finalized_checkpoint(NodeOptions {
+        data_dir: data_dir.clone(),
+    })
+    .expect("verify exact finalized checkpoint");
+    assert!(checkpoint.verified);
+    assert_eq!(checkpoint.consensus_v2_activation_height, 1);
+    assert_eq!(checkpoint.checkpoint_height, 1);
+    let mut legacy_retry_tip = store.read_chain_tip().expect("read checkpoint tip");
+    legacy_retry_tip.receipt_count = legacy_retry_tip.receipt_count.saturating_add(1);
+    store
+        .write_chain_tip(&legacy_retry_tip)
+        .expect("model raw rejected-to-accepted receipt retry");
+    verify_finalized_checkpoint(NodeOptions {
+        data_dir: data_dir.clone(),
+    })
+    .expect("raw receipt journal count may exceed canonical terminal receipts");
+    export_snapshot_from_finalized_checkpoint(SnapshotExportOptions {
+        data_dir: data_dir.clone(),
+        snapshot_dir,
+    })
+    .expect("export from finalized checkpoint");
+
+    let mut undersized_tip = legacy_retry_tip.clone();
+    undersized_tip.receipt_count = 0;
+    store
+        .write_chain_tip(&undersized_tip)
+        .expect("tamper receipt journal counter");
+    verify_finalized_checkpoint(NodeOptions {
+        data_dir: data_dir.clone(),
+    })
+    .expect_err("receipt journal counter below canonical receipts must fail");
+    store
+        .write_chain_tip(&legacy_retry_tip)
+        .expect("restore legacy retry tip");
+
+    let original_ledger = store.read_ledger().expect("original ledger");
+    let mut tampered_ledger = original_ledger.clone();
+    tampered_ledger.accounts[0].balance = tampered_ledger.accounts[0].balance.saturating_add(1);
+    store
+        .write_ledger(&tampered_ledger)
+        .expect("tamper post-finality state");
+    let state_error = verify_finalized_checkpoint(NodeOptions {
+        data_dir: data_dir.clone(),
+    })
+    .expect_err("state outside the certified root must fail");
+    assert!(
+        state_error
+            .to_string()
+            .contains("current replicated state root"),
+        "{state_error}"
+    );
+    store
+        .write_ledger(&original_ledger)
+        .expect("restore certified ledger");
+
+    let mut tampered_blocks = store.read_blocks().expect("read blocks");
+    tampered_blocks.blocks[0]
+        .header
+        .consensus_v2_commit
+        .as_mut()
+        .expect("consensus v2 commit")
+        .proposal
+        .block
+        .state_root = "00".repeat(48);
+    store
+        .write_blocks(&tampered_blocks)
+        .expect("tamper finality certificate");
+    verify_finalized_checkpoint(NodeOptions { data_dir })
+        .expect_err("tampered finality certificate must fail");
+
+    std::fs::remove_dir_all(root).expect("cleanup finalized-checkpoint test");
+}
+
+#[test]
 fn signed_deployment_manifest_rejects_tampering_expiry_and_wrong_publisher() {
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1649,24 +1874,23 @@ fn signed_deployment_manifest_rejects_tampering_expiry_and_wrong_publisher() {
     let generic_key_file = root.join("generic.private.json");
     let generic_key = create_dev_key_file().expect("create generic development key");
     write_key_file(&generic_key_file, &generic_key).expect("write generic development key");
-    let generic_error = export_deployment_publisher_public_key(
-        DeploymentPublisherKeyExportOptions {
+    let generic_error =
+        export_deployment_publisher_public_key(DeploymentPublisherKeyExportOptions {
             publisher_key_file: generic_key_file,
             public_key_file: root.join("generic.public.json"),
-        },
-    )
-    .expect_err("generic development key must not become a deployment publisher key");
+        })
+        .expect_err("generic development key must not become a deployment publisher key");
     assert!(
-        generic_error.to_string().contains("deployment publisher key"),
+        generic_error
+            .to_string()
+            .contains("deployment publisher key"),
         "{generic_error}"
     );
 
     let publisher_key_file = root.join("publisher.private.json");
-    let publisher = create_deployment_publisher_private_key(
-        DeploymentPublisherKeyCreateOptions {
-            publisher_key_file: publisher_key_file.clone(),
-        },
-    )
+    let publisher = create_deployment_publisher_private_key(DeploymentPublisherKeyCreateOptions {
+        publisher_key_file: publisher_key_file.clone(),
+    })
     .expect("create dedicated deployment publisher key");
     let publisher_key_bytes =
         std::fs::read(&publisher_key_file).expect("read dedicated deployment publisher key");
@@ -1684,12 +1908,11 @@ fn signed_deployment_manifest_rejects_tampering_expiry_and_wrong_publisher() {
             "deployment publisher key must be private"
         );
     }
-    let overwrite_error = create_deployment_publisher_private_key(
-        DeploymentPublisherKeyCreateOptions {
+    let overwrite_error =
+        create_deployment_publisher_private_key(DeploymentPublisherKeyCreateOptions {
             publisher_key_file: publisher_key_file.clone(),
-        },
-    )
-    .expect_err("deployment publisher key creation must not overwrite an existing key");
+        })
+        .expect_err("deployment publisher key creation must not overwrite an existing key");
     assert_eq!(overwrite_error.kind(), io::ErrorKind::AlreadyExists);
     assert_eq!(
         std::fs::read(&publisher_key_file).expect("re-read deployment publisher key"),
@@ -1712,13 +1935,12 @@ fn signed_deployment_manifest_rejects_tampering_expiry_and_wrong_publisher() {
     .expect("write wrong-purpose deployment key");
     set_private_file_permissions(&wrong_purpose_key_file)
         .expect("protect wrong-purpose deployment key");
-    let wrong_purpose_error = export_deployment_publisher_public_key(
-        DeploymentPublisherKeyExportOptions {
+    let wrong_purpose_error =
+        export_deployment_publisher_public_key(DeploymentPublisherKeyExportOptions {
             publisher_key_file: wrong_purpose_key_file,
             public_key_file: root.join("wrong-purpose.public.json"),
-        },
-    )
-    .expect_err("wrong-purpose deployment key must fail");
+        })
+        .expect_err("wrong-purpose deployment key must fail");
     assert!(
         wrong_purpose_error
             .to_string()
@@ -1741,13 +1963,12 @@ fn signed_deployment_manifest_rejects_tampering_expiry_and_wrong_publisher() {
     .expect("write wrong-schema deployment key");
     set_private_file_permissions(&wrong_schema_key_file)
         .expect("protect wrong-schema deployment key");
-    let wrong_schema_error = export_deployment_publisher_public_key(
-        DeploymentPublisherKeyExportOptions {
+    let wrong_schema_error =
+        export_deployment_publisher_public_key(DeploymentPublisherKeyExportOptions {
             publisher_key_file: wrong_schema_key_file,
             public_key_file: root.join("wrong-schema.public.json"),
-        },
-    )
-    .expect_err("wrong-schema deployment key must fail");
+        })
+        .expect_err("wrong-schema deployment key must fail");
     assert!(
         wrong_schema_error
             .to_string()
@@ -1770,13 +1991,12 @@ fn signed_deployment_manifest_rejects_tampering_expiry_and_wrong_publisher() {
     .expect("write invalid-material deployment key");
     set_private_file_permissions(&invalid_material_key_file)
         .expect("protect invalid-material deployment key");
-    let invalid_material_error = export_deployment_publisher_public_key(
-        DeploymentPublisherKeyExportOptions {
+    let invalid_material_error =
+        export_deployment_publisher_public_key(DeploymentPublisherKeyExportOptions {
             publisher_key_file: invalid_material_key_file,
             public_key_file: root.join("invalid-material.public.json"),
-        },
-    )
-    .expect_err("private material from another key must fail");
+        })
+        .expect_err("private material from another key must fail");
     assert!(
         invalid_material_error
             .to_string()
@@ -1820,7 +2040,10 @@ fn signed_deployment_manifest_rejects_tampering_expiry_and_wrong_publisher() {
         (&unit, b"unit-v1".as_slice()),
         (&environment, b"environment-v1".as_slice()),
         (&transport_unit, b"transport-unit-v1".as_slice()),
-        (&transport_environment, b"transport-environment-v1".as_slice()),
+        (
+            &transport_environment,
+            b"transport-environment-v1".as_slice(),
+        ),
         (&swap_metadata, b"swap-metadata-v1".as_slice()),
         (&egress_metadata, b"egress-metadata-v1".as_slice()),
     ] {
@@ -1842,8 +2065,7 @@ fn signed_deployment_manifest_rejects_tampering_expiry_and_wrong_publisher() {
                 let rpc_unit = root.join(format!("{validator_id}.rpc.service"));
                 let rpc_environment = root.join(format!("{validator_id}.rpc.env"));
                 let transport_unit = root.join(format!("{validator_id}.transport.service"));
-                let transport_environment =
-                    root.join(format!("{validator_id}.transport.env"));
+                let transport_environment = root.join(format!("{validator_id}.transport.env"));
                 for (path, contents) in [
                     (&rpc_unit, format!("{validator_id}-rpc-unit").into_bytes()),
                     (
@@ -1859,8 +2081,7 @@ fn signed_deployment_manifest_rejects_tampering_expiry_and_wrong_publisher() {
                         format!("{validator_id}-transport-environment").into_bytes(),
                     ),
                 ] {
-                    atomic_write(path, contents)
-                        .expect("write unique validator deployment input");
+                    atomic_write(path, contents).expect("write unique validator deployment input");
                 }
                 (
                     rpc_unit,
@@ -2020,9 +2241,7 @@ fn signed_deployment_manifest_rejects_tampering_expiry_and_wrong_publisher() {
             Some(DeploymentRuntimeArtifactHashes {
                 binary_sha256: manifest.binary_sha256.clone(),
                 topology_sha256: manifest.topology_sha256.clone(),
-                swap_circuit_metadata_sha256: manifest
-                    .swap_circuit_metadata_sha256
-                    .clone(),
+                swap_circuit_metadata_sha256: manifest.swap_circuit_metadata_sha256.clone(),
                 private_egress_circuit_metadata_sha256: manifest
                     .private_egress_circuit_metadata_sha256
                     .clone(),
@@ -2040,7 +2259,9 @@ fn signed_deployment_manifest_rejects_tampering_expiry_and_wrong_publisher() {
     )
     .expect_err("partial runtime deployment binding must fail");
     assert!(
-        partial_runtime.to_string().contains("must be configured together"),
+        partial_runtime
+            .to_string()
+            .contains("must be configured together"),
         "{partial_runtime}"
     );
     let partial_runtime_artifacts = deployment_runtime_identity_from_config(
@@ -2070,8 +2291,7 @@ fn signed_deployment_manifest_rejects_tampering_expiry_and_wrong_publisher() {
         &wrong_swap_metadata,
         &wrong_egress_metadata,
     ] {
-        atomic_write(path, b"wrong-runtime-artifact")
-            .expect("write mismatched runtime artifact");
+        atomic_write(path, b"wrong-runtime-artifact").expect("write mismatched runtime artifact");
     }
     let runtime_identity_mismatch = deployment_runtime_identity_from_config(
         Some(manifest_file.clone().into_os_string()),
@@ -2138,19 +2358,17 @@ fn signed_deployment_manifest_rejects_tampering_expiry_and_wrong_publisher() {
             "{label}: {mismatch}"
         );
     }
-    let partial_runtime_verify = verify_deployment_manifest(
-        DeploymentManifestVerifyOptions {
-            manifest_file: manifest_file.clone(),
-            trusted_publisher_key_file: trusted_key_file.clone(),
-            now_unix: Some(now),
-            validator_id: None,
-            validator_bindings_file: None,
-            runtime_binary_file: Some(binary.clone()),
-            runtime_topology_file: None,
-            runtime_swap_circuit_metadata_file: None,
-            runtime_private_egress_circuit_metadata_file: None,
-        },
-    )
+    let partial_runtime_verify = verify_deployment_manifest(DeploymentManifestVerifyOptions {
+        manifest_file: manifest_file.clone(),
+        trusted_publisher_key_file: trusted_key_file.clone(),
+        now_unix: Some(now),
+        validator_id: None,
+        validator_bindings_file: None,
+        runtime_binary_file: Some(binary.clone()),
+        runtime_topology_file: None,
+        runtime_swap_circuit_metadata_file: None,
+        runtime_private_egress_circuit_metadata_file: None,
+    })
     .expect_err("partial runtime artifact verification must fail");
     assert!(
         partial_runtime_verify
@@ -2159,8 +2377,7 @@ fn signed_deployment_manifest_rejects_tampering_expiry_and_wrong_publisher() {
         "{partial_runtime_verify}"
     );
     let mismatched_environment = root.join("mismatched-validator.env");
-    atomic_write(&mismatched_environment, b"environment-v2")
-        .expect("write mismatched environment");
+    atomic_write(&mismatched_environment, b"environment-v2").expect("write mismatched environment");
     let mismatched_bindings = root.join("mismatched-validator-bindings.json");
     atomic_write(
         &mismatched_bindings,
@@ -2197,7 +2414,9 @@ fn signed_deployment_manifest_rejects_tampering_expiry_and_wrong_publisher() {
     })
     .expect_err("mismatched local validator binding must fail");
     assert!(
-        mismatch.to_string().contains("do not match signed validator binding"),
+        mismatch
+            .to_string()
+            .contains("do not match signed validator binding"),
         "{mismatch}"
     );
     let runtime_binding_mismatch = deployment_runtime_identity_from_config(
@@ -2235,10 +2454,8 @@ fn signed_deployment_manifest_rejects_tampering_expiry_and_wrong_publisher() {
         ),
     )
     .expect("write missing transport bindings");
-    let missing_transport = read_deployment_validator_bindings_file(
-        &missing_transport_bindings,
-    )
-    .expect_err("missing transport binding must fail");
+    let missing_transport = read_deployment_validator_bindings_file(&missing_transport_bindings)
+        .expect_err("missing transport binding must fail");
     assert!(
         missing_transport.to_string().contains("rpc and transport"),
         "{missing_transport}"
@@ -2319,7 +2536,10 @@ fn signed_deployment_manifest_rejects_tampering_expiry_and_wrong_publisher() {
         runtime_private_egress_circuit_metadata_file: None,
     })
     .expect_err("tampered deployment manifest must fail");
-    assert!(error.to_string().contains("signature verification"), "{error}");
+    assert!(
+        error.to_string().contains("signature verification"),
+        "{error}"
+    );
     std::fs::remove_dir_all(root).expect("cleanup deployment manifest test");
 }
 
@@ -2369,8 +2589,8 @@ fn deployment_validator_unit_stage_is_canonical_and_non_overwriting() {
         private_egress_circuit_metadata_file: private_egress_metadata,
         output_dir: output_dir.clone(),
     };
-    let report = stage_deployment_validator_units(options.clone())
-        .expect("stage canonical validator units");
+    let report =
+        stage_deployment_validator_units(options.clone()).expect("stage canonical validator units");
     assert_eq!(report.schema, DEPLOYMENT_VALIDATOR_UNIT_STAGE_SCHEMA);
     assert_eq!(report.validators.len(), 6);
     assert!(report.binary_file.is_file());
@@ -2429,18 +2649,15 @@ fn deployment_validator_unit_stage_is_canonical_and_non_overwriting() {
             );
         }
     }
-    let signing_bindings =
-        read_deployment_validator_bindings_file(&report.signing_bindings_file)
-            .expect("read canonical signing bindings");
+    let signing_bindings = read_deployment_validator_bindings_file(&report.signing_bindings_file)
+        .expect("read canonical signing bindings");
     assert_eq!(signing_bindings.len(), 6);
     for row in &report.validators {
-        let rpc_unit = std::fs::read_to_string(&row.rpc_unit_file)
-            .expect("read staged RPC unit");
-        let transport_unit = std::fs::read_to_string(&row.transport_unit_file)
-            .expect("read staged transport unit");
-        let transport_environment =
-            std::fs::read_to_string(&row.transport_environment_file)
-                .expect("read staged transport environment");
+        let rpc_unit = std::fs::read_to_string(&row.rpc_unit_file).expect("read staged RPC unit");
+        let transport_unit =
+            std::fs::read_to_string(&row.transport_unit_file).expect("read staged transport unit");
+        let transport_environment = std::fs::read_to_string(&row.transport_environment_file)
+            .expect("read staged transport environment");
         assert!(rpc_unit.contains("--spool-dir"));
         assert!(rpc_unit.contains("--ready-file"));
         assert!(rpc_unit.contains("--bind-host 127.0.0.1"));
@@ -2463,8 +2680,7 @@ fn deployment_validator_unit_stage_is_canonical_and_non_overwriting() {
         assert!(transport_unit.contains("--unsafe-devnet-file-signer"));
         assert!(transport_unit.contains("--unsafe-devnet-json-storage"));
         assert!(!transport_unit.contains("1000000"));
-        assert!(transport_unit
-            .contains("--runtime-private-egress-circuit-metadata-file"));
+        assert!(transport_unit.contains("--runtime-private-egress-circuit-metadata-file"));
         assert_eq!(transport_unit.matches("ExecStartPre=").count(), 2);
         for unit in [&rpc_unit, &transport_unit] {
             for directive in [
@@ -2489,19 +2705,19 @@ fn deployment_validator_unit_stage_is_canonical_and_non_overwriting() {
                 assert!(unit.contains(directive), "missing {directive}");
             }
         }
-        assert!(transport_environment
-            .contains("POSTFIAT_PREWARM_ASSET_ORCHARD_SWAP_VERIFIER=1"));
+        assert!(transport_environment.contains("POSTFIAT_PREWARM_ASSET_ORCHARD_SWAP_VERIFIER=1"));
         assert!(transport_environment
             .contains("POSTFIAT_PREWARM_ASSET_ORCHARD_PRIVATE_EGRESS_VERIFIER=1"));
         assert!(!transport_environment.contains("PRIVATE_EGRESS_VERIFIER=0"));
         assert!(!transport_environment.contains("POSTFIAT_ALLOW_PUBLIC_TRANSPORT_BIND"));
-        let runtime_bindings: DeploymentValidatorBindingsFile = read_json_file(
-            &row.runtime_bindings_file,
-            "staged runtime bindings",
-        )
-        .expect("read staged runtime binding file");
+        let runtime_bindings: DeploymentValidatorBindingsFile =
+            read_json_file(&row.runtime_bindings_file, "staged runtime bindings")
+                .expect("read staged runtime binding file");
         assert_eq!(runtime_bindings.validators.len(), 1);
-        assert_eq!(runtime_bindings.validators[0].validator_id, row.validator_id);
+        assert_eq!(
+            runtime_bindings.validators[0].validator_id,
+            row.validator_id
+        );
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -2652,9 +2868,18 @@ fn historical_external_certificate_rejects_state_divergent_catch_up_without_muta
             .contains("historical replay state root mismatch"),
         "{error}"
     );
-    assert_eq!(store.read_ledger().expect("ledger after rejection"), ledger_before);
-    assert_eq!(store.read_chain_tip().expect("tip after rejection"), tip_before);
-    assert_eq!(store.read_blocks().expect("blocks after rejection"), blocks_before);
+    assert_eq!(
+        store.read_ledger().expect("ledger after rejection"),
+        ledger_before
+    );
+    assert_eq!(
+        store.read_chain_tip().expect("tip after rejection"),
+        tip_before
+    );
+    assert_eq!(
+        store.read_blocks().expect("blocks after rejection"),
+        blocks_before
+    );
 
     fs::remove_dir_all(&data_dir).expect("cleanup state-divergent replay test");
 }
@@ -2686,12 +2911,23 @@ fn historical_external_certificate_rejects_wrong_local_parent_without_mutation()
     )
     .expect_err("historical certificate must not attach to a different local parent");
     assert!(
-        error.to_string().contains("historical replay parent mismatch"),
+        error
+            .to_string()
+            .contains("historical replay parent mismatch"),
         "{error}"
     );
-    assert_eq!(store.read_ledger().expect("ledger after rejection"), ledger_before);
-    assert_eq!(store.read_chain_tip().expect("tip after rejection"), divergent_tip);
-    assert_eq!(store.read_blocks().expect("blocks after rejection"), blocks_before);
+    assert_eq!(
+        store.read_ledger().expect("ledger after rejection"),
+        ledger_before
+    );
+    assert_eq!(
+        store.read_chain_tip().expect("tip after rejection"),
+        divergent_tip
+    );
+    assert_eq!(
+        store.read_blocks().expect("blocks after rejection"),
+        blocks_before
+    );
 
     fs::remove_dir_all(&data_dir).expect("cleanup parent-divergent replay test");
 }

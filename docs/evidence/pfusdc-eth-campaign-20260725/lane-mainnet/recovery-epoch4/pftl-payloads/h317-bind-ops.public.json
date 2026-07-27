@@ -1,0 +1,79 @@
+{
+  "height": 317,
+  "operation_count": 2,
+  "operations": [
+    {
+      "dependencies": [],
+      "label": "h317-nav-profile-register",
+      "operation": {
+        "challenge_window_blocks": 64,
+        "max_epoch_gap_blocks": 128,
+        "max_proof_bytes": 4096,
+        "max_public_values_bytes": 4096,
+        "max_snapshot_age_blocks": 900,
+        "min_attestations": 0,
+        "min_challenge_bond": 1,
+        "operation": "nav_profile_register",
+        "registrant": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "settle_deadline_blocks": 256,
+        "source_class": "vault_bridge:erc20_bridge_vault:1:0x8583409ddbac984ec195dfa06a21103d92403c1e:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "sp1_program_vkey": "0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e",
+        "sp1_proof_encoding": "groth16",
+        "tolerance_bp": 10,
+        "valuation_policy_hash": "03580838ff28bb30ab62ffbe7a4b774afcf6a6a166c737e77cd37f593ac0ef7d",
+        "vault_bridge_route_policy_hash": "928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81",
+        "verifier_kind": "sp1-groth16"
+      },
+      "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+      "source_object": {
+        "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/package/planned-nav-profile.mainnet-epoch4.json",
+        "sha256": "5535f602ec48722a7748ab2fd78d0251863cee5c8e41d2d665369ecc5f0e05e8"
+      }
+    },
+    {
+      "dependencies": [
+        {
+          "label": "h317-nav-profile-register",
+          "mode": "same_round",
+          "reason": "pfUSDC binds the epoch-4 NAV profile registered earlier in the ordered H317 asset batch"
+        }
+      ],
+      "label": "h317-nav-asset-bind",
+      "operation": {
+        "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+        "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "operation": "nav_asset_register",
+        "proof_profile": "765f2d6b5cf9025f4070629d0585bf50585e36dde88baa68146dabf739de2433945027d7b616fabd92b6bcd7048dda89",
+        "redemption_account": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "reserve_operator": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "valuation_unit": "USDC"
+      },
+      "planned_nav_bind": {
+        "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+        "height": 317,
+        "planned_nav_profile_file": "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/package/planned-nav-profile.mainnet-epoch4.json",
+        "route_binding": "f062a7b19a33ab9674457b0fd7b8c98a42f43c240806e3a25ef035da3fa643f3",
+        "route_epoch": 4,
+        "route_id": "ethereum-mainnet-usdc-v1",
+        "route_profile_hash": "928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81",
+        "route_profile_hash_commitment": "0xb41465ac4cd30bbe132a66c1953815940f720796574edf7c8107a4ae3306c743",
+        "schema": "postfiat.pfusdc.nav_profile_bind_payload.v1"
+      },
+      "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+      "source_object": {
+        "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/package/planned-nav-bind.mainnet-epoch4.json",
+        "sha256": "221d12b6c740bda3c8028b28180428ed582a855b15d7f791e8e84255b0cd4e7b"
+      }
+    }
+  ],
+  "profile_id": "765f2d6b5cf9025f4070629d0585bf50585e36dde88baa68146dabf739de2433945027d7b616fabd92b6bcd7048dda89",
+  "provenance": {
+    "c8": {
+      "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/package/consumer-c8-simulation.log",
+      "sha256": "a09536aa84ecf3425c650f383a2c057f8a389ccb1f9734f4e6fd3528f8ef0616"
+    },
+    "canonical_serializer": "postfiat-node vault-bridge-bootstrap-bundle"
+  },
+  "schema": "postfiat.public_unsigned_asset_operations.v1",
+  "signing_material_included": false
+}

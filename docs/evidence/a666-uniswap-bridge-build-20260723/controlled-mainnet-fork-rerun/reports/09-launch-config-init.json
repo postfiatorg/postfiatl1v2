@@ -1,0 +1,8 @@
+{
+  "schema": "postfiat-navcoin-bridge-launch-config-init-v1",
+  "route_id": "pftl-a666-ce22-ethereum-wA666-usdc-controlled-20260723-v1",
+  "route_config_digest": "ae558831a5a0c80bd8788c2289ea70ff10ba49a72274b8df026fea8855e27c59d5b612091f9efa3a8d1db9b5e4c197dc",
+  "launch_config_digest": "25bbbdf0d52ee0781a38f39873b3353668b09f13de8debab5abafac34b8eeb4a321e97dc9263659801bfc2e3083d57d0",
+  "launch_config_file": "/home/postfiat/repos/a666-uniswap-bridge-build-20260723/docs/evidence/a666-uniswap-bridge-build-20260723/controlled-mainnet-fork-rerun/sidecar/pftl_uniswap_launch_configs.json",
+  "launch_config_count": 1
+}

@@ -381,6 +381,9 @@ pub struct PftlUniswapRouteStatusRow {
     pub route_family: String,
     pub route_config_digest: String,
     pub route_trust_class: String,
+    pub movement_model: String,
+    pub refund_model: String,
+    pub live_value_enabled: bool,
     pub route_live: bool,
     pub paused: bool,
     pub native_nav_asset_id: String,
@@ -2764,7 +2767,14 @@ fn pftl_uniswap_route_status_row(
         route_family: ledger.route_family.clone(),
         route_config_digest: ledger.route_config_digest.clone(),
         route_trust_class: ledger.route_trust_class.clone(),
-        route_live: !ledger.paused && ledger.route_trust_class != ROUTE_TRUST_CLASS_DISABLED,
+        movement_model: "burn_mint".to_string(),
+        refund_model: if ledger.route_trust_class == ROUTE_TRUST_CLASS_BFT_CHECKPOINT {
+            "checkpoint_verified".to_string()
+        } else {
+            "operator_attested_non_consumption".to_string()
+        },
+        live_value_enabled: false,
+        route_live: false,
         paused: ledger.paused,
         native_nav_asset_id: ledger.native_nav_asset_id.clone(),
         settlement_asset_id: ledger.settlement_asset_id.clone(),

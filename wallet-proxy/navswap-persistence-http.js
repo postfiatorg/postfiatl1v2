@@ -8,6 +8,9 @@ function create(runtime) {
     const httpRequestRequiresAuth = (...args) => runtime.httpRequestRequiresAuth(...args);
     const acquireMutationAdmission = (...args) => runtime.acquireMutationAdmission(...args);
     const boundedHttpBodyLimit = (...args) => runtime.boundedHttpBodyLimit(...args);
+    const trustlessBridgeReadiness = (...args) => runtime.trustlessBridgeReadiness(...args);
+    const submitTrustlessBridgeJob = (...args) => runtime.submitTrustlessBridgeJob(...args);
+    const trustlessBridgeJobStatus = (...args) => runtime.trustlessBridgeJobStatus(...args);
     const addProxyRouteEvent = (...args) => runtime.addProxyRouteEvent(...args);
     const assertNoShieldedPrivateMaterial = (...args) => runtime.assertNoShieldedPrivateMaterial(...args);
     const assertVaultBridgeEvidenceMatches = (...args) => runtime.assertVaultBridgeEvidenceMatches(...args);
@@ -973,6 +976,7 @@ function create(runtime) {
                     route_supply_cap_atoms: bridge.route_supply_cap_atoms,
                     supply_cap_remaining_atoms: bridge.supply_cap_remaining_atoms,
                     packet_notional_cap_atoms: bridge.packet_notional_cap_atoms,
+                    action_labels: bridge.action_labels,
                     failure_behavior: bridge.failure_behavior,
                     mint_and_swap_uniswap: quote.mint_and_swap_uniswap,
                     quote_binding_hash: quote.quote_binding_hash,
@@ -1576,6 +1580,29 @@ function create(runtime) {
                 return true;
             }
 
+            if (req.method === 'GET' && url.pathname === '/api/bridge/readiness') {
+                const routeId = String(url.searchParams.get('route') || '').trim().toLowerCase();
+                const result = await trustlessBridgeReadiness(routeId);
+                const status = result.code === 'unsupported_bridge_route' ? 404 : 200;
+                sendJson(req, res, status, result);
+                return true;
+            }
+
+            if (req.method === 'POST' && url.pathname === '/api/bridge/jobs') {
+                const body = await readJsonBody(req);
+                const result = await submitTrustlessBridgeJob(body);
+                sendJson(req, res, 202, { ok: true, ...result });
+                return true;
+            }
+
+            if (req.method === 'GET' && url.pathname.startsWith('/api/bridge/jobs/')) {
+                const jobId = decodeURIComponent(url.pathname.slice('/api/bridge/jobs/'.length));
+                const result = trustlessBridgeJobStatus(jobId);
+                sendJson(req, res, result ? 200 : 404,
+                    result ? { ok: true, ...result } : { ok: false, code: 'bridge_job_not_found' });
+                return true;
+            }
+
             if (req.method === 'POST' && url.pathname === '/api/bridge/relay') {
                 const body = await readJsonBody(req);
                 const result = await executeNavswapIdempotentRequest({
@@ -1766,7 +1793,14 @@ function create(runtime) {
                 return true;
             }
         } catch (error) {
-            sendJson(req, res, error.code === 'request_body_too_large' ? 413 : 400, {
+            const errorStatuses = {
+                request_body_too_large: 413,
+                unsupported_bridge_route: 404,
+                bridge_job_binding_conflict: 409,
+                bridge_job_busy: 503,
+                trustless_ingress_unavailable: 503,
+            };
+            sendJson(req, res, errorStatuses[error.code] || 400, {
                 ok: false,
                 code: error.code || 'navswap_adapter_error',
                 message: error.message || 'NAVSwap adapter error',

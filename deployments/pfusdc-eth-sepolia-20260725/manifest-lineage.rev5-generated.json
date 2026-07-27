@@ -1,0 +1,53 @@
+{
+  "current_revision": {
+    "activation_height": 314,
+    "manifest": {
+      "path": "deployments/pfusdc-eth-sepolia-20260725/manifest.rev5-generated-nonce65-66.json",
+      "sha256": "61f309924c2b5894a519e1f1849033bd5c31252d15f3068937741cd5c34430f5"
+    },
+    "route_binding": "ca1142a9eaaa4d73220d77c469d7ef4c3dd80b70aae59002f45f822e7faa8253",
+    "route_epoch": 2,
+    "route_profile": {
+      "path": "deployments/pfusdc-eth-sepolia-20260725/route-profile.rev5-generated-nonce65-66.json",
+      "sha256": "6de72dad242b6492a76b6192e463a972585b4ac2e3b956225ffe6af4ecf7b0c8"
+    },
+    "route_profile_hash": "81596feb0992ab86caf77fbe8cc911d24ab9c190012144a2a0b88cd70bce8815152ba341cac0d49869268901bb035bb4",
+    "route_profile_hash_commitment": "0x854705cb7e0f5553a69bf915f49baa7a1de15f4726e50d202c09ccc4c751cd7d",
+    "schedule": {
+      "bind_height": 313,
+      "claim_height": 315,
+      "registration_activation_height": 314
+    },
+    "status": "generated-not-deployed"
+  },
+  "history": [
+    {
+      "reason": "runtime-hash rebinding; vault has no verifier setter; never registered",
+      "revision": "rev1-nonce61-62-invalid",
+      "status": "preserved-unregistered-invalid"
+    },
+    {
+      "reason": "superseded before registration by the epoch-1 H312 attempt",
+      "revision": "rev2-nonce63-64-frozen",
+      "status": "preserved-unregistered"
+    },
+    {
+      "activation_height": 312,
+      "binding": "3d8618e65c5e95d0badf2870d10eb8c5a1fec96e53e22eb925b41898f516aaf1",
+      "commitment": "0xa1cf3d3a427498e60ad2e9ae7b011cd9c28e4d469c75e01de63aa4c80442ac3d",
+      "nonce_63_verifier": "0x16603cfb9df15e56d35ed8301174c6aab0e5c80d",
+      "nonce_64_vault": "0x9321beac017993ac8f7f1ba4f28ce90690ac7b0f",
+      "policy_hash": "f3ad67ac43abb7216aed7518709c269eb49cb23251075e0b12843b5c16728caf",
+      "profile_hash": "6b2003fb81e44b43348dec3b88eef23df642e29232ba264f50c1dcb83af5da2b51400a30b7e418c9502dd1c43229858f",
+      "reason": "epoch-1 H312 registration was rejected by monotonic route admission; never registered",
+      "revision": "rev3-activity-h310-nonce63-64-frozen",
+      "status": "superseded-unregistered"
+    },
+    {
+      "reason": "contradictory hand-assembled package superseded by deterministic generated revision",
+      "revision": "rev4-activity-h312-nonce65-66-frozen",
+      "status": "superseded-unregistered"
+    }
+  ],
+  "schema": "postfiat.pfusdc.eth_sepolia_manifest_lineage.v2"
+}

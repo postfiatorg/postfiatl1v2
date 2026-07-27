@@ -8,6 +8,7 @@ pub struct VaultBridgeConservationOptions {
     pub asset_id: String,
     pub source_rpc_url: String,
     pub cast_binary: PathBuf,
+    pub vault_interface_lineage_manifest: PathBuf,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -19,6 +20,7 @@ pub struct VaultBridgeConservationRouteRow {
     pub vault_address: String,
     pub token_address: String,
     pub vault_runtime_code_hash: String,
+    pub vault_interface_abi_class: String,
     pub token_runtime_code_hash: String,
     pub vault_balance_atoms: u64,
     pub balance_counted_once: bool,
@@ -110,6 +112,234 @@ struct SourceRouteFacts {
     source_claimed_withdrawal_ids: BTreeSet<String>,
 }
 
+const VAULT_INTERFACE_LINEAGE_SCHEMA: &str = "postfiat.pfusdc.vault_interface_lineage.v1";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum VaultInterfaceAbiClass {
+    SnakeCaseV1,
+    CamelCaseV2,
+}
+
+impl VaultInterfaceAbiClass {
+    fn lineage_name(self) -> &'static str {
+        match self {
+            Self::SnakeCaseV1 => "snake_case_v1",
+            Self::CamelCaseV2 => "camel_case_v2",
+        }
+    }
+
+    fn deposit_seen_selector(self) -> &'static str {
+        match self {
+            Self::SnakeCaseV1 => "deposit_seen(bytes32)(bool)",
+            Self::CamelCaseV2 => "depositSeen(bytes32)(bool)",
+        }
+    }
+
+    fn withdrawal_claimed_selector(self) -> &'static str {
+        match self {
+            Self::SnakeCaseV1 => "claimed_withdrawal_id(bytes32)(bool)",
+            Self::CamelCaseV2 => "consumedWithdrawalIdCommitment(bytes32)(bool)",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum VaultInterfaceVerificationStatus {
+    LiveVerified,
+    ExpectedPendingLiveReadback,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct VaultInterfaceLineageEntry {
+    runtime_code_hash: String,
+    abi_class: VaultInterfaceAbiClass,
+    source_manifest_path: String,
+    source_manifest_sha256: String,
+    deployment_revision_label: String,
+    verification_status: VaultInterfaceVerificationStatus,
+}
+
+#[derive(Debug, Deserialize)]
+struct VaultInterfaceLineageManifest {
+    schema: String,
+    version: u32,
+    entries: Vec<VaultInterfaceLineageEntry>,
+}
+
+fn invalid_vault_interface_lineage(message: impl Into<String>) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, message.into())
+}
+
+fn validate_runtime_code_hash(runtime_code_hash: &str) -> io::Result<()> {
+    if runtime_code_hash.len() != 66
+        || !runtime_code_hash.starts_with("0x")
+        || runtime_code_hash != runtime_code_hash.to_ascii_lowercase()
+        || !runtime_code_hash[2..]
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit())
+    {
+        return Err(invalid_vault_interface_lineage(format!(
+            "vault interface lineage runtime code hash must be exact lowercase 0x-prefixed bytes32: `{runtime_code_hash}`"
+        )));
+    }
+    Ok(())
+}
+
+fn source_manifest_declares_runtime_hash(
+    value: &serde_json::Value,
+    runtime_code_hash: &str,
+) -> bool {
+    match value {
+        serde_json::Value::String(text) => text == runtime_code_hash,
+        serde_json::Value::Array(items) => items
+            .iter()
+            .any(|item| source_manifest_declares_runtime_hash(item, runtime_code_hash)),
+        serde_json::Value::Object(items) => items
+            .values()
+            .any(|item| source_manifest_declares_runtime_hash(item, runtime_code_hash)),
+        _ => false,
+    }
+}
+
+fn resolve_lineage_source_manifest(
+    lineage_manifest_path: &Path,
+    source_manifest_path: &Path,
+) -> io::Result<PathBuf> {
+    lineage_manifest_path
+        .parent()
+        .into_iter()
+        .flat_map(Path::ancestors)
+        .map(|root| root.join(source_manifest_path))
+        .find(|candidate| candidate.is_file())
+        .ok_or_else(|| {
+            invalid_vault_interface_lineage(format!(
+                "vault interface lineage source manifest `{}` is unreadable from lineage ancestry",
+                source_manifest_path.display()
+            ))
+        })
+}
+
+fn load_vault_interface_lineage(
+    lineage_manifest_path: &Path,
+) -> io::Result<BTreeMap<String, VaultInterfaceLineageEntry>> {
+    let bytes = std::fs::read(lineage_manifest_path).map_err(|error| {
+        invalid_vault_interface_lineage(format!(
+            "vault interface lineage manifest `{}` is unreadable: {error}",
+            lineage_manifest_path.display()
+        ))
+    })?;
+    let lineage: VaultInterfaceLineageManifest =
+        serde_json::from_slice(&bytes).map_err(|error| {
+            invalid_vault_interface_lineage(format!(
+                "vault interface lineage manifest `{}` is invalid JSON: {error}",
+                lineage_manifest_path.display()
+            ))
+        })?;
+    if lineage.schema != VAULT_INTERFACE_LINEAGE_SCHEMA || lineage.version != 1 {
+        return Err(invalid_vault_interface_lineage(format!(
+            "vault interface lineage manifest `{}` has unsupported schema/version",
+            lineage_manifest_path.display()
+        )));
+    }
+    if lineage.entries.is_empty() {
+        return Err(invalid_vault_interface_lineage(
+            "vault interface lineage manifest has no entries",
+        ));
+    }
+    let mut entries = BTreeMap::new();
+    for entry in lineage.entries {
+        validate_runtime_code_hash(&entry.runtime_code_hash)?;
+        if entry.deployment_revision_label.trim().is_empty() {
+            return Err(invalid_vault_interface_lineage(format!(
+                "vault interface lineage `{}` has an empty deployment revision label",
+                entry.runtime_code_hash
+            )));
+        }
+        if entry.source_manifest_sha256.len() != 64
+            || entry.source_manifest_sha256 != entry.source_manifest_sha256.to_ascii_lowercase()
+            || !entry
+                .source_manifest_sha256
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit())
+        {
+            return Err(invalid_vault_interface_lineage(format!(
+                "vault interface lineage `{}` has an invalid source manifest SHA-256",
+                entry.runtime_code_hash
+            )));
+        }
+        let source_path = Path::new(&entry.source_manifest_path);
+        if source_path.as_os_str().is_empty()
+            || source_path.is_absolute()
+            || source_path
+                .components()
+                .any(|component| matches!(component, std::path::Component::ParentDir))
+        {
+            return Err(invalid_vault_interface_lineage(format!(
+                "vault interface lineage `{}` has a non-repository-relative source manifest path",
+                entry.runtime_code_hash
+            )));
+        }
+        let resolved_source_path =
+            resolve_lineage_source_manifest(lineage_manifest_path, source_path)?;
+        let source_bytes = std::fs::read(&resolved_source_path).map_err(|error| {
+            invalid_vault_interface_lineage(format!(
+                "vault interface lineage source manifest `{}` is unreadable: {error}",
+                resolved_source_path.display()
+            ))
+        })?;
+        let mut hasher = Sha256::new();
+        Sha2Digest::update(&mut hasher, &source_bytes);
+        let observed_digest = bytes_to_hex(&hasher.finalize());
+        if observed_digest != entry.source_manifest_sha256 {
+            return Err(invalid_vault_interface_lineage(format!(
+                "vault interface lineage source manifest digest mismatch for `{}`",
+                entry.runtime_code_hash
+            )));
+        }
+        let source_manifest: serde_json::Value =
+            serde_json::from_slice(&source_bytes).map_err(|error| {
+                invalid_vault_interface_lineage(format!(
+                    "vault interface lineage source manifest `{}` is invalid JSON: {error}",
+                    entry.source_manifest_path
+                ))
+            })?;
+        if !source_manifest_declares_runtime_hash(&source_manifest, &entry.runtime_code_hash) {
+            return Err(invalid_vault_interface_lineage(format!(
+                "vault interface lineage source manifest `{}` does not declare runtime hash `{}`",
+                entry.source_manifest_path, entry.runtime_code_hash
+            )));
+        }
+        if entries
+            .insert(entry.runtime_code_hash.clone(), entry)
+            .is_some()
+        {
+            return Err(invalid_vault_interface_lineage(
+                "vault interface lineage has duplicate runtime code hash mapping",
+            ));
+        }
+    }
+    Ok(entries)
+}
+
+fn select_vault_interface(
+    entries: &BTreeMap<String, VaultInterfaceLineageEntry>,
+    runtime_code_hash: &str,
+) -> io::Result<VaultInterfaceAbiClass> {
+    let entry = entries.get(runtime_code_hash).ok_or_else(|| {
+        invalid_vault_interface_lineage(format!(
+            "vault interface lineage has no entry for governed runtime hash `{runtime_code_hash}`"
+        ))
+    })?;
+    if entry.verification_status != VaultInterfaceVerificationStatus::LiveVerified {
+        return Err(invalid_vault_interface_lineage(format!(
+            "vault interface lineage runtime hash `{runtime_code_hash}` is not live_verified"
+        )));
+    }
+    Ok(entry.abi_class)
+}
+
 pub fn vault_bridge_conservation_audit(
     options: VaultBridgeConservationOptions,
 ) -> io::Result<VaultBridgeConservationReport> {
@@ -153,6 +383,8 @@ pub fn vault_bridge_conservation_audit(
             .authorized_vault_bridge_route_profile(&options.asset_id, &record.profile_hash)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     }
+    let interface_lineage =
+        load_vault_interface_lineage(&options.vault_interface_lineage_manifest)?;
 
     let source_chain_id = cast_u64(
         &options.cast_binary,
@@ -170,6 +402,7 @@ pub fn vault_bridge_conservation_audit(
     }
 
     let mut route_rows = Vec::with_capacity(records.len());
+    let mut route_interfaces = BTreeMap::new();
     let mut unique_vault_balances = BTreeMap::<(String, String), u64>::new();
     for record in &records {
         let vault_code = cast_hex_bytes(
@@ -216,6 +449,8 @@ pub fn vault_bridge_conservation_audit(
                 ),
             ));
         }
+        let interface = select_vault_interface(&interface_lineage, &observed_vault_hash)?;
+        route_interfaces.insert(record.profile_hash.clone(), interface);
 
         let key = (
             record.profile.vault_address.clone(),
@@ -248,6 +483,7 @@ pub fn vault_bridge_conservation_audit(
             vault_address: record.profile.vault_address.clone(),
             token_address: record.profile.token_address.clone(),
             vault_runtime_code_hash: observed_vault_hash,
+            vault_interface_abi_class: interface.lineage_name().to_string(),
             token_runtime_code_hash: observed_token_hash,
             vault_balance_atoms,
             balance_counted_once,
@@ -284,12 +520,15 @@ pub fn vault_bridge_conservation_audit(
     {
         let record = route_record_for_policy(&records, &deposit.policy_hash)?;
         ensure_deposit_matches_route(deposit, record)?;
+        let interface = route_interfaces.get(&record.profile_hash).ok_or_else(|| {
+            invalid_vault_interface_lineage("missing selected interface for governed deposit route")
+        })?;
         let seen = cast_bool(
             &options.cast_binary,
             &[
                 "call",
                 &record.profile.vault_address,
-                "deposit_seen(bytes32)(bool)",
+                interface.deposit_seen_selector(),
                 &format!("0x{}", deposit.evidence.deposit_id),
                 "--rpc-url",
                 &options.source_rpc_url,
@@ -332,6 +571,11 @@ pub fn vault_bridge_conservation_audit(
             })?;
         let record = route_record_for_policy(&records, &bucket.policy_hash)?;
         ensure_redemption_matches_route(redemption, record)?;
+        let interface = route_interfaces.get(&record.profile_hash).ok_or_else(|| {
+            invalid_vault_interface_lineage(
+                "missing selected interface for governed redemption route",
+            )
+        })?;
         let withdrawal_id = vault_bridge_hex_bytes_exact(
             "vault bridge redemption id",
             &redemption.redemption_id,
@@ -347,7 +591,7 @@ pub fn vault_bridge_conservation_audit(
             &[
                 "call",
                 &record.profile.vault_address,
-                "claimed_withdrawal_id(bytes32)(bool)",
+                interface.withdrawal_claimed_selector(),
                 &commitment,
                 "--rpc-url",
                 &options.source_rpc_url,
@@ -379,7 +623,6 @@ pub fn vault_bridge_conservation_audit(
         &source_facts,
         route_rows,
     )?;
-    report.verify()?;
     Ok(report)
 }
 
@@ -428,15 +671,6 @@ fn build_vault_bridge_conservation_report(
             )
         })
     })?;
-    if issued_supply_atoms != wrapped_supply_atoms {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!(
-                "vault bridge issued supply {} does not match bucket wrapped supply {}",
-                issued_supply_atoms, wrapped_supply_atoms
-            ),
-        ));
-    }
     let live_claim_atoms = wrapped_supply_atoms
         .checked_add(nav_subscription_claim_atoms)
         .and_then(|value| value.checked_add(other_claim_atoms))
@@ -807,6 +1041,169 @@ mod tests {
         }
     }
 
+    fn write_test_interface_lineage(root: &Path, entries: &[(&str, &str, &str)]) -> PathBuf {
+        std::fs::create_dir_all(root).expect("create interface lineage fixture directory");
+        let mut serialized_entries = Vec::new();
+        for (index, (runtime_code_hash, abi_class, verification_status)) in
+            entries.iter().enumerate()
+        {
+            let source_name = format!("source-{index}.json");
+            let source_path = root.join(&source_name);
+            std::fs::write(
+                &source_path,
+                format!("{{\"vault_runtime_code_hash\":\"{runtime_code_hash}\"}}"),
+            )
+            .expect("write interface lineage source manifest");
+            let mut hasher = Sha256::new();
+            Sha2Digest::update(
+                &mut hasher,
+                std::fs::read(&source_path).expect("read interface lineage source manifest"),
+            );
+            serialized_entries.push(format!(
+                "{{\"runtime_code_hash\":\"{runtime_code_hash}\",\"abi_class\":\"{abi_class}\",\"source_manifest_path\":\"{source_name}\",\"source_manifest_sha256\":\"{}\",\"deployment_revision_label\":\"fixture-{index}\",\"verification_status\":\"{verification_status}\"}}",
+                bytes_to_hex(&hasher.finalize())
+            ));
+        }
+        let lineage_path = root.join("vault-interface-lineage.json");
+        std::fs::write(
+            &lineage_path,
+            format!(
+                "{{\"schema\":\"{VAULT_INTERFACE_LINEAGE_SCHEMA}\",\"version\":1,\"entries\":[{}]}}",
+                serialized_entries.join(",")
+            ),
+        )
+        .expect("write interface lineage manifest");
+        lineage_path
+    }
+
+    #[test]
+    fn vault_bridge_conservation_interface_lineage_selects_closed_abis() {
+        let root = std::env::temp_dir().join(format!(
+            "postfiat-vault-bridge-conservation-interfaces-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let snake = format!("0x{}", "11".repeat(32));
+        let tier4_v2 = format!("0x{}", "22".repeat(32));
+        let ethereum_l1 = format!("0x{}", "33".repeat(32));
+        let lineage_path = write_test_interface_lineage(
+            &root,
+            &[
+                (&snake, "snake_case_v1", "live_verified"),
+                (&tier4_v2, "camel_case_v2", "live_verified"),
+                (&ethereum_l1, "camel_case_v2", "live_verified"),
+            ],
+        );
+        let entries = load_vault_interface_lineage(&lineage_path).expect("load lineage");
+        let snake = select_vault_interface(&entries, &snake).expect("select snake interface");
+        let tier4_v2 =
+            select_vault_interface(&entries, &tier4_v2).expect("select tier4 V2 interface");
+        let ethereum_l1 =
+            select_vault_interface(&entries, &ethereum_l1).expect("select Ethereum L1 interface");
+        assert_eq!("deposit_seen(bytes32)(bool)", snake.deposit_seen_selector());
+        assert_eq!(
+            "claimed_withdrawal_id(bytes32)(bool)",
+            snake.withdrawal_claimed_selector()
+        );
+        assert_eq!(
+            "depositSeen(bytes32)(bool)",
+            tier4_v2.deposit_seen_selector()
+        );
+        assert_eq!(
+            "consumedWithdrawalIdCommitment(bytes32)(bool)",
+            tier4_v2.withdrawal_claimed_selector()
+        );
+        assert_eq!(tier4_v2, ethereum_l1);
+        let unknown = format!("0x{}", "44".repeat(32));
+        let error =
+            select_vault_interface(&entries, &unknown).expect_err("unknown hash must fail closed");
+        assert!(error.to_string().contains("no entry"));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn vault_bridge_conservation_interface_lineage_rejects_pending_digest_and_duplicates() {
+        let root = std::env::temp_dir().join(format!(
+            "postfiat-vault-bridge-conservation-interface-rejections-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let pending = format!("0x{}", "55".repeat(32));
+        let pending_path = write_test_interface_lineage(
+            &root.join("pending"),
+            &[(&pending, "camel_case_v2", "expected_pending_live_readback")],
+        );
+        let entries = load_vault_interface_lineage(&pending_path).expect("load pending lineage");
+        let error =
+            select_vault_interface(&entries, &pending).expect_err("pending hash must fail closed");
+        assert!(error.to_string().contains("not live_verified"));
+
+        let digest_hash = format!("0x{}", "66".repeat(32));
+        let digest_root = root.join("digest");
+        let digest_path = write_test_interface_lineage(
+            &digest_root,
+            &[(&digest_hash, "camel_case_v2", "live_verified")],
+        );
+        std::fs::write(digest_root.join("source-0.json"), "{}")
+            .expect("tamper test source manifest");
+        let error = load_vault_interface_lineage(&digest_path)
+            .expect_err("digest mismatch must fail closed");
+        assert!(error.to_string().contains("digest mismatch"));
+
+        let duplicate = format!("0x{}", "77".repeat(32));
+        let duplicate_path = write_test_interface_lineage(
+            &root.join("duplicate"),
+            &[
+                (&duplicate, "snake_case_v1", "live_verified"),
+                (&duplicate, "camel_case_v2", "live_verified"),
+            ],
+        );
+        let error = load_vault_interface_lineage(&duplicate_path)
+            .expect_err("duplicate mapping must fail closed");
+        assert!(error.to_string().contains("duplicate runtime code hash"));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn vault_bridge_conservation_selected_getter_revert_has_no_fallback() {
+        let root = std::env::temp_dir().join(format!(
+            "postfiat-vault-bridge-conservation-selector-revert-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("create selector fixture directory");
+        let script = root.join("cast");
+        let fallback_marker = root.join("unexpected-snake-fallback");
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\nif [ \"$3\" = 'depositSeen(bytes32)(bool)' ]; then exit 1; fi\nif [ \"$3\" = 'deposit_seen(bytes32)(bool)' ]; then touch '{}'; echo true; exit 0; fi\nexit 1\n",
+                fallback_marker.display()
+            ),
+        )
+        .expect("write selector fixture cast");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = std::fs::metadata(&script).expect("metadata").permissions();
+            permissions.set_mode(0o700);
+            std::fs::set_permissions(&script, permissions).expect("chmod selector fixture cast");
+        }
+        let error = cast_bool(
+            &script,
+            &[
+                "call",
+                "0x1111111111111111111111111111111111111111",
+                VaultInterfaceAbiClass::CamelCaseV2.deposit_seen_selector(),
+            ],
+            "selected camel-case getter",
+        )
+        .expect_err("selected getter revert must remain fatal");
+        assert!(error.to_string().contains("selected camel-case getter"));
+        assert!(!fallback_marker.exists());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
     #[test]
     fn conservation_report_fails_closed_on_any_unexplained_atom() {
         let mut report = VaultBridgeConservationReport {
@@ -958,6 +1355,14 @@ mod tests {
         current_route.route_epoch = 2;
         current_route.activation_height = 5;
         let current_route_hash = current_route.profile_hash().expect("current route hash");
+        let interface_lineage_manifest = write_test_interface_lineage(
+            &root,
+            &[(
+                &route.vault_runtime_code_hash,
+                "snake_case_v1",
+                "live_verified",
+            )],
+        );
         let route_amendment = test_amendment(
             &postfiat_types::vault_bridge_route_amendment_kind(&route)
                 .expect("route amendment kind"),
@@ -1169,6 +1574,7 @@ mod tests {
             asset_id: asset.asset_id,
             source_rpc_url: "http://127.0.0.1:8545".to_string(),
             cast_binary: cast.clone(),
+            vault_interface_lineage_manifest: interface_lineage_manifest,
         };
         let report = vault_bridge_conservation_audit(options.clone()).expect("conserved audit");
         assert_eq!(95, report.source_vault_atoms);
@@ -1233,7 +1639,10 @@ mod tests {
         store.write_ledger(&ledger).expect("restore fixture ledger");
 
         write_cast(42_161, "6001", 81, 15, true, true);
-        let error = vault_bridge_conservation_audit(options)
+        let report = vault_bridge_conservation_audit(options)
+            .expect("audit must return the non-conserved report");
+        let error = report
+            .verify()
             .expect_err("one unexplained source atom must fail closed");
         assert!(
             error.to_string().contains("unexplained_delta=1"),

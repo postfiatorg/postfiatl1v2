@@ -1,0 +1,54 @@
+{
+  "schema": "postfiat.pfusdc.eth_mainnet_ingress_program_info.v1",
+  "name": "pfusdc-eth-mainnet-ingress-program",
+  "route_id": "ethereum-mainnet-usdc-v1",
+  "source_chain_id": 1,
+  "genesis_validators_root": "0x4b363db94e286120d76eb905340fdd4e54bfe9f06bf33ff6cf5ad27f511bfe95",
+  "proof_kind": "sp1-ethereum-finality-v1",
+  "proof_mode": "groth16",
+  "sp1_sdk_version": "6.3.1",
+  "elf_path": "programs/pfusdc-eth-mainnet-ingress/elf/pfusdc-eth-mainnet-ingress-program",
+  "elf_sha256": "0e59a0cf7723b9028aaa4c57f9e9c0da72119a552d62a5577223ba7b2df222d3",
+  "program_vkey": "0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e",
+  "reproducibility": {
+    "build_1_elf_sha256": "0e59a0cf7723b9028aaa4c57f9e9c0da72119a552d62a5577223ba7b2df222d3",
+    "build_2_elf_sha256": "0e59a0cf7723b9028aaa4c57f9e9c0da72119a552d62a5577223ba7b2df222d3",
+    "byte_identical": true,
+    "vkey_derive_1": "0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e",
+    "vkey_derive_2": "0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e",
+    "vkey_identical": true,
+    "build_command": "cd programs/pfusdc-eth-mainnet-ingress && PATH=$HOME/.sp1/bin:$PATH cargo prove build --locked --output-directory elf",
+    "vkey_command": "tools/eth-l1-mainnet-fast-lane-p0/target/release/eth-l1-mainnet-fast-lane-p0 program-info",
+    "toolchain": "cargo-prove (SP1 6.3.1), succinct rust toolchain 1.94.0-dev"
+  },
+  "fork_schedule_mainnet": {
+    "genesis": {"epoch": 0, "fork_version": "0x00000000"},
+    "altair": {"epoch": 74240, "fork_version": "0x01000000"},
+    "bellatrix": {"epoch": 144896, "fork_version": "0x02000000"},
+    "capella": {"epoch": 194048, "fork_version": "0x03000000"},
+    "deneb": {"epoch": 269568, "fork_version": "0x04000000"},
+    "electra": {"epoch": 364032, "fork_version": "0x05000000"},
+    "fulu": {"epoch": 411648, "fork_version": "0x06000000"}
+  },
+  "lineage": {
+    "derived_from": "programs/pfusdc-eth-ingress (audited Sepolia guest; UNTOUCHED, ELF sha256 b4e487042abeee91e0ea4c7526db5d4c93a95649a50ea1430a3a7c16597cebfa preserved)",
+    "isolation": "separate package/bin names, separate Cargo.toml/Cargo.lock, separate ELF; no shared mutable artifact",
+    "changes_vs_sepolia_guest": "exactly: package/import names; ROUTE_ID; chain id; genesis validators root; fork schedule; error text Sepolia->mainnet; tool defaults to mainnet RPC/beacon endpoints; USDC constant to canonical mainnet 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48; manifest domain tag postfiat.ethereum-mainnet-usdc-v1.p0",
+    "preserved_byte_for_byte": "proof bounds (MAX_UPDATES=8, MAX_MPT_NODES=64, MAX_MPT_NODE_BYTES=16384, DEPOSIT_MAPPING_SLOT=1), storage/MPT verification, nullifier/deposit-ID logic, witness/policy/public-values schemas"
+  },
+  "capture_prove_tool": {
+    "path": "tools/eth-l1-mainnet-fast-lane-p0",
+    "default_execution_rpc": "https://ethereum-rpc.publicnode.com",
+    "default_beacon_rpc": "https://ethereum-beacon-api.publicnode.com",
+    "resumable_stages": "initialized -> captured -> proved (run-state.json, schema+deployment-hash gated)",
+    "banked_proof_verification": "native verify_witness re-check before prove; inherited from audited P0 tool"
+  },
+  "tests": {
+    "guest_lib_tests": "7/7 PASS (lane-mainnet/guest-freeze/guest-tests.log): exact mainnet constants, mainnet forks accepted, Sepolia forks rejected, mixed tuple rejected, error text says mainnet, Sepolia route/chain/genesis inequality, slot math",
+    "tool_tests": "6/6 PASS (lane-mainnet/guest-freeze/tool-tests.log): Sepolia network tuple rejected, arbitrum markers rejected, resumable-state tamper gates"
+  },
+  "secret_scan": "rg over programs/pfusdc-eth-mainnet-ingress/src, tools/eth-l1-mainnet-fast-lane-p0/src, lane-mainnet: no private-key/secret/mnemonic material",
+  "source_commit": "f30d3683ab7dd5065598b4944bbd918a210b04d4",
+  "frozen_utc": "2026-07-26T03:22Z",
+  "no_mainnet_mutation": "no transaction executed or authorized; deploy remains gated on Krimp package + Ghash auditor-authorization.mainnet-epoch3.json PASS"
+}

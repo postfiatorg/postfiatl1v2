@@ -1,0 +1,11 @@
+{
+  "route_id": "pftl-a666-ce22-ethereum-wA666-usdc-controlled-20260723-v1",
+  "packet_hash": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+  "nonce": "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+  "source_wallet": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "ethereum_recipient": "0xa0d7127e6512166318d6fbdd21bb872af2b6d9d9",
+  "amount_atoms": 100000,
+  "source_height": 10,
+  "destination_deadline_seconds": 1924992000,
+  "refund_not_before_height": 20
+}

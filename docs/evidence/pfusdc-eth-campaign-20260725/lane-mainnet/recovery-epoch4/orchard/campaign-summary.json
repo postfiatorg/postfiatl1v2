@@ -1,0 +1,44 @@
+{
+  "schema": "postfiat-pfusdc-mainnet-orchard-roundtrip-v1",
+  "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "amount_atoms": 1,
+  "holder": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "temporary_recipient": "pfd0c86d9084915e1fefd22eab891806397d5a5937",
+  "output_commitment": "a6f4a2e9c0e42b3e3a99bdb13010762a0e6c2b95e43aa6074fd15281f752350c",
+  "nullifier": "d2ad2059a631b4495e99a34cd3aadd839e4e13d65f8fe1ed5532b486e828da31",
+  "nullifier_publicly_recorded": true,
+  "terminal_orchard_output_count": 50,
+  "terminal_orchard_nullifier_count": 41,
+  "blocks": [
+    {
+      "height": 323,
+      "operation": "asset_orchard_ingress",
+      "batch_id": "9e5aea12f8be9270bdc730d441e71bef438facb16b734a5a451e07aae3c1088fa27d6035d273128cf1dea687bd28f589",
+      "block_id": "e9a66e9583e64e58be39e11e844ce4e0dafe9661d60f9644f2d5dfab0d3b39995f57819d30ec75f4674461f0d850185e",
+      "state_root": "c8268f7d1b672ac7c3978dacb4457892e66c90d4977979de924fcc0bbb41a7286a54cf86bd93bdb99cbfa6cd4f40757a"
+    },
+    {
+      "height": 324,
+      "operation": "asset_orchard_egress",
+      "batch_id": "a816d0c0a40f7fd14635f70af84d89253687f62cbadf907989e9f858bac64e167601d936664bc3932e428f125bdd61f4",
+      "block_id": "33b3eb9a19ea25399fb7e7e046abedf811eba872e1b2c8234b7fe5a2482c7abe5eab3905e4d732ae43acd3cf4ec121c8",
+      "state_root": "79dd98555eb7e15ec9a29b9b9b782cfa4e6108ef68dc3067ae91a9374c1084851bc11cba6a7d289b0370311b04ef32e8"
+    },
+    {
+      "height": 325,
+      "operation": "issued_payment_return",
+      "batch_id": "5173aba78db4c8a8bc80d14f0556463c75e02b75e0ad620a6db2c29774e12ab7cf1c01f8f891799ea49bb4b52cc81b42",
+      "block_id": "5157de5cc9a0cbb780be7ed063f8c09f372c2fb4ec9de6cf3d71345e38852ea9ab3ab4f515d46ce3ff4b066bd72178cd",
+      "state_root": "5d8439ca05f5e0fff74b4186d2f63ed412368749f00b14bdb89ecc77cee6fdf130381c77f5f759d6c10417f040882868"
+    }
+  ],
+  "terminal_balances": {
+    "holder_atoms": 25800000,
+    "temporary_recipient_atoms": 0
+  },
+  "fleet_validation": {
+    "validator_count": 6,
+    "all_validators_same_height_tip_and_state_root": true,
+    "mempool_pending_each": 0
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "schema": "postfiat-certified-asset-ops-request-v1",
+  "operations": [
+    {
+      "label": "a666-zero-reserve-attest",
+      "source": "pfd0c86d9084915e1fefd22eab891806397d5a5937",
+      "key_file": "/home/postfiat/.pft/venue/orchard-mirror/navswap-fast-live/keys/reserve.json",
+      "operation": {
+        "operation": "nav_reserve_attest",
+        "attestor": "pfd0c86d9084915e1fefd22eab891806397d5a5937",
+        "asset_id": "300bf48a63a94770b6e67817f88cd1abf77e7f592a061e15682d7fd9973260af4c2e631e32df3c2c402b7d2fe272a293",
+        "epoch": 1,
+        "reserve_packet_hash": "b57dc2b7b39b2a1449bfc810f0a90d279ae2f5d3ce19652c9a966a89ede84d92fd0b5433a9d9a10e030654701a09ed70",
+        "pass": true,
+        "observation_root": "f78c5cf9446d77f14389942225c511bdfa91e47e0f90d9aad0fc4c35fa796ef21257675d4364ad0ccab10887ca9748a8"
+      },
+      "dependencies": [
+        {
+          "label": "a666-zero-reserve-submit",
+          "mode": "prior_round",
+          "reason": "attestation must reference a finalized submitted packet"
+        }
+      ]
+    }
+  ]
+}
+

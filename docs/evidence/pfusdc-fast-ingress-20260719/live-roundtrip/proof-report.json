@@ -1,0 +1,8 @@
+{
+  "program_vkey": "0x00db1d337b7a4808b6f5dab22c90c0f5755a0e465a224e992005b0fa8a20f94e",
+  "proof_bytes": 356,
+  "proof_mode": "groth16",
+  "public_values_bytes": 1598,
+  "schema": "postfiat.pfusdc.bonded_ingress_proof_report.v1",
+  "setup_and_prove_ms": 86673
+}

@@ -1,0 +1,8 @@
+{
+  "id": "rpc-doctor-validator-0-write-probe",
+  "method": "mempool_submit_signed_transfer",
+  "params": {
+    "signed_transfer_json": "{}"
+  },
+  "version": "postfiat-local-rpc-v1"
+}

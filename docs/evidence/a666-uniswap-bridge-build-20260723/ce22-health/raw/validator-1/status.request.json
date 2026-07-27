@@ -1,0 +1,6 @@
+{
+  "version": "postfiat-local-rpc-v1",
+  "id": "rpc-doctor-validator-1-status",
+  "method": "status",
+  "params": {}
+}

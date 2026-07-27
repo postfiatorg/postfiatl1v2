@@ -1,0 +1,27 @@
+{
+  "schema": "postfiat-certified-asset-ops-request-v1",
+  "operations": [
+    {
+      "label": "a666-nav-register",
+      "source": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+      "key_file": "/home/postfiat/.pft/venue/orchard-mirror/navswap-fast-live/keys/a651-issuer.json",
+      "operation": {
+        "operation": "nav_asset_register",
+        "issuer": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+        "asset_id": "300bf48a63a94770b6e67817f88cd1abf77e7f592a061e15682d7fd9973260af4c2e631e32df3c2c402b7d2fe272a293",
+        "reserve_operator": "pfd0c86d9084915e1fefd22eab891806397d5a5937",
+        "proof_profile": "f0318291c1251067c92f6360830acadf0a02f865f62c85af387dfb28bdff7edd555deadf9e253351f729d253ea76aae0",
+        "valuation_unit": "USDC",
+        "redemption_account": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b"
+      },
+      "dependencies": [
+        {
+          "label": "a666-asset-create",
+          "mode": "prior_round",
+          "reason": "the issued asset definition must be finalized before NAV registration"
+        }
+      ]
+    }
+  ]
+}
+

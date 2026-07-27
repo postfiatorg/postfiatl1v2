@@ -1,0 +1,17 @@
+{
+  "operations": [
+    {
+      "label": "a666-holder-pfusdc-dust",
+      "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+      "key_file": "/home/postfiat/.pft/venue/orchard-mirror/fast-ingress-live/pfusdc-issuer-key.json",
+      "operation": {
+        "operation": "issued_payment",
+        "from": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "to": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+        "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+        "amount": 10
+      }
+    }
+  ]
+}
