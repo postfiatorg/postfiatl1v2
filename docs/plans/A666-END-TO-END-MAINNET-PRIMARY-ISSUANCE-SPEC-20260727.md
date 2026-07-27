@@ -2,8 +2,8 @@
 
 **Date:** 2026-07-27  
 **Priority:** P0  
-**Status:** canonical specification; implementation candidate exists locally;
-not fork-proven or deployed  
+**Status:** canonical specification; native asset/NAV and paused Ethereum
+contracts deployed; public issuance route and Uniswap venue not yet live
 **Owner:** Post Fiat protocol and product release owners  
 **Change control:** any normative change requires a dated amendment, a new
 document hash, and a fresh acceptance run  
@@ -19,15 +19,21 @@ with this document. It also supersedes any a651-era assumption that a large
 buyer must acquire existing inventory, traverse the Uniswap curve, or depend
 on an owner-authorized Ethereum mint.
 
-The result is not live today. Mainnet pfUSDC is live and proof-verified. The
-repository now contains an implementation candidate for a666 v2 consensus,
-directional route verification, capacity reservations, primary issue/redeem,
-finalized export receipts, the SP1 guest, Ethereum verifier/controller, and
-deterministic deploy/pool scripts. The SP1 6.3.1 ELF and program vkey have been
-derived and recorded, but no genuine Groth16 receipt proof has yet been
-produced. The pinned mainnet-fork campaign, deployment, opening-reserve/pool
-seed funding, and live
-latency/capacity gates also remain incomplete.
+The deployment is now partially live. On 2026-07-27, production a666 v2 was
+created on the six-validator PFTL WAN fleet with no permanent maximum supply.
+The fleet finalized the StakeHub reserve proof, epoch-one `$1.00` NAV mark, and
+an opening supply of `31,386.197455 a666` against `$31,386.19745591` of
+verified net assets. On Ethereum mainnet, the wA666 token, SP1 receipt
+verifier, proof-gated primary controller, and ownerless a651-to-a666 migration
+contract were deployed and their immutable/controller bindings verified.
+
+This does **not** mean the public end-to-end product is live. Ethereum wrapped
+supply remains zero, controller minting is paused, no PFTL export route is
+active, and the wA666/USDC Uniswap pool has not been initialized. The SP1
+receipt program ELF and vkey are pinned, but its genuine Groth16 receipt proof
+and the route/pool acceptance campaign remain incomplete. See
+`../status/A666-MAINNET-DEPLOYMENT-20260727.md` for deployed identifiers,
+transactions, evidence, and the exact remaining gates.
 
 ### Normative language
 

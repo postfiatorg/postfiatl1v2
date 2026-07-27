@@ -1,0 +1,144 @@
+{
+  "addresses": {
+    "controller": "0x9A0262C0572fb4DB08765408eB225E207F40c3d9",
+    "migration": "0xFfBBae0eb8450D10F8C0D26C2952b089D56e517c",
+    "token": "0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5",
+    "verifier": "0xb79FF97EcC11574a8A78d0b5a9D7C8c2A94bF96A"
+  },
+  "agent": {
+    "spent_today_usd_before": 44.28,
+    "unlocked": true
+  },
+  "balance_wei_after": 300437760256175391,
+  "balance_wei_before": 300798125798604083,
+  "block_number_preflight": 25626567,
+  "block_number_verified": 25626578,
+  "chain_id": 1,
+  "creation_bytecode": {
+    "controller": {
+      "init_code_keccak256": "0x307a127f23a3cbed4b2c2d3b28b8ba972151c17a021b567c71acf3ccf06df8c0",
+      "keccak256": "0xe582206785a79cc5c23cfc685dd6bddcbadb379f2aeb6933819e2932a442e31a",
+      "length": 9568,
+      "runtime_code_keccak256": "0x4c62b7d8b3a7928fd9667445f8fd68b3336ba0ec9a8f3e59b463b684fe6ceaaf"
+    },
+    "migration": {
+      "init_code_keccak256": "0xacceafb4893f1e6c3a36c6c14c93f56b3cca0066a3be6b07e8f93609093439f7",
+      "keccak256": "0x63d354ad5b1de9db3f665ae51af18b3664aee10e9bf0d93b389760ca266edeae",
+      "length": 2669,
+      "runtime_code_keccak256": "0x51788f6f8024084fde219255be9804dcc34af014b38e4813d30cd5da41c62ed0"
+    },
+    "token": {
+      "init_code_keccak256": "0x03f6c94359d3bee77008d961a901ec5a2f5379122ae8a52bf14da587f4336a9f",
+      "keccak256": "0x3901e7f7f942beb7e60e78fdb55924c714bdfa5edc6a04ab5b8681fd1bbd3160",
+      "length": 3991,
+      "runtime_code_keccak256": "0x671ee905050e2969995a8c6db8b05e4c2f30bd690eeff55093c03f9722be66b0"
+    },
+    "verifier": {
+      "init_code_keccak256": "0xce280010da6f1fa02d921d3057b956d94d9abbe4125eb5b7aab22b54f9ff5bda",
+      "keccak256": "0x2273b7dab8f01cf325974c631267777d6217e1bc3503d5fe1027f64854b35b72",
+      "length": 8554,
+      "runtime_code_keccak256": "0xe7d8647046de37e0ce2981b0ebaab0c5f56ab3c215a10b4c1ca2d1f36e39cb6d"
+    }
+  },
+  "deployer": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+  "end_nonce": 176,
+  "migration": {
+    "a651_denominator_atoms": 4000000000000000000000,
+    "a651_supply_controller": "0x74f4A27Acd503B3aABE955659BFEda33082e3340",
+    "a651_token": "0x1e55EDa7ce0788E8b624456C4d401A33bD83b62e",
+    "a666_numerator_atoms": 31386197455
+  },
+  "pftl": {
+    "a666_asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+    "chain_id": "postfiat-wan-devnet-2",
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "initial_block_id": "283a24c12098da85a3387cd92f7be0a70cc63a142be1c3b4628bc15053f5dc9b862130ce9c9a17c1e9e1e2f78e166d35",
+    "initial_checkpoint_commitment": "0x6ae09474b3b1a6128c8ce167a425fcd330c063c66fe205e99c89de495443eb95",
+    "initial_finalized_height": 344,
+    "pfusdc_asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+    "protocol_version": 1,
+    "route_id": "pftl-a666-ethereum-wA666-usdc-v1"
+  },
+  "phase": "verified",
+  "pool_id": "0xc5f1e4b5bb07c0718eddcc3d102dc751b8953ec25bb05cdc14d95419d4d16e98",
+  "readback": {
+    "controller_mint_paused": true,
+    "controller_outstanding_atoms": 0,
+    "controller_packet_notional_cap_atoms": 250000000000,
+    "controller_route_supply_cap_atoms": 2000000000000,
+    "migration_a651_denominator_atoms": 4000000000000000000000,
+    "migration_a666_numerator_atoms": 31386197455,
+    "migration_authorized_on_a651": true,
+    "migration_remaining_a666_atoms": 0,
+    "token_controller": "0x9A0262C0572fb4DB08765408eB225E207F40c3d9",
+    "token_controller_locked": true,
+    "token_decimals": 6,
+    "token_name": "Post Fiat a666",
+    "token_owner": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+    "token_symbol": "wA666",
+    "token_total_supply": 0,
+    "verifier_initial_checkpoint": "0x6ae09474b3b1a6128c8ce167a425fcd330c063c66fe205e99c89de495443eb95",
+    "verifier_initial_height": 344,
+    "verifier_program_vkey": "0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9"
+  },
+  "rpc": "https://ethereum-rpc.publicnode.com",
+  "schema": "postfiat-a666-ethereum-mainnet-deployment-v1",
+  "sp1": {
+    "elf_sha256": "495e46273337ce4ff035177825a605cc389ad82c05ead11d4874e349ba22cc3a",
+    "program_vkey": "0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9",
+    "verifier": "0x397A5f7f3dBd538f23DE225B51f532c34448dA9B",
+    "verifier_runtime_code_hash": "0x11612dc6695484a4dfcac5ae1a7bcb093f891eb93d8aa9ddeca7f24a1f3b7d57"
+  },
+  "start_nonce": 169,
+  "transactions": [
+    {
+      "action": "deploy_a666_token",
+      "block_number": 25626570,
+      "contract_address": "0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5",
+      "gas_used": 796702,
+      "tx": "0xe82bb3dcd5a8f90459a9ac73c3860d2f3d2f6a61a889638baea75e51fe9e2842"
+    },
+    {
+      "action": "deploy_a666_verifier",
+      "block_number": 25626571,
+      "contract_address": "0xb79FF97EcC11574a8A78d0b5a9D7C8c2A94bF96A",
+      "gas_used": 1654486,
+      "tx": "0x0bb2ffa453578df716b634596ac9844bd8a7aa476488f369a6816d78baaf139f"
+    },
+    {
+      "action": "deploy_a666_controller",
+      "block_number": 25626572,
+      "contract_address": "0x9A0262C0572fb4DB08765408eB225E207F40c3d9",
+      "gas_used": 1788025,
+      "tx": "0x319bad2bb090a8af4c6b5a8ffb1a346c8f1622a92c15fa2456041fd02645f372"
+    },
+    {
+      "action": "deploy_a666_migration",
+      "block_number": 25626574,
+      "contract_address": "0xFfBBae0eb8450D10F8C0D26C2952b089D56e517c",
+      "gas_used": 462909,
+      "tx": "0x58f13873e7838635c3165686a617bdd8feec99e1a498af881df63bde227a6305"
+    },
+    {
+      "action": "set_a666_controller",
+      "block_number": 25626575,
+      "gas_used": 47446,
+      "target": "0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5",
+      "tx": "0x3eac73ed9e600b2259c569d215bed94299c7e469f79ac1f5ade5160fd6ac5e83"
+    },
+    {
+      "action": "lock_a666_controller",
+      "block_number": 25626576,
+      "gas_used": 29464,
+      "target": "0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5",
+      "tx": "0x086325e91fd61c0f244f100fac06a6e006540d75885d17f952b884b60c5d35b4"
+    },
+    {
+      "action": "authorize_a651_migration",
+      "block_number": 25626578,
+      "gas_used": 48254,
+      "target": "0x74f4A27Acd503B3aABE955659BFEda33082e3340",
+      "tx": "0xfd5001b03ab55eb93d976e6cae368643c52cfe06ad87358e7253f37323d73eed"
+    }
+  ]
+}

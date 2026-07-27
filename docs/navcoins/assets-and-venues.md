@@ -30,9 +30,9 @@ PFTL export has been accepted through the route's disclosed finality verifier.
 
 | Context | Status | Notes |
 |---|---|---|
-| PFTL WAN devnet | Native a666 exists; primary subscription and bridge-accounting primitives have been exercised. | This is the intended canonical NAV and authorized-supply ledger. Current controlled route caps are not production capacity. |
+| PFTL WAN fleet | **Production a666 v2 and its opening StakeHub NAV are finalized.** | Asset `521c…74b6` has no permanent maximum supply. Epoch one marks `$1.00` per unit and `31,386.197455 a666` outstanding against `$31,386.19745591` verified net assets. The public issue/export route is not active. |
 | Ethereum Sepolia | Controlled wA666 stack and route evidence exist. | Controlled testing only; the route is not a trustless mainnet product. |
-| Ethereum mainnet | **Not deployed as a persistent public product.** | There is no live public wA666 token/controller and no live wA666/USDC or a666/USDC Uniswap pool. Mainnet-fork rehearsals are not deployments. |
+| Ethereum mainnet | **wA666, verifier, controller, and a651 migration contracts are deployed but paused.** | wA666 is `0xeE4C…9bE5`; total supply is zero and controller minting is paused. No wA666/USDC pool is initialized, so this is not yet a public acquisition route. |
 
 The required primary acquisition flow is:
 
@@ -60,13 +60,14 @@ posted redemption policy. This posted capacity is not a permanent supply
 ceiling; production a666 must be created with `max_supply` absent (`None`) so
 verified subscriptions and redemptions can expand and contract supply.
 
-The current six-decimal controlled configuration is not production capacity:
+The former six-decimal controlled configuration is not production capacity:
 its route cap is 10 a666, its packet cap is 1 a666, and its native asset
-maximum is 1,000,000 a666. Because there is no safe in-place asset-definition
-update that removes that test maximum, production must use a fresh asset
-version and asset ID with no static maximum, plus production route/packet
-limits. See
-`../plans/A666-END-TO-END-MAINNET-PRIMARY-ISSUANCE-SPEC-20260727.md`.
+maximum is 1,000,000 a666. It is superseded by the fresh production v2 asset,
+which has no static maximum. The deployed Ethereum controller encodes a
+2,000,000-a666 route cap and 250,000-a666 packet cap, but those limits do not
+become available capacity until the proof-backed PFTL route is activated. See
+`../plans/A666-END-TO-END-MAINNET-PRIMARY-ISSUANCE-SPEC-20260727.md` and
+`../status/A666-MAINNET-DEPLOYMENT-20260727.md`.
 
 ## Ethereum a651 and Uniswap
 
