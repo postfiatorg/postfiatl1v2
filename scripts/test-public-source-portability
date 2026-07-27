@@ -27,9 +27,38 @@ IPV4 = re.compile(rb"(?<![0-9.])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9.])")
 BINARY_ARTIFACT_ALLOWLIST = frozenset(
     {
         "programs/pfusdc-egress/elf/pfusdc-egress-program",
+        "programs/pfusdc-eth-ingress/elf/pfusdc-eth-ingress-program",
+        "programs/pfusdc-eth-mainnet-ingress/elf/pfusdc-eth-mainnet-ingress-program",
+        "programs/pfusdc-ingress/elf/pfusdc-ingress-bonded-program",
         "programs/pfusdc-ingress/elf/pfusdc-ingress-program",
     }
 )
+IMMUTABLE_ARCHIVE_PREFIX_ALLOWLIST = (
+    "docs/evidence/a666-uniswap-bridge-build-20260723/",
+)
+IMMUTABLE_ARCHIVE_FILE_ALLOWLIST = frozenset(
+    {
+        "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/"
+        "checkpoint/h316-h325-proof/execute-report.json",
+        "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/"
+        "deploy/deploy-result.json",
+        "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/"
+        "egress/proof/execute-report.json",
+        "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/"
+        "package/deploy-consumer-schema.audit.log",
+        "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/"
+        "package/deploy-consumer-schema.log",
+        "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/recovery-epoch4/"
+        "reviews/from-zero-audit.json",
+        "docs/evidence/pfusdc-fast-ingress-20260719/live-roundtrip/evm-deposit.json",
+    }
+)
+
+
+def immutable_archive(relative: str) -> bool:
+    return relative in IMMUTABLE_ARCHIVE_FILE_ALLOWLIST or relative.startswith(
+        IMMUTABLE_ARCHIVE_PREFIX_ALLOWLIST
+    )
 
 
 def main() -> int:
@@ -50,7 +79,11 @@ def main() -> int:
         if not path.is_file():
             continue
         data = path.read_bytes()
-        if FORBIDDEN in data and relative not in BINARY_ARTIFACT_ALLOWLIST:
+        if (
+            FORBIDDEN in data
+            and relative not in BINARY_ARTIFACT_ALLOWLIST
+            and not immutable_archive(relative)
+        ):
             findings.append(f"{relative} (embedded maintainer path)")
         if b"\0" in data[:8192]:
             continue
@@ -60,7 +93,8 @@ def main() -> int:
             except ValueError:
                 continue
             if address.is_global:
-                findings.append(f"{relative} (public IPv4 literal)")
+                if not immutable_archive(relative):
+                    findings.append(f"{relative} (public IPv4 literal)")
                 break
     if findings:
         raise SystemExit(

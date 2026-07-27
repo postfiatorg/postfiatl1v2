@@ -4,7 +4,7 @@
     {
       "label": "a666-zero-epoch-finalize",
       "source": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
-      "key_file": "/home/postfiat/.pft/venue/orchard-mirror/navswap-fast-live/keys/a651-issuer.json",
+      "key_file": "/existing/secret-safe/a651-issuer.json",
       "operation": {
         "operation": "nav_epoch_finalize",
         "issuer": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",

@@ -27,7 +27,7 @@ from web3 import Web3
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACTS = ROOT / "crates/ethereum-contracts"
 NODE = ROOT / "target/release/postfiat-node"
-STAKEHUB = Path("/home/postfiat/repos/StakeHub")
+STAKEHUB = Path(__file__).resolve().parents[2] / "StakeHub"
 STATE = ROOT / "docs/evidence/a666-uniswap-bridge-build-20260723/sepolia-persistent/state.json"
 RPC = "https://ethereum-sepolia-rpc.publicnode.com"
 CHAIN_ID = 11_155_111

@@ -182,18 +182,18 @@ for ingress by active-route selection).
 - Ethereum deployer `0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0`:
   ~0.29 ETH + ~3,362 USDC on mainnet (recheck live), ~4 ETH Sepolia.
   Signing via agentd only; no raw key handling.
-- Vultr API key file: `/home/postfiat/repos/vultr.txt` (0600, one token).
+- Vultr API key file: `/existing/secret-safe/vultr.txt` (0600, one token).
 - Snapshot publisher key:
-  `/home/postfiat/.postfiat/recovery-v3-snapshot-publisher.private.json`.
+  `/existing/secret-safe/recovery-v3-snapshot-publisher.private.json`.
 - Deployment publisher key (schema
   `postfiat.deployment_publisher_private_key.v1`):
-  `/home/postfiat/.postfiat/deployment-bfinal-1a8c0cb6.private.json`.
+  `/existing/secret-safe/deployment-publisher.private.json`.
 - pfUSDC issuer key: exists on fleet hosts; Sauron ruled NO rotation after
   the 2026-07-26 leak incident (file deleted, never committed — incident
   record in `lane-c/incidents/`). Fleet-artifact copies must EXCLUDE key
   files.
 - Fleet: six Vultr validators, inventory
-  `/home/postfiat/repos/wan-vultr-all-fleet.txt`; access pattern in
+  `/existing/secret-safe/validator-inventory.txt`; access pattern in
   `lane-b/fleet-access-method.md`. Rollout tooling:
   `python/postfiat_ops/safe_rollout.py`.
 - Canonical mainnet USDC `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48`;

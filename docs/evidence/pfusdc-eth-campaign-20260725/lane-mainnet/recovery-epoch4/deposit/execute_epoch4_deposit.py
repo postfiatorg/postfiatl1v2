@@ -19,8 +19,8 @@ from eth_abi import encode
 from web3 import Web3
 
 
-REPO = Path("/home/postfiat/repos/a666-eth-fast-lane-combined-20260724")
 HERE = Path(__file__).resolve().parent
+REPO = HERE.parents[5]
 BUILDER = (
     REPO
     / "docs/evidence/pfusdc-eth-campaign-20260725/lane-c/rev6-execution/06-h315-claim"
@@ -168,7 +168,7 @@ def main() -> None:
     if manifest_digest != EXPECTED_MANIFEST_SHA256:
         fail(f"postdeploy manifest digest {manifest_digest} != authorized digest")
 
-    sys.path.insert(0, "/home/postfiat/repos/StakeHub")
+    sys.path.insert(0, str(REPO.parent / "StakeHub"))
     from stakehub.agentd import call
 
     w3 = Web3(Web3.HTTPProvider(RPC, request_kwargs={"timeout": 30}))
