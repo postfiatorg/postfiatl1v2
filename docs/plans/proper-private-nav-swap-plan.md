@@ -242,6 +242,16 @@ Acceptance:
 Goal: let users move private `pfUSDC` or `a651` around inside PFTL without
 requiring a swap against a counterparty note every time.
 
+Live evidence update (2026-07-27): 100,000 atoms of pfUSDC moved from a private
+note controlled by wallet A to a spendable private note recoverable by distinct
+wallet B at fleet height 336. The test reused the fixed two-input/two-output
+swap circuit with an equal-value a651 helper note, whose value was conserved
+into an unspent helper output. This validates a narrow private-send
+construction, not completion of this phase: the general typed-transfer action,
+one-input/change shapes, and their dedicated negative-test matrix remain open.
+Evidence is in
+`docs/evidence/pfusdc-private-send-20260727-pfusdc-private-send-01/`.
+
 Work:
 
 - Add an Asset-Orchard typed transfer action or generalized note spend action.

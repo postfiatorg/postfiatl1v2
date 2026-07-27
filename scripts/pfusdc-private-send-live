@@ -1,0 +1,653 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+: "${PFTL_FLEET_FILE:?set PFTL_FLEET_FILE to the validator inventory}"
+: "${PFTL_SSH_KEY:?set PFTL_SSH_KEY to the fleet SSH identity}"
+
+NODE="${PFTL_NODE:-/opt/postfiat/releases/pfusdc-eth-l1-f30d368/postfiat-node}"
+TOPOLOGY="${PFTL_TOPOLOGY:-/etc/postfiat/releases/pfusdc-eth-l1-f30d368/topology.json}"
+SOURCE_NODE="${PFTL_SOURCE_NODE:-validator-2}"
+HOLDER_KEY="${PFTL_HOLDER_KEY:-/var/lib/postfiat/validator-2/closed-roundtrip/keys/holder.json}"
+HOLDER="${PFTL_HOLDER:-pfab9b9228942e5c529633a13aa271d5297bec6353}"
+PFUSDC_ASSET_ID="${PFUSDC_ASSET_ID:-02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b}"
+A651_ASSET_ID="${A651_ASSET_ID:-de8d3d78aca83f7000632cbd3dd06edd30d105085d16eef1696f9e1707908ec9209239080d21ca1c0cecc36ca6f966b6}"
+AMOUNT_ATOMS="${AMOUNT_ATOMS:-100000}"
+RUN_ID="${RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
+REMOTE_RUN="${REMOTE_RUN:-/var/lib/postfiat/$SOURCE_NODE/pfusdc-private-send-$RUN_ID}"
+EVIDENCE_DIR="${EVIDENCE_DIR:-$ROOT/docs/evidence/pfusdc-private-send-$RUN_ID}"
+TIMEOUT_MS="${TIMEOUT_MS:-2400000}"
+CAMPAIGN_START_HEIGHT="${CAMPAIGN_START_HEIGHT:-}"
+
+SSH_OPTS=(
+  -i "$PFTL_SSH_KEY"
+  -o BatchMode=yes
+  -o StrictHostKeyChecking=accept-new
+  -o ConnectTimeout=12
+)
+
+die() {
+  printf 'fatal: %s\n' "$*" >&2
+  exit 1
+}
+
+host_for() {
+  local node="$1"
+  awk -v node="$node" '$1 == node {print $2}' "$PFTL_FLEET_FILE"
+}
+
+ssh_node() {
+  local node="$1"
+  shift
+  local host
+  host="$(host_for "$node")"
+  [[ -n "$host" ]] || die "no host for $node"
+  ssh -n "${SSH_OPTS[@]}" "root@$host" "$@"
+}
+
+ssh_node_script() {
+  local node="$1"
+  shift
+  local host
+  host="$(host_for "$node")"
+  [[ -n "$host" ]] || die "no host for $node"
+  ssh "${SSH_OPTS[@]}" "root@$host" "$@"
+}
+
+copy_between_nodes() {
+  local source_node="$1"
+  local source_path="$2"
+  local destination_node="$3"
+  local destination_path="$4"
+  local source_host destination_host
+  source_host="$(host_for "$source_node")"
+  destination_host="$(host_for "$destination_node")"
+  [[ -n "$source_host" && -n "$destination_host" ]] ||
+    die "cannot resolve copy endpoints"
+  if [[ "$source_node" == "$destination_node" && "$source_path" == "$destination_path" ]]; then
+    return 0
+  fi
+  scp -q -3 "${SSH_OPTS[@]}" \
+    "root@$source_host:$source_path" \
+    "root@$destination_host:$destination_path"
+}
+
+copy_from_node() {
+  local source_node="$1"
+  local source_path="$2"
+  local destination_path="$3"
+  local source_host
+  source_host="$(host_for "$source_node")"
+  [[ -n "$source_host" ]] || die "cannot resolve source node"
+  scp -q "${SSH_OPTS[@]}" \
+    "root@$source_host:$source_path" \
+    "$destination_path"
+}
+
+collect_fleet() {
+  local output="$1"
+  while read -r node _; do
+    ssh_node "$node" \
+      "sudo -n -u postfiat '$NODE' status --data-dir '/var/lib/postfiat/$node'"
+  done < <(awk 'NF && $1 ~ /^validator-[0-9]+$/ {print $1, $2}' "$PFTL_FLEET_FILE") |
+    jq -s . >"$output"
+}
+
+assert_outbox_ownership() {
+  local node count
+  while read -r node _; do
+    count="$(
+      ssh_node "$node" \
+        "find '/var/lib/postfiat/$node/certified-send-outbox' \
+          -mindepth 1 -maxdepth 1 -type d ! -name completed \
+          ! -user postfiat -printf . 2>/dev/null | wc -c"
+    )"
+    [[ "$count" == "0" ]] ||
+      die "$node has $count certified-send jobs not owned by postfiat"
+  done < <(awk 'NF && $1 ~ /^validator-[0-9]+$/ {print $1, $2}' "$PFTL_FLEET_FILE")
+}
+
+assert_fleet_converged() {
+  local status_file="$1"
+  local expected_height="$2"
+  jq -e --argjson height "$expected_height" '
+    length == 6
+    and ([.[].block_height] | unique == [$height])
+    and ([.[].block_tip_hash] | unique | length == 1)
+    and ([.[].state_root] | unique | length == 1)
+    and all(.[];
+      ((.mempool_pending // .mempool.pending // 0) == 0)
+    )
+  ' "$status_file" >/dev/null
+}
+
+wait_for_fleet() {
+  local height="$1"
+  local output="$2"
+  local attempt
+  for attempt in $(seq 1 30); do
+    collect_fleet "$output"
+    if assert_fleet_converged "$output" "$height"; then
+      return 0
+    fi
+    sleep 2
+  done
+  die "fleet did not converge at height $height"
+}
+
+proposer_for() {
+  local height="$1"
+  ssh_node "$SOURCE_NODE" \
+    "'$NODE' block-proposer --data-dir '/var/lib/postfiat/$SOURCE_NODE' --height '$height' --view 0" |
+    jq -er .proposer
+}
+
+run_round() {
+  local height="$1"
+  local label="$2"
+  local source_batch="$3"
+  local proposer destination_batch artifact_dir
+  proposer="$(proposer_for "$height")"
+  destination_batch="/var/lib/postfiat/$proposer/pfusdc-private-send-$RUN_ID-$label.batch.json"
+  artifact_dir="/var/lib/postfiat/$proposer/pfusdc-private-send-$RUN_ID-$label-round"
+
+  copy_between_nodes "$SOURCE_NODE" "$source_batch" "$proposer" "$destination_batch"
+  ssh_node "$proposer" \
+    "chown postfiat:postfiat '$destination_batch' &&
+     sudo -n -u postfiat '$NODE' transport-peer-certified-batch-round \
+       --data-dir '/var/lib/postfiat/$proposer' \
+       --topology '$TOPOLOGY' \
+       --batch-kind shielded \
+       --batch-file '$destination_batch' \
+       --key-file '/var/lib/postfiat/$proposer/validator_keys.json' \
+       --proposal-key-file '/var/lib/postfiat/$proposer/validator_keys.json' \
+       --require-local-proposer \
+       --artifact-dir '$artifact_dir' \
+       --height '$height' \
+       --view 0 \
+       --timeout-ms '$TIMEOUT_MS' \
+       --send-retries 3 \
+       --retry-backoff-ms 250 \
+       --quorum-early-full-propagation \
+       --local-apply-before-certified-send" >"$EVIDENCE_DIR/$label-round.json"
+
+  wait_for_fleet "$height" "$EVIDENCE_DIR/$label-fleet.json"
+}
+
+mkdir -p "$EVIDENCE_DIR"
+chmod 700 "$EVIDENCE_DIR"
+command -v jq >/dev/null || die "jq is required"
+command -v ssh >/dev/null || die "ssh is required"
+command -v scp >/dev/null || die "scp is required"
+[[ "$AMOUNT_ATOMS" =~ ^[1-9][0-9]*$ ]] || die "AMOUNT_ATOMS must be nonzero"
+
+active_preflight="$EVIDENCE_DIR/preflight-fleet.json"
+if [[ -s "$active_preflight" ]]; then
+  active_preflight="$EVIDENCE_DIR/resume-preflight-fleet.json"
+fi
+collect_fleet "$active_preflight"
+current_height="$(jq -er '.[0].block_height' "$active_preflight")"
+assert_fleet_converged "$active_preflight" "$current_height" ||
+  die "preflight fleet is not converged"
+assert_outbox_ownership
+start_height="${CAMPAIGN_START_HEIGHT:-$current_height}"
+
+pfusdc_height=$((start_height + 1))
+a651_height=$((start_height + 2))
+send_height=$((start_height + 3))
+(( current_height >= start_height && current_height <= send_height )) ||
+  die "current height $current_height is outside campaign range $start_height..$send_height"
+
+if [[ ! -s "$EVIDENCE_DIR/transparent-balances-before.json" ]]; then
+  ssh_node "$SOURCE_NODE" \
+    "'$NODE' account-assets \
+       --data-dir '/var/lib/postfiat/$SOURCE_NODE' \
+       --account '$HOLDER'" >"$EVIDENCE_DIR/transparent-balances-before.json"
+fi
+
+jq -e \
+  --arg pfusdc "$PFUSDC_ASSET_ID" \
+  --arg a651 "$A651_ASSET_ID" \
+  --argjson amount "$AMOUNT_ATOMS" '
+    (.assets[] | select(.asset_id == $pfusdc) | .balance) >= $amount
+    and (.assets[] | select(.asset_id == $a651) | .balance) >= $amount
+  ' "$EVIDENCE_DIR/transparent-balances-before.json" >/dev/null ||
+  die "holder lacks transparent input balances"
+
+ssh_node_script "$SOURCE_NODE" "bash -s -- \
+  '$NODE' '$SOURCE_NODE' '$REMOTE_RUN' '$HOLDER_KEY' \
+  '$PFUSDC_ASSET_ID' '$AMOUNT_ATOMS'" <<'REMOTE_PFUSDC'
+set -Eeuo pipefail
+node_bin="$1"
+source_node="$2"
+run="$3"
+holder_key="$4"
+asset="$5"
+amount="$6"
+data="/var/lib/postfiat/$source_node"
+install -d -m 700 "$run"
+test -x "$node_bin"
+test -s "$holder_key"
+if [[ -s "$run/pfusdc-ingress.batch.json" ]]; then
+  test -s "$run/pfusdc-input-note.json"
+  test -s "$run/pfusdc-ingress-report.json"
+  exit 0
+fi
+umask 077
+openssl rand -hex 32 >"$run/sender-pfusdc.seed"
+seed="$(tr -d '\n' <"$run/sender-pfusdc.seed")"
+"$node_bin" asset-orchard-ingress-create \
+  --data-dir "$data" \
+  --key-file "$holder_key" \
+  --asset-id "$asset" \
+  --amount "$amount" \
+  --note-seed-hex "$seed" \
+  --ingress-file "$run/pfusdc-ingress.json" \
+  --note-file "$run/pfusdc-input-note.json" \
+  >"$run/pfusdc-ingress-report.json"
+"$node_bin" shield-batch-asset-orchard-ingress \
+  --data-dir "$data" \
+  --ingress-file "$run/pfusdc-ingress.json" \
+  --batch-file "$run/pfusdc-ingress.batch.json" \
+  >"$run/pfusdc-ingress-batch-report.json"
+REMOTE_PFUSDC
+
+if (( current_height < pfusdc_height )); then
+  run_round "$pfusdc_height" "pfusdc-ingress" "$REMOTE_RUN/pfusdc-ingress.batch.json"
+  current_height="$pfusdc_height"
+fi
+
+ssh_node_script "$SOURCE_NODE" "bash -s -- \
+  '$NODE' '$SOURCE_NODE' '$REMOTE_RUN' '$HOLDER_KEY' \
+  '$A651_ASSET_ID' '$AMOUNT_ATOMS'" <<'REMOTE_A651'
+set -Eeuo pipefail
+node_bin="$1"
+source_node="$2"
+run="$3"
+holder_key="$4"
+asset="$5"
+amount="$6"
+data="/var/lib/postfiat/$source_node"
+if [[ -s "$run/a651-ingress.batch.json" ]]; then
+  test -s "$run/a651-input-note.json"
+  test -s "$run/a651-ingress-report.json"
+  exit 0
+fi
+umask 077
+openssl rand -hex 32 >"$run/sender-a651.seed"
+seed="$(tr -d '\n' <"$run/sender-a651.seed")"
+"$node_bin" asset-orchard-ingress-create \
+  --data-dir "$data" \
+  --key-file "$holder_key" \
+  --asset-id "$asset" \
+  --amount "$amount" \
+  --note-seed-hex "$seed" \
+  --ingress-file "$run/a651-ingress.json" \
+  --note-file "$run/a651-input-note.json" \
+  >"$run/a651-ingress-report.json"
+"$node_bin" shield-batch-asset-orchard-ingress \
+  --data-dir "$data" \
+  --ingress-file "$run/a651-ingress.json" \
+  --batch-file "$run/a651-ingress.batch.json" \
+  >"$run/a651-ingress-batch-report.json"
+REMOTE_A651
+
+if (( current_height < a651_height )); then
+  run_round "$a651_height" "a651-ingress" "$REMOTE_RUN/a651-ingress.batch.json"
+  current_height="$a651_height"
+fi
+
+ssh_node_script "$SOURCE_NODE" "bash -s -- \
+  '$NODE' '$SOURCE_NODE' '$REMOTE_RUN' '$PFUSDC_ASSET_ID' \
+  '$A651_ASSET_ID' '$AMOUNT_ATOMS'" <<'REMOTE_SEND'
+set -Eeuo pipefail
+node_bin="$1"
+source_node="$2"
+run="$3"
+pfusdc="$4"
+a651="$5"
+amount="$6"
+data="/var/lib/postfiat/$source_node"
+if [[ -s "$run/private-send.batch.json" ]]; then
+  test -s "$run/private-send-action.json"
+  test -s "$run/recipient-pfusdc-note.json"
+  test -s "$run/recipient-wallet-b.seed"
+  exit 0
+fi
+umask 077
+
+base_lo="$(jq -er .note.asset_tag_lo "$run/a651-input-note.json")"
+base_hi="$(jq -er .note.asset_tag_hi "$run/a651-input-note.json")"
+quote_lo="$(jq -er .note.asset_tag_lo "$run/pfusdc-input-note.json")"
+quote_hi="$(jq -er .note.asset_tag_hi "$run/pfusdc-input-note.json")"
+jq -n \
+  --arg reserve_packet_hash "bedd17cb1114053e0b9d79ae1b24fba103e63519cf20a8e8cef23852f5ed9f95a0cb0e8ee4096bf9c81806524bead347" \
+  --arg base_lo "$base_lo" \
+  --arg base_hi "$base_hi" \
+  --arg quote_lo "$quote_lo" \
+  --arg quote_hi "$quote_hi" \
+  '{
+    nav_epoch: 3,
+    reserve_packet_hash: $reserve_packet_hash,
+    ratio_numerator: 1000000,
+    ratio_denominator: 1000000,
+    mode: "at_nav_with_band",
+    band_bps: 1,
+    base_asset_tag_lo: $base_lo,
+    base_asset_tag_hi: $base_hi,
+    quote_asset_tag_lo: $quote_lo,
+    quote_asset_tag_hi: $quote_hi
+  }' >"$run/pricing-claim.json"
+
+openssl rand -hex 32 >"$run/recipient-wallet-b.seed"
+openssl rand -hex 32 >"$run/sender-helper-wallet.seed"
+recipient_seed="$(tr -d '\n' <"$run/recipient-wallet-b.seed")"
+helper_seed="$(tr -d '\n' <"$run/sender-helper-wallet.seed")"
+
+"$node_bin" asset-orchard-swap-create \
+  --data-dir "$data" \
+  --input-note-file-a "$run/a651-input-note.json" \
+  --input-note-file-b "$run/pfusdc-input-note.json" \
+  --output-note-seed-hex-a "$recipient_seed" \
+  --output-note-seed-hex-b "$helper_seed" \
+  --pricing-claim-file "$run/pricing-claim.json" \
+  --action-file "$run/private-send-action.json" \
+  --output-note-file-a "$run/recipient-pfusdc-note.json" \
+  --output-note-file-b "$run/sender-a651-helper-note.json" \
+  >"$run/private-send-create-report.json"
+
+"$node_bin" shield-batch-swap \
+  --data-dir "$data" \
+  --swap-file "$run/private-send-action.json" \
+  --batch-file "$run/private-send.batch.json" \
+  >"$run/private-send-batch-report.json"
+
+jq -e --arg pfusdc "$pfusdc" --arg a651 "$a651" --argjson amount "$amount" '
+  .asset_id == $pfusdc and .value == $amount
+' "$run/recipient-pfusdc-note.json" >/dev/null
+jq -e --arg a651 "$a651" --argjson amount "$amount" '
+  .asset_id == $a651 and .value == $amount
+' "$run/sender-a651-helper-note.json" >/dev/null
+REMOTE_SEND
+
+if (( current_height < send_height )); then
+  run_round "$send_height" "private-send" "$REMOTE_RUN/private-send.batch.json"
+  current_height="$send_height"
+fi
+
+set +e
+ssh_node "$SOURCE_NODE" \
+  "'$NODE' apply-shield-batch \
+     --data-dir '/var/lib/postfiat/$SOURCE_NODE' \
+     --batch-file '$REMOTE_RUN/private-send.batch.json'" \
+  >"$EVIDENCE_DIR/replay.stdout.json" \
+  2>"$EVIDENCE_DIR/replay.stderr.txt"
+replay_exit=$?
+set -e
+[[ "$replay_exit" -ne 0 ]] || die "exact batch replay unexpectedly succeeded"
+grep -q 'already applied' "$EVIDENCE_DIR/replay.stderr.txt" ||
+  die "exact batch replay failed for an unexpected reason"
+sed -n '1p' "$EVIDENCE_DIR/replay.stderr.txt" \
+  >"$EVIDENCE_DIR/replay-rejection.txt"
+
+ssh_node_script "$SOURCE_NODE" "bash -s -- \
+  '$NODE' '$SOURCE_NODE' '$REMOTE_RUN' '$PFUSDC_ASSET_ID' \
+  '$A651_ASSET_ID' '$HOLDER' '$AMOUNT_ATOMS'" <<'REMOTE_VERIFY' \
+  >"$EVIDENCE_DIR/private-send-verification.json"
+set -Eeuo pipefail
+node_bin="$1"
+source_node="$2"
+run="$3"
+pfusdc="$4"
+a651="$5"
+holder="$6"
+amount="$7"
+data="/var/lib/postfiat/$source_node"
+recipient_seed="$(tr -d '\n' <"$run/recipient-wallet-b.seed")"
+
+"$node_bin" asset-orchard-scan \
+  --data-dir "$data" \
+  --note-seed-hex "$recipient_seed" \
+  --note-file "$run/recipient-pfusdc-note-recovered.json" \
+  --overwrite >"$run/recipient-scan-report.json"
+"$node_bin" asset-orchard-note-status \
+  --data-dir "$data" \
+  --note-file "$run/recipient-pfusdc-note-recovered.json" \
+  >"$run/recipient-note-status.json"
+"$node_bin" asset-orchard-note-status \
+  --data-dir "$data" \
+  --note-file "$run/pfusdc-input-note.json" \
+  >"$run/pfusdc-input-status.json"
+"$node_bin" asset-orchard-note-status \
+  --data-dir "$data" \
+  --note-file "$run/a651-input-note.json" \
+  >"$run/a651-input-status.json"
+"$node_bin" asset-orchard-note-status \
+  --data-dir "$data" \
+  --note-file "$run/sender-a651-helper-note.json" \
+  >"$run/a651-output-status.json"
+
+action_hash="$(sha256sum "$run/private-send-action.json" | awk '{print $1}')"
+batch_hash="$(sha256sum "$run/private-send.batch.json" | awk '{print $1}')"
+recipient_fingerprint="$(sha256sum "$run/recipient-wallet-b.seed" | awk '{print $1}')"
+output_match="$(
+  jq -n \
+    --arg created "$(jq -er .output_commitment "$run/recipient-pfusdc-note.json")" \
+    --arg recovered "$(jq -er .output_commitment "$run/recipient-pfusdc-note-recovered.json")" \
+    '$created == $recovered'
+)"
+forbidden_key_count="$(
+  jq '[paths(scalars) as $path
+      | ($path[-1] | tostring)
+      | select(. == "asset_id"
+          or . == "value"
+          or . == "amount"
+          or . == "sender"
+          or . == "recipient"
+          or . == "memo"
+          or . == "spend_auth_signing_key")
+    ] | length' "$run/private-send-action.json"
+)"
+serialized_action="$(tr -d '\n' <"$run/private-send-action.json")"
+raw_identifier_hits=0
+for forbidden in "$pfusdc" "$a651" "$holder" "$recipient_seed"; do
+  if [[ "$serialized_action" == *"$forbidden"* ]]; then
+    raw_identifier_hits=$((raw_identifier_hits + 1))
+  fi
+done
+
+jq -n \
+  --arg action_sha256 "$action_hash" \
+  --arg batch_sha256 "$batch_hash" \
+  --arg recipient_wallet_fingerprint "$recipient_fingerprint" \
+  --arg pfusdc "$pfusdc" \
+  --arg a651 "$a651" \
+  --argjson amount_atoms "$amount" \
+  --argjson output_match "$output_match" \
+  --argjson forbidden_key_count "$forbidden_key_count" \
+  --argjson raw_identifier_hits "$raw_identifier_hits" \
+  --slurpfile scan "$run/recipient-scan-report.json" \
+  --slurpfile recipient "$run/recipient-note-status.json" \
+  --slurpfile pf_input "$run/pfusdc-input-status.json" \
+  --slurpfile a651_input "$run/a651-input-status.json" \
+  --slurpfile a651_output "$run/a651-output-status.json" \
+  '{
+    schema: "postfiat-pfusdc-private-send-verification-v1",
+    action_sha256: $action_sha256,
+    batch_sha256: $batch_sha256,
+    recipient_wallet_fingerprint: $recipient_wallet_fingerprint,
+    amount_atoms: $amount_atoms,
+    recipient_scan: $scan[0],
+    recipient_note: $recipient[0],
+    input_notes: {
+      pfusdc: $pf_input[0],
+      a651: $a651_input[0]
+    },
+    helper_output_note: $a651_output[0],
+    checks: {
+      recipient_output_matches_created_note: $output_match,
+      recipient_scan_recovered:
+        ($scan[0].recovered
+         and $scan[0].legacy_output_count == 0),
+      recipient_note_is_spendable:
+        ($recipient[0].spendable
+         and $recipient[0].pool_output
+         and $recipient[0].asset_id == $pfusdc
+         and $recipient[0].amount == $amount_atoms),
+      input_nullifiers_are_spent:
+        ($pf_input[0].spent
+         and $pf_input[0].asset_id == $pfusdc
+         and $pf_input[0].amount == $amount_atoms
+         and $a651_input[0].spent
+         and $a651_input[0].asset_id == $a651
+         and $a651_input[0].amount == $amount_atoms),
+      helper_value_is_conserved:
+        ($a651_output[0].spendable
+         and $a651_output[0].pool_output
+         and $a651_output[0].asset_id == $a651
+         and $a651_output[0].amount == $amount_atoms),
+      forbidden_cleartext_action_keys_absent: ($forbidden_key_count == 0),
+      raw_asset_owner_recipient_material_absent: ($raw_identifier_hits == 0)
+    }
+  }'
+REMOTE_VERIFY
+
+copy_from_node \
+  "$SOURCE_NODE" \
+  "$REMOTE_RUN/private-send-action.json" \
+  "$EVIDENCE_DIR/public-private-send-action.json"
+copy_from_node \
+  "$SOURCE_NODE" \
+  "$REMOTE_RUN/private-send.batch.json" \
+  "$EVIDENCE_DIR/public-private-send-batch.json"
+
+expected_action_hash="$(
+  jq -er .action_sha256 "$EVIDENCE_DIR/private-send-verification.json"
+)"
+expected_batch_hash="$(
+  jq -er .batch_sha256 "$EVIDENCE_DIR/private-send-verification.json"
+)"
+[[ "$(sha256sum "$EVIDENCE_DIR/public-private-send-action.json" | awk '{print $1}')" == \
+  "$expected_action_hash" ]] || die "copied public action hash mismatch"
+[[ "$(sha256sum "$EVIDENCE_DIR/public-private-send-batch.json" | awk '{print $1}')" == \
+  "$expected_batch_hash" ]] || die "copied public batch hash mismatch"
+
+ssh_node "$SOURCE_NODE" \
+  "'$NODE' account-assets \
+     --data-dir '/var/lib/postfiat/$SOURCE_NODE' \
+     --account '$HOLDER'" >"$EVIDENCE_DIR/transparent-balances-after.json"
+
+before_pf="$(
+  jq -er --arg asset "$PFUSDC_ASSET_ID" \
+    '.assets[] | select(.asset_id == $asset) | .balance' \
+    "$EVIDENCE_DIR/transparent-balances-before.json"
+)"
+after_pf="$(
+  jq -er --arg asset "$PFUSDC_ASSET_ID" \
+    '.assets[] | select(.asset_id == $asset) | .balance' \
+    "$EVIDENCE_DIR/transparent-balances-after.json"
+)"
+before_a651="$(
+  jq -er --arg asset "$A651_ASSET_ID" \
+    '.assets[] | select(.asset_id == $asset) | .balance' \
+    "$EVIDENCE_DIR/transparent-balances-before.json"
+)"
+after_a651="$(
+  jq -er --arg asset "$A651_ASSET_ID" \
+    '.assets[] | select(.asset_id == $asset) | .balance' \
+    "$EVIDENCE_DIR/transparent-balances-after.json"
+)"
+
+privacy_ok="$(
+  jq -er '[.checks[]] | all' "$EVIDENCE_DIR/private-send-verification.json"
+)"
+[[ "$privacy_ok" == "true" ]] || die "private-send verification failed"
+[[ $((before_pf - after_pf)) -eq "$AMOUNT_ATOMS" ]] ||
+  die "transparent pfUSDC debit mismatch"
+[[ $((before_a651 - after_a651)) -eq "$AMOUNT_ATOMS" ]] ||
+  die "transparent a651 debit mismatch"
+
+jq -n \
+  --slurpfile fleet "$EVIDENCE_DIR/private-send-fleet.json" \
+  --slurpfile round "$EVIDENCE_DIR/private-send-round.json" '
+    {
+      schema: "postfiat-pfusdc-private-send-fleet-attestation-v1",
+      verdict: "PASS",
+      height: $fleet[0][0].block_height,
+      validator_count: ($fleet[0] | length),
+      validator_ids: [$fleet[0][].node_id],
+      tip_hash: $fleet[0][0].block_tip_hash,
+      state_root: $fleet[0][0].state_root,
+      all_tip_hashes_identical:
+        ([$fleet[0][].block_tip_hash] | unique | length == 1),
+      all_state_roots_identical:
+        ([$fleet[0][].state_root] | unique | length == 1),
+      all_mempools_empty:
+        ([$fleet[0][].mempool_pending] | all(. == 0)),
+      round: {
+        round_ok: $round[0].round_ok,
+        all_sends_verified: $round[0].all_sends_verified,
+        all_vote_requests_verified: $round[0].all_vote_requests_verified,
+        total_ms: $round[0].timings.total_ms,
+        client_visible_finality_ms:
+          $round[0].timings.client_visible_finality_ms
+      }
+    }
+  ' >"$EVIDENCE_DIR/fleet-attestation.json"
+jq -e --argjson expected_height "$send_height" '
+  .verdict == "PASS"
+  and .validator_count == 6
+  and .height == $expected_height
+  and .all_tip_hashes_identical
+  and .all_state_roots_identical
+  and .all_mempools_empty
+  and .round.round_ok
+  and .round.all_sends_verified
+  and .round.all_vote_requests_verified
+' "$EVIDENCE_DIR/fleet-attestation.json" >/dev/null ||
+  die "fleet attestation failed"
+
+jq -n \
+  --arg run_id "$RUN_ID" \
+  --arg remote_private_wallet_dir "$REMOTE_RUN" \
+  --argjson start_height "$start_height" \
+  --argjson pfusdc_ingress_height "$pfusdc_height" \
+  --argjson a651_ingress_height "$a651_height" \
+  --argjson private_send_height "$send_height" \
+  --argjson amount_atoms "$AMOUNT_ATOMS" \
+  --argjson replay_exit "$replay_exit" \
+  --argjson before_pf "$before_pf" \
+  --argjson after_pf "$after_pf" \
+  --argjson before_a651 "$before_a651" \
+  --argjson after_a651 "$after_a651" \
+  --slurpfile verification "$EVIDENCE_DIR/private-send-verification.json" \
+  '{
+    schema: "postfiat-pfusdc-private-send-live-gate-v1",
+    verdict: "PASS",
+    run_id: $run_id,
+    route: "transparent pfUSDC -> Asset-Orchard note A -> private note B",
+    amount_atoms: $amount_atoms,
+    heights: {
+      start: $start_height,
+      pfusdc_ingress: $pfusdc_ingress_height,
+      a651_helper_ingress: $a651_ingress_height,
+      private_send: $private_send_height
+    },
+    transparent_balances: {
+      pfusdc: {before: $before_pf, after: $after_pf},
+      a651: {before: $before_a651, after: $after_a651}
+    },
+    replay: {
+      exact_batch_rejected: ($replay_exit != 0)
+    },
+    verification: $verification[0],
+    private_wallet_material: {
+      retained_remote: true,
+      path: $remote_private_wallet_dir,
+      copied_to_public_evidence: false
+    }
+  }' >"$EVIDENCE_DIR/gate.json"
+
+chmod 600 "$EVIDENCE_DIR"/*
+printf '%s\n' "$EVIDENCE_DIR/gate.json"

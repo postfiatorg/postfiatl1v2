@@ -1,0 +1,108 @@
+{
+  "schema": "postfiat-pfusdc-private-send-live-gate-v1",
+  "verdict": "PASS",
+  "run_id": "20260727-pfusdc-private-send-01",
+  "route": "transparent pfUSDC -> Asset-Orchard note A -> private note B",
+  "amount_atoms": 100000,
+  "heights": {
+    "start": 333,
+    "pfusdc_ingress": 334,
+    "a651_helper_ingress": 335,
+    "private_send": 336
+  },
+  "transparent_balances": {
+    "pfusdc": {
+      "before": 800000,
+      "after": 700000
+    },
+    "a651": {
+      "before": 45501463531,
+      "after": 45501363531
+    }
+  },
+  "replay": {
+    "exact_batch_rejected": true
+  },
+  "verification": {
+    "schema": "postfiat-pfusdc-private-send-verification-v1",
+    "action_sha256": "144ca5bb02ea75061ce24fdaa56465c593b5189872d04f7d29253e9764bfbdae",
+    "batch_sha256": "205174396b858a60ed44366ed9df6ed3a342740a22b9ef1c63e9e43467cb2de3",
+    "recipient_wallet_fingerprint": "ea1dede462434eee46b8ade03262e99d5e52195e7cd527a39feb9ab401accaa2",
+    "amount_atoms": 100000,
+    "recipient_scan": {
+      "schema": "postfiat-asset-orchard-scan-report-v1",
+      "note_file": "/var/lib/postfiat/validator-2/pfusdc-private-send-20260727-pfusdc-private-send-01/recipient-pfusdc-note-recovered.json",
+      "pool_id": "asset-orchard-v1",
+      "chain_output_count": 54,
+      "encrypted_output_v1_count": 54,
+      "legacy_output_count": 0,
+      "nonmatching_output_count": 53,
+      "output_commitment": "228afdc9e1cfdc26d75152acd8fdad6f9f03bb71d0695f52d159dd89d20e521d",
+      "recovered": true
+    },
+    "recipient_note": {
+      "schema": "postfiat-asset-orchard-note-status-report-v1",
+      "note_file": "/var/lib/postfiat/validator-2/pfusdc-private-send-20260727-pfusdc-private-send-01/recipient-pfusdc-note-recovered.json",
+      "pool_id": "asset-orchard-v1",
+      "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+      "amount": 100000,
+      "output_commitment": "228afdc9e1cfdc26d75152acd8fdad6f9f03bb71d0695f52d159dd89d20e521d",
+      "nullifier": "3a9c1a8e62d552303db23793886140accbe215550db8c5b072bec298c6e50b04",
+      "pool_output": true,
+      "spent": false,
+      "spendable": true
+    },
+    "input_notes": {
+      "pfusdc": {
+        "schema": "postfiat-asset-orchard-note-status-report-v1",
+        "note_file": "/var/lib/postfiat/validator-2/pfusdc-private-send-20260727-pfusdc-private-send-01/pfusdc-input-note.json",
+        "pool_id": "asset-orchard-v1",
+        "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+        "amount": 100000,
+        "output_commitment": "3f119cda292eb4fa07e419dea8b974445db3533366868e0543c6284badbd3f16",
+        "nullifier": "f60fa8aa5bd77c9080399f9ffde4cce1735c8bf4b701610eb61dc563c59cbe33",
+        "pool_output": true,
+        "spent": true,
+        "spendable": false
+      },
+      "a651": {
+        "schema": "postfiat-asset-orchard-note-status-report-v1",
+        "note_file": "/var/lib/postfiat/validator-2/pfusdc-private-send-20260727-pfusdc-private-send-01/a651-input-note.json",
+        "pool_id": "asset-orchard-v1",
+        "asset_id": "de8d3d78aca83f7000632cbd3dd06edd30d105085d16eef1696f9e1707908ec9209239080d21ca1c0cecc36ca6f966b6",
+        "amount": 100000,
+        "output_commitment": "c3b8669d64f181a66de416d9e7a813f105d54d4316244d1b67a926133a207b18",
+        "nullifier": "d26a9096229e69d95ed2d2bf3aa209fefe4fa375498f56b0790ed869b5aeb31c",
+        "pool_output": true,
+        "spent": true,
+        "spendable": false
+      }
+    },
+    "helper_output_note": {
+      "schema": "postfiat-asset-orchard-note-status-report-v1",
+      "note_file": "/var/lib/postfiat/validator-2/pfusdc-private-send-20260727-pfusdc-private-send-01/sender-a651-helper-note.json",
+      "pool_id": "asset-orchard-v1",
+      "asset_id": "de8d3d78aca83f7000632cbd3dd06edd30d105085d16eef1696f9e1707908ec9209239080d21ca1c0cecc36ca6f966b6",
+      "amount": 100000,
+      "output_commitment": "9f98573f9d828fd1faa17444c1e8b745a4a78d0f50f3e228035d1f43231e6e11",
+      "nullifier": "f9c42841fc0a6610dc47d7bae2855496bab0c3f9248aae24bf9cdead3eeaaf0f",
+      "pool_output": true,
+      "spent": false,
+      "spendable": true
+    },
+    "checks": {
+      "recipient_output_matches_created_note": true,
+      "recipient_scan_recovered": true,
+      "recipient_note_is_spendable": true,
+      "input_nullifiers_are_spent": true,
+      "helper_value_is_conserved": true,
+      "forbidden_cleartext_action_keys_absent": true,
+      "raw_asset_owner_recipient_material_absent": true
+    }
+  },
+  "private_wallet_material": {
+    "retained_remote": true,
+    "path": "/var/lib/postfiat/validator-2/pfusdc-private-send-20260727-pfusdc-private-send-01",
+    "copied_to_public_evidence": false
+  }
+}
