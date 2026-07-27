@@ -4155,7 +4155,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         .find(|route| route.route_id == route_id)
         .expect("legacy fixture route");
     legacy_route.route_trust_class = PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT.to_string();
-    legacy_route.ethereum_verification_policy = Some(policy);
+    legacy_route.ethereum_verification_policy = Some(policy.clone());
     legacy_route.live_value_enabled = true;
     assert_eq!(ledger.pftl_uniswap_receipts.len(), 1);
     assert_eq!(
@@ -5120,13 +5120,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         outbound_verification_class: PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY.to_string(),
         return_verification_class: PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT.to_string(),
         live_value_enabled: false,
-        ethereum_verification_policy: EthereumRouteVerificationPolicyV1 {
-            authority_epoch: 1,
-            committee_root: FastSwapCommitteeRootV1([0xb2; 48]),
-            minimum_confirmations: 12,
-            handoff_controller_code_hash: [0xb3; 32],
-            wrapped_navcoin_code_hash: [0xb4; 32],
-        },
+        ethereum_verification_policy: policy.clone(),
         primary_market_policy: primary_policy.clone(),
     };
 
@@ -5152,7 +5146,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
             + 1,
         AssetTransactionOperation::PftlUniswapRouteInitV2(opening_operation.clone()),
     );
-    let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+    let receipt = super::execute_asset_transaction(
         &genesis,
         &mut opening_inventory_ledger,
         &opening_route_init,
@@ -5230,12 +5224,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         ledger.account(&operator).expect("operator").sequence + 1,
         AssetTransactionOperation::PftlUniswapRouteInitV2(v2_route_operation),
     );
-    let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
-        &genesis,
-        &mut ledger,
-        &v2_route_init,
-        24,
-    );
+    let receipt = super::execute_asset_transaction(&genesis, &mut ledger, &v2_route_init, 24);
     assert!(receipt.accepted, "{receipt:?}");
 
     let unfunded_reserve = signed_asset_transaction_with_minimum_fee(

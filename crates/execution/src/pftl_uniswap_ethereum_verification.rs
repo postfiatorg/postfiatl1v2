@@ -22,11 +22,11 @@ pub(crate) fn verify_live_route_initialization_v2(
         != postfiat_types::PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY
         || operation.return_verification_class
             != postfiat_types::PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT
-        || !operation.live_value_enabled
+        || operation.live_value_enabled
     {
         return Err((
             "pftl_uniswap_v2_trust_class_mismatch",
-            "v2 live route requires trustless-finality outbound and BFT-checkpoint return verification"
+            "v2 route creation requires trustless-finality outbound, BFT-checkpoint return verification, and live value disabled"
                 .to_string(),
         ));
     }
