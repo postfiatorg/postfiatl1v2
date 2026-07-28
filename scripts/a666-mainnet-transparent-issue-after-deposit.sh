@@ -6,11 +6,13 @@ phase_dir=
 workflow_id=
 expected_pftl_height=
 prior_checkpoint_block_id=
+expected_verifier_height=
 expected_wrapped_balance_before=
 expected_wrapped_supply_before=
 a100_host=${A666_A100_HOST:-194.228.55.129}
 a100_port=${A666_A100_PORT:-30886}
 validator2_host=${A666_VALIDATOR2_HOST:-66.42.48.39}
+release_id=${A666_PFTL_RELEASE_ID:-a666-private-redeem-9061829}
 
 while (($#)); do
   case "$1" in
@@ -18,6 +20,7 @@ while (($#)); do
     --workflow-id) workflow_id=$2; shift 2 ;;
     --expected-pftl-height) expected_pftl_height=$2; shift 2 ;;
     --prior-checkpoint-block-id) prior_checkpoint_block_id=$2; shift 2 ;;
+    --expected-verifier-height) expected_verifier_height=$2; shift 2 ;;
     --expected-wrapped-balance-before) expected_wrapped_balance_before=$2; shift 2 ;;
     --expected-wrapped-supply-before) expected_wrapped_supply_before=$2; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -29,6 +32,7 @@ for value in \
   "$workflow_id" \
   "$expected_pftl_height" \
   "$prior_checkpoint_block_id" \
+  "$expected_verifier_height" \
   "$expected_wrapped_balance_before" \
   "$expected_wrapped_supply_before"
 do
@@ -36,6 +40,7 @@ do
 done
 [[ "$workflow_id" =~ ^[a-z0-9][a-z0-9-]{0,63}$ ]]
 [[ "$expected_pftl_height" =~ ^[0-9]+$ ]]
+[[ "$expected_verifier_height" =~ ^[0-9]+$ ]]
 [[ "$expected_wrapped_balance_before" =~ ^[0-9]+$ ]]
 [[ "$expected_wrapped_supply_before" =~ ^[0-9]+$ ]]
 [[ "$prior_checkpoint_block_id" =~ ^[0-9a-f]{96}$ ]]
@@ -60,8 +65,8 @@ test "$mint_amount" = 1000000
 test "$settlement_amount" = 1005000
 jq -e '.verdict=="PASS" and .amount_atoms==1005000' "$deposit_file" >/dev/null
 
-remote_node=/opt/postfiat/releases/a666-acceptance-98c81a9/postfiat-node
-remote_topology=/etc/postfiat/releases/a666-acceptance-98c81a9/topology.json
+remote_node=/opt/postfiat/releases/$release_id/postfiat-node
+remote_topology=/etc/postfiat/releases/$release_id/topology.json
 remote_run="/var/lib/postfiat/validator-2/$workflow_id"
 a100_root="/workspace/a666-acceptance/live/$workflow_id"
 ingress_prover=/workspace/a666-acceptance/bin/eth-l1-mainnet-fast-lane-p0-cuda-optimized
@@ -139,6 +144,10 @@ rsync -a "$phase_dir/ingress/proof-cuda/" \
   "root@$validator2_host:$remote_run/ingress-proof/"
 DEPOSIT_TX="$deposit_tx" \
 EXPECTED_HOLDER_ATOMS=1805000 \
+PFTL_NODE_BIN="$remote_node" \
+PFTL_TOPOLOGY="$remote_topology" \
+PFTL_POLICY_HASH=541a43e1f2ad0f37f6d98ea437b57f502cb888e9bba8151a50e2e5bfe5ce57a5 \
+PFTL_VAULT_ADDRESS=0xaaa78FdA7062eFce769e95cd72Fc55e507BC8183 \
 PFTL_RUN_DIR="$remote_run" \
 PFTL_PROOF_DIR="$remote_run/ingress-proof" \
 PFTL_LOCAL_EVIDENCE="$phase_dir/pftl" \
@@ -198,7 +207,7 @@ jq -e \
   "$phase_dir/pftl-supply-status-after.json" >/dev/null
 verifier_height=$(ssh -o BatchMode=yes "root@$validator2_host" \
   '/var/lib/postfiat/validator-2/pfusdc-latency-20260727-run2/cast call 0xb79FF97EcC11574a8A78d0b5a9D7C8c2A94bF96A "latestFinalizedHeight()(uint64)" --rpc-url https://ethereum-rpc.publicnode.com')
-test "$verifier_height" = "$expected_pftl_height"
+test "$verifier_height" = "$expected_verifier_height"
 
 ssh -o BatchMode=yes "root@$validator2_host" \
   "$remote_node pftl-uniswap-receipt-witness \
