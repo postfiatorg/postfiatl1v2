@@ -31,6 +31,16 @@ pub struct PacketConsumedEventV1 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PacketConsumedEventV2 {
+    pub controller: [u8; 20],
+    pub packet_digest: [u8; 32],
+    pub source_packet_commitment: [u8; 32],
+    pub source_receipt_commitment: [u8; 32],
+    pub recipient: [u8; 20],
+    pub mint_amount_atoms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PacketCancelledEventV1 {
     pub controller: [u8; 20],
     pub packet_digest: [u8; 32],
@@ -53,6 +63,16 @@ pub struct ReturnBurnedEventV1 {
     pub bridge_controller: [u8; 20],
     pub wrapped_navcoin: [u8; 20],
     pub burn_height: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReturnBurnedEventV2 {
+    pub controller: [u8; 20],
+    pub return_burn_id: [u8; 32],
+    pub ethereum_sender: [u8; 20],
+    pub return_nonce: [u8; 32],
+    pub pftl_recipient: String,
+    pub amount_atoms: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -157,6 +177,26 @@ pub fn decode_packet_consumed_event(
     })
 }
 
+pub fn decode_packet_consumed_event_v2(
+    log: &EthereumLogV1,
+    expected_controller: [u8; 20],
+) -> Result<PacketConsumedEventV2, EthereumProofError> {
+    require_event_header(
+        log,
+        expected_controller,
+        "PacketConsumed(bytes32,bytes32,bytes32,address,uint256)",
+        4,
+    )?;
+    Ok(PacketConsumedEventV2 {
+        controller: log.emitter,
+        packet_digest: log.topics[1],
+        source_packet_commitment: log.topics[2],
+        source_receipt_commitment: log.topics[3],
+        recipient: data_address(&log.data, 0, 2, "PacketConsumed.recipient")?,
+        mint_amount_atoms: data_u64(&log.data, 1, 2, "PacketConsumed.mint_amount")?,
+    })
+}
+
 pub fn verify_packet_cancelled_event(
     log: &EthereumLogV1,
     expected: &PacketCancelledEventV1,
@@ -253,6 +293,47 @@ pub fn decode_return_burned_event(
         )?,
         wrapped_navcoin: data_address(&log.data, 5, HEAD_WORDS, "ReturnBurned.wrapped_navcoin")?,
         burn_height: data_head_u64(&log.data, 6, HEAD_WORDS, "ReturnBurned.burn_height")?,
+    })
+}
+
+pub fn decode_return_burned_event_v2(
+    log: &EthereumLogV1,
+    expected_controller: [u8; 20],
+) -> Result<ReturnBurnedEventV2, EthereumProofError> {
+    require_event_header(
+        log,
+        expected_controller,
+        "ReturnBurned(bytes32,address,bytes32,string,uint256)",
+        4,
+    )?;
+    const HEAD_WORDS: usize = 2;
+    require_abi_data_minimum(&log.data, HEAD_WORDS, "ReturnBurnedV2")?;
+    let (recipient, recipient_end) = dynamic_bytes(
+        &log.data,
+        HEAD_WORDS,
+        0,
+        HEAD_WORDS * 32,
+        "ReturnBurnedV2.pftl_recipient",
+    )?;
+    if recipient_end != log.data.len() {
+        return Err(EthereumProofError::new(
+            "ethereum_event_abi_noncanonical",
+            "ReturnBurnedV2 has trailing ABI bytes",
+        ));
+    }
+    let pftl_recipient = std::str::from_utf8(recipient).map_err(|_| {
+        EthereumProofError::new(
+            "ethereum_event_text_invalid",
+            "ReturnBurnedV2 PFTL recipient is not UTF-8",
+        )
+    })?;
+    Ok(ReturnBurnedEventV2 {
+        controller: log.emitter,
+        return_burn_id: log.topics[1],
+        ethereum_sender: topic_address(&log.topics[2], "ReturnBurnedV2.ethereum_sender")?,
+        return_nonce: log.topics[3],
+        pftl_recipient: pftl_recipient.to_string(),
+        amount_atoms: data_head_u64(&log.data, 1, HEAD_WORDS, "ReturnBurnedV2.amount_atoms")?,
     })
 }
 
@@ -1191,6 +1272,53 @@ mod tests {
     }
 
     #[test]
+    fn decodes_compact_primary_market_v2_packet_consumed_event() {
+        let controller = [0x11; 20];
+        let recipient = [0x22; 20];
+        let packet_digest = [0x33; 32];
+        let source_packet_commitment = [0x44; 32];
+        let source_receipt_commitment = [0x55; 32];
+        let signature: [u8; 32] =
+            Keccak256::digest(b"PacketConsumed(bytes32,bytes32,bytes32,address,uint256)").into();
+        let mut data = abi_address(recipient).to_vec();
+        data.extend_from_slice(&abi_u64(1_000_000));
+        let (root, proof) = single_receipt_proof(receipt_with_topics(
+            1,
+            controller,
+            &[
+                signature,
+                packet_digest,
+                source_packet_commitment,
+                source_receipt_commitment,
+            ],
+            &data,
+        ));
+        let log = verify_ethereum_receipt_log(root, &proof, 0).expect("V2 consume log");
+        let decoded =
+            decode_packet_consumed_event_v2(&log, controller).expect("compact V2 consume");
+        assert_eq!(decoded.packet_digest, packet_digest);
+        assert_eq!(decoded.source_packet_commitment, source_packet_commitment);
+        assert_eq!(decoded.source_receipt_commitment, source_receipt_commitment);
+        assert_eq!(decoded.recipient, recipient);
+        assert_eq!(decoded.mint_amount_atoms, 1_000_000);
+        assert_eq!(
+            decode_packet_consumed_event(&log, controller)
+                .expect_err("compact event is not legacy V1")
+                .code(),
+            "ethereum_event_topic_mismatch"
+        );
+
+        let mut trailing = log;
+        trailing.data.push(0);
+        assert_eq!(
+            decode_packet_consumed_event_v2(&trailing, controller)
+                .expect_err("trailing compact consume byte")
+                .code(),
+            "ethereum_event_abi_size_invalid"
+        );
+    }
+
+    #[test]
     fn binds_cancel_event_to_exact_controller_packet_and_deadline() {
         let controller = [0x11; 20];
         let packet_digest = [0x22; 32];
@@ -1346,6 +1474,48 @@ mod tests {
         assert_eq!(
             verify_return_burned_event(&noncanonical, &expected)
                 .expect_err("trailing byte")
+                .code(),
+            "ethereum_event_abi_noncanonical"
+        );
+    }
+
+    #[test]
+    fn decodes_compact_primary_market_v2_return_burned_event() {
+        let controller = [0x11; 20];
+        let sender = [0x22; 20];
+        let return_burn_id = [0x33; 32];
+        let return_nonce = [0x44; 32];
+        let recipient = b"pfab9b9228942e5c529633a13aa271d5297bec6353";
+        let signature: [u8; 32] =
+            Keccak256::digest(b"ReturnBurned(bytes32,address,bytes32,string,uint256)").into();
+        let mut data = abi_u64(2 * 32).to_vec();
+        data.extend_from_slice(&abi_u64(1_000_000));
+        data.extend_from_slice(&abi_dynamic(recipient));
+        let (root, proof) = single_receipt_proof(receipt_with_topics(
+            1,
+            controller,
+            &[signature, return_burn_id, abi_address(sender), return_nonce],
+            &data,
+        ));
+        let log = verify_ethereum_receipt_log(root, &proof, 0).expect("V2 return log");
+        let decoded = decode_return_burned_event_v2(&log, controller).expect("compact V2 return");
+        assert_eq!(decoded.return_burn_id, return_burn_id);
+        assert_eq!(decoded.ethereum_sender, sender);
+        assert_eq!(decoded.return_nonce, return_nonce);
+        assert_eq!(decoded.pftl_recipient.as_bytes(), recipient);
+        assert_eq!(decoded.amount_atoms, 1_000_000);
+        assert_eq!(
+            decode_return_burned_event(&log, controller)
+                .expect_err("compact event is not legacy V1")
+                .code(),
+            "ethereum_event_topic_mismatch"
+        );
+
+        let mut trailing = log;
+        trailing.data.push(0);
+        assert_eq!(
+            decode_return_burned_event_v2(&trailing, controller)
+                .expect_err("trailing compact return byte")
                 .code(),
             "ethereum_event_abi_noncanonical"
         );

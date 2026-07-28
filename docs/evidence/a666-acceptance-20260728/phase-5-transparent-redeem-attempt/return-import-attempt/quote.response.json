@@ -1,0 +1,17 @@
+{
+  "error": {
+    "code": "rpc_error",
+    "message": "rpc asset_fee_quote failed: asset operation JSON exceeds 65536 bytes"
+  },
+  "events": [
+    {
+      "event_type": "error",
+      "message": "rpc request failed",
+      "subject": "rpc_error"
+    }
+  ],
+  "id": "a666-return-import-first-attempt-quote",
+  "ok": false,
+  "result": null,
+  "version": "postfiat-local-rpc-v1"
+}

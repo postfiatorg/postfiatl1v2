@@ -1,6 +1,7 @@
 use postfiat_bridge::{
-    decode_packet_cancelled_event, decode_packet_consumed_event, decode_return_burned_event,
-    ethereum_keccak256, verify_ethereum_checkpoint_certificate, verify_ethereum_receipt_log,
+    decode_packet_cancelled_event, decode_packet_consumed_event, decode_packet_consumed_event_v2,
+    decode_return_burned_event, decode_return_burned_event_v2, ethereum_keccak256,
+    verify_ethereum_checkpoint_certificate, verify_ethereum_receipt_log,
 };
 use postfiat_crypto_provider::hex_to_bytes;
 use postfiat_types::{
@@ -184,7 +185,6 @@ pub(crate) fn verify_destination_consume(
         operation.finalized_height,
     )?;
     let controller = evm_address("handoff controller", &route.handoff_controller)?;
-    let event = decode_packet_consumed_event(&log, controller).map_err(external_proof_error)?;
     let source_packet_commitment = ethereum_keccak256(&hex_exact::<48>(
         "source packet hash",
         &operation.packet_hash,
@@ -201,14 +201,26 @@ pub(crate) fn verify_destination_consume(
         .ok_or_else(missing_external_verification)
         .and_then(|digest| hex_exact::<32>("Ethereum packet digest", digest))?;
     require_packet_schema(packet)?;
-    if event.packet_digest != packet_digest
-        || event.source_packet_commitment != source_packet_commitment
-        || event.recipient != recipient
-        || event.route_config_commitment != route_config_commitment
-        || event.route_trust_class != route_trust_class
-        || event.mint_amount_atoms != packet.amount_atoms
-        || event.settlement_amount_atoms == 0
-    {
+    let event_matches = match decode_packet_consumed_event(&log, controller) {
+        Ok(event) => {
+            event.packet_digest == packet_digest
+                && event.source_packet_commitment == source_packet_commitment
+                && event.recipient == recipient
+                && event.route_config_commitment == route_config_commitment
+                && event.route_trust_class == route_trust_class
+                && event.mint_amount_atoms == packet.amount_atoms
+                && event.settlement_amount_atoms != 0
+        }
+        Err(_) => {
+            let event =
+                decode_packet_consumed_event_v2(&log, controller).map_err(external_proof_error)?;
+            event.packet_digest == packet_digest
+                && event.source_packet_commitment == source_packet_commitment
+                && event.recipient == recipient
+                && event.mint_amount_atoms == packet.amount_atoms
+        }
+    };
+    if !event_matches {
         return Err((
             "pftl_uniswap_ethereum_event_binding_mismatch",
             "PacketConsumed does not exactly bind the source packet, governed route, recipient, trust class, and amount"
@@ -287,23 +299,35 @@ pub(crate) fn verify_return_import(
         operation.finalized_height,
     )?;
     let controller = evm_address("handoff controller", &route.handoff_controller)?;
-    let event = decode_return_burned_event(&log, controller).map_err(external_proof_error)?;
     let expected_return_id = hex_exact::<32>("return burn id", &operation.burn_event_hash)?;
     let expected_sender = evm_address("Ethereum sender", &operation.ethereum_sender)?;
     let expected_nonce = hex_exact::<32>("return nonce", &operation.return_nonce)?;
     let expected_asset = hex_exact::<48>("native NAV asset", &operation.native_nav_asset_id)?;
     let expected_wrapped = evm_address("wrapped NAVCoin", &operation.wrapped_navcoin_token)?;
-    if event.return_burn_id != expected_return_id
-        || event.ethereum_sender != expected_sender
-        || event.return_nonce != expected_nonce
-        || event.pftl_recipient != operation.pftl_recipient
-        || event.native_nav_asset_id != expected_asset
-        || event.amount_atoms != operation.amount_atoms
-        || event.ethereum_chain_id != operation.ethereum_chain_id
-        || event.bridge_controller != controller
-        || event.wrapped_navcoin != expected_wrapped
-        || event.burn_height != operation.burn_height
-    {
+    let event_matches = match decode_return_burned_event(&log, controller) {
+        Ok(event) => {
+            event.return_burn_id == expected_return_id
+                && event.ethereum_sender == expected_sender
+                && event.return_nonce == expected_nonce
+                && event.pftl_recipient == operation.pftl_recipient
+                && event.native_nav_asset_id == expected_asset
+                && event.amount_atoms == operation.amount_atoms
+                && event.ethereum_chain_id == operation.ethereum_chain_id
+                && event.bridge_controller == controller
+                && event.wrapped_navcoin == expected_wrapped
+                && event.burn_height == operation.burn_height
+        }
+        Err(_) => {
+            let event =
+                decode_return_burned_event_v2(&log, controller).map_err(external_proof_error)?;
+            event.return_burn_id == expected_return_id
+                && event.ethereum_sender == expected_sender
+                && event.return_nonce == expected_nonce
+                && event.pftl_recipient == operation.pftl_recipient
+                && event.amount_atoms == operation.amount_atoms
+        }
+    };
+    if !event_matches {
         return Err((
             "pftl_uniswap_ethereum_return_binding_mismatch",
             "ReturnBurned does not exactly bind every governed return-import field".to_string(),
