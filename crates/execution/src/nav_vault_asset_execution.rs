@@ -167,6 +167,18 @@ struct NavSubscriptionReserveOverlayRow {
     bucket_status: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NavPrimaryMarketReserveOverlayRow {
+    route_id: String,
+    route_config_digest: String,
+    settlement_asset_id: String,
+    settlement_reserve_atoms: u64,
+    value_nav_units: u64,
+    active_bucket_backing_atoms: u64,
+    live_value_enabled: bool,
+    paused: bool,
+}
+
 fn nav_subscription_reserve_overlay(
     ledger: &LedgerState,
     nav_asset: &NavTrackedAsset,
@@ -265,17 +277,91 @@ fn nav_subscription_reserve_overlay(
             bucket_status: bucket.status.clone(),
         });
     }
-    if rows.is_empty() {
+    let mut primary_market_rows = Vec::new();
+    let mut reserve_by_settlement_asset = std::collections::BTreeMap::<String, u64>::new();
+    for route in ledger.pftl_uniswap_routes.iter().filter(|route| {
+        route.native_nav_asset_id == nav_asset.asset_id && route.settlement_reserve_atoms != 0
+    }) {
+        let settlement_nav_asset = ledger.nav_asset(&route.settlement_asset_id).ok_or_else(|| {
+            (
+                "missing_primary_market_settlement_nav_asset",
+                "primary-market NAV reserve overlay references an unregistered settlement NAV asset"
+                    .to_string(),
+            )
+        })?;
+        let settlement_asset = ledger
+            .asset_definition(&route.settlement_asset_id)
+            .ok_or_else(|| {
+                (
+                    "missing_primary_market_settlement_asset",
+                    "primary-market NAV reserve overlay references a missing settlement asset"
+                        .to_string(),
+                )
+            })?;
+        let active_bucket_backing_atoms = ledger
+            .vault_bridge_bucket_states
+            .iter()
+            .filter(|bucket| {
+                bucket.asset_id == route.settlement_asset_id
+                    && bucket.status == VAULT_BRIDGE_BUCKET_STATUS_ACTIVE
+            })
+            .try_fold(0_u64, |sum, bucket| {
+                sum.checked_add(bucket.outstanding_vault_bridge_atoms)
+                    .ok_or_else(|| {
+                        (
+                            "primary_market_backing_overflow",
+                            "primary-market settlement bucket backing sum overflowed".to_string(),
+                        )
+                    })
+            })?;
+        let committed = reserve_by_settlement_asset
+            .entry(route.settlement_asset_id.clone())
+            .or_default();
+        *committed = committed
+            .checked_add(route.settlement_reserve_atoms)
+            .ok_or_else(|| {
+                (
+                    "primary_market_reserve_overflow",
+                    "primary-market settlement reserve sum overflowed".to_string(),
+                )
+            })?;
+        if *committed > active_bucket_backing_atoms {
+            return Err((
+                "primary_market_reserve_exceeds_vault_backing",
+                "primary-market settlement reserve exceeds active proof-backed vault bridge backing"
+                    .to_string(),
+            ));
+        }
+        let value_nav_units = vault_bridge_atoms_to_nav_value(
+            route.settlement_reserve_atoms,
+            &nav_asset.valuation_unit,
+            &settlement_nav_asset.valuation_unit,
+            settlement_asset.precision,
+        )?;
+        primary_market_rows.push(NavPrimaryMarketReserveOverlayRow {
+            route_id: route.route_id.clone(),
+            route_config_digest: route.route_config_digest.clone(),
+            settlement_asset_id: route.settlement_asset_id.clone(),
+            settlement_reserve_atoms: route.settlement_reserve_atoms,
+            value_nav_units,
+            active_bucket_backing_atoms,
+            live_value_enabled: route.live_value_enabled,
+            paused: route.paused,
+        });
+    }
+    if rows.is_empty() && primary_market_rows.is_empty() {
         return Ok(None);
     }
     rows.sort_by(|left, right| left.allocation_id.cmp(&right.allocation_id));
+    primary_market_rows.sort_by(|left, right| left.route_id.cmp(&right.route_id));
     let mut value_nav_units = 0_u64;
     let mut preimage = format!(
-        "nav_asset_id={}\nnav_valuation_unit_bytes={}\nnav_valuation_unit={}\nallocation_count={}\n",
+        "nav_asset_id={}\nnav_valuation_unit_bytes={}\nnav_valuation_unit={}\nallocation_count={}\nprimary_market_route_count={}\n",
         nav_asset.asset_id,
         nav_asset.valuation_unit.len(),
         nav_asset.valuation_unit,
-        rows.len()
+        rows.len(),
+        primary_market_rows.len(),
     );
     for (index, row) in rows.iter().enumerate() {
         value_nav_units = value_nav_units
@@ -306,6 +392,28 @@ fn nav_subscription_reserve_overlay(
             row.bucket_redemption_queue_atoms,
             row.bucket_outstanding_vault_bridge_atoms,
             row.bucket_status,
+        ));
+    }
+    for (index, row) in primary_market_rows.iter().enumerate() {
+        value_nav_units = value_nav_units
+            .checked_add(row.value_nav_units)
+            .ok_or_else(|| {
+                (
+                    "nav_subscription_overlay_overflow",
+                    "primary-market reserve overlay value would overflow".to_string(),
+                )
+            })?;
+        preimage.push_str(&format!(
+            "primary_market[{index}].route_id_bytes={}\nprimary_market[{index}].route_id={}\nprimary_market[{index}].route_config_digest={}\nprimary_market[{index}].settlement_asset_id={}\nprimary_market[{index}].settlement_reserve_atoms={}\nprimary_market[{index}].value_nav_units={}\nprimary_market[{index}].active_bucket_backing_atoms={}\nprimary_market[{index}].live_value_enabled={}\nprimary_market[{index}].paused={}\n",
+            row.route_id.len(),
+            row.route_id,
+            row.route_config_digest,
+            row.settlement_asset_id,
+            row.settlement_reserve_atoms,
+            row.value_nav_units,
+            row.active_bucket_backing_atoms,
+            row.live_value_enabled,
+            row.paused,
         ));
     }
     Ok(Some(NavSubscriptionReserveOverlay {

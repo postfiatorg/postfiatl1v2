@@ -8,20 +8,27 @@ release_id=${A666_PFTL_RELEASE_ID:-a666-private-redeem-9061829}
 hosts_file=${A666_PROPOSER_HOSTS_FILE:-docs/evidence/a666-joe-mainnet-e2e-20260728/proposer-hosts.json}
 holder_key=${A666_JOE_HOLDER_KEY:-/home/postfiat/tmp/pfusdc-closed-roundtrip-20260720/keys/holder.json}
 resume=false
+nav_amount_atoms=
+settlement_output_atoms=
 
 while (($#)); do
   case "$1" in
     --phase-dir) phase_dir=$2; shift 2 ;;
     --workflow-id) workflow_id=$2; shift 2 ;;
+    --nav-amount-atoms) nav_amount_atoms=$2; shift 2 ;;
+    --settlement-output-atoms) settlement_output_atoms=$2; shift 2 ;;
     --resume) resume=true; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 
-for value in "$phase_dir" "$workflow_id"; do
+for value in "$phase_dir" "$workflow_id" "$nav_amount_atoms" "$settlement_output_atoms"; do
   test -n "$value"
 done
 [[ "$workflow_id" =~ ^[a-z0-9][a-z0-9-]{0,39}$ ]]
+[[ "$nav_amount_atoms" =~ ^[1-9][0-9]*$ ]]
+[[ "$settlement_output_atoms" =~ ^[1-9][0-9]*$ ]]
+test "$settlement_output_atoms" -le "$nav_amount_atoms"
 
 cd "$repo"
 phase_dir=$(realpath "$phase_dir")
@@ -70,7 +77,7 @@ if ! test -s "$orchard_dir/ingress/finality/summary.json"; then
          --data-dir /var/lib/postfiat/validator-2 \
          --key-file '$remote_private/holder-key.json' \
          --asset-id '$a666' \
-         --amount 1000000 \
+         --amount '$nav_amount_atoms' \
          --note-seed-hex \"\$seed\" \
          --ingress-file '$remote_public/a666-ingress.json' \
          --note-file '$remote_private/a666-note.json' \
@@ -114,8 +121,8 @@ if ! test -s "$orchard_dir/private-primary-redeem/finality/summary.json"; then
          --settlement-recipient '$joe' \
          --redemption-id \"\$redemption_id\" \
          --redemption-nonce \"\$redemption_nonce\" \
-         --nav-amount-atoms 1000000 \
-         --settlement-output-atoms 999500 \
+         --nav-amount-atoms '$nav_amount_atoms' \
+         --settlement-output-atoms '$settlement_output_atoms' \
          --expires-at-height '$expires_at_height' \
          --action-file '$remote_public/private-primary-redeem.json' \
          > '$remote_public/private-primary-redeem-report.json'; \
@@ -157,7 +164,7 @@ if ! test -s "$orchard_dir/pfusdc-private-egress/finality/summary.json"; then
          --disclosure-hash \"\$disclosure_hash\" \
          --egress-file '$remote_public/pfusdc-private-egress.json' \
          --asset-id '$pfusdc' \
-         --amount 999500 \
+         --amount '$settlement_output_atoms' \
          --fee 0 \
          > '$remote_public/pfusdc-private-egress-report.json'; \
        '$remote_node' shield-batch-asset-orchard-private-egress \
@@ -191,7 +198,8 @@ ssh -o BatchMode=yes "root@$validator2_host" \
     --account '$joe' \
     --asset-id '$pfusdc'" \
   > "$orchard_dir/joe-pfusdc-after-private-egress.json"
-jq -e '.assets|length==1 and .[0].balance >= 999500' \
+jq -e --argjson minimum "$settlement_output_atoms" \
+  '.assets|length==1 and .[0].balance >= $minimum' \
   "$orchard_dir/joe-pfusdc-after-private-egress.json" >/dev/null
 
 jq -n \
@@ -200,6 +208,8 @@ jq -n \
     "$orchard_dir/private-primary-redeem/private-primary-redeem-report.json" \
   --slurpfile egress \
     "$orchard_dir/pfusdc-private-egress/pfusdc-private-egress-report.json" \
+  --argjson expected_nav "$nav_amount_atoms" \
+  --argjson expected_settlement "$settlement_output_atoms" \
   '{
     schema:"postfiat.a666.private_primary_redeem_acceptance.v1",
     verdict:"PASS",
@@ -218,4 +228,10 @@ jq -n \
       verified:$egress[0].verified
     },
     private_material_location:"validator-2 only; mode 0600; excluded from evidence"
-  }' > "$orchard_dir/summary.json"
+  }
+  | if .a666_ingress.amount_atoms!=$expected_nav
+      or .private_redeem.nav_amount_atoms!=$expected_nav
+      or .private_redeem.settlement_output_atoms!=$expected_settlement
+      or .private_egress.amount_atoms!=$expected_settlement
+    then error("private redeem amount mismatch") else . end' \
+  > "$orchard_dir/summary.json"

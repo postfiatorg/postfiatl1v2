@@ -5,20 +5,26 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 phase_dir=
 workflow_id=
 resume=false
+nav_amount_atoms=
+settlement_output_atoms=
 
 while (($#)); do
   case "$1" in
     --phase-dir) phase_dir=$2; shift 2 ;;
     --workflow-id) workflow_id=$2; shift 2 ;;
+    --nav-amount-atoms) nav_amount_atoms=$2; shift 2 ;;
+    --settlement-output-atoms) settlement_output_atoms=$2; shift 2 ;;
     --resume) resume=true; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 
-for value in "$phase_dir" "$workflow_id"; do
+for value in "$phase_dir" "$workflow_id" "$nav_amount_atoms" "$settlement_output_atoms"; do
   test -n "$value"
 done
 [[ "$workflow_id" =~ ^[a-z0-9][a-z0-9-]{0,39}$ ]]
+[[ "$nav_amount_atoms" =~ ^[1-9][0-9]*$ ]]
+[[ "$settlement_output_atoms" =~ ^[1-9][0-9]*$ ]]
 
 cd "$repo"
 phase_dir=$(realpath "$phase_dir")
@@ -33,6 +39,17 @@ route_id=pftl-a666-ethereum-wA666-usdc-v1
 
 test -s "$phase_dir/destination-consume/summary.json"
 jq -e '.verdict=="PASS"' "$phase_dir/destination-consume/summary.json" >/dev/null
+if ! test -s "$phase_dir/roundtrip-supply-before.json"; then
+  ssh -o BatchMode=yes "root@$validator2_host" \
+    "$remote_node navcoin-bridge-supply-status \
+      --data-dir /var/lib/postfiat/validator-2 \
+      --route-id '$route_id'" \
+    > "$phase_dir/roundtrip-supply-before.json"
+fi
+jq -e \
+  --argjson amount "$nav_amount_atoms" \
+  '.invariant_holds==true and .ethereum_spendable_supply_atoms >= $amount' \
+  "$phase_dir/roundtrip-supply-before.json" >/dev/null
 
 if ! test -s "$burn_dir/burn.json"; then
   test ! -e "$burn_dir"
@@ -41,16 +58,16 @@ if ! test -s "$burn_dir/burn.json"; then
   printf '%s\n' "$return_nonce" > "$burn_dir/return-nonce.txt"
   python3 scripts/a666-mainnet-burn-for-return.py \
     --execute \
-    --amount-atoms 1000000 \
+    --amount-atoms "$nav_amount_atoms" \
     --return-nonce "$return_nonce" \
     > "$burn_dir/burn.json"
 fi
-jq -e \
+jq -e --argjson amount "$nav_amount_atoms" \
   '.phase=="burned"
-   and .amount_atoms==1000000
+   and .amount_atoms==$amount
    and .event_log_index==1
-   and (.pre_state.recipient_balance_atoms-.post_state.recipient_balance_atoms)==1000000
-   and (.pre_state.token_total_supply-.post_state.token_total_supply)==1000000
+   and (.pre_state.recipient_balance_atoms-.post_state.recipient_balance_atoms)==$amount
+   and (.pre_state.token_total_supply-.post_state.token_total_supply)==$amount
    and .post_state.nonce_consumed==true' \
   "$burn_dir/burn.json" >/dev/null
 
@@ -68,6 +85,8 @@ fi
 private_args=(
   --phase-dir "$phase_dir"
   --workflow-id "$workflow_id"
+  --nav-amount-atoms "$nav_amount_atoms"
+  --settlement-output-atoms "$settlement_output_atoms"
 )
 if "$resume"; then
   private_args+=(--resume)
@@ -80,6 +99,7 @@ jq -e '.verdict=="PASS"' "$phase_dir/orchard/summary.json" >/dev/null
 egress_args=(
   --phase-dir "$phase_dir"
   --workflow-id "$workflow_id"
+  --amount-atoms "$settlement_output_atoms"
 )
 if "$resume"; then
   egress_args+=(--resume)
@@ -95,11 +115,15 @@ ssh -o BatchMode=yes "root@$validator2_host" \
     --route-id '$route_id'" \
   > "$phase_dir/final-pftl-supply-status.json"
 jq -e \
+  --argjson nav_amount "$nav_amount_atoms" \
+  --slurpfile before "$phase_dir/roundtrip-supply-before.json" \
   '.invariant_holds==true
    and .active_reservation_atoms==0
    and .export_entitlement_atoms==0
    and .outstanding_bridge_claims_atoms==.wrapped_exposure_atoms
-   and .ethereum_spendable_supply_atoms==0' \
+   and .authorized_valid_supply_atoms==($before[0].authorized_valid_supply_atoms-$nav_amount)
+   and .outstanding_bridge_claims_atoms==($before[0].outstanding_bridge_claims_atoms-$nav_amount)
+   and .ethereum_spendable_supply_atoms==($before[0].ethereum_spendable_supply_atoms-$nav_amount)' \
   "$phase_dir/final-pftl-supply-status.json" >/dev/null
 
 jq -n \

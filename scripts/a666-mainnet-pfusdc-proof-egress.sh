@@ -11,20 +11,23 @@ issuer_key=${A666_PFUSDC_ISSUER_KEY:-/home/postfiat/tmp/navswap-ce22-venue-rebui
 a100_host=${A666_A100_HOST:-194.228.55.129}
 a100_port=${A666_A100_PORT:-30886}
 resume=false
+amount_atoms=
 
 while (($#)); do
   case "$1" in
     --phase-dir) phase_dir=$2; shift 2 ;;
     --workflow-id) workflow_id=$2; shift 2 ;;
+    --amount-atoms) amount_atoms=$2; shift 2 ;;
     --resume) resume=true; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 
-for value in "$phase_dir" "$workflow_id"; do
+for value in "$phase_dir" "$workflow_id" "$amount_atoms"; do
   test -n "$value"
 done
 [[ "$workflow_id" =~ ^[a-z0-9][a-z0-9-]{0,39}$ ]]
+[[ "$amount_atoms" =~ ^[1-9][0-9]*$ ]]
 
 cd "$repo"
 phase_dir=$(realpath "$phase_dir")
@@ -76,7 +79,7 @@ if ! test -s "$egress_dir/burn-finality/summary.json"; then
          --data-dir /var/lib/postfiat/validator-2 \
          --owner '$joe' \
          --asset-id '$pfusdc' \
-         --amount-atoms 999500 \
+         --amount-atoms '$amount_atoms' \
          --destination-ref 'evm-erc20:1:${joe_evm,,}' \
          --bundle '$remote_root/burn-bundle' \
          > '$remote_root/burn-bundle-report.json'"
@@ -118,9 +121,10 @@ if ! test -s "$egress_dir/witness.json"; then
   redemption_id=$(jq -er \
     --arg owner "$joe" \
     --argjson height "$burn_height" \
+    --argjson amount "$amount_atoms" \
     '[.redemptions[]
       | select(.owner==$owner
-        and .amount_atoms==999500
+        and .amount_atoms==$amount
         and .created_at_height==$height
         and .state=="pending")]
      | if length==1 then .[0].redemption_id else error("ambiguous redemption") end' \
@@ -153,11 +157,12 @@ if ! test -s "$egress_dir/witness.json"; then
     --arg redemption_id "$redemption_id" \
     --arg prior "$prior_checkpoint" \
     --argjson height "$burn_height" \
+    --argjson amount "$amount_atoms" \
     '.schema=="postfiat.pfusdc.egress_proof_witness.v1"
      and .prior_checkpoint_block_id==$prior
      and .withdrawal_packet.withdrawal_id==$redemption_id
      and .block.header.height==$height
-     and .withdrawal_packet.amount_atoms==999500' \
+     and .withdrawal_packet.amount_atoms==$amount' \
     "$egress_dir/witness.json" >/dev/null
 fi
 
@@ -190,17 +195,17 @@ if ! test -s "$egress_dir/withdrawal-result.json"; then
     --output "$egress_dir/withdrawal-result.json" \
     --deployment-manifest "$manifest" \
     --expected-manifest-sha256 "$manifest_sha256" \
-    --amount-atoms 999500 \
+    --amount-atoms "$amount_atoms" \
     --recipient "$joe_evm"
 fi
-jq -e \
-  '.amount_atoms==999500
+jq -e --argjson amount "$amount_atoms" \
+  '.amount_atoms==$amount
    and .withdrawal_consumed==true
    and .burn_consumed==true
    and .proof_nullifier_consumed==true
    and .replay_rejected==true
-   and (.recipient_balance_after-.recipient_balance_before)==999500
-   and (.vault_balance_before-.vault_balance_after)==999500' \
+   and (.recipient_balance_after-.recipient_balance_before)==$amount
+   and (.vault_balance_before-.vault_balance_after)==$amount' \
   "$egress_dir/withdrawal-result.json" >/dev/null
 
 if ! test -s "$egress_dir/settle-finality/summary.json"; then
@@ -210,7 +215,7 @@ if ! test -s "$egress_dir/settle-finality/summary.json"; then
   receipt_block_hash=$(jq -er '.receipt_block_hash | ltrimstr("0x")' \
     "$egress_dir/withdrawal-result.json")
   settlement_receipt_hash=$(printf '%s' \
-    "postfiat.pfusdc.ethereum_settlement.v1:$withdrawal_tx:$receipt_block_hash:999500" \
+    "postfiat.pfusdc.ethereum_settlement.v1:$withdrawal_tx:$receipt_block_hash:$amount_atoms" \
     | openssl dgst -sha3-384 -r | awk '{print $1}')
   jq -n \
     --arg label "$workflow_id-pfusdc-settle" \
@@ -219,6 +224,7 @@ if ! test -s "$egress_dir/settle-finality/summary.json"; then
     --arg asset_id "$pfusdc" \
     --arg redemption_id "$redemption_id" \
     --arg receipt_hash "$settlement_receipt_hash" \
+    --argjson amount "$amount_atoms" \
     '{
       schema:"postfiat-certified-asset-ops-request-v1",
       operations:[{
@@ -231,7 +237,7 @@ if ! test -s "$egress_dir/settle-finality/summary.json"; then
           asset_id:$asset_id,
           redemption_id:$redemption_id,
           settlement_receipt_hash:$receipt_hash,
-          settled_atoms:999500
+          settled_atoms:$amount
         }
       }]
     }' > "$egress_dir/settle.ops.json"

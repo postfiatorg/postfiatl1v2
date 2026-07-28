@@ -3224,3 +3224,109 @@
         assert_eq!(receipt.code, "bad_asset_transaction_envelope");
         assert!(receipt.message.contains("asset_clawback.asset_id"));
     }
+
+    #[test]
+    fn a666_nav_overlay_counts_only_vault_backed_primary_market_reserve() {
+        let issuer = "issuer".to_string();
+        let settlement =
+            AssetDefinition::new("postfiat-local", &issuer, "pfUSDC", 1, 6)
+                .expect("settlement asset");
+        let settlement_asset_id = settlement.asset_id.clone();
+        let nav = AssetDefinition::new("postfiat-local", &issuer, "A666", 1, 6)
+            .expect("nav asset");
+        let nav_asset_id = nav.asset_id.clone();
+        let mut ledger = LedgerState::new(Vec::new());
+        ledger.asset_definitions.push(settlement);
+        ledger.asset_definitions.push(nav);
+        ledger.nav_assets.push(
+            NavTrackedAsset::new(
+                settlement_asset_id.clone(),
+                issuer.clone(),
+                issuer.clone(),
+                "11".repeat(48),
+                "USDC",
+                issuer.clone(),
+            )
+            .expect("settlement nav"),
+        );
+        ledger.nav_assets.push(
+            NavTrackedAsset::new(
+                nav_asset_id.clone(),
+                issuer.clone(),
+                issuer.clone(),
+                "12".repeat(48),
+                "USD_1E8",
+                issuer.clone(),
+            )
+            .expect("A666 nav"),
+        );
+
+        let mut bucket = VaultBridgeBucketState::new(
+            settlement_asset_id.clone(),
+            "erc20_bridge_vault:1:0x1111111111111111111111111111111111111111:0x2222222222222222222222222222222222222222",
+            "13".repeat(48),
+            1,
+        )
+        .expect("bucket");
+        bucket.gross_receipt_atoms = 205_036_000;
+        bucket.counted_value_atoms = 205_036_000;
+        bucket.outstanding_vault_bridge_atoms = 205_036_000;
+        bucket.validate().expect("valid bucket");
+        ledger.vault_bridge_bucket_states.push(bucket);
+
+        ledger.pftl_uniswap_routes.push(
+            postfiat_types::PftlUniswapConsensusRouteState {
+                route_id: "pftl-a666-ethereum-wA666-usdc-v1".to_string(),
+                route_family:
+                    postfiat_types::PFTL_UNISWAP_ROUTE_FAMILY_PRIMARY_MINT.to_string(),
+                route_config_digest: "14".repeat(48),
+                route_trust_class:
+                    postfiat_types::PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT.to_string(),
+                native_nav_asset_id: nav_asset_id.clone(),
+                settlement_asset_id: settlement_asset_id.clone(),
+                handoff_controller: "0x1111111111111111111111111111111111111111"
+                    .to_string(),
+                settlement_adapter: "0x2222222222222222222222222222222222222222"
+                    .to_string(),
+                wrapped_navcoin_token: "0x3333333333333333333333333333333333333333"
+                    .to_string(),
+                ethereum_chain_id: 1,
+                route_supply_cap_atoms: 1_000_000_000,
+                packet_notional_cap_atoms: 1_000_000_000,
+                latest_finalized_nav_epoch: 1,
+                return_finality_blocks: 12,
+                live_value_enabled: true,
+                ethereum_verification_policy: None,
+                authorized_valid_supply_atoms: 0,
+                pftl_spendable_supply_atoms: 0,
+                native_spendable_balances_atoms: std::collections::BTreeMap::new(),
+                ethereum_spendable_supply_atoms: 0,
+                other_registered_venue_supply_atoms: 0,
+                outstanding_bridge_claims_atoms: 0,
+                pending_return_import_claims_atoms: 0,
+                settlement_reserve_atoms: 204_000_000,
+                primary_subscription_nonces: std::collections::BTreeMap::new(),
+                export_packets: std::collections::BTreeMap::new(),
+                export_nonces: std::collections::BTreeMap::new(),
+                return_imports: std::collections::BTreeMap::new(),
+                paused: false,
+                v2: None,
+            },
+        );
+
+        let overlay = nav_subscription_reserve_overlay(
+            &ledger,
+            ledger.nav_asset(&nav_asset_id).expect("A666 nav"),
+        )
+        .expect("overlay")
+        .expect("overlay present");
+        assert_eq!(overlay.value_nav_units, 20_400_000_000);
+
+        ledger.pftl_uniswap_routes[0].settlement_reserve_atoms = 205_036_001;
+        let error = nav_subscription_reserve_overlay(
+            &ledger,
+            ledger.nav_asset(&nav_asset_id).expect("A666 nav"),
+        )
+        .expect_err("reserve above backing must fail");
+        assert_eq!(error.0, "primary_market_reserve_exceeds_vault_backing");
+    }

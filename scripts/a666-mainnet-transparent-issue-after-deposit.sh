@@ -12,6 +12,7 @@ expected_wrapped_supply_before=
 resume_after_ingress_proof=false
 resume_after_ingress_deployment=false
 allow_recovery_timing_exception=false
+private_middle=false
 a100_host=${A666_A100_HOST:-194.228.55.129}
 a100_port=${A666_A100_PORT:-30886}
 validator2_host=${A666_VALIDATOR2_HOST:-66.42.48.39}
@@ -29,6 +30,7 @@ while (($#)); do
     --resume-after-ingress-proof) resume_after_ingress_proof=true; shift ;;
     --resume-after-ingress-deployment) resume_after_ingress_deployment=true; shift ;;
     --allow-recovery-timing-exception) allow_recovery_timing_exception=true; shift ;;
+    --private-middle) private_middle=true; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -216,45 +218,56 @@ PFTL_PROOF_DIR="$remote_run/ingress-proof" \
 PFTL_LOCAL_EVIDENCE="$phase_dir/pftl" \
 bash "$repo/docs/evidence/a666-acceptance-20260728/phase-1-transparent-issue-debug/pftl/relay.sh"
 
-round_args=(
-  --node-bin target/release/postfiat-node
-  --remote-runner scripts/a666-remote-sync-round.py
-  --proposer-hosts-file docs/evidence/a666-joe-mainnet-e2e-20260728/proposer-hosts.json
-  --remote-binary "$remote_node"
-  --remote-topology "$remote_topology"
-)
-python3 scripts/a666-ce22-remote-finality-op.py \
-  --ops-file "$ops_dir/01-reserve.ops.json" \
-  --artifact-dir "$phase_dir/a666/01-reserve-round" \
-  "${round_args[@]}"
-python3 scripts/a666-ce22-remote-finality-op.py \
-  --ops-file "$ops_dir/02-subscribe.ops.json" \
-  --artifact-dir "$phase_dir/a666/02-subscribe-round" \
-  "${round_args[@]}"
+if "$private_middle"; then
+  bash scripts/a666-mainnet-private-issue-middle.sh \
+    --phase-dir "$phase_dir" \
+    --workflow-id "$workflow_id" \
+    --expected-pftl-height "$((expected_pftl_height + 2))"
+  export_height=$((expected_pftl_height + 7))
+else
+  round_args=(
+    --node-bin target/release/postfiat-node
+    --remote-runner scripts/a666-remote-sync-round.py
+    --proposer-hosts-file docs/evidence/a666-joe-mainnet-e2e-20260728/proposer-hosts.json
+    --remote-binary "$remote_node"
+    --remote-topology "$remote_topology"
+  )
+  python3 scripts/a666-ce22-remote-finality-op.py \
+    --ops-file "$ops_dir/01-reserve.ops.json" \
+    --artifact-dir "$phase_dir/a666/01-reserve-round" \
+    "${round_args[@]}"
+  python3 scripts/a666-ce22-remote-finality-op.py \
+    --ops-file "$ops_dir/02-subscribe.ops.json" \
+    --artifact-dir "$phase_dir/a666/02-subscribe-round" \
+    "${round_args[@]}"
 
-ssh -o BatchMode=yes "root@$validator2_host" \
-  "$remote_node account-assets --data-dir /var/lib/postfiat/validator-2 --account $joe --asset-id $pfusdc" \
-  > "$phase_dir/a666/joe-pfusdc-after-subscribe.json"
-ssh -o BatchMode=yes "root@$validator2_host" \
-  "$remote_node account-assets --data-dir /var/lib/postfiat/validator-2 --account $joe --asset-id $a666" \
-  > "$phase_dir/a666/joe-a666-after-subscribe.json"
-jq -e --argjson expected "$pfusdc_balance_before" \
-  '([.assets[]?.balance] | add // 0)==$expected' \
-  "$phase_dir/a666/joe-pfusdc-after-subscribe.json" >/dev/null
-jq -e \
-  --argjson before "$a666_balance_before" \
-  --argjson minted "$mint_amount" \
-  '([.assets[]?.balance] | add // 0)==($before+$minted)' \
-  "$phase_dir/a666/joe-a666-after-subscribe.json" >/dev/null
+  ssh -o BatchMode=yes "root@$validator2_host" \
+    "$remote_node account-assets --data-dir /var/lib/postfiat/validator-2 --account $joe --asset-id $pfusdc" \
+    > "$phase_dir/a666/joe-pfusdc-after-subscribe.json"
+  ssh -o BatchMode=yes "root@$validator2_host" \
+    "$remote_node account-assets --data-dir /var/lib/postfiat/validator-2 --account $joe --asset-id $a666" \
+    > "$phase_dir/a666/joe-a666-after-subscribe.json"
+  jq -e --argjson expected "$pfusdc_balance_before" \
+    '([.assets[]?.balance] | add // 0)==$expected' \
+    "$phase_dir/a666/joe-pfusdc-after-subscribe.json" >/dev/null
+  jq -e \
+    --argjson before "$a666_balance_before" \
+    --argjson minted "$mint_amount" \
+    '([.assets[]?.balance] | add // 0)==($before+$minted)' \
+    "$phase_dir/a666/joe-a666-after-subscribe.json" >/dev/null
 
-python3 scripts/a666-ce22-remote-finality-op.py \
-  --ops-file "$ops_dir/03-export.ops.json" \
-  --artifact-dir "$phase_dir/a666/03-export-round" \
-  "${round_args[@]}"
-export_height=$((expected_pftl_height + 5))
+  python3 scripts/a666-ce22-remote-finality-op.py \
+    --ops-file "$ops_dir/03-export.ops.json" \
+    --artifact-dir "$phase_dir/a666/03-export-round" \
+    "${round_args[@]}"
+  export_height=$((expected_pftl_height + 5))
+fi
 ssh -o BatchMode=yes "root@$validator2_host" \
   "$remote_node account-assets --data-dir /var/lib/postfiat/validator-2 --account $joe --asset-id $a666" \
   > "$phase_dir/a666/joe-a666-after-export.json"
+ssh -o BatchMode=yes "root@$validator2_host" \
+  "$remote_node account-assets --data-dir /var/lib/postfiat/validator-2 --account $joe --asset-id $pfusdc" \
+  > "$phase_dir/a666/joe-pfusdc-after-export.json"
 ssh -o BatchMode=yes "root@$validator2_host" \
   "$remote_node navcoin-bridge-supply-status \
     --data-dir /var/lib/postfiat/validator-2 \
@@ -263,6 +276,9 @@ ssh -o BatchMode=yes "root@$validator2_host" \
 jq -e --argjson expected "$a666_balance_before" \
   '([.assets[]?.balance] | add // 0)==$expected' \
   "$phase_dir/a666/joe-a666-after-export.json" >/dev/null
+jq -e --argjson expected "$pfusdc_balance_before" \
+  '([.assets[]?.balance] | add // 0)==$expected' \
+  "$phase_dir/a666/joe-pfusdc-after-export.json" >/dev/null
 jq -e \
   --slurpfile before "$phase_dir/pftl-supply-status-before.json" \
   --argjson minted "$mint_amount" \
