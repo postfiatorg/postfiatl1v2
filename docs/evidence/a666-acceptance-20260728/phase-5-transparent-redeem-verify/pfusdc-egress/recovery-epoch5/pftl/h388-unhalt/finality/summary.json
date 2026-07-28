@@ -1,0 +1,21 @@
+{
+  "accepted": true,
+  "all_sends_verified": true,
+  "confirmed": true,
+  "end_block_tip_hash": "32fd9343a389c48cc5d70bd845bcdeac42e81a9f9f7691bffd39d140e29384703ff73ff30cd457461cee70fa3a854f89",
+  "end_height": 388,
+  "end_mempool_pending": 0,
+  "end_state_root": "bdce414b399f935a4b22908da1ebd793eb0ec7ae8be488af5d4398d3d7a668d8a5a18cd4d82d175c5217bc8a499eabf1",
+  "label": "unhalt-pfusdc-epoch5-acceptance",
+  "proposer": "validator-4",
+  "round_ok": true,
+  "schema": "postfiat-a666-ce22-remote-finality-operation-v1",
+  "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "start_height": 387,
+  "start_state_root": "d8344429fb34be408a4e91d2fb3f2c75ff3489692c0266d367173dbb2a4fa5a84f6f39cd6fef3ef67a60ca5949f61b28",
+  "transaction_kind": "nav_halt",
+  "trust_class": "CONTROLLED",
+  "tx_id": "dfcb25ae92bc00eb1318b5ad3d5797001361e24b0361431ab22c2a39af185b2cb2b13b6497f740c23c8ef60f7afdad19",
+  "validator_count": 6,
+  "vote_count": 5
+}

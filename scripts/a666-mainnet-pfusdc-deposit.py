@@ -49,7 +49,63 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--amount-atoms", type=int, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--deployment-manifest",
+        type=Path,
+        help="Frozen post-deployment manifest for a replacement vault lane",
+    )
+    parser.add_argument(
+        "--expected-manifest-sha256",
+        help="Required content digest when --deployment-manifest is used",
+    )
     return parser.parse_args()
+
+
+def apply_deployment_manifest(
+    base: object,
+    manifest_path: Path,
+    expected_digest: str | None,
+) -> str:
+    if not expected_digest:
+        raise RuntimeError(
+            "--expected-manifest-sha256 is required with --deployment-manifest"
+        )
+    digest = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    if digest != expected_digest:
+        raise RuntimeError(
+            f"deployment manifest digest {digest} != frozen digest {expected_digest}"
+        )
+    manifest = json.loads(manifest_path.read_text())
+    route = manifest["route"]
+    network = manifest["network"]
+    profile = route["route_profile"]
+    if route["status"] not in {"generated-not-deployed", "deployed"}:
+        raise RuntimeError("deployment manifest has an unsupported route status")
+    if route["route_id"] != "ethereum-mainnet-usdc-v1":
+        raise RuntimeError("deployment manifest is not the Ethereum mainnet USDC route")
+    if int(route["route_epoch"]) < 4:
+        raise RuntimeError("replacement deployment manifest regresses the route epoch")
+    if profile["vault_address"] != route["vault_address"]:
+        raise RuntimeError("route profile and deployment disagree on the vault")
+    if profile["vault_runtime_code_hash"] != route["vault_runtime_code_hash"]:
+        raise RuntimeError("route profile and deployment disagree on vault runtime")
+    if profile["token_address"] != network["token"]["address"]:
+        raise RuntimeError("route profile and network disagree on the source token")
+    if int(profile["source_chain_id"]) != int(network["source_chain_id"]):
+        raise RuntimeError("route profile and network disagree on source chain")
+
+    base.MANIFEST = manifest_path
+    base.EXPECTED_MANIFEST_SHA256 = digest
+    base.CHAIN_ID = int(network["source_chain_id"])
+    base.RPC = network["execution_rpc_default"]
+    base.VAULT = route["vault_address"]
+    base.VERIFIER = route["verifier_address"]
+    base.USDC = network["token"]["address"]
+    base.ROUTE_BINDING = route["route_binding"]
+    base.EXPECTED_VAULT_RUNTIME_KECCAK = route[
+        "vault_runtime_code_hash"
+    ].removeprefix("0x")
+    return digest
 
 
 def main() -> None:
@@ -60,9 +116,20 @@ def main() -> None:
         raise RuntimeError(f"refusing to overwrite evidence: {args.output}")
 
     base = load_base()
-    manifest_digest = hashlib.sha256(MANIFEST.read_bytes()).hexdigest()
-    if manifest_digest != base.EXPECTED_MANIFEST_SHA256:
-        raise RuntimeError("authorized pfUSDC deployment manifest changed")
+    if args.deployment_manifest:
+        manifest_digest = apply_deployment_manifest(
+            base,
+            args.deployment_manifest,
+            args.expected_manifest_sha256,
+        )
+    else:
+        if args.expected_manifest_sha256:
+            raise RuntimeError(
+                "--expected-manifest-sha256 requires --deployment-manifest"
+            )
+        manifest_digest = hashlib.sha256(MANIFEST.read_bytes()).hexdigest()
+        if manifest_digest != base.EXPECTED_MANIFEST_SHA256:
+            raise RuntimeError("authorized pfUSDC deployment manifest changed")
 
     sys.path.insert(0, str(REPO.parent / "StakeHub"))
     from stakehub.agentd import call

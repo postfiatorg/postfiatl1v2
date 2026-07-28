@@ -7,11 +7,12 @@ node=${PFTL_NODE_BIN:-/opt/postfiat/releases/a666-acceptance-98c81a9/postfiat-no
 topology=${PFTL_TOPOLOGY:-/etc/postfiat/releases/a666-acceptance-98c81a9/topology.json}
 run=${PFTL_RUN_DIR:-/var/lib/postfiat/validator-2/a666-acceptance-20260728}
 local_evidence=${PFTL_LOCAL_EVIDENCE:-$(cd "$(dirname "$0")" && pwd)}
-issuer_key=/var/lib/postfiat/validator-2/a666-joe-e2e-20260728/pfusdc-issuer-key.json
-cast=/var/lib/postfiat/validator-2/pfusdc-latency-20260727-run2/cast
+issuer_key=${PFTL_ISSUER_KEY:-/var/lib/postfiat/validator-2/a666-joe-e2e-20260728/pfusdc-issuer-key.json}
+cast=${PFTL_CAST_BIN:-/var/lib/postfiat/validator-2/pfusdc-latency-20260727-run2/cast}
 proof_dir=${PFTL_PROOF_DIR:-"$run/phase1-ingress-proof-cuda"}
 asset=02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b
-policy=928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81
+policy=${PFTL_POLICY_HASH:-928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81}
+vault=${PFTL_VAULT_ADDRESS:-0x8583409ddbac984ec195dfa06a21103d92403c1e}
 issuer=pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8
 holder=pfab9b9228942e5c529633a13aa271d5297bec6353
 deposit_tx=${DEPOSIT_TX:-0xadecf2fe0b96b7aef2eaaa62ebeac33f16201f8014c784603486a46fe1a0cbb1}
@@ -78,7 +79,7 @@ ssh_v2 "set -euo pipefail
     --cast-bin '$cast' \
     --source-rpc-url https://ethereum-rpc.publicnode.com \
     --tx-hash '$deposit_tx' \
-    --vault-address 0x8583409ddbac984ec195dfa06a21103d92403c1e \
+    --vault-address '$vault' \
     --token-address 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 \
     --asset-id '$asset' \
     --policy-hash '$policy' \
