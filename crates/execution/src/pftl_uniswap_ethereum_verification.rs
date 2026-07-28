@@ -200,7 +200,7 @@ pub(crate) fn verify_destination_consume(
         .as_ref()
         .ok_or_else(missing_external_verification)
         .and_then(|digest| hex_exact::<32>("Ethereum packet digest", digest))?;
-    require_packet_schema(packet)?;
+    require_packet_schema(route, packet)?;
     let event_matches = match decode_packet_consumed_event(&log, controller) {
         Ok(event) => {
             event.packet_digest == packet_digest
@@ -260,7 +260,7 @@ pub(crate) fn verify_source_refund(
         .as_ref()
         .ok_or_else(missing_external_verification)
         .and_then(|digest| hex_exact::<32>("Ethereum packet digest", digest))?;
-    require_packet_schema(packet)?;
+    require_packet_schema(route, packet)?;
     if event.packet_digest != packet_digest
         || event.source_packet_commitment != source_packet_commitment
         || event.deadline != packet.destination_deadline_seconds
@@ -495,16 +495,27 @@ fn missing_external_verification() -> ExecutionError {
     )
 }
 
-fn require_packet_schema(packet: &PftlUniswapConsensusExportPacket) -> Result<(), ExecutionError> {
-    if packet.ethereum_packet_schema_version
-        != Some(postfiat_types::PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V1)
-    {
+fn require_packet_schema(
+    route: &PftlUniswapConsensusRouteState,
+    packet: &PftlUniswapConsensusExportPacket,
+) -> Result<(), ExecutionError> {
+    let expected_schema = expected_packet_schema(route.v2.is_some());
+    if packet.ethereum_packet_schema_version != Some(expected_schema) {
         return Err((
             "pftl_uniswap_ethereum_packet_schema_mismatch",
-            "external evidence references an unsupported or legacy packet schema".to_string(),
+            "external evidence packet schema does not match the governed route generation"
+                .to_string(),
         ));
     }
     Ok(())
+}
+
+fn expected_packet_schema(route_is_v2: bool) -> u32 {
+    if route_is_v2 {
+        postfiat_types::PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V2
+    } else {
+        postfiat_types::PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V1
+    }
 }
 
 fn external_proof_error(error: postfiat_bridge::EthereumProofError) -> ExecutionError {
@@ -512,4 +523,21 @@ fn external_proof_error(error: postfiat_bridge::EthereumProofError) -> Execution
         "invalid_pftl_uniswap_ethereum_receipt_proof",
         format!("{}: {error}", error.code()),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::expected_packet_schema;
+
+    #[test]
+    fn packet_schema_tracks_route_generation() {
+        assert_eq!(
+            expected_packet_schema(false),
+            postfiat_types::PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V1
+        );
+        assert_eq!(
+            expected_packet_schema(true),
+            postfiat_types::PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V2
+        );
+    }
 }
