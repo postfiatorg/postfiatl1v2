@@ -1446,6 +1446,70 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "asset-orchard-private-primary-redeem-create" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let note_file = flag_value(flags, "--note-file").ok_or("missing --note-file")?;
+            let output_note_seed_hex = flag_value(flags, "--output-note-seed-hex")
+                .ok_or("missing --output-note-seed-hex")?
+                .to_string();
+            let output_note_file =
+                flag_value(flags, "--output-note-file").ok_or("missing --output-note-file")?;
+            let route_id = flag_value(flags, "--route-id")
+                .ok_or("missing --route-id")?
+                .to_string();
+            let owner = flag_value(flags, "--owner")
+                .ok_or("missing --owner")?
+                .to_string();
+            let settlement_recipient = flag_value(flags, "--settlement-recipient")
+                .ok_or("missing --settlement-recipient")?
+                .to_string();
+            let redemption_id = flag_value(flags, "--redemption-id")
+                .ok_or("missing --redemption-id")?
+                .to_string();
+            let redemption_nonce = flag_value(flags, "--redemption-nonce")
+                .ok_or("missing --redemption-nonce")?
+                .to_string();
+            let nav_amount_atoms = flag_value(flags, "--nav-amount-atoms")
+                .ok_or("missing --nav-amount-atoms")?
+                .parse::<u64>()
+                .map_err(|_| "--nav-amount-atoms must be a u64".to_string())?;
+            let settlement_output_atoms = flag_value(flags, "--settlement-output-atoms")
+                .ok_or("missing --settlement-output-atoms")?
+                .parse::<u64>()
+                .map_err(|_| "--settlement-output-atoms must be a u64".to_string())?;
+            let expires_at_height = flag_value(flags, "--expires-at-height")
+                .ok_or("missing --expires-at-height")?
+                .parse::<u64>()
+                .map_err(|_| "--expires-at-height must be a u64".to_string())?;
+            let action_file =
+                flag_value(flags, "--action-file").ok_or("missing --action-file")?;
+            let report = create_asset_orchard_private_primary_redeem(
+                AssetOrchardPrivatePrimaryRedeemCreateOptions {
+                    data_dir: PathBuf::from(data_dir),
+                    note_file: PathBuf::from(note_file),
+                    output_note_seed_hex,
+                    output_note_file: PathBuf::from(output_note_file),
+                    route_id,
+                    owner,
+                    settlement_recipient,
+                    redemption_id,
+                    redemption_nonce,
+                    nav_amount_atoms,
+                    settlement_output_atoms,
+                    expires_at_height,
+                    action_file: PathBuf::from(action_file),
+                    overwrite: flag_present(flags, "--overwrite"),
+                },
+            )
+            .map_err(|error| {
+                format!("asset-orchard-private-primary-redeem-create failed: {error}")
+            })?;
+            let json = serde_json::to_string_pretty(&report).map_err(|error| {
+                format!("AssetOrchard private-primary redeem report serialization failed: {error}")
+            })?;
+            println!("{json}");
+            Ok(())
+        }
         "asset-orchard-note-status" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let note_file = flag_value(flags, "--note-file").ok_or("missing --note-file")?;
@@ -2139,6 +2203,29 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             })?;
             let json = serde_json::to_string_pretty(&batch).map_err(|error| {
                 format!("AssetOrchard private-primary batch serialization failed: {error}")
+            })?;
+            println!("{json}");
+            Ok(())
+        }
+        "shield-batch-asset-orchard-private-primary-redeem" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let action_file =
+                flag_value(flags, "--action-file").ok_or("missing --action-file")?;
+            let batch_file = flag_value(flags, "--batch-file").ok_or("missing --batch-file")?;
+            let batch = create_asset_orchard_private_primary_redeem_batch(
+                AssetOrchardPrivatePrimaryRedeemBatchOptions {
+                    data_dir: PathBuf::from(data_dir),
+                    action_file: PathBuf::from(action_file),
+                    batch_file: PathBuf::from(batch_file),
+                },
+            )
+            .map_err(|error| {
+                format!("shield-batch-asset-orchard-private-primary-redeem failed: {error}")
+            })?;
+            let json = serde_json::to_string_pretty(&batch).map_err(|error| {
+                format!(
+                    "AssetOrchard private-primary redeem batch serialization failed: {error}"
+                )
             })?;
             println!("{json}");
             Ok(())

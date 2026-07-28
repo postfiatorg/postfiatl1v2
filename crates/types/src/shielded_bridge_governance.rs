@@ -414,6 +414,13 @@ pub struct AssetOrchardPrivatePrimaryIssueActionPayload {
     pub spend_authorization_signature: String,
 }
 
+/// Private-primary redemption uses the same bounded wire fields and pinned
+/// one-note proof container as private-primary issuance.  The action `schema`
+/// is consensus-significant and selects the opposite input/output asset
+/// semantics; it is never accepted by the issuance transition.
+pub type AssetOrchardPrivatePrimaryRedeemActionPayload =
+    AssetOrchardPrivatePrimaryIssueActionPayload;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind")]
 #[allow(clippy::large_enum_variant)]
@@ -442,6 +449,8 @@ pub enum ShieldedAction {
     AssetOrchardPrivateEgressV1(AssetOrchardPrivateEgressActionPayload),
     #[serde(rename = "asset_orchard_private_primary_issue_v1")]
     AssetOrchardPrivatePrimaryIssueV1(AssetOrchardPrivatePrimaryIssueActionPayload),
+    #[serde(rename = "asset_orchard_private_primary_redeem_v1")]
+    AssetOrchardPrivatePrimaryRedeemV1(AssetOrchardPrivatePrimaryRedeemActionPayload),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -1450,6 +1450,139 @@ pub fn create_asset_orchard_private_primary_issue_batch(
     Ok(batch)
 }
 
+pub fn create_asset_orchard_private_primary_redeem(
+    options: AssetOrchardPrivatePrimaryRedeemCreateOptions,
+) -> io::Result<AssetOrchardPrivatePrimaryRedeemReport> {
+    ensure_output_can_be_written(
+        &options.action_file,
+        options.overwrite,
+        "AssetOrchard private-primary redeem action file",
+    )?;
+    ensure_output_can_be_written(
+        &options.output_note_file,
+        options.overwrite,
+        "AssetOrchard private-primary redeem output note file",
+    )?;
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let ledger = store.read_ledger()?;
+    let shielded = store.read_shielded()?;
+    let pool = shielded
+        .orchard
+        .as_ref()
+        .filter(|pool| pool.pool_id == ASSET_ORCHARD_POOL_ID_V1)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "AssetOrchard pool is empty; ingress private NAV before private-primary redemption",
+            )
+        })?;
+    let route = ledger
+        .pftl_uniswap_routes
+        .iter()
+        .find(|route| route.route_id == options.route_id)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("PFTL-Uniswap route `{}` does not exist", options.route_id),
+            )
+        })?;
+    let v2 = route.v2.as_ref().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "private-primary redemption requires a v2 PFTL-Uniswap route",
+        )
+    })?;
+    let policy = &v2.primary_market_policy;
+    let input_note: AssetOrchardWalletNote =
+        read_json_file(&options.note_file, "AssetOrchard private-primary redeem input note")?;
+    let genesis_hash_32 = asset_orchard_domain_genesis_hash(&genesis_hash(&genesis))
+        .map_err(invalid_data)?;
+    let built = build_asset_orchard_private_primary_redeem_action(
+        &genesis.chain_id,
+        genesis_hash_32,
+        genesis.protocol_version,
+        input_note,
+        &options.output_note_seed_hex,
+        &options.route_id,
+        &options.owner,
+        &options.settlement_recipient,
+        &options.redemption_id,
+        &options.redemption_nonce,
+        v2.route_epoch,
+        policy.policy_epoch,
+        &policy.policy_hash,
+        policy.pricing_nav_epoch,
+        &policy.pricing_reserve_packet_hash,
+        options.nav_amount_atoms,
+        options.settlement_output_atoms,
+        options.expires_at_height,
+        &route.settlement_asset_id,
+        &route.native_nav_asset_id,
+        &pool.output_commitments,
+    )
+    .map_err(invalid_data)?;
+    let domain = orchard_authorizing_domain(&genesis, &built.action.pool_id)?;
+    verify_serialized_asset_orchard_private_primary_issue_action(
+        &built.action,
+        &domain,
+        &route.settlement_asset_id,
+        &route.native_nav_asset_id,
+    )
+    .map_err(invalid_data)?;
+    let payload = asset_orchard_private_primary_issue_payload_from_action(&built.action)?;
+    validate_asset_orchard_private_primary_redeem_payload(&payload)?;
+    let file = AssetOrchardPrivatePrimaryRedeemFile {
+        schema: ASSET_ORCHARD_PRIVATE_PRIMARY_REDEEM_FILE_SCHEMA.to_string(),
+        payload,
+    };
+    let json = serde_json::to_string_pretty(&file).map_err(invalid_data)?;
+    atomic_write(&options.action_file, format!("{json}\n"))?;
+    write_asset_orchard_wallet_note_file(&options.output_note_file, &built.output_note)?;
+    Ok(AssetOrchardPrivatePrimaryRedeemReport {
+        schema: ASSET_ORCHARD_PRIVATE_PRIMARY_REDEEM_REPORT_SCHEMA.to_string(),
+        action_file: options.action_file.display().to_string(),
+        input_note_file: options.note_file.display().to_string(),
+        output_note_file: options.output_note_file.display().to_string(),
+        route_id: options.route_id,
+        native_nav_asset_id: route.native_nav_asset_id.clone(),
+        settlement_asset_id: route.settlement_asset_id.clone(),
+        nav_amount_atoms: options.nav_amount_atoms,
+        settlement_output_atoms: options.settlement_output_atoms,
+        anchor: built.anchor.as_hex().to_string(),
+        nullifier: built.action.nullifier.as_hex().to_string(),
+        output_commitment: built.action.output_commitment.as_hex().to_string(),
+        proof_bytes: built.action.proof.byte_len(),
+        verified: true,
+        privacy: "private_nav_note_to_encrypted_settlement_note_with_public_route_economics"
+            .to_string(),
+    })
+}
+
+pub fn create_asset_orchard_private_primary_redeem_batch(
+    options: AssetOrchardPrivatePrimaryRedeemBatchOptions,
+) -> io::Result<ShieldedActionBatch> {
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let file: AssetOrchardPrivatePrimaryRedeemFile =
+        read_json_file(&options.action_file, "AssetOrchard private-primary redemption")?;
+    if file.schema != ASSET_ORCHARD_PRIVATE_PRIMARY_REDEEM_FILE_SCHEMA {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "AssetOrchard private-primary redeem file schema mismatch",
+        ));
+    }
+    validate_asset_orchard_private_primary_redeem_payload(&file.payload)?;
+    let batch = build_shielded_action_batch(
+        &genesis,
+        vec![ShieldedAction::AssetOrchardPrivatePrimaryRedeemV1(
+            file.payload,
+        )],
+    )?;
+    write_shielded_action_batch_file(&options.batch_file, &batch)?;
+    Ok(batch)
+}
+
 pub fn asset_orchard_note_status(
     options: AssetOrchardNoteStatusOptions,
 ) -> io::Result<AssetOrchardNoteStatusReport> {
@@ -2754,6 +2887,12 @@ fn shielded_archive_payload_orchard_commitment_action_indexes(
                 }
                 None
             }
+            ShieldedAction::AssetOrchardPrivatePrimaryRedeemV1(payload) => {
+                if payload.output_commitment == commitment {
+                    indexes.push(index);
+                }
+                None
+            }
             ShieldedAction::Mint(_) | ShieldedAction::Spend(_) | ShieldedAction::Migrate(_) => None,
         };
         let Some(action_json) = action_json else {
@@ -3306,6 +3445,30 @@ fn validate_asset_orchard_private_egress_payload_for_genesis(
 }
 
 fn validate_asset_orchard_private_primary_issue_payload(
+    payload: &AssetOrchardPrivatePrimaryIssueActionPayload,
+) -> io::Result<()> {
+    if payload.schema != ASSET_ORCHARD_PRIVATE_PRIMARY_ISSUE_ACTION_SCHEMA_V1 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "AssetOrchard private-primary issue schema mismatch",
+        ));
+    }
+    validate_asset_orchard_private_primary_payload(payload)
+}
+
+fn validate_asset_orchard_private_primary_redeem_payload(
+    payload: &AssetOrchardPrivatePrimaryRedeemActionPayload,
+) -> io::Result<()> {
+    if payload.schema != ASSET_ORCHARD_PRIVATE_PRIMARY_REDEEM_ACTION_SCHEMA_V1 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "AssetOrchard private-primary redeem schema mismatch",
+        ));
+    }
+    validate_asset_orchard_private_primary_payload(payload)
+}
+
+fn validate_asset_orchard_private_primary_payload(
     payload: &AssetOrchardPrivatePrimaryIssueActionPayload,
 ) -> io::Result<()> {
     if payload.pool_id != ASSET_ORCHARD_POOL_ID_V1 {

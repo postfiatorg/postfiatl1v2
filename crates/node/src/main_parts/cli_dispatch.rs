@@ -52,6 +52,8 @@ use postfiat_node::{
     create_asset_orchard_private_egress, create_asset_orchard_private_egress_batch,
     create_asset_orchard_private_primary_issue,
     create_asset_orchard_private_primary_issue_batch,
+    create_asset_orchard_private_primary_redeem,
+    create_asset_orchard_private_primary_redeem_batch,
     create_asset_orchard_swap_action, create_asset_orchard_swap_action_verified,
     create_atomic_swap_mempool_batch_for_tx_id, create_block_timeout_vote, create_block_vote,
     create_block_vote_for_verified_proposal, create_block_vote_with_timings,
@@ -140,7 +142,9 @@ use postfiat_node::{
     AssetOrchardIngressBatchOptions, AssetOrchardIngressCreateOptions,
     AssetOrchardNoteStatusOptions, AssetOrchardPrivateEgressBatchOptions,
     AssetOrchardPrivateEgressCreateOptions, AssetOrchardPrivatePrimaryIssueBatchOptions,
-    AssetOrchardPrivatePrimaryIssueCreateOptions, AssetOrchardScanOptions,
+    AssetOrchardPrivatePrimaryIssueCreateOptions,
+    AssetOrchardPrivatePrimaryRedeemBatchOptions,
+    AssetOrchardPrivatePrimaryRedeemCreateOptions, AssetOrchardScanOptions,
     AssetOrchardSwapCreateOptions, AssetOrchardSwapCreateReport, AtomicSettlementTemplateOptions,
     AtomicSwapFeeQuoteOptions,
     AtomicSwapQuoteLegInput, AtomicSwapTargetBatchOptions, BatchArchiveQueryOptions,
@@ -584,6 +588,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "asset-orchard-egress-create"
         | "asset-orchard-private-egress-create"
         | "asset-orchard-private-primary-issue-create"
+        | "asset-orchard-private-primary-redeem-create"
         | "asset-orchard-note-status"
         | "asset-orchard-scan"
         | "asset-orchard-swap-create"
@@ -606,6 +611,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "shield-batch-asset-orchard-egress"
         | "shield-batch-asset-orchard-private-egress"
         | "shield-batch-asset-orchard-private-primary-issue"
+        | "shield-batch-asset-orchard-private-primary-redeem"
         | "shield-batch-orchard-withdraw"
         | "shield-batch-swap"
         | "apply-shield-batch"

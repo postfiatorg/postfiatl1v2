@@ -4592,6 +4592,189 @@ pub fn apply_asset_orchard_private_primary_issue_route_transition(
     )
 }
 
+pub fn apply_asset_orchard_private_primary_redeem_route_transition(
+    ledger: &mut LedgerState,
+    operation: &AssetOrchardPrivatePrimaryRedeemActionPayload,
+    block_height: u64,
+) -> Result<(), (&'static str, String)> {
+    let route_index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
+    let route = ledger.pftl_uniswap_routes[route_index].clone();
+    // Redemption remains available while inbound issue/export is paused.
+    let v2 = route.v2.as_ref().ok_or_else(|| {
+        (
+            "pftl_uniswap_v2_required",
+            "private primary redemption requires a v2 route".to_string(),
+        )
+    })?;
+    let policy = &v2.primary_market_policy;
+    if block_height > operation.expires_at_height
+        || block_height < policy.valid_from_height
+        || block_height > policy.expires_at_height
+        || operation.route_epoch != v2.route_epoch
+        || operation.policy_epoch != policy.policy_epoch
+        || operation.policy_hash != policy.policy_hash
+        || operation.mint_amount_atoms < policy.min_order_atoms
+        || operation.mint_amount_atoms > policy.max_order_atoms
+        || v2
+            .redemption_nonces
+            .contains_key(&operation.subscription_nonce)
+    {
+        return Err((
+            "pftl_uniswap_private_redemption_policy_mismatch",
+            "private redemption expiry, policy binding, amount, or nonce is invalid".to_string(),
+        ));
+    }
+    let redeemed_after = v2
+        .redeem_capacity_used_atoms
+        .checked_add(operation.mint_amount_atoms)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_capacity_overflow",
+                "private redemption capacity would overflow".to_string(),
+            )
+        })?;
+    if redeemed_after > policy.redeem_capacity_atoms {
+        return Err((
+            "pftl_uniswap_redeem_capacity_exceeded",
+            "private redemption exceeds active policy capacity".to_string(),
+        ));
+    }
+    let nav_asset = pftl_uniswap_pricing_nav_asset(ledger, &route, block_height)?;
+    if operation.pricing_nav_epoch != nav_asset.finalized_epoch
+        || operation.pricing_nav_epoch != policy.pricing_nav_epoch
+        || operation.pricing_reserve_packet_hash != nav_asset.finalized_reserve_packet_hash
+        || operation.pricing_reserve_packet_hash != policy.pricing_reserve_packet_hash
+    {
+        return Err((
+            "pftl_uniswap_pricing_binding_mismatch",
+            "private redemption must match the policy-pinned finalized NAV packet".to_string(),
+        ));
+    }
+    let policy_fresh_until = nav_asset
+        .finalized_at_height
+        .checked_add(policy.max_nav_age_blocks)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_pricing_height_overflow",
+                "policy NAV freshness height would overflow".to_string(),
+            )
+        })?;
+    if block_height > policy_fresh_until {
+        return Err((
+            "stale_pftl_uniswap_policy_pricing",
+            "policy-pinned NAV is older than the policy freshness limit".to_string(),
+        ));
+    }
+    let base_value =
+        pftl_uniswap_v2_base_value(ledger, &route, &nav_asset, operation.mint_amount_atoms)?;
+    let settlement_output = checked_mul_div_floor(
+        base_value,
+        policy.redeem_multiplier_bps,
+        postfiat_types::PFTL_UNISWAP_BPS_DENOMINATOR,
+    )?;
+    if operation.settlement_value_atoms != settlement_output
+        || route.settlement_reserve_atoms < base_value
+    {
+        return Err((
+            "pftl_uniswap_private_redemption_unavailable",
+            "private redemption output or subscription-funded reserve principal is invalid"
+                .to_string(),
+        ));
+    }
+    let spread = base_value.checked_sub(settlement_output).ok_or_else(|| {
+        (
+            "pftl_uniswap_pricing_underflow",
+            "private redemption output exceeds base NAV".to_string(),
+        )
+    })?;
+    let mut next_route = route;
+    let state_before_hash = pftl_uniswap_route_state_hash(&next_route);
+    pftl_uniswap_debit_native_route_balance(
+        &mut next_route,
+        &operation.subscriber,
+        operation.mint_amount_atoms,
+    )?;
+    next_route.authorized_valid_supply_atoms = next_route
+        .authorized_valid_supply_atoms
+        .checked_sub(operation.mint_amount_atoms)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_supply_underflow",
+                "private redemption exceeds route authorized supply".to_string(),
+            )
+        })?;
+    next_route.pftl_spendable_supply_atoms = next_route
+        .pftl_spendable_supply_atoms
+        .checked_sub(operation.mint_amount_atoms)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_supply_underflow",
+                "private redemption exceeds route PFTL spendable supply".to_string(),
+            )
+        })?;
+    next_route.settlement_reserve_atoms = next_route
+        .settlement_reserve_atoms
+        .checked_sub(base_value)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_reserve_underflow",
+                "private redemption exceeds route settlement reserve".to_string(),
+            )
+        })?;
+    let next_v2 = next_route.v2.as_mut().expect("v2 route checked above");
+    next_v2.redeem_capacity_used_atoms = redeemed_after;
+    next_v2.non_nav_spread_atoms = next_v2
+        .non_nav_spread_atoms
+        .checked_add(spread)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_spread_overflow",
+                "private redemption spread would overflow non-NAV fee custody".to_string(),
+            )
+        })?;
+    next_v2.redemption_nonces.insert(
+        operation.subscription_nonce.clone(),
+        operation.subscriber.clone(),
+    );
+    next_route
+        .validate()
+        .map_err(|error| ("bad_pftl_uniswap_route", error))?;
+    let circulating_after = nav_asset
+        .circulating_supply
+        .checked_sub(operation.mint_amount_atoms)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_nav_supply_underflow",
+                "private redemption exceeds NAV circulating supply".to_string(),
+            )
+        })?;
+    let state_after_hash = pftl_uniswap_route_state_hash(&next_route);
+    ledger
+        .nav_asset_mut(&next_route.native_nav_asset_id)
+        .ok_or_else(|| {
+            (
+                "missing_pftl_uniswap_nav_asset",
+                "private redemption native NAV asset disappeared".to_string(),
+            )
+        })?
+        .circulating_supply = circulating_after;
+    ledger.pftl_uniswap_routes[route_index] = next_route;
+    append_pftl_uniswap_consensus_receipt(
+        ledger,
+        PftlUniswapReceiptPlan {
+            transition: "private_primary_redeemed",
+            route_id: &operation.route_id,
+            state_before_hash,
+            state_after_hash,
+            packet_hash: Some(operation.reservation_id.clone()),
+            burn_event_hash: None,
+            wallet: Some(operation.subscriber.clone()),
+            amount_atoms: Some(operation.mint_amount_atoms),
+            block_height,
+        },
+    )
+}
+
 fn apply_pftl_uniswap_redemption_fund(
     _ledger: &mut LedgerState,
     _operation: &PftlUniswapRedemptionFundOperation,

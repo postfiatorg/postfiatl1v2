@@ -42,10 +42,11 @@ use crate::{
     OrchardSpendAuthSignature, OrchardTypeError, OrchardValueCommitment, ShieldedSwapAction,
     ShieldedSwapCommitment, ASSET_ORCHARD_CIRCUIT_ID_V1, ASSET_ORCHARD_POOL_ID_V1,
     ASSET_ORCHARD_PRIVATE_EGRESS_CIRCUIT_ID_V1,
-    ASSET_ORCHARD_PRIVATE_PRIMARY_OUTPUT_VALIDITY_POLICY_V1, ASSET_ORCHARD_PROOF_SYSTEM_ID_V1,
-    ORCHARD_COMPACT_CIPHERTEXT_BYTES, ORCHARD_EXTERNAL_BINDING_HASH_BYTES, ORCHARD_NULLIFIER_BYTES,
-    SHIELDED_SWAP_ACTION_SCHEMA, SHIELDED_SWAP_CIRCUIT_ID,
-    SHIELDED_SWAP_LEGACY_TRANSCRIPT_HASH_BYTES, SHIELDED_SWAP_LEG_COUNT,
+    ASSET_ORCHARD_PRIVATE_PRIMARY_OUTPUT_VALIDITY_POLICY_V1,
+    ASSET_ORCHARD_PRIVATE_PRIMARY_REDEEM_OUTPUT_VALIDITY_POLICY_V1,
+    ASSET_ORCHARD_PROOF_SYSTEM_ID_V1, ORCHARD_COMPACT_CIPHERTEXT_BYTES,
+    ORCHARD_EXTERNAL_BINDING_HASH_BYTES, ORCHARD_NULLIFIER_BYTES, SHIELDED_SWAP_ACTION_SCHEMA,
+    SHIELDED_SWAP_CIRCUIT_ID, SHIELDED_SWAP_LEGACY_TRANSCRIPT_HASH_BYTES, SHIELDED_SWAP_LEG_COUNT,
     SHIELDED_SWAP_PROOF_SYSTEM_ID,
 };
 
@@ -1070,12 +1071,23 @@ pub fn verify_serialized_asset_orchard_private_primary_issue_action(
             "private-primary output-validity proof anchor is not the singleton tree derived from the issued output commitment",
         ));
     }
+    let (output_asset_id, output_policy_id) = if action.is_private_primary_redeem() {
+        (
+            settlement_asset_id,
+            ASSET_ORCHARD_PRIVATE_PRIMARY_REDEEM_OUTPUT_VALIDITY_POLICY_V1,
+        )
+    } else {
+        (
+            native_nav_asset_id,
+            ASSET_ORCHARD_PRIVATE_PRIMARY_OUTPUT_VALIDITY_POLICY_V1,
+        )
+    };
     verify_serialized_asset_orchard_private_egress_action(
         &action.output_validity_action,
         domain,
         action.output_commitment.as_hex(),
-        native_nav_asset_id,
-        ASSET_ORCHARD_PRIVATE_PRIMARY_OUTPUT_VALIDITY_POLICY_V1,
+        output_asset_id,
+        output_policy_id,
         &action.route_id,
     )?;
     let public_instance = action.public_instance()?;

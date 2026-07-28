@@ -1828,6 +1828,31 @@ pub struct AssetOrchardPrivatePrimaryIssueBatchOptions {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AssetOrchardPrivatePrimaryRedeemCreateOptions {
+    pub data_dir: PathBuf,
+    pub note_file: PathBuf,
+    pub output_note_seed_hex: String,
+    pub output_note_file: PathBuf,
+    pub route_id: String,
+    pub owner: String,
+    pub settlement_recipient: String,
+    pub redemption_id: String,
+    pub redemption_nonce: String,
+    pub nav_amount_atoms: u64,
+    pub settlement_output_atoms: u64,
+    pub expires_at_height: u64,
+    pub action_file: PathBuf,
+    pub overwrite: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AssetOrchardPrivatePrimaryRedeemBatchOptions {
+    pub data_dir: PathBuf,
+    pub action_file: PathBuf,
+    pub batch_file: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AssetOrchardNoteStatusOptions {
     pub data_dir: PathBuf,
     pub note_file: PathBuf,
@@ -1864,6 +1889,8 @@ pub struct AssetOrchardPrivatePrimaryIssueFile {
     pub schema: String,
     pub payload: AssetOrchardPrivatePrimaryIssueActionPayload,
 }
+
+pub type AssetOrchardPrivatePrimaryRedeemFile = AssetOrchardPrivatePrimaryIssueFile;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AssetOrchardIngressReport {
@@ -1935,6 +1962,25 @@ pub struct AssetOrchardPrivatePrimaryIssueReport {
     pub native_nav_asset_id: String,
     pub settlement_value_atoms: u64,
     pub mint_amount_atoms: u64,
+    pub anchor: String,
+    pub nullifier: String,
+    pub output_commitment: String,
+    pub proof_bytes: usize,
+    pub verified: bool,
+    pub privacy: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssetOrchardPrivatePrimaryRedeemReport {
+    pub schema: String,
+    pub action_file: String,
+    pub input_note_file: String,
+    pub output_note_file: String,
+    pub route_id: String,
+    pub native_nav_asset_id: String,
+    pub settlement_asset_id: String,
+    pub nav_amount_atoms: u64,
+    pub settlement_output_atoms: u64,
     pub anchor: String,
     pub nullifier: String,
     pub output_commitment: String,

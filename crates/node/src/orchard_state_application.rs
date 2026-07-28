@@ -1848,9 +1848,44 @@ fn apply_asset_orchard_private_primary_issue_action_to_state(
     payload: &AssetOrchardPrivatePrimaryIssueActionPayload,
     block_height: u64,
 ) -> io::Result<Receipt> {
+    apply_asset_orchard_private_primary_action_to_state(
+        genesis,
+        ledger,
+        shielded,
+        payload,
+        block_height,
+        false,
+    )
+}
+
+fn apply_asset_orchard_private_primary_redeem_action_to_state(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    shielded: &mut ShieldedState,
+    payload: &AssetOrchardPrivatePrimaryRedeemActionPayload,
+    block_height: u64,
+) -> io::Result<Receipt> {
+    apply_asset_orchard_private_primary_action_to_state(
+        genesis,
+        ledger,
+        shielded,
+        payload,
+        block_height,
+        true,
+    )
+}
+
+fn apply_asset_orchard_private_primary_action_to_state(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    shielded: &mut ShieldedState,
+    payload: &AssetOrchardPrivatePrimaryIssueActionPayload,
+    block_height: u64,
+    is_redeem: bool,
+) -> io::Result<Receipt> {
     let reject = |code: &'static str, message: String| -> io::Result<Receipt> {
         Ok(Receipt::rejected(
-            asset_orchard_private_primary_issue_receipt_id(genesis, payload, code)?,
+            asset_orchard_private_primary_receipt_id(genesis, payload, code, is_redeem)?,
             code,
             message,
         ))
@@ -1864,6 +1899,13 @@ fn apply_asset_orchard_private_primary_issue_action_to_state(
             )
         }
     };
+    if action.is_private_primary_redeem() != is_redeem {
+        return reject(
+            "asset_orchard_private_primary_schema_transition_mismatch",
+            "private-primary action schema does not match the selected consensus transition"
+                .to_string(),
+        );
+    }
     let Some(route) = ledger
         .pftl_uniswap_routes
         .iter()
@@ -1943,11 +1985,20 @@ fn apply_asset_orchard_private_primary_issue_action_to_state(
     }
 
     let mut trial_ledger = ledger.clone();
-    if let Err((code, message)) = apply_asset_orchard_private_primary_issue_route_transition(
-        &mut trial_ledger,
-        payload,
-        block_height,
-    ) {
+    let transition = if is_redeem {
+        apply_asset_orchard_private_primary_redeem_route_transition(
+            &mut trial_ledger,
+            payload,
+            block_height,
+        )
+    } else {
+        apply_asset_orchard_private_primary_issue_route_transition(
+            &mut trial_ledger,
+            payload,
+            block_height,
+        )
+    };
+    if let Err((code, message)) = transition {
         return reject(code, message);
     }
     let mut trial_shielded = shielded.clone();
@@ -1956,15 +2007,28 @@ fn apply_asset_orchard_private_primary_issue_action_to_state(
             .orchard
             .as_mut()
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing Orchard pool"))?;
-        if let Err((code, message)) = debit_asset_orchard_balance(
-            pool,
-            &settlement_asset_id,
-            payload.settlement_value_atoms,
-        ) {
+        let (input_asset_id, input_amount, output_asset_id, output_amount) = if is_redeem {
+            (
+                native_nav_asset_id.as_str(),
+                payload.mint_amount_atoms,
+                settlement_asset_id.as_str(),
+                payload.settlement_value_atoms,
+            )
+        } else {
+            (
+                settlement_asset_id.as_str(),
+                payload.settlement_value_atoms,
+                native_nav_asset_id.as_str(),
+                payload.mint_amount_atoms,
+            )
+        };
+        if let Err((code, message)) =
+            debit_asset_orchard_balance(pool, input_asset_id, input_amount)
+        {
             return reject(code, message);
         }
         if let Err((code, message)) =
-            credit_asset_orchard_balance(pool, &native_nav_asset_id, payload.mint_amount_atoms)
+            credit_asset_orchard_balance(pool, output_asset_id, output_amount)
         {
             return reject(code, message);
         }
@@ -1991,8 +2055,17 @@ fn apply_asset_orchard_private_primary_issue_action_to_state(
     *ledger = trial_ledger;
     *shielded = trial_shielded;
     Ok(Receipt::accepted(
-        asset_orchard_private_primary_issue_receipt_id(genesis, payload, "accepted")?,
-        "private pfUSDC was atomically consumed by the governed primary route and encrypted A666 was issued",
+        asset_orchard_private_primary_receipt_id(
+            genesis,
+            payload,
+            "accepted",
+            is_redeem,
+        )?,
+        if is_redeem {
+            "private A666 was atomically retired by the governed primary route and encrypted pfUSDC was issued"
+        } else {
+            "private pfUSDC was atomically consumed by the governed primary route and encrypted A666 was issued"
+        },
     ))
 }
 
@@ -2886,14 +2959,19 @@ fn asset_orchard_private_egress_receipt_id(
     )
 }
 
-fn asset_orchard_private_primary_issue_receipt_id(
+fn asset_orchard_private_primary_receipt_id(
     genesis: &Genesis,
     payload: &AssetOrchardPrivatePrimaryIssueActionPayload,
     code: &str,
+    is_redeem: bool,
 ) -> io::Result<String> {
     direct_receipt_id(
         genesis,
-        "postfiat.privacy.asset_orchard_private_primary_issue_receipt.v1",
+        if is_redeem {
+            "postfiat.privacy.asset_orchard_private_primary_redeem_receipt.v1"
+        } else {
+            "postfiat.privacy.asset_orchard_private_primary_issue_receipt.v1"
+        },
         &(
             payload.pool_id.as_str(),
             payload.route_id.as_str(),

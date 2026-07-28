@@ -5531,6 +5531,112 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
     );
     assert!(receipt.accepted, "{receipt:?}");
 
+    let mut private_redeem_ledger = ledger.clone();
+    let private_redeem = AssetOrchardPrivatePrimaryRedeemActionPayload {
+        version: 1,
+        schema: "postfiat-asset-orchard-private-primary-redeem-action-v1".to_string(),
+        pool_id: "asset-orchard-v1".to_string(),
+        route_id: v2_route_id.clone(),
+        subscriber: subscriber.clone(),
+        ethereum_recipient: subscriber.clone(),
+        reservation_id: "c7".repeat(48),
+        subscription_nonce: "c8".repeat(32),
+        route_epoch: 2,
+        policy_epoch: 2,
+        policy_hash: primary_policy.policy_hash.clone(),
+        pricing_nav_epoch: 7,
+        pricing_reserve_packet_hash: pricing_reserve_packet_hash.clone(),
+        mint_amount_atoms: 10,
+        settlement_value_atoms: 69,
+        expires_at_height: 30,
+        output_commitment: String::new(),
+        encrypted_output: String::new(),
+        output_validity_action_json: String::new(),
+        proof_system_id: String::new(),
+        circuit_id: String::new(),
+        pool_domain: String::new(),
+        anchor: String::new(),
+        nullifier: String::new(),
+        randomized_verification_key: String::new(),
+        settlement_asset_tag_lo: 0,
+        settlement_asset_tag_hi: 0,
+        native_nav_asset_tag_lo: 0,
+        native_nav_asset_tag_hi: 0,
+        primary_binding_hash: String::new(),
+        proof: String::new(),
+        spend_authorization_signature: String::new(),
+    };
+    let mut wrong_output_ledger = private_redeem_ledger.clone();
+    let mut wrong_output = private_redeem.clone();
+    wrong_output.settlement_value_atoms += 1;
+    let wrong_output_before =
+        pftl_uniswap_route_state_hash(
+            wrong_output_ledger
+                .pftl_uniswap_routes
+                .iter()
+                .find(|route| route.route_id == v2_route_id)
+                .expect("wrong-output route"),
+        );
+    let wrong_output_error =
+        super::apply_asset_orchard_private_primary_redeem_route_transition(
+            &mut wrong_output_ledger,
+            &wrong_output,
+            26,
+        )
+        .expect_err("noncanonical redemption output must reject");
+    assert_eq!(
+        wrong_output_error.0,
+        "pftl_uniswap_private_redemption_unavailable"
+    );
+    assert_eq!(
+        pftl_uniswap_route_state_hash(
+            wrong_output_ledger
+                .pftl_uniswap_routes
+                .iter()
+                .find(|route| route.route_id == v2_route_id)
+                .expect("wrong-output route after rejection"),
+        ),
+        wrong_output_before
+    );
+    super::apply_asset_orchard_private_primary_redeem_route_transition(
+        &mut private_redeem_ledger,
+        &private_redeem,
+        26,
+    )
+    .expect("private redemption route transition");
+    let private_route = private_redeem_ledger
+        .pftl_uniswap_routes
+        .iter()
+        .find(|route| route.route_id == v2_route_id)
+        .expect("private route");
+    assert_eq!(private_route.authorized_valid_supply_atoms, 30);
+    assert_eq!(private_route.settlement_reserve_atoms, 210);
+    assert_eq!(
+        private_route
+            .v2
+            .as_ref()
+            .expect("v2")
+            .redeem_capacity_used_atoms,
+        10
+    );
+    let state_after_private_redeem = pftl_uniswap_route_state_hash(private_route);
+    let replay = super::apply_asset_orchard_private_primary_redeem_route_transition(
+        &mut private_redeem_ledger,
+        &private_redeem,
+        26,
+    )
+    .expect_err("private redemption nonce replay must reject");
+    assert_eq!(replay.0, "pftl_uniswap_private_redemption_policy_mismatch");
+    let private_route_after_replay = private_redeem_ledger
+        .pftl_uniswap_routes
+        .iter()
+        .find(|route| route.route_id == v2_route_id)
+        .expect("private route after replay");
+    assert_eq!(
+        pftl_uniswap_route_state_hash(private_route_after_replay),
+        state_after_private_redeem
+    );
+
     let redeem_v2 = signed_asset_transaction_with_minimum_fee(
         &genesis,
         &ledger,

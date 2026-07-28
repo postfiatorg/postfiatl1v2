@@ -36,6 +36,10 @@ pub const ASSET_ORCHARD_PRIVATE_PRIMARY_ISSUE_FILE_SCHEMA: &str =
     "postfiat-asset-orchard-private-primary-issue-file-v1";
 pub const ASSET_ORCHARD_PRIVATE_PRIMARY_ISSUE_REPORT_SCHEMA: &str =
     "postfiat-asset-orchard-private-primary-issue-report-v1";
+pub const ASSET_ORCHARD_PRIVATE_PRIMARY_REDEEM_FILE_SCHEMA: &str =
+    "postfiat-asset-orchard-private-primary-redeem-file-v1";
+pub const ASSET_ORCHARD_PRIVATE_PRIMARY_REDEEM_REPORT_SCHEMA: &str =
+    "postfiat-asset-orchard-private-primary-redeem-report-v1";
 pub const ASSET_ORCHARD_SWAP_CREATE_REPORT_SCHEMA: &str =
     "postfiat-asset-orchard-swap-create-report-v1";
 pub const ASSET_ORCHARD_NOTE_STATUS_REPORT_SCHEMA: &str =

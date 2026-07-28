@@ -78,6 +78,8 @@ pub const ASSET_ORCHARD_PRIVATE_EGRESS_ACTION_SCHEMA_V1: &str =
     "postfiat-asset-orchard-private-egress-action-v1";
 pub const ASSET_ORCHARD_PRIVATE_PRIMARY_ISSUE_ACTION_SCHEMA_V1: &str =
     "postfiat-asset-orchard-private-primary-issue-action-v1";
+pub const ASSET_ORCHARD_PRIVATE_PRIMARY_REDEEM_ACTION_SCHEMA_V1: &str =
+    "postfiat-asset-orchard-private-primary-redeem-action-v1";
 pub const ASSET_ORCHARD_NOTE_COMMIT_DOMAIN_V1: &str = "postfiat.asset_orchard.note_commit.v1";
 pub const ASSET_ORCHARD_SWAP_BINDING_HASH_BYTES: usize = 64;
 pub const ASSET_ORCHARD_SIGHASH_BYTES: usize = 32;
@@ -123,6 +125,10 @@ const PRIVATE_PRIMARY_ISSUE_H_SIG_DOMAIN: &[u8] =
     b"postfiat.asset_orchard.private_primary_issue.sighash.v1";
 const PRIVATE_PRIMARY_ISSUE_BINDING_DOMAIN: &[u8] =
     b"postfiat.asset_orchard.private_primary_issue.binding.v1";
+const PRIVATE_PRIMARY_REDEEM_H_SIG_DOMAIN: &[u8] =
+    b"postfiat.asset_orchard.private_primary_redeem.sighash.v1";
+const PRIVATE_PRIMARY_REDEEM_BINDING_DOMAIN: &[u8] =
+    b"postfiat.asset_orchard.private_primary_redeem.binding.v1";
 const ACCOUNTING_VALUE_COMMITMENT_G_DST: &str =
     "postfiat.asset_orchard.swap_accounting.value_commitment_g.v1";
 const ACCOUNTING_VALUE_COMMITMENT_H_DST: &str =
@@ -134,6 +140,8 @@ pub const ASSET_ORCHARD_PRIVATE_EGRESS_H_ACTION_FIELD_COUNT: usize = 16;
 pub const ASSET_ORCHARD_PRIVATE_EGRESS_H_ACTION_POSEIDON_INPUT_COUNT: usize = 18;
 pub const ASSET_ORCHARD_PRIVATE_PRIMARY_OUTPUT_VALIDITY_POLICY_V1: &str =
     "private-primary-output-validity-v1";
+pub const ASSET_ORCHARD_PRIVATE_PRIMARY_REDEEM_OUTPUT_VALIDITY_POLICY_V1: &str =
+    "private-primary-redeem-output-validity-v1";
 
 mod u128_hex_serde {
     use serde::{Deserialize, Deserializer, Serializer};
@@ -1007,6 +1015,8 @@ pub struct AssetOrchardPrivatePrimaryIssueAction {
     pub spend_authorization_signature: AssetOrchardSpendAuthSignature,
 }
 
+pub type AssetOrchardPrivatePrimaryRedeemAction = AssetOrchardPrivatePrimaryIssueAction;
+
 impl AssetOrchardSwapAction {
     pub fn validate(&self) -> Result<(), AssetOrchardError> {
         if self.version != ASSET_ORCHARD_ACTION_VERSION_V1 {
@@ -1492,6 +1502,10 @@ impl AssetOrchardPrivateEgressAction {
 }
 
 impl AssetOrchardPrivatePrimaryIssueAction {
+    pub fn is_private_primary_redeem(&self) -> bool {
+        self.schema == ASSET_ORCHARD_PRIVATE_PRIMARY_REDEEM_ACTION_SCHEMA_V1
+    }
+
     pub fn validate(&self) -> Result<(), AssetOrchardError> {
         if self.version != ASSET_ORCHARD_ACTION_VERSION_V1 {
             return Err(AssetOrchardError::new(
@@ -1502,7 +1516,9 @@ impl AssetOrchardPrivatePrimaryIssueAction {
                 ),
             ));
         }
-        if self.schema != ASSET_ORCHARD_PRIVATE_PRIMARY_ISSUE_ACTION_SCHEMA_V1 {
+        if self.schema != ASSET_ORCHARD_PRIVATE_PRIMARY_ISSUE_ACTION_SCHEMA_V1
+            && self.schema != ASSET_ORCHARD_PRIVATE_PRIMARY_REDEEM_ACTION_SCHEMA_V1
+        {
             return Err(AssetOrchardError::new(
                 "unsupported_asset_orchard_private_primary_issue_schema",
                 format!(
@@ -1595,7 +1611,12 @@ impl AssetOrchardPrivatePrimaryIssueAction {
                 "private-primary output-validity proof must use the primary action pool domain",
             ));
         }
-        if self.output_validity_action.amount != self.mint_amount_atoms
+        let expected_output_amount = if self.is_private_primary_redeem() {
+            self.settlement_value_atoms
+        } else {
+            self.mint_amount_atoms
+        };
+        if self.output_validity_action.amount != expected_output_amount
             || self.output_validity_action.fee != 0
         {
             return Err(AssetOrchardError::new(
@@ -1603,8 +1624,13 @@ impl AssetOrchardPrivatePrimaryIssueAction {
                 "private-primary output-validity proof must prove the exact mint amount with zero fee",
             ));
         }
-        if self.output_validity_action.asset_tag_lo != self.native_nav_asset_tag_lo
-            || self.output_validity_action.asset_tag_hi != self.native_nav_asset_tag_hi
+        let expected_output_tag = if self.is_private_primary_redeem() {
+            (self.settlement_asset_tag_lo, self.settlement_asset_tag_hi)
+        } else {
+            (self.native_nav_asset_tag_lo, self.native_nav_asset_tag_hi)
+        };
+        if self.output_validity_action.asset_tag_lo != expected_output_tag.0
+            || self.output_validity_action.asset_tag_hi != expected_output_tag.1
         {
             return Err(AssetOrchardError::new(
                 "asset_orchard_private_primary_issue_output_asset_tag_mismatch",
@@ -1646,6 +1672,7 @@ impl AssetOrchardPrivatePrimaryIssueAction {
                 chain_id,
                 genesis_hash,
                 protocol_version,
+                schema: &self.schema,
                 pool_id: &self.pool_id,
                 circuit_id: &self.circuit_id,
                 pool_domain: self.pool_domain.to_field()?,
@@ -1751,16 +1778,29 @@ impl AssetOrchardPrivatePrimaryIssueAction {
     fn public_fields_without_binding_check(
         &self,
     ) -> Result<AssetOrchardPrivateEgressPublicFields, AssetOrchardError> {
+        let (asset_tag_lo, asset_tag_hi, amount) = if self.is_private_primary_redeem() {
+            (
+                self.native_nav_asset_tag_lo,
+                self.native_nav_asset_tag_hi,
+                self.mint_amount_atoms,
+            )
+        } else {
+            (
+                self.settlement_asset_tag_lo,
+                self.settlement_asset_tag_hi,
+                self.settlement_value_atoms,
+            )
+        };
         Ok(AssetOrchardPrivateEgressPublicFields {
             pool_domain: self.pool_domain.to_field()?,
             anchor: self.anchor.to_field()?,
             nullifier: self.nullifier.to_field()?,
             randomized_verification_key: self.randomized_verification_key.fields()?,
             asset_tag: AssetTag {
-                lo: self.settlement_asset_tag_lo,
-                hi: self.settlement_asset_tag_hi,
+                lo: asset_tag_lo,
+                hi: asset_tag_hi,
             },
-            amount: self.settlement_value_atoms,
+            amount,
             fee: 0,
             exit_binding_hash: self.primary_binding_hash.to_bytes()?,
         })
@@ -2647,6 +2687,7 @@ pub struct AssetOrchardPrivatePrimaryIssueBindingPreimage<'a> {
     pub chain_id: &'a str,
     pub genesis_hash: [u8; 32],
     pub protocol_version: u32,
+    pub schema: &'a str,
     pub pool_id: &'a str,
     pub circuit_id: &'a str,
     pub pool_domain: pallas::Base,
@@ -2675,6 +2716,16 @@ pub struct AssetOrchardPrivatePrimaryIssueBindingPreimage<'a> {
 pub fn asset_orchard_private_primary_issue_binding_hash(
     preimage: &AssetOrchardPrivatePrimaryIssueBindingPreimage<'_>,
 ) -> Result<[u8; ASSET_ORCHARD_SWAP_BINDING_HASH_BYTES], AssetOrchardError> {
+    let is_redeem = preimage.schema == ASSET_ORCHARD_PRIVATE_PRIMARY_REDEEM_ACTION_SCHEMA_V1;
+    if !is_redeem && preimage.schema != ASSET_ORCHARD_PRIVATE_PRIMARY_ISSUE_ACTION_SCHEMA_V1 {
+        return Err(AssetOrchardError::new(
+            "unsupported_asset_orchard_private_primary_schema",
+            format!(
+                "unsupported AssetOrchard private-primary schema `{}`",
+                preimage.schema
+            ),
+        ));
+    }
     validate_canonical_text("private_primary_issue.chain_id", preimage.chain_id, 256)?;
     validate_canonical_text(
         "private_primary_issue.pool_id",
@@ -2775,9 +2826,7 @@ pub fn asset_orchard_private_primary_issue_binding_hash(
     let fields = [
         const_field(&format!("proof_system:{ASSET_ORCHARD_PROOF_SYSTEM_ID_V1}"))?,
         const_field(&format!("circuit:{}", preimage.circuit_id))?,
-        const_field(&format!(
-            "schema:{ASSET_ORCHARD_PRIVATE_PRIMARY_ISSUE_ACTION_SCHEMA_V1}"
-        ))?,
+        const_field(&format!("schema:{}", preimage.schema))?,
         const_field(&format!("pool:{}", preimage.pool_id))?,
         const_field(&format!("note_version:{ASSET_ORCHARD_NOTE_VERSION_V1}"))?,
         text_to_field("private_primary_issue.chain_id", preimage.chain_id)?,
@@ -2845,11 +2894,16 @@ pub fn asset_orchard_private_primary_issue_binding_hash(
             &output_validity_action,
         )?,
     ];
+    let binding_domain = if is_redeem {
+        PRIVATE_PRIMARY_REDEEM_BINDING_DOMAIN
+    } else {
+        PRIVATE_PRIMARY_ISSUE_BINDING_DOMAIN
+    };
     let hash = poseidon_hash2(
-        std::str::from_utf8(PRIVATE_PRIMARY_ISSUE_BINDING_DOMAIN).map_err(|_| {
+        std::str::from_utf8(binding_domain).map_err(|_| {
             AssetOrchardError::new(
-                "invalid_private_primary_issue_binding_domain",
-                "private-primary issue binding domain is not valid UTF-8",
+                "invalid_private_primary_binding_domain",
+                "private-primary binding domain is not valid UTF-8",
             )
         })?,
         &fields,
@@ -3093,12 +3147,14 @@ pub fn asset_orchard_private_primary_issue_sighash(
             )
         })?;
     let mut payload = Vec::new();
-    payload.extend_from_slice(PRIVATE_PRIMARY_ISSUE_H_SIG_DOMAIN);
+    let sighash_domain = if action.is_private_primary_redeem() {
+        PRIVATE_PRIMARY_REDEEM_H_SIG_DOMAIN
+    } else {
+        PRIVATE_PRIMARY_ISSUE_H_SIG_DOMAIN
+    };
+    payload.extend_from_slice(sighash_domain);
     payload.extend_from_slice(&ASSET_ORCHARD_ACTION_VERSION_V1.to_le_bytes());
-    append_len_bytes_vec(
-        &mut payload,
-        ASSET_ORCHARD_PRIVATE_PRIMARY_ISSUE_ACTION_SCHEMA_V1.as_bytes(),
-    )?;
+    append_len_bytes_vec(&mut payload, action.schema.as_bytes())?;
     append_len_bytes_vec(&mut payload, chain_id.as_bytes())?;
     payload.extend_from_slice(&genesis_hash);
     payload.extend_from_slice(&protocol_version.to_le_bytes());
@@ -4675,6 +4731,31 @@ mod tests {
                 .code(),
             "asset_orchard_private_primary_issue_output_domain_mismatch"
         );
+    }
+
+    #[test]
+    fn private_primary_redeem_schema_selects_settlement_output_semantics() {
+        let mut action = sample_private_primary_issue_action();
+        action.schema = ASSET_ORCHARD_PRIVATE_PRIMARY_REDEEM_ACTION_SCHEMA_V1.to_string();
+        assert_eq!(
+            action
+                .validate()
+                .expect_err("issue-shaped output must reject")
+                .code(),
+            "asset_orchard_private_primary_issue_output_amount_mismatch"
+        );
+        action.output_validity_action.amount = action.settlement_value_atoms;
+        action.output_validity_action.asset_tag_lo = action.settlement_asset_tag_lo;
+        action.output_validity_action.asset_tag_hi = action.settlement_asset_tag_hi;
+        action
+            .validate()
+            .expect("redeem schema accepts exact settlement output");
+        let public = action
+            .public_fields_without_binding_check()
+            .expect("public fields");
+        assert_eq!(public.amount, action.mint_amount_atoms);
+        assert_eq!(public.asset_tag.lo, action.native_nav_asset_tag_lo);
+        assert_eq!(public.asset_tag.hi, action.native_nav_asset_tag_hi);
     }
 
     #[test]

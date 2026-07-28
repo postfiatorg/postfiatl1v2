@@ -2566,6 +2566,18 @@ pub(super) fn execute_shielded_batch(
                     archive_replay,
                 )
             }
+            ShieldedAction::AssetOrchardPrivatePrimaryRedeemV1(action) => {
+                execute_asset_orchard_private_primary_redeem_action(
+                    genesis,
+                    ledger,
+                    shielded,
+                    &batch.batch_id,
+                    block_height,
+                    index,
+                    action,
+                    archive_replay,
+                )
+            }
         };
         receipts.push(receipt);
     }
@@ -2993,6 +3005,58 @@ pub(super) fn execute_asset_orchard_private_primary_issue_action(
                 "asset_orchard_private_primary_issue_apply_error",
             ),
             "asset_orchard_private_primary_issue_apply_error",
+            error.to_string(),
+        ),
+    }
+}
+
+pub(super) fn execute_asset_orchard_private_primary_redeem_action(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    shielded: &mut ShieldedState,
+    batch_id: &str,
+    block_height: u64,
+    index: usize,
+    payload: &AssetOrchardPrivatePrimaryRedeemActionPayload,
+    archive_replay: bool,
+) -> Receipt {
+    if archive_replay {
+        return Receipt::rejected(
+            shielded_action_rejection_id(
+                batch_id,
+                index,
+                "asset_orchard_private_primary_redeem_archive_unsupported",
+            ),
+            "asset_orchard_private_primary_redeem_archive_unsupported",
+            "private-primary redemption has no historical replay form",
+        );
+    }
+    if let Err(error) = validate_asset_orchard_private_primary_redeem_payload(payload) {
+        return Receipt::rejected(
+            shielded_action_rejection_id(
+                batch_id,
+                index,
+                "asset_orchard_private_primary_redeem_bad_payload",
+            ),
+            "asset_orchard_private_primary_redeem_bad_payload",
+            error.to_string(),
+        );
+    }
+    match apply_asset_orchard_private_primary_redeem_action_to_state(
+        genesis,
+        ledger,
+        shielded,
+        payload,
+        block_height,
+    ) {
+        Ok(receipt) => receipt,
+        Err(error) => Receipt::rejected(
+            shielded_action_rejection_id(
+                batch_id,
+                index,
+                "asset_orchard_private_primary_redeem_apply_error",
+            ),
+            "asset_orchard_private_primary_redeem_apply_error",
             error.to_string(),
         ),
     }

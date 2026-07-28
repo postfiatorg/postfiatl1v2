@@ -229,6 +229,53 @@ fn private_egress_alpha_sampler_uses_fresh_randomness() {
 }
 
 #[test]
+fn private_primary_redeem_builder_rejects_wrong_input_asset_before_proving() {
+    let chain_id = "postfiat-wan-private-primary-redeem-wrong-asset-test";
+    let genesis_hash =
+        crate::asset_orchard_domain_genesis_hash(&"79".repeat(48)).expect("genesis adapter");
+    let settlement_asset_id = "02".repeat(48);
+    let native_nav_asset_id = "52".repeat(48);
+    let wrong_note = crate::build_asset_orchard_wallet_note(
+        chain_id,
+        genesis_hash,
+        3,
+        &settlement_asset_id,
+        1_000_000,
+        &"71".repeat(32),
+    )
+    .expect("wrong-asset note");
+    let commitments = [wrong_note.output_commitment.as_hex().to_string()];
+    let error = build_asset_orchard_private_primary_redeem_action(
+        chain_id,
+        genesis_hash,
+        3,
+        wrong_note,
+        &"72".repeat(32),
+        "pftl-a666-ethereum-wA666-usdc-v1",
+        "pf-test-owner",
+        "pf-test-settlement-recipient",
+        &"73".repeat(48),
+        &"74".repeat(32),
+        2,
+        2,
+        &"75".repeat(48),
+        1,
+        &"76".repeat(48),
+        1_000_000,
+        999_500,
+        1_000,
+        &settlement_asset_id,
+        &native_nav_asset_id,
+        &commitments,
+    )
+    .expect_err("settlement note cannot be redeemed as NAV");
+    assert_eq!(
+        error.code(),
+        "asset_orchard_private_primary_issue_asset_id_mismatch"
+    );
+}
+
+#[test]
 #[ignore = "two full private-egress proofs are release-scale"]
 fn private_primary_issue_builder_proves_exact_output_and_verifies_both_proofs() {
     let chain_id = "postfiat-wan-private-primary-test";
@@ -290,6 +337,73 @@ fn private_primary_issue_builder_proves_exact_output_and_verifies_both_proofs() 
     assert_eq!(
         built.action.output_validity_action.amount,
         built.action.mint_amount_atoms
+    );
+}
+
+#[test]
+#[ignore = "two full private-egress proofs are release-scale"]
+fn private_primary_redeem_builder_proves_exact_output_and_verifies_both_proofs() {
+    let chain_id = "postfiat-wan-private-primary-redeem-test";
+    let genesis_hash_hex = "78".repeat(48);
+    let genesis_hash =
+        crate::asset_orchard_domain_genesis_hash(&genesis_hash_hex).expect("genesis adapter");
+    let protocol_version = 3;
+    let settlement_asset_id = "02".repeat(48);
+    let native_nav_asset_id = "52".repeat(48);
+    let input_note = crate::build_asset_orchard_wallet_note(
+        chain_id,
+        genesis_hash,
+        protocol_version,
+        &native_nav_asset_id,
+        1_000_000,
+        &"51".repeat(32),
+    )
+    .expect("NAV note");
+    let commitments = [input_note.output_commitment.as_hex().to_string()];
+    let built = build_asset_orchard_private_primary_redeem_action(
+        chain_id,
+        genesis_hash,
+        protocol_version,
+        input_note,
+        &"52".repeat(32),
+        "pftl-a666-ethereum-wA666-usdc-v1",
+        "pf-test-owner",
+        "pf-test-settlement-recipient",
+        &"61".repeat(48),
+        &"62".repeat(32),
+        2,
+        2,
+        &"63".repeat(48),
+        1,
+        &"64".repeat(48),
+        1_000_000,
+        999_500,
+        1_000,
+        &settlement_asset_id,
+        &native_nav_asset_id,
+        &commitments,
+    )
+    .expect("private-primary redeem action");
+    let domain = crate::OrchardAuthorizingDomain::new(
+        chain_id,
+        genesis_hash_hex,
+        protocol_version,
+        ASSET_ORCHARD_POOL_ID_V1,
+    )
+    .expect("domain");
+    crate::verify_serialized_asset_orchard_private_primary_issue_action(
+        &built.action,
+        &domain,
+        &settlement_asset_id,
+        &native_nav_asset_id,
+    )
+    .expect("both proofs verify");
+    assert!(built.action.is_private_primary_redeem());
+    assert_eq!(built.output_note.asset_id, settlement_asset_id);
+    assert_eq!(built.output_note.value, 999_500);
+    assert_eq!(
+        built.action.output_validity_action.amount,
+        built.action.settlement_value_atoms
     );
 }
 

@@ -3193,6 +3193,7 @@ impl PftlUniswapConsensusReceipt {
             | "order_released"
             | "redemption_funded"
             | "primary_redeemed"
+            | "private_primary_redeemed"
             | "route_epoch_advanced"
             | "route_paused"
             | "route_resumed" => {}

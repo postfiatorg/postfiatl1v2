@@ -164,6 +164,17 @@ def main() -> None:
     if len(events) != 1:
         raise RuntimeError(f"expected one ReturnBurned event, got {len(events)}")
     event = events[0]["args"]
+    block_log_index = int(events[0]["logIndex"])
+    receipt_log_index = next(
+        (
+            index
+            for index, receipt_log in enumerate(receipt["logs"])
+            if int(receipt_log["logIndex"]) == block_log_index
+        ),
+        None,
+    )
+    if receipt_log_index is None:
+        raise RuntimeError("ReturnBurned event is absent from its transaction receipt logs")
     block_number = int(receipt.blockNumber)
     canonical_preimage = Web3().codec.encode(
         [
@@ -223,7 +234,10 @@ def main() -> None:
                 "gas_used": int(receipt.gasUsed),
                 "status": int(receipt.status),
             },
-            "event_log_index": int(events[0]["logIndex"]),
+            # Ethereum receipt-trie proofs index the log within this receipt,
+            # not within the containing block.
+            "event_log_index": receipt_log_index,
+            "block_log_index": block_log_index,
             "receipt_sha256": hashlib.sha256(
                 web3.to_json(receipt).encode()
             ).hexdigest(),
