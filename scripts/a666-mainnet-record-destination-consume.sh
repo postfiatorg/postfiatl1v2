@@ -60,7 +60,7 @@ mint_tx=$(jq -er '.transactions[] | select(.label=="consume finalized A666 mint 
 mint_block=$(jq -er '.transactions[] | select(.label=="consume finalized A666 mint packet") | .block_number' "$mint_state")
 packet_hash=$(jq -er '.packet_hash' "$manifest")
 mint_amount=$(jq -er '.mint_amount_atoms' "$manifest")
-test "$mint_amount" = 1000000
+[[ "$mint_amount" =~ ^[1-9][0-9]*$ ]]
 [[ "$mint_tx" =~ ^0x[0-9a-fA-F]{64}$ ]]
 [[ "$packet_hash" =~ ^[0-9a-f]{96}$ ]]
 cast receipt "$mint_tx" --json --rpc-url "$ethereum_rpc" \

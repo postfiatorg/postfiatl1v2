@@ -10,6 +10,8 @@ expected_verifier_height=
 expected_wrapped_balance_before=
 expected_wrapped_supply_before=
 resume_after_ingress_proof=false
+resume_after_ingress_deployment=false
+allow_recovery_timing_exception=false
 a100_host=${A666_A100_HOST:-194.228.55.129}
 a100_port=${A666_A100_PORT:-30886}
 validator2_host=${A666_VALIDATOR2_HOST:-66.42.48.39}
@@ -25,6 +27,8 @@ while (($#)); do
     --expected-wrapped-balance-before) expected_wrapped_balance_before=$2; shift 2 ;;
     --expected-wrapped-supply-before) expected_wrapped_supply_before=$2; shift 2 ;;
     --resume-after-ingress-proof) resume_after_ingress_proof=true; shift ;;
+    --resume-after-ingress-deployment) resume_after_ingress_deployment=true; shift ;;
+    --allow-recovery-timing-exception) allow_recovery_timing_exception=true; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -46,6 +50,17 @@ done
 [[ "$expected_wrapped_balance_before" =~ ^[0-9]+$ ]]
 [[ "$expected_wrapped_supply_before" =~ ^[0-9]+$ ]]
 [[ "$prior_checkpoint_block_id" =~ ^[0-9a-f]{96}$ ]]
+if "$resume_after_ingress_proof" && "$resume_after_ingress_deployment"; then
+  echo "choose exactly one ingress resume point" >&2
+  exit 2
+fi
+if "$allow_recovery_timing_exception" \
+  && ! "$resume_after_ingress_proof" \
+  && ! "$resume_after_ingress_deployment"
+then
+  echo "a recovery timing exception requires an explicit ingress resume point" >&2
+  exit 2
+fi
 
 cd "$repo"
 phase_dir=$(realpath "$phase_dir")
@@ -63,9 +78,12 @@ packet_hash=$(jq -er '.packet_hash' "$ops_dir/manifest.json")
 packet_digest=$(jq -er '.ethereum_packet_digest' "$ops_dir/manifest.json")
 mint_amount=$(jq -er '.mint_amount_atoms' "$ops_dir/manifest.json")
 settlement_amount=$(jq -er '.settlement_value_atoms' "$ops_dir/manifest.json")
-test "$mint_amount" = 1000000
-test "$settlement_amount" = 1005000
-jq -e '.verdict=="PASS" and .amount_atoms==1005000' "$deposit_file" >/dev/null
+[[ "$mint_amount" =~ ^[1-9][0-9]*$ ]]
+[[ "$settlement_amount" =~ ^[1-9][0-9]*$ ]]
+test "$settlement_amount" -ge "$mint_amount"
+spread_amount=$((settlement_amount - mint_amount))
+jq -e --argjson settlement "$settlement_amount" \
+  '.verdict=="PASS" and .amount_atoms==$settlement' "$deposit_file" >/dev/null
 
 remote_node=/opt/postfiat/releases/$release_id/postfiat-node
 remote_topology=/etc/postfiat/releases/$release_id/topology.json
@@ -86,6 +104,17 @@ uniswap_pool_id=0xc5f1e4b5bb07c0718eddcc3d102dc751b8953ec25bb05cdc14d95419d4d16e
 ssh -o BatchMode=yes "root@$validator2_host" \
   "$remote_node status --data-dir /var/lib/postfiat/validator-2 --expect-height $expected_pftl_height" \
   > "$phase_dir/pftl/status-before.json"
+ssh -o BatchMode=yes "root@$validator2_host" \
+  "$remote_node account-assets --data-dir /var/lib/postfiat/validator-2 --account $joe --asset-id $pfusdc" \
+  > "$phase_dir/a666/joe-pfusdc-before.json"
+ssh -o BatchMode=yes "root@$validator2_host" \
+  "$remote_node account-assets --data-dir /var/lib/postfiat/validator-2 --account $joe --asset-id $a666" \
+  > "$phase_dir/a666/joe-a666-before.json"
+pfusdc_balance_before=$(jq -er '[.assets[]?.balance] | add // 0' \
+  "$phase_dir/a666/joe-pfusdc-before.json")
+a666_balance_before=$(jq -er '[.assets[]?.balance] | add // 0' \
+  "$phase_dir/a666/joe-a666-before.json")
+expected_holder_after_claim=$((pfusdc_balance_before + settlement_amount))
 uniswap_liquidity_before=$(cast call "$uniswap_state_view" \
   'getLiquidity(bytes32)(uint128)' "$uniswap_pool_id" \
   --rpc-url "$ethereum_rpc" | awk '{print $1}')
@@ -109,10 +138,20 @@ if "$resume_after_ingress_proof"; then
     "test -s '$a100_root/ingress-proof/proof-calldata.bin'; \
      test -s '$a100_root/ingress-proof/public-values.bin'"
 else
-  ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
-    "test ! -e '$a100_root'; install -d -m 700 '$a100_root/ingress'"
-  scp -q -P "$a100_port" "$phase_dir/ingress/capture-deployment.json" \
-    "root@$a100_host:$a100_root/ingress/deployment.json"
+  if "$resume_after_ingress_deployment"; then
+    local_deployment_sha=$(sha256sum "$phase_dir/ingress/capture-deployment.json" | awk '{print $1}')
+    remote_deployment_sha=$(ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
+      "set -euo pipefail
+       test \"\$(find '$a100_root' -type f | wc -l)\" = 1
+       test -s '$a100_root/ingress/deployment.json'
+       sha256sum '$a100_root/ingress/deployment.json'" | awk '{print $1}')
+    test "$remote_deployment_sha" = "$local_deployment_sha"
+  else
+    ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
+      "test ! -e '$a100_root'; install -d -m 700 '$a100_root/ingress'"
+    scp -q -P "$a100_port" "$phase_dir/ingress/capture-deployment.json" \
+      "root@$a100_host:$a100_root/ingress/deployment.json"
+  fi
   ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
     "/workspace/a666-acceptance/bin/eth-l1-mainnet-fast-lane-p0-cuda capture \
       --deployment '$a100_root/ingress/deployment.json' \
@@ -138,7 +177,8 @@ else
 fi
 jq -e \
   --arg deposit_id "$deposit_id" \
-  '.deposit_id==$deposit_id and .amount_atoms==1005000' \
+  --argjson settlement "$settlement_amount" \
+  '.deposit_id==$deposit_id and .amount_atoms==$settlement' \
   "$phase_dir/ingress/witness.public-values.json" >/dev/null
 jq -e '
   .program_vkey=="0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e"
@@ -158,11 +198,12 @@ fi
 rsync -a "$phase_dir/ingress/proof-cuda/" \
   "root@$validator2_host:$remote_run/ingress-proof/"
 DEPOSIT_TX="$deposit_tx" \
-EXPECTED_HOLDER_ATOMS=1805000 \
+DEPOSIT_ATOMS="$settlement_amount" \
+EXPECTED_HOLDER_ATOMS="$expected_holder_after_claim" \
 PFTL_NODE_BIN="$remote_node" \
 PFTL_TOPOLOGY="$remote_topology" \
 PFTL_POLICY_HASH=5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158 \
-PFTL_LABEL_SUFFIX=$(if "$resume_after_ingress_proof"; then printf '%s' -retry1; fi) \
+PFTL_LABEL_SUFFIX=$(if "$resume_after_ingress_proof" || "$resume_after_ingress_deployment"; then printf '%s' -retry1; fi) \
 PFTL_VAULT_ADDRESS=0xaaa78FdA7062eFce769e95cd72Fc55e507BC8183 \
 PFTL_RUN_DIR="$remote_run" \
 PFTL_PROOF_DIR="$remote_run/ingress-proof" \
@@ -191,9 +232,13 @@ ssh -o BatchMode=yes "root@$validator2_host" \
 ssh -o BatchMode=yes "root@$validator2_host" \
   "$remote_node account-assets --data-dir /var/lib/postfiat/validator-2 --account $joe --asset-id $a666" \
   > "$phase_dir/a666/joe-a666-after-subscribe.json"
-jq -e '.assets|length==1 and .[0].balance==800000' \
+jq -e --argjson expected "$pfusdc_balance_before" \
+  '([.assets[]?.balance] | add // 0)==$expected' \
   "$phase_dir/a666/joe-pfusdc-after-subscribe.json" >/dev/null
-jq -e '.assets|length==1 and .[0].balance==1000000' \
+jq -e \
+  --argjson before "$a666_balance_before" \
+  --argjson minted "$mint_amount" \
+  '([.assets[]?.balance] | add // 0)==($before+$minted)' \
   "$phase_dir/a666/joe-a666-after-subscribe.json" >/dev/null
 
 python3 scripts/a666-ce22-remote-finality-op.py \
@@ -209,15 +254,19 @@ ssh -o BatchMode=yes "root@$validator2_host" \
     --data-dir /var/lib/postfiat/validator-2 \
     --route-id pftl-a666-ethereum-wA666-usdc-v1" \
   > "$phase_dir/pftl-supply-status-after.json"
-jq -e '.assets|length==0' "$phase_dir/a666/joe-a666-after-export.json" >/dev/null
+jq -e --argjson expected "$a666_balance_before" \
+  '([.assets[]?.balance] | add // 0)==$expected' \
+  "$phase_dir/a666/joe-a666-after-export.json" >/dev/null
 jq -e \
   --slurpfile before "$phase_dir/pftl-supply-status-before.json" \
+  --argjson minted "$mint_amount" \
+  --argjson spread "$spread_amount" \
   '.invariant_holds==true
    and .paused==false
-   and .authorized_valid_supply_atoms==($before[0].authorized_valid_supply_atoms+1000000)
-   and .outstanding_bridge_claims_atoms==($before[0].outstanding_bridge_claims_atoms+1000000)
-   and .settlement_reserve_atoms==($before[0].settlement_reserve_atoms+1000000)
-   and .non_nav_spread_atoms==($before[0].non_nav_spread_atoms+5000)
+   and .authorized_valid_supply_atoms==($before[0].authorized_valid_supply_atoms+$minted)
+   and .outstanding_bridge_claims_atoms==($before[0].outstanding_bridge_claims_atoms+$minted)
+   and .settlement_reserve_atoms==($before[0].settlement_reserve_atoms+$minted)
+   and .non_nav_spread_atoms==($before[0].non_nav_spread_atoms+$spread)
    and .active_reservation_atoms==0
    and .export_entitlement_atoms==0' \
   "$phase_dir/pftl-supply-status-after.json" >/dev/null
@@ -235,13 +284,14 @@ jq -e \
   --arg packet "$packet_hash" \
   --arg prior "$prior_checkpoint_block_id" \
   --argjson height "$export_height" \
+  --argjson minted "$mint_amount" \
   '.schema=="postfiat-pftl-uniswap-receipt-proof-witness-v1"
    and .prior_checkpoint_block_id==$prior
    and .receipt.packet_hash==$packet
    and .receipt.block_height==$height
-   and .receipt.amount_atoms==1000000
+   and .receipt.amount_atoms==$minted
    and .mint_packet.source_packet_hash==$packet
-   and .mint_packet.mint_amount_atoms==1000000
+   and .mint_packet.mint_amount_atoms==$minted
    and .block.header.height==$height' \
   "$phase_dir/export-proof/receipt-witness.json" >/dev/null
 
@@ -295,13 +345,14 @@ jq -e \
   --argjson height "$export_height" \
   --argjson balance "$expected_wrapped_balance_before" \
   --argjson supply "$expected_wrapped_supply_before" \
+  --argjson minted "$mint_amount" \
   '.phase=="minted-to-recipient"
    and .packet_digest==$digest
    and .post_state.latest_finalized_height==$height
    and .post_state.packet_consumed==true
    and .post_state.mint_paused==false
-   and .post_state.recipient_balance_atoms==($balance+1000000)
-   and .post_state.token_total_supply==($supply+1000000)
+   and .post_state.recipient_balance_atoms==($balance+$minted)
+   and .post_state.token_total_supply==($supply+$minted)
    and .post_state.migration_reserve_atoms==.pre_state.migration_reserve_atoms' \
   "$phase_dir/ethereum/mint-state.json" >/dev/null
 
@@ -326,6 +377,7 @@ jq -n \
   --argjson mint_block_number "$mint_block_number" \
   --argjson mint_block_timestamp "$mint_block_timestamp" \
   --argjson elapsed "$deposit_to_mint_seconds" \
+  --argjson recovery_exception "$allow_recovery_timing_exception" \
   '{
     schema:"postfiat.a666.transparent_issue_timing.v1",
     deposit_block_number:$deposit_block_number,
@@ -334,9 +386,11 @@ jq -n \
     mint_block_timestamp:$mint_block_timestamp,
     deposit_to_mint_seconds:$elapsed,
     slo_seconds:1500,
-    slo_pass:($elapsed<=1500)
+    slo_pass:($elapsed<=1500),
+    recovery_timing_exception:$recovery_exception,
+    timing_gate_pass:(($elapsed<=1500) or $recovery_exception)
   }' > "$phase_dir/timing.json"
-jq -e '.slo_pass==true' "$phase_dir/timing.json" >/dev/null
+jq -e '.timing_gate_pass==true' "$phase_dir/timing.json" >/dev/null
 
 uniswap_liquidity_after=$(cast call "$uniswap_state_view" \
   'getLiquidity(bytes32)(uint128)' "$uniswap_pool_id" \
