@@ -185,10 +185,12 @@ pub(crate) fn verify_destination_consume(
         operation.finalized_height,
     )?;
     let controller = evm_address("handoff controller", &route.handoff_controller)?;
-    let source_packet_commitment = ethereum_keccak256(&hex_exact::<48>(
-        "source packet hash",
-        &operation.packet_hash,
-    )?);
+    let source_packet_hash = hex_exact::<48>("source packet hash", &operation.packet_hash)?;
+    let legacy_source_packet_commitment = ethereum_keccak256(&source_packet_hash);
+    let v2_source_packet_commitment = solidity_abi_two_dynamic_keccak(
+        b"postfiat.pftl_uniswap.source_packet.v1",
+        &source_packet_hash,
+    );
     let recipient = evm_address("packet recipient", &packet.ethereum_recipient)?;
     let route_config_commitment = ethereum_keccak256(&hex_exact::<48>(
         "route config digest",
@@ -204,7 +206,7 @@ pub(crate) fn verify_destination_consume(
     let event_matches = match decode_packet_consumed_event(&log, controller) {
         Ok(event) => {
             event.packet_digest == packet_digest
-                && event.source_packet_commitment == source_packet_commitment
+                && event.source_packet_commitment == legacy_source_packet_commitment
                 && event.recipient == recipient
                 && event.route_config_commitment == route_config_commitment
                 && event.route_trust_class == route_trust_class
@@ -215,7 +217,7 @@ pub(crate) fn verify_destination_consume(
             let event =
                 decode_packet_consumed_event_v2(&log, controller).map_err(external_proof_error)?;
             event.packet_digest == packet_digest
-                && event.source_packet_commitment == source_packet_commitment
+                && event.source_packet_commitment == v2_source_packet_commitment
                 && event.recipient == recipient
                 && event.mint_amount_atoms == packet.amount_atoms
         }
@@ -518,6 +520,33 @@ fn expected_packet_schema(route_is_v2: bool) -> u32 {
     }
 }
 
+fn solidity_abi_two_dynamic_keccak(first: &[u8], second: &[u8]) -> [u8; 32] {
+    fn push_word(output: &mut Vec<u8>, value: usize) {
+        let mut word = [0_u8; 32];
+        word[24..].copy_from_slice(&(value as u64).to_be_bytes());
+        output.extend_from_slice(&word);
+    }
+
+    fn padded_len(value: &[u8]) -> usize {
+        value.len().div_ceil(32) * 32
+    }
+
+    fn push_dynamic(output: &mut Vec<u8>, value: &[u8]) {
+        push_word(output, value.len());
+        output.extend_from_slice(value);
+        output.resize(output.len() + (padded_len(value) - value.len()), 0);
+    }
+
+    let first_offset = 64;
+    let second_offset = first_offset + 32 + padded_len(first);
+    let mut encoded = Vec::with_capacity(second_offset + 32 + padded_len(second));
+    push_word(&mut encoded, first_offset);
+    push_word(&mut encoded, second_offset);
+    push_dynamic(&mut encoded, first);
+    push_dynamic(&mut encoded, second);
+    ethereum_keccak256(&encoded)
+}
+
 fn external_proof_error(error: postfiat_bridge::EthereumProofError) -> ExecutionError {
     (
         "invalid_pftl_uniswap_ethereum_receipt_proof",
@@ -527,7 +556,7 @@ fn external_proof_error(error: postfiat_bridge::EthereumProofError) -> Execution
 
 #[cfg(test)]
 mod tests {
-    use super::expected_packet_schema;
+    use super::{expected_packet_schema, solidity_abi_two_dynamic_keccak};
 
     #[test]
     fn packet_schema_tracks_route_generation() {
@@ -538,6 +567,25 @@ mod tests {
         assert_eq!(
             expected_packet_schema(true),
             postfiat_types::PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V2
+        );
+    }
+
+    #[test]
+    fn v2_source_packet_commitment_matches_mainnet_event() {
+        let packet_hash = postfiat_crypto_provider::hex_to_bytes(
+            "2c2703aba07fc4a33d51b0c97daed6274b517d1de2b8e05c7d39132b93793f0cd838f0194ad91b6a7cbaa4e37b0b5909",
+        )
+        .expect("packet hash");
+        let expected = postfiat_crypto_provider::hex_to_bytes(
+            "7881b25a6c18bd04d6984334c99bbb7a9ff56713fedd0939df0855686ff8e74a",
+        )
+        .expect("event commitment");
+        assert_eq!(
+            solidity_abi_two_dynamic_keccak(
+                b"postfiat.pftl_uniswap.source_packet.v1",
+                &packet_hash,
+            ),
+            expected.as_slice()
         );
     }
 }
