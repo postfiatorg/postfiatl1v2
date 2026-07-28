@@ -1,0 +1,33 @@
+{
+  "route_binding": "caec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93",
+  "route_profile": {
+    "activation_height": 387,
+    "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+    "challenge_window_blocks": 64,
+    "evidence_tier": "receipt-proven",
+    "expires_at_height": 1000000,
+    "max_epoch_gap_blocks": 128,
+    "max_proof_bytes": 4096,
+    "max_public_values_bytes": 4096,
+    "max_snapshot_age_blocks": 900,
+    "min_attestations": 0,
+    "min_challenge_bond": 1,
+    "minimum_confirmations": 0,
+    "route_epoch": 5,
+    "route_id": "ethereum-mainnet-usdc-v1",
+    "schema": "postfiat.vault_bridge.route_profile.v1",
+    "settle_deadline_blocks": 256,
+    "source_chain_id": 1,
+    "token_address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+    "token_runtime_code_hash": "0xd80d4b7c890cb9d6a4893e6b52bc34b56b25335cb13716e0d1d31383e6b41505",
+    "vault_address": "0xaaa78fda7062efce769e95cd72fc55e507bc8183",
+    "vault_runtime_code_hash": "0xc6dbb722c23bfc841624bb909fcb54d84a65a2ea6ece96e2a28bf61d5dea6d05",
+    "verifier_kind": "sp1-groth16",
+    "verifier_policy_hash": "541a43e1f2ad0f37f6d98ea437b57f502cb888e9bba8151a50e2e5bfe5ce57a5",
+    "verifier_program_vkey": "0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e",
+    "verifier_proof_encoding": "groth16"
+  },
+  "route_profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+  "route_profile_hash_commitment": "0x1c8b464e78cee8850d4bcef8817fc6d9572ed0f798c297e9d689cec05e1a913a",
+  "schema": "postfiat.vault_bridge.route_profile_document.v1"
+}

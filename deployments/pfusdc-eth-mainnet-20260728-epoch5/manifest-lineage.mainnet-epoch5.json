@@ -1,0 +1,77 @@
+{
+  "current_revision": {
+    "activation_height": 387,
+    "manifest": {
+      "path": "deployments/pfusdc-eth-mainnet-20260728-epoch5/manifest.mainnet-epoch5.json",
+      "sha256": "66abebe1cc23b5154933d2771ffe8a9407cf16d257871e76cfddf8fb46a75559"
+    },
+    "revision": "mainnet-epoch5",
+    "route_binding": "caec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93",
+    "route_epoch": 5,
+    "route_profile": {
+      "path": "deployments/pfusdc-eth-mainnet-20260728-epoch5/route-profile.mainnet-epoch5.json",
+      "sha256": "12440fa2d4b8c84d9b6363069ca4554379dd3bb78b6657e98c039ca006d66d25"
+    },
+    "route_profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+    "route_profile_hash_commitment": "0x1c8b464e78cee8850d4bcef8817fc6d9572ed0f798c297e9d689cec05e1a913a",
+    "schedule": {
+      "bind_height": 386,
+      "registration_activation_height": 387
+    },
+    "status": "generated-not-deployed"
+  },
+  "history": [
+    {
+      "egress_status": "quarantined_consensus_encoding_incompatible",
+      "ingress_status": "superseded_paused",
+      "quarantine_reason": "immutable egress verifier pins a guest predating the consensus-v2 pftl_uniswap_receipt_root field",
+      "route_epoch": 4,
+      "route_id": "ethereum-mainnet-usdc-v1",
+      "source": {
+        "path": "deployments/pfusdc-eth-mainnet-20260726-epoch4/manifest-lineage.mainnet-epoch4.json",
+        "sha256": "5d391713e4a37ffa642435cb2d6b751c05bd2fd7bbecc15ca0a63c2ac64eb803"
+      },
+      "status": "superseded_ingress_paused_egress_incompatible"
+    },
+    {
+      "egress_status": "pinned_resolvable",
+      "ingress_status": "superseded_storage_incompatible",
+      "quarantine_reason": "vault did not persist the frozen ingress guest record",
+      "route_epoch": 3,
+      "route_id": "ethereum-mainnet-usdc-v1",
+      "source": {
+        "path": "deployments/pfusdc-eth-mainnet-20260726/manifest-lineage.mainnet-epoch3.json",
+        "sha256": "5662eb861961a828b227c42f944809a1a80396b27a73737a8dbccb9dbcc1265a"
+      },
+      "status": "superseded_ingress_pinned_egress_resolvable"
+    },
+    {
+      "egress_status": "pinned_resolvable",
+      "ingress_status": "superseded",
+      "route_epoch": 2,
+      "route_id": "ethereum-sepolia-usdc-v1",
+      "source": {
+        "path": "deployments/pfusdc-eth-sepolia-20260725/manifest-lineage.rev6-generated-nonce67-68.json",
+        "sha256": "a2b3313e13c0051a254bad56e5268c90b71093635a683b51a8d8e82bd692c03a"
+      },
+      "status": "superseded_ingress_pinned_egress_resolvable"
+    },
+    {
+      "egress_status": "pinned_resolvable",
+      "ingress_status": "superseded",
+      "route_epoch": 1,
+      "route_id": "pfusdc-tier4-arbitrum-one-v1",
+      "source": {
+        "path": "docs/evidence/pfusdc-eth-campaign-20260725/lane-b/conservation-current/scratch/run-5ed3c8d275504797a16c4130844c504d/snapshot/governance.json",
+        "sha256": "a8a8e668e784abfdc9ef9fa3faddcea3f9ab2bbc56078868848e6e64e134f5d4"
+      },
+      "status": "superseded_ingress_pinned_egress_resolvable"
+    }
+  ],
+  "preserved_egress_lineage": {
+    "description": "Historical lanes remain recorded, but epoch 4 is quarantined because its immutable guest cannot decode current consensus-v2 blocks.",
+    "mainnet_epoch3_lineage_path": "deployments/pfusdc-eth-mainnet-20260726/manifest-lineage.mainnet-epoch3.json",
+    "sepolia_epoch2_lineage_path": "deployments/pfusdc-eth-sepolia-20260725/manifest-lineage.rev6-generated-nonce67-68.json"
+  },
+  "schema": "postfiat.pfusdc.eth_mainnet_manifest_lineage.v1"
+}

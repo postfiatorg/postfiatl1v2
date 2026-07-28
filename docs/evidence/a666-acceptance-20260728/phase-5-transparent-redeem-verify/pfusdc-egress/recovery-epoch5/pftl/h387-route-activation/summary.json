@@ -1,0 +1,18 @@
+{
+  "accepted": true,
+  "all_sends_verified": true,
+  "batch_kind": "governance",
+  "confirmed": true,
+  "end_height": 387,
+  "end_state_root": "d8344429fb34be408a4e91d2fb3f2c75ff3489692c0266d367173dbb2a4fa5a84f6f39cd6fef3ef67a60ca5949f61b28",
+  "label": "pfusdc-epoch5-route-activate",
+  "local_apply_verified": true,
+  "proposer": "validator-3",
+  "round_ok": true,
+  "runner_exit_code": 0,
+  "runner_stderr": null,
+  "schema": "postfiat-a666-ce22-remote-finality-batch-v1",
+  "start_height": 386,
+  "start_state_root": "14e6092f49fc646aeb760d475ace4dc0f646f70cdddf7dc4a71624d3eac6be1d0a0fb3760bb8aa33a9947986667ccd47",
+  "vote_count": 5
+}
