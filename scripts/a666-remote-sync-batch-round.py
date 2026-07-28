@@ -67,27 +67,28 @@ def main() -> None:
             f"(exit {completed.returncode}): {completed.stderr.strip()}"
         )
     report = json.loads(completed.stdout)
-    if report.get("round_ok") is not True:
-        raise RuntimeError("certified batch round did not report round_ok=true")
     report_file = args.artifact_dir / "round-report.json"
     report_file.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     report_file.chmod(0o600)
+    certification = report.get("certification") or {}
     print(
         json.dumps(
             {
                 "schema": report.get("schema"),
                 "from": report.get("from"),
                 "round_ok": report.get("round_ok"),
-                "block_height": report["certification"]["block_height"],
-                "certificate_id": report["certification"]["certificate_id"],
-                "vote_count": report["certification"]["vote_count"],
-                "all_sends_verified": report["all_sends_verified"],
-                "local_apply_verified": report["local_apply_verified"],
+                "block_height": certification.get("block_height"),
+                "certificate_id": certification.get("certificate_id"),
+                "vote_count": certification.get("vote_count"),
+                "all_sends_verified": report.get("all_sends_verified"),
+                "local_apply_verified": report.get("local_apply_verified"),
             },
             indent=2,
             sort_keys=True,
         )
     )
+    if report.get("round_ok") is not True:
+        raise RuntimeError("certified batch round did not report round_ok=true")
 
 
 if __name__ == "__main__":

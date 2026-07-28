@@ -3182,10 +3182,20 @@ impl PftlUniswapConsensusReceipt {
             VAULT_BRIDGE_HEX_HASH_LEN,
         )?;
         match self.transition.as_str() {
-            "route_init" | "primary_subscription" | "export_debit" | "destination_consume"
-            | "source_refunded" | "return_imported" | "order_reserved" | "order_released"
-            | "redemption_funded" | "primary_redeemed" | "route_epoch_advanced"
-            | "route_paused" | "route_resumed" => {}
+            "route_init"
+            | "primary_subscription"
+            | "private_primary_subscription"
+            | "export_debit"
+            | "destination_consume"
+            | "source_refunded"
+            | "return_imported"
+            | "order_reserved"
+            | "order_released"
+            | "redemption_funded"
+            | "primary_redeemed"
+            | "route_epoch_advanced"
+            | "route_paused"
+            | "route_resumed" => {}
             "export_entitlement_released" => {}
             _ => return Err("unsupported pftl_uniswap receipt transition".to_string()),
         }

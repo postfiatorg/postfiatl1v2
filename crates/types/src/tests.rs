@@ -2730,6 +2730,32 @@ fn pftl_uniswap_receipt_merkle_proof_is_bounded_and_tamper_evident() {
 }
 
 #[test]
+fn pftl_uniswap_private_primary_subscription_receipt_is_canonical() {
+    let mut receipt = PftlUniswapConsensusReceipt {
+        receipt_hash: "00".repeat(48),
+        transition: "private_primary_subscription".to_string(),
+        route_id: "a666-mainnet".to_string(),
+        state_before_hash: "11".repeat(48),
+        state_after_hash: "22".repeat(48),
+        packet_hash: Some("33".repeat(48)),
+        burn_event_hash: None,
+        wallet: Some("bob".to_string()),
+        amount_atoms: Some(1_000_000),
+        block_height: 377,
+    };
+    receipt.receipt_hash = pftl_uniswap_consensus_receipt_computed_hash(&receipt);
+    receipt
+        .validate()
+        .expect("private primary subscription receipt must be canonical");
+
+    receipt.transition = "private_primary_subscription_typo".to_string();
+    assert_eq!(
+        receipt.validate().unwrap_err(),
+        "unsupported pftl_uniswap receipt transition"
+    );
+}
+
+#[test]
 fn pftl_uniswap_mint_packet_v2_digest_is_stable_and_receipt_independent() {
     let mut packet = PftlUniswapMintPacketV2 {
         route_config_digest: "11".repeat(48),

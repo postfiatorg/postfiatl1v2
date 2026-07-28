@@ -151,7 +151,7 @@ def main() -> None:
         "exec runuser -u postfiat -- "
         + " ".join(shlex.quote(value) for value in runner_args)
     )
-    run(
+    runner = subprocess.run(
         [
             "ssh",
             "-o",
@@ -159,19 +159,16 @@ def main() -> None:
             f"root@{host}",
             "unshare --mount --propagation private -- /bin/bash -c "
             + shlex.quote(namespace_command),
-        ]
+        ],
+        text=True,
+        capture_output=True,
     )
 
     consensus_dir = args.artifact_dir / "consensus"
     consensus_dir.mkdir(mode=0o700)
     run(["rsync", "-a", f"root@{host}:{remote_artifacts}/", f"{consensus_dir}/"])
-    report = json.loads((consensus_dir / "round-report.json").read_text())
-    if (
-        report.get("round_ok") is not True
-        or report.get("all_sends_verified") is not True
-        or report.get("local_apply_verified") is not True
-    ):
-        raise RuntimeError("copied consensus report did not prove full propagation")
+    report_file = consensus_dir / "round-report.json"
+    report = json.loads(report_file.read_text()) if report_file.exists() else {}
 
     deadline = time.monotonic() + args.postflight_seconds
     post = None
@@ -181,26 +178,44 @@ def main() -> None:
             post = candidate
             break
         time.sleep(0.25)
-    if post is None:
-        raise RuntimeError("fleet did not converge after finality")
+    consensus_confirmed = (
+        post is not None
+        and post[0]["block_height"] == next_height
+        and len({node["state_root"] for node in post}) == 1
+    )
+    application_accepted = (
+        runner.returncode == 0
+        and report.get("round_ok") is True
+        and report.get("all_sends_verified") is True
+        and report.get("local_apply_verified") is True
+    )
     summary = {
         "schema": "postfiat-a666-ce22-remote-finality-batch-v1",
         "label": args.label,
         "batch_kind": args.batch_kind,
-        "accepted": True,
-        "confirmed": True,
-        "round_ok": True,
+        "accepted": application_accepted,
+        "confirmed": consensus_confirmed,
+        "round_ok": report.get("round_ok"),
         "proposer": proposer,
-        "vote_count": report["certification"]["vote_count"],
+        "vote_count": (report.get("certification") or {}).get("vote_count"),
         "start_height": parent["block_height"],
-        "end_height": post[0]["block_height"],
+        "end_height": post[0]["block_height"] if post is not None else None,
         "start_state_root": parent["state_root"],
-        "end_state_root": post[0]["state_root"],
-        "all_sends_verified": True,
-        "local_apply_verified": True,
+        "end_state_root": post[0]["state_root"] if post is not None else None,
+        "all_sends_verified": report.get("all_sends_verified"),
+        "local_apply_verified": report.get("local_apply_verified"),
+        "runner_exit_code": runner.returncode,
+        "runner_stderr": runner.stderr.strip() or None,
     }
     rpc.write_json(args.artifact_dir / "summary.json", summary, 0o644)
     print(json.dumps(summary, indent=2, sort_keys=True))
+    if not consensus_confirmed:
+        raise RuntimeError("fleet did not converge after finality")
+    if not application_accepted:
+        raise RuntimeError(
+            "batch reached consensus but its application was not accepted; "
+            "artifacts and summary were preserved"
+        )
 
 
 if __name__ == "__main__":
