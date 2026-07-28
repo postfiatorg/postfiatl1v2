@@ -228,6 +228,71 @@ fn private_egress_alpha_sampler_uses_fresh_randomness() {
     assert_ne!(first, second);
 }
 
+#[test]
+#[ignore = "two full private-egress proofs are release-scale"]
+fn private_primary_issue_builder_proves_exact_output_and_verifies_both_proofs() {
+    let chain_id = "postfiat-wan-private-primary-test";
+    let genesis_hash_hex = "77".repeat(48);
+    let genesis_hash =
+        crate::asset_orchard_domain_genesis_hash(&genesis_hash_hex).expect("genesis adapter");
+    let protocol_version = 3;
+    let settlement_asset_id = "02".repeat(48);
+    let native_nav_asset_id = "52".repeat(48);
+    let input_note = crate::build_asset_orchard_wallet_note(
+        chain_id,
+        genesis_hash,
+        protocol_version,
+        &settlement_asset_id,
+        1_005_000,
+        &"31".repeat(32),
+    )
+    .expect("settlement note");
+    let commitments = [input_note.output_commitment.as_hex().to_string()];
+    let built = build_asset_orchard_private_primary_issue_action(
+        chain_id,
+        genesis_hash,
+        protocol_version,
+        input_note,
+        &"32".repeat(32),
+        "pftl-a666-ethereum-wA666-usdc-v1",
+        "pf-test-subscriber",
+        "0x1111111111111111111111111111111111111111",
+        &"41".repeat(48),
+        &"42".repeat(32),
+        2,
+        2,
+        &"43".repeat(48),
+        1,
+        &"44".repeat(48),
+        1_000_000,
+        1_005_000,
+        1_000,
+        &settlement_asset_id,
+        &native_nav_asset_id,
+        &commitments,
+    )
+    .expect("private-primary action");
+    let domain = crate::OrchardAuthorizingDomain::new(
+        chain_id,
+        genesis_hash_hex,
+        protocol_version,
+        ASSET_ORCHARD_POOL_ID_V1,
+    )
+    .expect("domain");
+    crate::verify_serialized_asset_orchard_private_primary_issue_action(
+        &built.action,
+        &domain,
+        &settlement_asset_id,
+        &native_nav_asset_id,
+    )
+    .expect("both proofs verify");
+    assert_eq!(built.output_note.value, 1_000_000);
+    assert_eq!(
+        built.action.output_validity_action.amount,
+        built.action.mint_amount_atoms
+    );
+}
+
 fn note_swap_witnesses(
     pool_domain: pallas::Base,
 ) -> (
