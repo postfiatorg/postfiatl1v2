@@ -1,0 +1,2003 @@
+{
+  "applied": [
+    "validator-1",
+    "validator-0",
+    "validator-2",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+  ],
+  "apply_reports": {
+    "validator-0": {
+      "completed_unix": 1785244214,
+      "diff": [
+        {
+          "action": "create",
+          "local_sha256": "707e25b4e07a37ef15d7159a9b9e40d2675f8f532d9f99045310c4d6a60c5d7e",
+          "path": "/opt/postfiat/releases/a666-v2-return-c871dfe/postfiat-node",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "62c3d59b99793b0ecdcde6c3867bba4ba75b81396c2178ef5cbc9eb005247d9e",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment-manifest.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "e753aeb83746c3d9ac1a69d77d672e0bf9d86f4c8f79a7c0a2fb94431d2a96ab",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment.public.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "4df248e0b8a7c19f4d92e946b9d20b97ceb070d6310096ab05ad6a0e605161a2",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/topology.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "3750cda7d1c4e03a8d6d2c0c6435bf8dea7d9cee6f94472b4d9d940cae06e351",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/swap.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "d371570a90707d70421389b39a57ae555eaefd9b1b2312eb8856b89ea43a6081",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/private-egress.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "27b80fedf3e5d485a2b00b92ba05f8de20b0751e030eabf19edccdc49cbf30d4",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-0.bindings.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "27915a12e8151bad0ba8bd1a29fd04702a1a93866925351a9b36e2f28e473570",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-0.rpc.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "255668df2326d101e5dc65b89a21449d19e3178235d1325f98e50c81afded69b",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-0.transport.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "update",
+          "local_sha256": "16841b6f6914833e75552f0915b67b32428193752ebaa8289f7e260fb1817826",
+          "path": "/etc/systemd/system/postfiat-validator-0.service",
+          "remote_sha256": "083eac3fadfe0ee6c293d7f054e608b146acb773049b5b516cde40867e9b97ed"
+        },
+        {
+          "action": "update",
+          "local_sha256": "0bca78d5f33226090100a8d53d2d2ea50d1fad0ebad5ca26f822792795540ee5",
+          "path": "/etc/systemd/system/postfiat-validator-0-rpc.service",
+          "remote_sha256": "9e5539191ecb6745104c9cd65ccbe9b2a7fc6c4e1dd9e8791c98850e2a299855"
+        }
+      ],
+      "fleet_convergence": {
+        "height": 380,
+        "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+        "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+        "validator_count": 6,
+        "validators": [
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-0"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-1"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-2"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-3"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-4"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-5"
+          }
+        ],
+        "verified": true
+      },
+      "height": 380,
+      "mempool_pending": 0,
+      "pre_mutation_committee_rosters": [
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-0",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-1",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-2",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-3",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-4",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-5",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        }
+      ],
+      "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+      "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9"
+    },
+    "validator-1": {
+      "completed_unix": 1785244072,
+      "diff": [
+        {
+          "action": "create",
+          "local_sha256": "707e25b4e07a37ef15d7159a9b9e40d2675f8f532d9f99045310c4d6a60c5d7e",
+          "path": "/opt/postfiat/releases/a666-v2-return-c871dfe/postfiat-node",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "62c3d59b99793b0ecdcde6c3867bba4ba75b81396c2178ef5cbc9eb005247d9e",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment-manifest.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "e753aeb83746c3d9ac1a69d77d672e0bf9d86f4c8f79a7c0a2fb94431d2a96ab",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment.public.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "4df248e0b8a7c19f4d92e946b9d20b97ceb070d6310096ab05ad6a0e605161a2",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/topology.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "3750cda7d1c4e03a8d6d2c0c6435bf8dea7d9cee6f94472b4d9d940cae06e351",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/swap.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "d371570a90707d70421389b39a57ae555eaefd9b1b2312eb8856b89ea43a6081",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/private-egress.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "52f1ae9b1881d2ce9763e1cf68175605735d4904f780289ee8622ec824e07f57",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-1.bindings.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "6774e3c63a7550c6608096b06187dfb0d7c4d8b419371ad1ad50b01a89f45b0d",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-1.rpc.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "c9585842aa0fcab7f028e5d5f604be4e2571ce79c4e02d3bd9c8578690b0fd9e",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-1.transport.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "update",
+          "local_sha256": "a694886e4470bd6c48b219f8dc8b0444b7cb4a9fe6cfd73e1d8558c2a06150a8",
+          "path": "/etc/systemd/system/postfiat-validator-1.service",
+          "remote_sha256": "0c3e27ab6ea28bf4b8fe1d2a2d3c743ed0d272b9de48431088422841e482d681"
+        },
+        {
+          "action": "update",
+          "local_sha256": "1097d3f68e1e864c295da2e2f092009fdc18077625c08ea04c270314b950b005",
+          "path": "/etc/systemd/system/postfiat-validator-1-rpc.service",
+          "remote_sha256": "81ce391595896959e6e4168e26d26c97d7b799cc8454fec309ab811d9e1a7640"
+        }
+      ],
+      "fleet_convergence": {
+        "height": 380,
+        "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+        "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+        "validator_count": 6,
+        "validators": [
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-0"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-1"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-2"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-3"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-4"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-5"
+          }
+        ],
+        "verified": true
+      },
+      "height": 380,
+      "mempool_pending": 0,
+      "pre_mutation_committee_rosters": [
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-0",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-1",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-2",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-3",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-4",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-5",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        }
+      ],
+      "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+      "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9"
+    },
+    "validator-2": {
+      "completed_unix": 1785244255,
+      "diff": [
+        {
+          "action": "create",
+          "local_sha256": "707e25b4e07a37ef15d7159a9b9e40d2675f8f532d9f99045310c4d6a60c5d7e",
+          "path": "/opt/postfiat/releases/a666-v2-return-c871dfe/postfiat-node",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "62c3d59b99793b0ecdcde6c3867bba4ba75b81396c2178ef5cbc9eb005247d9e",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment-manifest.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "e753aeb83746c3d9ac1a69d77d672e0bf9d86f4c8f79a7c0a2fb94431d2a96ab",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment.public.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "4df248e0b8a7c19f4d92e946b9d20b97ceb070d6310096ab05ad6a0e605161a2",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/topology.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "3750cda7d1c4e03a8d6d2c0c6435bf8dea7d9cee6f94472b4d9d940cae06e351",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/swap.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "d371570a90707d70421389b39a57ae555eaefd9b1b2312eb8856b89ea43a6081",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/private-egress.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "a55f2292a0e52d32481322e59c454b1b946de0ecc6f1103d5a2c9d572b081add",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-2.bindings.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "3a15309d147c030117c9fe3deb6fe44218f5de9f0ab13e79623c7fbd422e3833",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-2.rpc.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "0435f7899979f963962a808840dc0ca7cca1d199b52fdb1e4ffccf48d9eededb",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-2.transport.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "update",
+          "local_sha256": "b60c0230b0ef25a98dcd93a77169758a1cb84cebb390c5129ee078f8d6986bd0",
+          "path": "/etc/systemd/system/postfiat-validator-2.service",
+          "remote_sha256": "7ca8429788ce9683a1dbf293e972373b7e4f8ea4a287d3b04212de29e523f764"
+        },
+        {
+          "action": "update",
+          "local_sha256": "925ff77b3e948fae382f611cd125f97031e68ea859ee3783e9a9a4dc172ebfd5",
+          "path": "/etc/systemd/system/postfiat-validator-2-rpc.service",
+          "remote_sha256": "611ec4b8836530564ba9a18250e83b69169724cc77a7120d64faa2e2160c3b80"
+        }
+      ],
+      "fleet_convergence": {
+        "height": 380,
+        "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+        "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+        "validator_count": 6,
+        "validators": [
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-0"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-1"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-2"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-3"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-4"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-5"
+          }
+        ],
+        "verified": true
+      },
+      "height": 380,
+      "mempool_pending": 0,
+      "pre_mutation_committee_rosters": [
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-0",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-1",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-2",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-3",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-4",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-5",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        }
+      ],
+      "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+      "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9"
+    },
+    "validator-3": {
+      "completed_unix": 1785244393,
+      "diff": [
+        {
+          "action": "create",
+          "local_sha256": "707e25b4e07a37ef15d7159a9b9e40d2675f8f532d9f99045310c4d6a60c5d7e",
+          "path": "/opt/postfiat/releases/a666-v2-return-c871dfe/postfiat-node",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "62c3d59b99793b0ecdcde6c3867bba4ba75b81396c2178ef5cbc9eb005247d9e",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment-manifest.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "e753aeb83746c3d9ac1a69d77d672e0bf9d86f4c8f79a7c0a2fb94431d2a96ab",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment.public.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "4df248e0b8a7c19f4d92e946b9d20b97ceb070d6310096ab05ad6a0e605161a2",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/topology.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "3750cda7d1c4e03a8d6d2c0c6435bf8dea7d9cee6f94472b4d9d940cae06e351",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/swap.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "d371570a90707d70421389b39a57ae555eaefd9b1b2312eb8856b89ea43a6081",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/private-egress.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "8e97f6212e0a4831517a3a4cd611d08a7eb7619b4b571b915e255d186ce2b0a3",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-3.bindings.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "9d3a8b2a7cc964a914afb05ac74c0da62d77c8a0049cbe17ae065d15a948cda8",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-3.rpc.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "a18abb1822e75bd20bfa9cfcfa11f54c46a025e63ef3e59af3764b49775feb4c",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-3.transport.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "update",
+          "local_sha256": "e4a5aacc7bc2de8a91de044c05e86a95247f84e05ce4c68d03e6af032db3ca64",
+          "path": "/etc/systemd/system/postfiat-validator-3.service",
+          "remote_sha256": "b9fdc1b834a113a9de5036751c51dbcb2e0ddf2e4bb4485d3346f96aca7a70dd"
+        },
+        {
+          "action": "update",
+          "local_sha256": "9ff94640c729b1a384420171024e91b1db457e564519d47391b04bd120730a52",
+          "path": "/etc/systemd/system/postfiat-validator-3-rpc.service",
+          "remote_sha256": "3459dee4e2c43406f40a5d178cf985156c126a33b403104206afb749c4952907"
+        }
+      ],
+      "fleet_convergence": {
+        "height": 380,
+        "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+        "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+        "validator_count": 6,
+        "validators": [
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-0"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-1"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-2"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-3"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-4"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-5"
+          }
+        ],
+        "verified": true
+      },
+      "height": 380,
+      "mempool_pending": 0,
+      "pre_mutation_committee_rosters": [
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-0",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-1",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-2",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-3",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-4",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-5",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        }
+      ],
+      "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+      "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9"
+    },
+    "validator-4": {
+      "completed_unix": 1785244508,
+      "diff": [
+        {
+          "action": "create",
+          "local_sha256": "707e25b4e07a37ef15d7159a9b9e40d2675f8f532d9f99045310c4d6a60c5d7e",
+          "path": "/opt/postfiat/releases/a666-v2-return-c871dfe/postfiat-node",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "62c3d59b99793b0ecdcde6c3867bba4ba75b81396c2178ef5cbc9eb005247d9e",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment-manifest.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "e753aeb83746c3d9ac1a69d77d672e0bf9d86f4c8f79a7c0a2fb94431d2a96ab",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment.public.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "4df248e0b8a7c19f4d92e946b9d20b97ceb070d6310096ab05ad6a0e605161a2",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/topology.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "3750cda7d1c4e03a8d6d2c0c6435bf8dea7d9cee6f94472b4d9d940cae06e351",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/swap.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "d371570a90707d70421389b39a57ae555eaefd9b1b2312eb8856b89ea43a6081",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/private-egress.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "c4248209c5d1ad09dc5b61560344738131acd3092b4902aab73ddbc12dcaf0c0",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-4.bindings.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "4da168fd0887762c0e70160f681b704e558fd076187b1b4b56fb64fb607e8c8c",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-4.rpc.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "4d4f7bb74600410458ca9bf98bd6ca14815dfca59426de6bf2d480a92d0a786b",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-4.transport.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "update",
+          "local_sha256": "03f77778fdfb4da4fadf80a41f678a360ff44d7fa60638156d6c80f98e068bb7",
+          "path": "/etc/systemd/system/postfiat-validator-4.service",
+          "remote_sha256": "542625a8cb9c5c65bbf8c9ddb582723012f08e526128d9b977bdbed8748ec9a5"
+        },
+        {
+          "action": "update",
+          "local_sha256": "cd600f00a2bf62e22155842f1fd8c162fd91b39d6a558c886bd5208bef82b236",
+          "path": "/etc/systemd/system/postfiat-validator-4-rpc.service",
+          "remote_sha256": "b66bd239dd69f294485627fb4f72e5dfd63231043f04481b46634b973ac38a5d"
+        }
+      ],
+      "fleet_convergence": {
+        "height": 380,
+        "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+        "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+        "validator_count": 6,
+        "validators": [
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-0"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-1"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-2"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-3"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-4"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-5"
+          }
+        ],
+        "verified": true
+      },
+      "height": 380,
+      "mempool_pending": 0,
+      "pre_mutation_committee_rosters": [
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-0",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-1",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-2",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-3",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-4",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-5",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        }
+      ],
+      "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+      "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9"
+    },
+    "validator-5": {
+      "completed_unix": 1785244552,
+      "diff": [
+        {
+          "action": "create",
+          "local_sha256": "707e25b4e07a37ef15d7159a9b9e40d2675f8f532d9f99045310c4d6a60c5d7e",
+          "path": "/opt/postfiat/releases/a666-v2-return-c871dfe/postfiat-node",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "62c3d59b99793b0ecdcde6c3867bba4ba75b81396c2178ef5cbc9eb005247d9e",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment-manifest.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "e753aeb83746c3d9ac1a69d77d672e0bf9d86f4c8f79a7c0a2fb94431d2a96ab",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment.public.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "4df248e0b8a7c19f4d92e946b9d20b97ceb070d6310096ab05ad6a0e605161a2",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/topology.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "3750cda7d1c4e03a8d6d2c0c6435bf8dea7d9cee6f94472b4d9d940cae06e351",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/swap.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "d371570a90707d70421389b39a57ae555eaefd9b1b2312eb8856b89ea43a6081",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/private-egress.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "c870888b1e3fbdff53716e77da7faa530d627c2f3bb1a2672a155a1c9eee07da",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-5.bindings.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "68662140b86fa7061b9107dd3929c90c10701dca9945da1a80811980f8b195b6",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-5.rpc.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "19ff969109d27765abe77f948df0fbca96b81f5cf6fcf6db13847948bbb1c1e8",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-5.transport.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "update",
+          "local_sha256": "3e2a654db6c645211f0ad0039402c78342ac259c29acc13aebcbc3f8f17d3e41",
+          "path": "/etc/systemd/system/postfiat-validator-5.service",
+          "remote_sha256": "95c30c3ecab951efd2b44c93611a9ac0e14af2e13374a3b65c3ca0905ade93ca"
+        },
+        {
+          "action": "update",
+          "local_sha256": "ec303b06313cea0efa58f4f9f6bd5d40b8133ce8afcaaa777f86ce849b137aa4",
+          "path": "/etc/systemd/system/postfiat-validator-5-rpc.service",
+          "remote_sha256": "784de592955f97ff9fbfd0bb2b53f2df257117cba555bef5aefbb7588881ef25"
+        }
+      ],
+      "fleet_convergence": {
+        "height": 380,
+        "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+        "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+        "validator_count": 6,
+        "validators": [
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-0"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-1"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-2"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-3"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-4"
+          },
+          {
+            "height": 380,
+            "mempool_pending": 0,
+            "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+            "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+            "validator_id": "validator-5"
+          }
+        ],
+        "verified": true
+      },
+      "height": 380,
+      "mempool_pending": 0,
+      "pre_mutation_committee_rosters": [
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-0",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-1",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-2",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-3",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-4",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        },
+        {
+          "local_signer_matches_registry": true,
+          "local_signer_valid": true,
+          "node_id": "validator-5",
+          "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+          "registry_validator_count": 6,
+          "registry_validator_ids": [
+            "validator-0",
+            "validator-1",
+            "validator-2",
+            "validator-3",
+            "validator-4",
+            "validator-5"
+          ],
+          "schema": "postfiat-safe-rollout-committee-roster-v1"
+        }
+      ],
+      "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+      "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9"
+    }
+  },
+  "backup": {
+    "candidate_binary_sha256": "707e25b4e07a37ef15d7159a9b9e40d2675f8f532d9f99045310c4d6a60c5d7e",
+    "certificate_id": "03b9157c9f3f814407b0d5ebf9199679e198fbf19d0a2553c86f3dd202496ef35cb16b6fabb135b386062793968e13b3",
+    "consensus_v2_activation_height": 1,
+    "created_unix": 1785243977,
+    "finalized_checkpoint_verification_sha256": "99b143691342af4589db7d30de053f721e3dbb21be67be3338a2753798a40b68",
+    "height": 380,
+    "remote_unsigned_snapshot": "/var/lib/postfiat/pre-rollout-snapshots/a666-v2-return-c871dfe-validator-1-finalized-checkpoint",
+    "signed_manifest_sha256": "6851e775e4bb28fb880accc2dca208946634eae056b3fd6ebf369674c256e613",
+    "signed_snapshot": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/a666-mainnet-20260727/v2-return-release-c871dfe/rollout/pre-rollout-backup/backup-signed",
+    "source_validator": "validator-1",
+    "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+    "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+    "verification_basis": "consensus-v2-finalized-checkpoint",
+    "verified": true
+  },
+  "canary_validator_id": "validator-1",
+  "inventory_file": "/home/postfiat/repos/wan-vultr-all-fleet.txt",
+  "inventory_file_sha256": "8ac9e451b59db249357cc64d691934b1c82e528532fc38408f6da18edaf87d1f",
+  "order": [
+    "validator-1",
+    "validator-0",
+    "validator-2",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+  ],
+  "preflight": {
+    "committee_rosters": [
+      {
+        "local_signer_matches_registry": true,
+        "local_signer_valid": true,
+        "node_id": "validator-0",
+        "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+        "registry_validator_count": 6,
+        "registry_validator_ids": [
+          "validator-0",
+          "validator-1",
+          "validator-2",
+          "validator-3",
+          "validator-4",
+          "validator-5"
+        ],
+        "schema": "postfiat-safe-rollout-committee-roster-v1"
+      },
+      {
+        "local_signer_matches_registry": true,
+        "local_signer_valid": true,
+        "node_id": "validator-1",
+        "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+        "registry_validator_count": 6,
+        "registry_validator_ids": [
+          "validator-0",
+          "validator-1",
+          "validator-2",
+          "validator-3",
+          "validator-4",
+          "validator-5"
+        ],
+        "schema": "postfiat-safe-rollout-committee-roster-v1"
+      },
+      {
+        "local_signer_matches_registry": true,
+        "local_signer_valid": true,
+        "node_id": "validator-2",
+        "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+        "registry_validator_count": 6,
+        "registry_validator_ids": [
+          "validator-0",
+          "validator-1",
+          "validator-2",
+          "validator-3",
+          "validator-4",
+          "validator-5"
+        ],
+        "schema": "postfiat-safe-rollout-committee-roster-v1"
+      },
+      {
+        "local_signer_matches_registry": true,
+        "local_signer_valid": true,
+        "node_id": "validator-3",
+        "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+        "registry_validator_count": 6,
+        "registry_validator_ids": [
+          "validator-0",
+          "validator-1",
+          "validator-2",
+          "validator-3",
+          "validator-4",
+          "validator-5"
+        ],
+        "schema": "postfiat-safe-rollout-committee-roster-v1"
+      },
+      {
+        "local_signer_matches_registry": true,
+        "local_signer_valid": true,
+        "node_id": "validator-4",
+        "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+        "registry_validator_count": 6,
+        "registry_validator_ids": [
+          "validator-0",
+          "validator-1",
+          "validator-2",
+          "validator-3",
+          "validator-4",
+          "validator-5"
+        ],
+        "schema": "postfiat-safe-rollout-committee-roster-v1"
+      },
+      {
+        "local_signer_matches_registry": true,
+        "local_signer_valid": true,
+        "node_id": "validator-5",
+        "registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+        "registry_validator_count": 6,
+        "registry_validator_ids": [
+          "validator-0",
+          "validator-1",
+          "validator-2",
+          "validator-3",
+          "validator-4",
+          "validator-5"
+        ],
+        "schema": "postfiat-safe-rollout-committee-roster-v1"
+      }
+    ],
+    "created_unix": 1785243913,
+    "deletion_count": 0,
+    "diff": {
+      "validator-0": [
+        {
+          "action": "create",
+          "local_sha256": "707e25b4e07a37ef15d7159a9b9e40d2675f8f532d9f99045310c4d6a60c5d7e",
+          "path": "/opt/postfiat/releases/a666-v2-return-c871dfe/postfiat-node",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "62c3d59b99793b0ecdcde6c3867bba4ba75b81396c2178ef5cbc9eb005247d9e",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment-manifest.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "e753aeb83746c3d9ac1a69d77d672e0bf9d86f4c8f79a7c0a2fb94431d2a96ab",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment.public.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "4df248e0b8a7c19f4d92e946b9d20b97ceb070d6310096ab05ad6a0e605161a2",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/topology.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "3750cda7d1c4e03a8d6d2c0c6435bf8dea7d9cee6f94472b4d9d940cae06e351",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/swap.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "d371570a90707d70421389b39a57ae555eaefd9b1b2312eb8856b89ea43a6081",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/private-egress.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "27b80fedf3e5d485a2b00b92ba05f8de20b0751e030eabf19edccdc49cbf30d4",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-0.bindings.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "27915a12e8151bad0ba8bd1a29fd04702a1a93866925351a9b36e2f28e473570",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-0.rpc.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "255668df2326d101e5dc65b89a21449d19e3178235d1325f98e50c81afded69b",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-0.transport.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "update",
+          "local_sha256": "16841b6f6914833e75552f0915b67b32428193752ebaa8289f7e260fb1817826",
+          "path": "/etc/systemd/system/postfiat-validator-0.service",
+          "remote_sha256": "083eac3fadfe0ee6c293d7f054e608b146acb773049b5b516cde40867e9b97ed"
+        },
+        {
+          "action": "update",
+          "local_sha256": "0bca78d5f33226090100a8d53d2d2ea50d1fad0ebad5ca26f822792795540ee5",
+          "path": "/etc/systemd/system/postfiat-validator-0-rpc.service",
+          "remote_sha256": "9e5539191ecb6745104c9cd65ccbe9b2a7fc6c4e1dd9e8791c98850e2a299855"
+        }
+      ],
+      "validator-1": [
+        {
+          "action": "create",
+          "local_sha256": "707e25b4e07a37ef15d7159a9b9e40d2675f8f532d9f99045310c4d6a60c5d7e",
+          "path": "/opt/postfiat/releases/a666-v2-return-c871dfe/postfiat-node",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "62c3d59b99793b0ecdcde6c3867bba4ba75b81396c2178ef5cbc9eb005247d9e",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment-manifest.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "e753aeb83746c3d9ac1a69d77d672e0bf9d86f4c8f79a7c0a2fb94431d2a96ab",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment.public.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "4df248e0b8a7c19f4d92e946b9d20b97ceb070d6310096ab05ad6a0e605161a2",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/topology.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "3750cda7d1c4e03a8d6d2c0c6435bf8dea7d9cee6f94472b4d9d940cae06e351",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/swap.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "d371570a90707d70421389b39a57ae555eaefd9b1b2312eb8856b89ea43a6081",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/private-egress.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "52f1ae9b1881d2ce9763e1cf68175605735d4904f780289ee8622ec824e07f57",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-1.bindings.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "6774e3c63a7550c6608096b06187dfb0d7c4d8b419371ad1ad50b01a89f45b0d",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-1.rpc.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "c9585842aa0fcab7f028e5d5f604be4e2571ce79c4e02d3bd9c8578690b0fd9e",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-1.transport.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "update",
+          "local_sha256": "a694886e4470bd6c48b219f8dc8b0444b7cb4a9fe6cfd73e1d8558c2a06150a8",
+          "path": "/etc/systemd/system/postfiat-validator-1.service",
+          "remote_sha256": "0c3e27ab6ea28bf4b8fe1d2a2d3c743ed0d272b9de48431088422841e482d681"
+        },
+        {
+          "action": "update",
+          "local_sha256": "1097d3f68e1e864c295da2e2f092009fdc18077625c08ea04c270314b950b005",
+          "path": "/etc/systemd/system/postfiat-validator-1-rpc.service",
+          "remote_sha256": "81ce391595896959e6e4168e26d26c97d7b799cc8454fec309ab811d9e1a7640"
+        }
+      ],
+      "validator-2": [
+        {
+          "action": "create",
+          "local_sha256": "707e25b4e07a37ef15d7159a9b9e40d2675f8f532d9f99045310c4d6a60c5d7e",
+          "path": "/opt/postfiat/releases/a666-v2-return-c871dfe/postfiat-node",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "62c3d59b99793b0ecdcde6c3867bba4ba75b81396c2178ef5cbc9eb005247d9e",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment-manifest.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "e753aeb83746c3d9ac1a69d77d672e0bf9d86f4c8f79a7c0a2fb94431d2a96ab",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment.public.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "4df248e0b8a7c19f4d92e946b9d20b97ceb070d6310096ab05ad6a0e605161a2",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/topology.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "3750cda7d1c4e03a8d6d2c0c6435bf8dea7d9cee6f94472b4d9d940cae06e351",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/swap.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "d371570a90707d70421389b39a57ae555eaefd9b1b2312eb8856b89ea43a6081",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/private-egress.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "a55f2292a0e52d32481322e59c454b1b946de0ecc6f1103d5a2c9d572b081add",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-2.bindings.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "3a15309d147c030117c9fe3deb6fe44218f5de9f0ab13e79623c7fbd422e3833",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-2.rpc.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "0435f7899979f963962a808840dc0ca7cca1d199b52fdb1e4ffccf48d9eededb",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-2.transport.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "update",
+          "local_sha256": "b60c0230b0ef25a98dcd93a77169758a1cb84cebb390c5129ee078f8d6986bd0",
+          "path": "/etc/systemd/system/postfiat-validator-2.service",
+          "remote_sha256": "7ca8429788ce9683a1dbf293e972373b7e4f8ea4a287d3b04212de29e523f764"
+        },
+        {
+          "action": "update",
+          "local_sha256": "925ff77b3e948fae382f611cd125f97031e68ea859ee3783e9a9a4dc172ebfd5",
+          "path": "/etc/systemd/system/postfiat-validator-2-rpc.service",
+          "remote_sha256": "611ec4b8836530564ba9a18250e83b69169724cc77a7120d64faa2e2160c3b80"
+        }
+      ],
+      "validator-3": [
+        {
+          "action": "create",
+          "local_sha256": "707e25b4e07a37ef15d7159a9b9e40d2675f8f532d9f99045310c4d6a60c5d7e",
+          "path": "/opt/postfiat/releases/a666-v2-return-c871dfe/postfiat-node",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "62c3d59b99793b0ecdcde6c3867bba4ba75b81396c2178ef5cbc9eb005247d9e",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment-manifest.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "e753aeb83746c3d9ac1a69d77d672e0bf9d86f4c8f79a7c0a2fb94431d2a96ab",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment.public.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "4df248e0b8a7c19f4d92e946b9d20b97ceb070d6310096ab05ad6a0e605161a2",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/topology.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "3750cda7d1c4e03a8d6d2c0c6435bf8dea7d9cee6f94472b4d9d940cae06e351",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/swap.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "d371570a90707d70421389b39a57ae555eaefd9b1b2312eb8856b89ea43a6081",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/private-egress.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "8e97f6212e0a4831517a3a4cd611d08a7eb7619b4b571b915e255d186ce2b0a3",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-3.bindings.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "9d3a8b2a7cc964a914afb05ac74c0da62d77c8a0049cbe17ae065d15a948cda8",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-3.rpc.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "a18abb1822e75bd20bfa9cfcfa11f54c46a025e63ef3e59af3764b49775feb4c",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-3.transport.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "update",
+          "local_sha256": "e4a5aacc7bc2de8a91de044c05e86a95247f84e05ce4c68d03e6af032db3ca64",
+          "path": "/etc/systemd/system/postfiat-validator-3.service",
+          "remote_sha256": "b9fdc1b834a113a9de5036751c51dbcb2e0ddf2e4bb4485d3346f96aca7a70dd"
+        },
+        {
+          "action": "update",
+          "local_sha256": "9ff94640c729b1a384420171024e91b1db457e564519d47391b04bd120730a52",
+          "path": "/etc/systemd/system/postfiat-validator-3-rpc.service",
+          "remote_sha256": "3459dee4e2c43406f40a5d178cf985156c126a33b403104206afb749c4952907"
+        }
+      ],
+      "validator-4": [
+        {
+          "action": "create",
+          "local_sha256": "707e25b4e07a37ef15d7159a9b9e40d2675f8f532d9f99045310c4d6a60c5d7e",
+          "path": "/opt/postfiat/releases/a666-v2-return-c871dfe/postfiat-node",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "62c3d59b99793b0ecdcde6c3867bba4ba75b81396c2178ef5cbc9eb005247d9e",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment-manifest.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "e753aeb83746c3d9ac1a69d77d672e0bf9d86f4c8f79a7c0a2fb94431d2a96ab",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment.public.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "4df248e0b8a7c19f4d92e946b9d20b97ceb070d6310096ab05ad6a0e605161a2",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/topology.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "3750cda7d1c4e03a8d6d2c0c6435bf8dea7d9cee6f94472b4d9d940cae06e351",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/swap.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "d371570a90707d70421389b39a57ae555eaefd9b1b2312eb8856b89ea43a6081",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/private-egress.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "c4248209c5d1ad09dc5b61560344738131acd3092b4902aab73ddbc12dcaf0c0",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-4.bindings.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "4da168fd0887762c0e70160f681b704e558fd076187b1b4b56fb64fb607e8c8c",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-4.rpc.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "4d4f7bb74600410458ca9bf98bd6ca14815dfca59426de6bf2d480a92d0a786b",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-4.transport.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "update",
+          "local_sha256": "03f77778fdfb4da4fadf80a41f678a360ff44d7fa60638156d6c80f98e068bb7",
+          "path": "/etc/systemd/system/postfiat-validator-4.service",
+          "remote_sha256": "542625a8cb9c5c65bbf8c9ddb582723012f08e526128d9b977bdbed8748ec9a5"
+        },
+        {
+          "action": "update",
+          "local_sha256": "cd600f00a2bf62e22155842f1fd8c162fd91b39d6a558c886bd5208bef82b236",
+          "path": "/etc/systemd/system/postfiat-validator-4-rpc.service",
+          "remote_sha256": "b66bd239dd69f294485627fb4f72e5dfd63231043f04481b46634b973ac38a5d"
+        }
+      ],
+      "validator-5": [
+        {
+          "action": "create",
+          "local_sha256": "707e25b4e07a37ef15d7159a9b9e40d2675f8f532d9f99045310c4d6a60c5d7e",
+          "path": "/opt/postfiat/releases/a666-v2-return-c871dfe/postfiat-node",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "62c3d59b99793b0ecdcde6c3867bba4ba75b81396c2178ef5cbc9eb005247d9e",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment-manifest.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "e753aeb83746c3d9ac1a69d77d672e0bf9d86f4c8f79a7c0a2fb94431d2a96ab",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/deployment.public.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "4df248e0b8a7c19f4d92e946b9d20b97ceb070d6310096ab05ad6a0e605161a2",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/topology.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "3750cda7d1c4e03a8d6d2c0c6435bf8dea7d9cee6f94472b4d9d940cae06e351",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/swap.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "d371570a90707d70421389b39a57ae555eaefd9b1b2312eb8856b89ea43a6081",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/private-egress.metadata.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "c870888b1e3fbdff53716e77da7faa530d627c2f3bb1a2672a155a1c9eee07da",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-5.bindings.json",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "68662140b86fa7061b9107dd3929c90c10701dca9945da1a80811980f8b195b6",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-5.rpc.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "create",
+          "local_sha256": "19ff969109d27765abe77f948df0fbca96b81f5cf6fcf6db13847948bbb1c1e8",
+          "path": "/etc/postfiat/releases/a666-v2-return-c871dfe/validator-5.transport.env",
+          "remote_sha256": ""
+        },
+        {
+          "action": "update",
+          "local_sha256": "3e2a654db6c645211f0ad0039402c78342ac259c29acc13aebcbc3f8f17d3e41",
+          "path": "/etc/systemd/system/postfiat-validator-5.service",
+          "remote_sha256": "95c30c3ecab951efd2b44c93611a9ac0e14af2e13374a3b65c3ca0905ade93ca"
+        },
+        {
+          "action": "update",
+          "local_sha256": "ec303b06313cea0efa58f4f9f6bd5d40b8133ce8afcaaa777f86ce849b137aa4",
+          "path": "/etc/systemd/system/postfiat-validator-5-rpc.service",
+          "remote_sha256": "784de592955f97ff9fbfd0bb2b53f2df257117cba555bef5aefbb7588881ef25"
+        }
+      ]
+    },
+    "fleet_convergence": {
+      "height": 380,
+      "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+      "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+      "validator_count": 6,
+      "validators": [
+        {
+          "height": 380,
+          "mempool_pending": 0,
+          "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+          "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+          "validator_id": "validator-0"
+        },
+        {
+          "height": 380,
+          "mempool_pending": 0,
+          "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+          "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+          "validator_id": "validator-1"
+        },
+        {
+          "height": 380,
+          "mempool_pending": 0,
+          "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+          "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+          "validator_id": "validator-2"
+        },
+        {
+          "height": 380,
+          "mempool_pending": 0,
+          "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+          "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+          "validator_id": "validator-3"
+        },
+        {
+          "height": 380,
+          "mempool_pending": 0,
+          "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+          "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+          "validator_id": "validator-4"
+        },
+        {
+          "height": 380,
+          "mempool_pending": 0,
+          "state_root": "dec5c480d57c7cef0e2847f2466ee0fcada43c577d6c52e62a7610552ea7fc144d9f3f9fab38acead4c2626c9a566907",
+          "tip": "8c5b5e7ba202a7ba880b832ac28be8a4df6ce9d436e2c268332bd9bd503861e5ef70c14f184fe68b3cf837344d1513e9",
+          "validator_id": "validator-5"
+        }
+      ],
+      "verified": true
+    },
+    "inventory": [
+      {
+        "host": "64.176.220.75",
+        "instance_id": "763e0633-a900-462f-b3b1-3fc14eff652c",
+        "power_status": "running",
+        "region": "ewr",
+        "status": "active",
+        "validator_id": "validator-0"
+      },
+      {
+        "host": "95.179.184.122",
+        "instance_id": "4c2b5d60-229f-4fcd-9fa7-e0c76c79998e",
+        "power_status": "running",
+        "region": "ams",
+        "status": "active",
+        "validator_id": "validator-1"
+      },
+      {
+        "host": "66.42.48.39",
+        "instance_id": "028f9327-bbba-4d8a-8fad-ee43b3f5d9c2",
+        "power_status": "running",
+        "region": "sgp",
+        "status": "active",
+        "validator_id": "validator-2"
+      },
+      {
+        "host": "149.28.63.106",
+        "instance_id": "5fd6ee01-6cbd-45b6-b3b1-0650c078fff3",
+        "power_status": "running",
+        "region": "ewr",
+        "status": "active",
+        "validator_id": "validator-3"
+      },
+      {
+        "host": "95.179.179.206",
+        "instance_id": "896cd473-98aa-43a5-ac86-644497a62629",
+        "power_status": "running",
+        "region": "ams",
+        "status": "active",
+        "validator_id": "validator-4"
+      },
+      {
+        "host": "45.32.110.170",
+        "instance_id": "c07bf48b-3996-46fe-925c-240a1c1e07c0",
+        "power_status": "running",
+        "region": "sgp",
+        "status": "active",
+        "validator_id": "validator-5"
+      }
+    ],
+    "verified": true
+  },
+  "release_id": "a666-v2-return-c871dfe",
+  "rpc_tunnel_base_port": 28650,
+  "schema": "postfiat.safe_validator_rollout.v1",
+  "ssh_user": "root",
+  "stage_report": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/a666-mainnet-20260727/v2-return-release-c871dfe/validator-stage/stage-report.json",
+  "stage_report_sha256": "28b938acab79dbd33b4c14b2b93716f82e25b7db93186a53a51b614f385d7c5c"
+}
