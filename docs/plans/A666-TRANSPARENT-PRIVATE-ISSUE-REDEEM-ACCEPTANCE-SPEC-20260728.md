@@ -4,7 +4,8 @@
 
 **Priority:** P0
 
-**Status:** execution specification
+**Status:** execution in progress — functional round trip complete; clean A8
+verification open
 
 **Governing economics:** `A666-END-TO-END-MAINNET-PRIMARY-ISSUANCE-SPEC-20260727.md`
 
@@ -12,30 +13,29 @@
 private issue attempt/fix → transparent redeem attempt/fix → private redeem
 attempt/fix
 
-**Execution status (2026-07-28):** A0, A1, A2, and the A3 attempt gate PASS.
-The fresh Phase 2
-mainnet run completed hands-off in `1,464 seconds` with exact conservation,
-six-validator convergence, unchanged Uniswap liquidity, and PFTL/Ethereum
-replay rejection. Evidence:
-`../evidence/a666-acceptance-20260728/phase-2b-transparent-issue-slo-verify/README.md`.
-Phase 3 then stopped without mutation at
-`UNSUPPORTED_PRIVATE_PRIMARY_ISSUE`: the deployed wallet/RPC/consensus action
-surface has no private-primary issue action, and the existing private swap is
-conservation-only. Evidence:
-`../evidence/a666-acceptance-20260728/phase-3-private-issue-attempt/README.md`.
-Phase 4 subsequently passed after implementing the production A666 private
-primary-issue action and verifying it on the six-validator fleet.
+**Execution status (2026-07-28):** A0 through A4 are complete. A2 passed in a
+fresh hands-off `1,464-second` run. A3 safely exposed the missing
+private-primary issue action, and A4 implemented and exercised it.
 
-Phase 5 returned wA666 to PFTL and completed transparent primary redemption.
-The resulting `999500` pfUSDC atoms were burned at height `384`, where proof
-preflight exposed an immutable deployed-egress-guest incompatibility with the
-new PFTL-Uniswap receipt-root consensus encoding. The legacy Ethereum vault
-and the PFTL pfUSDC NAV asset were then paused fail-closed; the vault funds
-remain intact and the redemption remains pending and fully backed. A current
-egress guest validates the exact withdrawal witness. Incident evidence:
-`../evidence/a666-acceptance-20260728/phase-5-transparent-redeem-verify/pfusdc-egress/README.md`.
-Phase 6 must deploy and accept the replacement verifier/vault lane before
-pfUSDC is unhalted. Phases 6 through 8 remain pending.
+The transparent-redemption campaign then exposed an immutable legacy egress
+guest mismatch. The route failed closed, an Epoch-5 verifier/vault lane was
+deployed, and a proof-backed transparent round trip completed. That recovery
+establishes functional redemption but is not retroactively labeled a clean A6
+verification.
+
+Private primary redemption is now implemented and deployed in release
+`a666-private-redeem-9061829`. A live Phase-8-sized run completed the entire
+path from Ethereum USDC through new A666 supply, wA666 export/return, a
+private A666-to-pfUSDC primary redemption, and Ethereum USDC release. Exact
+conservation, six-validator convergence, private proof verification, and
+replay rejection all passed.
+
+The Phase 8 machine verdict remains `FAIL`, not `PASS`: the run required
+operator repairs after deposit, issue took `1,848 seconds`, and redemption
+took `2,688 seconds`. The corrected workflow now includes the previously
+missing proof-backed destination-consume transition. A fresh hands-off rerun
+is mandatory for A8. Evidence:
+`../evidence/a666-acceptance-20260728/phase-8-private-redeem-verify/README.md`.
 
 ## 1. Objective
 
@@ -95,11 +95,10 @@ not contribute to the `42.2-minute` wall time. It nevertheless proves that
 binary/config parity must be a hard pre-deposit gate.
 
 Asset-Orchard has real Halo2 proof verification, private notes, nullifiers,
-encrypted outputs, a pricing-bound private swap, a private-send construction,
-and proof-based private egress. The current wallet configuration is still
-centered on legacy a651/a652 private NAV swap pairs. A production A666 primary
-issue or primary redemption funded directly from private notes has not been
-accepted.
+encrypted outputs, private send/egress, and production A666 private-primary
+issue and redemption actions. Both primary actions have been accepted by the
+six-validator live fleet. The formal clean-run and latency gates remain
+separate from that functional fact.
 
 Private egress hides the consumed note opening. It does not make the public
 exit asset, amount, destination, later Ethereum transaction, or timing

@@ -1,0 +1,8 @@
+{
+  "schema": "postfiat.a666.replay_check.v1",
+  "action": "return_import",
+  "exit_code": 1,
+  "rejected": true,
+  "no_state_advance": true,
+  "error": "mempool admission rejected `duplicate_pftl_uniswap_return_import`"
+}

@@ -9,6 +9,7 @@ prior_checkpoint_block_id=
 expected_verifier_height=
 expected_wrapped_balance_before=
 expected_wrapped_supply_before=
+resume_after_ingress_proof=false
 a100_host=${A666_A100_HOST:-194.228.55.129}
 a100_port=${A666_A100_PORT:-30886}
 validator2_host=${A666_VALIDATOR2_HOST:-66.42.48.39}
@@ -23,6 +24,7 @@ while (($#)); do
     --expected-verifier-height) expected_verifier_height=$2; shift 2 ;;
     --expected-wrapped-balance-before) expected_wrapped_balance_before=$2; shift 2 ;;
     --expected-wrapped-supply-before) expected_wrapped_supply_before=$2; shift 2 ;;
+    --resume-after-ingress-proof) resume_after_ingress_proof=true; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -100,36 +102,44 @@ jq '{
   creation_bytecode_hash:"0xc02403a4d05a2b4400d21b360e5787ad560c1fccd293c1ad937840f986fdcd38"
 }' "$deposit_file" > "$phase_dir/ingress/capture-deployment.json"
 
-ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
-  "test ! -e '$a100_root'; install -d -m 700 '$a100_root/ingress'"
-scp -q -P "$a100_port" "$phase_dir/ingress/capture-deployment.json" \
-  "root@$a100_host:$a100_root/ingress/deployment.json"
-ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
-  "/workspace/a666-acceptance/bin/eth-l1-mainnet-fast-lane-p0-cuda capture \
-    --deployment '$a100_root/ingress/deployment.json' \
-    --output '$a100_root/ingress/witness.json' \
-    --wait-seconds 1800"
+if "$resume_after_ingress_proof"; then
+  test -s "$phase_dir/ingress/witness.public-values.json"
+  test -s "$phase_dir/ingress/proof-cuda/proof-report.json"
+  ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
+    "test -s '$a100_root/ingress-proof/proof-calldata.bin'; \
+     test -s '$a100_root/ingress-proof/public-values.bin'"
+else
+  ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
+    "test ! -e '$a100_root'; install -d -m 700 '$a100_root/ingress'"
+  scp -q -P "$a100_port" "$phase_dir/ingress/capture-deployment.json" \
+    "root@$a100_host:$a100_root/ingress/deployment.json"
+  ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
+    "/workspace/a666-acceptance/bin/eth-l1-mainnet-fast-lane-p0-cuda capture \
+      --deployment '$a100_root/ingress/deployment.json' \
+      --output '$a100_root/ingress/witness.json' \
+      --wait-seconds 1800"
 
-scp -q -P "$a100_port" "root@$a100_host:$a100_root/ingress/witness.json" \
-  "$phase_dir/ingress/witness.json"
-scp -q -P "$a100_port" \
-  "root@$a100_host:$a100_root/ingress/witness.public-values.json" \
-  "$phase_dir/ingress/witness.public-values.json"
+  scp -q -P "$a100_port" "root@$a100_host:$a100_root/ingress/witness.json" \
+    "$phase_dir/ingress/witness.json"
+  scp -q -P "$a100_port" \
+    "root@$a100_host:$a100_root/ingress/witness.public-values.json" \
+    "$phase_dir/ingress/witness.public-values.json"
+
+  ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
+    "SP1_PROVER=cuda '$ingress_prover' prove \
+      --witness '$a100_root/ingress/witness.json' \
+      --output-dir '$a100_root/ingress-proof' \
+      --require-prover cuda \
+      --skip-redundant-execute"
+  mkdir -p "$phase_dir/ingress/proof-cuda"
+  rsync -a -e "ssh -p $a100_port" \
+    "root@$a100_host:$a100_root/ingress-proof/" \
+    "$phase_dir/ingress/proof-cuda/"
+fi
 jq -e \
   --arg deposit_id "$deposit_id" \
   '.deposit_id==$deposit_id and .amount_atoms==1005000' \
   "$phase_dir/ingress/witness.public-values.json" >/dev/null
-
-ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
-  "SP1_PROVER=cuda '$ingress_prover' prove \
-    --witness '$a100_root/ingress/witness.json' \
-    --output-dir '$a100_root/ingress-proof' \
-    --require-prover cuda \
-    --skip-redundant-execute"
-mkdir -p "$phase_dir/ingress/proof-cuda"
-rsync -a -e "ssh -p $a100_port" \
-  "root@$a100_host:$a100_root/ingress-proof/" \
-  "$phase_dir/ingress/proof-cuda/"
 jq -e '
   .program_vkey=="0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e"
   and .prover_backend=="cuda"
@@ -138,15 +148,21 @@ jq -e '
   and .proof_bytes==356
 ' "$phase_dir/ingress/proof-cuda/proof-report.json" >/dev/null
 
-ssh -o BatchMode=yes "root@$validator2_host" \
-  "test ! -e '$remote_run'; install -d -o root -g root -m 700 '$remote_run/ingress-proof'"
+if "$resume_after_ingress_proof"; then
+  ssh -o BatchMode=yes "root@$validator2_host" \
+    "test -d '$remote_run'; test -s '$remote_run/ingress-proof/proof-calldata.bin'"
+else
+  ssh -o BatchMode=yes "root@$validator2_host" \
+    "test ! -e '$remote_run'; install -d -o root -g root -m 700 '$remote_run/ingress-proof'"
+fi
 rsync -a "$phase_dir/ingress/proof-cuda/" \
   "root@$validator2_host:$remote_run/ingress-proof/"
 DEPOSIT_TX="$deposit_tx" \
 EXPECTED_HOLDER_ATOMS=1805000 \
 PFTL_NODE_BIN="$remote_node" \
 PFTL_TOPOLOGY="$remote_topology" \
-PFTL_POLICY_HASH=541a43e1f2ad0f37f6d98ea437b57f502cb888e9bba8151a50e2e5bfe5ce57a5 \
+PFTL_POLICY_HASH=5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158 \
+PFTL_LABEL_SUFFIX=$(if "$resume_after_ingress_proof"; then printf '%s' -retry1; fi) \
 PFTL_VAULT_ADDRESS=0xaaa78FdA7062eFce769e95cd72Fc55e507BC8183 \
 PFTL_RUN_DIR="$remote_run" \
 PFTL_PROOF_DIR="$remote_run/ingress-proof" \
@@ -257,7 +273,7 @@ python3 scripts/a666-mainnet-accept-and-mint.py \
   --expected-finalized-height "$export_height" \
   > "$phase_dir/ethereum/preflight.stdout.json"
 jq -e \
-  --argjson height "$expected_pftl_height" \
+  --argjson height "$expected_verifier_height" \
   --argjson balance "$expected_wrapped_balance_before" \
   --argjson supply "$expected_wrapped_supply_before" \
   '.pre_state.latest_finalized_height==$height
@@ -288,6 +304,12 @@ jq -e \
    and .post_state.token_total_supply==($supply+1000000)
    and .post_state.migration_reserve_atoms==.pre_state.migration_reserve_atoms' \
   "$phase_dir/ethereum/mint-state.json" >/dev/null
+
+destination_height=$((export_height + 1))
+bash scripts/a666-mainnet-record-destination-consume.sh \
+  --phase-dir "$phase_dir" \
+  --workflow-id "$workflow_id" \
+  --expected-pftl-height "$destination_height"
 
 deposit_block_number=$(jq -er '.deposit.block_number' "$deposit_file")
 mint_block_number=$(jq -er '.transactions[-1].block_number' "$phase_dir/ethereum/mint-state.json")
@@ -346,8 +368,9 @@ jq -n \
   --arg packet_hash "$packet_hash" \
   --arg packet_digest "$packet_digest" \
   --argjson start_height "$expected_pftl_height" \
-  --argjson end_height "$export_height" \
+  --argjson export_height "$export_height" \
+  --argjson end_height "$destination_height" \
   --slurpfile timing "$phase_dir/timing.json" \
-  '{schema:"postfiat.a666.transparent_issue_acceptance.v1",verdict:"PASS",deposit_tx:$deposit_tx,packet_hash:$packet_hash,packet_digest:$packet_digest,start_height:$start_height,end_height:$end_height,timing:$timing[0]}' \
+  '{schema:"postfiat.a666.transparent_issue_acceptance.v1",verdict:"PASS",deposit_tx:$deposit_tx,packet_hash:$packet_hash,packet_digest:$packet_digest,start_height:$start_height,export_height:$export_height,end_height:$end_height,destination_consume_recorded:true,timing:$timing[0]}' \
   > "$phase_dir/summary.json"
 cat "$phase_dir/summary.json"

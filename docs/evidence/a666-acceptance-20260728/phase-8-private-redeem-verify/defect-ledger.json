@@ -1,0 +1,57 @@
+{
+  "schema": "postfiat.a666.phase8_defect_ledger.v1",
+  "defects": [
+    {
+      "id": "A666-P8-001",
+      "component": "pfUSDC ingress relay",
+      "symptom": "vault_bridge_policy_hash_mismatch",
+      "mutation": false,
+      "cause": "The orchestration pinned an obsolete Epoch-5 policy hash.",
+      "fix": "Pin the live policy hash and preserve the rejected first attempt as evidence.",
+      "regression_guard": "The live relay default and transparent issue driver use 5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158."
+    },
+    {
+      "id": "A666-P8-002",
+      "component": "Ethereum proof-controller preflight",
+      "symptom": "prior finalized checkpoint comparison failed",
+      "mutation": false,
+      "cause": "The preflight compared the controller checkpoint to the current PFTL tip rather than the frozen prior verifier checkpoint.",
+      "fix": "Compare latestFinalizedHeight to expected_verifier_height.",
+      "regression_guard": "The driver now separates expected PFTL height from expected verifier height."
+    },
+    {
+      "id": "A666-P8-003",
+      "component": "PFTL/Ethereum bridge accounting",
+      "symptom": "insufficient_pftl_uniswap_ethereum_supply",
+      "mutation": false,
+      "cause": "The issue workflow stopped after Ethereum mint and omitted the proof-backed PFTL destination-consume transition.",
+      "fix": "Build an Ethereum receipt proof, collect all six governed checkpoint votes, apply destination consume, and require the exact ethereum_spendable_supply_atoms delta.",
+      "regression_guard": "a666-mainnet-transparent-issue-after-deposit.sh now invokes a666-mainnet-record-destination-consume.sh before reporting success."
+    },
+    {
+      "id": "A666-P8-004",
+      "component": "Ethereum receipt-proof orchestration",
+      "symptom": "wrong event log selection during first destination-consume construction",
+      "mutation": false,
+      "cause": "A block-global log index was initially used where the receipt proof requires the transaction-local log index.",
+      "fix": "Use and validate receipt-local event index 1.",
+      "regression_guard": "The destination-consume helper defaults to receipt-local log index 1 and records it in the consensus operation."
+    },
+    {
+      "id": "A666-P8-005",
+      "component": "end-to-end latency",
+      "symptom": "issue and redemption exceeded 25 minutes",
+      "mutation": false,
+      "cause": "Ethereum finality waits plus sequential proof and consensus stages exceed the target in this run.",
+      "fix": "Not resolved by this functional run.",
+      "regression_guard": "A fresh run cannot pass A8 unless both timing verdicts pass and the run is hands-off."
+    }
+  ],
+  "interventions": [
+    "updated the live pfUSDC policy pin after a pre-mutation rejection",
+    "resumed from the already verified ingress proof",
+    "corrected the verifier checkpoint preflight after a pre-mutation rejection",
+    "constructed and submitted the omitted destination-consume transition",
+    "corrected the receipt-local log index before the accepted destination-consume transition"
+  ]
+}

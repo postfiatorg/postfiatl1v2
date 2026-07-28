@@ -1,0 +1,17 @@
+{
+  "schema": "postfiat-asset-orchard-private-primary-redeem-report-v1",
+  "action_file": "/var/lib/postfiat/validator-2/a666-phase8-private-redeem-orchard-20260728/public/private-primary-redeem.json",
+  "input_note_file": "/var/lib/postfiat/validator-2/a666-phase8-private-redeem-orchard-20260728/private/a666-note.json",
+  "output_note_file": "/var/lib/postfiat/validator-2/a666-phase8-private-redeem-orchard-20260728/private/pfusdc-note.json",
+  "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+  "native_nav_asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+  "settlement_asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "nav_amount_atoms": 1000000,
+  "settlement_output_atoms": 999500,
+  "anchor": "9412bd2bfc2b599e72795e833128dd5617833d2339be7edbcef01c3fc620202b",
+  "nullifier": "b41f7e2aa896b1dd50f45acc26d0082d93aa2aaf10f38dbe1af6c151ca4cfa02",
+  "output_commitment": "e0b90044d4c097222947342c9bdfcf16b6a49cbd39d3d11dbf71c23e451eb315",
+  "proof_bytes": 7616,
+  "verified": true,
+  "privacy": "private_nav_note_to_encrypted_settlement_note_with_public_route_economics"
+}

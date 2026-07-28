@@ -1,0 +1,8 @@
+{
+  "schema": "postfiat.a666.rejected_attempt.v1",
+  "height": 399,
+  "applied": false,
+  "state_mutated": false,
+  "reason": "vault_bridge_policy_hash_mismatch",
+  "resolution": "Retry used the live Epoch-5 policy hash; see joe-pfusdc-propose-h399-retry1.report.json."
+}

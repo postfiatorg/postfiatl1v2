@@ -1,0 +1,21 @@
+{
+  "schema": "postfiat.evidence_redaction_scan.v1",
+  "verdict": "PASS",
+  "files_scanned": 354,
+  "bytes_scanned": 22477147,
+  "private_material_filenames_found": 0,
+  "private_material_value_patterns_found": 0,
+  "zero_byte_files_found": 0,
+  "allowed_metadata": [
+    "remote key-file paths without key contents",
+    "remote private note-file paths without note contents",
+    "private_key_material_redacted booleans",
+    "private_key_decode_ms timing labels",
+    "privacy capability descriptions"
+  ],
+  "commands": [
+    "find phase -type f | rg -i '(^|/)(private|secrets?)(/|$)|(^|/).*(key|seed|mnemonic|note)\\.json$'",
+    "rg -i --pcre2 --glob '*.json' '\"(private_key|spending_key|viewing_key|master_seed|secret_key|mnemonic|seed(_phrase)?)\"\\s*:\\s*\"[^\"]+\"'",
+    "find phase -type f -size 0"
+  ]
+}

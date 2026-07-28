@@ -1,0 +1,105 @@
+{
+  "amount_atoms": 1005000,
+  "approve": {
+    "block_hash": "32015b055aa5272e50d6f4e36886805ad6b7be000f7a907a201e94de28e13c3c",
+    "block_number": 25632816,
+    "effective_gas_price_wei": 535736360,
+    "gas_used": 55558,
+    "response": {
+      "charged_usd": 11.004999999999999,
+      "gas_used": 55558,
+      "ok": true,
+      "tx": "640ecfe15ea7185525985f959dda970d57a4e7dde70c71209a0ba6d553880d97",
+      "value_wei": 0
+    },
+    "tx_hash": "0x640ecfe15ea7185525985f959dda970d57a4e7dde70c71209a0ba6d553880d97"
+  },
+  "chain_id": 1,
+  "closed_sessions": [
+    {
+      "response": {
+        "ok": true
+      },
+      "session_id": "a666-pfusdc-approve-20260728T172920357369Z"
+    },
+    {
+      "response": {
+        "ok": true
+      },
+      "session_id": "a666-pfusdc-deposit-20260728T172925572698Z"
+    }
+  ],
+  "completed_unix": 1785259779,
+  "deposit": {
+    "block_hash": "fe78a98e445453606cde1c31c3437118a4f4ed5b47c66d33ff46f1f884dc3d5f",
+    "block_number": 25632817,
+    "effective_gas_price_wei": 561444686,
+    "gas_used": 181457,
+    "response": {
+      "charged_usd": 10.0,
+      "gas_used": 181457,
+      "ok": true,
+      "tx": "a59e2b078f28c3bbd6579a1b2f27e1c9d235ca0d3794e12876fb616b68945c17",
+      "value_wei": 0
+    },
+    "tx_hash": "0xa59e2b078f28c3bbd6579a1b2f27e1c9d235ca0d3794e12876fb616b68945c17"
+  },
+  "deposit_calldata": "0x2391b45700000000000000000000000000000000000000000000000000000000000f55c800000000000000000000000000000000000000000000000000000000000000805b7dfe87d9686c0e6ff3fc25f7dbc20c2c959610cb5ce4fa63617a292756d461caec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93000000000000000000000000000000000000000000000000000000000000002a70663233643838333133303161613163636536666464376266346132646232616561643136313962613800000000000000000000000000000000000000000000",
+  "deposit_calldata_sha256": "eb2c308494a7e9c898b3907a54c40d671945d3a43ed21be0238cc70ff754713a",
+  "depositor": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+  "elapsed_seconds": 19,
+  "event": {
+    "amount_atoms": 1005000,
+    "deposit_id": "0x46d0d1991338a7a68adf75a4d8b1d12a0816a3b11649992f59481d1e134525a0",
+    "depositor": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+    "nonce": "0x5b7dfe87d9686c0e6ff3fc25f7dbc20c2c959610cb5ce4fa63617a292756d461",
+    "pftl_recipient": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+    "route_binding": "0xcaec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93"
+  },
+  "manifest_sha256": "b69417647e6a4bed5a3e7fa5069a0844b80a63f78020ba34f4796e373e92e904",
+  "nonce": "0x5b7dfe87d9686c0e6ff3fc25f7dbc20c2c959610cb5ce4fa63617a292756d461",
+  "opened_sessions": [
+    {
+      "action": "approve",
+      "response": {
+        "ok": true
+      },
+      "session_id": "a666-pfusdc-approve-20260728T172920357369Z"
+    },
+    {
+      "action": "deposit",
+      "response": {
+        "ok": true
+      },
+      "session_id": "a666-pfusdc-deposit-20260728T172925572698Z"
+    }
+  ],
+  "pftl_recipient": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "post_state": {
+    "allowance_atoms": 0,
+    "confirmed_nonce": 226,
+    "pending_nonce": 226,
+    "total_obligations_atoms": 1010500,
+    "vault_usdc_atoms": 1010500,
+    "wallet_eth_wei": 297817943831565228,
+    "wallet_usdc_atoms": 229182289
+  },
+  "pre_state": {
+    "allowance_atoms": 0,
+    "confirmed_nonce": 224,
+    "pending_nonce": 224,
+    "total_obligations_atoms": 5500,
+    "vault_usdc_atoms": 5500,
+    "wallet_eth_wei": 297949586340641610,
+    "wallet_usdc_atoms": 230187289
+  },
+  "predicted_deposit_id": "0x46d0d1991338a7a68adf75a4d8b1d12a0816a3b11649992f59481d1e134525a0",
+  "recipient_hash": "0x74abe9bdfafd4ca959cc7a501d590babdbd9520a3efe493e2172db3b4be5d0d5",
+  "route_binding": "0xcaec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93",
+  "schema": "postfiat.a666.pfusdc_buyer_deposit.v1",
+  "started_unix": 1785259760,
+  "usdc": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+  "vault": "0xaaa78fda7062efce769e95cd72fc55e507bc8183",
+  "verdict": "PASS",
+  "verifier": "0x9a45d6f1dc9da443a88b1c336b3188fa7924d1ae"
+}

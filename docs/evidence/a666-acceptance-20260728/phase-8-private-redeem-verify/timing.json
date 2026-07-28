@@ -1,0 +1,10 @@
+{
+  "schema": "postfiat.a666.transparent_issue_timing.v1",
+  "deposit_block_number": 25632817,
+  "deposit_block_timestamp": 1785259775,
+  "mint_block_number": 25632971,
+  "mint_block_timestamp": 1785261623,
+  "deposit_to_mint_seconds": 1848,
+  "slo_seconds": 1500,
+  "slo_pass": false
+}

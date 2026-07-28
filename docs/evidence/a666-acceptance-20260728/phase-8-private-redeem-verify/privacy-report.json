@@ -1,0 +1,41 @@
+{
+  "schema": "postfiat.a666.phase8_privacy_report.v1",
+  "verdict": "PASS",
+  "claim": "private PFTL middle only",
+  "proofs": {
+    "private_primary_redeem_verified": true,
+    "private_primary_redeem_proof_bytes": 7616,
+    "private_pfusdc_egress_verified": true,
+    "private_pfusdc_egress_proof_bytes": 7616
+  },
+  "not_in_public_evidence": [
+    "note openings",
+    "note randomness",
+    "spending key material",
+    "viewing key material",
+    "wallet seed material",
+    "private note files"
+  ],
+  "public_on_pftl": [
+    "route and asset identifiers",
+    "redemption economics and amounts",
+    "anchors",
+    "nullifiers",
+    "output commitments",
+    "proofs",
+    "action ordering and timing",
+    "transparent pfUSDC exit recipient and amount"
+  ],
+  "public_on_ethereum": [
+    "USDC deposit sender, amount, and timing",
+    "wA666 mint recipient, amount, and timing",
+    "wA666 burn sender, amount, and timing",
+    "USDC withdrawal recipient, amount, and timing"
+  ],
+  "redaction_scan": {
+    "actual_private_material_detected": false,
+    "benign_field_name_hits_expected": true,
+    "remote_private_file_paths_disclosed": true,
+    "remote_private_file_contents_copied": false
+  }
+}

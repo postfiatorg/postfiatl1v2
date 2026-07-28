@@ -1,0 +1,2 @@
+No stdout was emitted. The fail-closed rejection is preserved in stderr.txt
+and normalized in summary.json.

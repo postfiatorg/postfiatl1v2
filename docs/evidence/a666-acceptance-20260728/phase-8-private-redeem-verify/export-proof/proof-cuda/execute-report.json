@@ -1,0 +1,8 @@
+{
+  "elapsed_ms": 4668,
+  "instruction_count": 177821179,
+  "proof_kind": "receipt",
+  "public_values_bytes": 1120,
+  "schema": "postfiat-pftl-uniswap-execute-report-v1",
+  "witness": "/workspace/a666-acceptance/live/a666-phase8-private-redeem-20260728/export/receipt-witness.json"
+}

@@ -1,0 +1,11 @@
+{
+  "operation": "vault_bridge_burn_to_redeem",
+  "owner": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "bucket_id": "5d5abc049bd1545e0d552e4176047e39d2151868ad7287384cbaf8db792330add44f625cfc631c8204413deb3665c536",
+  "amount_atoms": 999500,
+  "epoch": 16,
+  "reserve_packet_hash": "f7948dfe8e62714bd0e2296795fce66dbeda0d5f9d1b8c21280abdada2fefd3901db17d66749b46d2d970e0e12d4d004",
+  "destination_ref": "evm-erc20:1:0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0"
+}

@@ -11,13 +11,14 @@ issuer_key=${PFTL_ISSUER_KEY:-/var/lib/postfiat/validator-2/a666-joe-e2e-2026072
 cast=${PFTL_CAST_BIN:-/var/lib/postfiat/validator-2/pfusdc-latency-20260727-run2/cast}
 proof_dir=${PFTL_PROOF_DIR:-"$run/phase1-ingress-proof-cuda"}
 asset=02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b
-policy=${PFTL_POLICY_HASH:-928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81}
+policy=${PFTL_POLICY_HASH:-5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158}
 vault=${PFTL_VAULT_ADDRESS:-0x8583409ddbac984ec195dfa06a21103d92403c1e}
 issuer=pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8
 holder=pfab9b9228942e5c529633a13aa271d5297bec6353
 deposit_tx=${DEPOSIT_TX:-0xadecf2fe0b96b7aef2eaaa62ebeac33f16201f8014c784603486a46fe1a0cbb1}
 deposit_atoms=${DEPOSIT_ATOMS:-1005000}
 expected_holder_atoms=${EXPECTED_HOLDER_ATOMS:-1805000}
+label_suffix=${PFTL_LABEL_SUFFIX:-}
 v0=$(awk '$1=="validator-0"{print $2}' "$fleet")
 v2=$(awk '$1=="validator-2"{print $2}' "$fleet")
 
@@ -108,8 +109,8 @@ ssh_v2 "set -euo pipefail
   test \"\$(jq '.operations|length' '$run/propose.ops.json')\" = 1
   test \"\$(jq '.operations|length' '$run/finalize-claim.ops.json')\" = 2"
 
-submit_round "$run/propose.ops.json" "$propose_height" 1 "joe-pfusdc-propose-h$propose_height"
-submit_round "$run/finalize-claim.ops.json" "$claim_height" 2 "joe-pfusdc-claim-h$claim_height"
+submit_round "$run/propose.ops.json" "$propose_height" 1 "joe-pfusdc-propose-h$propose_height$label_suffix"
+submit_round "$run/finalize-claim.ops.json" "$claim_height" 2 "joe-pfusdc-claim-h$claim_height$label_suffix"
 
 ssh_v2 "set -euo pipefail
   '$node' status --data-dir /var/lib/postfiat/validator-2 --expect-height '$claim_height' > '$run/post-status.json'

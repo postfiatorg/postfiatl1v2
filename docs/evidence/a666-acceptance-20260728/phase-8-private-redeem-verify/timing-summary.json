@@ -1,0 +1,32 @@
+{
+  "schema": "postfiat.a666.private_redeem_timing.v1",
+  "deposit": {
+    "block_number": 25632817,
+    "block_timestamp": 1785259775
+  },
+  "mint": {
+    "block_number": 25632971,
+    "block_timestamp": 1785261623
+  },
+  "return_burn": {
+    "block_number": 25632982,
+    "block_timestamp": 1785261755
+  },
+  "usdc_withdrawal": {
+    "block_number": 25633206,
+    "block_timestamp": 1785264443
+  },
+  "durations_seconds": {
+    "deposit_to_mint": 1848,
+    "return_burn_to_usdc_withdrawal": 2688,
+    "deposit_to_usdc_withdrawal": 4668
+  },
+  "slo_seconds": {
+    "issue": 1500,
+    "redemption": 1500
+  },
+  "verdicts": {
+    "issue": "FAIL",
+    "redemption": "FAIL"
+  }
+}

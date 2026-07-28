@@ -1,0 +1,18 @@
+{
+  "accepted": true,
+  "all_sends_verified": true,
+  "batch_kind": "shielded",
+  "confirmed": true,
+  "end_height": 406,
+  "end_state_root": "96716fb92c5160b7b594f720b8d9f9abc83f9aeeb234890ebd11092a19b80c864c83e454a94427b86cbb7e5f54d0c884",
+  "label": "a666-phase8-orchard-ingress",
+  "local_apply_verified": true,
+  "proposer": "validator-4",
+  "round_ok": true,
+  "runner_exit_code": 0,
+  "runner_stderr": null,
+  "schema": "postfiat-a666-ce22-remote-finality-batch-v1",
+  "start_height": 405,
+  "start_state_root": "fabfc2a4ad2098b3510358c55edf61f4ac92b1282a0e84e18e26592e2e152a607d2664de3e43a38170d23fcbe30ec911",
+  "vote_count": 5
+}

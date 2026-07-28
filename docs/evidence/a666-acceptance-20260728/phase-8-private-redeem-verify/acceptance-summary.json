@@ -1,0 +1,54 @@
+{
+  "schema": "postfiat.a666.phase8_acceptance.v1",
+  "gate": "A8",
+  "verdict": "FAIL",
+  "functional_pass": true,
+  "hands_off": false,
+  "fresh_run_required": true,
+  "recovery_required": false,
+  "funds_at_risk": false,
+  "flow": {
+    "deposit_usdc_atoms": 1005000,
+    "issued_a666_atoms": 1000000,
+    "minted_wa666_atoms": 1000000,
+    "returned_a666_atoms": 1000000,
+    "private_redeemed_a666_atoms": 1000000,
+    "private_output_pfusdc_atoms": 999500,
+    "withdrawn_usdc_atoms": 999500,
+    "net_user_usdc_cost_atoms": 5500
+  },
+  "timing": {
+    "issue_seconds": 1848,
+    "redemption_seconds": 2688,
+    "deposit_to_withdrawal_seconds": 4668,
+    "issue_slo_seconds": 1500,
+    "redemption_slo_seconds": 1500,
+    "issue_slo_pass": false,
+    "redemption_slo_pass": false
+  },
+  "conservation_verdict": "PASS",
+  "fleet_verdict": "PASS",
+  "privacy_proof_verdict": "PASS",
+  "privacy_claim": "private PFTL middle only",
+  "replay": {
+    "private_primary_redeem": "PASS",
+    "return_import": "PASS",
+    "ethereum_withdrawal": "PASS"
+  },
+  "operator_interventions_after_deposit": 5,
+  "formal_failure_reasons": [
+    "operator intervention occurred after deposit",
+    "orchestration changed after deposit",
+    "issue latency exceeded 1500 seconds",
+    "redemption latency exceeded 1500 seconds"
+  ],
+  "final": {
+    "pftl_height": 410,
+    "state_root": "12ea93322034fe5fcf092401ba0e71e2f7bb4edea9869ccb4752a30ad8c1bf3664b217240804ff1c7960cc9d80e5d48b",
+    "build_git_revision": "90618294",
+    "a666_authorized_supply_atoms": 31489197455,
+    "a666_reserve_principal_atoms": 103000000,
+    "wa666_total_supply_atoms": 31489197455,
+    "ethereum_spendable_supply_atoms": 0
+  }
+}

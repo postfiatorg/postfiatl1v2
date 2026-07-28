@@ -1,0 +1,21 @@
+{
+  "accepted": true,
+  "all_sends_verified": true,
+  "confirmed": true,
+  "end_block_tip_hash": "ce346a30478c27d98a64d7c5680f143b98783972cd115076ecb9c385563093176fb67f8b453f5a9258392dd446f0bf4a",
+  "end_height": 410,
+  "end_mempool_pending": 0,
+  "end_state_root": "12ea93322034fe5fcf092401ba0e71e2f7bb4edea9869ccb4752a30ad8c1bf3664b217240804ff1c7960cc9d80e5d48b",
+  "label": "a666-phase8-pfusdc-settle",
+  "proposer": "validator-2",
+  "round_ok": true,
+  "schema": "postfiat-a666-ce22-remote-finality-operation-v1",
+  "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "start_height": 409,
+  "start_state_root": "6ac708cfb3f0044b2c1d2ddfba9e9597a34b770de0b80531073105405cfefd8a257c4a4620460d26035dd798d35805a8",
+  "transaction_kind": "vault_bridge_redeem_settle",
+  "trust_class": "CONTROLLED",
+  "tx_id": "bacb6fb3c6688c08d057a22c87ce6621828c9818d8c0a875129ada85a19186e8e7ce8cbad74839389f0dd6c09fa899b5",
+  "validator_count": 6,
+  "vote_count": 5
+}

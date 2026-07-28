@@ -1,0 +1,19 @@
+{
+  "schema": "postfiat-asset-orchard-private-egress-report-v1",
+  "egress_file": "/var/lib/postfiat/validator-2/a666-phase8-private-redeem-orchard-20260728/public/pfusdc-private-egress.json",
+  "note_file": "/var/lib/postfiat/validator-2/a666-phase8-private-redeem-orchard-20260728/private/pfusdc-note.json",
+  "pool_id": "asset-orchard-v1",
+  "to": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "amount": 999500,
+  "fee": 0,
+  "policy_id": "77e8d7b093335a9391c7aa7ed940308c055e432fd804b4b8b15eff983a0edbdb",
+  "disclosure_hash": "5d8ece7c2232d4f94e417f95923d7132f9da73f8c128aaf53759c46ad80bf29e",
+  "anchor": "85d578fb788012b9aa4837d56cf95dd32a2dd7c3c4ccd6cc543a252fd72a7e09",
+  "nullifier": "7f038c274affc3f54ac09ea716394b7699e51ace6a4ffbdbeec51e9f4edde114",
+  "randomized_verification_key": "8265b0d91d5da74e2135af510b6c50560eb834e89caf61f862437a2bb1700294",
+  "exit_binding_hash": "dc3d150efaffd254cc05480042fabdae49e36d2b80ce1b3fa5ce1d390f5da13b1ffa0916bb976f6e940c5df24be5899867455b22a1b2bc3cc9bc931eb1c65b2f",
+  "proof_bytes": 7616,
+  "verified": true,
+  "privacy": "private_note_opening_egress_proof_public_exit"
+}

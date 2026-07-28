@@ -1,0 +1,45 @@
+{
+  "schema": "postfiat.a666.private_redeem_campaign.v1",
+  "frozen": true,
+  "release": {
+    "id": "a666-private-redeem-9061829",
+    "binary_sha256": "3aa69e0e5f9060893366316e7e5dcbb644f1f84c0a826c1eb52928d64f252929"
+  },
+  "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+  "pfusdc_vault": {
+    "address": "0xaaa78FdA7062eFce769e95cd72Fc55e507BC8183",
+    "manifest_sha256": "b69417647e6a4bed5a3e7fa5069a0844b80a63f78020ba34f4796e373e92e904"
+  },
+  "amounts": {
+    "deposit_atoms": 1005000,
+    "nav_atoms": 1000000,
+    "redemption_atoms": 999500,
+    "max_live_usdc_atoms": 1005000
+  },
+  "checkpoints": {
+    "starting_pftl_height": 398,
+    "starting_controller_checkpoint_height": 393,
+    "prior_checkpoint_block_id": "07b84fa2127625d1a2991cc5b3bf6ceff15539f35b7ee52cfcedeafdaba2c302f10b7a11b73dfab947a5bb297564ca76"
+  },
+  "starting_balances": {
+    "wallet_usdc_atoms": 230187289,
+    "vault_usdc_atoms": 5500,
+    "wallet_wa666_atoms": 103000000,
+    "wa666_total_supply_atoms": 31489197455
+  },
+  "privacy_boundary": {
+    "claim": "private PFTL middle only",
+    "public": [
+      "Ethereum deposit sender, amount, and timing",
+      "Ethereum wrapped-token burn sender, amount, and timing",
+      "Ethereum pfUSDC withdrawal recipient, amount, and timing"
+    ],
+    "not_claimed": [
+      "private Ethereum boundary",
+      "hidden amounts",
+      "hidden timing",
+      "audited production anonymity"
+    ]
+  },
+  "evidence_path": "docs/evidence/a666-acceptance-20260728/phase-8-private-redeem-verify"
+}
