@@ -139,7 +139,7 @@ if ! test -s "$egress_dir/witness.json"; then
   prior_checkpoint=$(jq -er \
     --argjson height "$verifier_height" \
     'if length==1 and .[0].header.height==$height
-     then .[0].block_hash
+     then .[0].header.block_hash
      else error("missing verifier checkpoint block")
      end' "$egress_dir/prior-checkpoint-block.json")
 
