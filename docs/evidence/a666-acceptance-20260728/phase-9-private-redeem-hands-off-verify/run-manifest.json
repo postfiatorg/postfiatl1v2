@@ -1,0 +1,16 @@
+{
+  "schema": "postfiat.a666.phase9_run_manifest.v1",
+  "workflow_id": "a666-p9-20260728",
+  "orchestration_commit": "3a5b970852f6d1d8bfa2cc51e4b9f91abd2a0685",
+  "start_height": 410,
+  "a666_verifier_prior_height": 403,
+  "a666_prior_checkpoint_block_id": "bbc31d3ab0b3c3b7e459b0e7d598db0aca52189a545b98c10d60ad03bf177c91ce1a4ec5d25ed49c5d2e310421fd5f88",
+  "amounts": {
+    "deposit_usdc_atoms": 1005000,
+    "mint_a666_atoms": 1000000,
+    "redeem_pfusdc_atoms": 999500
+  },
+  "operator_intervention_after_deposit_target": 0,
+  "private_material_policy": "validator-2 only; mode 0600; excluded from evidence",
+  "status": "PRE_VALUE"
+}
