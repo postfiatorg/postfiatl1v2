@@ -3,8 +3,9 @@
 **Date:** 2026-07-27  
 **Priority:** P0  
 **Status:** canonical specification; opening inventory proof-exported to
-Ethereum and the Uniswap venue seeded/trading; new-subscription and redemption
-acceptance campaigns remain
+Ethereum and the Uniswap venue seeded/trading; one transparent buyer-funded
+subscription/export functionally passed; clean SLO verification and redemption
+acceptance remain
 **Owner:** Post Fiat protocol and product release owners  
 **Change control:** any normative change requires a dated amendment, a new
 document hash, and a fresh acceptance run  
@@ -35,9 +36,11 @@ contract were deployed and their immutable/controller bindings verified. On
 began immediately and all temporary token/Permit2 allowances were revoked.
 
 This does **not** yet mean the complete public primary-issuance product is
-generally available. The opening migration and secondary venue are live, but
-a fresh buyer-funded subscription, its 25-minute end-to-end measurement, and
-the inverse primary-redemption campaign remain incomplete. See
+generally available. A fresh buyer-funded transparent subscription/export
+passed on 2026-07-28, but its `42.2-minute` wall time missed the `25-minute`
+SLO and the inverse primary-redemption campaign remains incomplete. The
+ordered transparent/private issue/redeem acceptance program is defined in
+`A666-TRANSPARENT-PRIVATE-ISSUE-REDEEM-ACCEPTANCE-SPEC-20260728.md`. See
 `../status/A666-MAINNET-DEPLOYMENT-20260727.md` for deployed identifiers,
 transactions, evidence, and the exact remaining gates.
 
@@ -238,13 +241,13 @@ Two older research assumptions are intentionally not carried forward:
 | Ethereum-mainnet USDC -> pfUSDC | Real round trip passed with SP1 proofs, exact conservation, and replay rejection. Replacement latency run passed in 20m12s. | Reuse the deployed mainnet pfUSDC rail and frozen proof lineage. |
 | pfUSDC ingress gas | Approval plus deposit used about 271k gas: 0.000015740899 ETH in the 25-USDC run and 0.000081604399 ETH in the 1-USDC latency run, approximately `$0.03` and `$0.15` at the campaign-pinned `$1,874.50/ETH`. | Quote live gas; do not scale gas estimates with principal size. Proof compute and later transactions are separate. |
 | Former controlled a666 | Six decimals; test asset maximum 1,000,000 a666; route cap 10 a666; packet cap 1 a666; controlled/test supply only. | Superseded by production a666 v2. Do not mutate or relabel the controlled lineage. |
-| PFTL primary subscription | Atomic settlement debit and a666 credit exist, with replayed nonce and supply conservation. | Extend it with rational spread pricing, policy envelopes, user limits, and redemption symmetry. |
+| PFTL primary subscription | Versioned rational-spread reservation/subscription exists. A live buyer-funded `100.500000 pfUSDC -> 100.000000 A666` subscription finalized at height `357` with exact supply and reserve accounting. | Make the proven path repeatable and verify it under the 25-minute SLO; do not replace primary issue with OTC inventory. |
 | PFTL export/refund/return | Export, destination consume, cancellation-based refund, and Ethereum return-import state machines exist. BFT-checkpoint routes verify Ethereum receipt-trie logs. | Reuse and harden; do not replace with manual operator assertions. |
-| Ethereum wA666 stack | Production wA666, receipt verifier, proof-gated controller, and ownerless a651 migration are deployed with immutable bindings. The finalized opening export proof was accepted and wrapped supply is `31,386.197455`. | Run fresh primary-subscription and redemption acceptance campaigns; no owner mint is available. |
-| Ethereum PFTL finality verifier | `PFTLFinalityVerifierV1` works for pfUSDC withdrawals but is hard-bound to the pfUSDC route, vault caller, token, and withdrawal public-value schema. | Build a receipt verifier for a666 export receipts. The pfUSDC verifier cannot be reused as configuration. |
+| Ethereum wA666 stack | Production wA666, receipt verifier, proof-gated controller, and ownerless a651 migration are deployed with immutable bindings. The opening export and fresh buyer export were proof-accepted; wrapped supply is `31,486.197455`. | Verify repeatability/latency and run redemption acceptance; no owner mint is available. |
+| Ethereum PFTL finality verifier | The production A666 receipt verifier is deployed and pins program vkey `0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9`. It advanced from PFTL height `348` to `358` for the fresh buyer export. The separate pfUSDC withdrawal verifier remains route/schema-bound. | Reuse each frozen verifier only for its bound schema; never treat the pfUSDC verifier as configurable A666 verification. |
 | Mainnet wA666/USDC pool | Hookless v4 pool `0xc5f1…6e98` was initialized at Q96/`$1.00`, fee `500`, tick spacing `10`, then seeded with `3,000 USDC` and `3,000` proof-exported/migrated wA666. Third-party swaps are finalized. | Treat it only as a secondary venue. Live pool price never controls NAV or primary issue/redemption arithmetic. |
 | a651 mainnet pool | Historical standalone token/controller/pool. Current position liquidity is zero; 4,000 a651 remains distributed between the operator, PoolManager, and external holders. | Deprecate the pool. Use a651 only as the burn input to the fixed-ratio successor contract; never use it as pool seed or an independently backed live product. |
-| Current redemption | `nav_redeem_at_nav` creates a claim, but settlement requires issuer/redemption-account action. It does not encode the 0.9995 band or guarantee permissionless execution from NAV reserve custody. | Add a policy-bound atomic primary redemption transition that releases subscription-funded reserve principal. |
+| Current redemption | The v2 primary policy includes a permissionless reserve-backed redemption operation at the frozen rational band. Controlled tests exist, but no live production wA666-to-USDC acceptance campaign has completed. | Execute transparent return/redemption/withdrawal, fix observed defects, then verify a fresh clean run before any availability claim. |
 
 Canonical pfUSDC mainnet contracts:
 
@@ -1326,10 +1329,8 @@ The current implementation candidate maps to this specification as follows:
 | Wallet/orchestration | `wallet-web/src/lib/a666-primary-route.js` fail-closes unless the v2 economics, directional trust, live state, invariant, capacity, proof/program, route, controller, token, pool, NAV, and recovery-deadline pins match. `wallet-proxy/a666-primary-workflow.js` provides an atomically persisted, restart-safe state journal with deterministic workflow/transition idempotency keys, required submission IDs before polling, explicit recovery states, and secret-field rejection. |
 | Operations | `docs/runbooks/a666-mainnet-primary-market-deployment.md` defines the no-broadcast, fork, genuine-proof, read-back, funding, pool, production-order, and rollback procedure. |
 
-Local unit/build success is not G2, G3, or deployment evidence. The remaining
-external gates are a frozen production parameter sheet; genuine SP1
-Groth16 proof against the recorded vkey; production adapters that drive the
-persisted USDC-to-pfUSDC, reservation, issuance, export, proof, and
-Ethereum-consume workflow; pinned mainnet-fork end-to-end campaign; governance,
-reserve/redemption/LP funding approvals; production deployment; real-value
-round trip; and the 20-run latency/capacity acceptance set.
+Local unit/build success is not live acceptance evidence. The remaining gates
+are a clean automated issue/export run within the SLO, transparent and
+private-middle redemption acceptance, failure/replay/capacity coverage, and
+the 20-run latency/capacity acceptance set. The exact execution order is in
+`A666-TRANSPARENT-PRIVATE-ISSUE-REDEEM-ACCEPTANCE-SPEC-20260728.md`.

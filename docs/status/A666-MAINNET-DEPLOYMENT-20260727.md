@@ -147,7 +147,9 @@ primary subscriptions.
 
 The opening migration, secondary venue, fresh primary issuance, and export to
 the buyer are live. The complete product is not yet declared generally
-available because these acceptance items remain:
+available. The binding campaign order is documented in
+`../plans/A666-TRANSPARENT-PRIVATE-ISSUE-REDEEM-ACCEPTANCE-SPEC-20260728.md`;
+these acceptance items remain:
 
 1. automate the proven primary path and pass a clean deposit-to-wA666 rerun
    within the `25-minute` SLO;
@@ -176,3 +178,5 @@ as the NAV oracle or as the primary issue/redemption price.
 - Fresh Joe primary subscription, PFTL export, Ethereum mint, timing, and pool
   readback:
   `../evidence/a666-joe-mainnet-e2e-20260728/README.md`
+- Ordered transparent/private issue and redemption acceptance program:
+  `../plans/A666-TRANSPARENT-PRIVATE-ISSUE-REDEEM-ACCEPTANCE-SPEC-20260728.md`
