@@ -16,7 +16,7 @@ private_middle=false
 a100_host=${A666_A100_HOST:-194.228.55.129}
 a100_port=${A666_A100_PORT:-30886}
 validator2_host=${A666_VALIDATOR2_HOST:-66.42.48.39}
-release_id=${A666_PFTL_RELEASE_ID:-a666-private-redeem-9061829}
+release_id=${A666_PFTL_RELEASE_ID:-a666-variable-nav-9ffdfb6}
 
 while (($#)); do
   case "$1" in

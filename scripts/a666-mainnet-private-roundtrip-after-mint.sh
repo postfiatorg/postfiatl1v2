@@ -33,7 +33,7 @@ burn_dir="$return_dir/ethereum-burn"
 hosts_file=${A666_PROPOSER_HOSTS_FILE:-docs/evidence/a666-joe-mainnet-e2e-20260728/proposer-hosts.json}
 hosts_file=$(realpath "$hosts_file")
 validator2_host=$(jq -er '."validator-2"' "$hosts_file")
-release_id=${A666_PFTL_RELEASE_ID:-a666-private-redeem-9061829}
+release_id=${A666_PFTL_RELEASE_ID:-a666-variable-nav-9ffdfb6}
 remote_node="/opt/postfiat/releases/$release_id/postfiat-node"
 route_id=pftl-a666-ethereum-wA666-usdc-v1
 

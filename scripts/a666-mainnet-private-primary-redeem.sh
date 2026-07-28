@@ -4,7 +4,7 @@ set -euo pipefail
 repo=$(cd "$(dirname "$0")/.." && pwd)
 phase_dir=
 workflow_id=
-release_id=${A666_PFTL_RELEASE_ID:-a666-private-redeem-9061829}
+release_id=${A666_PFTL_RELEASE_ID:-a666-variable-nav-9ffdfb6}
 hosts_file=${A666_PROPOSER_HOSTS_FILE:-docs/evidence/a666-joe-mainnet-e2e-20260728/proposer-hosts.json}
 holder_key=${A666_JOE_HOLDER_KEY:-/home/postfiat/tmp/pfusdc-closed-roundtrip-20260720/keys/holder.json}
 resume=false
