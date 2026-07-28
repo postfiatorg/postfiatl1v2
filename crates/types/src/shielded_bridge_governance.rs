@@ -367,6 +367,52 @@ pub struct AssetOrchardPrivateEgressActionPayload {
     pub spend_authorization_signature: String,
 }
 
+/// Versioned private-primary issue action.
+///
+/// The Halo2 proof consumes one retained Asset-Orchard settlement note. The
+/// primary-market fields are public consensus bindings: validators resolve the
+/// two issued assets from `route_id`, enforce the governed price/capacity
+/// transition, append the encrypted NAV output, and allocate one export
+/// entitlement atomically.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssetOrchardPrivatePrimaryIssueActionPayload {
+    pub version: u16,
+    pub schema: String,
+    pub pool_id: String,
+    pub route_id: String,
+    pub subscriber: String,
+    pub ethereum_recipient: String,
+    pub reservation_id: String,
+    pub subscription_nonce: String,
+    pub route_epoch: u64,
+    pub policy_epoch: u64,
+    pub policy_hash: String,
+    pub pricing_nav_epoch: u64,
+    pub pricing_reserve_packet_hash: String,
+    pub mint_amount_atoms: u64,
+    pub settlement_value_atoms: u64,
+    pub expires_at_height: u64,
+    pub output_commitment: String,
+    pub encrypted_output: String,
+    pub proof_system_id: String,
+    pub circuit_id: String,
+    pub pool_domain: String,
+    pub anchor: String,
+    pub nullifier: String,
+    pub randomized_verification_key: String,
+    #[serde(with = "u128_hex_serde")]
+    pub settlement_asset_tag_lo: u128,
+    #[serde(with = "u128_hex_serde")]
+    pub settlement_asset_tag_hi: u128,
+    #[serde(with = "u128_hex_serde")]
+    pub native_nav_asset_tag_lo: u128,
+    #[serde(with = "u128_hex_serde")]
+    pub native_nav_asset_tag_hi: u128,
+    pub primary_binding_hash: String,
+    pub proof: String,
+    pub spend_authorization_signature: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind")]
 #[allow(clippy::large_enum_variant)]
@@ -393,6 +439,8 @@ pub enum ShieldedAction {
     AssetOrchardEgressV1(AssetOrchardEgressActionPayload),
     #[serde(rename = "asset_orchard_private_egress_v1")]
     AssetOrchardPrivateEgressV1(AssetOrchardPrivateEgressActionPayload),
+    #[serde(rename = "asset_orchard_private_primary_issue_v1")]
+    AssetOrchardPrivatePrimaryIssueV1(AssetOrchardPrivatePrimaryIssueActionPayload),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
