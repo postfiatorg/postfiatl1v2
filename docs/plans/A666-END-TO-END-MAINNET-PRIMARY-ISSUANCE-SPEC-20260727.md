@@ -2,9 +2,9 @@
 
 **Date:** 2026-07-27  
 **Priority:** P0  
-**Status:** canonical specification; native asset/NAV, paused Ethereum
-contracts, and empty Uniswap pool deployed; public issuance route and seeded
-venue not yet live
+**Status:** canonical specification; opening inventory proof-exported to
+Ethereum and the Uniswap venue seeded/trading; new-subscription and redemption
+acceptance campaigns remain
 **Owner:** Post Fiat protocol and product release owners  
 **Change control:** any normative change requires a dated amendment, a new
 document hash, and a fresh acceptance run  
@@ -26,14 +26,18 @@ The fleet finalized the StakeHub reserve proof, epoch-one `$1.00` NAV mark, and
 an opening supply of `31,386.197455 a666` against `$31,386.19745591` of
 verified net assets. On Ethereum mainnet, the wA666 token, SP1 receipt
 verifier, proof-gated primary controller, and ownerless a651-to-a666 migration
-contract were deployed and their immutable/controller bindings verified.
+contract were deployed and their immutable/controller bindings verified. On
+2026-07-28, the full opening inventory was source-debited on PFTL at height
+`348`, proven with a genuine SP1 Groth16 proof, and minted exactly once as
+`31,386.197455 wA666` to the ownerless migration contract. Burning
+`382.333668078301459218 a651` released exactly `3,000 wA666`; that amount and
+`3,000 USDC` seeded the official Uniswap v4 PositionManager. Third-party swaps
+began immediately and all temporary token/Permit2 allowances were revoked.
 
-This does **not** mean the public end-to-end product is live. Ethereum wrapped
-supply remains zero, controller minting is paused, and no PFTL export route is
-active. The wA666/USDC Uniswap pool was initialized at the finalized `$1.00`
-NAV on 2026-07-27, but it has zero liquidity and is not a usable venue. The
-SP1 receipt program ELF and vkey are pinned, but its genuine Groth16 receipt
-proof and the route/pool acceptance campaign remain incomplete. See
+This does **not** yet mean the complete public primary-issuance product is
+generally available. The opening migration and secondary venue are live, but
+a fresh buyer-funded subscription, its 25-minute end-to-end measurement, and
+the inverse primary-redemption campaign remain incomplete. See
 `../status/A666-MAINNET-DEPLOYMENT-20260727.md` for deployed identifiers,
 transactions, evidence, and the exact remaining gates.
 
@@ -236,9 +240,9 @@ Two older research assumptions are intentionally not carried forward:
 | Former controlled a666 | Six decimals; test asset maximum 1,000,000 a666; route cap 10 a666; packet cap 1 a666; controlled/test supply only. | Superseded by production a666 v2. Do not mutate or relabel the controlled lineage. |
 | PFTL primary subscription | Atomic settlement debit and a666 credit exist, with replayed nonce and supply conservation. | Extend it with rational spread pricing, policy envelopes, user limits, and redemption symmetry. |
 | PFTL export/refund/return | Export, destination consume, cancellation-based refund, and Ethereum return-import state machines exist. BFT-checkpoint routes verify Ethereum receipt-trie logs. | Reuse and harden; do not replace with manual operator assertions. |
-| Ethereum wA666 stack | Production wA666, receipt verifier, proof-gated controller, and ownerless a651 migration are deployed with immutable bindings. The controller is paused and wrapped supply is zero. | Complete the proof-backed export before minting or seeding. |
+| Ethereum wA666 stack | Production wA666, receipt verifier, proof-gated controller, and ownerless a651 migration are deployed with immutable bindings. The finalized opening export proof was accepted and wrapped supply is `31,386.197455`. | Run fresh primary-subscription and redemption acceptance campaigns; no owner mint is available. |
 | Ethereum PFTL finality verifier | `PFTLFinalityVerifierV1` works for pfUSDC withdrawals but is hard-bound to the pfUSDC route, vault caller, token, and withdrawal public-value schema. | Build a receipt verifier for a666 export receipts. The pfUSDC verifier cannot be reused as configuration. |
-| Mainnet wA666/USDC pool | Hookless v4 pool `0xc5f1…6e98` is initialized at Q96/`$1.00`, fee `500`, tick spacing `10`; liquidity is zero. | Seed only with proof-exported/migrated wA666 plus USDC. Do not route users to the empty pool. |
+| Mainnet wA666/USDC pool | Hookless v4 pool `0xc5f1…6e98` was initialized at Q96/`$1.00`, fee `500`, tick spacing `10`, then seeded with `3,000 USDC` and `3,000` proof-exported/migrated wA666. Third-party swaps are finalized. | Treat it only as a secondary venue. Live pool price never controls NAV or primary issue/redemption arithmetic. |
 | a651 mainnet pool | Historical standalone token/controller/pool. Current position liquidity is zero; 4,000 a651 remains distributed between the operator, PoolManager, and external holders. | Deprecate the pool. Use a651 only as the burn input to the fixed-ratio successor contract; never use it as pool seed or an independently backed live product. |
 | Current redemption | `nav_redeem_at_nav` creates a claim, but settlement requires issuer/redemption-account action. It does not encode the 0.9995 band or guarantee permissionless execution from NAV reserve custody. | Add a policy-bound atomic primary redemption transition that releases subscription-funded reserve principal. |
 

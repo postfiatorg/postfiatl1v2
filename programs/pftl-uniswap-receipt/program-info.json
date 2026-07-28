@@ -4,8 +4,8 @@
   "sp1_version": "6.3.1",
   "build_command": "PATH=$HOME/.sp1/bin:$PATH cargo prove build --locked --output-directory elf",
   "elf_path": "elf/pftl-uniswap-receipt-program",
-  "elf_sha256": "495e46273337ce4ff035177825a605cc389ad82c05ead11d4874e349ba22cc3a",
-  "program_vkey": "0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9",
+  "elf_sha256": "f85348688a463877f7e7f0539b7427a0af8847d3ef0eff2085db0c3746ad77a7",
+  "program_vkey": "0x003af40eafdbc1873f7e5b8f02da0ccd668f65930797c8e20c4f19234a5ef02f",
   "cargo_lock_sha256": "e904251d4b160bf80e7d7d3d09fbfe490a6470107fbc95280439471c7b476caa",
   "cargo_toml_sha256": "4f48987cde3ba5d35b5a1fd0b1484230075ec469c274180abb31130bfcd648a8",
   "proof_modes": [

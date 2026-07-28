@@ -1,0 +1,19 @@
+{
+  "accepted": true,
+  "confirmed": true,
+  "end_block_tip_hash": "56479655f9f9ff95e9e315cf8980a4be0a28bd4ce9d93b75a727eebcc1d2c05867c564ab6327b53de1500e1e7eda3967",
+  "end_height": 345,
+  "end_mempool_pending": 0,
+  "end_state_root": "1a2cf30b8cd5924ba71dbb5093ce51e045df78227d0412732e818430c2a33c5f6865dae7332592f7eacab13cbbb6145d",
+  "fleet_converged": true,
+  "label": "a666-production-route-init-v2",
+  "round_ok": false,
+  "schema": "postfiat-a666-ce22-finality-operation-v1",
+  "source": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+  "start_height": 344,
+  "start_state_root": "651677815a2d7cb196706bda619a0fb9a147607973560a835b95a792d6f926ffd1b553c873dc786105e06391c758428a",
+  "transaction_kind": "pftl_uniswap_route_init_v2",
+  "trust_class": "CONTROLLED",
+  "tx_id": "bd6cb8920a6361cbaa97108df1dc76e55740c867617164d693dd6a1621ecf7b61bc1325454c7433397f9f1437ad9aa5a",
+  "validator_count": 6
+}

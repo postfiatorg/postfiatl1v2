@@ -1,0 +1,19 @@
+{
+  "accepted": true,
+  "confirmed": true,
+  "end_block_tip_hash": "c95e3c33fafa204e66dbd2d8a23c8efabc177e27545cc7b3ef1b9ae1525f433fa0c4acde9e29a274df4139e4d68498f1",
+  "end_height": 348,
+  "end_mempool_pending": 0,
+  "end_state_root": "f3a614b43ae94db1f759b666240334b6c51ff0be872bd474ae85ba1ec61e859eb4c8a598516c81915d49aea12ee74b34",
+  "fleet_converged": true,
+  "label": "a666-production-opening-inventory-export",
+  "round_ok": false,
+  "schema": "postfiat-a666-ce22-finality-operation-v1",
+  "source": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "start_height": 347,
+  "start_state_root": "c17b7de02b9d89d9e6497e0b659881f3aace806a9932df607c60b8711391e37c800ea94c191c4d5bc0a5926dc0a33a65",
+  "transaction_kind": "pftl_uniswap_export_debit",
+  "trust_class": "CONTROLLED",
+  "tx_id": "35e7f6a88346f90280c28d6e0769c6b9a333a9036d96518b1af83b64fe500dff1437f8df8fe7e3f8418c2d826736f3bd",
+  "validator_count": 6
+}

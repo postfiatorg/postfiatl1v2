@@ -1,0 +1,8 @@
+{
+  "schema": "postfiat-navcoin-bridge-route-init-v1",
+  "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+  "route_config_digest": "12ed00ca87e29554ce4b978da1710fffc0830767e84e62f08df257f727db953efdd89bcf6ea99f5634d6e5ea8aca2933",
+  "ledger_hash": "2da30162ce50bce13de7a0e432a054009bdcf721dec458ecfd55239eb532b3c89bc838305fbf6ad26c9330c1da6502f6",
+  "ledger_file": "/tmp/a666-route-digest.FzwTKV/pftl_uniswap_bridge_ledgers.json",
+  "route_count": 1
+}

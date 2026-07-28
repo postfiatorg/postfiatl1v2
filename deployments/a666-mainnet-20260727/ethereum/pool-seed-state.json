@@ -1,0 +1,240 @@
+{
+  "a651_burn_atoms": 382333668078301459218,
+  "external_swaps": [
+    {
+      "amount0_usdc_atoms": -188183563,
+      "amount1_wa666_atoms": 176971823,
+      "block_number": 25627682,
+      "fee_pips": 625,
+      "liquidity_after": 3000000000,
+      "sender": "0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af",
+      "sqrt_price_x96_after": 74554445052148906419244452533,
+      "tick_after": -1217,
+      "tx": "4c024cb0005d758355ec33528dc5602174fee77d37db8db7b64695ee24391bca"
+    },
+    {
+      "amount0_usdc_atoms": 187955333,
+      "amount1_wa666_atoms": -176971823,
+      "block_number": 25627684,
+      "fee_pips": 625,
+      "liquidity_after": 3000000000,
+      "sender": "0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af",
+      "sqrt_price_x96_after": 79225241395549392981499154135,
+      "tick_after": -1,
+      "tx": "ebaeeb320686c93548bee53eb13403b6932c33eeb2a6438d2c5ba5fbd463cfbb"
+    },
+    {
+      "amount0_usdc_atoms": -130122052,
+      "amount1_wa666_atoms": 124629051,
+      "block_number": 25627686,
+      "fee_pips": 625,
+      "liquidity_after": 3000000000,
+      "sender": "0x111116053F09d34a7Eae8102887004445176CA11",
+      "sqrt_price_x96_after": 75933864488720073209293564904,
+      "tick_after": -850,
+      "tx": "229cdea94a6fe28c24e397de1484c2ddb273eae5338ba4d5a00ace68a1dcb2d6"
+    },
+    {
+      "amount0_usdc_atoms": -94086387,
+      "amount1_wa666_atoms": 83851978,
+      "block_number": 25627687,
+      "fee_pips": 625,
+      "liquidity_after": 3000000000,
+      "sender": "0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af",
+      "sqrt_price_x96_after": 73719385106445721168841937573,
+      "tick_after": -1442,
+      "tx": "5c55a87a131f290e6bf8d743e547aa481215d7ae259d83fd584417d3b552ba6c"
+    },
+    {
+      "amount0_usdc_atoms": -186770667,
+      "amount1_wa666_atoms": 152756636,
+      "block_number": 25627688,
+      "fee_pips": 625,
+      "liquidity_after": 3000000000,
+      "sender": "0xb704Fcb4c43BdC030dE7EC5e0d5264B99Aa3af36",
+      "sqrt_price_x96_after": 69685175906159222975263334923,
+      "tick_after": -2568,
+      "tx": "d72260695154320adf8b2f1f70a50d0f81ed03077964d3101e3fec1dfae00cb3"
+    },
+    {
+      "amount0_usdc_atoms": 186543655,
+      "amount1_wa666_atoms": -152756636,
+      "block_number": 25627691,
+      "fee_pips": 625,
+      "liquidity_after": 3000000000,
+      "sender": "0xb704Fcb4c43BdC030dE7EC5e0d5264B99Aa3af36",
+      "sqrt_price_x96_after": 73716863716752755597415015172,
+      "tick_after": -1443,
+      "tx": "b5cc5abe8b32afc9f7bbe9324642045ff2511bf54cfe3396714140eb7581ad78"
+    },
+    {
+      "amount0_usdc_atoms": 93976862,
+      "amount1_wa666_atoms": -83851978,
+      "block_number": 25627692,
+      "fee_pips": 625,
+      "liquidity_after": 3000000000,
+      "sender": "0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af",
+      "sqrt_price_x96_after": 75929959033614579049639621110,
+      "tick_after": -851,
+      "tx": "150ab1a4e00469f540f5ff8339137fefdc76e5c467076203ecab69829e32e819"
+    },
+    {
+      "amount0_usdc_atoms": -497345450,
+      "amount1_wa666_atoms": 393960216,
+      "block_number": 25627692,
+      "fee_pips": 625,
+      "liquidity_after": 3000000000,
+      "sender": "0x8F10B468b06c6FD214B65F87778827F7D113f996",
+      "sqrt_price_x96_after": 65525710983796548867268191748,
+      "tick_after": -3798,
+      "tx": "f842ca37bfe0c71dd198ed33dabd84c63a1344063dfc8cd3e028d2cd2f8b8ea9"
+    },
+    {
+      "amount0_usdc_atoms": -497355114,
+      "amount1_wa666_atoms": 299012006,
+      "block_number": 25627694,
+      "fee_pips": 625,
+      "liquidity_after": 3000000000,
+      "sender": "0x8F10B468b06c6FD214B65F87778827F7D113f996",
+      "sqrt_price_x96_after": 57628987026867479906167793336,
+      "tick_after": -6367,
+      "tx": "4c146444493edc670b2c80e5f3d494f40259edb49e80a569b71beb788ca95ab3"
+    },
+    {
+      "amount0_usdc_atoms": -198866814,
+      "amount1_wa666_atoms": 100317057,
+      "block_number": 25627694,
+      "fee_pips": 625,
+      "liquidity_after": 3000000000,
+      "sender": "0x8F10B468b06c6FD214B65F87778827F7D113f996",
+      "sqrt_price_x96_after": 54979674992664088560054581738,
+      "tick_after": -7308,
+      "tx": "162ec708bdab7948182a49619d90f3176bf39df6890ff7b0754e5bf6fab7b29a"
+    }
+  ],
+  "phase": "seeded-external-trading-observed",
+  "post_state": {
+    "migration_reserve_atoms": 28386197455,
+    "owner_usdc_atoms": 334712789,
+    "owner_wa666_atoms": 0,
+    "pool_liquidity": 3000000000,
+    "pool_slot0": [
+      54979674992664088560054581738,
+      -7308,
+      512125,
+      500
+    ],
+    "position_manager_usdc_permit2_atoms": 0,
+    "position_manager_wa666_permit2_atoms": 0,
+    "router_usdc_permit2_atoms": 0,
+    "usdc_erc20_permit2_atoms": 0,
+    "wa666_erc20_permit2_atoms": 0,
+    "wa666_total_supply_atoms": 31386197455
+  },
+  "pre_state": {
+    "a651_owner_atoms": 3361722067184286485213,
+    "migration_a651_burned_atoms": 382333668078301459218,
+    "migration_a666_released_atoms": 3000000000,
+    "migration_reserve_atoms": 28386197455,
+    "pool_liquidity": 3000000000,
+    "pool_slot0": [
+      65525710983796548867268191748,
+      -3798,
+      512125,
+      500
+    ],
+    "position_nft_balance": 3,
+    "usdc_owner_atoms": 334712789,
+    "wa666_owner_atoms": 0,
+    "wa666_total_supply_atoms": 31386197455
+  },
+  "schema": "postfiat-a666-mainnet-pool-seed-v1",
+  "seed_atoms_each": 3000000000,
+  "smoke_input_usdc_atoms": 10000000,
+  "transactions": [
+    {
+      "block_number": 25627674,
+      "gas_estimate": 189394,
+      "gas_used": 167338,
+      "label": "retire A651 for exactly 3000 wA666",
+      "tx": "0xfaabbcc9b91beec0440c21935a0905ce855cdd14b62307a0ef9172aaecdc79ff"
+    },
+    {
+      "block_number": 25627675,
+      "gas_estimate": 38765,
+      "gas_used": 38398,
+      "label": "approve Permit2 for A666 pool USDC",
+      "tx": "0x26e3d11a46cf5d05e106ac77422ab3313ed805eb820d71eaa50270b955e167dd"
+    },
+    {
+      "block_number": 25627676,
+      "gas_estimate": 30841,
+      "gas_used": 30490,
+      "label": "approve PositionManager through Permit2 for USDC",
+      "tx": "0x3f36e7f4cffdf27abfee86103374e320a258b00728e0f81ded8c7ec1a2f68a9b"
+    },
+    {
+      "block_number": 25627677,
+      "gas_estimate": 46483,
+      "gas_used": 46101,
+      "label": "approve Permit2 for A666 pool wA666",
+      "tx": "0x77f26f1c40f1c16059064a6cfd3ff84de50ba6dc939ae5c8aa5dfc741c4e6af7"
+    },
+    {
+      "block_number": 25627678,
+      "gas_estimate": 47975,
+      "gas_used": 47590,
+      "label": "approve PositionManager through Permit2 for wA666",
+      "tx": "0x74999baa990e8f0d4241b5b10012b55488bafb41df85d22f89b3db20d0645822"
+    },
+    {
+      "block_number": 25627679,
+      "gas_estimate": 427834,
+      "gas_used": 401185,
+      "label": "seed A666 Uniswap v4 pool with 3000 USDC and 3000 wA666",
+      "tx": "0xc9569c05f3582efc9266ae63b33fdd68145dcdaef732bc865e264a93fd7425e8"
+    },
+    {
+      "block_number": 25627683,
+      "gas_estimate": 30747,
+      "gas_used": 30396,
+      "label": "revoke PositionManager Permit2 allowance for USDC",
+      "tx": "0x6967c98a0e92df995a7bd184fb00bda0306afb14ccee2aa432a6e2a00dd004e5"
+    },
+    {
+      "block_number": 25627684,
+      "gas_estimate": 35923,
+      "gas_used": 35562,
+      "label": "revoke Permit2 ERC20 allowance for USDC",
+      "tx": "0x321b6636d99431681ee7d35b813856dfaec3e3fe86234331c185d5de1eb100da"
+    },
+    {
+      "block_number": 25627685,
+      "gas_estimate": 30747,
+      "gas_used": 30396,
+      "label": "revoke PositionManager Permit2 allowance for wA666",
+      "tx": "0x13545dce0ec348d0ed31a96ef96db1bd9ae1502e281553a367b4a033f18e33bf"
+    },
+    {
+      "block_number": 25627686,
+      "gas_estimate": 26508,
+      "gas_used": 26165,
+      "label": "revoke Permit2 ERC20 allowance for wA666",
+      "tx": "0x49b8a6eff5e266923be4e52649a982c3e4fffe3f3cfb39d4e5646387842f71f4"
+    },
+    {
+      "block_number": 25627698,
+      "gas_estimate": 30747,
+      "gas_used": 30396,
+      "label": "revoke unused Universal Router Permit2 allowance",
+      "tx": "0xbba153715032af46eee99ce6c84bc3cdf9a57032caef089cb894bd50a157137f"
+    },
+    {
+      "block_number": 25627699,
+      "gas_estimate": 38886,
+      "gas_used": 33562,
+      "label": "revoke unused smoke-swap ERC20 allowance",
+      "tx": "0xbe83064f60ff6cb0f57eb144affb991b58f91d9ccab4315c530aea5ed76054ef"
+    }
+  ]
+}

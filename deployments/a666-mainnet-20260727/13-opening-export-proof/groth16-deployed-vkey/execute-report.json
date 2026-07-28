@@ -1,0 +1,8 @@
+{
+  "elapsed_ms": 2862,
+  "instruction_count": 89972346,
+  "proof_kind": "receipt",
+  "public_values_bytes": 1120,
+  "schema": "postfiat-pftl-uniswap-execute-report-v1",
+  "witness": "deployments/a666-mainnet-20260727/13-opening-export-proof/receipt-witness.json"
+}

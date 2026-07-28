@@ -1,0 +1,18 @@
+{
+  "leaf_index": 4,
+  "leaf_count": 8,
+  "steps": [
+    {
+      "sibling_hash": "2171076eaf0d441778070291f59bf259c60cbd40c113378aa5876ca901c5082202e4dad06ed67ca8ad10181a8b753dfb",
+      "sibling_is_left": false
+    },
+    {
+      "sibling_hash": "7107ccbd45132291aca8bb4c55338c39b3b565d61a26152a6390c19e8aab1e9d627438cd3fab1c41cfa8d310d4f88435",
+      "sibling_is_left": false
+    },
+    {
+      "sibling_hash": "d3525f103739a33c13918053e211b21b7d3dedd35a7aa0e82be524710eeb857f59e3230ffef432902e3bb84f694ed88e",
+      "sibling_is_left": true
+    }
+  ]
+}

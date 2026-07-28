@@ -41,11 +41,52 @@ macro_rules! hash48_newtype {
             where
                 D: serde::Deserializer<'de>,
             {
-                let bytes = Vec::<u8>::deserialize(deserializer)?;
-                let value = bytes
-                    .try_into()
-                    .map_err(|_| serde::de::Error::custom("expected exactly 48 bytes"))?;
-                Ok(Self(value))
+                struct Hash48Visitor;
+
+                impl<'de> serde::de::Visitor<'de> for Hash48Visitor {
+                    type Value = [u8; 48];
+
+                    fn expecting(
+                        &self,
+                        formatter: &mut std::fmt::Formatter<'_>,
+                    ) -> std::fmt::Result {
+                        formatter.write_str("exactly 48 bytes")
+                    }
+
+                    fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        value
+                            .try_into()
+                            .map_err(|_| E::custom("expected exactly 48 bytes"))
+                    }
+
+                    fn visit_byte_buf<E>(self, value: Vec<u8>) -> Result<Self::Value, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        self.visit_bytes(&value)
+                    }
+
+                    fn visit_seq<A>(self, mut sequence: A) -> Result<Self::Value, A::Error>
+                    where
+                        A: serde::de::SeqAccess<'de>,
+                    {
+                        let mut value = [0_u8; 48];
+                        for byte in &mut value {
+                            *byte = sequence
+                                .next_element()?
+                                .ok_or_else(|| serde::de::Error::custom("expected exactly 48 bytes"))?;
+                        }
+                        if sequence.next_element::<u8>()?.is_some() {
+                            return Err(serde::de::Error::custom("expected exactly 48 bytes"));
+                        }
+                        Ok(value)
+                    }
+                }
+
+                deserializer.deserialize_bytes(Hash48Visitor).map(Self)
             }
         }
     };

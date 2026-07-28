@@ -3131,3 +3131,22 @@ fn pfusdc_finality_state_requires_retained_ancestry_and_monotonic_advance() {
         .iter()
         .all(|mutation| state.clone().verify_and_advance(mutation).is_err()));
 }
+
+#[test]
+fn fastswap_hash48_newtypes_round_trip_json_and_cbor() {
+    let root = FastSwapCommitteeRootV1([0x5a; 48]);
+
+    let json = serde_json::to_vec(&root).expect("encode hash48 JSON");
+    assert_eq!(
+        serde_json::from_slice::<FastSwapCommitteeRootV1>(&json)
+            .expect("decode hash48 JSON"),
+        root
+    );
+
+    let cbor = serde_cbor::to_vec(&root).expect("encode hash48 CBOR");
+    assert_eq!(
+        serde_cbor::from_slice::<FastSwapCommitteeRootV1>(&cbor)
+            .expect("decode hash48 CBOR bytes"),
+        root
+    );
+}

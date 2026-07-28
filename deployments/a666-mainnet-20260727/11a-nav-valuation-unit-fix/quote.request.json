@@ -1,0 +1,9 @@
+{
+  "id": "a666-nav-valuation-unit-usd-1e8-quote",
+  "method": "asset_fee_quote",
+  "params": {
+    "operation_json": "{\"operation\":\"nav_asset_register\",\"issuer\":\"pffcb93d9f87a843a8aa34e1adf241f5d58143e81b\",\"asset_id\":\"521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c\",\"reserve_operator\":\"pfd0c86d9084915e1fefd22eab891806397d5a5937\",\"proof_profile\":\"8c0244fe0cfb216fb5ab471d0c9e060a5c8ba052b5a29952d6e7aad76b24523af2b7e0ed82885c11d2c6308ddfcc9118\",\"valuation_unit\":\"USD_1E8\",\"redemption_account\":\"pffcb93d9f87a843a8aa34e1adf241f5d58143e81b\"}",
+    "source": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b"
+  },
+  "version": "postfiat-local-rpc-v1"
+}

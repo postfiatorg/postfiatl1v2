@@ -1,0 +1,22 @@
+{
+  "schema": "postfiat-pftl-uniswap-route-config-v1",
+  "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+  "route_family": "primary_pftl_mint",
+  "native_nav_asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+  "settlement_asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "wrapped_navcoin_token": "0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5",
+  "handoff_controller": "0x9A0262C0572fb4DB08765408eB225E207F40c3d9",
+  "settlement_adapter": "0x9A0262C0572fb4DB08765408eB225E207F40c3d9",
+  "verifier_mode": "sp1-succinct-pftl-finality",
+  "route_trust_class": "TRUSTLESS_FINALITY",
+  "uniswap_pool_id_or_path": "0xc5f1e4b5bb07c0718eddcc3d102dc751b8953ec25bb05cdc14d95419d4d16e98",
+  "router": "0x66a9893cC07D91D95644AEDD05D03f95E1dBA8Af",
+  "failure_behavior": "claim_wrapped_token_if_swap_fails",
+  "route_supply_cap_atoms": 2000000000000,
+  "packet_notional_cap_atoms": 250000000000,
+  "seed_nav_epoch": 1,
+  "seed_usdc_atoms": 3000000000,
+  "seed_wrapped_navcoin_atoms": 3000000000,
+  "lp_recipient": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+  "lp_custody_policy": "operator_owned_uniswap_v4_position_nft"
+}

@@ -1,0 +1,12 @@
+{
+  "schema": "postfiat-chain-tip-v1",
+  "chain_id": "postfiat-wan-devnet-2",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "protocol_version": 1,
+  "height": 348,
+  "block_hash": "c95e3c33fafa204e66dbd2d8a23c8efabc177e27545cc7b3ef1b9ae1525f433fa0c4acde9e29a274df4139e4d68498f1",
+  "state_root": "f3a614b43ae94db1f759b666240334b6c51ff0be872bd474ae85ba1ec61e859eb4c8a598516c81915d49aea12ee74b34",
+  "ordered_batch_count": 348,
+  "receipt_count": 363,
+  "history_base_height": 0
+}
