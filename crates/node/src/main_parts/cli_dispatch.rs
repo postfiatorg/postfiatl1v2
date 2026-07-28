@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
+use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
@@ -187,8 +188,8 @@ use postfiat_node::{
     OrchardPoolReportOptions, OrchardSpendActionOptions, OrchardTestVectorOptions,
     OrchardViewKeyExportOptions, OrchardWalletKeygenOptions, OrchardWalletScanOptions,
     OrchardWithdrawActionBatchOptions, OrchardWithdrawActionOptions, OwnedObjectsOptions,
-    PfUsdcCheckpointWitnessOptions, PfUsdcEgressWitnessOptions,
-    PftlUniswapReceiptWitnessOptions, RatifyGovernanceOptions,
+    PfUsdcCheckpointWitnessOptions, PfUsdcEgressWitnessOptions, PftlUniswapReceiptWitnessOptions,
+    RatifyGovernanceOptions,
     RatifyValidatorSetOptions, ReceiptQueryOptions, RequiredBlockParent, ShieldMigrateBatchOptions,
     ShieldMintBatchOptions, ShieldMintOptions, ShieldSpendBatchOptions, ShieldSpendOptions,
     ShieldedSwapActionBatchOptions, SignedAssetTransactionBatchOptions,
@@ -242,8 +243,9 @@ use postfiat_storage::NodeStore;
 use postfiat_types::ValidatorRegistryEntry;
 use postfiat_types::NAV_PROFILE_VERIFIER_MULTI_FETCH;
 use postfiat_types::{
-    BatchArchiveEntry, BlockHeader, BlockRecord, Receipt, StatusReport, BRIDGE_DIRECTION_INBOUND,
-    DEFAULT_BRIDGE_DOMAIN_ID, DEFAULT_SHIELDED_ASSET_ID, GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED,
+    BatchArchiveEntry, BlockHeader, BlockRecord, PftlUniswapMintPacketV2, Receipt, StatusReport,
+    BRIDGE_DIRECTION_INBOUND, DEFAULT_BRIDGE_DOMAIN_ID, DEFAULT_SHIELDED_ASSET_ID,
+    GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED,
     GOVERNANCE_AUTHORITY_MODE_FOUNDATION, GOVERNANCE_KIND_ATOMIC_SWAP_ACTIVATION_HEIGHT,
     GOVERNANCE_KIND_ATOMIC_SWAP_PAUSE, GOVERNANCE_KIND_AUTHORITY_MODE,
     GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT,
@@ -510,6 +512,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "pfusdc-egress-witness"
         | "pfusdc-checkpoint-witness"
         | "pftl-uniswap-receipt-witness"
+        | "pftl-uniswap-mint-packet-digest"
         | "block-vote"
         | "block-vote-equivocation"
         | "block-vote-equivocation-verify"

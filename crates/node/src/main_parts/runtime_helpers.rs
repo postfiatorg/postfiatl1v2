@@ -685,6 +685,7 @@ fn print_usage() {
   postfiat-node pfusdc-egress-witness [--data-dir PATH] --withdrawal-id 96_HEX [--prior-checkpoint 96_HEX]
   postfiat-node pfusdc-checkpoint-witness [--data-dir PATH] --prior-checkpoint 96_HEX --target-block 96_HEX
   postfiat-node pftl-uniswap-receipt-witness [--data-dir PATH] --packet-hash 96_HEX --prior-checkpoint 96_HEX
+  postfiat-node pftl-uniswap-mint-packet-digest --packet-file PATH
   postfiat-node ethereum-checkpoint-vote-sign [--data-dir PATH] --checkpoint-file PATH --ethereum-rpc http://HOST:PORT[/PATH] --validator NODE_ID --validator-key-file PATH --vote-file PATH
   postfiat-node ethereum-checkpoint-certificate-assemble [--data-dir PATH] --checkpoint-file PATH --vote-files CSV --certificate-file PATH
   postfiat-node validator-registry-root [--data-dir PATH] [--registry-file PATH] --validators CSV

@@ -1427,6 +1427,30 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "pftl-uniswap-mint-packet-digest" => {
+            let packet_file =
+                flag_value(flags, "--packet-file").ok_or("missing --packet-file")?;
+            let packet_bytes = fs::read(packet_file)
+                .map_err(|error| format!("mint packet read failed: {error}"))?;
+            let packet: PftlUniswapMintPacketV2 = serde_json::from_slice(&packet_bytes)
+                .map_err(|error| format!("mint packet decode failed: {error}"))?;
+            packet
+                .validate()
+                .map_err(|error| format!("mint packet validation failed: {error}"))?;
+            let packet_digest = packet
+                .evm_digest()
+                .map_err(|error| format!("mint packet digest failed: {error}"))?;
+            let report = serde_json::json!({
+                "schema": "postfiat-pftl-uniswap-mint-packet-digest-v1",
+                "packet_file": packet_file,
+                "packet_digest": packet_digest,
+                "packet": packet,
+            });
+            let json = serde_json::to_string_pretty(&report)
+                .map_err(|error| format!("mint packet digest serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
         "block-vote" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let key_file = flag_value(flags, "--key-file")
