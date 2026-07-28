@@ -1,0 +1,21 @@
+{
+  "accepted": true,
+  "all_sends_verified": true,
+  "confirmed": true,
+  "end_block_tip_hash": "209e66c434f2969f81384e75a327b50c4ff2377203d1e432a8a656d1d9d2a2469257459c6ed33f9c49b30daa909ce535",
+  "end_height": 385,
+  "end_mempool_pending": 0,
+  "end_state_root": "39eea237bb97006a1b5132efd2b4e51eb941578d6a81d2cba0ea5198ca5c566b656828a1e6ba3d12f3fd97faa7b2c312",
+  "label": "halt-pfusdc-legacy-egress",
+  "proposer": "validator-1",
+  "round_ok": true,
+  "schema": "postfiat-a666-ce22-remote-finality-operation-v1",
+  "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "start_height": 384,
+  "start_state_root": "63f751b464957bc8ec82e82987daf1f6705428bdef548f8cec9a664e747816a181b2e494bde72a5cff62bafaa3a17e53",
+  "transaction_kind": "nav_halt",
+  "trust_class": "CONTROLLED",
+  "tx_id": "3b9489c1415b4f7f57e3b6489205b5d72debc7c0109506ab432490d05b3a14d4cae3c08c6883139735ff164a4721a0e1",
+  "validator_count": 6,
+  "vote_count": 5
+}

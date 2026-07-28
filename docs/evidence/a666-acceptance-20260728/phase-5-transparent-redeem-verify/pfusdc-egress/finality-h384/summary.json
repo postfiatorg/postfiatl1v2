@@ -1,0 +1,21 @@
+{
+  "accepted": true,
+  "all_sends_verified": true,
+  "confirmed": true,
+  "end_block_tip_hash": "f54c53e3338064861753dabe96952d965ee6018e6c6ffaa6b3204dd7202ffb035fa6481c763bddca9251895ab81fc732",
+  "end_height": 384,
+  "end_mempool_pending": 0,
+  "end_state_root": "63f751b464957bc8ec82e82987daf1f6705428bdef548f8cec9a664e747816a181b2e494bde72a5cff62bafaa3a17e53",
+  "label": "transparent-redeem-pfusdc-burn",
+  "proposer": "validator-0",
+  "round_ok": true,
+  "schema": "postfiat-a666-ce22-remote-finality-operation-v1",
+  "source": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "start_height": 383,
+  "start_state_root": "e57dbfa269b0a6b264b03e7fda1812d1e285e0f1f48a84ad10c2315c97b51d2f9c55ec6c2d0149116ad981286b4b0522",
+  "transaction_kind": "vault_bridge_burn_to_redeem",
+  "trust_class": "CONTROLLED",
+  "tx_id": "fdc1c8cfc3963a9552eb671abbc537866efcceed4bbc76cce0e29ab826807e698498ac52a5cec36ba143d35587085f68",
+  "validator_count": 6,
+  "vote_count": 5
+}

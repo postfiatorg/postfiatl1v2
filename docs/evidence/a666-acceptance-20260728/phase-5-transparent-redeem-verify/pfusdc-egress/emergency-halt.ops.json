@@ -1,0 +1,17 @@
+{
+  "operations": [
+    {
+      "key_file": "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json",
+      "label": "halt-pfusdc-legacy-egress",
+      "operation": {
+        "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+        "halted": true,
+        "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "operation": "nav_halt",
+        "reason": "ethereum_vault_egress_verifier_incompatible_with_pftl_uniswap_root"
+      },
+      "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8"
+    }
+  ],
+  "schema": "postfiat-certified-asset-ops-request-v1"
+}

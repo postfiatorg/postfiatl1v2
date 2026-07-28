@@ -23,7 +23,19 @@ Phase 3 then stopped without mutation at
 surface has no private-primary issue action, and the existing private swap is
 conservation-only. Evidence:
 `../evidence/a666-acceptance-20260728/phase-3-private-issue-attempt/README.md`.
-A4 through A8 remain pending.
+Phase 4 subsequently passed after implementing the production A666 private
+primary-issue action and verifying it on the six-validator fleet.
+
+Phase 5 returned wA666 to PFTL and completed transparent primary redemption.
+The resulting `999500` pfUSDC atoms were burned at height `384`, where proof
+preflight exposed an immutable deployed-egress-guest incompatibility with the
+new PFTL-Uniswap receipt-root consensus encoding. The legacy Ethereum vault
+and the PFTL pfUSDC NAV asset were then paused fail-closed; the vault funds
+remain intact and the redemption remains pending and fully backed. A current
+egress guest validates the exact withdrawal witness. Incident evidence:
+`../evidence/a666-acceptance-20260728/phase-5-transparent-redeem-verify/pfusdc-egress/README.md`.
+Phase 6 must deploy and accept the replacement verifier/vault lane before
+pfUSDC is unhalted. Phases 6 through 8 remain pending.
 
 ## 1. Objective
 
