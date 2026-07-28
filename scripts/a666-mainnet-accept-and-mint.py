@@ -79,7 +79,7 @@ def send(call: Any, web3: Web3, label: str) -> dict[str, Any]:
             "chain_id": CHAIN_ID,
             "label": label,
             "value_wei": 0,
-            "gas_usd": 0,
+            "gas_usd": 10,
         },
         timeout=1200.0,
     )
