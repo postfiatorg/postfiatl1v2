@@ -1,0 +1,8 @@
+{
+  "elapsed_ms": 7022,
+  "instruction_count": 175723036,
+  "proof_kind": "receipt",
+  "public_values_bytes": 1120,
+  "schema": "postfiat-pftl-uniswap-execute-report-v1",
+  "witness": "/workspace/joe-a666-proof/receipt-witness.json"
+}

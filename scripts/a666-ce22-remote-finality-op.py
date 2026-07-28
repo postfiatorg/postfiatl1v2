@@ -61,6 +61,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--node-bin", type=Path, required=True)
     parser.add_argument("--remote-runner", type=Path, required=True)
     parser.add_argument("--proposer-hosts-file", type=Path, required=True)
+    parser.add_argument("--remote-binary", default=REMOTE_BINARY)
+    parser.add_argument("--remote-topology", default=REMOTE_TOPOLOGY)
     parser.add_argument(
         "--ports",
         default="28650,28651,28652,28653,28654,28655",
@@ -154,7 +156,7 @@ def main() -> None:
             "-o",
             "BatchMode=yes",
             f"root@{proposer_hosts['validator-0']}",
-            REMOTE_BINARY,
+            args.remote_binary,
             "block-proposer",
             "--unsafe-devnet-json-storage",
             "--data-dir",
@@ -215,11 +217,11 @@ def main() -> None:
     runner_args = [
         remote_runner,
         "--node-bin",
-        REMOTE_BINARY,
+        args.remote_binary,
         "--data-dir",
         data_dir,
         "--topology",
-        REMOTE_TOPOLOGY,
+        args.remote_topology,
         "--key-file",
         key_path,
         "--signed-file",

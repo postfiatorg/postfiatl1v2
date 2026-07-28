@@ -1,0 +1,9 @@
+{
+  "id": "joe-a666-reserve-quote",
+  "method": "asset_fee_quote",
+  "params": {
+    "operation_json": "{\"operation\":\"pftl_uniswap_order_reserve\",\"subscriber\":\"pfab9b9228942e5c529633a13aa271d5297bec6353\",\"route_id\":\"pftl-a666-ethereum-wA666-usdc-v1\",\"reservation_id\":\"4141838839a1e956fe44517bd50d9fde79361b600533c9a12d2f784dc1bf882baafc145d59b93a3c74141e4ef070c34e\",\"ethereum_recipient\":\"0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0\",\"route_epoch\":2,\"policy_epoch\":2,\"policy_hash\":\"77e8d7d8bd242fcfa3c87af6cd5f89aedc47e21a8c9de2cdd1afae3dace9e774979635b7eb176f4d9cd42dd02d69dbdb\",\"mint_amount_atoms\":100000000,\"max_settlement_value_atoms\":100500000,\"expires_at_height\":2000}",
+    "source": "pfab9b9228942e5c529633a13aa271d5297bec6353"
+  },
+  "version": "postfiat-local-rpc-v1"
+}

@@ -1,0 +1,59 @@
+{
+  "agent_close_session": {
+    "ok": true
+  },
+  "agent_open_session": {
+    "ok": true
+  },
+  "amount_atoms": 100500000,
+  "deposit": {
+    "block_hash": "b3f36c261099a34952cd5d9366cd2f2f2ec8bd976ed1af2295f5443dfcbbf224",
+    "block_number": 25627947,
+    "block_timestamp": 1785201095,
+    "effective_gas_price_wei": 104265657,
+    "gas_used": 215669,
+    "response": {
+      "charged_usd": 10.0,
+      "gas_used": 215669,
+      "ok": true,
+      "tx": "136512df7ea2764e1878c70d51ba85939596c1d18d159c4e21e162d0b83f7155",
+      "value_wei": 0
+    },
+    "tx_hash": "0x136512df7ea2764e1878c70d51ba85939596c1d18d159c4e21e162d0b83f7155"
+  },
+  "deposit_record": {
+    "amount_atoms": 100500000,
+    "depositor": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+    "nonce": "0xb860d46044624c727e88bd84afe2859666bb3fec0255866f26928f6e5031e91d",
+    "recipient_hash": "0x74abe9bdfafd4ca959cc7a501d590babdbd9520a3efe493e2172db3b4be5d0d5",
+    "route_binding": "0xf062a7b19a33ab9674457b0fd7b8c98a42f43c240806e3a25ef035da3fa643f3"
+  },
+  "event": {
+    "amount_atoms": 100500000,
+    "deposit_id": "0xcbfb27f4523c00e27bb9b5fdc4cacd417b08ab2185a7f5fb5449b95731614609",
+    "nonce": "0xb860d46044624c727e88bd84afe2859666bb3fec0255866f26928f6e5031e91d",
+    "pftl_recipient": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+    "route_binding": "0xf062a7b19a33ab9674457b0fd7b8c98a42f43c240806e3a25ef035da3fa643f3"
+  },
+  "original_result": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-joe-mainnet-e2e-20260728/deposit/deposit-result.json",
+  "post_state": {
+    "allowance_atoms": 0,
+    "pending_nonce": 196,
+    "total_obligations_atoms": 100500000,
+    "vault_usdc_atoms": 100500000,
+    "wallet_eth_wei": 300303259348962092,
+    "wallet_usdc_atoms": 234212789
+  },
+  "pre_state": {
+    "allowance_atoms": 100500000,
+    "pending_nonce": 195,
+    "total_obligations_atoms": 0,
+    "vault_usdc_atoms": 0,
+    "wallet_eth_wei": 300325746218941625,
+    "wallet_usdc_atoms": 334712789
+  },
+  "predicted_deposit_id": "0xcbfb27f4523c00e27bb9b5fdc4cacd417b08ab2185a7f5fb5449b95731614609",
+  "schema": "postfiat.pfusdc.joe_deposit_retry.v1",
+  "session_id": "pfusdc-joe-deposit-retry-20260728T011127Z",
+  "verdict": "PASS"
+}

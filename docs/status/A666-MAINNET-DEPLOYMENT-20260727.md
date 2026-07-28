@@ -2,8 +2,9 @@
 
 **As of:** 2026-07-28 UTC
 **Status:** opening inventory exported and proof-minted; ownerless a651
-migration funded; wA666/USDC Uniswap v4 pool seeded and trading. New primary
-subscription and full redemption acceptance campaigns remain release gates.
+migration funded; wA666/USDC Uniswap v4 pool seeded and trading. A fresh
+buyer-funded primary subscription and export passed on mainnet. Full
+redemption acceptance and the 25-minute performance SLO remain release gates.
 
 ## Live identifiers
 
@@ -49,6 +50,41 @@ After export, native route spendability is zero and the route records
 `31,386.197455` outstanding bridge-claim units. This prevents the opening
 inventory from being spendable on PFTL while its Ethereum representation
 exists.
+
+## Buyer-funded primary subscription acceptance
+
+On 2026-07-28, Joe executed the complete live primary path:
+
+`100.500000 USDC` on Ethereum → `100.500000 pfUSDC` on PFTL →
+`100.000000` newly issued A666 on PFTL → `100.000000 wA666` on Ethereum.
+
+This was primary issuance at `1.005 × NAV`, not an OTC transfer from existing
+A666 inventory. The production A666 supply and proof-gated wrapped supply each
+increased by exactly `100,000,000` atoms.
+
+| Transition | Finalized result |
+|---|---|
+| Joe USDC deposit | Ethereum block `25,627,947`, tx `0x136512df7ea2764e1878c70d51ba85939596c1d18d159c4e21e162d0b83f7155` |
+| pfUSDC ingress propose/finalize/claim | PFTL heights `352` / `353` / `355` |
+| A666 reserve/subscription/export | PFTL heights `356` / `357` / `358` |
+| Accept A666 export proof | Ethereum block `25,628,155`, tx `0x1865f032c0714b1a415931479a555096d9540df346bb3537428af86deff42112` |
+| Mint 100 wA666 to Joe | Ethereum block `25,628,156`, tx `0xb4e91d0799ac566c50031329df06e9a51e638ceda20ef8ebcb6c6178429ca5a8` |
+
+Joe's native A666 balance went from zero to `100.000000` at subscription and
+back to zero at export. His wA666 balance went from zero to `100.000000`;
+total wA666 supply rose from `31,386.197455` to `31,486.197455`. The export
+packet is consumed exactly once and the migration reserve was unchanged.
+
+The live USDC/wA666 pool remained available with `3,000,000,000` liquidity
+units, so Joe's received wA666 is directly tradeable. No secondary-market swap
+was included because the acceptance objective ended with delivery of the
+Uniswap asset.
+
+Functional acceptance passed. Deposit confirmation to wA666 mint took `42.2`
+minutes, missing the `25-minute` SLO. Ethereum finality consumed about `15.3`
+minutes; first-run operator defects accounted for the avoidable excess. The
+deposit-through-mint gas cost was `0.000053731236825777 ETH`, or
+`0.000059522310558017 ETH` including approval.
 
 ## Genuine proof and Ethereum mint
 
@@ -109,18 +145,16 @@ primary subscriptions.
 
 ## What remains
 
-The opening migration and secondary venue are live. The complete public
-USDC-to-new-a666 product is not yet declared generally available because these
-acceptance items remain:
+The opening migration, secondary venue, fresh primary issuance, and export to
+the buyer are live. The complete product is not yet declared generally
+available because these acceptance items remain:
 
-1. execute a fresh buyer-funded primary subscription at `1.005 × NAV`, proving
-   reserve principal and a666 supply rise together;
-2. export that newly issued a666 to the buyer's Ethereum address and measure
-   the complete deposit-to-wA666 wall time against the 25-minute SLO;
-3. execute the inverse burn/import/primary-redemption path at `0.9995 × NAV`;
-4. pass replay, invalid-proof, refund/cancellation, packet-splitting, and
+1. automate the proven primary path and pass a clean deposit-to-wA666 rerun
+   within the `25-minute` SLO;
+2. execute the inverse burn/import/primary-redemption path at `0.9995 × NAV`;
+3. pass replay, invalid-proof, refund/cancellation, packet-splitting, and
    capacity tests; and
-5. expose a wallet/product workflow so a user does not assemble proof packets
+4. expose a wallet/product workflow so a user does not assemble proof packets
    manually.
 
 Uniswap liquidity is a secondary venue only. Its live price must never be used
@@ -139,3 +173,6 @@ as the NAV oracle or as the primary issue/redemption price.
   `../../deployments/a666-mainnet-20260727/ethereum/opening-mint-state.json`
 - Pool seed, revocations, external swaps, and final readback:
   `../../deployments/a666-mainnet-20260727/ethereum/pool-seed-state.json`
+- Fresh Joe primary subscription, PFTL export, Ethereum mint, timing, and pool
+  readback:
+  `../evidence/a666-joe-mainnet-e2e-20260728/README.md`

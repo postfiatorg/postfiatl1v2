@@ -1,0 +1,21 @@
+{
+  "schema": "postfiat-certified-asset-ops-request-v1",
+  "operations": [
+    {
+      "label": "joe-a666-subscribe",
+      "source": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+      "key_file": "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json",
+      "operation": {
+        "operation": "pftl_uniswap_primary_subscribe_v2",
+        "subscriber": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+        "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+        "reservation_id": "4141838839a1e956fe44517bd50d9fde79361b600533c9a12d2f784dc1bf882baafc145d59b93a3c74141e4ef070c34e",
+        "subscription_nonce": "dcb37fe5a002994254fbc6c2fefddb5fa4a320cc08065c8c75c75bfcd9f204a0",
+        "settlement_asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+        "settlement_value_atoms": 100500000,
+        "pricing_nav_epoch": 1,
+        "pricing_reserve_packet_hash": "c8bbb35b7b0eb4a567f04945eb977b3fe5dc539cd7d845f1266d39959eb301ffbe263ebec9ceb985ef09370f314e5b3e"
+      }
+    }
+  ]
+}

@@ -105,6 +105,7 @@ def main() -> None:
     parser.add_argument("--packet", type=Path, default=PACKET_PATH)
     parser.add_argument("--proof-dir", type=Path, default=PROOF_DIR)
     parser.add_argument("--state-file", type=Path, default=STATE_PATH)
+    parser.add_argument("--expected-finalized-height", type=int, default=348)
     args = parser.parse_args()
 
     packet = json.loads(args.packet.read_text())
@@ -164,15 +165,13 @@ def main() -> None:
         int(packet["settlement_value_atoms"]),
     )
     packet_digest = Web3.to_hex(controller.functions.packetDigest(mint_packet).call())
-    expected_digest = "0x3f4a57859cd56bd2978d709aa5671f0651cff3ad72fd1272c6abee6f9bc48798"
-    if packet_digest.lower() != expected_digest:
-        raise RuntimeError(f"packet digest drift: {packet_digest}")
+    recipient = Web3.to_checksum_address(packet["ethereum_recipient"])
 
     receipt_commitment = verifier.functions.receiptCommitment(
         mint_packet[4], mint_packet[3], mint_packet[0], bytes.fromhex(packet_digest[2:])
     ).call()
     state: dict[str, Any] = {
-        "schema": "postfiat-a666-opening-mint-mainnet-v1",
+        "schema": "postfiat-a666-proof-gated-mint-mainnet-v1",
         "phase": "prepared",
         "chain_id": CHAIN_ID,
         "rpc": RPC,
@@ -204,6 +203,7 @@ def main() -> None:
             ),
             "total_minted_atoms": int(controller.functions.totalMintedAtoms().call()),
             "token_total_supply": int(token.functions.totalSupply().call()),
+            "recipient_balance_atoms": int(token.functions.balanceOf(recipient).call()),
             "migration_reserve_atoms": int(
                 migration.functions.remainingA666Reserve().call()
             ),
@@ -220,7 +220,7 @@ def main() -> None:
             send(
                 verifier.functions.verifyAndAccept(public_values, proof),
                 web3,
-                "accept finalized A666 opening export proof",
+                "accept finalized A666 export proof",
             )
         )
         atomic_write_json(args.state_file, state)
@@ -240,7 +240,7 @@ def main() -> None:
             send(
                 controller.functions.consumeMintOnly(mint_packet),
                 web3,
-                "consume finalized A666 opening mint packet",
+                "consume finalized A666 mint packet",
             )
         )
         atomic_write_json(args.state_file, state)
@@ -256,20 +256,26 @@ def main() -> None:
         ),
         "total_minted_atoms": int(controller.functions.totalMintedAtoms().call()),
         "token_total_supply": int(token.functions.totalSupply().call()),
+        "recipient_balance_atoms": int(token.functions.balanceOf(recipient).call()),
         "migration_reserve_atoms": int(migration.functions.remainingA666Reserve().call()),
     }
     expected_atoms = int(packet["mint_amount_atoms"])
+    pre_state = state["pre_state"]
     if (
         not post_state["receipt_accepted"]
-        or post_state["latest_finalized_height"] != 348
+        or post_state["latest_finalized_height"] != args.expected_finalized_height
         or post_state["mint_paused"]
         or not post_state["packet_consumed"]
-        or post_state["total_minted_atoms"] != expected_atoms
-        or post_state["token_total_supply"] != expected_atoms
-        or post_state["migration_reserve_atoms"] != expected_atoms
+        or post_state["total_minted_atoms"] - pre_state["total_minted_atoms"]
+        != expected_atoms
+        or post_state["token_total_supply"] - pre_state["token_total_supply"]
+        != expected_atoms
+        or post_state["recipient_balance_atoms"] - pre_state["recipient_balance_atoms"]
+        != expected_atoms
+        or post_state["migration_reserve_atoms"] != pre_state["migration_reserve_atoms"]
     ):
-        raise RuntimeError(f"opening mint post-state mismatch: {post_state}")
-    state.update({"phase": "minted-to-migration", "post_state": post_state})
+        raise RuntimeError(f"A666 mint post-state mismatch: {post_state}")
+    state.update({"phase": "minted-to-recipient", "post_state": post_state})
     atomic_write_json(args.state_file, state)
     print(json.dumps(state, indent=2, sort_keys=True))
 

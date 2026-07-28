@@ -1,0 +1,59 @@
+{
+  "schema": "postfiat-certified-asset-ops-report-v1",
+  "request_schema": "postfiat-certified-asset-ops-request-v1",
+  "data_dir": "/var/lib/postfiat/validator-1",
+  "topology_file": "/etc/postfiat/releases/a666-joe-e2e-1312a94/topology.json",
+  "artifact_dir": "/var/lib/postfiat/validator-1/a666-joe-e2e-claim-h355-v2",
+  "operation_count": 1,
+  "max_transactions": 1,
+  "allow_existing_mempool": false,
+  "prepare_only": false,
+  "batch_only": false,
+  "start_height": 354,
+  "start_state_root": "65a58c1e95c34e8b95f4b4b2c5e4e2a3e6dc92131d27bff78b2be31856f29fda518c1db76884d664409962fb7b1b15b6",
+  "start_mempool_pending": 0,
+  "end_height": 355,
+  "end_state_root": "f080719b728415a63c11e34fb1c58fc1aca8b94a5f5efd07dde1f477d65b132e8ff8dd6578657eb40b6f746968b3ce0b",
+  "end_mempool_pending": 0,
+  "operations": [
+    {
+      "label": "claim",
+      "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+      "transaction_kind": "vault_bridge_deposit_claim",
+      "operation_file": "/var/lib/postfiat/validator-1/a666-joe-e2e-claim-h355-v2/claim/operation.json",
+      "quote_file": "/var/lib/postfiat/validator-1/a666-joe-e2e-claim-h355-v2/claim/quote.json",
+      "signed_file": "/var/lib/postfiat/validator-1/a666-joe-e2e-claim-h355-v2/claim/signed.json",
+      "submit_file": "/var/lib/postfiat/validator-1/a666-joe-e2e-claim-h355-v2/claim/submit.json",
+      "tx_id": "85eb368bad15c2f07030c71fb0745809fede430e0c2f61db87a97aa3fb1c82116f767795a1cfb1be529fd4ed81eea3a7",
+      "sequence": 77,
+      "fee": 53,
+      "timings_ms": {
+        "prepare_ms": 0.08418400000000001,
+        "quote_ms": 8.03619,
+        "sign_ms": 3.499971,
+        "submit_ms": 18.091088000000003
+      }
+    }
+  ],
+  "dependency_report": {
+    "declared_dependency_count": 0,
+    "same_round_dependency_count": 0,
+    "prior_round_dependency_count": 0,
+    "same_round_batch_eligible": true,
+    "candidate_batch_classes": [],
+    "replay_equivalence_required": false,
+    "live_round_compression_ready": true,
+    "live_round_compression_blockers": [],
+    "declarations": []
+  },
+  "batch_file": "/var/lib/postfiat/validator-1/a666-joe-e2e-claim-h355-v2/peer-certified-mempool-round/mempool-batch.json",
+  "round_artifact_dir": "/var/lib/postfiat/validator-1/a666-joe-e2e-claim-h355-v2/peer-certified-mempool-round",
+  "round_ok": true,
+  "timings_ms": {
+    "total_ms": 25877.924171,
+    "preflight_ms": 12.339338999999999,
+    "operations_ms": 30.309976,
+    "certify_ms": 25826.61868,
+    "final_status_ms": 8.172360999999999
+  }
+}
