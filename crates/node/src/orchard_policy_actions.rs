@@ -1397,7 +1397,7 @@ pub fn create_asset_orchard_private_primary_issue(
         &route.native_nav_asset_id,
     )
     .map_err(invalid_data)?;
-    let payload = asset_orchard_private_primary_issue_payload_from_action(&built.action);
+    let payload = asset_orchard_private_primary_issue_payload_from_action(&built.action)?;
     validate_asset_orchard_private_primary_issue_payload(&payload)?;
     let file = AssetOrchardPrivatePrimaryIssueFile {
         schema: ASSET_ORCHARD_PRIVATE_PRIMARY_ISSUE_FILE_SCHEMA.to_string(),
@@ -1856,8 +1856,8 @@ fn asset_orchard_private_egress_action_from_payload(
 
 fn asset_orchard_private_primary_issue_payload_from_action(
     action: &AssetOrchardPrivatePrimaryIssueAction,
-) -> AssetOrchardPrivatePrimaryIssueActionPayload {
-    AssetOrchardPrivatePrimaryIssueActionPayload {
+) -> io::Result<AssetOrchardPrivatePrimaryIssueActionPayload> {
+    Ok(AssetOrchardPrivatePrimaryIssueActionPayload {
         version: action.version,
         schema: action.schema.clone(),
         pool_id: action.pool_id.clone(),
@@ -1876,6 +1876,8 @@ fn asset_orchard_private_primary_issue_payload_from_action(
         expires_at_height: action.expires_at_height,
         output_commitment: action.output_commitment.as_hex().to_string(),
         encrypted_output: action.encrypted_output.as_hex().to_string(),
+        output_validity_action_json: serde_json::to_string(&action.output_validity_action)
+            .map_err(invalid_data)?,
         proof_system_id: action.proof_system_id.clone(),
         circuit_id: action.circuit_id.clone(),
         pool_domain: action.pool_domain.as_hex().to_string(),
@@ -1889,7 +1891,7 @@ fn asset_orchard_private_primary_issue_payload_from_action(
         primary_binding_hash: action.primary_binding_hash.as_hex().to_string(),
         proof: action.proof.as_hex().to_string(),
         spend_authorization_signature: action.spend_authorization_signature.as_hex().to_string(),
-    }
+    })
 }
 
 fn asset_orchard_private_primary_issue_action_from_payload(
@@ -1922,6 +1924,9 @@ fn asset_orchard_private_primary_issue_action_from_payload(
             ASSET_ORCHARD_ENCRYPTED_OUTPUT_MAX_BYTES,
         )
         .map_err(invalid_data)?,
+        output_validity_action: Box::new(
+            serde_json::from_str(&payload.output_validity_action_json).map_err(invalid_data)?,
+        ),
         proof_system_id: payload.proof_system_id.clone(),
         circuit_id: payload.circuit_id.clone(),
         pool_domain: AssetOrchardFieldElement::parse_hex(payload.pool_domain.clone())
@@ -3309,6 +3314,12 @@ fn validate_asset_orchard_private_primary_issue_payload(
             format!(
                 "AssetOrchard private-primary pool_id must be `{ASSET_ORCHARD_POOL_ID_V1}`"
             ),
+        ));
+    }
+    if payload.output_validity_action_json.len() > 2 * 1024 * 1024 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "AssetOrchard private-primary output-validity action exceeds 2 MiB",
         ));
     }
     let action = asset_orchard_private_primary_issue_action_from_payload(payload)?;

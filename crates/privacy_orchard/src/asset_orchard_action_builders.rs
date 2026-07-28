@@ -1106,6 +1106,23 @@ pub fn build_asset_orchard_private_primary_issue_action(
         protocol_version,
         &output_note,
     )?;
+    // Prove the newly encrypted NAV output in a synthetic singleton tree.
+    // Validators independently derive this tree's anchor from the public
+    // output commitment, so this pinned proof establishes the commitment's
+    // asset tag and exact value without revealing the note opening.
+    let output_validity = build_asset_orchard_private_egress_action(
+        chain_id,
+        genesis_hash,
+        protocol_version,
+        output_note.clone(),
+        output_note.output_commitment.as_hex(),
+        native_nav_asset_id,
+        mint_amount_atoms,
+        0,
+        crate::asset_orchard::ASSET_ORCHARD_PRIVATE_PRIMARY_OUTPUT_VALIDITY_POLICY_V1,
+        route_id,
+        &[output_note.output_commitment.as_hex().to_string()],
+    )?;
     let primary_binding_hash = asset_orchard_private_primary_issue_binding_hash(
         &AssetOrchardPrivatePrimaryIssueBindingPreimage {
             chain_id,
@@ -1131,6 +1148,7 @@ pub fn build_asset_orchard_private_primary_issue_action(
             expires_at_height,
             output_commitment: output_note.output_commitment.to_field()?,
             encrypted_output: &encrypted_output,
+            output_validity_action: &output_validity.action,
             settlement_asset_tag: settlement_tag,
             native_nav_asset_tag: native_nav_tag,
         },
@@ -1170,6 +1188,7 @@ pub fn build_asset_orchard_private_primary_issue_action(
         expires_at_height,
         output_commitment: output_note.output_commitment.clone(),
         encrypted_output,
+        output_validity_action: Box::new(output_validity.action),
         proof_system_id: ASSET_ORCHARD_PROOF_SYSTEM_ID_V1.to_string(),
         circuit_id: ASSET_ORCHARD_PRIVATE_EGRESS_CIRCUIT_ID_V1.to_string(),
         pool_domain: AssetOrchardFieldElement::from_field(pool_domain),
@@ -1555,6 +1574,14 @@ fn asset_orchard_merkle_witness_from_commitments(
         AssetOrchardFieldElement::from_field(base_from_merkle_hash(&root)?),
         merkle_witness_from_nodes(leaves, position)?,
     ))
+}
+
+pub fn asset_orchard_single_commitment_anchor(
+    output_commitment: &str,
+) -> Result<AssetOrchardFieldElement, AssetOrchardError> {
+    let commitments = [output_commitment.to_string()];
+    asset_orchard_merkle_witness_from_commitments(&commitments, output_commitment)
+        .map(|(anchor, _)| anchor)
 }
 
 fn merkle_hash_from_cmx(cmx: pallas::Base) -> Result<MerkleHashOrchard, AssetOrchardError> {

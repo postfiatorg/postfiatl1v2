@@ -30,18 +30,19 @@ use crate::timing::{
     AssetOrchardPrivateEgressActionVerifyTimingReport, AssetOrchardSwapProofVerifyTimingReport,
 };
 use crate::{
-    asset_orchard_private_egress_exit_binding_hash, AssetOrchardBoundedBytes, AssetOrchardError,
-    AssetOrchardFieldElement, AssetOrchardPoint, AssetOrchardPricingClaim,
-    AssetOrchardPrivateEgressAction, AssetOrchardPrivateEgressExitBindingPreimage,
-    AssetOrchardPrivateEgressVerifyingKey, AssetOrchardPrivatePrimaryIssueAction,
-    AssetOrchardSwapAccountingRecord, AssetOrchardSwapAction, AssetOrchardSwapBindingHash,
-    AssetOrchardSwapVerifyingKey, AssetTag, BoundedHexBlob, EncryptedShieldedOutput, OrchardAnchor,
-    OrchardBindingSignature, OrchardCircuitId, OrchardFlags, OrchardNullifier,
-    OrchardOutputCommitment, OrchardProofBytes, OrchardProofSystemId,
-    OrchardRandomizedVerificationKey, OrchardShieldedAction, OrchardSpendAuthSignature,
-    OrchardTypeError, OrchardValueCommitment, ShieldedSwapAction, ShieldedSwapCommitment,
-    ASSET_ORCHARD_CIRCUIT_ID_V1, ASSET_ORCHARD_POOL_ID_V1,
-    ASSET_ORCHARD_PRIVATE_EGRESS_CIRCUIT_ID_V1, ASSET_ORCHARD_PROOF_SYSTEM_ID_V1,
+    asset_orchard_private_egress_exit_binding_hash, asset_orchard_single_commitment_anchor,
+    AssetOrchardBoundedBytes, AssetOrchardError, AssetOrchardFieldElement, AssetOrchardPoint,
+    AssetOrchardPricingClaim, AssetOrchardPrivateEgressAction,
+    AssetOrchardPrivateEgressExitBindingPreimage, AssetOrchardPrivateEgressVerifyingKey,
+    AssetOrchardPrivatePrimaryIssueAction, AssetOrchardSwapAccountingRecord,
+    AssetOrchardSwapAction, AssetOrchardSwapBindingHash, AssetOrchardSwapVerifyingKey, AssetTag,
+    BoundedHexBlob, EncryptedShieldedOutput, OrchardAnchor, OrchardBindingSignature,
+    OrchardCircuitId, OrchardFlags, OrchardNullifier, OrchardOutputCommitment, OrchardProofBytes,
+    OrchardProofSystemId, OrchardRandomizedVerificationKey, OrchardShieldedAction,
+    OrchardSpendAuthSignature, OrchardTypeError, OrchardValueCommitment, ShieldedSwapAction,
+    ShieldedSwapCommitment, ASSET_ORCHARD_CIRCUIT_ID_V1, ASSET_ORCHARD_POOL_ID_V1,
+    ASSET_ORCHARD_PRIVATE_EGRESS_CIRCUIT_ID_V1,
+    ASSET_ORCHARD_PRIVATE_PRIMARY_OUTPUT_VALIDITY_POLICY_V1, ASSET_ORCHARD_PROOF_SYSTEM_ID_V1,
     ORCHARD_COMPACT_CIPHERTEXT_BYTES, ORCHARD_EXTERNAL_BINDING_HASH_BYTES, ORCHARD_NULLIFIER_BYTES,
     SHIELDED_SWAP_ACTION_SCHEMA, SHIELDED_SWAP_CIRCUIT_ID,
     SHIELDED_SWAP_LEGACY_TRANSCRIPT_HASH_BYTES, SHIELDED_SWAP_LEG_COUNT,
@@ -1060,6 +1061,22 @@ pub fn verify_serialized_asset_orchard_private_primary_issue_action(
         domain.protocol_version,
         settlement_asset_id,
         native_nav_asset_id,
+    )?;
+    let expected_output_anchor =
+        asset_orchard_single_commitment_anchor(action.output_commitment.as_hex())?;
+    if action.output_validity_action.anchor != expected_output_anchor {
+        return Err(OrchardVerificationError::new(
+            "asset_orchard_private_primary_issue_output_anchor_mismatch",
+            "private-primary output-validity proof anchor is not the singleton tree derived from the issued output commitment",
+        ));
+    }
+    verify_serialized_asset_orchard_private_egress_action(
+        &action.output_validity_action,
+        domain,
+        action.output_commitment.as_hex(),
+        native_nav_asset_id,
+        ASSET_ORCHARD_PRIVATE_PRIMARY_OUTPUT_VALIDITY_POLICY_V1,
+        &action.route_id,
     )?;
     let public_instance = action.public_instance()?;
     let proof = action.proof.to_bytes()?;

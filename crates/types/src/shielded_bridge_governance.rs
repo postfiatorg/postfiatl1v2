@@ -394,6 +394,7 @@ pub struct AssetOrchardPrivatePrimaryIssueActionPayload {
     pub expires_at_height: u64,
     pub output_commitment: String,
     pub encrypted_output: String,
+    pub output_validity_action_json: String,
     pub proof_system_id: String,
     pub circuit_id: String,
     pub pool_domain: String,

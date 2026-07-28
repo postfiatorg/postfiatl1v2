@@ -132,6 +132,8 @@ const NOTE_VERSION_CONST_NAME: &str = "asset_orchard_note_version_1";
 pub const ASSET_ORCHARD_PRIVATE_EGRESS_PUBLIC_INSTANCE_LEN: usize = 13;
 pub const ASSET_ORCHARD_PRIVATE_EGRESS_H_ACTION_FIELD_COUNT: usize = 16;
 pub const ASSET_ORCHARD_PRIVATE_EGRESS_H_ACTION_POSEIDON_INPUT_COUNT: usize = 18;
+pub const ASSET_ORCHARD_PRIVATE_PRIMARY_OUTPUT_VALIDITY_POLICY_V1: &str =
+    "private-primary-output-validity-v1";
 
 mod u128_hex_serde {
     use serde::{Deserialize, Deserializer, Serializer};
@@ -982,6 +984,10 @@ pub struct AssetOrchardPrivatePrimaryIssueAction {
     pub expires_at_height: u64,
     pub output_commitment: AssetOrchardFieldElement,
     pub encrypted_output: AssetOrchardBoundedBytes,
+    /// A second pinned one-note proof over the newly created NAV note. Its
+    /// singleton-tree anchor proves that `output_commitment` opens to exactly
+    /// `mint_amount_atoms` of the governed NAV asset.
+    pub output_validity_action: Box<AssetOrchardPrivateEgressAction>,
     pub proof_system_id: String,
     pub circuit_id: String,
     pub pool_domain: AssetOrchardFieldElement,
@@ -1580,6 +1586,31 @@ impl AssetOrchardPrivatePrimaryIssueAction {
                 ),
             ));
         }
+        self.output_validity_action.validate()?;
+        if self.output_validity_action.pool_id != self.pool_id
+            || self.output_validity_action.pool_domain != self.pool_domain
+        {
+            return Err(AssetOrchardError::new(
+                "asset_orchard_private_primary_issue_output_domain_mismatch",
+                "private-primary output-validity proof must use the primary action pool domain",
+            ));
+        }
+        if self.output_validity_action.amount != self.mint_amount_atoms
+            || self.output_validity_action.fee != 0
+        {
+            return Err(AssetOrchardError::new(
+                "asset_orchard_private_primary_issue_output_amount_mismatch",
+                "private-primary output-validity proof must prove the exact mint amount with zero fee",
+            ));
+        }
+        if self.output_validity_action.asset_tag_lo != self.native_nav_asset_tag_lo
+            || self.output_validity_action.asset_tag_hi != self.native_nav_asset_tag_hi
+        {
+            return Err(AssetOrchardError::new(
+                "asset_orchard_private_primary_issue_output_asset_tag_mismatch",
+                "private-primary output-validity proof must prove the governed NAV asset tag",
+            ));
+        }
         self.public_fields_without_binding_check()?
             .public_instance()?;
         Ok(())
@@ -1635,6 +1666,7 @@ impl AssetOrchardPrivatePrimaryIssueAction {
                 expires_at_height: self.expires_at_height,
                 output_commitment: self.output_commitment.to_field()?,
                 encrypted_output: &self.encrypted_output,
+                output_validity_action: &self.output_validity_action,
                 settlement_asset_tag: AssetTag {
                     lo: self.settlement_asset_tag_lo,
                     hi: self.settlement_asset_tag_hi,
@@ -2635,6 +2667,7 @@ pub struct AssetOrchardPrivatePrimaryIssueBindingPreimage<'a> {
     pub expires_at_height: u64,
     pub output_commitment: pallas::Base,
     pub encrypted_output: &'a AssetOrchardBoundedBytes,
+    pub output_validity_action: &'a AssetOrchardPrivateEgressAction,
     pub settlement_asset_tag: AssetTag,
     pub native_nav_asset_tag: AssetTag,
 }
@@ -2731,6 +2764,14 @@ pub fn asset_orchard_private_primary_issue_binding_hash(
     }
     let encrypted_output = preimage.encrypted_output.to_bytes()?;
     let encrypted_output_hash = encrypted_output_hash(0, &encrypted_output)?.as_fields();
+    preimage.output_validity_action.validate()?;
+    let output_validity_action =
+        serde_json::to_vec(preimage.output_validity_action).map_err(|error| {
+            AssetOrchardError::new(
+                "asset_orchard_private_primary_issue_output_validity_serialize_failed",
+                error.to_string(),
+            )
+        })?;
     let fields = [
         const_field(&format!("proof_system:{ASSET_ORCHARD_PROOF_SYSTEM_ID_V1}"))?,
         const_field(&format!("circuit:{}", preimage.circuit_id))?,
@@ -2799,6 +2840,10 @@ pub fn asset_orchard_private_primary_issue_binding_hash(
         pallas::Base::from_u128(preimage.settlement_asset_tag.hi),
         pallas::Base::from_u128(preimage.native_nav_asset_tag.lo),
         pallas::Base::from_u128(preimage.native_nav_asset_tag.hi),
+        bytes_to_field(
+            "private_primary_issue.output_validity_action",
+            &output_validity_action,
+        )?,
     ];
     let hash = poseidon_hash2(
         std::str::from_utf8(PRIVATE_PRIMARY_ISSUE_BINDING_DOMAIN).map_err(|_| {
@@ -3040,6 +3085,13 @@ pub fn asset_orchard_private_primary_issue_sighash(
         ));
     }
     let encrypted_output = action.encrypted_output.to_bytes()?;
+    let output_validity_action =
+        serde_json::to_vec(&action.output_validity_action).map_err(|error| {
+            AssetOrchardError::new(
+                "asset_orchard_private_primary_issue_output_validity_serialize_failed",
+                error.to_string(),
+            )
+        })?;
     let mut payload = Vec::new();
     payload.extend_from_slice(PRIVATE_PRIMARY_ISSUE_H_SIG_DOMAIN);
     payload.extend_from_slice(&ASSET_ORCHARD_ACTION_VERSION_V1.to_le_bytes());
@@ -3074,6 +3126,7 @@ pub fn asset_orchard_private_primary_issue_sighash(
     payload.extend_from_slice(&action.expires_at_height.to_le_bytes());
     payload.extend_from_slice(&field_enc(action.output_commitment.to_field()?));
     append_len_bytes_vec(&mut payload, &encrypted_output)?;
+    append_len_bytes_vec(&mut payload, &output_validity_action)?;
     payload.extend_from_slice(&action.settlement_asset_tag_lo.to_le_bytes());
     payload.extend_from_slice(&action.settlement_asset_tag_hi.to_le_bytes());
     payload.extend_from_slice(&action.native_nav_asset_tag_lo.to_le_bytes());
@@ -4500,6 +4553,128 @@ mod tests {
                 "private egress action leaked forbidden field {forbidden}: {json}"
             );
         }
+    }
+
+    fn sample_private_primary_issue_action() -> AssetOrchardPrivatePrimaryIssueAction {
+        let chain_id = "postfiat-wan-devnet";
+        let genesis_hash = [4u8; 32];
+        let protocol_version = 3;
+        let pool_domain =
+            AssetOrchardSwapAction::expected_pool_domain(chain_id, genesis_hash, protocol_version)
+                .expect("pool domain");
+        let settlement_tag = AssetTag::derive("pfUSDC").expect("settlement tag");
+        let native_tag = AssetTag::derive("a666").expect("native tag");
+        let output_commitment =
+            hash_to_pallas_base("test", b"private-primary-output").expect("output");
+        let output_validity_action = AssetOrchardPrivateEgressAction {
+            version: ASSET_ORCHARD_ACTION_VERSION_V1,
+            schema: ASSET_ORCHARD_PRIVATE_EGRESS_ACTION_SCHEMA_V1.to_string(),
+            pool_id: ASSET_ORCHARD_POOL_ID_V1.to_string(),
+            proof_system_id: ASSET_ORCHARD_PROOF_SYSTEM_ID_V1.to_string(),
+            circuit_id: ASSET_ORCHARD_PRIVATE_EGRESS_CIRCUIT_ID_V1.to_string(),
+            pool_domain: AssetOrchardFieldElement::from_field(pool_domain),
+            anchor: AssetOrchardFieldElement::from_field(
+                hash_to_pallas_base("test", b"output-anchor").expect("anchor"),
+            ),
+            nullifier: AssetOrchardFieldElement::from_field(
+                hash_to_pallas_base("test", b"output-nullifier").expect("nullifier"),
+            ),
+            randomized_verification_key: AssetOrchardPoint::from_affine(sample_point(b"output-rk"))
+                .expect("rk"),
+            asset_tag_lo: native_tag.lo,
+            asset_tag_hi: native_tag.hi,
+            amount: 1_000_000,
+            fee: 0,
+            exit_binding_hash: AssetOrchardSwapBindingHash::from_bytes(&[0u8; 64]),
+            proof: AssetOrchardProofBytes::from_bytes(b"placeholder-output-proof").expect("proof"),
+            spend_authorization_signature: AssetOrchardSpendAuthSignature::parse_hex(
+                "44".repeat(ASSET_ORCHARD_SPEND_AUTH_SIGNATURE_BYTES),
+            )
+            .expect("signature"),
+        };
+        AssetOrchardPrivatePrimaryIssueAction {
+            version: ASSET_ORCHARD_ACTION_VERSION_V1,
+            schema: ASSET_ORCHARD_PRIVATE_PRIMARY_ISSUE_ACTION_SCHEMA_V1.to_string(),
+            pool_id: ASSET_ORCHARD_POOL_ID_V1.to_string(),
+            route_id: "pftl-a666-ethereum-wA666-usdc-v1".to_string(),
+            subscriber: "pf-test-subscriber".to_string(),
+            ethereum_recipient: "0x1111111111111111111111111111111111111111".to_string(),
+            reservation_id: "11".repeat(48),
+            subscription_nonce: "22".repeat(32),
+            route_epoch: 2,
+            policy_epoch: 2,
+            policy_hash: "33".repeat(48),
+            pricing_nav_epoch: 1,
+            pricing_reserve_packet_hash: "55".repeat(48),
+            mint_amount_atoms: 1_000_000,
+            settlement_value_atoms: 1_005_000,
+            expires_at_height: 100,
+            output_commitment: AssetOrchardFieldElement::from_field(output_commitment),
+            encrypted_output: AssetOrchardBoundedBytes::from_bytes(
+                b"encrypted-private-primary-output",
+                ASSET_ORCHARD_ENCRYPTED_OUTPUT_MAX_BYTES,
+            )
+            .expect("encrypted output"),
+            output_validity_action: Box::new(output_validity_action),
+            proof_system_id: ASSET_ORCHARD_PROOF_SYSTEM_ID_V1.to_string(),
+            circuit_id: ASSET_ORCHARD_PRIVATE_EGRESS_CIRCUIT_ID_V1.to_string(),
+            pool_domain: AssetOrchardFieldElement::from_field(pool_domain),
+            anchor: AssetOrchardFieldElement::from_field(
+                hash_to_pallas_base("test", b"input-anchor").expect("anchor"),
+            ),
+            nullifier: AssetOrchardFieldElement::from_field(
+                hash_to_pallas_base("test", b"input-nullifier").expect("nullifier"),
+            ),
+            randomized_verification_key: AssetOrchardPoint::from_affine(sample_point(b"input-rk"))
+                .expect("rk"),
+            settlement_asset_tag_lo: settlement_tag.lo,
+            settlement_asset_tag_hi: settlement_tag.hi,
+            native_nav_asset_tag_lo: native_tag.lo,
+            native_nav_asset_tag_hi: native_tag.hi,
+            primary_binding_hash: AssetOrchardSwapBindingHash::from_bytes(&[0u8; 64]),
+            proof: AssetOrchardProofBytes::from_bytes(b"placeholder-input-proof").expect("proof"),
+            spend_authorization_signature: AssetOrchardSpendAuthSignature::parse_hex(
+                "66".repeat(ASSET_ORCHARD_SPEND_AUTH_SIGNATURE_BYTES),
+            )
+            .expect("signature"),
+        }
+    }
+
+    #[test]
+    fn private_primary_issue_requires_exact_output_value_asset_and_domain() {
+        let action = sample_private_primary_issue_action();
+        action.validate().expect("matching output proof metadata");
+
+        let mut wrong_amount = action.clone();
+        wrong_amount.output_validity_action.amount += 1;
+        assert_eq!(
+            wrong_amount
+                .validate()
+                .expect_err("wrong output amount rejected")
+                .code(),
+            "asset_orchard_private_primary_issue_output_amount_mismatch"
+        );
+
+        let mut wrong_asset = action.clone();
+        wrong_asset.output_validity_action.asset_tag_lo ^= 1;
+        assert_eq!(
+            wrong_asset
+                .validate()
+                .expect_err("wrong output asset rejected")
+                .code(),
+            "asset_orchard_private_primary_issue_output_asset_tag_mismatch"
+        );
+
+        let mut wrong_domain = action;
+        wrong_domain.output_validity_action.pool_domain =
+            AssetOrchardFieldElement::from_field(pallas::Base::from(9u64));
+        assert_eq!(
+            wrong_domain
+                .validate()
+                .expect_err("wrong output domain rejected")
+                .code(),
+            "asset_orchard_private_primary_issue_output_domain_mismatch"
+        );
     }
 
     #[test]
