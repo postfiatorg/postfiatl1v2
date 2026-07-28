@@ -96,8 +96,9 @@ use postfiat_node::{
     orchard_wallet_scan, owned_apply, owned_apply_report, owned_apply_v3, owned_certificate_domain,
     owned_certificate_v3, owned_objects, owned_recovery_capabilities_v3, owned_recovery_status_v3,
     owned_safe_unlock, owned_sign, owned_sign_v3, owned_unwrap_apply, owned_unwrap_apply_report,
-    owned_unwrap_apply_v3, owned_unwrap_sign, owned_unwrap_sign_v3, pfusdc_checkpoint_witness,
-    pfusdc_egress_witness, propose_batch, propose_batch_with_required_parent_with_timings,
+    owned_unwrap_apply_v3, owned_unwrap_sign, owned_unwrap_sign_v3,
+    pftl_uniswap_receipt_witness, pfusdc_checkpoint_witness, pfusdc_egress_witness,
+    propose_batch, propose_batch_with_required_parent_with_timings,
     propose_batch_with_timings, ratify_governance, ratify_validator_set,
     read_consensus_v2_qc_graph, rebuild_account_tx_index, receipts,
     reconcile_terminal_mempool_entries, replay_market_ops_bundle,
@@ -186,7 +187,8 @@ use postfiat_node::{
     OrchardPoolReportOptions, OrchardSpendActionOptions, OrchardTestVectorOptions,
     OrchardViewKeyExportOptions, OrchardWalletKeygenOptions, OrchardWalletScanOptions,
     OrchardWithdrawActionBatchOptions, OrchardWithdrawActionOptions, OwnedObjectsOptions,
-    PfUsdcCheckpointWitnessOptions, PfUsdcEgressWitnessOptions, RatifyGovernanceOptions,
+    PfUsdcCheckpointWitnessOptions, PfUsdcEgressWitnessOptions,
+    PftlUniswapReceiptWitnessOptions, RatifyGovernanceOptions,
     RatifyValidatorSetOptions, ReceiptQueryOptions, RequiredBlockParent, ShieldMigrateBatchOptions,
     ShieldMintBatchOptions, ShieldMintOptions, ShieldSpendBatchOptions, ShieldSpendOptions,
     ShieldedSwapActionBatchOptions, SignedAssetTransactionBatchOptions,
@@ -507,6 +509,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "blocks"
         | "pfusdc-egress-witness"
         | "pfusdc-checkpoint-witness"
+        | "pftl-uniswap-receipt-witness"
         | "block-vote"
         | "block-vote-equivocation"
         | "block-vote-equivocation-verify"

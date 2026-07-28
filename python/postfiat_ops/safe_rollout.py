@@ -626,6 +626,80 @@ def preflight(args: argparse.Namespace, runner: Runner) -> dict[str, Any]:
     return state
 
 
+def _verify_and_record_backup(
+    *,
+    args: argparse.Namespace,
+    runner: Runner,
+    state: dict[str, Any],
+    binary: Path,
+    binary_sha256: str,
+    remote_dir: PurePosixPath,
+) -> dict[str, Any]:
+    signed = args.evidence_dir / "backup-signed"
+    verify_dir = args.evidence_dir / "backup-verified-import"
+    manifest = signed / "snapshot.signed-manifest.json"
+    if not manifest.is_file():
+        raise SafetyError("signed pre-rollout backup manifest is missing")
+    if verify_dir.exists():
+        raise SafetyError(
+            "backup verification destination already exists; refusing to overwrite it"
+        )
+    trusted = args.snapshot_publisher_public_key_file
+    if not trusted.is_file():
+        raise SafetyError("trusted snapshot publisher public key is missing")
+    canary = str(state["canary_validator_id"])
+    runner.run(
+        [
+            str(binary),
+            "snapshot-import-signed-finalized-checkpoint",
+            "--data-dir",
+            str(verify_dir),
+            "--snapshot-dir",
+            str(signed),
+            "--trusted-publisher-key-file",
+            str(trusted),
+            "--node-id",
+            canary,
+        ]
+    )
+    verification = runner.run(
+        [str(binary), "verify-finalized-checkpoint", "--data-dir", str(verify_dir)]
+    )
+    report = json.loads(verification.stdout)
+    if report.get("verified") is not True:
+        raise SafetyError(
+            "signed pre-rollout backup did not pass finalized-checkpoint verification"
+        )
+    verification_report_file = args.evidence_dir / "finalized-checkpoint-verification.json"
+    atomic_write_json(verification_report_file, report)
+    chain_tip = json.loads((verify_dir / "chain_tip.json").read_text(encoding="utf-8"))
+    state_root = str(chain_tip.get("state_root", ""))
+    if not state_root:
+        raise SafetyError("verified signed backup is missing its chain-tip state root")
+    state["backup"] = {
+        "verified": True,
+        "created_unix": int(time.time()),
+        "source_validator": canary,
+        "remote_unsigned_snapshot": str(remote_dir),
+        "signed_snapshot": str(signed.resolve()),
+        "signed_manifest_sha256": sha256_file(manifest),
+        "candidate_binary_sha256": binary_sha256,
+        "verification_basis": report.get("verification_basis"),
+        "consensus_v2_activation_height": report.get(
+            "consensus_v2_activation_height"
+        ),
+        "certificate_id": report.get("certificate_id"),
+        "finalized_checkpoint_verification_sha256": sha256_file(
+            verification_report_file
+        ),
+        "height": chain_tip.get("height"),
+        "tip": chain_tip.get("block_hash", ""),
+        "state_root": state_root,
+    }
+    atomic_write_json(args.state_file, state)
+    return state
+
+
 def create_backup(args: argparse.Namespace, runner: Runner) -> dict[str, Any]:
     state = json.loads(args.state_file.read_text(encoding="utf-8"))
     verify_frozen_inputs(state)
@@ -694,7 +768,6 @@ def create_backup(args: argparse.Namespace, runner: Runner) -> dict[str, Any]:
     runner.run(["ssh", "-o", "BatchMode=yes", target, "bash", "-s"], input_text=remote_script)
     unsigned = args.evidence_dir / "backup-unsigned"
     signed = args.evidence_dir / "backup-signed"
-    verify_dir = args.evidence_dir / "backup-verified-import"
     args.evidence_dir.mkdir(parents=True, exist_ok=False)
     runner.run(["scp", "-q", "-r", f"{target}:{remote_dir}/.", str(unsigned)])
     runner.run(
@@ -709,58 +782,42 @@ def create_backup(args: argparse.Namespace, runner: Runner) -> dict[str, Any]:
             str(args.snapshot_publisher_key_file),
         ]
     )
-    trusted = args.snapshot_publisher_public_key_file
-    runner.run(
-        [
-            str(binary),
-            "snapshot-import-signed-finalized-checkpoint",
-            "--data-dir",
-            str(verify_dir),
-            "--snapshot-dir",
-            str(signed),
-            "--trusted-publisher-key-file",
-            str(trusted),
-            "--node-id",
-            canary,
-        ]
+    return _verify_and_record_backup(
+        args=args,
+        runner=runner,
+        state=state,
+        binary=binary,
+        binary_sha256=binary_sha256,
+        remote_dir=remote_dir,
     )
-    verification = runner.run(
-        [str(binary), "verify-finalized-checkpoint", "--data-dir", str(verify_dir)]
+
+
+def resume_backup_verification(
+    args: argparse.Namespace, runner: Runner
+) -> dict[str, Any]:
+    state = json.loads(args.state_file.read_text(encoding="utf-8"))
+    verify_frozen_inputs(state)
+    if not state.get("preflight", {}).get("verified"):
+        raise SafetyError("backup recovery requires a completed preflight")
+    if state.get("applied"):
+        raise SafetyError("backup recovery must complete before any validator is deployed")
+    if state.get("backup", {}).get("verified"):
+        raise SafetyError("signed backup is already recorded")
+    canary = str(state["canary_validator_id"])
+    release_id, entries = copy_entries(Path(state["stage_report"]), canary)
+    binary = next(entry.source for entry in entries if entry.target.name == "postfiat-node")
+    remote_dir = (
+        PurePosixPath("/var/lib/postfiat/pre-rollout-snapshots")
+        / f"{release_id}-{canary}-finalized-checkpoint"
     )
-    report = json.loads(verification.stdout)
-    if report.get("verified") is not True:
-        raise SafetyError(
-            "signed pre-rollout backup did not pass finalized-checkpoint verification"
-        )
-    verification_report_file = args.evidence_dir / "finalized-checkpoint-verification.json"
-    atomic_write_json(verification_report_file, report)
-    chain_tip = json.loads((verify_dir / "chain_tip.json").read_text(encoding="utf-8"))
-    state_root = str(chain_tip.get("state_root", ""))
-    if not state_root:
-        raise SafetyError("verified signed backup is missing its chain-tip state root")
-    manifest = signed / "snapshot.signed-manifest.json"
-    state["backup"] = {
-        "verified": True,
-        "created_unix": int(time.time()),
-        "source_validator": canary,
-        "remote_unsigned_snapshot": str(remote_dir),
-        "signed_snapshot": str(signed.resolve()),
-        "signed_manifest_sha256": sha256_file(manifest),
-        "candidate_binary_sha256": binary_sha256,
-        "verification_basis": report.get("verification_basis"),
-        "consensus_v2_activation_height": report.get(
-            "consensus_v2_activation_height"
-        ),
-        "certificate_id": report.get("certificate_id"),
-        "finalized_checkpoint_verification_sha256": sha256_file(
-            verification_report_file
-        ),
-        "height": chain_tip.get("height"),
-        "tip": chain_tip.get("block_hash", ""),
-        "state_root": state_root,
-    }
-    atomic_write_json(args.state_file, state)
-    return state
+    return _verify_and_record_backup(
+        args=args,
+        runner=runner,
+        state=state,
+        binary=binary,
+        binary_sha256=sha256_file(binary),
+        remote_dir=remote_dir,
+    )
 
 
 def _copy_release(
@@ -883,6 +940,12 @@ def parser() -> argparse.ArgumentParser:
     backup_parser.add_argument("--evidence-dir", type=Path, required=True)
     backup_parser.add_argument("--snapshot-publisher-key-file", type=Path, required=True)
     backup_parser.add_argument("--snapshot-publisher-public-key-file", type=Path, required=True)
+    resume_backup_parser = subparsers.add_parser("resume-backup-verification")
+    resume_backup_parser.add_argument("--state-file", type=Path, required=True)
+    resume_backup_parser.add_argument("--evidence-dir", type=Path, required=True)
+    resume_backup_parser.add_argument(
+        "--snapshot-publisher-public-key-file", type=Path, required=True
+    )
     apply_parser = subparsers.add_parser("apply-next")
     apply_parser.add_argument("--state-file", type=Path, required=True)
     return result
@@ -898,6 +961,8 @@ def main(argv: Sequence[str] | None = None, runner: Runner | None = None) -> int
             report = preflight(args, active_runner)
         elif args.command == "backup":
             report = create_backup(args, active_runner)
+        elif args.command == "resume-backup-verification":
+            report = resume_backup_verification(args, active_runner)
         else:
             report = apply_next(args, active_runner)
         print(json.dumps(report, indent=2, sort_keys=True))

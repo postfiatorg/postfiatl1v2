@@ -1303,6 +1303,26 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                 )],
             )
         }
+        "pftl_uniswap_receipt_witness" => {
+            let packet_hash = flag_value(flags, "--packet-hash").ok_or("missing --packet-hash")?;
+            let prior_checkpoint_block_id =
+                flag_value(flags, "--prior-checkpoint").ok_or("missing --prior-checkpoint")?;
+            let witness = pftl_uniswap_receipt_witness(PftlUniswapReceiptWitnessOptions {
+                data_dir,
+                packet_hash: packet_hash.to_string(),
+                prior_checkpoint_block_id: prior_checkpoint_block_id.to_string(),
+            })
+            .map_err(|error| format!("rpc pftl_uniswap_receipt_witness failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &witness,
+                vec![RpcEvent::new(
+                    "pftl_uniswap_receipt_witness",
+                    packet_hash,
+                    "proof-ready bounded PFTL-Uniswap receipt witness exported",
+                )],
+            )
+        }
         "validators" => {
             let report = rpc_validators_alias(data_dir)?;
             let target = report

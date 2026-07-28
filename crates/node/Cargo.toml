@@ -28,6 +28,7 @@ postfiat-execution = { path = "../execution" }
 postfiat-mempool-dag = { path = "../mempool_dag" }
 postfiat-network = { path = "../network" }
 postfiat-ordering-fast = { path = "../ordering_fast" }
+postfiat-pftl-uniswap-proofs = { path = "../pftl_uniswap_proofs" }
 postfiat-privacy = { path = "../privacy" }
 postfiat-privacy-orchard = { path = "../privacy_orchard" }
 postfiat-rpc-sdk = { path = "../rpc_sdk" }

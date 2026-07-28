@@ -1747,6 +1747,7 @@ dependencies = [
  "postfiat-mempool-dag",
  "postfiat-network",
  "postfiat-ordering-fast",
+ "postfiat-pftl-uniswap-proofs",
  "postfiat-privacy",
  "postfiat-privacy-orchard",
  "postfiat-rpc-sdk",

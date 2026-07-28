@@ -14,6 +14,13 @@ pub struct PfUsdcCheckpointWitnessOptions {
     pub target_block_id: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PftlUniswapReceiptWitnessOptions {
+    pub data_dir: PathBuf,
+    pub packet_hash: String,
+    pub prior_checkpoint_block_id: String,
+}
+
 struct ExportedFinalitySegment {
     prior_checkpoint_block_id: String,
     finality_ancestry: Vec<PfUsdcEgressFinalityStepV1>,
@@ -194,6 +201,176 @@ pub fn pfusdc_checkpoint_witness(
     };
     witness
         .validate_bounds()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    Ok(witness)
+}
+
+pub fn pftl_uniswap_receipt_witness(
+    options: PftlUniswapReceiptWitnessOptions,
+) -> io::Result<PftlUniswapReceiptProofWitnessV1> {
+    for (field, value) in [
+        ("packet_hash", options.packet_hash.as_str()),
+        (
+            "prior_checkpoint_block_id",
+            options.prior_checkpoint_block_id.as_str(),
+        ),
+    ] {
+        validate_lower_hex_len(field, value, 96)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    }
+
+    let store = NodeStore::new(options.data_dir);
+    let genesis = store.read_genesis()?;
+    let governance = store.read_governance()?;
+    let ledger = store.read_ledger()?;
+    let blocks = store.read_blocks()?;
+
+    let route = ledger
+        .pftl_uniswap_routes
+        .iter()
+        .find(|route| route.export_packets.contains_key(&options.packet_hash))
+        .cloned()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "PFTL-Uniswap export packet is unavailable",
+            )
+        })?;
+    let export = route
+        .export_packets
+        .get(&options.packet_hash)
+        .cloned()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "export packet is unavailable"))?;
+    let receipt = ledger
+        .pftl_uniswap_receipts
+        .iter()
+        .find(|receipt| {
+            receipt.transition == "export_debit"
+                && receipt.packet_hash.as_deref() == Some(options.packet_hash.as_str())
+        })
+        .cloned()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "finalized export-debit receipt is unavailable",
+            )
+        })?;
+    if receipt.state_after_hash != pftl_uniswap_route_state_hash(&route) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "current route state is newer than the requested export receipt; export the witness at the receipt boundary",
+        ));
+    }
+    let block = blocks
+        .blocks
+        .iter()
+        .find(|block| block.header.height == receipt.block_height)
+        .cloned()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "finalized export receipt block is unavailable",
+            )
+        })?;
+    let receipt_root = block
+        .header
+        .pftl_uniswap_receipt_root
+        .clone()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "export receipt block has no PFTL-Uniswap receipt root",
+            )
+        })?;
+    let receipt_hashes = ledger
+        .pftl_uniswap_receipts
+        .iter()
+        .filter(|candidate| candidate.block_height <= receipt.block_height)
+        .map(|candidate| candidate.receipt_hash.clone())
+        .collect::<Vec<_>>();
+    let receipt_merkle_proof =
+        pftl_uniswap_consensus_receipt_merkle_proof(&receipt_hashes, &receipt.receipt_hash)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let v2 = route.v2.as_ref().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidData, "export route is not schema v2")
+    })?;
+    let policy = &v2.primary_market_policy;
+    let policy_hash_bytes = hex_to_bytes(&policy.policy_hash)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
+    if policy_hash_bytes.len() != 48 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "primary policy hash must encode 48 bytes",
+        ));
+    }
+    let mint_packet = PftlUniswapMintPacketV2 {
+        route_config_digest: route.route_config_digest.clone(),
+        source_packet_hash: export.packet_hash.clone(),
+        reservation_id: export.reservation_id.clone().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "v2 export packet has no reservation ID",
+            )
+        })?,
+        source_receipt_hash: receipt.receipt_hash.clone(),
+        source_receipt_root: receipt_root,
+        settlement_asset_id: route.settlement_asset_id.clone(),
+        native_nav_asset_id: route.native_nav_asset_id.clone(),
+        pricing_reserve_packet_hash: policy.pricing_reserve_packet_hash.clone(),
+        policy_hash_commitment: bytes_to_hex(&Keccak256::digest(policy_hash_bytes)),
+        route_epoch: v2.route_epoch,
+        pricing_nav_epoch: policy.pricing_nav_epoch,
+        deadline_seconds: export.destination_deadline_seconds,
+        nonce: export.nonce.clone(),
+        destination_chain_id: route.ethereum_chain_id,
+        destination_controller: route.handoff_controller.clone(),
+        wrapped_token: route.wrapped_navcoin_token.clone(),
+        ethereum_recipient: export.ethereum_recipient.clone(),
+        mint_amount_atoms: export.amount_atoms,
+        settlement_value_atoms: export.settlement_value_atoms.ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "v2 export packet has no settlement value",
+            )
+        })?,
+    };
+    mint_packet
+        .validate()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let mint_packet_digest = mint_packet
+        .evm_digest()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    if export.ethereum_packet_digest.as_deref() != Some(mint_packet_digest.as_str()) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "mint packet digest does not match the finalized export packet",
+        ));
+    }
+
+    let segment = pfusdc_export_finality_segment(
+        &store,
+        &genesis,
+        &governance,
+        &blocks,
+        options.prior_checkpoint_block_id,
+        &block,
+    )?;
+    let witness = PftlUniswapReceiptProofWitnessV1 {
+        schema: PFTL_UNISWAP_RECEIPT_PROOF_WITNESS_SCHEMA_V1.to_string(),
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        protocol_version: genesis.protocol_version,
+        prior_checkpoint_block_id: segment.prior_checkpoint_block_id,
+        finality_ancestry: segment.finality_ancestry,
+        block,
+        committee_epoch: segment.committee_epoch,
+        committee: segment.committee,
+        receipt,
+        receipt_merkle_proof,
+        route_state_after: route,
+        mint_packet,
+    };
+    verify_pftl_uniswap_receipt_witness_v1(&witness)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     Ok(witness)
 }

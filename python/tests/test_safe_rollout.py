@@ -23,6 +23,7 @@ from postfiat_ops.safe_rollout import (
     parse_inventory,
     preflight,
     reject_unsafe_cli_tokens,
+    resume_backup_verification,
     rollout_order,
     validate_copy_entries,
     validate_diff,
@@ -423,6 +424,53 @@ class SafeRolloutTests(unittest.TestCase):
             "consensus-v2-finalized-checkpoint",
             state["backup"]["verification_basis"],
         )
+
+    def test_backup_verification_can_resume_without_remote_mutation(self) -> None:
+        state_file = self.root / "rollout-state.json"
+        state_file.write_text(
+            json.dumps(
+                {
+                    "schema": STATE_SCHEMA,
+                    "release_id": self.release_id,
+                    "stage_report": str(self.stage_report),
+                    "stage_report_sha256": __import__("hashlib").sha256(
+                        self.stage_report.read_bytes()
+                    ).hexdigest(),
+                    "inventory_file": str(self.inventory),
+                    "inventory_file_sha256": __import__("hashlib").sha256(
+                        self.inventory.read_bytes()
+                    ).hexdigest(),
+                    "ssh_user": "root",
+                    "canary_validator_id": "validator-1",
+                    "order": rollout_order("validator-1"),
+                    "applied": [],
+                    "preflight": {"verified": True},
+                    "backup": {"verified": False},
+                }
+            ),
+            encoding="utf-8",
+        )
+        evidence = self.root / "evidence"
+        signed = evidence / "backup-signed"
+        signed.mkdir(parents=True)
+        (signed / "snapshot.signed-manifest.json").write_text(
+            '{"schema":"test"}\n', encoding="utf-8"
+        )
+        publisher_public = self.root / "publisher.public.json"
+        publisher_public.write_text("public", encoding="utf-8")
+        args = argparse.Namespace(
+            state_file=state_file,
+            evidence_dir=evidence,
+            snapshot_publisher_public_key_file=publisher_public,
+        )
+        runner = FakeRunner()
+        state = resume_backup_verification(args, runner)
+        self.assertTrue(state["backup"]["verified"])
+        flattened = [argument for call, _ in runner.calls for argument in call]
+        self.assertIn("snapshot-import-signed-finalized-checkpoint", flattened)
+        self.assertIn("verify-finalized-checkpoint", flattened)
+        self.assertNotIn("snapshot-export-finalized-checkpoint", flattened)
+        self.assertFalse(any(call[0] in {"ssh", "scp"} for call, _ in runner.calls))
 
     @patch("postfiat_ops.safe_rollout.fleet_convergence")
     @patch("postfiat_ops.safe_rollout.remote_hashes")

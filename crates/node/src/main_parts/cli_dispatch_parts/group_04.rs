@@ -1410,6 +1410,23 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "pftl-uniswap-receipt-witness" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let packet_hash = flag_value(flags, "--packet-hash").ok_or("missing --packet-hash")?;
+            let prior_checkpoint_block_id =
+                flag_value(flags, "--prior-checkpoint").ok_or("missing --prior-checkpoint")?;
+            let witness = pftl_uniswap_receipt_witness(PftlUniswapReceiptWitnessOptions {
+                data_dir: PathBuf::from(data_dir),
+                packet_hash: packet_hash.to_string(),
+                prior_checkpoint_block_id: prior_checkpoint_block_id.to_string(),
+            })
+            .map_err(|error| format!("pftl-uniswap-receipt-witness failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&witness).map_err(|error| {
+                format!("PFTL-Uniswap receipt witness serialization failed: {error}")
+            })?;
+            println!("{json}");
+            Ok(())
+        }
         "block-vote" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let key_file = flag_value(flags, "--key-file")
