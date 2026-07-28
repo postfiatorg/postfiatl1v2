@@ -81,6 +81,17 @@ impl FastIngressVerifierConfigV1 {
         serde_json::to_vec(self)
             .map_err(|error| format!("encode fast-ingress verifier config: {error}"))
     }
+
+    pub fn pre_age_release_state_commitment_bytes(&self) -> Result<Vec<u8>, String> {
+        if self.age_release_enabled {
+            return Err(
+                "age-enabled fast-ingress verifier has no pre-age-release commitment".to_string(),
+            );
+        }
+        let mut bytes = self.state_commitment_bytes()?;
+        remove_pre_age_release_default_field(&mut bytes)?;
+        Ok(bytes)
+    }
 }
 
 /// Canonical public output of the optimistic/bonded pfUSDC ingress guest.
@@ -681,6 +692,52 @@ impl FastIngressCampaignStateV1 {
         Ok(released)
     }
 
+    pub fn apply_incremental_age_release_for_replay(
+        &mut self,
+        values: &PfUsdcBondedLifecyclePublicValuesV1,
+    ) -> Result<u64, String> {
+        self.validate()?;
+        values.validate()?;
+        if !self.age_release_enabled
+            || self.route_profile_hash != values.route_profile_hash
+            || self.route_epoch != values.route_epoch
+            || self.manifest_hash != values.manifest_hash
+            || values.update_kind != PFUSDC_BONDED_LIFECYCLE_UPDATE_AGE_RELEASED
+            || values.age_release_after_blocks != self.age_margin_blocks
+        {
+            return Err("fast-ingress age release does not match its governed campaign".to_string());
+        }
+        let mut released = 0_u64;
+        for mint in self
+            .mints
+            .iter_mut()
+            .filter(|mint| mint.source_assertion_id == values.source_assertion_id)
+        {
+            match mint.status.as_str() {
+                FAST_INGRESS_MINT_STATUS_ESCROWED => {
+                    mint.status = FAST_INGRESS_MINT_STATUS_RELEASED_UNCONFIRMED.to_string();
+                    released = released
+                        .checked_add(mint.amount_atoms)
+                        .ok_or_else(|| "fast-ingress age-release overflow".to_string())?;
+                }
+                FAST_INGRESS_MINT_STATUS_RELEASED_UNCONFIRMED => {}
+                FAST_INGRESS_MINT_STATUS_FINAL => {
+                    return Err("confirmed fast-ingress mint does not need age release".to_string());
+                }
+                FAST_INGRESS_MINT_STATUS_REVERTED_ESCROWED
+                | FAST_INGRESS_MINT_STATUS_REVERTED_RELEASED => {
+                    return Err("cannot age-release a reverted fast-ingress assertion".to_string());
+                }
+                _ => return Err("unknown fast-ingress mint status".to_string()),
+            }
+        }
+        if released == 0 {
+            return Err("fast-ingress age release has no new escrowed mints".to_string());
+        }
+        self.validate()?;
+        Ok(released)
+    }
+
     pub fn apply_reversion(
         &mut self,
         values: &PfUsdcBondedLifecyclePublicValuesV1,
@@ -740,6 +797,33 @@ impl FastIngressCampaignStateV1 {
         self.validate()?;
         serde_json::to_vec(self).map_err(|error| format!("encode fast-ingress campaign: {error}"))
     }
+
+    pub fn pre_age_release_state_commitment_bytes(&self) -> Result<Vec<u8>, String> {
+        if self.age_release_enabled {
+            return Err(
+                "age-enabled fast-ingress campaign has no pre-age-release commitment".to_string(),
+            );
+        }
+        let mut bytes = self.state_commitment_bytes()?;
+        remove_pre_age_release_default_field(&mut bytes)?;
+        Ok(bytes)
+    }
+}
+
+fn remove_pre_age_release_default_field(bytes: &mut Vec<u8>) -> Result<(), String> {
+    const OMITTED_DEFAULT: &[u8] = b"\"age_release_enabled\":false,";
+    let mut matches = bytes
+        .windows(OMITTED_DEFAULT.len())
+        .enumerate()
+        .filter_map(|(index, window)| (window == OMITTED_DEFAULT).then_some(index));
+    let index = matches
+        .next()
+        .ok_or_else(|| "pre-age-release commitment field is missing".to_string())?;
+    if matches.next().is_some() {
+        return Err("pre-age-release commitment field is ambiguous".to_string());
+    }
+    bytes.drain(index..index + OMITTED_DEFAULT.len());
+    Ok(())
 }
 
 pub fn pfusdc_fast_ingress_deposit_key_v1(
@@ -1118,6 +1202,32 @@ mod pfusdc_bonded_accounting_tests {
             FAST_INGRESS_MINT_STATUS_RELEASED_UNCONFIRMED
         );
         assert!(campaign.apply_age_release(&release).is_err());
+    }
+
+    #[test]
+    fn replay_only_incremental_age_release_skips_prior_release_and_requires_new_escrow() {
+        let first = ingress("01", 2, 5);
+        let second = ingress("02", 3, 5);
+        let mut campaign = FastIngressCampaignStateV1::from_public_values(&first).unwrap();
+        campaign.age_release_enabled = true;
+        campaign.accept_escrowed_mint(&first, 10).unwrap();
+        let release = lifecycle(PFUSDC_BONDED_LIFECYCLE_UPDATE_AGE_RELEASED, "bb");
+        assert_eq!(campaign.apply_age_release(&release).unwrap(), 2);
+        campaign.accept_escrowed_mint(&second, 11).unwrap();
+        assert!(campaign.apply_age_release(&release).is_err());
+        assert_eq!(
+            campaign
+                .apply_incremental_age_release_for_replay(&release)
+                .unwrap(),
+            3
+        );
+        assert!(campaign
+            .apply_incremental_age_release_for_replay(&release)
+            .is_err());
+        assert!(campaign
+            .mints
+            .iter()
+            .all(|mint| mint.status == FAST_INGRESS_MINT_STATUS_RELEASED_UNCONFIRMED));
     }
 
     #[test]

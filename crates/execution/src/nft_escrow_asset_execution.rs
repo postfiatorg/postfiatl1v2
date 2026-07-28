@@ -616,6 +616,8 @@ pub struct AssetExecutionCompatibility {
     pub emit_legacy_domainless_withdrawal_packet: bool,
     pub reject_legacy_domainless_withdrawal_packet_state: bool,
     pub allow_unverified_pftl_uniswap_bridge_replay: bool,
+    pub allow_incremental_age_release_replay: bool,
+    pub allow_legacy_pftl_uniswap_disabled_live_value_replay: bool,
     pub bridge_verification_activation_height: Option<u64>,
     pub atomic_swap_activation_height: Option<u64>,
     pub atomic_swap_paused: bool,
@@ -629,6 +631,8 @@ impl AssetExecutionCompatibility {
             emit_legacy_domainless_withdrawal_packet: false,
             reject_legacy_domainless_withdrawal_packet_state: false,
             allow_unverified_pftl_uniswap_bridge_replay: false,
+            allow_incremental_age_release_replay: false,
+            allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
             bridge_verification_activation_height: Some(0),
             atomic_swap_activation_height: Some(0),
             atomic_swap_paused: false,
@@ -642,6 +646,8 @@ impl AssetExecutionCompatibility {
             emit_legacy_domainless_withdrawal_packet: true,
             reject_legacy_domainless_withdrawal_packet_state: false,
             allow_unverified_pftl_uniswap_bridge_replay: true,
+            allow_incremental_age_release_replay: false,
+            allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
             bridge_verification_activation_height: Some(0),
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
@@ -655,6 +661,8 @@ impl AssetExecutionCompatibility {
             emit_legacy_domainless_withdrawal_packet: false,
             reject_legacy_domainless_withdrawal_packet_state: false,
             allow_unverified_pftl_uniswap_bridge_replay: true,
+            allow_incremental_age_release_replay: false,
+            allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
             bridge_verification_activation_height: Some(0),
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
@@ -668,6 +676,8 @@ impl AssetExecutionCompatibility {
             emit_legacy_domainless_withdrawal_packet: false,
             reject_legacy_domainless_withdrawal_packet_state: false,
             allow_unverified_pftl_uniswap_bridge_replay: true,
+            allow_incremental_age_release_replay: false,
+            allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
             bridge_verification_activation_height: Some(0),
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
@@ -681,6 +691,8 @@ impl AssetExecutionCompatibility {
             emit_legacy_domainless_withdrawal_packet: false,
             reject_legacy_domainless_withdrawal_packet_state: true,
             allow_unverified_pftl_uniswap_bridge_replay: true,
+            allow_incremental_age_release_replay: false,
+            allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
             bridge_verification_activation_height: Some(0),
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
@@ -692,6 +704,16 @@ impl AssetExecutionCompatibility {
         bridge_verification_activation_height: Option<u64>,
     ) -> Self {
         self.bridge_verification_activation_height = bridge_verification_activation_height;
+        self
+    }
+
+    pub const fn with_incremental_age_release_replay(mut self) -> Self {
+        self.allow_incremental_age_release_replay = true;
+        self
+    }
+
+    pub const fn with_legacy_pftl_uniswap_disabled_live_value_replay(mut self) -> Self {
+        self.allow_legacy_pftl_uniswap_disabled_live_value_replay = true;
         self
     }
 
@@ -2134,6 +2156,7 @@ fn apply_asset_operation(
                 ledger,
                 operation,
                 block_height,
+                compatibility,
             )
         }
         AssetTransactionOperation::VaultBridgeReceiptSubmit(operation) => {
@@ -2268,7 +2291,13 @@ fn apply_asset_operation(
                     genesis, ledger, route,
                 )?;
             }
-            apply_pftl_uniswap_primary_subscribe(genesis, ledger, operation, block_height)
+            apply_pftl_uniswap_primary_subscribe(
+                genesis,
+                ledger,
+                operation,
+                block_height,
+                compatibility.allow_legacy_pftl_uniswap_disabled_live_value_replay,
+            )
         }
         AssetTransactionOperation::PftlUniswapOrderReserve(operation) => {
             if transaction.unsigned.transaction_kind
@@ -2376,7 +2405,13 @@ fn apply_asset_operation(
                     genesis, ledger, route, operation,
                 )?;
             }
-            apply_pftl_uniswap_export_debit(genesis, ledger, operation, block_height)
+            apply_pftl_uniswap_export_debit(
+                genesis,
+                ledger,
+                operation,
+                block_height,
+                compatibility.allow_legacy_pftl_uniswap_disabled_live_value_replay,
+            )
         }
         AssetTransactionOperation::PftlUniswapDestinationConsume(operation) => {
             if transaction.unsigned.transaction_kind
@@ -2404,7 +2439,13 @@ fn apply_asset_operation(
                     genesis, ledger, route, packet, operation,
                 )?;
             }
-            apply_pftl_uniswap_destination_consume(genesis, ledger, operation, block_height)
+            apply_pftl_uniswap_destination_consume(
+                genesis,
+                ledger,
+                operation,
+                block_height,
+                compatibility.allow_legacy_pftl_uniswap_disabled_live_value_replay,
+            )
         }
         AssetTransactionOperation::PftlUniswapRefundSource(operation) => {
             if transaction.unsigned.transaction_kind != PFTL_UNISWAP_REFUND_SOURCE_TRANSACTION_KIND {

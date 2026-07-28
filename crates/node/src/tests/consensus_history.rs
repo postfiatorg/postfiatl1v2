@@ -328,6 +328,198 @@ fn wan_devnet2_receipt_id_drift_is_exactly_allowlisted() {
     ));
 }
 
+#[test]
+fn wan_devnet2_deduplicated_governance_receipt_is_exactly_allowlisted() {
+    let genesis =
+        Genesis::try_new_with_validator_count("postfiat-wan-devnet-2".to_string(), 6)
+            .expect("devnet-2 genesis");
+    let (height, batch_id, receipt_id) = WAN_DEVNET2_DEDUPLICATED_GOVERNANCE_RECEIPT;
+    let mut block = dummy_block_record(height);
+    block.header.batch_kind = BATCH_KIND_GOVERNANCE.to_string();
+    block.header.batch_id = batch_id.to_string();
+    assert!(archived_wan_devnet2_deduplicated_governance_receipt_allowed(
+        &genesis, &block, receipt_id
+    ));
+
+    let mut wrong_height = block.clone();
+    wrong_height.header.height += 1;
+    assert!(!archived_wan_devnet2_deduplicated_governance_receipt_allowed(
+        &genesis,
+        &wrong_height,
+        receipt_id
+    ));
+    let mut wrong_batch = block.clone();
+    wrong_batch.header.batch_id = "00".repeat(48);
+    assert!(!archived_wan_devnet2_deduplicated_governance_receipt_allowed(
+        &genesis,
+        &wrong_batch,
+        receipt_id
+    ));
+    assert!(!archived_wan_devnet2_deduplicated_governance_receipt_allowed(
+        &genesis,
+        &block,
+        &"00".repeat(48)
+    ));
+    let other_chain =
+        Genesis::try_new_with_validator_count("postfiat-wan-devnet".to_string(), 6)
+            .expect("other genesis");
+    assert!(!archived_wan_devnet2_deduplicated_governance_receipt_allowed(
+        &other_chain,
+        &block,
+        receipt_id
+    ));
+
+    let mut first_attempt = dummy_block_record(64);
+    first_attempt.header.batch_kind = BATCH_KIND_GOVERNANCE.to_string();
+    first_attempt.header.batch_id =
+        "b9dfc8ddbaefa6fa9ae458b1326c88c4f414b2c92987390732a7bee27ff2eeab2b741b2cc2b3b8c7d8d58e3949e57913"
+            .to_string();
+    let replayed = Receipt::rejected(
+        receipt_id,
+        "vault_bridge_route_profile_rejected",
+        "vault bridge route asset is missing from the NAV registry",
+    );
+    let persisted = Receipt::accepted(receipt_id, "vault bridge route profile activated");
+    assert!(replayed_receipt_matches_persisted(
+        &genesis,
+        &first_attempt,
+        &replayed,
+        &persisted
+    ));
+    let mut tampered = replayed.clone();
+    tampered.message.push_str(" (tampered)");
+    assert!(!replayed_receipt_matches_persisted(
+        &genesis,
+        &first_attempt,
+        &tampered,
+        &persisted
+    ));
+}
+
+#[test]
+fn wan_devnet2_pre_age_release_state_roots_are_exactly_allowlisted() {
+    let genesis =
+        Genesis::try_new_with_validator_count("postfiat-wan-devnet-2".to_string(), 6)
+            .expect("devnet-2 genesis");
+    for (height, batch_id) in [
+        (
+            66,
+            "2657b1fcc26ec48d0c55e26d75abab784e287f5022d03f1c77eb54028538d4487dc472239346288cfd65a857b473e8b8",
+        ),
+        (
+            67,
+            "a4b2c426004698c46fd99a1dfe26fa6d41cd3c557cb13f0e4a2dea385e02e0b4a2a341e71cb7c4774d0a2b403ab82a01",
+        ),
+        (
+            68,
+            "3441a3554f92100dcce900e641129d540972fd0689f2935a37408f11d340e503a7fac9dad1518a3fdcd456938372f0b7",
+        ),
+    ] {
+        let mut block = dummy_block_record(height);
+        block.header.batch_id = batch_id.to_string();
+        assert!(archived_wan_devnet2_pre_age_release_state_root_allowed(
+            &genesis, &block
+        ));
+        block.header.batch_id = "00".repeat(48);
+        assert!(!archived_wan_devnet2_pre_age_release_state_root_allowed(
+            &genesis, &block
+        ));
+    }
+    let mut wrong_height = dummy_block_record(69);
+    wrong_height.header.batch_id =
+        "3441a3554f92100dcce900e641129d540972fd0689f2935a37408f11d340e503a7fac9dad1518a3fdcd456938372f0b7"
+            .to_string();
+    assert!(!archived_wan_devnet2_pre_age_release_state_root_allowed(
+        &genesis,
+        &wrong_height
+    ));
+    let other_chain =
+        Genesis::try_new_with_validator_count("postfiat-wan-devnet".to_string(), 6)
+            .expect("other genesis");
+    wrong_height.header.height = 68;
+    assert!(!archived_wan_devnet2_pre_age_release_state_root_allowed(
+        &other_chain,
+        &wrong_height
+    ));
+}
+
+#[test]
+fn wan_devnet2_incremental_age_release_is_exactly_allowlisted() {
+    const BATCH_ID: &str =
+        "e0bd2eca7b23294afd24dae19b535fbcc8ef26159b5718dac02b30918d5f7d36418fd53114b072c48e39d816c8ad243c";
+    const TX_ID: &str =
+        "6a93f92d067fe32acac2a04afcddfa017324102d2c3ccb73c4f0d1e0e13710c97ab2922e114a5dadf28ad0f8d4cb4f49";
+    let genesis =
+        Genesis::try_new_with_validator_count("postfiat-wan-devnet-2".to_string(), 6)
+            .expect("devnet-2 genesis");
+    let mut block = dummy_block_record(170);
+    block.header.batch_id = BATCH_ID.to_string();
+    block.receipt_ids = vec![TX_ID.to_string()];
+    assert!(
+        archived_wan_devnet2_incremental_age_release_identity_allowed(
+            &genesis, &block, TX_ID, true
+        )
+    );
+    assert!(
+        !archived_wan_devnet2_incremental_age_release_identity_allowed(
+            &genesis,
+            &block,
+            &"00".repeat(48),
+            true
+        )
+    );
+    assert!(
+        !archived_wan_devnet2_incremental_age_release_identity_allowed(
+            &genesis, &block, TX_ID, false
+        )
+    );
+    block.header.height += 1;
+    assert!(
+        !archived_wan_devnet2_incremental_age_release_identity_allowed(
+            &genesis, &block, TX_ID, true
+        )
+    );
+}
+
+#[test]
+fn wan_devnet2_disabled_live_value_route_replay_is_exactly_allowlisted() {
+    const BATCH_ID: &str =
+        "5bafceed094b192308fee657bbf0cb643f9d1f434a19b8efd9492177bccc21b0676147e0aeae2234a3abb2f806021ff6";
+    const TX_ID: &str =
+        "325a75211f6927fd23baebc9185363de27adf17c57693758c2405286cb2d275b4f5a24d12a6ee641d4f406bd91f2ab3c";
+    let genesis =
+        Genesis::try_new_with_validator_count("postfiat-wan-devnet-2".to_string(), 6)
+            .expect("devnet-2 genesis");
+    let mut block = dummy_block_record(304);
+    block.header.batch_id = BATCH_ID.to_string();
+    block.receipt_ids = vec![TX_ID.to_string()];
+    assert!(
+        archived_wan_devnet2_disabled_live_value_route_identity_allowed(
+            &genesis,
+            &block,
+            TX_ID,
+            "primary_subscribe"
+        )
+    );
+    assert!(
+        !archived_wan_devnet2_disabled_live_value_route_identity_allowed(
+            &genesis,
+            &block,
+            TX_ID,
+            "export_debit"
+        )
+    );
+    block.header.batch_id = "00".repeat(48);
+    assert!(
+        !archived_wan_devnet2_disabled_live_value_route_identity_allowed(
+            &genesis,
+            &block,
+            TX_ID,
+            "primary_subscribe"
+        )
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn private_material_reads_reject_group_readable_files() {

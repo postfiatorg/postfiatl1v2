@@ -2367,6 +2367,7 @@ fn apply_vault_bridge_fast_ingress_lifecycle(
     ledger: &mut LedgerState,
     operation: &VaultBridgeFastIngressLifecycleOperation,
     block_height: u64,
+    compatibility: AssetExecutionCompatibility,
 ) -> Result<(), (&'static str, String)> {
     let nav_asset = ledger
         .nav_asset(&operation.asset_id)
@@ -2489,9 +2490,15 @@ fn apply_vault_bridge_fast_ingress_lifecycle(
             .apply_reversion(&values)
             .map_err(|error| ("pfusdc_fast_ingress_reversion_rejected", error))?;
     } else if age_released {
-        campaign
-            .apply_age_release(&values)
-            .map_err(|error| ("pfusdc_fast_ingress_age_release_rejected", error))?;
+        if compatibility.allow_incremental_age_release_replay {
+            campaign
+                .apply_incremental_age_release_for_replay(&values)
+                .map_err(|error| ("pfusdc_fast_ingress_age_release_rejected", error))?;
+        } else {
+            campaign
+                .apply_age_release(&values)
+                .map_err(|error| ("pfusdc_fast_ingress_age_release_rejected", error))?;
+        }
     } else {
         campaign
             .apply_confirmation(&values)
@@ -3434,10 +3441,11 @@ fn apply_pftl_uniswap_primary_subscribe(
     ledger: &mut LedgerState,
     operation: &PftlUniswapPrimarySubscribeOperation,
     block_height: u64,
+    allow_disabled_live_value_replay: bool,
 ) -> Result<(), (&'static str, String)> {
     let route_index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
     let route = ledger.pftl_uniswap_routes[route_index].clone();
-    ensure_pftl_uniswap_route_live(&route)?;
+    ensure_pftl_uniswap_route_live(&route, allow_disabled_live_value_replay)?;
     let native_nav_asset = pftl_uniswap_pricing_nav_asset(ledger, &route, block_height)?;
     if operation.pricing_nav_epoch != native_nav_asset.finalized_epoch {
         return Err((
@@ -3882,7 +3890,7 @@ fn apply_pftl_uniswap_order_reserve(
 ) -> Result<(), (&'static str, String)> {
     let route_index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
     let mut next_route = ledger.pftl_uniswap_routes[route_index].clone();
-    ensure_pftl_uniswap_route_live(&next_route)?;
+    ensure_pftl_uniswap_route_live(&next_route, false)?;
     let state_before_hash = pftl_uniswap_route_state_hash(&next_route);
     let pricing_nav_asset =
         pftl_uniswap_pricing_nav_asset(ledger, &next_route, block_height)?;
@@ -4142,7 +4150,7 @@ fn apply_pftl_uniswap_primary_subscribe_v2(
 ) -> Result<(), (&'static str, String)> {
     let route_index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
     let route = ledger.pftl_uniswap_routes[route_index].clone();
-    ensure_pftl_uniswap_route_live(&route)?;
+    ensure_pftl_uniswap_route_live(&route, false)?;
     if route.settlement_asset_id != operation.settlement_asset_id
         || route
             .primary_subscription_nonces
@@ -4729,10 +4737,11 @@ fn apply_pftl_uniswap_export_debit(
     ledger: &mut LedgerState,
     operation: &PftlUniswapExportDebitOperation,
     block_height: u64,
+    allow_disabled_live_value_replay: bool,
 ) -> Result<(), (&'static str, String)> {
     let route_index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
     let route = ledger.pftl_uniswap_routes[route_index].clone();
-    ensure_pftl_uniswap_route_live(&route)?;
+    ensure_pftl_uniswap_route_live(&route, allow_disabled_live_value_replay)?;
     let mut effective_reservation_id = operation.reservation_id.clone();
     if let Some(v2) = &route.v2 {
         if let Some(reservation_id) = operation.reservation_id.as_ref() {
@@ -5128,10 +5137,11 @@ fn apply_pftl_uniswap_destination_consume(
     ledger: &mut LedgerState,
     operation: &PftlUniswapDestinationConsumeOperation,
     block_height: u64,
+    allow_disabled_live_value_replay: bool,
 ) -> Result<(), (&'static str, String)> {
     let route_index = pftl_uniswap_route_index(ledger, &operation.route_id)?;
     let route = ledger.pftl_uniswap_routes[route_index].clone();
-    ensure_pftl_uniswap_route_live(&route)?;
+    ensure_pftl_uniswap_route_live(&route, allow_disabled_live_value_replay)?;
     ensure_pftl_uniswap_native_asset_policy(
         ledger,
         &route.native_nav_asset_id,
@@ -5432,8 +5442,9 @@ fn pftl_uniswap_route_index(
 
 fn ensure_pftl_uniswap_route_live(
     route: &PftlUniswapConsensusRouteState,
+    allow_disabled_live_value_replay: bool,
 ) -> Result<(), (&'static str, String)> {
-    if route.paused || !route.live_value_enabled {
+    if route.paused || (!route.live_value_enabled && !allow_disabled_live_value_replay) {
         return Err((
             "pftl_uniswap_route_paused",
             "PFTL-Uniswap route is paused or live value is disabled".to_string(),

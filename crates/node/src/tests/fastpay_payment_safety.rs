@@ -2378,3 +2378,67 @@ fn owned_apply_uses_public_registry_with_isolated_local_signer() {
     assert_eq!(report.created_count, 1);
     let _ = std::fs::remove_dir_all(data_dir);
 }
+
+#[test]
+fn fastpay_replay_schedules_same_block_object_dependencies_before_lock_id_order() {
+    let fence = |lock_id: &str, input_id: &str| postfiat_types::FastPayVersionFenceV1 {
+        schema: postfiat_types::FASTPAY_VERSION_FENCE_SCHEMA_V1.to_string(),
+        operation: postfiat_types::FastPayOperationKindV1::Unwrap,
+        origin: postfiat_types::FastPayFenceOriginV1::Consensusless,
+        committee_epoch: 1,
+        registry_root: "11".repeat(48),
+        lock_id: lock_id.repeat(48),
+        inputs: vec![postfiat_types::OwnedObjectRef {
+            id: input_id.to_string(),
+            version: 1,
+        }],
+        decision: postfiat_types::FastPayRecoveryDecisionV1::Confirmed {
+            order_digest: "22".repeat(48),
+            certificate_digest: "33".repeat(48),
+        },
+        certificate: None,
+        decided_at_height: 1,
+        next_versions: vec![postfiat_types::OwnedObjectRef {
+            id: input_id.to_string(),
+            version: 2,
+        }],
+    };
+    let consumer = fence("00", "same-block-change");
+    let producer = fence("ff", "prior-block-input");
+    let wire_order = vec![&consumer, &producer];
+    let mut ledger = postfiat_types::LedgerState::empty();
+    ledger.owned_objects.push(postfiat_types::OwnedObject {
+        id: "prior-block-input".to_string(),
+        version: 1,
+        owner_pubkey_hex: "owner".to_string(),
+        value: 2,
+        asset: postfiat_execution::OWNED_NATIVE_ASSET.to_string(),
+    });
+
+    assert_eq!(
+        next_replayable_fastpay_effect_index(&ledger, &wire_order),
+        Some(1),
+        "the producer must run before the lexicographically earlier consumer"
+    );
+
+    ledger.owned_objects.clear();
+    ledger.owned_objects.push(postfiat_types::OwnedObject {
+        id: "same-block-change".to_string(),
+        version: 1,
+        owner_pubkey_hex: "owner".to_string(),
+        value: 1,
+        asset: postfiat_execution::OWNED_NATIVE_ASSET.to_string(),
+    });
+    assert_eq!(
+        next_replayable_fastpay_effect_index(&ledger, &wire_order),
+        Some(0),
+        "the canonical first effect becomes ready after its dependency is produced"
+    );
+
+    ledger.owned_objects.clear();
+    assert_eq!(
+        next_replayable_fastpay_effect_index(&ledger, &wire_order),
+        None,
+        "missing or cyclic dependencies must fail closed"
+    );
+}

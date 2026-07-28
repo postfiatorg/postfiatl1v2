@@ -400,6 +400,52 @@ fn tier4_state(
 }
 
 #[test]
+fn archived_governance_identity_accepts_only_the_pre_age_release_schema() {
+    let genesis =
+        Genesis::try_new_with_validator_count("postfiat-local".to_string(), 1).expect("genesis");
+    let profile = tier4_route(2);
+    let kind = vault_bridge_route_amendment_kind(&profile).expect("route amendment kind");
+    let amendment = ratify_governance_amendment_with_lifecycle(
+        &cobalt_domain(&genesis),
+        &EssentialSubsetConfig::all_of(vec!["validator-0".to_string()]),
+        &kind,
+        profile.route_epoch,
+        vec!["validator-0".to_string()],
+        GovernanceAmendmentLifecycle {
+            activation_height: profile.activation_height,
+            veto_until_height: 0,
+            paused: false,
+        },
+    )
+    .expect("ratified route amendment");
+    let activation = VaultBridgeRouteProfileActivationV1 {
+        schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
+        profile: profile.clone(),
+        amendment,
+        tier4_finality_bootstrap: Some(tier4_state(&profile, &"44".repeat(32))),
+    };
+    let mut batch =
+        GovernanceActionBatch::with_vault_bridge_route_profile_activation("", activation);
+    batch.batch_id = pre_age_release_governance_action_batch_id(&genesis, &batch)
+        .expect("legacy batch id")
+        .expect("eligible legacy batch");
+
+    verify_governance_action_batch_id(&genesis, &batch)
+        .expect_err("live verification rejects the historical schema");
+    verify_archived_governance_action_batch_id(&genesis, &batch)
+        .expect("archive verification accepts the self-consistent historical schema");
+
+    batch.vault_bridge_route_profile_activations[0]
+        .tier4_finality_bootstrap
+        .as_mut()
+        .and_then(|state| state.fast_ingress_verifier.as_mut())
+        .expect("fast ingress config")
+        .cap_atoms += 1;
+    verify_archived_governance_action_batch_id(&genesis, &batch)
+        .expect_err("historical compatibility still rejects payload tampering");
+}
+
+#[test]
 fn governed_fast_ingress_verifier_update_preserves_route_and_finality() {
     let profile = tier4_route(2);
     let mut governance = GovernanceState::new(1);

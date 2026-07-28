@@ -848,6 +848,17 @@ impl EthereumArbitrumFinalityStateV2 {
     }
 
     pub fn state_commitment_bytes(&self) -> Result<Vec<u8>, String> {
+        self.state_commitment_bytes_with_fast_ingress_schema(false)
+    }
+
+    pub fn pre_age_release_state_commitment_bytes(&self) -> Result<Vec<u8>, String> {
+        self.state_commitment_bytes_with_fast_ingress_schema(true)
+    }
+
+    fn state_commitment_bytes_with_fast_ingress_schema(
+        &self,
+        pre_age_release: bool,
+    ) -> Result<Vec<u8>, String> {
         self.validate()?;
         let mut bytes = pfusdc_canonical_prefix(ETHEREUM_ARBITRUM_FINALITY_STATE_SCHEMA_V2);
         pfusdc_append_text(&mut bytes, 1, &self.schema)?;
@@ -902,7 +913,12 @@ impl EthereumArbitrumFinalityStateV2 {
             pfusdc_append_field(&mut bytes, 16, &checkpoint_bytes)?;
         }
         if let Some(config) = &self.fast_ingress_verifier {
-            pfusdc_append_field(&mut bytes, 17, &config.state_commitment_bytes()?)?;
+            let config_bytes = if pre_age_release {
+                config.pre_age_release_state_commitment_bytes()?
+            } else {
+                config.state_commitment_bytes()?
+            };
+            pfusdc_append_field(&mut bytes, 17, &config_bytes)?;
         }
         Ok(bytes)
     }

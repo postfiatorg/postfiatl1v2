@@ -110,6 +110,54 @@ pub(super) fn legacy_vault_bridge_deposit_attestation_replicated_state_root(
     )
 }
 
+pub(super) fn legacy_pre_age_release_replicated_state_root(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    ordered_batches: &[String],
+    shielded: &ShieldedState,
+    bridge: &BridgeState,
+) -> io::Result<String> {
+    replicated_state_root_with_options(
+        genesis,
+        governance,
+        ledger,
+        ordered_batches,
+        shielded,
+        bridge,
+        true,
+        true,
+        false,
+        false,
+        true,
+        true,
+    )
+}
+
+pub(super) fn legacy_pre_age_release_finality_replicated_state_root(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    ordered_batches: &[String],
+    shielded: &ShieldedState,
+    bridge: &BridgeState,
+) -> io::Result<String> {
+    replicated_state_root_with_options(
+        genesis,
+        governance,
+        ledger,
+        ordered_batches,
+        shielded,
+        bridge,
+        true,
+        true,
+        false,
+        false,
+        true,
+        false,
+    )
+}
+
 pub(super) fn bridge_verification_legacy_replay_allowed(
     governance: &GovernanceState,
     block_height: u64,
@@ -117,6 +165,30 @@ pub(super) fn bridge_verification_legacy_replay_allowed(
     governance
         .bridge_verification_activation_height()
         .is_none_or(|activation_height| block_height < activation_height)
+}
+
+pub(super) fn archived_wan_devnet2_pre_age_release_state_root_allowed(
+    genesis: &Genesis,
+    block: &BlockRecord,
+) -> bool {
+    const BLOCKS: &[(u64, &str)] = &[
+        (
+            66,
+            "2657b1fcc26ec48d0c55e26d75abab784e287f5022d03f1c77eb54028538d4487dc472239346288cfd65a857b473e8b8",
+        ),
+        (
+            67,
+            "a4b2c426004698c46fd99a1dfe26fa6d41cd3c557cb13f0e4a2dea385e02e0b4a2a341e71cb7c4774d0a2b403ab82a01",
+        ),
+        (
+            68,
+            "3441a3554f92100dcce900e641129d540972fd0689f2935a37408f11d340e503a7fac9dad1518a3fdcd456938372f0b7",
+        ),
+    ];
+    genesis.chain_id == "postfiat-wan-devnet-2"
+        && BLOCKS.iter().any(|(height, batch_id)| {
+            block.header.height == *height && block.header.batch_id == *batch_id
+        })
 }
 
 pub(super) fn legacy_nav_asset_uncommitted_replicated_state_root(
@@ -162,6 +234,36 @@ pub(super) fn replicated_state_root_with_nav_completeness(
     legacy_vault_bridge_domainless_withdrawal_packets: bool,
     legacy_vault_bridge_deposit_attestation_fields: bool,
 ) -> io::Result<String> {
+    replicated_state_root_with_options(
+        genesis,
+        governance,
+        ledger,
+        ordered_batches,
+        shielded,
+        bridge,
+        commit_complete_nav_state,
+        commit_nav_profile_sp1_fields,
+        legacy_vault_bridge_domainless_withdrawal_packets,
+        legacy_vault_bridge_deposit_attestation_fields,
+        false,
+        false,
+    )
+}
+
+fn replicated_state_root_with_options(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    ordered_batches: &[String],
+    shielded: &ShieldedState,
+    bridge: &BridgeState,
+    commit_complete_nav_state: bool,
+    commit_nav_profile_sp1_fields: bool,
+    legacy_vault_bridge_domainless_withdrawal_packets: bool,
+    legacy_vault_bridge_deposit_attestation_fields: bool,
+    pre_age_release_finality_commitments: bool,
+    pre_age_release_campaign_commitments: bool,
+) -> io::Result<String> {
     assert_genesis_commitment_inventory_complete(genesis);
     verify_global_issued_asset_supply_caps(ledger, shielded)?;
     let state_height = u64::try_from(ordered_batches.len())
@@ -188,6 +290,8 @@ pub(super) fn replicated_state_root_with_nav_completeness(
         legacy_vault_bridge_domainless_withdrawal_packets,
         legacy_vault_bridge_deposit_attestation_fields,
         commit_fastlane_state,
+        pre_age_release_finality_commitments,
+        pre_age_release_campaign_commitments,
     )?;
     append_string_list(&mut state_bytes, "ordered_batch", ordered_batches);
     append_shielded_state(&mut state_bytes, shielded);
@@ -752,6 +856,8 @@ pub(super) fn append_ledger_state(
     legacy_vault_bridge_domainless_withdrawal_packets: bool,
     legacy_vault_bridge_deposit_attestation_fields: bool,
     commit_fastlane_state: bool,
+    pre_age_release_finality_commitments: bool,
+    pre_age_release_campaign_commitments: bool,
 ) -> io::Result<()> {
     assert_ledger_state_commitment_inventory_complete(ledger);
     let mut accounts = ledger.accounts.iter().collect::<Vec<_>>();
@@ -1027,17 +1133,26 @@ pub(super) fn append_ledger_state(
             ledger
                 .ethereum_arbitrum_finality_states
                 .iter()
-                .map(|value| value.state_commitment_bytes()),
+                .map(|value| {
+                    if pre_age_release_finality_commitments {
+                        value.pre_age_release_state_commitment_bytes()
+                    } else {
+                        value.state_commitment_bytes()
+                    }
+                }),
         )?;
     }
     if commit_complete_nav_state && !ledger.fast_ingress_campaigns.is_empty() {
         append_sorted_canonical_commitments(
             bytes,
             "ledger.fast_ingress_campaign",
-            ledger
-                .fast_ingress_campaigns
-                .iter()
-                .map(|value| value.state_commitment_bytes()),
+            ledger.fast_ingress_campaigns.iter().map(|value| {
+                if pre_age_release_campaign_commitments {
+                    value.pre_age_release_state_commitment_bytes()
+                } else {
+                    value.state_commitment_bytes()
+                }
+            }),
         )?;
     }
 

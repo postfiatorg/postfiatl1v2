@@ -495,6 +495,35 @@ pub(super) fn execute_asset_transaction_for_archive_replay(
     receipt_index: usize,
     governance: &GovernanceState,
 ) -> io::Result<Receipt> {
+    if archived_wan_devnet2_disabled_live_value_route_allowed(genesis, block, transaction) {
+        let compatibility = asset_execution_compatibility_with_chain_activation(
+            AssetExecutionCompatibility::strict()
+                .with_legacy_pftl_uniswap_disabled_live_value_replay(),
+            genesis,
+            governance,
+        );
+        return Ok(execute_asset_transaction_with_replay_compatibility(
+            genesis,
+            ledger,
+            transaction,
+            block.header.height,
+            compatibility,
+        ));
+    }
+    if archived_wan_devnet2_incremental_age_release_allowed(genesis, block, transaction) {
+        let compatibility = asset_execution_compatibility_with_chain_activation(
+            AssetExecutionCompatibility::strict().with_incremental_age_release_replay(),
+            genesis,
+            governance,
+        );
+        return Ok(execute_asset_transaction_with_replay_compatibility(
+            genesis,
+            ledger,
+            transaction,
+            block.header.height,
+            compatibility,
+        ));
+    }
     if archived_wan_devnet_legacy_nav_profile_id_allowed(genesis, block) {
         let compatibility = if archived_wan_devnet_legacy_domainless_withdrawal_packet_emit_allowed(
             genesis,
@@ -567,6 +596,90 @@ pub(super) fn execute_asset_transaction_for_archive_replay(
         block.header.height,
         asset_execution_compatibility_for_genesis_and_governance(genesis, governance),
     ))
+}
+
+fn archived_wan_devnet2_disabled_live_value_route_allowed(
+    genesis: &Genesis,
+    block: &BlockRecord,
+    transaction: &SignedAssetTransaction,
+) -> bool {
+    let operation = match &transaction.unsigned.operation {
+        AssetTransactionOperation::PftlUniswapPrimarySubscribe(_) => "primary_subscribe",
+        AssetTransactionOperation::PftlUniswapExportDebit(_) => "export_debit",
+        AssetTransactionOperation::PftlUniswapDestinationConsume(_) => "destination_consume",
+        _ => return false,
+    };
+    archived_wan_devnet2_disabled_live_value_route_identity_allowed(
+        genesis,
+        block,
+        &asset_transaction_tx_id(transaction),
+        operation,
+    )
+}
+
+pub(super) fn archived_wan_devnet2_disabled_live_value_route_identity_allowed(
+    genesis: &Genesis,
+    block: &BlockRecord,
+    tx_id: &str,
+    operation: &str,
+) -> bool {
+    let expected = match block.header.height {
+        304 => (
+            "5bafceed094b192308fee657bbf0cb643f9d1f434a19b8efd9492177bccc21b0676147e0aeae2234a3abb2f806021ff6",
+            "325a75211f6927fd23baebc9185363de27adf17c57693758c2405286cb2d275b4f5a24d12a6ee641d4f406bd91f2ab3c",
+            "primary_subscribe",
+        ),
+        305 => (
+            "0c95f092894438e363a220632a94745366af1e02224af2675b9aade4615decae46b8be55c6796dd5eac9e12911f555d9",
+            "8cb04e83136f5799990e457aec0a42083d1cb2ff5ecd683d00c56552bb75471fc6e5b47fdfb6498befacfcb5d8063e15",
+            "export_debit",
+        ),
+        306 => (
+            "45b5893bf557ee59d9b4385fea2ae27b1222bfc00192162f64111da3e5a875d9634c1ab9bd4b60b7ccf0ee22c815045a",
+            "ca3809d91d958e98953a1d0a41a7023396dead48e4d15acd9f0753590219db816d4895932fe1d31b7e547138da0bc18f",
+            "destination_consume",
+        ),
+        _ => return false,
+    };
+    genesis.chain_id == "postfiat-wan-devnet-2"
+        && block.header.batch_id == expected.0
+        && block.receipt_ids.as_slice() == [expected.1]
+        && tx_id == expected.1
+        && operation == expected.2
+}
+
+fn archived_wan_devnet2_incremental_age_release_allowed(
+    genesis: &Genesis,
+    block: &BlockRecord,
+    transaction: &SignedAssetTransaction,
+) -> bool {
+    archived_wan_devnet2_incremental_age_release_identity_allowed(
+        genesis,
+        block,
+        &asset_transaction_tx_id(transaction),
+        matches!(
+            transaction.unsigned.operation,
+            AssetTransactionOperation::VaultBridgeFastIngressLifecycle(_)
+        ),
+    )
+}
+
+pub(super) fn archived_wan_devnet2_incremental_age_release_identity_allowed(
+    genesis: &Genesis,
+    block: &BlockRecord,
+    tx_id: &str,
+    is_fast_ingress_lifecycle: bool,
+) -> bool {
+    const BATCH_ID: &str =
+        "e0bd2eca7b23294afd24dae19b535fbcc8ef26159b5718dac02b30918d5f7d36418fd53114b072c48e39d816c8ad243c";
+    const TX_ID: &str =
+        "6a93f92d067fe32acac2a04afcddfa017324102d2c3ccb73c4f0d1e0e13710c97ab2922e114a5dadf28ad0f8d4cb4f49";
+    genesis.chain_id == "postfiat-wan-devnet-2"
+        && block.header.height == 170
+        && block.header.batch_id == BATCH_ID
+        && block.receipt_ids.as_slice() == [TX_ID]
+        && tx_id == TX_ID
+        && is_fast_ingress_lifecycle
 }
 
 pub(super) fn execute_governance_batch(

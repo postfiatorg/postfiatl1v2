@@ -2149,6 +2149,9 @@ pub(super) fn verify_archived_governance_action_batch_id(
     if governance_action_batch_id_matches_genesis_hash(genesis, batch, &genesis_hash(genesis))? {
         return Ok(());
     }
+    if governance_action_batch_id_matches_pre_age_release_schema(genesis, batch)? {
+        return Ok(());
+    }
     if batch.amendments.is_empty()
         && batch.governance_agent_dry_runs.is_empty()
         && batch.fastswap_bootstraps.is_empty()
@@ -2169,8 +2172,76 @@ pub(super) fn verify_archived_governance_action_batch_id(
     }
     Err(io::Error::new(
         io::ErrorKind::InvalidData,
-        "governance batch id mismatch",
+        format!(
+            "governance batch id mismatch for archived batch {}",
+            batch.batch_id
+        ),
     ))
+}
+
+pub(super) fn governance_action_batch_id_matches_pre_age_release_schema(
+    genesis: &Genesis,
+    batch: &GovernanceActionBatch,
+) -> io::Result<bool> {
+    Ok(
+        pre_age_release_governance_action_batch_id(genesis, batch)?.as_ref()
+            == Some(&batch.batch_id),
+    )
+}
+
+pub(super) fn pre_age_release_governance_action_batch_id(
+    genesis: &Genesis,
+    batch: &GovernanceActionBatch,
+) -> io::Result<Option<String>> {
+    if !batch.amendments.is_empty()
+        || !batch.validator_registry_updates.is_empty()
+        || !batch.governance_agent_dry_runs.is_empty()
+        || !batch.fastswap_bootstraps.is_empty()
+        || !batch.fastpay_recovery_bootstraps.is_empty()
+        || batch.vault_bridge_route_profile_activations.len() != 1
+    {
+        return Ok(None);
+    }
+    let Some(config) = batch.vault_bridge_route_profile_activations[0]
+        .tier4_finality_bootstrap
+        .as_ref()
+        .and_then(|state| state.fast_ingress_verifier.as_ref())
+    else {
+        return Ok(None);
+    };
+    if config.age_release_enabled {
+        return Ok(None);
+    }
+
+    let genesis_hash_hex = genesis_hash(genesis);
+    let mut encoded = serde_json::to_vec(&(
+        genesis.chain_id.as_str(),
+        genesis_hash_hex.as_str(),
+        genesis.protocol_version,
+        "governance",
+        (
+            &batch.amendments,
+            &batch.validator_registry_updates,
+            &batch.governance_agent_dry_runs,
+            &batch.fastswap_bootstraps,
+            &batch.vault_bridge_route_profile_activations,
+        ),
+    ))
+    .map_err(invalid_data)?;
+    const OMITTED_DEFAULT: &[u8] = b"\"age_release_enabled\":false,";
+    let positions = encoded
+        .windows(OMITTED_DEFAULT.len())
+        .enumerate()
+        .filter_map(|(index, window)| (window == OMITTED_DEFAULT).then_some(index))
+        .collect::<Vec<_>>();
+    let [position] = positions.as_slice() else {
+        return Ok(None);
+    };
+    encoded.drain(*position..position + OMITTED_DEFAULT.len());
+    Ok(Some(hash_hex(
+        "postfiat.governance_action_batch.v1",
+        &encoded,
+    )))
 }
 
 pub(super) fn common_embedded_registry_update_genesis_hash(
