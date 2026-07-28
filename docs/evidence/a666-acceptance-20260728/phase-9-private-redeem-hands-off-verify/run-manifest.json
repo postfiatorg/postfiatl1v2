@@ -10,7 +10,16 @@
     "mint_a666_atoms": 1000000,
     "redeem_pfusdc_atoms": 999500
   },
+  "deposit": {
+    "deposit_id": "0xc1b73435029d42ebace223a0970d837736862da6569c9cf38cb7cef5c5ba5682",
+    "transaction_hash": "0x88f4c9ffc95568e1c44f422d8e7ba2162da70fb1fb753fd43b45458fd6cf4a48",
+    "block_number": 25633383,
+    "route_binding": "0xcaec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93",
+    "pftl_recipient": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8"
+  },
   "operator_intervention_after_deposit_target": 0,
   "private_material_policy": "validator-2 only; mode 0600; excluded from evidence",
-  "status": "PRE_VALUE"
+  "status": "DEPOSIT_FINALIZED_AWAITING_INGRESS_CAPTURE",
+  "recovery_checkpoint": "recovery-checkpoint-20260728T203650Z.json",
+  "next_operation": "capture the finalized Ethereum ingress witness from the existing GPU deployment intent; do not create another deposit or submit a PFTL relay first"
 }
