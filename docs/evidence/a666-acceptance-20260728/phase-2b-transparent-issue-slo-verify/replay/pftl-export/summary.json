@@ -1,0 +1,10 @@
+{
+  "schema": "postfiat.a666.pftl_replay_rejection.v1",
+  "verdict": "PASS",
+  "replay": "exact finalized export signed transaction",
+  "exit_code": 1,
+  "rejected": true,
+  "fleet_state_unchanged": true,
+  "mempools_empty": true,
+  "error": "error: mempool-submit-signed-asset-transaction failed: mempool admission rejected `bad_sequence`: expected sequence 59, got 58"
+}

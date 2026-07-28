@@ -1,0 +1,49 @@
+{
+  "schema": "postfiat.a666.phase2_acceptance.v1",
+  "gate": "A2",
+  "verdict": "PASS",
+  "hands_off": true,
+  "human_actions_between_deposit_and_terminal_readback": 0,
+  "flow": {
+    "schema": "postfiat.a666.transparent_issue_acceptance.v1",
+    "verdict": "PASS",
+    "deposit_tx": "0xfda3bc55156774b9c35b16d03eea1832ca5f269fed3670b2956a3149c2852892",
+    "packet_hash": "2ab16576034b1f0b78d1e9ba898f073399268e3a2a76249121a547a6cc1e1a3f6bb223b8152181b218354898d07bfead",
+    "packet_digest": "f45f930b961c38f688156f86c18a6f935b69e12f240a872b47854566560a3570",
+    "start_height": 368,
+    "end_height": 373,
+    "timing": {
+      "schema": "postfiat.a666.transparent_issue_timing.v1",
+      "deposit_block_number": 25630312,
+      "deposit_block_timestamp": 1785229595,
+      "mint_block_number": 25630434,
+      "mint_block_timestamp": 1785231059,
+      "deposit_to_mint_seconds": 1464,
+      "slo_seconds": 1500,
+      "slo_pass": true
+    }
+  },
+  "timing": {
+    "schema": "postfiat.a666.transparent_issue_timing.v1",
+    "deposit_block_number": 25630312,
+    "deposit_block_timestamp": 1785229595,
+    "mint_block_number": 25630434,
+    "mint_block_timestamp": 1785231059,
+    "deposit_to_mint_seconds": 1464,
+    "slo_seconds": 1500,
+    "slo_pass": true
+  },
+  "conservation_verdict": "PASS",
+  "fleet_verdict": "PASS",
+  "uniswap_verdict": "PASS",
+  "replay": {
+    "pftl": "PASS",
+    "ethereum": "PASS"
+  },
+  "proofs": {
+    "ingress_vkey": "0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e",
+    "ingress_backend": "cuda",
+    "export_vkey": "0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9",
+    "export_mode": "groth16"
+  }
+}

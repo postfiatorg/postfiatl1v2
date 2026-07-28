@@ -1,0 +1,30 @@
+{
+  "schema": "postfiat.a666.transparent_issue_conservation.v1",
+  "ethereum_usdc": {
+    "user_delta_atoms": -1005000,
+    "vault_balance_delta_atoms": 1005000,
+    "vault_obligations_delta_atoms": 1005000
+  },
+  "pfusdc": {
+    "user_before_atoms": 800000,
+    "user_after_claim_atoms": 1805000,
+    "user_terminal_atoms": 800000,
+    "credit_delta_atoms": 1005000,
+    "settlement_debit_atoms": 1005000,
+    "base_reserve_delta_atoms": 1000000,
+    "spread_delta_atoms": 5000
+  },
+  "a666": {
+    "pftl_mid_atoms": 1000000,
+    "pftl_terminal_atoms": 0,
+    "authorized_supply_delta_atoms": 1000000,
+    "outstanding_bridge_claim_delta_atoms": 1000000,
+    "wa666_supply_delta_atoms": 1000000,
+    "joe_wa666_delta_atoms": 1000000,
+    "migration_reserve_delta_atoms": 0
+  },
+  "uniswap": {
+    "liquidity_delta": 0
+  },
+  "verdict": "PASS"
+}

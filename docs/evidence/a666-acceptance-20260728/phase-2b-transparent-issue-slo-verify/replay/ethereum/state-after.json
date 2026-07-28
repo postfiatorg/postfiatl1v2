@@ -1,0 +1,10 @@
+{
+  "latest_finalized_height": 373,
+  "receipt_accepted": true,
+  "packet_consumed": true,
+  "total_minted_atoms": 31489197455,
+  "wa666_total_supply_atoms": 31489197455,
+  "joe_wa666_atoms": 103000000,
+  "migration_reserve_atoms": 27306423797,
+  "uniswap_liquidity": 3000000000
+}

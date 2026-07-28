@@ -12,6 +12,13 @@
 private issue attempt/fix → transparent redeem attempt/fix → private redeem
 attempt/fix
 
+**Execution status (2026-07-28):** A0, A1, and A2 PASS. The fresh Phase 2
+mainnet run completed hands-off in `1,464 seconds` with exact conservation,
+six-validator convergence, unchanged Uniswap liquidity, and PFTL/Ethereum
+replay rejection. Evidence:
+`../evidence/a666-acceptance-20260728/phase-2b-transparent-issue-slo-verify/README.md`.
+Phase 3 is next; A3 through A8 remain pending.
+
 ## 1. Objective
 
 Prove, in increasing order of complexity, that a user can:
