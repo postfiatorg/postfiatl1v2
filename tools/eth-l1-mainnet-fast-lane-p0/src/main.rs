@@ -75,6 +75,9 @@ enum Command {
         /// Fail closed unless SP1_PROVER selects this exact backend.
         #[arg(long)]
         require_prover: Option<String>,
+        /// Skip the redundant host execute pass before proving.
+        #[arg(long)]
+        skip_redundant_execute: bool,
     },
     Run {
         #[arg(long)]
@@ -256,9 +259,10 @@ async fn main() -> Result<()> {
             witness,
             output_dir,
             require_prover,
+            skip_redundant_execute,
         } => {
             enforce_prover_backend(require_prover.as_deref())?;
-            prove(&witness, &output_dir).await
+            prove(&witness, &output_dir, skip_redundant_execute).await
         }
         Command::Run {
             deployment,
@@ -436,7 +440,7 @@ async fn run_resumable(
 
     let proof_path = proof_dir.join("proof.bin");
     if !proof_path.exists() {
-        prove(&witness, &proof_dir).await?;
+        prove(&witness, &proof_dir, false).await?;
     }
     let proof_sha256 = sha256_file(&proof_path)?;
     ensure_banked_hash("proof", state.proof_sha256.as_ref(), &proof_sha256)?;
@@ -709,15 +713,26 @@ fn enforce_prover_backend(expected: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-async fn prove(witness_path: &Path, out: &Path) -> Result<()> {
+async fn prove(witness_path: &Path, out: &Path, skip_redundant_execute: bool) -> Result<()> {
     let witness: EthIngressWitnessV1 = serde_json::from_slice(&fs::read(witness_path)?)?;
     let expected = serde_cbor::to_vec(&verify_witness(&witness).map_err(|e| anyhow!(e))?)?;
     let mut stdin = SP1Stdin::new();
     stdin.write_vec(serde_cbor::to_vec(&witness)?);
     let client = ProverClient::from_env().await;
-    let exec_start = Instant::now();
-    let (pv, report) = client.execute(ELF, stdin.clone()).await?;
-    anyhow::ensure!(pv.to_vec() == expected, "SP1 execute output mismatch");
+    let (instruction_count, execute_ms) = if skip_redundant_execute {
+        (None, 0)
+    } else {
+        let exec_start = Instant::now();
+        let (public_values, report) = client.execute(ELF, stdin.clone()).await?;
+        anyhow::ensure!(
+            public_values.to_vec() == expected,
+            "SP1 execute output mismatch"
+        );
+        (
+            Some(report.total_instruction_count()),
+            exec_start.elapsed().as_millis(),
+        )
+    };
     fs::create_dir_all(out)?;
     write_atomic(&out.join("public-values.bin"), &expected)?;
     let prove_start = Instant::now();
@@ -731,8 +746,9 @@ async fn prove(witness_path: &Path, out: &Path) -> Result<()> {
     write_atomic(&out.join("proof.bin"), &bincode::serialize(&proof)?)?;
     write_atomic(&out.join("proof-calldata.bin"), &proof.bytes())?;
     let result = json!({"schema":"postfiat.eth_l1_fast_lane_p0_proof_report.v1","program_vkey":pk.verifying_key().bytes32(),
-        "elf_sha256":hex::encode(Sha256::digest(&*ELF)),"instruction_count":report.total_instruction_count(),
-        "execute_ms":exec_start.elapsed().as_millis(),"setup_and_groth16_ms":prove_start.elapsed().as_millis(),
+        "elf_sha256":hex::encode(Sha256::digest(&*ELF)),"instruction_count":instruction_count,
+        "host_execute_skipped":skip_redundant_execute,
+        "execute_ms":execute_ms,"setup_and_groth16_ms":prove_start.elapsed().as_millis(),
         "proof_bytes":proof.bytes().len(),"serialized_proof_bytes":fs::metadata(out.join("proof.bin"))?.len(),
         "public_values_bytes":expected.len(),
         "prover_backend":env::var("SP1_PROVER").unwrap_or_else(|_| "default".to_string())});
