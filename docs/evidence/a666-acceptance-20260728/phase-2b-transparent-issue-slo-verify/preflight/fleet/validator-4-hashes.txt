@@ -1,0 +1,2 @@
+2e2284a469689383b96be64995df1f9eb011b9868d1dff4e0b23c5f3b21d4b2e  /opt/postfiat/releases/a666-acceptance-98c81a9/postfiat-node
+4df248e0b8a7c19f4d92e946b9d20b97ceb070d6310096ab05ad6a0e605161a2  /etc/postfiat/releases/a666-acceptance-98c81a9/topology.json
