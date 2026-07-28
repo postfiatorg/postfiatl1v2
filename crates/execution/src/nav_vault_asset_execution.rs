@@ -4114,7 +4114,7 @@ fn apply_pftl_uniswap_order_release(
             ));
         };
     if let Some(refund_atoms) = escrow_refund {
-        credit_issued_asset_balance(
+        credit_issued_asset_balance_from_custody(
             ledger,
             &owner,
             &next_route.settlement_asset_id,
@@ -4261,7 +4261,7 @@ fn apply_pftl_uniswap_primary_subscribe_v2(
             )
         })?;
     if reservation_refund != 0 {
-        credit_issued_asset_balance(
+        credit_issued_asset_balance_from_custody(
             ledger,
             &operation.subscriber,
             &operation.settlement_asset_id,
@@ -4691,7 +4691,7 @@ fn apply_pftl_uniswap_primary_redeem(
         operation.nav_amount_atoms,
         "PFTL-Uniswap primary redemption NAV debit",
     )?;
-    credit_issued_asset_balance(
+    credit_issued_asset_balance_from_custody(
         ledger,
         &operation.settlement_recipient,
         &route.settlement_asset_id,
@@ -5906,6 +5906,19 @@ fn credit_issued_asset_balance(
     context: &str,
 ) -> Result<(), (&'static str, String)> {
     ensure_not_vault_bridge_out_of_lane_mint(ledger, asset_id, context)?;
+    credit_issued_asset_balance_from_custody(ledger, account, asset_id, amount_atoms, context)
+}
+
+/// Releases issued assets previously removed from spendable supply into
+/// route/reservation custody. Callers must prove and atomically decrement the
+/// matching custody balance; this is not an issuance lane.
+fn credit_issued_asset_balance_from_custody(
+    ledger: &mut LedgerState,
+    account: &str,
+    asset_id: &str,
+    amount_atoms: u64,
+    context: &str,
+) -> Result<(), (&'static str, String)> {
     let asset = ledger.asset_definition(asset_id).cloned().ok_or_else(|| {
         (
             "missing_asset",
