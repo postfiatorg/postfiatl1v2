@@ -98,7 +98,7 @@ jq -e \
   '.invariant_holds==true
    and .active_reservation_atoms==0
    and .export_entitlement_atoms==0
-   and .outstanding_bridge_claims_atoms==0
+   and .outstanding_bridge_claims_atoms==.wrapped_exposure_atoms
    and .ethereum_spendable_supply_atoms==0' \
   "$phase_dir/final-pftl-supply-status.json" >/dev/null
 
