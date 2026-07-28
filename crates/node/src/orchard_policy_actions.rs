@@ -1317,6 +1317,139 @@ pub fn create_asset_orchard_private_egress_batch(
     Ok(batch)
 }
 
+pub fn create_asset_orchard_private_primary_issue(
+    options: AssetOrchardPrivatePrimaryIssueCreateOptions,
+) -> io::Result<AssetOrchardPrivatePrimaryIssueReport> {
+    ensure_output_can_be_written(
+        &options.action_file,
+        options.overwrite,
+        "AssetOrchard private-primary action file",
+    )?;
+    ensure_output_can_be_written(
+        &options.output_note_file,
+        options.overwrite,
+        "AssetOrchard private-primary output note file",
+    )?;
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let ledger = store.read_ledger()?;
+    let shielded = store.read_shielded()?;
+    let pool = shielded
+        .orchard
+        .as_ref()
+        .filter(|pool| pool.pool_id == ASSET_ORCHARD_POOL_ID_V1)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "AssetOrchard pool is empty; ingress private settlement before private-primary issue",
+            )
+        })?;
+    let route = ledger
+        .pftl_uniswap_routes
+        .iter()
+        .find(|route| route.route_id == options.route_id)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("PFTL-Uniswap route `{}` does not exist", options.route_id),
+            )
+        })?;
+    let v2 = route.v2.as_ref().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "private-primary issue requires a v2 PFTL-Uniswap route",
+        )
+    })?;
+    let policy = &v2.primary_market_policy;
+    let input_note: AssetOrchardWalletNote =
+        read_json_file(&options.note_file, "AssetOrchard private-primary input note")?;
+    let genesis_hash_32 = asset_orchard_domain_genesis_hash(&genesis_hash(&genesis))
+        .map_err(invalid_data)?;
+    let built = build_asset_orchard_private_primary_issue_action(
+        &genesis.chain_id,
+        genesis_hash_32,
+        genesis.protocol_version,
+        input_note,
+        &options.output_note_seed_hex,
+        &options.route_id,
+        &options.subscriber,
+        &options.ethereum_recipient,
+        &options.reservation_id,
+        &options.subscription_nonce,
+        v2.route_epoch,
+        policy.policy_epoch,
+        &policy.policy_hash,
+        policy.pricing_nav_epoch,
+        &policy.pricing_reserve_packet_hash,
+        options.mint_amount_atoms,
+        options.settlement_value_atoms,
+        options.expires_at_height,
+        &route.settlement_asset_id,
+        &route.native_nav_asset_id,
+        &pool.output_commitments,
+    )
+    .map_err(invalid_data)?;
+    let domain = orchard_authorizing_domain(&genesis, &built.action.pool_id)?;
+    verify_serialized_asset_orchard_private_primary_issue_action(
+        &built.action,
+        &domain,
+        &route.settlement_asset_id,
+        &route.native_nav_asset_id,
+    )
+    .map_err(invalid_data)?;
+    let payload = asset_orchard_private_primary_issue_payload_from_action(&built.action);
+    validate_asset_orchard_private_primary_issue_payload(&payload)?;
+    let file = AssetOrchardPrivatePrimaryIssueFile {
+        schema: ASSET_ORCHARD_PRIVATE_PRIMARY_ISSUE_FILE_SCHEMA.to_string(),
+        payload,
+    };
+    let json = serde_json::to_string_pretty(&file).map_err(invalid_data)?;
+    atomic_write(&options.action_file, format!("{json}\n"))?;
+    write_asset_orchard_wallet_note_file(&options.output_note_file, &built.output_note)?;
+    Ok(AssetOrchardPrivatePrimaryIssueReport {
+        schema: ASSET_ORCHARD_PRIVATE_PRIMARY_ISSUE_REPORT_SCHEMA.to_string(),
+        action_file: options.action_file.display().to_string(),
+        input_note_file: options.note_file.display().to_string(),
+        output_note_file: options.output_note_file.display().to_string(),
+        route_id: options.route_id,
+        settlement_asset_id: route.settlement_asset_id.clone(),
+        native_nav_asset_id: route.native_nav_asset_id.clone(),
+        settlement_value_atoms: options.settlement_value_atoms,
+        mint_amount_atoms: options.mint_amount_atoms,
+        anchor: built.anchor.as_hex().to_string(),
+        nullifier: built.action.nullifier.as_hex().to_string(),
+        output_commitment: built.action.output_commitment.as_hex().to_string(),
+        proof_bytes: built.action.proof.byte_len(),
+        verified: true,
+        privacy: "private_settlement_note_to_encrypted_nav_note_with_public_route_economics"
+            .to_string(),
+    })
+}
+
+pub fn create_asset_orchard_private_primary_issue_batch(
+    options: AssetOrchardPrivatePrimaryIssueBatchOptions,
+) -> io::Result<ShieldedActionBatch> {
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let file: AssetOrchardPrivatePrimaryIssueFile =
+        read_json_file(&options.action_file, "AssetOrchard private-primary issue")?;
+    if file.schema != ASSET_ORCHARD_PRIVATE_PRIMARY_ISSUE_FILE_SCHEMA {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "AssetOrchard private-primary issue file schema mismatch",
+        ));
+    }
+    validate_asset_orchard_private_primary_issue_payload(&file.payload)?;
+    let batch = build_shielded_action_batch(
+        &genesis,
+        vec![ShieldedAction::AssetOrchardPrivatePrimaryIssueV1(
+            file.payload,
+        )],
+    )?;
+    write_shielded_action_batch_file(&options.batch_file, &batch)?;
+    Ok(batch)
+}
+
 pub fn asset_orchard_note_status(
     options: AssetOrchardNoteStatusOptions,
 ) -> io::Result<AssetOrchardNoteStatusReport> {
@@ -1711,6 +1844,102 @@ fn asset_orchard_private_egress_action_from_payload(
         fee: payload.fee,
         exit_binding_hash: AssetOrchardSwapBindingHash::parse_hex(
             payload.exit_binding_hash.clone(),
+        )
+        .map_err(invalid_data)?,
+        proof: AssetOrchardProofBytes::parse_hex(payload.proof.clone()).map_err(invalid_data)?,
+        spend_authorization_signature: AssetOrchardSpendAuthSignature::parse_hex(
+            payload.spend_authorization_signature.clone(),
+        )
+        .map_err(invalid_data)?,
+    })
+}
+
+fn asset_orchard_private_primary_issue_payload_from_action(
+    action: &AssetOrchardPrivatePrimaryIssueAction,
+) -> AssetOrchardPrivatePrimaryIssueActionPayload {
+    AssetOrchardPrivatePrimaryIssueActionPayload {
+        version: action.version,
+        schema: action.schema.clone(),
+        pool_id: action.pool_id.clone(),
+        route_id: action.route_id.clone(),
+        subscriber: action.subscriber.clone(),
+        ethereum_recipient: action.ethereum_recipient.clone(),
+        reservation_id: action.reservation_id.clone(),
+        subscription_nonce: action.subscription_nonce.clone(),
+        route_epoch: action.route_epoch,
+        policy_epoch: action.policy_epoch,
+        policy_hash: action.policy_hash.clone(),
+        pricing_nav_epoch: action.pricing_nav_epoch,
+        pricing_reserve_packet_hash: action.pricing_reserve_packet_hash.clone(),
+        mint_amount_atoms: action.mint_amount_atoms,
+        settlement_value_atoms: action.settlement_value_atoms,
+        expires_at_height: action.expires_at_height,
+        output_commitment: action.output_commitment.as_hex().to_string(),
+        encrypted_output: action.encrypted_output.as_hex().to_string(),
+        proof_system_id: action.proof_system_id.clone(),
+        circuit_id: action.circuit_id.clone(),
+        pool_domain: action.pool_domain.as_hex().to_string(),
+        anchor: action.anchor.as_hex().to_string(),
+        nullifier: action.nullifier.as_hex().to_string(),
+        randomized_verification_key: action.randomized_verification_key.as_hex().to_string(),
+        settlement_asset_tag_lo: action.settlement_asset_tag_lo,
+        settlement_asset_tag_hi: action.settlement_asset_tag_hi,
+        native_nav_asset_tag_lo: action.native_nav_asset_tag_lo,
+        native_nav_asset_tag_hi: action.native_nav_asset_tag_hi,
+        primary_binding_hash: action.primary_binding_hash.as_hex().to_string(),
+        proof: action.proof.as_hex().to_string(),
+        spend_authorization_signature: action.spend_authorization_signature.as_hex().to_string(),
+    }
+}
+
+fn asset_orchard_private_primary_issue_action_from_payload(
+    payload: &AssetOrchardPrivatePrimaryIssueActionPayload,
+) -> io::Result<AssetOrchardPrivatePrimaryIssueAction> {
+    Ok(AssetOrchardPrivatePrimaryIssueAction {
+        version: payload.version,
+        schema: payload.schema.clone(),
+        pool_id: payload.pool_id.clone(),
+        route_id: payload.route_id.clone(),
+        subscriber: payload.subscriber.clone(),
+        ethereum_recipient: payload.ethereum_recipient.clone(),
+        reservation_id: payload.reservation_id.clone(),
+        subscription_nonce: payload.subscription_nonce.clone(),
+        route_epoch: payload.route_epoch,
+        policy_epoch: payload.policy_epoch,
+        policy_hash: payload.policy_hash.clone(),
+        pricing_nav_epoch: payload.pricing_nav_epoch,
+        pricing_reserve_packet_hash: payload.pricing_reserve_packet_hash.clone(),
+        mint_amount_atoms: payload.mint_amount_atoms,
+        settlement_value_atoms: payload.settlement_value_atoms,
+        expires_at_height: payload.expires_at_height,
+        output_commitment: AssetOrchardFieldElement::parse_hex(
+            payload.output_commitment.clone(),
+        )
+        .map_err(invalid_data)?,
+        encrypted_output: AssetOrchardBoundedBytes::parse_hex(
+            "asset_orchard_private_primary_issue_encrypted_output",
+            payload.encrypted_output.clone(),
+            ASSET_ORCHARD_ENCRYPTED_OUTPUT_MAX_BYTES,
+        )
+        .map_err(invalid_data)?,
+        proof_system_id: payload.proof_system_id.clone(),
+        circuit_id: payload.circuit_id.clone(),
+        pool_domain: AssetOrchardFieldElement::parse_hex(payload.pool_domain.clone())
+            .map_err(invalid_data)?,
+        anchor: AssetOrchardFieldElement::parse_hex(payload.anchor.clone())
+            .map_err(invalid_data)?,
+        nullifier: AssetOrchardFieldElement::parse_hex(payload.nullifier.clone())
+            .map_err(invalid_data)?,
+        randomized_verification_key: AssetOrchardPoint::parse_hex(
+            payload.randomized_verification_key.clone(),
+        )
+        .map_err(invalid_data)?,
+        settlement_asset_tag_lo: payload.settlement_asset_tag_lo,
+        settlement_asset_tag_hi: payload.settlement_asset_tag_hi,
+        native_nav_asset_tag_lo: payload.native_nav_asset_tag_lo,
+        native_nav_asset_tag_hi: payload.native_nav_asset_tag_hi,
+        primary_binding_hash: AssetOrchardSwapBindingHash::parse_hex(
+            payload.primary_binding_hash.clone(),
         )
         .map_err(invalid_data)?,
         proof: AssetOrchardProofBytes::parse_hex(payload.proof.clone()).map_err(invalid_data)?,
@@ -2514,6 +2743,12 @@ fn shielded_archive_payload_orchard_commitment_action_indexes(
             }
             ShieldedAction::AssetOrchardEgressV1(_) => None,
             ShieldedAction::AssetOrchardPrivateEgressV1(_) => None,
+            ShieldedAction::AssetOrchardPrivatePrimaryIssueV1(payload) => {
+                if payload.output_commitment == commitment {
+                    indexes.push(index);
+                }
+                None
+            }
             ShieldedAction::Mint(_) | ShieldedAction::Spend(_) | ShieldedAction::Migrate(_) => None,
         };
         let Some(action_json) = action_json else {
@@ -3063,6 +3298,21 @@ fn validate_asset_orchard_private_egress_payload_for_genesis(
     )
     .map(|_| ())
     .map_err(invalid_data)
+}
+
+fn validate_asset_orchard_private_primary_issue_payload(
+    payload: &AssetOrchardPrivatePrimaryIssueActionPayload,
+) -> io::Result<()> {
+    if payload.pool_id != ASSET_ORCHARD_POOL_ID_V1 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "AssetOrchard private-primary pool_id must be `{ASSET_ORCHARD_POOL_ID_V1}`"
+            ),
+        ));
+    }
+    let action = asset_orchard_private_primary_issue_action_from_payload(payload)?;
+    action.validate().map_err(invalid_data)
 }
 
 fn asset_orchard_public_note_from_ingress(

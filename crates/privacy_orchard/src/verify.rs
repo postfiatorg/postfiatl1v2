@@ -33,13 +33,14 @@ use crate::{
     asset_orchard_private_egress_exit_binding_hash, AssetOrchardBoundedBytes, AssetOrchardError,
     AssetOrchardFieldElement, AssetOrchardPoint, AssetOrchardPricingClaim,
     AssetOrchardPrivateEgressAction, AssetOrchardPrivateEgressExitBindingPreimage,
-    AssetOrchardPrivateEgressVerifyingKey, AssetOrchardSwapAccountingRecord,
-    AssetOrchardSwapAction, AssetOrchardSwapBindingHash, AssetOrchardSwapVerifyingKey, AssetTag,
-    BoundedHexBlob, EncryptedShieldedOutput, OrchardAnchor, OrchardBindingSignature,
-    OrchardCircuitId, OrchardFlags, OrchardNullifier, OrchardOutputCommitment, OrchardProofBytes,
-    OrchardProofSystemId, OrchardRandomizedVerificationKey, OrchardShieldedAction,
-    OrchardSpendAuthSignature, OrchardTypeError, OrchardValueCommitment, ShieldedSwapAction,
-    ShieldedSwapCommitment, ASSET_ORCHARD_CIRCUIT_ID_V1, ASSET_ORCHARD_POOL_ID_V1,
+    AssetOrchardPrivateEgressVerifyingKey, AssetOrchardPrivatePrimaryIssueAction,
+    AssetOrchardSwapAccountingRecord, AssetOrchardSwapAction, AssetOrchardSwapBindingHash,
+    AssetOrchardSwapVerifyingKey, AssetTag, BoundedHexBlob, EncryptedShieldedOutput, OrchardAnchor,
+    OrchardBindingSignature, OrchardCircuitId, OrchardFlags, OrchardNullifier,
+    OrchardOutputCommitment, OrchardProofBytes, OrchardProofSystemId,
+    OrchardRandomizedVerificationKey, OrchardShieldedAction, OrchardSpendAuthSignature,
+    OrchardTypeError, OrchardValueCommitment, ShieldedSwapAction, ShieldedSwapCommitment,
+    ASSET_ORCHARD_CIRCUIT_ID_V1, ASSET_ORCHARD_POOL_ID_V1,
     ASSET_ORCHARD_PRIVATE_EGRESS_CIRCUIT_ID_V1, ASSET_ORCHARD_PROOF_SYSTEM_ID_V1,
     ORCHARD_COMPACT_CIPHERTEXT_BYTES, ORCHARD_EXTERNAL_BINDING_HASH_BYTES, ORCHARD_NULLIFIER_BYTES,
     SHIELDED_SWAP_ACTION_SCHEMA, SHIELDED_SWAP_CIRCUIT_ID,
@@ -521,6 +522,24 @@ pub struct VerifiedAssetOrchardPrivateEgress {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerifiedAssetOrchardPrivatePrimaryIssue {
+    pub proof_system_id: String,
+    pub circuit_id: String,
+    pub pool_domain: AssetOrchardFieldElement,
+    pub anchor: AssetOrchardFieldElement,
+    pub nullifier: AssetOrchardFieldElement,
+    pub randomized_verification_key: AssetOrchardPoint,
+    pub settlement_asset_tag_lo: u128,
+    pub settlement_asset_tag_hi: u128,
+    pub native_nav_asset_tag_lo: u128,
+    pub native_nav_asset_tag_hi: u128,
+    pub settlement_value_atoms: u64,
+    pub mint_amount_atoms: u64,
+    pub output_commitment: AssetOrchardFieldElement,
+    pub primary_binding_hash: AssetOrchardSwapBindingHash,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OrchardVerificationError {
     code: &'static str,
     message: String,
@@ -984,6 +1003,86 @@ pub fn verify_serialized_asset_orchard_private_egress_action(
         disclosure_hash,
         AssetOrchardVkVerificationPolicy::LiveCurrent,
     )
+}
+
+pub fn verify_serialized_asset_orchard_private_primary_issue_action(
+    action: &AssetOrchardPrivatePrimaryIssueAction,
+    domain: &OrchardAuthorizingDomain,
+    settlement_asset_id: &str,
+    native_nav_asset_id: &str,
+) -> Result<VerifiedAssetOrchardPrivatePrimaryIssue, OrchardVerificationError> {
+    action.validate()?;
+    domain.validate()?;
+    if domain.pool_id != ASSET_ORCHARD_POOL_ID_V1 || action.pool_id != domain.pool_id {
+        return Err(OrchardVerificationError::new(
+            "pool_id_mismatch",
+            "private-primary action and authorizing domain must use the active AssetOrchard pool",
+        ));
+    }
+    if action.proof_system_id != ASSET_ORCHARD_PROOF_SYSTEM_ID_V1
+        || action.circuit_id != ASSET_ORCHARD_PRIVATE_EGRESS_CIRCUIT_ID_V1
+    {
+        return Err(OrchardVerificationError::new(
+            "unsupported_asset_orchard_private_primary_issue_verifier",
+            "private-primary action does not name the live pinned one-note verifier",
+        ));
+    }
+    let settlement_tag = AssetTag::derive(settlement_asset_id)?;
+    let native_nav_tag = AssetTag::derive(native_nav_asset_id)?;
+    if action.settlement_asset_tag_lo != settlement_tag.lo
+        || action.settlement_asset_tag_hi != settlement_tag.hi
+        || action.native_nav_asset_tag_lo != native_nav_tag.lo
+        || action.native_nav_asset_tag_hi != native_nav_tag.hi
+    {
+        return Err(OrchardVerificationError::new(
+            "asset_orchard_private_primary_issue_asset_tag_mismatch",
+            "private-primary action tags do not match the live route assets",
+        ));
+    }
+    let genesis_hash = asset_orchard_domain_genesis_hash(&domain.genesis_hash)?;
+    action.validate_domain_binding(&domain.chain_id, genesis_hash, domain.protocol_version)?;
+    let expected_binding = action.expected_primary_binding_hash(
+        &domain.chain_id,
+        genesis_hash,
+        domain.protocol_version,
+        settlement_asset_id,
+        native_nav_asset_id,
+    )?;
+    if action.primary_binding_hash.to_bytes()? != expected_binding {
+        return Err(OrchardVerificationError::new(
+            "asset_orchard_private_primary_issue_binding_mismatch",
+            "private-primary action binding does not match its governed route and output fields",
+        ));
+    }
+    action.verify_spend_authorization(
+        &domain.chain_id,
+        genesis_hash,
+        domain.protocol_version,
+        settlement_asset_id,
+        native_nav_asset_id,
+    )?;
+    let public_instance = action.public_instance()?;
+    let proof = action.proof.to_bytes()?;
+    let verifying_key = AssetOrchardPrivateEgressVerifyingKey::cached()?;
+    verifying_key.metadata().validate_release_pin()?;
+    verifying_key.verify_proof(&proof, &public_instance)?;
+
+    Ok(VerifiedAssetOrchardPrivatePrimaryIssue {
+        proof_system_id: action.proof_system_id.clone(),
+        circuit_id: action.circuit_id.clone(),
+        pool_domain: action.pool_domain.clone(),
+        anchor: action.anchor.clone(),
+        nullifier: action.nullifier.clone(),
+        randomized_verification_key: action.randomized_verification_key.clone(),
+        settlement_asset_tag_lo: action.settlement_asset_tag_lo,
+        settlement_asset_tag_hi: action.settlement_asset_tag_hi,
+        native_nav_asset_tag_lo: action.native_nav_asset_tag_lo,
+        native_nav_asset_tag_hi: action.native_nav_asset_tag_hi,
+        settlement_value_atoms: action.settlement_value_atoms,
+        mint_amount_atoms: action.mint_amount_atoms,
+        output_commitment: action.output_commitment.clone(),
+        primary_binding_hash: action.primary_binding_hash.clone(),
+    })
 }
 
 /// Verifies immutable archived private egress using the VK named by its circuit ID.

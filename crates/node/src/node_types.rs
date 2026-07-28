@@ -1803,6 +1803,31 @@ pub struct AssetOrchardPrivateEgressBatchOptions {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AssetOrchardPrivatePrimaryIssueCreateOptions {
+    pub data_dir: PathBuf,
+    pub note_file: PathBuf,
+    pub output_note_seed_hex: String,
+    pub output_note_file: PathBuf,
+    pub route_id: String,
+    pub subscriber: String,
+    pub ethereum_recipient: String,
+    pub reservation_id: String,
+    pub subscription_nonce: String,
+    pub mint_amount_atoms: u64,
+    pub settlement_value_atoms: u64,
+    pub expires_at_height: u64,
+    pub action_file: PathBuf,
+    pub overwrite: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AssetOrchardPrivatePrimaryIssueBatchOptions {
+    pub data_dir: PathBuf,
+    pub action_file: PathBuf,
+    pub batch_file: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AssetOrchardNoteStatusOptions {
     pub data_dir: PathBuf,
     pub note_file: PathBuf,
@@ -1832,6 +1857,12 @@ pub struct AssetOrchardEgressFile {
 pub struct AssetOrchardPrivateEgressFile {
     pub schema: String,
     pub payload: AssetOrchardPrivateEgressActionPayload,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssetOrchardPrivatePrimaryIssueFile {
+    pub schema: String,
+    pub payload: AssetOrchardPrivatePrimaryIssueActionPayload,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1888,6 +1919,25 @@ pub struct AssetOrchardPrivateEgressReport {
     pub nullifier: String,
     pub randomized_verification_key: String,
     pub exit_binding_hash: String,
+    pub proof_bytes: usize,
+    pub verified: bool,
+    pub privacy: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssetOrchardPrivatePrimaryIssueReport {
+    pub schema: String,
+    pub action_file: String,
+    pub input_note_file: String,
+    pub output_note_file: String,
+    pub route_id: String,
+    pub settlement_asset_id: String,
+    pub native_nav_asset_id: String,
+    pub settlement_value_atoms: u64,
+    pub mint_amount_atoms: u64,
+    pub anchor: String,
+    pub nullifier: String,
+    pub output_commitment: String,
     pub proof_bytes: usize,
     pub verified: bool,
     pub privacy: String,

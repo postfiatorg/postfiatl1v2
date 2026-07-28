@@ -1841,6 +1841,161 @@ fn apply_asset_orchard_private_egress_action_to_state(
     finish_receipt!(receipt);
 }
 
+fn apply_asset_orchard_private_primary_issue_action_to_state(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    shielded: &mut ShieldedState,
+    payload: &AssetOrchardPrivatePrimaryIssueActionPayload,
+    block_height: u64,
+) -> io::Result<Receipt> {
+    let reject = |code: &'static str, message: String| -> io::Result<Receipt> {
+        Ok(Receipt::rejected(
+            asset_orchard_private_primary_issue_receipt_id(genesis, payload, code)?,
+            code,
+            message,
+        ))
+    };
+    let action = match asset_orchard_private_primary_issue_action_from_payload(payload) {
+        Ok(action) => action,
+        Err(error) => {
+            return reject(
+                "asset_orchard_private_primary_issue_bad_payload",
+                error.to_string(),
+            )
+        }
+    };
+    let Some(route) = ledger
+        .pftl_uniswap_routes
+        .iter()
+        .find(|route| route.route_id == payload.route_id)
+    else {
+        return reject(
+            "missing_pftl_uniswap_route",
+            format!(
+                "private-primary route `{}` does not exist",
+                payload.route_id
+            ),
+        );
+    };
+    let settlement_asset_id = route.settlement_asset_id.clone();
+    let native_nav_asset_id = route.native_nav_asset_id.clone();
+    let domain = orchard_authorizing_domain(genesis, &payload.pool_id)?;
+    let verified = match verify_serialized_asset_orchard_private_primary_issue_action(
+        &action,
+        &domain,
+        &settlement_asset_id,
+        &native_nav_asset_id,
+    ) {
+        Ok(verified) => verified,
+        Err(error) => {
+            return reject(
+                "asset_orchard_private_primary_issue_bad_proof",
+                error.to_string(),
+            )
+        }
+    };
+
+    let Some(pool) = shielded.orchard.as_ref() else {
+        return reject(
+            "asset_orchard_private_primary_issue_empty_pool",
+            "private-primary issue requires an existing AssetOrchard pool".to_string(),
+        );
+    };
+    if pool.pool_id != payload.pool_id {
+        return reject(
+            "pool_id_mismatch",
+            format!(
+                "Orchard pool state is for `{}`, private-primary issue is for `{}`",
+                pool.pool_id, payload.pool_id
+            ),
+        );
+    }
+    if !orchard_anchor_is_retained_for_apply(pool, verified.anchor.as_hex())? {
+        return reject(
+            "unretained_orchard_anchor",
+            format!(
+                "private-primary anchor `{}` is not retained",
+                verified.anchor.as_hex()
+            ),
+        );
+    }
+    if pool.is_nullified(verified.nullifier.as_hex()) {
+        return reject(
+            "duplicate_nullifier",
+            format!(
+                "private-primary nullifier `{}` already exists",
+                verified.nullifier.as_hex()
+            ),
+        );
+    }
+    if pool
+        .output_commitments
+        .iter()
+        .any(|commitment| commitment == verified.output_commitment.as_hex())
+    {
+        return reject(
+            "duplicate_output_commitment",
+            format!(
+                "private-primary output commitment `{}` already exists",
+                verified.output_commitment.as_hex()
+            ),
+        );
+    }
+
+    let mut trial_ledger = ledger.clone();
+    if let Err((code, message)) = apply_asset_orchard_private_primary_issue_route_transition(
+        &mut trial_ledger,
+        payload,
+        block_height,
+    ) {
+        return reject(code, message);
+    }
+    let mut trial_shielded = shielded.clone();
+    {
+        let pool = trial_shielded
+            .orchard
+            .as_mut()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing Orchard pool"))?;
+        if let Err((code, message)) = debit_asset_orchard_balance(
+            pool,
+            &settlement_asset_id,
+            payload.settlement_value_atoms,
+        ) {
+            return reject(code, message);
+        }
+        if let Err((code, message)) =
+            credit_asset_orchard_balance(pool, &native_nav_asset_id, payload.mint_amount_atoms)
+        {
+            return reject(code, message);
+        }
+        pool.nullifiers
+            .push(verified.nullifier.as_hex().to_string());
+        pool.output_commitments
+            .push(verified.output_commitment.as_hex().to_string());
+        pool.asset_orchard_outputs
+            .push(AssetOrchardEncryptedOutputRecord {
+                output_commitment: verified.output_commitment.as_hex().to_string(),
+                encrypted_output: payload.encrypted_output.clone(),
+            });
+        append_orchard_current_root(pool)?;
+    }
+    trial_ledger
+        .validate_asset_state(&genesis.chain_id)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    trial_ledger
+        .validate_nav_state(&genesis.chain_id)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    verify_shielded_state(&trial_shielded)?;
+    verify_global_issued_asset_supply_caps(&trial_ledger, &trial_shielded)?;
+
+    *ledger = trial_ledger;
+    *shielded = trial_shielded;
+    Ok(Receipt::accepted(
+        asset_orchard_private_primary_issue_receipt_id(genesis, payload, "accepted")?,
+        "private pfUSDC was atomically consumed by the governed primary route and encrypted A666 was issued",
+    ))
+}
+
 fn orchard_minimum_fee_for_action(
     action: &OrchardShieldedAction,
     verified: &VerifiedOrchardBundle,
@@ -2726,6 +2881,32 @@ fn asset_orchard_private_egress_receipt_id(
             payload.exit_binding_hash.as_str(),
             payload.policy_id.as_str(),
             payload.disclosure_hash.as_str(),
+            code,
+        ),
+    )
+}
+
+fn asset_orchard_private_primary_issue_receipt_id(
+    genesis: &Genesis,
+    payload: &AssetOrchardPrivatePrimaryIssueActionPayload,
+    code: &str,
+) -> io::Result<String> {
+    direct_receipt_id(
+        genesis,
+        "postfiat.privacy.asset_orchard_private_primary_issue_receipt.v1",
+        &(
+            payload.pool_id.as_str(),
+            payload.route_id.as_str(),
+            payload.subscriber.as_str(),
+            payload.ethereum_recipient.as_str(),
+            payload.reservation_id.as_str(),
+            payload.subscription_nonce.as_str(),
+            payload.mint_amount_atoms,
+            payload.settlement_value_atoms,
+            payload.anchor.as_str(),
+            payload.nullifier.as_str(),
+            payload.output_commitment.as_str(),
+            payload.primary_binding_hash.as_str(),
             code,
         ),
     )

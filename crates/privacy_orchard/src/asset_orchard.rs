@@ -1539,10 +1539,7 @@ impl AssetOrchardPrivatePrimaryIssueAction {
         ] {
             validate_canonical_text(label, value, 256)?;
         }
-        fixed_lower_hex_array::<48>(
-            "private_primary_issue.reservation_id",
-            &self.reservation_id,
-        )?;
+        fixed_lower_hex_array::<48>("private_primary_issue.reservation_id", &self.reservation_id)?;
         fixed_lower_hex_array::<32>(
             "private_primary_issue.subscription_nonce",
             &self.subscription_nonce,
@@ -1655,7 +1652,8 @@ impl AssetOrchardPrivatePrimaryIssueAction {
     ) -> Result<[pallas::Base; ASSET_ORCHARD_PRIVATE_EGRESS_PUBLIC_INSTANCE_LEN], AssetOrchardError>
     {
         self.validate()?;
-        self.public_fields_without_binding_check()?.public_instance()
+        self.public_fields_without_binding_check()?
+            .public_instance()
     }
 
     pub fn sighash(
@@ -2612,6 +2610,211 @@ pub fn asset_orchard_private_egress_exit_binding_hash(
     Ok(out)
 }
 
+#[derive(Debug, Clone)]
+pub struct AssetOrchardPrivatePrimaryIssueBindingPreimage<'a> {
+    pub chain_id: &'a str,
+    pub genesis_hash: [u8; 32],
+    pub protocol_version: u32,
+    pub pool_id: &'a str,
+    pub circuit_id: &'a str,
+    pub pool_domain: pallas::Base,
+    pub route_id: &'a str,
+    pub settlement_asset_id: &'a str,
+    pub native_nav_asset_id: &'a str,
+    pub subscriber: &'a str,
+    pub ethereum_recipient: &'a str,
+    pub reservation_id: &'a str,
+    pub subscription_nonce: &'a str,
+    pub route_epoch: u64,
+    pub policy_epoch: u64,
+    pub policy_hash: &'a str,
+    pub pricing_nav_epoch: u64,
+    pub pricing_reserve_packet_hash: &'a str,
+    pub mint_amount_atoms: u64,
+    pub settlement_value_atoms: u64,
+    pub expires_at_height: u64,
+    pub output_commitment: pallas::Base,
+    pub encrypted_output: &'a AssetOrchardBoundedBytes,
+    pub settlement_asset_tag: AssetTag,
+    pub native_nav_asset_tag: AssetTag,
+}
+
+pub fn asset_orchard_private_primary_issue_binding_hash(
+    preimage: &AssetOrchardPrivatePrimaryIssueBindingPreimage<'_>,
+) -> Result<[u8; ASSET_ORCHARD_SWAP_BINDING_HASH_BYTES], AssetOrchardError> {
+    validate_canonical_text("private_primary_issue.chain_id", preimage.chain_id, 256)?;
+    validate_canonical_text(
+        "private_primary_issue.pool_id",
+        preimage.pool_id,
+        ASSET_ORCHARD_MAX_POOL_ID_BYTES,
+    )?;
+    validate_canonical_text("private_primary_issue.route_id", preimage.route_id, 256)?;
+    validate_canonical_text(
+        "private_primary_issue.settlement_asset_id",
+        preimage.settlement_asset_id,
+        ASSET_ORCHARD_MAX_ASSET_ID_BYTES,
+    )?;
+    validate_canonical_text(
+        "private_primary_issue.native_nav_asset_id",
+        preimage.native_nav_asset_id,
+        ASSET_ORCHARD_MAX_ASSET_ID_BYTES,
+    )?;
+    validate_canonical_text("private_primary_issue.subscriber", preimage.subscriber, 256)?;
+    validate_canonical_text(
+        "private_primary_issue.ethereum_recipient",
+        preimage.ethereum_recipient,
+        256,
+    )?;
+    if preimage.pool_id != ASSET_ORCHARD_POOL_ID_V1 {
+        return Err(AssetOrchardError::new(
+            "unsupported_asset_orchard_pool",
+            format!("unsupported asset-orchard pool `{}`", preimage.pool_id),
+        ));
+    }
+    if preimage.protocol_version == 0 {
+        return Err(AssetOrchardError::new(
+            "invalid_protocol_version",
+            "protocol_version must be nonzero",
+        ));
+    }
+    if preimage.circuit_id != ASSET_ORCHARD_PRIVATE_EGRESS_CIRCUIT_ID_V2 {
+        return Err(AssetOrchardError::new(
+            "unsupported_asset_orchard_private_primary_issue_circuit",
+            format!(
+                "private-primary issue requires circuit `{ASSET_ORCHARD_PRIVATE_EGRESS_CIRCUIT_ID_V2}`"
+            ),
+        ));
+    }
+    fixed_lower_hex_array::<48>(
+        "private_primary_issue.reservation_id",
+        preimage.reservation_id,
+    )?;
+    fixed_lower_hex_array::<32>(
+        "private_primary_issue.subscription_nonce",
+        preimage.subscription_nonce,
+    )?;
+    fixed_lower_hex_array::<48>("private_primary_issue.policy_hash", preimage.policy_hash)?;
+    fixed_lower_hex_array::<48>(
+        "private_primary_issue.pricing_reserve_packet_hash",
+        preimage.pricing_reserve_packet_hash,
+    )?;
+    if preimage.route_epoch == 0
+        || preimage.policy_epoch == 0
+        || preimage.pricing_nav_epoch == 0
+        || preimage.mint_amount_atoms == 0
+        || preimage.settlement_value_atoms == 0
+        || preimage.expires_at_height == 0
+    {
+        return Err(AssetOrchardError::new(
+            "zero_asset_orchard_private_primary_issue_field",
+            "private-primary issue epochs, amounts, and expiry must be nonzero",
+        ));
+    }
+    let expected_settlement_tag = AssetTag::derive(preimage.settlement_asset_id)?;
+    let expected_native_tag = AssetTag::derive(preimage.native_nav_asset_id)?;
+    if preimage.settlement_asset_tag != expected_settlement_tag
+        || preimage.native_nav_asset_tag != expected_native_tag
+    {
+        return Err(AssetOrchardError::new(
+            "asset_orchard_private_primary_issue_asset_tag_mismatch",
+            "private-primary asset tags do not match the governed asset identifiers",
+        ));
+    }
+    if preimage.encrypted_output.byte_len() > ASSET_ORCHARD_ENCRYPTED_OUTPUT_MAX_BYTES {
+        return Err(AssetOrchardError::new(
+            "oversized_asset_orchard_private_primary_issue_encrypted_output",
+            format!(
+                "private-primary encrypted output has {} bytes, max {ASSET_ORCHARD_ENCRYPTED_OUTPUT_MAX_BYTES}",
+                preimage.encrypted_output.byte_len()
+            ),
+        ));
+    }
+    let encrypted_output = preimage.encrypted_output.to_bytes()?;
+    let encrypted_output_hash = encrypted_output_hash(0, &encrypted_output)?.as_fields();
+    let fields = [
+        const_field(&format!("proof_system:{ASSET_ORCHARD_PROOF_SYSTEM_ID_V1}"))?,
+        const_field(&format!("circuit:{}", preimage.circuit_id))?,
+        const_field(&format!(
+            "schema:{ASSET_ORCHARD_PRIVATE_PRIMARY_ISSUE_ACTION_SCHEMA_V1}"
+        ))?,
+        const_field(&format!("pool:{}", preimage.pool_id))?,
+        const_field(&format!("note_version:{ASSET_ORCHARD_NOTE_VERSION_V1}"))?,
+        text_to_field("private_primary_issue.chain_id", preimage.chain_id)?,
+        bytes_to_field("private_primary_issue.genesis_hash", &preimage.genesis_hash)?,
+        pallas::Base::from(u64::from(preimage.protocol_version)),
+        preimage.pool_domain,
+        text_to_field("private_primary_issue.route_id", preimage.route_id)?,
+        text_to_field(
+            "private_primary_issue.settlement_asset_id",
+            preimage.settlement_asset_id,
+        )?,
+        text_to_field(
+            "private_primary_issue.native_nav_asset_id",
+            preimage.native_nav_asset_id,
+        )?,
+        text_to_field("private_primary_issue.subscriber", preimage.subscriber)?,
+        text_to_field(
+            "private_primary_issue.ethereum_recipient",
+            preimage.ethereum_recipient,
+        )?,
+        bytes_to_field(
+            "private_primary_issue.reservation_id",
+            &fixed_lower_hex_array::<48>(
+                "private_primary_issue.reservation_id",
+                preimage.reservation_id,
+            )?,
+        )?,
+        bytes_to_field(
+            "private_primary_issue.subscription_nonce",
+            &fixed_lower_hex_array::<32>(
+                "private_primary_issue.subscription_nonce",
+                preimage.subscription_nonce,
+            )?,
+        )?,
+        pallas::Base::from(preimage.route_epoch),
+        pallas::Base::from(preimage.policy_epoch),
+        bytes_to_field(
+            "private_primary_issue.policy_hash",
+            &fixed_lower_hex_array::<48>(
+                "private_primary_issue.policy_hash",
+                preimage.policy_hash,
+            )?,
+        )?,
+        pallas::Base::from(preimage.pricing_nav_epoch),
+        bytes_to_field(
+            "private_primary_issue.pricing_reserve_packet_hash",
+            &fixed_lower_hex_array::<48>(
+                "private_primary_issue.pricing_reserve_packet_hash",
+                preimage.pricing_reserve_packet_hash,
+            )?,
+        )?,
+        pallas::Base::from(preimage.mint_amount_atoms),
+        pallas::Base::from(preimage.settlement_value_atoms),
+        pallas::Base::from(preimage.expires_at_height),
+        preimage.output_commitment,
+        encrypted_output_hash[0],
+        encrypted_output_hash[1],
+        encrypted_output_hash[2],
+        pallas::Base::from_u128(preimage.settlement_asset_tag.lo),
+        pallas::Base::from_u128(preimage.settlement_asset_tag.hi),
+        pallas::Base::from_u128(preimage.native_nav_asset_tag.lo),
+        pallas::Base::from_u128(preimage.native_nav_asset_tag.hi),
+    ];
+    let hash = poseidon_hash2(
+        std::str::from_utf8(PRIVATE_PRIMARY_ISSUE_BINDING_DOMAIN).map_err(|_| {
+            AssetOrchardError::new(
+                "invalid_private_primary_issue_binding_domain",
+                "private-primary issue binding domain is not valid UTF-8",
+            )
+        })?,
+        &fields,
+    )?;
+    let mut out = [0u8; ASSET_ORCHARD_SWAP_BINDING_HASH_BYTES];
+    out[0..32].copy_from_slice(&field_enc(hash[0]));
+    out[32..64].copy_from_slice(&field_enc(hash[1]));
+    Ok(out)
+}
+
 fn binding_hash_fields(
     hash: &[u8; ASSET_ORCHARD_SWAP_BINDING_HASH_BYTES],
 ) -> Result<[pallas::Base; 2], AssetOrchardError> {
@@ -2804,6 +3007,83 @@ pub fn asset_orchard_private_egress_sighash(
         AssetOrchardError::new(
             "digest_slice",
             "invalid asset-orchard private-egress sighash digest length",
+        )
+    })
+}
+
+pub fn asset_orchard_private_primary_issue_sighash(
+    action: &AssetOrchardPrivatePrimaryIssueAction,
+    chain_id: &str,
+    genesis_hash: [u8; 32],
+    protocol_version: u32,
+    settlement_asset_id: &str,
+    native_nav_asset_id: &str,
+) -> Result<[u8; ASSET_ORCHARD_SIGHASH_BYTES], AssetOrchardError> {
+    validate_canonical_text("private_primary_issue.chain_id", chain_id, 256)?;
+    if protocol_version == 0 {
+        return Err(AssetOrchardError::new(
+            "invalid_protocol_version",
+            "protocol_version must be nonzero",
+        ));
+    }
+    let expected_binding = action.expected_primary_binding_hash(
+        chain_id,
+        genesis_hash,
+        protocol_version,
+        settlement_asset_id,
+        native_nav_asset_id,
+    )?;
+    if action.primary_binding_hash.to_bytes()? != expected_binding {
+        return Err(AssetOrchardError::new(
+            "asset_orchard_private_primary_issue_binding_mismatch",
+            "private-primary binding hash does not match governed action fields",
+        ));
+    }
+    let encrypted_output = action.encrypted_output.to_bytes()?;
+    let mut payload = Vec::new();
+    payload.extend_from_slice(PRIVATE_PRIMARY_ISSUE_H_SIG_DOMAIN);
+    payload.extend_from_slice(&ASSET_ORCHARD_ACTION_VERSION_V1.to_le_bytes());
+    append_len_bytes_vec(
+        &mut payload,
+        ASSET_ORCHARD_PRIVATE_PRIMARY_ISSUE_ACTION_SCHEMA_V1.as_bytes(),
+    )?;
+    append_len_bytes_vec(&mut payload, chain_id.as_bytes())?;
+    payload.extend_from_slice(&genesis_hash);
+    payload.extend_from_slice(&protocol_version.to_le_bytes());
+    append_len_bytes_vec(&mut payload, action.pool_id.as_bytes())?;
+    append_len_bytes_vec(&mut payload, action.proof_system_id.as_bytes())?;
+    append_len_bytes_vec(&mut payload, action.circuit_id.as_bytes())?;
+    payload.extend_from_slice(&field_enc(action.pool_domain.to_field()?));
+    payload.extend_from_slice(&field_enc(action.anchor.to_field()?));
+    payload.extend_from_slice(&field_enc(action.nullifier.to_field()?));
+    payload.extend_from_slice(&point_enc(action.randomized_verification_key.to_affine()?)?);
+    append_len_bytes_vec(&mut payload, action.route_id.as_bytes())?;
+    append_len_bytes_vec(&mut payload, settlement_asset_id.as_bytes())?;
+    append_len_bytes_vec(&mut payload, native_nav_asset_id.as_bytes())?;
+    append_len_bytes_vec(&mut payload, action.subscriber.as_bytes())?;
+    append_len_bytes_vec(&mut payload, action.ethereum_recipient.as_bytes())?;
+    append_len_bytes_vec(&mut payload, action.reservation_id.as_bytes())?;
+    append_len_bytes_vec(&mut payload, action.subscription_nonce.as_bytes())?;
+    payload.extend_from_slice(&action.route_epoch.to_le_bytes());
+    payload.extend_from_slice(&action.policy_epoch.to_le_bytes());
+    append_len_bytes_vec(&mut payload, action.policy_hash.as_bytes())?;
+    payload.extend_from_slice(&action.pricing_nav_epoch.to_le_bytes());
+    append_len_bytes_vec(&mut payload, action.pricing_reserve_packet_hash.as_bytes())?;
+    payload.extend_from_slice(&action.mint_amount_atoms.to_le_bytes());
+    payload.extend_from_slice(&action.settlement_value_atoms.to_le_bytes());
+    payload.extend_from_slice(&action.expires_at_height.to_le_bytes());
+    payload.extend_from_slice(&field_enc(action.output_commitment.to_field()?));
+    append_len_bytes_vec(&mut payload, &encrypted_output)?;
+    payload.extend_from_slice(&action.settlement_asset_tag_lo.to_le_bytes());
+    payload.extend_from_slice(&action.settlement_asset_tag_hi.to_le_bytes());
+    payload.extend_from_slice(&action.native_nav_asset_tag_lo.to_le_bytes());
+    payload.extend_from_slice(&action.native_nav_asset_tag_hi.to_le_bytes());
+    payload.extend_from_slice(&expected_binding);
+    let digest = Sha3_256::digest(&payload);
+    digest.as_slice().try_into().map_err(|_| {
+        AssetOrchardError::new(
+            "digest_slice",
+            "invalid asset-orchard private-primary sighash digest length",
         )
     })
 }

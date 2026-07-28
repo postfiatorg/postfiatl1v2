@@ -50,6 +50,8 @@ use postfiat_node::{
     consensus_v2_active_at, create_asset_orchard_egress, create_asset_orchard_egress_batch,
     create_asset_orchard_ingress, create_asset_orchard_ingress_batch,
     create_asset_orchard_private_egress, create_asset_orchard_private_egress_batch,
+    create_asset_orchard_private_primary_issue,
+    create_asset_orchard_private_primary_issue_batch,
     create_asset_orchard_swap_action, create_asset_orchard_swap_action_verified,
     create_atomic_swap_mempool_batch_for_tx_id, create_block_timeout_vote, create_block_vote,
     create_block_vote_for_verified_proposal, create_block_vote_with_timings,
@@ -137,8 +139,10 @@ use postfiat_node::{
     AssetInfoOptions, AssetOrchardEgressBatchOptions, AssetOrchardEgressCreateOptions,
     AssetOrchardIngressBatchOptions, AssetOrchardIngressCreateOptions,
     AssetOrchardNoteStatusOptions, AssetOrchardPrivateEgressBatchOptions,
-    AssetOrchardPrivateEgressCreateOptions, AssetOrchardScanOptions, AssetOrchardSwapCreateOptions,
-    AssetOrchardSwapCreateReport, AtomicSettlementTemplateOptions, AtomicSwapFeeQuoteOptions,
+    AssetOrchardPrivateEgressCreateOptions, AssetOrchardPrivatePrimaryIssueBatchOptions,
+    AssetOrchardPrivatePrimaryIssueCreateOptions, AssetOrchardScanOptions,
+    AssetOrchardSwapCreateOptions, AssetOrchardSwapCreateReport, AtomicSettlementTemplateOptions,
+    AtomicSwapFeeQuoteOptions,
     AtomicSwapQuoteLegInput, AtomicSwapTargetBatchOptions, BatchArchiveQueryOptions,
     BatchCertificateRoundOptions, BatchCertificateRoundReport, BatchProposalOptions,
     BatchProposalTimingReport, BatchTransferOptions, BlockCertificateFile,
@@ -579,6 +583,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "asset-orchard-ingress-create"
         | "asset-orchard-egress-create"
         | "asset-orchard-private-egress-create"
+        | "asset-orchard-private-primary-issue-create"
         | "asset-orchard-note-status"
         | "asset-orchard-scan"
         | "asset-orchard-swap-create"
@@ -600,6 +605,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "shield-batch-asset-orchard-ingress"
         | "shield-batch-asset-orchard-egress"
         | "shield-batch-asset-orchard-private-egress"
+        | "shield-batch-asset-orchard-private-primary-issue"
         | "shield-batch-orchard-withdraw"
         | "shield-batch-swap"
         | "apply-shield-batch"
