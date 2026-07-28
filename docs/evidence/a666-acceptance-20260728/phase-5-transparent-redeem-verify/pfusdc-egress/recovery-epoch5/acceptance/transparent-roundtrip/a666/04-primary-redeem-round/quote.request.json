@@ -1,0 +1,9 @@
+{
+  "id": "a666-epoch5-transparent-primary-redeem-quote",
+  "method": "asset_fee_quote",
+  "params": {
+    "operation_json": "{\"operation\":\"pftl_uniswap_primary_redeem\",\"owner\":\"pfab9b9228942e5c529633a13aa271d5297bec6353\",\"settlement_recipient\":\"pfab9b9228942e5c529633a13aa271d5297bec6353\",\"route_id\":\"pftl-a666-ethereum-wA666-usdc-v1\",\"redemption_nonce\":\"e468d7913303b53f529406c5e80c25892d3a14784a71d0a261e831bb7cef8325\",\"nav_amount_atoms\":1000000,\"min_settlement_value_atoms\":999500,\"route_epoch\":2,\"policy_epoch\":2,\"policy_hash\":\"77e8d7d8bd242fcfa3c87af6cd5f89aedc47e21a8c9de2cdd1afae3dace9e774979635b7eb176f4d9cd42dd02d69dbdb\",\"pricing_nav_epoch\":1,\"pricing_reserve_packet_hash\":\"c8bbb35b7b0eb4a567f04945eb977b3fe5dc539cd7d845f1266d39959eb301ffbe263ebec9ceb985ef09370f314e5b3e\",\"expires_at_height\":500}",
+    "source": "pfab9b9228942e5c529633a13aa271d5297bec6353"
+  },
+  "version": "postfiat-local-rpc-v1"
+}

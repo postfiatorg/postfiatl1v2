@@ -1,0 +1,21 @@
+{
+  "accepted": true,
+  "all_sends_verified": true,
+  "confirmed": true,
+  "end_block_tip_hash": "577c5f85add403dc1e52fc12c23a442a3de6424922c80b1d274429c05c863ac3ed08ee84903b033c84fdceccaa618c28",
+  "end_height": 395,
+  "end_mempool_pending": 0,
+  "end_state_root": "78bc191ed4b62441fce6202155839302ba68095b0225e4db40017a862690c4a8e029b2729f48c4218fa734ce92c062cd",
+  "label": "a666-epoch5-transparent-return-import-final",
+  "proposer": "validator-5",
+  "round_ok": true,
+  "schema": "postfiat-a666-ce22-remote-finality-operation-v1",
+  "source": "pfd0c86d9084915e1fefd22eab891806397d5a5937",
+  "start_height": 394,
+  "start_state_root": "5d0466e088d2d69499bd1b23c11a2d207ffbc122f6ae29247d35b923540a0f93115f586b6cf0cb3082fc8c4ba2027a91",
+  "transaction_kind": "pftl_uniswap_return_import",
+  "trust_class": "CONTROLLED",
+  "tx_id": "87933cd13d3c1e1aae16f502f9f07d638670f000c59924f849687055b9a23418602c4c65286588107a83f0e14be2ca64",
+  "validator_count": 6,
+  "vote_count": 5
+}
