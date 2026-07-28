@@ -1,0 +1,12 @@
+{
+  "schema": "postfiat-asset-orchard-note-status-report-v1",
+  "note_file": "/var/lib/postfiat/validator-2/a666-phase4-private-issue-20260728/private/pfusdc-note.json",
+  "pool_id": "asset-orchard-v1",
+  "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "amount": 1005000,
+  "output_commitment": "7d9f28184667d96e2d012fa09a0d7f555b3f5af9718da5326dcd39fdf2e8c528",
+  "nullifier": "3051eb92219b9f56188c23d7ce6af1df97e28d6fa63583d00188d8613be7bf2b",
+  "pool_output": true,
+  "spent": true,
+  "spendable": false
+}

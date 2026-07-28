@@ -1,0 +1,18 @@
+{
+  "accepted": true,
+  "all_sends_verified": true,
+  "batch_kind": "shielded",
+  "confirmed": true,
+  "end_height": 378,
+  "end_state_root": "e1eb9ef488826c54dc87550f671a1c6cb25cba05141b814cd0256d74ca3772c80097774ff52e9016fe614fb936e1c5f7",
+  "label": "phase4-private-primary-retry",
+  "local_apply_verified": true,
+  "proposer": "validator-0",
+  "round_ok": true,
+  "runner_exit_code": 0,
+  "runner_stderr": null,
+  "schema": "postfiat-a666-ce22-remote-finality-batch-v1",
+  "start_height": 377,
+  "start_state_root": "80fc084f15a0f824c033ca8c196490fd731fb5fd1cc6858809993518362c765fa52a3d2f009bcddc84c548773ee07dc1",
+  "vote_count": 5
+}
