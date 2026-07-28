@@ -1,0 +1,21 @@
+{
+  "route_config_digest": "12ed00ca87e29554ce4b978da1710fffc0830767e84e62f08df257f727db953efdd89bcf6ea99f5634d6e5ea8aca2933",
+  "source_packet_hash": "72b2ccf189370d1a6012fd5a3fce3835612289a71f34b9807d3eea0655d0811b207e9b548c67a02b8178bd1581c1fd8d",
+  "reservation_id": "bb66508bf3b97b633c86f81caf5bbf8aa4874cc07a350e885a7428b97c5a428998162febeb77363637cabd59cbfbd873",
+  "source_receipt_hash": "d6135d06e185e32d6afd67a33f36838eea8fb744b50f8e6e0823575cb09b89b9093fd124dccef4fe2aeb91b935817e38",
+  "source_receipt_root": "7708c22ab46c40494741d179eb4d3e82781f73700b91b8179a5583e44f314182fef53449a9b3c768a18a2e012fe154c5",
+  "settlement_asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "native_nav_asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+  "pricing_reserve_packet_hash": "c8bbb35b7b0eb4a567f04945eb977b3fe5dc539cd7d845f1266d39959eb301ffbe263ebec9ceb985ef09370f314e5b3e",
+  "policy_hash_commitment": "257fa2219a3839991706a625db1649600d0ed1d4a5035a196873968e3f2aa15a",
+  "route_epoch": 2,
+  "pricing_nav_epoch": 1,
+  "deadline_seconds": 1785311404,
+  "nonce": "ce99cfffa937471847f3fe3b300979a721cd7d6f7802887be0a5ff656b8fab99",
+  "destination_chain_id": 1,
+  "destination_controller": "0x9a0262c0572fb4db08765408eb225e207f40c3d9",
+  "wrapped_token": "0xee4c92edb03efdd9b519339edc19ad70c69a9be5",
+  "ethereum_recipient": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+  "mint_amount_atoms": 1000000,
+  "settlement_value_atoms": 1005000
+}

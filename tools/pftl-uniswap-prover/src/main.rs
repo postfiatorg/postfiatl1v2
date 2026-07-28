@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf, time::Instant};
+use std::{env, fs, path::PathBuf, time::Instant};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -42,6 +42,9 @@ enum Command {
         elf: Option<PathBuf>,
         #[arg(long)]
         prove: bool,
+        /// Fail closed unless SP1_PROVER selects this exact backend.
+        #[arg(long)]
+        require_prover: Option<String>,
     },
     /// Execute or Groth16-prove a receipt-independent checkpoint segment.
     Checkpoint {
@@ -54,6 +57,9 @@ enum Command {
         elf: Option<PathBuf>,
         #[arg(long)]
         prove: bool,
+        /// Fail closed unless SP1_PROVER selects this exact backend.
+        #[arg(long)]
+        require_prover: Option<String>,
     },
 }
 
@@ -67,14 +73,35 @@ async fn main() -> Result<()> {
             output_dir,
             elf,
             prove,
-        } => prove_receipt(witness, output_dir, elf, prove).await,
+            require_prover,
+        } => {
+            enforce_prover_backend(require_prover.as_deref())?;
+            prove_receipt(witness, output_dir, elf, prove).await
+        }
         Command::Checkpoint {
             witness,
             output_dir,
             elf,
             prove,
-        } => prove_checkpoint(witness, output_dir, elf, prove).await,
+            require_prover,
+        } => {
+            enforce_prover_backend(require_prover.as_deref())?;
+            prove_checkpoint(witness, output_dir, elf, prove).await
+        }
     }
+}
+
+fn enforce_prover_backend(expected: Option<&str>) -> Result<()> {
+    let Some(expected) = expected else {
+        return Ok(());
+    };
+    anyhow::ensure!(!expected.is_empty(), "--require-prover cannot be empty");
+    let actual = env::var("SP1_PROVER").unwrap_or_default();
+    anyhow::ensure!(
+        actual.eq_ignore_ascii_case(expected),
+        "required SP1 prover backend `{expected}` is not selected; SP1_PROVER is `{actual}`"
+    );
+    Ok(())
 }
 
 async fn program_info(elf_path: Option<PathBuf>, output: Option<PathBuf>) -> Result<()> {
@@ -248,6 +275,8 @@ async fn execute_or_prove(
                 "setup_and_prove_ms": prove_started.elapsed().as_millis(),
                 "proof_bytes": proof.bytes().len(),
                 "public_values_bytes": proof.public_values.to_vec().len(),
+                "prover_backend": env::var("SP1_PROVER")
+                    .unwrap_or_else(|_| "default".to_string()),
             }))?,
         )?;
     }

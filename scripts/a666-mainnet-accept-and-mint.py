@@ -102,13 +102,41 @@ def send(call: Any, web3: Web3, label: str) -> dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--execute", action="store_true")
-    parser.add_argument("--packet", type=Path, default=PACKET_PATH)
+    parser.add_argument("--packet", type=Path)
+    parser.add_argument("--receipt-witness", type=Path)
     parser.add_argument("--proof-dir", type=Path, default=PROOF_DIR)
     parser.add_argument("--state-file", type=Path, default=STATE_PATH)
     parser.add_argument("--expected-finalized-height", type=int, default=348)
     args = parser.parse_args()
 
-    packet = json.loads(args.packet.read_text())
+    receipt_witness_sha256 = None
+    if args.receipt_witness is not None:
+        receipt_witness_bytes = args.receipt_witness.read_bytes()
+        receipt_witness = json.loads(receipt_witness_bytes)
+        packet = receipt_witness["mint_packet"]
+        receipt = receipt_witness["receipt"]
+        block_header = receipt_witness["block"]["header"]
+        zero_hash48 = "00" * 48
+        if (
+            packet["source_receipt_hash"] == zero_hash48
+            or packet["source_receipt_root"] == zero_hash48
+            or packet["source_receipt_hash"] != receipt["receipt_hash"]
+            or packet["source_receipt_root"]
+            != block_header["pftl_uniswap_receipt_root"]
+            or packet["source_packet_hash"] != receipt["packet_hash"]
+            or int(packet["mint_amount_atoms"]) != int(receipt["amount_atoms"])
+        ):
+            raise RuntimeError(
+                "receipt witness does not contain one internally consistent finalized mint packet"
+            )
+        receipt_witness_sha256 = hashlib.sha256(receipt_witness_bytes).hexdigest()
+    else:
+        if args.execute:
+            raise RuntimeError(
+                "--execute requires --receipt-witness; refusing a pre-export packet template"
+            )
+        packet_path = args.packet or PACKET_PATH
+        packet = json.loads(packet_path.read_text())
     public_values = (args.proof_dir / "public-values.bin").read_bytes()
     proof = (args.proof_dir / "proof-calldata.bin").read_bytes()
     if len(public_values) != 1120 or not proof:
@@ -184,6 +212,7 @@ def main() -> None:
         },
         "packet_digest": packet_digest,
         "receipt_commitment": Web3.to_hex(receipt_commitment),
+        "receipt_witness_sha256": receipt_witness_sha256,
         "proof": {
             "public_values_bytes": len(public_values),
             "public_values_sha256": hashlib.sha256(public_values).hexdigest(),
@@ -215,6 +244,23 @@ def main() -> None:
         print(json.dumps(state, indent=2, sort_keys=True))
         return
 
+    if state["pre_state"]["mint_paused"]:
+        raise RuntimeError(
+            "A666 mint controller is paused; refusing to mutate governed pause state"
+        )
+    if state["pre_state"]["latest_finalized_height"] > args.expected_finalized_height:
+        raise RuntimeError(
+            "PFTL verifier finalized height is already beyond the expected receipt boundary"
+        )
+    if (
+        state["pre_state"]["receipt_accepted"]
+        and state["pre_state"]["latest_finalized_height"]
+        != args.expected_finalized_height
+    ):
+        raise RuntimeError(
+            "accepted receipt does not match the expected PFTL finalized height"
+        )
+
     if not state["pre_state"]["receipt_accepted"]:
         state["transactions"].append(
             send(
@@ -224,15 +270,14 @@ def main() -> None:
             )
         )
         atomic_write_json(args.state_file, state)
-    if bool(controller.functions.mintPaused().call()):
-        state["transactions"].append(
-            send(
-                controller.functions.setMintPaused(False),
-                web3,
-                "unpause proof-gated A666 mint controller",
-            )
+    if not bool(verifier.functions.acceptedReceiptCommitment(receipt_commitment).call()):
+        raise RuntimeError(
+            "accepted SP1 proof does not authorize the selected finalized mint packet"
         )
-        atomic_write_json(args.state_file, state)
+    if bool(controller.functions.mintPaused().call()):
+        raise RuntimeError(
+            "A666 mint controller became paused during execution; refusing to unpause"
+        )
     if not bool(
         controller.functions.consumedPacket(bytes.fromhex(packet_digest[2:])).call()
     ):

@@ -1,5 +1,5 @@
 use std::{
-    fs,
+    env, fs,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -72,6 +72,9 @@ enum Command {
         witness: PathBuf,
         #[arg(long)]
         output_dir: PathBuf,
+        /// Fail closed unless SP1_PROVER selects this exact backend.
+        #[arg(long)]
+        require_prover: Option<String>,
     },
     Run {
         #[arg(long)]
@@ -84,6 +87,9 @@ enum Command {
         beacon_rpc: String,
         #[arg(long, default_value_t = 21600)]
         wait_seconds: u64,
+        /// Fail closed unless SP1_PROVER selects this exact backend.
+        #[arg(long)]
+        require_prover: Option<String>,
     },
     CrossVkeyAudit {
         #[arg(long)]
@@ -249,14 +255,20 @@ async fn main() -> Result<()> {
         Command::Prove {
             witness,
             output_dir,
-        } => prove(&witness, &output_dir).await,
+            require_prover,
+        } => {
+            enforce_prover_backend(require_prover.as_deref())?;
+            prove(&witness, &output_dir).await
+        }
         Command::Run {
             deployment,
             work_dir,
             execution_rpc,
             beacon_rpc,
             wait_seconds,
+            require_prover,
         } => {
+            enforce_prover_backend(require_prover.as_deref())?;
             run_resumable(
                 &deployment,
                 &work_dir,
@@ -684,6 +696,19 @@ fn audit(witness_path: &Path, output: &Path) -> Result<()> {
     Ok(())
 }
 
+fn enforce_prover_backend(expected: Option<&str>) -> Result<()> {
+    let Some(expected) = expected else {
+        return Ok(());
+    };
+    anyhow::ensure!(!expected.is_empty(), "--require-prover cannot be empty");
+    let actual = env::var("SP1_PROVER").unwrap_or_default();
+    anyhow::ensure!(
+        actual.eq_ignore_ascii_case(expected),
+        "required SP1 prover backend `{expected}` is not selected; SP1_PROVER is `{actual}`"
+    );
+    Ok(())
+}
+
 async fn prove(witness_path: &Path, out: &Path) -> Result<()> {
     let witness: EthIngressWitnessV1 = serde_json::from_slice(&fs::read(witness_path)?)?;
     let expected = serde_cbor::to_vec(&verify_witness(&witness).map_err(|e| anyhow!(e))?)?;
@@ -709,7 +734,8 @@ async fn prove(witness_path: &Path, out: &Path) -> Result<()> {
         "elf_sha256":hex::encode(Sha256::digest(&*ELF)),"instruction_count":report.total_instruction_count(),
         "execute_ms":exec_start.elapsed().as_millis(),"setup_and_groth16_ms":prove_start.elapsed().as_millis(),
         "proof_bytes":proof.bytes().len(),"serialized_proof_bytes":fs::metadata(out.join("proof.bin"))?.len(),
-        "public_values_bytes":expected.len()});
+        "public_values_bytes":expected.len(),
+        "prover_backend":env::var("SP1_PROVER").unwrap_or_else(|_| "default".to_string())});
     write_atomic(
         &out.join("proof-report.json"),
         &serde_json::to_vec_pretty(&result)?,
