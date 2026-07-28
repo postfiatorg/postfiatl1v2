@@ -12,12 +12,18 @@
 private issue attempt/fix → transparent redeem attempt/fix → private redeem
 attempt/fix
 
-**Execution status (2026-07-28):** A0, A1, and A2 PASS. The fresh Phase 2
+**Execution status (2026-07-28):** A0, A1, A2, and the A3 attempt gate PASS.
+The fresh Phase 2
 mainnet run completed hands-off in `1,464 seconds` with exact conservation,
 six-validator convergence, unchanged Uniswap liquidity, and PFTL/Ethereum
 replay rejection. Evidence:
 `../evidence/a666-acceptance-20260728/phase-2b-transparent-issue-slo-verify/README.md`.
-Phase 3 is next; A3 through A8 remain pending.
+Phase 3 then stopped without mutation at
+`UNSUPPORTED_PRIVATE_PRIMARY_ISSUE`: the deployed wallet/RPC/consensus action
+surface has no private-primary issue action, and the existing private swap is
+conservation-only. Evidence:
+`../evidence/a666-acceptance-20260728/phase-3-private-issue-attempt/README.md`.
+A4 through A8 remain pending.
 
 ## 1. Objective
 

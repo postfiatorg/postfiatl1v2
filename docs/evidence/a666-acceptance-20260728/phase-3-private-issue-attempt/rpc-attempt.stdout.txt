@@ -1,0 +1,17 @@
+{
+  "version": "postfiat-local-rpc-v1",
+  "id": "local-1",
+  "ok": false,
+  "result": null,
+  "error": {
+    "code": "rpc_error",
+    "message": "unknown rpc method `asset_orchard_primary_subscribe`"
+  },
+  "events": [
+    {
+      "event_type": "error",
+      "subject": "rpc_error",
+      "message": "rpc request failed"
+    }
+  ]
+}
