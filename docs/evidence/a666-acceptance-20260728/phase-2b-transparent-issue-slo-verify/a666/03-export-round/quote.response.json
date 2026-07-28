@@ -1,0 +1,50 @@
+{
+  "error": null,
+  "events": [
+    {
+      "event_type": "asset_fee_quote",
+      "message": "asset transaction fee quoted",
+      "subject": "pfab9b9228942e5c529633a13aa271d5297bec6353"
+    }
+  ],
+  "id": "joe-a666-export-quote",
+  "ok": true,
+  "result": {
+    "account_reserve": 10,
+    "asset_weight_bytes": 11663,
+    "base_asset_fee": 23,
+    "chain_id": "postfiat-wan-devnet-2",
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "mempool_pending_for_sender": 0,
+    "minimum_fee": 23,
+    "operation": {
+      "amount_atoms": 1000000,
+      "destination_deadline_seconds": 1785315702,
+      "ethereum_packet_digest": "f45f930b961c38f688156f86c18a6f935b69e12f240a872b47854566560a3570",
+      "ethereum_packet_schema_version": 2,
+      "ethereum_recipient": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+      "export_nonce": "98b5d57c57d6d808dd9d78d913d21d9b26dc2977fa1c7ad5d60c352e36945e2c",
+      "operation": "pftl_uniswap_export_debit",
+      "owner": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+      "packet_hash": "2ab16576034b1f0b78d1e9ba898f073399268e3a2a76249121a547a6cc1e1a3f6bb223b8152181b218354898d07bfead",
+      "refund_delay_blocks": 100,
+      "reservation_id": "7513d5057f71ce294a9a06fd90e86ef0f15993cba768ff072f0c9757f7cc6642b02f49381d0ea652a7e01f25048ea33a",
+      "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+      "settlement_value_atoms": 1005000
+    },
+    "protocol_version": 1,
+    "schema": "postfiat-asset-fee-quote-v1",
+    "sender_balance": 3514,
+    "sender_balance_after_fee": 3491,
+    "sender_meets_reserve_after_fee": true,
+    "sender_sequence": 57,
+    "sequence": 58,
+    "sequence_source": "ledger_mempool",
+    "source": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+    "state_expansion_fee": 0,
+    "transaction_kind": "pftl_uniswap_export_debit",
+    "transfer_fee_byte_quantum": 512,
+    "transfer_fee_per_quantum": 1
+  },
+  "version": "postfiat-local-rpc-v1"
+}

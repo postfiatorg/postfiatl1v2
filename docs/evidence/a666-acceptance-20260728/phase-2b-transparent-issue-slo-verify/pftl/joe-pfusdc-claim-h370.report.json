@@ -1,0 +1,77 @@
+{
+  "schema": "postfiat-certified-asset-ops-report-v1",
+  "request_schema": "postfiat-certified-asset-ops-request-v1",
+  "data_dir": "/var/lib/postfiat/validator-4",
+  "topology_file": "/etc/postfiat/releases/a666-acceptance-98c81a9/topology.json",
+  "artifact_dir": "/var/lib/postfiat/validator-4/joe-pfusdc-claim-h370",
+  "operation_count": 2,
+  "max_transactions": 2,
+  "allow_existing_mempool": false,
+  "prepare_only": false,
+  "batch_only": false,
+  "start_height": 369,
+  "start_state_root": "15290901a39b17cea0a13557808d65c1e10cce2685adfb8f698bf846b2afa1636817266c29be99e8053d2d18ef93e595",
+  "start_mempool_pending": 0,
+  "end_height": 370,
+  "end_state_root": "5e4d718e2d986b5bfd0f7d117b78944e2ab3515db832372ec455eedfd1b671563904a93361611b6a4d87c8db3a253a00",
+  "end_mempool_pending": 0,
+  "operations": [
+    {
+      "label": "finalize",
+      "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+      "transaction_kind": "vault_bridge_deposit_finalize",
+      "operation_file": "/var/lib/postfiat/validator-4/joe-pfusdc-claim-h370/finalize/operation.json",
+      "quote_file": "/var/lib/postfiat/validator-4/joe-pfusdc-claim-h370/finalize/quote.json",
+      "signed_file": "/var/lib/postfiat/validator-4/joe-pfusdc-claim-h370/finalize/signed.json",
+      "submit_file": "/var/lib/postfiat/validator-4/joe-pfusdc-claim-h370/finalize/submit.json",
+      "tx_id": "2e1b0504dc6dec0545e56465456fdda7bba49358842fe54ac9ea07c1bf55bf04a571b141be19081fe0ba26c46c80225f",
+      "sequence": 85,
+      "fee": 22,
+      "timings_ms": {
+        "prepare_ms": 0.073489,
+        "quote_ms": 8.449397000000001,
+        "sign_ms": 2.90902,
+        "submit_ms": 19.740493
+      }
+    },
+    {
+      "label": "claim",
+      "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+      "transaction_kind": "vault_bridge_deposit_claim",
+      "operation_file": "/var/lib/postfiat/validator-4/joe-pfusdc-claim-h370/claim/operation.json",
+      "quote_file": "/var/lib/postfiat/validator-4/joe-pfusdc-claim-h370/claim/quote.json",
+      "signed_file": "/var/lib/postfiat/validator-4/joe-pfusdc-claim-h370/claim/signed.json",
+      "submit_file": "/var/lib/postfiat/validator-4/joe-pfusdc-claim-h370/claim/submit.json",
+      "tx_id": "8d3b20f928cc6304ec1af1c00f3f1ff992e2eb7a9bc6c79cc6e5a9921f45afcab41b6490f45e604bfb363e06e817a3c5",
+      "sequence": 86,
+      "fee": 53,
+      "timings_ms": {
+        "prepare_ms": 0.054062,
+        "quote_ms": 17.47529,
+        "sign_ms": 2.391864,
+        "submit_ms": 29.839614
+      }
+    }
+  ],
+  "dependency_report": {
+    "declared_dependency_count": 0,
+    "same_round_dependency_count": 0,
+    "prior_round_dependency_count": 0,
+    "same_round_batch_eligible": true,
+    "candidate_batch_classes": [],
+    "replay_equivalence_required": false,
+    "live_round_compression_ready": true,
+    "live_round_compression_blockers": [],
+    "declarations": []
+  },
+  "batch_file": "/var/lib/postfiat/validator-4/joe-pfusdc-claim-h370/peer-certified-mempool-round/mempool-batch.json",
+  "round_artifact_dir": "/var/lib/postfiat/validator-4/joe-pfusdc-claim-h370/peer-certified-mempool-round",
+  "round_ok": true,
+  "timings_ms": {
+    "total_ms": 25946.958274,
+    "preflight_ms": 12.964602000000001,
+    "operations_ms": 82.242972,
+    "certify_ms": 25844.400455,
+    "final_status_ms": 6.907456
+  }
+}
