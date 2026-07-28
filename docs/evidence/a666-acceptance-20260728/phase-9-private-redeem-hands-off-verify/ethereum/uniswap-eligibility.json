@@ -1,0 +1,10 @@
+{
+  "schema": "postfiat.a666.uniswap_eligibility.v2",
+  "pool_id": "0xc5f1e4b5bb07c0718eddcc3d102dc751b8953ec25bb05cdc14d95419d4d16e98",
+  "comparison_available": false,
+  "liquidity_before": 3000000000,
+  "liquidity_after": 3000000000,
+  "liquidity_consumed": null,
+  "wa666_transfer_eth_call": "true",
+  "verdict": "PASS"
+}

@@ -1,4 +1,28 @@
-# Phase 9 Recovery Checkpoint
+# Phase 9 Transparent Issue Recovery and Completion
+
+Status: `PASS` at PFTL height `416`
+
+The frozen recovery point below was resumed without creating a second
+deposit. The existing `1.005000 USDC` deposit produced `1.000000 A666`,
+exported it to Ethereum, and increased Joe's wA666 balance from `103000000`
+to `104000000` atoms. Destination consumption then moved the new unit from
+outstanding bridge claims to Ethereum spendable supply while preserving the
+route invariant.
+
+The functional result is recorded in `summary.json`. The deposit-to-mint
+elapsed time was `6660` seconds because this was a recovery of a deliberately
+paused run; `timing.json` records `slo_pass:false` and does not represent this
+run as satisfying the 25-minute fresh-run SLO.
+
+The runner initially stopped after the successful destination-consume round
+because its evidence assertion incorrectly expected outstanding bridge claims
+to remain constant. The correct transition is:
+
+```text
+outstanding_bridge_claims -= minted_amount
+ethereum_spendable_supply += minted_amount
+authorized_valid_supply remains constant
+```
 
 This directory contains the frozen recovery point for workflow
 `a666-p9-20260728`.

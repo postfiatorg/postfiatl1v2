@@ -120,6 +120,12 @@ uniswap_liquidity_before=$(cast call "$uniswap_state_view" \
   --rpc-url "$ethereum_rpc" | awk '{print $1}')
 [[ "$uniswap_liquidity_before" =~ ^[0-9]+$ ]]
 test "$uniswap_liquidity_before" -gt 0
+jq -n \
+  --arg pool_id "$uniswap_pool_id" \
+  --argjson liquidity "$uniswap_liquidity_before" \
+  '{schema:"postfiat.a666.uniswap_liquidity_observation.v1",
+    pool_id:$pool_id,liquidity_atoms:$liquidity}' \
+  > "$phase_dir/ethereum/uniswap-liquidity-before.json"
 
 jq '{
   vault,
@@ -362,69 +368,8 @@ bash scripts/a666-mainnet-record-destination-consume.sh \
   --workflow-id "$workflow_id" \
   --expected-pftl-height "$destination_height"
 
-deposit_block_number=$(jq -er '.deposit.block_number' "$deposit_file")
-mint_block_number=$(jq -er '.transactions[-1].block_number' "$phase_dir/ethereum/mint-state.json")
-cast block "$deposit_block_number" --json --rpc-url "$ethereum_rpc" \
-  > "$phase_dir/ethereum/deposit-block.json"
-cast block "$mint_block_number" --json --rpc-url "$ethereum_rpc" \
-  > "$phase_dir/ethereum/mint-block.json"
-deposit_block_timestamp=$((16#$(jq -er '.timestamp|ltrimstr("0x")' "$phase_dir/ethereum/deposit-block.json")))
-mint_block_timestamp=$((16#$(jq -er '.timestamp|ltrimstr("0x")' "$phase_dir/ethereum/mint-block.json")))
-deposit_to_mint_seconds=$((mint_block_timestamp - deposit_block_timestamp))
-jq -n \
-  --argjson deposit_block_number "$deposit_block_number" \
-  --argjson deposit_block_timestamp "$deposit_block_timestamp" \
-  --argjson mint_block_number "$mint_block_number" \
-  --argjson mint_block_timestamp "$mint_block_timestamp" \
-  --argjson elapsed "$deposit_to_mint_seconds" \
-  --argjson recovery_exception "$allow_recovery_timing_exception" \
-  '{
-    schema:"postfiat.a666.transparent_issue_timing.v1",
-    deposit_block_number:$deposit_block_number,
-    deposit_block_timestamp:$deposit_block_timestamp,
-    mint_block_number:$mint_block_number,
-    mint_block_timestamp:$mint_block_timestamp,
-    deposit_to_mint_seconds:$elapsed,
-    slo_seconds:1500,
-    slo_pass:($elapsed<=1500),
-    recovery_timing_exception:$recovery_exception,
-    timing_gate_pass:(($elapsed<=1500) or $recovery_exception)
-  }' > "$phase_dir/timing.json"
-jq -e '.timing_gate_pass==true' "$phase_dir/timing.json" >/dev/null
-
-uniswap_liquidity_after=$(cast call "$uniswap_state_view" \
-  'getLiquidity(bytes32)(uint128)' "$uniswap_pool_id" \
-  --rpc-url "$ethereum_rpc" | awk '{print $1}')
-wa666_transfer_simulation=$(cast call "$wa666" \
-  'transfer(address,uint256)(bool)' "$joe_evm" 1 \
-  --from "$joe_evm" --rpc-url "$ethereum_rpc")
-test "$uniswap_liquidity_after" = "$uniswap_liquidity_before"
-test "$wa666_transfer_simulation" = true
-jq -n \
-  --arg pool_id "$uniswap_pool_id" \
-  --argjson liquidity_before "$uniswap_liquidity_before" \
-  --argjson liquidity_after "$uniswap_liquidity_after" \
-  --arg transfer_simulation "$wa666_transfer_simulation" \
-  '{
-    schema:"postfiat.a666.uniswap_eligibility.v1",
-    pool_id:$pool_id,
-    liquidity_before:$liquidity_before,
-    liquidity_after:$liquidity_after,
-    liquidity_consumed:($liquidity_before-$liquidity_after),
-    wa666_transfer_eth_call:$transfer_simulation,
-    verdict:(if $liquidity_before>0
-      and $liquidity_before==$liquidity_after
-      and $transfer_simulation=="true" then "PASS" else "FAIL" end)
-  }' > "$phase_dir/ethereum/uniswap-eligibility.json"
-jq -e '.verdict=="PASS"' "$phase_dir/ethereum/uniswap-eligibility.json" >/dev/null
-jq -n \
-  --arg deposit_tx "$deposit_tx" \
-  --arg packet_hash "$packet_hash" \
-  --arg packet_digest "$packet_digest" \
-  --argjson start_height "$expected_pftl_height" \
-  --argjson export_height "$export_height" \
-  --argjson end_height "$destination_height" \
-  --slurpfile timing "$phase_dir/timing.json" \
-  '{schema:"postfiat.a666.transparent_issue_acceptance.v1",verdict:"PASS",deposit_tx:$deposit_tx,packet_hash:$packet_hash,packet_digest:$packet_digest,start_height:$start_height,export_height:$export_height,end_height:$end_height,destination_consume_recorded:true,timing:$timing[0]}' \
-  > "$phase_dir/summary.json"
-cat "$phase_dir/summary.json"
+finalize_args=(--phase-dir "$phase_dir")
+if "$allow_recovery_timing_exception"; then
+  finalize_args+=(--allow-recovery-timing-exception)
+fi
+bash scripts/a666-mainnet-finalize-issue-evidence.sh "${finalize_args[@]}"

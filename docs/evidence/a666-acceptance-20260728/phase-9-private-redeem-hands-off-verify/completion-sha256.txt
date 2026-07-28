@@ -1,0 +1,10 @@
+6a831c99eb9bc4ebb478a228b17a47a89d6447434c6e7143211080ec909dc0b9  docs/evidence/a666-acceptance-20260728/phase-9-private-redeem-hands-off-verify/summary.json
+7e8384dcdb6b9c60b124b3df62b9cfeeea5911e94a7b22bd9396c59aacb78508  docs/evidence/a666-acceptance-20260728/phase-9-private-redeem-hands-off-verify/timing.json
+0a87164794e515b204d7d96cf0164b200f54a5d8de0b41caba0b6b3be5cc92cd  docs/evidence/a666-acceptance-20260728/phase-9-private-redeem-hands-off-verify/ethereum/mint-state.json
+830c650901470c7c575a84aeffa5078aabfdcca77a7ea8a5f947ee0165efc6f2  docs/evidence/a666-acceptance-20260728/phase-9-private-redeem-hands-off-verify/ethereum/uniswap-eligibility.json
+bebdc9c67154a7d1685adb455d7e93d1847fdb353d986b4ce578d3506ea246b2  docs/evidence/a666-acceptance-20260728/phase-9-private-redeem-hands-off-verify/pftl/summary.json
+3dd5c3f331e4df501ca5e7212e168995d0df0d8ea81e87198ddceccaa40a00b4  docs/evidence/a666-acceptance-20260728/phase-9-private-redeem-hands-off-verify/pftl-supply-status-after.json
+d7d85545c208f8a4dac4b373054eaf1fd1c73187cfbd9effb684cbf42682c206  docs/evidence/a666-acceptance-20260728/phase-9-private-redeem-hands-off-verify/destination-consume/summary.json
+4cca92aa72dad6c1def6915f212668b387ca720a265ca2896619518b93095e36  docs/evidence/a666-acceptance-20260728/phase-9-private-redeem-hands-off-verify/destination-consume/pftl-supply-status-after.json
+9c6f29d48f53e5456784859d6de90b123144294c0df359c1d468d28a5057d00e  docs/evidence/a666-acceptance-20260728/phase-9-private-redeem-hands-off-verify/ingress/proof-cuda/proof-report.json
+173e542d8fda858af7a1c5a1d1bd3091898ac1e8477643b5e2cf178f27d54dcb  docs/evidence/a666-acceptance-20260728/phase-9-private-redeem-hands-off-verify/export-proof/proof-cuda/proof-report.json

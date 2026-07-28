@@ -15,6 +15,7 @@ mint_consumed_topic=0xe6744ee565256772cd16e05e0dcf10583d6039e18553fcafabd22a4c99
 ethereum_rpc=${A666_ETHEREUM_RPC:-https://ethereum-rpc.publicnode.com}
 log_index=1
 finality_timeout_seconds=1800
+resume_after_finality=false
 
 while (($#)); do
   case "$1" in
@@ -23,6 +24,7 @@ while (($#)); do
     --expected-pftl-height) expected_pftl_height=$2; shift 2 ;;
     --log-index) log_index=$2; shift 2 ;;
     --finality-timeout-seconds) finality_timeout_seconds=$2; shift 2 ;;
+    --resume-after-finality) resume_after_finality=true; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -53,8 +55,6 @@ test -s "$operator_key"
 test -s "$mint_state"
 test -s "$supply_before"
 test -s "$manifest"
-test ! -e "$phase_dir/destination-consume"
-mkdir -p "$proof_dir"
 
 mint_tx=$(jq -er '.transactions[] | select(.label=="consume finalized A666 mint packet") | .tx' "$mint_state")
 mint_block=$(jq -er '.transactions[] | select(.label=="consume finalized A666 mint packet") | .block_number' "$mint_state")
@@ -63,17 +63,29 @@ mint_amount=$(jq -er '.mint_amount_atoms' "$manifest")
 [[ "$mint_amount" =~ ^[1-9][0-9]*$ ]]
 [[ "$mint_tx" =~ ^0x[0-9a-fA-F]{64}$ ]]
 [[ "$packet_hash" =~ ^[0-9a-f]{96}$ ]]
-cast receipt "$mint_tx" --json --rpc-url "$ethereum_rpc" \
-  > "$proof_dir/mint-receipt.json"
-jq -e \
-  --arg controller "${controller,,}" \
-  --arg topic "$mint_consumed_topic" \
-  --argjson log_index "$log_index" \
-  '.logs[$log_index].address==$controller
-   and .logs[$log_index].topics[0]==$topic' \
-  "$proof_dir/mint-receipt.json" >/dev/null
 
 validator2_host=$(jq -er '."validator-2"' "$hosts_file")
+if "$resume_after_finality"; then
+  test -s "$proof_dir/checkpoint.json"
+  test -s "$proof_dir/mint-receipt.json"
+  test -s "$artifact_dir/summary.json"
+  test -s "$phase_dir/destination-consume/pftl-supply-status-after.json"
+  jq -e \
+    --argjson expected_height "$expected_pftl_height" \
+    '.accepted==true and .confirmed==true and .end_height==$expected_height' \
+    "$artifact_dir/summary.json" >/dev/null
+else
+  test ! -e "$phase_dir/destination-consume"
+  mkdir -p "$proof_dir"
+  cast receipt "$mint_tx" --json --rpc-url "$ethereum_rpc" \
+    > "$proof_dir/mint-receipt.json"
+  jq -e \
+    --arg controller "${controller,,}" \
+    --arg topic "$mint_consumed_topic" \
+    --argjson log_index "$log_index" \
+    '.logs[$log_index].address==$controller
+     and .logs[$log_index].topics[0]==$topic' \
+    "$proof_dir/mint-receipt.json" >/dev/null
 ssh -o BatchMode=yes "root@$validator2_host" \
   "test ! -e '$remote_root'; install -d -m 700 '$remote_root'"
 
@@ -193,12 +205,14 @@ ssh -o BatchMode=yes "root@$validator2_host" \
     --data-dir /var/lib/postfiat/validator-2 \
     --route-id '$route_id'" \
   > "$phase_dir/destination-consume/pftl-supply-status-after.json"
+fi
+finalized_height=$(jq -er '.observed_head_number' "$proof_dir/checkpoint.json")
 jq -e \
   --argjson mint_amount "$mint_amount" \
   --slurpfile before "$supply_before" \
   '.invariant_holds==true
    and .authorized_valid_supply_atoms==$before[0].authorized_valid_supply_atoms
-   and .outstanding_bridge_claims_atoms==$before[0].outstanding_bridge_claims_atoms
+   and .outstanding_bridge_claims_atoms==($before[0].outstanding_bridge_claims_atoms-$mint_amount)
    and .ethereum_spendable_supply_atoms==($before[0].ethereum_spendable_supply_atoms+$mint_amount)' \
   "$phase_dir/destination-consume/pftl-supply-status-after.json" >/dev/null
 
