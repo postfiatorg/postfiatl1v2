@@ -720,6 +720,10 @@ fn public_swap_status(entry: &PftlSwapJournalEntry) -> Value {
     })
 }
 
+fn certified_round_batch_file_name(batch_hash: &str) -> String {
+    format!("{batch_hash}.batch.json")
+}
+
 fn recover_published_outbox(state: &RuntimeState) -> io::Result<()> {
     let config = &state.config;
     let journal = load_pftl_swap_journal(&config.journal_file)?;
@@ -737,20 +741,28 @@ fn recover_published_outbox(state: &RuntimeState) -> io::Result<()> {
         })?;
         if config
             .processed_batch_dir
-            .join(format!("{batch_hash}.json"))
+            .join(certified_round_batch_file_name(batch_hash))
             .exists()
         {
             let _ = resolve_published_swap(state, &entry.idempotency_key)?;
             continue;
         }
         if ordered.contains(batch_hash)
-            || config.batch_dir.join(format!("{batch_hash}.json")).exists()
+            || config
+                .batch_dir
+                .join(certified_round_batch_file_name(batch_hash))
+                .exists()
         {
             continue;
         }
         let stage = config.batch_dir.join(format!(".{batch_hash}.pending"));
         if stage.exists() {
-            fs::rename(&stage, config.batch_dir.join(format!("{batch_hash}.json")))?;
+            fs::rename(
+                &stage,
+                config
+                    .batch_dir
+                    .join(certified_round_batch_file_name(batch_hash)),
+            )?;
             sync_parent_directory(&stage)?;
             continue;
         }
@@ -781,7 +793,12 @@ fn recover_published_outbox(state: &RuntimeState) -> io::Result<()> {
             ));
         }
         write_private_json(&stage, &batch)?;
-        fs::rename(&stage, config.batch_dir.join(format!("{batch_hash}.json")))?;
+        fs::rename(
+            &stage,
+            config
+                .batch_dir
+                .join(certified_round_batch_file_name(batch_hash)),
+        )?;
         sync_parent_directory(&stage)?;
     }
     Ok(())
@@ -819,7 +836,7 @@ fn resolve_published_swap(
     })?;
     let processed = config
         .processed_batch_dir
-        .join(format!("{batch_hash}.json"));
+        .join(certified_round_batch_file_name(batch_hash));
     if !processed.exists() {
         return Ok(entry);
     }
@@ -1034,7 +1051,7 @@ fn execute_prepublication(
         .join(format!(".{}.pending", prepared.batch.batch_id));
     let destination = config
         .batch_dir
-        .join(format!("{}.json", prepared.batch.batch_id));
+        .join(certified_round_batch_file_name(&prepared.batch.batch_id));
     let publication_start = Instant::now();
     write_private_json(&stage, &prepared.batch)?;
     transition_swap_journal(
@@ -2814,6 +2831,15 @@ mod tests {
                 .private_dir
                 .parent()
                 .expect("test private dir has root"),
+        );
+    }
+
+    #[test]
+    fn resident_swap_batches_use_certified_round_driver_suffix() {
+        let batch_hash = "ab".repeat(48);
+        assert_eq!(
+            certified_round_batch_file_name(&batch_hash),
+            format!("{batch_hash}.batch.json")
         );
     }
 
