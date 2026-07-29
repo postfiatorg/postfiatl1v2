@@ -2287,6 +2287,48 @@ pub fn create_block_vote_for_verified_proposal(
     )
 }
 
+pub fn read_block_vote_for_verified_proposal(
+    data_dir: &Path,
+    proposal: &BlockProposalFile,
+    vote_file: &Path,
+) -> io::Result<BlockVoteFile> {
+    let store = NodeStore::new(data_dir);
+    let genesis = store.read_genesis()?;
+    validate_block_proposal_file(proposal, &genesis)?;
+    verify_block_proposal_signature_if_present(&store, proposal)?;
+    let governance =
+        governance_with_due_validator_registry_activations(&store, &genesis, proposal.block_height)?;
+    validate_bridge_exit_root_activation(proposal, &genesis, &governance)?;
+    let validators = active_validator_ids(&governance)?;
+    let proposal_hash = block_proposal_hash(proposal)?;
+    let target = BlockVoteTarget {
+        evidence: OwnedBlockEvidence::from_proposal(proposal),
+        validators,
+        block_hash: None,
+        proposal_hash: Some(proposal_hash),
+    };
+    let vote = read_block_vote_file(vote_file)?;
+    validate_block_vote_file_for_target(
+        &vote,
+        &genesis,
+        &target.evidence,
+        &target.validators,
+        target.block_hash.as_deref(),
+        target.proposal_hash.as_deref(),
+    )?;
+    let registry = read_validator_registry_file(&store.data_dir().join(VALIDATOR_REGISTRY_FILE))?;
+    let registry_root = validator_registry_root(&registry, &target.validators)?;
+    verify_block_certificate_vote_for_evidence(
+        &genesis,
+        &target.evidence.as_evidence(),
+        &registry,
+        &vote.vote,
+        &vote.vote.validator,
+        &registry_root,
+    )?;
+    Ok(vote)
+}
+
 fn create_block_vote_for_target(
     store: &NodeStore,
     genesis: &Genesis,

@@ -1191,6 +1191,121 @@ fn signed_block_proposals_verify_before_votes() {
 }
 
 #[test]
+fn verified_prepare_vote_reuse_rejects_missing_stale_and_tampered_votes() {
+    let data_dir = unique_test_dir("postfiat-verified-prepare-vote-reuse");
+    init(InitOptions {
+        data_dir: data_dir.clone(),
+        chain_id: "postfiat-local".to_string(),
+        node_id: "validator-0".to_string(),
+        validator_count: 2,
+    })
+    .expect("init verified prepare vote reuse test");
+
+    let first_batch_file = data_dir.join("first.batch.json");
+    create_transfer_batch(BatchTransferOptions {
+        data_dir: data_dir.clone(),
+        key_file: None,
+        to: "pfpreparevoteexact000000000000000000000".to_string(),
+        amount: 25,
+        batch_file: first_batch_file.clone(),
+    })
+    .expect("create first batch");
+    let first_proposal_file = data_dir.join("first.proposal.json");
+    let first_proposal = propose_batch(BatchProposalOptions {
+        data_dir: data_dir.clone(),
+        verify_block_log: true,
+        batch_kind: None,
+        batch_file: first_batch_file.clone(),
+        proposal_file: first_proposal_file.clone(),
+        view: None,
+        timeout_certificate_file: None,
+        key_file: None,
+        validator_id: None,
+    })
+    .expect("create first proposal");
+
+    let missing_vote_file = data_dir.join("missing.block_vote.json");
+    let missing_error =
+        read_block_vote_for_verified_proposal(&data_dir, &first_proposal, &missing_vote_file)
+            .expect_err("missing durable prepare vote must fail");
+    assert_eq!(missing_error.kind(), io::ErrorKind::NotFound);
+
+    let validator_keys =
+        read_validator_key_file(&data_dir.join(VALIDATOR_KEYS_FILE)).expect("validator keys");
+    let split_key_paths = write_split_validator_key_files(&data_dir, &validator_keys);
+    let validator_0_key = split_key_paths
+        .iter()
+        .find_map(|(node_id, path)| (node_id == "validator-0").then_some(path.clone()))
+        .expect("validator-0 split key");
+    let vote_file = data_dir.join("validator-0.block_vote.json");
+    let vote = create_block_vote(BlockVoteOptions {
+        data_dir: data_dir.clone(),
+        verify_block_log: true,
+        key_file: validator_0_key,
+        validator_id: Some("validator-0".to_string()),
+        batch_file: Some(first_batch_file),
+        proposal_file: Some(first_proposal_file),
+        timeout_certificate_file: None,
+        block_height: Some(first_proposal.block_height),
+        vote_file: vote_file.clone(),
+    })
+    .expect("create durable prepare vote");
+    assert_eq!(
+        read_block_vote_for_verified_proposal(&data_dir, &first_proposal, &vote_file)
+            .expect("exact proposal-bound prepare vote"),
+        vote
+    );
+
+    let second_batch_file = data_dir.join("second.batch.json");
+    create_transfer_batch(BatchTransferOptions {
+        data_dir: data_dir.clone(),
+        key_file: None,
+        to: "pfpreparevotestale000000000000000000000".to_string(),
+        amount: 26,
+        batch_file: second_batch_file.clone(),
+    })
+    .expect("create second batch");
+    let second_proposal_file = data_dir.join("second.proposal.json");
+    let second_proposal = propose_batch(BatchProposalOptions {
+        data_dir: data_dir.clone(),
+        verify_block_log: true,
+        batch_kind: None,
+        batch_file: second_batch_file,
+        proposal_file: second_proposal_file,
+        view: None,
+        timeout_certificate_file: None,
+        key_file: None,
+        validator_id: None,
+    })
+    .expect("create second proposal");
+    let stale_error =
+        read_block_vote_for_verified_proposal(&data_dir, &second_proposal, &vote_file)
+            .expect_err("prepare vote for a different proposal must fail");
+    assert!(
+        stale_error.to_string().contains("mismatch"),
+        "{stale_error}"
+    );
+
+    let mut tampered_vote = vote;
+    let replacement = if tampered_vote.vote.signature_hex.starts_with('0') {
+        "1"
+    } else {
+        "0"
+    };
+    tampered_vote.vote.signature_hex.replace_range(0..1, replacement);
+    write_block_vote_file(&vote_file, &tampered_vote).expect("write tampered prepare vote");
+    let tampered_error =
+        read_block_vote_for_verified_proposal(&data_dir, &first_proposal, &vote_file)
+            .expect_err("tampered prepare vote signature must fail");
+    assert!(
+        tampered_error.to_string().contains("signature"),
+        "{tampered_error}"
+    );
+
+    std::fs::remove_dir_all(data_dir).expect("cleanup verified prepare vote reuse data");
+}
+
+#[test]
 fn block_proposer_reports_deterministic_local_status() {
     let data_dir = std::env::temp_dir().join(format!(
         "postfiat-block-proposer-test-{}",

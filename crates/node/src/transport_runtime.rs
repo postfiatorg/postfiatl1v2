@@ -1510,33 +1510,62 @@ fn handle_transport_block_vote_line(
         })?;
     }
 
+    let consensus_block_proposal = envelope
+        .consensus_v2
+        .as_ref()
+        .map(|request| {
+            let block_proposal: BlockProposalFile =
+                serde_json::from_str(&envelope.proposal_json).map_err(|error| {
+                    format!("transport consensus v2 block proposal parse failed: {error}")
+                })?;
+            verify_consensus_v2_proposal_matches_block(&block_proposal, &request.proposal).map_err(
+                |error| format!("transport consensus v2 proposal binding failed: {error}"),
+            )?;
+            Ok::<_, String>(block_proposal)
+        })
+        .transpose()?;
     let stage_start = Instant::now();
-    let vote_with_timings = create_block_vote_with_timings(BlockVoteOptions {
-        data_dir: data_dir.to_path_buf(),
-        verify_block_log: false,
-        key_file: key_file.to_path_buf(),
-        validator_id: Some(local_status.node_id.clone()),
-        batch_file: Some(batch_file),
-        proposal_file: Some(proposal_file),
-        timeout_certificate_file,
-        block_height: Some(envelope.block_height),
-        vote_file: vote_file.clone(),
-    })
-    .map_err(|error| format!("transport block vote signing failed: {error}"))?;
+    let vote_with_timings = if envelope.consensus_v2.as_ref().is_some_and(|request| {
+        request.phase == postfiat_types::ConsensusV2Phase::Precommit
+    }) {
+        let vote = read_block_vote_for_verified_proposal(
+            data_dir,
+            consensus_block_proposal
+                .as_ref()
+                .ok_or_else(|| "consensus v2 precommit omitted block proposal".to_string())?,
+            &vote_file,
+        )
+        .map_err(|error| {
+            format!("transport consensus v2 precommit prepare-vote recovery failed: {error}")
+        })?;
+        BlockVoteWithTimingsReport {
+            vote,
+            timings: BlockVoteCreationTimingReport {
+                schema: "postfiat.block_vote_creation_timing.v1".to_string(),
+                total_ms: monotonic_elapsed_ms(stage_start),
+                ..BlockVoteCreationTimingReport::default()
+            },
+        }
+    } else {
+        create_block_vote_with_timings(BlockVoteOptions {
+            data_dir: data_dir.to_path_buf(),
+            verify_block_log: false,
+            key_file: key_file.to_path_buf(),
+            validator_id: Some(local_status.node_id.clone()),
+            batch_file: Some(batch_file),
+            proposal_file: Some(proposal_file),
+            timeout_certificate_file,
+            block_height: Some(envelope.block_height),
+            vote_file: vote_file.clone(),
+        })
+        .map_err(|error| format!("transport block vote signing failed: {error}"))?
+    };
     timings.vote_creation_ms = monotonic_elapsed_ms(stage_start);
     timings.block_vote_breakdown = vote_with_timings.timings;
 
     let consensus_v2_vote = match envelope.consensus_v2.as_ref() {
         None => None,
         Some(request) => {
-            let block_proposal: BlockProposalFile = serde_json::from_str(&envelope.proposal_json)
-                .map_err(|error| {
-                    format!("transport consensus v2 block proposal parse failed: {error}")
-                })?;
-            verify_consensus_v2_proposal_matches_block(&block_proposal, &request.proposal)
-                .map_err(|error| {
-                    format!("transport consensus v2 proposal binding failed: {error}")
-                })?;
             let vote = match request.phase {
                 postfiat_types::ConsensusV2Phase::Prepare => {
                     if request.prepare_qc.is_some() {
