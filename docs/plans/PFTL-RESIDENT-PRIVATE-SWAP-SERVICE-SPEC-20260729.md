@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-29
 **Priority:** P0 (immediate independently shippable PFTL product milestone)
-**Status:** amended implementation and qualification specification (v5)
+**Status:** amended implementation and qualification specification (v6)
 **Parent research:** `CHAIN-OPTIMIZATION-STACKED-RESEARCH-20260729.md`
 (S1.1, S1.3, S3.1, S6.1), `NAV-SWAP-EFFICIENCY-RESEARCH-20260729.md`
 (Tier 0.1, Tier 2.1)
@@ -15,6 +15,22 @@ one-round relay failure (mempool admission lesson)
 `MUST`, `MUST NOT`, `SHOULD`, and `REQUIRED` are normative.
 
 ## Amendment note
+
+The v6 delivery amendment separates two gates that were previously
+conflated:
+
+1. **Limited-availability gate:** safely make the default shielded PFTL issue
+   and redeem paths available to the controlled wallet under a low value and
+   concurrency cap.
+2. **Scale-and-performance gate:** qualify higher limits and publish latency
+   claims only after the complete 100-swap-per-direction workload and fault
+   matrix passes.
+
+The first gate MUST NOT waive proof verification, atomicity, replay
+protection, supply conservation, six-validator convergence, private-material
+controls, or crash-safe idempotency. It only avoids making a statistically
+meaningful performance campaign a prerequisite for a tightly bounded usable
+canary. The service MUST remain at canary limits until the second gate passes.
 
 The v5 delivery amendment makes the fastest safe PFTL-resident issue and
 redeem path the immediate product objective. It is not a preliminary demo and
@@ -81,6 +97,21 @@ therefore MUST be generated and run through the same conformance harness in a
 real controlled certified round. No test-only state mutation or downgraded
 finality path is acceptable evidence.
 
+### 2026-07-29 deployment checkpoint
+
+The consensus/node prerequisite has been deployed. Release
+`d035493538bfcb38a044c89117c9f725ba0e2155` was installed across all six
+validators using a signed manifest, a verified pre-rollout backup, the frozen
+quorum-safe rollout order, and post-rollout convergence checks. Every
+validator runs the same candidate binary hash
+`7b419090baf0d5a72073855969a34a39d6c096ba0be98f2d8a1e8f935048cd9e`.
+
+This does **not** mean the resident product is available yet. The remaining
+critical path is to deploy and ready the resident asset prover, persistent
+round driver, and `pftl-swapd` on validator-2; run controlled certified
+issue/redeem canaries; verify rollback, replay, restart, and private-material
+gates; and only then open the limited-availability gate.
+
 ### 2026-07-29 PFTL-first delivery decision
 
 The independently useful product is the fastest safe swap path that can be
@@ -105,14 +136,21 @@ otherwise healthy PFTL-resident swap service unready.
 
 The release order is therefore normative:
 
-1. qualify and deploy transparent pfUSDC -> private A666 on PFTL;
-2. qualify and deploy private A666 -> private pfUSDC on PFTL;
-3. qualify the requested transparent-output variants;
-4. measure and optimize the warm PFTL path until the 20s/45s SLO is met; and
-5. integrate Ethereum ingress/export without changing or delaying the
+1. deploy and prove readiness of the three resident services on validator-2;
+2. run a controlled transparent pfUSDC -> private A666 issue and verify the
+   governed A666 supply increase;
+3. redeem controlled private A666 -> private pfUSDC and verify the governed
+   A666 supply decrease;
+4. pass the limited-availability safety gate and enable the default shielded
+   paths under low value, concurrency, and wallet limits;
+5. qualify the requested transparent-output variants;
+6. run the full scale-and-performance campaign and meet the 20s/45s SLO
+   before raising limits or publishing production latency claims; and
+7. integrate Ethereum ingress/export without changing or delaying the
    independently operable PFTL service.
 
-Steps 1-4 are the immediate release. Step 5 is a subsequent integration
+Steps 1-4 are the immediate limited-availability release. Steps 5-6 complete
+route and performance qualification. Step 7 is a subsequent integration
 milestone, even when its implementation proceeds in parallel.
 
 ## 1. Purpose
@@ -495,11 +533,11 @@ at every stage boundary (extends `issue_timing.v2` with a per-stage schema
 reported separately from accepted-request service time. Cold-start and
 warm-path samples are never mixed.
 
-Release qualification requires at least 100 completed swaps per direction
-for the default shielded-output route. Optional transparent-egress routes
-require their own sample and may not borrow the shielded route's percentile.
-Report p50, p95, p99, maximum, sample count, hardware/build fingerprint, and
-validator missed-round rate:
+Full scale-and-performance qualification requires at least 100 completed
+swaps per direction for the default shielded-output route. Optional
+transparent-egress routes require their own sample and may not borrow the
+shielded route's percentile. Report p50, p95, p99, maximum, sample count,
+hardware/build fingerprint, and validator missed-round rate:
 
 | Metric | Target |
 |---|---|
@@ -518,6 +556,27 @@ attempt, no private material in evidence (redaction scan), idempotent
 retry test, crash-resume test at each state-machine stage, invalid-action
 atomicity matrix from R-BATCH-5, and proof that proving load does not
 degrade validator liveness.
+
+The limited-availability gate MAY open before the 100-swap campaign only when
+all of the following are true:
+
+- all three resident services are healthy after a clean start and a forced
+  restart, and fail closed if any required dependency is unavailable;
+- one certified default private issue and one certified default private
+  redemption complete on the live controlled fleet using real committed
+  notes and governed NAV/policy state;
+- before/after state proves the exact expected pfUSDC consumption/return and
+  A666 supply increase/decrease, with all six validators converged;
+- replay, malformed-intent, stale-anchor, timeout/retry, and atomic rollback
+  checks pass without a second spend or partial state mutation;
+- a redaction scan finds no spending keys, note openings, seeds, or bearer
+  authorization material in logs or evidence; and
+- the service is capped at one controlled wallet, one active swap, and the
+  explicitly approved low canary value.
+
+Passing this gate permits bounded use. It does not permit a production-scale
+latency claim, higher value limits, concurrent proving, or public/non-custodial
+service claims.
 
 Release evidence MUST contain a PFTL-only timing report that can be reproduced
 with Ethereum access disabled. Any end-to-end bridge demonstration is reported
@@ -542,13 +601,15 @@ PFTL service number.
    mainnet funds. If batch-local admission is negative, adopt the N-round
    fallback and re-scope Phase C targets (~+3s). If a consensus change is
    needed, follow R-BATCH-6.
-2. **Phase B — first usable PFTL-only release.** Deploy `pftl-swapd` with
+2. **Phase B — resident runtime and limited-availability release.** Deploy
+   the asset prover, persistent round driver, and `pftl-swapd` with
    warm PKs, frontier mirror, readiness, persistent fleet sessions,
    continuous preflight, and bounded dependency-aware proving. Swaps MAY
    still use N certified rounds if Phase A has not admitted the atomic path.
-   This release has no synchronous Ethereum dependency and is
-   acceptance-tested for both issue and redeem. Expected: ~5-6 min -> tens
-   of seconds.
+   Run one real controlled private issue and private redemption plus the
+   limited-availability safety matrix. Only then open the service at the
+   canary limits in section 9. This release has no synchronous Ethereum
+   dependency. Expected: ~5-6 min -> tens of seconds.
 3. **Phase C — fastest PFTL path.** Enable the admitted single atomic batch,
    retain dependency-aware proof scheduling, and remove remaining
    per-request orchestration startup. Expected: -> ~10-45s under the
@@ -556,10 +617,10 @@ PFTL service number.
    distribution rather than a one-off demonstration.
 4. **Phase D — durable async evidence, recovery, resource isolation, and
    per-stage timing schema.** Expected: p50 <= 20s met.
-5. **Phase E — controlled-value canary and performance qualification.**
-   Run restart/fault injection at every state, bounded-load tests, the
-   required issue/redeem samples, and rollback rehearsal before increasing
-   value limits.
+5. **Phase E — scale-and-performance qualification.** Run the remaining
+   restart/fault injection matrix, bounded-load tests, the required 100
+   issue and 100 redeem samples, and rollback rehearsal before increasing
+   value or concurrency limits or publishing production latency claims.
 6. **Phase F (optional, independent adapters) — pinned PK artifact
    integration (S1.1), GPU backend (S1.2), and redemption-mirror wiring
    into the Ethereum egress flow. Ethereum work may proceed in parallel,
@@ -567,8 +628,9 @@ PFTL service number.
    separate `user_journey_latency` clock.**
 
 Each phase ships behind the standard release/regression-gate treatment
-(pinned-VK gate precedent) and its own controlled-testnet evidence packet
-before touching mainnet value.
+(pinned-VK gate precedent) and its own controlled-fleet evidence packet.
+Only Phase B's explicitly approved low-value canary may touch live value
+before Phase E completes.
 
 ## 11. Implementation and release gates
 
