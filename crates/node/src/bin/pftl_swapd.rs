@@ -34,6 +34,7 @@ const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 30_000;
 const DEFAULT_MAX_CONNECTIONS: usize = 16;
 const DEFAULT_MAX_SWAPS_PER_PRINCIPAL_PER_MINUTE: u64 = 12;
 const DEFAULT_MAXIMUM_FEE_ATOMS: u64 = 100;
+const DEFAULT_MAX_NAV_AMOUNT_ATOMS: u64 = 1_000_000;
 const MAX_RATE_LIMIT_PRINCIPALS: usize = 1_024;
 const PRIVATE_NOTE_INDEX_SCHEMA_V1: &str = "postfiat.pftl_swap.private_note_index.v1";
 const MAX_PRIVATE_NOTE_INDEX_ENTRIES: usize = 4_096;
@@ -60,6 +61,7 @@ struct Config {
     asset_service_vault_dir: PathBuf,
     quote_ttl_blocks: u64,
     maximum_fee_atoms: u64,
+    max_nav_amount_atoms: u64,
     issue_ethereum_recipient: String,
     egress_policy_id: String,
     readiness_amount_atoms: u64,
@@ -415,6 +417,7 @@ fn handle_request(
             }
             let request: PftlSwapQuoteRequestV1 =
                 serde_json::from_slice(&request.body).map_err(invalid_data)?;
+            enforce_canary_amount(config, request.nav_amount_atoms)?;
             let quote = build_pftl_swap_quote(PftlSwapQuoteOptions {
                 data_dir: config.data_dir.clone(),
                 route_id: config.route_id.clone(),
@@ -511,6 +514,7 @@ fn handle_request(
                 )?;
                 (quote, entry, replayed)
             };
+            enforce_canary_amount(config, quote.nav_amount_atoms)?;
             let prepared = match execute_prepublication(
                 state,
                 &quote,
@@ -638,6 +642,16 @@ fn try_acquire_swap(state: &RuntimeState) -> io::Result<SwapPermit<'_>> {
     Ok(SwapPermit {
         active: &state.swap_active,
     })
+}
+
+fn enforce_canary_amount(config: &Config, nav_amount_atoms: u64) -> io::Result<()> {
+    if nav_amount_atoms > config.max_nav_amount_atoms {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "requested NAV amount exceeds the configured canary limit",
+        ));
+    }
+    Ok(())
 }
 
 fn enforce_principal_rate_limit(state: &RuntimeState, principal: &str) -> io::Result<()> {
@@ -1968,6 +1982,7 @@ fn readiness_report(state: &RuntimeState) -> Value {
             "admission": {
                 "ok": !shutting_down,
                 "shutting_down": shutting_down,
+                "max_nav_amount_atoms": config.max_nav_amount_atoms,
             },
             "quote_store": result_status(&quotes),
             "issue_quote": result_status(&issue),
@@ -2588,6 +2603,11 @@ fn parse_config() -> io::Result<Config> {
             1_000_000,
             "--maximum-fee-atoms",
         )?,
+        max_nav_amount_atoms: parse_u64(
+            value("--max-nav-amount-atoms"),
+            DEFAULT_MAX_NAV_AMOUNT_ATOMS,
+            "--max-nav-amount-atoms",
+        )?,
         issue_ethereum_recipient,
         egress_policy_id,
         readiness_amount_atoms: parse_u64(
@@ -2713,6 +2733,7 @@ mod tests {
             asset_service_vault_dir: vault_dir,
             quote_ttl_blocks: 2,
             maximum_fee_atoms: 100,
+            max_nav_amount_atoms: DEFAULT_MAX_NAV_AMOUNT_ATOMS,
             issue_ethereum_recipient: "0x1111111111111111111111111111111111111111".to_string(),
             egress_policy_id: "egress-1".to_string(),
             readiness_amount_atoms: 1_000_000,
@@ -2733,6 +2754,19 @@ mod tests {
             .shutdown(Shutdown::Write)
             .expect("shutdown test request writer");
         listener.accept().expect("accept test connection").0
+    }
+
+    #[test]
+    fn canary_amount_limit_rejects_value_above_configured_cap() {
+        let config = test_config("canary-amount");
+        enforce_canary_amount(&config, DEFAULT_MAX_NAV_AMOUNT_ATOMS)
+            .expect("configured canary amount");
+        assert_eq!(
+            enforce_canary_amount(&config, DEFAULT_MAX_NAV_AMOUNT_ATOMS + 1)
+                .expect_err("amount above canary cap must fail")
+                .kind(),
+            io::ErrorKind::InvalidInput,
+        );
     }
 
     #[test]
