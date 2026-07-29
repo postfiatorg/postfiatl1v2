@@ -45,7 +45,7 @@ deposit_block_number=$(jq -er '.deposit.block_number' "$deposit_file")
 mint_block_number=$(jq -er \
   '.transactions[] | select(.label=="consume finalized A666 mint packet") | .block_number' \
   "$mint_state")
-start_height=$(jq -er '.start_height' "$run_manifest")
+start_height=$(jq -er '.start_height // .expected_pftl_height' "$run_manifest")
 export_height=$(jq -er '.post_state.latest_finalized_height' "$mint_state")
 end_height=$(jq -er '.pftl_height' "$destination_summary")
 
