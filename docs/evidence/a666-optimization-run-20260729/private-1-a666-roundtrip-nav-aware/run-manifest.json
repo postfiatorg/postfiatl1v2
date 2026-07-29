@@ -16,6 +16,13 @@
     "private_egress_vk_hash": "a8e020b877a45f9691a266990e3466b52b1518518d3a5264f9725be201b9884db80d4c9cb457c29020e65cfefa85d6be"
   },
   "workflow_id": "a666-opt-pass2-20260729",
+  "pfusdc_deposit_lane": {
+    "route_epoch": 5,
+    "vault": "0xaaa78fda7062efce769e95cd72fc55e507bc8183",
+    "verifier": "0x9a45d6f1dc9da443a88b1c336b3188fa7924d1ae",
+    "deployment_manifest": "docs/evidence/a666-acceptance-20260728/phase-5-transparent-redeem-verify/pfusdc-egress/recovery-epoch5/deploy/manifest.postdeploy-enriched.json",
+    "deployment_manifest_sha256": "b69417647e6a4bed5a3e7fa5069a0844b80a63f78020ba34f4796e373e92e904"
+  },
   "expected_pftl_height": 440,
   "expected_verifier_height": 422,
   "prior_checkpoint_block_id": "852d5abc7d2441be4d5edb92dac734c0a5ef2af7ac0ad1d6ddaaad0a78873d8344513466cfc5414a6a0e4910ef95935c",

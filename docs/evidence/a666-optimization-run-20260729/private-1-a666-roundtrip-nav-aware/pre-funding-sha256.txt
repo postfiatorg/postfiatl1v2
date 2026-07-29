@@ -9,6 +9,7 @@ ab04db6d0d610f6b354d0860c00fa745c93ed4faf173c1829edfb0cbd699e552  docs/evidence/
 64fc356841d3707d69bcee905d88a90e6a55cb43155b82fa6a609d2a509caa00  docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-nav-aware/baseline/supply-status.json
 3ce616375f81596c1dadec4785534aa0be745dc572ee1f3b7fc445911dd4c09a  docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-nav-aware/baseline/validator-2-status.json
 e43224392e868167126caf94003628695a07f068c49bd7b63497dd459b02b458  docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-nav-aware/preflight/a100-readiness.txt
+30f8955ec317e081809ed8d0552b93aabf358b4ecf2381e91c9769977eefc593  docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-nav-aware/preflight/deposit-helper-default-lane-rejection.json
 6485f9b3d58f8c6292d55e0c8df21e889ab22e96395cf19c4c3c7cd786d52937  docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-nav-aware/preflight/ethereum-state.json
 0495f1b3cb6e8c16f5bca5b566e9c1d6437e048249fac71226b81fa124aee7e1  docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-nav-aware/preflight/fleet-status.json
 bda6d9171e297ce2d84d218f182b2083f3d2503c813eb157f46bb89c7834f9e2  docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-nav-aware/preflight/prior-checkpoint-block.json
@@ -27,4 +28,4 @@ a1d8958b1888d2bf185517ac934fbbfa5cf29c7207fe7efb5475b190fc734e53  docs/evidence/
 5c00dde54deab0f6b05adb867e8a97a44b8d63b832594de13eda761ca5065b93  docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-nav-aware/preflight/validators/validator-3.json
 5a5e8984194d512e98e73e8f4b8c41e75151fe0c4285492f8d468af878a4f6a0  docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-nav-aware/preflight/validators/validator-4.json
 ab003eafa6a548daae325f47303a95f5848824151a3a3ddcdb22abb505f88760  docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-nav-aware/preflight/validators/validator-5.json
-7201e88ee211a8f9febc4b8a6d74fc48e228206a087e855b9bd1acc06380058f  docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-nav-aware/run-manifest.json
+b9426ddb02c834ae48e2620e7b302758d31f7a99266acca8c17ccf496db27601  docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-nav-aware/run-manifest.json
