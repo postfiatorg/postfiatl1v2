@@ -1,0 +1,9 @@
+workspace=fresh
+2e6017599d95e09541446b8e3054f2bbf3644dae24996a7327f50d3989d77fae  /workspace/a666-acceptance/bin/eth-l1-mainnet-fast-lane-p0-cuda-optimized
+933af6743541dce228a8ed64d96d3a807c2d8633e1ae5534ec1ee0611eed8c98  /workspace/a666-acceptance/bin/pftl-uniswap-prover-cuda
+dfa248ee93ac9216d2f1a9e7306b855ee7eef527e7778e6c52c11bd8f58f3456  /workspace/a666-acceptance/live/a666-epoch5-transparent-20260728t1505z/pfusdc-egress/pfusdc-tier4-prover-cuda
+495e46273337ce4ff035177825a605cc389ad82c05ead11d4874e349ba22cc3a  /workspace/a666-acceptance/witness/deployed-program-004e44.elf
+NVIDIA A100-SXM4-40GB, 40960 MiB, 0 MiB, 0 %
+               total        used        free      shared  buff/cache   available
+Mem:     540944846848 24460984320 424974278656   193077248 95212441600 516483862528
+Swap:     8589930496           0  8589930496

@@ -1,0 +1,37 @@
+{
+  "schema": "postfiat.a666.optimization_run_manifest.v3",
+  "created_at": "2026-07-29T03:05:42Z",
+  "objective": "fresh intervention-free private issue and private redemption each within 1500 seconds",
+  "orchestration_commit": "0ff1079f3785fe70be563ffdda1b4d5ce841ce94",
+  "validator_release": "a666-variable-nav-9ffdfb6",
+  "validator_revision": "9ffdfb66",
+  "validator_binary_sha256": "fb3cb3d21ff677269baada047445a6372a2caf415c2710a5c987872f85ecb94b",
+  "resident_prover": {
+    "binary_sha256": "8ca2684b952d01119a2029dde20894dcad1bf2129d2dd796fd248e139d2a5a65"
+  },
+  "workflow_id": "a666-opt-pass3-20260729",
+  "pfusdc_deposit_lane": {
+    "route_epoch": 5,
+    "vault": "0xaaa78fda7062efce769e95cd72fc55e507bc8183",
+    "verifier": "0x9a45d6f1dc9da443a88b1c336b3188fa7924d1ae",
+    "deployment_manifest": "docs/evidence/a666-acceptance-20260728/phase-5-transparent-redeem-verify/pfusdc-egress/recovery-epoch5/deploy/manifest.postdeploy-enriched.json",
+    "deployment_manifest_sha256": "b69417647e6a4bed5a3e7fa5069a0844b80a63f78020ba34f4796e373e92e904"
+  },
+  "expected_pftl_height": 453,
+  "start_height": 453,
+  "expected_verifier_height": 446,
+  "prior_checkpoint_block_id": "0952c73894b37a0afd0235dd75aff1cf4ef91ebc8a850a934bb2f1f16a65a294720a2d67824a97c416f041a4de8dfc83",
+  "amounts": {
+    "mint_atoms": 1000000,
+    "issue_base_value_atoms": 901032,
+    "deposit_atoms": 905538,
+    "issue_spread_atoms": 4506,
+    "redemption_output_atoms": 900581
+  },
+  "expected_wrapped_balance_before": 103000000,
+  "expected_wrapped_supply_before": 31489197455,
+  "post_funding_code_changes_permitted": false,
+  "post_funding_manual_state_repair_permitted": false,
+  "issue_slo_seconds": 1500,
+  "redemption_slo_seconds": 1500
+}
