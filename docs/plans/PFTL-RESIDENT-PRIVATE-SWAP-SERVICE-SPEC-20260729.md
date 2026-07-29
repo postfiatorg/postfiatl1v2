@@ -99,18 +99,73 @@ finality path is acceptable evidence.
 
 ### 2026-07-29 deployment checkpoint
 
-The consensus/node prerequisite has been deployed. Release
-`d035493538bfcb38a044c89117c9f725ba0e2155` was installed across all six
-validators using a signed manifest, a verified pre-rollout backup, the frozen
+The original prerequisite release
+`d035493538bfcb38a044c89117c9f725ba0e2155` was superseded by fleet release
+`resident-remote-proposer-5548112`. It was installed across all six validators
+using a signed manifest, a verified height-484 pre-rollout backup, the frozen
 quorum-safe rollout order, and post-rollout convergence checks. Every
-validator runs the same candidate binary hash
-`7b419090baf0d5a72073855969a34a39d6c096ba0be98f2d8a1e8f935048cd9e`.
+validator runs node binary hash
+`e0927992a97590d8542e16dba998b92df597a38c4be159a56fd9278ed228dc6a`.
 
-This does **not** mean the resident product is available yet. The remaining
-critical path is to deploy and ready the resident asset prover, persistent
-round driver, and `pftl-swapd` on validator-2; run controlled certified
-issue/redeem canaries; verify rollback, replay, restart, and private-material
-gates; and only then open the limited-availability gate.
+The resident asset prover, persistent round driver, and `pftl-swapd` are
+deployed on validator-2. The driver has five authenticated persistent peers,
+requires remote proposer routing, and applies locally before certified
+delivery. The service requires all of those capabilities in readiness.
+
+### 2026-07-29 limited-availability determination
+
+The bounded limited-availability gate is **open** for the single controlled
+wallet, one active swap, and a maximum request of 1,000,000 NAV atoms. This is
+not a scale or latency qualification.
+
+The determination is based on:
+
+- certified private issue at height 483 and certified private redemption at
+  height 484 using real committed notes;
+- certified transparent-output issue and redemption at heights 486 and 489;
+- exact supply increase/decrease and governed pfUSDC settlement amounts;
+- six-validator convergence with empty mempools at height 489;
+- live replay, malformed-intent, dependency-failure, restart, and idempotent
+  recovery checks;
+- exact-live-batch conformance against certified height-482 and height-483
+  pre-state roots: 11 private-issue and 8 private-redemption adversarial cases,
+  all rejected with rollback preserved;
+- a live redaction scan with zero forbidden JSON keys and zero matches across
+  38 extracted sensitive values; and
+- an explicit 1,000,000-atom admission cap, enforced at quote and execution
+  and advertised by readiness.
+
+The scale-and-performance gate remains **closed**. Recent accepted-to-commit
+samples are 202.5-354.3 seconds and the private-primary proof DAG is
+112.6-132.6 seconds, so the service does not meet the 20-second p50,
+45-second p95, or 35-second proof-DAG targets. The 100-issue/100-redeem
+campaign must not be represented as passed or used to raise limits until that
+bottleneck is fixed and the complete campaign succeeds.
+
+The proof path is structurally two serial `asset-orchard-private-egress-v1`
+proofs per private-primary request. Resident timing records place those two
+proofs at about 86-91 seconds on the current 2-vCPU validator shape. All six
+validators have the same CPU/memory shape, and the prover has reached its
+former 1,280-MiB cgroup ceiling. The deployed service now runs at normal
+priority with `CPUWeight=100` and a 2,048-MiB ceiling. Its post-change key
+prewarm completed in 441.5 seconds with zero memory-limit/OOM events and green
+resident readiness at unchanged height 489. This removes avoidable resource
+pressure, but cannot make two serial 40-45-second proofs meet a 35-second
+proof-DAG SLO. Meeting the scale gate therefore requires a qualified
+prover/circuit or hardware change, not merely moving the service to another
+current validator.
+
+The rollback rehearsal is now complete. The archived height-482 governance
+block replayed from the verified height-481 backup with its original round
+certificate, advanced the isolated state to height 482, and reproduced the
+certified state root. A prior mismatch came from a stale certificate selected
+by the temporary fixture, not from historical replay logic; strict
+proposal-hash verification correctly rejected it.
+
+The detailed public determination is
+`docs/status/PFTL-RESIDENT-SWAP-LIMITED-AVAILABILITY-20260729.md`. Raw private
+records, note material, signatures, and output references remain restricted
+operational state and are deliberately excluded from the public packet.
 
 ### 2026-07-29 PFTL-first delivery decision
 
@@ -650,12 +705,15 @@ regression.
 
 ## 12. Open questions
 
-1. **Resolved in implementation, pending controlled-fleet qualification:**
-   atomic shielded admission now evaluates batch-local note commitments
-   against a trial state and commits only if every action accepts. Local
-   conformance and four-/six-validator transport tests pass; the funds-bearing
-   gate remains closed until the complete R-BATCH-5 matrix passes on the
-   controlled fleet.
+1. **Resolved for the default private limited-availability route:** atomic
+   shielded admission evaluates batch-local note commitments against a trial
+   state and commits only if every action accepts. Exact real private-issue
+   and private-redemption batches passed the adversarial conformance matrix
+   against pre-state roots matching certified heights 482 and 483, and their
+   valid baselines committed and converged on the six-validator fleet. The
+   complete four-shape R-BATCH-5 campaign, including both transparent-egress
+   shapes, remains required before raising value/concurrency limits or
+   claiming scale qualification.
 2. Egress-to-transparent as part of the same batch or a user-optional
    second step (privacy tradeoff: immediate egress links timing).
    Default SHOULD be to leave output notes shielded.
