@@ -911,7 +911,10 @@ fn verify_processed_swap_finality(
         || certificate.block_height != commit.proposal.round.height
         || certificate.view != commit.proposal.round.view
         || certificate.proposer != commit.proposal.proposer
-        || certificate.block_hash.as_deref() != Some(committed_block.block_id.as_str())
+        || certificate
+            .block_hash
+            .as_ref()
+            .is_some_and(|block_hash| block_hash != &committed_block.block_id)
     {
         return Err(invalid_data(
             "processed swap certificate does not bind the archived batch",
