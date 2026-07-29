@@ -16,12 +16,6 @@ ASSET_ID = (
 )
 ISSUER = "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b"
 RESERVE_OPERATOR = "pfd0c86d9084915e1fefd22eab891806397d5a5937"
-PROFILE_ID = (
-    "8c0244fe0cfb216fb5ab471d0c9e060a5c8ba052b5a29952d6e7aad76b24523a"
-    "f2b7e0ed82885c11d2c6308ddfcc9118"
-)
-POLICY_HASH = "a13553ba6f1a48dbe02dbc34de4d8faed1afa962dc2d2b29ff6f0c6b7ac6fd5c"
-PROGRAM_VKEY = "0x00f96064937f05d891b13a80667bdf5ecd62a7d5ed245724ab294bad311a2164"
 ISSUER_KEY = (
     "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/faucet-key.json"
 )
@@ -37,6 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pftl-status", type=Path, required=True)
     parser.add_argument("--route-status", type=Path, required=True)
     parser.add_argument("--vault-status", type=Path, required=True)
+    parser.add_argument("--profile-manifest", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     return parser.parse_args()
 
@@ -92,7 +87,12 @@ def write_json(path: Path, value: object) -> None:
     os.chmod(path, 0o600)
 
 
-def active_a666_profile(status: dict[str, Any]) -> dict[str, Any]:
+def active_a666_profile(
+    status: dict[str, Any],
+    profile_id: str,
+    source_class: str,
+    policy_hash: str,
+) -> dict[str, Any]:
     matches = [
         profile
         for profile in status.get("active_nav_profiles", [])
@@ -102,10 +102,10 @@ def active_a666_profile(status: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("PFTL status must contain exactly one active A666 profile")
     profile = matches[0]
     required = {
-        "profile_id": PROFILE_ID,
+        "profile_id": profile_id,
         "verifier_kind": "sp1-groth16",
-        "source_class": "stakehub-six-leg-reserves-v2",
-        "valuation_policy_hash": POLICY_HASH,
+        "source_class": source_class,
+        "valuation_policy_hash": policy_hash,
         "halted": False,
     }
     for field, expected in required.items():
@@ -240,7 +240,16 @@ def main() -> None:
     status = json.loads(args.pftl_status.read_text())
     route = json.loads(args.route_status.read_text())
     vault = json.loads(args.vault_status.read_text())
-    profile = active_a666_profile(status)
+    governed = json.loads(args.profile_manifest.read_text())
+    if governed.get("asset_id") != ASSET_ID:
+        raise RuntimeError("profile manifest does not describe A666")
+    profile_id = governed["profile_id"]
+    source_class = governed["source_class"]
+    policy_hash = governed["valuation_policy_hash"]
+    program_vkey = governed["sp1_program_vkey"]
+    profile = active_a666_profile(
+        status, profile_id, source_class, policy_hash
+    )
 
     proof = (args.proof_dir / "aggregate-proof-calldata.bin").read_bytes()
     public_values = (args.proof_dir / "aggregate-public-values.bin").read_bytes()
@@ -248,7 +257,7 @@ def main() -> None:
     if executed.exists() and public_values != executed.read_bytes():
         raise RuntimeError("proved and executed aggregate public values differ")
     vkey = (args.proof_dir / "aggregate-vkey.txt").read_text().strip()
-    if vkey != PROGRAM_VKEY:
+    if vkey != program_vkey:
         raise RuntimeError("aggregate vkey differs from the governed A666 profile")
     if len(proof) > 4096 or len(public_values) > 16384:
         raise RuntimeError("proof material exceeds the governed profile limits")
@@ -257,7 +266,7 @@ def main() -> None:
     if tuple_offset != 32 or word_u128(public_values, tuple_offset) != 2:
         raise RuntimeError("unexpected AggregatePublicValuesV2 encoding")
     base = tuple_offset
-    if public_values[base + 64 : base + 96].hex() != POLICY_HASH:
+    if public_values[base + 64 : base + 96].hex() != policy_hash:
         raise RuntimeError("public-values policy differs from the governed profile")
     spot = word_u128(public_values, base + 96)
     cash = word_u128(public_values, base + 192)
@@ -277,10 +286,10 @@ def main() -> None:
     )
     source_preimage = (
         f"asset_id={ASSET_ID}\n"
-        f"profile_id={PROFILE_ID}\n"
+        f"profile_id={profile_id}\n"
         f"profile_source_class_bytes={len(profile['source_class'])}\n"
         f"profile_source_class={profile['source_class']}\n"
-        f"policy_hash={POLICY_HASH}\n"
+        f"policy_hash={policy_hash}\n"
         f"sp1_public_values_hash={public_values_hash}\n"
         f"sp1_verified_net_assets={proof_verified_net_assets}\n"
         f"subscription_overlay_source_root={overlay_root}\n"
@@ -293,8 +302,8 @@ def main() -> None:
     )
     attestor_preimage = (
         "operator=0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0\n"
-        f"policy_hash={POLICY_HASH}\n"
-        f"program_vkey={PROGRAM_VKEY}\n"
+        f"policy_hash={policy_hash}\n"
+        f"program_vkey={program_vkey}\n"
     ).encode()
     attestor_root = hash_domain(
         "postfiat.a666.stakehub_attestor_root.v1", attestor_preimage
@@ -305,7 +314,7 @@ def main() -> None:
         f"nav_per_unit={nav_per_unit}\n"
         f"circulating_supply={circulating_supply}\n"
         f"verified_net_assets={total_verified_net_assets}\n"
-        f"proof_profile={PROFILE_ID}\nsource_root={source_root}\n"
+        f"proof_profile={profile_id}\nsource_root={source_root}\n"
         f"attestor_root={attestor_root}\n"
     ).encode()
     packet_hash = hash_domain(
@@ -326,7 +335,7 @@ def main() -> None:
             "nav_per_unit": nav_per_unit,
             "circulating_supply": circulating_supply,
             "verified_net_assets": total_verified_net_assets,
-            "proof_profile": PROFILE_ID,
+            "proof_profile": profile_id,
             "source_root": source_root,
             "attestor_root": attestor_root,
             "reserve_packet_hash": packet_hash,
@@ -356,9 +365,9 @@ def main() -> None:
         "asset_id": ASSET_ID,
         "prior_epoch": profile["finalized_epoch"],
         "epoch": epoch,
-        "profile_id": PROFILE_ID,
-        "policy_hash": POLICY_HASH,
-        "program_vkey": PROGRAM_VKEY,
+        "profile_id": profile_id,
+        "policy_hash": policy_hash,
+        "program_vkey": program_vkey,
         "proof_sha256": proof_sha,
         "public_values_sha256": public_sha,
         "proof_verified_net_assets_usd_1e8": proof_verified_net_assets,

@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-28
 **Priority:** P0
-**Status:** proposed execution specification
+**Status:** executed — business flow PASS, release gate FAIL
 **Parent economics:** `A666-END-TO-END-MAINNET-PRIMARY-ISSUANCE-SPEC-20260727.md`
 **Parent acceptance:** `A666-TRANSPARENT-PRIVATE-ISSUE-REDEEM-ACCEPTANCE-SPEC-20260728.md`
 **Starting checkpoint:** commit `367a449ae20cbaed8652935690ea45420a2b0646`,
@@ -25,6 +25,14 @@ pool price.
 `MUST`, `MUST NOT`, and `REQUIRED` are normative. This document does not
 change the canonical issue or redemption formulas, trust boundaries, route
 limits, proof systems, or privacy claims defined by the parent specifications.
+
+Execution evidence is in
+`../evidence/a666-variable-size-nav-roundtrip-20260728/`. The live campaign
+reached a safe, fully reconciled terminal state at PFTL height 440. Functional
+issuance, real StakeHub NAV marking, transparent redemption, and private-middle
+redemption passed. The top-level release verdict is `FAIL` because measured
+fresh operations exceeded the 1,500-second SLO and the run was not
+intervention-free.
 
 ## 1. User-visible outcome
 

@@ -1,0 +1,18 @@
+{
+  "accepted": true,
+  "all_sends_verified": true,
+  "batch_kind": "shielded",
+  "confirmed": true,
+  "end_height": 420,
+  "end_state_root": "243e01ef0b14bcba94910e912ddc4dc99f63cbb6b634c9f29197fb8548fd1a30e680b607046f4c1de17043e8bc371c9e",
+  "label": "a666-p-large-20260728-private-primary-issue",
+  "local_apply_verified": true,
+  "proposer": "validator-0",
+  "round_ok": true,
+  "runner_exit_code": 0,
+  "runner_stderr": null,
+  "schema": "postfiat-a666-ce22-remote-finality-batch-v1",
+  "start_height": 419,
+  "start_state_root": "cb1527e8a1de0905247274b791fed90166da1b569b953bf7fab9ec5956242c18462c29a8e736d5326082bffea0c5c46e",
+  "vote_count": 5
+}

@@ -1,0 +1,18 @@
+{
+  "accepted": true,
+  "all_sends_verified": true,
+  "batch_kind": "shielded",
+  "confirmed": true,
+  "end_height": 419,
+  "end_state_root": "cb1527e8a1de0905247274b791fed90166da1b569b953bf7fab9ec5956242c18462c29a8e736d5326082bffea0c5c46e",
+  "label": "a666-p-large-20260728-pfusdc-ingress",
+  "local_apply_verified": true,
+  "proposer": "validator-5",
+  "round_ok": true,
+  "runner_exit_code": 0,
+  "runner_stderr": null,
+  "schema": "postfiat-a666-ce22-remote-finality-batch-v1",
+  "start_height": 418,
+  "start_state_root": "291dacf3e22bb84549e03e14e3f230086cf18ff5a0be6e33b930b06cbddfd224d03a025fdea1ef49235d790debe71393",
+  "vote_count": 5
+}

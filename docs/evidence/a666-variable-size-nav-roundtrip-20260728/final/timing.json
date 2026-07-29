@@ -1,0 +1,51 @@
+{
+  "p_large_issue": {
+    "elapsed_seconds": 3948,
+    "end_block": 25634482,
+    "end_timestamp": 1785279827,
+    "slo_pass": false,
+    "slo_seconds": 1500,
+    "start_block": 25634155,
+    "start_timestamp": 1785275879
+  },
+  "p_large_redeem": {
+    "elapsed_seconds": 1776,
+    "end_block": 25634937,
+    "end_timestamp": 1785285287,
+    "slo_pass": false,
+    "slo_seconds": 1500,
+    "start_block": 25634789,
+    "start_timestamp": 1785283511
+  },
+  "schema": "postfiat.a666.variable_roundtrip_timing.v1",
+  "t_small_issue": {
+    "deposit_block_number": 25633383,
+    "deposit_block_timestamp": 1785266579,
+    "deposit_to_mint_seconds": 6660,
+    "mint_block_number": 25633937,
+    "mint_block_timestamp": 1785273239,
+    "recovery_timing_exception": true,
+    "schema": "postfiat.a666.issue_timing.v2",
+    "slo_pass": false,
+    "slo_seconds": 1500,
+    "timing_gate_pass": true
+  },
+  "t_small_redeem_exact_completion": {
+    "elapsed_seconds": 3240,
+    "end_block": 25634979,
+    "end_timestamp": 1785285791,
+    "slo_pass": false,
+    "slo_seconds": 1500,
+    "start_block": 25634709,
+    "start_timestamp": 1785282551
+  },
+  "t_small_redeem_main_payout": {
+    "elapsed_seconds": 828,
+    "end_block": 25634778,
+    "end_timestamp": 1785283379,
+    "slo_pass": true,
+    "slo_seconds": 1500,
+    "start_block": 25634709,
+    "start_timestamp": 1785282551
+  }
+}

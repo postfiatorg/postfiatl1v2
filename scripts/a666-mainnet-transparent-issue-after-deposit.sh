@@ -107,6 +107,11 @@ ssh -o BatchMode=yes "root@$validator2_host" \
   "$remote_node status --data-dir /var/lib/postfiat/validator-2 --expect-height $expected_pftl_height" \
   > "$phase_dir/pftl/status-before.json"
 ssh -o BatchMode=yes "root@$validator2_host" \
+  "$remote_node navcoin-bridge-supply-status \
+    --data-dir /var/lib/postfiat/validator-2 \
+    --route-id pftl-a666-ethereum-wA666-usdc-v1" \
+  > "$phase_dir/pftl-supply-status-before.json"
+ssh -o BatchMode=yes "root@$validator2_host" \
   "$remote_node account-assets --data-dir /var/lib/postfiat/validator-2 --account $joe --asset-id $pfusdc" \
   > "$phase_dir/a666/joe-pfusdc-before.json"
 ssh -o BatchMode=yes "root@$validator2_host" \
@@ -142,9 +147,6 @@ jq '{
 if "$resume_after_ingress_proof"; then
   test -s "$phase_dir/ingress/witness.public-values.json"
   test -s "$phase_dir/ingress/proof-cuda/proof-report.json"
-  ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
-    "test -s '$a100_root/ingress-proof/proof-calldata.bin'; \
-     test -s '$a100_root/ingress-proof/public-values.bin'"
 else
   if "$resume_after_ingress_deployment"; then
     local_deployment_sha=$(sha256sum "$phase_dir/ingress/capture-deployment.json" | awk '{print $1}')
@@ -198,7 +200,12 @@ jq -e '
 
 if "$resume_after_ingress_proof"; then
   ssh -o BatchMode=yes "root@$validator2_host" \
-    "test -d '$remote_run'; test -s '$remote_run/ingress-proof/proof-calldata.bin'"
+    "if test -e '$remote_run'; then
+       test -d '$remote_run'
+     else
+       install -d -o root -g root -m 700 '$remote_run'
+     fi
+     install -d -o root -g root -m 700 '$remote_run/ingress-proof'"
 else
   ssh -o BatchMode=yes "root@$validator2_host" \
     "test ! -e '$remote_run'; install -d -o root -g root -m 700 '$remote_run/ingress-proof'"
@@ -223,7 +230,7 @@ if "$private_middle"; then
     --phase-dir "$phase_dir" \
     --workflow-id "$workflow_id" \
     --expected-pftl-height "$((expected_pftl_height + 2))"
-  export_height=$((expected_pftl_height + 7))
+  export_height=$((expected_pftl_height + 6))
 else
   round_args=(
     --node-bin target/release/postfiat-node

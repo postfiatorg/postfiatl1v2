@@ -740,10 +740,6 @@ async fn capture_helios_inputs(
     let final_slot = finality_update.finalized_header().beacon().slot;
     let (bootstrap_slot, checkpoint_root) = if let Some(checkpoint) = prior_checkpoint {
         checkpoint.validate().map_err(|error| anyhow!(error))?;
-        anyhow::ensure!(
-            checkpoint.ethereum_finalized_slot.is_multiple_of(32),
-            "governed Ethereum checkpoint slot is not an epoch boundary"
-        );
         let root = parse_hex32(&checkpoint.ethereum_finalized_beacon_root)?;
         let canonical = rpc
             .beacon_root(consensus_rpc, checkpoint.ethereum_finalized_slot)

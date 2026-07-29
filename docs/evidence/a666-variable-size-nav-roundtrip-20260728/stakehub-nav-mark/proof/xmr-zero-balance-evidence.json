@@ -1,0 +1,13 @@
+{
+  "schema": "stakehub.xmr_zero_balance_evidence.v1",
+  "address": "4ADLBk3PnUARCFR1nmHHKUHdPzxd3BPQNRrcw2VyTvGsNpb7vhauAAuR7yt4QsTCnPFK9WnMBbvuFb4haBTkwFGh8YgaXBk",
+  "message": "stakehub-pol-xmr-reserve-v1|owner:0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0|run:20260728T230932Z",
+  "observed_unix": 1785281231,
+  "agent_operation": "xmr_reserve_proof",
+  "wallet_rpc_error": {
+    "code": -1,
+    "message": "Zero balance"
+  },
+  "proven_atomic": 0,
+  "claim": "No XMR reserve value is included; commitment exists only to preserve the governed six-leg policy shape."
+}

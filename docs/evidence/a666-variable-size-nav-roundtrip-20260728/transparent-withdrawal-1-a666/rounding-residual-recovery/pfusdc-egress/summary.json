@@ -1,0 +1,20 @@
+{
+  "schema": "postfiat.a666.pfusdc_proof_egress_acceptance.v1",
+  "verdict": "PASS",
+  "pftl_burn_height": 439,
+  "proof": {
+    "program_vkey": "0x0026a156bfd82ce1d1bf3f966c77daba8d5c266b8cc29928474747c4a02ca89b",
+    "proof_bytes": 356,
+    "proof_mode": "groth16",
+    "public_values_bytes": 1486,
+    "schema": "postfiat.pfusdc.egress_proof_report.v1",
+    "setup_and_prove_ms": 148868
+  },
+  "ethereum_withdrawal": {
+    "tx": "87cc97c07091e162119c6019720365ee00f15440b4b4d40b515a670a011d81cc",
+    "amount_atoms": 1,
+    "replay_rejected": true
+  },
+  "pftl_accounting_settle_height": 440,
+  "trust_boundary": "Ethereum payout is proof-gated and precedes PFTL issuer-signed accounting closure; settlement signature does not authorize or gate user funds"
+}

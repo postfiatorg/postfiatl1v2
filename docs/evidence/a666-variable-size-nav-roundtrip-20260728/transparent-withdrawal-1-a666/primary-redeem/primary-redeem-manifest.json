@@ -1,0 +1,11 @@
+{
+  "base_value_atoms": 901031,
+  "nav_amount_atoms": 1000000,
+  "nav_per_unit_usd_1e8": 90103113,
+  "policy_epoch": 3,
+  "policy_hash": "f28ab92c43c4e57e03de31ac98f85426b6e1e6748fd84c71394f102b7227950faf716c8bd889cbbf3ba56686bb8bd91f",
+  "redemption_nonce": "515e73e02aecb2096a4825dfcc5d146e7436a776618cdaec379dc82772084d58",
+  "route_epoch": 3,
+  "schema": "postfiat.a666.transparent_primary_redeem.v1",
+  "settlement_output_atoms": 900580
+}

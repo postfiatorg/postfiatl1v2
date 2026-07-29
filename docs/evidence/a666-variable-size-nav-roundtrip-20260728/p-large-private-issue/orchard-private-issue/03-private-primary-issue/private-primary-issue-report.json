@@ -1,0 +1,17 @@
+{
+  "schema": "postfiat-asset-orchard-private-primary-issue-report-v1",
+  "action_file": "/var/lib/postfiat/validator-2/a666-p-large-20260728-private-issue/public/private-primary-issue.json",
+  "input_note_file": "/var/lib/postfiat/validator-2/a666-p-large-20260728-private-issue/private/pfusdc-note.json",
+  "output_note_file": "/var/lib/postfiat/validator-2/a666-p-large-20260728-private-issue/private/a666-note.json",
+  "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+  "settlement_asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "native_nav_asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+  "settlement_value_atoms": 100500000,
+  "mint_amount_atoms": 100000000,
+  "anchor": "c3b6483aa35fbc11f6a9879acd2754da930ab8c2208d05f5d3d6193e3c45b912",
+  "nullifier": "ff7b06b4335b7d6ee9f35f353956ae2d75fa1d9e79c1832cd9da0ef72fb60f08",
+  "output_commitment": "3e84794b35795f2b0a7ff81e70ae1ce296de352d076f8ce3c6def798b9e51e36",
+  "proof_bytes": 7616,
+  "verified": true,
+  "privacy": "private_settlement_note_to_encrypted_nav_note_with_public_route_economics"
+}

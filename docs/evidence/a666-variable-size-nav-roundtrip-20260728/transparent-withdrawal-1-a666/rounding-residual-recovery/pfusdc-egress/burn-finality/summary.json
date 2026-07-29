@@ -1,0 +1,21 @@
+{
+  "accepted": true,
+  "all_sends_verified": true,
+  "confirmed": true,
+  "end_block_tip_hash": "cba3c73ed5d760dae44c81dac71f55f89b3081e63b2bf82821f330b4a8aa997f3532019fe854e716a93b728d3aea2888",
+  "end_height": 439,
+  "end_mempool_pending": 0,
+  "end_state_root": "9d3b50167ecf49b18c3063fa0dfa769b2aec8c0fd58cc9ffdf2742d9d873989e569c073ee0a6905a688d2f01623f69b4",
+  "label": "a666-var-transparent-rounding-pfusdc-burn",
+  "proposer": "validator-1",
+  "round_ok": true,
+  "schema": "postfiat-a666-ce22-remote-finality-operation-v1",
+  "source": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "start_height": 438,
+  "start_state_root": "fed381bf080bad87ce55c97e766fc19c609391ba8fe557cc628cf23a9f367db211fd98088b149d4ec5f190f55c8315c7",
+  "transaction_kind": "vault_bridge_burn_to_redeem",
+  "trust_class": "CONTROLLED",
+  "tx_id": "d90ac6a8894853bc15dd93769eba4a5977cc465f957c098f216f8b8e6964e784e195093c1ade27d63f025c72916acab3",
+  "validator_count": 6,
+  "vote_count": 5
+}

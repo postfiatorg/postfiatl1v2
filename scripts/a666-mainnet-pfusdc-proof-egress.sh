@@ -12,12 +12,14 @@ a100_host=${A666_A100_HOST:-194.228.55.129}
 a100_port=${A666_A100_PORT:-30886}
 resume=false
 amount_atoms=
+bucket_id=
 
 while (($#)); do
   case "$1" in
     --phase-dir) phase_dir=$2; shift 2 ;;
     --workflow-id) workflow_id=$2; shift 2 ;;
     --amount-atoms) amount_atoms=$2; shift 2 ;;
+    --bucket-id) bucket_id=${2,,}; shift 2 ;;
     --resume) resume=true; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -28,6 +30,9 @@ for value in "$phase_dir" "$workflow_id" "$amount_atoms"; do
 done
 [[ "$workflow_id" =~ ^[a-z0-9][a-z0-9-]{0,39}$ ]]
 [[ "$amount_atoms" =~ ^[1-9][0-9]*$ ]]
+if test -n "$bucket_id"; then
+  [[ "$bucket_id" =~ ^[0-9a-f]{96}$ ]]
+fi
 
 cd "$repo"
 phase_dir=$(realpath "$phase_dir")
@@ -74,12 +79,54 @@ round_args=(
 if ! test -s "$egress_dir/burn-finality/summary.json"; then
   if ! test -s "$egress_dir/burn.ops.json"; then
     ssh -o BatchMode=yes "root@$validator2_host" \
+      "$remote_node vault-bridge-status \
+        --data-dir /var/lib/postfiat/validator-2 \
+        --asset-id '$pfusdc'" \
+      > "$egress_dir/vault-bridge-status-before-burn.json"
+    source_chain_id=$(jq -er '.route.route_profile.source_chain_id' "$manifest")
+    vault_address=$(jq -er '.route.route_profile.vault_address | ascii_downcase' "$manifest")
+    token_address=$(jq -er '.route.route_profile.token_address | ascii_downcase' "$manifest")
+    route_profile_hash=$(jq -er '.route.route_profile_hash' "$manifest")
+    source_domain="erc20_bridge_vault:$source_chain_id:$vault_address:$token_address"
+    selected_bucket=$(jq -c \
+      --arg source_domain "$source_domain" \
+      --arg policy_hash "$route_profile_hash" \
+      --arg requested_bucket "$bucket_id" \
+      --argjson amount "$amount_atoms" \
+      '[.buckets[]
+        | select(.source_domain==$source_domain
+          and .policy_hash==$policy_hash
+          and .status=="active"
+          and .outstanding_vault_bridge_atoms >= $amount)
+        | select($requested_bucket=="" or .bucket_id==$requested_bucket)]
+       | if length==1 then .[0]
+         elif length==0 then error("no active deployment-matched bucket has sufficient outstanding backing")
+         else error("multiple deployment-matched buckets remain ambiguous")
+         end' "$egress_dir/vault-bridge-status-before-burn.json")
+    bucket_id=$(jq -er '.bucket_id' <<<"$selected_bucket")
+    jq -n \
+      --arg selection_rule \
+        "unique active bucket matching deployed route source_domain and route_profile_hash with sufficient outstanding backing" \
+      --arg source_domain "$source_domain" \
+      --arg route_profile_hash "$route_profile_hash" \
+      --argjson amount_atoms "$amount_atoms" \
+      --argjson bucket "$selected_bucket" \
+      '{
+        schema:"postfiat.a666.pfusdc_egress_bucket_selection.v1",
+        selection_rule:$selection_rule,
+        source_domain:$source_domain,
+        route_profile_hash:$route_profile_hash,
+        requested_amount_atoms:$amount_atoms,
+        selected_bucket:$bucket
+      }' > "$egress_dir/selected-bucket.json"
+    ssh -o BatchMode=yes "root@$validator2_host" \
       "install -d -m 700 '$remote_root'; \
        '$remote_node' vault-bridge-burn-to-redeem-bundle \
          --data-dir /var/lib/postfiat/validator-2 \
          --owner '$joe' \
          --asset-id '$pfusdc' \
          --amount-atoms '$amount_atoms' \
+         --bucket-id '$bucket_id' \
          --destination-ref 'evm-erc20:1:${joe_evm,,}' \
          --bundle '$remote_root/burn-bundle' \
          > '$remote_root/burn-bundle-report.json'"

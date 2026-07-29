@@ -1,0 +1,44 @@
+{
+  "business_flow_pass": true,
+  "intervention_free_after_p_large_funding": false,
+  "interventions": [
+    "validator ingress finality gating was hardened after P-LARGE funding",
+    "the P-LARGE proof worker resumed after an A100 crash",
+    "the transparent redemption quote rounded base value down by one atom",
+    "the one-atom transparent payout residual completed after reconciliation"
+  ],
+  "p_large": {
+    "issue_slo": "FAIL",
+    "private_issue_pass": true,
+    "private_redeem_pass": true,
+    "redeem_slo": "FAIL"
+  },
+  "pfusdc_conservation_pass": true,
+  "release_slo_pass": false,
+  "reserve_conservation_pass": true,
+  "schema": "postfiat.a666.variable_size_nav_roundtrip_acceptance.v1",
+  "stakehub_nav": {
+    "epoch": 2,
+    "finalized_on_pftl": true,
+    "nav_per_unit_usd_1e8": 90103113,
+    "program_vkey": "0x00580ee8c389192568a29dc23d54c22e73a3a45203b22e3d5a934801871e11a7",
+    "proof_sha256": "e5db09e97e46bf4b09da9f7a68732114dce1ff1c90bd03d4536f67cd0a2f8811",
+    "proof_verified": true,
+    "public_values_sha256": "6946d6a46ac8ae874cdf99ea1bc8159b7872c83d464a1960c72871d386f88caa",
+    "real_sources": true,
+    "uniswap_price_used": false
+  },
+  "supply_conservation_pass": true,
+  "t_small": {
+    "issue_slo": "NOT_MEASURED_FROM_FRESH_START",
+    "redeem_slo": "FAIL",
+    "transparent_issue_pass": true,
+    "transparent_redeem_pass": true
+  },
+  "terminal_pftl_height": 440,
+  "terminal_state_root": "a07bb418b4031b7bde1368683104e9e6890cabb10ce63d52f54af3a15aa28d00f904245632b7477a697fc063b99b0da3",
+  "uniswap_liquidity_consumed_by_primary_issue": 0,
+  "unresolved_recovery": false,
+  "verdict": "FAIL",
+  "wrapper_conservation_pass": true
+}

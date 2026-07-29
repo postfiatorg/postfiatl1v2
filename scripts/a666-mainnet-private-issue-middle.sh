@@ -48,7 +48,6 @@ joe_evm=0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0
 test -s "$hosts_file"
 test -s "$holder_key"
 test -s "$manifest"
-test -s "$ops_dir/01-reserve.ops.json"
 test -s "$ops_dir/03-export.ops.json"
 test ! -e "$orchard_dir"
 ssh -o BatchMode=yes "root@$validator2_host" "test ! -e '$remote_root'"
@@ -64,7 +63,6 @@ subscription_nonce=$(jq -er '.subscription_nonce' "$manifest")
 
 mkdir -p \
   "$orchard_dir/01-pfusdc-ingress" \
-  "$orchard_dir/02-reserve" \
   "$orchard_dir/03-private-primary-issue" \
   "$orchard_dir/04-a666-private-egress" \
   "$orchard_dir/05-export"
@@ -118,19 +116,6 @@ jq -e \
   '.confirmed==true and .accepted==true and .end_height==$height' \
   "$orchard_dir/01-pfusdc-ingress/finality/summary.json" >/dev/null
 
-python3 scripts/a666-ce22-remote-finality-op.py \
-  --node-bin target/release/postfiat-node \
-  --remote-runner scripts/a666-remote-sync-round.py \
-  --proposer-hosts-file "$hosts_file" \
-  --remote-binary "$remote_node" \
-  --remote-topology "$remote_topology" \
-  --ops-file "$ops_dir/01-reserve.ops.json" \
-  --artifact-dir "$orchard_dir/02-reserve/finality"
-jq -e \
-  --argjson height "$((expected_pftl_height + 2))" \
-  '.confirmed==true and .accepted==true and .end_height==$height' \
-  "$orchard_dir/02-reserve/finality/summary.json" >/dev/null
-
 expires_at_height=$((expected_pftl_height + 130))
 ssh -o BatchMode=yes "root@$validator2_host" \
   "set -euo pipefail
@@ -178,7 +163,7 @@ python3 scripts/a666-ce22-remote-finality-batch.py \
   --artifact-dir "$orchard_dir/03-private-primary-issue/finality" \
   "${round_args[@]}"
 jq -e \
-  --argjson height "$((expected_pftl_height + 3))" \
+  --argjson height "$((expected_pftl_height + 2))" \
   '.confirmed==true and .accepted==true and .end_height==$height' \
   "$orchard_dir/03-private-primary-issue/finality/summary.json" >/dev/null
 
@@ -221,7 +206,7 @@ python3 scripts/a666-ce22-remote-finality-batch.py \
   --artifact-dir "$orchard_dir/04-a666-private-egress/finality" \
   "${round_args[@]}"
 jq -e \
-  --argjson height "$((expected_pftl_height + 4))" \
+  --argjson height "$((expected_pftl_height + 3))" \
   '.confirmed==true and .accepted==true and .end_height==$height' \
   "$orchard_dir/04-a666-private-egress/finality/summary.json" >/dev/null
 
@@ -234,13 +219,13 @@ python3 scripts/a666-ce22-remote-finality-op.py \
   --ops-file "$ops_dir/03-export.ops.json" \
   --artifact-dir "$orchard_dir/05-export/finality"
 jq -e \
-  --argjson height "$((expected_pftl_height + 5))" \
+  --argjson height "$((expected_pftl_height + 4))" \
   '.confirmed==true and .accepted==true and .end_height==$height' \
   "$orchard_dir/05-export/finality/summary.json" >/dev/null
 
 jq -n \
   --argjson start_height "$expected_pftl_height" \
-  --argjson end_height "$((expected_pftl_height + 5))" \
+  --argjson end_height "$((expected_pftl_height + 4))" \
   --argjson settlement "$settlement_amount" \
   --argjson mint "$mint_amount" \
   '{

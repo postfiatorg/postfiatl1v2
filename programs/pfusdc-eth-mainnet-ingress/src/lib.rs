@@ -262,8 +262,11 @@ fn verify_finality(inputs: &ProofInputs, p: &EthIngressPolicyV1) -> Result<Final
     .map_err(|e| format!("invalid Helios finality update: {e}"))?;
     apply_finality_update(&mut store, &inputs.finality_update);
     let final_slot = store.finalized_header.beacon().slot;
-    if final_slot <= prior_slot || final_slot % 32 != 0 {
-        return Err("Ethereum mainnet finalized checkpoint did not advance".into());
+    // A finalized checkpoint may resolve to the most recent occupied block
+    // before an epoch boundary when that boundary slot was skipped. Helios
+    // authenticates the checkpoint root; monotonicity is the invariant.
+    if final_slot <= prior_slot {
+        return Err("Ethereum mainnet finalized checkpoint did not canonically advance".into());
     }
     let execution = store
         .finalized_header

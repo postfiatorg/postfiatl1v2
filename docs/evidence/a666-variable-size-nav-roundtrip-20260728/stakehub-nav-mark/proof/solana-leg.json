@@ -1,0 +1,12 @@
+{
+  "kind": "solana_stake",
+  "quantity_tier": "attested",
+  "valuation_tier": "attested",
+  "spot_locked_usd_e8": 0,
+  "spot_unlocked_usd_e8": 106234173000,
+  "cash_locked_usd_e8": 0,
+  "cash_unlocked_usd_e8": 0,
+  "perp_notional_usd_e8": 0,
+  "liability_usd_e8": 0,
+  "metadata_hash": "0x8bec00753756a7e14b973bbfb5546c231df1091374ca544d2f3af541abbf5e9b"
+}

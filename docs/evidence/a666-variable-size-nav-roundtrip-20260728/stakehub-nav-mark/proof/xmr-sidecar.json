@@ -1,0 +1,8 @@
+{
+  "address": "4ADLBk3PnUARCFR1nmHHKUHdPzxd3BPQNRrcw2VyTvGsNpb7vhauAAuR7yt4QsTCnPFK9WnMBbvuFb4haBTkwFGh8YgaXBk",
+  "message": "stakehub-pol-xmr-reserve-v1|owner:0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0|run:20260728T230932Z",
+  "reserve_proof_hash": "0x8cc62e2d9f9c41dfb5b05c811db28dcf13999b0386a0d8a877034ed821e3ee7a",
+  "xmr_atomic": 0,
+  "price_usd_e8": 34057000000,
+  "price_source": "coingecko:XMR"
+}

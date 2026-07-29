@@ -1,0 +1,27 @@
+{
+  "schema": "postfiat-account-assets-v1",
+  "chain_id": "postfiat-wan-devnet-2",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "protocol_version": 1,
+  "account": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "limit": 512,
+  "truncated": false,
+  "asset_count": 1,
+  "assets": [
+    {
+      "trustline_id": "e94b1634a7d6255aa12e3bd90fd81cb098577cd428c45010584a8c103044b029af8625873daa500d14250eccc46c2943",
+      "account": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+      "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+      "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+      "code": "PFUSDC",
+      "version": 1,
+      "precision": 6,
+      "balance": 101300000,
+      "limit": 2000000000000,
+      "authorized": true,
+      "frozen": false,
+      "reserve_paid": 0
+    }
+  ]
+}

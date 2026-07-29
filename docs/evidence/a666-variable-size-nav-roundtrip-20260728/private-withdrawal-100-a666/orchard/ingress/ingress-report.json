@@ -1,0 +1,18 @@
+{
+  "schema": "postfiat-asset-orchard-ingress-report-v1",
+  "ingress_file": "/var/lib/postfiat/validator-2/a666-var-private-redeem-orchard/public/a666-ingress.json",
+  "note_file": "/var/lib/postfiat/validator-2/a666-var-private-redeem-orchard/private/a666-note.json",
+  "pool_id": "asset-orchard-v1",
+  "from": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+  "amount": 100000000,
+  "asset_tag_lo": 5755111753105266246220756916853299272,
+  "asset_tag_hi": 194474676134903117657139649042018520897,
+  "output_commitment": "e3f2dc562f2255bc69b0e925b7ed3ba770d5d0f752d9de80e511e477add9743e",
+  "encrypted_output_bytes": 1288,
+  "burn_transaction_id": "4f57dd0039195659dacea57110cff1939bc7a162664248cde75af857e09cfebd3f19b58b5ff166b94135b92bb003fe22",
+  "burn_fee": 22,
+  "minimum_burn_fee": 22,
+  "sequence": 80,
+  "verified": true
+}

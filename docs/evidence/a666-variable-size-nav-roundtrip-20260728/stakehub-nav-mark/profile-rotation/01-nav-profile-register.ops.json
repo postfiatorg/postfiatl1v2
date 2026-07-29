@@ -1,0 +1,28 @@
+{
+  "operations": [
+    {
+      "key_file": "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/faucet-key.json",
+      "label": "a666-stakehub-v3-nav-profile-register",
+      "operation": {
+        "challenge_window_blocks": 1,
+        "max_epoch_gap_blocks": 128,
+        "max_proof_bytes": 4096,
+        "max_public_values_bytes": 16384,
+        "max_snapshot_age_blocks": 900,
+        "min_attestations": 0,
+        "min_challenge_bond": 0,
+        "operation": "nav_profile_register",
+        "registrant": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+        "settle_deadline_blocks": 256,
+        "source_class": "stakehub-six-leg-reserves-v3",
+        "sp1_program_vkey": "0x00580ee8c389192568a29dc23d54c22e73a3a45203b22e3d5a934801871e11a7",
+        "sp1_proof_encoding": "groth16",
+        "tolerance_bp": 0,
+        "valuation_policy_hash": "076c071e44127158ef82350e7feeb64e0be0a06bf8ba4be5f0374ac36b992ac7",
+        "verifier_kind": "sp1-groth16"
+      },
+      "source": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b"
+    }
+  ],
+  "schema": "postfiat-certified-asset-ops-request-v1"
+}

@@ -1,0 +1,14 @@
+{
+  "account_id": "eed15bedebb4ac46d1528187a8c2f00aa59b441398d3e346c44eb2dcb2fc1d9a",
+  "callback_receipt_id": "3WfmftjhPY8R85uWWo8ghG8K7T1jzTBEBYFFho9ngcSr",
+  "head_hash": "HZu8Ny6JQ84ZWSFiy1Jfq5Ycg8WbWgctSEFaeg5kmDGV",
+  "head_height": 208964125,
+  "manager_fetch_command": "cargo run --release -p stakehub-aave-script --bin fetch-near-receipt-leg -- --receipt-id 3WfmftjhPY8R85uWWo8ghG8K7T1jzTBEBYFFho9ngcSr --reader-account-id eed15bedebb4ac46d1528187a8c2f00aa59b441398d3e346c44eb2dcb2fc1d9a --reader-code-hash 4mdewfmqBVSbXzgbKfThp6vnXJA6KxhMrcLSj6ZMwUhx --price-usd-e8 <NEAR_USD_E8> --price-source operator-near-usd --out /home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-variable-size-nav-roundtrip-20260728/stakehub-nav-mark/proof/near-receipt-witness.json",
+  "pool_id": "astro-stakers.poolv1.near",
+  "reader_account_id": "eed15bedebb4ac46d1528187a8c2f00aa59b441398d3e346c44eb2dcb2fc1d9a",
+  "reader_code_hash": "4mdewfmqBVSbXzgbKfThp6vnXJA6KxhMrcLSj6ZMwUhx",
+  "salt": "0x062cb3ae477e129776e9ac75136f936f661a38dab160a7c936f0bd0350e6bcb1",
+  "snapshot_block_hash": "2SQRtk8XMLMm5CtensUZQVJSasUcCifMc9pfZtguESZF",
+  "snapshot_block_height": 208964113,
+  "snapshot_tx": "9nizzwSCjzzEQvSt4dRfaNn6V632maVuAjQKfn1rpReA"
+}

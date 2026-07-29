@@ -1,0 +1,14 @@
+{
+  "schema": "postfiat.a666.ethereum_baseline.v1",
+  "block_number": 25634139,
+  "wallet_usdc_atoms": 229176789,
+  "vault_usdc_atoms": 1016000,
+  "vault_obligations_atoms": 1016000,
+  "wallet_wa666_atoms": 104000000,
+  "wa666_total_supply_atoms": 31490197455,
+  "wallet_eth_wei": 297477545056116401,
+  "nonce_latest": 234,
+  "nonce_pending": 234,
+  "pool_id": "0xc5f1e4b5bb07c0718eddcc3d102dc751b8953ec25bb05cdc14d95419d4d16e98",
+  "pool_liquidity": 3000000000
+}
