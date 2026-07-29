@@ -114,17 +114,11 @@ ssh -o BatchMode=yes "root@$validator2_host" \
     --data-dir /var/lib/postfiat/validator-2 \
     --route-id '$route_id'" \
   > "$phase_dir/final-pftl-supply-status.json"
-jq -e \
-  --argjson nav_amount "$nav_amount_atoms" \
-  --slurpfile before "$phase_dir/roundtrip-supply-before.json" \
-  '.invariant_holds==true
-   and .active_reservation_atoms==0
-   and .export_entitlement_atoms==0
-   and .outstanding_bridge_claims_atoms==.wrapped_exposure_atoms
-   and .authorized_valid_supply_atoms==($before[0].authorized_valid_supply_atoms-$nav_amount)
-   and .outstanding_bridge_claims_atoms==($before[0].outstanding_bridge_claims_atoms-$nav_amount)
-   and .ethereum_spendable_supply_atoms==($before[0].ethereum_spendable_supply_atoms-$nav_amount)' \
-  "$phase_dir/final-pftl-supply-status.json" >/dev/null
+python3 scripts/a666-private-roundtrip-supply-check.py \
+  --before "$phase_dir/roundtrip-supply-before.json" \
+  --after "$phase_dir/final-pftl-supply-status.json" \
+  --amount-atoms "$nav_amount_atoms" \
+  > "$phase_dir/roundtrip-supply-check.json"
 
 jq -n \
   --slurpfile destination "$phase_dir/destination-consume/summary.json" \
