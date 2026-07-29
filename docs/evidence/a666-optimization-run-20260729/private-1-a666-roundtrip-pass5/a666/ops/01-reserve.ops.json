@@ -1,0 +1,23 @@
+{
+  "operations": [
+    {
+      "key_file": "/home/postfiat/tmp/pfusdc-closed-roundtrip-20260720/keys/holder.json",
+      "label": "joe-a666-reserve",
+      "operation": {
+        "ethereum_recipient": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+        "expires_at_height": 722,
+        "max_settlement_value_atoms": 905538,
+        "mint_amount_atoms": 1000000,
+        "operation": "pftl_uniswap_order_reserve",
+        "policy_epoch": 3,
+        "policy_hash": "f28ab92c43c4e57e03de31ac98f85426b6e1e6748fd84c71394f102b7227950faf716c8bd889cbbf3ba56686bb8bd91f",
+        "reservation_id": "cbd06b4a0fa9076d5a4445955954e38818548d7748cac8a266d3780cb57dc08d97d0e31763efac87d9b0482cb1d7db7a",
+        "route_epoch": 3,
+        "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+        "subscriber": "pfab9b9228942e5c529633a13aa271d5297bec6353"
+      },
+      "source": "pfab9b9228942e5c529633a13aa271d5297bec6353"
+    }
+  ],
+  "schema": "postfiat-certified-asset-ops-request-v1"
+}

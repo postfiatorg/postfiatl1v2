@@ -1,0 +1,49 @@
+{
+  "schema": "postfiat.a666.optimization_run_manifest.v4",
+  "created_at": "2026-07-29T04:54:27Z",
+  "objective": "fresh intervention-free private issue and private redemption each within 1500 seconds",
+  "orchestration_commit": "1ccc9158c50715792e03c3d9c8c9c6d01af093fc",
+  "validator_release": "a666-variable-nav-9ffdfb6",
+  "validator_revision": "9ffdfb66",
+  "validator_binary_sha256": "fb3cb3d21ff677269baada047445a6372a2caf415c2710a5c987872f85ecb94b",
+  "resident_prover": {
+    "binary_sha256": "7eedc5616f275826be68e5c34dd7ff1f29750a37ab6cf6af79d681fc26a2d87f"
+  },
+  "export_prover": {
+    "binary_sha256": "6fb18b08338f1eff651cf11e26e180d8f0964cb761d7339a2316b1984180307e",
+    "redundant_host_execute_skipped": true
+  },
+  "workflow_id": "a666-opt-pass5-20260729",
+  "pfusdc_deposit_lane": {
+    "route_epoch": 5,
+    "vault": "0xaaa78fda7062efce769e95cd72fc55e507bc8183",
+    "verifier": "0x9a45d6f1dc9da443a88b1c336b3188fa7924d1ae",
+    "deployment_manifest": "docs/evidence/a666-acceptance-20260728/phase-5-transparent-redeem-verify/pfusdc-egress/recovery-epoch5/deploy/manifest.postdeploy-enriched.json",
+    "deployment_manifest_sha256": "b69417647e6a4bed5a3e7fa5069a0844b80a63f78020ba34f4796e373e92e904"
+  },
+  "expected_pftl_height": 466,
+  "start_height": 466,
+  "expected_verifier_height": 459,
+  "prior_checkpoint_block_id": "55f99962b061560e7d1f89c4f846c024a9c4cfcc0ff9f1bdd819e67fcdfd149020fd4c30aa1dd9a30d44a1e7bcd9eaeb",
+  "amounts": {
+    "mint_atoms": 1000000,
+    "issue_base_value_atoms": 901032,
+    "deposit_atoms": 905538,
+    "issue_spread_atoms": 4506,
+    "redemption_output_atoms": 900581
+  },
+  "expected_wrapped_balance_before": 103000000,
+  "expected_wrapped_supply_before": 31489197455,
+  "post_funding_code_changes_permitted": false,
+  "post_funding_manual_state_repair_permitted": false,
+  "latency_optimizations": {
+    "exact_preapproval_before_slo_clock": true,
+    "ethereum_deposit_head_slot_in_epoch": 28,
+    "full_finality_policy_unchanged": true,
+    "same_block_pfusdc_propose_finalize_claim": true,
+    "prewarmed_resident_issue_rounds": 5,
+    "expected_issue_export_height": 471
+  },
+  "issue_slo_seconds": 1500,
+  "redemption_slo_seconds": 1500
+}

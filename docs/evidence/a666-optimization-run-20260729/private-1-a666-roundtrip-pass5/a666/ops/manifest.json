@@ -1,0 +1,29 @@
+{
+  "base_value_atoms": 901032,
+  "destination_deadline_seconds": 1785387266,
+  "ethereum_packet_digest": "3a92ddd1873894a09d26f79df9893147c6726317ad318eaf2b885dad8b5314b4",
+  "ethereum_recipient": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+  "export_nonce": "94b2f71cd305266ce64a5aa4765a4878796d1c1ba6c155db346ae212989453bd",
+  "files": {
+    "export": "docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-pass5/a666/ops/03-export.ops.json",
+    "mint_packet": "docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-pass5/a666/ops/03-mint-packet.json",
+    "mint_packet_digest": "docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-pass5/a666/ops/03-mint-packet-digest.json",
+    "reserve": "docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-pass5/a666/ops/01-reserve.ops.json",
+    "subscribe": "docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-pass5/a666/ops/02-subscribe.ops.json"
+  },
+  "issue_multiplier_bps": 10050,
+  "issue_spread_atoms": 4506,
+  "mint_amount_atoms": 1000000,
+  "nav_circulating_supply_atoms": 31590197455,
+  "nav_per_unit_usd_1e8": 90103113,
+  "nav_verified_net_assets_usd_1e8": 2846375143580,
+  "packet_hash": "5f39478331eb8a4d6520e745e00e85649c23965950a4cffd3d54de113792fab9c707aa2f16d332b7bae727bd6437232f",
+  "pricing_nav_epoch": 2,
+  "pricing_reserve_packet_hash": "60334589ab27d9a7d9ef3c02b8b5f345ce6e13792c48af14b02e2cf219b638be9b14be6a938d0e406865ae64276887e7",
+  "reservation_id": "cbd06b4a0fa9076d5a4445955954e38818548d7748cac8a266d3780cb57dc08d97d0e31763efac87d9b0482cb1d7db7a",
+  "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+  "schema": "postfiat.a666.transparent_primary_issue_ops.v1",
+  "settlement_value_atoms": 905538,
+  "subscriber": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "subscription_nonce": "92142da1708f1fed780ebc317c0890eb74f49b7d6ea858042326f20924ab0bcf"
+}
