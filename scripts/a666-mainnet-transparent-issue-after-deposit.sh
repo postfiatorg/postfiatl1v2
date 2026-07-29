@@ -116,7 +116,7 @@ remote_topology=/etc/postfiat/releases/$release_id/topology.json
 remote_run="/var/lib/postfiat/validator-2/$workflow_id"
 a100_root="/workspace/a666-acceptance/live/$workflow_id"
 ingress_prover=/workspace/a666-acceptance/bin/eth-l1-mainnet-fast-lane-p0-cuda-optimized
-export_prover=/workspace/a666-acceptance/bin/pftl-uniswap-prover-cuda
+export_prover=/workspace/a666-acceptance/bin/pftl-uniswap-prover-cuda-optimized-20260729
 export_elf=/workspace/a666-acceptance/witness/deployed-program-004e44.elf
 joe=pfab9b9228942e5c529633a13aa271d5297bec6353
 pfusdc=02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b
@@ -130,8 +130,8 @@ uniswap_pool_id=0xc5f1e4b5bb07c0718eddcc3d102dc751b8953ec25bb05cdc14d95419d4d16e
 if "$resume_after_private_middle"; then
   test -s "$phase_dir/orchard-private-issue/summary.json"
   jq -e \
-    --argjson start "$((expected_pftl_height + 2))" \
-    --argjson end "$((expected_pftl_height + 6))" \
+    --argjson start "$((expected_pftl_height + 1))" \
+    --argjson end "$((expected_pftl_height + 5))" \
     '.verdict=="PASS" and .start_height==$start and .end_height==$end' \
     "$phase_dir/orchard-private-issue/summary.json" >/dev/null
   test -s "$phase_dir/a666/joe-pfusdc-before.json"
@@ -140,7 +140,7 @@ if "$resume_after_private_middle"; then
     "$phase_dir/a666/joe-pfusdc-before.json")
   a666_balance_before=$(jq -er '[.assets[]?.balance] | add // 0' \
     "$phase_dir/a666/joe-a666-before.json")
-  export_height=$((expected_pftl_height + 6))
+  export_height=$((expected_pftl_height + 5))
 else
 ssh -o BatchMode=yes "root@$validator2_host" \
   "$remote_node status --data-dir /var/lib/postfiat/validator-2 --expect-height $expected_pftl_height" \
@@ -262,14 +262,14 @@ PFTL_VAULT_ADDRESS=0xaaa78FdA7062eFce769e95cd72Fc55e507BC8183 \
 PFTL_RUN_DIR="$remote_run" \
 PFTL_PROOF_DIR="$remote_run/ingress-proof" \
 PFTL_LOCAL_EVIDENCE="$phase_dir/pftl" \
-bash "$repo/docs/evidence/a666-acceptance-20260728/phase-1-transparent-issue-debug/pftl/relay.sh"
+bash "$repo/scripts/a666-mainnet-pfusdc-relay.sh"
 
 if "$private_middle"; then
   bash scripts/a666-mainnet-private-issue-middle.sh \
     --phase-dir "$phase_dir" \
     --workflow-id "$workflow_id" \
-    --expected-pftl-height "$((expected_pftl_height + 2))"
-  export_height=$((expected_pftl_height + 6))
+    --expected-pftl-height "$((expected_pftl_height + 1))"
+  export_height=$((expected_pftl_height + 5))
 else
   round_args=(
     --node-bin target/release/postfiat-node
@@ -306,7 +306,7 @@ else
     --ops-file "$ops_dir/03-export.ops.json" \
     --artifact-dir "$phase_dir/a666/03-export-round" \
     "${round_args[@]}"
-  export_height=$((expected_pftl_height + 5))
+  export_height=$((expected_pftl_height + 4))
 fi
 fi
 ssh -o BatchMode=yes "root@$validator2_host" \
@@ -374,7 +374,9 @@ ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
     --witness '$a100_root/export/receipt-witness.json' \
     --output-dir '$a100_root/export-proof' \
     --elf '$export_elf' \
-    --prove"
+    --prove \
+    --require-prover cuda \
+    --skip-redundant-execute"
 mkdir -p "$phase_dir/export-proof/proof-cuda"
 rsync -a -e "ssh -p $a100_port" \
   "root@$a100_host:$a100_root/export-proof/" \
@@ -382,6 +384,9 @@ rsync -a -e "ssh -p $a100_port" \
 jq -e '
   .program_vkey=="0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9"
   and .proof_mode=="groth16"
+  and .prover_backend=="cuda"
+  and .host_execute_skipped==true
+  and .execute_ms==0
   and .proof_bytes==356
   and .public_values_bytes==1120
 ' "$phase_dir/export-proof/proof-cuda/proof-report.json" >/dev/null

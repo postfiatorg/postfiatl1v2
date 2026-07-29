@@ -10,6 +10,7 @@ request_attempt=0
 release_id=${A666_PFTL_RELEASE_ID:-a666-variable-nav-9ffdfb6}
 hosts_file=${A666_PROPOSER_HOSTS_FILE:-docs/evidence/a666-joe-mainnet-e2e-20260728/proposer-hosts.json}
 holder_key=${A666_JOE_HOLDER_KEY:-/home/postfiat/tmp/pfusdc-closed-roundtrip-20260720/keys/holder.json}
+resident_rounds_manifest=${A666_RESIDENT_ROUNDS_MANIFEST:-}
 
 while (($#)); do
   case "$1" in
@@ -112,6 +113,11 @@ round_args=(
   --remote-binary "$remote_node"
   --remote-topology "$remote_topology"
 )
+if test -n "$resident_rounds_manifest"; then
+  resident_rounds_manifest=$(realpath "$resident_rounds_manifest")
+  test -s "$resident_rounds_manifest"
+  round_args+=(--resident-manifest "$resident_rounds_manifest")
+fi
 if ! test -s "$orchard_dir/01-pfusdc-ingress/finality/summary.json"; then
   if ! test -s "$orchard_dir/01-pfusdc-ingress/pfusdc-ingress-batch.json"; then
     scp -q "$holder_key" "root@$validator2_host:$remote_keys/holder-key.json"

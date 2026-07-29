@@ -58,6 +58,17 @@ def parse_args() -> argparse.Namespace:
         "--expected-manifest-sha256",
         help="Required content digest when --deployment-manifest is used",
     )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--approval-only",
+        action="store_true",
+        help="Set the exact allowance without submitting the value-moving deposit",
+    )
+    mode.add_argument(
+        "--require-preapproved",
+        action="store_true",
+        help="Fail unless the exact allowance already exists; never approve inline",
+    )
     return parser.parse_args()
 
 
@@ -208,7 +219,11 @@ def main() -> None:
     approve_calldata = usdc.encode_abi("approve", args=[vault_address, amount])
 
     evidence: dict[str, object] = {
-        "schema": "postfiat.a666.pfusdc_buyer_deposit.v1",
+        "schema": (
+            "postfiat.a666.pfusdc_buyer_preapproval.v1"
+            if args.approval_only
+            else "postfiat.a666.pfusdc_buyer_deposit.v1"
+        ),
         "verdict": "PENDING",
         "started_unix": int(time.time()),
         "manifest_sha256": manifest_digest,
@@ -318,6 +333,34 @@ def main() -> None:
         return transaction_hash, receipt
 
     try:
+        if args.approval_only:
+            if before["allowance_atoms"] != amount:
+                send("approve", base.USDC, approve_calldata)
+            allowance = usdc.functions.allowance(wallet_address, vault_address).call()
+            if allowance != amount:
+                raise RuntimeError("USDC approval did not produce the exact allowance")
+            evidence["post_state"] = {
+                **before,
+                "allowance_atoms": allowance,
+                "wallet_eth_wei": w3.eth.get_balance(wallet_address),
+                "confirmed_nonce": w3.eth.get_transaction_count(
+                    wallet_address, "latest"
+                ),
+                "pending_nonce": w3.eth.get_transaction_count(
+                    wallet_address, "pending"
+                ),
+            }
+            evidence["completed_unix"] = int(time.time())
+            evidence["elapsed_seconds"] = (
+                evidence["completed_unix"] - evidence["started_unix"]
+            )
+            evidence["verdict"] = "PASS"
+            print(f"A666_PFUSDC_PREAPPROVAL: PASS amount_atoms={amount}")
+            return
+        if args.require_preapproved and before["allowance_atoms"] != amount:
+            raise RuntimeError(
+                "exact USDC allowance is not preapproved; inline approval is disabled"
+            )
         if before["allowance_atoms"] != amount:
             send("approve", base.USDC, approve_calldata)
             allowance = usdc.functions.allowance(wallet_address, vault_address).call()

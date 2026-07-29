@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import shlex
 import subprocess
+import sys
 import time
 from typing import Any
 
@@ -46,6 +47,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--preflight-seconds", type=float, default=45.0)
     parser.add_argument("--postflight-seconds", type=float, default=45.0)
     parser.add_argument("--resume-postflight", action="store_true")
+    parser.add_argument("--resident-manifest", type=Path)
     return parser.parse_args()
 
 
@@ -81,6 +83,35 @@ def main() -> None:
     args = parse_args()
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", args.label):
         raise RuntimeError("label is not a safe remote path component")
+    if args.resident_manifest is not None:
+        if args.resume_postflight:
+            raise RuntimeError("resident rounds do not support one-shot postflight resume")
+        run(
+            [
+                sys.executable,
+                str(Path(__file__).resolve().parent / "a666-resident-rounds.py"),
+                "submit",
+                "--manifest",
+                str(args.resident_manifest),
+                "--batch-file",
+                str(args.batch_file),
+                "--batch-kind",
+                args.batch_kind,
+                "--label",
+                args.label,
+                "--artifact-dir",
+                str(args.artifact_dir),
+                "--ports",
+                args.ports,
+                "--timeout-seconds",
+                str(args.timeout_seconds),
+                "--preflight-seconds",
+                str(args.preflight_seconds),
+                "--postflight-seconds",
+                str(args.postflight_seconds),
+            ]
+        )
+        return
     proposer_hosts = json.loads(args.proposer_hosts_file.read_text())
     expected = {f"validator-{index}" for index in range(EXPECTED_VALIDATORS)}
     if not isinstance(proposer_hosts, dict) or set(proposer_hosts) != expected:

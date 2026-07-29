@@ -9,8 +9,10 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import shlex
 import subprocess
+import sys
 import time
 from typing import Any
 
@@ -70,6 +72,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeout-seconds", type=float, default=45.0)
     parser.add_argument("--preflight-seconds", type=float, default=45.0)
     parser.add_argument("--postflight-seconds", type=float, default=45.0)
+    parser.add_argument("--resident-manifest", type=Path)
     return parser.parse_args()
 
 
@@ -186,6 +189,132 @@ def main() -> None:
     remote_artifacts = f"{data_dir}/a666-finality-artifacts/{remote_label}"
     isolated_outbox = f"{data_dir}/a666-isolated-outboxes/{remote_label}"
     remote_runner = "/usr/local/sbin/a666-remote-sync-round.py"
+
+    if args.resident_manifest is not None:
+        resident_manifest = json.loads(args.resident_manifest.read_text())
+        if resident_manifest.get("schema") != "postfiat.a666.resident_round_manifest.v1":
+            raise RuntimeError("resident round manifest schema mismatch")
+        entries = [
+            entry
+            for entry in resident_manifest.get("entries", [])
+            if entry.get("height") == next_height
+            and entry.get("batch_kind") == "transparent"
+        ]
+        if len(entries) != 1:
+            raise RuntimeError(
+                f"resident manifest does not select one transparent worker at {next_height}"
+            )
+        entry = entries[0]
+        if entry.get("proposer") != proposer or entry.get("host") != host:
+            raise RuntimeError("resident worker does not match the elected proposer")
+        build_root = f"{entry['remote']['root']}/build-{label}"
+        remote_signed = f"{build_root}/signed.json"
+        remote_batch = f"{build_root}/batch.json"
+        run(
+            [
+                "scp",
+                "-q",
+                str(signed_file),
+                f"root@{host}:/tmp/{remote_label}.signed.json",
+            ]
+        )
+        build = "set -euo pipefail; " + "; ".join(
+            [
+                f"test ! -e {shlex.quote(build_root)}",
+                (
+                    "install -d -o postfiat -g postfiat -m 700 "
+                    f"{shlex.quote(build_root)}"
+                ),
+                (
+                    "install -o postfiat -g postfiat -m 600 "
+                    f"{shlex.quote('/tmp/' + remote_label + '.signed.json')} "
+                    f"{shlex.quote(remote_signed)}"
+                ),
+                (
+                    "runuser -u postfiat -- "
+                    f"{shlex.quote(args.remote_binary)} signed-asset-batch "
+                    f"--data-dir {shlex.quote(data_dir)} "
+                    f"--batch-file {shlex.quote(remote_batch)} "
+                    "--signed-asset-transaction-files "
+                    f"{shlex.quote(remote_signed)} >/dev/null"
+                ),
+            ]
+        )
+        run(["ssh", "-o", "BatchMode=yes", f"root@{host}", build])
+        local_batch = args.artifact_dir / "resident-input-batch.json"
+        run(["scp", "-q", f"root@{host}:{remote_batch}", str(local_batch)])
+        resident_artifacts = args.artifact_dir / "resident-finality"
+        run(
+            [
+                sys.executable,
+                str(Path(__file__).resolve().parent / "a666-resident-rounds.py"),
+                "submit",
+                "--manifest",
+                str(args.resident_manifest),
+                "--batch-file",
+                str(local_batch),
+                "--batch-kind",
+                "transparent",
+                "--label",
+                label,
+                "--artifact-dir",
+                str(resident_artifacts),
+                "--ports",
+                args.ports,
+                "--timeout-seconds",
+                str(args.timeout_seconds),
+                "--preflight-seconds",
+                str(args.preflight_seconds),
+                "--postflight-seconds",
+                str(args.postflight_seconds),
+            ]
+        )
+        resident_summary = json.loads(
+            (resident_artifacts / "summary.json").read_text()
+        )
+        shutil.copytree(
+            resident_artifacts / "consensus",
+            args.artifact_dir / "consensus",
+        )
+        round_summary = {
+            "schema": "postfiat-transport-peer-certified-mempool-round-v1",
+            "node_id": proposer,
+            "submitted_tx_id": None,
+            "round_ok": resident_summary["round_ok"],
+            "block_height": resident_summary["end_height"],
+            "certificate_id": json.loads(
+                (args.artifact_dir / "consensus/round-report.json").read_text()
+            )["certification"]["certificate_id"],
+            "vote_count": resident_summary["vote_count"],
+            "all_sends_verified": resident_summary["all_sends_verified"],
+            "local_apply_verified": resident_summary["local_apply_verified"],
+            "execution_mode": "prewarmed_resident_worker",
+        }
+        rpc.write_json(args.artifact_dir / "remote-round-summary.json", round_summary, 0o644)
+        summary = {
+            "schema": "postfiat-a666-ce22-remote-finality-operation-v1",
+            "execution_mode": "prewarmed_resident_worker",
+            "label": label,
+            "source": source,
+            "transaction_kind": signed["unsigned"]["transaction_kind"],
+            "tx_id": None,
+            "accepted": resident_summary["accepted"],
+            "confirmed": resident_summary["confirmed"],
+            "round_ok": resident_summary["round_ok"],
+            "proposer": proposer,
+            "validator_count": EXPECTED_VALIDATORS,
+            "vote_count": resident_summary["vote_count"],
+            "start_height": resident_summary["start_height"],
+            "end_height": resident_summary["end_height"],
+            "start_state_root": resident_summary["start_state_root"],
+            "end_state_root": resident_summary["end_state_root"],
+            "end_mempool_pending": 0,
+            "all_sends_verified": resident_summary["all_sends_verified"],
+            "trust_class": "CONTROLLED",
+        }
+        rpc.write_json(args.artifact_dir / "summary.json", summary, 0o644)
+        print(json.dumps(summary, indent=2, sort_keys=True))
+        return
 
     run(
         [

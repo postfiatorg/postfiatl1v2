@@ -170,13 +170,17 @@ ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
    echo workspace=fresh
    sha256sum \
      /workspace/a666-acceptance/bin/eth-l1-mainnet-fast-lane-p0-cuda-optimized \
-     /workspace/a666-acceptance/bin/pftl-uniswap-prover-cuda \
+     /workspace/a666-acceptance/bin/pftl-uniswap-prover-cuda-optimized-20260729 \
      /workspace/a666-acceptance/live/a666-epoch5-transparent-20260728t1505z/pfusdc-egress/pfusdc-tier4-prover-cuda \
      /workspace/a666-acceptance/witness/deployed-program-004e44.elf
    nvidia-smi --query-gpu=name,memory.total,memory.used,utilization.gpu \
      --format=csv,noheader
    free -b" \
   > "$phase_dir/preflight/a100-readiness.txt"
+export_prover_sha256=$(awk \
+  '$2=="/workspace/a666-acceptance/bin/pftl-uniswap-prover-cuda-optimized-20260729"{print $1}' \
+  "$phase_dir/preflight/a100-readiness.txt")
+[[ "$export_prover_sha256" =~ ^[0-9a-f]{64}$ ]]
 
 wallet_usdc=$(cast call "$usdc" 'balanceOf(address)(uint256)' "$wallet" \
   --rpc-url "$ethereum_rpc" | awk '{print $1}')
@@ -298,6 +302,7 @@ jq -n \
   --arg validator_revision "$validator_revision" \
   --arg validator_binary_sha256 "$validator_binary" \
   --arg resident_binary_sha256 "$resident_binary" \
+  --arg export_prover_binary_sha256 "$export_prover_sha256" \
   --arg lane_manifest "$lane_manifest" \
   --arg lane_manifest_sha256 "$lane_manifest_sha256" \
   --arg prior_checkpoint_block_id "$prior_checkpoint_block_id" \
@@ -311,7 +316,7 @@ jq -n \
   --argjson expected_wrapped_balance_before "$wallet_wa666" \
   --argjson expected_wrapped_supply_before "$wa666_supply" \
   '{
-    schema:"postfiat.a666.optimization_run_manifest.v3",
+    schema:"postfiat.a666.optimization_run_manifest.v4",
     created_at:$created_at,
     objective:"fresh intervention-free private issue and private redemption each within 1500 seconds",
     orchestration_commit:$orchestration_commit,
@@ -319,6 +324,10 @@ jq -n \
     validator_revision:$validator_revision,
     validator_binary_sha256:$validator_binary_sha256,
     resident_prover:{binary_sha256:$resident_binary_sha256},
+    export_prover:{
+      binary_sha256:$export_prover_binary_sha256,
+      redundant_host_execute_skipped:true
+    },
     workflow_id:$workflow_id,
     pfusdc_deposit_lane:{
       route_epoch:5,
@@ -342,6 +351,14 @@ jq -n \
     expected_wrapped_supply_before:$expected_wrapped_supply_before,
     post_funding_code_changes_permitted:false,
     post_funding_manual_state_repair_permitted:false,
+    latency_optimizations:{
+      exact_preapproval_before_slo_clock:true,
+      ethereum_deposit_head_slot_in_epoch:28,
+      full_finality_policy_unchanged:true,
+      same_block_pfusdc_propose_finalize_claim:true,
+      prewarmed_resident_issue_rounds:5,
+      expected_issue_export_height:($expected_pftl_height+5)
+    },
     issue_slo_seconds:1500,
     redemption_slo_seconds:1500
   }' > "$phase_dir/run-manifest.json"
@@ -349,6 +366,12 @@ jq -n \
 jq -n \
   --arg prepare "$(sha256sum scripts/a666-mainnet-prepare-private-optimization-run.sh | awk '{print $1}')" \
   --arg run "$(sha256sum scripts/a666-mainnet-run-private-optimization.sh | awk '{print $1}')" \
+  --arg deposit "$(sha256sum scripts/a666-mainnet-pfusdc-deposit.py | awk '{print $1}')" \
+  --arg deposit_window "$(sha256sum scripts/a666-wait-ethereum-deposit-window.py | awk '{print $1}')" \
+  --arg resident_rounds "$(sha256sum scripts/a666-resident-rounds.py | awk '{print $1}')" \
+  --arg relay "$(sha256sum scripts/a666-mainnet-pfusdc-relay.sh | awk '{print $1}')" \
+  --arg finality_batch "$(sha256sum scripts/a666-ce22-remote-finality-batch.py | awk '{print $1}')" \
+  --arg finality_op "$(sha256sum scripts/a666-ce22-remote-finality-op.py | awk '{print $1}')" \
   --arg issue "$(sha256sum scripts/a666-mainnet-transparent-issue-after-deposit.sh | awk '{print $1}')" \
   --arg private_issue "$(sha256sum scripts/a666-mainnet-private-issue-middle.sh | awk '{print $1}')" \
   --arg consume "$(sha256sum scripts/a666-mainnet-record-destination-consume.sh | awk '{print $1}')" \
@@ -357,10 +380,16 @@ jq -n \
   --arg egress "$(sha256sum scripts/a666-mainnet-pfusdc-proof-egress.sh | awk '{print $1}')" \
   --arg score "$(sha256sum scripts/a666-score-private-optimization-run.py | awk '{print $1}')" \
   '{
-    schema:"postfiat.a666.optimization_script_hashes.v1",
+    schema:"postfiat.a666.optimization_script_hashes.v2",
     scripts:{
       "scripts/a666-mainnet-prepare-private-optimization-run.sh":$prepare,
       "scripts/a666-mainnet-run-private-optimization.sh":$run,
+      "scripts/a666-mainnet-pfusdc-deposit.py":$deposit,
+      "scripts/a666-wait-ethereum-deposit-window.py":$deposit_window,
+      "scripts/a666-resident-rounds.py":$resident_rounds,
+      "scripts/a666-mainnet-pfusdc-relay.sh":$relay,
+      "scripts/a666-ce22-remote-finality-batch.py":$finality_batch,
+      "scripts/a666-ce22-remote-finality-op.py":$finality_op,
       "scripts/a666-mainnet-transparent-issue-after-deposit.sh":$issue,
       "scripts/a666-mainnet-private-issue-middle.sh":$private_issue,
       "scripts/a666-mainnet-record-destination-consume.sh":$consume,

@@ -2093,8 +2093,8 @@ fn ethereum_backed_claim_grows_cap_and_converges_across_six_replicas() {
         asset_id: asset.asset_id.clone(),
         evidence_root: evidence_root.clone(),
     };
-    apply_vault_bridge_deposit_finalize(&mut initial, &finalize, 11)
-        .expect("consensus-verified Ethereum ingress skips the optimistic window");
+    apply_vault_bridge_deposit_finalize(&mut initial, &finalize, 10)
+        .expect("consensus-verified Ethereum ingress finalizes at its submission height");
     assert_eq!(
         initial.vault_bridge_deposits[0].status,
         VAULT_BRIDGE_DEPOSIT_STATUS_FINALIZED
@@ -2125,8 +2125,8 @@ fn ethereum_backed_claim_grows_cap_and_converges_across_six_replicas() {
 
     let mut replicas = Vec::new();
     for mut replica in std::iter::repeat_with(|| initial.clone()).take(6) {
-        apply_vault_bridge_deposit_claim(&genesis, &mut replica, &claim, 20)
-            .expect("proof-bounded claim");
+        apply_vault_bridge_deposit_claim(&genesis, &mut replica, &claim, 10)
+            .expect("proof-bounded claim can follow finalization in the same block");
         assert_eq!(replica.nav_assets[0].circulating_supply, amount_atoms);
         assert_eq!(replica.nav_assets[0].finalized_epoch, 1);
         assert_eq!(

@@ -45,6 +45,12 @@ enum Command {
         /// Fail closed unless SP1_PROVER selects this exact backend.
         #[arg(long)]
         require_prover: Option<String>,
+        /// Skip the redundant SP1 host execute pass before proving.
+        ///
+        /// Native witness verification still derives the expected public
+        /// values, and the generated Groth16 proof is still verified locally.
+        #[arg(long)]
+        skip_redundant_execute: bool,
     },
     /// Execute or Groth16-prove a receipt-independent checkpoint segment.
     Checkpoint {
@@ -74,9 +80,10 @@ async fn main() -> Result<()> {
             elf,
             prove,
             require_prover,
+            skip_redundant_execute,
         } => {
             enforce_prover_backend(require_prover.as_deref())?;
-            prove_receipt(witness, output_dir, elf, prove).await
+            prove_receipt(witness, output_dir, elf, prove, skip_redundant_execute).await
         }
         Command::Checkpoint {
             witness,
@@ -129,7 +136,12 @@ async fn prove_receipt(
     output_dir: PathBuf,
     elf_path: Option<PathBuf>,
     prove: bool,
+    skip_redundant_execute: bool,
 ) -> Result<()> {
+    anyhow::ensure!(
+        !skip_redundant_execute || prove,
+        "--skip-redundant-execute requires --prove"
+    );
     let witness_bytes = fs::read(&witness_path)
         .with_context(|| format!("read receipt witness {}", witness_path.display()))?;
     let witness: PftlUniswapReceiptProofWitnessV1 = serde_json::from_slice(&witness_bytes)
@@ -145,6 +157,7 @@ async fn prove_receipt(
         PftlUniswapProofInputV1::Receipt(Box::new(witness)),
         expected,
         "receipt",
+        skip_redundant_execute,
     )
     .await
 }
@@ -170,6 +183,7 @@ async fn prove_checkpoint(
         PftlUniswapProofInputV1::Checkpoint(Box::new(witness)),
         expected,
         "checkpoint",
+        false,
     )
     .await
 }
@@ -182,6 +196,7 @@ async fn execute_or_prove(
     input: PftlUniswapProofInputV1,
     expected_public_values: Vec<u8>,
     proof_kind: &str,
+    skip_redundant_execute: bool,
 ) -> Result<()> {
     #[cfg(debug_assertions)]
     if prove {
@@ -215,32 +230,40 @@ async fn execute_or_prove(
     let mut stdin = SP1Stdin::new();
     stdin.write_vec(encoded_input);
     let client = ProverClient::from_env().await;
-    let started = Instant::now();
-    let (public_values, report) = client.execute(elf.clone(), stdin.clone()).await?;
-    let executed = public_values.to_vec();
-    if executed != expected_public_values {
-        fs::create_dir_all(&output_dir)?;
-        fs::write(output_dir.join("public-values.executed.bin"), &executed)?;
-        fs::write(
-            output_dir.join("public-values.expected.bin"),
-            &expected_public_values,
-        )?;
-        fs::write(
-            output_dir.join("mismatch-report.json"),
-            serde_json::to_vec_pretty(&serde_json::json!({
-                "executed_public_values_bytes": executed.len(),
-                "expected_public_values_bytes": expected_public_values.len(),
-                "instruction_count": report.total_instruction_count(),
-                "elapsed_ms": started.elapsed().as_millis(),
-            }))?,
-        )?;
-    }
-    anyhow::ensure!(
-        executed == expected_public_values,
-        "SP1 {proof_kind} output differs from native canonical public values"
-    );
-
     fs::create_dir_all(&output_dir)?;
+    let execute_started = Instant::now();
+    let (executed, instruction_count, execute_ms) = if skip_redundant_execute {
+        (expected_public_values.clone(), None, 0)
+    } else {
+        let (public_values, report) = client.execute(elf.clone(), stdin.clone()).await?;
+        let executed = public_values.to_vec();
+        if executed != expected_public_values {
+            fs::write(output_dir.join("public-values.executed.bin"), &executed)?;
+            fs::write(
+                output_dir.join("public-values.expected.bin"),
+                &expected_public_values,
+            )?;
+            fs::write(
+                output_dir.join("mismatch-report.json"),
+                serde_json::to_vec_pretty(&serde_json::json!({
+                    "executed_public_values_bytes": executed.len(),
+                    "expected_public_values_bytes": expected_public_values.len(),
+                    "instruction_count": report.total_instruction_count(),
+                    "elapsed_ms": execute_started.elapsed().as_millis(),
+                }))?,
+            )?;
+        }
+        anyhow::ensure!(
+            executed == expected_public_values,
+            "SP1 {proof_kind} output differs from native canonical public values"
+        );
+        (
+            executed,
+            Some(report.total_instruction_count()),
+            execute_started.elapsed().as_millis(),
+        )
+    };
+
     fs::write(output_dir.join("public-values.bin"), &executed)?;
     fs::write(
         output_dir.join("execute-report.json"),
@@ -248,8 +271,9 @@ async fn execute_or_prove(
             "schema": "postfiat-pftl-uniswap-execute-report-v1",
             "proof_kind": proof_kind,
             "witness": witness_path,
-            "elapsed_ms": started.elapsed().as_millis(),
-            "instruction_count": report.total_instruction_count(),
+            "host_execute_skipped": skip_redundant_execute,
+            "elapsed_ms": execute_ms,
+            "instruction_count": instruction_count,
             "public_values_bytes": executed.len(),
         }))?,
     )?;
@@ -275,15 +299,20 @@ async fn execute_or_prove(
                 "setup_and_prove_ms": prove_started.elapsed().as_millis(),
                 "proof_bytes": proof.bytes().len(),
                 "public_values_bytes": proof.public_values.to_vec().len(),
+                "host_execute_skipped": skip_redundant_execute,
+                "execute_ms": execute_ms,
                 "prover_backend": env::var("SP1_PROVER")
                     .unwrap_or_else(|_| "default".to_string()),
             }))?,
         )?;
     }
     println!(
-        "{proof_kind} witness executed: {} cycles in {} ms",
-        report.total_instruction_count(),
-        started.elapsed().as_millis()
+        "{proof_kind} witness processed: {} cycles in {} ms (host execute skipped: {})",
+        instruction_count
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "skipped".to_string()),
+        execute_ms,
+        skip_redundant_execute,
     );
     Ok(())
 }

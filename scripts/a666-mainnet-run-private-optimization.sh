@@ -35,6 +35,7 @@ wrapped_balance_before=$(jq -er '.expected_wrapped_balance_before' "$manifest")
 wrapped_supply_before=$(jq -er '.expected_wrapped_supply_before' "$manifest")
 lane_manifest=$(jq -er '.pfusdc_deposit_lane.deployment_manifest' "$manifest")
 lane_manifest_sha=$(jq -er '.pfusdc_deposit_lane.deployment_manifest_sha256' "$manifest")
+validator_release=$(jq -er '.validator_release' "$manifest")
 
 [[ "$workflow_id" =~ ^[a-z0-9][a-z0-9-]{0,39}$ ]]
 [[ "$deposit_atoms" =~ ^[1-9][0-9]*$ ]]
@@ -67,13 +68,39 @@ on_error() {
 }
 trap on_error ERR
 
+resident_manifest="$phase_dir/preflight/resident-rounds-manifest.json"
+python3 scripts/a666-resident-rounds.py start \
+  --workflow-id "$workflow_id" \
+  --start-height "$expected_pftl_height" \
+  --plan transparent,shielded,shielded,shielded,transparent \
+  --output "$resident_manifest" \
+  --proposer-hosts-file \
+    docs/evidence/a666-joe-mainnet-e2e-20260728/proposer-hosts.json \
+  --remote-binary \
+    "/opt/postfiat/releases/$validator_release/postfiat-node" \
+  --remote-topology \
+    "/etc/postfiat/releases/$validator_release/topology.json"
+
+mkdir -p "$phase_dir/preapproval"
+python3 scripts/a666-mainnet-pfusdc-deposit.py \
+  --approval-only \
+  --amount-atoms "$deposit_atoms" \
+  --output "$phase_dir/preapproval/preapproval-result.json" \
+  --deployment-manifest "$lane_manifest" \
+  --expected-manifest-sha256 "$lane_manifest_sha"
+
+python3 scripts/a666-wait-ethereum-deposit-window.py \
+  --output "$phase_dir/preflight/deposit-window.json"
+
 mkdir -p "$phase_dir/deposit"
 python3 scripts/a666-mainnet-pfusdc-deposit.py \
+  --require-preapproved \
   --amount-atoms "$deposit_atoms" \
   --output "$phase_dir/deposit/deposit-result.json" \
   --deployment-manifest "$lane_manifest" \
   --expected-manifest-sha256 "$lane_manifest_sha"
 
+A666_RESIDENT_ROUNDS_MANIFEST="$resident_manifest" \
 bash scripts/a666-mainnet-transparent-issue-after-deposit.sh \
   --phase-dir "$phase_dir" \
   --workflow-id "$workflow_id" \
