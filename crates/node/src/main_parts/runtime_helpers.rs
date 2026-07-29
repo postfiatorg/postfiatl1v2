@@ -828,7 +828,7 @@ fn print_usage() {
   postfiat-node shield-batch-swap [--data-dir PATH] --swap-file PATH --batch-file PATH
   postfiat-node shield-batch-atomic [--data-dir PATH] --source-batch-files PATH[,PATH] --batch-file PATH
   postfiat-node shield-batch-simulate [--data-dir PATH] --batch-file PATH
-  postfiat-node shield-batch-conformance [--data-dir PATH] --batch-file PATH
+  postfiat-node shield-batch-conformance [--data-dir PATH] [--prefix-batch-files PATH[,PATH]] --batch-file PATH
   postfiat-node apply-shield-batch [--data-dir PATH] --batch-file PATH [--certificate-file PATH]
   postfiat-node shield-scan [--data-dir PATH] --owner OWNER
   postfiat-node shield-disclose [--data-dir PATH] --note-id NOTE

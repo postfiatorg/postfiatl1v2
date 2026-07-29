@@ -4806,6 +4806,7 @@ pub struct ShieldedBatchSimulateOptions {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShieldedBatchConformanceOptions {
     pub data_dir: PathBuf,
+    pub prefix_batch_files: Vec<PathBuf>,
     pub batch_file: PathBuf,
 }
 

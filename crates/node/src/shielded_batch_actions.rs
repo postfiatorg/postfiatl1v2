@@ -386,18 +386,62 @@ fn simulate_shielded_batch_against_state(
 pub fn conformance_shielded_batch(
     options: ShieldedBatchConformanceOptions,
 ) -> io::Result<ShieldedBatchConformanceReport> {
+    if options.prefix_batch_files.len() > 16 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "shielded batch conformance accepts at most 16 prefix batches",
+        ));
+    }
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
     let governance = store.read_governance()?;
-    let ledger = store.read_ledger()?;
-    let shielded = store.read_shielded()?;
+    let mut ledger = store.read_ledger()?;
+    let mut shielded = store.read_shielded()?;
     let bridge = store.read_bridge()?;
-    let ordered_batches = store.read_ordered_batches()?;
+    let mut ordered_batches = store.read_ordered_batches()?;
     let chain_tip = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?;
-    let execution_height = chain_tip
+    let mut execution_height = chain_tip
         .height
         .checked_add(1)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "block height overflow"))?;
+    for prefix_file in &options.prefix_batch_files {
+        let prefix = read_shielded_action_batch_file(prefix_file)?;
+        verify_shielded_action_batch_id(&genesis, &prefix)?;
+        reject_live_legacy_cleartext_shielded_actions(&prefix)?;
+        if ordered_batches.contains(&prefix.batch_id) {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                format!(
+                    "shielded conformance prefix batch `{}` already applied",
+                    prefix.batch_id
+                ),
+            ));
+        }
+        let receipts = execute_shielded_batch(
+            &genesis,
+            &mut ledger,
+            &mut shielded,
+            &prefix,
+            execution_height,
+            asset_execution_compatibility_for_genesis_and_governance(&genesis, &governance),
+            governance.orchard_pool_paused,
+            governance.shielded_atomic_batch_activation_height(),
+            false,
+        );
+        if !receipts.iter().all(|receipt| receipt.accepted) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "shielded conformance prefix batch `{}` was not fully accepted",
+                    prefix.batch_id
+                ),
+            ));
+        }
+        ordered_batches.push(prefix.batch_id);
+        execution_height = execution_height
+            .checked_add(1)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "block height overflow"))?;
+    }
     let source = read_shielded_action_batch_file(&options.batch_file)?;
     verify_shielded_action_batch_id(&genesis, &source)?;
     reject_live_legacy_cleartext_shielded_actions(&source)?;

@@ -2357,8 +2357,18 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
         "shield-batch-conformance" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let batch_file = flag_value(flags, "--batch-file").ok_or("missing --batch-file")?;
+            let prefix_batch_files = flag_value(flags, "--prefix-batch-files")
+                .map(|value| {
+                    value
+                        .split(',')
+                        .filter(|path| !path.is_empty())
+                        .map(PathBuf::from)
+                        .collect()
+                })
+                .unwrap_or_default();
             let report = conformance_shielded_batch(ShieldedBatchConformanceOptions {
                 data_dir: PathBuf::from(data_dir),
+                prefix_batch_files,
                 batch_file: PathBuf::from(batch_file),
             })
             .map_err(|error| format!("shield-batch-conformance failed: {error}"))?;
