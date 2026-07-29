@@ -3143,8 +3143,10 @@ fn build_shielded_batch_proposal_with_timings(
         block_height,
         asset_execution_compatibility_for_genesis_and_governance(&genesis, &governance),
         governance.orchard_pool_paused,
+        governance.shielded_atomic_batch_activation_height(),
         false,
     );
+    ensure_atomic_shielded_batch_accepted(&batch, &receipts)?;
     timings.state_exec_ms = node_timing_elapsed_ms(stage_start);
     let private_egress_verifier_breakdown = take_asset_orchard_private_egress_timings();
     let private_egress_state_breakdown = take_asset_orchard_private_egress_node_timings();

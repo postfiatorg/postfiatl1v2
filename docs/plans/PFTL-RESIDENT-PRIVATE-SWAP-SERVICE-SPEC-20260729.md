@@ -3,7 +3,7 @@
 **Date:** 2026-07-29
 **Priority:** P1 (first product-latency workstream after the optimization
 campaign)
-**Status:** amended proposed implementation specification (v2)
+**Status:** amended proposed implementation specification (v3)
 **Parent research:** `CHAIN-OPTIMIZATION-STACKED-RESEARCH-20260729.md`
 (S1.1, S1.3, S3.1, S6.1), `NAV-SWAP-EFFICIENCY-RESEARCH-20260729.md`
 (Tier 0.1, Tier 2.1)
@@ -17,7 +17,7 @@ one-round relay failure (mempool admission lesson)
 
 ## Amendment note
 
-This v2 amendment preserves the resident-prover, persistent-session, and
+This v3 amendment preserves the resident-prover, persistent-session, and
 single-batch architecture. It tightens the product boundary and resolves
 security and implementation ambiguities that would otherwise block a safe
 implementation:
@@ -36,6 +36,28 @@ implementation:
   admission tests; and
 - performance acceptance separates queueing, proving, consensus, and the
   optional transparent-egress action.
+
+### 2026-07-29 PFTL-first delivery decision
+
+The independently useful product is the fastest safe swap path that can be
+delivered entirely on PFTL. It MUST NOT be held back by Ethereum finality,
+Ethereum RPC health, or completion of the external bridge user experience.
+
+The first shippable outcome is:
+
+1. a user already has spendable transparent pfUSDC on PFTL;
+2. the user issues A666 at the governed NAV price, increasing A666 supply;
+3. the user receives private A666 by default, or explicitly requests
+   transparent A666;
+4. the user can later redeem A666 at the governed NAV price, decreasing A666
+   supply and receiving private or transparent pfUSDC; and
+5. both directions satisfy the PFTL latency, convergence, conservation,
+   replay, and privacy gates in this specification.
+
+Ethereum USDC -> pfUSDC ingress and PFTL -> Ethereum/Uniswap export remain
+important adapters around this product, but they are separate state machines
+with separate clocks. A pending or degraded Ethereum adapter MUST NOT make an
+otherwise healthy PFTL-resident swap service unready.
 
 ## 1. Purpose
 
@@ -73,6 +95,12 @@ The default private issue/redeem result remains shielded. A requested
 transparent output adds an egress action and is measured as a distinct
 route mode.
 
+This boundary is a delivery decision, not merely a measurement convention.
+The PFTL-resident service MUST be deployable, operable, and acceptance-tested
+without an Ethereum endpoint. Bridge adapters may call or feed the service,
+but the core service MUST NOT synchronously call Ethereum during quote,
+authorization, proving, publication, commitment, or recovery.
+
 ## 2. Scope
 
 In scope (PFTL-only flows, no Ethereum excursion):
@@ -94,7 +122,20 @@ finality floor (governed fast lane decision), PFTL->Ethereum export/mint,
 acceptance-campaign evidence flows, any change to circuits, public inputs,
 verification keys, NAV formulas, or route policy.
 
-### 2.1 Trust and custody boundary
+### 2.1 Delivery boundary
+
+The implementation is divided into two independently releasable layers:
+
+| Layer | Required for this specification | Readiness dependency |
+|---|---|---|
+| PFTL-resident issue/redeem service | Yes | PFTL node, governed NAV/policy, Orchard state, proving contexts, quorum |
+| Ethereum ingress/export adapters | No; separate integration work | Ethereum finality, RPC, contracts, relayer/export proof |
+
+No PFTL quote or swap may imply that an Ethereum deposit or export is
+complete. Conversely, Ethereum unavailability is not a valid reason to
+reject an otherwise valid PFTL-resident issue or redemption.
+
+### 2.2 Trust and custody boundary
 
 The protocol remains trust-minimized with respect to issuance and
 redemption correctness: every validator independently verifies the proofs,
@@ -117,7 +158,7 @@ shielded spend authority). It is not implied by this specification.
 ## 3. Architecture
 
 Four components. All run on existing hosts. They add no new consensus trust,
-but they operate within the custody boundary in section 2.1.
+but they operate within the custody boundary in section 2.2.
 
 ### 3.1 `pftl-swapd` — resident swap daemon (validator-2)
 
@@ -398,6 +439,19 @@ retry test, crash-resume test at each state-machine stage, invalid-action
 atomicity matrix from R-BATCH-5, and proof that proving load does not
 degrade validator liveness.
 
+Release evidence MUST contain a PFTL-only timing report that can be reproduced
+with Ethereum access disabled. Any end-to-end bridge demonstration is reported
+separately and MUST show at least:
+
+- Ethereum confirmation/finality time;
+- bridge observation and claim time;
+- PFTL-resident swap time;
+- PFTL export-proof time; and
+- Ethereum submission/finality time.
+
+The combined user-journey number MUST NOT replace or obscure the normative
+PFTL service number.
+
 ## 10. Rollout phases
 
 1. **Phase A — route inventory, authorization, and admission study.**
@@ -408,20 +462,27 @@ degrade validator liveness.
    mainnet funds. If batch-local admission is negative, adopt the N-round
    fallback and re-scope Phase C targets (~+3s). If a consensus change is
    needed, follow R-BATCH-6.
-2. **Phase B — daemon + persistent sessions.** `pftl-swapd` with warm
-   PKs, frontier mirror, readiness, persistent fleet sessions,
-   continuous preflight. Swaps still N rounds. Expected: ~5-6 min ->
-   ~40-70s.
-3. **Phase C — single batch + parallel proving.** Expected: -> ~10-25s.
+2. **Phase B — first usable PFTL-only release.** Deploy `pftl-swapd` with
+   warm PKs, frontier mirror, readiness, persistent fleet sessions,
+   continuous preflight, and bounded parallel proving. Swaps MAY still use
+   N certified rounds if Phase A has not admitted the atomic path. This
+   release has no synchronous Ethereum dependency and is acceptance-tested
+   for both issue and redeem. Expected: ~5-6 min -> tens of seconds.
+3. **Phase C — fastest PFTL path.** Enable the admitted single atomic batch,
+   retain parallel proving, and remove remaining per-request orchestration
+   startup. Expected: -> ~10-25s, subject to the measured qualification
+   distribution rather than a one-off demonstration.
 4. **Phase D — durable async evidence, recovery, resource isolation, and
    per-stage timing schema.** Expected: p50 <= 20s met.
 5. **Phase E — controlled-value canary and performance qualification.**
    Run restart/fault injection at every state, bounded-load tests, the
    required issue/redeem samples, and rollback rehearsal before increasing
    value limits.
-6. **Phase F (optional) — pinned PK artifact integration (S1.1), GPU
-   backend (S1.2), redemption-mirror wiring into the Ethereum egress
-   flow (drops the 888s redemption leg toward export-proof + tx time).**
+6. **Phase F (optional, independent adapters) — pinned PK artifact
+   integration (S1.1), GPU backend (S1.2), and redemption-mirror wiring
+   into the Ethereum egress flow. Ethereum work may proceed in parallel,
+   but it is not a release gate for Phases B-E and is measured under the
+   separate `user_journey_latency` clock.**
 
 Each phase ships behind the standard release/regression-gate treatment
 (pinned-VK gate precedent) and its own controlled-testnet evidence packet
@@ -455,3 +516,6 @@ regression.
 4. After the single-wallet canary, should multi-wallet concurrency use
    disjoint per-wallet workers or a shared reservation manager? The first
    release serializes conflicting input/frontier work rather than guessing.
+
+Ethereum finality is deliberately not an open question for this plan: it is
+outside the PFTL execution SLO and cannot block the PFTL-resident release.

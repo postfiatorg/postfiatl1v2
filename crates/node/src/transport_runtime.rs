@@ -806,6 +806,7 @@ pub(super) fn transport_validator_serve_inner(
         .map_err(|_| "transport validator service summary lock poisoned".to_string())?;
     let batch_acks = std::mem::take(&mut shared_state.batch_acks);
     let block_vote_responses = std::mem::take(&mut shared_state.block_vote_responses);
+    let health_responses = std::mem::take(&mut shared_state.health_responses);
     let rejected = std::mem::take(&mut shared_state.rejected);
 
     Ok(TransportValidatorServeReport {
@@ -819,9 +820,11 @@ pub(super) fn transport_validator_serve_inner(
         connection_count: max_connections as u64,
         accepted_batch_count: batch_acks.len() as u64,
         accepted_block_vote_count: block_vote_responses.len() as u64,
+        accepted_health_count: health_responses.len() as u64,
         rejected_count: rejected.len() as u64,
         batch_acks,
         block_vote_responses,
+        health_responses,
         rejected,
         verified: true,
     })
@@ -884,6 +887,7 @@ fn handle_transport_validator_connection(
                         "unknown",
                         None,
                         None,
+                        None,
                         Some(rejection.clone()),
                     )?;
                 }
@@ -918,6 +922,7 @@ fn handle_transport_validator_connection(
                             connection_index,
                             "batch",
                             Some(ack.clone()),
+                            None,
                             None,
                             None,
                         )?;
@@ -967,6 +972,7 @@ fn handle_transport_validator_connection(
                             None,
                             Some(response.clone()),
                             None,
+                            None,
                         )?;
                     }
                     shared_state
@@ -983,6 +989,50 @@ fn handle_transport_validator_connection(
                         &local_status,
                         connection_index,
                         "block_vote_request",
+                        error,
+                        &event_writer,
+                        &shared_state,
+                    )?;
+                }
+            },
+            TRANSPORT_HEALTH_REQUEST_SCHEMA => match handle_transport_health_line(
+                &mut stream,
+                &data_dir,
+                &topology,
+                &local_status,
+                &line,
+            ) {
+                Ok(response) => {
+                    {
+                        let mut writer = event_writer.lock().map_err(|_| {
+                            "transport validator service event log lock poisoned".to_string()
+                        })?;
+                        write_transport_validator_event(
+                            &mut writer,
+                            &local_status,
+                            &topology,
+                            connection_index,
+                            "health_request",
+                            None,
+                            None,
+                            Some(response.clone()),
+                            None,
+                        )?;
+                    }
+                    shared_state
+                        .lock()
+                        .map_err(|_| "transport validator service state lock poisoned".to_string())?
+                        .health_responses
+                        .push(response);
+                }
+                Err(error) => {
+                    record_transport_validator_rejection(
+                        Some(&mut stream),
+                        &data_dir,
+                        &topology,
+                        &local_status,
+                        connection_index,
+                        "health_request",
                         error,
                         &event_writer,
                         &shared_state,
@@ -1042,6 +1092,7 @@ fn record_transport_validator_rejection(
             kind,
             None,
             None,
+            None,
             Some(rejection.clone()),
         )?;
     }
@@ -1064,6 +1115,46 @@ fn write_transport_validator_rejection_response(
         .and_then(|_| stream.write_all(b"\n"))
         .and_then(|_| stream.flush())
         .map_err(|error| format!("transport validator rejection response write failed: {error}"))
+}
+
+fn handle_transport_health_line(
+    stream: &mut TcpStream,
+    data_dir: &Path,
+    topology: &NetworkTopology,
+    local_status: &StatusReport,
+    line: &str,
+) -> Result<TransportHealthResponseEnvelope, String> {
+    let request: TransportHealthRequestEnvelope = serde_json::from_str(line)
+        .map_err(|error| format!("transport health request parse failed: {error}"))?;
+    validate_transport_health_request(&request, data_dir, topology, local_status)?;
+    let state = transport_hello(topology, local_status);
+    let response_payload = transport_health_response_payload(
+        &topology.topology_id,
+        &request.frame.message_id,
+        &request.nonce,
+        &state,
+    )?;
+    let frame = frame_message(
+        &network_domain_from_topology(topology),
+        local_status.node_id.clone(),
+        Some(request.frame.from.clone()),
+        TRANSPORT_HEALTH_RESPONSE_TOPIC,
+        &response_payload,
+    )
+    .map_err(|error| format!("transport health response frame failed: {error}"))?;
+    let auth =
+        sign_transport_envelope_auth(data_dir, topology, &local_status.node_id, &frame)?;
+    let response = TransportHealthResponseEnvelope {
+        schema: TRANSPORT_HEALTH_RESPONSE_SCHEMA.to_string(),
+        topology_id: topology.topology_id.clone(),
+        frame,
+        auth,
+        request_message_id: request.frame.message_id,
+        nonce: request.nonce,
+        state,
+    };
+    write_json_line(stream, &response)?;
+    Ok(response)
 }
 
 fn handle_transport_block_vote_connection(
@@ -1524,6 +1615,151 @@ fn transport_vote_stream_pool() -> &'static Mutex<BTreeMap<String, TcpStream>> {
     static POOL: std::sync::OnceLock<Mutex<BTreeMap<String, TcpStream>>> =
         std::sync::OnceLock::new();
     POOL.get_or_init(|| Mutex::new(BTreeMap::new()))
+}
+
+fn transport_authenticated_health_request(
+    data_dir: &Path,
+    topology: &NetworkTopology,
+    local_status: &StatusReport,
+    target: &str,
+    timeout_ms: u64,
+) -> Result<TransportHealthResponseEnvelope, String> {
+    static HEALTH_NONCE_COUNTER: std::sync::atomic::AtomicU64 =
+        std::sync::atomic::AtomicU64::new(0);
+    let peer = topology
+        .peer(target)
+        .ok_or_else(|| format!("transport health target `{target}` is not in topology"))?;
+    let peer_address = socket_address(&peer.host, peer.p2p_port);
+    let counter = HEALTH_NONCE_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|_| "transport health clock is before Unix epoch".to_string())?
+        .as_nanos();
+    let nonce = hash_hex(
+        "postfiat.transport.health.nonce.v1",
+        format!(
+            "{}:{target}:{}:{counter}:{nanos}",
+            local_status.node_id,
+            std::process::id()
+        )
+        .as_bytes(),
+    );
+    let payload = transport_health_request_payload(&topology.topology_id, &nonce)?;
+    let frame = frame_message(
+        &network_domain_from_topology(topology),
+        local_status.node_id.clone(),
+        Some(target.to_string()),
+        TRANSPORT_HEALTH_REQUEST_TOPIC,
+        &payload,
+    )
+    .map_err(|error| format!("transport health request frame failed: {error}"))?;
+    let auth =
+        sign_transport_envelope_auth(data_dir, topology, &local_status.node_id, &frame)?;
+    let request = TransportHealthRequestEnvelope {
+        schema: TRANSPORT_HEALTH_REQUEST_SCHEMA.to_string(),
+        topology_id: topology.topology_id.clone(),
+        frame,
+        auth,
+        nonce,
+    };
+    let request_json = serde_json::to_string(&request)
+        .map_err(|error| format!("transport health request serialization failed: {error}"))?;
+    let cached_stream = transport_vote_stream_pool()
+        .lock()
+        .map_err(|_| "transport health stream pool lock poisoned".to_string())?
+        .remove(&peer_address);
+    let mut stream = match cached_stream {
+        Some(mut stream) => {
+            let cached_result = (|| {
+                let (line, _, _) =
+                    transport_vote_exchange_on_stream(&mut stream, &request_json, timeout_ms)?;
+                let response: TransportHealthResponseEnvelope = serde_json::from_str(&line)
+                    .map_err(|error| format!("transport health response parse failed: {error}"))?;
+                validate_transport_health_response(
+                    &response,
+                    &request,
+                    data_dir,
+                    topology,
+                    local_status,
+                    target,
+                )?;
+                Ok::<_, String>(response)
+            })();
+            if let Ok(response) = cached_result {
+                transport_vote_stream_pool()
+                    .lock()
+                    .map_err(|_| "transport health stream pool lock poisoned".to_string())?
+                    .insert(peer_address, stream);
+                return Ok(response);
+            }
+            connect_transport_stream(&peer_address, timeout_ms, "transport health dial")?
+        }
+        None => connect_transport_stream(&peer_address, timeout_ms, "transport health dial")?,
+    };
+    set_stream_timeout(&stream, timeout_ms)?;
+    let (line, _, _) =
+        transport_vote_exchange_on_stream(&mut stream, &request_json, timeout_ms)?;
+    let response: TransportHealthResponseEnvelope = serde_json::from_str(&line)
+        .map_err(|error| format!("transport health response parse failed: {error}"))?;
+    validate_transport_health_response(
+        &response,
+        &request,
+        data_dir,
+        topology,
+        local_status,
+        target,
+    )?;
+    transport_vote_stream_pool()
+        .lock()
+        .map_err(|_| "transport health stream pool lock poisoned".to_string())?
+        .insert(peer_address, stream);
+    Ok(response)
+}
+
+pub(super) fn transport_authenticated_peer_health(
+    data_dir: &Path,
+    topology: &NetworkTopology,
+    local_status: &StatusReport,
+    timeout_ms: u64,
+) -> Result<(usize, usize), String> {
+    let targets =
+        active_transport_targets(data_dir, topology, local_status, "transport health")?;
+    let required = targets.len();
+    let outcomes = std::thread::scope(|scope| {
+        targets
+            .iter()
+            .map(|target| {
+                scope.spawn(move || {
+                    transport_authenticated_health_request(
+                        data_dir,
+                        topology,
+                        local_status,
+                        target,
+                        timeout_ms,
+                    )
+                })
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|handle| {
+                handle
+                    .join()
+                    .map_err(|_| "transport health worker panicked".to_string())?
+            })
+            .collect::<Vec<_>>()
+    });
+    let authenticated = outcomes.iter().filter(|outcome| outcome.is_ok()).count();
+    if authenticated != required {
+        let failures = outcomes
+            .into_iter()
+            .filter_map(Result::err)
+            .collect::<Vec<_>>();
+        return Err(format!(
+            "authenticated transport health reached {authenticated}/{required} remote validators: {}",
+            failures.join("; ")
+        ));
+    }
+    Ok((authenticated, required))
 }
 
 #[cfg(test)]
@@ -3019,6 +3255,70 @@ pub(super) fn transport_peer_certified_mempool_round(
     })
 }
 
+struct TransportLoopReadyFileGuard {
+    path: PathBuf,
+}
+
+impl Drop for TransportLoopReadyFileGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+fn write_peer_certified_batch_loop_ready(
+    ready_file: &Path,
+    options: &TransportPeerCertifiedBatchLoopOptions,
+    topology: &NetworkTopology,
+    local_status: &StatusReport,
+    shielded_verifier_prewarm: &TransportShieldedVerifierPrewarmReport,
+    authenticated_peer_count: usize,
+    required_remote_peer_count: usize,
+    processed_round_count: usize,
+) -> Result<(), String> {
+    let heartbeat_unix_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|_| "peer certified batch loop clock is before Unix epoch".to_string())?
+        .as_millis()
+        .try_into()
+        .map_err(|_| "peer certified batch loop clock exceeds u64".to_string())?;
+    let report = TransportPeerCertifiedBatchLoopReadyReport {
+        schema: "postfiat-transport-peer-certified-batch-loop-ready-v2",
+        node_id: local_status.node_id.clone(),
+        topology_id: topology.topology_id.clone(),
+        batch_kind: options
+            .batch_kind
+            .clone()
+            .unwrap_or_else(default_transport_batch_kind),
+        batch_dir: options.batch_dir.display().to_string(),
+        processed_dir: options
+            .processed_dir
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_default(),
+        artifact_root: options.artifact_root.display().to_string(),
+        start_height: options.start_height,
+        max_rounds: options.max_rounds,
+        processed_round_count,
+        poll_ms: options.poll_ms,
+        idle_timeout_ms: options.idle_timeout_ms,
+        require_local_proposer: options.require_local_proposer,
+        require_signed_proposal: options.require_signed_proposal,
+        allow_peer_failures: options.allow_peer_failures,
+        quorum_early_full_propagation: options.quorum_early_full_propagation,
+        local_apply_before_certified_send: options.local_apply_before_certified_send,
+        defer_certified_sends: options.defer_certified_sends,
+        persistent_vote_streams: persistent_vote_streams_enabled(),
+        heartbeat_unix_ms,
+        local_state: transport_hello(topology, local_status),
+        authenticated_peer_count,
+        required_remote_peer_count,
+        authenticated_quorum: required_remote_peer_count > 0
+            && authenticated_peer_count == required_remote_peer_count,
+        shielded_verifier_prewarm: shielded_verifier_prewarm.clone(),
+    };
+    write_transport_ready_file(ready_file, &report, "peer certified batch loop")
+}
+
 pub(super) fn transport_peer_certified_batch_loop(
     options: TransportPeerCertifiedBatchLoopOptions,
 ) -> Result<TransportPeerCertifiedBatchLoopReport, String> {
@@ -3051,8 +3351,8 @@ pub(super) fn transport_peer_certified_batch_loop(
     .map_err(|error| format!("peer certified batch loop status failed: {error}"))?;
     validate_status_matches_topology(&local_status, &topology)?;
     let shielded_verifier_prewarm = prewarm_shielded_verifier_cache("peer certified batch loop")?;
-    if let Some(ready_file) = std::env::var_os(CERTIFIED_BATCH_LOOP_READY_FILE_ENV) {
-        let ready_file = PathBuf::from(ready_file);
+    let ready_file = std::env::var_os(CERTIFIED_BATCH_LOOP_READY_FILE_ENV).map(PathBuf::from);
+    if let Some(ready_file) = ready_file.as_ref() {
         if let Some(parent) = ready_file.parent() {
             std::fs::create_dir_all(parent).map_err(|error| {
                 format!(
@@ -3061,26 +3361,11 @@ pub(super) fn transport_peer_certified_batch_loop(
                 )
             })?;
         }
-        let ready_report = TransportPeerCertifiedBatchLoopReadyReport {
-            schema: "postfiat-transport-peer-certified-batch-loop-ready-v1",
-            node_id: &local_status.node_id,
-            topology_id: &topology.topology_id,
-            batch_dir: options.batch_dir.display().to_string(),
-            artifact_root: options.artifact_root.display().to_string(),
-            start_height: options.start_height,
-            max_rounds: options.max_rounds,
-            shielded_verifier_prewarm: &shielded_verifier_prewarm,
-        };
-        let json = serde_json::to_vec_pretty(&ready_report).map_err(|error| {
-            format!("peer certified batch loop ready file serialization failed: {error}")
-        })?;
-        std::fs::write(&ready_file, [json.as_slice(), b"\n"].concat()).map_err(|error| {
-            format!(
-                "peer certified batch loop ready file `{}` write failed: {error}",
-                ready_file.display()
-            )
-        })?;
+        clear_transport_ready_file(ready_file, "peer certified batch loop")?;
     }
+    let _ready_file_guard = ready_file
+        .as_ref()
+        .map(|path| TransportLoopReadyFileGuard { path: path.clone() });
 
     let mut processed = BTreeSet::new();
     let mut processed_batch_files = Vec::with_capacity(options.max_rounds);
@@ -3090,7 +3375,53 @@ pub(super) fn transport_peer_certified_batch_loop(
     let idle_timeout =
         (options.idle_timeout_ms > 0).then(|| Duration::from_millis(options.idle_timeout_ms));
     let mut last_progress = Instant::now();
+    let health_interval = Duration::from_secs(2);
+    let mut last_health_attempt = Instant::now()
+        .checked_sub(health_interval)
+        .unwrap_or_else(Instant::now);
+    let mut authenticated_health = None;
     while rounds.len() < options.max_rounds {
+        if last_health_attempt.elapsed() >= health_interval {
+            last_health_attempt = Instant::now();
+            let current_status = status(NodeOptions {
+                data_dir: options.data_dir.clone(),
+            })
+            .map_err(|error| format!("peer certified batch loop health status failed: {error}"))?;
+            validate_status_matches_topology(&current_status, &topology)?;
+            authenticated_health = match transport_authenticated_peer_health(
+                &options.data_dir,
+                &topology,
+                &current_status,
+                options.timeout_ms,
+            ) {
+                Ok((authenticated, required)) => {
+                    if let Some(ready_file) = ready_file.as_ref() {
+                        write_peer_certified_batch_loop_ready(
+                            ready_file,
+                            &options,
+                            &topology,
+                            &current_status,
+                            &shielded_verifier_prewarm,
+                            authenticated,
+                            required,
+                            rounds.len(),
+                        )?;
+                    }
+                    Some((authenticated, required))
+                }
+                Err(error) => {
+                    if let Some(ready_file) = ready_file.as_ref() {
+                        clear_transport_ready_file(ready_file, "peer certified batch loop")?;
+                    }
+                    eprintln!("WARN peer certified batch loop health degraded: {error}");
+                    None
+                }
+            };
+        }
+        if authenticated_health.is_none() {
+            std::thread::sleep(poll_duration);
+            continue;
+        }
         let next_batch = list_certified_loop_batch_files(&options.batch_dir)?
             .into_iter()
             .find(|path| !processed.contains(&path.display().to_string()));
@@ -3149,6 +3480,9 @@ pub(super) fn transport_peer_certified_batch_loop(
         }
         rounds.push(round);
         last_progress = Instant::now();
+        last_health_attempt = Instant::now()
+            .checked_sub(health_interval)
+            .unwrap_or_else(Instant::now);
     }
     let loop_ok = rounds.len() == options.max_rounds && rounds.iter().all(|round| round.round_ok);
     let shutdown_reason = if rounds.len() == options.max_rounds {

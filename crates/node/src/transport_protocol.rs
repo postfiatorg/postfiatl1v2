@@ -121,6 +121,102 @@ pub(super) fn validate_transport_envelope_auth(
     Ok(())
 }
 
+pub(super) fn transport_health_request_payload(
+    topology_id: &str,
+    nonce: &str,
+) -> Result<Vec<u8>, String> {
+    serde_json::to_vec(&(TRANSPORT_HEALTH_REQUEST_SCHEMA, topology_id, nonce))
+        .map_err(|error| format!("transport health request payload serialization failed: {error}"))
+}
+
+pub(super) fn transport_health_response_payload(
+    topology_id: &str,
+    request_message_id: &str,
+    nonce: &str,
+    state: &TransportHello,
+) -> Result<Vec<u8>, String> {
+    serde_json::to_vec(&(
+        TRANSPORT_HEALTH_RESPONSE_SCHEMA,
+        topology_id,
+        request_message_id,
+        nonce,
+        state,
+    ))
+    .map_err(|error| format!("transport health response payload serialization failed: {error}"))
+}
+
+pub(super) fn validate_transport_health_request(
+    envelope: &TransportHealthRequestEnvelope,
+    data_dir: &Path,
+    topology: &NetworkTopology,
+    local_status: &StatusReport,
+) -> Result<(), String> {
+    if envelope.schema != TRANSPORT_HEALTH_REQUEST_SCHEMA
+        || envelope.topology_id != topology.topology_id
+        || envelope.frame.topic != TRANSPORT_HEALTH_REQUEST_TOPIC
+        || envelope.frame.to.as_deref() != Some(local_status.node_id.as_str())
+        || topology.peer(&envelope.frame.from).is_none()
+        || envelope.nonce.len() != 96
+        || !envelope.nonce.bytes().all(|byte| {
+            byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()
+        })
+    {
+        return Err("transport health request has invalid canonical fields".to_string());
+    }
+    let payload = transport_health_request_payload(&envelope.topology_id, &envelope.nonce)?;
+    if !verify_message_payload(
+        &network_domain_from_topology(topology),
+        &envelope.frame,
+        &payload,
+    ) {
+        return Err("transport health request payload binding mismatch".to_string());
+    }
+    validate_transport_envelope_auth(Some(&envelope.auth), data_dir, topology, &envelope.frame)
+}
+
+pub(super) fn validate_transport_health_response(
+    response: &TransportHealthResponseEnvelope,
+    request: &TransportHealthRequestEnvelope,
+    data_dir: &Path,
+    topology: &NetworkTopology,
+    local_status: &StatusReport,
+    target: &str,
+) -> Result<(), String> {
+    if response.schema != TRANSPORT_HEALTH_RESPONSE_SCHEMA
+        || response.topology_id != topology.topology_id
+        || response.frame.topic != TRANSPORT_HEALTH_RESPONSE_TOPIC
+        || response.frame.from != target
+        || response.frame.to.as_deref() != Some(local_status.node_id.as_str())
+        || response.request_message_id != request.frame.message_id
+        || response.nonce != request.nonce
+    {
+        return Err("transport health response has invalid request binding".to_string());
+    }
+    validate_transport_hello(&response.state, topology, local_status)?;
+    if response.state.node_id != target {
+        return Err("transport health response state has wrong validator identity".to_string());
+    }
+    let payload = transport_health_response_payload(
+        &response.topology_id,
+        &response.request_message_id,
+        &response.nonce,
+        &response.state,
+    )?;
+    if !verify_message_payload(
+        &network_domain_from_topology(topology),
+        &response.frame,
+        &payload,
+    ) {
+        return Err("transport health response payload binding mismatch".to_string());
+    }
+    validate_transport_envelope_auth(
+        Some(&response.auth),
+        data_dir,
+        topology,
+        &response.frame,
+    )
+}
+
 pub(super) fn transport_auth_message(
     topology: &NetworkTopology,
     frame: &FramedMessage,
@@ -470,6 +566,7 @@ pub(super) fn write_transport_validator_event(
     kind: &str,
     batch_ack: Option<TransportBatchAck>,
     block_vote_response: Option<TransportBlockVoteResponse>,
+    health_response: Option<TransportHealthResponseEnvelope>,
     rejection: Option<TransportValidatorServeRejection>,
 ) -> Result<(), String> {
     if let Some(writer) = event_writer.as_mut() {
@@ -487,6 +584,7 @@ pub(super) fn write_transport_validator_event(
             outcome: outcome.to_string(),
             batch_ack,
             block_vote_response,
+            health_response,
             rejection,
         };
         write_event_log_line(writer, &event)?;
@@ -1428,6 +1526,17 @@ pub(super) fn is_ipv6_unicast_link_local(address: &std::net::Ipv6Addr) -> bool {
 mod transport_cli_tests {
     use super::*;
 
+    fn unique_transport_protocol_test_dir(label: &str) -> PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("test clock")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "postfiat-transport-protocol-{label}-{}-{nanos}",
+            std::process::id()
+        ))
+    }
+
     fn test_status(node_id: &str) -> StatusReport {
         StatusReport {
             chain_id: "postfiat-wan-devnet".to_string(),
@@ -1482,6 +1591,157 @@ mod transport_cli_tests {
                 },
             ],
         }
+    }
+
+    #[test]
+    fn authenticated_health_exchange_binds_nonce_route_state_and_signers() {
+        let data_dir = unique_transport_protocol_test_dir("health");
+        std::fs::create_dir_all(&data_dir).expect("create health test directory");
+        let validator_0 =
+            postfiat_crypto_provider::ml_dsa_65_keygen_from_seed(&[41_u8; 32]);
+        let validator_1 =
+            postfiat_crypto_provider::ml_dsa_65_keygen_from_seed(&[42_u8; 32]);
+        let records = [
+            ("validator-0", &validator_0),
+            ("validator-1", &validator_1),
+        ];
+        let key_file = serde_json::json!({
+            "validators": records
+                .iter()
+                .map(|(node_id, key)| serde_json::json!({
+                    "node_id": node_id,
+                    "algorithm_id": ML_DSA_65_ALGORITHM,
+                    "public_key_hex": bytes_to_hex(&key.public_key),
+                    "private_key_hex": bytes_to_hex(&key.private_key),
+                }))
+                .collect::<Vec<_>>()
+        });
+        let key_path = data_dir.join(VALIDATOR_KEYS_FILE);
+        std::fs::write(
+            &key_path,
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&key_file).expect("health key json")
+            ),
+        )
+        .expect("write health validator keys");
+        #[cfg(unix)]
+        std::fs::set_permissions(
+            &key_path,
+            std::os::unix::fs::PermissionsExt::from_mode(0o600),
+        )
+        .expect("protect health validator keys");
+        let registry = serde_json::json!({
+            "validators": records
+                .iter()
+                .map(|(node_id, key)| serde_json::json!({
+                    "node_id": node_id,
+                    "algorithm_id": ML_DSA_65_ALGORITHM,
+                    "public_key_hex": bytes_to_hex(&key.public_key),
+                }))
+                .collect::<Vec<_>>()
+        });
+        std::fs::write(
+            data_dir.join(VALIDATOR_REGISTRY_FILE),
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&registry).expect("health registry json")
+            ),
+        )
+        .expect("write health validator registry");
+
+        let topology = test_topology("127.0.0.1");
+        let client_status = test_status("validator-0");
+        let target_status = test_status("validator-1");
+        let nonce = "ab".repeat(48);
+        let request_payload =
+            transport_health_request_payload(&topology.topology_id, &nonce)
+                .expect("health request payload");
+        let request_frame = frame_message(
+            &network_domain_from_topology(&topology),
+            "validator-0",
+            Some("validator-1".to_string()),
+            TRANSPORT_HEALTH_REQUEST_TOPIC,
+            &request_payload,
+        )
+        .expect("health request frame");
+        let request = TransportHealthRequestEnvelope {
+            schema: TRANSPORT_HEALTH_REQUEST_SCHEMA.to_string(),
+            topology_id: topology.topology_id.clone(),
+            auth: sign_transport_envelope_auth(
+                &data_dir,
+                &topology,
+                "validator-0",
+                &request_frame,
+            )
+            .expect("sign health request"),
+            frame: request_frame,
+            nonce: nonce.clone(),
+        };
+        validate_transport_health_request(
+            &request,
+            &data_dir,
+            &topology,
+            &target_status,
+        )
+        .expect("validate authenticated health request");
+
+        let state = transport_hello(&topology, &target_status);
+        let response_payload = transport_health_response_payload(
+            &topology.topology_id,
+            &request.frame.message_id,
+            &nonce,
+            &state,
+        )
+        .expect("health response payload");
+        let response_frame = frame_message(
+            &network_domain_from_topology(&topology),
+            "validator-1",
+            Some("validator-0".to_string()),
+            TRANSPORT_HEALTH_RESPONSE_TOPIC,
+            &response_payload,
+        )
+        .expect("health response frame");
+        let response = TransportHealthResponseEnvelope {
+            schema: TRANSPORT_HEALTH_RESPONSE_SCHEMA.to_string(),
+            topology_id: topology.topology_id.clone(),
+            auth: sign_transport_envelope_auth(
+                &data_dir,
+                &topology,
+                "validator-1",
+                &response_frame,
+            )
+            .expect("sign health response"),
+            frame: response_frame,
+            request_message_id: request.frame.message_id.clone(),
+            nonce,
+            state,
+        };
+        validate_transport_health_response(
+            &response,
+            &request,
+            &data_dir,
+            &topology,
+            &client_status,
+            "validator-1",
+        )
+        .expect("validate authenticated health response");
+
+        let mut replayed = response.clone();
+        replayed.nonce = "cd".repeat(48);
+        assert!(
+            validate_transport_health_response(
+                &replayed,
+                &request,
+                &data_dir,
+                &topology,
+                &client_status,
+                "validator-1",
+            )
+            .is_err(),
+            "response replay under a different challenge must fail",
+        );
+        let _ = std::fs::remove_dir_all(data_dir);
     }
 
     fn test_prewarm_report() -> TransportShieldedVerifierPrewarmReport {

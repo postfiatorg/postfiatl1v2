@@ -138,6 +138,22 @@ mod transport_batch_payload_tests {
             &format!("h{height}-v{view}"),
         );
         let data_dir = data_dirs[proposer_index].clone();
+        let topology =
+            read_topology_file(&topology_file.to_path_buf()).expect("read health topology");
+        let local_status = status(NodeOptions {
+            data_dir: data_dir.clone(),
+        })
+        .expect("read health local status");
+        let (authenticated, required) =
+            crate::transport_runtime::transport_authenticated_peer_health(
+            &data_dir,
+            &topology,
+            &local_status,
+            15_000,
+        )
+            .expect("authenticated persistent peer health");
+        assert_eq!(authenticated, data_dirs.len() - 1);
+        assert_eq!(required, data_dirs.len() - 1);
         transport_peer_certified_batch_round(TransportPeerCertifiedBatchRoundOptions {
             data_dir: data_dir.clone(),
             topology_file: topology_file.to_path_buf(),
@@ -173,6 +189,7 @@ mod transport_batch_payload_tests {
                 report.accepted_block_vote_count,
                 expected_block_vote_count
             );
+            assert_eq!(report.accepted_health_count, 1);
             assert_eq!(report.accepted_batch_count, 1);
             assert!(report.rejected.is_empty(), "{:?}", report.rejected);
         }

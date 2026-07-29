@@ -329,6 +329,142 @@ fn wan_devnet2_receipt_id_drift_is_exactly_allowlisted() {
 }
 
 #[test]
+fn wan_devnet2_rejected_private_primary_replay_drift_is_exactly_allowlisted() {
+    let genesis =
+        Genesis::try_new_with_validator_count("postfiat-wan-devnet-2".to_string(), 6)
+            .expect("devnet-2 genesis");
+    let mut block = dummy_block_record(377);
+    block.header.batch_kind = BATCH_KIND_SHIELDED.to_string();
+    block.header.batch_id =
+        "aed030cd9716c15217cd371820c74bc88d589dc0dadf5e4cd4145d83ffe99197d613da52a72966bf0db5de6159f7d570"
+            .to_string();
+
+    let replayed = Receipt::rejected(
+        "91c2e778f13c71939ad5bfb35d23bb8fa1a2815c941460f219ff0344fff66a4d9421e99194655ddb351674207cdda132",
+        "asset_orchard_private_primary_issue_archive_unsupported",
+        "private-primary issue has no historical replay form",
+    );
+    let persisted = Receipt::rejected(
+        "4af10a87b60ce1343054b770d4b265e08ee2ca4a1cc0ee28894377de8c2c3d9f01e293adb39c0021407e3cf556daba9a",
+        "bad_pftl_uniswap_receipt",
+        "unsupported pftl_uniswap receipt transition",
+    );
+
+    assert!(archived_wan_devnet2_legacy_receipt_id_drift_allowed(
+        &genesis, &block
+    ));
+    assert!(replayed_receipt_matches_persisted(
+        &genesis, &block, &replayed, &persisted
+    ));
+
+    let mut accepted_replay = replayed.clone();
+    accepted_replay.accepted = true;
+    assert!(!replayed_receipt_matches_persisted(
+        &genesis,
+        &block,
+        &accepted_replay,
+        &persisted,
+    ));
+
+    let mut charged_persisted = persisted.clone();
+    charged_persisted.fee_charged = 1;
+    assert!(!replayed_receipt_matches_persisted(
+        &genesis,
+        &block,
+        &replayed,
+        &charged_persisted,
+    ));
+
+    let mut wrong_height = block.clone();
+    wrong_height.header.height += 1;
+    assert!(!archived_wan_devnet2_legacy_receipt_id_drift_allowed(
+        &genesis,
+        &wrong_height,
+    ));
+    assert!(!replayed_receipt_matches_persisted(
+        &genesis,
+        &wrong_height,
+        &replayed,
+        &persisted,
+    ));
+
+    let mut wrong_batch = block.clone();
+    wrong_batch.header.batch_id = "00".repeat(48);
+    assert!(!archived_wan_devnet2_legacy_receipt_id_drift_allowed(
+        &genesis,
+        &wrong_batch,
+    ));
+
+    let other_chain =
+        Genesis::try_new_with_validator_count("postfiat-wan-devnet".to_string(), 6)
+            .expect("other genesis");
+    assert!(!archived_wan_devnet2_legacy_receipt_id_drift_allowed(
+        &other_chain,
+        &block,
+    ));
+}
+
+#[test]
+fn wan_devnet2_accepted_private_primary_replay_is_exactly_allowlisted() {
+    let genesis =
+        Genesis::try_new_with_validator_count("postfiat-wan-devnet-2".to_string(), 6)
+            .expect("devnet-2 genesis");
+    let issue_height = 378;
+    let issue_batch =
+        "1d971584eb5cf2752aed24b7128f0412517a12844549998a66879634d3c70fe73d6ae209317052f2fd696f17f08a8b11";
+    let redeem_height = 407;
+    let redeem_batch =
+        "7a494fc0cfa8f99b681fe8501ec2425e0307be771dfe4fcc26634586bbeb4675b77862d009d518ff1650e724a19fce01";
+
+    assert!(archived_wan_devnet2_private_primary_execution_allowed(
+        &genesis,
+        issue_height,
+        issue_batch,
+        false,
+    ));
+    assert!(archived_wan_devnet2_private_primary_execution_allowed(
+        &genesis,
+        redeem_height,
+        redeem_batch,
+        true,
+    ));
+    assert!(!archived_wan_devnet2_private_primary_execution_allowed(
+        &genesis,
+        issue_height,
+        issue_batch,
+        true,
+    ));
+    assert!(!archived_wan_devnet2_private_primary_execution_allowed(
+        &genesis,
+        redeem_height,
+        redeem_batch,
+        false,
+    ));
+    assert!(!archived_wan_devnet2_private_primary_execution_allowed(
+        &genesis,
+        issue_height + 1,
+        issue_batch,
+        false,
+    ));
+    assert!(!archived_wan_devnet2_private_primary_execution_allowed(
+        &genesis,
+        issue_height,
+        &"00".repeat(48),
+        false,
+    ));
+
+    let other_chain =
+        Genesis::try_new_with_validator_count("postfiat-wan-devnet".to_string(), 6)
+            .expect("other genesis");
+    assert!(!archived_wan_devnet2_private_primary_execution_allowed(
+        &other_chain,
+        issue_height,
+        issue_batch,
+        false,
+    ));
+}
+
+#[test]
 fn wan_devnet2_deduplicated_governance_receipt_is_exactly_allowlisted() {
     let genesis =
         Genesis::try_new_with_validator_count("postfiat-wan-devnet-2".to_string(), 6)

@@ -1207,6 +1207,15 @@
                 .map(|rejection| rejection.0),
             Some("invalid_replicated_state_v2_activation_height")
         );
+        let mut shielded_atomic_activation = amendment.clone();
+        shielded_atomic_activation.kind =
+            GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT.to_owned();
+        assert!(governance_amendment_lifecycle_rejection(&shielded_atomic_activation, 1).is_none());
+        assert_eq!(
+            governance_amendment_lifecycle_rejection(&shielded_atomic_activation, 2)
+                .map(|rejection| rejection.0),
+            Some("invalid_shielded_atomic_batch_activation_height")
+        );
         let mut migration_governance = GovernanceState::new(1);
         migration_governance.apply(amendment);
         assert_eq!(
@@ -3960,6 +3969,7 @@
                 1,
                 AssetExecutionCompatibility::strict(),
                 false,
+                None,
                 false,
             );
         assert_eq!(oversized_receipts.len(), 1);
@@ -4030,6 +4040,7 @@
             2,
             AssetExecutionCompatibility::strict(),
             governance.orchard_pool_paused,
+            None,
             false,
         );
         assert_eq!(receipts.len(), 2);
@@ -4169,6 +4180,7 @@
             1,
             AssetExecutionCompatibility::strict(),
             false,
+            None,
             false,
         );
         assert_eq!(live_receipts[0].code, "legacy_cleartext_shielded_action_disabled");
@@ -4182,11 +4194,202 @@
             1,
             AssetExecutionCompatibility::strict(),
             false,
+            None,
             true,
         );
         assert!(replay_receipts[0].accepted, "{replay_receipts:?}");
 
         fs::remove_dir_all(local_dir).expect("cleanup local debug pool test");
+    }
+
+    #[test]
+    fn atomic_shielded_batch_rolls_back_earlier_accepted_action() {
+        let (data_dir, genesis) =
+            shielded_swap_test_dir("postfiat-atomic-shielded-batch-rollback");
+        let store = NodeStore::new(&data_dir);
+        let mut ledger = store.read_ledger().expect("read atomic test ledger");
+        let mut shielded = store
+            .read_shielded()
+            .expect("read atomic test shielded state");
+        let ledger_before = ledger.clone();
+        let shielded_before = shielded.clone();
+        let batch = build_atomic_shielded_action_batch(
+            &genesis,
+            vec![
+                ShieldedAction::Mint(ShieldMintAction {
+                    owner: "historical-alice".to_string(),
+                    asset_id: DEFAULT_SHIELDED_ASSET_ID.to_string(),
+                    amount: 5,
+                    memo: "atomic rollback fixture".to_string(),
+                }),
+                ShieldedAction::Spend(postfiat_types::ShieldSpendAction {
+                    note_id: "missing-note".to_string(),
+                    to: "historical-bob".to_string(),
+                    amount: 1,
+                    memo: "force rejection".to_string(),
+                }),
+            ],
+        )
+        .expect("build atomic shielded batch");
+        verify_shielded_action_batch_id(&genesis, &batch)
+            .expect("verify atomic shielded batch domain");
+
+        let inactive_receipts = execute_shielded_batch(
+            &genesis,
+            &mut ledger,
+            &mut shielded,
+            &batch,
+            1,
+            AssetExecutionCompatibility::strict(),
+            false,
+            None,
+            true,
+        );
+        assert_eq!(inactive_receipts.len(), 2);
+        assert!(inactive_receipts
+            .iter()
+            .all(|receipt| receipt.code == "shielded_atomic_batch_not_active"));
+        assert_eq!(ledger, ledger_before);
+        assert_eq!(shielded, shielded_before);
+
+        let receipts = execute_shielded_batch(
+            &genesis,
+            &mut ledger,
+            &mut shielded,
+            &batch,
+            1,
+            AssetExecutionCompatibility::strict(),
+            false,
+            Some(1),
+            true,
+        );
+        assert_eq!(receipts.len(), 2);
+        assert!(!receipts[0].accepted);
+        assert_eq!(receipts[0].code, "atomic_batch_aborted");
+        assert!(!receipts[1].accepted);
+        assert_eq!(ledger, ledger_before);
+        assert_eq!(shielded, shielded_before);
+        let proposal_error = ensure_atomic_shielded_batch_accepted(&batch, &receipts)
+            .expect_err("rejected atomic batch must not reach proposal");
+        assert!(proposal_error
+            .to_string()
+            .contains("atomic_batch_aborted"));
+
+        let mut tampered_mode = batch.clone();
+        tampered_mode.atomic = false;
+        let error = verify_shielded_action_batch_id(&genesis, &tampered_mode)
+            .expect_err("atomic domain must not verify as legacy");
+        assert!(error.to_string().contains("shielded batch id mismatch"));
+
+        fs::remove_dir_all(data_dir).expect("cleanup atomic shielded batch test");
+    }
+
+    #[test]
+    fn batch_local_orchard_commitments_are_canonical_bounded_and_unique() {
+        let committed = vec!["11".repeat(32)];
+        let pending = vec!["22".repeat(32), "33".repeat(32)];
+        let combined = asset_orchard_batch_local_commitments(&committed, &pending)
+            .expect("combine bounded batch-local commitments");
+        assert_eq!(combined, vec!["11".repeat(32), "22".repeat(32), "33".repeat(32)]);
+
+        let duplicate =
+            asset_orchard_batch_local_commitments(&committed, &["11".repeat(32)])
+                .expect_err("committed commitment duplication must fail");
+        assert!(duplicate.to_string().contains("duplicate"));
+
+        let oversized = asset_orchard_batch_local_commitments(
+            &committed,
+            &["22".repeat(32), "33".repeat(32), "44".repeat(32)],
+        )
+        .expect_err("oversized pending commitment set must fail");
+        assert!(oversized.to_string().contains("at most two"));
+
+        let uppercase = asset_orchard_batch_local_commitments(&committed, &["AA".repeat(32)])
+            .expect_err("non-canonical hex must fail");
+        assert!(uppercase.to_string().contains("lowercase hex"));
+    }
+
+    #[test]
+    fn shielded_atomic_batch_builder_is_governance_gated_and_canonical() {
+        let data_dir = unique_test_dir("postfiat-shielded-atomic-batch-builder");
+        init(InitOptions {
+            data_dir: data_dir.clone(),
+            chain_id: "postfiat-shielded-atomic-batch-builder".to_string(),
+            node_id: "validator-0".to_string(),
+            validator_count: 1,
+        })
+        .expect("init atomic batch builder node");
+        let store = NodeStore::new(&data_dir);
+        let genesis = store.read_genesis().expect("read atomic builder genesis");
+        let source_file = data_dir.join("source.batch.json");
+        let output_file = data_dir.join("atomic.batch.json");
+        let source = build_shielded_action_batch(
+            &genesis,
+            vec![ShieldedAction::Migrate(ShieldMigrateAction {
+                note_id: "fixture-note".to_string(),
+                target_pool: "fixture-pool".to_string(),
+                memo: String::new(),
+            })],
+        )
+        .expect("build atomic source batch");
+        write_shielded_action_batch_file(&source_file, &source)
+            .expect("write atomic source batch");
+
+        let not_governed = create_shielded_atomic_batch(ShieldedAtomicBatchOptions {
+            data_dir: data_dir.clone(),
+            source_batch_files: vec![source_file.clone()],
+            batch_file: output_file.clone(),
+        })
+        .expect_err("ungoverned atomic batch construction must fail");
+        assert!(not_governed.to_string().contains("not governed"));
+
+        let mut governance = store.read_governance().expect("read atomic governance");
+        governance.apply(GovernanceAmendment {
+            amendment_id: "activate-shielded-atomic-batches".to_string(),
+            chain_id: genesis.chain_id.clone(),
+            genesis_hash: genesis_hash(&genesis),
+            protocol_version: genesis.protocol_version,
+            instance_id: "atomic-builder-test".to_string(),
+            proposal_id: "atomic-builder-test".to_string(),
+            certificate_id: "atomic-builder-test".to_string(),
+            proposer: "validator-0".to_string(),
+            validators: vec!["validator-0".to_string()],
+            quorum: 1,
+            kind: GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT.to_string(),
+            value: 1,
+            activation_height: 0,
+            veto_until_height: 0,
+            paused: false,
+            support: vec!["validator-0".to_string()],
+            votes: Vec::new(),
+            signed_authorizations: Vec::new(),
+        });
+        store
+            .write_governance(&governance)
+            .expect("write atomic governance");
+
+        let atomic = create_shielded_atomic_batch(ShieldedAtomicBatchOptions {
+            data_dir: data_dir.clone(),
+            source_batch_files: vec![source_file],
+            batch_file: output_file.clone(),
+        })
+        .expect("build governed atomic batch");
+        assert!(atomic.atomic);
+        assert_eq!(atomic.actions.len(), 1);
+        verify_shielded_action_batch_id(&genesis, &atomic).expect("verify atomic batch id");
+        let persisted = read_shielded_action_batch_file(&output_file)
+            .expect("read persisted atomic batch");
+        assert_eq!(persisted, atomic);
+        let simulation = simulate_shielded_batch(ShieldedBatchSimulateOptions {
+            data_dir: data_dir.clone(),
+            batch_file: output_file,
+        })
+        .expect("simulate governed atomic batch");
+        assert!(!simulation.all_accepted);
+        assert!(simulation.rejection_left_state_unchanged);
+        assert_eq!(simulation.pre_state_root, simulation.post_state_root);
+
+        fs::remove_dir_all(data_dir).expect("cleanup atomic builder test");
     }
 
     #[test]

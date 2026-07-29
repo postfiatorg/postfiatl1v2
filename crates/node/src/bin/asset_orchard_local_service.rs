@@ -11,13 +11,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use postfiat_crypto_provider::{bytes_to_hex, hash_hex};
 use postfiat_execution::genesis_hash;
 use postfiat_node::{
-    create_asset_orchard_private_egress, create_asset_orchard_private_primary_issue,
-    create_asset_orchard_private_primary_issue_batch, create_asset_orchard_private_primary_redeem,
-    create_asset_orchard_private_primary_redeem_batch, create_asset_orchard_swap_action,
-    create_shielded_swap_action_batch, AssetOrchardPrivateEgressCreateOptions,
-    AssetOrchardPrivatePrimaryIssueBatchOptions, AssetOrchardPrivatePrimaryIssueCreateOptions,
-    AssetOrchardPrivatePrimaryRedeemBatchOptions, AssetOrchardPrivatePrimaryRedeemCreateOptions,
-    AssetOrchardSwapCreateOptions, ShieldedSwapActionBatchOptions,
+    build_atomic_shielded_action_batch, create_asset_orchard_private_egress,
+    create_asset_orchard_private_primary_issue, create_asset_orchard_private_primary_issue_batch,
+    create_asset_orchard_private_primary_redeem, create_asset_orchard_private_primary_redeem_batch,
+    create_asset_orchard_swap_action, create_shielded_swap_action_batch,
+    AssetOrchardPrivateEgressCreateOptions, AssetOrchardPrivatePrimaryIssueBatchOptions,
+    AssetOrchardPrivatePrimaryIssueCreateOptions, AssetOrchardPrivatePrimaryRedeemBatchOptions,
+    AssetOrchardPrivatePrimaryRedeemCreateOptions, AssetOrchardSwapCreateOptions,
+    ShieldedSwapActionBatchOptions,
 };
 use postfiat_privacy_orchard::{
     asset_orchard_domain_genesis_hash, build_asset_orchard_wallet_note,
@@ -27,6 +28,7 @@ use postfiat_privacy_orchard::{
     AssetOrchardSwapProvingKey, AssetOrchardSwapVerifyingKey,
 };
 use postfiat_storage::NodeStore;
+use postfiat_types::ShieldedActionBatch;
 use serde::Serialize;
 use serde_json::{json, Value};
 
@@ -100,6 +102,11 @@ struct SwapBatchRequest {
 }
 
 #[derive(Debug)]
+struct AtomicBatchRequest {
+    batches: Vec<ShieldedActionBatch>,
+}
+
+#[derive(Debug)]
 struct PrivateEgressActionRequest {
     wallet_address: String,
     to: String,
@@ -109,6 +116,7 @@ struct PrivateEgressActionRequest {
     input_note_path: Option<String>,
     policy_id: String,
     disclosure_hash: String,
+    pending_output_commitments: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -123,6 +131,7 @@ struct PrivatePrimaryIssueActionRequest {
     mint_amount_atoms: u64,
     settlement_value_atoms: u64,
     expires_at_height: u64,
+    pending_output_commitments: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -135,6 +144,7 @@ struct PrivatePrimaryRedeemActionRequest {
     nav_amount_atoms: u64,
     settlement_output_atoms: u64,
     expires_at_height: u64,
+    pending_output_commitments: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -716,6 +726,9 @@ fn handle_connection(config: &Config, stream: &mut TcpStream) -> io::Result<()> 
             }
         }
         ("POST", "/asset-orchard/swap-actions") => {
+            if reject_if_prover_not_ready(config, stream)? {
+                return Ok(());
+            }
             let body: Value = serde_json::from_slice(&request.body).map_err(invalid_json)?;
             if let Some(path) = find_forbidden_private_material(&body, "$") {
                 return write_json_response(
@@ -757,6 +770,25 @@ fn handle_connection(config: &Config, stream: &mut TcpStream) -> io::Result<()> 
                 ),
             }
         }
+        ("POST", "/asset-orchard/atomic-batch") => {
+            let body: Value = serde_json::from_slice(&request.body).map_err(invalid_json)?;
+            if let Some(path) = find_forbidden_private_material(&body, "$") {
+                return write_json_response(
+                    stream,
+                    400,
+                    &json!({
+                        "ok": false,
+                        "error": "forbidden_private_material",
+                        "message": format!("request contains forbidden private material at {path}"),
+                    }),
+                );
+            }
+            let atomic = parse_atomic_batch_request(&body)?;
+            match build_atomic_batch(config, &atomic) {
+                Ok(response) => write_json_response(stream, 200, &response),
+                Err(error) => write_json_response(stream, 400, &error_response(&error)),
+            }
+        }
         ("POST", "/asset-orchard/swap-finalize") => {
             let body: Value = serde_json::from_slice(&request.body).map_err(invalid_json)?;
             if let Some(path) = find_forbidden_private_material(&body, "$") {
@@ -780,6 +812,9 @@ fn handle_connection(config: &Config, stream: &mut TcpStream) -> io::Result<()> 
             }
         }
         ("POST", "/asset-orchard/private-egress-actions") => {
+            if reject_if_prover_not_ready(config, stream)? {
+                return Ok(());
+            }
             let body: Value = serde_json::from_slice(&request.body).map_err(invalid_json)?;
             if let Some(path) = find_forbidden_private_material(&body, "$") {
                 return write_json_response(
@@ -799,6 +834,9 @@ fn handle_connection(config: &Config, stream: &mut TcpStream) -> io::Result<()> 
             }
         }
         ("POST", "/asset-orchard/private-primary-issue-actions") => {
+            if reject_if_prover_not_ready(config, stream)? {
+                return Ok(());
+            }
             let body: Value = serde_json::from_slice(&request.body).map_err(invalid_json)?;
             if let Some(path) = find_forbidden_private_material(&body, "$") {
                 return write_json_response(
@@ -818,6 +856,9 @@ fn handle_connection(config: &Config, stream: &mut TcpStream) -> io::Result<()> 
             }
         }
         ("POST", "/asset-orchard/private-primary-redeem-actions") => {
+            if reject_if_prover_not_ready(config, stream)? {
+                return Ok(());
+            }
             let body: Value = serde_json::from_slice(&request.body).map_err(invalid_json)?;
             if let Some(path) = find_forbidden_private_material(&body, "$") {
                 return write_json_response(
@@ -860,6 +901,23 @@ fn handle_connection(config: &Config, stream: &mut TcpStream) -> io::Result<()> 
         }
         _ => write_json_response(stream, 404, &json!({ "ok": false, "error": "not_found" })),
     }
+}
+
+fn reject_if_prover_not_ready(config: &Config, stream: &mut TcpStream) -> io::Result<bool> {
+    let readiness = local_readiness(config);
+    if readiness.get("ready").and_then(Value::as_bool) == Some(true) {
+        return Ok(false);
+    }
+    write_json_response(
+        stream,
+        503,
+        &json!({
+            "ok": false,
+            "error": "service_not_ready",
+            "readiness": readiness,
+        }),
+    )?;
+    Ok(true)
 }
 
 fn private_primary_work_dir(config: &Config, operation: &str, request_id: &str) -> PathBuf {
@@ -923,6 +981,7 @@ fn build_and_store_private_primary_issue_action(
             mint_amount_atoms: request.mint_amount_atoms,
             settlement_value_atoms: request.settlement_value_atoms,
             expires_at_height: request.expires_at_height,
+            pending_output_commitments: request.pending_output_commitments.clone(),
             action_file: action_file.clone(),
             overwrite: false,
         },
@@ -991,6 +1050,7 @@ fn build_and_store_private_primary_redeem_action(
             nav_amount_atoms: request.nav_amount_atoms,
             settlement_output_atoms: request.settlement_output_atoms,
             expires_at_height: request.expires_at_height,
+            pending_output_commitments: request.pending_output_commitments.clone(),
             action_file: action_file.clone(),
             overwrite: false,
         },
@@ -1516,6 +1576,59 @@ fn build_swap_batch(config: &Config, request: &SwapBatchRequest) -> io::Result<V
     }))
 }
 
+fn build_atomic_batch(config: &Config, request: &AtomicBatchRequest) -> io::Result<Value> {
+    let store = NodeStore::new(&config.data_dir);
+    let genesis = store.read_genesis()?;
+    let governance = store.read_governance()?;
+    let chain_tip = store.read_chain_tip()?;
+    let execution_height = chain_tip
+        .height
+        .checked_add(1)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "block height overflow"))?;
+    let activation_height = governance
+        .shielded_atomic_batch_activation_height()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "shielded atomic batch execution is not governed",
+            )
+        })?;
+    if execution_height < activation_height {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!(
+                "shielded atomic batch execution activates at height {activation_height}; next height is {execution_height}"
+            ),
+        ));
+    }
+    let mut actions = Vec::with_capacity(request.batches.len());
+    for batch in &request.batches {
+        postfiat_node::verify_shielded_action_batch_id(&genesis, batch)?;
+        if batch.atomic {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "nested atomic shielded batches are not allowed",
+            ));
+        }
+        if batch.actions.len() != 1 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "each source shielded batch must contain exactly one action",
+            ));
+        }
+        actions.push(batch.actions[0].clone());
+    }
+    let batch = build_atomic_shielded_action_batch(&genesis, actions)?;
+    Ok(json!({
+        "ok": true,
+        "schema": "postfiat-asset-orchard-local-atomic-batch-v1",
+        "batch": batch,
+        "activation_height": activation_height,
+        "execution_height": execution_height,
+        "readiness": local_readiness(config),
+    }))
+}
+
 fn finalize_swap(config: &Config, body: &Value) -> io::Result<Value> {
     let swap_id = string_field(body, "swap_id")?;
     let accepted = match body.get("accepted") {
@@ -1609,9 +1722,24 @@ fn build_and_store_private_egress_action(
             .join("egress-work")
             .join(format!("{}-{}", std::process::id(), unix_ms()?));
     prepare_private_dir(&work_dir)?;
-    let note_file = work_dir.join("input-note.json");
+    let note_file = match string_value(&input, "source_note_path") {
+        Some(path) => {
+            let path = PathBuf::from(path);
+            if !path.is_absolute() || !path.is_file() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "private egress source note handle is unavailable",
+                ));
+            }
+            path
+        }
+        None => {
+            let path = work_dir.join("input-note.json");
+            atomic_write_private_json(&path, wallet_note_value(&input)?)?;
+            path
+        }
+    };
     let egress_file = work_dir.join("private-egress.json");
-    atomic_write_private_json(&note_file, wallet_note_value(&input)?)?;
 
     reset_asset_orchard_private_egress_timings();
     let report = match create_asset_orchard_private_egress(AssetOrchardPrivateEgressCreateOptions {
@@ -1623,6 +1751,7 @@ fn build_and_store_private_egress_action(
         fee: 0,
         policy_id: request.policy_id.clone(),
         disclosure_hash: request.disclosure_hash.clone(),
+        pending_output_commitments: request.pending_output_commitments.clone(),
         egress_file: egress_file.clone(),
         overwrite: true,
     }) {
@@ -1886,6 +2015,25 @@ fn parse_swap_batch_request(body: &Value) -> io::Result<SwapBatchRequest> {
     Ok(SwapBatchRequest { swap_action_json })
 }
 
+fn parse_atomic_batch_request(body: &Value) -> io::Result<AtomicBatchRequest> {
+    let batches = body
+        .get("batches")
+        .and_then(Value::as_array)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "batches array is required"))?;
+    if batches.is_empty() || batches.len() > 3 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "batches must contain between one and three source batches",
+        ));
+    }
+    let batches = batches
+        .iter()
+        .cloned()
+        .map(|value| serde_json::from_value(value).map_err(invalid_json))
+        .collect::<io::Result<Vec<ShieldedActionBatch>>>()?;
+    Ok(AtomicBatchRequest { batches })
+}
+
 fn parse_private_egress_action_request(body: &Value) -> io::Result<PrivateEgressActionRequest> {
     if body.get("disclosure_ack").and_then(Value::as_bool) != Some(true) {
         return Err(io::Error::new(
@@ -1925,6 +2073,7 @@ fn parse_private_egress_action_request(body: &Value) -> io::Result<PrivateEgress
         input_note_path,
         policy_id,
         disclosure_hash,
+        pending_output_commitments: pending_output_commitments(body)?,
     })
 }
 
@@ -1942,6 +2091,7 @@ fn parse_private_primary_issue_action_request(
         mint_amount_atoms: u64_field(body, "mint_amount_atoms")?,
         settlement_value_atoms: u64_field(body, "settlement_value_atoms")?,
         expires_at_height: u64_field(body, "expires_at_height")?,
+        pending_output_commitments: pending_output_commitments(body)?,
     })
 }
 
@@ -1957,7 +2107,48 @@ fn parse_private_primary_redeem_action_request(
         nav_amount_atoms: u64_field(body, "nav_amount_atoms")?,
         settlement_output_atoms: u64_field(body, "settlement_output_atoms")?,
         expires_at_height: u64_field(body, "expires_at_height")?,
+        pending_output_commitments: pending_output_commitments(body)?,
     })
+}
+
+fn pending_output_commitments(body: &Value) -> io::Result<Vec<String>> {
+    let Some(values) = body.get("pending_output_commitments") else {
+        return Ok(Vec::new());
+    };
+    let values = values.as_array().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "pending_output_commitments must be an array",
+        )
+    })?;
+    if values.len() > 2 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "pending_output_commitments supports at most two values",
+        ));
+    }
+    values
+        .iter()
+        .map(|value| {
+            let value = value.as_str().ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "pending output commitment must be a string",
+                )
+            })?;
+            if value.len() != 64
+                || !value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "pending output commitment must be 32-byte lowercase hex",
+                ));
+            }
+            Ok(value.to_string())
+        })
+        .collect()
 }
 
 fn request_id_field(body: &Value) -> io::Result<String> {
@@ -2320,9 +2511,12 @@ fn local_readiness(config: &Config) -> Value {
     };
     let mirror_ready = mirror.get("height").and_then(Value::as_u64).is_some()
         && mirror.get("state_root").and_then(Value::as_str).is_some();
+    let prover_warm = prover_warm_snapshot(config);
+    let prover_ready = prover_warm.get("ready").and_then(Value::as_bool) == Some(true);
+    let ready = mirror_ready && prover_ready;
     json!({
-        "ok": mirror_ready,
-        "ready": mirror_ready,
+        "ok": ready,
+        "ready": ready,
         "local_only": true,
         "service": "asset-orchard-local-service",
         "bind": config.bind.to_string(),
@@ -2332,11 +2526,12 @@ fn local_readiness(config: &Config) -> Value {
         "circuit_id": "asset-orchard-swap-v1",
         "k": 15,
         "vault_schema": NOTE_VAULT_SCHEMA,
-        "prover_warm": prover_warm_snapshot(config),
+        "prover_warm": prover_warm,
         "operations": {
             "ingress_notes": "/asset-orchard/ingress-notes",
             "swap_actions": "/asset-orchard/swap-actions",
             "swap_batch": "/asset-orchard/swap-batch",
+            "atomic_batch": "/asset-orchard/atomic-batch",
             "private_primary_issue_actions": "/asset-orchard/private-primary-issue-actions",
             "private_primary_redeem_actions": "/asset-orchard/private-primary-redeem-actions",
             "private_egress_actions": "/asset-orchard/private-egress-actions",
@@ -2405,7 +2600,7 @@ fn forbidden_key(key: &str) -> bool {
             | "spend_authorization_key"
             | "spend_key"
             | "spending_key"
-    ) || normalized.starts_with("spend_")
+    ) || (normalized.starts_with("spend_") && normalized != "spend_authorization_signature")
 }
 
 fn find_forbidden_swap_action_private_material(value: &Value, path: &str) -> Option<String> {
@@ -2828,6 +3023,65 @@ mod tests {
         assert!(error
             .to_string()
             .contains("forbidden private material at $.note_opening"));
+    }
+
+    #[test]
+    fn atomic_batch_request_is_bounded_and_preserves_source_actions() {
+        let source = ShieldedActionBatch::new(
+            "source-batch",
+            vec![postfiat_types::ShieldedAction::Mint(
+                postfiat_types::ShieldMintAction {
+                    owner: "historical-owner".to_string(),
+                    asset_id: "asset".to_string(),
+                    amount: 1,
+                    memo: String::new(),
+                },
+            )],
+        );
+        let parsed = parse_atomic_batch_request(&json!({
+            "batches": [source.clone()],
+        }))
+        .expect("parse bounded atomic batch request");
+        assert_eq!(parsed.batches.len(), 1);
+        assert_eq!(parsed.batches[0].actions.len(), 1);
+
+        let empty = parse_atomic_batch_request(&json!({ "batches": [] }))
+            .expect_err("empty atomic request must fail");
+        assert!(empty.to_string().contains("between one and three"));
+        let too_many = parse_atomic_batch_request(&json!({
+            "batches": [source.clone(), source.clone(), source.clone(), source],
+        }))
+        .expect_err("oversized atomic request must fail");
+        assert!(too_many.to_string().contains("between one and three"));
+    }
+
+    #[test]
+    fn pending_output_commitments_parser_is_canonical_and_bounded() {
+        let parsed = pending_output_commitments(&json!({
+            "pending_output_commitments": ["11".repeat(32), "22".repeat(32)],
+        }))
+        .expect("parse bounded pending commitments");
+        assert_eq!(parsed, vec!["11".repeat(32), "22".repeat(32)]);
+
+        let absent = pending_output_commitments(&json!({}))
+            .expect("missing pending commitments defaults empty");
+        assert!(absent.is_empty());
+
+        let oversized = pending_output_commitments(&json!({
+            "pending_output_commitments": [
+                "11".repeat(32),
+                "22".repeat(32),
+                "33".repeat(32),
+            ],
+        }))
+        .expect_err("oversized pending commitments must fail");
+        assert!(oversized.to_string().contains("at most two"));
+
+        let uppercase = pending_output_commitments(&json!({
+            "pending_output_commitments": ["AA".repeat(32)],
+        }))
+        .expect_err("uppercase commitment must fail");
+        assert!(uppercase.to_string().contains("lowercase hex"));
     }
 
     fn asset_orchard_local_service_test_dir(name: &str) -> PathBuf {

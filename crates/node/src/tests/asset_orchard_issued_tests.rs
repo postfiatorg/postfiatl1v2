@@ -1095,6 +1095,7 @@
             1,
             AssetExecutionCompatibility::strict(),
             false,
+            None,
             false,
         );
         assert_eq!(
@@ -1114,6 +1115,7 @@
             1,
             AssetExecutionCompatibility::strict(),
             false,
+            None,
             true,
         );
         assert!(replay_receipts[0].accepted, "{replay_receipts:?}");
@@ -1423,6 +1425,7 @@
                 fee: 0,
                 policy_id: "wallet_private_egress_public_exit_v1".to_string(),
                 disclosure_hash: "privacy-p0-issued-asset-round-trip".to_string(),
+                pending_output_commitments: Vec::new(),
                 egress_file: private_egress_file.clone(),
                 overwrite: false,
             })

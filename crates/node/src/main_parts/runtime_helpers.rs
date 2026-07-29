@@ -675,6 +675,7 @@ fn print_usage() {
   postfiat-node ratify-orchard-pool-pause [--data-dir PATH] --validators CSV [--support CSV] --state paused|resumed [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-atomic-swap-pause [--data-dir PATH] --validators CSV [--support CSV] --state paused|resumed [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-atomic-swap-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
+  postfiat-node ratify-shielded-atomic-batch-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-vault-bridge-route-authority-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-replicated-state-v2-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
   postfiat-node ratify-bridge-exit-root-activation-height [--data-dir PATH] --validators CSV [--support CSV] --height H [--activation-height H] [--veto-until-height H] [--paused] --amendment-file PATH
@@ -777,10 +778,11 @@ fn print_usage() {
   postfiat-node orchard-output-create [--data-dir PATH] (--recipient-view-key-file PATH | --recipient-key-file PATH | --recipient-address-raw-hex HEX) --action-file PATH [--value N] [--memo-hex HEX] [--fee N] [--overwrite]
   postfiat-node orchard-deposit-create [--data-dir PATH] [--key-file PATH] (--recipient-view-key-file PATH | --recipient-key-file PATH | --recipient-address-raw-hex HEX) --deposit-file PATH --amount N [--fee N] [--memo-hex HEX] [--policy-id ID] [--disclosure-hash HEX] [--overwrite]
   postfiat-node asset-orchard-ingress-create [--data-dir PATH] --key-file PATH --asset-id ASSET --amount N --note-seed-hex HEX --ingress-file PATH --note-file PATH [--fee N] [--overwrite]
+  postfiat-node pftl-swap-quote [--data-dir PATH] --route-id ID --direction issue|redeem --amount-atoms N [--output-mode private|transparent] [--ttl-blocks N] [--maximum-fee-atoms N]
   postfiat-node asset-orchard-egress-create [--data-dir PATH] --note-file PATH --to ACCOUNT --egress-file PATH [--amount N] [--overwrite]
-  postfiat-node asset-orchard-private-egress-create [--data-dir PATH] --note-file PATH --to ACCOUNT --policy-id ID --disclosure-hash HASH --egress-file PATH [--asset-id ASSET] [--amount N] [--fee 0] [--overwrite]
-  postfiat-node asset-orchard-private-primary-issue-create [--data-dir PATH] --note-file PATH --output-note-seed-hex HEX --output-note-file PATH --route-id ID --subscriber ACCOUNT --ethereum-recipient ADDRESS --reservation-id HEX --subscription-nonce HEX --mint-amount-atoms N --settlement-value-atoms N --expires-at-height N --action-file PATH [--overwrite]
-  postfiat-node asset-orchard-private-primary-redeem-create [--data-dir PATH] --note-file PATH --output-note-seed-hex HEX --output-note-file PATH --route-id ID --owner ACCOUNT --settlement-recipient ACCOUNT --redemption-id HEX --redemption-nonce HEX --nav-amount-atoms N --settlement-output-atoms N --expires-at-height N --action-file PATH [--overwrite]
+  postfiat-node asset-orchard-private-egress-create [--data-dir PATH] --note-file PATH --to ACCOUNT --policy-id ID --disclosure-hash HASH --egress-file PATH [--asset-id ASSET] [--amount N] [--fee 0] [--pending-output-commitments HEX[,HEX]] [--overwrite]
+  postfiat-node asset-orchard-private-primary-issue-create [--data-dir PATH] --note-file PATH --output-note-seed-hex HEX --output-note-file PATH --route-id ID --subscriber ACCOUNT --ethereum-recipient ADDRESS --reservation-id HEX --subscription-nonce HEX --mint-amount-atoms N --settlement-value-atoms N --expires-at-height N --action-file PATH [--pending-output-commitments HEX[,HEX]] [--overwrite]
+  postfiat-node asset-orchard-private-primary-redeem-create [--data-dir PATH] --note-file PATH --output-note-seed-hex HEX --output-note-file PATH --route-id ID --owner ACCOUNT --settlement-recipient ACCOUNT --redemption-id HEX --redemption-nonce HEX --nav-amount-atoms N --settlement-output-atoms N --expires-at-height N --action-file PATH [--pending-output-commitments HEX[,HEX]] [--overwrite]
   postfiat-node asset-orchard-note-status [--data-dir PATH] --note-file PATH
   postfiat-node asset-orchard-scan [--data-dir PATH] --note-seed-hex HEX --note-file PATH [--overwrite]
   postfiat-node asset-orchard-swap-create [--data-dir PATH] --input-note-file-a PATH --input-note-file-b PATH --output-note-seed-hex-a HEX --output-note-seed-hex-b HEX --action-file PATH --output-note-file-a PATH --output-note-file-b PATH [--overwrite]
@@ -805,6 +807,9 @@ fn print_usage() {
   postfiat-node shield-batch-asset-orchard-private-primary-redeem [--data-dir PATH] --action-file PATH --batch-file PATH
   postfiat-node shield-batch-orchard-withdraw [--data-dir PATH] --action-file PATH --to ADDRESS --amount N --fee N --batch-file PATH [--policy-id ID] [--disclosure-hash HEX]
   postfiat-node shield-batch-swap [--data-dir PATH] --swap-file PATH --batch-file PATH
+  postfiat-node shield-batch-atomic [--data-dir PATH] --source-batch-files PATH[,PATH] --batch-file PATH
+  postfiat-node shield-batch-simulate [--data-dir PATH] --batch-file PATH
+  postfiat-node shield-batch-conformance [--data-dir PATH] --batch-file PATH
   postfiat-node apply-shield-batch [--data-dir PATH] --batch-file PATH [--certificate-file PATH]
   postfiat-node shield-scan [--data-dir PATH] --owner OWNER
   postfiat-node shield-disclose [--data-dir PATH] --note-id NOTE

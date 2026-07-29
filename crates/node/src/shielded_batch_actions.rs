@@ -207,6 +207,63 @@ pub fn create_shielded_swap_action_batch(
     Ok(batch)
 }
 
+pub fn create_shielded_atomic_batch(
+    options: ShieldedAtomicBatchOptions,
+) -> io::Result<ShieldedActionBatch> {
+    if options.source_batch_files.is_empty() || options.source_batch_files.len() > 3 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "shielded atomic batch requires between one and three source batches",
+        ));
+    }
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let governance = store.read_governance()?;
+    let chain_tip = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?;
+    let execution_height = chain_tip
+        .height
+        .checked_add(1)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "block height overflow"))?;
+    let activation_height = governance
+        .shielded_atomic_batch_activation_height()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "shielded atomic batch execution is not governed",
+            )
+        })?;
+    if execution_height < activation_height {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!(
+                "shielded atomic batch execution activates at height {activation_height}; next height is {execution_height}"
+            ),
+        ));
+    }
+
+    let mut actions = Vec::with_capacity(options.source_batch_files.len());
+    for source_path in &options.source_batch_files {
+        let source = read_shielded_action_batch_file(source_path)?;
+        verify_shielded_action_batch_id(&genesis, &source)?;
+        if source.atomic {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "nested shielded atomic batches are not allowed",
+            ));
+        }
+        if source.actions.len() != 1 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "each shielded atomic source batch must contain exactly one action",
+            ));
+        }
+        actions.push(source.actions[0].clone());
+    }
+    let batch = build_atomic_shielded_action_batch(&genesis, actions)?;
+    write_shielded_action_batch_file(&options.batch_file, &batch)?;
+    Ok(batch)
+}
+
 pub fn create_verified_asset_orchard_swap_action_batch(
     data_dir: PathBuf,
     action: &AssetOrchardSwapAction,
@@ -221,6 +278,657 @@ pub fn create_verified_asset_orchard_swap_action_batch(
     let batch = build_shielded_action_batch(&genesis, actions)?;
     write_shielded_action_batch_file(&batch_file, &batch)?;
     Ok(batch)
+}
+
+pub fn simulate_shielded_batch(
+    options: ShieldedBatchSimulateOptions,
+) -> io::Result<ShieldedBatchSimulationReport> {
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let governance = store.read_governance()?;
+    let ledger = store.read_ledger()?;
+    let shielded = store.read_shielded()?;
+    let bridge = store.read_bridge()?;
+    let ordered_batches = store.read_ordered_batches()?;
+    let chain_tip = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?;
+    let execution_height = chain_tip
+        .height
+        .checked_add(1)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "block height overflow"))?;
+    let batch = read_shielded_action_batch_file(&options.batch_file)?;
+    verify_shielded_action_batch_id(&genesis, &batch)?;
+    reject_live_legacy_cleartext_shielded_actions(&batch)?;
+    if ordered_batches.contains(&batch.batch_id) {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!("shielded batch `{}` already applied", batch.batch_id),
+        ));
+    }
+
+    simulate_shielded_batch_against_state(
+        &genesis,
+        &governance,
+        &ledger,
+        &ordered_batches,
+        &shielded,
+        &bridge,
+        execution_height,
+        &batch,
+    )
+}
+
+fn simulate_shielded_batch_against_state(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    ordered_batches: &[String],
+    shielded: &ShieldedState,
+    bridge: &BridgeState,
+    execution_height: u64,
+    batch: &ShieldedActionBatch,
+) -> io::Result<ShieldedBatchSimulationReport> {
+    verify_shielded_action_batch_id(genesis, batch)?;
+    reject_live_legacy_cleartext_shielded_actions(batch)?;
+    let pre_state_root = replicated_state_root(
+        genesis,
+        governance,
+        ledger,
+        ordered_batches,
+        shielded,
+        bridge,
+    )?;
+    let mut post_ledger = ledger.clone();
+    let mut post_shielded = shielded.clone();
+    let receipts = execute_shielded_batch(
+        genesis,
+        &mut post_ledger,
+        &mut post_shielded,
+        batch,
+        execution_height,
+        asset_execution_compatibility_for_genesis_and_governance(genesis, governance),
+        governance.orchard_pool_paused,
+        governance.shielded_atomic_batch_activation_height(),
+        false,
+    );
+    let all_accepted = receipts.iter().all(|receipt| receipt.accepted);
+    let mut post_ordered_batches = ordered_batches.to_vec();
+    if all_accepted {
+        post_ordered_batches.push(batch.batch_id.clone());
+    }
+    let post_state_root = replicated_state_root(
+        genesis,
+        governance,
+        &post_ledger,
+        &post_ordered_batches,
+        &post_shielded,
+        bridge,
+    )?;
+    let state_changed = pre_state_root != post_state_root;
+    Ok(ShieldedBatchSimulationReport {
+        schema: "postfiat.shielded_batch_simulation.v1".to_string(),
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        protocol_version: genesis.protocol_version,
+        batch_id: batch.batch_id.clone(),
+        atomic: batch.atomic,
+        execution_height,
+        activation_height: governance.shielded_atomic_batch_activation_height(),
+        action_count: batch.actions.len(),
+        receipts,
+        all_accepted,
+        pre_state_root,
+        post_state_root,
+        state_changed,
+        rejection_left_state_unchanged: !all_accepted && !state_changed,
+    })
+}
+
+pub fn conformance_shielded_batch(
+    options: ShieldedBatchConformanceOptions,
+) -> io::Result<ShieldedBatchConformanceReport> {
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let governance = store.read_governance()?;
+    let ledger = store.read_ledger()?;
+    let shielded = store.read_shielded()?;
+    let bridge = store.read_bridge()?;
+    let ordered_batches = store.read_ordered_batches()?;
+    let chain_tip = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?;
+    let execution_height = chain_tip
+        .height
+        .checked_add(1)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "block height overflow"))?;
+    let source = read_shielded_action_batch_file(&options.batch_file)?;
+    verify_shielded_action_batch_id(&genesis, &source)?;
+    reject_live_legacy_cleartext_shielded_actions(&source)?;
+    if !source.atomic || source.actions.len() != 3 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "shielded batch conformance requires one atomic three-action ingress/issue/redeem batch",
+        ));
+    }
+    if ordered_batches.contains(&source.batch_id) {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!("shielded batch `{}` already applied", source.batch_id),
+        ));
+    }
+    let (ingress, issue, redeem) = match (
+        &source.actions[0],
+        &source.actions[1],
+        &source.actions[2],
+    ) {
+        (
+            ShieldedAction::AssetOrchardIngressV2(ingress),
+            ShieldedAction::AssetOrchardPrivatePrimaryIssueV1(issue),
+            ShieldedAction::AssetOrchardPrivatePrimaryRedeemV1(redeem),
+        ) if issue.route_id == redeem.route_id => (ingress, issue, redeem),
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "shielded batch conformance source must be ingress v2 -> private issue -> private redeem for one route",
+            ))
+        }
+    };
+    let baseline = simulate_shielded_batch_against_state(
+        &genesis,
+        &governance,
+        &ledger,
+        &ordered_batches,
+        &shielded,
+        &bridge,
+        execution_height,
+        &source,
+    )?;
+    if !baseline.all_accepted {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "shielded batch conformance baseline is not fully accepted",
+        ));
+    }
+
+    let mut cases = Vec::new();
+    let mut invalid_ingress = source.actions.clone();
+    if let ShieldedAction::AssetOrchardIngressV2(action) = &mut invalid_ingress[0] {
+        corrupt_hex_field(&mut action.burn_transaction.signature_hex)?;
+    }
+    push_atomic_rejection_case(
+        &mut cases,
+        "invalid_action_0_signature",
+        &genesis,
+        &governance,
+        &ledger,
+        &ordered_batches,
+        &shielded,
+        &bridge,
+        execution_height,
+        invalid_ingress,
+    )?;
+
+    let mut invalid_issue = source.actions.clone();
+    if let ShieldedAction::AssetOrchardPrivatePrimaryIssueV1(action) = &mut invalid_issue[1] {
+        corrupt_hex_field(&mut action.proof)?;
+    }
+    push_atomic_rejection_case(
+        &mut cases,
+        "invalid_action_1_proof",
+        &genesis,
+        &governance,
+        &ledger,
+        &ordered_batches,
+        &shielded,
+        &bridge,
+        execution_height,
+        invalid_issue,
+    )?;
+
+    let mut invalid_redeem = source.actions.clone();
+    if let ShieldedAction::AssetOrchardPrivatePrimaryRedeemV1(action) = &mut invalid_redeem[2] {
+        corrupt_hex_field(&mut action.proof)?;
+    }
+    push_atomic_rejection_case(
+        &mut cases,
+        "invalid_action_2_proof",
+        &genesis,
+        &governance,
+        &ledger,
+        &ordered_batches,
+        &shielded,
+        &bridge,
+        execution_height,
+        invalid_redeem,
+    )?;
+
+    push_atomic_rejection_case(
+        &mut cases,
+        "duplicate_nullifier",
+        &genesis,
+        &governance,
+        &ledger,
+        &ordered_batches,
+        &shielded,
+        &bridge,
+        execution_height,
+        vec![
+            ShieldedAction::AssetOrchardIngressV2(ingress.clone()),
+            ShieldedAction::AssetOrchardPrivatePrimaryIssueV1(issue.clone()),
+            ShieldedAction::AssetOrchardPrivatePrimaryIssueV1(issue.clone()),
+        ],
+    )?;
+    push_atomic_rejection_case(
+        &mut cases,
+        "reordered_actions",
+        &genesis,
+        &governance,
+        &ledger,
+        &ordered_batches,
+        &shielded,
+        &bridge,
+        execution_height,
+        vec![
+            ShieldedAction::AssetOrchardPrivatePrimaryIssueV1(issue.clone()),
+            ShieldedAction::AssetOrchardIngressV2(ingress.clone()),
+            ShieldedAction::AssetOrchardPrivatePrimaryRedeemV1(redeem.clone()),
+        ],
+    )?;
+    push_atomic_rejection_case(
+        &mut cases,
+        "missing_batch_local_commitment",
+        &genesis,
+        &governance,
+        &ledger,
+        &ordered_batches,
+        &shielded,
+        &bridge,
+        execution_height,
+        vec![
+            ShieldedAction::AssetOrchardPrivatePrimaryIssueV1(issue.clone()),
+            ShieldedAction::AssetOrchardPrivatePrimaryRedeemV1(redeem.clone()),
+        ],
+    )?;
+
+    let ingress_batch = build_shielded_action_batch(
+        &genesis,
+        vec![ShieldedAction::AssetOrchardIngressV2(ingress.clone())],
+    )?;
+    let mut post_ingress_ledger = ledger.clone();
+    let mut post_ingress_shielded = shielded.clone();
+    let ingress_receipts = execute_shielded_batch(
+        &genesis,
+        &mut post_ingress_ledger,
+        &mut post_ingress_shielded,
+        &ingress_batch,
+        execution_height,
+        asset_execution_compatibility_for_genesis_and_governance(&genesis, &governance),
+        governance.orchard_pool_paused,
+        governance.shielded_atomic_batch_activation_height(),
+        false,
+    );
+    if !ingress_receipts.iter().all(|receipt| receipt.accepted) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "stale-anchor conformance could not construct an accepted ingress pre-state",
+        ));
+    }
+    make_orchard_anchor_stale(&mut post_ingress_shielded, &issue.anchor)?;
+    let post_ingress_issue_redeem = build_atomic_shielded_action_batch(
+        &genesis,
+        vec![
+            ShieldedAction::AssetOrchardPrivatePrimaryIssueV1(issue.clone()),
+            ShieldedAction::AssetOrchardPrivatePrimaryRedeemV1(redeem.clone()),
+        ],
+    )?;
+    push_existing_batch_rejection_case(
+        &mut cases,
+        "stale_anchor",
+        &genesis,
+        &governance,
+        &post_ingress_ledger,
+        &ordered_batches,
+        &post_ingress_shielded,
+        &bridge,
+        execution_height,
+        &post_ingress_issue_redeem,
+    )?;
+
+    let mut changed_policy_ledger = ledger.clone();
+    let changed_policy_v2 =
+        private_primary_route_v2_mut(&mut changed_policy_ledger, &issue.route_id)?;
+    changed_policy_v2.primary_market_policy.policy_epoch = changed_policy_v2
+        .primary_market_policy
+        .policy_epoch
+        .checked_add(1)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "policy epoch overflow"))?;
+    changed_policy_v2.primary_market_policy.policy_hash =
+        changed_policy_v2.primary_market_policy.computed_hash();
+    for reservation in changed_policy_v2.active_reservations.values_mut() {
+        reservation.policy_epoch = changed_policy_v2.primary_market_policy.policy_epoch;
+        reservation.policy_hash = changed_policy_v2.primary_market_policy.policy_hash.clone();
+    }
+    for entitlement in changed_policy_v2.export_entitlements.values_mut() {
+        entitlement.policy_epoch = changed_policy_v2.primary_market_policy.policy_epoch;
+        entitlement.policy_hash = changed_policy_v2.primary_market_policy.policy_hash.clone();
+    }
+    push_existing_batch_rejection_case(
+        &mut cases,
+        "changed_policy",
+        &genesis,
+        &governance,
+        &changed_policy_ledger,
+        &ordered_batches,
+        &shielded,
+        &bridge,
+        execution_height,
+        &source,
+    )?;
+
+    let mut exhausted_capacity_ledger = ledger.clone();
+    let exhausted_v2 =
+        private_primary_route_v2_mut(&mut exhausted_capacity_ledger, &issue.route_id)?;
+    exhausted_v2.issue_capacity_used_atoms =
+        exhausted_v2.primary_market_policy.issue_capacity_atoms;
+    push_existing_batch_rejection_case(
+        &mut cases,
+        "issue_capacity_exhausted",
+        &genesis,
+        &governance,
+        &exhausted_capacity_ledger,
+        &ordered_batches,
+        &shielded,
+        &bridge,
+        execution_height,
+        &source,
+    )?;
+
+    let mut changed_nav_ledger = ledger.clone();
+    let native_nav_asset_id = changed_nav_ledger
+        .pftl_uniswap_routes
+        .iter()
+        .find(|route| route.route_id == issue.route_id)
+        .map(|route| route.native_nav_asset_id.clone())
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "private-primary route missing"))?;
+    let nav_asset = changed_nav_ledger
+        .nav_assets
+        .iter_mut()
+        .find(|asset| asset.asset_id == native_nav_asset_id)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "private-primary pricing NAV asset missing",
+            )
+        })?;
+    nav_asset.finalized_epoch = nav_asset
+        .finalized_epoch
+        .checked_add(1)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "NAV epoch overflow"))?;
+    push_existing_batch_rejection_case(
+        &mut cases,
+        "changed_nav",
+        &genesis,
+        &governance,
+        &changed_nav_ledger,
+        &ordered_batches,
+        &shielded,
+        &bridge,
+        execution_height,
+        &source,
+    )?;
+
+    let malformed_error = build_atomic_shielded_action_batch(
+        &genesis,
+        vec![
+            source.actions[0].clone(),
+            source.actions[1].clone(),
+            source.actions[2].clone(),
+            source.actions[2].clone(),
+        ],
+    )
+    .expect_err("four-action atomic batch must be rejected");
+    cases.push(admission_rejection_case(
+        "malformed_action_bounds",
+        malformed_error.to_string(),
+        &baseline.pre_state_root,
+    ));
+    cases.push(admission_rejection_case(
+        "replayed_batch_id",
+        format!("shielded batch `{}` already applied", source.batch_id),
+        &baseline.post_state_root,
+    ));
+
+    for (case, expected_code) in [
+        (
+            "invalid_action_0_signature",
+            "asset_orchard_ingress_burn_rejected",
+        ),
+        (
+            "invalid_action_1_proof",
+            "asset_orchard_private_primary_issue_bad_proof",
+        ),
+        (
+            "invalid_action_2_proof",
+            "asset_orchard_private_primary_issue_bad_proof",
+        ),
+        ("duplicate_nullifier", "duplicate_nullifier"),
+        ("reordered_actions", "unretained_orchard_anchor"),
+        (
+            "missing_batch_local_commitment",
+            "unretained_orchard_anchor",
+        ),
+        ("stale_anchor", "unretained_orchard_anchor"),
+        (
+            "changed_policy",
+            "pftl_uniswap_private_primary_policy_mismatch",
+        ),
+        (
+            "issue_capacity_exhausted",
+            "pftl_uniswap_issue_capacity_exceeded",
+        ),
+        ("changed_nav", "pftl_uniswap_pricing_binding_mismatch"),
+    ] {
+        require_conformance_receipt_code(&cases, case, expected_code)?;
+    }
+    let all_cases_rejected_without_state_change = cases
+        .iter()
+        .all(|case| !case.all_accepted && case.rollback_preserved);
+    if !all_cases_rejected_without_state_change {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "one or more shielded atomic conformance cases did not reject without state change",
+        ));
+    }
+    Ok(ShieldedBatchConformanceReport {
+        schema: "postfiat.shielded_batch_conformance.v1".to_string(),
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        protocol_version: genesis.protocol_version,
+        execution_height,
+        activation_height: governance.shielded_atomic_batch_activation_height(),
+        source_batch_id: source.batch_id,
+        baseline,
+        cases,
+        all_cases_rejected_without_state_change,
+    })
+}
+
+fn push_atomic_rejection_case(
+    cases: &mut Vec<ShieldedBatchConformanceCaseReport>,
+    case: &str,
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    ordered_batches: &[String],
+    shielded: &ShieldedState,
+    bridge: &BridgeState,
+    execution_height: u64,
+    actions: Vec<ShieldedAction>,
+) -> io::Result<()> {
+    let batch = build_atomic_shielded_action_batch(genesis, actions)?;
+    push_existing_batch_rejection_case(
+        cases,
+        case,
+        genesis,
+        governance,
+        ledger,
+        ordered_batches,
+        shielded,
+        bridge,
+        execution_height,
+        &batch,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_existing_batch_rejection_case(
+    cases: &mut Vec<ShieldedBatchConformanceCaseReport>,
+    case: &str,
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    ordered_batches: &[String],
+    shielded: &ShieldedState,
+    bridge: &BridgeState,
+    execution_height: u64,
+    batch: &ShieldedActionBatch,
+) -> io::Result<()> {
+    let report = simulate_shielded_batch_against_state(
+        genesis,
+        governance,
+        ledger,
+        ordered_batches,
+        shielded,
+        bridge,
+        execution_height,
+        batch,
+    )?;
+    if report.all_accepted || !report.rejection_left_state_unchanged {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("conformance case `{case}` did not reject with full rollback"),
+        ));
+    }
+    cases.push(ShieldedBatchConformanceCaseReport {
+        case: case.to_string(),
+        batch_id: Some(report.batch_id),
+        admission_error: None,
+        receipts: report.receipts,
+        all_accepted: report.all_accepted,
+        pre_state_root: report.pre_state_root,
+        post_state_root: report.post_state_root,
+        state_changed: report.state_changed,
+        rollback_preserved: report.rejection_left_state_unchanged,
+    });
+    Ok(())
+}
+
+fn require_conformance_receipt_code(
+    cases: &[ShieldedBatchConformanceCaseReport],
+    case: &str,
+    expected_code: &str,
+) -> io::Result<()> {
+    let report = cases
+        .iter()
+        .find(|report| report.case == case)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("conformance case `{case}` is missing"),
+            )
+        })?;
+    if report
+        .receipts
+        .iter()
+        .any(|receipt| receipt.code == expected_code)
+    {
+        Ok(())
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "conformance case `{case}` did not produce expected rejection code `{expected_code}`"
+            ),
+        ))
+    }
+}
+
+fn admission_rejection_case(
+    case: &str,
+    error: String,
+    state_root: &str,
+) -> ShieldedBatchConformanceCaseReport {
+    ShieldedBatchConformanceCaseReport {
+        case: case.to_string(),
+        batch_id: None,
+        admission_error: Some(error),
+        receipts: Vec::new(),
+        all_accepted: false,
+        pre_state_root: state_root.to_string(),
+        post_state_root: state_root.to_string(),
+        state_changed: false,
+        rollback_preserved: true,
+    }
+}
+
+fn corrupt_hex_field(value: &mut String) -> io::Result<()> {
+    let first = value.as_bytes().first().copied().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidData, "cannot corrupt an empty hex field")
+    })?;
+    if !first.is_ascii_hexdigit() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "cannot corrupt a non-hex field",
+        ));
+    }
+    value.replace_range(..1, if first == b'0' { "1" } else { "0" });
+    Ok(())
+}
+
+fn make_orchard_anchor_stale(shielded: &mut ShieldedState, stale_anchor: &str) -> io::Result<()> {
+    let pool = shielded.orchard.as_mut().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "stale-anchor conformance requires an Orchard pool",
+        )
+    })?;
+    let commitment = pool.output_commitments.first_mut().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "stale-anchor conformance requires an existing Orchard commitment",
+        )
+    })?;
+    let original = commitment.clone();
+    corrupt_hex_field(commitment)?;
+    let replacement = commitment.clone();
+    let encrypted = pool
+        .asset_orchard_outputs
+        .iter_mut()
+        .find(|output| output.output_commitment == original)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "stale-anchor conformance commitment has no encrypted output",
+            )
+    })?;
+    encrypted.output_commitment = replacement;
+    pool.root_history
+        .retain(|record| record.root != stale_anchor);
+    append_orchard_current_root(pool)
+}
+
+fn private_primary_route_v2_mut<'a>(
+    ledger: &'a mut LedgerState,
+    route_id: &str,
+) -> io::Result<&'a mut PftlUniswapRouteV2State> {
+    ledger
+        .pftl_uniswap_routes
+        .iter_mut()
+        .find(|route| route.route_id == route_id)
+        .and_then(|route| route.v2.as_mut())
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "private-primary v2 route missing",
+            )
+        })
 }
 
 pub fn apply_shielded_batch(options: ApplyBatchOptions) -> io::Result<Vec<Receipt>> {
@@ -291,8 +999,10 @@ pub fn apply_shielded_batch_with_replay(
         block_height,
         asset_execution_compatibility_for_genesis_and_governance(&genesis, &governance),
         governance.orchard_pool_paused,
+        governance.shielded_atomic_batch_activation_height(),
         historical_replay.is_some(),
     );
+    ensure_atomic_shielded_batch_accepted(&batch, &receipts)?;
     let mut proposed_ordered_batches = ordered_batches.clone();
     proposed_ordered_batches.push(batch.batch_id.clone());
     let consensus_proposal = build_block_proposal_from_state(BlockProposalPlan {

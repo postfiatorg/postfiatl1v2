@@ -1161,6 +1161,40 @@ fn write_private_egress_timing_report<T: serde::Serialize>(
     atomic_write(path, format!("{json}\n"))
 }
 
+fn asset_orchard_batch_local_commitments(
+    committed: &[String],
+    pending: &[String],
+) -> io::Result<Vec<String>> {
+    if pending.len() > 2 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "at most two batch-local AssetOrchard commitments are supported",
+        ));
+    }
+    let mut seen = committed.iter().map(String::as_str).collect::<BTreeSet<_>>();
+    let mut combined = committed.to_vec();
+    for commitment in pending {
+        if commitment.len() != 64
+            || !commitment
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "batch-local AssetOrchard commitment must be 32-byte lowercase hex",
+            ));
+        }
+        if !seen.insert(commitment.as_str()) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "duplicate batch-local AssetOrchard commitment",
+            ));
+        }
+        combined.push(commitment.clone());
+    }
+    Ok(combined)
+}
+
 pub fn create_asset_orchard_private_egress(
     options: AssetOrchardPrivateEgressCreateOptions,
 ) -> io::Result<AssetOrchardPrivateEgressReport> {
@@ -1200,6 +1234,10 @@ pub fn create_asset_orchard_private_egress(
 
     reset_asset_orchard_private_egress_timings();
     let stage_start = std::time::Instant::now();
+    let pool_output_commitments = asset_orchard_batch_local_commitments(
+        &pool.output_commitments,
+        &options.pending_output_commitments,
+    )?;
     let built = build_asset_orchard_private_egress_action(
         &genesis.chain_id,
         genesis_hash_32,
@@ -1211,7 +1249,7 @@ pub fn create_asset_orchard_private_egress(
         options.fee,
         &options.policy_id,
         &options.disclosure_hash,
-        &pool.output_commitments,
+        &pool_output_commitments,
     )
     .map_err(invalid_data)?;
     timing.action_build_ms = node_timing_elapsed_ms(stage_start);
@@ -1365,6 +1403,10 @@ pub fn create_asset_orchard_private_primary_issue(
         read_json_file(&options.note_file, "AssetOrchard private-primary input note")?;
     let genesis_hash_32 = asset_orchard_domain_genesis_hash(&genesis_hash(&genesis))
         .map_err(invalid_data)?;
+    let pool_output_commitments = asset_orchard_batch_local_commitments(
+        &pool.output_commitments,
+        &options.pending_output_commitments,
+    )?;
     let built = build_asset_orchard_private_primary_issue_action(
         &genesis.chain_id,
         genesis_hash_32,
@@ -1386,7 +1428,7 @@ pub fn create_asset_orchard_private_primary_issue(
         options.expires_at_height,
         &route.settlement_asset_id,
         &route.native_nav_asset_id,
-        &pool.output_commitments,
+        &pool_output_commitments,
     )
     .map_err(invalid_data)?;
     let domain = orchard_authorizing_domain(&genesis, &built.action.pool_id)?;
@@ -1498,6 +1540,10 @@ pub fn create_asset_orchard_private_primary_redeem(
         read_json_file(&options.note_file, "AssetOrchard private-primary redeem input note")?;
     let genesis_hash_32 = asset_orchard_domain_genesis_hash(&genesis_hash(&genesis))
         .map_err(invalid_data)?;
+    let pool_output_commitments = asset_orchard_batch_local_commitments(
+        &pool.output_commitments,
+        &options.pending_output_commitments,
+    )?;
     let built = build_asset_orchard_private_primary_redeem_action(
         &genesis.chain_id,
         genesis_hash_32,
@@ -1519,7 +1565,7 @@ pub fn create_asset_orchard_private_primary_redeem(
         options.expires_at_height,
         &route.settlement_asset_id,
         &route.native_nav_asset_id,
-        &pool.output_commitments,
+        &pool_output_commitments,
     )
     .map_err(invalid_data)?;
     let domain = orchard_authorizing_domain(&genesis, &built.action.pool_id)?;

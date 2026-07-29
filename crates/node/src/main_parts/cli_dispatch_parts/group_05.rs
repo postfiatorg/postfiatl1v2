@@ -1,5 +1,38 @@
 fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
     match command {
+        "pftl-swap-quote" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let route_id = flag_value(flags, "--route-id").ok_or("missing --route-id")?;
+            let nav_amount_atoms = parse_u64_flag(flags, "--amount-atoms")?;
+            let direction = match flag_value(flags, "--direction") {
+                Some("issue") => PftlSwapDirection::Issue,
+                Some("redeem") => PftlSwapDirection::Redeem,
+                Some(_) => return Err("--direction must be issue or redeem".to_string()),
+                None => return Err("missing --direction".to_string()),
+            };
+            let output_mode = match flag_value(flags, "--output-mode").unwrap_or("private") {
+                "private" => PftlSwapOutputMode::Private,
+                "transparent" => PftlSwapOutputMode::Transparent,
+                _ => return Err("--output-mode must be private or transparent".to_string()),
+            };
+            let quote = build_pftl_swap_quote(PftlSwapQuoteOptions {
+                data_dir: PathBuf::from(data_dir),
+                route_id: route_id.to_string(),
+                request: PftlSwapQuoteRequestV1 {
+                    direction,
+                    nav_amount_atoms,
+                    output_mode,
+                },
+                quote_ttl_blocks: parse_optional_u64_flag(flags, "--ttl-blocks")?.unwrap_or(2),
+                maximum_fee_atoms: parse_optional_u64_flag(flags, "--maximum-fee-atoms")?
+                    .unwrap_or(1),
+            })
+            .map_err(|error| format!("pftl-swap-quote failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&quote)
+                .map_err(|error| format!("PFTL swap quote serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
         "market-ops-status" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let asset_id = flag_value(flags, "--asset-id").ok_or("missing --asset-id")?;
@@ -1362,6 +1395,10 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                 .ok_or("missing --disclosure-hash")?
                 .to_string();
             let egress_file = flag_value(flags, "--egress-file").ok_or("missing --egress-file")?;
+            let pending_output_commitments = flag_value(flags, "--pending-output-commitments")
+                .filter(|value| !value.is_empty())
+                .map(|value| value.split(',').map(str::to_string).collect())
+                .unwrap_or_default();
             let report =
                 create_asset_orchard_private_egress(AssetOrchardPrivateEgressCreateOptions {
                     data_dir: PathBuf::from(data_dir),
@@ -1372,6 +1409,7 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                     fee,
                     policy_id,
                     disclosure_hash,
+                    pending_output_commitments,
                     egress_file: PathBuf::from(egress_file),
                     overwrite: flag_present(flags, "--overwrite"),
                 })
@@ -1417,8 +1455,11 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                 .ok_or("missing --expires-at-height")?
                 .parse::<u64>()
                 .map_err(|_| "--expires-at-height must be a u64".to_string())?;
-            let action_file =
-                flag_value(flags, "--action-file").ok_or("missing --action-file")?;
+            let action_file = flag_value(flags, "--action-file").ok_or("missing --action-file")?;
+            let pending_output_commitments = flag_value(flags, "--pending-output-commitments")
+                .filter(|value| !value.is_empty())
+                .map(|value| value.split(',').map(str::to_string).collect())
+                .unwrap_or_default();
             let report = create_asset_orchard_private_primary_issue(
                 AssetOrchardPrivatePrimaryIssueCreateOptions {
                     data_dir: PathBuf::from(data_dir),
@@ -1433,6 +1474,7 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                     mint_amount_atoms,
                     settlement_value_atoms,
                     expires_at_height,
+                    pending_output_commitments,
                     action_file: PathBuf::from(action_file),
                     overwrite: flag_present(flags, "--overwrite"),
                 },
@@ -1481,8 +1523,11 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                 .ok_or("missing --expires-at-height")?
                 .parse::<u64>()
                 .map_err(|_| "--expires-at-height must be a u64".to_string())?;
-            let action_file =
-                flag_value(flags, "--action-file").ok_or("missing --action-file")?;
+            let action_file = flag_value(flags, "--action-file").ok_or("missing --action-file")?;
+            let pending_output_commitments = flag_value(flags, "--pending-output-commitments")
+                .filter(|value| !value.is_empty())
+                .map(|value| value.split(',').map(str::to_string).collect())
+                .unwrap_or_default();
             let report = create_asset_orchard_private_primary_redeem(
                 AssetOrchardPrivatePrimaryRedeemCreateOptions {
                     data_dir: PathBuf::from(data_dir),
@@ -1497,6 +1542,7 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                     nav_amount_atoms,
                     settlement_output_atoms,
                     expires_at_height,
+                    pending_output_commitments,
                     action_file: PathBuf::from(action_file),
                     overwrite: flag_present(flags, "--overwrite"),
                 },
@@ -2188,8 +2234,7 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
         }
         "shield-batch-asset-orchard-private-primary-issue" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
-            let action_file =
-                flag_value(flags, "--action-file").ok_or("missing --action-file")?;
+            let action_file = flag_value(flags, "--action-file").ok_or("missing --action-file")?;
             let batch_file = flag_value(flags, "--batch-file").ok_or("missing --batch-file")?;
             let batch = create_asset_orchard_private_primary_issue_batch(
                 AssetOrchardPrivatePrimaryIssueBatchOptions {
@@ -2209,8 +2254,7 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
         }
         "shield-batch-asset-orchard-private-primary-redeem" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
-            let action_file =
-                flag_value(flags, "--action-file").ok_or("missing --action-file")?;
+            let action_file = flag_value(flags, "--action-file").ok_or("missing --action-file")?;
             let batch_file = flag_value(flags, "--batch-file").ok_or("missing --batch-file")?;
             let batch = create_asset_orchard_private_primary_redeem_batch(
                 AssetOrchardPrivatePrimaryRedeemBatchOptions {
@@ -2223,9 +2267,7 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                 format!("shield-batch-asset-orchard-private-primary-redeem failed: {error}")
             })?;
             let json = serde_json::to_string_pretty(&batch).map_err(|error| {
-                format!(
-                    "AssetOrchard private-primary redeem batch serialization failed: {error}"
-                )
+                format!("AssetOrchard private-primary redeem batch serialization failed: {error}")
             })?;
             println!("{json}");
             Ok(())
@@ -2274,6 +2316,55 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             .map_err(|error| format!("shield-batch-swap failed: {error}"))?;
             let json = serde_json::to_string_pretty(&batch)
                 .map_err(|error| format!("ShieldedSwap batch serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
+        "shield-batch-atomic" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let source_batch_files =
+                flag_value(flags, "--source-batch-files").ok_or("missing --source-batch-files")?;
+            let source_batch_files = source_batch_files
+                .split(',')
+                .filter(|path| !path.is_empty())
+                .map(PathBuf::from)
+                .collect::<Vec<_>>();
+            let batch_file = flag_value(flags, "--batch-file").ok_or("missing --batch-file")?;
+            let batch = create_shielded_atomic_batch(ShieldedAtomicBatchOptions {
+                data_dir: PathBuf::from(data_dir),
+                source_batch_files,
+                batch_file: PathBuf::from(batch_file),
+            })
+            .map_err(|error| format!("shield-batch-atomic failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&batch)
+                .map_err(|error| format!("shielded atomic batch serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
+        "shield-batch-simulate" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let batch_file = flag_value(flags, "--batch-file").ok_or("missing --batch-file")?;
+            let report = simulate_shielded_batch(ShieldedBatchSimulateOptions {
+                data_dir: PathBuf::from(data_dir),
+                batch_file: PathBuf::from(batch_file),
+            })
+            .map_err(|error| format!("shield-batch-simulate failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&report).map_err(|error| {
+                format!("shielded batch simulation serialization failed: {error}")
+            })?;
+            println!("{json}");
+            Ok(())
+        }
+        "shield-batch-conformance" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let batch_file = flag_value(flags, "--batch-file").ok_or("missing --batch-file")?;
+            let report = conformance_shielded_batch(ShieldedBatchConformanceOptions {
+                data_dir: PathBuf::from(data_dir),
+                batch_file: PathBuf::from(batch_file),
+            })
+            .map_err(|error| format!("shield-batch-conformance failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&report).map_err(|error| {
+                format!("shielded batch conformance serialization failed: {error}")
+            })?;
             println!("{json}");
             Ok(())
         }

@@ -1588,13 +1588,48 @@ pub(super) fn build_shielded_action_batch(
     Ok(ShieldedActionBatch::new(batch_id, actions))
 }
 
-pub(super) fn verify_shielded_action_batch_id(
+pub fn build_atomic_shielded_action_batch(
+    genesis: &Genesis,
+    actions: Vec<ShieldedAction>,
+) -> io::Result<ShieldedActionBatch> {
+    if actions.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "atomic shielded batch requires at least one action",
+        ));
+    }
+    if actions.len() > 3 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "atomic shielded batch supports at most three actions",
+        ));
+    }
+    let batch_id = chain_bound_action_batch_id(
+        genesis,
+        "postfiat.shielded_action_batch.atomic.v2",
+        "shielded",
+        &actions,
+    )?;
+    Ok(ShieldedActionBatch::new_atomic(batch_id, actions))
+}
+
+pub fn verify_shielded_action_batch_id(
     genesis: &Genesis,
     batch: &ShieldedActionBatch,
 ) -> io::Result<()> {
+    if batch.atomic && (batch.actions.is_empty() || batch.actions.len() > 3) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "atomic shielded batch must contain between one and three actions",
+        ));
+    }
     let expected = chain_bound_action_batch_id(
         genesis,
-        "postfiat.shielded_action_batch.v1",
+        if batch.atomic {
+            "postfiat.shielded_action_batch.atomic.v2"
+        } else {
+            "postfiat.shielded_action_batch.v1"
+        },
         "shielded",
         &batch.actions,
     )?;

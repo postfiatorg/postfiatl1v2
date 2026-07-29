@@ -1229,6 +1229,15 @@ pub(super) fn governance_amendment_lifecycle_rejection(
                 .to_string(),
         ));
     }
+    if amendment.kind == GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT
+        && u64::from(amendment.value) <= block_height
+    {
+        return Some((
+            "invalid_shielded_atomic_batch_activation_height",
+            "shielded atomic batch activation must be scheduled strictly after the amendment block"
+                .to_string(),
+        ));
+    }
     if amendment.paused {
         return Some((
             "governance_amendment_paused",
@@ -1356,6 +1365,10 @@ pub(super) fn governance_amendment_current_value(governance: &GovernanceState, k
             .bridge_exit_root_activation_height()
             .and_then(|height| u32::try_from(height).ok())
             .unwrap_or(0),
+        GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT => governance
+            .shielded_atomic_batch_activation_height()
+            .and_then(|height| u32::try_from(height).ok())
+            .unwrap_or(0),
         _ => 0,
     }
 }
@@ -1373,6 +1386,7 @@ fn governance_amendment_has_materialized_current_value(kind: &str) -> bool {
             | GOVERNANCE_KIND_ATOMIC_SWAP_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT
+            | GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT
     )
 }
 
@@ -2349,6 +2363,111 @@ pub(super) fn execute_shielded_batch(
     block_height: u64,
     asset_execution_compatibility: AssetExecutionCompatibility,
     orchard_pool_paused: bool,
+    shielded_atomic_batch_activation_height: Option<u64>,
+    archive_replay: bool,
+) -> Vec<Receipt> {
+    if !batch.atomic {
+        return execute_shielded_batch_actions(
+            genesis,
+            ledger,
+            shielded,
+            batch,
+            block_height,
+            asset_execution_compatibility,
+            orchard_pool_paused,
+            archive_replay,
+        );
+    }
+
+    let atomic_active = shielded_atomic_batch_activation_height
+        .is_some_and(|activation_height| block_height >= activation_height);
+    if !atomic_active {
+        return batch
+            .actions
+            .iter()
+            .enumerate()
+            .map(|(index, _)| {
+                Receipt::rejected(
+                    shielded_action_rejection_id(
+                        &batch.batch_id,
+                        index,
+                        "shielded_atomic_batch_not_active",
+                    ),
+                    "shielded_atomic_batch_not_active",
+                    "shielded atomic batch execution is not active at this block height",
+                )
+            })
+            .collect();
+    }
+
+    let mut trial_ledger = ledger.clone();
+    let mut trial_shielded = shielded.clone();
+    let receipts = execute_shielded_batch_actions(
+        genesis,
+        &mut trial_ledger,
+        &mut trial_shielded,
+        batch,
+        block_height,
+        asset_execution_compatibility,
+        orchard_pool_paused,
+        archive_replay,
+    );
+    if receipts.iter().all(|receipt| receipt.accepted) {
+        *ledger = trial_ledger;
+        *shielded = trial_shielded;
+        return receipts;
+    }
+
+    receipts
+        .into_iter()
+        .enumerate()
+        .map(|(index, receipt)| {
+            if receipt.accepted {
+                Receipt::rejected(
+                    shielded_action_rejection_id(&batch.batch_id, index, "atomic_batch_aborted"),
+                    "atomic_batch_aborted",
+                    "action validated, but the atomic shielded batch contained a rejected action",
+                )
+            } else {
+                receipt
+            }
+        })
+        .collect()
+}
+
+pub(super) fn ensure_atomic_shielded_batch_accepted(
+    batch: &ShieldedActionBatch,
+    receipts: &[Receipt],
+) -> io::Result<()> {
+    if !batch.atomic {
+        return Ok(());
+    }
+    if receipts.len() != batch.actions.len() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "atomic shielded batch receipt count does not match action count",
+        ));
+    }
+    if let Some(receipt) = receipts.iter().find(|receipt| !receipt.accepted) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "atomic shielded batch rejected before proposal: {}",
+                receipt.code
+            ),
+        ));
+    }
+    Ok(())
+}
+
+fn execute_shielded_batch_actions(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    shielded: &mut ShieldedState,
+    batch: &ShieldedActionBatch,
+    block_height: u64,
+    asset_execution_compatibility: AssetExecutionCompatibility,
+    orchard_pool_paused: bool,
     archive_replay: bool,
 ) -> Vec<Receipt> {
     if orchard_pool_paused {
@@ -2968,7 +3087,14 @@ pub(super) fn execute_asset_orchard_private_primary_issue_action(
     payload: &AssetOrchardPrivatePrimaryIssueActionPayload,
     archive_replay: bool,
 ) -> Receipt {
-    if archive_replay {
+    if archive_replay
+        && !archived_wan_devnet2_private_primary_execution_allowed(
+            genesis,
+            block_height,
+            batch_id,
+            false,
+        )
+    {
         return Receipt::rejected(
             shielded_action_rejection_id(
                 batch_id,
@@ -3020,7 +3146,14 @@ pub(super) fn execute_asset_orchard_private_primary_redeem_action(
     payload: &AssetOrchardPrivatePrimaryRedeemActionPayload,
     archive_replay: bool,
 ) -> Receipt {
-    if archive_replay {
+    if archive_replay
+        && !archived_wan_devnet2_private_primary_execution_allowed(
+            genesis,
+            block_height,
+            batch_id,
+            true,
+        )
+    {
         return Receipt::rejected(
             shielded_action_rejection_id(
                 batch_id,

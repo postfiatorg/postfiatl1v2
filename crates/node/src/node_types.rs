@@ -1791,6 +1791,9 @@ pub struct AssetOrchardPrivateEgressCreateOptions {
     pub fee: u64,
     pub policy_id: String,
     pub disclosure_hash: String,
+    /// Commitments created by earlier actions in the same atomic batch, in
+    /// canonical action order. Empty for ordinary one-round egress.
+    pub pending_output_commitments: Vec<String>,
     pub egress_file: PathBuf,
     pub overwrite: bool,
 }
@@ -1816,6 +1819,9 @@ pub struct AssetOrchardPrivatePrimaryIssueCreateOptions {
     pub mint_amount_atoms: u64,
     pub settlement_value_atoms: u64,
     pub expires_at_height: u64,
+    /// Commitments created by earlier actions in the same atomic batch, in
+    /// canonical action order. Empty for ordinary one-round issuance.
+    pub pending_output_commitments: Vec<String>,
     pub action_file: PathBuf,
     pub overwrite: bool,
 }
@@ -1841,6 +1847,9 @@ pub struct AssetOrchardPrivatePrimaryRedeemCreateOptions {
     pub nav_amount_atoms: u64,
     pub settlement_output_atoms: u64,
     pub expires_at_height: u64,
+    /// Commitments created by earlier actions in the same atomic batch, in
+    /// canonical action order. Empty for ordinary one-round redemption.
+    pub pending_output_commitments: Vec<String>,
     pub action_file: PathBuf,
     pub overwrite: bool,
 }
@@ -4777,6 +4786,71 @@ pub struct ShieldedSwapActionBatchOptions {
     pub data_dir: PathBuf,
     pub swap_file: PathBuf,
     pub batch_file: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShieldedAtomicBatchOptions {
+    pub data_dir: PathBuf,
+    pub source_batch_files: Vec<PathBuf>,
+    pub batch_file: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShieldedBatchSimulateOptions {
+    pub data_dir: PathBuf,
+    pub batch_file: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShieldedBatchConformanceOptions {
+    pub data_dir: PathBuf,
+    pub batch_file: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShieldedBatchSimulationReport {
+    pub schema: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub protocol_version: u32,
+    pub batch_id: String,
+    pub atomic: bool,
+    pub execution_height: u64,
+    pub activation_height: Option<u64>,
+    pub action_count: usize,
+    pub receipts: Vec<Receipt>,
+    pub all_accepted: bool,
+    pub pre_state_root: String,
+    pub post_state_root: String,
+    pub state_changed: bool,
+    pub rejection_left_state_unchanged: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShieldedBatchConformanceCaseReport {
+    pub case: String,
+    pub batch_id: Option<String>,
+    pub admission_error: Option<String>,
+    pub receipts: Vec<Receipt>,
+    pub all_accepted: bool,
+    pub pre_state_root: String,
+    pub post_state_root: String,
+    pub state_changed: bool,
+    pub rollback_preserved: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShieldedBatchConformanceReport {
+    pub schema: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub protocol_version: u32,
+    pub execution_height: u64,
+    pub activation_height: Option<u64>,
+    pub source_batch_id: String,
+    pub baseline: ShieldedBatchSimulationReport,
+    pub cases: Vec<ShieldedBatchConformanceCaseReport>,
+    pub all_cases_rejected_without_state_change: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

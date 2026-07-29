@@ -1739,6 +1739,7 @@ dependencies = [
  "base64 0.22.1",
  "flate2",
  "k256",
+ "libc",
  "orchard",
  "postfiat-bridge",
  "postfiat-consensus-cobalt",

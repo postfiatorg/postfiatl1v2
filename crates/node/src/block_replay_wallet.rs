@@ -562,6 +562,70 @@ pub(super) const WAN_DEVNET2_PRE_REPIN_PRIVATE_EGRESS_BATCHES: &[(u64, &str)] = 
     (597, "6515ab3ccf4255246278f623719b8e3d8bd1bb75153a4ff0fb010fe452da0acaebd7530efcde59abd6899ae65daef50f"),
 ];
 
+// One certificate-bound private-primary issue was rejected before that action
+// gained an explicit archive-replay rejection. Both the historical and current
+// receipts are zero-fee rejections and therefore have the same no-state-change
+// effect. Keep this compatibility tuple exact: it is not permission to execute
+// a historical private-primary action under current rules.
+const WAN_DEVNET2_ARCHIVED_REJECTED_PRIVATE_PRIMARY_ISSUE:
+    (u64, &str, &str, &str) = (
+    377,
+    "aed030cd9716c15217cd371820c74bc88d589dc0dadf5e4cd4145d83ffe99197d613da52a72966bf0db5de6159f7d570",
+    "4af10a87b60ce1343054b770d4b265e08ee2ca4a1cc0ee28894377de8c2c3d9f01e293adb39c0021407e3cf556daba9a",
+    "91c2e778f13c71939ad5bfb35d23bb8fa1a2815c941460f219ff0344fff66a4d9421e99194655ddb351674207cdda132",
+);
+
+// Immutable, certificate-bound private-primary actions accepted before the
+// node gained an explicit archive-replay gate for this action family. Replay
+// still performs the complete proof, policy, capacity, supply, nullifier, and
+// state-root validation; these tuples only authorize entering that normal
+// deterministic transition for the historical batch at its committed height.
+const WAN_DEVNET2_ARCHIVED_PRIVATE_PRIMARY_ISSUES: &[(u64, &str)] = &[
+    (
+        378,
+        "1d971584eb5cf2752aed24b7128f0412517a12844549998a66879634d3c70fe73d6ae209317052f2fd696f17f08a8b11",
+    ),
+    (
+        420,
+        "84e65da8e8e8116edd9211ae6e959780e0317a08be205747876e973d51d97a865925a1addb1f79fcb529a77cc1c8a581",
+    ),
+    (
+        444,
+        "1d82643e943210392c423a7c204edf1e68d49c92e8c9b13010215842da88cfd28abbf7655300decb2cffb9ffeec4cc86",
+    ),
+    (
+        457,
+        "3bab99198a34dd839ac50baac27eff49027db440bebb64ec67aa1de026f322d34620ee8f97a6dd2130eb4e4ffa6040c9",
+    ),
+    (
+        472,
+        "f557663997c1cdb5ab903810ef5b27f52455c6b6c6fa923765a5bcff24b6d66dfff9e8bec67732690c8ba3832d0ad366",
+    ),
+];
+
+const WAN_DEVNET2_ARCHIVED_PRIVATE_PRIMARY_REDEEMS: &[(u64, &str)] = &[
+    (
+        407,
+        "7a494fc0cfa8f99b681fe8501ec2425e0307be771dfe4fcc26634586bbeb4675b77862d009d518ff1650e724a19fce01",
+    ),
+    (
+        435,
+        "befbaaa94d823b21c0c9eb4ff1a04a90ad7a62149321946732c40b46c1d0c59a313f0ecf8b4e676095dacbbd12faa15c",
+    ),
+    (
+        450,
+        "e6e0bee680ef1e1a18c00c040fcc669de4723583e751bbf61d688f0484ef2339562c7c7557a36f3d9e3a357438f18736",
+    ),
+    (
+        463,
+        "a17d99bb7a7aad3ed5fdca82ae95f5aab794b90bdfe788b3e02d304ad00d84179fbe1235e4f3463480836e4db3fa8675",
+    ),
+    (
+        478,
+        "409c9c7cc8b2298ef1525d68bb9e496582702316a0b90f23c410866526302dd6c6e57dd598cee535c957dcbccec0db4e",
+    ),
+];
+
 pub(super) fn archived_wan_devnet2_pre_pricing_swap_allowed(
     genesis: &Genesis,
     height: u64,
@@ -621,7 +685,35 @@ pub(super) fn archived_wan_devnet2_legacy_receipt_id_drift_allowed(
         genesis,
         block.header.height,
         &block.header.batch_id,
-    )
+    ) || archived_wan_devnet2_rejected_private_primary_issue_allowed(genesis, block)
+}
+
+fn archived_wan_devnet2_rejected_private_primary_issue_allowed(
+    genesis: &Genesis,
+    block: &BlockRecord,
+) -> bool {
+    let (height, batch_id, _, _) = WAN_DEVNET2_ARCHIVED_REJECTED_PRIVATE_PRIMARY_ISSUE;
+    genesis.chain_id == "postfiat-wan-devnet-2"
+        && block.header.height == height
+        && block.header.batch_kind == BATCH_KIND_SHIELDED
+        && block.header.batch_id == batch_id
+}
+
+pub(super) fn archived_wan_devnet2_private_primary_execution_allowed(
+    genesis: &Genesis,
+    height: u64,
+    batch_id: &str,
+    is_redeem: bool,
+) -> bool {
+    let allowed = if is_redeem {
+        WAN_DEVNET2_ARCHIVED_PRIVATE_PRIMARY_REDEEMS
+    } else {
+        WAN_DEVNET2_ARCHIVED_PRIVATE_PRIMARY_ISSUES
+    };
+    genesis.chain_id == "postfiat-wan-devnet-2"
+        && allowed.iter().any(|(allowed_height, allowed_batch_id)| {
+            height == *allowed_height && batch_id == *allowed_batch_id
+        })
 }
 
 pub(super) fn archived_wan_devnet_legacy_nav_profile_id_schema_allowed(
@@ -2154,6 +2246,21 @@ pub(super) fn replayed_receipt_matches_persisted(
     if replayed_receipt == persisted_receipt {
         return true;
     }
+    if archived_wan_devnet2_rejected_private_primary_issue_allowed(genesis, block) {
+        let (_, _, persisted_receipt_id, replayed_receipt_id) =
+            WAN_DEVNET2_ARCHIVED_REJECTED_PRIVATE_PRIMARY_ISSUE;
+        let expected_replayed = Receipt::rejected(
+            replayed_receipt_id,
+            "asset_orchard_private_primary_issue_archive_unsupported",
+            "private-primary issue has no historical replay form",
+        );
+        let expected_persisted = Receipt::rejected(
+            persisted_receipt_id,
+            "bad_pftl_uniswap_receipt",
+            "unsupported pftl_uniswap receipt transition",
+        );
+        return *replayed_receipt == expected_replayed && *persisted_receipt == expected_persisted;
+    }
     if genesis.chain_id == "postfiat-wan-devnet-2"
         && block.header.height == 64
         && block.header.batch_kind == BATCH_KIND_GOVERNANCE
@@ -2263,6 +2370,7 @@ pub(super) fn replay_archived_payload(
                 block.header.height,
                 compatibility,
                 state.governance.orchard_pool_paused,
+                state.governance.shielded_atomic_batch_activation_height(),
                 true,
             ))
         }

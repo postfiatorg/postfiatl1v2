@@ -1800,6 +1800,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
         "ratify-atomic-swap-activation-height"
         | "ratify-replicated-state-v2-activation-height"
         | "ratify-bridge-exit-root-activation-height"
+        | "ratify-shielded-atomic-batch-activation-height"
         | "ratify-vault-bridge-route-authority-activation-height" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let validators =
@@ -1822,6 +1823,10 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 "ratify-bridge-exit-root-activation-height" => (
                     GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT,
                     "--bridge-exit-root-activation-height",
+                ),
+                "ratify-shielded-atomic-batch-activation-height" => (
+                    GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT,
+                    "--shielded-atomic-batch-activation-height",
                 ),
                 _ => (
                     GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT,

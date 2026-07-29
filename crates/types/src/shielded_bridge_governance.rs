@@ -19,6 +19,8 @@ pub const GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT: &str =
     "replicated_state_v2_activation_height";
 pub const GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT: &str =
     "bridge_exit_root_activation_height";
+pub const GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT: &str =
+    "shielded_atomic_batch_activation_height";
 pub const GOVERNANCE_KIND_ATOMIC_SWAP_PAUSE: &str = "atomic_swap_pause";
 pub const GOVERNANCE_KIND_ORCHARD_POOL_PAUSE: &str = "orchard_pool_pause";
 pub const GOVERNANCE_AUTHORITY_MODE_FOUNDATION: u32 = 0;
@@ -456,13 +458,28 @@ pub enum ShieldedAction {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ShieldedActionBatch {
     pub batch_id: String,
+    #[serde(default, skip_serializing_if = "shielded_batch_atomic_is_false")]
+    pub atomic: bool,
     pub actions: Vec<ShieldedAction>,
+}
+
+fn shielded_batch_atomic_is_false(value: &bool) -> bool {
+    !*value
 }
 
 impl ShieldedActionBatch {
     pub fn new(batch_id: impl Into<String>, actions: Vec<ShieldedAction>) -> Self {
         Self {
             batch_id: batch_id.into(),
+            atomic: false,
+            actions,
+        }
+    }
+
+    pub fn new_atomic(batch_id: impl Into<String>, actions: Vec<ShieldedAction>) -> Self {
+        Self {
+            batch_id: batch_id.into(),
+            atomic: true,
             actions,
         }
     }
@@ -1108,6 +1125,17 @@ impl GovernanceState {
             .map(|amendment| u64::from(amendment.value))
             .min()
     }
+
+    pub fn shielded_atomic_batch_activation_height(&self) -> Option<u64> {
+        self.amendments
+            .iter()
+            .filter(|amendment| {
+                amendment.kind == GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT
+                    && !amendment.paused
+            })
+            .map(|amendment| u64::from(amendment.value))
+            .min()
+    }
 }
 
 pub fn vault_bridge_route_amendment_prefix(asset_id: &str) -> String {
@@ -1584,6 +1612,48 @@ mod shielded_bridge_governance_tests {
         assert_eq!(paused.get("atomic_swap_paused"), Some(&serde_json::json!(true)));
         governance.apply(amendment(GOVERNANCE_KIND_ATOMIC_SWAP_PAUSE, 0));
         assert!(!governance.atomic_swap_paused);
+    }
+
+    #[test]
+    fn shielded_atomic_batch_encoding_preserves_legacy_shape_and_binds_atomic_mode() {
+        let action = ShieldedAction::Mint(ShieldMintAction {
+            owner: "historical-owner".to_string(),
+            asset_id: DEFAULT_SHIELDED_ASSET_ID.to_string(),
+            amount: 1,
+            memo: String::new(),
+        });
+        let legacy = ShieldedActionBatch::new("legacy", vec![action.clone()]);
+        let legacy_json = serde_json::to_value(&legacy).expect("serialize legacy shielded batch");
+        assert!(legacy_json.get("atomic").is_none());
+        let parsed: ShieldedActionBatch =
+            serde_json::from_value(legacy_json).expect("parse legacy shielded batch");
+        assert!(!parsed.atomic);
+
+        let atomic = ShieldedActionBatch::new_atomic("atomic", vec![action]);
+        let atomic_json = serde_json::to_value(&atomic).expect("serialize atomic shielded batch");
+        assert_eq!(atomic_json.get("atomic"), Some(&serde_json::json!(true)));
+        let parsed: ShieldedActionBatch =
+            serde_json::from_value(atomic_json).expect("parse atomic shielded batch");
+        assert!(parsed.atomic);
+    }
+
+    #[test]
+    fn shielded_atomic_batch_activation_is_absent_for_legacy_and_cannot_be_postponed() {
+        let mut governance = GovernanceState::new(6);
+        assert_eq!(governance.shielded_atomic_batch_activation_height(), None);
+
+        governance.apply(amendment(
+            GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT,
+            500,
+        ));
+        governance.apply(amendment(
+            GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT,
+            700,
+        ));
+        assert_eq!(
+            governance.shielded_atomic_batch_activation_height(),
+            Some(500)
+        );
     }
 
     #[test]

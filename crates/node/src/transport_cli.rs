@@ -7,6 +7,10 @@ const TRANSPORT_BATCH_TOPIC: &str = "transparent_batch";
 const TRANSPORT_BLOCK_VOTE_REQUEST_SCHEMA: &str = "postfiat-transport-block-vote-request-v1";
 const TRANSPORT_BLOCK_VOTE_RESPONSE_SCHEMA: &str = "postfiat-transport-block-vote-response-v1";
 const TRANSPORT_BLOCK_VOTE_TOPIC: &str = "block_vote_request";
+const TRANSPORT_HEALTH_REQUEST_SCHEMA: &str = "postfiat-transport-health-request-v1";
+const TRANSPORT_HEALTH_RESPONSE_SCHEMA: &str = "postfiat-transport-health-response-v1";
+const TRANSPORT_HEALTH_REQUEST_TOPIC: &str = "validator_health_request";
+const TRANSPORT_HEALTH_RESPONSE_TOPIC: &str = "validator_health_response";
 const MAX_TRANSPORT_FRAME_BYTES: u64 = 4 * 1024 * 1024;
 const PREWARM_SHIELDED_VERIFIER_ENV: &str = "POSTFIAT_PREWARM_SHIELDED_VERIFIER";
 const PREWARM_ASSET_ORCHARD_SWAP_VERIFIER_ENV: &str =
@@ -48,15 +52,32 @@ struct TransportShieldedVerifierPrewarmReport {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-struct TransportPeerCertifiedBatchLoopReadyReport<'a> {
+struct TransportPeerCertifiedBatchLoopReadyReport {
     schema: &'static str,
-    node_id: &'a str,
-    topology_id: &'a str,
+    node_id: String,
+    topology_id: String,
+    batch_kind: String,
     batch_dir: String,
+    processed_dir: String,
     artifact_root: String,
     start_height: u64,
     max_rounds: usize,
-    shielded_verifier_prewarm: &'a TransportShieldedVerifierPrewarmReport,
+    processed_round_count: usize,
+    poll_ms: u64,
+    idle_timeout_ms: u64,
+    require_local_proposer: bool,
+    require_signed_proposal: bool,
+    allow_peer_failures: bool,
+    quorum_early_full_propagation: bool,
+    local_apply_before_certified_send: bool,
+    defer_certified_sends: bool,
+    persistent_vote_streams: bool,
+    heartbeat_unix_ms: u64,
+    local_state: TransportHello,
+    authenticated_peer_count: usize,
+    required_remote_peer_count: usize,
+    authenticated_quorum: bool,
+    shielded_verifier_prewarm: TransportShieldedVerifierPrewarmReport,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -167,6 +188,26 @@ struct TransportBlockVoteRequestEnvelope {
     timeout_certificate_json: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     consensus_v2: Option<TransportConsensusV2VoteRequest>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct TransportHealthRequestEnvelope {
+    schema: String,
+    topology_id: String,
+    frame: FramedMessage,
+    auth: TransportEnvelopeAuth,
+    nonce: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct TransportHealthResponseEnvelope {
+    schema: String,
+    topology_id: String,
+    frame: FramedMessage,
+    auth: TransportEnvelopeAuth,
+    request_message_id: String,
+    nonce: String,
+    state: TransportHello,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -392,6 +433,8 @@ struct TransportValidatorServeEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     block_vote_response: Option<TransportBlockVoteResponse>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    health_response: Option<TransportHealthResponseEnvelope>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     rejection: Option<TransportValidatorServeRejection>,
 }
 
@@ -418,9 +461,11 @@ struct TransportValidatorServeReport {
     connection_count: u64,
     accepted_batch_count: u64,
     accepted_block_vote_count: u64,
+    accepted_health_count: u64,
     rejected_count: u64,
     batch_acks: Vec<TransportBatchAck>,
     block_vote_responses: Vec<TransportBlockVoteResponse>,
+    health_responses: Vec<TransportHealthResponseEnvelope>,
     rejected: Vec<TransportValidatorServeRejection>,
     verified: bool,
 }
@@ -429,6 +474,7 @@ struct TransportValidatorServeReport {
 struct TransportValidatorServeSharedState {
     batch_acks: Vec<TransportBatchAck>,
     block_vote_responses: Vec<TransportBlockVoteResponse>,
+    health_responses: Vec<TransportHealthResponseEnvelope>,
     rejected: Vec<TransportValidatorServeRejection>,
 }
 
