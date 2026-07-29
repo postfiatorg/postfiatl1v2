@@ -17,11 +17,16 @@ ROUTE_ID = "pftl-a666-ethereum-wA666-usdc-v1"
 JOE_PFTL = "pfab9b9228942e5c529633a13aa271d5297bec6353"
 JOE_EVM = "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0"
 ZERO_HASH48 = "00" * 48
+LIVE_NAV_SCHEMA = "postfiat.a666.live_nav_mark.v1"
+NAV_USD_E8_SCALE = 100_000_000
+BPS_SCALE = 10_000
+MAX_U64 = (1 << 64) - 1
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--supply-status", type=Path, required=True)
+    parser.add_argument("--nav-manifest", type=Path, required=True)
     parser.add_argument("--holder-key-file", type=Path, required=True)
     parser.add_argument("--node-bin", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -38,6 +43,70 @@ def write_json(path: Path, value: object) -> None:
 
 def random_hex(byte_count: int) -> str:
     return os.urandom(byte_count).hex()
+
+
+def checked_ceil_div(numerator: int, denominator: int, label: str) -> int:
+    if numerator < 0 or denominator <= 0:
+        raise RuntimeError(f"{label} inputs must be nonnegative with a positive divisor")
+    value = (numerator + denominator - 1) // denominator
+    if value > MAX_U64:
+        raise RuntimeError(f"{label} exceeds the u64 protocol range")
+    return value
+
+
+def derive_issue_amounts(
+    mint_amount_atoms: int,
+    nav_per_unit_usd_1e8: int,
+    issue_multiplier_bps: int,
+) -> tuple[int, int, int]:
+    if mint_amount_atoms <= 0:
+        raise RuntimeError("mint amount must be positive")
+    if nav_per_unit_usd_1e8 <= 0:
+        raise RuntimeError("NAV per unit must be positive")
+    if issue_multiplier_bps < BPS_SCALE:
+        raise RuntimeError("issue multiplier cannot price below base NAV")
+    base_value_atoms = checked_ceil_div(
+        mint_amount_atoms * nav_per_unit_usd_1e8,
+        NAV_USD_E8_SCALE,
+        "base NAV value",
+    )
+    settlement_due_atoms = checked_ceil_div(
+        base_value_atoms * issue_multiplier_bps,
+        BPS_SCALE,
+        "issue settlement",
+    )
+    return (
+        base_value_atoms,
+        settlement_due_atoms,
+        settlement_due_atoms - base_value_atoms,
+    )
+
+
+def validate_nav_binding(
+    status: dict[str, object], nav: dict[str, object]
+) -> tuple[int, int, int]:
+    required = {
+        "schema": LIVE_NAV_SCHEMA,
+        "asset_id": status["native_nav_asset_id"],
+        "epoch": status["pricing_nav_epoch"],
+        "reserve_packet_hash": status["pricing_reserve_packet_hash"],
+        "opening_constants_used": False,
+        "uniswap_price_used": False,
+    }
+    for field, expected in required.items():
+        if nav.get(field) != expected:
+            raise RuntimeError(f"NAV manifest {field} differs from {expected!r}")
+    nav_per_unit = nav.get("nav_per_unit_usd_1e8")
+    circulating_supply = nav.get("circulating_supply_atoms")
+    verified_net_assets = nav.get("verified_net_assets_usd_1e8")
+    for field, value in (
+        ("nav_per_unit_usd_1e8", nav_per_unit),
+        ("circulating_supply_atoms", circulating_supply),
+        ("verified_net_assets_usd_1e8", verified_net_assets),
+    ):
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            raise RuntimeError(f"NAV manifest {field} must be a positive integer")
+    return nav_per_unit, circulating_supply, verified_net_assets
 
 
 def ops(label: str, key_file: Path, operation: dict[str, object]) -> dict[str, object]:
@@ -64,6 +133,7 @@ def main() -> None:
         raise RuntimeError("digest-capable node binary is unavailable")
 
     status = json.loads(args.supply_status.read_text())
+    nav = json.loads(args.nav_manifest.read_text())
     required = {
         "schema": "postfiat-pftl-uniswap-supply-status-v2",
         "route_id": ROUTE_ID,
@@ -78,6 +148,9 @@ def main() -> None:
     for field, expected in required.items():
         if status.get(field) != expected:
             raise RuntimeError(f"route status {field} differs from {expected!r}")
+    nav_per_unit, nav_circulating_supply, nav_verified_net_assets = (
+        validate_nav_binding(status, nav)
+    )
 
     amount = args.mint_amount_atoms
     if amount <= 0:
@@ -87,7 +160,9 @@ def main() -> None:
     if amount > status["available_issue_atoms"]:
         raise RuntimeError("mint amount exceeds available issue capacity")
     multiplier = int(status["issue_multiplier_bps"])
-    settlement = (amount * multiplier + 9_999) // 10_000
+    base_value, settlement, issue_spread = derive_issue_amounts(
+        amount, nav_per_unit, multiplier
+    )
     deadline = args.deadline_seconds or int(time.time()) + 86_400
     if deadline <= int(time.time()) + 3_600:
         raise RuntimeError("destination deadline must leave at least one hour")
@@ -203,7 +278,15 @@ def main() -> None:
         "subscriber": JOE_PFTL,
         "ethereum_recipient": JOE_EVM,
         "mint_amount_atoms": amount,
+        "base_value_atoms": base_value,
         "settlement_value_atoms": settlement,
+        "issue_spread_atoms": issue_spread,
+        "nav_per_unit_usd_1e8": nav_per_unit,
+        "issue_multiplier_bps": multiplier,
+        "pricing_nav_epoch": status["pricing_nav_epoch"],
+        "pricing_reserve_packet_hash": status["pricing_reserve_packet_hash"],
+        "nav_circulating_supply_atoms": nav_circulating_supply,
+        "nav_verified_net_assets_usd_1e8": nav_verified_net_assets,
         "reservation_id": reservation_id,
         "subscription_nonce": subscription_nonce,
         "packet_hash": packet_hash,

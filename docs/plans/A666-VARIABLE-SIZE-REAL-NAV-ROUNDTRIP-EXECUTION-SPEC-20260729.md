@@ -152,15 +152,15 @@ content-addressed campaign manifest is committed and pushed.
 
 ### 5.1 Required NAV-aware orchestration correction
 
-The current consensus transition already derives primary issue value from
-the policy-pinned NAV. The current orchestration does not fully reflect that
-behavior and MUST be corrected before funding:
+The consensus transition already derives primary issue value from the
+policy-pinned NAV. The pre-Gate-0 orchestration did not fully reflect that
+behavior and MUST be corrected and regression-tested before funding:
 
-- `scripts/a666-mainnet-primary-issue-ops.py` currently derives settlement as
+- `scripts/a666-mainnet-primary-issue-ops.py` derived settlement as
   `mint_amount × issue_multiplier` without first applying NAV;
-- `scripts/a666-mainnet-transparent-issue-after-deposit.sh` currently assumes
-  settlement is at least the A666 atom count, derives spread as
-  `settlement - mint`, and expects reserve principal to increase by the mint
+- `scripts/a666-mainnet-transparent-issue-after-deposit.sh` assumed
+  settlement was at least the A666 atom count, derived spread as
+  `settlement - mint`, and expected reserve principal to increase by the mint
   atom count; and
 - the existing private issue runner consumes the same incorrect operation
   manifest, so this is a shared transparent/private defect.
@@ -620,4 +620,3 @@ The campaign is complete only when:
 - all six validators converge;
 - the complete non-secret evidence bundle is committed and pushed; and
 - `acceptance-summary.json` reports `verdict: "PASS"`.
-

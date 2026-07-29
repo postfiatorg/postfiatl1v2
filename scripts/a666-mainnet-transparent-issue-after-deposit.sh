@@ -79,11 +79,14 @@ deposit_id=$(jq -er '.event.deposit_id | ltrimstr("0x")' "$deposit_file")
 packet_hash=$(jq -er '.packet_hash' "$ops_dir/manifest.json")
 packet_digest=$(jq -er '.ethereum_packet_digest' "$ops_dir/manifest.json")
 mint_amount=$(jq -er '.mint_amount_atoms' "$ops_dir/manifest.json")
+base_value_amount=$(jq -er '.base_value_atoms' "$ops_dir/manifest.json")
 settlement_amount=$(jq -er '.settlement_value_atoms' "$ops_dir/manifest.json")
+spread_amount=$(jq -er '.issue_spread_atoms' "$ops_dir/manifest.json")
 [[ "$mint_amount" =~ ^[1-9][0-9]*$ ]]
+[[ "$base_value_amount" =~ ^[1-9][0-9]*$ ]]
 [[ "$settlement_amount" =~ ^[1-9][0-9]*$ ]]
-test "$settlement_amount" -ge "$mint_amount"
-spread_amount=$((settlement_amount - mint_amount))
+[[ "$spread_amount" =~ ^[0-9]+$ ]]
+test "$settlement_amount" -eq "$((base_value_amount + spread_amount))"
 jq -e --argjson settlement "$settlement_amount" \
   '.verdict=="PASS" and .amount_atoms==$settlement' "$deposit_file" >/dev/null
 
@@ -289,12 +292,13 @@ jq -e --argjson expected "$pfusdc_balance_before" \
 jq -e \
   --slurpfile before "$phase_dir/pftl-supply-status-before.json" \
   --argjson minted "$mint_amount" \
+  --argjson base "$base_value_amount" \
   --argjson spread "$spread_amount" \
   '.invariant_holds==true
    and .paused==false
    and .authorized_valid_supply_atoms==($before[0].authorized_valid_supply_atoms+$minted)
    and .outstanding_bridge_claims_atoms==($before[0].outstanding_bridge_claims_atoms+$minted)
-   and .settlement_reserve_atoms==($before[0].settlement_reserve_atoms+$minted)
+   and .settlement_reserve_atoms==($before[0].settlement_reserve_atoms+$base)
    and .non_nav_spread_atoms==($before[0].non_nav_spread_atoms+$spread)
    and .active_reservation_atoms==0
    and .export_entitlement_atoms==0' \
