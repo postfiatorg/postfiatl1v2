@@ -1,0 +1,20 @@
+{
+  "schema": "postfiat.a666.optimization_script_hashes.v2",
+  "scripts": {
+    "scripts/a666-mainnet-prepare-private-optimization-run.sh": "707140238a425583c3f039d13f3491cf2fb9c7410d07fe6134dd929eeffdb035",
+    "scripts/a666-mainnet-run-private-optimization.sh": "b11da9ff49d39d92765237d6155949b62693fc6faf877ab30c7c96632a682536",
+    "scripts/a666-mainnet-pfusdc-deposit.py": "61c6e7a476843d2f721a105a01dd85fea315a9b65bc9ad13d0e24b4f4235085b",
+    "scripts/a666-wait-ethereum-deposit-window.py": "4b20cdf60a8b1f40e4619f18452b9965bd93a6e46a1b0f3747e8506d804f483c",
+    "scripts/a666-resident-rounds.py": "ecd2f623a71c60769ab4ff16f9ad6f82e5b5a2f004874e1b9b59d7a7347ccccd",
+    "scripts/a666-mainnet-pfusdc-relay.sh": "a2fe23a2ae48a11d3e9dc0878bc301272d2af77261ae769559c5a4922809b9e1",
+    "scripts/a666-ce22-remote-finality-batch.py": "4c6c6ff0630abf3d2f94033dc14d98bcff4ed26e3958ebac130caa918ce6a4b8",
+    "scripts/a666-ce22-remote-finality-op.py": "ae04e12603fae8d8a9f5926be8f8dc8298010dad1a54e56d66161b949e9bac2b",
+    "scripts/a666-mainnet-transparent-issue-after-deposit.sh": "e8b4aa5537a4c30429d8d187b9d4f00a6756e9986a35c172b94a304c58893850",
+    "scripts/a666-mainnet-private-issue-middle.sh": "4ff9407117e12468275f8c726f964ce7109ae6967a17246229c255ff1d4588c9",
+    "scripts/a666-mainnet-record-destination-consume.sh": "81d7c78d026f59ed1d3e274cfb90ea783f59bae2f92b8a6b41fb5663d6f95e5b",
+    "scripts/a666-mainnet-private-roundtrip-after-mint.sh": "bdc4a96a7ed6c2e2b9ab4e7ad130a4e4cbba48676eab9f4b9fcf4b44896db60c",
+    "scripts/a666-mainnet-private-primary-redeem.sh": "ab6b159fbaf267fc5e9587226474b685e6f7a16f308134724f567de0560ccef0",
+    "scripts/a666-mainnet-pfusdc-proof-egress.sh": "0859a6640c560731bcf3451cdb0547533d175c5f3ed16a6b3596758ac7d13a57",
+    "scripts/a666-score-private-optimization-run.py": "d673e5a5ca2328948cc436c92add7bc7add38b067b671ce7395dfdf4670e94aa"
+  }
+}

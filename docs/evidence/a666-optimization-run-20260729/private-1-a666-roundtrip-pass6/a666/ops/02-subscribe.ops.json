@@ -1,0 +1,21 @@
+{
+  "operations": [
+    {
+      "key_file": "/home/postfiat/tmp/pfusdc-closed-roundtrip-20260720/keys/holder.json",
+      "label": "joe-a666-subscribe",
+      "operation": {
+        "operation": "pftl_uniswap_primary_subscribe_v2",
+        "pricing_nav_epoch": 2,
+        "pricing_reserve_packet_hash": "60334589ab27d9a7d9ef3c02b8b5f345ce6e13792c48af14b02e2cf219b638be9b14be6a938d0e406865ae64276887e7",
+        "reservation_id": "6b197f87faf2c850e46a8c3abea4e41410ed4390d7a95654de75e85593c1d6e82326d259eeb8f873b744167e146597a9",
+        "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+        "settlement_asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+        "settlement_value_atoms": 905538,
+        "subscriber": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+        "subscription_nonce": "9a708a1de597d63b0f1fbbb5ca777561c38fc52e3ae6a55cd9ace3d0ba4dcf9c"
+      },
+      "source": "pfab9b9228942e5c529633a13aa271d5297bec6353"
+    }
+  ],
+  "schema": "postfiat-certified-asset-ops-request-v1"
+}

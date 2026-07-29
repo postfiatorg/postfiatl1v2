@@ -1,0 +1,26 @@
+{
+  "packet": {
+    "deadline_seconds": 1785388820,
+    "destination_chain_id": 1,
+    "destination_controller": "0x9a0262c0572fb4db08765408eb225e207f40c3d9",
+    "ethereum_recipient": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+    "mint_amount_atoms": 1000000,
+    "native_nav_asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+    "nonce": "c9b68ffcd69bc4ec13b1cf24cd2989aa0048ee6bcf9a3164ef6fac82f1935d1c",
+    "policy_hash_commitment": "c639acaa30d31fa22dc5c95c12732705ca36908f68c5fc53ec442e520f1759a0",
+    "pricing_nav_epoch": 2,
+    "pricing_reserve_packet_hash": "60334589ab27d9a7d9ef3c02b8b5f345ce6e13792c48af14b02e2cf219b638be9b14be6a938d0e406865ae64276887e7",
+    "reservation_id": "6b197f87faf2c850e46a8c3abea4e41410ed4390d7a95654de75e85593c1d6e82326d259eeb8f873b744167e146597a9",
+    "route_config_digest": "12ed00ca87e29554ce4b978da1710fffc0830767e84e62f08df257f727db953efdd89bcf6ea99f5634d6e5ea8aca2933",
+    "route_epoch": 3,
+    "settlement_asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+    "settlement_value_atoms": 905538,
+    "source_packet_hash": "87183c5cc65546f6a7d725b53d5ff5cd45e919001ebc0e8e4a3b6e9a9abcedbe1992fc9420f84f2740658bfbb9704318",
+    "source_receipt_hash": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "source_receipt_root": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "wrapped_token": "0xee4c92edb03efdd9b519339edc19ad70c69a9be5"
+  },
+  "packet_digest": "a6a7726ac548a17eeff0199ddc949b0f7e68d35b3388873daf26896b2cc78ce1",
+  "packet_file": "docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-pass6/a666/ops/03-mint-packet.json",
+  "schema": "postfiat-pftl-uniswap-mint-packet-digest-v1"
+}
