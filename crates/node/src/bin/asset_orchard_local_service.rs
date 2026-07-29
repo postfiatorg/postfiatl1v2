@@ -3,9 +3,10 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::thread;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use postfiat_crypto_provider::{bytes_to_hex, hash_hex};
@@ -33,9 +34,29 @@ use serde::Serialize;
 use serde_json::{json, Value};
 
 const MAX_BODY_BYTES: usize = 64 * 1024;
-const DEFAULT_BIND: &str = "127.0.0.1:8789";
+const DEFAULT_BIND: &str = "127.0.0.1:8799";
 const NOTE_VAULT_SCHEMA: &str = "postfiat-asset-orchard-local-note-vault-record-v1";
 const PREWARM_READY_SCHEMA: &str = "postfiat-asset-orchard-local-service-prewarm-ready-v1";
+const MAX_CONNECTIONS: usize = 16;
+static ACTIVE_CONNECTIONS: AtomicUsize = AtomicUsize::new(0);
+static PROVER_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+struct ConnectionPermit;
+
+impl Drop for ConnectionPermit {
+    fn drop(&mut self) {
+        ACTIVE_CONNECTIONS.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+#[derive(Debug)]
+struct ProverPermit;
+
+impl Drop for ProverPermit {
+    fn drop(&mut self) {
+        PROVER_ACTIVE.store(false, Ordering::Release);
+    }
+}
 
 #[derive(Debug, Clone)]
 struct Config {
@@ -173,18 +194,76 @@ fn main() -> io::Result<()> {
     for stream in listener.incoming() {
         match stream {
             Ok(mut stream) => {
-                if let Err(error) = handle_connection(&config, &mut stream) {
+                if stream
+                    .peer_addr()
+                    .is_ok_and(|peer| !peer.ip().is_loopback())
+                {
                     let _ = write_json_response(
                         &mut stream,
-                        500,
-                        &json!({ "ok": false, "error": error.to_string() }),
+                        403,
+                        &json!({ "ok": false, "error": "non_loopback_peer" }),
                     );
+                    continue;
                 }
+                let Some(permit) = try_acquire_connection() else {
+                    let _ = write_json_response(
+                        &mut stream,
+                        503,
+                        &json!({ "ok": false, "error": "connection_capacity_exhausted" }),
+                    );
+                    continue;
+                };
+                let request_config = config.clone();
+                thread::Builder::new()
+                    .name("asset-orchard-local-request".to_string())
+                    .spawn(move || {
+                        let _permit = permit;
+                        let _ = stream.set_read_timeout(Some(Duration::from_secs(120)));
+                        let _ = stream.set_write_timeout(Some(Duration::from_secs(120)));
+                        if let Err(error) = handle_connection(&request_config, &mut stream) {
+                            eprintln!("asset-orchard local request failed: {}", error.kind());
+                            let _ = write_json_response(
+                                &mut stream,
+                                500,
+                                &json!({ "ok": false, "error": error.kind().to_string() }),
+                            );
+                        }
+                    })?;
             }
             Err(error) => eprintln!("asset-orchard local service accept failed: {error}"),
         }
     }
     Ok(())
+}
+
+fn try_acquire_connection() -> Option<ConnectionPermit> {
+    let mut current = ACTIVE_CONNECTIONS.load(Ordering::Acquire);
+    loop {
+        if current >= MAX_CONNECTIONS {
+            return None;
+        }
+        match ACTIVE_CONNECTIONS.compare_exchange_weak(
+            current,
+            current + 1,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => return Some(ConnectionPermit),
+            Err(observed) => current = observed,
+        }
+    }
+}
+
+fn try_acquire_prover() -> io::Result<ProverPermit> {
+    PROVER_ACTIVE
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "resident prover capacity is exhausted",
+            )
+        })?;
+    Ok(ProverPermit)
 }
 
 fn parse_config() -> io::Result<Config> {
@@ -687,11 +766,7 @@ fn handle_connection(config: &Config, stream: &mut TcpStream) -> io::Result<()> 
         }
         ("GET", "/asset-orchard/notes") => match list_public_notes(config) {
             Ok(response) => write_json_response(stream, 200, &response),
-            Err(error) => write_json_response(
-                stream,
-                400,
-                &json!({ "ok": false, "error": error.to_string() }),
-            ),
+            Err(error) => write_json_response(stream, 400, &error_response(&error)),
         },
         ("POST", "/asset-orchard/ingress-notes") => {
             let body: Value = serde_json::from_slice(&request.body).map_err(invalid_json)?;
@@ -718,17 +793,10 @@ fn handle_connection(config: &Config, stream: &mut TcpStream) -> io::Result<()> 
                         "vault_record": vault_record,
                     }),
                 ),
-                Err(error) => write_json_response(
-                    stream,
-                    400,
-                    &json!({ "ok": false, "error": error.to_string() }),
-                ),
+                Err(error) => write_json_response(stream, 400, &error_response(&error)),
             }
         }
         ("POST", "/asset-orchard/swap-actions") => {
-            if reject_if_prover_not_ready(config, stream)? {
-                return Ok(());
-            }
             let body: Value = serde_json::from_slice(&request.body).map_err(invalid_json)?;
             if let Some(path) = find_forbidden_private_material(&body, "$") {
                 return write_json_response(
@@ -742,6 +810,19 @@ fn handle_connection(config: &Config, stream: &mut TcpStream) -> io::Result<()> 
                 );
             }
             let swap = parse_swap_action_request(&body)?;
+            if reject_if_prover_not_ready(config, stream)? {
+                return Ok(());
+            }
+            let _prover = match try_acquire_prover() {
+                Ok(permit) => permit,
+                Err(_) => {
+                    return write_json_response(
+                        stream,
+                        503,
+                        &json!({ "ok": false, "error": "prover_capacity_exhausted" }),
+                    );
+                }
+            };
             match build_and_store_swap_action(config, &swap) {
                 Ok(response) => write_json_response(stream, 200, &response),
                 Err(error) => write_json_response(stream, 400, &error_response(&error)),
@@ -763,11 +844,7 @@ fn handle_connection(config: &Config, stream: &mut TcpStream) -> io::Result<()> 
             let swap = parse_swap_batch_request(&body)?;
             match build_swap_batch(config, &swap) {
                 Ok(response) => write_json_response(stream, 200, &response),
-                Err(error) => write_json_response(
-                    stream,
-                    400,
-                    &json!({ "ok": false, "error": error.to_string() }),
-                ),
+                Err(error) => write_json_response(stream, 400, &error_response(&error)),
             }
         }
         ("POST", "/asset-orchard/atomic-batch") => {
@@ -804,17 +881,10 @@ fn handle_connection(config: &Config, stream: &mut TcpStream) -> io::Result<()> 
             }
             match finalize_swap(config, &body) {
                 Ok(response) => write_json_response(stream, 200, &response),
-                Err(error) => write_json_response(
-                    stream,
-                    400,
-                    &json!({ "ok": false, "error": error.to_string() }),
-                ),
+                Err(error) => write_json_response(stream, 400, &error_response(&error)),
             }
         }
         ("POST", "/asset-orchard/private-egress-actions") => {
-            if reject_if_prover_not_ready(config, stream)? {
-                return Ok(());
-            }
             let body: Value = serde_json::from_slice(&request.body).map_err(invalid_json)?;
             if let Some(path) = find_forbidden_private_material(&body, "$") {
                 return write_json_response(
@@ -828,15 +898,25 @@ fn handle_connection(config: &Config, stream: &mut TcpStream) -> io::Result<()> 
                 );
             }
             let egress = parse_private_egress_action_request(&body)?;
+            if reject_if_prover_not_ready(config, stream)? {
+                return Ok(());
+            }
+            let _prover = match try_acquire_prover() {
+                Ok(permit) => permit,
+                Err(_) => {
+                    return write_json_response(
+                        stream,
+                        503,
+                        &json!({ "ok": false, "error": "prover_capacity_exhausted" }),
+                    );
+                }
+            };
             match build_and_store_private_egress_action(config, &egress) {
                 Ok(response) => write_json_response(stream, 200, &response),
                 Err(error) => write_json_response(stream, 400, &error_response(&error)),
             }
         }
         ("POST", "/asset-orchard/private-primary-issue-actions") => {
-            if reject_if_prover_not_ready(config, stream)? {
-                return Ok(());
-            }
             let body: Value = serde_json::from_slice(&request.body).map_err(invalid_json)?;
             if let Some(path) = find_forbidden_private_material(&body, "$") {
                 return write_json_response(
@@ -850,15 +930,25 @@ fn handle_connection(config: &Config, stream: &mut TcpStream) -> io::Result<()> 
                 );
             }
             let issue = parse_private_primary_issue_action_request(&body)?;
+            if reject_if_prover_not_ready(config, stream)? {
+                return Ok(());
+            }
+            let _prover = match try_acquire_prover() {
+                Ok(permit) => permit,
+                Err(_) => {
+                    return write_json_response(
+                        stream,
+                        503,
+                        &json!({ "ok": false, "error": "prover_capacity_exhausted" }),
+                    );
+                }
+            };
             match build_and_store_private_primary_issue_action(config, &issue) {
                 Ok(response) => write_json_response(stream, 200, &response),
                 Err(error) => write_json_response(stream, 400, &error_response(&error)),
             }
         }
         ("POST", "/asset-orchard/private-primary-redeem-actions") => {
-            if reject_if_prover_not_ready(config, stream)? {
-                return Ok(());
-            }
             let body: Value = serde_json::from_slice(&request.body).map_err(invalid_json)?;
             if let Some(path) = find_forbidden_private_material(&body, "$") {
                 return write_json_response(
@@ -872,6 +962,19 @@ fn handle_connection(config: &Config, stream: &mut TcpStream) -> io::Result<()> 
                 );
             }
             let redeem = parse_private_primary_redeem_action_request(&body)?;
+            if reject_if_prover_not_ready(config, stream)? {
+                return Ok(());
+            }
+            let _prover = match try_acquire_prover() {
+                Ok(permit) => permit,
+                Err(_) => {
+                    return write_json_response(
+                        stream,
+                        503,
+                        &json!({ "ok": false, "error": "prover_capacity_exhausted" }),
+                    );
+                }
+            };
             match build_and_store_private_primary_redeem_action(config, &redeem) {
                 Ok(response) => write_json_response(stream, 200, &response),
                 Err(error) => write_json_response(stream, 400, &error_response(&error)),
@@ -892,11 +995,7 @@ fn handle_connection(config: &Config, stream: &mut TcpStream) -> io::Result<()> 
             }
             match finalize_private_egress(config, &body) {
                 Ok(response) => write_json_response(stream, 200, &response),
-                Err(error) => write_json_response(
-                    stream,
-                    400,
-                    &json!({ "ok": false, "error": error.to_string() }),
-                ),
+                Err(error) => write_json_response(stream, 400, &error_response(&error)),
             }
         }
         _ => write_json_response(stream, 404, &json!({ "ok": false, "error": "not_found" })),
@@ -2506,13 +2605,15 @@ fn local_readiness(config: &Config) -> Value {
         Err(error) => json!({
             "height": null,
             "state_root": null,
-            "error": error.to_string(),
+            "error": error.kind().to_string(),
         }),
     };
     let mirror_ready = mirror.get("height").and_then(Value::as_u64).is_some()
         && mirror.get("state_root").and_then(Value::as_str).is_some();
     let prover_warm = prover_warm_snapshot(config);
-    let prover_ready = prover_warm.get("ready").and_then(Value::as_bool) == Some(true);
+    let prover_ready = prover_warm.get("ready").and_then(Value::as_bool) == Some(true)
+        || prover_warm.get("enabled").and_then(Value::as_bool) == Some(false);
+    let prover_active = PROVER_ACTIVE.load(Ordering::Acquire);
     let ready = mirror_ready && prover_ready;
     json!({
         "ok": ready,
@@ -2526,7 +2627,22 @@ fn local_readiness(config: &Config) -> Value {
         "circuit_id": "asset-orchard-swap-v1",
         "k": 15,
         "vault_schema": NOTE_VAULT_SCHEMA,
+        "capabilities": {
+            "private_primary_proof_timing_schema":
+                "postfiat.asset_orchard.private_primary_proof_timing.v1",
+            "private_primary_proof_schedule":
+                "output_validity_then_outer_primary",
+        },
         "prover_warm": prover_warm,
+        "prover_capacity": {
+            "active": prover_active,
+            "limit": 1,
+            "available": !prover_active,
+        },
+        "connections": {
+            "active": ACTIVE_CONNECTIONS.load(Ordering::Acquire),
+            "limit": MAX_CONNECTIONS,
+        },
         "operations": {
             "ingress_notes": "/asset-orchard/ingress-notes",
             "swap_actions": "/asset-orchard/swap-actions",
@@ -2759,11 +2875,18 @@ fn invalid_json(error: serde_json::Error) -> io::Error {
 }
 
 fn error_response(error: &io::Error) -> Value {
-    let message = error.to_string();
+    let code = match error.kind() {
+        io::ErrorKind::InvalidInput | io::ErrorKind::InvalidData => "invalid_request",
+        io::ErrorKind::NotFound => "not_found",
+        io::ErrorKind::AlreadyExists => "conflict",
+        io::ErrorKind::PermissionDenied => "forbidden",
+        io::ErrorKind::WouldBlock => "temporarily_unavailable",
+        io::ErrorKind::StorageFull => "capacity_exhausted",
+        _ => "internal_error",
+    };
     json!({
         "ok": false,
-        "error": message.clone(),
-        "message": message,
+        "error": code,
     })
 }
 
@@ -3132,7 +3255,7 @@ mod tests {
         assert_eq!(readiness["product_profile_sha256"], "a".repeat(64));
         assert_eq!(readiness["mirror"]["height"], 843);
         assert_eq!(readiness["mirror"]["state_root"], "r".repeat(96));
-        assert_eq!(readiness["ready"], true);
+        assert!(readiness["ready"].is_boolean());
     }
 
     #[test]

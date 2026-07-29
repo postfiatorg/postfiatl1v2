@@ -833,6 +833,23 @@ pub struct AssetOrchardPrivatePrimaryIssueBuildResult {
     pub action: AssetOrchardPrivatePrimaryIssueAction,
     pub output_note: AssetOrchardWalletNote,
     pub anchor: AssetOrchardFieldElement,
+    pub proof_timing: AssetOrchardPrivatePrimaryProofTimingV1,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct AssetOrchardPrivatePrimaryProofTimingV1 {
+    pub schema: String,
+    pub witness_preparation_ns: u64,
+    pub output_validity_proof_action_ns: u64,
+    pub binding_and_outer_circuit_ns: u64,
+    pub outer_proving_key_ns: u64,
+    pub outer_proof_generation_ns: u64,
+    pub action_assembly_and_authorization_ns: u64,
+    pub total_ns: u64,
+}
+
+fn private_primary_elapsed_ns(start: std::time::Instant) -> u64 {
+    start.elapsed().as_nanos().try_into().unwrap_or(u64::MAX)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1132,6 +1149,8 @@ fn build_asset_orchard_private_primary_action(
     schema: &str,
     pool_output_commitments: &[String],
 ) -> Result<AssetOrchardPrivatePrimaryIssueBuildResult, AssetOrchardError> {
+    let total_start = std::time::Instant::now();
+    let witness_start = std::time::Instant::now();
     let is_redeem = schema == ASSET_ORCHARD_PRIVATE_PRIMARY_REDEEM_ACTION_SCHEMA_V1;
     if !is_redeem && schema != ASSET_ORCHARD_PRIVATE_PRIMARY_ISSUE_ACTION_SCHEMA_V1 {
         return Err(AssetOrchardError::new(
@@ -1239,10 +1258,12 @@ fn build_asset_orchard_private_primary_action(
         protocol_version,
         &output_note,
     )?;
+    let witness_preparation_ns = private_primary_elapsed_ns(witness_start);
     // Prove the newly encrypted NAV output in a synthetic singleton tree.
     // Validators independently derive this tree's anchor from the public
     // output commitment, so this pinned proof establishes the commitment's
     // asset tag and exact value without revealing the note opening.
+    let output_validity_start = std::time::Instant::now();
     let output_validity = build_asset_orchard_private_egress_action(
         chain_id,
         genesis_hash,
@@ -1260,6 +1281,8 @@ fn build_asset_orchard_private_primary_action(
         route_id,
         &[output_note.output_commitment.as_hex().to_string()],
     )?;
+    let output_validity_proof_action_ns = private_primary_elapsed_ns(output_validity_start);
+    let binding_start = std::time::Instant::now();
     let primary_binding_hash = asset_orchard_private_primary_issue_binding_hash(
         &AssetOrchardPrivatePrimaryIssueBindingPreimage {
             chain_id,
@@ -1303,8 +1326,15 @@ fn build_asset_orchard_private_primary_action(
     };
     let circuit =
         AssetOrchardPrivateEgressCircuit::new_with_note_witness(input_witness, &public_fields)?;
-    let proof = AssetOrchardPrivateEgressProvingKey::cached()?.create_proof(&circuit, OsRng)?;
+    let binding_and_outer_circuit_ns = private_primary_elapsed_ns(binding_start);
+    let proving_key_start = std::time::Instant::now();
+    let proving_key = AssetOrchardPrivateEgressProvingKey::cached()?;
+    let outer_proving_key_ns = private_primary_elapsed_ns(proving_key_start);
+    let proof_start = std::time::Instant::now();
+    let proof = proving_key.create_proof(&circuit, OsRng)?;
+    let outer_proof_generation_ns = private_primary_elapsed_ns(proof_start);
 
+    let assembly_start = std::time::Instant::now();
     let placeholder =
         AssetOrchardSpendAuthSignature::from_orchard(&signing_key.sign(OsRng, b"placeholder"));
     let mut action = AssetOrchardPrivatePrimaryIssueAction {
@@ -1359,10 +1389,21 @@ fn build_asset_orchard_private_primary_action(
         settlement_asset_id,
         native_nav_asset_id,
     )?;
+    let action_assembly_and_authorization_ns = private_primary_elapsed_ns(assembly_start);
     Ok(AssetOrchardPrivatePrimaryIssueBuildResult {
         action,
         output_note,
         anchor,
+        proof_timing: AssetOrchardPrivatePrimaryProofTimingV1 {
+            schema: "postfiat.asset_orchard.private_primary_proof_timing.v1".to_string(),
+            witness_preparation_ns,
+            output_validity_proof_action_ns,
+            binding_and_outer_circuit_ns,
+            outer_proving_key_ns,
+            outer_proof_generation_ns,
+            action_assembly_and_authorization_ns,
+            total_ns: private_primary_elapsed_ns(total_start),
+        },
     })
 }
 

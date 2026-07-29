@@ -1,0 +1,65 @@
+[Unit]
+Description=PostFiat resident pfUSDC/A666 private swap service
+After=network-online.target postfiat-validator-2.service postfiat-asset-orchard-local.service postfiat-pftl-round-driver.service
+Wants=network-online.target
+Requires=postfiat-validator-2.service postfiat-asset-orchard-local.service postfiat-pftl-round-driver.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=postfiat
+Group=postfiat
+EnvironmentFile=/etc/postfiat/pftl-swapd.env
+ExecStart=/opt/postfiat/services/pftl_swapd \
+  --bind 127.0.0.1:8798 \
+  --data-dir /var/lib/postfiat/validator-2 \
+  --private-dir /var/lib/postfiat/validator-2/pftl-swapd \
+  --batch-dir /var/lib/postfiat/validator-2/pftl-swapd/batch-outbox \
+  --processed-batch-dir /var/lib/postfiat/validator-2/pftl-swapd/processed-batches \
+  --round-driver-ready-file /run/postfiat-pftl-round-driver/ready.json \
+  --round-driver-max-age-ms 5000 \
+  --transparent-key-file /var/lib/postfiat/validator-2/pftl-swapd/controlled-wallet-key.json \
+  --asset-service-address 127.0.0.1:8799 \
+  --asset-service-vault-dir /var/lib/postfiat/validator-2/asset-orchard-local-vault \
+  --route-id ${PFTL_ROUTE_ID} \
+  --controlled-wallet-id ${PFTL_CONTROLLED_WALLET_ID} \
+  --issue-ethereum-recipient ${PFTL_ISSUE_EVM_RECIPIENT} \
+  --egress-policy-id ${PFTL_EGRESS_POLICY_ID} \
+  --quote-ttl-blocks 2 \
+  --maximum-fee-atoms 100 \
+  --readiness-amount-atoms 1000000 \
+  --max-body-bytes 1048576 \
+  --max-connections 16 \
+  --max-swaps-per-principal-per-minute 12 \
+  --request-timeout-ms 60000
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=65
+KillMode=control-group
+Nice=5
+CPUWeight=30
+MemoryMax=2G
+TasksMax=64
+LimitNOFILE=4096
+LimitCORE=0
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/postfiat/validator-2/pftl-swapd
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

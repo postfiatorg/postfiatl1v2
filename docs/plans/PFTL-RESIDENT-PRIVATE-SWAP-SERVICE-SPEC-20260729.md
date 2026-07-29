@@ -3,7 +3,7 @@
 **Date:** 2026-07-29
 **Priority:** P1 (first product-latency workstream after the optimization
 campaign)
-**Status:** amended proposed implementation specification (v3)
+**Status:** amended implementation and qualification specification (v4)
 **Parent research:** `CHAIN-OPTIMIZATION-STACKED-RESEARCH-20260729.md`
 (S1.1, S1.3, S3.1, S6.1), `NAV-SWAP-EFFICIENCY-RESEARCH-20260729.md`
 (Tier 0.1, Tier 2.1)
@@ -17,7 +17,7 @@ one-round relay failure (mempool admission lesson)
 
 ## Amendment note
 
-This v3 amendment preserves the resident-prover, persistent-session, and
+This v4 amendment preserves the resident-prover, persistent-session, and
 single-batch architecture. It tightens the product boundary and resolves
 security and implementation ambiguities that would otherwise block a safe
 implementation:
@@ -36,6 +36,43 @@ implementation:
   admission tests; and
 - performance acceptance separates queueing, proving, consensus, and the
   optional transparent-egress action.
+
+The v4 amendment also records a source-level proof dependency discovered
+during implementation. The current private-primary binding hash commits to
+the completed nested output-validity action, including its proof bytes.
+Consequently the nested output-validity proof must finish before the outer
+private-primary proof can be constructed. Claiming that those two proofs run
+in parallel would be false. This specification now requires dependency-aware
+scheduling and measurement; changing that dependency is a separately gated
+consensus optimization, not a release blocker for the resident service.
+
+### 2026-07-29 implementation checkpoint
+
+The plan is no longer based only on architectural assumptions. The following
+facts are implemented and locally verified:
+
+- atomic shielded execution uses a trial ledger and Orchard state and commits
+  no action unless every action accepts;
+- the conformance harness recognizes all four canonical route shapes:
+  issue-to-private, issue-to-transparent, redeem-to-private, and
+  redeem-to-transparent;
+- issue-to-private passed a valid baseline plus 11 invalid/replay cases with
+  full rollback;
+- issue-to-transparent passed a valid baseline plus 12 invalid/replay cases,
+  including a corrupted egress proof, with full rollback;
+- authenticated persistent-round health passed four- and six-validator
+  failover integration tests;
+- the resident asset service and `pftl-swapd` focused test suites pass; and
+- exact private-primary proof-DAG timings are emitted into the durable swap
+  journal.
+
+The redemption route modes remain a release gate, not an inferred success.
+Their baselines require a committed, controlled A666 note in the qualification
+pre-state. The copied local chain correctly refused an artificial direct
+commit because consensus v2 requires a precommit QC. The redemption vectors
+therefore MUST be generated and run through the same conformance harness in a
+real controlled certified round. No test-only state mutation or downgraded
+finality path is acceptable evidence.
 
 ### 2026-07-29 PFTL-first delivery decision
 
@@ -277,26 +314,50 @@ Requirements:
 - Acceptance campaigns MAY continue to run synchronous evidence; this
   spec does not change them.
 
-## 4. Parallel proving
+## 4. Dependency-aware proving
 
-Once swap amounts and the NAV mark are fixed, the full note chain is
-deterministic: ingress note N1, issue consumes N1 -> N2, egress consumes
-N2 -> outputs. Therefore:
+Once swap amounts, seeds, and the NAV mark are fixed, the full note chain is
+deterministic: ingress note N1, primary action consumes N1 -> N2, optional
+egress consumes N2 -> transparent output. Proof scheduling MUST follow the
+actual cryptographic dependency graph:
 
-- **R-PROVE-1:** The builder MUST derive all witnesses up front and prove
-  the route's independent proof roles **concurrently**. Wall-clock proving
-  target is approximately the slowest required proof, not the sum.
+1. build N2 and its nested output-validity witness;
+2. prove and assemble the nested output-validity action;
+3. hash that completed action into the private-primary binding, then prove
+   the private-primary input spend; and
+4. prove an optional user-requested egress as soon as its N2 witness and
+   batch-local commitment path are available.
+
+Steps 2 and 3 are serial in the current protocol. The dependency is visible
+in
+`crates/privacy_orchard/src/asset_orchard_action_builders.rs`,
+`build_asset_orchard_private_primary_action`: the completed
+`output_validity.action` is an input to
+`asset_orchard_private_primary_issue_binding_hash`, and that hash is a public
+field of the outer proof.
+
+- **R-PROVE-1:** The builder MUST derive available witnesses before proof
+  scheduling and execute proof roles according to the explicit dependency
+  DAG. Roles with no dependency edge SHOULD run concurrently. A release
+  report MUST show the DAG and per-role timings and MUST NOT represent the
+  nested output-validity and outer private-primary proofs as parallel.
 - **R-PROVE-2:** Proof outputs MUST be assembled into the batch in
   canonical action order regardless of proving completion order.
-- **R-PROVE-3:** Concurrent proving MUST be CPU- and memory-bounded. Proof
-  work runs on a dedicated blocking/Rayon pool, never on the async reactor,
-  and no lock may be held across an await. The daemon MUST enforce global
-  and per-caller concurrency/queue limits, deadlines, and early
-  backpressure; an unbounded FIFO is forbidden.
+- **R-PROVE-3:** Proof work MUST be CPU- and memory-bounded. It runs on a
+  dedicated blocking/prover worker, never on an async reactor, and no
+  private-state or journal lock may be held during proof generation. The
+  daemon MUST enforce global and per-caller concurrency/queue limits,
+  deadlines, and early backpressure; an unbounded FIFO is forbidden.
 - **R-PROVE-4:** Service resource limits (thread count, CPU weight/affinity,
   and memory maximum) MUST prevent proving load from starving validator
   consensus, RPC, or storage work. Exceeding a service limit rejects or
   queues work; it MUST NOT degrade validator liveness.
+- **R-PROVE-5:** Removing the serial edge between nested output validity and
+  the outer private-primary proof requires a versioned binding preimage and
+  coordinated protocol activation. It MUST have new conformance vectors,
+  historical replay coverage, and a fleet rollout gate. It is an optional
+  post-release optimization; the resident PFTL service MUST ship and be
+  measured with the current binding first.
 - GPU proving (research S1.2) is an optional later backend behind the
   same interface; it MUST NOT change proof bytes/transcripts relative to
   the pinned VK.
@@ -425,7 +486,7 @@ validator missed-round rate:
 |---|---|
 | Swap request -> committed + converged, p50 | <= 20s |
 | Swap request -> committed + converged, p95 | <= 45s |
-| Required proof roles (parallel) wall time, p95 | <= 10s |
+| Current proof DAG wall time, p95 | <= 35s for first release; <= 10s only after an independently qualified binding/prover optimization |
 | Consensus round (publish -> certificate), p95 | <= 3s |
 | Daemon cold start -> ready (with PK artifact) | <= 60s |
 | Daemon cold start -> ready (PK build fallback) | <= 20 min, off critical path |
@@ -464,13 +525,15 @@ PFTL service number.
    needed, follow R-BATCH-6.
 2. **Phase B — first usable PFTL-only release.** Deploy `pftl-swapd` with
    warm PKs, frontier mirror, readiness, persistent fleet sessions,
-   continuous preflight, and bounded parallel proving. Swaps MAY still use
-   N certified rounds if Phase A has not admitted the atomic path. This
-   release has no synchronous Ethereum dependency and is acceptance-tested
-   for both issue and redeem. Expected: ~5-6 min -> tens of seconds.
+   continuous preflight, and bounded dependency-aware proving. Swaps MAY
+   still use N certified rounds if Phase A has not admitted the atomic path.
+   This release has no synchronous Ethereum dependency and is
+   acceptance-tested for both issue and redeem. Expected: ~5-6 min -> tens
+   of seconds.
 3. **Phase C — fastest PFTL path.** Enable the admitted single atomic batch,
-   retain parallel proving, and remove remaining per-request orchestration
-   startup. Expected: -> ~10-25s, subject to the measured qualification
+   retain dependency-aware proof scheduling, and remove remaining
+   per-request orchestration startup. Expected: -> ~10-45s under the
+   current serial proof edge, subject to the measured qualification
    distribution rather than a one-off demonstration.
 4. **Phase D — durable async evidence, recovery, resource isolation, and
    per-stage timing schema.** Expected: p50 <= 20s met.
@@ -506,8 +569,12 @@ regression.
 
 ## 12. Open questions
 
-1. Does batch admission see batch-local note commitments today, or is an
-   execution-layer change required (Phase A outcome)?
+1. **Resolved in implementation, pending controlled-fleet qualification:**
+   atomic shielded admission now evaluates batch-local note commitments
+   against a trial state and commits only if every action accepts. Local
+   conformance and four-/six-validator transport tests pass; the funds-bearing
+   gate remains closed until the complete R-BATCH-5 matrix passes on the
+   controlled fleet.
 2. Egress-to-transparent as part of the same batch or a user-optional
    second step (privacy tradeoff: immediate egress links timing).
    Default SHOULD be to leave output notes shielded.

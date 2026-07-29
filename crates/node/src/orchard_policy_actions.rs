@@ -1462,6 +1462,7 @@ pub fn create_asset_orchard_private_primary_issue(
         nullifier: built.action.nullifier.as_hex().to_string(),
         output_commitment: built.action.output_commitment.as_hex().to_string(),
         proof_bytes: built.action.proof.byte_len(),
+        proof_timing: built.proof_timing,
         verified: true,
         privacy: "private_settlement_note_to_encrypted_nav_note_with_public_route_economics"
             .to_string(),
@@ -1599,6 +1600,7 @@ pub fn create_asset_orchard_private_primary_redeem(
         nullifier: built.action.nullifier.as_hex().to_string(),
         output_commitment: built.action.output_commitment.as_hex().to_string(),
         proof_bytes: built.action.proof.byte_len(),
+        proof_timing: built.proof_timing,
         verified: true,
         privacy: "private_nav_note_to_encrypted_settlement_note_with_public_route_economics"
             .to_string(),

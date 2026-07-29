@@ -401,10 +401,10 @@ pub fn conformance_shielded_batch(
     let source = read_shielded_action_batch_file(&options.batch_file)?;
     verify_shielded_action_batch_id(&genesis, &source)?;
     reject_live_legacy_cleartext_shielded_actions(&source)?;
-    if !source.atomic || source.actions.len() != 3 {
+    if !source.atomic {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "shielded batch conformance requires one atomic three-action ingress/issue/redeem batch",
+            "shielded batch conformance requires an atomic batch",
         ));
     }
     if ordered_batches.contains(&source.batch_id) {
@@ -413,22 +413,33 @@ pub fn conformance_shielded_batch(
             format!("shielded batch `{}` already applied", source.batch_id),
         ));
     }
-    let (ingress, issue, redeem) = match (
-        &source.actions[0],
-        &source.actions[1],
-        &source.actions[2],
-    ) {
-        (
-            ShieldedAction::AssetOrchardIngressV2(ingress),
-            ShieldedAction::AssetOrchardPrivatePrimaryIssueV1(issue),
-            ShieldedAction::AssetOrchardPrivatePrimaryRedeemV1(redeem),
-        ) if issue.route_id == redeem.route_id => (ingress, issue, redeem),
-        _ => {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "shielded batch conformance source must be ingress v2 -> private issue -> private redeem for one route",
-            ))
+    let legacy_roundtrip = if source.actions.len() == 3 {
+        match (
+            &source.actions[0],
+            &source.actions[1],
+            &source.actions[2],
+        ) {
+            (
+                ShieldedAction::AssetOrchardIngressV2(ingress),
+                ShieldedAction::AssetOrchardPrivatePrimaryIssueV1(issue),
+                ShieldedAction::AssetOrchardPrivatePrimaryRedeemV1(redeem),
+            ) if issue.route_id == redeem.route_id => Some((ingress, issue, redeem)),
+            _ => None,
         }
+    } else {
+        None
+    };
+    let Some((ingress, issue, redeem)) = legacy_roundtrip else {
+        return conformance_shielded_route_source(
+            &genesis,
+            &governance,
+            &ledger,
+            &ordered_batches,
+            &shielded,
+            &bridge,
+            execution_height,
+            source,
+        );
     };
     let baseline = simulate_shielded_batch_against_state(
         &genesis,
@@ -748,6 +759,366 @@ pub fn conformance_shielded_batch(
         cases,
         all_cases_rejected_without_state_change,
     })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn conformance_shielded_route_source(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    ordered_batches: &[String],
+    shielded: &ShieldedState,
+    bridge: &BridgeState,
+    execution_height: u64,
+    source: ShieldedActionBatch,
+) -> io::Result<ShieldedBatchConformanceReport> {
+    let (route_mode, route_id, is_issue) = classify_private_primary_route(&source.actions)?;
+    let baseline = simulate_shielded_batch_against_state(
+        genesis,
+        governance,
+        ledger,
+        ordered_batches,
+        shielded,
+        bridge,
+        execution_height,
+        &source,
+    )?;
+    if !baseline.all_accepted {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "shielded `{route_mode}` conformance baseline is not fully accepted"
+            ),
+        ));
+    }
+
+    let mut cases = Vec::new();
+    for index in 0..source.actions.len() {
+        let mut actions = source.actions.clone();
+        let expected_code = corrupt_route_action(&mut actions[index])?;
+        let case = format!("invalid_action_{index}");
+        push_atomic_rejection_case(
+            &mut cases,
+            &case,
+            genesis,
+            governance,
+            ledger,
+            ordered_batches,
+            shielded,
+            bridge,
+            execution_height,
+            actions,
+        )?;
+        require_conformance_receipt_code(&cases, &case, expected_code)?;
+    }
+
+    let spend_index = source
+        .actions
+        .iter()
+        .position(route_action_has_nullifier)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "private-primary route has no nullifying action",
+            )
+        })?;
+    let duplicate = source.actions[spend_index].clone();
+    let mut duplicate_actions = source.actions.clone();
+    if duplicate_actions.len() < 3 {
+        duplicate_actions.push(duplicate);
+    } else {
+        duplicate_actions[2] = duplicate;
+    }
+    push_atomic_rejection_case(
+        &mut cases,
+        "duplicate_nullifier",
+        genesis,
+        governance,
+        ledger,
+        ordered_batches,
+        shielded,
+        bridge,
+        execution_height,
+        duplicate_actions,
+    )?;
+    require_conformance_receipt_code(&cases, "duplicate_nullifier", "duplicate_nullifier")?;
+
+    if source.actions.len() > 1 {
+        let mut reordered = source.actions.clone();
+        reordered.swap(0, 1);
+        push_atomic_rejection_case(
+            &mut cases,
+            "reordered_actions",
+            genesis,
+            governance,
+            ledger,
+            ordered_batches,
+            shielded,
+            bridge,
+            execution_height,
+            reordered,
+        )?;
+
+        let missing_dependency = source.actions[1..].to_vec();
+        push_atomic_rejection_case(
+            &mut cases,
+            "missing_batch_local_commitment",
+            genesis,
+            governance,
+            ledger,
+            ordered_batches,
+            shielded,
+            bridge,
+            execution_height,
+            missing_dependency,
+        )?;
+    }
+
+    let anchor = source
+        .actions
+        .iter()
+        .find_map(route_action_anchor)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "private-primary route has no Orchard anchor",
+            )
+        })?;
+    let mut stale_shielded = shielded.clone();
+    make_orchard_anchor_stale(&mut stale_shielded, anchor)?;
+    push_existing_batch_rejection_case(
+        &mut cases,
+        "stale_anchor",
+        genesis,
+        governance,
+        ledger,
+        ordered_batches,
+        &stale_shielded,
+        bridge,
+        execution_height,
+        &source,
+    )?;
+
+    let mut changed_policy_ledger = ledger.clone();
+    let changed_policy_v2 = private_primary_route_v2_mut(&mut changed_policy_ledger, route_id)?;
+    changed_policy_v2.primary_market_policy.policy_epoch = changed_policy_v2
+        .primary_market_policy
+        .policy_epoch
+        .checked_add(1)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "policy epoch overflow"))?;
+    changed_policy_v2.primary_market_policy.policy_hash =
+        changed_policy_v2.primary_market_policy.computed_hash();
+    for reservation in changed_policy_v2.active_reservations.values_mut() {
+        reservation.policy_epoch = changed_policy_v2.primary_market_policy.policy_epoch;
+        reservation.policy_hash = changed_policy_v2.primary_market_policy.policy_hash.clone();
+    }
+    for entitlement in changed_policy_v2.export_entitlements.values_mut() {
+        entitlement.policy_epoch = changed_policy_v2.primary_market_policy.policy_epoch;
+        entitlement.policy_hash = changed_policy_v2.primary_market_policy.policy_hash.clone();
+    }
+    push_existing_batch_rejection_case(
+        &mut cases,
+        "changed_policy",
+        genesis,
+        governance,
+        &changed_policy_ledger,
+        ordered_batches,
+        shielded,
+        bridge,
+        execution_height,
+        &source,
+    )?;
+    require_conformance_receipt_code(
+        &cases,
+        "changed_policy",
+        if is_issue {
+            "pftl_uniswap_private_primary_policy_mismatch"
+        } else {
+            "pftl_uniswap_private_redemption_policy_mismatch"
+        },
+    )?;
+
+    let mut exhausted_capacity_ledger = ledger.clone();
+    let exhausted_v2 = private_primary_route_v2_mut(&mut exhausted_capacity_ledger, route_id)?;
+    let capacity_case = if is_issue {
+        exhausted_v2.issue_capacity_used_atoms =
+            exhausted_v2.primary_market_policy.issue_capacity_atoms;
+        "issue_capacity_exhausted"
+    } else {
+        exhausted_v2.redeem_capacity_used_atoms =
+            exhausted_v2.primary_market_policy.redeem_capacity_atoms;
+        "redeem_capacity_exhausted"
+    };
+    push_existing_batch_rejection_case(
+        &mut cases,
+        capacity_case,
+        genesis,
+        governance,
+        &exhausted_capacity_ledger,
+        ordered_batches,
+        shielded,
+        bridge,
+        execution_height,
+        &source,
+    )?;
+    require_conformance_receipt_code(
+        &cases,
+        capacity_case,
+        if is_issue {
+            "pftl_uniswap_issue_capacity_exceeded"
+        } else {
+            "pftl_uniswap_redeem_capacity_exceeded"
+        },
+    )?;
+
+    let mut changed_nav_ledger = ledger.clone();
+    let native_nav_asset_id = changed_nav_ledger
+        .pftl_uniswap_routes
+        .iter()
+        .find(|route| route.route_id == route_id)
+        .map(|route| route.native_nav_asset_id.clone())
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "private-primary route missing"))?;
+    let nav_asset = changed_nav_ledger
+        .nav_assets
+        .iter_mut()
+        .find(|asset| asset.asset_id == native_nav_asset_id)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "private-primary pricing NAV asset missing",
+            )
+        })?;
+    nav_asset.finalized_epoch = nav_asset
+        .finalized_epoch
+        .checked_add(1)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "NAV epoch overflow"))?;
+    push_existing_batch_rejection_case(
+        &mut cases,
+        "changed_nav",
+        genesis,
+        governance,
+        &changed_nav_ledger,
+        ordered_batches,
+        shielded,
+        bridge,
+        execution_height,
+        &source,
+    )?;
+    require_conformance_receipt_code(
+        &cases,
+        "changed_nav",
+        "pftl_uniswap_pricing_binding_mismatch",
+    )?;
+
+    let malformed_error = build_atomic_shielded_action_batch(
+        genesis,
+        vec![
+            source.actions[0].clone(),
+            source.actions[0].clone(),
+            source.actions[0].clone(),
+            source.actions[0].clone(),
+        ],
+    )
+    .expect_err("four-action atomic batch must be rejected");
+    cases.push(admission_rejection_case(
+        "malformed_action_bounds",
+        malformed_error.to_string(),
+        &baseline.pre_state_root,
+    ));
+    cases.push(admission_rejection_case(
+        "replayed_batch_id",
+        format!("shielded batch `{}` already applied", source.batch_id),
+        &baseline.post_state_root,
+    ));
+
+    let all_cases_rejected_without_state_change = cases
+        .iter()
+        .all(|case| !case.all_accepted && case.rollback_preserved);
+    if !all_cases_rejected_without_state_change {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "one or more shielded route conformance cases did not reject without state change",
+        ));
+    }
+    Ok(ShieldedBatchConformanceReport {
+        schema: "postfiat.shielded_batch_route_conformance.v1".to_string(),
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(genesis),
+        protocol_version: genesis.protocol_version,
+        execution_height,
+        activation_height: governance.shielded_atomic_batch_activation_height(),
+        source_batch_id: source.batch_id,
+        baseline,
+        cases,
+        all_cases_rejected_without_state_change,
+    })
+}
+
+fn classify_private_primary_route(
+    actions: &[ShieldedAction],
+) -> io::Result<(&'static str, &str, bool)> {
+    match actions {
+        [
+            ShieldedAction::AssetOrchardIngressV2(_),
+            ShieldedAction::AssetOrchardPrivatePrimaryIssueV1(issue),
+        ] => Ok(("issue_private", issue.route_id.as_str(), true)),
+        [
+            ShieldedAction::AssetOrchardIngressV2(_),
+            ShieldedAction::AssetOrchardPrivatePrimaryIssueV1(issue),
+            ShieldedAction::AssetOrchardPrivateEgressV1(_),
+        ] => Ok(("issue_transparent", issue.route_id.as_str(), true)),
+        [ShieldedAction::AssetOrchardPrivatePrimaryRedeemV1(redeem)] => {
+            Ok(("redeem_private", redeem.route_id.as_str(), false))
+        }
+        [
+            ShieldedAction::AssetOrchardPrivatePrimaryRedeemV1(redeem),
+            ShieldedAction::AssetOrchardPrivateEgressV1(_),
+        ] => Ok(("redeem_transparent", redeem.route_id.as_str(), false)),
+        _ => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "shielded route conformance requires one canonical issue/redeem route with private or transparent output",
+        )),
+    }
+}
+
+fn corrupt_route_action(action: &mut ShieldedAction) -> io::Result<&'static str> {
+    match action {
+        ShieldedAction::AssetOrchardIngressV2(action) => {
+            corrupt_hex_field(&mut action.burn_transaction.signature_hex)?;
+            Ok("asset_orchard_ingress_burn_rejected")
+        }
+        ShieldedAction::AssetOrchardPrivatePrimaryIssueV1(action)
+        | ShieldedAction::AssetOrchardPrivatePrimaryRedeemV1(action) => {
+            corrupt_hex_field(&mut action.proof)?;
+            Ok("asset_orchard_private_primary_issue_bad_proof")
+        }
+        ShieldedAction::AssetOrchardPrivateEgressV1(action) => {
+            corrupt_hex_field(&mut action.proof)?;
+            Ok("asset_orchard_private_egress_bad_payload")
+        }
+        _ => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "unsupported shielded route action",
+        )),
+    }
+}
+
+fn route_action_has_nullifier(action: &ShieldedAction) -> bool {
+    matches!(
+        action,
+        ShieldedAction::AssetOrchardPrivatePrimaryIssueV1(_)
+            | ShieldedAction::AssetOrchardPrivatePrimaryRedeemV1(_)
+            | ShieldedAction::AssetOrchardPrivateEgressV1(_)
+    )
+}
+
+fn route_action_anchor(action: &ShieldedAction) -> Option<&str> {
+    match action {
+        ShieldedAction::AssetOrchardPrivatePrimaryIssueV1(action)
+        | ShieldedAction::AssetOrchardPrivatePrimaryRedeemV1(action) => Some(action.anchor.as_str()),
+        ShieldedAction::AssetOrchardPrivateEgressV1(action) => Some(action.anchor.as_str()),
+        _ => None,
+    }
 }
 
 fn push_atomic_rejection_case(

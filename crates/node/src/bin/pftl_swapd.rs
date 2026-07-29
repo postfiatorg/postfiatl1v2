@@ -4,9 +4,9 @@ use postfiat_node::{
     capture_pftl_swap_state_identity, create_asset_orchard_ingress,
     create_asset_orchard_ingress_batch, create_asset_orchard_private_egress_batch,
     create_shielded_atomic_batch, find_pftl_swap_intent_replay, find_pftl_swap_quote,
-    load_pftl_swap_journal, load_pftl_swap_quote_store, recover_pftl_swap_journal,
-    revalidate_pftl_swap_quote_for_execution, simulate_shielded_batch, store_pftl_swap_quote,
-    transition_pftl_swap_journal_entry, AssetOrchardIngressBatchOptions,
+    load_pftl_swap_journal, load_pftl_swap_quote_store, record_pftl_swap_stage_timings,
+    recover_pftl_swap_journal, revalidate_pftl_swap_quote_for_execution, simulate_shielded_batch,
+    store_pftl_swap_quote, transition_pftl_swap_journal_entry, AssetOrchardIngressBatchOptions,
     AssetOrchardIngressCreateOptions, AssetOrchardPrivateEgressBatchOptions, PftlSwapDirection,
     PftlSwapJournalEntry, PftlSwapJournalState, PftlSwapOutputMode, PftlSwapQuoteOptions,
     PftlSwapQuoteRequestV1, PftlSwapQuoteV1, ShieldedAtomicBatchOptions,
@@ -79,6 +79,7 @@ struct HttpRequest {
 struct PreparedSwap {
     batch: ShieldedActionBatch,
     output_note_refs: Vec<String>,
+    stage_timings_ns: BTreeMap<String, u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -673,6 +674,22 @@ fn public_error_message(kind: io::ErrorKind) -> &'static str {
 }
 
 fn public_swap_status(entry: &PftlSwapJournalEntry) -> Value {
+    let transition_elapsed = |from: PftlSwapJournalState, to: PftlSwapJournalState| {
+        let start = entry
+            .transitions
+            .iter()
+            .find(|transition| transition.state == from)
+            .map(|transition| transition.at_monotonic_ns)
+            .unwrap_or(0);
+        let end = entry
+            .transitions
+            .iter()
+            .rev()
+            .find(|transition| transition.state == to)
+            .map(|transition| transition.at_monotonic_ns)
+            .unwrap_or(0);
+        (start > 0 && end >= start).then_some(end - start)
+    };
     json!({
         "swap_id": entry.swap_id,
         "idempotency_key": entry.idempotency_key,
@@ -684,6 +701,18 @@ fn public_swap_status(entry: &PftlSwapJournalEntry) -> Value {
         "batch_hash": entry.batch_hash,
         "committed_height": entry.committed_height,
         "certificate_ref": entry.certificate_ref,
+        "timing": {
+            "schema": "postfiat.pftl_swap.public_timing.v1",
+            "stages": &entry.timing,
+            "accepted_to_committed_ns": transition_elapsed(
+                PftlSwapJournalState::Journaled,
+                PftlSwapJournalState::Committed,
+            ),
+            "published_to_committed_ns": transition_elapsed(
+                PftlSwapJournalState::Published,
+                PftlSwapJournalState::Committed,
+            ),
+        },
     })
 }
 
@@ -913,6 +942,7 @@ fn execute_prepublication(
     swap_id: &str,
 ) -> io::Result<PreparedSwap> {
     let config = &state.config;
+    let prepublication_start = Instant::now();
     let proving = transition_swap_journal(
         state,
         idempotency_key,
@@ -931,15 +961,22 @@ fn execute_prepublication(
         "postfiat.pftl_swap.proving_attempt.v1",
         format!("{swap_id}:{attempt}").as_bytes(),
     );
+    let preflight_start = Instant::now();
     revalidate_pftl_swap_quote_for_execution(&config.data_dir, quote)?;
     let build_identity = capture_pftl_swap_state_identity(&config.data_dir)?;
+    let preflight_ns = elapsed_ns(preflight_start);
     let work_dir = config
         .private_dir
         .join("work")
         .join(swap_id)
         .join(format!("attempt-{attempt}"));
     prepare_private_dir(&work_dir)?;
-    let prepared = prepare_swap(state, quote, signed_intent, swap_id, &request_id, &work_dir)?;
+    let mut prepared = prepare_swap(state, quote, signed_intent, swap_id, &request_id, &work_dir)?;
+    insert_stage_timing(
+        &mut prepared.stage_timings_ns,
+        "preflight_state_capture",
+        preflight_ns,
+    )?;
     if capture_pftl_swap_state_identity(&config.data_dir)? != build_identity {
         return Err(io::Error::new(
             io::ErrorKind::WouldBlock,
@@ -948,16 +985,29 @@ fn execute_prepublication(
     }
     let prepared_batch_file = work_dir.join("prepared-batch.json");
     write_private_json(&prepared_batch_file, &prepared.batch)?;
+    let simulation_start = Instant::now();
     let simulation = simulate_shielded_batch(ShieldedBatchSimulateOptions {
         data_dir: config.data_dir.clone(),
         batch_file: prepared_batch_file.clone(),
     })?;
+    insert_elapsed_stage(
+        &mut prepared.stage_timings_ns,
+        "local_atomic_simulation",
+        simulation_start,
+    )?;
     if !simulation.all_accepted {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "prepared PFTL swap batch failed local atomic simulation",
         ));
     }
+    insert_stage_timing(
+        &mut prepared.stage_timings_ns,
+        "prepublication_total",
+        elapsed_ns(prepublication_start),
+    )?;
+    let attempt_timings = prefix_attempt_timings(attempt, &prepared.stage_timings_ns)?;
+    record_swap_timings(state, idempotency_key, &attempt_timings)?;
     transition_swap_journal(
         state,
         idempotency_key,
@@ -968,7 +1018,9 @@ fn execute_prepublication(
         None,
     )?;
 
+    let final_revalidation_start = Instant::now();
     revalidate_pftl_swap_quote_for_execution(&config.data_dir, quote)?;
+    let final_revalidation_ns = elapsed_ns(final_revalidation_start);
     if DAEMON_SHUTDOWN.load(Ordering::Acquire) {
         return Err(io::Error::new(
             io::ErrorKind::WouldBlock,
@@ -982,6 +1034,7 @@ fn execute_prepublication(
     let destination = config
         .batch_dir
         .join(format!("{}.json", prepared.batch.batch_id));
+    let publication_start = Instant::now();
     write_private_json(&stage, &prepared.batch)?;
     transition_swap_journal(
         state,
@@ -1006,6 +1059,18 @@ fn execute_prepublication(
         fs::rename(&stage, &destination)?;
         sync_parent_directory(&destination)?;
     }
+    let mut publication_timings = BTreeMap::new();
+    insert_stage_timing(
+        &mut publication_timings,
+        &format!("attempt_{attempt}_final_policy_revalidation"),
+        final_revalidation_ns,
+    )?;
+    insert_stage_timing(
+        &mut publication_timings,
+        &format!("attempt_{attempt}_publication_outbox_write"),
+        elapsed_ns(publication_start),
+    )?;
+    record_swap_timings(state, idempotency_key, &publication_timings)?;
     Ok(prepared)
 }
 
@@ -1036,6 +1101,8 @@ fn prepare_issue_swap(
     work_dir: &Path,
 ) -> io::Result<PreparedSwap> {
     let config = &state.config;
+    let mut stage_timings_ns = BTreeMap::new();
+    let ingress_start = Instant::now();
     let ingress_file = work_dir.join("ingress.json");
     let ingress_note_file = work_dir.join("ingress-note.json");
     let ingress_batch_file = work_dir.join("ingress-batch.json");
@@ -1062,6 +1129,8 @@ fn prepare_issue_swap(
         ingress_file: work_dir.join("ingress.json"),
         batch_file: ingress_batch_file,
     })?;
+    insert_elapsed_stage(&mut stage_timings_ns, "ingress_construct", ingress_start)?;
+    let primary_start = Instant::now();
     let issue_response = post_json(
         config.asset_service_address,
         "/asset-orchard/private-primary-issue-actions",
@@ -1084,7 +1153,13 @@ fn prepare_issue_swap(
         config.max_body_bytes,
         config.request_timeout,
     )?;
+    insert_elapsed_stage(
+        &mut stage_timings_ns,
+        "primary_service_request",
+        primary_start,
+    )?;
     ensure_service_verified(&issue_response, "private-primary issue")?;
+    insert_primary_proof_timings(&mut stage_timings_ns, &issue_response)?;
     let issue_batch: ShieldedActionBatch =
         serde_json::from_value(issue_response["batch"].clone()).map_err(invalid_data)?;
     let output_commitment = service_output_commitment(&issue_response)?;
@@ -1092,6 +1167,7 @@ fn prepare_issue_swap(
     index_pending_output_note(state, &output_commitment, &output_note_path, swap_id)?;
     let mut source_batches = vec![ingress_batch, issue_batch];
     let output_note_refs = if quote.output_mode == PftlSwapOutputMode::Transparent {
+        let egress_start = Instant::now();
         let egress_batch = build_private_egress_batch(
             config,
             quote,
@@ -1101,12 +1177,23 @@ fn prepare_issue_swap(
             &output_commitment,
             vec![ingress.output_commitment, output_commitment.clone()],
         )?;
+        insert_elapsed_stage(
+            &mut stage_timings_ns,
+            "optional_egress_service",
+            egress_start,
+        )?;
         source_batches.push(egress_batch);
         Vec::new()
     } else {
         vec![output_commitment]
     };
-    build_atomic_prepared_swap(config, work_dir, source_batches, output_note_refs)
+    build_atomic_prepared_swap(
+        config,
+        work_dir,
+        source_batches,
+        output_note_refs,
+        stage_timings_ns,
+    )
 }
 
 fn prepare_redeem_swap(
@@ -1118,7 +1205,15 @@ fn prepare_redeem_swap(
     work_dir: &Path,
 ) -> io::Result<PreparedSwap> {
     let config = &state.config;
+    let mut stage_timings_ns = BTreeMap::new();
+    let input_resolution_start = Instant::now();
     let input_note_path = resolve_indexed_note(state, &signed_intent.intent.input_reference, true)?;
+    insert_elapsed_stage(
+        &mut stage_timings_ns,
+        "input_note_resolution",
+        input_resolution_start,
+    )?;
+    let primary_start = Instant::now();
     let redeem_response = post_json(
         config.asset_service_address,
         "/asset-orchard/private-primary-redeem-actions",
@@ -1136,7 +1231,13 @@ fn prepare_redeem_swap(
         config.max_body_bytes,
         config.request_timeout,
     )?;
+    insert_elapsed_stage(
+        &mut stage_timings_ns,
+        "primary_service_request",
+        primary_start,
+    )?;
     ensure_service_verified(&redeem_response, "private-primary redeem")?;
+    insert_primary_proof_timings(&mut stage_timings_ns, &redeem_response)?;
     let redeem_batch: ShieldedActionBatch =
         serde_json::from_value(redeem_response["batch"].clone()).map_err(invalid_data)?;
     let output_commitment = service_output_commitment(&redeem_response)?;
@@ -1144,6 +1245,7 @@ fn prepare_redeem_swap(
     index_pending_output_note(state, &output_commitment, &output_note_path, swap_id)?;
     let mut source_batches = vec![redeem_batch];
     let output_note_refs = if quote.output_mode == PftlSwapOutputMode::Transparent {
+        let egress_start = Instant::now();
         let egress_batch = build_private_egress_batch(
             config,
             quote,
@@ -1153,12 +1255,23 @@ fn prepare_redeem_swap(
             &output_commitment,
             vec![output_commitment.clone()],
         )?;
+        insert_elapsed_stage(
+            &mut stage_timings_ns,
+            "optional_egress_service",
+            egress_start,
+        )?;
         source_batches.push(egress_batch);
         Vec::new()
     } else {
         vec![output_commitment]
     };
-    build_atomic_prepared_swap(config, work_dir, source_batches, output_note_refs)
+    build_atomic_prepared_swap(
+        config,
+        work_dir,
+        source_batches,
+        output_note_refs,
+        stage_timings_ns,
+    )
 }
 
 fn build_private_egress_batch(
@@ -1207,7 +1320,9 @@ fn build_atomic_prepared_swap(
     work_dir: &Path,
     source_batches: Vec<ShieldedActionBatch>,
     output_note_refs: Vec<String>,
+    mut stage_timings_ns: BTreeMap<String, u64>,
 ) -> io::Result<PreparedSwap> {
+    let assembly_start = Instant::now();
     let mut source_batch_files = Vec::with_capacity(source_batches.len());
     for (index, batch) in source_batches.iter().enumerate() {
         let path = work_dir.join(format!("source-batch-{index}.json"));
@@ -1219,10 +1334,107 @@ fn build_atomic_prepared_swap(
         source_batch_files,
         batch_file: work_dir.join("atomic-batch.json"),
     })?;
+    insert_elapsed_stage(&mut stage_timings_ns, "atomic_assembly", assembly_start)?;
     Ok(PreparedSwap {
         batch,
         output_note_refs,
+        stage_timings_ns,
     })
+}
+
+fn insert_elapsed_stage(
+    stages: &mut BTreeMap<String, u64>,
+    name: &str,
+    started: Instant,
+) -> io::Result<()> {
+    insert_stage_timing(stages, name, elapsed_ns(started))
+}
+
+fn elapsed_ns(started: Instant) -> u64 {
+    u64::try_from(started.elapsed().as_nanos())
+        .unwrap_or(u64::MAX)
+        .max(1)
+}
+
+fn insert_stage_timing(
+    stages: &mut BTreeMap<String, u64>,
+    name: &str,
+    elapsed_ns: u64,
+) -> io::Result<()> {
+    if stages.insert(name.to_string(), elapsed_ns.max(1)).is_some() {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "duplicate PFTL swap timing stage",
+        ));
+    }
+    Ok(())
+}
+
+fn prefix_attempt_timings(
+    attempt: usize,
+    stages: &BTreeMap<String, u64>,
+) -> io::Result<BTreeMap<String, u64>> {
+    let mut prefixed = BTreeMap::new();
+    for (stage, elapsed_ns) in stages {
+        insert_stage_timing(
+            &mut prefixed,
+            &format!("attempt_{attempt}_{stage}"),
+            *elapsed_ns,
+        )?;
+    }
+    Ok(prefixed)
+}
+
+fn record_swap_timings(
+    state: &RuntimeState,
+    idempotency_key: &str,
+    stages: &BTreeMap<String, u64>,
+) -> io::Result<PftlSwapJournalEntry> {
+    let _private_state = state
+        .private_state_lock
+        .lock()
+        .map_err(|_| invalid_data("private state lock poisoned"))?;
+    record_pftl_swap_stage_timings(&state.config.journal_file, idempotency_key, stages)
+}
+
+fn insert_primary_proof_timings(
+    stages: &mut BTreeMap<String, u64>,
+    response: &Value,
+) -> io::Result<()> {
+    let timing = response["verification"]
+        .get("proof_timing")
+        .and_then(Value::as_object)
+        .filter(|timing| {
+            timing.get("schema").and_then(Value::as_str)
+                == Some("postfiat.asset_orchard.private_primary_proof_timing.v1")
+        })
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "resident prover response lacks private-primary proof timing",
+            )
+        })?;
+    for (source, target) in [
+        ("witness_preparation_ns", "primary_witness"),
+        ("output_validity_proof_action_ns", "primary_output_validity"),
+        ("binding_and_outer_circuit_ns", "primary_binding_circuit"),
+        ("outer_proving_key_ns", "primary_outer_proving_key"),
+        ("outer_proof_generation_ns", "primary_outer_proof"),
+        (
+            "action_assembly_and_authorization_ns",
+            "primary_assembly_authorization",
+        ),
+        ("total_ns", "primary_proof_dag_total"),
+    ] {
+        let elapsed_ns = timing.get(source).and_then(Value::as_u64).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "resident prover response has invalid private-primary timing",
+            )
+        })?;
+        insert_stage_timing(stages, target, elapsed_ns)?;
+    }
+    Ok(())
 }
 
 fn ensure_service_verified(response: &Value, label: &str) -> io::Result<()> {
@@ -1527,6 +1739,10 @@ fn readiness_report(state: &RuntimeState) -> Value {
         report["ready"].as_bool() == Some(true)
             && report["mirror"]["height"].as_u64() == expected_height
             && report["mirror"]["state_root"].as_str() == expected_state_root
+            && report["capabilities"]["private_primary_proof_timing_schema"].as_str()
+                == Some("postfiat.asset_orchard.private_primary_proof_timing.v1")
+            && report["capabilities"]["private_primary_proof_schedule"].as_str()
+                == Some("output_validity_then_outer_primary")
     });
     let public_asset_service = asset_service
         .as_ref()
@@ -1722,6 +1938,12 @@ fn public_asset_service_readiness(report: &Value) -> Value {
         "ready": report["ready"],
         "local_only": report["local_only"],
         "pool_id": report["pool_id"],
+        "capabilities": {
+            "private_primary_proof_timing_schema":
+                report["capabilities"]["private_primary_proof_timing_schema"],
+            "private_primary_proof_schedule":
+                report["capabilities"]["private_primary_proof_schedule"],
+        },
         "mirror": {
             "height": report["mirror"]["height"],
             "state_root": report["mirror"]["state_root"],
@@ -1730,7 +1952,8 @@ fn public_asset_service_readiness(report: &Value) -> Value {
             "ready": report["prover_warm"]["ready"],
             "status": report["prover_warm"]["status"],
             "circuits": circuits,
-        }
+        },
+        "prover_capacity": report["prover_capacity"],
     })
 }
 

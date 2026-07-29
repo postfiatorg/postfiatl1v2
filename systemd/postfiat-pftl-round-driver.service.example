@@ -1,0 +1,67 @@
+[Unit]
+Description=PostFiat resident shielded certified-round driver
+After=network-online.target postfiat-validator-2.service
+Wants=network-online.target
+Requires=postfiat-validator-2.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=postfiat
+Group=postfiat
+Environment=POSTFIAT_CERTIFIED_BATCH_LOOP_READY_FILE=/run/postfiat-pftl-round-driver/ready.json
+Environment=POSTFIAT_PREWARM_SHIELDED_VERIFIER=1
+Environment=POSTFIAT_PREWARM_ASSET_ORCHARD_SWAP_VERIFIER=1
+Environment=POSTFIAT_PREWARM_ASSET_ORCHARD_PRIVATE_EGRESS_VERIFIER=1
+Environment=POSTFIAT_TRANSPORT_PERSISTENT_VOTE_STREAMS=1
+ExecStart=/opt/postfiat/bin/postfiat-node transport-peer-certified-batch-loop \
+  --unsafe-devnet-json-storage \
+  --unsafe-devnet-file-signer \
+  --data-dir /var/lib/postfiat/validator-2 \
+  --topology /etc/postfiat/private-overlay-topology.json \
+  --batch-kind shielded \
+  --batch-dir /var/lib/postfiat/validator-2/pftl-swapd/batch-outbox \
+  --processed-dir /var/lib/postfiat/validator-2/pftl-swapd/processed-batches \
+  --key-file /var/lib/postfiat/validator-2/validator-keys.json \
+  --proposal-key-file /var/lib/postfiat/validator-2/validator-keys.json \
+  --artifact-root /var/lib/postfiat/validator-2/pftl-swapd/round-artifacts \
+  --start-height auto \
+  --max-rounds 1000000 \
+  --poll-ms 25 \
+  --timeout-ms 15000 \
+  --idle-timeout-ms 0 \
+  --send-retries 2 \
+  --retry-backoff-ms 50
+RuntimeDirectory=postfiat-pftl-round-driver
+RuntimeDirectoryMode=0700
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillMode=control-group
+Nice=5
+CPUWeight=50
+MemoryMax=8G
+TasksMax=128
+LimitNOFILE=65536
+LimitCORE=0
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/postfiat/validator-2 /run/postfiat-pftl-round-driver
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

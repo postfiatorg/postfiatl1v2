@@ -1975,6 +1975,7 @@ pub struct AssetOrchardPrivatePrimaryIssueReport {
     pub nullifier: String,
     pub output_commitment: String,
     pub proof_bytes: usize,
+    pub proof_timing: AssetOrchardPrivatePrimaryProofTimingV1,
     pub verified: bool,
     pub privacy: String,
 }
@@ -1994,6 +1995,7 @@ pub struct AssetOrchardPrivatePrimaryRedeemReport {
     pub nullifier: String,
     pub output_commitment: String,
     pub proof_bytes: usize,
+    pub proof_timing: AssetOrchardPrivatePrimaryProofTimingV1,
     pub verified: bool,
     pub privacy: String,
 }

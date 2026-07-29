@@ -13,6 +13,7 @@ const PFTL_SWAP_MAX_ID_BYTES: usize = 128;
 const PFTL_SWAP_MAX_REFERENCE_BYTES: usize = 256;
 const PFTL_SWAP_MAX_JOURNAL_ENTRIES: usize = 4_096;
 const PFTL_SWAP_MAX_JOURNAL_TRANSITIONS: usize = 64;
+const PFTL_SWAP_MAX_TIMING_STAGES: usize = 64;
 const PFTL_SWAP_MAX_REASON_BYTES: usize = 256;
 const PFTL_SWAP_MAX_DURABLE_FILE_BYTES: usize = 32 << 20;
 
@@ -316,7 +317,16 @@ impl PftlSwapJournalState {
 pub struct PftlSwapJournalTransition {
     pub state: PftlSwapJournalState,
     pub at_unix_ms: u64,
+    #[serde(default)]
+    pub at_monotonic_ns: u64,
     pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PftlSwapTimingV1 {
+    pub schema: String,
+    pub recorded_at_unix_ms: u64,
+    pub stages_ns: BTreeMap<String, u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -336,6 +346,8 @@ pub struct PftlSwapJournalEntry {
     pub committed_height: Option<u64>,
     pub certificate_ref: Option<String>,
     pub transitions: Vec<PftlSwapJournalTransition>,
+    #[serde(default)]
+    pub timing: Option<PftlSwapTimingV1>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -931,8 +943,10 @@ fn journal_verified_pftl_swap_intent(
         transitions: vec![PftlSwapJournalTransition {
             state: PftlSwapJournalState::Journaled,
             at_unix_ms: now,
+            at_monotonic_ns: pftl_swap_now_monotonic_ns()?,
             reason: None,
         }],
+        timing: None,
     };
     journal.entries.insert(key, entry.clone());
     persist_pftl_swap_journal(path, &journal)?;
@@ -1081,8 +1095,69 @@ pub fn transition_pftl_swap_journal_entry(
     entry.transitions.push(PftlSwapJournalTransition {
         state: next,
         at_unix_ms: pftl_swap_now_unix_ms()?,
+        at_monotonic_ns: pftl_swap_now_monotonic_ns()?,
         reason,
     });
+    let updated = entry.clone();
+    persist_pftl_swap_journal(path, &journal)?;
+    Ok(updated)
+}
+
+pub fn record_pftl_swap_stage_timings(
+    path: &Path,
+    idempotency_key: &str,
+    stages_ns: &BTreeMap<String, u64>,
+) -> io::Result<PftlSwapJournalEntry> {
+    if stages_ns.is_empty() || stages_ns.len() > PFTL_SWAP_MAX_TIMING_STAGES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "PFTL swap timing update has an invalid stage count",
+        ));
+    }
+    if stages_ns
+        .iter()
+        .any(|(stage, elapsed_ns)| !pftl_swap_timing_stage(stage) || *elapsed_ns == 0)
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "PFTL swap timing update has invalid bounded fields",
+        ));
+    }
+    let mut journal = load_pftl_swap_journal(path)?;
+    let entry = journal.entries.get_mut(idempotency_key).ok_or_else(|| {
+        io::Error::new(io::ErrorKind::NotFound, "PFTL swap journal entry missing")
+    })?;
+    let timing = entry.timing.get_or_insert_with(|| PftlSwapTimingV1 {
+        schema: "postfiat.pftl_swap.timing.v1".to_string(),
+        recorded_at_unix_ms: 0,
+        stages_ns: BTreeMap::new(),
+    });
+    if timing.stages_ns.len().saturating_add(stages_ns.len()) > PFTL_SWAP_MAX_TIMING_STAGES {
+        return Err(io::Error::new(
+            io::ErrorKind::StorageFull,
+            "PFTL swap timing history has reached its bounded capacity",
+        ));
+    }
+    let mut changed = false;
+    for (stage, elapsed_ns) in stages_ns {
+        match timing.stages_ns.get(stage) {
+            Some(existing) if existing != elapsed_ns => {
+                return Err(io::Error::new(
+                    io::ErrorKind::AlreadyExists,
+                    "PFTL swap timing stage is already recorded differently",
+                ));
+            }
+            Some(_) => {}
+            None => {
+                timing.stages_ns.insert(stage.clone(), *elapsed_ns);
+                changed = true;
+            }
+        }
+    }
+    if !changed {
+        return Ok(entry.clone());
+    }
+    timing.recorded_at_unix_ms = pftl_swap_now_unix_ms()?;
     let updated = entry.clone();
     persist_pftl_swap_journal(path, &journal)?;
     Ok(updated)
@@ -1109,6 +1184,7 @@ pub fn recover_pftl_swap_journal(path: &Path) -> io::Result<PftlSwapJournalV1> {
             entry.transitions.push(PftlSwapJournalTransition {
                 state: PftlSwapJournalState::InterruptedPrepublish,
                 at_unix_ms: now,
+                at_monotonic_ns: pftl_swap_now_monotonic_ns()?,
                 reason: Some("daemon restarted before publication".to_string()),
             });
             changed = true;
@@ -1194,6 +1270,15 @@ fn validate_pftl_swap_journal(journal: &PftlSwapJournalV1) -> io::Result<()> {
                         reason.is_empty() || reason.len() > PFTL_SWAP_MAX_REASON_BYTES
                     })
             })
+            || entry.timing.as_ref().is_some_and(|timing| {
+                timing.schema != "postfiat.pftl_swap.timing.v1"
+                    || timing.recorded_at_unix_ms == 0
+                    || timing.stages_ns.is_empty()
+                    || timing.stages_ns.len() > PFTL_SWAP_MAX_TIMING_STAGES
+                    || timing.stages_ns.iter().any(|(stage, elapsed_ns)| {
+                        !pftl_swap_timing_stage(stage) || *elapsed_ns == 0
+                    })
+            })
         {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -1210,6 +1295,14 @@ fn pftl_swap_bounded_id(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':'))
+}
+
+fn pftl_swap_timing_stage(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
 }
 
 fn read_pftl_swap_bounded_file(path: &Path) -> io::Result<Vec<u8>> {
@@ -1283,6 +1376,25 @@ fn pftl_swap_now_unix_ms() -> io::Result<u64> {
         .as_millis();
     u64::try_from(millis)
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "clock exceeds u64"))
+}
+
+fn pftl_swap_now_monotonic_ns() -> io::Result<u64> {
+    let mut value = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    let result = unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut value) };
+    if result != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let seconds = u64::try_from(value.tv_sec)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "negative monotonic clock"))?;
+    let nanos = u64::try_from(value.tv_nsec)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "negative monotonic clock"))?;
+    seconds
+        .checked_mul(1_000_000_000)
+        .and_then(|base| base.checked_add(nanos))
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "monotonic clock overflow"))
 }
 
 #[cfg(test)]
@@ -1523,6 +1635,55 @@ mod tests {
             .kind(),
             io::ErrorKind::InvalidInput,
         );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn journal_records_bounded_machine_timings_idempotently() {
+        let root = swap_test_dir("pftl-swap-journal-timing");
+        let path = root.join("swap-journal.json");
+        let quote = quote_fixture();
+        let mut signed = signed_fixture("timed-intent");
+        signed.intent.quote_id = quote.quote_id.clone();
+        let keypair = ml_dsa_65_keygen_from_seed(&[7_u8; 32]);
+        signed.signature_hex = bytes_to_hex(
+            &ml_dsa_65_sign_with_context(
+                &keypair.private_key,
+                &signed.intent.signing_bytes().expect("timed signing bytes"),
+                PFTL_SWAP_INTENT_SIGNATURE_CONTEXT_V1,
+            )
+            .expect("sign timed intent"),
+        );
+        journal_pftl_swap_intent(&path, &quote, &signed).expect("journal timed intent");
+        let stages = BTreeMap::from([
+            ("attempt_1_primary_output_validity".to_string(), 11_u64),
+            ("attempt_1_primary_outer_proof".to_string(), 17_u64),
+        ]);
+        let first =
+            record_pftl_swap_stage_timings(&path, "timed-intent", &stages).expect("record timings");
+        assert_eq!(
+            first
+                .timing
+                .as_ref()
+                .expect("timing")
+                .stages_ns
+                .get("attempt_1_primary_outer_proof"),
+            Some(&17)
+        );
+        let replay =
+            record_pftl_swap_stage_timings(&path, "timed-intent", &stages).expect("timing replay");
+        assert_eq!(first.timing, replay.timing);
+        let conflict = BTreeMap::from([("attempt_1_primary_outer_proof".to_string(), 18_u64)]);
+        assert_eq!(
+            record_pftl_swap_stage_timings(&path, "timed-intent", &conflict)
+                .expect_err("conflicting timing must fail")
+                .kind(),
+            io::ErrorKind::AlreadyExists,
+        );
+        assert!(first
+            .transitions
+            .iter()
+            .all(|transition| transition.at_monotonic_ns > 0));
         let _ = fs::remove_dir_all(root);
     }
 

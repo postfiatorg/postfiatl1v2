@@ -43,10 +43,20 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 .unwrap_or("1")
                 .parse::<usize>()
                 .map_err(|_| "--max-rounds must be a usize".to_string())?;
-            let start_height = flag_value(flags, "--start-height")
-                .unwrap_or("1")
-                .parse::<u64>()
-                .map_err(|_| "--start-height must be a u64".to_string())?;
+            let start_height_value = flag_value(flags, "--start-height").unwrap_or("1");
+            let start_height = if start_height_value == "auto" {
+                status(NodeOptions {
+                    data_dir: data_dir.clone(),
+                })
+                .map_err(|error| format!("automatic start-height status failed: {error}"))?
+                .block_height
+                .checked_add(1)
+                .ok_or_else(|| "automatic start-height overflow".to_string())?
+            } else {
+                start_height_value.parse::<u64>().map_err(|_| {
+                    "--start-height must be a u64 or `auto`".to_string()
+                })?
+            };
             let poll_ms = flag_value(flags, "--poll-ms")
                 .unwrap_or("250")
                 .parse::<u64>()

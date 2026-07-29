@@ -14,7 +14,7 @@ Environment=ASSET_ORCHARD_LOCAL_SERVICE_PREWARM_SWAP=0
 Environment=ASSET_ORCHARD_LOCAL_SERVICE_PREWARM_PRIVATE_EGRESS=1
 Environment=RAYON_NUM_THREADS=2
 ExecStart=/opt/postfiat/services/asset-orchard-local-service \
-  --bind 127.0.0.1:8789 \
+  --bind 127.0.0.1:8799 \
   --data-dir /var/lib/postfiat/validator-2 \
   --vault-dir /var/lib/postfiat/validator-2/asset-orchard-local-vault \
   --prewarm-ready-file /var/lib/postfiat/validator-2/asset-orchard-local-vault/prewarm-ready.json
@@ -22,12 +22,28 @@ Restart=on-failure
 RestartSec=10
 TimeoutStopSec=30
 Nice=10
-CPUWeight=10
+CPUWeight=20
+MemoryMax=16G
+TasksMax=64
+LimitNOFILE=4096
+LimitCORE=0
 OOMScoreAdjust=500
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
 ReadWritePaths=/var/lib/postfiat/validator-2/asset-orchard-local-vault
 
 [Install]
