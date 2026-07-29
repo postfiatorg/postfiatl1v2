@@ -3890,6 +3890,10 @@ pub(super) fn transport_peer_certified_batch_loop(
             .ok_or_else(|| "peer certified batch loop block height overflow".to_string())?;
         let artifact_dir = options.artifact_root.join(format!("round-{block_height}"));
         let certificate_file = artifact_dir.join("block-certificate.json");
+        let round_started_unix_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|_| "peer certified batch loop clock is before Unix epoch".to_string())?
+            .as_millis();
         let round =
             transport_peer_certified_batch_round(TransportPeerCertifiedBatchRoundOptions {
                 data_dir: options.data_dir.clone(),
@@ -3902,7 +3906,7 @@ pub(super) fn transport_peer_certified_batch_loop(
                 require_signed_proposal: options.require_signed_proposal,
                 allow_peer_failures: options.allow_peer_failures,
                 quorum_early_full_propagation: options.quorum_early_full_propagation,
-                artifact_dir,
+                artifact_dir: artifact_dir.clone(),
                 block_height: Some(block_height),
                 view: None,
                 timeout_certificate_file: None,
@@ -3914,6 +3918,7 @@ pub(super) fn transport_peer_certified_batch_loop(
                 required_parent: None,
             })?;
         let batch_file_display = batch_file.display().to_string();
+        let archive_start = Instant::now();
         let archived_batch_file = if round.round_ok {
             archive_processed_batch_file(
                 &batch_file,
@@ -3923,6 +3928,24 @@ pub(super) fn transport_peer_certified_batch_loop(
         } else {
             None
         };
+        let archive_processed_ms = monotonic_elapsed_ms(archive_start);
+        let round_completed_unix_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|_| "peer certified batch loop clock is before Unix epoch".to_string())?
+            .as_millis();
+        write_transport_ready_file(
+            &artifact_dir.join("round-timings.json"),
+            &serde_json::json!({
+                "schema": "postfiat.transport.peer_certified_batch_round_timings.v1",
+                "block_height": block_height,
+                "round_started_unix_ms": round_started_unix_ms,
+                "round_completed_unix_ms": round_completed_unix_ms,
+                "archive_processed_ms": archive_processed_ms,
+                "round_ok": round.round_ok,
+                "timings": &round.timings,
+            }),
+            "peer certified batch round timings",
+        )?;
         processed.insert(batch_file_display.clone());
         processed_batch_files.push(batch_file_display);
         if let Some(archived_batch_file) = archived_batch_file {

@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-29
 **Priority:** P0 (immediate independently shippable PFTL product milestone)
-**Status:** amended implementation and qualification specification (v6)
+**Status:** amended implementation and qualification specification (v7)
 **Parent research:** `CHAIN-OPTIMIZATION-STACKED-RESEARCH-20260729.md`
 (S1.1, S1.3, S3.1, S6.1), `NAV-SWAP-EFFICIENCY-RESEARCH-20260729.md`
 (Tier 0.1, Tier 2.1)
@@ -15,6 +15,23 @@ one-round relay failure (mempool admission lesson)
 `MUST`, `MUST NOT`, `SHOULD`, and `REQUIRED` are normative.
 
 ## Amendment note
+
+The v7 performance amendment records a release-mode synthetic benchmark of
+the unchanged two-proof private-primary issue builder after proving-key
+prewarm. On a 32-logical-CPU AMD EPYC KVM host with 32 Rayon threads, the
+nested proof took 6.593 seconds, the outer proof took 6.128 seconds, and the
+complete hot proof DAG took 12.751 seconds; both proofs verified. This result
+does not qualify production hardware or open the scale gate. It establishes
+that higher-core proving hardware can clear the 35-second proof-DAG target
+without a one-proof circuit rewrite.
+
+The same amendment makes the residual live commit path an explicit blocker.
+The tuned height-490/491 samples retained approximately 60.8-77.4 seconds
+outside proof construction. Merely substituting the synthetic proof result
+would still miss the 45-second accepted-to-committed target. Qualification
+therefore requires both an always-on higher-core prover and per-stage evidence
+showing that accepted request, admission, publish, certificate, local apply,
+and fleet-convergence latency meet their individual budgets.
 
 The v6 delivery amendment separates two gates that were previously
 conflated:
@@ -135,9 +152,9 @@ The determination is based on:
 - an explicit 1,000,000-atom admission cap, enforced at quote and execution
   and advertised by readiness.
 
-The scale-and-performance gate remains **closed**. Recent accepted-to-commit
-samples are 202.5-354.3 seconds and the private-primary proof DAG is
-112.6-132.6 seconds, so the service does not meet the 20-second p50,
+The scale-and-performance gate remains **closed**. Live accepted-to-commit
+samples are 141.8-354.3 seconds and live private-primary proof DAG samples are
+81.0-132.6 seconds, so the service does not meet the 20-second p50,
 45-second p95, or 35-second proof-DAG targets. The 100-issue/100-redeem
 campaign must not be represented as passed or used to raise limits until that
 bottleneck is fixed and the complete campaign succeeds.
@@ -162,8 +179,18 @@ Their individual nested/outer proofs remained approximately 39-45 seconds
 each, and no memory-limit event occurred. A666 supply returned exactly to
 31,489,197,455 atoms, the route invariant held, and all six validators
 converged at height 491 with empty mempools. The tuning is therefore retained,
-but the scale gate remains closed pending a one-proof private-primary circuit
-or qualified higher-core prover, followed by the full campaign.
+but the scale gate remains closed.
+
+A subsequent release-mode synthetic issue benchmark prewarmed the identical
+private-egress proving key and ran the unchanged two-proof builder with 32
+Rayon threads. Its nested and outer proofs took 6.593 seconds and 6.128
+seconds, and the complete hot proof DAG took 12.751 seconds with successful
+verification. Higher-core hardware can therefore satisfy the proof-DAG
+target without a one-proof circuit rewrite. It does not by itself satisfy the
+accepted-to-committed target: the tuned live samples still contain
+approximately 60.8-77.4 seconds outside the proof DAG. The required next
+qualification step is an always-on higher-core prover plus removal of the
+round-driver/commit scheduling delay, followed by the full campaign.
 
 The rollback rehearsal is now complete. The archived height-482 governance
 block replayed from the verified height-481 backup with its original round

@@ -200,6 +200,23 @@ proof DAG from 132.6s to 88.3s and the observed private redemption proof DAG
 from 112.6s to 81.0s, but the two serial proofs still make the 35-second gate
 unreachable on the current two-vCPU shape.
 
+A release-mode synthetic issue benchmark then prewarmed the same
+private-egress proving key and ran the unchanged two-proof builder with 32
+Rayon threads on a 32-logical-CPU AMD EPYC KVM host. The nested proof took
+6.593s, the outer proof took 6.128s, and the complete hot proof DAG took
+12.751s. Both proofs verified and peak process RSS was 2,060,780 KiB. This is
+not live-fleet qualification and does not open the scale gate, but it proves
+that a one-proof circuit rewrite is not required to meet the 35-second proof
+target. A qualified higher-core resident prover is a viable path.
+
+Proof acceleration alone is insufficient for the end-to-end SLO. The two
+tuned live samples retained approximately 60.8-77.4 seconds outside the
+reported proof DAG. Even substituting the 12.751-second synthetic proof result
+would leave an estimated 73.5-90.2 seconds accepted-to-committed if every
+other stage remained unchanged. The round-driver admission/publish/certificate
+timing must therefore be measured and reduced independently before the
+100/100 campaign.
+
 ## Rollback rehearsal
 
 The certified height-482 governance block was replayed from the verified
@@ -234,4 +251,5 @@ The following remain blocked:
 - public or non-custodial service claims.
 
 Before raising limits, the proof path must be brought within the SLO, the
-100/100 campaign and remaining fault matrix must pass.
+non-proof commit delay must be removed, and the 100/100 campaign and remaining
+fault matrix must pass.

@@ -295,6 +295,7 @@ fn private_primary_issue_builder_proves_exact_output_and_verifies_both_proofs() 
     )
     .expect("settlement note");
     let commitments = [input_note.output_commitment.as_hex().to_string()];
+    AssetOrchardPrivateEgressProvingKey::cached().expect("prewarm private-egress proving key");
     let built = build_asset_orchard_private_primary_issue_action(
         chain_id,
         genesis_hash,
@@ -319,6 +320,10 @@ fn private_primary_issue_builder_proves_exact_output_and_verifies_both_proofs() 
         &commitments,
     )
     .expect("private-primary action");
+    eprintln!(
+        "private_primary_proof_timing={}",
+        serde_json::to_string(&built.proof_timing).expect("serialize proof timing")
+    );
     let domain = crate::OrchardAuthorizingDomain::new(
         chain_id,
         genesis_hash_hex,
