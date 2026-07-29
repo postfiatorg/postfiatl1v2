@@ -2039,7 +2039,7 @@ fn certified_round_driver_readiness(
         || !report.require_signed_proposal
         || report.allow_peer_failures
         || report.quorum_early_full_propagation
-        || report.local_apply_before_certified_send
+        || !report.local_apply_before_certified_send
         || report.defer_certified_sends
         || !report.persistent_vote_streams
         || !report.remote_proposal_routing
@@ -2074,6 +2074,7 @@ fn certified_round_driver_readiness(
         "required_remote_peer_count": report.required_remote_peer_count,
         "persistent_vote_streams": report.persistent_vote_streams,
         "remote_proposal_routing": report.remote_proposal_routing,
+        "local_apply_before_certified_send": report.local_apply_before_certified_send,
     }))
 }
 
@@ -2830,7 +2831,7 @@ mod tests {
             "require_signed_proposal": true,
             "allow_peer_failures": false,
             "quorum_early_full_propagation": false,
-            "local_apply_before_certified_send": false,
+            "local_apply_before_certified_send": true,
             "defer_certified_sends": false,
             "persistent_vote_streams": true,
             "remote_proposal_routing": true,
@@ -2857,8 +2858,24 @@ mod tests {
         });
         write_private_json(&config.round_driver_ready_file, &report)
             .expect("write healthy ready report");
-        assert!(certified_round_driver_readiness(&config, height, &state_root, &block_id).is_ok());
+        let ready = certified_round_driver_readiness(&config, height, &state_root, &block_id)
+            .expect("healthy round driver");
+        assert_eq!(
+            ready["local_apply_before_certified_send"],
+            Value::Bool(true)
+        );
 
+        report["local_apply_before_certified_send"] = Value::Bool(false);
+        write_private_json(&config.round_driver_ready_file, &report)
+            .expect("write unsafe local-apply ordering report");
+        assert_eq!(
+            certified_round_driver_readiness(&config, height, &state_root, &block_id)
+                .expect_err("certified send before local apply must fail")
+                .kind(),
+            io::ErrorKind::WouldBlock,
+        );
+
+        report["local_apply_before_certified_send"] = Value::Bool(true);
         report["allow_peer_failures"] = Value::Bool(true);
         write_private_json(&config.round_driver_ready_file, &report)
             .expect("write degraded ready report");
