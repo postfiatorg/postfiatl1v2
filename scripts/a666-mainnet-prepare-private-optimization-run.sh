@@ -355,9 +355,9 @@ jq -n \
       exact_preapproval_before_slo_clock:true,
       ethereum_deposit_head_slot_in_epoch:28,
       full_finality_policy_unchanged:true,
-      same_block_pfusdc_propose_finalize_claim:true,
-      prewarmed_resident_issue_rounds:5,
-      expected_issue_export_height:($expected_pftl_height+5)
+      two_round_pfusdc_propose_then_finalize_claim:true,
+      prewarmed_resident_issue_rounds:6,
+      expected_issue_export_height:($expected_pftl_height+6)
     },
     issue_slo_seconds:1500,
     redemption_slo_seconds:1500

@@ -130,8 +130,8 @@ uniswap_pool_id=0xc5f1e4b5bb07c0718eddcc3d102dc751b8953ec25bb05cdc14d95419d4d16e
 if "$resume_after_private_middle"; then
   test -s "$phase_dir/orchard-private-issue/summary.json"
   jq -e \
-    --argjson start "$((expected_pftl_height + 1))" \
-    --argjson end "$((expected_pftl_height + 5))" \
+    --argjson start "$((expected_pftl_height + 2))" \
+    --argjson end "$((expected_pftl_height + 6))" \
     '.verdict=="PASS" and .start_height==$start and .end_height==$end' \
     "$phase_dir/orchard-private-issue/summary.json" >/dev/null
   test -s "$phase_dir/a666/joe-pfusdc-before.json"
@@ -140,7 +140,7 @@ if "$resume_after_private_middle"; then
     "$phase_dir/a666/joe-pfusdc-before.json")
   a666_balance_before=$(jq -er '[.assets[]?.balance] | add // 0' \
     "$phase_dir/a666/joe-a666-before.json")
-  export_height=$((expected_pftl_height + 5))
+  export_height=$((expected_pftl_height + 6))
 else
 ssh -o BatchMode=yes "root@$validator2_host" \
   "$remote_node status --data-dir /var/lib/postfiat/validator-2 --expect-height $expected_pftl_height" \
@@ -268,8 +268,8 @@ if "$private_middle"; then
   bash scripts/a666-mainnet-private-issue-middle.sh \
     --phase-dir "$phase_dir" \
     --workflow-id "$workflow_id" \
-    --expected-pftl-height "$((expected_pftl_height + 1))"
-  export_height=$((expected_pftl_height + 5))
+    --expected-pftl-height "$((expected_pftl_height + 2))"
+  export_height=$((expected_pftl_height + 6))
 else
   round_args=(
     --node-bin target/release/postfiat-node
@@ -306,7 +306,7 @@ else
     --ops-file "$ops_dir/03-export.ops.json" \
     --artifact-dir "$phase_dir/a666/03-export-round" \
     "${round_args[@]}"
-  export_height=$((expected_pftl_height + 4))
+  export_height=$((expected_pftl_height + 5))
 fi
 fi
 ssh -o BatchMode=yes "root@$validator2_host" \

@@ -33,10 +33,11 @@ host_for_validator() {
   awk -v validator="$1" '$1==validator{print $2}' "$fleet"
 }
 
-submit_combined_round() {
+submit_round() {
   local ops_file=$1
   local height=$2
-  local label=$3
+  local max_transactions=$3
+  local label=$4
   local proposer
   proposer=$(ssh -i "$ssh_key" "root@$v0" \
     "$node block-proposer --unsafe-devnet-json-storage \
@@ -59,7 +60,7 @@ submit_combined_round() {
         --proposal-key-file /var/lib/postfiat/validator-$index/validator_keys.json \
         --ops-file '$remote_ops' \
         --artifact-dir '$build_dir' \
-        --max-transactions 3 \
+        --max-transactions '$max_transactions' \
         --require-local-proposer \
         --height '$height' \
         --timeout-ms 30000 \
@@ -68,8 +69,8 @@ submit_combined_round() {
         --quorum-early-full-propagation \
         --local-apply-before-certified-send \
         --batch-only" > "$local_evidence/$label.batch-build-report.json"
-    jq -e \
-      '.batch_only==true and .round_ok==null and .operation_count==3' \
+    jq -e --argjson count "$max_transactions" \
+      '.batch_only==true and .round_ok==null and .operation_count==$count' \
       "$local_evidence/$label.batch-build-report.json" >/dev/null
     scp -q -i "$ssh_key" \
       "root@$host:$build_dir/mempool-batch.json" \
@@ -91,7 +92,7 @@ submit_combined_round() {
         --proposal-key-file /var/lib/postfiat/validator-$index/validator_keys.json \
         --ops-file '$remote_ops' \
         --artifact-dir /var/lib/postfiat/validator-$index/$label \
-        --max-transactions 3 \
+        --max-transactions '$max_transactions' \
         --require-local-proposer \
         --height '$height' \
         --timeout-ms 180000 \
@@ -111,7 +112,7 @@ mkdir -p "$local_evidence"
 start_height=$(ssh_v2 \
   "'$node' status --data-dir /var/lib/postfiat/validator-2" | jq -er .block_height)
 relay_height=$((start_height + 1))
-label="joe-pfusdc-relay-h$relay_height$label_suffix"
+claim_height=$((start_height + 2))
 
 ssh_v2 "set -euo pipefail
   test -x '$cast'
@@ -146,13 +147,27 @@ ssh_v2 "set -euo pipefail
     --overwrite
   test \"\$(jq '.operations|length' '$run/full.ops.json')\" = 3
   test \"\$(jq -r '[.operations[].label]|join(\",\")' \
-    '$run/full.ops.json')\" = 'propose,finalize,claim'"
+    '$run/full.ops.json')\" = 'propose,finalize,claim'
+  jq '{schema,operations:[.operations[]|select(.label==\"propose\")]}' \
+    '$run/full.ops.json' > '$run/propose.ops.json'
+  jq --arg holder '$holder' \
+    '{schema,operations:[.operations[]
+      |select(.label==\"finalize\" or .label==\"claim\")
+      |if .label==\"claim\" then .operation.recipient=\$holder else . end]}' \
+    '$run/full.ops.json' > '$run/finalize-claim.ops.json'
+  test \"\$(jq '.operations|length' '$run/propose.ops.json')\" = 1
+  test \"\$(jq '.operations|length' '$run/finalize-claim.ops.json')\" = 2
+  test \"\$(jq -r '.operations[1].operation.recipient' \
+    '$run/finalize-claim.ops.json')\" = '$holder'"
 
-submit_combined_round "$run/full.ops.json" "$relay_height" "$label"
+submit_round "$run/propose.ops.json" "$relay_height" 1 \
+  "joe-pfusdc-propose-h$relay_height$label_suffix"
+submit_round "$run/finalize-claim.ops.json" "$claim_height" 2 \
+  "joe-pfusdc-claim-h$claim_height$label_suffix"
 
 ssh_v2 "set -euo pipefail
   '$node' status --data-dir /var/lib/postfiat/validator-2 \
-    --expect-height '$relay_height' > '$run/post-status.json'
+    --expect-height '$claim_height' > '$run/post-status.json'
   '$node' account-assets \
     --data-dir /var/lib/postfiat/validator-2 \
     --account '$holder' \
@@ -169,13 +184,13 @@ scp -q -i "$ssh_key" "root@$v2:$run/post-status.json" \
 
 jq -n \
   --argjson start_height "$start_height" \
-  --argjson finalized_height "$relay_height" \
+  --argjson finalized_height "$claim_height" \
   --argjson amount_atoms "$deposit_atoms" \
   --arg deposit_tx "$deposit_tx" \
   '{
     schema:"postfiat.a666.pfusdc_relay.v2",
     verdict:"PASS",
-    execution_mode:"same_block_propose_finalize_claim",
+    execution_mode:"two_round_propose_then_finalize_claim",
     deposit_tx:$deposit_tx,
     start_height:$start_height,
     finalized_height:$finalized_height,

@@ -124,7 +124,7 @@ class ResidentRoundTests(unittest.TestCase):
 
     def test_start_freezes_one_deterministic_worker_per_planned_height(self) -> None:
         hosts = {f"validator-{index}": f"192.0.2.{index + 1}" for index in range(6)}
-        plan = "transparent,shielded,shielded,shielded,transparent"
+        plan = "transparent,transparent,shielded,shielded,shielded,transparent"
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "manifest.json"
             args = argparse.Namespace(
@@ -167,13 +167,13 @@ class ResidentRoundTests(unittest.TestCase):
             self.assertEqual(MODULE.MANIFEST_SCHEMA, manifest["schema"])
             self.assertEqual(466, manifest["start_height"])
             self.assertEqual(
-                [467, 468, 469, 470, 471],
+                [467, 468, 469, 470, 471, 472],
                 [entry["height"] for entry in manifest["entries"]],
             )
             self.assertEqual(plan.split(","), [
                 entry["batch_kind"] for entry in manifest["entries"]
             ])
-            self.assertEqual(5, start_worker.call_count)
+            self.assertEqual(6, start_worker.call_count)
 
 
 if __name__ == "__main__":

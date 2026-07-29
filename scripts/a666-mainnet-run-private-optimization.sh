@@ -72,7 +72,7 @@ resident_manifest="$phase_dir/preflight/resident-rounds-manifest.json"
 python3 scripts/a666-resident-rounds.py start \
   --workflow-id "$workflow_id" \
   --start-height "$expected_pftl_height" \
-  --plan transparent,shielded,shielded,shielded,transparent \
+  --plan transparent,transparent,shielded,shielded,shielded,transparent \
   --output "$resident_manifest" \
   --proposer-hosts-file \
     docs/evidence/a666-joe-mainnet-e2e-20260728/proposer-hosts.json \
