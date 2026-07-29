@@ -1159,6 +1159,27 @@ mod transport_batch_payload_tests {
     }
 
     #[test]
+    fn peer_certified_loop_start_height_supports_restart_safe_auto() {
+        assert_eq!(
+            resolve_peer_certified_start_height_value(None, 482).expect("default auto height"),
+            482
+        );
+        assert_eq!(
+            resolve_peer_certified_start_height_value(Some("auto"), 482)
+                .expect("explicit auto height"),
+            482
+        );
+        assert_eq!(
+            resolve_peer_certified_start_height_value(Some("900"), 482)
+                .expect("explicit numeric height"),
+            900
+        );
+        let error = resolve_peer_certified_start_height_value(Some("tip"), 482)
+            .expect_err("unknown start-height token must fail closed");
+        assert!(error.contains("u64 or `auto`"), "{error}");
+    }
+
+    #[test]
     fn rpc_fastpay_is_enabled_by_default_and_only_exactly_disabled() {
         assert!(rpc_owned_lane_enabled(&[]));
         assert!(rpc_owned_lane_enabled(&[

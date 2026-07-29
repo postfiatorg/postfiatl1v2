@@ -28,18 +28,7 @@ fn run_peer_certified_loop_options(
         .unwrap_or_else(|| DEFAULT_RUN_PEER_CERTIFIED_MAX_ROUNDS.to_string())
         .parse::<usize>()
         .map_err(|_| "--max-rounds must be a usize".to_string())?;
-    let start_height = match flag_value(flags, "--start-height") {
-        Some(value) => value
-            .parse::<u64>()
-            .map_err(|_| "--start-height must be a u64".to_string())?,
-        None => status(NodeOptions {
-            data_dir: data_dir.clone(),
-        })
-        .map_err(|error| format!("peer-certified run status failed: {error}"))?
-        .block_height
-        .checked_add(1)
-        .ok_or_else(|| "peer-certified run start height overflow".to_string())?,
-    };
+    let start_height = peer_certified_loop_start_height(flags, &data_dir)?;
     let poll_ms = flag_value(flags, "--poll-ms")
         .unwrap_or("250")
         .parse::<u64>()
@@ -91,6 +80,36 @@ fn run_peer_certified_loop_options(
         send_retries,
         retry_backoff_ms,
     })
+}
+
+fn peer_certified_loop_start_height(flags: &[String], data_dir: &Path) -> Result<u64, String> {
+    let value = flag_value(flags, "--start-height");
+    if value.is_some_and(|value| value != "auto") {
+        return value
+            .expect("checked start-height value")
+            .parse::<u64>()
+            .map_err(|_| "--start-height must be a u64 or `auto`".to_string());
+    }
+    let next_height = status(NodeOptions {
+        data_dir: data_dir.to_path_buf(),
+    })
+    .map_err(|error| format!("automatic peer-certified start-height status failed: {error}"))?
+    .block_height
+    .checked_add(1)
+    .ok_or_else(|| "automatic peer-certified start-height overflow".to_string())?;
+    resolve_peer_certified_start_height_value(value, next_height)
+}
+
+fn resolve_peer_certified_start_height_value(
+    value: Option<&str>,
+    automatic_next_height: u64,
+) -> Result<u64, String> {
+    match value {
+        None | Some("auto") => Ok(automatic_next_height),
+        Some(value) => value
+            .parse::<u64>()
+            .map_err(|_| "--start-height must be a u64 or `auto`".to_string()),
+    }
 }
 fn flag_value<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
     args.windows(2)
