@@ -62,6 +62,8 @@ the dependency restored a green service.
 | 487 | transparent A666 -> transparent pfUSDC | committed through the governed transparent path |
 | 488 | transparent pfUSDC -> private A666 | committed through the resident service |
 | 489 | private A666 -> transparent pfUSDC | committed; A666 supply returned to baseline |
+| 490 | transparent pfUSDC -> private A666 | post-tuning canary committed; A666 supply +1,000,000 |
+| 491 | private A666 -> private pfUSDC | post-tuning canary committed; A666 supply returned to baseline |
 
 The governed 1.000000-A666 quote consumed 905,538 pfUSDC atoms on issue and
 returned 900,581 pfUSDC atoms on redemption. After height 489:
@@ -74,6 +76,13 @@ returned 900,581 pfUSDC atoms on redemption. After height 489:
 
 The converged state root is
 `9cd41dfd5fb8571d627415dc01293d4276cf861eae30384a987d6c7562b30c24fe17f6c27a8910292006452d147d40be`.
+
+After the post-tuning height-490/491 round trip, A666 live supply returned
+exactly to 31,489,197,455 atoms and the route supply invariant remained true.
+All six validators converged at height 491 with empty mempools, state root
+`db2afdc65b01e7dca94524db61284e488dab43e547e80ce49dd87f42fbfc754910d80b844887bc1092fc47addc34bfe8`,
+and block hash
+`29f78fdad95ca9efe2d2046437302b5491d14699ac8126ecdfd2d41335327dc39c776e367e4a003b71eb0692acc55308`.
 
 ## Safety matrix
 
@@ -161,6 +170,8 @@ restricted operational state and were not copied into this report.
 | transparent issue | 486 | 275.3s | 129.3s | 60.1s |
 | private issue | 488 | 202.5s | 132.6s | n/a |
 | transparent redemption | 489 | 263.3s | 127.7s | 60.1s |
+| tuned private issue | 490 | 165.7s | 88.3s | n/a |
+| tuned private redemption | 491 | 141.8s | 81.0s | n/a |
 
 The required targets are accepted-to-committed p50 <=20 seconds, p95 <=45
 seconds, and proof-DAG p95 <=35 seconds. These samples fail those targets.
@@ -180,6 +191,14 @@ prewarm completed in 441.5 seconds with zero memory-limit or OOM events, and
 resident readiness returned green at unchanged height 489. This removes
 avoidable resource pressure, but cannot make two serial 40-45-second proofs
 fit a 35-second proof-DAG target.
+
+The fresh height-490/491 canaries confirm the effect on the live critical
+path. The issue's nested output-validity and outer proofs took 45.3s and
+42.9s; the redemption's took 41.5s and 39.4s. There were zero cgroup
+memory-limit or OOM events. Resource tuning reduced the observed private issue
+proof DAG from 132.6s to 88.3s and the observed private redemption proof DAG
+from 112.6s to 81.0s, but the two serial proofs still make the 35-second gate
+unreachable on the current two-vCPU shape.
 
 ## Rollback rehearsal
 

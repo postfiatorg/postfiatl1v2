@@ -155,6 +155,16 @@ proof-DAG SLO. Meeting the scale gate therefore requires a qualified
 prover/circuit or hardware change, not merely moving the service to another
 current validator.
 
+Fresh capped private canaries after the resource change committed at heights
+490 and 491. Issue measured 165.7 seconds accepted-to-committed with an
+88.3-second proof DAG; redemption measured 141.8 seconds and 81.0 seconds.
+Their individual nested/outer proofs remained approximately 39-45 seconds
+each, and no memory-limit event occurred. A666 supply returned exactly to
+31,489,197,455 atoms, the route invariant held, and all six validators
+converged at height 491 with empty mempools. The tuning is therefore retained,
+but the scale gate remains closed pending a one-proof private-primary circuit
+or qualified higher-core prover, followed by the full campaign.
+
 The rollback rehearsal is now complete. The archived height-482 governance
 block replayed from the verified height-481 backup with its original round
 certificate, advanced the isolated state to height 482, and reproduced the
