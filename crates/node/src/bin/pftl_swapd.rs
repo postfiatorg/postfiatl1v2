@@ -957,10 +957,7 @@ fn execute_prepublication(
         .iter()
         .filter(|transition| transition.state == PftlSwapJournalState::Proving)
         .count();
-    let request_id = hash_hex(
-        "postfiat.pftl_swap.proving_attempt.v1",
-        format!("{swap_id}:{attempt}").as_bytes(),
-    );
+    let request_id = pftl_swap_proving_request_id(swap_id, attempt);
     let preflight_start = Instant::now();
     revalidate_pftl_swap_quote_for_execution(&config.data_dir, quote)?;
     let build_identity = capture_pftl_swap_state_identity(&config.data_dir)?;
@@ -1072,6 +1069,14 @@ fn execute_prepublication(
     )?;
     record_swap_timings(state, idempotency_key, &publication_timings)?;
     Ok(prepared)
+}
+
+fn pftl_swap_proving_request_id(swap_id: &str, attempt: usize) -> String {
+    let digest = hash_hex(
+        "postfiat.pftl_swap.proving_attempt.v1",
+        format!("{swap_id}:{attempt}").as_bytes(),
+    );
+    format!("swap-{}", &digest[..59])
 }
 
 fn prepare_swap(
@@ -2561,6 +2566,23 @@ mod tests {
             .shutdown(Shutdown::Write)
             .expect("shutdown test request writer");
         listener.accept().expect("accept test connection").0
+    }
+
+    #[test]
+    fn prover_request_id_matches_resident_service_bound() {
+        let request_id = pftl_swap_proving_request_id(&"ab".repeat(48), 1);
+        assert_eq!(request_id.len(), 64);
+        assert!(request_id.bytes().enumerate().all(|(index, byte)| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || (index > 0 && byte == b'-')
+        }));
+        assert_eq!(
+            request_id,
+            pftl_swap_proving_request_id(&"ab".repeat(48), 1)
+        );
+        assert_ne!(
+            request_id,
+            pftl_swap_proving_request_id(&"ab".repeat(48), 2)
+        );
     }
 
     #[test]
