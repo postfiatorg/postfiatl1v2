@@ -957,7 +957,7 @@ fn execute_prepublication(
         .iter()
         .filter(|transition| transition.state == PftlSwapJournalState::Proving)
         .count();
-    let request_id = pftl_swap_proving_request_id(swap_id, attempt);
+    let request_id = pftl_swap_proving_request_id(swap_id);
     let preflight_start = Instant::now();
     revalidate_pftl_swap_quote_for_execution(&config.data_dir, quote)?;
     let build_identity = capture_pftl_swap_state_identity(&config.data_dir)?;
@@ -1071,10 +1071,10 @@ fn execute_prepublication(
     Ok(prepared)
 }
 
-fn pftl_swap_proving_request_id(swap_id: &str, attempt: usize) -> String {
+fn pftl_swap_proving_request_id(swap_id: &str) -> String {
     let digest = hash_hex(
         "postfiat.pftl_swap.proving_attempt.v1",
-        format!("{swap_id}:{attempt}").as_bytes(),
+        format!("{swap_id}:1").as_bytes(),
     );
     format!("swap-{}", &digest[..59])
 }
@@ -2458,7 +2458,7 @@ fn parse_config() -> io::Result<Config> {
             value("--request-timeout-ms"),
             DEFAULT_REQUEST_TIMEOUT_MS,
             1_000,
-            120_000,
+            600_000,
             "--request-timeout-ms",
         )?),
     })
@@ -2570,19 +2570,14 @@ mod tests {
 
     #[test]
     fn prover_request_id_matches_resident_service_bound() {
-        let request_id = pftl_swap_proving_request_id(&"ab".repeat(48), 1);
+        let swap_id = "ab".repeat(48);
+        let request_id = pftl_swap_proving_request_id(&swap_id);
         assert_eq!(request_id.len(), 64);
         assert!(request_id.bytes().enumerate().all(|(index, byte)| {
             byte.is_ascii_lowercase() || byte.is_ascii_digit() || (index > 0 && byte == b'-')
         }));
-        assert_eq!(
-            request_id,
-            pftl_swap_proving_request_id(&"ab".repeat(48), 1)
-        );
-        assert_ne!(
-            request_id,
-            pftl_swap_proving_request_id(&"ab".repeat(48), 2)
-        );
+        assert_eq!(request_id, pftl_swap_proving_request_id(&swap_id));
+        assert_ne!(request_id, pftl_swap_proving_request_id(&"cd".repeat(48)));
     }
 
     #[test]

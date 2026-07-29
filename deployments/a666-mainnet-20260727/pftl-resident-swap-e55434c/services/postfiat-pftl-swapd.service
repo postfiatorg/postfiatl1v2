@@ -33,7 +33,7 @@ ExecStart=/opt/postfiat/services/releases/pftl-resident-swap-e55434c/pftl_swapd 
   --max-body-bytes 1048576 \
   --max-connections 16 \
   --max-swaps-per-principal-per-minute 12 \
-  --request-timeout-ms 60000
+  --request-timeout-ms 300000
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=65
