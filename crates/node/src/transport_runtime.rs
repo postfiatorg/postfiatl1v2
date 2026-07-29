@@ -3444,6 +3444,7 @@ pub(super) fn transport_peer_certified_batch_loop(
             .checked_add(offset)
             .ok_or_else(|| "peer certified batch loop block height overflow".to_string())?;
         let artifact_dir = options.artifact_root.join(format!("round-{block_height}"));
+        let certificate_file = artifact_dir.join("block-certificate.json");
         let round =
             transport_peer_certified_batch_round(TransportPeerCertifiedBatchRoundOptions {
                 data_dir: options.data_dir.clone(),
@@ -3469,7 +3470,11 @@ pub(super) fn transport_peer_certified_batch_loop(
             })?;
         let batch_file_display = batch_file.display().to_string();
         let archived_batch_file = if round.round_ok {
-            archive_processed_batch_file(&batch_file, options.processed_dir.as_deref())?
+            archive_processed_batch_file(
+                &batch_file,
+                &certificate_file,
+                options.processed_dir.as_deref(),
+            )?
         } else {
             None
         };
@@ -3908,6 +3913,7 @@ fn write_private_egress_loop_ready_file(
 
 fn archive_processed_batch_file(
     batch_file: &Path,
+    certificate_file: &Path,
     processed_dir: Option<&Path>,
 ) -> Result<Option<String>, String> {
     let Some(processed_dir) = processed_dir else {
@@ -3934,6 +3940,44 @@ fn archive_processed_batch_file(
             "certified batch loop processed file already exists: {}",
             archived_path.display()
         ));
+    }
+    let batch_stem = batch_file
+        .file_name()
+        .and_then(|name| name.to_str())
+        .and_then(|name| name.strip_suffix(".batch.json"))
+        .ok_or_else(|| {
+            format!(
+                "certified batch loop batch file `{}` does not end in .batch.json",
+                batch_file.display()
+            )
+        })?;
+    let archived_certificate = processed_dir.join(format!("{batch_stem}.certificate.json"));
+    let certificate_bytes = std::fs::read(certificate_file).map_err(|error| {
+        format!(
+            "certified batch loop certificate read `{}` failed: {error}",
+            certificate_file.display()
+        )
+    })?;
+    if archived_certificate.exists() {
+        let existing = std::fs::read(&archived_certificate).map_err(|error| {
+            format!(
+                "certified batch loop archived certificate read `{}` failed: {error}",
+                archived_certificate.display()
+            )
+        })?;
+        if existing != certificate_bytes {
+            return Err(format!(
+                "certified batch loop processed certificate already exists with different bytes: {}",
+                archived_certificate.display()
+            ));
+        }
+    } else {
+        std::fs::write(&archived_certificate, &certificate_bytes).map_err(|error| {
+            format!(
+                "certified batch loop certificate archive `{}` failed: {error}",
+                archived_certificate.display()
+            )
+        })?;
     }
     std::fs::rename(batch_file, &archived_path).map_err(|error| {
         format!(

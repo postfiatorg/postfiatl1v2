@@ -1,17 +1,19 @@
 use postfiat_crypto_provider::{bytes_to_hex, hash_hex};
 use postfiat_node::{
-    authorize_and_journal_pftl_swap_intent, build_pftl_swap_quote,
+    authorize_and_journal_pftl_swap_intent, batch_archive_payload_hash, build_pftl_swap_quote,
     capture_pftl_swap_state_identity, create_asset_orchard_ingress,
     create_asset_orchard_ingress_batch, create_asset_orchard_private_egress_batch,
     create_shielded_atomic_batch, find_pftl_swap_intent_replay, find_pftl_swap_quote,
-    load_pftl_swap_journal, load_pftl_swap_quote_store, record_pftl_swap_stage_timings,
-    recover_pftl_swap_journal, revalidate_pftl_swap_quote_for_execution, simulate_shielded_batch,
-    store_pftl_swap_quote, transition_pftl_swap_journal_entry, AssetOrchardIngressBatchOptions,
-    AssetOrchardIngressCreateOptions, AssetOrchardPrivateEgressBatchOptions, PftlSwapDirection,
-    PftlSwapJournalEntry, PftlSwapJournalState, PftlSwapOutputMode, PftlSwapQuoteOptions,
-    PftlSwapQuoteRequestV1, PftlSwapQuoteV1, ShieldedAtomicBatchOptions,
+    live_consensus_v2_context, load_pftl_swap_journal, load_pftl_swap_quote_store,
+    read_consensus_v2_qc_graph, record_pftl_swap_stage_timings, recover_pftl_swap_journal,
+    revalidate_pftl_swap_quote_for_execution, simulate_shielded_batch, store_pftl_swap_quote,
+    transition_pftl_swap_journal_entry, AssetOrchardIngressBatchOptions,
+    AssetOrchardIngressCreateOptions, AssetOrchardPrivateEgressBatchOptions, BlockCertificateFile,
+    PftlSwapDirection, PftlSwapJournalEntry, PftlSwapJournalState, PftlSwapOutputMode,
+    PftlSwapQuoteOptions, PftlSwapQuoteRequestV1, PftlSwapQuoteV1, ShieldedAtomicBatchOptions,
     ShieldedBatchSimulateOptions, SignedPftlSwapIntentV1,
 };
+use postfiat_ordering_fast::verify_consensus_v2_commit;
 use postfiat_storage::NodeStore;
 use postfiat_types::{ShieldedAction, ShieldedActionBatch};
 use serde::{Deserialize, Serialize};
@@ -724,6 +726,10 @@ fn certified_round_batch_file_name(batch_hash: &str) -> String {
     format!("{batch_hash}.batch.json")
 }
 
+fn certified_round_certificate_file_name(batch_hash: &str) -> String {
+    format!("{batch_hash}.certificate.json")
+}
+
 fn recover_published_outbox(state: &RuntimeState) -> io::Result<()> {
     let config = &state.config;
     let journal = load_pftl_swap_journal(&config.journal_file)?;
@@ -840,43 +846,81 @@ fn resolve_published_swap(
     if !processed.exists() {
         return Ok(entry);
     }
+    let processed_payload = fs::read_to_string(&processed)?;
+    if processed_payload.len() > MAX_PRIVATE_STATE_FILE_BYTES {
+        return Err(invalid_data(
+            "processed swap batch exceeds private file bound",
+        ));
+    }
     let processed_batch: ShieldedActionBatch =
-        serde_json::from_slice(&fs::read(&processed)?).map_err(invalid_data)?;
+        serde_json::from_str(&processed_payload).map_err(invalid_data)?;
     if processed_batch.batch_id != *batch_hash {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "processed swap batch identity mismatch",
         ));
     }
-    let store = NodeStore::new(&config.data_dir);
-    if !store.read_ordered_batches()?.contains(batch_hash) {
-        return Err(io::Error::new(
-            io::ErrorKind::WouldBlock,
-            "processed swap is not present in local ordered state",
-        ));
-    }
-    let block = store
-        .read_blocks()?
-        .blocks
-        .into_iter()
-        .find(|block| block.header.batch_id == *batch_hash)
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::WouldBlock,
-                "processed swap has no local certified block",
-            )
-        })?;
+    let (committed_height, certificate_ref) =
+        verify_processed_swap_finality(config, batch_hash, &processed_payload)?;
     let committed = transition_pftl_swap_journal_entry(
         &config.journal_file,
         idempotency_key,
         PftlSwapJournalState::Committed,
         Some(batch_hash.clone()),
-        Some(block.header.height),
-        Some(block.header.certificate_id),
+        Some(committed_height),
+        Some(certificate_ref),
         None,
     )?;
     mark_committed_note_index(state, &committed)?;
     Ok(committed)
+}
+
+fn verify_processed_swap_finality(
+    config: &Config,
+    batch_hash: &str,
+    processed_payload: &str,
+) -> io::Result<(u64, String)> {
+    let certificate_path = config
+        .processed_batch_dir
+        .join(certified_round_certificate_file_name(batch_hash));
+    let certificate_bytes = fs::read(&certificate_path)?;
+    if certificate_bytes.len() > MAX_PRIVATE_STATE_FILE_BYTES {
+        return Err(invalid_data(
+            "processed swap certificate exceeds private file bound",
+        ));
+    }
+    let certificate: BlockCertificateFile =
+        serde_json::from_slice(&certificate_bytes).map_err(invalid_data)?;
+    let commit = certificate
+        .consensus_v2_commit
+        .as_ref()
+        .ok_or_else(|| invalid_data("processed swap certificate omitted consensus-v2 finality"))?;
+    let (domain, validators) = live_consensus_v2_context(&config.data_dir)?;
+    let graph = read_consensus_v2_qc_graph(&config.data_dir, &domain, &validators)?;
+    let committed_block =
+        verify_consensus_v2_commit(&domain, &validators, commit, &graph).map_err(invalid_data)?;
+    if committed_block != commit.proposal.block {
+        return Err(invalid_data(
+            "processed swap finality does not commit its signed proposal",
+        ));
+    }
+    let genesis = NodeStore::new(&config.data_dir).read_genesis()?;
+    let expected_payload_hash =
+        batch_archive_payload_hash(&genesis, "shielded", batch_hash, processed_payload)?;
+    if committed_block.payload_hash != expected_payload_hash
+        || certificate.block_height != commit.proposal.round.height
+        || certificate.view != commit.proposal.round.view
+        || certificate.proposer != commit.proposal.proposer
+        || certificate.block_hash.as_deref() != Some(committed_block.block_id.as_str())
+    {
+        return Err(invalid_data(
+            "processed swap certificate does not bind the archived batch",
+        ));
+    }
+    Ok((
+        commit.proposal.round.height,
+        commit.precommit_qc.certificate_id.clone(),
+    ))
 }
 
 fn transition_swap_journal(
@@ -2840,6 +2884,10 @@ mod tests {
         assert_eq!(
             certified_round_batch_file_name(&batch_hash),
             format!("{batch_hash}.batch.json")
+        );
+        assert_eq!(
+            certified_round_certificate_file_name(&batch_hash),
+            format!("{batch_hash}.certificate.json")
         );
     }
 

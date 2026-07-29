@@ -2810,7 +2810,7 @@ pub(super) fn chain_tip_after_delta(
     })
 }
 
-pub(super) fn batch_archive_payload_hash(
+pub fn batch_archive_payload_hash(
     genesis: &Genesis,
     batch_kind: &str,
     batch_id: &str,
