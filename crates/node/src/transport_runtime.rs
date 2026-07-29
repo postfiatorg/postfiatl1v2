@@ -758,6 +758,7 @@ pub(super) fn transport_validator_serve_inner(
                     max_connections,
                     timeout_ms,
                     require_signed_proposal,
+                    remote_proposal_routing: true,
                     shielded_verifier_prewarm,
                 };
                 write_transport_ready_file(
@@ -806,6 +807,8 @@ pub(super) fn transport_validator_serve_inner(
         .map_err(|_| "transport validator service summary lock poisoned".to_string())?;
     let batch_acks = std::mem::take(&mut shared_state.batch_acks);
     let block_vote_responses = std::mem::take(&mut shared_state.block_vote_responses);
+    let block_proposal_responses =
+        std::mem::take(&mut shared_state.block_proposal_responses);
     let health_responses = std::mem::take(&mut shared_state.health_responses);
     let rejected = std::mem::take(&mut shared_state.rejected);
 
@@ -820,10 +823,12 @@ pub(super) fn transport_validator_serve_inner(
         connection_count: max_connections as u64,
         accepted_batch_count: batch_acks.len() as u64,
         accepted_block_vote_count: block_vote_responses.len() as u64,
+        accepted_block_proposal_count: block_proposal_responses.len() as u64,
         accepted_health_count: health_responses.len() as u64,
         rejected_count: rejected.len() as u64,
         batch_acks,
         block_vote_responses,
+        block_proposal_responses,
         health_responses,
         rejected,
         verified: true,
@@ -888,6 +893,7 @@ fn handle_transport_validator_connection(
                         None,
                         None,
                         None,
+                        None,
                         Some(rejection.clone()),
                     )?;
                 }
@@ -922,6 +928,7 @@ fn handle_transport_validator_connection(
                             connection_index,
                             "batch",
                             Some(ack.clone()),
+                            None,
                             None,
                             None,
                             None,
@@ -973,6 +980,7 @@ fn handle_transport_validator_connection(
                             Some(response.clone()),
                             None,
                             None,
+                            None,
                         )?;
                     }
                     shared_state
@@ -995,6 +1003,57 @@ fn handle_transport_validator_connection(
                     )?;
                 }
             },
+            TRANSPORT_BLOCK_PROPOSAL_REQUEST_SCHEMA => {
+                match handle_transport_block_proposal_line(
+                    &mut stream,
+                    &data_dir,
+                    &key_file,
+                    &vote_dir,
+                    &topology,
+                    &local_status,
+                    &line,
+                ) {
+                    Ok(response) => {
+                        {
+                            let mut writer = event_writer.lock().map_err(|_| {
+                                "transport validator service event log lock poisoned".to_string()
+                            })?;
+                            write_transport_validator_event(
+                                &mut writer,
+                                &local_status,
+                                &topology,
+                                connection_index,
+                                "block_proposal_request",
+                                None,
+                                None,
+                                Some(response.clone()),
+                                None,
+                                None,
+                            )?;
+                        }
+                        shared_state
+                            .lock()
+                            .map_err(|_| {
+                                "transport validator service state lock poisoned".to_string()
+                            })?
+                            .block_proposal_responses
+                            .push(response);
+                    }
+                    Err(error) => {
+                        record_transport_validator_rejection(
+                            Some(&mut stream),
+                            &data_dir,
+                            &topology,
+                            &local_status,
+                            connection_index,
+                            "block_proposal_request",
+                            error,
+                            &event_writer,
+                            &shared_state,
+                        )?;
+                    }
+                }
+            },
             TRANSPORT_HEALTH_REQUEST_SCHEMA => match handle_transport_health_line(
                 &mut stream,
                 &data_dir,
@@ -1013,6 +1072,7 @@ fn handle_transport_validator_connection(
                             &topology,
                             connection_index,
                             "health_request",
+                            None,
                             None,
                             None,
                             Some(response.clone()),
@@ -1093,6 +1153,7 @@ fn record_transport_validator_rejection(
             None,
             None,
             None,
+            None,
             Some(rejection.clone()),
         )?;
     }
@@ -1128,10 +1189,12 @@ fn handle_transport_health_line(
         .map_err(|error| format!("transport health request parse failed: {error}"))?;
     validate_transport_health_request(&request, data_dir, topology, local_status)?;
     let state = transport_hello(topology, local_status);
+    let capabilities = vec![TRANSPORT_REMOTE_PROPOSAL_CAPABILITY.to_string()];
     let response_payload = transport_health_response_payload(
         &topology.topology_id,
         &request.frame.message_id,
         &request.nonce,
+        &capabilities,
         &state,
     )?;
     let frame = frame_message(
@@ -1151,6 +1214,7 @@ fn handle_transport_health_line(
         auth,
         request_message_id: request.frame.message_id,
         nonce: request.nonce,
+        capabilities,
         state,
     };
     write_json_line(stream, &response)?;
@@ -1180,6 +1244,180 @@ fn handle_transport_block_vote_connection(
         require_signed_proposal,
         transport_read_ms,
     )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn handle_transport_block_proposal_line(
+    stream: &mut TcpStream,
+    data_dir: &Path,
+    key_file: &Path,
+    vote_dir: &Path,
+    topology: &NetworkTopology,
+    local_status: &StatusReport,
+    line: &str,
+) -> Result<TransportBlockProposalResponseEnvelope, String> {
+    let envelope = parse_transport_block_proposal_request(line)?;
+    validate_transport_block_proposal_request(&envelope, data_dir, topology, local_status)?;
+
+    static PROPOSAL_REQUEST_DIR_LOCK: std::sync::OnceLock<Mutex<()>> =
+        std::sync::OnceLock::new();
+    let request_dir_guard = PROPOSAL_REQUEST_DIR_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .map_err(|_| "transport block proposal request directory lock poisoned".to_string())?;
+    let request_root = vote_dir.join("proposal-requests");
+    std::fs::create_dir_all(&request_root)
+        .map_err(|error| format!("transport block proposal request root failed: {error}"))?;
+    let request_dir = request_root.join(&envelope.frame.message_id);
+    if !request_dir.exists() {
+        let request_count = std::fs::read_dir(&request_root)
+            .map_err(|error| {
+                format!("transport block proposal request root read failed: {error}")
+            })?
+            .take(MAX_TRANSPORT_PROPOSAL_REQUEST_DIRS + 1)
+            .count();
+        if request_count >= MAX_TRANSPORT_PROPOSAL_REQUEST_DIRS {
+            return Err(format!(
+                "transport block proposal request directory reached cap {MAX_TRANSPORT_PROPOSAL_REQUEST_DIRS}"
+            ));
+        }
+    }
+    std::fs::create_dir_all(&request_dir)
+        .map_err(|error| format!("transport block proposal request directory failed: {error}"))?;
+    drop(request_dir_guard);
+    let batch_file = request_dir.join("batch.json");
+    let proposal_file = request_dir.join("proposal.json");
+    std::fs::write(&batch_file, envelope.batch_json.as_bytes())
+        .map_err(|error| format!("transport block proposal batch write failed: {error}"))?;
+    let timeout_certificate_file = match envelope.timeout_certificate_json.as_ref() {
+        Some(json) => {
+            let path = request_dir.join("timeout-certificate.json");
+            std::fs::write(&path, json.as_bytes()).map_err(|error| {
+                format!("transport block proposal timeout certificate write failed: {error}")
+            })?;
+            Some(path)
+        }
+        None => None,
+    };
+    let required_parent = RequiredBlockParent::from(&envelope.required_parent);
+    let unsigned = propose_batch_with_required_parent_with_timings(
+        BatchProposalOptions {
+            data_dir: data_dir.to_path_buf(),
+            verify_block_log: false,
+            batch_kind: Some(envelope.batch_kind.clone()),
+            batch_file,
+            proposal_file,
+            view: Some(envelope.view),
+            timeout_certificate_file: timeout_certificate_file.clone(),
+            key_file: None,
+            validator_id: None,
+        },
+        &required_parent,
+    )
+    .map_err(|error| format!("transport block proposal reconstruction failed: {error}"))?
+    .proposal;
+    if unsigned != envelope.expected_proposal {
+        return Err(
+            "transport block proposal reconstruction differs from requester expectation"
+                .to_string(),
+        );
+    }
+
+    // Reserve the normal durable one-proposal-per-height vote lock before
+    // emitting either proposer signature. Replays of the same proposal are
+    // allowed; a conflicting request fails closed.
+    let lock_vote_file = request_dir.join("proposer-lock.block_vote.json");
+    create_block_vote_for_verified_proposal(BlockVoteForVerifiedProposalOptions {
+        data_dir: data_dir.to_path_buf(),
+        verify_block_log: false,
+        key_file: key_file.to_path_buf(),
+        validator_id: Some(local_status.node_id.clone()),
+        proposal: unsigned.clone(),
+        block_height: Some(envelope.block_height),
+        vote_file: lock_vote_file,
+    })
+    .map_err(|error| format!("transport block proposal lock failed: {error}"))?;
+
+    let proposal = sign_verified_block_proposal(
+        data_dir,
+        unsigned,
+        key_file,
+        &local_status.node_id,
+    )
+    .map_err(|error| format!("transport block proposal signing failed: {error}"))?;
+    let genesis = NodeStore::new(data_dir)
+        .read_genesis()
+        .map_err(|error| format!("transport block proposal genesis failed: {error}"))?;
+    let consensus_v2_proposal = if consensus_v2_active_at(&genesis, proposal.block_height) {
+        let timeout_certificate = if proposal.view > 0 {
+            let path = timeout_certificate_file.as_ref().ok_or_else(|| {
+                "transport consensus v2 nonzero view omitted timeout certificate".to_string()
+            })?;
+            Some(
+                verify_block_timeout_certificate_file(BlockTimeoutCertificateVerifyOptions {
+                    data_dir: data_dir.to_path_buf(),
+                    verify_block_log: false,
+                    certificate_file: path.clone(),
+                })
+                .map_err(|error| {
+                    format!("transport consensus v2 timeout certificate failed: {error}")
+                })?
+                .consensus_v2_certificate
+                .ok_or_else(|| {
+                    "transport timeout certificate omitted consensus v2 certificate".to_string()
+                })?,
+            )
+        } else {
+            None
+        };
+        Some(
+            create_consensus_v2_proposal_for_block(
+                data_dir,
+                &proposal,
+                timeout_certificate.as_ref(),
+                key_file,
+            )
+            .map_err(|error| format!("transport consensus v2 proposal signing failed: {error}"))?,
+        )
+    } else {
+        None
+    };
+
+    let response_state = transport_hello(topology, local_status);
+    let response_payload = transport_block_proposal_response_payload(
+        &envelope.frame.message_id,
+        &proposal,
+        consensus_v2_proposal.as_ref(),
+        &response_state,
+    )?;
+    let response_frame = frame_message(
+        &network_domain_from_topology(topology),
+        local_status.node_id.clone(),
+        Some(envelope.frame.from.clone()),
+        TRANSPORT_BLOCK_PROPOSAL_RESPONSE_TOPIC,
+        &response_payload,
+    )
+    .map_err(|error| format!("transport block proposal response frame failed: {error}"))?;
+    let response = TransportBlockProposalResponseEnvelope {
+        schema: TRANSPORT_BLOCK_PROPOSAL_RESPONSE_SCHEMA.to_string(),
+        topology_id: topology.topology_id.clone(),
+        auth: sign_transport_envelope_auth(
+            data_dir,
+            topology,
+            &local_status.node_id,
+            &response_frame,
+        )?,
+        frame: response_frame,
+        request_message_id: envelope.frame.message_id,
+        proposal,
+        consensus_v2_proposal,
+        state: response_state,
+    };
+    write_json_line(stream, &response)?;
+    stream
+        .flush()
+        .map_err(|error| format!("transport block proposal response flush failed: {error}"))?;
+    Ok(response)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1599,6 +1837,130 @@ pub(super) fn transport_block_vote_request(
         timings,
         verified: true,
     })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn transport_block_proposal_request(
+    data_dir: &Path,
+    topology: &NetworkTopology,
+    local_status: &StatusReport,
+    target: &str,
+    batch_kind: &str,
+    batch_json: &str,
+    expected_proposal: &BlockProposalFile,
+    required_parent: &RequiredBlockParent,
+    timeout_certificate_json: Option<&str>,
+    timeout_ms: u64,
+) -> Result<TransportBlockProposalResponseEnvelope, String> {
+    let peer = topology
+        .peer(target)
+        .ok_or_else(|| format!("proposal target `{target}` is not in topology"))?;
+    let transport_parent = TransportRequiredBlockParent::from(required_parent);
+    let payload = transport_block_proposal_request_payload(
+        expected_proposal.block_height,
+        expected_proposal.view,
+        batch_kind,
+        batch_json,
+        expected_proposal,
+        &transport_parent,
+        timeout_certificate_json,
+    )?;
+    let frame = frame_message(
+        &network_domain_from_topology(topology),
+        local_status.node_id.clone(),
+        Some(target.to_string()),
+        TRANSPORT_BLOCK_PROPOSAL_REQUEST_TOPIC,
+        &payload,
+    )
+    .map_err(|error| format!("transport block proposal request frame failed: {error}"))?;
+    let request = TransportBlockProposalRequestEnvelope {
+        schema: TRANSPORT_BLOCK_PROPOSAL_REQUEST_SCHEMA.to_string(),
+        topology_id: topology.topology_id.clone(),
+        auth: sign_transport_envelope_auth(
+            data_dir,
+            topology,
+            &local_status.node_id,
+            &frame,
+        )?,
+        frame,
+        block_height: expected_proposal.block_height,
+        view: expected_proposal.view,
+        batch_kind: batch_kind.to_string(),
+        batch_json: batch_json.to_string(),
+        expected_proposal: expected_proposal.clone(),
+        required_parent: transport_parent,
+        timeout_certificate_json: timeout_certificate_json.map(str::to_string),
+    };
+    let request_json = serde_json::to_string(&request)
+        .map_err(|error| format!("transport block proposal request serialization failed: {error}"))?;
+    let peer_address = socket_address(&peer.host, peer.p2p_port);
+    let (line, _, _, _) =
+        transport_block_vote_request_exchange(&peer_address, &request_json, timeout_ms)?;
+    let response = parse_transport_block_proposal_response(&line)?;
+    validate_transport_block_proposal_response(
+        &response,
+        &request,
+        data_dir,
+        topology,
+        local_status,
+        target,
+    )?;
+    verify_signed_block_proposal(data_dir, &response.proposal)
+        .map_err(|error| format!("transport proposal response signature invalid: {error}"))?;
+
+    let genesis = NodeStore::new(data_dir)
+        .read_genesis()
+        .map_err(|error| format!("transport proposal response genesis failed: {error}"))?;
+    let consensus_v2_active =
+        consensus_v2_active_at(&genesis, response.proposal.block_height);
+    match (consensus_v2_active, response.consensus_v2_proposal.as_ref()) {
+        (false, None) => {}
+        (false, Some(_)) => {
+            return Err(
+                "transport proposal response carried consensus v2 before activation".to_string(),
+            )
+        }
+        (true, None) => {
+            return Err(
+                "transport proposal response omitted active consensus v2 proposal".to_string(),
+            )
+        }
+        (true, Some(proposal)) => {
+            verify_consensus_v2_proposal_matches_block(&response.proposal, proposal)
+                .map_err(|error| {
+                    format!("transport proposal response v2 block binding failed: {error}")
+                })?;
+            let timeout_certificate = if response.proposal.view > 0 {
+                let json = timeout_certificate_json.ok_or_else(|| {
+                    "transport proposal response nonzero view omitted timeout certificate"
+                        .to_string()
+                })?;
+                let certificate: BlockTimeoutCertificateFile =
+                    serde_json::from_str(json).map_err(|error| {
+                        format!("transport proposal timeout certificate parse failed: {error}")
+                    })?;
+                Some(certificate.consensus_v2_certificate.ok_or_else(|| {
+                    "transport proposal timeout certificate omitted consensus v2 certificate"
+                        .to_string()
+                })?)
+            } else {
+                None
+            };
+            let (domain, validators) = live_consensus_v2_context(data_dir)
+                .map_err(|error| format!("transport proposal response v2 context: {error}"))?;
+            let graph = read_consensus_v2_qc_graph(data_dir, &domain, &validators)
+                .map_err(|error| format!("transport proposal response v2 QC graph: {error}"))?;
+            postfiat_ordering_fast::verify_consensus_v2_proposal(
+                &domain,
+                &validators,
+                proposal,
+                timeout_certificate.as_ref(),
+                &graph,
+            )
+            .map_err(|error| format!("transport proposal response v2 invalid: {error}"))?;
+        }
+    }
+    Ok(response)
 }
 
 fn persistent_vote_streams_enabled() -> bool {
@@ -2183,7 +2545,12 @@ pub(super) fn transport_peer_certified_batch_round(
     let setup_ms = monotonic_elapsed_ms(setup_start);
 
     let proposal_start = Instant::now();
-    let proposal_options = BatchProposalOptions {
+    let required_parent = options.required_parent.clone().unwrap_or(RequiredBlockParent {
+        height: local_status.block_height,
+        block_hash: local_status.block_tip_hash.clone(),
+        state_root: local_status.state_root.clone(),
+    });
+    let unsigned_proposal_options = BatchProposalOptions {
         data_dir: options.data_dir.clone(),
         verify_block_log: false,
         batch_kind: options.batch_kind.clone(),
@@ -2191,23 +2558,47 @@ pub(super) fn transport_peer_certified_batch_round(
         proposal_file: proposal_file.clone(),
         view: options.view,
         timeout_certificate_file: options.timeout_certificate_file.clone(),
-        key_file: options.proposal_key_file.clone(),
+        key_file: None,
         validator_id: None,
     };
-    let proposal_with_timings = match options.required_parent.as_ref() {
-        Some(required_parent) => {
-            propose_batch_with_required_parent_with_timings(proposal_options, required_parent)
-        }
-        None => propose_batch_with_timings(proposal_options),
-    }
+    let proposal_with_timings = propose_batch_with_required_parent_with_timings(
+        unsigned_proposal_options,
+        &required_parent,
+    )
     .map_err(|error| format!("peer certified batch round proposal failed: {error}"))?;
     let proposal_breakdown = proposal_with_timings.timings;
-    let proposal = proposal_with_timings.proposal;
+    let expected_unsigned_proposal = proposal_with_timings.proposal;
+    if let Some(block_height) = options.block_height {
+        if expected_unsigned_proposal.block_height != block_height {
+            return Err(format!(
+                "proposed block height {} does not match --height {block_height}",
+                expected_unsigned_proposal.block_height
+            ));
+        }
+    }
+    if options.require_local_proposer
+        && expected_unsigned_proposal.proposer != local_status.node_id
+    {
+        return Err(format!(
+            "local validator `{}` is not deterministic proposer `{}` for height {} view {}",
+            local_status.node_id,
+            expected_unsigned_proposal.proposer,
+            expected_unsigned_proposal.block_height,
+            expected_unsigned_proposal.view
+        ));
+    }
     let genesis = NodeStore::new(&options.data_dir)
         .read_genesis()
         .map_err(|error| format!("peer certified batch round genesis failed: {error}"))?;
-    let consensus_v2_active = consensus_v2_active_at(&genesis, proposal.block_height);
-    let consensus_v2_timeout_certificate = if consensus_v2_active && proposal.view > 0 {
+    let consensus_v2_active =
+        consensus_v2_active_at(&genesis, expected_unsigned_proposal.block_height);
+    let timeout_certificate_json = options
+        .timeout_certificate_file
+        .as_ref()
+        .map(|path| read_transport_payload_file(path))
+        .transpose()?;
+    let consensus_v2_timeout_certificate =
+        if consensus_v2_active && expected_unsigned_proposal.view > 0 {
         let path = options.timeout_certificate_file.as_ref().ok_or_else(|| {
             "consensus v2 nonzero view omitted timeout certificate file".to_string()
         })?;
@@ -2222,44 +2613,97 @@ pub(super) fn transport_peer_certified_batch_round(
         Some(certificate.consensus_v2_certificate.ok_or_else(|| {
             "consensus v2 timeout certificate file omitted v2 certificate".to_string()
         })?)
-    } else {
-        None
-    };
-    let consensus_v2_proposal = if consensus_v2_active {
-        let proposal_key_file = options.proposal_key_file.as_ref().ok_or_else(|| {
-            "consensus v2 activation requires --proposal-key-file".to_string()
-        })?;
-        Some(
-            create_consensus_v2_proposal_for_block(
-                &options.data_dir,
-                &proposal,
-                consensus_v2_timeout_certificate.as_ref(),
-                proposal_key_file,
-            )
-            .map_err(|error| format!("consensus v2 proposal failed: {error}"))?,
-        )
-    } else {
-        None
-    };
+        } else {
+            None
+        };
+
+    let (proposal, consensus_v2_proposal) =
+        if expected_unsigned_proposal.proposer == local_status.node_id {
+            let proposal = match options.proposal_key_file.as_ref() {
+                Some(key_file) => sign_verified_block_proposal(
+                    &options.data_dir,
+                    expected_unsigned_proposal,
+                    key_file,
+                    &local_status.node_id,
+                )
+                .map_err(|error| format!("peer certified batch round proposal signing failed: {error}"))?,
+                None => expected_unsigned_proposal,
+            };
+            let proposal_json = serde_json::to_string_pretty(&proposal).map_err(|error| {
+                format!("peer certified batch round proposal serialization failed: {error}")
+            })?;
+            std::fs::write(&proposal_file, proposal_json.as_bytes()).map_err(|error| {
+                format!("peer certified batch round proposal write failed: {error}")
+            })?;
+            let consensus_v2_proposal = if consensus_v2_active {
+                let proposal_key_file = options.proposal_key_file.as_ref().ok_or_else(|| {
+                    "consensus v2 activation requires --proposal-key-file".to_string()
+                })?;
+                Some(
+                    create_consensus_v2_proposal_for_block(
+                        &options.data_dir,
+                        &proposal,
+                        consensus_v2_timeout_certificate.as_ref(),
+                        proposal_key_file,
+                    )
+                    .map_err(|error| format!("consensus v2 proposal failed: {error}"))?,
+                )
+            } else {
+                None
+            };
+            (proposal, consensus_v2_proposal)
+        } else {
+            let batch_json = read_transport_payload_file(&options.batch_file)?;
+            let target = expected_unsigned_proposal.proposer.clone();
+            let max_attempts = options.send_retries.saturating_add(1);
+            let mut last_error = None;
+            let mut response = None;
+            for attempt in 1..=max_attempts {
+                match transport_block_proposal_request(
+                    &options.data_dir,
+                    &topology,
+                    &local_status,
+                    &target,
+                    &expected_unsigned_proposal.batch_kind,
+                    &batch_json,
+                    &expected_unsigned_proposal,
+                    &required_parent,
+                    timeout_certificate_json.as_deref(),
+                    options.timeout_ms,
+                ) {
+                    Ok(value) => {
+                        response = Some(value);
+                        break;
+                    }
+                    Err(error) => {
+                        last_error = Some(error);
+                        if attempt < max_attempts {
+                            std::thread::sleep(Duration::from_millis(
+                                options.retry_backoff_ms,
+                            ));
+                        }
+                    }
+                }
+            }
+            let response = response.ok_or_else(|| {
+                format!(
+                    "remote proposer `{target}` request failed after {max_attempts} attempt(s): {}",
+                    last_error.unwrap_or_else(|| "unknown failure".to_string())
+                )
+            })?;
+            let proposal_json =
+                serde_json::to_string_pretty(&response.proposal).map_err(|error| {
+                    format!("remote proposal serialization failed: {error}")
+                })?;
+            std::fs::write(&proposal_file, proposal_json.as_bytes())
+                .map_err(|error| format!("remote proposal write failed: {error}"))?;
+            (response.proposal, response.consensus_v2_proposal)
+        };
     if options.require_signed_proposal && proposal.signature.is_none() {
         return Err(
             "peer certified batch round requires signed proposal; pass --proposal-key-file"
                 .to_string(),
         );
-    }
-    if let Some(block_height) = options.block_height {
-        if proposal.block_height != block_height {
-            return Err(format!(
-                "proposed block height {} does not match --height {block_height}",
-                proposal.block_height
-            ));
-        }
-    }
-    if options.require_local_proposer && proposal.proposer != local_status.node_id {
-        return Err(format!(
-            "local validator `{}` is not deterministic proposer `{}` for height {} view {}",
-            local_status.node_id, proposal.proposer, proposal.block_height, proposal.view
-        ));
     }
     let proposal_ms = monotonic_elapsed_ms(proposal_start);
 
@@ -3308,6 +3752,7 @@ fn write_peer_certified_batch_loop_ready(
         local_apply_before_certified_send: options.local_apply_before_certified_send,
         defer_certified_sends: options.defer_certified_sends,
         persistent_vote_streams: persistent_vote_streams_enabled(),
+        remote_proposal_routing: true,
         heartbeat_unix_ms,
         local_state: transport_hello(topology, local_status),
         authenticated_peer_count,
@@ -3611,7 +4056,11 @@ pub(super) fn transport_certified_batch_loop(
         })?;
         let batch_file_display = batch_file.display().to_string();
         let archived_batch_file = if round.round_ok {
-            archive_processed_batch_file(&batch_file, options.processed_dir.as_deref())?
+            archive_processed_batch_file(
+                &batch_file,
+                Path::new(&round.certification.certificate_file),
+                options.processed_dir.as_deref(),
+            )?
         } else {
             None
         };
@@ -3787,12 +4236,16 @@ pub(super) fn transport_peer_certified_private_egress_loop(
                 required_parent: None,
             })?;
         let archived_egress_file = if round.round_ok {
-            archive_processed_batch_file(&egress_file, options.processed_egress_dir.as_deref())?
+            archive_processed_input_file(&egress_file, options.processed_egress_dir.as_deref())?
         } else {
             None
         };
         let archived_batch_file = if round.round_ok {
-            archive_processed_batch_file(&batch_file, options.processed_batch_dir.as_deref())?
+            archive_processed_batch_file(
+                &batch_file,
+                Path::new(&round.certification.certificate_file),
+                options.processed_batch_dir.as_deref(),
+            )?
         } else {
             None
         };
@@ -3983,6 +4436,42 @@ fn archive_processed_batch_file(
         format!(
             "certified batch loop archive `{}` to `{}` failed: {error}",
             batch_file.display(),
+            archived_path.display()
+        )
+    })?;
+    Ok(Some(archived_path.display().to_string()))
+}
+
+fn archive_processed_input_file(
+    input_file: &Path,
+    processed_dir: Option<&Path>,
+) -> Result<Option<String>, String> {
+    let Some(processed_dir) = processed_dir else {
+        return Ok(None);
+    };
+    std::fs::create_dir_all(processed_dir).map_err(|error| {
+        format!(
+            "processed input directory create `{}` failed: {error}",
+            processed_dir.display()
+        )
+    })?;
+    let file_name = input_file.file_name().ok_or_else(|| {
+        format!(
+            "processed input file `{}` has no file name",
+            input_file.display()
+        )
+    })?;
+    let archived_path = processed_dir.join(file_name);
+    if archived_path.exists() {
+        return Err(format!(
+            "processed input file already exists: {}",
+            archived_path.display()
+        ));
+    }
+    std::fs::rename(input_file, &archived_path).map_err(|error| {
+        format!(
+            "processed input archive `{}` to `{}` failed: {error}",
+            input_file.display(),
             archived_path.display()
         )
     })?;

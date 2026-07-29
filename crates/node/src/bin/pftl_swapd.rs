@@ -133,6 +133,7 @@ struct CertifiedRoundDriverReadyV2 {
     local_apply_before_certified_send: bool,
     defer_certified_sends: bool,
     persistent_vote_streams: bool,
+    remote_proposal_routing: bool,
     heartbeat_unix_ms: u64,
     local_state: CertifiedRoundDriverLocalState,
     authenticated_peer_count: usize,
@@ -2041,6 +2042,7 @@ fn certified_round_driver_readiness(
         || report.local_apply_before_certified_send
         || report.defer_certified_sends
         || !report.persistent_vote_streams
+        || !report.remote_proposal_routing
         || age_ms > max_age_ms
         || report.local_state.block_height != expected_height
         || report.local_state.state_root != expected_state_root
@@ -2071,6 +2073,7 @@ fn certified_round_driver_readiness(
         "authenticated_peer_count": report.authenticated_peer_count,
         "required_remote_peer_count": report.required_remote_peer_count,
         "persistent_vote_streams": report.persistent_vote_streams,
+        "remote_proposal_routing": report.remote_proposal_routing,
     }))
 }
 
@@ -2830,6 +2833,7 @@ mod tests {
             "local_apply_before_certified_send": false,
             "defer_certified_sends": false,
             "persistent_vote_streams": true,
+            "remote_proposal_routing": true,
             "heartbeat_unix_ms": now_ms,
             "local_state": {
                 "schema": "postfiat-transport-hello-v1",

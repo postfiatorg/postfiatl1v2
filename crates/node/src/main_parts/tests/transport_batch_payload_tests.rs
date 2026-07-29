@@ -53,12 +53,12 @@ mod transport_batch_payload_tests {
     fn start_consensus_v2_test_servers(
         data_dirs: &[PathBuf],
         topology_file: &Path,
-        proposer_index: usize,
+        excluded_index: usize,
         round_label: &str,
     ) -> Vec<std::thread::JoinHandle<Result<TransportValidatorServeReport, String>>> {
         let mut handles = Vec::new();
         for (index, data_dir) in data_dirs.iter().enumerate() {
-            if index == proposer_index {
+            if index == excluded_index {
                 continue;
             }
             let data_dir = data_dir.clone();
@@ -95,7 +95,7 @@ mod transport_batch_payload_tests {
             .peers
             .iter()
             .enumerate()
-            .filter(|(index, _)| *index != proposer_index)
+            .filter(|(index, _)| *index != excluded_index)
             .map(|(_, peer)| (peer.host.clone(), peer.p2p_port))
             .collect::<Vec<_>>();
         let mut ready = false;
@@ -1020,6 +1020,220 @@ mod transport_batch_payload_tests {
     fn activated_consensus_v2_transport_survives_failed_view_zero_proposer_n6() {
         let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
         run_activated_consensus_v2_transport_failed_proposer(6);
+    }
+
+    #[test]
+    fn peer_round_routes_to_remote_proposer_with_host_local_keys() {
+        let _guard = CONSENSUS_V2_TRANSPORT_TEST_LOCK.lock().expect("test lock");
+        prewarm_shielded_verifier_cache("remote proposer transport test")
+            .expect("prewarm verifier");
+        let validator_count = 4usize;
+        let root = std::env::temp_dir().join(format!(
+            "postfiat-remote-proposer-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let data_dirs = (0..validator_count)
+            .map(|index| {
+                let data_dir = root.join(format!("validator-{index}"));
+                init_consensus_v2(InitConsensusV2Options {
+                    data_dir: data_dir.clone(),
+                    chain_id: "postfiat-remote-proposer-test".to_string(),
+                    node_id: format!("validator-{index}"),
+                    validator_count: validator_count as u32,
+                    activation_height: 1,
+                })
+                .expect("init validator");
+                data_dir
+            })
+            .collect::<Vec<_>>();
+        let shared_keys_bytes = std::fs::read(data_dirs[0].join(VALIDATOR_KEYS_FILE))
+            .expect("read generated validator keys");
+        let shared_keys: ValidatorKeyFile =
+            serde_json::from_slice(&shared_keys_bytes).expect("parse generated validator keys");
+        let bootstrap_snapshot = root.join("bootstrap-snapshot");
+        export_snapshot(SnapshotExportOptions {
+            data_dir: data_dirs[0].clone(),
+            snapshot_dir: bootstrap_snapshot.clone(),
+        })
+        .expect("export common state");
+        for (index, data_dir) in data_dirs.iter().enumerate().skip(1) {
+            std::fs::remove_dir_all(data_dir).expect("clear initialized replica");
+            import_snapshot(SnapshotImportOptions {
+                data_dir: data_dir.clone(),
+                snapshot_dir: bootstrap_snapshot.clone(),
+                node_id: Some(format!("validator-{index}")),
+            })
+            .expect("import common state");
+        }
+        for (index, data_dir) in data_dirs.iter().enumerate() {
+            let node_id = format!("validator-{index}");
+            let record = shared_keys
+                .validators
+                .iter()
+                .find(|record| record.node_id == node_id)
+                .expect("local validator key")
+                .clone();
+            let isolated = serde_json::to_vec_pretty(&ValidatorKeyFile {
+                validators: vec![record],
+            })
+            .expect("serialize isolated validator key");
+            let key_path = data_dir.join(VALIDATOR_KEYS_FILE);
+            std::fs::write(&key_path, isolated).expect("write isolated validator key");
+            #[cfg(unix)]
+            std::fs::set_permissions(&key_path, std::fs::Permissions::from_mode(0o600))
+                .expect("protect isolated validator key");
+        }
+
+        let topology_file = root.join("topology.json");
+        let base_port = consensus_v2_test_base_port(validator_count);
+        write_consensus_v2_topology(TopologyConsensusV2Options {
+            chain_id: "postfiat-remote-proposer-test".to_string(),
+            validators: validator_count as u32,
+            base_port,
+            rpc_base_port: Some(base_port.saturating_add(100)),
+            hosts: Some(vec!["127.0.0.1".to_string(); validator_count]),
+            output_file: topology_file.clone(),
+            activation_height: 1,
+        })
+        .expect("write topology");
+        let (_, validators) =
+            live_consensus_v2_context(&data_dirs[0]).expect("consensus context");
+        let proposer =
+            postfiat_ordering_fast::leader_for_view(&validators.validator_ids(), 1, 0)
+                .expect("height-1 leader");
+        let proposer_index = validators
+            .validator_ids()
+            .iter()
+            .position(|validator| validator == &proposer)
+            .expect("proposer index");
+        let collector_index = (proposer_index + 1) % validator_count;
+        let collector_dir = data_dirs[collector_index].clone();
+        let batch_file = root.join("height-1.batch.json");
+        create_transfer_batch(BatchTransferOptions {
+            data_dir: collector_dir.clone(),
+            key_file: Some(data_dirs[0].join("faucet_key.json")),
+            to: format!("pf{}", "c".repeat(40)),
+            amount: 1_000_000,
+            batch_file: batch_file.clone(),
+        })
+        .expect("create remote-proposer batch");
+
+        let handles = start_consensus_v2_test_servers(
+            &data_dirs,
+            &topology_file,
+            collector_index,
+            "remote-proposer-h1",
+        );
+        let topology = read_topology_file(&topology_file).expect("read topology");
+        let local_status = status(NodeOptions {
+            data_dir: collector_dir.clone(),
+        })
+        .expect("collector status");
+        transport_authenticated_peer_health(
+            &collector_dir,
+            &topology,
+            &local_status,
+            15_000,
+        )
+        .expect("authenticated peer health");
+        let report =
+            transport_peer_certified_batch_round(TransportPeerCertifiedBatchRoundOptions {
+                data_dir: collector_dir.clone(),
+                topology_file: topology_file.clone(),
+                batch_kind: Some("transparent".to_string()),
+                batch_file,
+                key_file: collector_dir.join(VALIDATOR_KEYS_FILE),
+                proposal_key_file: Some(collector_dir.join(VALIDATOR_KEYS_FILE)),
+                require_local_proposer: false,
+                require_signed_proposal: true,
+                allow_peer_failures: false,
+                quorum_early_full_propagation: false,
+                artifact_dir: root.join("height-1-artifacts"),
+                block_height: Some(1),
+                view: Some(0),
+                timeout_certificate_file: None,
+                timeout_ms: 15_000,
+                send_retries: 2,
+                retry_backoff_ms: 50,
+                local_apply_before_certified_send: false,
+                defer_certified_sends: false,
+                required_parent: None,
+            })
+            .expect("route round to remote proposer");
+        let send_summary = report
+            .sends
+            .iter()
+            .map(|send| {
+                (
+                    send.to.as_str(),
+                    send.verified,
+                    send.ack.applied,
+                    send.ack.already_applied,
+                    send.ack.rejected_count,
+                    send.ack.state.block_height,
+                    send.ack.certificate_attached,
+                )
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            report.round_ok,
+            "local_apply={} all_votes={} all_sends={} send_failures={:?} sends={send_summary:?}",
+            report.local_apply_verified,
+            report.all_vote_requests_verified,
+            report.all_sends_verified,
+            report.send_failures,
+        );
+        assert_eq!(report.proposal_proposer, proposer);
+        assert_eq!(
+            report.proposal_signature_signer.as_deref(),
+            Some(proposer.as_str())
+        );
+        clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
+        for (index, handle) in handles.into_iter().enumerate() {
+            let node_index = if index < collector_index {
+                index
+            } else {
+                index + 1
+            };
+            let service = handle
+                .join()
+                .expect("validator service thread")
+                .expect("validator service");
+            assert_eq!(service.accepted_health_count, 1);
+            assert_eq!(service.accepted_block_vote_count, 2);
+            assert_eq!(service.accepted_batch_count, 1);
+            assert_eq!(
+                service.accepted_block_proposal_count,
+                u64::from(node_index == proposer_index)
+            );
+            assert!(service.rejected.is_empty(), "{:?}", service.rejected);
+        }
+        let statuses = data_dirs
+            .iter()
+            .map(|data_dir| status(NodeOptions {
+                data_dir: data_dir.clone(),
+            }))
+            .collect::<io::Result<Vec<_>>>()
+            .expect("fleet statuses");
+        assert!(statuses.iter().all(|status| status.block_height == 1));
+        assert!(statuses.windows(2).all(|pair| {
+            pair[0].block_tip_hash == pair[1].block_tip_hash
+                && pair[0].state_root == pair[1].state_root
+        }));
+        for (index, data_dir) in data_dirs.iter().enumerate() {
+            let keys: ValidatorKeyFile = read_transport_json_file(
+                &data_dir.join(VALIDATOR_KEYS_FILE),
+                "isolated validator key",
+            )
+            .expect("read isolated validator key");
+            assert_eq!(keys.validators.len(), 1);
+            assert_eq!(keys.validators[0].node_id, format!("validator-{index}"));
+        }
+        std::fs::remove_dir_all(root).expect("cleanup remote proposer test");
     }
 
     #[test]

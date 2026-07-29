@@ -133,6 +133,7 @@ pub(super) fn transport_health_response_payload(
     topology_id: &str,
     request_message_id: &str,
     nonce: &str,
+    capabilities: &[String],
     state: &TransportHello,
 ) -> Result<Vec<u8>, String> {
     serde_json::to_vec(&(
@@ -140,6 +141,7 @@ pub(super) fn transport_health_response_payload(
         topology_id,
         request_message_id,
         nonce,
+        capabilities,
         state,
     ))
     .map_err(|error| format!("transport health response payload serialization failed: {error}"))
@@ -189,6 +191,8 @@ pub(super) fn validate_transport_health_response(
         || response.frame.to.as_deref() != Some(local_status.node_id.as_str())
         || response.request_message_id != request.frame.message_id
         || response.nonce != request.nonce
+        || response.capabilities
+            != vec![TRANSPORT_REMOTE_PROPOSAL_CAPABILITY.to_string()]
     {
         return Err("transport health response has invalid request binding".to_string());
     }
@@ -200,6 +204,7 @@ pub(super) fn validate_transport_health_response(
         &response.topology_id,
         &response.request_message_id,
         &response.nonce,
+        &response.capabilities,
         &response.state,
     )?;
     if !verify_message_payload(
@@ -436,6 +441,48 @@ pub(super) fn transport_block_vote_request_payload(
     })
 }
 
+pub(super) fn transport_block_proposal_request_payload(
+    block_height: u64,
+    view: u64,
+    batch_kind: &str,
+    batch_json: &str,
+    expected_proposal: &BlockProposalFile,
+    required_parent: &TransportRequiredBlockParent,
+    timeout_certificate_json: Option<&str>,
+) -> Result<Vec<u8>, String> {
+    serde_json::to_vec(&TransportBlockProposalRequestPayload {
+        schema: TRANSPORT_BLOCK_PROPOSAL_REQUEST_SCHEMA,
+        block_height,
+        view,
+        batch_kind,
+        batch_json,
+        expected_proposal,
+        required_parent,
+        timeout_certificate_json,
+    })
+    .map_err(|error| {
+        format!("transport block proposal request payload serialization failed: {error}")
+    })
+}
+
+pub(super) fn transport_block_proposal_response_payload(
+    request_message_id: &str,
+    proposal: &BlockProposalFile,
+    consensus_v2_proposal: Option<&postfiat_types::ConsensusV2Proposal>,
+    state: &TransportHello,
+) -> Result<Vec<u8>, String> {
+    serde_json::to_vec(&TransportBlockProposalResponsePayload {
+        schema: TRANSPORT_BLOCK_PROPOSAL_RESPONSE_SCHEMA,
+        request_message_id,
+        proposal,
+        consensus_v2_proposal,
+        state,
+    })
+    .map_err(|error| {
+        format!("transport block proposal response payload serialization failed: {error}")
+    })
+}
+
 pub(super) fn read_transport_line(stream: &TcpStream, context: &str) -> Result<String, String> {
     let mut reader = BufReader::new(stream);
     let mut bytes = Vec::new();
@@ -566,6 +613,7 @@ pub(super) fn write_transport_validator_event(
     kind: &str,
     batch_ack: Option<TransportBatchAck>,
     block_vote_response: Option<TransportBlockVoteResponse>,
+    block_proposal_response: Option<TransportBlockProposalResponseEnvelope>,
     health_response: Option<TransportHealthResponseEnvelope>,
     rejection: Option<TransportValidatorServeRejection>,
 ) -> Result<(), String> {
@@ -584,6 +632,7 @@ pub(super) fn write_transport_validator_event(
             outcome: outcome.to_string(),
             batch_ack,
             block_vote_response,
+            block_proposal_response,
             health_response,
             rejection,
         };
@@ -675,6 +724,40 @@ pub(super) fn parse_transport_block_vote_request(
     }
     serde_json::from_str(line)
         .map_err(|error| format!("transport block vote request parse failed: {error}"))
+}
+
+pub(super) fn parse_transport_block_proposal_request(
+    line: &str,
+) -> Result<TransportBlockProposalRequestEnvelope, String> {
+    if line.trim().is_empty() {
+        return Err("transport block proposal request was empty".to_string());
+    }
+    serde_json::from_str(line)
+        .map_err(|error| format!("transport block proposal request parse failed: {error}"))
+}
+
+pub(super) fn parse_transport_block_proposal_response(
+    line: &str,
+) -> Result<TransportBlockProposalResponseEnvelope, String> {
+    if line.trim().is_empty() {
+        return Err("transport block proposal response was empty".to_string());
+    }
+    let schema = transport_envelope_schema(line)?;
+    if schema == "postfiat-transport-validator-serve-rejection-v1" {
+        let rejection: TransportValidatorServeRejection = serde_json::from_str(line)
+            .map_err(|error| format!("transport validator rejection parse failed: {error}"))?;
+        return Err(format!(
+            "transport block proposal rejected by `{}` for `{}`: {}",
+            rejection.node_id, rejection.kind, rejection.error
+        ));
+    }
+    if schema != TRANSPORT_BLOCK_PROPOSAL_RESPONSE_SCHEMA {
+        return Err(format!(
+            "transport block proposal response schema `{schema}` is not supported"
+        ));
+    }
+    serde_json::from_str(line)
+        .map_err(|error| format!("transport block proposal response parse failed: {error}"))
 }
 
 pub(super) fn parse_transport_block_vote_response(
@@ -1064,6 +1147,152 @@ pub(super) fn validate_transport_block_vote_request(
         return Err("transport block vote request payload hash or message id mismatch".to_string());
     }
     Ok(())
+}
+
+pub(super) fn validate_transport_block_proposal_request(
+    envelope: &TransportBlockProposalRequestEnvelope,
+    data_dir: &Path,
+    topology: &NetworkTopology,
+    local_status: &StatusReport,
+) -> Result<(), String> {
+    if envelope.schema != TRANSPORT_BLOCK_PROPOSAL_REQUEST_SCHEMA
+        || envelope.topology_id != topology.topology_id
+        || envelope.frame.topic != TRANSPORT_BLOCK_PROPOSAL_REQUEST_TOPIC
+        || envelope.frame.to.as_deref() != Some(local_status.node_id.as_str())
+    {
+        return Err("transport block proposal request has invalid route".to_string());
+    }
+    if topology.peer(&envelope.frame.from).is_none() {
+        return Err(format!(
+            "transport block proposal request sender `{}` is not in topology",
+            envelope.frame.from
+        ));
+    }
+    if envelope.block_height == 0
+        || envelope.required_parent.height.checked_add(1) != Some(envelope.block_height)
+        || envelope.required_parent.height != local_status.block_height
+        || envelope.required_parent.block_hash != local_status.block_tip_hash
+        || envelope.required_parent.state_root != local_status.state_root
+    {
+        return Err("transport block proposal request parent does not match local state".to_string());
+    }
+    if !is_supported_transport_batch_kind(&envelope.batch_kind) {
+        return Err(format!(
+            "transport block proposal request batch kind `{}` is not supported",
+            envelope.batch_kind
+        ));
+    }
+    serde_json::from_str::<serde_json::Value>(&envelope.batch_json).map_err(|error| {
+        format!("transport block proposal request batch is not valid JSON: {error}")
+    })?;
+    if let Some(timeout_certificate_json) = envelope.timeout_certificate_json.as_ref() {
+        serde_json::from_str::<serde_json::Value>(timeout_certificate_json).map_err(|error| {
+            format!(
+                "transport block proposal request timeout certificate is not valid JSON: {error}"
+            )
+        })?;
+    }
+    let expected = &envelope.expected_proposal;
+    if expected.signature.is_some()
+        || expected.block_height != envelope.block_height
+        || expected.view != envelope.view
+        || expected.batch_kind != envelope.batch_kind
+        || expected.parent_hash != envelope.required_parent.block_hash
+        || expected.proposer != local_status.node_id
+    {
+        return Err(
+            "transport block proposal request expected proposal has invalid binding".to_string(),
+        );
+    }
+    let payload = transport_block_proposal_request_payload(
+        envelope.block_height,
+        envelope.view,
+        &envelope.batch_kind,
+        &envelope.batch_json,
+        expected,
+        &envelope.required_parent,
+        envelope.timeout_certificate_json.as_deref(),
+    )?;
+    if !verify_message_payload(
+        &network_domain_from_topology(topology),
+        &envelope.frame,
+        &payload,
+    ) {
+        return Err(
+            "transport block proposal request payload hash or message id mismatch".to_string(),
+        );
+    }
+    validate_transport_envelope_auth(
+        Some(&envelope.auth),
+        data_dir,
+        topology,
+        &envelope.frame,
+    )
+}
+
+pub(super) fn validate_transport_block_proposal_response(
+    response: &TransportBlockProposalResponseEnvelope,
+    request: &TransportBlockProposalRequestEnvelope,
+    data_dir: &Path,
+    topology: &NetworkTopology,
+    local_status: &StatusReport,
+    target: &str,
+) -> Result<(), String> {
+    if response.schema != TRANSPORT_BLOCK_PROPOSAL_RESPONSE_SCHEMA
+        || response.topology_id != topology.topology_id
+        || response.frame.topic != TRANSPORT_BLOCK_PROPOSAL_RESPONSE_TOPIC
+        || response.frame.from != target
+        || response.frame.to.as_deref() != Some(local_status.node_id.as_str())
+        || response.request_message_id != request.frame.message_id
+    {
+        return Err("transport block proposal response has invalid request binding".to_string());
+    }
+    validate_transport_hello(&response.state, topology, local_status)?;
+    if response.state.node_id != target
+        || response.state.block_height != request.required_parent.height
+        || response.state.block_tip_hash != request.required_parent.block_hash
+        || response.state.state_root != request.required_parent.state_root
+    {
+        return Err("transport block proposal response state mismatch".to_string());
+    }
+    let mut unsigned_response = response.proposal.clone();
+    unsigned_response.signature = None;
+    if unsigned_response != request.expected_proposal {
+        return Err(
+            "transport block proposal response differs from expected proposal".to_string(),
+        );
+    }
+    let signature = response
+        .proposal
+        .signature
+        .as_ref()
+        .ok_or_else(|| "transport block proposal response is unsigned".to_string())?;
+    if response.proposal.proposer != target
+        || signature.signer != target
+        || signature.algorithm_id != ML_DSA_65_ALGORITHM
+        || signature.signature_hex.is_empty()
+    {
+        return Err("transport block proposal response signature binding mismatch".to_string());
+    }
+    let payload = transport_block_proposal_response_payload(
+        &response.request_message_id,
+        &response.proposal,
+        response.consensus_v2_proposal.as_ref(),
+        &response.state,
+    )?;
+    if !verify_message_payload(
+        &network_domain_from_topology(topology),
+        &response.frame,
+        &payload,
+    ) {
+        return Err("transport block proposal response payload binding mismatch".to_string());
+    }
+    validate_transport_envelope_auth(
+        Some(&response.auth),
+        data_dir,
+        topology,
+        &response.frame,
+    )
 }
 
 pub(super) fn validate_signed_proposal_policy(
@@ -1687,10 +1916,12 @@ mod transport_cli_tests {
         .expect("validate authenticated health request");
 
         let state = transport_hello(&topology, &target_status);
+        let capabilities = vec![TRANSPORT_REMOTE_PROPOSAL_CAPABILITY.to_string()];
         let response_payload = transport_health_response_payload(
             &topology.topology_id,
             &request.frame.message_id,
             &nonce,
+            &capabilities,
             &state,
         )
         .expect("health response payload");
@@ -1715,6 +1946,7 @@ mod transport_cli_tests {
             frame: response_frame,
             request_message_id: request.frame.message_id.clone(),
             nonce,
+            capabilities,
             state,
         };
         validate_transport_health_response(
@@ -1726,6 +1958,21 @@ mod transport_cli_tests {
             "validator-1",
         )
         .expect("validate authenticated health response");
+
+        let mut missing_capability = response.clone();
+        missing_capability.capabilities.clear();
+        assert!(
+            validate_transport_health_response(
+                &missing_capability,
+                &request,
+                &data_dir,
+                &topology,
+                &client_status,
+                "validator-1",
+            )
+            .is_err(),
+            "health response without remote-proposer capability must fail closed"
+        );
 
         let mut replayed = response.clone();
         replayed.nonce = "cd".repeat(48);

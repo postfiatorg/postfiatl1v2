@@ -7,11 +7,19 @@ const TRANSPORT_BATCH_TOPIC: &str = "transparent_batch";
 const TRANSPORT_BLOCK_VOTE_REQUEST_SCHEMA: &str = "postfiat-transport-block-vote-request-v1";
 const TRANSPORT_BLOCK_VOTE_RESPONSE_SCHEMA: &str = "postfiat-transport-block-vote-response-v1";
 const TRANSPORT_BLOCK_VOTE_TOPIC: &str = "block_vote_request";
+const TRANSPORT_BLOCK_PROPOSAL_REQUEST_SCHEMA: &str =
+    "postfiat-transport-block-proposal-request-v1";
+const TRANSPORT_BLOCK_PROPOSAL_RESPONSE_SCHEMA: &str =
+    "postfiat-transport-block-proposal-response-v1";
+const TRANSPORT_BLOCK_PROPOSAL_REQUEST_TOPIC: &str = "block_proposal_request";
+const TRANSPORT_BLOCK_PROPOSAL_RESPONSE_TOPIC: &str = "block_proposal_response";
 const TRANSPORT_HEALTH_REQUEST_SCHEMA: &str = "postfiat-transport-health-request-v1";
-const TRANSPORT_HEALTH_RESPONSE_SCHEMA: &str = "postfiat-transport-health-response-v1";
+const TRANSPORT_HEALTH_RESPONSE_SCHEMA: &str = "postfiat-transport-health-response-v2";
 const TRANSPORT_HEALTH_REQUEST_TOPIC: &str = "validator_health_request";
 const TRANSPORT_HEALTH_RESPONSE_TOPIC: &str = "validator_health_response";
+const TRANSPORT_REMOTE_PROPOSAL_CAPABILITY: &str = "block_proposal_request_v1";
 const MAX_TRANSPORT_FRAME_BYTES: u64 = 4 * 1024 * 1024;
+const MAX_TRANSPORT_PROPOSAL_REQUEST_DIRS: usize = 1_024;
 const PREWARM_SHIELDED_VERIFIER_ENV: &str = "POSTFIAT_PREWARM_SHIELDED_VERIFIER";
 const PREWARM_ASSET_ORCHARD_SWAP_VERIFIER_ENV: &str =
     "POSTFIAT_PREWARM_ASSET_ORCHARD_SWAP_VERIFIER";
@@ -72,6 +80,7 @@ struct TransportPeerCertifiedBatchLoopReadyReport {
     local_apply_before_certified_send: bool,
     defer_certified_sends: bool,
     persistent_vote_streams: bool,
+    remote_proposal_routing: bool,
     heartbeat_unix_ms: u64,
     local_state: TransportHello,
     authenticated_peer_count: usize,
@@ -90,6 +99,7 @@ struct TransportValidatorServeReadyReport<'a> {
     max_connections: usize,
     timeout_ms: u64,
     require_signed_proposal: bool,
+    remote_proposal_routing: bool,
     shielded_verifier_prewarm: &'a TransportShieldedVerifierPrewarmReport,
 }
 
@@ -190,6 +200,85 @@ struct TransportBlockVoteRequestEnvelope {
     consensus_v2: Option<TransportConsensusV2VoteRequest>,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+struct TransportRequiredBlockParent {
+    height: u64,
+    block_hash: String,
+    state_root: String,
+}
+
+impl From<&RequiredBlockParent> for TransportRequiredBlockParent {
+    fn from(parent: &RequiredBlockParent) -> Self {
+        Self {
+            height: parent.height,
+            block_hash: parent.block_hash.clone(),
+            state_root: parent.state_root.clone(),
+        }
+    }
+}
+
+impl From<&TransportRequiredBlockParent> for RequiredBlockParent {
+    fn from(parent: &TransportRequiredBlockParent) -> Self {
+        Self {
+            height: parent.height,
+            block_hash: parent.block_hash.clone(),
+            state_root: parent.state_root.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct TransportBlockProposalRequestEnvelope {
+    schema: String,
+    topology_id: String,
+    frame: FramedMessage,
+    auth: TransportEnvelopeAuth,
+    block_height: u64,
+    view: u64,
+    batch_kind: String,
+    batch_json: String,
+    expected_proposal: BlockProposalFile,
+    required_parent: TransportRequiredBlockParent,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    timeout_certificate_json: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct TransportBlockProposalRequestPayload<'a> {
+    schema: &'static str,
+    block_height: u64,
+    view: u64,
+    batch_kind: &'a str,
+    batch_json: &'a str,
+    expected_proposal: &'a BlockProposalFile,
+    required_parent: &'a TransportRequiredBlockParent,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    timeout_certificate_json: Option<&'a str>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct TransportBlockProposalResponseEnvelope {
+    schema: String,
+    topology_id: String,
+    frame: FramedMessage,
+    auth: TransportEnvelopeAuth,
+    request_message_id: String,
+    proposal: BlockProposalFile,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    consensus_v2_proposal: Option<postfiat_types::ConsensusV2Proposal>,
+    state: TransportHello,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct TransportBlockProposalResponsePayload<'a> {
+    schema: &'static str,
+    request_message_id: &'a str,
+    proposal: &'a BlockProposalFile,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    consensus_v2_proposal: Option<&'a postfiat_types::ConsensusV2Proposal>,
+    state: &'a TransportHello,
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct TransportHealthRequestEnvelope {
     schema: String,
@@ -207,6 +296,7 @@ struct TransportHealthResponseEnvelope {
     auth: TransportEnvelopeAuth,
     request_message_id: String,
     nonce: String,
+    capabilities: Vec<String>,
     state: TransportHello,
 }
 
@@ -433,6 +523,8 @@ struct TransportValidatorServeEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     block_vote_response: Option<TransportBlockVoteResponse>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    block_proposal_response: Option<TransportBlockProposalResponseEnvelope>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     health_response: Option<TransportHealthResponseEnvelope>,
     #[serde(skip_serializing_if = "Option::is_none")]
     rejection: Option<TransportValidatorServeRejection>,
@@ -461,10 +553,12 @@ struct TransportValidatorServeReport {
     connection_count: u64,
     accepted_batch_count: u64,
     accepted_block_vote_count: u64,
+    accepted_block_proposal_count: u64,
     accepted_health_count: u64,
     rejected_count: u64,
     batch_acks: Vec<TransportBatchAck>,
     block_vote_responses: Vec<TransportBlockVoteResponse>,
+    block_proposal_responses: Vec<TransportBlockProposalResponseEnvelope>,
     health_responses: Vec<TransportHealthResponseEnvelope>,
     rejected: Vec<TransportValidatorServeRejection>,
     verified: bool,
@@ -474,6 +568,7 @@ struct TransportValidatorServeReport {
 struct TransportValidatorServeSharedState {
     batch_acks: Vec<TransportBatchAck>,
     block_vote_responses: Vec<TransportBlockVoteResponse>,
+    block_proposal_responses: Vec<TransportBlockProposalResponseEnvelope>,
     health_responses: Vec<TransportHealthResponseEnvelope>,
     rejected: Vec<TransportValidatorServeRejection>,
 }

@@ -4230,6 +4230,64 @@ fn sign_block_proposal_file(
     Ok(())
 }
 
+pub fn sign_verified_block_proposal(
+    data_dir: &Path,
+    mut proposal: BlockProposalFile,
+    key_file: &Path,
+    validator_id: &str,
+) -> io::Result<BlockProposalFile> {
+    let store = NodeStore::new(data_dir);
+    let genesis = store.read_genesis()?;
+    validate_block_proposal_file(&proposal, &genesis)?;
+    let governance =
+        governance_with_due_validator_registry_activations(&store, &genesis, proposal.block_height)?;
+    validate_bridge_exit_root_activation(&proposal, &genesis, &governance)?;
+    let validators = active_validator_ids(&governance)?;
+    let expected_proposer =
+        leader_for_view(&validators, proposal.block_height, proposal.view).map_err(invalid_data)?;
+    if proposal.proposer != expected_proposer || proposal.proposer != validator_id {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "proposal signer `{validator_id}` is not deterministic proposer `{expected_proposer}`"
+            ),
+        ));
+    }
+    sign_block_proposal_file(&store, &mut proposal, key_file, Some(validator_id))?;
+    verify_block_proposal_signature_if_present(&store, &proposal)?;
+    Ok(proposal)
+}
+
+pub fn verify_signed_block_proposal(
+    data_dir: &Path,
+    proposal: &BlockProposalFile,
+) -> io::Result<()> {
+    let store = NodeStore::new(data_dir);
+    let genesis = store.read_genesis()?;
+    validate_block_proposal_file(proposal, &genesis)?;
+    if proposal.signature.is_none() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "block proposal is unsigned",
+        ));
+    }
+    let governance =
+        governance_with_due_validator_registry_activations(&store, &genesis, proposal.block_height)?;
+    let validators = active_validator_ids(&governance)?;
+    let expected_proposer =
+        leader_for_view(&validators, proposal.block_height, proposal.view).map_err(invalid_data)?;
+    if proposal.proposer != expected_proposer {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "block proposal proposer `{}` is not deterministic proposer `{expected_proposer}`",
+                proposal.proposer
+            ),
+        ));
+    }
+    verify_block_proposal_signature_if_present(&store, proposal)
+}
+
 fn verify_block_proposal_signature_if_present(
     store: &NodeStore,
     proposal: &BlockProposalFile,
