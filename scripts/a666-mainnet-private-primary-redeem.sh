@@ -40,6 +40,7 @@ remote_topology="/etc/postfiat/releases/$release_id/topology.json"
 remote_root="/var/lib/postfiat/validator-2/$workflow_id-orchard"
 remote_public="$remote_root/public"
 remote_private="$remote_root/private"
+remote_keys="$remote_root/keys"
 remote_orchard_service=http://127.0.0.1:8789
 validator2_host=$(jq -er '."validator-2"' "$hosts_file")
 joe=pfab9b9228942e5c529633a13aa271d5297bec6353
@@ -59,7 +60,19 @@ mkdir -p \
   "$orchard_dir/private-primary-redeem" \
   "$orchard_dir/pfusdc-private-egress"
 ssh -o BatchMode=yes "root@$validator2_host" \
-  "install -d -m 700 '$remote_private'; install -d -m 755 '$remote_public'"
+  "install -d -o root -g root -m 755 '$remote_root'; \
+   install -d -o postfiat -g postfiat -m 700 '$remote_private'; \
+   chown postfiat:postfiat '$remote_private'; \
+   install -d -o root -g root -m 700 '$remote_keys'; \
+   install -d -m 755 '$remote_public'; \
+   if test -e '$remote_private/a666-note.json'; then \
+     chown postfiat:postfiat '$remote_private/a666-note.json'; \
+     chmod 600 '$remote_private/a666-note.json'; \
+   fi; \
+   if test -e '$remote_private/pfusdc-note.json'; then \
+     chown postfiat:postfiat '$remote_private/pfusdc-note.json'; \
+     chmod 600 '$remote_private/pfusdc-note.json'; \
+   fi"
 ssh -o BatchMode=yes "root@$validator2_host" \
   "curl --silent --show-error --fail-with-body '$remote_orchard_service/asset-orchard/readiness' \
      > '$remote_public/resident-prover-readiness.json'; \
@@ -78,14 +91,19 @@ round_args=(
 if ! test -s "$orchard_dir/ingress/finality/summary.json"; then
   if ! test -s "$orchard_dir/ingress/ingress-batch.json"; then
     ssh -o BatchMode=yes "root@$validator2_host" \
-      "install -d -m 700 '$remote_private'; install -d -m 755 '$remote_public'"
-    scp -q "$holder_key" "root@$validator2_host:$remote_private/holder-key.json"
+      "install -d -o root -g root -m 755 '$remote_root'; \
+       install -d -o postfiat -g postfiat -m 700 '$remote_private'; \
+       chown postfiat:postfiat '$remote_private'; \
+       install -d -o root -g root -m 700 '$remote_keys'; \
+       install -d -m 755 '$remote_public'"
+    scp -q "$holder_key" "root@$validator2_host:$remote_keys/holder-key.json"
     ssh -o BatchMode=yes "root@$validator2_host" \
-      "chmod 600 '$remote_private/holder-key.json'; \
+      "chown root:root '$remote_keys/holder-key.json'; \
+       chmod 600 '$remote_keys/holder-key.json'; \
        seed=\$(openssl rand -hex 32); \
        '$remote_node' asset-orchard-ingress-create \
          --data-dir /var/lib/postfiat/validator-2 \
-         --key-file '$remote_private/holder-key.json' \
+         --key-file '$remote_keys/holder-key.json' \
          --asset-id '$a666' \
          --amount '$nav_amount_atoms' \
          --note-seed-hex \"\$seed\" \
@@ -97,6 +115,7 @@ if ! test -s "$orchard_dir/ingress/finality/summary.json"; then
          --ingress-file '$remote_public/a666-ingress.json' \
          --batch-file '$remote_public/ingress-batch.json' \
          > '$remote_public/ingress-batch-report.json'; \
+       chown postfiat:postfiat '$remote_private/a666-note.json'; \
        chmod 600 '$remote_private/a666-note.json'"
     for name in ingress-report ingress-batch-report ingress-batch; do
       scp -q "root@$validator2_host:$remote_public/$name.json" \
@@ -153,7 +172,8 @@ if ! test -s "$orchard_dir/private-primary-redeem/finality/summary.json"; then
          > '$remote_public/private-primary-redeem-timing.json'
        output_note_path=\$(jq -er '.output_note_path' \
          '$remote_public/private-primary-redeem-response.json')
-       install -m 600 \"\$output_note_path\" '$remote_private/pfusdc-note.json'
+       install -o postfiat -g postfiat -m 600 \"\$output_note_path\" \
+         '$remote_private/pfusdc-note.json'
        '$remote_node' shield-batch-asset-orchard-private-primary-redeem \
          --data-dir /var/lib/postfiat/validator-2 \
          --action-file '$remote_public/private-primary-redeem.json' \

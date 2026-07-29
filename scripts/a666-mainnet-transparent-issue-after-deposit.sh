@@ -11,6 +11,7 @@ expected_wrapped_balance_before=
 expected_wrapped_supply_before=
 resume_after_ingress_proof=false
 resume_after_ingress_deployment=false
+resume_after_private_middle=false
 allow_recovery_timing_exception=false
 private_middle=false
 a100_host=${A666_A100_HOST:-194.228.55.129}
@@ -29,6 +30,7 @@ while (($#)); do
     --expected-wrapped-supply-before) expected_wrapped_supply_before=$2; shift 2 ;;
     --resume-after-ingress-proof) resume_after_ingress_proof=true; shift ;;
     --resume-after-ingress-deployment) resume_after_ingress_deployment=true; shift ;;
+    --resume-after-private-middle) resume_after_private_middle=true; shift ;;
     --allow-recovery-timing-exception) allow_recovery_timing_exception=true; shift ;;
     --private-middle) private_middle=true; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -52,15 +54,34 @@ done
 [[ "$expected_wrapped_balance_before" =~ ^[0-9]+$ ]]
 [[ "$expected_wrapped_supply_before" =~ ^[0-9]+$ ]]
 [[ "$prior_checkpoint_block_id" =~ ^[0-9a-f]{96}$ ]]
-if "$resume_after_ingress_proof" && "$resume_after_ingress_deployment"; then
-  echo "choose exactly one ingress resume point" >&2
+resume_point_count=0
+for resume_point in \
+  "$resume_after_ingress_proof" \
+  "$resume_after_ingress_deployment" \
+  "$resume_after_private_middle"
+do
+  if "$resume_point"; then
+    resume_point_count=$((resume_point_count + 1))
+  fi
+done
+if test "$resume_point_count" -gt 1; then
+  echo "choose exactly one recovery resume point" >&2
   exit 2
 fi
 if "$allow_recovery_timing_exception" \
   && ! "$resume_after_ingress_proof" \
-  && ! "$resume_after_ingress_deployment"
+  && ! "$resume_after_ingress_deployment" \
+  && ! "$resume_after_private_middle"
 then
-  echo "a recovery timing exception requires an explicit ingress resume point" >&2
+  echo "a recovery timing exception requires an explicit resume point" >&2
+  exit 2
+fi
+if "$resume_after_private_middle" && ! "$private_middle"; then
+  echo "private-middle recovery requires --private-middle" >&2
+  exit 2
+fi
+if "$resume_after_private_middle" && ! "$allow_recovery_timing_exception"; then
+  echo "private-middle recovery requires an explicit timing exception" >&2
   exit 2
 fi
 
@@ -106,6 +127,21 @@ joe_evm=0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0
 uniswap_state_view=0x7fFE42C4a5DEeA5b0feC41C94C136Cf115597227
 uniswap_pool_id=0xc5f1e4b5bb07c0718eddcc3d102dc751b8953ec25bb05cdc14d95419d4d16e98
 
+if "$resume_after_private_middle"; then
+  test -s "$phase_dir/orchard-private-issue/summary.json"
+  jq -e \
+    --argjson start "$expected_pftl_height" \
+    --argjson end "$((expected_pftl_height + 4))" \
+    '.verdict=="PASS" and .start_height==$start and .end_height==$end' \
+    "$phase_dir/orchard-private-issue/summary.json" >/dev/null
+  test -s "$phase_dir/a666/joe-pfusdc-before.json"
+  test -s "$phase_dir/a666/joe-a666-before.json"
+  pfusdc_balance_before=$(jq -er '[.assets[]?.balance] | add // 0' \
+    "$phase_dir/a666/joe-pfusdc-before.json")
+  a666_balance_before=$(jq -er '[.assets[]?.balance] | add // 0' \
+    "$phase_dir/a666/joe-a666-before.json")
+  export_height=$((expected_pftl_height + 6))
+else
 ssh -o BatchMode=yes "root@$validator2_host" \
   "$remote_node status --data-dir /var/lib/postfiat/validator-2 --expect-height $expected_pftl_height" \
   > "$phase_dir/pftl/status-before.json"
@@ -271,6 +307,7 @@ else
     --artifact-dir "$phase_dir/a666/03-export-round" \
     "${round_args[@]}"
   export_height=$((expected_pftl_height + 5))
+fi
 fi
 ssh -o BatchMode=yes "root@$validator2_host" \
   "$remote_node account-assets --data-dir /var/lib/postfiat/validator-2 --account $joe --asset-id $a666" \
