@@ -1,0 +1,73 @@
+{
+  "completed_at_unix_ms": 1785287913005,
+  "elapsed_ms": 10728.862255811691,
+  "remote_vote_files": [
+    "/var/lib/postfiat/validator-2/opt-vote-smoke-20260729-assemble/validator-0.vote.json",
+    "/var/lib/postfiat/validator-2/opt-vote-smoke-20260729-assemble/validator-1.vote.json",
+    "/var/lib/postfiat/validator-2/opt-vote-smoke-20260729-assemble/validator-2.vote.json",
+    "/var/lib/postfiat/validator-2/opt-vote-smoke-20260729-assemble/validator-3.vote.json",
+    "/var/lib/postfiat/validator-2/opt-vote-smoke-20260729-assemble/validator-4.vote.json",
+    "/var/lib/postfiat/validator-2/opt-vote-smoke-20260729-assemble/validator-5.vote.json"
+  ],
+  "remote_vote_files_csv": "/var/lib/postfiat/validator-2/opt-vote-smoke-20260729-assemble/validator-0.vote.json,/var/lib/postfiat/validator-2/opt-vote-smoke-20260729-assemble/validator-1.vote.json,/var/lib/postfiat/validator-2/opt-vote-smoke-20260729-assemble/validator-2.vote.json,/var/lib/postfiat/validator-2/opt-vote-smoke-20260729-assemble/validator-3.vote.json,/var/lib/postfiat/validator-2/opt-vote-smoke-20260729-assemble/validator-4.vote.json,/var/lib/postfiat/validator-2/opt-vote-smoke-20260729-assemble/validator-5.vote.json",
+  "schema": "postfiat-a666-parallel-checkpoint-votes-v1",
+  "started_at_unix_ms": 1785287902276,
+  "strategy": "six independent validator signatures collected concurrently",
+  "validator_count": 6,
+  "validators": [
+    {
+      "completed_at_unix_ms": 1785287912908,
+      "elapsed_ms": 10631.375923752785,
+      "host": "64.176.220.75",
+      "local_vote_file": "docs/evidence/a666-optimization-run-20260729/preflight/checkpoint-vote-smoke/validator-0.vote.json",
+      "remote_vote_file": "/var/lib/postfiat/validator-2/opt-vote-smoke-20260729-assemble/validator-0.vote.json",
+      "started_at_unix_ms": 1785287902277,
+      "validator": "validator-0"
+    },
+    {
+      "completed_at_unix_ms": 1785287911860,
+      "elapsed_ms": 9582.03750103712,
+      "host": "95.179.184.122",
+      "local_vote_file": "docs/evidence/a666-optimization-run-20260729/preflight/checkpoint-vote-smoke/validator-1.vote.json",
+      "remote_vote_file": "/var/lib/postfiat/validator-2/opt-vote-smoke-20260729-assemble/validator-1.vote.json",
+      "started_at_unix_ms": 1785287902278,
+      "validator": "validator-1"
+    },
+    {
+      "completed_at_unix_ms": 1785287907078,
+      "elapsed_ms": 4799.76873844862,
+      "host": "66.42.48.39",
+      "local_vote_file": "docs/evidence/a666-optimization-run-20260729/preflight/checkpoint-vote-smoke/validator-2.vote.json",
+      "remote_vote_file": "/var/lib/postfiat/validator-2/opt-vote-smoke-20260729-assemble/validator-2.vote.json",
+      "started_at_unix_ms": 1785287902278,
+      "validator": "validator-2"
+    },
+    {
+      "completed_at_unix_ms": 1785287913004,
+      "elapsed_ms": 10724.671587347984,
+      "host": "149.28.63.106",
+      "local_vote_file": "docs/evidence/a666-optimization-run-20260729/preflight/checkpoint-vote-smoke/validator-3.vote.json",
+      "remote_vote_file": "/var/lib/postfiat/validator-2/opt-vote-smoke-20260729-assemble/validator-3.vote.json",
+      "started_at_unix_ms": 1785287902279,
+      "validator": "validator-3"
+    },
+    {
+      "completed_at_unix_ms": 1785287911810,
+      "elapsed_ms": 9530.427761375904,
+      "host": "95.179.179.206",
+      "local_vote_file": "docs/evidence/a666-optimization-run-20260729/preflight/checkpoint-vote-smoke/validator-4.vote.json",
+      "remote_vote_file": "/var/lib/postfiat/validator-2/opt-vote-smoke-20260729-assemble/validator-4.vote.json",
+      "started_at_unix_ms": 1785287902280,
+      "validator": "validator-4"
+    },
+    {
+      "completed_at_unix_ms": 1785287907857,
+      "elapsed_ms": 5576.329879462719,
+      "host": "45.32.110.170",
+      "local_vote_file": "docs/evidence/a666-optimization-run-20260729/preflight/checkpoint-vote-smoke/validator-5.vote.json",
+      "remote_vote_file": "/var/lib/postfiat/validator-2/opt-vote-smoke-20260729-assemble/validator-5.vote.json",
+      "started_at_unix_ms": 1785287902280,
+      "validator": "validator-5"
+    }
+  ]
+}
