@@ -860,8 +860,10 @@ fn resolve_published_swap(
             "processed swap batch identity mismatch",
         ));
     }
+    let canonical_processed_payload =
+        serde_json::to_string(&processed_batch).map_err(invalid_data)?;
     let (committed_height, certificate_ref) =
-        verify_processed_swap_finality(config, batch_hash, &processed_payload)?;
+        verify_processed_swap_finality(config, batch_hash, &canonical_processed_payload)?;
     let committed = transition_pftl_swap_journal_entry(
         &config.journal_file,
         idempotency_key,
