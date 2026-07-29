@@ -13,7 +13,7 @@ use postfiat_node::{
     ShieldedBatchSimulateOptions, SignedPftlSwapIntentV1,
 };
 use postfiat_storage::NodeStore;
-use postfiat_types::ShieldedActionBatch;
+use postfiat_types::{ShieldedAction, ShieldedActionBatch};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -449,7 +449,11 @@ fn handle_request(
             };
             if let Some(existing) = existing.as_ref() {
                 let entry = resolve_published_swap(state, &existing.idempotency_key)?;
-                if entry.state != PftlSwapJournalState::InterruptedPrepublish {
+                if !matches!(
+                    entry.state,
+                    PftlSwapJournalState::InterruptedPrepublish
+                        | PftlSwapJournalState::FailedPrepublish
+                ) {
                     let pending = matches!(
                         entry.state,
                         PftlSwapJournalState::Journaled
@@ -1108,38 +1112,55 @@ fn prepare_issue_swap(
     let config = &state.config;
     let mut stage_timings_ns = BTreeMap::new();
     let ingress_start = Instant::now();
-    let ingress_file = work_dir.join("ingress.json");
-    let ingress_note_file = work_dir.join("ingress-note.json");
-    let ingress_batch_file = work_dir.join("ingress-batch.json");
-    let ingress = create_asset_orchard_ingress(AssetOrchardIngressCreateOptions {
-        data_dir: config.data_dir.clone(),
-        key_file: config.transparent_key_file.clone(),
-        asset_id: quote.input_asset_id.clone(),
-        amount: quote.input_amount_atoms,
-        fee: 0,
-        note_seed_hex: random_hex(32)?,
-        encrypted_output_hex: None,
-        ingress_file,
-        note_file: ingress_note_file.clone(),
-        overwrite: false,
-    })?;
-    if ingress.burn_fee > signed_intent.intent.maximum_fee_atoms {
-        return Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "controlled-wallet ingress fee exceeds signed maximum",
-        ));
-    }
-    let ingress_batch = create_asset_orchard_ingress_batch(AssetOrchardIngressBatchOptions {
-        data_dir: config.data_dir.clone(),
-        ingress_file: work_dir.join("ingress.json"),
-        batch_file: ingress_batch_file,
-    })?;
-    insert_elapsed_stage(&mut stage_timings_ns, "ingress_construct", ingress_start)?;
-    let primary_start = Instant::now();
-    let issue_response = post_json(
-        config.asset_service_address,
-        "/asset-orchard/private-primary-issue-actions",
-        &json!({
+    let first_attempt_dir = work_dir
+        .parent()
+        .ok_or_else(|| invalid_data("swap work directory has no attempt parent"))?
+        .join("attempt-1");
+    let ingress_batch_file = first_attempt_dir.join("ingress-batch.json");
+    let request_file = first_attempt_dir.join("primary-request.json");
+    let cached_response = load_cached_primary_response(config, "issue", request_id)?;
+    let (ingress_batch, ingress_output_commitment, issue_request) = if ingress_batch_file.exists() {
+        let ingress_batch: ShieldedActionBatch =
+            read_private_json(&ingress_batch_file, "durable issue ingress batch")?;
+        let ingress_output_commitment = ingress_output_commitment(&ingress_batch)?.to_string();
+        let issue_request = request_file
+            .exists()
+            .then(|| read_private_json::<Value>(&request_file, "durable primary issue request"))
+            .transpose()?;
+        (ingress_batch, ingress_output_commitment, issue_request)
+    } else {
+        if work_dir != first_attempt_dir {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "resumed issue has no durable first-attempt ingress",
+            ));
+        }
+        let ingress_file = first_attempt_dir.join("ingress.json");
+        let ingress_note_file = first_attempt_dir.join("ingress-note.json");
+        let ingress = create_asset_orchard_ingress(AssetOrchardIngressCreateOptions {
+            data_dir: config.data_dir.clone(),
+            key_file: config.transparent_key_file.clone(),
+            asset_id: quote.input_asset_id.clone(),
+            amount: quote.input_amount_atoms,
+            fee: 0,
+            note_seed_hex: random_hex(32)?,
+            encrypted_output_hex: None,
+            ingress_file: ingress_file.clone(),
+            note_file: ingress_note_file.clone(),
+            overwrite: false,
+        })?;
+        if ingress.burn_fee > signed_intent.intent.maximum_fee_atoms {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "controlled-wallet ingress fee exceeds signed maximum",
+            ));
+        }
+        let ingress_batch = create_asset_orchard_ingress_batch(AssetOrchardIngressBatchOptions {
+            data_dir: config.data_dir.clone(),
+            ingress_file,
+            batch_file: ingress_batch_file,
+        })?;
+        let issue_request = json!({
             "request_id": request_id,
             "input_note_path": ingress_note_file.display().to_string(),
             "route_id": quote.route_id,
@@ -1154,10 +1175,31 @@ fn prepare_issue_swap(
             "settlement_value_atoms": quote.input_amount_atoms,
             "expires_at_height": quote.expiry_height,
             "pending_output_commitments": [ingress.output_commitment],
-        }),
-        config.max_body_bytes,
-        config.request_timeout,
-    )?;
+        });
+        write_private_json(&request_file, &issue_request)?;
+        (
+            ingress_batch,
+            ingress.output_commitment,
+            Some(issue_request),
+        )
+    };
+    insert_elapsed_stage(&mut stage_timings_ns, "ingress_construct", ingress_start)?;
+    let primary_start = Instant::now();
+    let issue_response = match cached_response {
+        Some(response) => response,
+        None => post_json(
+            config.asset_service_address,
+            "/asset-orchard/private-primary-issue-actions",
+            &issue_request.ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "durable primary issue request is unavailable",
+                )
+            })?,
+            config.max_body_bytes,
+            config.request_timeout,
+        )?,
+    };
     insert_elapsed_stage(
         &mut stage_timings_ns,
         "primary_service_request",
@@ -1180,7 +1222,7 @@ fn prepare_issue_swap(
             work_dir,
             &output_note_path,
             &output_commitment,
-            vec![ingress.output_commitment, output_commitment.clone()],
+            vec![ingress_output_commitment, output_commitment.clone()],
         )?;
         insert_elapsed_stage(
             &mut stage_timings_ns,
@@ -1199,6 +1241,49 @@ fn prepare_issue_swap(
         output_note_refs,
         stage_timings_ns,
     )
+}
+
+fn load_cached_primary_response(
+    config: &Config,
+    direction: &str,
+    request_id: &str,
+) -> io::Result<Option<Value>> {
+    if !matches!(direction, "issue" | "redeem") {
+        return Err(invalid_data("resident prover cache direction is invalid"));
+    }
+    let response_file = config
+        .asset_service_vault_dir
+        .join("private-primary-work")
+        .join(direction)
+        .join(request_id)
+        .join("response.json");
+    if !response_file.exists() {
+        return Ok(None);
+    }
+    let response: Value = read_private_json(&response_file, "resident prover cached response")?;
+    if response["request_id"].as_str() != Some(request_id) {
+        return Err(invalid_data(
+            "resident prover cached response request identity mismatch",
+        ));
+    }
+    ensure_service_verified(&response, "cached private-primary response")?;
+    Ok(Some(response))
+}
+
+fn ingress_output_commitment(batch: &ShieldedActionBatch) -> io::Result<&str> {
+    match batch.actions.as_slice() {
+        [ShieldedAction::AssetOrchardIngressV2(action)] => {
+            validate_lower_hex(
+                &action.output_commitment,
+                64,
+                "durable ingress output commitment",
+            )?;
+            Ok(&action.output_commitment)
+        }
+        _ => Err(invalid_data(
+            "durable issue ingress batch has an unexpected action shape",
+        )),
+    }
 }
 
 fn prepare_redeem_swap(
@@ -1506,15 +1591,21 @@ fn index_pending_output_note(
         state: PrivateNoteStateV1::Pending,
         swap_id: swap_id.to_string(),
     };
-    if index
-        .notes
-        .get(commitment)
-        .is_some_and(|existing| existing != &record)
-    {
-        return Err(io::Error::new(
-            io::ErrorKind::AlreadyExists,
-            "private note commitment is already indexed differently",
-        ));
+    match index.notes.get_mut(commitment) {
+        Some(existing)
+            if existing.path == record.path
+                && existing.swap_id == record.swap_id
+                && existing.state == PrivateNoteStateV1::Discarded =>
+        {
+            transition_private_note_state(existing, PrivateNoteStateV1::Pending)?;
+        }
+        Some(existing) if existing != &record => {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                "private note commitment is already indexed differently",
+            ));
+        }
+        _ => {}
     }
     if index.notes.len() >= MAX_PRIVATE_NOTE_INDEX_ENTRIES && !index.notes.contains_key(commitment)
     {
@@ -1523,7 +1614,7 @@ fn index_pending_output_note(
             "private note index has reached its bounded capacity",
         ));
     }
-    index.notes.insert(commitment.to_string(), record);
+    index.notes.entry(commitment.to_string()).or_insert(record);
     persist_private_note_index(config, &index)
 }
 
@@ -1645,7 +1736,7 @@ fn transition_private_note_state(
     }
     if !matches!(
         (record.state, next),
-        (Pending, Spendable | Egressed | Discarded) | (Spendable, Spent)
+        (Pending, Spendable | Egressed | Discarded) | (Spendable, Spent) | (Discarded, Pending)
     ) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -2069,6 +2160,12 @@ fn read_bounded_file(path: &Path, maximum_bytes: usize, label: &str) -> io::Resu
         ));
     }
     Ok(bytes)
+}
+
+fn read_private_json<T: serde::de::DeserializeOwned>(path: &Path, label: &str) -> io::Result<T> {
+    validate_private_file(path, label)?;
+    let bytes = read_bounded_file(path, MAX_PRIVATE_STATE_FILE_BYTES, label)?;
+    serde_json::from_slice(&bytes).map_err(invalid_data)
 }
 
 fn write_private_json(path: &Path, value: &impl serde::Serialize) -> io::Result<()> {
@@ -2597,6 +2694,15 @@ mod tests {
                 .kind(),
             io::ErrorKind::InvalidData,
         );
+        let mut interrupted = PrivateNoteRecordV1 {
+            path: PathBuf::from("/test/interrupted-note.json"),
+            state: PrivateNoteStateV1::Pending,
+            swap_id: "22".repeat(48),
+        };
+        transition_private_note_state(&mut interrupted, PrivateNoteStateV1::Discarded)
+            .expect("interrupted note is discarded");
+        transition_private_note_state(&mut interrupted, PrivateNoteStateV1::Pending)
+            .expect("same prepublication lineage can revive its note");
     }
 
     #[test]

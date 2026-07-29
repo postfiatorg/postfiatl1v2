@@ -346,10 +346,7 @@ pub enum PftlSwapJournalState {
 
 impl PftlSwapJournalState {
     fn is_terminal(self) -> bool {
-        matches!(
-            self,
-            Self::Committed | Self::Rejected | Self::FailedPrepublish
-        )
+        matches!(self, Self::Committed | Self::Rejected)
     }
 }
 
@@ -1252,6 +1249,7 @@ fn pftl_swap_transition_allowed(current: PftlSwapJournalState, next: PftlSwapJou
                 | (Prepared, InterruptedPrepublish)
                 | (InterruptedPrepublish, Proving)
                 | (InterruptedPrepublish, FailedPrepublish)
+                | (FailedPrepublish, Proving)
                 | (Published, Committed)
                 | (Published, Rejected)
         )
@@ -1694,6 +1692,27 @@ mod tests {
         )
         .expect("same transition is idempotent");
         assert_eq!(replay.transitions.len(), 3);
+        transition_pftl_swap_journal_entry(
+            &path,
+            "intent-1",
+            PftlSwapJournalState::FailedPrepublish,
+            None,
+            None,
+            None,
+            Some("retryable prepublication failure".to_string()),
+        )
+        .expect("record prepublication failure");
+        let recovered_failure = transition_pftl_swap_journal_entry(
+            &path,
+            "intent-1",
+            PftlSwapJournalState::Proving,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("resume failed prepublication lineage");
+        assert_eq!(recovered_failure.transitions.len(), 5);
         assert_eq!(
             transition_pftl_swap_journal_entry(
                 &path,
