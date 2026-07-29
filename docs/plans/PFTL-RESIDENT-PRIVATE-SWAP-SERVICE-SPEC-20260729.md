@@ -1,9 +1,8 @@
 # PFTL Resident Private Swap Service Specification
 
 **Date:** 2026-07-29
-**Priority:** P1 (first product-latency workstream after the optimization
-campaign)
-**Status:** amended implementation and qualification specification (v4)
+**Priority:** P0 (immediate independently shippable PFTL product milestone)
+**Status:** amended implementation and qualification specification (v5)
 **Parent research:** `CHAIN-OPTIMIZATION-STACKED-RESEARCH-20260729.md`
 (S1.1, S1.3, S3.1, S6.1), `NAV-SWAP-EFFICIENCY-RESEARCH-20260729.md`
 (Tier 0.1, Tier 2.1)
@@ -16,6 +15,14 @@ one-round relay failure (mempool admission lesson)
 `MUST`, `MUST NOT`, `SHOULD`, and `REQUIRED` are normative.
 
 ## Amendment note
+
+The v5 delivery amendment makes the fastest safe PFTL-resident issue and
+redeem path the immediate product objective. It is not a preliminary demo and
+it does not wait for Ethereum or Uniswap integration. A release qualifies on
+PFTL when both governed directions work, preserve every protocol invariant,
+recover safely, and meet the PFTL execution SLO on the controlled fleet.
+Ethereum ingress and export remain separately measured adapters and cannot
+block this release.
 
 This v4 amendment preserves the resident-prover, persistent-session, and
 single-batch architecture. It tightens the product boundary and resolves
@@ -95,6 +102,18 @@ Ethereum USDC -> pfUSDC ingress and PFTL -> Ethereum/Uniswap export remain
 important adapters around this product, but they are separate state machines
 with separate clocks. A pending or degraded Ethereum adapter MUST NOT make an
 otherwise healthy PFTL-resident swap service unready.
+
+The release order is therefore normative:
+
+1. qualify and deploy transparent pfUSDC -> private A666 on PFTL;
+2. qualify and deploy private A666 -> private pfUSDC on PFTL;
+3. qualify the requested transparent-output variants;
+4. measure and optimize the warm PFTL path until the 20s/45s SLO is met; and
+5. integrate Ethereum ingress/export without changing or delaying the
+   independently operable PFTL service.
+
+Steps 1-4 are the immediate release. Step 5 is a subsequent integration
+milestone, even when its implementation proceeds in parallel.
 
 ## 1. Purpose
 
