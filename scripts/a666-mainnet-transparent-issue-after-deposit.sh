@@ -130,8 +130,8 @@ uniswap_pool_id=0xc5f1e4b5bb07c0718eddcc3d102dc751b8953ec25bb05cdc14d95419d4d16e
 if "$resume_after_private_middle"; then
   test -s "$phase_dir/orchard-private-issue/summary.json"
   jq -e \
-    --argjson start "$expected_pftl_height" \
-    --argjson end "$((expected_pftl_height + 4))" \
+    --argjson start "$((expected_pftl_height + 2))" \
+    --argjson end "$((expected_pftl_height + 6))" \
     '.verdict=="PASS" and .start_height==$start and .end_height==$end' \
     "$phase_dir/orchard-private-issue/summary.json" >/dev/null
   test -s "$phase_dir/a666/joe-pfusdc-before.json"
