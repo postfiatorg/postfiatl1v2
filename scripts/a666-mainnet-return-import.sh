@@ -123,9 +123,8 @@ python3 scripts/a666-parallel-checkpoint-votes.py \
   --ethereum-rpc "$rpc" \
   --validator2-remote-root "$remote_root" \
   > "$proof_dir/checkpoint-vote-fanout.json"
-vote_files=$(jq -er \
-  '.validator_count==6 and .remote_vote_files_csv' \
-  "$proof_dir/checkpoint-vote-fanout.json")
+vote_files=$(python3 scripts/a666-checkpoint-vote-files.py \
+  --fanout-file "$proof_dir/checkpoint-vote-fanout.json")
 ssh -o BatchMode=yes "root@$validator2_host" \
   "$remote_node ethereum-checkpoint-certificate-assemble \
     --data-dir /var/lib/postfiat/validator-2 \
