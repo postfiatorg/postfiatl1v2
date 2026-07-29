@@ -2989,6 +2989,7 @@ pub(super) fn transport_peer_certified_batch_round(
     vote_files.extend(remote_vote_files);
 
     let certificate_start = Instant::now();
+    let legacy_certificate_start = Instant::now();
     let mut verified_certificate = aggregate_verified_block_certificate(BlockCertificateOptions {
         data_dir: options.data_dir.clone(),
         verify_block_log: false,
@@ -3000,7 +3001,14 @@ pub(super) fn transport_peer_certified_batch_round(
         certificate_file: certificate_file.clone(),
     })
     .map_err(|error| format!("peer certified batch round certificate failed: {error}"))?;
+    let legacy_certificate_ms = monotonic_elapsed_ms(legacy_certificate_start);
+    let mut consensus_v2_prepare_qc_ms = 0.0;
+    let mut consensus_v2_precommit_votes_ms = 0.0;
+    let mut consensus_v2_precommit_qc_ms = 0.0;
+    let mut consensus_v2_commit_assembly_ms = 0.0;
+    let mut consensus_v2_commit_attach_write_ms = 0.0;
     if let Some(consensus_v2_proposal) = consensus_v2_proposal.as_ref() {
+        let stage_start = Instant::now();
         let prepare_qc = certify_and_persist_consensus_v2_votes(
             &options.data_dir,
             consensus_v2_proposal.round,
@@ -3009,6 +3017,8 @@ pub(super) fn transport_peer_certified_batch_round(
             consensus_v2_prepare_votes,
         )
         .map_err(|error| format!("consensus v2 prepare QC failed: {error}"))?;
+        consensus_v2_prepare_qc_ms = monotonic_elapsed_ms(stage_start);
+        let stage_start = Instant::now();
         let precommit_votes = collect_consensus_v2_precommit_votes(
             &options,
             &proposal,
@@ -3020,6 +3030,8 @@ pub(super) fn transport_peer_certified_batch_round(
             &targets,
             &local_status,
         )?;
+        consensus_v2_precommit_votes_ms = monotonic_elapsed_ms(stage_start);
+        let stage_start = Instant::now();
         let precommit_qc = certify_and_persist_consensus_v2_votes(
             &options.data_dir,
             consensus_v2_proposal.round,
@@ -3028,6 +3040,8 @@ pub(super) fn transport_peer_certified_batch_round(
             precommit_votes,
         )
         .map_err(|error| format!("consensus v2 precommit QC failed: {error}"))?;
+        consensus_v2_precommit_qc_ms = monotonic_elapsed_ms(stage_start);
+        let stage_start = Instant::now();
         let commit = assemble_consensus_v2_commit(
             &options.data_dir,
             &proposal,
@@ -3037,6 +3051,8 @@ pub(super) fn transport_peer_certified_batch_round(
             precommit_qc,
         )
         .map_err(|error| format!("consensus v2 commit assembly failed: {error}"))?;
+        consensus_v2_commit_assembly_ms = monotonic_elapsed_ms(stage_start);
+        let stage_start = Instant::now();
         verified_certificate = verified_certificate
             .attach_consensus_v2_commit(&options.data_dir, &proposal, commit)
             .map_err(|error| format!("consensus v2 certificate attachment failed: {error}"))?;
@@ -3045,6 +3061,7 @@ pub(super) fn transport_peer_certified_batch_round(
             verified_certificate.as_block_certificate_file(),
         )
         .map_err(|error| format!("consensus v2 certificate write failed: {error}"))?;
+        consensus_v2_commit_attach_write_ms = monotonic_elapsed_ms(stage_start);
     }
     let certificate = verified_certificate.as_block_certificate_file().clone();
     if certificate.certificate.votes.len() < certificate.certificate.quorum {
@@ -3416,6 +3433,12 @@ pub(super) fn transport_peer_certified_batch_round(
         local_vote_ms,
         vote_requests_ms,
         certificate_ms,
+        legacy_certificate_ms,
+        consensus_v2_prepare_qc_ms,
+        consensus_v2_precommit_votes_ms,
+        consensus_v2_precommit_qc_ms,
+        consensus_v2_commit_assembly_ms,
+        consensus_v2_commit_attach_write_ms,
         certified_sends_ms,
         local_apply_ms,
         post_apply_status_ms,

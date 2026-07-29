@@ -12,7 +12,7 @@ Type=simple
 User=postfiat
 Group=postfiat
 EnvironmentFile=/etc/postfiat/pftl-swapd.env
-ExecStart=/opt/postfiat/services/releases/pftl-resident-swap-e55434c/pftl_swapd \
+ExecStart=/opt/postfiat/services/releases/pftl-resident-swap-06f80d2/pftl_swapd \
   --bind 127.0.0.1:8798 \
   --data-dir /var/lib/postfiat/validator-2 \
   --private-dir /var/lib/postfiat/validator-2/pftl-swapd \
