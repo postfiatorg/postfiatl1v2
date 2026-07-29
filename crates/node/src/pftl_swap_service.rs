@@ -944,7 +944,13 @@ fn journal_verified_pftl_swap_intent(
         signed_intent.intent.input_reference.as_bytes(),
     );
     if journal.entries.values().any(|entry| {
-        !entry.state.is_terminal() && entry.input_reference_hash == input_reference_hash
+        entry.input_reference_hash == input_reference_hash
+            && !entry.state.is_terminal()
+            && !matches!(
+                entry.state,
+                PftlSwapJournalState::FailedPrepublish
+                    | PftlSwapJournalState::InterruptedPrepublish
+            )
     }) {
         return Err(io::Error::new(
             io::ErrorKind::WouldBlock,
@@ -958,6 +964,28 @@ fn journal_verified_pftl_swap_intent(
         ));
     }
     let now = pftl_swap_now_unix_ms()?;
+    for entry in journal.entries.values_mut().filter(|entry| {
+        entry.input_reference_hash == input_reference_hash
+            && matches!(
+                entry.state,
+                PftlSwapJournalState::FailedPrepublish
+                    | PftlSwapJournalState::InterruptedPrepublish
+            )
+    }) {
+        if entry.transitions.len() >= PFTL_SWAP_MAX_JOURNAL_TRANSITIONS {
+            return Err(io::Error::new(
+                io::ErrorKind::StorageFull,
+                "PFTL swap journal has no transition capacity to supersede a failed intent",
+            ));
+        }
+        entry.state = PftlSwapJournalState::Rejected;
+        entry.transitions.push(PftlSwapJournalTransition {
+            state: PftlSwapJournalState::Rejected,
+            at_unix_ms: now,
+            at_monotonic_ns: pftl_swap_now_monotonic_ns()?,
+            reason: Some("superseded by a newly signed intent".to_string()),
+        });
+    }
     let swap_id = hash_hex(
         "postfiat.pftl_swap.swap_id.v1",
         format!("{key}:{intent_hash}:{}", quote.quote_id).as_bytes(),
@@ -1101,7 +1129,6 @@ pub fn transition_pftl_swap_journal_entry(
         PftlSwapJournalState::Prepared
             | PftlSwapJournalState::Published
             | PftlSwapJournalState::Committed
-            | PftlSwapJournalState::Rejected
     ) && entry.batch_hash.is_none()
     {
         return Err(io::Error::new(
@@ -1249,7 +1276,9 @@ fn pftl_swap_transition_allowed(current: PftlSwapJournalState, next: PftlSwapJou
                 | (Prepared, InterruptedPrepublish)
                 | (InterruptedPrepublish, Proving)
                 | (InterruptedPrepublish, FailedPrepublish)
+                | (InterruptedPrepublish, Rejected)
                 | (FailedPrepublish, Proving)
+                | (FailedPrepublish, Rejected)
                 | (Published, Committed)
                 | (Published, Rejected)
         )
@@ -1290,7 +1319,6 @@ fn validate_pftl_swap_journal(journal: &PftlSwapJournalV1) -> io::Result<()> {
                 PftlSwapJournalState::Prepared
                     | PftlSwapJournalState::Published
                     | PftlSwapJournalState::Committed
-                    | PftlSwapJournalState::Rejected
             ) && entry.batch_hash.is_none()
             || entry.state == PftlSwapJournalState::Committed
                 && (entry.committed_height.is_none() || entry.certificate_ref.is_none())
@@ -1726,6 +1754,57 @@ mod tests {
             .expect_err("prepared state requires batch hash")
             .kind(),
             io::ErrorKind::InvalidInput,
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn newly_signed_intent_supersedes_failed_input_reservation() {
+        let root = swap_test_dir("pftl-swap-journal-supersede");
+        let path = root.join("swap-journal.json");
+        let quote = quote_fixture();
+        let keypair = ml_dsa_65_keygen_from_seed(&[7_u8; 32]);
+        let sign = |idempotency_key: &str| {
+            let mut signed = signed_fixture(idempotency_key);
+            signed.intent.quote_id = quote.quote_id.clone();
+            signed.signature_hex = bytes_to_hex(
+                &ml_dsa_65_sign_with_context(
+                    &keypair.private_key,
+                    &signed.intent.signing_bytes().expect("signing bytes"),
+                    PFTL_SWAP_INTENT_SIGNATURE_CONTEXT_V1,
+                )
+                .expect("sign intent"),
+            );
+            signed
+        };
+        let first = sign("failed-intent");
+        journal_pftl_swap_intent(&path, &quote, &first).expect("journal failed intent");
+        transition_pftl_swap_journal_entry(
+            &path,
+            "failed-intent",
+            PftlSwapJournalState::FailedPrepublish,
+            None,
+            None,
+            None,
+            Some("prepublication validation failed".to_string()),
+        )
+        .expect("record failed prepublication");
+
+        let replacement = sign("replacement-intent");
+        let (replacement_entry, replayed) =
+            journal_pftl_swap_intent(&path, &quote, &replacement).expect("journal replacement");
+        assert!(!replayed);
+        assert_eq!(replacement_entry.state, PftlSwapJournalState::Journaled);
+        let journal = load_pftl_swap_journal(&path).expect("load superseded journal");
+        let superseded = &journal.entries["failed-intent"];
+        assert_eq!(superseded.state, PftlSwapJournalState::Rejected);
+        assert!(superseded.batch_hash.is_none());
+        assert_eq!(
+            superseded
+                .transitions
+                .last()
+                .and_then(|transition| transition.reason.as_deref()),
+            Some("superseded by a newly signed intent")
         );
         let _ = fs::remove_dir_all(root);
     }
