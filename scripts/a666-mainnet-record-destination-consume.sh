@@ -121,30 +121,19 @@ ssh -o BatchMode=yes "root@$validator2_host" \
   > "$proof_dir/receipt-proof-report.json"
 scp -q "root@$validator2_host:$remote_root/receipt-proof.json" "$proof_dir/receipt-proof.json"
 
-for validator in validator-{0..5}; do
-  host=$(jq -er --arg validator "$validator" '.[$validator]' "$hosts_file")
-  validator_run="/var/lib/postfiat/$validator/$workflow_id-destination-consume"
-  ssh -o BatchMode=yes "root@$host" \
-    "install -d -m 700 '$validator_run'"
-  scp -q "$proof_dir/checkpoint.json" "root@$host:$validator_run/checkpoint.json"
-  ssh -o BatchMode=yes "root@$host" \
-    "$remote_node ethereum-checkpoint-vote-sign \
-      --data-dir /var/lib/postfiat/$validator \
-      --checkpoint-file '$validator_run/checkpoint.json' \
-      --ethereum-rpc '$rpc' \
-      --validator '$validator' \
-      --validator-key-file /var/lib/postfiat/$validator/validator_keys.json \
-      --vote-file '$validator_run/$validator.vote.json'" \
-    > "$proof_dir/$validator.vote-report.json"
-  scp -q "root@$host:$validator_run/$validator.vote.json" "$proof_dir/$validator.vote.json"
-done
-
-vote_files=
-for validator in validator-{0..5}; do
-  remote_vote="$remote_root/$validator.vote.json"
-  scp -q "$proof_dir/$validator.vote.json" "root@$validator2_host:$remote_vote"
-  vote_files+="${vote_files:+,}$remote_vote"
-done
+python3 scripts/a666-parallel-checkpoint-votes.py \
+  --hosts-file "$hosts_file" \
+  --checkpoint-file "$proof_dir/checkpoint.json" \
+  --proof-dir "$proof_dir" \
+  --workflow-id "$workflow_id" \
+  --remote-suffix destination-consume \
+  --remote-node "$remote_node" \
+  --ethereum-rpc "$rpc" \
+  --validator2-remote-root "$remote_root" \
+  > "$proof_dir/checkpoint-vote-fanout.json"
+vote_files=$(jq -er \
+  '.validator_count==6 and .remote_vote_files_csv' \
+  "$proof_dir/checkpoint-vote-fanout.json")
 ssh -o BatchMode=yes "root@$validator2_host" \
   "$remote_node ethereum-checkpoint-certificate-assemble \
     --data-dir /var/lib/postfiat/validator-2 \

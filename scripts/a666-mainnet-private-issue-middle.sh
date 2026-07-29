@@ -36,6 +36,7 @@ remote_topology="/etc/postfiat/releases/$release_id/topology.json"
 remote_root="/var/lib/postfiat/validator-2/$workflow_id-private-issue"
 remote_public="$remote_root/public"
 remote_private="$remote_root/private"
+remote_orchard_service=http://127.0.0.1:8789
 validator2_host=$(jq -er '."validator-2"' "$hosts_file")
 
 joe=pfab9b9228942e5c529633a13aa271d5297bec6353
@@ -69,6 +70,13 @@ mkdir -p \
 
 ssh -o BatchMode=yes "root@$validator2_host" \
   "install -d -m 700 '$remote_private'; install -d -m 755 '$remote_public'"
+ssh -o BatchMode=yes "root@$validator2_host" \
+  "curl --silent --show-error --fail-with-body '$remote_orchard_service/asset-orchard/readiness' \
+     > '$remote_public/resident-prover-readiness.json'; \
+   jq -e '.ready==true and .prover_warm.ready==true' \
+     '$remote_public/resident-prover-readiness.json' >/dev/null"
+scp -q "root@$validator2_host:$remote_public/resident-prover-readiness.json" \
+  "$orchard_dir/resident-prover-readiness.json"
 scp -q "$holder_key" "root@$validator2_host:$remote_private/holder-key.json"
 ssh -o BatchMode=yes "root@$validator2_host" \
   "set -euo pipefail
@@ -119,30 +127,54 @@ jq -e \
 expires_at_height=$((expected_pftl_height + 130))
 ssh -o BatchMode=yes "root@$validator2_host" \
   "set -euo pipefail
-   output_seed=\$(openssl rand -hex 32)
-   '$remote_node' asset-orchard-private-primary-issue-create \
-     --data-dir /var/lib/postfiat/validator-2 \
-     --note-file '$remote_private/pfusdc-note.json' \
-     --output-note-seed-hex \"\$output_seed\" \
-     --output-note-file '$remote_private/a666-note.json' \
-     --route-id '$route_id' \
-     --subscriber '$joe' \
-     --ethereum-recipient '$joe_evm' \
-     --reservation-id '$reservation_id' \
-     --subscription-nonce '$subscription_nonce' \
-     --mint-amount-atoms '$mint_amount' \
-     --settlement-value-atoms '$settlement_amount' \
-     --expires-at-height '$expires_at_height' \
-     --action-file '$remote_public/private-primary-issue.json' \
+   jq -n \
+     --arg request_id '$workflow_id-primary-issue' \
+     --arg input_note_path '$remote_private/pfusdc-note.json' \
+     --arg route_id '$route_id' \
+     --arg subscriber '$joe' \
+     --arg ethereum_recipient '$joe_evm' \
+     --arg reservation_id '$reservation_id' \
+     --arg subscription_nonce '$subscription_nonce' \
+     --arg mint_amount_atoms '$mint_amount' \
+     --arg settlement_value_atoms '$settlement_amount' \
+     --arg expires_at_height '$expires_at_height' \
+     '{request_id:\$request_id,input_note_path:\$input_note_path,route_id:\$route_id,
+       subscriber:\$subscriber,ethereum_recipient:\$ethereum_recipient,
+       reservation_id:\$reservation_id,subscription_nonce:\$subscription_nonce,
+       mint_amount_atoms:\$mint_amount_atoms,
+       settlement_value_atoms:\$settlement_value_atoms,
+       expires_at_height:\$expires_at_height}' \
+     > '$remote_public/private-primary-issue-request.json'
+   curl --silent --show-error --fail-with-body --max-time 300 \
+     -H 'Content-Type: application/json' \
+     --data-binary '@$remote_public/private-primary-issue-request.json' \
+     '$remote_orchard_service/asset-orchard/private-primary-issue-actions' \
+     > '$remote_public/private-primary-issue-response.json'
+   jq -e '.ok==true and .verification.verified==true' \
+     '$remote_public/private-primary-issue-response.json' >/dev/null
+   jq '.action' '$remote_public/private-primary-issue-response.json' \
+     > '$remote_public/private-primary-issue.json'
+   jq '.batch' '$remote_public/private-primary-issue-response.json' \
+     > '$remote_public/private-primary-issue-batch.json'
+   jq '.verification' '$remote_public/private-primary-issue-response.json' \
      > '$remote_public/private-primary-issue-report.json'
+   jq '{schema,request_id,timing,prover_warm:.readiness.prover_warm}' \
+     '$remote_public/private-primary-issue-response.json' \
+     > '$remote_public/private-primary-issue-timing.json'
+   output_note_path=\$(jq -er '.output_note_path' \
+     '$remote_public/private-primary-issue-response.json')
+   install -m 600 \"\$output_note_path\" '$remote_private/a666-note.json'
    '$remote_node' shield-batch-asset-orchard-private-primary-issue \
      --data-dir /var/lib/postfiat/validator-2 \
      --action-file '$remote_public/private-primary-issue.json' \
-     --batch-file '$remote_public/private-primary-issue-batch.json' \
+     --batch-file '$remote_public/private-primary-issue-batch-check.json' \
      > '$remote_public/private-primary-issue-batch-report.json'
-   chmod 600 '$remote_private/a666-note.json'"
+   jq -e --slurp '.[0]==.[1]' \
+     '$remote_public/private-primary-issue-batch.json' \
+     '$remote_public/private-primary-issue-batch-check.json' >/dev/null"
 for name in \
   private-primary-issue-report \
+  private-primary-issue-timing \
   private-primary-issue-batch-report \
   private-primary-issue-batch
 do
@@ -170,17 +202,34 @@ jq -e \
 ssh -o BatchMode=yes "root@$validator2_host" \
   "set -euo pipefail
    disclosure_hash=\$(openssl rand -hex 32)
-   '$remote_node' asset-orchard-private-egress-create \
-     --data-dir /var/lib/postfiat/validator-2 \
-     --note-file '$remote_private/a666-note.json' \
-     --to '$joe' \
-     --policy-id '$private_egress_policy' \
-     --disclosure-hash \"\$disclosure_hash\" \
-     --egress-file '$remote_public/a666-private-egress.json' \
-     --asset-id '$a666' \
-     --amount '$mint_amount' \
-     --fee 0 \
+   jq -n \
+     --arg wallet_address '$joe' \
+     --arg to '$joe' \
+     --arg asset_id '$a666' \
+     --arg amount_atoms '$mint_amount' \
+     --arg input_note_path '$remote_private/a666-note.json' \
+     --arg policy_id '$private_egress_policy' \
+     --arg disclosure_hash \"\$disclosure_hash\" \
+     '{wallet_address:\$wallet_address,to:\$to,asset_id:\$asset_id,
+       amount_atoms:\$amount_atoms,input_note_path:\$input_note_path,
+       policy_id:\$policy_id,disclosure_hash:\$disclosure_hash,
+       disclosure_ack:true}' \
+     > '$remote_public/a666-private-egress-request.json'
+   curl --silent --show-error --fail-with-body --max-time 300 \
+     -H 'Content-Type: application/json' \
+     --data-binary '@$remote_public/a666-private-egress-request.json' \
+     '$remote_orchard_service/asset-orchard/private-egress-actions' \
+     > '$remote_public/a666-private-egress-response.json'
+   jq -e '.ok==true and .private_egress_report.verified==true' \
+     '$remote_public/a666-private-egress-response.json' >/dev/null
+   jq '.egress' '$remote_public/a666-private-egress-response.json' \
+     > '$remote_public/a666-private-egress.json'
+   jq '.private_egress_report' \
+     '$remote_public/a666-private-egress-response.json' \
      > '$remote_public/a666-private-egress-report.json'
+   jq '{schema,egress_id,timing,prover_warm:.readiness.prover_warm}' \
+     '$remote_public/a666-private-egress-response.json' \
+     > '$remote_public/a666-private-egress-timing.json'
    '$remote_node' shield-batch-asset-orchard-private-egress \
      --data-dir /var/lib/postfiat/validator-2 \
      --egress-file '$remote_public/a666-private-egress.json' \
@@ -188,6 +237,7 @@ ssh -o BatchMode=yes "root@$validator2_host" \
      > '$remote_public/a666-private-egress-batch-report.json'"
 for name in \
   a666-private-egress-report \
+  a666-private-egress-timing \
   a666-private-egress-batch-report \
   a666-private-egress-batch
 do
@@ -209,6 +259,21 @@ jq -e \
   --argjson height "$((expected_pftl_height + 3))" \
   '.confirmed==true and .accepted==true and .end_height==$height' \
   "$orchard_dir/04-a666-private-egress/finality/summary.json" >/dev/null
+ssh -o BatchMode=yes "root@$validator2_host" \
+  "set -euo pipefail
+   egress_id=\$(jq -er '.egress_id' '$remote_public/a666-private-egress-response.json')
+   jq -n --arg egress_id \"\$egress_id\" \
+     '{egress_id:\$egress_id,accepted:true}' \
+     > '$remote_public/a666-private-egress-finalize-request.json'
+   curl --silent --show-error --fail-with-body \
+     -H 'Content-Type: application/json' \
+     --data-binary '@$remote_public/a666-private-egress-finalize-request.json' \
+     '$remote_orchard_service/asset-orchard/private-egress-finalize' \
+     > '$remote_public/a666-private-egress-finalize.json'
+   jq -e '.ok==true and .accepted==true' \
+     '$remote_public/a666-private-egress-finalize.json' >/dev/null"
+scp -q "root@$validator2_host:$remote_public/a666-private-egress-finalize.json" \
+  "$orchard_dir/04-a666-private-egress/a666-private-egress-finalize.json"
 
 python3 scripts/a666-ce22-remote-finality-op.py \
   --node-bin target/release/postfiat-node \

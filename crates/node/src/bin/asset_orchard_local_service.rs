@@ -11,8 +11,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use postfiat_crypto_provider::{bytes_to_hex, hash_hex};
 use postfiat_execution::genesis_hash;
 use postfiat_node::{
-    create_asset_orchard_private_egress, create_asset_orchard_swap_action,
+    create_asset_orchard_private_egress, create_asset_orchard_private_primary_issue,
+    create_asset_orchard_private_primary_issue_batch, create_asset_orchard_private_primary_redeem,
+    create_asset_orchard_private_primary_redeem_batch, create_asset_orchard_swap_action,
     create_shielded_swap_action_batch, AssetOrchardPrivateEgressCreateOptions,
+    AssetOrchardPrivatePrimaryIssueBatchOptions, AssetOrchardPrivatePrimaryIssueCreateOptions,
+    AssetOrchardPrivatePrimaryRedeemBatchOptions, AssetOrchardPrivatePrimaryRedeemCreateOptions,
     AssetOrchardSwapCreateOptions, ShieldedSwapActionBatchOptions,
 };
 use postfiat_privacy_orchard::{
@@ -105,6 +109,32 @@ struct PrivateEgressActionRequest {
     input_note_path: Option<String>,
     policy_id: String,
     disclosure_hash: String,
+}
+
+#[derive(Debug)]
+struct PrivatePrimaryIssueActionRequest {
+    request_id: String,
+    input_note_path: String,
+    route_id: String,
+    subscriber: String,
+    ethereum_recipient: String,
+    reservation_id: String,
+    subscription_nonce: String,
+    mint_amount_atoms: u64,
+    settlement_value_atoms: u64,
+    expires_at_height: u64,
+}
+
+#[derive(Debug)]
+struct PrivatePrimaryRedeemActionRequest {
+    request_id: String,
+    input_note_path: String,
+    route_id: String,
+    owner: String,
+    settlement_recipient: String,
+    nav_amount_atoms: u64,
+    settlement_output_atoms: u64,
+    expires_at_height: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -279,14 +309,30 @@ fn prover_prewarm_enabled() -> bool {
     )
 }
 
+fn prover_circuit_prewarm_enabled(variable: &str) -> bool {
+    prover_prewarm_enabled()
+        && !matches!(
+            env::var(variable)
+                .unwrap_or_else(|_| "1".to_string())
+                .to_ascii_lowercase()
+                .as_str(),
+            "0" | "false" | "no" | "off"
+        )
+}
+
 fn start_prover_prewarm(config: &Config) -> io::Result<()> {
     if let Some(parent) = config.prewarm_ready_file.parent() {
         prepare_private_dir(parent)?;
     }
     let enabled = prover_prewarm_enabled();
+    let swap_enabled = prover_circuit_prewarm_enabled("ASSET_ORCHARD_LOCAL_SERVICE_PREWARM_SWAP");
+    let private_egress_enabled =
+        prover_circuit_prewarm_enabled("ASSET_ORCHARD_LOCAL_SERVICE_PREWARM_PRIVATE_EGRESS");
     let started_at_unix_ms = unix_ms()?;
-    let state = PrewarmState::new(
+    let state = PrewarmState::new_with_circuits(
         enabled,
+        swap_enabled,
+        private_egress_enabled,
         started_at_unix_ms,
         config.prewarm_ready_file.clone(),
     );
@@ -296,21 +342,26 @@ fn start_prover_prewarm(config: &Config) -> io::Result<()> {
         return Ok(());
     }
 
-    thread::Builder::new()
-        .name("asset-orchard-prewarm-swap".to_string())
-        .spawn(|| {
-            let start = Instant::now();
-            let result = prewarm_swap_keys().map_err(|error| error.to_string());
-            finish_prewarm_circuit("swap", start, result);
-        })?;
+    if swap_enabled {
+        thread::Builder::new()
+            .name("asset-orchard-prewarm-swap".to_string())
+            .spawn(|| {
+                let start = Instant::now();
+                let result = prewarm_swap_keys().map_err(|error| error.to_string());
+                finish_prewarm_circuit("swap", start, result);
+            })?;
+    }
 
-    thread::Builder::new()
-        .name("asset-orchard-prewarm-private-egress".to_string())
-        .spawn(|| {
-            let start = Instant::now();
-            let result = prewarm_private_egress_keys().map_err(|error| error.to_string());
-            finish_prewarm_circuit("private_egress", start, result);
-        })?;
+    if private_egress_enabled {
+        thread::Builder::new()
+            .name("asset-orchard-prewarm-private-egress".to_string())
+            .spawn(|| {
+                let start = Instant::now();
+                let result = prewarm_private_egress_keys().map_err(|error| error.to_string());
+                finish_prewarm_circuit("private_egress", start, result);
+            })?;
+    }
+    write_prewarm_marker_if_terminal();
 
     Ok(())
 }
@@ -491,12 +542,37 @@ impl PrewarmCircuitState {
 }
 
 impl PrewarmState {
+    #[cfg(test)]
     fn new(enabled: bool, started_at_unix_ms: u128, marker_file: PathBuf) -> Self {
+        Self::new_with_circuits(enabled, enabled, enabled, started_at_unix_ms, marker_file)
+    }
+
+    fn new_with_circuits(
+        enabled: bool,
+        swap_enabled: bool,
+        private_egress_enabled: bool,
+        started_at_unix_ms: u128,
+        marker_file: PathBuf,
+    ) -> Self {
         let (status, swap, private_egress) = if enabled {
             (
                 "warming",
-                PrewarmCircuitState::pending("asset-orchard-swap-v1"),
-                PrewarmCircuitState::pending("asset-orchard-private-egress-v1"),
+                if swap_enabled {
+                    PrewarmCircuitState::pending("asset-orchard-swap-v1")
+                } else {
+                    PrewarmCircuitState::not_applicable(
+                        "asset-orchard-swap-v1",
+                        "swap prewarm disabled by ASSET_ORCHARD_LOCAL_SERVICE_PREWARM_SWAP",
+                    )
+                },
+                if private_egress_enabled {
+                    PrewarmCircuitState::pending("asset-orchard-private-egress-v1")
+                } else {
+                    PrewarmCircuitState::not_applicable(
+                        "asset-orchard-private-egress-v1",
+                        "private-egress prewarm disabled by ASSET_ORCHARD_LOCAL_SERVICE_PREWARM_PRIVATE_EGRESS",
+                    )
+                },
             )
         } else {
             (
@@ -505,7 +581,7 @@ impl PrewarmState {
                 PrewarmCircuitState::disabled("asset-orchard-private-egress-v1"),
             )
         };
-        Self {
+        let mut state = Self {
             enabled,
             status,
             started_at_unix_ms,
@@ -521,7 +597,9 @@ impl PrewarmState {
                 "asset-orchard-ingress-notes",
                 "ingress note creation has no separate Halo2 proving key in this implementation",
             ),
-        }
+        };
+        state.recompute_status(Some(started_at_unix_ms));
+        state
     }
 
     fn circuit_mut(&mut self, circuit: &str) -> &mut PrewarmCircuitState {
@@ -536,7 +614,9 @@ impl PrewarmState {
         if self.swap.status == "error" || self.private_egress.status == "error" {
             self.status = "error";
             self.completed_at_unix_ms = completed_at_unix_ms;
-        } else if self.swap.status == "ready" && self.private_egress.status == "ready" {
+        } else if matches!(self.swap.status, "ready" | "not_applicable")
+            && matches!(self.private_egress.status, "ready" | "not_applicable")
+        {
             self.status = "ready";
             self.completed_at_unix_ms = completed_at_unix_ms;
         } else if self.enabled {
@@ -718,6 +798,44 @@ fn handle_connection(config: &Config, stream: &mut TcpStream) -> io::Result<()> 
                 Err(error) => write_json_response(stream, 400, &error_response(&error)),
             }
         }
+        ("POST", "/asset-orchard/private-primary-issue-actions") => {
+            let body: Value = serde_json::from_slice(&request.body).map_err(invalid_json)?;
+            if let Some(path) = find_forbidden_private_material(&body, "$") {
+                return write_json_response(
+                    stream,
+                    400,
+                    &json!({
+                        "ok": false,
+                        "error": "forbidden_private_material",
+                        "message": format!("request contains forbidden private material at {path}"),
+                    }),
+                );
+            }
+            let issue = parse_private_primary_issue_action_request(&body)?;
+            match build_and_store_private_primary_issue_action(config, &issue) {
+                Ok(response) => write_json_response(stream, 200, &response),
+                Err(error) => write_json_response(stream, 400, &error_response(&error)),
+            }
+        }
+        ("POST", "/asset-orchard/private-primary-redeem-actions") => {
+            let body: Value = serde_json::from_slice(&request.body).map_err(invalid_json)?;
+            if let Some(path) = find_forbidden_private_material(&body, "$") {
+                return write_json_response(
+                    stream,
+                    400,
+                    &json!({
+                        "ok": false,
+                        "error": "forbidden_private_material",
+                        "message": format!("request contains forbidden private material at {path}"),
+                    }),
+                );
+            }
+            let redeem = parse_private_primary_redeem_action_request(&body)?;
+            match build_and_store_private_primary_redeem_action(config, &redeem) {
+                Ok(response) => write_json_response(stream, 200, &response),
+                Err(error) => write_json_response(stream, 400, &error_response(&error)),
+            }
+        }
         ("POST", "/asset-orchard/private-egress-finalize") => {
             let body: Value = serde_json::from_slice(&request.body).map_err(invalid_json)?;
             if let Some(path) = find_forbidden_private_material(&body, "$") {
@@ -742,6 +860,171 @@ fn handle_connection(config: &Config, stream: &mut TcpStream) -> io::Result<()> 
         }
         _ => write_json_response(stream, 404, &json!({ "ok": false, "error": "not_found" })),
     }
+}
+
+fn private_primary_work_dir(config: &Config, operation: &str, request_id: &str) -> PathBuf {
+    config
+        .vault_dir
+        .join("private-primary-work")
+        .join(operation)
+        .join(request_id)
+}
+
+fn cached_or_prepare_private_primary_work_dir(
+    config: &Config,
+    operation: &str,
+    request_id: &str,
+) -> io::Result<(PathBuf, Option<Value>)> {
+    let work_dir = private_primary_work_dir(config, operation, request_id);
+    let response_file = work_dir.join("response.json");
+    if response_file.exists() {
+        let response = serde_json::from_slice(&fs::read(response_file)?).map_err(invalid_json)?;
+        return Ok((work_dir, Some(response)));
+    }
+    if work_dir.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!(
+                "{operation} request `{request_id}` has incomplete prior state; audit it and use a new request_id"
+            ),
+        ));
+    }
+    prepare_private_dir(&work_dir)?;
+    Ok((work_dir, None))
+}
+
+fn build_and_store_private_primary_issue_action(
+    config: &Config,
+    request: &PrivatePrimaryIssueActionRequest,
+) -> io::Result<Value> {
+    let (work_dir, cached) =
+        cached_or_prepare_private_primary_work_dir(config, "issue", &request.request_id)?;
+    if let Some(response) = cached {
+        return Ok(response);
+    }
+    let action_file = work_dir.join("action.json");
+    let batch_file = work_dir.join("batch.json");
+    let output_note_file = work_dir.join("output-note.json");
+    let output_seed_hex = bytes_to_hex(&random_seed()?);
+
+    let total_start = Instant::now();
+    reset_asset_orchard_private_egress_timings();
+    let report = match create_asset_orchard_private_primary_issue(
+        AssetOrchardPrivatePrimaryIssueCreateOptions {
+            data_dir: config.data_dir.clone(),
+            note_file: PathBuf::from(&request.input_note_path),
+            output_note_seed_hex: output_seed_hex,
+            output_note_file: output_note_file.clone(),
+            route_id: request.route_id.clone(),
+            subscriber: request.subscriber.clone(),
+            ethereum_recipient: request.ethereum_recipient.clone(),
+            reservation_id: request.reservation_id.clone(),
+            subscription_nonce: request.subscription_nonce.clone(),
+            mint_amount_atoms: request.mint_amount_atoms,
+            settlement_value_atoms: request.settlement_value_atoms,
+            expires_at_height: request.expires_at_height,
+            action_file: action_file.clone(),
+            overwrite: false,
+        },
+    ) {
+        Ok(report) => report,
+        Err(error) => {
+            let _ = take_asset_orchard_private_egress_timings();
+            return Err(error);
+        }
+    };
+    let proof_timing = private_egress_timing_value()?;
+    let batch = create_asset_orchard_private_primary_issue_batch(
+        AssetOrchardPrivatePrimaryIssueBatchOptions {
+            data_dir: config.data_dir.clone(),
+            action_file: action_file.clone(),
+            batch_file: batch_file.clone(),
+        },
+    )?;
+    let response = json!({
+        "ok": true,
+        "schema": "postfiat-asset-orchard-local-private-primary-issue-action-v1",
+        "request_id": request.request_id,
+        "action": serde_json::from_slice::<Value>(&fs::read(&action_file)?).map_err(invalid_json)?,
+        "batch": batch,
+        "verification": report,
+        "output_note_path": output_note_file.display().to_string(),
+        "timing": {
+            "total_ms": total_start.elapsed().as_secs_f64() * 1000.0,
+            "proof": proof_timing
+        },
+        "readiness": local_readiness(config),
+    });
+    atomic_write_private_json(&work_dir.join("response.json"), &response)?;
+    Ok(response)
+}
+
+fn build_and_store_private_primary_redeem_action(
+    config: &Config,
+    request: &PrivatePrimaryRedeemActionRequest,
+) -> io::Result<Value> {
+    let (work_dir, cached) =
+        cached_or_prepare_private_primary_work_dir(config, "redeem", &request.request_id)?;
+    if let Some(response) = cached {
+        return Ok(response);
+    }
+    let action_file = work_dir.join("action.json");
+    let batch_file = work_dir.join("batch.json");
+    let output_note_file = work_dir.join("output-note.json");
+    let output_seed_hex = bytes_to_hex(&random_seed()?);
+    let redemption_id = bytes_to_hex(&random_bytes::<48>()?);
+    let redemption_nonce = bytes_to_hex(&random_seed()?);
+
+    let total_start = Instant::now();
+    reset_asset_orchard_private_egress_timings();
+    let report = match create_asset_orchard_private_primary_redeem(
+        AssetOrchardPrivatePrimaryRedeemCreateOptions {
+            data_dir: config.data_dir.clone(),
+            note_file: PathBuf::from(&request.input_note_path),
+            output_note_seed_hex: output_seed_hex,
+            output_note_file: output_note_file.clone(),
+            route_id: request.route_id.clone(),
+            owner: request.owner.clone(),
+            settlement_recipient: request.settlement_recipient.clone(),
+            redemption_id,
+            redemption_nonce,
+            nav_amount_atoms: request.nav_amount_atoms,
+            settlement_output_atoms: request.settlement_output_atoms,
+            expires_at_height: request.expires_at_height,
+            action_file: action_file.clone(),
+            overwrite: false,
+        },
+    ) {
+        Ok(report) => report,
+        Err(error) => {
+            let _ = take_asset_orchard_private_egress_timings();
+            return Err(error);
+        }
+    };
+    let proof_timing = private_egress_timing_value()?;
+    let batch = create_asset_orchard_private_primary_redeem_batch(
+        AssetOrchardPrivatePrimaryRedeemBatchOptions {
+            data_dir: config.data_dir.clone(),
+            action_file: action_file.clone(),
+            batch_file: batch_file.clone(),
+        },
+    )?;
+    let response = json!({
+        "ok": true,
+        "schema": "postfiat-asset-orchard-local-private-primary-redeem-action-v1",
+        "request_id": request.request_id,
+        "action": serde_json::from_slice::<Value>(&fs::read(&action_file)?).map_err(invalid_json)?,
+        "batch": batch,
+        "verification": report,
+        "output_note_path": output_note_file.display().to_string(),
+        "timing": {
+            "total_ms": total_start.elapsed().as_secs_f64() * 1000.0,
+            "proof": proof_timing
+        },
+        "readiness": local_readiness(config),
+    });
+    atomic_write_private_json(&work_dir.join("response.json"), &response)?;
+    Ok(response)
 }
 
 fn build_and_store_note(
@@ -1489,10 +1772,14 @@ fn finalize_private_egress(config: &Config, body: &Value) -> io::Result<Value> {
 }
 
 fn random_seed() -> io::Result<[u8; 32]> {
+    random_bytes::<32>()
+}
+
+fn random_bytes<const N: usize>() -> io::Result<[u8; N]> {
     let mut file = fs::File::open("/dev/urandom")?;
-    let mut seed = [0u8; 32];
-    file.read_exact(&mut seed)?;
-    Ok(seed)
+    let mut bytes = [0u8; N];
+    file.read_exact(&mut bytes)?;
+    Ok(bytes)
 }
 
 fn parse_ingress_note_request(body: &Value) -> io::Result<IngressNoteRequest> {
@@ -1639,6 +1926,54 @@ fn parse_private_egress_action_request(body: &Value) -> io::Result<PrivateEgress
         policy_id,
         disclosure_hash,
     })
+}
+
+fn parse_private_primary_issue_action_request(
+    body: &Value,
+) -> io::Result<PrivatePrimaryIssueActionRequest> {
+    Ok(PrivatePrimaryIssueActionRequest {
+        request_id: request_id_field(body)?,
+        input_note_path: string_field(body, "input_note_path")?,
+        route_id: string_field(body, "route_id")?,
+        subscriber: string_field(body, "subscriber")?,
+        ethereum_recipient: string_field(body, "ethereum_recipient")?,
+        reservation_id: hex_field(body, "reservation_id", 96)?,
+        subscription_nonce: hex_field(body, "subscription_nonce", 64)?,
+        mint_amount_atoms: u64_field(body, "mint_amount_atoms")?,
+        settlement_value_atoms: u64_field(body, "settlement_value_atoms")?,
+        expires_at_height: u64_field(body, "expires_at_height")?,
+    })
+}
+
+fn parse_private_primary_redeem_action_request(
+    body: &Value,
+) -> io::Result<PrivatePrimaryRedeemActionRequest> {
+    Ok(PrivatePrimaryRedeemActionRequest {
+        request_id: request_id_field(body)?,
+        input_note_path: string_field(body, "input_note_path")?,
+        route_id: string_field(body, "route_id")?,
+        owner: string_field(body, "owner")?,
+        settlement_recipient: string_field(body, "settlement_recipient")?,
+        nav_amount_atoms: u64_field(body, "nav_amount_atoms")?,
+        settlement_output_atoms: u64_field(body, "settlement_output_atoms")?,
+        expires_at_height: u64_field(body, "expires_at_height")?,
+    })
+}
+
+fn request_id_field(body: &Value) -> io::Result<String> {
+    let value = string_field(body, "request_id")?;
+    if value.len() <= 64
+        && value.bytes().enumerate().all(|(index, byte)| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || (index > 0 && byte == b'-')
+        })
+    {
+        Ok(value)
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "request_id must match [a-z0-9][a-z0-9-]{0,63}",
+        ))
+    }
 }
 
 fn string_field(body: &Value, field: &str) -> io::Result<String> {
@@ -2002,6 +2337,8 @@ fn local_readiness(config: &Config) -> Value {
             "ingress_notes": "/asset-orchard/ingress-notes",
             "swap_actions": "/asset-orchard/swap-actions",
             "swap_batch": "/asset-orchard/swap-batch",
+            "private_primary_issue_actions": "/asset-orchard/private-primary-issue-actions",
+            "private_primary_redeem_actions": "/asset-orchard/private-primary-redeem-actions",
             "private_egress_actions": "/asset-orchard/private-egress-actions",
             "private_egress_finalize": "/asset-orchard/private-egress-finalize",
             "notes": "/asset-orchard/notes"
@@ -2374,6 +2711,96 @@ mod tests {
             value["threading"]["halo2_multicore_feature"],
             "explicitly_enabled"
         );
+    }
+
+    #[test]
+    fn selective_prewarm_can_ready_only_the_private_primary_key() {
+        let mut state = PrewarmState::new_with_circuits(
+            true,
+            false,
+            true,
+            123,
+            PathBuf::from("/tmp/postfiat-prewarm-ready.json"),
+        );
+        assert_eq!(state.status, "warming");
+        assert_eq!(state.swap.status, "not_applicable");
+        assert_eq!(state.private_egress.status, "warming");
+
+        state.private_egress.status = "ready";
+        state.private_egress.k = Some(15);
+        state.recompute_status(Some(456));
+        let value = state.to_json();
+        assert_eq!(value["ready"], true);
+        assert_eq!(value["circuits"]["swap"]["ready"], true);
+        assert_eq!(value["circuits"]["private_egress"]["ready"], true);
+    }
+
+    #[test]
+    fn private_primary_requests_are_public_only_and_path_safe() {
+        let issue = parse_private_primary_issue_action_request(&json!({
+            "request_id": "run-42-primary-issue",
+            "input_note_path": "/var/lib/postfiat/private/input-note.json",
+            "route_id": "route-v1",
+            "subscriber": "pfsubscriber",
+            "ethereum_recipient": "0x1111111111111111111111111111111111111111",
+            "reservation_id": "a".repeat(96),
+            "subscription_nonce": "b".repeat(64),
+            "mint_amount_atoms": "1000000",
+            "settlement_value_atoms": "905538",
+            "expires_at_height": "900",
+        }))
+        .unwrap();
+        assert_eq!(issue.request_id, "run-42-primary-issue");
+        assert_eq!(issue.mint_amount_atoms, 1_000_000);
+
+        let redeem = parse_private_primary_redeem_action_request(&json!({
+            "request_id": "run-42-primary-redeem",
+            "input_note_path": "/var/lib/postfiat/private/input-note.json",
+            "route_id": "route-v1",
+            "owner": "pfowner",
+            "settlement_recipient": "pfrecipient",
+            "nav_amount_atoms": 1000000,
+            "settlement_output_atoms": 900580,
+            "expires_at_height": 901,
+        }))
+        .unwrap();
+        assert_eq!(redeem.request_id, "run-42-primary-redeem");
+        assert_eq!(redeem.settlement_output_atoms, 900_580);
+
+        let unsafe_id = json!({
+            "request_id": "../escape",
+            "input_note_path": "/var/lib/postfiat/private/input-note.json",
+            "route_id": "route-v1",
+            "owner": "pfowner",
+            "settlement_recipient": "pfrecipient",
+            "nav_amount_atoms": 1,
+            "settlement_output_atoms": 1,
+            "expires_at_height": 2,
+        });
+        assert!(parse_private_primary_redeem_action_request(&unsafe_id)
+            .unwrap_err()
+            .to_string()
+            .contains("request_id must match"));
+    }
+
+    #[test]
+    fn private_primary_cached_response_is_idempotent() {
+        let root = asset_orchard_local_service_test_dir("primary_idempotent");
+        let config = asset_orchard_local_service_test_config(&root);
+        let work_dir = private_primary_work_dir(&config, "issue", "cached-issue");
+        prepare_private_dir(&work_dir).unwrap();
+        let expected = json!({
+            "ok": true,
+            "schema": "postfiat-asset-orchard-local-private-primary-issue-action-v1",
+            "request_id": "cached-issue",
+        });
+        atomic_write_private_json(&work_dir.join("response.json"), &expected).unwrap();
+
+        let (_, cached) =
+            cached_or_prepare_private_primary_work_dir(&config, "issue", "cached-issue").unwrap();
+        assert_eq!(cached, Some(expected));
+
+        fs::remove_dir_all(root).expect("cleanup private-primary idempotency test");
     }
 
     #[test]
