@@ -291,6 +291,46 @@ impl SignedPftlSwapIntentV1 {
     }
 }
 
+pub fn sign_pftl_swap_intent_with_key_file(
+    key_file_path: &Path,
+    intent: PftlSwapIntentV1,
+) -> io::Result<SignedPftlSwapIntentV1> {
+    let DevKeyFile {
+        algorithm_id,
+        address,
+        public_key_hex,
+        private_key_hex,
+    } = read_key_file(key_file_path)?;
+    if intent.principal != address {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "PFTL swap intent principal does not match the signing key",
+        ));
+    }
+    let private_key_hex = Zeroizing::new(private_key_hex);
+    let private_key = Zeroizing::new(hex_to_bytes(private_key_hex.as_str()).map_err(|error| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("PFTL swap signing key has invalid private key hex: {error}"),
+        )
+    })?);
+    let signature = ml_dsa_65_sign_with_context(
+        &private_key,
+        &intent.signing_bytes()?,
+        PFTL_SWAP_INTENT_SIGNATURE_CONTEXT_V1,
+    )
+    .map_err(invalid_data)?;
+    let signed = SignedPftlSwapIntentV1 {
+        schema: PFTL_SWAP_SIGNED_INTENT_SCHEMA_V1.to_string(),
+        intent,
+        algorithm_id,
+        public_key_hex,
+        signature_hex: bytes_to_hex(&signature),
+    };
+    signed.verify()?;
+    Ok(signed)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum PftlSwapJournalState {
@@ -1485,6 +1525,39 @@ mod tests {
         };
         quote.quote_id = pftl_swap_quote_id(&quote).expect("quote id");
         quote
+    }
+
+    #[test]
+    fn signed_intent_key_file_helper_binds_the_principal_and_zeroizes_key_bytes() {
+        let dir = swap_test_dir("pftl-swap-intent-key-file");
+        fs::create_dir_all(&dir).expect("create key directory");
+        let key_path = dir.join("wallet-key.json");
+        let keypair = ml_dsa_65_keygen_from_seed(&[19_u8; 32]);
+        let key_file = DevKeyFile {
+            algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+            address: address_from_public_key(&keypair.public_key),
+            public_key_hex: bytes_to_hex(&keypair.public_key),
+            private_key_hex: bytes_to_hex(&keypair.private_key),
+        };
+        write_key_file(&key_path, &key_file).expect("write signing key");
+
+        let mut intent = signed_fixture("key-file-signing").intent;
+        intent.principal = key_file.address.clone();
+        let signed = sign_pftl_swap_intent_with_key_file(&key_path, intent.clone())
+            .expect("sign intent from key file");
+        signed.verify().expect("verify signed intent");
+        assert_eq!(signed.intent, intent);
+
+        let mut mismatched = intent;
+        mismatched.principal =
+            address_from_public_key(&ml_dsa_65_keygen_from_seed(&[20_u8; 32]).public_key);
+        assert_eq!(
+            sign_pftl_swap_intent_with_key_file(&key_path, mismatched)
+                .expect_err("mismatched principal must fail")
+                .kind(),
+            io::ErrorKind::PermissionDenied
+        );
+        fs::remove_dir_all(dir).expect("remove key directory");
     }
 
     #[test]
