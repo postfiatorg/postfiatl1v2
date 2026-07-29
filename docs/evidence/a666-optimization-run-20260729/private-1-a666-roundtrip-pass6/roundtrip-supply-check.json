@@ -1,0 +1,19 @@
+{
+  "schema": "postfiat.a666.private_roundtrip_supply_check.v1",
+  "verdict": "PASS",
+  "amount_atoms": 1000000,
+  "expected": {
+    "authorized_valid_supply_atoms": 31489197455,
+    "outstanding_bridge_claims_atoms": 31489197455,
+    "ethereum_spendable_supply_atoms": 0,
+    "wrapped_exposure_atoms": 31489197455,
+    "committed_wrapped_exposure_atoms": 31489197455
+  },
+  "observed": {
+    "authorized_valid_supply_atoms": 31489197455,
+    "outstanding_bridge_claims_atoms": 31489197455,
+    "ethereum_spendable_supply_atoms": 0,
+    "wrapped_exposure_atoms": 31489197455,
+    "committed_wrapped_exposure_atoms": 31489197455
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "schema": "postfiat.a666.pfusdc_egress_bucket_selection.v1",
+  "selection_rule": "unique active bucket matching deployed route source_domain and route_profile_hash with sufficient outstanding backing",
+  "source_domain": "erc20_bridge_vault:1:0xaaa78fda7062efce769e95cd72fc55e507bc8183:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+  "route_profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+  "requested_amount_atoms": 900581,
+  "selected_bucket": {
+    "bucket_id": "5d5abc049bd1545e0d552e4176047e39d2151868ad7287384cbaf8db792330add44f625cfc631c8204413deb3665c536",
+    "source_domain": "erc20_bridge_vault:1:0xaaa78fda7062efce769e95cd72fc55e507bc8183:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+    "policy_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+    "gross_receipt_atoms": 107137152,
+    "counted_value_atoms": 12378348,
+    "outstanding_vault_bridge_atoms": 12378348,
+    "nav_subscription_allocations_atoms": 0,
+    "redemption_queue_atoms": 0,
+    "other_allocations_atoms": 0,
+    "unallocated_counted_capacity_atoms": 0,
+    "impairment_factor_bps": 10000,
+    "status": "active",
+    "last_packet_epoch": 0,
+    "last_updated_height": 470
+  }
+}

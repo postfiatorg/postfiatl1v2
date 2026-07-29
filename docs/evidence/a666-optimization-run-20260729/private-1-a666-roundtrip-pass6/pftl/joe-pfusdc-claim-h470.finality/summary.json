@@ -1,0 +1,59 @@
+{
+  "accepted": true,
+  "all_sends_verified": true,
+  "batch_kind": "transparent",
+  "confirmed": true,
+  "end_height": 470,
+  "end_state_root": "832045222871b28ca883a6d5723dbd6d041b783a466c4ae89d9adc4ab1da868c0abdc4715e21ccd2b7a34a011c206ea4",
+  "execution_mode": "prewarmed_resident_worker",
+  "label": "joe-pfusdc-claim-h470",
+  "local_apply_verified": true,
+  "proposer": "validator-2",
+  "resident_prewarm": {
+    "asset_orchard_private_egress_verifier_breakdown": {
+      "action_builds": [],
+      "action_verifications": [],
+      "proof_verifications": [],
+      "schema": "postfiat.asset_orchard_private_egress.timings.v1",
+      "vk_builds": [
+        {
+          "artifact_decode_ms": 20.798904999999998,
+          "artifact_mode": "embedded",
+          "artifact_read_ms": 0.0,
+          "artifact_vk_reconstruct_ms": 41.272393,
+          "artifact_write_ms": 0.0,
+          "full_shape_ms": 0.0,
+          "keygen_vk_ms": 0.0,
+          "metadata_ms": 5.291907,
+          "params_new_ms": 4.990728,
+          "release_pin_validation_ms": 0.00206,
+          "result": "ok",
+          "schema": "postfiat.asset_orchard_private_egress.vk_build_timing.v1",
+          "total_ms": 72.855273
+        }
+      ],
+      "vk_cached_calls": [
+        {
+          "build_triggered": true,
+          "cache_was_populated": false,
+          "result": "ok",
+          "schema": "postfiat.asset_orchard_private_egress.vk_cached_timing.v1",
+          "total_ms": 72.890671
+        }
+      ]
+    },
+    "asset_orchard_private_egress_verifier_ms": 72.920152,
+    "asset_orchard_private_egress_verifier_warm": true,
+    "asset_orchard_swap_verifier_ms": 1034.493525,
+    "asset_orchard_swap_verifier_warm": true,
+    "requested": true,
+    "schema": "postfiat-transport-shielded-verifier-prewarm-v1",
+    "total_ms": 1107.533464
+  },
+  "round_ok": true,
+  "runner_exit_code": 0,
+  "schema": "postfiat-a666-ce22-remote-finality-batch-v1",
+  "start_height": 469,
+  "start_state_root": "8382b7995e3511579921fcb3545e90939cd7dc0f6be9e40e58497c2c59e5012e9314237ab19b41c86976510623eefaaa",
+  "vote_count": 5
+}

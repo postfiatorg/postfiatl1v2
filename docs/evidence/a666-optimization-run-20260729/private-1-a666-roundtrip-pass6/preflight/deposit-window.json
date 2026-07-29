@@ -1,0 +1,17 @@
+{
+  "beacon_url": "https://ethereum-beacon-api.publicnode.com/eth/v1/beacon/headers/head",
+  "finality_policy_changed": false,
+  "first_observed_slot": 14873207,
+  "poll_attempts": 50,
+  "schema": "postfiat.a666.ethereum_deposit_window.v1",
+  "selected_epoch": 464787,
+  "selected_head_slot": 14873212,
+  "selected_slot_in_epoch": 28,
+  "selected_unix_ms": 1785302569687,
+  "slo_clock_started": false,
+  "slots_per_epoch": 32,
+  "started_unix_ms": 1785302510127,
+  "target_slot_in_epoch": 28,
+  "verdict": "PASS",
+  "wait_ms": 59560
+}

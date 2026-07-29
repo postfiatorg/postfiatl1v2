@@ -310,6 +310,63 @@ Issue leg (today 1,848s): floor-bound at ~800s (finality) + ~60-120s of
 system time once S2 lands; with S4.1 small-swap early acceptance,
 ~120-400s total for capped amounts.
 
+## Live optimization run result — passes 4-6
+
+The frozen-release-safe stack was implemented and exercised on Ethereum
+mainnet and the six-validator PFTL fleet:
+
+- exact USDC approval moved before the scored deposit;
+- deposit submission targeted beacon head slot 28/32 without changing the
+  full-finality policy;
+- six deterministic, proposer-bound PFTL rounds were started and verifier
+  caches warmed before deposit;
+- the Orchard resident service was rebuilt for validator-2's
+  `skylake-avx512` CPU after the exact two-proof regression improved from
+  525.88s to 507.68s (3.5%);
+- the PFTL export prover skipped its redundant 222,133,675-cycle host execute
+  pass while still natively deriving public values, producing a Groth16
+  proof, locally verifying that proof, and checking its public values; and
+- the dependency-safe pfUSDC relay retained two rounds: proposal, then
+  finalize+claim.
+
+Pass 4 stopped before approval/deposit because the resident-worker verifier
+prewarm environment was not enabled. Pass 5 proved Ethereum ingress but
+stopped at PFTL mempool admission when an experimental one-round
+proposal+finalize+claim batch tried to admit the claim before the proposal had
+created the holder trustline. No block was committed by that failed batch.
+The deposit was reconciled through the proven two-round path at heights
+467-468, and the experimental compression was removed.
+
+Pass 6 was the clean measurement from reconciled height 468. Functional
+issuance succeeded through destination consume at height 475, but the exact
+Ethereum block-timestamp score was **1,776s**, so the 1,500s issue SLO
+**failed by 276s**. This is only 48s faster than pass 3's 1,824s result.
+The full-finality wait and two SP1 Groth16 proofs remain the dominant critical
+path; eliminating wrapper startup did not create the projected margin.
+
+The fail-closed issue timing gate stopped the scripted runner before
+redemption. Standard private redemption recovery then completed through
+height 481:
+
+- redemption block time: **888s / 1,500s — PASS**;
+- private issue, private redeem, pfUSDC withdrawal, and replay rejection:
+  **PASS**;
+- authorized native supply and outstanding bridge claims returned exactly to
+  the pass-6 baseline (`31,489,197,455` atoms);
+- Ethereum-spendable native supply returned to zero;
+- wrapped exposure returned to baseline;
+- final supply invariant: **PASS**; and
+- six validators converged at height 481 with one state root and empty
+  mempools.
+
+Conclusion: the full-finality canonical issue path is functional and clean,
+but it does **not** currently meet 25 minutes. Another orchestration-only run
+is not justified. Passing requires one of the already identified structural
+changes: overlap/continuous proof construction during finality (S2.2/S4.3),
+materially faster SP1 proving (S2.1), or a separately governed and capped
+early-confirmation/relayer lane (S4.1/S4.2). The canonical full-finality rule
+must not be silently weakened to manufacture a passing score.
+
 ## Sequencing
 
 1. **Now (frozen-release-safe):** Tier 0.1-0.4 + Tier 1.4 timestamps.

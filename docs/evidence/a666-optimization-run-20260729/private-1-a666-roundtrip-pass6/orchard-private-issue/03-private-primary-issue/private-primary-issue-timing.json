@@ -1,0 +1,144 @@
+{
+  "schema": "postfiat-asset-orchard-local-private-primary-issue-action-v1",
+  "request_id": "a666-opt-pass6-20260729-primary-issue",
+  "timing": {
+    "proof": {
+      "action_builds": [
+        {
+          "action_assembly_sighash_signature_ms": 1.7294100000000001,
+          "exit_binding_public_fields_circuit_ms": 14.132826,
+          "key_build_ms": 0.000988,
+          "merkle_witness_ms": 26.779513,
+          "nullifier_rvk_ms": 0.554606,
+          "post_proof_ms": 1.7294100000000001,
+          "pre_key_ms": 45.417805,
+          "proof_gen_ms": 44790.273501,
+          "proof_generation_ms": 44790.273501,
+          "proving_key_cached_ms": 0.000988,
+          "result": "ok",
+          "schema": "postfiat.asset_orchard_private_egress.action_build_timing.v1",
+          "signing_witness_prep_ms": 2.778028,
+          "total_ms": 44837.425478,
+          "validation_domain_ms": 1.1728319999999999
+        }
+      ],
+      "action_verifications": [
+        {
+          "domain_binding_ms": 0.01056,
+          "exit_binding_ms": 0.49156099999999997,
+          "halo2_verify_proof_ms": 440.11469800000003,
+          "metadata_pin_validation_ms": 0.5521139999999999,
+          "proof_bytes_ms": 0.09980900000000001,
+          "public_instance_construction_ms": 1.092138,
+          "result": "ok",
+          "schema": "postfiat.asset_orchard_private_egress.action_verify_timing.v1",
+          "spend_auth_verification_ms": 1.098951,
+          "total_ms": 443.467247,
+          "verifying_key_cached_ms": 0.004258
+        }
+      ],
+      "proof_verifications": [
+        {
+          "halo2_verify_proof_ms": 435.157472,
+          "instance_setup_ms": 0.000092,
+          "result": "ok",
+          "schema": "postfiat.asset_orchard_private_egress.proof_verify_timing.v1",
+          "total_ms": 440.111201,
+          "transcript_init_ms": 0.0013909999999999999,
+          "verifier_strategy_ms": 0.000267,
+          "vk_metadata_recompute_ms": 4.948532
+        },
+        {
+          "halo2_verify_proof_ms": 442.51286699999997,
+          "instance_setup_ms": 0.000075,
+          "result": "ok",
+          "schema": "postfiat.asset_orchard_private_egress.proof_verify_timing.v1",
+          "total_ms": 447.390873,
+          "transcript_init_ms": 0.001019,
+          "verifier_strategy_ms": 0.000057,
+          "vk_metadata_recompute_ms": 4.872926
+        }
+      ],
+      "schema": "postfiat.asset_orchard_private_egress.timings.v1",
+      "vk_builds": [],
+      "vk_cached_calls": [
+        {
+          "build_triggered": false,
+          "cache_was_populated": true,
+          "result": "ok",
+          "schema": "postfiat.asset_orchard_private_egress.vk_cached_timing.v1",
+          "total_ms": 0.000533
+        },
+        {
+          "build_triggered": false,
+          "cache_was_populated": true,
+          "result": "ok",
+          "schema": "postfiat.asset_orchard_private_egress.vk_cached_timing.v1",
+          "total_ms": 0.000532
+        }
+      ]
+    },
+    "total_ms": 91060.566438
+  },
+  "prover_warm": {
+    "circuits": {
+      "ingress_notes": {
+        "circuit_id": "asset-orchard-ingress-notes",
+        "completed_at_unix_ms": null,
+        "elapsed_ms": null,
+        "error": null,
+        "k": null,
+        "note": "ingress note creation has no separate Halo2 proving key in this implementation",
+        "params_hash": null,
+        "ready": true,
+        "started_at_unix_ms": null,
+        "status": "not_applicable",
+        "vk_hash": null
+      },
+      "private_egress": {
+        "circuit_id": "asset-orchard-private-egress-v1",
+        "completed_at_unix_ms": "1785300617665",
+        "elapsed_ms": 430014.13967299997,
+        "error": null,
+        "k": 15,
+        "note": null,
+        "params_hash": "bcd57a07fc6729861fa7524a16825722d7c96e1703990f673d95e7c28c77db2da7844a4a9f981dd54b4499edddd3d555",
+        "ready": true,
+        "started_at_unix_ms": "1785300187649",
+        "status": "ready",
+        "vk_hash": "a8e020b877a45f9691a266990e3466b52b1518518d3a5264f9725be201b9884db80d4c9cb457c29020e65cfefa85d6be"
+      },
+      "swap": {
+        "circuit_id": "asset-orchard-swap-v1",
+        "completed_at_unix_ms": null,
+        "elapsed_ms": null,
+        "error": null,
+        "k": null,
+        "note": "swap prewarm disabled by ASSET_ORCHARD_LOCAL_SERVICE_PREWARM_SWAP",
+        "params_hash": null,
+        "ready": true,
+        "started_at_unix_ms": null,
+        "status": "not_applicable",
+        "vk_hash": null
+      }
+    },
+    "completed_at_unix_ms": "1785300617665",
+    "disk_pk_vk_cache": {
+      "reason": "pinned halo2_proofs exposes verifier pinned-assembly serialization but no ProvingKey read/write API; resident service prewarm remains the primary warm path",
+      "stale_cache_test_required": false,
+      "status": "skipped",
+      "supported": false
+    },
+    "enabled": true,
+    "prewarm_ready_file": "/var/lib/postfiat/validator-2/asset-orchard-local-vault/prewarm-ready.json",
+    "ready": true,
+    "schema": "postfiat-asset-orchard-local-service-prewarm-ready-v1",
+    "started_at_unix_ms": "1785300187649",
+    "status": "ready",
+    "threading": {
+      "available_parallelism": 2,
+      "halo2_multicore_feature": "explicitly_enabled",
+      "rayon_num_threads": "2"
+    }
+  }
+}

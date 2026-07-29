@@ -1,0 +1,13 @@
+{
+  "schema": "postfiat.a666.private_roundtrip_after_mint_acceptance.v1",
+  "verdict": "PASS",
+  "stages": {
+    "destination_consume": "PASS",
+    "return_import": "PASS",
+    "private_primary_redeem": "PASS",
+    "pfusdc_proof_egress": "PASS"
+  },
+  "final_supply_invariant": true,
+  "final_ethereum_spendable_supply_atoms": 0,
+  "private_material": "validator-2 only; never copied into evidence"
+}

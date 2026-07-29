@@ -1,0 +1,43 @@
+{
+  "error": null,
+  "events": [
+    {
+      "event_type": "asset_fee_quote",
+      "message": "asset transaction fee quoted",
+      "subject": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8"
+    }
+  ],
+  "id": "a666-opt-pass6-20260729-pfusdc-settle-quote",
+  "ok": true,
+  "result": {
+    "account_reserve": 10,
+    "asset_weight_bytes": 11408,
+    "base_asset_fee": 23,
+    "chain_id": "postfiat-wan-devnet-2",
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "mempool_pending_for_sender": 0,
+    "minimum_fee": 23,
+    "operation": {
+      "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+      "issuer_or_redemption_account": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+      "operation": "vault_bridge_redeem_settle",
+      "redemption_id": "20019e247088b0ca147e3259ce0279046dff2de8af8bce83e81a45edadbb6e2bb8709835475268a0f19aaa01038ab788",
+      "settled_atoms": 900581,
+      "settlement_receipt_hash": "0efdb4d150eddf98c304ed62bbc502ddbf5284d01a05613dc8921e0517e77c95b42ab19e7fb89a3bd5edd788c7a813dd"
+    },
+    "protocol_version": 1,
+    "schema": "postfiat-asset-fee-quote-v1",
+    "sender_balance": 997176,
+    "sender_balance_after_fee": 997153,
+    "sender_meets_reserve_after_fee": true,
+    "sender_sequence": 124,
+    "sequence": 125,
+    "sequence_source": "ledger_mempool",
+    "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+    "state_expansion_fee": 0,
+    "transaction_kind": "vault_bridge_redeem_settle",
+    "transfer_fee_byte_quantum": 512,
+    "transfer_fee_per_quantum": 1
+  },
+  "version": "postfiat-local-rpc-v1"
+}

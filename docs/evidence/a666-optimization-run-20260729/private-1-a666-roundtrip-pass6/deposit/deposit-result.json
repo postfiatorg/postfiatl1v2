@@ -1,0 +1,78 @@
+{
+  "amount_atoms": 905538,
+  "chain_id": 1,
+  "closed_sessions": [
+    {
+      "response": {
+        "ok": true
+      },
+      "session_id": "a666-pfusdc-deposit-20260729T052253009130Z"
+    }
+  ],
+  "completed_unix": 1785302582,
+  "deposit": {
+    "block_hash": "4b82b8de7bec4554c7636ced8f96a2b02e833ff69d99c3dcad080f4ba2ce33f4",
+    "block_number": 25636372,
+    "effective_gas_price_wei": 52809245,
+    "gas_used": 181457,
+    "response": {
+      "charged_usd": 10.0,
+      "gas_used": 181457,
+      "ok": true,
+      "tx": "8d9d202379cf20ba0fb71932579fcf3e380a94af95e9e78eb87f19acb2cd2d3e",
+      "value_wei": 0
+    },
+    "tx_hash": "0x8d9d202379cf20ba0fb71932579fcf3e380a94af95e9e78eb87f19acb2cd2d3e"
+  },
+  "deposit_calldata": "0x2391b45700000000000000000000000000000000000000000000000000000000000dd1420000000000000000000000000000000000000000000000000000000000000080839e9cb95d1b931df6e69209c0dcbf28e3bae6cd8de30de5df76a26833bb609fcaec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93000000000000000000000000000000000000000000000000000000000000002a70663233643838333133303161613163636536666464376266346132646232616561643136313962613800000000000000000000000000000000000000000000",
+  "deposit_calldata_sha256": "9a9484b16636cdaeef4da34967fc05499c94bfe8451dabcba2043e33564e206b",
+  "depositor": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+  "elapsed_seconds": 9,
+  "event": {
+    "amount_atoms": 905538,
+    "deposit_id": "0xd7eee478aa34b1563a91344c24b3a3b2cf5830280e7c878f00a11c973a97128d",
+    "depositor": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+    "nonce": "0x839e9cb95d1b931df6e69209c0dcbf28e3bae6cd8de30de5df76a26833bb609f",
+    "pftl_recipient": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+    "route_binding": "0xcaec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93"
+  },
+  "manifest_sha256": "b69417647e6a4bed5a3e7fa5069a0844b80a63f78020ba34f4796e373e92e904",
+  "nonce": "0x839e9cb95d1b931df6e69209c0dcbf28e3bae6cd8de30de5df76a26833bb609f",
+  "opened_sessions": [
+    {
+      "action": "deposit",
+      "response": {
+        "ok": true
+      },
+      "session_id": "a666-pfusdc-deposit-20260729T052253009130Z"
+    }
+  ],
+  "pftl_recipient": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "post_state": {
+    "allowance_atoms": 0,
+    "confirmed_nonce": 259,
+    "pending_nonce": 259,
+    "total_obligations_atoms": 12378348,
+    "vault_usdc_atoms": 12378348,
+    "wallet_eth_wei": 297152692729504015,
+    "wallet_usdc_atoms": 217814441
+  },
+  "pre_state": {
+    "allowance_atoms": 905538,
+    "confirmed_nonce": 258,
+    "pending_nonce": 258,
+    "total_obligations_atoms": 11472810,
+    "vault_usdc_atoms": 11472810,
+    "wallet_eth_wei": 297162275336673980,
+    "wallet_usdc_atoms": 218719979
+  },
+  "predicted_deposit_id": "0xd7eee478aa34b1563a91344c24b3a3b2cf5830280e7c878f00a11c973a97128d",
+  "recipient_hash": "0x74abe9bdfafd4ca959cc7a501d590babdbd9520a3efe493e2172db3b4be5d0d5",
+  "route_binding": "0xcaec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93",
+  "schema": "postfiat.a666.pfusdc_buyer_deposit.v1",
+  "started_unix": 1785302573,
+  "usdc": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+  "vault": "0xaaa78fda7062efce769e95cd72fc55e507bc8183",
+  "verdict": "PASS",
+  "verifier": "0x9a45d6f1dc9da443a88b1c336b3188fa7924d1ae"
+}
