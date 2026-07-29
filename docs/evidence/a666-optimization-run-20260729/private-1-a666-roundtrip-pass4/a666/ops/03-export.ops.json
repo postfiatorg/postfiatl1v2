@@ -1,0 +1,25 @@
+{
+  "operations": [
+    {
+      "key_file": "/home/postfiat/tmp/pfusdc-closed-roundtrip-20260720/keys/holder.json",
+      "label": "joe-a666-export",
+      "operation": {
+        "amount_atoms": 1000000,
+        "destination_deadline_seconds": 1785387057,
+        "ethereum_packet_digest": "9e7c757b6e68807ae870b6adba6a7655504de3dc46c5e3ba11dc5cebca10fb52",
+        "ethereum_packet_schema_version": 2,
+        "ethereum_recipient": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+        "export_nonce": "a26e0e100f85a3154b18f998cdc905d3fd3d08c7906439b378a5dd35cc3ad85d",
+        "operation": "pftl_uniswap_export_debit",
+        "owner": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+        "packet_hash": "a0d4c704fe7dab7ba3ffb34ca8b8f96cadb2abbdbe4382c6a18d1c5edced86b5d75deadd5ad074613f4535559bfc016e",
+        "refund_delay_blocks": 100,
+        "reservation_id": "1736a7f8ad0e4b912b12e2d1fe7d061223b4ddec9cc4fb3b4cb88623e1fab26ecd0652a544f6707db912b71cb40d6581",
+        "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+        "settlement_value_atoms": 905538
+      },
+      "source": "pfab9b9228942e5c529633a13aa271d5297bec6353"
+    }
+  ],
+  "schema": "postfiat-certified-asset-ops-request-v1"
+}

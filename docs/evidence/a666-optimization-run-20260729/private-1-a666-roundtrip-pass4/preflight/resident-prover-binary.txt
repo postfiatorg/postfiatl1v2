@@ -1,0 +1,2 @@
+7eedc5616f275826be68e5c34dd7ff1f29750a37ab6cf6af79d681fc26a2d87f  /opt/postfiat/services/asset-orchard-local-service
+/opt/postfiat/releases/a666-orchard-resident-skylake-20260729/asset-orchard-local-service

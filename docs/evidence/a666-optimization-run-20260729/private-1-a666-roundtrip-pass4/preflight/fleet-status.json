@@ -1,0 +1,66 @@
+{
+  "binary_sha256": "fb3cb3d21ff677269baada047445a6372a2caf415c2710a5c987872f85ecb94b",
+  "block_tip_hash": "d28ad6629e9080e359a5272f0229220a8ccf4ca4a883c6c9849da73d06846527df02003e84a64f06ead13c379b73cd1c",
+  "build_git_revision": "9ffdfb66",
+  "height": 466,
+  "mempool_pending": 0,
+  "nodes": [
+    {
+      "binary_sha256": "fb3cb3d21ff677269baada047445a6372a2caf415c2710a5c987872f85ecb94b",
+      "block_tip_hash": "d28ad6629e9080e359a5272f0229220a8ccf4ca4a883c6c9849da73d06846527df02003e84a64f06ead13c379b73cd1c",
+      "build_git_revision": "9ffdfb66",
+      "height": 466,
+      "mempool_pending": 0,
+      "node_id": "validator-0",
+      "state_root": "d7ce1d1c5e0c9bdc16e656b6a5237f476dedd03c6720a0d0fe4bd6936ef02c955aad44ec1a3dab5784ff0155ab290df1"
+    },
+    {
+      "binary_sha256": "fb3cb3d21ff677269baada047445a6372a2caf415c2710a5c987872f85ecb94b",
+      "block_tip_hash": "d28ad6629e9080e359a5272f0229220a8ccf4ca4a883c6c9849da73d06846527df02003e84a64f06ead13c379b73cd1c",
+      "build_git_revision": "9ffdfb66",
+      "height": 466,
+      "mempool_pending": 0,
+      "node_id": "validator-1",
+      "state_root": "d7ce1d1c5e0c9bdc16e656b6a5237f476dedd03c6720a0d0fe4bd6936ef02c955aad44ec1a3dab5784ff0155ab290df1"
+    },
+    {
+      "binary_sha256": "fb3cb3d21ff677269baada047445a6372a2caf415c2710a5c987872f85ecb94b",
+      "block_tip_hash": "d28ad6629e9080e359a5272f0229220a8ccf4ca4a883c6c9849da73d06846527df02003e84a64f06ead13c379b73cd1c",
+      "build_git_revision": "9ffdfb66",
+      "height": 466,
+      "mempool_pending": 0,
+      "node_id": "validator-2",
+      "state_root": "d7ce1d1c5e0c9bdc16e656b6a5237f476dedd03c6720a0d0fe4bd6936ef02c955aad44ec1a3dab5784ff0155ab290df1"
+    },
+    {
+      "binary_sha256": "fb3cb3d21ff677269baada047445a6372a2caf415c2710a5c987872f85ecb94b",
+      "block_tip_hash": "d28ad6629e9080e359a5272f0229220a8ccf4ca4a883c6c9849da73d06846527df02003e84a64f06ead13c379b73cd1c",
+      "build_git_revision": "9ffdfb66",
+      "height": 466,
+      "mempool_pending": 0,
+      "node_id": "validator-3",
+      "state_root": "d7ce1d1c5e0c9bdc16e656b6a5237f476dedd03c6720a0d0fe4bd6936ef02c955aad44ec1a3dab5784ff0155ab290df1"
+    },
+    {
+      "binary_sha256": "fb3cb3d21ff677269baada047445a6372a2caf415c2710a5c987872f85ecb94b",
+      "block_tip_hash": "d28ad6629e9080e359a5272f0229220a8ccf4ca4a883c6c9849da73d06846527df02003e84a64f06ead13c379b73cd1c",
+      "build_git_revision": "9ffdfb66",
+      "height": 466,
+      "mempool_pending": 0,
+      "node_id": "validator-4",
+      "state_root": "d7ce1d1c5e0c9bdc16e656b6a5237f476dedd03c6720a0d0fe4bd6936ef02c955aad44ec1a3dab5784ff0155ab290df1"
+    },
+    {
+      "binary_sha256": "fb3cb3d21ff677269baada047445a6372a2caf415c2710a5c987872f85ecb94b",
+      "block_tip_hash": "d28ad6629e9080e359a5272f0229220a8ccf4ca4a883c6c9849da73d06846527df02003e84a64f06ead13c379b73cd1c",
+      "build_git_revision": "9ffdfb66",
+      "height": 466,
+      "mempool_pending": 0,
+      "node_id": "validator-5",
+      "state_root": "d7ce1d1c5e0c9bdc16e656b6a5237f476dedd03c6720a0d0fe4bd6936ef02c955aad44ec1a3dab5784ff0155ab290df1"
+    }
+  ],
+  "schema": "postfiat.a666.optimization_fleet_preflight.v2",
+  "state_root": "d7ce1d1c5e0c9bdc16e656b6a5237f476dedd03c6720a0d0fe4bd6936ef02c955aad44ec1a3dab5784ff0155ab290df1",
+  "validator_count": 6
+}
