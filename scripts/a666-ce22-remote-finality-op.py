@@ -68,6 +68,7 @@ def parse_args() -> argparse.Namespace:
         default="28650,28651,28652,28653,28654,28655",
     )
     parser.add_argument("--timeout-seconds", type=float, default=45.0)
+    parser.add_argument("--preflight-seconds", type=float, default=45.0)
     parser.add_argument("--postflight-seconds", type=float, default=45.0)
     return parser.parse_args()
 
@@ -97,7 +98,11 @@ def main() -> None:
     if not key_file.is_file():
         raise RuntimeError(f"declared signing key does not exist: {key_file}")
 
-    pre = rpc.fleet_status(ports, args.timeout_seconds)
+    pre = rpc.wait_for_fleet_status(
+        ports,
+        args.timeout_seconds,
+        args.preflight_seconds,
+    )
     parent = pre[0]
     preflight = {
         "schema": "postfiat-a666-ce22-remote-finality-preflight-v1",

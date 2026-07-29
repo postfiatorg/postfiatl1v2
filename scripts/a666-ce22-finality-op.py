@@ -86,6 +86,25 @@ def fleet_status(ports: list[int], timeout: float) -> list[dict[str, Any]]:
     return statuses
 
 
+def wait_for_fleet_status(
+    ports: list[int],
+    rpc_timeout: float,
+    convergence_timeout: float,
+) -> list[dict[str, Any]]:
+    deadline = time.monotonic() + convergence_timeout
+    last_error: Exception | None = None
+    while True:
+        try:
+            return fleet_status(ports, rpc_timeout)
+        except Exception as error:
+            last_error = error
+        if time.monotonic() >= deadline:
+            raise RuntimeError(
+                f"fleet did not converge within {convergence_timeout}s: {last_error}"
+            ) from last_error
+        time.sleep(0.25)
+
+
 def write_json(path: Path, value: Any, mode: int = 0o600) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
     os.chmod(path, mode)
@@ -101,6 +120,7 @@ def parse_args() -> argparse.Namespace:
         default="28650,28651,28652,28653,28654,28655",
     )
     parser.add_argument("--timeout-seconds", type=float, default=45.0)
+    parser.add_argument("--preflight-seconds", type=float, default=45.0)
     parser.add_argument("--postflight-seconds", type=float, default=30.0)
     return parser.parse_args()
 
@@ -126,7 +146,11 @@ def main() -> None:
     if not key_file.is_file():
         raise RuntimeError(f"declared signing key does not exist: {key_file}")
 
-    pre = fleet_status(ports, args.timeout_seconds)
+    pre = wait_for_fleet_status(
+        ports,
+        args.timeout_seconds,
+        args.preflight_seconds,
+    )
     write_json(
         args.artifact_dir / "preflight-fleet.json",
         {
