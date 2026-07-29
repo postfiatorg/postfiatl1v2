@@ -335,7 +335,10 @@ stopped at PFTL mempool admission when an experimental one-round
 proposal+finalize+claim batch tried to admit the claim before the proposal had
 created the holder trustline. No block was committed by that failed batch.
 The deposit was reconciled through the proven two-round path at heights
-467-468, and the experimental compression was removed.
+467-468, and the experimental compression was removed. That pass-5 deposit
+remains as Joe-owned pfUSDC inventory backed by the corresponding Ethereum
+vault obligation; it was not converted into A666 and was not withdrawn back
+to Ethereum during this campaign.
 
 Pass 6 was the clean measurement from reconciled height 468. Functional
 issuance succeeded through destination consume at height 475, but the exact
@@ -358,6 +361,11 @@ height 481:
 - final supply invariant: **PASS**; and
 - six validators converged at height 481 with one state root and empty
   mempools.
+
+Here, "baseline" means the frozen pass-6 baseline at height 468. It includes
+the reconciled pass-5 pfUSDC inventory described above; the NAV/wA666
+round-trip is fully reconciled, while that separate pfUSDC balance remains
+available to Joe for a later issue or withdrawal.
 
 Conclusion: the full-finality canonical issue path is functional and clean,
 but it does **not** currently meet 25 minutes. Another orchestration-only run
