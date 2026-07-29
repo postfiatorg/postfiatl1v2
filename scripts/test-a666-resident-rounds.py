@@ -115,6 +115,11 @@ class ResidentRoundTests(unittest.TestCase):
         self.assertIn(f"install -d -o postfiat -g postfiat -m 700 {root}", prepare)
         launch = remote.call_args_list[1].args[1]
         self.assertIn("unshare --mount --propagation private", launch)
+        self.assertIn("POSTFIAT_PREWARM_SHIELDED_VERIFIER=1", launch)
+        self.assertIn(
+            "POSTFIAT_PREWARM_ASSET_ORCHARD_PRIVATE_EGRESS_VERIFIER=1",
+            launch,
+        )
         self.assertIn("POSTFIAT_CERTIFIED_BATCH_LOOP_READY_FILE=", launch)
 
     def test_start_freezes_one_deterministic_worker_per_planned_height(self) -> None:

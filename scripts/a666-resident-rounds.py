@@ -221,6 +221,9 @@ def start_worker(entry: dict[str, Any], remote_binary: str, remote_topology: str
         f"mount --bind {shlex.quote(paths['isolated_outbox'])} "
         f"{shlex.quote(paths['data_dir'] + '/certified-send-outbox')}; "
         "runuser -u postfiat -- env "
+        "POSTFIAT_PREWARM_SHIELDED_VERIFIER=1 "
+        "POSTFIAT_PREWARM_ASSET_ORCHARD_SWAP_VERIFIER=1 "
+        "POSTFIAT_PREWARM_ASSET_ORCHARD_PRIVATE_EGRESS_VERIFIER=1 "
         f"POSTFIAT_CERTIFIED_BATCH_LOOP_READY_FILE={shlex.quote(paths['ready_file'])} "
         + " ".join(shlex.quote(value) for value in worker_args)
         + f" > {shlex.quote(paths['report_tmp_file'])} "
