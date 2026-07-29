@@ -1,0 +1,21 @@
+{
+  "accepted": true,
+  "all_sends_verified": true,
+  "confirmed": true,
+  "end_block_tip_hash": "c102aa76b0abdedeaf5054eb4c34ffde4446f4ba244da9ee8c0a373c13596e28602ae9539c3cf7c792d705592db661cd",
+  "end_height": 461,
+  "end_mempool_pending": 0,
+  "end_state_root": "b88cb48a5fd2c1d5b410185daf18f0400d8f9a3189b36869a5f984817e81636f4420b8901829506ba697fd1893124865",
+  "label": "a666-opt-pass3-20260729-return-import",
+  "proposer": "validator-5",
+  "round_ok": true,
+  "schema": "postfiat-a666-ce22-remote-finality-operation-v1",
+  "source": "pfd0c86d9084915e1fefd22eab891806397d5a5937",
+  "start_height": 460,
+  "start_state_root": "50ffbccb72796c453763550e43d3d0e28fb334f449e3ab760a1dc2328d651d5a561631bb71bb503ca422b32e35d317d5",
+  "transaction_kind": "pftl_uniswap_return_import",
+  "trust_class": "CONTROLLED",
+  "tx_id": "ba5f517f07a240531dd5f4d7a03fafcc732c77736f46a313ea7c5ee344c9d07fffdaa5ee93e491d21728c4e1d7b11647",
+  "validator_count": 6,
+  "vote_count": 5
+}

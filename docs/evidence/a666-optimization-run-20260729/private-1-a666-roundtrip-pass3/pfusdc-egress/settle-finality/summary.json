@@ -1,0 +1,21 @@
+{
+  "accepted": true,
+  "all_sends_verified": true,
+  "confirmed": true,
+  "end_block_tip_hash": "d28ad6629e9080e359a5272f0229220a8ccf4ca4a883c6c9849da73d06846527df02003e84a64f06ead13c379b73cd1c",
+  "end_height": 466,
+  "end_mempool_pending": 0,
+  "end_state_root": "d7ce1d1c5e0c9bdc16e656b6a5237f476dedd03c6720a0d0fe4bd6936ef02c955aad44ec1a3dab5784ff0155ab290df1",
+  "label": "a666-opt-pass3-20260729-pfusdc-settle",
+  "proposer": "validator-4",
+  "round_ok": true,
+  "schema": "postfiat-a666-ce22-remote-finality-operation-v1",
+  "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "start_height": 465,
+  "start_state_root": "cf0ab7016bf539fd829db3d1775e77e06ffafcca87f70f9c9b0e8ac627157b9ff357092d9f76b9ec56387cd3d23f9d78",
+  "transaction_kind": "vault_bridge_redeem_settle",
+  "trust_class": "CONTROLLED",
+  "tx_id": "20428bc6b8885b1c259c250004f040487a1defb0b203ab9a64d43cec8dda60240f43cb733a31127168235d99b797d60e",
+  "validator_count": 6,
+  "vote_count": 5
+}

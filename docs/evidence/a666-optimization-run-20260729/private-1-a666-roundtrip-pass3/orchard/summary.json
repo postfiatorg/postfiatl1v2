@@ -1,0 +1,19 @@
+{
+  "schema": "postfiat.a666.private_primary_redeem_acceptance.v1",
+  "verdict": "PASS",
+  "privacy": "private A666 note to private pfUSDC note; only governed route economics and exit are public",
+  "a666_ingress": {
+    "amount_atoms": 1000000,
+    "verified": true
+  },
+  "private_redeem": {
+    "nav_amount_atoms": 1000000,
+    "settlement_output_atoms": 900581,
+    "verified": true
+  },
+  "private_egress": {
+    "amount_atoms": 900581,
+    "verified": true
+  },
+  "private_material_location": "validator-2 only; mode 0600; excluded from evidence"
+}

@@ -28,6 +28,67 @@ The consensus core is already fast when warm. The stack's latency is
 dominated by (a) cold prover state, (b) serialized orchestration, (c) the
 Ethereum finality floor, and (d) per-statement Groth16 wraps.
 
+## Implemented optimization run: pass 3
+
+The first immutable, hands-off optimization lineage
+(`a666-opt-pass3-20260729`) ran from a frozen preflight at PFTL height 453.
+It completed the private issue path through Ethereum mint and PFTL
+destination-consume without a manual resume or state repair. The strict
+latency gate then stopped the runner before redemption because issuance
+missed the 1,500-second SLO.
+
+| Pass-3 result | Measured | Gate | Verdict |
+|---|---:|---:|---|
+| Private issue, Ethereum deposit block -> spendable wA666 mint block | 1,824s | <=1,500s | FAIL |
+| Private redemption recovery, wA666 burn block -> USDC withdrawal block | 852s | <=1,500s | PASS |
+| Minted/redeemed NAV | 1,000,000 atoms | exact | PASS |
+| Deposit / withdrawal | 905,538 / 900,581 USDC atoms | governed NAV arithmetic | PASS |
+| Final PFTL supply and Ethereum wrapper conservation | baseline restored | exact | PASS |
+| Withdrawal replay rejection | rejected | required | PASS |
+
+The issue leg was functionally correct:
+
+- deposit `0x7552c0aba0ff317240fd8bb965ca57acdddaf1f7266f0e456d3bf2430b634c07`
+  was included at Ethereum block 25,635,693;
+- full-finality ingress proof verification, pfUSDC relay, private primary
+  issue, private A666 egress, and native export finalized at PFTL heights
+  454-459;
+- Ethereum acceptance and mint completed at blocks 25,635,844-25,635,845;
+- the wallet increased by exactly 1,000,000 wA666 and PFTL recorded
+  destination consumption at height 460.
+
+The measured issue critical path was:
+
+| Boundary | UTC | Increment |
+|---|---:|---:|
+| Deposit confirmed | 03:06:50 | - |
+| Full-finality ingress witness available | 03:22:29 | 939s |
+| Ingress Groth16 proof | 03:24:55 | 146s |
+| pfUSDC relay complete | 03:26:31 | 96s |
+| Private pfUSDC ingress complete | 03:27:46 | 75s |
+| Private primary issue complete | 03:30:26 | 160s |
+| Private A666 egress complete | 03:32:12 | 106s |
+| Native export complete | 03:33:22 | 70s |
+| Export Groth16 proof | 03:36:41 | 199s |
+| Ethereum mint state recorded | 03:37:17 | 36s |
+
+This isolates the miss: Ethereum finality consumed about 15m39s and the
+post-finality pipeline consumed about 14m48s. The latter, not correctness or
+liquidity, is the remaining controllable issue bottleneck. The clean runner
+stopped as designed after destination consumption. A separately labeled
+recovery then privately redeemed the reconciled test position in 852
+seconds, returned 900,581 USDC, rejected withdrawal replay, settled at PFTL
+height 466, and restored authorized supply, outstanding claims,
+Ethereum-spendable supply, wallet wA666, and wrapper total supply to their
+pre-pass values. The only retained economic delta was the expected 4,957
+atom governed spread.
+
+Canonical evidence:
+`docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-pass3/`.
+The concise independent recovery record is
+`pass3-recovery-summary.json`. Private notes and spending material remained
+on validator-2 and are not present in the evidence tree.
+
 ## S1 — Halo2 privacy-prover layer
 
 ### S1.1 Proving-key serialization (removes the 330s cold build class)

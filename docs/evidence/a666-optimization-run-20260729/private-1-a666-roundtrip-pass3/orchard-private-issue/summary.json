@@ -1,0 +1,10 @@
+{
+  "schema": "postfiat.a666.private_issue_middle.v1",
+  "verdict": "PASS",
+  "start_height": 455,
+  "end_height": 459,
+  "private_settlement_atoms": 905538,
+  "private_nav_atoms": 1000000,
+  "privacy": "transparent PFUSDC ingress; private PFUSDC-to-A666 primary issue; transparent A666 egress for trustless Ethereum export",
+  "private_material_location": "validator-2 only; mode 0600; excluded from evidence"
+}

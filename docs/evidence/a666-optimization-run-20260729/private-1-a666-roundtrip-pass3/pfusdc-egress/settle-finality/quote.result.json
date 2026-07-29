@@ -1,0 +1,30 @@
+{
+  "account_reserve": 10,
+  "asset_weight_bytes": 11408,
+  "base_asset_fee": 23,
+  "chain_id": "postfiat-wan-devnet-2",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "mempool_pending_for_sender": 0,
+  "minimum_fee": 23,
+  "operation": {
+    "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+    "issuer_or_redemption_account": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+    "operation": "vault_bridge_redeem_settle",
+    "redemption_id": "034dd3e81b94018b751f6e0a70ea2fe377ebf2ba043f8a7ef101f6d93c750db320a762261be94c4a1c475e76dfe02dc0",
+    "settled_atoms": 900581,
+    "settlement_receipt_hash": "6552928d645759e0b1b94946e622716f50f0107ec61f812847a377ccd59a735b94cd1b8adda4fdbb2899303016fde253"
+  },
+  "protocol_version": 1,
+  "schema": "postfiat-asset-fee-quote-v1",
+  "sender_balance": 997415,
+  "sender_balance_after_fee": 997392,
+  "sender_meets_reserve_after_fee": true,
+  "sender_sequence": 117,
+  "sequence": 118,
+  "sequence_source": "ledger_mempool",
+  "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "state_expansion_fee": 0,
+  "transaction_kind": "vault_bridge_redeem_settle",
+  "transfer_fee_byte_quantum": 512,
+  "transfer_fee_per_quantum": 1
+}

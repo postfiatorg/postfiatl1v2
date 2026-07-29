@@ -1,0 +1,9 @@
+{
+  "id": "a666-opt-pass3-20260729-pfusdc-settle-quote",
+  "method": "asset_fee_quote",
+  "params": {
+    "operation_json": "{\"operation\":\"vault_bridge_redeem_settle\",\"issuer_or_redemption_account\":\"pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8\",\"asset_id\":\"02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b\",\"redemption_id\":\"034dd3e81b94018b751f6e0a70ea2fe377ebf2ba043f8a7ef101f6d93c750db320a762261be94c4a1c475e76dfe02dc0\",\"settlement_receipt_hash\":\"6552928d645759e0b1b94946e622716f50f0107ec61f812847a377ccd59a735b94cd1b8adda4fdbb2899303016fde253\",\"settled_atoms\":900581}",
+    "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8"
+  },
+  "version": "postfiat-local-rpc-v1"
+}
