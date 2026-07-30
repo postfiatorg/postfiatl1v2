@@ -1855,6 +1855,64 @@ mod tests {
             .transitions
             .iter()
             .all(|transition| transition.at_monotonic_ns > 0));
+        let batch_hash = "ab".repeat(48);
+        transition_pftl_swap_journal_entry(
+            &path,
+            "timed-intent",
+            PftlSwapJournalState::Proving,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("advance timed intent to proving");
+        transition_pftl_swap_journal_entry(
+            &path,
+            "timed-intent",
+            PftlSwapJournalState::Prepared,
+            Some(batch_hash.clone()),
+            None,
+            None,
+            None,
+        )
+        .expect("advance timed intent to prepared");
+        transition_pftl_swap_journal_entry(
+            &path,
+            "timed-intent",
+            PftlSwapJournalState::Published,
+            Some(batch_hash.clone()),
+            None,
+            None,
+            None,
+        )
+        .expect("advance timed intent to published");
+        let finality_timing =
+            BTreeMap::from([("processed_finality_verify_ns".to_string(), 23_u64)]);
+        record_pftl_swap_stage_timings(&path, "timed-intent", &finality_timing)
+            .expect("durably record finality timing before terminal transition");
+        let committed = transition_pftl_swap_journal_entry(
+            &path,
+            "timed-intent",
+            PftlSwapJournalState::Committed,
+            Some(batch_hash),
+            Some(7),
+            Some("certificate-1".to_string()),
+            None,
+        )
+        .expect("commit timed intent");
+        assert_eq!(
+            committed
+                .timing
+                .as_ref()
+                .expect("committed timing")
+                .stages_ns
+                .get("processed_finality_verify_ns"),
+            Some(&23)
+        );
+        let committed_replay =
+            record_pftl_swap_stage_timings(&path, "timed-intent", &finality_timing)
+                .expect("replay finality timing after terminal transition");
+        assert_eq!(committed.timing, committed_replay.timing);
         let _ = fs::remove_dir_all(root);
     }
 

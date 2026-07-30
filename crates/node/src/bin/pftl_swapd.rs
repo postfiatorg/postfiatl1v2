@@ -5,7 +5,7 @@ use postfiat_node::{
     create_asset_orchard_ingress_batch, create_asset_orchard_private_egress_batch,
     create_shielded_atomic_batch, find_pftl_swap_intent_replay, find_pftl_swap_quote,
     live_consensus_v2_context, load_pftl_swap_journal, load_pftl_swap_quote_store,
-    read_consensus_v2_qc_graph, record_pftl_swap_stage_timings, recover_pftl_swap_journal,
+    read_consensus_v2_qc_graph_for_view, record_pftl_swap_stage_timings, recover_pftl_swap_journal,
     revalidate_pftl_swap_quote_for_execution, simulate_shielded_batch, store_pftl_swap_quote,
     transition_pftl_swap_journal_entry, AssetOrchardIngressBatchOptions,
     AssetOrchardIngressCreateOptions, AssetOrchardPrivateEgressBatchOptions, BlockCertificateFile,
@@ -40,6 +40,7 @@ const PRIVATE_NOTE_INDEX_SCHEMA_V1: &str = "postfiat.pftl_swap.private_note_inde
 const MAX_PRIVATE_NOTE_INDEX_ENTRIES: usize = 4_096;
 const MAX_PRIVATE_STATE_FILE_BYTES: usize = 16 << 20;
 const MAX_READY_FILE_BYTES: usize = 1 << 20;
+const BLOCK_CERTIFICATE_SCHEMA_V1: &str = "postfiat.block_certificate.v1";
 static DAEMON_SHUTDOWN: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone)]
@@ -84,6 +85,13 @@ struct PreparedSwap {
     batch: ShieldedActionBatch,
     output_note_refs: Vec<String>,
     stage_timings_ns: BTreeMap<String, u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProcessedSwapFinality {
+    committed_height: u64,
+    certificate_ref: String,
+    verification_ns: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -893,15 +901,26 @@ fn resolve_published_swap(
     }
     let canonical_processed_payload =
         serde_json::to_string(&processed_batch).map_err(invalid_data)?;
-    let (committed_height, certificate_ref) =
+    let finality =
         verify_processed_swap_finality(config, batch_hash, &canonical_processed_payload)?;
+    let finality_stage = "processed_finality_verify_ns";
+    if entry
+        .timing
+        .as_ref()
+        .and_then(|timing| timing.stages_ns.get(finality_stage))
+        .is_none()
+    {
+        let finality_timing =
+            BTreeMap::from([(finality_stage.to_string(), finality.verification_ns)]);
+        record_pftl_swap_stage_timings(&config.journal_file, idempotency_key, &finality_timing)?;
+    }
     let committed = transition_pftl_swap_journal_entry(
         &config.journal_file,
         idempotency_key,
         PftlSwapJournalState::Committed,
         Some(batch_hash.clone()),
-        Some(committed_height),
-        Some(certificate_ref),
+        Some(finality.committed_height),
+        Some(finality.certificate_ref),
         None,
     )?;
     mark_committed_note_index(state, &committed)?;
@@ -912,7 +931,8 @@ fn verify_processed_swap_finality(
     config: &Config,
     batch_hash: &str,
     processed_payload: &str,
-) -> io::Result<(u64, String)> {
+) -> io::Result<ProcessedSwapFinality> {
+    let verification_start = Instant::now();
     let certificate_path = config
         .processed_batch_dir
         .join(certified_round_certificate_file_name(batch_hash));
@@ -929,7 +949,21 @@ fn verify_processed_swap_finality(
         .as_ref()
         .ok_or_else(|| invalid_data("processed swap certificate omitted consensus-v2 finality"))?;
     let (domain, validators) = live_consensus_v2_context(&config.data_dir)?;
-    let graph = read_consensus_v2_qc_graph(&config.data_dir, &domain, &validators)?;
+    if certificate.schema != BLOCK_CERTIFICATE_SCHEMA_V1
+        || certificate.chain_id != domain.chain_id
+        || certificate.genesis_hash != domain.genesis_hash
+        || certificate.protocol_version != domain.protocol_version
+    {
+        return Err(invalid_data(
+            "processed swap certificate does not match the live consensus domain",
+        ));
+    }
+    let graph = read_consensus_v2_qc_graph_for_view(
+        &config.data_dir,
+        &domain,
+        &validators,
+        commit.proposal.round.view,
+    )?;
     let committed_block =
         verify_consensus_v2_commit(&domain, &validators, commit, &graph).map_err(invalid_data)?;
     if committed_block != commit.proposal.block {
@@ -953,10 +987,11 @@ fn verify_processed_swap_finality(
             "processed swap certificate does not bind the archived batch",
         ));
     }
-    Ok((
-        commit.proposal.round.height,
-        commit.precommit_qc.certificate_id.clone(),
-    ))
+    Ok(ProcessedSwapFinality {
+        committed_height: commit.proposal.round.height,
+        certificate_ref: commit.precommit_qc.certificate_id.clone(),
+        verification_ns: elapsed_ns(verification_start),
+    })
 }
 
 fn transition_swap_journal(
@@ -2698,7 +2733,24 @@ fn invalid_data(error: impl ToString) -> io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use postfiat_node::{
+        assemble_consensus_v2_commit, certify_and_persist_consensus_v2_votes,
+        create_consensus_v2_precommit_vote, create_consensus_v2_prepare_vote,
+        create_consensus_v2_proposal_for_block, init_consensus_v2, BlockProposalFile,
+        InitConsensusV2Options, CONSENSUS_V2_QC_DIR, VALIDATOR_KEYS_FILE, VALIDATOR_REGISTRY_FILE,
+    };
+    use postfiat_ordering_fast::leader_for_view;
+    use postfiat_types::{BlockCertificate, ConsensusV2Phase};
     use std::net::Shutdown;
+
+    #[derive(Debug)]
+    struct ProcessedFinalityFixture {
+        config: Config,
+        batch_hash: String,
+        payload: String,
+        certificate: BlockCertificateFile,
+        root: PathBuf,
+    }
 
     fn test_root(label: &str) -> PathBuf {
         let suffix = hash_hex(
@@ -2770,6 +2822,406 @@ mod tests {
             .shutdown(Shutdown::Write)
             .expect("shutdown test request writer");
         listener.accept().expect("accept test connection").0
+    }
+
+    fn processed_finality_fixture(label: &str) -> ProcessedFinalityFixture {
+        let config = test_config(label);
+        let root = config
+            .private_dir
+            .parent()
+            .expect("test private directory has a root")
+            .to_path_buf();
+        let mut data_dirs = Vec::new();
+        let mut statuses = Vec::new();
+        for index in 0..6 {
+            let data_dir = if index == 0 {
+                config.data_dir.clone()
+            } else {
+                root.join(format!("validator-{index}"))
+            };
+            let status = init_consensus_v2(InitConsensusV2Options {
+                data_dir: data_dir.clone(),
+                chain_id: "postfiat-pftl-swapd-finality-test".to_string(),
+                node_id: format!("validator-{index}"),
+                validator_count: 6,
+                activation_height: 1,
+            })
+            .expect("initialize finality test validator");
+            data_dirs.push(data_dir);
+            statuses.push(status);
+        }
+        assert!(statuses
+            .windows(2)
+            .all(|pair| pair[0].genesis_hash == pair[1].genesis_hash));
+        let shared_keys =
+            fs::read(data_dirs[0].join(VALIDATOR_KEYS_FILE)).expect("read shared validator keys");
+        let shared_registry = fs::read(data_dirs[0].join(VALIDATOR_REGISTRY_FILE))
+            .expect("read shared validator registry");
+        for data_dir in data_dirs.iter().skip(1) {
+            fs::write(data_dir.join(VALIDATOR_KEYS_FILE), &shared_keys)
+                .expect("stage shared validator keys");
+            fs::write(data_dir.join(VALIDATOR_REGISTRY_FILE), &shared_registry)
+                .expect("stage shared validator registry");
+        }
+
+        let batch_hash = "ab".repeat(48);
+        let batch = ShieldedActionBatch::new(batch_hash.clone(), Vec::new());
+        let payload = serde_json::to_string(&batch).expect("serialize finality test batch");
+        let genesis = NodeStore::new(&config.data_dir)
+            .read_genesis()
+            .expect("read finality test genesis");
+        let payload_hash = batch_archive_payload_hash(&genesis, "shielded", &batch_hash, &payload)
+            .expect("hash finality test batch");
+        let (domain, validators) =
+            live_consensus_v2_context(&config.data_dir).expect("load finality test context");
+        let proposer = leader_for_view(&validators.validator_ids(), 1, 0)
+            .expect("select finality test proposer");
+        let proposer_index = validators
+            .validator_ids()
+            .iter()
+            .position(|validator| validator == &proposer)
+            .expect("locate finality test proposer");
+        let block = BlockProposalFile {
+            schema: "postfiat.block_proposal.v1".to_string(),
+            chain_id: domain.chain_id.clone(),
+            genesis_hash: domain.genesis_hash.clone(),
+            protocol_version: domain.protocol_version,
+            block_height: 1,
+            view: 0,
+            parent_hash: statuses[0].block_tip_hash.clone(),
+            proposer: proposer.clone(),
+            batch_kind: "shielded".to_string(),
+            batch_id: batch_hash.clone(),
+            payload_hash,
+            state_root: "33".repeat(48),
+            bridge_exit_root: None,
+            pftl_uniswap_receipt_root: None,
+            receipt_count: 0,
+            receipt_ids: Vec::new(),
+            fastpay_pre_state_effects: Vec::new(),
+            signature: None,
+        };
+        let proposal = create_consensus_v2_proposal_for_block(
+            &data_dirs[proposer_index],
+            &block,
+            None,
+            &data_dirs[proposer_index].join(VALIDATOR_KEYS_FILE),
+        )
+        .expect("create finality test proposal");
+        let prepare_votes = data_dirs
+            .iter()
+            .enumerate()
+            .map(|(index, data_dir)| {
+                create_consensus_v2_prepare_vote(
+                    data_dir,
+                    &proposal,
+                    None,
+                    &data_dir.join(VALIDATOR_KEYS_FILE),
+                    &format!("validator-{index}"),
+                )
+                .expect("create finality test prepare vote")
+            })
+            .collect::<Vec<_>>();
+        let prepare_qc = certify_and_persist_consensus_v2_votes(
+            &data_dirs[proposer_index],
+            proposal.round,
+            ConsensusV2Phase::Prepare,
+            Some(proposal.block.clone()),
+            prepare_votes,
+        )
+        .expect("certify finality test prepare votes");
+        let precommit_votes = data_dirs
+            .iter()
+            .enumerate()
+            .map(|(index, data_dir)| {
+                create_consensus_v2_precommit_vote(
+                    data_dir,
+                    &prepare_qc,
+                    &data_dir.join(VALIDATOR_KEYS_FILE),
+                    &format!("validator-{index}"),
+                )
+                .expect("create finality test precommit vote")
+            })
+            .collect::<Vec<_>>();
+        let precommit_qc = certify_and_persist_consensus_v2_votes(
+            &data_dirs[proposer_index],
+            proposal.round,
+            ConsensusV2Phase::Precommit,
+            Some(proposal.block.clone()),
+            precommit_votes,
+        )
+        .expect("certify finality test precommit votes");
+        let commit = assemble_consensus_v2_commit(
+            &data_dirs[proposer_index],
+            &block,
+            proposal,
+            None,
+            prepare_qc,
+            precommit_qc,
+        )
+        .expect("assemble finality test commit");
+        let certificate = BlockCertificateFile {
+            schema: BLOCK_CERTIFICATE_SCHEMA_V1.to_string(),
+            chain_id: domain.chain_id,
+            genesis_hash: domain.genesis_hash,
+            protocol_version: domain.protocol_version,
+            block_height: commit.proposal.round.height,
+            view: commit.proposal.round.view,
+            proposer: commit.proposal.proposer.clone(),
+            block_hash: Some(commit.proposal.block.block_id.clone()),
+            proposal_hash: None,
+            certificate_id: commit.precommit_qc.certificate_id.clone(),
+            certificate: BlockCertificate {
+                validators: commit.precommit_qc.validators.clone(),
+                quorum: commit.precommit_qc.quorum,
+                registry_root: String::new(),
+                votes: Vec::new(),
+            },
+            fastpay_pre_state_effects: Vec::new(),
+            consensus_v2_commit: Some(commit),
+        };
+        write_private_json(
+            &config
+                .processed_batch_dir
+                .join(certified_round_certificate_file_name(&batch_hash)),
+            &certificate,
+        )
+        .expect("write finality test certificate");
+        ProcessedFinalityFixture {
+            config,
+            batch_hash,
+            payload,
+            certificate,
+            root,
+        }
+    }
+
+    fn write_processed_finality_certificate(
+        fixture: &ProcessedFinalityFixture,
+        certificate: &BlockCertificateFile,
+    ) {
+        write_private_json(
+            &fixture
+                .config
+                .processed_batch_dir
+                .join(certified_round_certificate_file_name(&fixture.batch_hash)),
+            certificate,
+        )
+        .expect("write mutated finality test certificate");
+    }
+
+    fn assert_processed_finality_rejected(
+        fixture: &ProcessedFinalityFixture,
+        certificate: &BlockCertificateFile,
+        label: &str,
+    ) {
+        write_processed_finality_certificate(fixture, certificate);
+        verify_processed_swap_finality(&fixture.config, &fixture.batch_hash, &fixture.payload)
+            .expect_err(label);
+    }
+
+    fn tamper_signature(signature_hex: &mut String) {
+        let original = signature_hex.clone();
+        signature_hex.replace_range(0..2, "00");
+        if *signature_hex == original {
+            signature_hex.replace_range(0..2, "ff");
+        }
+    }
+
+    #[test]
+    fn processed_finality_view_zero_ignores_history_but_nonzero_reads_it() {
+        let fixture = processed_finality_fixture("view-aware-finality");
+        let qc_dir = fixture.config.data_dir.join(CONSENSUS_V2_QC_DIR);
+        fs::create_dir_all(&qc_dir).expect("create finality QC directory");
+        for index in 0..256 {
+            fs::write(
+                qc_dir.join(format!("zz-irrelevant-corrupt-{index:03}.json")),
+                b"{",
+            )
+            .expect("write irrelevant corrupt QC");
+        }
+
+        let verified =
+            verify_processed_swap_finality(&fixture.config, &fixture.batch_hash, &fixture.payload)
+                .expect("view-zero finality ignores historical QC files");
+        let commit = fixture
+            .certificate
+            .consensus_v2_commit
+            .as_ref()
+            .expect("fixture commit");
+        assert_eq!(verified.committed_height, 1);
+        assert_eq!(verified.certificate_ref, commit.precommit_qc.certificate_id);
+        assert!(verified.verification_ns > 0);
+
+        let mut nonzero = fixture.certificate.clone();
+        nonzero.view = 1;
+        nonzero
+            .consensus_v2_commit
+            .as_mut()
+            .expect("fixture commit")
+            .proposal
+            .round
+            .view = 1;
+        write_processed_finality_certificate(&fixture, &nonzero);
+        let error =
+            verify_processed_swap_finality(&fixture.config, &fixture.batch_hash, &fixture.payload)
+                .expect_err("nonzero finality must load historical QC files");
+        assert!(
+            error.to_string().contains("parse failed"),
+            "unexpected nonzero graph error: {error}"
+        );
+        let _ = fs::remove_dir_all(fixture.root);
+    }
+
+    #[test]
+    fn processed_finality_rejects_domain_qc_proposal_and_payload_mutations() {
+        let fixture = processed_finality_fixture("finality-bindings");
+
+        let mut wrong_schema = fixture.certificate.clone();
+        wrong_schema.schema.push_str("-wrong");
+        assert_processed_finality_rejected(&fixture, &wrong_schema, "wrong schema must fail");
+
+        let mut wrong_domain = fixture.certificate.clone();
+        wrong_domain.chain_id.push_str("-wrong");
+        assert_processed_finality_rejected(&fixture, &wrong_domain, "wrong domain must fail");
+
+        let mut wrong_genesis = fixture.certificate.clone();
+        wrong_genesis.genesis_hash = "11".repeat(48);
+        assert_processed_finality_rejected(
+            &fixture,
+            &wrong_genesis,
+            "wrong genesis hash must fail",
+        );
+
+        let mut wrong_protocol = fixture.certificate.clone();
+        wrong_protocol.protocol_version = wrong_protocol.protocol_version.saturating_add(1);
+        assert_processed_finality_rejected(
+            &fixture,
+            &wrong_protocol,
+            "wrong protocol version must fail",
+        );
+
+        let mut wrong_block_hash = fixture.certificate.clone();
+        wrong_block_hash.block_hash = Some("44".repeat(48));
+        assert_processed_finality_rejected(
+            &fixture,
+            &wrong_block_hash,
+            "wrong block hash must fail",
+        );
+
+        let mut wrong_proposer = fixture.certificate.clone();
+        wrong_proposer.proposer.push_str("-wrong");
+        assert_processed_finality_rejected(&fixture, &wrong_proposer, "wrong proposer must fail");
+
+        let mut wrong_height = fixture.certificate.clone();
+        wrong_height.block_height = wrong_height.block_height.saturating_add(1);
+        assert_processed_finality_rejected(&fixture, &wrong_height, "wrong height must fail");
+
+        let mut wrong_view = fixture.certificate.clone();
+        wrong_view.view = 1;
+        assert_processed_finality_rejected(&fixture, &wrong_view, "wrong view must fail");
+
+        let mut wrong_payload_proposal = fixture.certificate.clone();
+        wrong_payload_proposal
+            .consensus_v2_commit
+            .as_mut()
+            .expect("fixture commit")
+            .proposal
+            .block
+            .payload_hash = "55".repeat(48);
+        assert_processed_finality_rejected(
+            &fixture,
+            &wrong_payload_proposal,
+            "mutated signed proposal must fail",
+        );
+
+        let mut wrong_parent = fixture.certificate.clone();
+        wrong_parent
+            .consensus_v2_commit
+            .as_mut()
+            .expect("fixture commit")
+            .proposal
+            .block
+            .parent_block_id = "66".repeat(48);
+        assert_processed_finality_rejected(
+            &fixture,
+            &wrong_parent,
+            "mutated signed parent must fail",
+        );
+
+        let mut wrong_proposal_signer = fixture.certificate.clone();
+        tamper_signature(
+            &mut wrong_proposal_signer
+                .consensus_v2_commit
+                .as_mut()
+                .expect("fixture commit")
+                .proposal
+                .signature
+                .signature_hex,
+        );
+        assert_processed_finality_rejected(
+            &fixture,
+            &wrong_proposal_signer,
+            "tampered proposal signature must fail",
+        );
+
+        let mut wrong_prepare_qc = fixture.certificate.clone();
+        tamper_signature(
+            &mut wrong_prepare_qc
+                .consensus_v2_commit
+                .as_mut()
+                .expect("fixture commit")
+                .prepare_qc
+                .votes[0]
+                .signature
+                .signature_hex,
+        );
+        assert_processed_finality_rejected(
+            &fixture,
+            &wrong_prepare_qc,
+            "tampered prepare QC must fail",
+        );
+
+        let mut wrong_precommit_qc = fixture.certificate.clone();
+        wrong_precommit_qc
+            .consensus_v2_commit
+            .as_mut()
+            .expect("fixture commit")
+            .precommit_qc
+            .votes
+            .pop();
+        assert_processed_finality_rejected(
+            &fixture,
+            &wrong_precommit_qc,
+            "insufficient precommit quorum must fail",
+        );
+
+        let mut wrong_precommit_signature = fixture.certificate.clone();
+        tamper_signature(
+            &mut wrong_precommit_signature
+                .consensus_v2_commit
+                .as_mut()
+                .expect("fixture commit")
+                .precommit_qc
+                .votes[0]
+                .signature
+                .signature_hex,
+        );
+        assert_processed_finality_rejected(
+            &fixture,
+            &wrong_precommit_signature,
+            "tampered precommit signature must fail",
+        );
+
+        write_processed_finality_certificate(&fixture, &fixture.certificate);
+        verify_processed_swap_finality(
+            &fixture.config,
+            &fixture.batch_hash,
+            &format!("{} ", fixture.payload),
+        )
+        .expect_err("mutated archived payload must fail exact binding");
+
+        let _ = fs::remove_dir_all(fixture.root);
     }
 
     #[test]
