@@ -1,11 +1,13 @@
 // EVM integration via MetaMask (window.ethereum).
-// Handles USDC approval and bridge vault deposit on Arbitrum.
+// Handles governed USDC approval and bridge vault deposits on Ethereum.
 // The wallet proxy relays confirmed vault deposits into PFTL.
 
 import {
   ARBITRUM_CHAIN_ID,
   ARBITRUM_RPC,
   ARBITRUM_RPC_BROWSER,
+  ETH_MAINNET_CHAIN_ID,
+  ETH_MAINNET_USDC,
   USDC_CONTRACT_ARBITRUM,
 } from './utils.js';
 
@@ -91,6 +93,20 @@ export async function ensureArbitrum() {
     }
   } catch (e) {
     throw new Error('Could not switch to Arbitrum: ' + (e.message || 'unknown'));
+  }
+}
+
+export async function ensureEthereumMainnet() {
+  if (!hasMetaMask()) throw new Error('MetaMask not found');
+  try {
+    const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+    if (parseInt(chainId, 16) === ETH_MAINNET_CHAIN_ID) return;
+    await window.ethereum.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: '0x1' }],
+    });
+  } catch (e) {
+    throw new Error('Could not switch to Ethereum mainnet: ' + (e.message || 'unknown'));
   }
 }
 
@@ -374,6 +390,111 @@ export async function getUsdcBalance(evmAddress) {
     ],
   });
   return BigInt(result);
+}
+
+export async function getEthereumUsdcBalance(evmAddress) {
+  if (!hasMetaMask()) return 0n;
+  await ensureEthereumMainnet();
+  const result = await window.ethereum.request({
+    method: 'eth_call',
+    params: [{ to: ETH_MAINNET_USDC, data: encodeBalanceOf(evmAddress) }, 'latest'],
+  });
+  return BigInt(result || '0x0');
+}
+
+export async function getEthereumEthBalance(evmAddress) {
+  if (!hasMetaMask()) return 0n;
+  await ensureEthereumMainnet();
+  const result = await window.ethereum.request({
+    method: 'eth_getBalance',
+    params: [evmAddress, 'latest'],
+  });
+  return BigInt(result || '0x0');
+}
+
+export async function getEthereumUsdcAllowance(owner, spender) {
+  if (!hasMetaMask()) return 0n;
+  await ensureEthereumMainnet();
+  const result = await window.ethereum.request({
+    method: 'eth_call',
+    params: [{
+      to: ETH_MAINNET_USDC,
+      data: encodeAllowance(owner, spender),
+    }, 'latest'],
+  });
+  return BigInt(result || '0x0');
+}
+
+export async function estimateEthereumTransactionFee({ from, to, data, value = '0x0' }) {
+  if (!hasMetaMask()) throw new Error('MetaMask not found');
+  await ensureEthereumMainnet();
+  const tx = { from, to, data, value };
+  const [gasHex, gasPriceHex] = await Promise.all([
+    window.ethereum.request({ method: 'eth_estimateGas', params: [tx] }),
+    window.ethereum.request({ method: 'eth_gasPrice', params: [] }),
+  ]);
+  const gas = BigInt(gasHex || '0x0');
+  const gasPrice = BigInt(gasPriceHex || '0x0');
+  return { gas, gasPrice, maxCostWei: gas * gasPrice };
+}
+
+export async function estimateEthereumApproveUsdcFee(spender, amount, from) {
+  return estimateEthereumTransactionFee({
+    from,
+    to: ETH_MAINNET_USDC,
+    data: encodeApprove(spender, amount),
+  });
+}
+
+export async function estimateEthereumBridgeDepositFee(
+  vaultContract,
+  amount,
+  pftlRecipient,
+  nonce,
+  routeBinding,
+  from,
+) {
+  return estimateEthereumTransactionFee({
+    from,
+    to: vaultContract,
+    data: encodeBridgeDepositData(amount, pftlRecipient, nonce, routeBinding),
+  });
+}
+
+export async function approveEthereumUsdc(spender, amount) {
+  if (!hasMetaMask()) throw new Error('MetaMask not found');
+  await ensureEthereumMainnet();
+  const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+  if (!accounts.length) throw new Error('MetaMask is not connected');
+  return window.ethereum.request({
+    method: 'eth_sendTransaction',
+    params: [{
+      from: accounts[0],
+      to: ETH_MAINNET_USDC,
+      data: encodeApprove(spender, amount),
+    }],
+  });
+}
+
+export async function depositToEthereumBridge(
+  vaultContract,
+  amount,
+  pftlRecipient,
+  nonce,
+  routeBinding,
+) {
+  if (!hasMetaMask()) throw new Error('MetaMask not found');
+  await ensureEthereumMainnet();
+  const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+  if (!accounts.length) throw new Error('MetaMask is not connected');
+  return window.ethereum.request({
+    method: 'eth_sendTransaction',
+    params: [{
+      from: accounts[0],
+      to: vaultContract,
+      data: encodeBridgeDepositData(amount, pftlRecipient, nonce, routeBinding),
+    }],
+  });
 }
 
 export async function getArbitrumUsdcBalance(evmAddress) {

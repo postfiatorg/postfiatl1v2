@@ -28,7 +28,11 @@ test('bridge destination is chain-discovered and both contracts are verified bef
   const bridgeSource = readFileSync(new URL('../components/Bridge.jsx', import.meta.url), 'utf8');
   const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
   assert.match(bridgeSource, /loadGovernedVaultBridgeRoute/);
-  assert.equal((bridgeSource.match(/assertContractCodeHash\(activeVault, activeRoute\.vaultRuntimeCodeHash\)/g) || []).length, 2);
-  assert.equal((bridgeSource.match(/assertContractCodeHash\(activeRoute\.tokenAddress, activeRoute\.tokenRuntimeCodeHash\)/g) || []).length, 2);
+  assert.match(bridgeSource, /assertContractCodeHash\(active\.vaultAddress, active\.vaultRuntimeCodeHash\)/);
+  assert.match(bridgeSource, /assertContractCodeHash\(active\.tokenAddress, active\.tokenRuntimeCodeHash\)/);
+  assert.ok(
+    (bridgeSource.match(/refreshAndVerifyRoute\(\)/g) || []).length >= 3,
+    'approval, deposit, and recovery must re-check the governed route and bytecode',
+  );
   assert.doesNotMatch(appSource, /BRIDGE_VAULT_(?:CONTRACT|CODE_HASH)/);
 });

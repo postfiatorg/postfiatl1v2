@@ -10,6 +10,7 @@ export async function relayVaultDeposit({
   routeProfileHash = '',
   routeEpoch = 0,
   routeBinding = '',
+  proxyAuthToken = '',
 } = {}) {
   const body = {
     deposit_tx_hash: depositTxHash,
@@ -28,6 +29,7 @@ export async function relayVaultDeposit({
     headers: {
       'Content-Type': 'application/json',
       ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
+      ...(proxyAuthToken ? { Authorization: `Bearer ${proxyAuthToken}` } : {}),
     },
     body: JSON.stringify(body),
   });

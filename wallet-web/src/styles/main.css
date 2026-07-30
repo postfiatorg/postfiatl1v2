@@ -381,6 +381,7 @@ button.pf-tile:hover{border-color:#333;}
 .pfb-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;align-items:start;}
 .pfb-main-flow{display:grid;gap:16px;min-width:0;}
 .pfb-stepper{display:grid;grid-template-columns:64px 1fr 64px 1fr 64px 1fr 64px 1fr 64px;align-items:start;gap:8px;}
+.pfb-stepper.four{grid-template-columns:64px 1fr 64px 1fr 64px 1fr 64px;}
 .pfb-stepper>i{height:2px;background:var(--border);border-radius:999px;margin-top:16px;}
 .pfb-stepper>i.done{background:var(--axis);}
 .pfb-step{display:grid;gap:6px;justify-items:center;text-align:center;color:var(--dim);font-size:11px;line-height:1.15;}
@@ -416,7 +417,7 @@ button.pf-tile:hover{border-color:#333;}
 .pfb-amount>span{color:var(--muted);font-family:var(--mono);font-size:12px;}
 .pfb-inline-error{color:var(--red);font-size:12px;font-weight:500;}
 .pfb-progress-card{display:grid;gap:8px;border-color:var(--green-border);background:var(--green-soft);}
-.pfb-progress-card>strong{color:var(--mint);font-size:14px;}
+.pfb-progress-card>strong{display:flex;align-items:center;gap:7px;color:var(--mint);font-size:14px;}
 .pfb-progress-card>span{color:var(--muted);font-family:var(--mono);font-size:11px;}
 .pfb-side{display:grid;gap:18px;position:sticky;top:24px;}
 .pfb-location{display:grid;gap:8px;border-bottom:1px solid var(--border-soft);padding-bottom:16px;}

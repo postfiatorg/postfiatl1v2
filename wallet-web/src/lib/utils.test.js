@@ -11,7 +11,7 @@ test('public wallet defaults are bound to the live WAN devnet domain', () => {
   assert.equal(CHAIN_ID, 'postfiat-wan-devnet-2');
   assert.equal(
     GENESIS_HASH,
-    '46da6c340d27d9140bd9d9a2fc0cb81064b0bfa662d5981d2e2b2de6960f06cd22ef4f790cb35f8d2e20f771f595ff10',
+    'ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9',
   );
   assert.deepEqual(LEGACY_CHAIN_IDS, ['postfiat-wan-devnet']);
 });

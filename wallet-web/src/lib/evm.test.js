@@ -5,7 +5,11 @@ import test from 'node:test';
 import {
   assertContractCodeHash,
   atomsToUsdc,
+  approveEthereumUsdc,
   encodeBridgeDepositData,
+  ensureEthereumMainnet,
+  estimateEthereumApproveUsdcFee,
+  getEthereumUsdcAllowance,
   estimateApproveUsdcFee,
   estimateBridgeDepositFee,
   generateNonce,
@@ -16,6 +20,7 @@ import {
   usdcToAtoms,
 } from './evm.js';
 import { USDC_CONTRACT_ARBITRUM } from './utils.js';
+import { ETH_MAINNET_USDC } from './utils.js';
 
 const sampleRecipient = 'pf1234567890abcdef1234567890abcdef12345678';
 const sampleNonce = '0x' + 'ab'.repeat(32);
@@ -121,6 +126,69 @@ test('generateNonce returns a 32-byte hex nonce', () => {
 test('USDC conversion helpers use six decimals', () => {
   assert.equal(usdcToAtoms('1.5'), 1500000n);
   assert.equal(atomsToUsdc(1500000n), '1.500000');
+});
+
+test('Ethereum mainnet helpers switch chains and bind approval to canonical USDC', async () => {
+  const previousWindow = globalThis.window;
+  const owner = '0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0';
+  const vault = '0xaaa78fda7062efce769e95cd72fc55e507bc8183';
+  const calls = [];
+  globalThis.window = {
+    ethereum: {
+      async request(request) {
+        calls.push(request);
+        if (request.method === 'eth_chainId') return '0xa4b1';
+        if (request.method === 'eth_accounts') return [owner];
+        if (request.method === 'eth_sendTransaction') return '0x' + '12'.repeat(32);
+        return null;
+      },
+    },
+  };
+  try {
+    await ensureEthereumMainnet();
+    const txHash = await approveEthereumUsdc(vault, 1000000n);
+    assert.equal(txHash, '0x' + '12'.repeat(32));
+    assert.equal(calls.filter((call) => call.method === 'wallet_switchEthereumChain').length, 2);
+    const send = calls.find((call) => call.method === 'eth_sendTransaction');
+    assert.equal(send.params[0].from, owner);
+    assert.equal(send.params[0].to, ETH_MAINNET_USDC);
+    assert.match(send.params[0].data, /^0x095ea7b3/i);
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  }
+});
+
+test('Ethereum allowance and fee preflight use MetaMask on canonical USDC', async () => {
+  const previousWindow = globalThis.window;
+  const owner = '0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0';
+  const vault = '0xaaa78fda7062efce769e95cd72fc55e507bc8183';
+  const calls = [];
+  globalThis.window = {
+    ethereum: {
+      async request(request) {
+        calls.push(request);
+        if (request.method === 'eth_chainId') return '0x1';
+        if (request.method === 'eth_call') return '0xf4240';
+        if (request.method === 'eth_estimateGas') return '0x5208';
+        if (request.method === 'eth_gasPrice') return '0x3b9aca00';
+        return null;
+      },
+    },
+  };
+  try {
+    assert.equal(await getEthereumUsdcAllowance(owner, vault), 1000000n);
+    const fee = await estimateEthereumApproveUsdcFee(vault, 1000000n, owner);
+    assert.equal(fee.maxCostWei, 21000000000000n);
+    const allowanceCall = calls.find((call) => call.method === 'eth_call');
+    assert.equal(allowanceCall.params[0].to, ETH_MAINNET_USDC);
+    const gasCall = calls.find((call) => call.method === 'eth_estimateGas');
+    assert.equal(gasCall.params[0].to, ETH_MAINNET_USDC);
+    assert.equal(gasCall.params[0].from, owner);
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  }
 });
 
 test('bridge contract preflight binds exact deployed bytecode hash', async () => {

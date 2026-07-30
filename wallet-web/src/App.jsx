@@ -611,6 +611,7 @@ export default function App() {
             <Bridge
               address={walletAddress}
               rpc={rpc}
+              proxyAuthToken={proxyAuthToken}
             />
           )}
           {tab === 'nav' && (
