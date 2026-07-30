@@ -9,8 +9,10 @@ live value
 
 **Working name:** NAVCoin Reserve Redemption System (`NRRS`)
 
-**Initial settlement families:** `pfUSD`, `pfXRP`, `pfETH`, `pfStakedETH`,
-and `pfBTC`
+**Phase-one activated settlement asset:** the existing Ethereum-mainnet
+pfUSDC asset and route only
+
+**Later expansion families:** `pfXRP`, `pfETH`, `pfStakedETH`, and `pfBTC`
 
 **Current implementation baseline:**
 `A666-END-TO-END-MAINNET-PRIMARY-ISSUANCE-SPEC-20260727.md`
@@ -51,17 +53,21 @@ pfAsset -> newly issued NAVCoin
 NAVCoin -> pfAsset from posted reserve
 ```
 
-The first intended settlement families are:
+The first activated facility MUST be the existing Ethereum-mainnet pfUSDC
+asset used by A666. The state, registry, pricing, and transaction schemas MUST
+remain generic, but no non-pfUSDC facility is part of the phase-one release.
 
-- `pfUSD`;
+The intended later settlement families are:
+
 - `pfXRP`;
 - `pfETH`;
 - `pfStakedETH`; and
 - `pfBTC`.
 
-These are product families, not consensus identifiers. Every facility binds an
-exact PFTL asset ID, source domain, source token or native asset, proof profile,
-valuation policy, precision, bridge route, and risk policy.
+These are product families, not consensus identifiers. The phase-one pfUSDC
+facility and every later facility bind an exact PFTL asset ID, source domain,
+source token or native asset, proof profile, valuation policy, precision,
+bridge route, and risk policy.
 
 The NAVCoin operator posts reserve inventory and terms once. A user with a
 valid signed order may execute against that committed reserve without:
@@ -112,6 +118,32 @@ actual executable issue capacity
 actual executable redemption capacity
 temporarily reserved capacity
 ```
+
+### 2.1 Phase-one product slice
+
+Phase one activates exactly:
+
+```text
+Ethereum-mainnet pfUSDC -> newly issued A666
+A666 -> posted Ethereum-mainnet pfUSDC
+```
+
+The concrete compatibility route is
+`pftl-a666-ethereum-wA666-usdc-v1`. Phase one MUST use the generic facility
+schema; it MUST NOT implement a special pfUSDC-only state object or hardcode:
+
+- settlement price permanently equal to one dollar;
+- six-decimal precision as a protocol-wide rule;
+- one facility per NAVCoin;
+- Ethereum ERC-20 custody as the only source model; or
+- pfUSDC-specific field meanings into generic hashes and receipts.
+
+The pfUSDC facility MUST use a fresh settlement-price packet even when its
+verified price is `$1.00`. This proves the price, freshness, haircut, and
+depeg path needed by every later asset.
+
+No `pfXRP`, `pfETH`, `pfStakedETH`, or `pfBTC` facility may be activated
+until the pfUSDC facility passes the phase-one release gates in section 25.
 
 ## 3. Economic principles
 
@@ -175,6 +207,67 @@ movements.
 
 Asset-specific caps, haircuts, and pause controls protect the fund from
 unbounded composition drift and adverse selection.
+
+### 3.7 Phase-one pfUSDC seed capital
+
+Primary issue and primary redemption have different inventory requirements:
+
+- issue does not require pre-posted pfUSDC because the buyer supplies the
+  pfUSDC that backs the newly created A666; and
+- redemption requires escrowed pfUSDC before the facility may advertise a
+  nonzero executable redemption size.
+
+A phase-one facility with zero posted pfUSDC may expose issue capacity, but it
+MUST expose:
+
+```text
+actual executable redemption capacity = 0
+```
+
+It MUST NOT be described as a functional two-sided facility.
+
+Before activating a two-sided pfUSDC quote, the operator MUST post enough
+pfUSDC to cover the intended concurrently executable redemption size:
+
+```text
+required_initial_pfUSDC_atoms
+  >= settlement_out_atoms(target_initial_redeem_nav_atoms)
+```
+
+The calculation uses the exact section 11 redemption formula and the current
+NAV, pfUSDC price packet, redemption multiplier, haircut, and rounding rules.
+Any governed minimum reserve or safety buffer is withheld from executable
+capacity rather than counted twice.
+
+For example, at A666 NAV `$1.00`, pfUSDC price `$1.00`, redemption multiplier
+`0.9995`, and no outgoing haircut, a displayed executable redemption size of
+`100,000 A666` requires at least:
+
+```text
+99,950.000000 pfUSDC
+```
+
+The initial seed may come from:
+
+1. existing A666 `settlement_reserve_atoms`, but only through a
+   reconciliation-gated transition that removes the same atoms from the
+   legacy route before or atomically with crediting the new facility;
+2. a new fund-owned pfUSDC contribution posted through
+   `nav_reserve_facility_post_v1` and included under the section 10 NAV rules;
+   or
+3. completed subscriptions after activation, whose base settlement principal
+   automatically increases facility reserve under section 10.2.
+
+An external wallet balance, an unfunded policy capacity, the general value of
+non-pfUSDC portfolio assets, or the existing reserve counted simultaneously
+in two state objects is not phase-one pfUSDC liquidity.
+
+Posting seed capital does not create A666. Reclassifying already counted
+pfUSDC leaves NAV and supply unchanged. Newly contributed pfUSDC requires the
+specified reserve-packet treatment before it becomes counted holder backing.
+There is no protocol requirement to pre-fund the entire `2,000,000 A666`
+policy capacity: the facility publishes only the smaller redemption size
+that its currently unreserved escrow can actually honor.
 
 ## 4. Non-goals
 
@@ -1193,6 +1286,10 @@ For every supported pfAsset:
 ### Phase A — Economic and schema freeze
 
 - [ ] Freeze reserve ownership and spread treatment.
+- [ ] Freeze the phase-one pfUSDC seed amount, source allocation, governed
+  minimum reserve, and reconciliation procedure.
+- [ ] Freeze the pfUSDC price-packet sources, aggregation/quorum rule,
+  freshness window, depeg behavior, and recovery authority.
 - [ ] Freeze deterministic price and rounding vectors.
 - [ ] Freeze registry, facility, reservation, receipt, and egress schemas.
 - [ ] Complete threat model and storage-growth bounds.
@@ -1205,49 +1302,74 @@ For every supported pfAsset:
 - [ ] Implement quote, reservation, issue, redeem, and expiry.
 - [ ] Add RPC and independent wallet verification.
 
-### Phase C — pfUSD compatibility
+### Phase C — pfUSDC-only transparent activation
 
 - [ ] Register the current pfUSDC lane (deployed route
   `pftl-a666-ethereum-wA666-usdc-v1`, vault-bridge source-labeled pfUSDC)
   as one concrete `pfUSD` family asset, priced by a real settlement-price
   packet instead of hardcoded par.
+- [ ] Capture the pre-activation legacy settlement reserve, allocation
+  obligations, and unencumbered amount from fresh consensus state.
+- [ ] Complete the old/new dry-run reconciliation before moving live value.
+- [ ] Post the governed initial pfUSDC seed through a signed transition and
+  prove it is not simultaneously available to the legacy route or another
+  allocation.
+- [ ] Publish actual executable redemption capacity derived from the posted,
+  unreserved seed rather than from policy capacity.
 - [ ] Prove A666-equivalent economics through the new facility.
-- [ ] Reconcile old and new state without moving live value.
+- [ ] Complete transparent issue/redeem, last-liquidity race, expiry, restart,
+  and reserve-withdrawal tests.
 
-### Phase D — non-USD assets
+### Phase D — pfUSDC private and external completion
+
+- [ ] Add typed-note pfUSDC facility issue and redemption by extending the
+  existing Asset-Orchard path.
+- [ ] Keep spending authority client-side.
+- [ ] Prove recovery and forbidden-field behavior.
+- [ ] Register and prove the canonical Ethereum-mainnet USDC route.
+- [ ] Implement consume/cancel mutual exclusion.
+- [ ] Guarantee that failed or cancelled external delivery returns the exact
+  pending pfUSDC to the redeeming user's PFTL control.
+- [ ] Publish directional trust and restriction disclosures.
+
+### Phase E — pfUSDC controlled live qualification
+
+- [ ] Run small and variable-size transparent pfUSDC issue/redeem.
+- [ ] Run small and variable-size private pfUSDC issue/redeem.
+- [ ] Run variable-size and concurrency ladders.
+- [ ] Complete restart, expiry, stale-price, and last-liquidity races.
+- [ ] Complete a real Ethereum USDC -> pfUSDC -> A666 -> pfUSDC -> Ethereum
+  USDC round trip.
+- [ ] Reconcile NAV, A666 supply, facility inventory, pfUSDC supply, and the
+  Ethereum vault balance.
+
+### Phase F — later asset expansion
+
+Only after phase-one pfUSDC passes Gate R5:
 
 - [ ] Add pfETH.
 - [ ] Add pfBTC.
 - [ ] Add pfXRP.
 - [ ] Add pfStakedETH share/index valuation.
+- [ ] Activate one new asset at a time behind its own live-value gate.
+
+### Phase G — multi-asset qualification
+
+- [ ] Run transparent issue/redeem for every added asset.
+- [ ] Run private issue/redeem for every eligible added asset.
 - [ ] Run same-asset and cross-facility amount ladders.
-
-### Phase E — private execution
-
-- [ ] Add typed-note facility issue and redemption.
-- [ ] Keep spending authority client-side.
-- [ ] Prove recovery and forbidden-field behavior.
-
-### Phase F — external delivery
-
-- [ ] Register and prove each source/destination route.
-- [ ] Implement consume/cancel mutual exclusion.
-- [ ] Publish directional trust and restriction disclosures.
-
-### Phase G — controlled live qualification
-
-- [ ] Run small transparent issue/redeem for every asset.
-- [ ] Run small private issue/redeem for every eligible asset.
-- [ ] Run variable-size and concurrency ladders.
-- [ ] Complete restart, expiry, stale-price, and last-liquidity races.
+- [ ] Complete each asset's external round trip, recovery, and restriction
+  tests.
 - [ ] Reconcile NAV, supply, facility inventory, pfAsset supply, and external
-  vault balances.
+  vault balances across all active facilities.
 
 ## 25. Release gates
 
 ### Gate R0 — specification
 
 - schema, math, trust model, and reserve ownership are frozen;
+- the phase-one pfUSDC seed source and target executable redemption size are
+  frozen;
 - all open economic decisions have an owner; and
 - no document calls policy capacity executable liquidity.
 
@@ -1272,14 +1394,18 @@ For every supported pfAsset:
 - evidence is redaction-safe; and
 - public capacity changes equal hidden economic changes.
 
-### Gate R4 — external assets
+### Gate R4 — external completion, pfUSDC first
 
-- each advertised asset completes a real round trip;
+- the phase-one pfUSDC asset completes a real Ethereum-mainnet round trip;
+- every later facility that advertises external delivery completes its own
+  real route before that facility can pass R6;
 - bridge/vault replay and cancellation tests pass;
+- failed or cancelled external delivery returns the exact pending pfUSDC to
+  the redeeming user's PFTL control;
 - transfer restrictions are accurately surfaced; and
 - no route is described with a stronger trust class than deployed.
 
-### Gate R5 — controlled availability
+### Gate R5 — pfUSDC controlled availability
 
 - sustained issue/redeem and concurrency campaigns pass;
 - p95 and worst-case latency meet the published SLO, measured with the same
@@ -1291,9 +1417,43 @@ For every supported pfAsset:
 - actual available capacity is shown separately from policy capacity; and
 - all live-value limits are bounded by the smallest proven run.
 
+Passing Gate R5 authorizes only the registered pfUSDC facility. It does not
+authorize another settlement asset.
+
+### Gate R6 — later asset activation
+
+For each later asset independently:
+
+- its registry, proof, price, haircut, custody, and transfer rules pass R0-R1;
+- its transparent facility passes R2;
+- its private path, if advertised, passes R3;
+- its external route, if advertised, passes R4;
+- its own latency, recovery, concurrency, and live-value limits pass R5; and
+- activating it does not modify the already registered pfUSDC facility.
+
 ## 26. Definition of done
 
-NRRS is complete when a NAVCoin operator can:
+### 26.1 Phase-one pfUSDC release
+
+The first executable release is complete when A666 has one generic-schema
+pfUSDC facility that:
+
+1. uses a fresh registered pfUSDC price packet rather than hardcoded par;
+2. accepts buyer pfUSDC and creates new A666;
+3. holds posted pfUSDC reserve without double counting;
+4. publishes redemption capacity limited by actual unreserved escrow;
+5. retires A666 and pays pfUSDC without per-user operator approval;
+6. supports the qualified transparent and private PFTL paths;
+7. completes or safely refunds Ethereum-mainnet USDC egress;
+8. survives duplicates, races, stale prices, restarts, and expiry; and
+9. reconciles A666 supply, facility inventory, pfUSDC supply, source-vault
+   backing, and NAV allocations after every transition.
+
+No later asset is required to ship this phase-one release.
+
+### 26.2 Multi-asset completion
+
+The full multi-asset NRRS is complete when a NAVCoin operator can:
 
 1. register an approved pfAsset facility;
 2. post fund-owned reserve without double counting it;
