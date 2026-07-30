@@ -28,15 +28,16 @@ proof path remains materially slower than the specification.
 
 | Item | Deployed value |
 |---|---|
-| Fleet release | `resident-precommit-6ad587f` |
-| Fleet node revision | `6ad587f74b5c2d307fee8c6d11212047df93be89` |
-| Fleet node binary SHA-256 | `01d70c3b98ab1df7fafba11889d59ccbb1255fc8caadb5544f60c79d3f1c2011` |
+| Fleet release | `resident-qc-view0-59cd3ee` |
+| Fleet node revision | `59cd3eee6579a58855b4ffc28551a230810a4fe1` |
+| Fleet node binary SHA-256 | `67a4c488cf390d7600bed2cebba3df140435d1b8e737a4022a2a449ecb026b26` |
 | Safe apply-order readiness revision | `053ac01` |
 | Canary-cap revision | `df7ae7c` |
 | Resident swap revision | `06f80d24b6269ebed88cc28fb792b74b335b49b3` |
 | Resident swap binary SHA-256 | `55e3e97a4968646947bb5eddb187bb6ad55056f1817699f0d864d263f82c0206` |
-| Instrumented round-driver revision | `db929bf` |
-| Instrumented round-driver binary SHA-256 | `e24dfbc956b94c08e3393369c4e6a6dba499c3c3889f7258af65816ee3f03062` |
+| Resident round-driver revision | `59cd3eee6579a58855b4ffc28551a230810a4fe1` |
+| Resident round-driver binary SHA-256 | `67a4c488cf390d7600bed2cebba3df140435d1b8e737a4022a2a449ecb026b26` |
+| Round-driver unit pin revision | `ce72afb` |
 | Maximum NAV amount | 1,000,000 atoms |
 | Active-swap limit | 1 |
 | Controlled wallets | 1 |
@@ -64,6 +65,15 @@ height-494 convergence, and empty mempools. Restarting validator-2's dependent
 asset service triggered a fail-closed proving-key prewarm: readiness remained
 HTTP 503 until the 447.9-second prewarm completed and then returned green.
 
+The successor `resident-qc-view0-59cd3ee` release used the same signed,
+one-validator-at-a-time process. Its mandatory signed finalized-checkpoint
+backup verified at height 497 against state root
+`b17e9259455350942a2bd915c50dc4aebc75e18bc8b763fee7bde76e68a23909e5357b69a055f3d10677aeaa10a50779`.
+All six validator services and the resident round driver now run the exact
+binary hash above. The dependent asset prover again failed readiness closed
+during its cold prewarm and returned the complete resident service to HTTP
+200 before the qualification cycle began.
+
 ## Certified functional runs
 
 | Height | Route | Result |
@@ -81,6 +91,9 @@ HTTP 503 until the 447.9-second prewarm completed and then returned green.
 | 495 | private pfUSDC -> transparent pfUSDC | controlled-input restoration committed |
 | 496 | transparent pfUSDC -> private A666 | post-precommit-release canary committed; A666 supply +1,000,000 |
 | 497 | private A666 -> private pfUSDC | post-precommit-release canary committed; A666 supply returned to baseline |
+| 498 | private pfUSDC -> transparent pfUSDC | controlled-input restoration committed |
+| 499 | transparent pfUSDC -> private A666 | bounded-QC canary committed; A666 supply +1,000,000 |
+| 500 | private A666 -> private pfUSDC | bounded-QC canary committed; A666 supply returned to baseline |
 
 The governed 1.000000-A666 quote consumed 905,538 pfUSDC atoms on issue and
 returned 900,581 pfUSDC atoms on redemption. After height 489:
@@ -109,6 +122,15 @@ state root
 `b17e9259455350942a2bd915c50dc4aebc75e18bc8b763fee7bde76e68a23909e5357b69a055f3d10677aeaa10a50779`,
 and block hash
 `325e528c79d68f68a0944357f0c216d5f21d02f025b257c8893da59380029c410cae316fcaf795b09d4828d6fcc9d5eb`.
+
+After the height-499/500 private round trip, A666 live supply again returned
+exactly to 31,489,197,455 atoms. The route invariant held, active reservation
+count and atoms were zero, and native spendable A666 balance count and atoms
+were zero. All six validators converged at height 500 with empty mempools,
+state root
+`d7f0b68fbed2473b0a8365eb67bfd601c730daee80a3393c3ee9a3a00361ec4275c669d7d284d4fb90b7a50359e24789`,
+and block hash
+`1a8e988c4a0c77c1353e0c01691f328e88cd2a263de59c55eab39a0cf46e9c724f141945f5e7f84a7a285eb044ea141f`.
 
 ## Safety matrix
 
@@ -209,6 +231,8 @@ restricted operational state and were not copied into this report.
 | instrumented private redemption | 494 | 146.1s | 86.0s | n/a |
 | post-precommit private issue | 496 | 156.2s | 82.4s | n/a |
 | post-precommit private redemption | 497 | 145.9s | 84.6s | n/a |
+| bounded-QC private issue | 499 | 127.3s | 81.9s | n/a |
+| bounded-QC private redemption | 500 | 115.6s | 85.4s | n/a |
 
 The required targets are accepted-to-committed p50 <=20 seconds, p95 <=45
 seconds, and proof-DAG p95 <=35 seconds. These samples fail those targets.
@@ -290,6 +314,43 @@ insufficient. The next consensus optimization must reduce proposal/QC
 verification and transport/finality latency while retaining exact proposal
 binding and full quorum verification.
 
+Revision `59cd3ee` removes the height-linear component of that remaining
+path. Each validator had accumulated 577 persisted consensus-v2 QCs (about
+36 MiB). The view-zero hot path was rebuilding and cryptographically
+re-verifying that entire unrelated history one or more times per vote. The
+new path preserves complete QC signature, committee, quorum, target, and
+canonical-ID verification for the QC being persisted. It uses an empty
+dependency graph only for view zero, where timeout evidence and valid-round
+QC references are forbidden by protocol; nonzero views still reconstruct and
+verify the historical dependency graph. Signature-tampered QCs fail before
+write, and immutable existing QC IDs still cannot be replaced.
+
+Qualification included clippy with warnings denied, 29 ordering/adversarial
+tests, the four-node consensus-v2 finality test, two store tests including
+tampered-QC and view-bound dependency coverage, 11 snapshot/deployment
+integrity tests, and the ignored six-validator TCP finality/catch-up test.
+All passed.
+
+The deployed height-499 issue certified round fell to 36.247 seconds, with
+prepare-QC, precommit-QC, and commit assembly each below 0.5 seconds.
+Published-to-committed fell from 67.581 seconds at h496 to 39.187 seconds at
+h499. The height-500 redemption certified round fell further to 23.257
+seconds, with 17.916-second client-visible finality; its
+published-to-committed time was 26.206 seconds. The h500 stage totals were
+2.934 seconds proposal, 4.012 seconds prepare-vote collection, 6.778 seconds
+certificate work, 3.665 seconds local apply, and 5.339 seconds certified
+sends.
+
+The remaining gate is narrower but not closed. Replacing the live two-core
+proof DAG with the measured 12.751-second 32-core proof result projects h500
+redemption at approximately 42.9 seconds accepted-to-committed, within the
+45-second p95 objective for that single sample. The same substitution projects
+h499 issue at approximately 58.1 seconds because issue proposal, validation,
+apply, and send work is heavier. This is a projection, not production
+qualification. An always-on higher-core prover is still required, and the
+issue non-proof path must lose at least approximately 13.2 seconds before the
+100/100 scale campaign can credibly target p95 <=45 seconds.
+
 ## Rollback rehearsal
 
 The certified height-482 governance block was replayed from the verified
@@ -323,6 +384,7 @@ The following remain blocked:
 - bounded-burst qualification; and
 - public or non-custodial service claims.
 
-Before raising limits, the proof path must be brought within the SLO, the
-non-proof commit delay must be removed, and the 100/100 campaign and remaining
-fault matrix must pass.
+Before raising limits, an always-on higher-core prover must bring the live
+proof path within the SLO, the measured issue non-proof path must lose at
+least approximately 13.2 seconds, and the 100/100 campaign and remaining fault
+matrix must pass.

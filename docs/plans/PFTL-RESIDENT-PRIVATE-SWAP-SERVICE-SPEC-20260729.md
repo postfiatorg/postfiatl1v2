@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-29
 **Priority:** P0 (immediate independently shippable PFTL product milestone)
-**Status:** amended implementation and qualification specification (v8)
+**Status:** amended implementation and qualification specification (v9)
 **Parent research:** `CHAIN-OPTIMIZATION-STACKED-RESEARCH-20260729.md`
 (S1.1, S1.3, S3.1, S6.1), `NAV-SWAP-EFFICIENCY-RESEARCH-20260729.md`
 (Tier 0.1, Tier 2.1)
@@ -15,6 +15,31 @@ one-round relay failure (mempool admission lesson)
 `MUST`, `MUST NOT`, `SHOULD`, and `REQUIRED` are normative.
 
 ## Amendment note
+
+The v9 qualification amendment records removal of the consensus-v2
+height-linear QC-history scan and its signed deployment as
+`resident-qc-view0-59cd3ee`. At rollout time, each validator held 577
+persisted QCs (about 36 MiB). View-zero proposal and commit verification now
+use no historical dependency graph because timeout and valid-round QC
+references are forbidden in that view. Each new QC is still independently
+verified for committee, quorum, target, signatures, and canonical ID before
+immutable persistence. Nonzero views retain full historical dependency
+verification.
+
+The live h499/h500 private issue/redeem cycle committed and restored exact
+baseline supply with six-validator convergence, empty mempools, zero active
+reservations, and green resident readiness. Published-to-committed fell to
+39.187 seconds for issue and 26.206 seconds for redemption. The certified
+rounds fell to 36.247 and 23.257 seconds. Accepted-to-committed remains
+127.330 and 115.554 seconds because the live two-core proof DAG still took
+81.938 and 85.385 seconds.
+
+With the measured 12.751-second 32-core proof DAG substituted, redemption
+projects to approximately 42.9 seconds but issue still projects to
+approximately 58.1 seconds. Therefore the scale gate remains closed. The next
+qualification requires an always-on higher-core prover plus at least
+approximately 13.2 seconds of additional issue-path reduction, followed by
+the full 100-issue/100-redeem campaign.
 
 The v8 qualification amendment records the first measured consensus
 optimization and its signed six-validator deployment. Revision `6ad587f`
@@ -161,6 +186,15 @@ The rollout used the frozen one-validator-at-a-time order and a signed,
 verified height-494 finalized checkpoint. All six services run the exact
 binary and converged after every apply.
 
+The fleet and resident round driver have now advanced again to signed release
+`resident-qc-view0-59cd3ee`, full binary revision
+`59cd3eee6579a58855b4ffc28551a230810a4fe1`, SHA-256
+`67a4c488cf390d7600bed2cebba3df140435d1b8e737a4022a2a449ecb026b26`.
+The rollout used a signed, independently imported height-497 finalized
+checkpoint and the same frozen one-validator-at-a-time order. Unit pin
+revision `ce72afb` ensures the resident round driver exercises the same
+binary as the validator fleet.
+
 The resident swap daemon is separately at revision `06f80d2`. It fixes a
 recovery defect found during the timing campaign: failed or interrupted
 prepublication entries no longer retain the input reservation forever. A
@@ -242,6 +276,15 @@ reservations. Remote precommit legacy-vote recovery is now only 4-7
 milliseconds, but the h497 precommit collection stage remained 8.164 seconds
 and the complete certified round remained 54.678 seconds. The scale gate
 therefore remains closed and the 100/100 campaign has not been run.
+
+The successor bounded-QC release committed another exact private round trip at
+heights 499 and 500. Accepted-to-committed measured 127.330 and 115.554
+seconds; proof DAG measured 81.938 and 85.385 seconds; and
+published-to-committed measured 39.187 and 26.206 seconds. The certified
+rounds measured 36.247 and 23.257 seconds. A666 supply returned to
+31,489,197,455 atoms, all six validators converged with empty mempools, and
+the service retained zero active reservations. The 100/100 campaign remains
+blocked on the live proof hardware and the residual issue path.
 
 The rollback rehearsal is now complete. The archived height-482 governance
 block replayed from the verified height-481 backup with its original round
