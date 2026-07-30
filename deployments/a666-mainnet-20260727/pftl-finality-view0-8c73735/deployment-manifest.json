@@ -1,0 +1,37 @@
+{
+  "schema": "postfiat.pftl_swapd.standalone_deployment.v1",
+  "deployment_id": "pftl-finality-view0-8c73735",
+  "scope": "resident-observer-only",
+  "created_at_utc": "2026-07-30T03:22:00Z",
+  "source": {
+    "repository": "postfiatorg/postfiatl1v2",
+    "commit": "8c73735ff63a1a51d3b4d777a8fef90049a5f213",
+    "branch": "main"
+  },
+  "build": {
+    "command": "CARGO_BUILD_JOBS=4 cargo build --release -p postfiat-node --bin pftl_swapd",
+    "profile": "release",
+    "target": "x86_64-unknown-linux-gnu",
+    "rustc": "1.95.0 (59807616e 2026-04-14)",
+    "llvm": "22.1.2",
+    "feature_tree_sha256": "8d4f038ba354445ebacf6c95fef4b1b7feebe9caadf5987826053d85bea6644a"
+  },
+  "artifact": {
+    "name": "pftl_swapd",
+    "size_bytes": 28027984,
+    "sha256": "fd4d59ef50be6aa1ed62b83470204fcc4cd7cf82e95f8418754ea45e3a55a31f"
+  },
+  "service": {
+    "path": "services/postfiat-pftl-swapd.service",
+    "sha256": "a6c83095157eb6c5790e4a7675612cb4aacff262ba6a2eedc9a5f23c6e5f0ba4",
+    "host": "validator-2",
+    "unit": "postfiat-pftl-swapd.service"
+  },
+  "previous": {
+    "deployment_id": "pftl-high-core-prover-83b515c",
+    "artifact_sha256": "1210ce0edf8b08d02080117002346ebfce9192d88496f3dc55dac146b782e7e1",
+    "service_sha256": "53b6962186fc7390087e5c6bf65abf8d4e76be5befe453446afa3cdd0ffc1ec5"
+  },
+  "validator_binary_changed": false,
+  "circuit_artifact_changed": false
+}
