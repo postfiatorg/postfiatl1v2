@@ -4,13 +4,25 @@
 
 **Priority:** P0 product architecture; P1 protocol implementation
 
-**Status:** proposed normative specification; not implemented or authorized for
-live value
+**Status:** the generic multi-asset NRRS described in sections 8–16 is a
+proposed successor and is not authorized for live value. The binding Monday
+profile in section 2.2 uses already-deployed A666/pfUSDC operations and is the
+only live execution scope of this document.
 
 **Working name:** NAVCoin Reserve Redemption System (`NRRS`)
 
 **Immediate execution profile:** Monday, 2026-08-03, uses the deployed
 A666/pfUSDC primary route only; see section 2.2
+
+**Monday scope precedence:** if any general requirement elsewhere in this
+document appears to require new consensus code, a new facility, a new bridge,
+a new price-packet format, another settlement asset, or a new Uniswap
+deployment before the Monday demonstration, section 2.2 controls and that work
+is deferred.
+
+**Not a pool-creation plan:** the mainnet wA666/USDC Uniswap v4 pool already
+exists. Monday proves low-slippage primary creation and reserve-backed
+redemption without using that AMM curve.
 
 **Phase-one activated settlement asset:** the existing Ethereum-mainnet
 pfUSDC asset and route only
@@ -160,6 +172,10 @@ The Monday, 2026-08-03 demonstration has one business claim:
 This is an execution and evidence demonstration of the already deployed
 A666/pfUSDC route. It is not the activation of the generic multi-facility
 NRRS state proposed by sections 8–16.
+
+For avoidance of doubt, completing section 2.2 is the Monday deliverable.
+Implementing the remainder of this specification is not a prerequisite for
+that demonstration.
 
 The demo does **not** create a Uniswap pool. The wA666/USDC Uniswap v4 pool
 already exists. It also does not create a new pfUSDC facility. It exercises
