@@ -28,12 +28,15 @@ proof path remains materially slower than the specification.
 
 | Item | Deployed value |
 |---|---|
-| Fleet release | `resident-remote-proposer-5548112` |
-| Fleet node revision | `5548112` |
-| Fleet node binary SHA-256 | `e0927992a97590d8542e16dba998b92df597a38c4be159a56fd9278ed228dc6a` |
+| Fleet release | `resident-precommit-6ad587f` |
+| Fleet node revision | `6ad587f74b5c2d307fee8c6d11212047df93be89` |
+| Fleet node binary SHA-256 | `01d70c3b98ab1df7fafba11889d59ccbb1255fc8caadb5544f60c79d3f1c2011` |
 | Safe apply-order readiness revision | `053ac01` |
 | Canary-cap revision | `df7ae7c` |
-| Resident swap binary SHA-256 | `4448d80dd2af2f4e4b446f09b7259a92fbd6f08fdb5fa626b7946a22c4ed7367` |
+| Resident swap revision | `06f80d24b6269ebed88cc28fb792b74b335b49b3` |
+| Resident swap binary SHA-256 | `55e3e97a4968646947bb5eddb187bb6ad55056f1817699f0d864d263f82c0206` |
+| Instrumented round-driver revision | `db929bf` |
+| Instrumented round-driver binary SHA-256 | `e24dfbc956b94c08e3393369c4e6a6dba499c3c3889f7258af65816ee3f03062` |
 | Maximum NAV amount | 1,000,000 atoms |
 | Active-swap limit | 1 |
 | Controlled wallets | 1 |
@@ -52,6 +55,15 @@ quotes, and healthy durable stores. Stopping the round driver also stopped
 swap admission through the unit dependency and readiness chain; restarting
 the dependency restored a green service.
 
+The `resident-precommit-6ad587f` release was installed one validator at a time
+using a signed deployment manifest, the frozen quorum-safe apply order, and a
+signed finalized-checkpoint backup at height 494. The backup root was
+`1ed3653904ccb488352445bea184c3ca0b92d6b88e8239b7dc781477d6aeb1e745e05c242691ac7968b21b45745bb55e`.
+Every post-apply check found the exact release hash above, an active service,
+height-494 convergence, and empty mempools. Restarting validator-2's dependent
+asset service triggered a fail-closed proving-key prewarm: readiness remained
+HTTP 503 until the 447.9-second prewarm completed and then returned green.
+
 ## Certified functional runs
 
 | Height | Route | Result |
@@ -64,6 +76,11 @@ the dependency restored a green service.
 | 489 | private A666 -> transparent pfUSDC | committed; A666 supply returned to baseline |
 | 490 | transparent pfUSDC -> private A666 | post-tuning canary committed; A666 supply +1,000,000 |
 | 491 | private A666 -> private pfUSDC | post-tuning canary committed; A666 supply returned to baseline |
+| 493 | transparent pfUSDC -> private A666 | instrumented canary committed; A666 supply +1,000,000 |
+| 494 | private A666 -> private pfUSDC | instrumented canary committed; A666 supply returned to baseline |
+| 495 | private pfUSDC -> transparent pfUSDC | controlled-input restoration committed |
+| 496 | transparent pfUSDC -> private A666 | post-precommit-release canary committed; A666 supply +1,000,000 |
+| 497 | private A666 -> private pfUSDC | post-precommit-release canary committed; A666 supply returned to baseline |
 
 The governed 1.000000-A666 quote consumed 905,538 pfUSDC atoms on issue and
 returned 900,581 pfUSDC atoms on redemption. After height 489:
@@ -83,6 +100,15 @@ All six validators converged at height 491 with empty mempools, state root
 `db2afdc65b01e7dca94524db61284e488dab43e547e80ce49dd87f42fbfc754910d80b844887bc1092fc47addc34bfe8`,
 and block hash
 `29f78fdad95ca9efe2d2046437302b5491d14699ac8126ecdfd2d41335327dc39c776e367e4a003b71eb0692acc55308`.
+
+After the height-496/497 private round trip, A666 live supply again returned
+exactly to 31,489,197,455 atoms. `invariant_holds` was true, active reservation
+count and atoms were zero, and native spendable A666 balance count and atoms
+were zero. All six validators converged at height 497 with empty mempools,
+state root
+`b17e9259455350942a2bd915c50dc4aebc75e18bc8b763fee7bde76e68a23909e5357b69a055f3d10677aeaa10a50779`,
+and block hash
+`325e528c79d68f68a0944357f0c216d5f21d02f025b257c8893da59380029c410cae316fcaf795b09d4828d6fcc9d5eb`.
 
 ## Safety matrix
 
@@ -139,6 +165,13 @@ simulation. It does not bypass certificates or write state.
   HTTP 200; height remained 489.
 - The height-483 private issue preserved one idempotency lineage across
   interrupted and failed prepublication attempts before committing.
+- A later prepublication failure exposed a reservation-liveness bug: a
+  terminal failed or interrupted intent still prevented a newly signed intent
+  from using the same unspent input. Revision `06f80d2` now atomically marks
+  that old lineage rejected when the replacement is journaled, while
+  published and otherwise live lineages remain exclusive. The focused
+  supersession test passed, the service was rolled forward, and subsequent
+  h493/h494 and h496/h497 round trips left zero active reservations.
 - A forced round-driver outage made swap admission unavailable and a clean
   restart restored all required readiness capabilities.
 - Focused Rust tests passed for atomic rollback, stale/wrong anchors and
@@ -172,6 +205,10 @@ restricted operational state and were not copied into this report.
 | transparent redemption | 489 | 263.3s | 127.7s | 60.1s |
 | tuned private issue | 490 | 165.7s | 88.3s | n/a |
 | tuned private redemption | 491 | 141.8s | 81.0s | n/a |
+| instrumented private issue | 493 | 161.2s | 83.9s | n/a |
+| instrumented private redemption | 494 | 146.1s | 86.0s | n/a |
+| post-precommit private issue | 496 | 156.2s | 82.4s | n/a |
+| post-precommit private redemption | 497 | 145.9s | 84.6s | n/a |
 
 The required targets are accepted-to-committed p50 <=20 seconds, p95 <=45
 seconds, and proof-DAG p95 <=35 seconds. These samples fail those targets.
@@ -216,6 +253,42 @@ would leave an estimated 73.5-90.2 seconds accepted-to-committed if every
 other stage remained unchanged. The round-driver admission/publish/certificate
 timing must therefore be measured and reduced independently before the
 100/100 campaign.
+
+The instrumented height-494 round localized its 52.652-second certified round
+to 5.333 seconds of proposal work, 6.334 seconds of prepare-vote collection,
+27.992 seconds of certificate work, 5.551 seconds of local apply, and 7.049
+seconds of certified sends. The certificate segment included 11.328 seconds
+collecting consensus-v2 precommit votes.
+
+Revision `6ad587f` removes a redundant full legacy proposal revalidation from
+the remote precommit path without weakening finality. A validator may reuse
+only its durable prepare vote for the exact proposal after cryptographically
+verifying that vote against the live registry and state root. Missing, stale,
+different-proposal, and signature-tampered votes fail closed. The targeted
+safety test and the ignored six-validator TCP finality/catch-up integration
+test passed. A broader node-library run was stopped while one unrelated
+long-running Orchard debug proof was still CPU-bound; every test that had
+completed was green, but that stopped run is not represented as a full-suite
+pass.
+
+The deployed h497 evidence confirms that the intended optimization is active:
+remote precommit legacy-vote recovery took 4-7 milliseconds, versus roughly
+2.6-2.7 seconds for full prepare vote construction on the same round. The
+whole precommit collection stage nevertheless took 8.164 seconds because the
+consensus-v2 proposal/QC verification, signing, and transport response path
+remain. The full h497 certified round took 54.678 seconds, including 10.351
+seconds of proposal work, 5.634 seconds of prepare-vote collection, 24.735
+seconds of certificate work, 5.791 seconds of local apply, and 7.742 seconds
+of certified sends. Accepted-to-committed remained 145.873 seconds because
+the 84.570-second proof DAG and 57.453-second published-to-committed path both
+remain above budget.
+
+Substituting the 12.751-second 32-core proof benchmark into h497 without any
+other improvement projects approximately 74.1 seconds
+accepted-to-committed. Higher-core proving is therefore necessary but still
+insufficient. The next consensus optimization must reduce proposal/QC
+verification and transport/finality latency while retaining exact proposal
+binding and full quorum verification.
 
 ## Rollback rehearsal
 

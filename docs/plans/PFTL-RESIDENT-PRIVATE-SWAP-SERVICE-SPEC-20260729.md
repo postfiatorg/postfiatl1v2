@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-29
 **Priority:** P0 (immediate independently shippable PFTL product milestone)
-**Status:** amended implementation and qualification specification (v7)
+**Status:** amended implementation and qualification specification (v8)
 **Parent research:** `CHAIN-OPTIMIZATION-STACKED-RESEARCH-20260729.md`
 (S1.1, S1.3, S3.1, S6.1), `NAV-SWAP-EFFICIENCY-RESEARCH-20260729.md`
 (Tier 0.1, Tier 2.1)
@@ -15,6 +15,30 @@ one-round relay failure (mempool admission lesson)
 `MUST`, `MUST NOT`, `SHOULD`, and `REQUIRED` are normative.
 
 ## Amendment note
+
+The v8 qualification amendment records the first measured consensus
+optimization and its signed six-validator deployment. Revision `6ad587f`
+reuses a validator's durable legacy prepare vote at consensus-v2 precommit
+only after exact proposal binding and cryptographic verification against the
+live registry and state root. Missing, stale, wrong-proposal, and tampered
+prepare votes fail closed. The release was rolled out one validator at a time
+from a signed height-494 checkpoint backup.
+
+The deployed h496/h497 private issue/redeem cycle committed, restored A666
+supply exactly to 31,489,197,455 atoms, left zero active reservations and zero
+native spendable A666 balances, and converged all six validators at height 497
+with empty mempools. Remote legacy-vote recovery at precommit fell to 4-7
+milliseconds. This is a real improvement, but it does not open the scale
+gate: h497 still measured 145.873 seconds accepted-to-committed, 84.570
+seconds for the two-proof DAG, 57.453 seconds published-to-committed, and
+54.678 seconds for the certified round.
+
+The next optimization MUST preserve exact proposal and quorum-certificate
+verification while reducing the remaining consensus-v2 proposal/QC,
+transport, local-apply, and certified-send latency. Even substituting the
+12.751-second 32-core proof benchmark into h497 projects approximately 74.1
+seconds accepted-to-committed if every non-proof stage remains unchanged.
+Both the higher-core prover and the non-proof finality path remain gates.
 
 The v7 performance amendment records a release-mode synthetic benchmark of
 the unchanged two-proof private-primary issue builder after proving-key
@@ -129,6 +153,22 @@ deployed on validator-2. The driver has five authenticated persistent peers,
 requires remote proposer routing, and applies locally before certified
 delivery. The service requires all of those capabilities in readiness.
 
+The fleet has since advanced to signed release
+`resident-precommit-6ad587f`, full revision
+`6ad587f74b5c2d307fee8c6d11212047df93be89`, binary SHA-256
+`01d70c3b98ab1df7fafba11889d59ccbb1255fc8caadb5544f60c79d3f1c2011`.
+The rollout used the frozen one-validator-at-a-time order and a signed,
+verified height-494 finalized checkpoint. All six services run the exact
+binary and converged after every apply.
+
+The resident swap daemon is separately at revision `06f80d2`. It fixes a
+recovery defect found during the timing campaign: failed or interrupted
+prepublication entries no longer retain the input reservation forever. A
+newly signed replacement intent atomically supersedes only those terminal
+prepublication lineages; published and otherwise live lineages still block a
+second spend. Subsequent certified cycles completed with zero active
+reservations.
+
 ### 2026-07-29 limited-availability determination
 
 The bounded limited-availability gate is **open** for the single controlled
@@ -191,6 +231,17 @@ accepted-to-committed target: the tuned live samples still contain
 approximately 60.8-77.4 seconds outside the proof DAG. The required next
 qualification step is an always-on higher-core prover plus removal of the
 round-driver/commit scheduling delay, followed by the full campaign.
+
+The first safe round-driver reduction is now deployed. Heights 496 and 497
+formed a complete capped private issue/redeem cycle under revision `6ad587f`.
+Accepted-to-committed measured 156.231 seconds and 145.873 seconds; proof DAG
+measured 82.408 seconds and 84.570 seconds; published-to-committed measured
+67.581 seconds and 57.453 seconds. Supply returned to the exact baseline and
+the fleet converged at height 497 with empty mempools and no active
+reservations. Remote precommit legacy-vote recovery is now only 4-7
+milliseconds, but the h497 precommit collection stage remained 8.164 seconds
+and the complete certified round remained 54.678 seconds. The scale gate
+therefore remains closed and the 100/100 campaign has not been run.
 
 The rollback rehearsal is now complete. The archived height-482 governance
 block replayed from the verified height-481 backup with its original round
