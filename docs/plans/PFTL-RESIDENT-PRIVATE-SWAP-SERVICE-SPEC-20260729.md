@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-29
 **Priority:** P0 (immediate independently shippable PFTL product milestone)
-**Status:** amended implementation and qualification specification (v9)
+**Status:** amended implementation and qualification specification (v10)
 **Parent research:** `CHAIN-OPTIMIZATION-STACKED-RESEARCH-20260729.md`
 (S1.1, S1.3, S3.1, S6.1), `NAV-SWAP-EFFICIENCY-RESEARCH-20260729.md`
 (Tier 0.1, Tier 2.1)
@@ -15,6 +15,49 @@ one-round relay failure (mempool admission lesson)
 `MUST`, `MUST NOT`, `SHOULD`, and `REQUIRED` are normative.
 
 ## Amendment note
+
+The v10 qualification amendment records signed release
+`resident-local-commit-777faa0`, full revision
+`777faa0e5cf4dfce52d36ce272dff7eecea1121d`, binary SHA-256
+`0d47fc2ce57b8f5cdbcda2db1a406eb90d9d7b2c1bebe974a347de2d8d104291`.
+It was installed one validator at a time from a signed, clean-imported
+height-500 finalized checkpoint. An independent post-rollout audit confirmed
+the exact binary on all six validators and active validator transport and RPC
+units. Unit pin revision `1e64c71` places the resident round driver on the
+same release.
+
+The release removes the final redundant legacy certificate re-execution only
+after the local proposal has been executed and matched exactly. It still
+verifies every vote signature, committee member, quorum, registry binding,
+target, and certificate ID. State apply independently recomputes the proposal
+and resulting state. After apply, the driver atomically publishes the local
+certified-batch marker before durable fleet delivery; its send outbox remains
+restart-recoverable. This makes safe local finality visible without waiting
+for all six durable sends.
+
+Live qualification first restored the controlled private pfUSDC output to
+transparent form at height 501, then completed a new issue/redeem cycle.
+Height 502 consumed 905,538 transparent pfUSDC atoms and issued 1,000,000
+private A666 atoms. Height 503 spent that exact private output and returned
+900,581 private pfUSDC atoms. All six validators converged at height 503 with
+empty mempools, zero active reservations, and the route invariant true.
+A666 supply increased by exactly 1,000,000 atoms and then returned exactly to
+the 31,489,197,455-atom baseline.
+
+At height 502, accepted-to-committed was 123.202 seconds, the proof DAG was
+87.326 seconds, published-to-committed was 29.242 seconds, the certified round
+was 32.196 seconds, and client-visible local finality was 25.157 seconds. At
+height 503 those measurements were 108.957, 83.372, 21.844, 24.695, and
+18.975 seconds respectively. Redundant legacy certificate work fell from
+4.608 seconds at height 499 to 0.023 seconds at height 502, and to 0.013
+seconds at height 503.
+
+Substituting the measured 12.751-second 32-core proof DAG into these live
+samples projects approximately 48.6 seconds for issue and 38.3 seconds for
+redemption. The scale gate remains closed: an always-on higher-core prover
+must be qualified live, the issue path needs approximately another 3.7
+seconds of reduction or a correspondingly faster proof result, and the full
+100-issue/100-redeem and fault campaign has not run.
 
 The v9 qualification amendment records removal of the consensus-v2
 height-linear QC-history scan and its signed deployment as
@@ -195,6 +238,15 @@ checkpoint and the same frozen one-validator-at-a-time order. Unit pin
 revision `ce72afb` ensures the resident round driver exercises the same
 binary as the validator fleet.
 
+The current fleet and resident round driver run signed release
+`resident-local-commit-777faa0`, full revision
+`777faa0e5cf4dfce52d36ce272dff7eecea1121d`, binary SHA-256
+`0d47fc2ce57b8f5cdbcda2db1a406eb90d9d7b2c1bebe974a347de2d8d104291`.
+The rollout used a mandatory signed, clean-imported height-500 checkpoint and
+the frozen one-validator-at-a-time order. An independent audit confirmed the
+exact binary and active validator transport/RPC units on all six nodes. Unit
+pin revision `1e64c71` advances the resident driver to that release.
+
 The resident swap daemon is separately at revision `06f80d2`. It fixes a
 recovery defect found during the timing campaign: failed or interrupted
 prepublication entries no longer retain the input reservation forever. A
@@ -285,6 +337,19 @@ rounds measured 36.247 and 23.257 seconds. A666 supply returned to
 31,489,197,455 atoms, all six validators converged with empty mempools, and
 the service retained zero active reservations. The 100/100 campaign remains
 blocked on the live proof hardware and the residual issue path.
+
+The early-local-commit release then restored the controlled input at height
+501 and completed another exact private issue/redeem round trip at heights 502
+and 503. Accepted-to-committed measured 123.202 and 108.957 seconds; proof DAG
+measured 87.326 and 83.372 seconds; published-to-committed measured 29.242 and
+21.844 seconds; and client-visible local finality measured 25.157 and 18.975
+seconds. Supply again returned exactly to 31,489,197,455 atoms, all six
+validators converged with empty mempools, and active reservations returned to
+zero. With the measured 32-core proof substituted, those runs project to
+approximately 48.6 seconds for issue and 38.3 seconds for redemption. The
+next required step is live qualification of an always-on higher-core prover,
+followed by the remaining issue-path reduction and the still-unrun 100/100
+campaign.
 
 The rollback rehearsal is now complete. The archived height-482 governance
 block replayed from the verified height-481 backup with its original round
