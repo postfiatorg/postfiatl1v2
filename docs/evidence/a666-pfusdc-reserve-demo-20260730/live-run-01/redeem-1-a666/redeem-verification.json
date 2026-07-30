@@ -1,0 +1,17 @@
+{
+  "balances": {
+    "a666_after": 99000000,
+    "a666_before": 100000000,
+    "pfusdc_after": 2514233,
+    "pfusdc_before": 1613526
+  },
+  "base_reserve_decrease_atoms": 901158,
+  "redemption_spread_atoms": 451,
+  "released_pfusdc_atoms": 900707,
+  "retained_a666_atoms": 99000000,
+  "retained_same_run_reserve_atoms": 89214592,
+  "retired_a666_atoms": 1000000,
+  "schema": "postfiat.a666.pfusdc_reserve_demo_redeem_verify.v1",
+  "verdict": "PASS",
+  "zero_active_order_state": true
+}

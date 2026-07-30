@@ -1,0 +1,17 @@
+{
+  "schema": "postfiat.a666.pfusdc_claim_after_deposit.v1",
+  "verdict": "PASS",
+  "deposit_tx": "0xd8027f1e3f5a4a9babab4c5532a0de75dc8b54ed74e2fc22cc791d0a3c59aebc",
+  "deposit_id": "f4c12a7390bf0af6895968923720f3ef9040d8943fda5a156bb13b9ea6b1e25b",
+  "amount_atoms": 90553629,
+  "expected_holder_atoms": 92179855,
+  "relay": {
+    "schema": "postfiat.a666.pfusdc_relay.v2",
+    "verdict": "PASS",
+    "execution_mode": "two_round_propose_then_finalize_claim",
+    "deposit_tx": "0xd8027f1e3f5a4a9babab4c5532a0de75dc8b54ed74e2fc22cc791d0a3c59aebc",
+    "start_height": 544,
+    "finalized_height": 546,
+    "amount_atoms": 90553629
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "balances": {
+    "a666_after_release": 100000000,
+    "a666_after_subscribe": 100000000,
+    "a666_before": 0,
+    "pfusdc_after_release": 1613526,
+    "pfusdc_after_subscribe": 1613526,
+    "pfusdc_before": 92179855
+  },
+  "base_reserve_increase_atoms": 90115750,
+  "creates_ethereum_export": false,
+  "export_entitlement_released": true,
+  "issue_spread_atoms": 450579,
+  "mint_amount_atoms": 100000000,
+  "schema": "postfiat.a666.pfusdc_reserve_demo_issue_verify.v1",
+  "verdict": "PASS"
+}

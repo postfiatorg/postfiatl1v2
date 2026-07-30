@@ -1,0 +1,182 @@
+{
+  "schema": "postfiat.a666.pfusdc_reserve_demo_live_run.v1",
+  "verdict": "PASS",
+  "classification": "controlled-live-mainnet-value",
+  "run_id": "a666-pfusdc-reserve-demo-20260730-live-run-01",
+  "business_claim": "An ordinary funded user deposited Ethereum-mainnet USDC, claimed source-labeled pfUSDC on PFTL, exchanged pfUSDC for newly issued A666, caused the base pfUSDC to enter the A666 settlement reserve and fresh NAV mark, and redeemed part of the A666 back to pfUSDC without an AMM trade or operator inventory transfer.",
+  "scope": {
+    "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+    "transparent": true,
+    "creates_new_a666": true,
+    "private_execution": false,
+    "ethereum_a666_export": false,
+    "uniswap_swap": false,
+    "generic_multi_asset_nrrs": false
+  },
+  "assets": {
+    "a666_asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+    "pfusdc_asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+    "user": "pfab9b9228942e5c529633a13aa271d5297bec6353"
+  },
+  "timing": {
+    "ethereum_deposit_started_unix": 1785436043,
+    "ethereum_deposit_completed_unix": 1785436071,
+    "ethereum_deposit_elapsed_seconds": 28,
+    "pfusdc_claim_artifact_unix": 1785437250,
+    "governed_proof_artifact_unix": 1785439600,
+    "preissue_route_ready_artifact_unix": 1785439817,
+    "issue_release_ready_artifact_unix": 1785439985,
+    "postissue_route_ready_artifact_unix": 1785440191,
+    "redemption_ready_artifact_unix": 1785440254,
+    "final_fleet_capture_unix": 1785440321,
+    "deposit_start_to_final_fleet_seconds": 4278,
+    "preissue_route_ready_to_final_fleet_seconds": 504,
+    "artifact_timestamp_note": "Only the Ethereum deposit duration is emitted by the value-moving runner. Other phase timestamps are filesystem artifact completion times and are not consensus-attested latency measurements."
+  },
+  "ethereum_deposit": {
+    "amount_atoms": 90553629,
+    "amount_usdc": "90.553629",
+    "tx_hash": "0xd8027f1e3f5a4a9babab4c5532a0de75dc8b54ed74e2fc22cc791d0a3c59aebc",
+    "block_number": 25647461,
+    "block_hash": "2a253de9de61abaebdf245244e1a27ac8a06c1c1e56a836dff7c0f7c4b064385",
+    "deposit_id": "f4c12a7390bf0af6895968923720f3ef9040d8943fda5a156bb13b9ea6b1e25b",
+    "gas_used": 181469,
+    "effective_gas_price_wei": 408118780,
+    "stakehub_charged_usd": "10.00",
+    "verdict": "PASS"
+  },
+  "pfusdc_claim": {
+    "amount_atoms": 90553629,
+    "holder_balance_after_atoms": 92179855,
+    "propose": {
+      "height": 545,
+      "tx_id": "96b2e48ccda6f6f589301beb8017981ca0ed012d4c3a66f67beb52c57afa2462889867d0e5c2908235fbc304984ec1f6"
+    },
+    "finalize": {
+      "height": 546,
+      "tx_id": "9aa969afc955f60a123f55808bb8ccf018cd2fc94234a924ac82273963860ee49b31d09cf125d95e09766356e596a49a"
+    },
+    "verdict": "PASS"
+  },
+  "governed_proof_of_reserves": {
+    "proof_profile": "stakehub-six-leg-reserves-v3",
+    "program_vkey": "0x00580ee8c389192568a29dc23d54c22e73a3a45203b22e3d5a934801871e11a7",
+    "governed_elf_sha256": "dd743c3867140fa5b8824272fcaba6e5d91f036b4848494a7f93bf21bbeb249e",
+    "proof_bin_sha256": "35e44b5cef445fb8651c8112d7d600b2ad6145594eb3a957a9d8df95e62fd6fe",
+    "proof_calldata_sha256": "8646c38202fd4493eb59427dc85a6905d941c5d4b85cf31407186e440dd2f303",
+    "public_values_sha256": "e842676cc4a2b7f604651b6396559813b186d50c703942c45282e38c7523eb90",
+    "policy_hash": "076c071e44127158ef82350e7feeb64e0be0a06bf8ba4be5f0374ac36b992ac7",
+    "proof_verified_net_assets_usd_1e8": 2826373076806,
+    "leg_count": 6,
+    "postissue_reuse_basis": "No StakeHub portfolio transaction occurred after this fresh proof. Epoch 4 reused the same governed public values and proof while replacing the consensus-read PFTL settlement-reserve overlay and circulating supply."
+  },
+  "preissue_nav": {
+    "epoch": 3,
+    "height_reserve_submit": 547,
+    "reserve_submit_tx_id": "4491c4f6a217e267c5662fefeacaf9bccce795c4195508beb2ff18a2acb16e1170b87715300437cdef659bb7eb52a453",
+    "height_finalize": 548,
+    "finalize_tx_id": "5f7360684201af211e5c80eab8004d4128b76e61bc22164aa98b263d707cd376cd10d5b1e3a2039c917c9454721d6d8b",
+    "settlement_reserve_overlay_atoms": 112995855,
+    "circulating_supply_atoms": 31489197455,
+    "verified_net_assets_usd_1e8": 2837672662306,
+    "nav_per_unit_usd_1e8": 90115750,
+    "reserve_packet_hash": "559da38033e4c523f86b7d7570b6a2e828548dbf4fa54729ed9bfa9d3f5964ff68ebd657ffdd098fd06867c0ef9831f7"
+  },
+  "preissue_route": {
+    "route_epoch": 4,
+    "height": 549,
+    "tx_id": "f509eb28ad19e4a3f39021a0e8f7a251a0c0a59b5046e5f1773ef65b50786df5b1ab9d0398ba1a883d196ad2e600c707",
+    "policy_hash": "d327095795ad94c71b9493883d7f793b3e47fbc6d33b509c052de727cb442bd943c49503b81dc285a98d086da4c9a0cc",
+    "pricing_nav_epoch": 3
+  },
+  "issue": {
+    "reservation_id": "199061aa6753d058700f869aca505c1508fa501b6f4c332eb2e37f0b817327b6df4dd7faaf24b7f43f8a596ca4637718",
+    "mint_amount_atoms": 100000000,
+    "mint_amount_a666": "100.000000",
+    "base_reserve_increase_atoms": 90115750,
+    "settlement_paid_atoms": 90566329,
+    "issue_spread_atoms": 450579,
+    "reserve": {
+      "height": 550,
+      "tx_id": "a1623584a916f30faee62c2096963f97daa48812d976c83e4b18f01451aa87d1bb349bfe7b9bcb7d0a7423125ea7d506"
+    },
+    "subscribe": {
+      "height": 551,
+      "tx_id": "9e1211e8739da82a56c44a1e76099a2921903ab07aa574bb07189dc4bfa427aaffd0707557191682e5136c21020d5ceb"
+    },
+    "release_unused_export_entitlement": {
+      "height": 552,
+      "tx_id": "8fe3294889832d7610deb16f5b295cdda6cbad163924ce1e1a1d7a94d050d678ffef03b7e5872e320637cf10cefe6462"
+    },
+    "balances": {
+      "user_a666_before_atoms": 0,
+      "user_a666_after_atoms": 100000000,
+      "user_pfusdc_before_atoms": 92179855,
+      "user_pfusdc_after_atoms": 1613526
+    },
+    "supply_before_atoms": 31489197455,
+    "supply_after_atoms": 31589197455,
+    "settlement_reserve_before_atoms": 112995855,
+    "settlement_reserve_after_atoms": 203111605,
+    "creates_ethereum_export": false,
+    "verdict": "PASS"
+  },
+  "postissue_nav": {
+    "epoch": 4,
+    "height_reserve_submit": 553,
+    "reserve_submit_tx_id": "f8cfc6096181451dfe3e51cf3a171f5cec756aa1e5644f78b20a7ab71e1b17c97caa6b692c5d213e3ccae31701605d34",
+    "height_finalize": 554,
+    "finalize_tx_id": "49eda17fe364a4e102ca55c4baea6e915ca768e532ad1d57382d85dfbea0b6c9dadb1f50e7c7f8f4fe494150dd89d218",
+    "settlement_reserve_overlay_atoms": 203111605,
+    "circulating_supply_atoms": 31589197455,
+    "verified_net_assets_usd_1e8": 2846684237306,
+    "nav_per_unit_usd_1e8": 90115750,
+    "reserve_packet_hash": "d9a798a26732f377c48bc38876b969df6deb2227bdbc5792721052a9db80df227a20a50de369604097868d8851e9d8d2",
+    "invariant": "NAV remained exactly 0.90115750 USD because the same-run base reserve and newly issued supply increased proportionally."
+  },
+  "postissue_route": {
+    "route_epoch": 5,
+    "height": 555,
+    "tx_id": "a2cf597d31a504aac6f4598f2a2ab560ece3b78a6933a0002cd78291bd014963d5494b80d177d115c128f33fa866d6c7",
+    "policy_hash": "a16d45b492d169cfb1959f5fa40c94a526c2589bfa36ff41232e2066c7ff6eb0a79a148b7d9054ef645f3f211aaccf8f",
+    "pricing_nav_epoch": 4
+  },
+  "redemption": {
+    "height": 556,
+    "tx_id": "abbf604f2b985910c59ac9c148f3197e0fdbfd314df3af0f42514960d95fbd821fdfe85368532555b974399dcc02a448",
+    "retired_a666_atoms": 1000000,
+    "retired_a666": "1.000000",
+    "base_reserve_decrease_atoms": 901158,
+    "pfusdc_released_atoms": 900707,
+    "redemption_spread_atoms": 451,
+    "user_a666_final_atoms": 99000000,
+    "user_pfusdc_final_atoms": 2514233,
+    "authorized_valid_supply_final_atoms": 31588197455,
+    "settlement_reserve_final_atoms": 202210447,
+    "retained_same_run_reserve_atoms": 89214592,
+    "active_reservation_count": 0,
+    "export_entitlement_count": 0,
+    "verdict": "PASS"
+  },
+  "final_fleet": {
+    "height": 556,
+    "validator_count": 6,
+    "build_git_revision": "777faa0e",
+    "state_root": "155fa39ea8d16f0175cf1f53ac4a88fdf7fb0ef49d498f787ddf17066b264280e6f0e94ed40a561f671623f1fb495723",
+    "block_tip_hash": "32b471b71b7560790b2aff8104d1b0b0ff4533291c208e75f44f2d4b3a3c1efa553f5b16d84220ea08a45440c8e6b526",
+    "mempool_pending": 0,
+    "route_states_identical": true,
+    "invariant_holds": true,
+    "verdict": "PASS"
+  },
+  "artifact_paths": {
+    "deposit": "deposit/deposit-result.json",
+    "pfusdc_claim": "pfusdc-claim-summary.json",
+    "governed_proof_hashes": "por-preissue/proof-sha256.txt",
+    "preissue_nav": "por-preissue/nav-epoch-3-builder.stdout.json",
+    "issue_verification": "issue-retry1/issue-verification.json",
+    "postissue_nav": "por-postissue/nav-epoch-4-builder.stdout.json",
+    "redemption_verification": "redeem-1-a666/redeem-verification.json",
+    "final_fleet": "final-fleet-h556/summary.json"
+  }
+}

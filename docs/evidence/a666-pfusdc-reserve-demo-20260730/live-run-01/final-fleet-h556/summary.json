@@ -1,0 +1,34 @@
+{
+  "schema": "postfiat.a666.pfusdc_reserve_demo_fleet_reconcile.v1",
+  "verdict": "PASS",
+  "validator_count": 6,
+  "node_ids": [
+    "validator-0",
+    "validator-1",
+    "validator-2",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+  ],
+  "all_running": true,
+  "build_git_revision": "777faa0e",
+  "block_height": 556,
+  "state_root": "155fa39ea8d16f0175cf1f53ac4a88fdf7fb0ef49d498f787ddf17066b264280e6f0e94ed40a561f671623f1fb495723",
+  "block_tip_hash": "32b471b71b7560790b2aff8104d1b0b0ff4533291c208e75f44f2d4b3a3c1efa553f5b16d84220ea08a45440c8e6b526",
+  "mempool_pending": 0,
+  "routes_identical": true,
+  "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+  "route_epoch": 5,
+  "pricing_nav_epoch": 4,
+  "authorized_valid_supply_atoms": 31588197455,
+  "pftl_spendable_supply_atoms": 99000000,
+  "settlement_reserve_atoms": 202210447,
+  "non_nav_spread_atoms": 1627216,
+  "active_reservation_count": 0,
+  "export_entitlement_count": 0,
+  "invariant_holds": true,
+  "source_files": [
+    "statuses.json",
+    "routes.json"
+  ]
+}

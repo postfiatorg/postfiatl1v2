@@ -177,6 +177,15 @@ For avoidance of doubt, completing section 2.2 is the Monday deliverable.
 Implementing the remainder of this specification is not a prerequisite for
 that demonstration.
 
+**Execution status (2026-07-30): PASS.** A controlled live run completed the
+required mainnet-USDC -> pfUSDC -> newly issued A666 -> updated NAV/route ->
+partial A666 redemption -> pfUSDC sequence. The authoritative summary is
+[`../evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/summary.json`](../evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/summary.json),
+the human-readable report is
+[`../evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/README.md`](../evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/README.md),
+and the Monday command sheet is
+[`../runbooks/A666-PFUSDC-MONDAY-DEMO-RUNBOOK-20260803.md`](../runbooks/A666-PFUSDC-MONDAY-DEMO-RUNBOOK-20260803.md).
+
 The demo does **not** create a Uniswap pool. The wA666/USDC Uniswap v4 pool
 already exists. It also does not create a new pfUSDC facility. It exercises
 the deployed primary route:
@@ -376,24 +385,29 @@ primary redemption.
 
 #### 2.2.7 Required preparation checklist
 
-- [ ] Implement or assemble a narrow orchestration wrapper for exactly the
+- [x] Implement or assemble a narrow orchestration wrapper for exactly the
   section 2.2.1 sequence; it may compose existing operations but MUST NOT add a
   consensus transaction kind.
-- [ ] Make every generated artifact fail on overwrite and bind it to the fresh
+- [x] Make every generated artifact fail on overwrite and bind it to the fresh
   route epoch, policy hash, NAV packet, account, and amount.
-- [ ] Rehearse the exact reserve -> subscribe -> entitlement-release sequence
+- [x] Rehearse the exact reserve -> subscribe -> entitlement-release sequence
   without submitting an export operation.
-- [ ] Rehearse the fresh NAV mark and governed route epoch advance with zero
+- [x] Rehearse the fresh NAV mark and governed route epoch advance with zero
   active reservations and zero export entitlements.
-- [ ] Calculate the maximum redeemable A666 from the incremental base reserve
+- [x] Calculate the maximum redeemable A666 from the incremental base reserve
   after the fresh NAV is known; do not assume the full issued amount remains
   redeemable if NAV moves.
-- [ ] Rehearse the exact redemption and final six-validator reconciliation.
-- [ ] Produce one operator-facing command sheet with explicit stop points
+- [x] Rehearse the exact redemption and final six-validator reconciliation.
+- [x] Produce one operator-facing command sheet with explicit stop points
   before Ethereum deposit, PFTL issue, NAV finalization, route advance, and
   redemption.
-- [ ] Complete at least one clean dress rehearsal using the same code,
+- [x] Complete at least one clean dress rehearsal using the same code,
   topology, authorizations, and evidence schema intended for Monday.
+
+The 2026-07-30 controlled live run is the qualifying rehearsal. It issued
+`100.000000 A666`, retained `99.000000 A666` after a `1.000000 A666`
+redemption, and retained `89.214592 pfUSDC` of the same-run base reserve. No
+Ethereum export or Uniswap trade occurred.
 
 ## 3. Economic principles
 

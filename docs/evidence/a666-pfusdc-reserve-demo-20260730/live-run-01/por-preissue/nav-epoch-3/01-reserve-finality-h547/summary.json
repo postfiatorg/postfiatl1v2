@@ -1,0 +1,21 @@
+{
+  "accepted": true,
+  "all_sends_verified": true,
+  "confirmed": true,
+  "end_block_tip_hash": "e34834a527538352f393203ffb71fc41cd78000fc87c458bef14dbdb0113e5749dec291005809a46a09baa790611431b",
+  "end_height": 547,
+  "end_mempool_pending": 0,
+  "end_state_root": "f09f9bdb0dd3c178790a616001d21edd04217bedb6db121f44c12e329408a4258ecb5d90327a12fd311c053b582a7743",
+  "label": "a666-live-nav-e3-reserve-submit",
+  "proposer": "validator-1",
+  "round_ok": true,
+  "schema": "postfiat-a666-ce22-remote-finality-operation-v1",
+  "source": "pfd0c86d9084915e1fefd22eab891806397d5a5937",
+  "start_height": 546,
+  "start_state_root": "98b2cca2fea0d7d2b7abdb89993b877076c57a1e64e6949dce4697571ae5e65f5a49fae4a13ac07ee22b33e8798d5311",
+  "transaction_kind": "nav_reserve_submit",
+  "trust_class": "CONTROLLED",
+  "tx_id": "4491c4f6a217e267c5662fefeacaf9bccce795c4195508beb2ff18a2acb16e1170b87715300437cdef659bb7eb52a453",
+  "validator_count": 6,
+  "vote_count": 5
+}
