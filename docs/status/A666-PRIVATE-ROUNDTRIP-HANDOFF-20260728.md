@@ -1,5 +1,12 @@
 # A666 Private Round-Trip Status and Handoff
 
+> **Historical handoff (superseded for current status on 2026-07-30):**
+> “all execution is stopped” describes the end of the 2026-07-28 campaign, not
+> the current service. Optimization and resident-service work resumed
+> afterward. See
+> [A666, pfUSDC, Private Swap, Bridge, and Uniswap Current State](A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md)
+> for the current live audit and release determination.
+
 **As of:** 2026-07-28 UTC  
 **Status:** functional mainnet round trip complete; formal hands-off private
 acceptance remains open; all execution is stopped

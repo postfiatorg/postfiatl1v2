@@ -1,5 +1,15 @@
 # A666 Transparent and Private Issue/Redeem Acceptance Spec
 
+> **Status amendment (2026-07-30):** All functional stages in this sequence
+> were subsequently exercised. The later optimized private issue completed in
+> `1,776 seconds` and redemption recovery in `888 seconds`. That is a
+> functional issue/redeem pass, but not a release pass: issue still missed the
+> `25-minute` target, the run history was not uniformly intervention-free, and
+> the production 100/100 gate remains open. See
+> [current state](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md)
+> and
+> [production hardening](A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md).
+
 **Date:** 2026-07-28
 
 **Priority:** P0

@@ -1,5 +1,13 @@
 # NAVCOIN Proof of Reserves
 
+> **Production lineage notice (2026-07-30):** This page explains the
+> proof-of-reserves primitives and earlier devnet phases. The current A666
+> deployment, StakeHub NAV policy, live supply/reserve state, and production
+> limitations are summarized in
+> [A666 current state](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
+> Nothing in this page should be read as a claim that the current A666 service
+> has passed production GA.
+
 Status: Phase 0 + Phase 1 live on devnet
 Plan: `NAVCOIN_POR_V2_PLAN.md` (repo root)
 Public proposal: [The NAVCoin Proposal](https://postfiat.org/blog/navcoin-proposal/)

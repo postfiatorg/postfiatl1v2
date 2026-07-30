@@ -1,8 +1,19 @@
 # PFTL Resident Private Swap Service Specification
 
+> **v11 status amendment (2026-07-30):** The service now uses the dedicated
+> high-core prover path and the proposal-view-aware finality observer. Four
+> complete private issue/redeem qualification cycles committed exactly once.
+> Four-sample issue p95 was `50.365 seconds` and redeem p95 was `38.862
+> seconds`. Cycle 5 failed closed before publication on stale governed NAV;
+> its pending output was discarded and the outbox remained empty. The
+> 100/100 gate is `NO-GO`. Current status and remaining work:
+> [current state](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md)
+> and
+> [production hardening](A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md).
+
 **Date:** 2026-07-29
 **Priority:** P0 (immediate independently shippable PFTL product milestone)
-**Status:** amended implementation and qualification specification (v10)
+**Status:** amended implementation and qualification specification (v11)
 **Parent research:** `CHAIN-OPTIMIZATION-STACKED-RESEARCH-20260729.md`
 (S1.1, S1.3, S3.1, S6.1), `NAV-SWAP-EFFICIENCY-RESEARCH-20260729.md`
 (Tier 0.1, Tier 2.1)

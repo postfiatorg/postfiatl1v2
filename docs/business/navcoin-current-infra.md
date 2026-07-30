@@ -1,5 +1,13 @@
 # NAVCOIN On Current Infrastructure
 
+> **Production lineage notice (2026-07-30):** This page describes the earlier
+> native-NAV prototype and devnet smoke. The deployed product has progressed
+> to A666 v2 with buyer-funded primary issue/redemption, Ethereum-mainnet
+> pfUSDC, proof-gated wA666, private PFTL execution, and an A666/USDC Uniswap
+> venue. See
+> [A666 current state](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
+> Prototype statements below remain historical implementation context.
+
 Status: native NAV smoke  
 Script: `scripts/navcoin-current-infra-smoke`
 

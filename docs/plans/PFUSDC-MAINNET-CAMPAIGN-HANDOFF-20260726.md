@@ -1,5 +1,10 @@
 # pfUSDC Ethereum Campaign — FULL HANDOFF
 
+> **Historical campaign handoff:** This remains the detailed pfUSDC campaign
+> record. For the current combined pfUSDC/A666/private-swap/bridge/Uniswap
+> status and production-release determination, see
+> [A666, pfUSDC, Private Swap, Bridge, and Uniswap Current State](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
+
 **Written:** 2026-07-26T14:30Z by Angmar (Nazgul command), on Sauron's order.
 **Reason:** Troll pane (Burzum) wedged on repeated content-filter turn errors;
 orc panes idle/stopped. This document is sufficient to resume with a fresh

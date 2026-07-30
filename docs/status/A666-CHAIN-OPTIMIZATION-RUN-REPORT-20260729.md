@@ -1,5 +1,10 @@
 # A666 Chain Optimization Run Report
 
+> **Historical performance report:** This records the 2026-07-29 full-chain
+> optimization run. It remains valid evidence for that run, but it is not the
+> current resident-service or production-release status. See
+> [A666, pfUSDC, Private Swap, Bridge, and Uniswap Current State](A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
+
 Date: 2026-07-29 UTC
 
 Repository: `postfiatorg/postfiatl1v2`

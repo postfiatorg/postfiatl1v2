@@ -1,5 +1,15 @@
 # A666 Variable-Size Real-NAV Round-Trip Execution Spec
 
+> **Status context (2026-07-30):** A prior `1x` transparent / `100x`
+> private-middle campaign with a real StakeHub NAV refresh already completed
+> as a business-flow pass and release fail; see
+> `A666-VARIABLE-SIZE-TRANSPARENT-PRIVATE-NAV-ROUNDTRIP-SPEC-20260728.md`.
+> This proposed clean rerun has not superseded that evidence and is now
+> governed by
+> `A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md`. Do not execute
+> new live funds from this document without satisfying its Gate 0 and the
+> production-hardening gates.
+
 **Date:** 2026-07-29  
 **Priority:** P0  
 **Status:** proposed; no live funds authorized until Gate 0 passes  

@@ -1,5 +1,11 @@
 # Shielded Swap Performance Handoff
 
+> **Historical performance handoff:** This records the 2026-06-21 cold a651
+> workflow. The current A666 service uses a long-lived resident private prover
+> and a dedicated high-core path; its latest proof-DAG maximum was about `12.5
+> seconds`. See
+> [A666 Current State](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
+
 Status: urgent handoff / performance triage
 Date: 2026-06-21
 Audience: protocol engineering, validator operators, next execution agent

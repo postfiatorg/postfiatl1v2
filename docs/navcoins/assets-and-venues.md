@@ -1,5 +1,10 @@
 # NAVCoin Assets And Venues
 
+> **Current-state amendment (2026-07-30):** The earlier status descriptions on
+> this page were overtaken by the A666 v2 mainnet deployment. Use
+> [A666 Current State](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md)
+> for live identifiers, economics, proof boundaries, and release status.
+
 NAVCoins separate the asset's backing from the places where users access or
 trade the asset. A venue can host liquidity without becoming a separate backing
 pool.
@@ -12,13 +17,12 @@ work.
 
 | Context | Status | Notes |
 |---|---|---|
-| PFTL WAN devnet | Canonical-target NAV/supply path exercised end to end. | Used for primary mint/redeem, pfUSDC settlement, a651/a652 swap evidence, and Asset-Orchard shielded swap work. |
-| Ethereum mainnet | Live a651 token and a651/USDC Uniswap v4 venue. | This documents a real venue/representation, but PFTL remains the intended canonical NAV/supply ledger for the architecture. There is no live cross-chain a651 bridge. |
-| Shielded Asset-Orchard | Implemented for internal private a651/pfUSDC swaps. | Internal swap actions hide raw asset ids, values, owners, recipients, and price. Boundary ingress/egress still discloses public asset/value. |
+| PFTL WAN devnet | Historical NAV/supply and private-swap evidence. | Used for primary mint/redeem, pfUSDC settlement, a651/a652 swap evidence, and early Asset-Orchard work. |
+| Ethereum mainnet | Legacy a651 token and historical a651/USDC Uniswap v4 venue. | Pool-specific liquidity was zero at the last a651 inspection. There is no live cross-chain a651 bridge. |
+| Shielded Asset-Orchard | Historical private a651/pfUSDC swap lineage. | The private infrastructure progressed to A666 private-primary issue/redeem; boundary disclosure caveats still apply. |
 
-The current PFTL position is: do not bootstrap parallel fake a651 assets for
-proof runs. Use the real registered WAN devnet a651 when proving the NAVCoin
-round trip.
+New production acceptance must use A666 v2. a651 may be used only for explicit
+legacy regression, migration, or historical-reproduction work.
 
 ## a666 and wA666
 
@@ -30,9 +34,9 @@ PFTL export has been accepted through the route's disclosed finality verifier.
 
 | Context | Status | Notes |
 |---|---|---|
-| PFTL WAN fleet | **Production a666 v2 and its opening StakeHub NAV are finalized.** | Asset `521c…74b6` has no permanent maximum supply. Epoch one marks `$1.00` per unit and `31,386.197455 a666` outstanding against `$31,386.19745591` verified net assets. The public issue/export route is not active. |
+| PFTL WAN fleet | **Production A666 v2 is finalized and its issue/redeem/export route is active.** | Asset `521c…74b6` has no permanent maximum supply. Transparent and private primary issue/redeem transitions have committed. |
 | Ethereum Sepolia | Controlled wA666 stack and route evidence exist. | Controlled testing only; the route is not a trustless mainnet product. |
-| Ethereum mainnet | **wA666 contracts and the hookless v4 pool are deployed; issuance and liquidity remain paused.** | wA666 is `0xeE4C…9bE5`; pool `0xc5f1…6e98` is initialized at `$1.00` with fee `500`, but total supply and pool liquidity are zero. This is not yet a public acquisition route. |
+| Ethereum mainnet | **wA666 contracts and the hookless v4 pool are deployed and functionally exercised.** | wA666 is `0xeE4C…9bE5`; pool `0xc5f1…6e98` was seeded with `3,000 wA666 + 3,000 USDC` and third-party swaps finalized. Re-read chain state before making a current liquidity or price claim. |
 
 The required primary acquisition flow is:
 
@@ -51,8 +55,9 @@ reserves and the 500-USDC spread is separately accounted outside NAV assets,
 preserving the stated $1.00 NAV. A small Uniswap pool is a price anchor and
 secondary venue, not the inventory source for that acquisition.
 
-The binding launch direction is at least 2,000,000 a666 of posted primary mint
-capacity and at least 100,000 a666 in one export packet or atomic export batch.
+The deployed policy exposes `2,000,000 A666` issue and redemption capacity per
+policy epoch, a `1,000,000 A666` maximum primary order, a `250,000 A666`
+per-export-packet cap, and a `2,000,000 A666` net wrapped cap.
 Available capacity must be bounded by proven backing and policy caps, not
 issuer inventory or AMM liquidity. Redemption performs the inverse economic
 transition: retire NAVCoin supply and release settlement value under the
@@ -64,15 +69,16 @@ The former six-decimal controlled configuration is not production capacity:
 its route cap is 10 a666, its packet cap is 1 a666, and its native asset
 maximum is 1,000,000 a666. It is superseded by the fresh production v2 asset,
 which has no static maximum. The deployed Ethereum controller encodes a
-2,000,000-a666 route cap and 250,000-a666 packet cap, but those limits do not
-become available capacity until the proof-backed PFTL route is activated. See
+2,000,000-a666 route cap and 250,000-a666 packet cap. These are risk bounds,
+not evidence that million-A666 live orders have been qualified. See
 `../plans/A666-END-TO-END-MAINNET-PRIMARY-ISSUANCE-SPEC-20260727.md` and
 `../status/A666-MAINNET-DEPLOYMENT-20260727.md`.
 
-## Ethereum a651 and Uniswap
+## Legacy Ethereum a651 and Uniswap
 
-The Ethereum mainnet a651 launch produced a live ERC-20 token and a Uniswap v4
-a651/USDC pool. The dedicated pool page is
+The Ethereum mainnet a651 launch produced an ERC-20 token and a Uniswap v4
+a651/USDC pool. The pool is now legacy and had zero pool-specific liquidity at
+the last a651 inspection. The dedicated historical page is
 [a651 Uniswap Pool](uniswap-pool.md).
 
 | Component | Value |
@@ -98,7 +104,7 @@ Launch configuration:
 | Genesis supply | 4,000.000 a651 |
 | NAV per unit | $5.912 |
 | Proven portfolio NAV | $23,648.69 |
-| Pool liquidity | 676.57 a651 + $4,000.00 USDC |
+| Launch-time pool liquidity | 676.57 a651 + $4,000.00 USDC |
 | Pool fee | 100 bps |
 | Legacy a651 controller redemption allocation | $990 USDC |
 | Smoke swap | $1 USDC |
@@ -115,7 +121,10 @@ deployments.
 ## pfUSDC
 
 `pfUSDC` is the product name for a PFTL-side cash receipt backed by source-chain
-USDC evidence. The implementation path is intentionally generic:
+USDC evidence. The current production source is canonical Ethereum-mainnet
+USDC; Arbitrum is deprecated for new ingress because its trustless
+confirmation path took approximately `6.4 days`. The implementation primitive
+remains intentionally generic:
 
 ```text
 source ERC-20 deposit

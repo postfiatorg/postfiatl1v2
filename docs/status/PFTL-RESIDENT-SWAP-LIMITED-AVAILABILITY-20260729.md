@@ -1,5 +1,16 @@
 # PFTL Resident Swap Limited-Availability Report
 
+> **2026-07-30 amendment:** The resident service was subsequently moved to the
+> dedicated high-core prover path, its mount identity mapping was hardened,
+> and the finality observer was made proposal-view-aware without weakening
+> certificate verification. Four qualification issue/redeem cycles committed
+> exactly once. Issue p95 was `50.365 seconds`; redeem p95 was `38.862
+> seconds`. Cycle 5 correctly stopped prepublication on stale governed NAV.
+> The decision remains limited availability and `NO-GO` for the 100/100
+> production gate. See
+> [current state](A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md) and the
+> [latest evidence](../evidence/pftl-private-swap-p0-20260730/README.md).
+
 **Date:** 2026-07-29
 **Scope:** PFTL-resident pfUSDC/A666 issue and redemption
 **Determination:** bounded limited availability passed; scale/performance

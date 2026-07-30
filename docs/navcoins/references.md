@@ -1,5 +1,10 @@
 # NAVCoin Reference Posts
 
+Current deployed status is tracked in
+[A666 Current State](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
+The public posts below explain product lineage and research boundaries; older
+a651/Arbitrum posts are not current deployment claims.
+
 The NAVCoin public series defines the product and proof boundaries. The L1 docs
 then map those claims to the local PFTL implementation.
 
@@ -21,11 +26,12 @@ then map those claims to the local PFTL implementation.
 
 | Doc | Role |
 |---|---|
+| [A666 Current State](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md) | Current pfUSDC/A666/private-swap/bridge/Uniswap deployment, evidence, limitations, and release status. |
 | [Detailed Proof Of Reserves](../business/navcoin-proof-of-reserves.md) | Full proof-profile, attestor, multi-fetch, challenge, and source-adapter design. |
-| [a651 Uniswap Pool](uniswap-pool.md) | Live Ethereum a651/USDC Uniswap v4 venue details, pool id, launch configuration, and caveats. |
+| [a651 Uniswap Pool](uniswap-pool.md) | Legacy Ethereum a651/USDC venue, pool id, launch configuration, and migration caveats. |
 | [Current Infrastructure](../business/navcoin-current-infra.md) | Native NAV settlement rail and end-to-end smoke behavior. |
 | [Python Example](../business/navcoin-python-example.md) | Minimal Python reserve-packet and operation-builder walkthrough. |
-| [Proper Private NAV Swap Plan](../plans/proper-private-nav-swap-plan.md) | Current user-facing plan for private pfUSDC/a651 swaps and exit boundaries. |
+| [Proper Private NAV Swap Plan](../plans/proper-private-nav-swap-plan.md) | Historical pfUSDC/a651 private-swap plan and still-relevant privacy-boundary analysis. |
 | [Archive Summary](../evidence/navcoin-archive-summary.md) | Inventory of archived legacy NAV/VAN applications and contract context. |
 
 ## Local implementation references

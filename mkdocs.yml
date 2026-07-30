@@ -14,6 +14,7 @@ exclude_docs: |
   review/**
   specs/**
   status/**
+  !status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md
   ai-handoff.md
   cut.md
   navcoin-sp1-verifier.md
@@ -88,7 +89,9 @@ nav:
   - Whitepaper: whitepaper.md
   - NAVCoins:
       - Overview: navcoins/index.md
-      - a651 Uniswap Pool: navcoins/uniswap-pool.md
+      - A666 Current State: status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md
+      - A666 Production Hardening: plans/A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md
+      - Legacy a651 Uniswap Pool: navcoins/uniswap-pool.md
       - Proof-of-Reserve Primitives: navcoins/reserve-primitives.md
       - Assets And Venues: navcoins/assets-and-venues.md
       - PFTL Tools: navcoins/pftl-tools.md
@@ -111,7 +114,7 @@ nav:
       - State And Storage: architecture/state-and-storage.md
       - Finality: architecture/finality.md
       - Evidence Model: architecture/evidence-model.md
-      - pfUSDC Tier-4 Plan: plans/PFUSDC-TIER4-IMPLEMENTATION-PLAN-20260717.md
+      - Historical Arbitrum pfUSDC Plan: plans/PFUSDC-TIER4-IMPLEMENTATION-PLAN-20260717.md
   - Governance:
       - Cobalt: governance/cobalt.md
       - Cobalt Implementation: governance/cobalt-implementation.md

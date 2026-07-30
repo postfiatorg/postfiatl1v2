@@ -1,5 +1,14 @@
 # Trustless NAVSwap Wallet Integration Spec
 
+> **Lineage notice (2026-07-30):** This wallet specification predates the
+> A666 v2 primary-market deployment and still names the legacy a651 route.
+> Its non-custodial wallet boundary remains a production requirement, but its
+> asset/route examples are historical. Use
+> [the production-hardening specification](A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md)
+> and
+> [current state](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md)
+> for the active A666 implementation.
+
 Date: 2026-06-29
 Repo scope: `postfiatl1v2` live wallet, wallet proxy/RPC, and StakeHub NAVSwap orchestration
 Status: implementation spec

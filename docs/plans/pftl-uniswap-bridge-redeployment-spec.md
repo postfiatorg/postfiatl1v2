@@ -1,5 +1,15 @@
 # PFTL-to-Uniswap NAVCoin Redeployment Spec
 
+> **Historical design notice (2026-07-30):** This predates the A666 v2
+> production deployment and must not be used as current deployment status.
+> A666 v2, proof-gated wA666, and the wA666/USDC Uniswap v4 pool were
+> subsequently deployed and exercised. See
+> [A666 current state](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md)
+> and
+> [the governing primary-issuance specification](A666-END-TO-END-MAINNET-PRIMARY-ISSUANCE-SPEC-20260727.md).
+> The gates below remain useful historical design rationale only where they do
+> not conflict with those documents.
+
 Date: 2026-07-01
 Status: design spec for implementation planning
 Repos covered: `postfiatl1v2`, `StakeHub`, `postfiatorg.github.io`

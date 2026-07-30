@@ -1,10 +1,17 @@
 # A666 Mainnet Deployment Status
 
+> **Current-state notice (2026-07-30):** This report is the historical
+> deployment record. The inverse transparent and private redemption paths were
+> subsequently implemented and functionally exercised. The current release
+> status, live PFTL audit, limitations, and remaining production gates are in
+> [A666, pfUSDC, Private Swap, Bridge, and Uniswap Current State](A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
+
 **As of:** 2026-07-28 UTC
 **Status:** opening inventory exported and proof-minted; ownerless a651
 migration funded; wA666/USDC Uniswap v4 pool seeded and trading. A fresh
 buyer-funded primary subscription and export passed on mainnet. Full
-redemption acceptance and the 25-minute performance SLO remain release gates.
+redemption acceptance and the 25-minute performance SLO remained release
+gates at the time of this report.
 
 ## Live identifiers
 

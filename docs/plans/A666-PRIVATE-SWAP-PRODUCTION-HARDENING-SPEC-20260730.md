@@ -10,6 +10,8 @@ with transparent or private PFTL execution and the inverse redemption path
 `A666-END-TO-END-MAINNET-PRIMARY-ISSUANCE-SPEC-20260727.md`
 **Current service baseline:**
 `PFTL-PRIVATE-SWAP-INFRASTRUCTURE-AND-LATENCY-DIAGNOSTIC-20260730.md`
+**Current combined status:**
+`../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md`
 **Latest qualification evidence:**
 `../evidence/pftl-private-swap-p0-20260730/README.md`
 
@@ -232,11 +234,11 @@ before GA by a dedicated authenticated prover protocol with:
 
 ## 7. Phase A — Freeze and reconcile the current live state
 
-- [ ] Re-audit all six validators for exact height, tip, state root, release,
+- [x] Re-audit all six validators for exact height, tip, state root, release,
   topology, mempool count, supply, reserve, reservations, and bridge exposure.
-- [ ] Verify the live `pftl_swapd` binary and unit hashes against the recorded
+- [x] Verify the live `pftl_swapd` binary and unit hashes against the recorded
   `pftl-finality-view0-8c73735` manifest.
-- [ ] Verify the height-528 cycle-5 journal lineage is terminal
+- [x] Verify the height-528 cycle-5 journal lineage is terminal
   `FAILED_PREPUBLISH`, its pending output is `discarded`, and no publication
   artifact exists.
 - [ ] Verify the egressed cycle-5 pfUSDC is represented exactly once in the

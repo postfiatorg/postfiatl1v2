@@ -1,7 +1,14 @@
 # a651 Uniswap Pool
 
-This page documents the live Ethereum a651/USDC Uniswap v4 venue. It is a venue
-page, not the canonical NAV accounting page.
+> **Legacy venue notice (2026-07-30):** a651 is deprecated for the current
+> product. Its pool-specific liquidity was zero in the last inspection. A666
+> v2 and a separate wA666/USDC Uniswap v4 pool were subsequently deployed.
+> See
+> [A666 current state](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
+> This page is retained for a651 contract, launch, and migration history.
+
+This page documents the historical Ethereum a651/USDC Uniswap v4 venue. It is
+a venue-history page, not the canonical NAV accounting page.
 
 The most important boundary:
 

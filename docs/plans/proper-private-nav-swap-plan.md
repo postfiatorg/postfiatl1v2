@@ -1,5 +1,11 @@
 # Proper Private NAV Swap Completion Plan
 
+> **Historical a651 plan (superseded for current execution):** The deployed
+> product now uses A666 v2 and private-primary issue/redeem actions rather than
+> the a651 OTC-oriented flow described here. The privacy analysis remains
+> useful, especially at public ingress/egress boundaries. Current status:
+> [A666, pfUSDC, Private Swap, Bridge, and Uniswap Current State](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
+
 Date: 2026-06-22
 Repo: `postfiatl1v2`
 Scope: Asset-Orchard `pfUSDC <-> a651` private swap completion for a user-facing StakeHub flow.

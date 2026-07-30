@@ -1,5 +1,12 @@
 # pfUSDC / Vault Bridge Handoff - 2026-06-19
 
+> **Historical handoff (superseded for current status):** This records the
+> initial generic Arbitrum-oriented bridge implementation. The production
+> program later rejected Arbitrum's approximately `6.4-day` trustless
+> confirmation delay, deployed direct Ethereum-mainnet pfUSDC, and used it in
+> the A666 mainnet issue/redeem flows. See
+> [current combined status](A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
+
 ## Purpose
 
 This is a handoff for the bridge work requested as:
@@ -536,4 +543,3 @@ The bridge is no longer just internal ledger scaffolding. It now has:
 - source-chain relay bundle for proof/finality/claim
 
 But the goal is not fully complete because there is no live deployed Arbitrum USDC vault, no real USDC deposit, no live PFTL mint, no live swap, no live burn, and no live USDC claim from the vault yet.
-

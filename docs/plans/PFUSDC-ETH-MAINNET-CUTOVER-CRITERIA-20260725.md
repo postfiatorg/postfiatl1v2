@@ -1,5 +1,13 @@
 # pfUSDC Ethereum Mainnet Cutover Criteria
 
+> **Status amendment (2026-07-30):** The direct Ethereum-mainnet pfUSDC lane
+> subsequently passed a complete `1 USDC` round trip in `20m12s`, with exact
+> conservation and replay rejection, and became the canonical replacement for
+> the commercially unusable Arbitrum route. The rail was later used by the
+> A666 transparent and private mainnet flows. See
+> [the campaign handoff](PFUSDC-MAINNET-CAMPAIGN-HANDOFF-20260726.md) and
+> [A666 current state](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
+
 **Date:** 2026-07-25
 **Author:** Angmar (Nazgul command)
 **Status:** DRAFT — awaiting Sauron sign-off on Section 3

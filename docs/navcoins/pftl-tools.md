@@ -1,5 +1,11 @@
 # NAVCoin PFTL Tools
 
+> **Tooling lineage notice (2026-07-30):** Most commands below are generic or
+> historical a651/devnet tools. The current A666 resident service, production
+> deployment, and evidence entry points are documented in
+> [A666 Current State](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
+> Do not infer current production routing from an older script name.
+
 This page maps the main NAVCoin tools to the evidence they produce. It is a
 starting point for operators and reviewers who need to find the actual scripts,
 commands, Python builders, and contracts behind the docs.
@@ -16,7 +22,7 @@ commands, Python builders, and contracts behind the docs.
 | `scripts/navcoin-sp1-test-wan-devnet-remote.sh` | Remote-run variant of the SP1 WAN devnet proof path. |
 | `scripts/navcoin-a651-sp1-wan-devnet-remote.sh` | Remote a651/SP1 WAN devnet execution helper. |
 | `scripts/navcoin-market-ops-cold-start-check` | Checks market-operation cold-start assumptions and parameter readiness. |
-| `scripts/private-a651-pfusdc-optimized-swap-live` | Runs the current live optimized private a651/pfUSDC shielded swap path. |
+| `scripts/private-a651-pfusdc-optimized-swap-live` | Runs the legacy optimized private a651/pfUSDC shielded swap path for regression/reproduction. |
 
 Common local runs:
 

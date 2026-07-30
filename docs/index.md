@@ -10,6 +10,12 @@ This site is the engineering front door. It is not a dump of internal notes. It
 points to the current code, scripts, reports, and operating runbooks that define
 what has been built.
 
+For the current reserve-backed NAVCoin product—including Ethereum-mainnet
+pfUSDC, A666 primary issue/redemption, the private PFTL middle, proof-gated
+wA666, the Uniswap venue, live deployment state, and remaining production
+gates—start with
+[A666, pfUSDC, Private Swap, Bridge, and Uniswap Current State](status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
+
 The sidebar is curated for reading. Generated governance packets and per-gate
 receipts stay searchable in the site and are collected in the
 Generated Governance Archive, but
@@ -19,6 +25,7 @@ they are not listed one-by-one in the primary navigation.
 
 | Area | Current State | Where To Read |
 | --- | --- | --- |
+| A666 primary market | Mainnet components and full economic loop are functionally proven; resident private swaps remain limited availability and production GA is closed. | [A666 current state](status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md), [production hardening](plans/A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md) |
 | Core chain | Rust L1 with accounts, signed transfers, fees, blocks, receipts, deterministic replay, and state roots. | [Architecture](architecture/overview.md) |
 | Finality | Versioned certified ordering: legacy single-view mode and activated consensus v2 with durable prepare/precommit, timeout certificates, and proposer rotation. | [Finality](architecture/finality.md) |
 | Settlement lanes | Consensus transactions, W6 dual-authorized atomic swap, FastPay payments, FastSwap DvP, and Asset-Orchard private settlement have distinct finality and recovery boundaries. | [Settlement Lanes](architecture/settlement-lanes.md) |

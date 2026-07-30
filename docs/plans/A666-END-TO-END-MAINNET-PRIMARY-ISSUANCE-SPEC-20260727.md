@@ -1,11 +1,23 @@
 # a666 End-to-End Mainnet Primary Issuance and Redemption Spec
 
+> **Non-normative status amendment (2026-07-30):** The inverse transparent
+> and private primary-redemption paths described here were subsequently
+> implemented and functionally exercised. A complete private mainnet round
+> trip passed functionally, and the resident PFTL service completed four
+> exact-once qualification cycles. Production GA remains closed because issue
+> latency, unattended NAV refresh, scale, multi-wallet/non-custodial custody,
+> recovery, and the 100/100 qualification gate remain incomplete. See
+> [current state](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md)
+> and the
+> [production-hardening specification](A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md).
+> This amendment does not change the normative economics below.
+
 **Date:** 2026-07-27  
 **Priority:** P0  
 **Status:** canonical specification; opening inventory proof-exported to
 Ethereum and the Uniswap venue seeded/trading; one transparent buyer-funded
 subscription/export functionally passed; clean SLO verification and redemption
-acceptance remain
+acceptance remained open at the time of this status line
 **Owner:** Post Fiat protocol and product release owners  
 **Change control:** any normative change requires a dated amendment, a new
 document hash, and a fresh acceptance run  
@@ -35,10 +47,11 @@ contract were deployed and their immutable/controller bindings verified. On
 `3,000 USDC` seeded the official Uniswap v4 PositionManager. Third-party swaps
 began immediately and all temporary token/Permit2 allowances were revoked.
 
-This does **not** yet mean the complete public primary-issuance product is
+This did **not** mean the complete public primary-issuance product was
 generally available. A fresh buyer-funded transparent subscription/export
 passed on 2026-07-28, but its `42.2-minute` wall time missed the `25-minute`
-SLO and the inverse primary-redemption campaign remains incomplete. The
+SLO. The inverse primary-redemption campaign was incomplete at this point in
+the deployment history and was functionally completed later. The
 ordered transparent/private issue/redeem acceptance program is defined in
 `A666-TRANSPARENT-PRIVATE-ISSUE-REDEEM-ACCEPTANCE-SPEC-20260728.md`. See
 `../status/A666-MAINNET-DEPLOYMENT-20260727.md` for deployed identifiers,

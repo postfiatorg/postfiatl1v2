@@ -1,5 +1,10 @@
 # Shielded Layer Map for Private NAV OTC
 
+> **Historical layer map:** This 2026-06-22 document predates direct private
+> egress and A666 private-primary issue/redeem. Its data-model discussion is
+> useful lineage, but its “current” product status is superseded by
+> [A666 Current State](A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
+
 Date: 2026-06-22
 
 Scope: Phase 1 of `docs/specs/private-otc-shielded-scope.md`.

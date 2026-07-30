@@ -1,5 +1,15 @@
 # pfUSDC Tier-4 Implementation Plan
 
+> **Superseded route notice (2026-07-30):** This is the historical Arbitrum
+> Tier-4 design. Its approximately `6.4-day` trustless Nitro confirmation
+> delay made it unsuitable for the required `25-minute` product journey. Do
+> not use this page as the current production route or register a new
+> Arbitrum pfUSDC profile. Direct Ethereum-mainnet pfUSDC replaced it and
+> passed a `20m12s` round trip. See
+> [the mainnet campaign handoff](PFUSDC-MAINNET-CAMPAIGN-HANDOFF-20260726.md)
+> and
+> [current combined status](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
+
 **Date:** 2026-07-17
 
 **Priority:** P0
@@ -42,7 +52,9 @@ proof state, source-finality age, receipt result, and balance changes.
 - The StakeHub agent and test wallets may be unlocked while running approved implementation batteries.
 - Devnet PFT, pfUSDC, and a651 may be funded as needed. The clock-critical
   external-chain proof uses Ethereum Sepolia, Arbitrum Sepolia, and Circle test
-  USDC; the production profile remains Ethereum mainnet and Arbitrum One.
+  USDC; at the time of this historical plan, the intended production profile
+  was Ethereum mainnet and Arbitrum One. That route was later deprecated as
+  stated in the notice above.
 - New contracts may be deployed and the controlled devnet may be upgraded or reset when a phase explicitly requires it.
 - Use the current six-validator WAN topology. No validator geography change is required.
 - Preserve the generic vault and governed-route model. Do not hardcode a user address, StakeHub address, current vault address, or asset ID into proof code.
