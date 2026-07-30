@@ -5,8 +5,6 @@ import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
 const pkg = require('./package.json');
-const fastSwapDemoToken = process.env.FASTSWAP_DEMO_API_TOKEN || '';
-const fastSwapDemoBackend = process.env.FASTSWAP_DEMO_BACKEND_URL || 'http://127.0.0.1:18830';
 
 const CSP_VALUE = "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://127.0.0.1:8080 ws://localhost:8080 http://127.0.0.1:8789 http://localhost:8789;";
 
@@ -62,11 +60,6 @@ export default defineConfig({
       '/api/shielded-nav-swap': {
         target: 'http://127.0.0.1:8080',
         changeOrigin: true,
-      },
-      '/api/fastswap-demo': {
-        target: fastSwapDemoBackend,
-        changeOrigin: true,
-        headers: { 'x-fastswap-demo-token': fastSwapDemoToken },
       },
     },
     // No CSP header in dev — Vite needs inline scripts for HMR/react-refresh

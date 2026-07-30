@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { isValidAddress, formatBalance, formatAssetBalance, pftToAtoms, shortenAssetId, PFUSDC_ASSET_ID, A651_ASSET_ID } from '../lib/utils.js';
+import { isValidAddress, formatBalance, formatAssetBalance, pftToAtoms, shortenAssetId, PFUSDC_ASSET_ID, A666_ASSET_ID } from '../lib/utils.js';
 import { encodePaymentMemoFields, hasMemoFields, PAYMENT_MEMO_LIMITS } from '../lib/tx-builder.js';
 import {
   FASTPAY_OWNED_OBJECT_LOOKUP_LIMIT,
@@ -154,7 +154,7 @@ export default function Send({ rpc, txBuilder, backupJson, address, publicKeyHex
 
   const getAssetCode = (assetId) => {
     if (assetId === PFUSDC_ASSET_ID) return 'pfUSDC';
-    if (assetId === A651_ASSET_ID) return 'a651';
+    if (assetId === A666_ASSET_ID) return 'A666';
     return shortenAssetId(assetId);
   };
 
@@ -515,7 +515,9 @@ export default function Send({ rpc, txBuilder, backupJson, address, publicKeyHex
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                 <input value={amt} onChange={e => setAmt(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0" inputMode="decimal"
                   style={{ background: 'transparent', border: 'none', outline: 'none', color: amt ? 'var(--text)' : 'var(--dim)', fontSize: 46, fontWeight: 700, letterSpacing: '-0.03em', width: '100%' }} />
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--muted)' }}>PFT</span>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--muted)' }}>
+                  {lane === 'asset' ? (selectedAsset ? getAssetCode(selectedAsset) : 'ASSET') : 'PFT'}
+                </span>
               </div>
             </div>
 
@@ -623,7 +625,7 @@ export default function Send({ rpc, txBuilder, backupJson, address, publicKeyHex
                 ? 'The account lane carries the full balance and finalizes through Cobalt certification. Use it for any standard transfer.'
                 : lane === 'fastpay'
                   ? 'FastPay moves owned objects directly for near-instant settlement. Best for small, frequent payments.'
-                  : 'Send issued assets (pfUSDC, a651, etc.) to another account. Settles with Cobalt finality.'}
+                  : 'Send current issued assets such as pfUSDC or native A666 to another PFTL account. Settles with authenticated asset finality.'}
             </div>
           </div>
         </div>

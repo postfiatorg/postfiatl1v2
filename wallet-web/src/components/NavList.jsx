@@ -1,149 +1,175 @@
-import React, { useState, useEffect } from 'react';
-import { formatBalance, formatAssetBalance, shortenAssetId, PFUSDC_ASSET_ID, A651_ASSET_ID, A666_ASSET_ID } from '../lib/utils.js';
+import React, { useCallback, useEffect, useState } from 'react';
 
-export default function NavList({ rpc, address, swapServer, go }) {
-  const [assets, setAssets] = useState([]);
-  const [navData, setNavData] = useState(null);
+import {
+  A666_NATIVE_ASSET_ID,
+  A666_PRIMARY_ROUTE_ID,
+  A666_SETTLEMENT_ASSET_ID,
+  formatA666Nav,
+  formatA666Units,
+} from '../lib/a666-primary-route.js';
+import { formatAssetBalance, shortenAssetId } from '../lib/utils.js';
+
+function result(response) {
+  return response?.ok && response.result ? response.result : null;
+}
+
+function assetRows(value) {
+  return Array.isArray(value) ? value : (value?.assets || []);
+}
+
+function assetBalance(assets, assetId) {
+  const row = assets.find(asset => String(asset?.asset_id || asset?.id || '').toLowerCase() === assetId);
+  return String(row?.balance ?? row?.amount ?? 0);
+}
+
+function hasBalance(value) {
+  try {
+    return BigInt(String(value ?? '0')) > 0n;
+  } catch (_) {
+    return false;
+  }
+}
+
+export default function NavList({ rpc, address, go }) {
+  const [snapshot, setSnapshot] = useState(null);
   const [error, setError] = useState('');
-  const [chainStatus, setChainStatus] = useState(null);
+
+  const refresh = useCallback(async () => {
+    if (!rpc) return;
+    setError('');
+    try {
+      const [routeResponse, navResponse, assetsResponse, statusResponse] = await Promise.all([
+        rpc.navcoinBridgeSupplyStatus(A666_PRIMARY_ROUTE_ID),
+        rpc.vaultBridgeStatus(A666_NATIVE_ASSET_ID),
+        address ? rpc.accountAssets(address) : Promise.resolve(null),
+        rpc.status(),
+      ]);
+      const route = result(routeResponse);
+      const nav = result(navResponse);
+      const assets = assetRows(result(assetsResponse));
+      if (!route || !nav) throw new Error('The live A666 route or NAV packet is unavailable.');
+      setSnapshot({
+        route,
+        nav,
+        assets,
+        chain: result(statusResponse),
+      });
+    } catch (failure) {
+      setError(failure.message || 'Unable to load current NavCoins');
+    }
+  }, [address, rpc]);
 
   useEffect(() => {
-    const fetchData = async () => {
-      if (rpc) {
-        try {
-          const statusResp = await rpc.status();
-          if (statusResp.ok) setChainStatus(statusResp.result);
-        } catch (e) { /* optional */ }
-        if (address) {
-          try {
-            const resp = await rpc.accountAssets(address);
-            if (resp.ok && resp.result) {
-              const items = Array.isArray(resp.resp) ? resp.result : (resp.result.assets || []);
-              setAssets(items);
-            }
-          } catch (e) { setAssets([]); }
-        }
-      }
-      if (swapServer) {
-        try {
-          const nav = await swapServer.getNav('before');
-          setNavData(nav);
-        } catch (e) { /* optional */ }
-      }
-    };
-    fetchData();
-  }, [rpc, address, swapServer]);
+    refresh();
+  }, [refresh]);
 
-  const getAssetCode = (assetId) => {
-    if (assetId === PFUSDC_ASSET_ID) return 'pfUSDC';
-    if (assetId === A651_ASSET_ID) return 'a651';
-    if (assetId === A666_ASSET_ID) return 'A666';
-    return shortenAssetId(assetId);
-  };
-
-  // Build coin rows from assets, with NAV data if available
-  const coins = assets.map(a => {
-    const id = a.asset_id || a.id;
-    const code = getAssetCode(id);
-    const holding = a.balance || a.amount || 0;
-    // NAV data would come from swapServer; for now we display what we have
-    return {
-      id: code,
-      name: code === 'pfUSDC' ? 'USDC bridge' : code === 'a651' ? 'Reserve Alpha' : 'Issued asset',
-      holding,
-      assetId: id,
-    };
+  const route = snapshot?.route;
+  const nav = snapshot?.nav;
+  const assets = snapshot?.assets || [];
+  const navVerified = Boolean(
+    route?.route_id === A666_PRIMARY_ROUTE_ID
+    && route?.native_nav_asset_id === A666_NATIVE_ASSET_ID
+    && route?.settlement_asset_id === A666_SETTLEMENT_ASSET_ID
+    && route?.live_value_enabled === true
+    && route?.paused === false
+    && route?.invariant_holds === true
+    && nav?.asset_id === A666_NATIVE_ASSET_ID
+    && nav?.finalized_epoch === route?.pricing_nav_epoch
+    && nav?.finalized_reserve_packet_hash === route?.pricing_reserve_packet_hash
+  );
+  const a666Balance = assetBalance(assets, A666_NATIVE_ASSET_ID);
+  const pfusdcBalance = assetBalance(assets, A666_SETTLEMENT_ASSET_ID);
+  const otherAssets = assets.filter(asset => {
+    const id = String(asset?.asset_id || asset?.id || '').toLowerCase();
+    return id !== A666_NATIVE_ASSET_ID && id !== A666_SETTLEMENT_ASSET_ID;
   });
 
-  // Add PFT as a "coin" row
-  coins.unshift({ id: 'PFT', name: 'PostFiat L1', holding: 0, assetId: 'PFT' });
-
-  const fmt = (n, d = 2) => Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const rows = [
+    {
+      id: 'A666',
+      name: 'A666 NAVCoin fund share',
+      holding: a666Balance,
+      assetId: A666_NATIVE_ASSET_ID,
+      status: navVerified ? `${formatA666Nav(nav?.nav_per_unit)} verified NAV` : 'NAV verification blocked',
+    },
+    {
+      id: 'pfUSDC',
+      name: 'Ethereum-vault-backed settlement asset',
+      holding: pfusdcBalance,
+      assetId: A666_SETTLEMENT_ASSET_ID,
+      status: 'Funds A666 minting and receives redemptions',
+    },
+    ...otherAssets.map(asset => {
+      const assetId = String(asset?.asset_id || asset?.id || '');
+      return {
+        id: shortenAssetId(assetId),
+        name: 'Other or legacy issued asset · send only',
+        holding: String(asset?.balance ?? asset?.amount ?? 0),
+        assetId,
+        status: 'Not part of the current A666 market',
+      };
+    }),
+  ];
 
   return (
     <div className="pf-page">
-      <div className="pf-eyebrow">Proof-of-reserves funds</div>
+      <div className="pf-eyebrow">Current proof-of-reserves assets</div>
       <h1 className="pf-h1">NavCoins</h1>
-      <p style={{ fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.55, marginTop: 10, maxWidth: 600 }}>
-        Shielded funds with verifiable reserves. Each row is a fund you hold or can trade. Click a row for proof-of-reserves details.
+      <p style={{ fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.55, marginTop: 10, maxWidth: 680 }}>
+        A666 is the active NAVCoin. pfUSDC is its PFTL settlement and reserve asset.
+        Historical issued assets may remain visible in balances, but they are not offered as current markets.
       </p>
 
       {error && <div className="pf-error" style={{ marginTop: 16 }}>{error}</div>}
 
       <div className="pf-card" style={{ padding: 0, marginTop: 18 }}>
         <div className="pf-thead">
-          <span className="pf-th" style={{ cursor: 'default' }}>Fund</span>
+          <span className="pf-th" style={{ cursor: 'default' }}>Asset</span>
           <span className="pf-th r" style={{ cursor: 'default' }}>Held</span>
           <span className="pf-th r" style={{ cursor: 'default' }}>Asset ID</span>
           <span className="pf-th" style={{ cursor: 'default' }} />
           <span />
           <span />
         </div>
-
-        {coins.length === 0 ? (
-          <div style={{ padding: '24px 16px', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--dim)' }}>
-            No assets visible yet. pfUSDC and a651 will appear after bridge or swap activity.
-          </div>
-        ) : (
-          coins.map((c, i) => (
-            <React.Fragment key={i}>
-              <div className="pf-trow-d" onClick={() => go('navDetail', c.id)}>
-                <div>
-                  <span style={{ fontWeight: 700, fontSize: 16, letterSpacing: '-0.01em' }}>{c.id}</span>
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--dim)', marginTop: 2 }}>{c.name}</div>
-                </div>
-                <div className="pf-num" style={{ color: c.holding > 0 ? 'var(--text)' : 'var(--dim)' }}>
-                  {c.holding > 0 ? formatAssetBalance(c.assetId, c.holding) : '—'}
-                </div>
-                <div className="pf-num" style={{ color: 'var(--dim)', fontSize: 11 }}>{shortenAssetId(c.assetId)}</div>
-                <div />
-                <div />
-                <span style={{ color: 'var(--dim)', textAlign: 'right' }}>→</span>
+        {rows.map(row => (
+          <React.Fragment key={row.assetId}>
+            <div className="pf-trow-d" onClick={() => go('navDetail', row.id === 'A666' || row.id === 'pfUSDC' ? row.id : row.assetId)}>
+              <div>
+                <span style={{ fontWeight: 700, fontSize: 16 }}>{row.id}</span>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--dim)', marginTop: 2 }}>{row.name}</div>
               </div>
-
-              <div className="pf-trow-m" onClick={() => go('navDetail', c.id)}>
-                <div className="pf-row" style={{ marginBottom: 4 }}>
-                  <span style={{ fontWeight: 700, fontSize: 16 }}>{c.id}</span>
-                  {c.holding > 0 && <span className="pf-pill">{formatAssetBalance(c.assetId, c.holding)} held</span>}
-                </div>
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--dim)' }}>
-                  {c.name} · {shortenAssetId(c.assetId)}
-                </div>
+              <div className="pf-num" style={{ color: hasBalance(row.holding) ? 'var(--text)' : 'var(--dim)' }}>
+                {hasBalance(row.holding) ? formatAssetBalance(row.assetId, row.holding) : '—'}
               </div>
-            </React.Fragment>
-          ))
-        )}
+              <div className="pf-num" style={{ color: 'var(--dim)', fontSize: 11 }}>{shortenAssetId(row.assetId)}</div>
+              <div />
+              <div />
+              <span style={{ color: 'var(--dim)', textAlign: 'right' }}>→</span>
+            </div>
+            <div className="pf-trow-m" onClick={() => go('navDetail', row.id === 'A666' || row.id === 'pfUSDC' ? row.id : row.assetId)}>
+              <div className="pf-row">
+                <span style={{ fontWeight: 700, fontSize: 16 }}>{row.id}</span>
+                {hasBalance(row.holding) && <span className="pf-pill">{formatAssetBalance(row.assetId, row.holding)} held</span>}
+              </div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--dim)' }}>{row.status}</div>
+            </div>
+          </React.Fragment>
+        ))}
       </div>
 
-      {/* evidence strip */}
       <div className="pf-evidence">
         <div>
-          <div className="pf-eyebrow">Live reserve evidence</div>
+          <div className="pf-eyebrow">Live A666 reserve evidence</div>
           <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>
-            All fund reserves attested on-ledger and independently verifiable.
+            {navVerified
+              ? 'The route policy and finalized StakeHub reserve packet match.'
+              : 'A666 actions are blocked until the route policy and reserve packet match.'}
           </div>
         </div>
         <div className="pf-evidence-stats">
-          <div>
-            <div className="pf-eyebrow" style={{ fontSize: 10 }}>Ledger</div>
-            <div style={{ fontSize: 16, fontWeight: 650, fontFamily: 'var(--mono)' }}>
-              {chainStatus ? formatBalance(chainStatus.block_height, 0) : '—'}
-            </div>
-          </div>
-          <div>
-            <div className="pf-eyebrow" style={{ fontSize: 10 }}>Validators</div>
-            <div style={{ fontSize: 16, fontWeight: 650, fontFamily: 'var(--mono)' }}>
-              {chainStatus?.validator_count ? `${chainStatus.validator_count} / ${chainStatus.validator_count}` : '—'}
-            </div>
-          </div>
-          {navData && (
-            <div>
-              <div className="pf-eyebrow" style={{ fontSize: 10 }}>NAV floor</div>
-              <div style={{ fontSize: 16, fontWeight: 650, color: 'var(--mint)', fontFamily: 'var(--mono)' }}>
-                {formatBalance(navData.nav_floor || navData.result?.nav_floor || 0)}
-              </div>
-            </div>
-          )}
+          <div><div className="pf-eyebrow" style={{ fontSize: 10 }}>NAV</div><div style={{ fontFamily: 'var(--mono)', fontSize: 16 }}>{formatA666Nav(nav?.nav_per_unit)}</div></div>
+          <div><div className="pf-eyebrow" style={{ fontSize: 10 }}>pfUSDC reserve</div><div style={{ fontFamily: 'var(--mono)', fontSize: 16 }}>{formatA666Units(route?.settlement_reserve_atoms)}</div></div>
+          <div><div className="pf-eyebrow" style={{ fontSize: 10 }}>Ledger</div><div style={{ fontFamily: 'var(--mono)', fontSize: 16 }}>{snapshot?.chain?.block_height ?? '—'}</div></div>
         </div>
       </div>
     </div>

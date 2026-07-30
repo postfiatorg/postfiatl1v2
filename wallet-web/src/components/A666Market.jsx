@@ -53,6 +53,7 @@ export default function A666Market({
   chainCapabilities,
   liveSnapshot = null,
   onToast,
+  onNavigate,
 }) {
   const [mode, setMode] = useState('issue');
   const [amount, setAmount] = useState('1');
@@ -273,9 +274,9 @@ export default function A666Market({
       <header className="a666-hero">
         <div>
           <div className="fs-kicker"><span className="fs-live-dot" /> A666 PRIMARY MARKET · PFTL</div>
-          <h1>Buy A666 at verified NAV,<br />not AMM price.</h1>
+          <h1>Mint or redeem A666<br />at verified NAV.</h1>
           <p>
-            Mint new fund shares directly against pfUSDC, or redeem shares back into the standing reserve.
+            Mint new fund shares directly against pfUSDC, or redeem shares against the on-chain pfUSDC settlement reserve.
             The Uniswap pool is a separate optional venue—this trade does not consume its liquidity.
           </p>
         </div>
@@ -313,15 +314,15 @@ export default function A666Market({
 
       <div className="a666-flow" aria-label="A666 acquisition flow">
         <div><span>1</span><strong>Fund</strong><small>USDC → pfUSDC</small></div><i />
-        <div className="active"><span>2</span><strong>Buy</strong><small>pfUSDC → A666</small></div><i />
+        <div className="active"><span>2</span><strong>Mint</strong><small>pfUSDC → A666</small></div><i />
         <div><span>3</span><strong>Hold</strong><small>Native on PFTL</small></div><i />
-        <div><span>4</span><strong>Optional bridge</strong><small>A666 → wA666</small></div>
+        <div><span>4</span><strong>Bridge-out</strong><small>Not yet in wallet</small></div>
       </div>
 
       <div className="a666-workspace">
         <div className="a666-trade-card">
           <div className="a666-tabs">
-            <button className={mode === 'issue' ? 'on' : ''} onClick={() => { setMode('issue'); setProgress([]); setActionError(''); }}>Buy A666</button>
+            <button className={mode === 'issue' ? 'on' : ''} onClick={() => { setMode('issue'); setProgress([]); setActionError(''); }}>Mint A666</button>
             <button className={mode === 'redeem' ? 'on' : ''} onClick={() => { setMode('redeem'); setProgress([]); setActionError(''); }}>Redeem</button>
           </div>
 
@@ -368,12 +369,17 @@ export default function A666Market({
               {displayBlockers.slice(0, 4).map(reason => <span key={reason}>• {reason}</span>)}
             </div>
           )}
+          {mode === 'issue' && displayBlockers.includes('wallet pfUSDC balance is insufficient') && (
+            <button className="pf-button secondary" onClick={() => onNavigate?.('bridge')} disabled={executing}>
+              Add pfUSDC from Ethereum
+            </button>
+          )}
           {!finalityReady && <div className="a666-blockers"><span>• Authenticated finality submission is not enabled for this wallet endpoint.</span></div>}
           {actionError && <div className="pf-error">{actionError}</div>}
 
           <button className="pf-primary" disabled={!canExecute} onClick={execute}>
             {executing ? 'Finalizing on PFTL…' : mode === 'issue'
-              ? `Buy ${amountAtoms ? formatA666Units(amountAtoms) : '—'} A666`
+              ? `Mint ${amountAtoms ? formatA666Units(amountAtoms) : '—'} A666`
               : `Redeem ${amountAtoms ? formatA666Units(amountAtoms) : '—'} A666`}
           </button>
           <p className="a666-signing">Your ML-DSA key signs locally. The proxy receives only signed transactions.</p>
@@ -414,7 +420,8 @@ export default function A666Market({
         <strong>A666 is delivered natively on PFTL.</strong>
         <span>
           The deployed Ethereum token is {route?.wrapped_navcoin_token ? truncateMiddle(route.wrapped_navcoin_token, 8) : 'wA666'}.
-          Bridge-out to that token is the next optional leg and is deliberately not hidden inside this trade.
+          Bridge-out to that token is a separate operation and is not yet exposed by this wallet.
+          Completing a mint here delivers native A666 on PFTL only.
         </span>
       </div>
     </section>

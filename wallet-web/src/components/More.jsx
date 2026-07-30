@@ -112,7 +112,7 @@ export default function More({ settings, proxyAuthToken = '', onSave, onRemove, 
             {rpcEndpoint === 'custom' && (
               <input className="pf-input" placeholder="ws://your-host:port" value={customRpc} onChange={e => setCustomRpc(e.target.value)} />
             )}
-            <Field label="Swap server">
+            <Field label="Optional private-route status service">
               <input className="pf-input" value={swapServerUrl} onChange={e => setSwapServerUrl(e.target.value)} />
             </Field>
             <Field label="Proxy mutation token (session only)">
@@ -120,13 +120,15 @@ export default function More({ settings, proxyAuthToken = '', onSave, onRemove, 
                 className="pf-input"
                 type="password"
                 autoComplete="off"
-                placeholder="Required for sends, swaps, bridge, and funding"
+                placeholder="Required for PFTL mutations and bridge relay"
                 value={proxyToken}
                 onChange={e => setProxyToken(e.target.value)}
               />
             </Field>
             <p style={{ margin: 0, color: 'var(--dim)', fontSize: 12, lineHeight: 1.5 }}>
-              Bridge deposits require a reviewed build-time vault binding. Money destinations cannot be changed from wallet settings.
+              Bridge deposits use the active governed Ethereum-mainnet vault discovered from PFTL.
+              The wallet verifies the route profile and deployed contract bytecode before signing;
+              money destinations cannot be changed here.
             </p>
           </div>
 

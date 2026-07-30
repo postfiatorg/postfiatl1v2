@@ -74,8 +74,7 @@ function fixtureHtml() {
 import { RpcClient } from '/src/lib/rpc-client.js';
 import { SwapServer } from '/src/lib/swap-server.js';
 import { relayVaultDeposit } from '/src/lib/bridge-relay.js';
-import { fastSwapDemoApi } from '/src/lib/fastswap-demo.js';
-import { approveUsdc, depositToBridge } from '/src/lib/evm.js';
+import { approveEthereumUsdc, depositToEthereumBridge } from '/src/lib/evm.js';
 import { clearSensitiveMemory, setDecryptedState } from '/src/lib/vault.js';
 
 window.runCustodyCapture = async ({ seed, backupJson, privateNote }) => {
@@ -90,7 +89,7 @@ window.runCustodyCapture = async ({ seed, backupJson, privateNote }) => {
   window.ethereum = {
     async request(request) {
       ethereumRequests.push(request);
-      if (request.method === 'eth_chainId') return '0xa4b1';
+      if (request.method === 'eth_chainId') return '0x1';
       if (request.method === 'eth_accounts') return ['0x1111111111111111111111111111111111111111'];
       if (request.method === 'eth_sendTransaction') return '0x' + '22'.repeat(32);
       return null;
@@ -130,10 +129,8 @@ window.runCustodyCapture = async ({ seed, backupJson, privateNote }) => {
     routeEpoch: 1,
     routeBinding: '55'.repeat(32),
   });
-  await fastSwapDemoApi.faucet('pf-browser-capture');
-  await fastSwapDemoApi.swap('quote-browser-capture');
-  await approveUsdc('0x2222222222222222222222222222222222222222', 1n);
-  await depositToBridge(
+  await approveEthereumUsdc('0x2222222222222222222222222222222222222222', 1n);
+  await depositToEthereumBridge(
     '0x3333333333333333333333333333333333333333',
     1n,
     'pf-browser-capture',
@@ -285,7 +282,7 @@ test('Chromium captures every wallet money boundary without custody material', {
     );
 
     assert.equal(capture.websocket.length, 10, 'complete WebSocket money-operation catalog');
-    assert.equal(capture.http.length, 10, 'complete HTTP money-operation catalog');
+    assert.equal(capture.http.length, 8, 'complete current HTTP money-operation catalog');
     assert.equal(browserResult.ethereumRequests.filter(item => item.method === 'eth_sendTransaction').length, 2);
 
     const outbound = JSON.stringify({ capture, ethereum: browserResult.ethereumRequests });

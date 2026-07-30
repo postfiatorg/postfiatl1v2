@@ -25,9 +25,9 @@ import A666Market from './components/A666Market.jsx';
 const PROXY_AUTH_SESSION_KEY = 'postfiat.wallet_proxy_api_token';
 
 const NAV_ITEMS = [
-  { id: 'wallet', label: 'Wallet' }, { id: 'a666', label: 'A666 Market' },
-  { id: 'send', label: 'Send' }, { id: 'swap', label: 'Swap' },
-  { id: 'bridge', label: 'Bridge' },
+  { id: 'wallet', label: 'Wallet' }, { id: 'bridge', label: 'Bridge' },
+  { id: 'a666', label: 'A666 Market' }, { id: 'send', label: 'Send' },
+  { id: 'swap', label: 'Process' },
   { id: 'nav', label: 'NavCoins' }, { id: 'more', label: 'More' },
 ];
 const isOn = (tab, id) => tab === id || (id === 'nav' && tab === 'navDetail');
@@ -605,6 +605,7 @@ export default function App() {
               chainCapabilities={chainCapabilities}
               liveSnapshot={walletLiveSnapshot}
               onToast={showToast}
+              onNavigate={go}
             />
           )}
           {tab === 'bridge' && (
@@ -618,7 +619,6 @@ export default function App() {
             <NavList
               rpc={rpc}
               address={walletAddress}
-              swapServer={swapServer}
               go={go}
             />
           )}

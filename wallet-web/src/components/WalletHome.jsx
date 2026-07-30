@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { formatBalance, formatAssetBalance, shortenAssetId, PFUSDC_ASSET_ID, A651_ASSET_ID, A666_ASSET_ID, truncateMiddle, pftToAtoms } from '../lib/utils.js';
+import { formatBalance, formatAssetBalance, shortenAssetId, PFUSDC_ASSET_ID, A666_ASSET_ID, truncateMiddle, pftToAtoms } from '../lib/utils.js';
 import {
   FASTPAY_OWNED_OBJECT_LOOKUP_LIMIT,
   fetchOwnedObjectsSnapshot,
@@ -417,7 +417,6 @@ export default function WalletHome({ rpc, txBuilder, backupJson, address, public
 
   const getAssetCode = (assetId) => {
     if (assetId === PFUSDC_ASSET_ID) return 'pfUSDC';
-    if (assetId === A651_ASSET_ID) return 'a651';
     if (assetId === A666_ASSET_ID) return 'A666';
     return shortenAssetId(assetId);
   };
@@ -429,12 +428,12 @@ export default function WalletHome({ rpc, txBuilder, backupJson, address, public
   };
   const pfusdcAsset = assets.find(a => (a.asset_id || a.id) === PFUSDC_ASSET_ID);
   const issuedAssetRows = [
-    ['pfUSDC', `${formatAssetBalance(PFUSDC_ASSET_ID, getAssetBalance(pfusdcAsset))} pfUSDC`, pfusdcAsset ? 'bridged USDC asset' : 'bridged USDC asset · waiting for relay'],
+    ['pfUSDC', `${formatAssetBalance(PFUSDC_ASSET_ID, getAssetBalance(pfusdcAsset))} pfUSDC`, pfusdcAsset ? 'Ethereum-vault-backed settlement asset' : 'Ethereum-vault-backed settlement asset · no balance'],
     ...assets
       .filter(a => (a.asset_id || a.id) !== PFUSDC_ASSET_ID)
       .map(a => {
         const code = getAssetCode(a.asset_id || a.id);
-        return [code, getAssetBalanceLabel(a), 'issued asset'];
+        return [code, getAssetBalanceLabel(a), code === 'A666' ? 'active NAVCoin fund share' : 'other or legacy issued asset'];
       }),
   ];
 
@@ -508,7 +507,7 @@ export default function WalletHome({ rpc, txBuilder, backupJson, address, public
         <div className="pf-actions">
           <button className="pf-ghost" onClick={() => { navigator.clipboard?.writeText(address || ''); onCopy('Address copied'); }}>Receive</button>
           <button className="pf-ghost" onClick={() => go('send', { sendSource: 'account' })}>Send</button>
-          <button className="pf-ghost" onClick={() => go('swap')}>Swap</button>
+          <button className="pf-ghost" onClick={() => go('swap')}>Process</button>
         </div>
       </div>
 
@@ -664,9 +663,10 @@ export default function WalletHome({ rpc, txBuilder, backupJson, address, public
             <div className="pf-eyebrow" style={{ marginBottom: 12 }}>Quick links</div>
             <div className="pf-card" style={{ padding: '6px 18px' }}>
               {[
+                ['Bridge USDC', 'Ethereum mainnet → pfUSDC', () => go('bridge')],
+                ['A666 Market', 'mint / redeem at verified NAV', () => go('a666')],
                 ['Send Asset', 'issued assets', () => go('send', { sendSource: 'asset' })],
-                ['Swap', 'transparent / private', () => go('swap')],
-                ['NavCoins', 'proof-of-reserves', () => go('nav')],
+                ['Process Status', 'current / unavailable legs', () => go('swap')],
                 ['Settings', 'network / backup', () => go('more')],
               ].map(([label, note, onClick], i, arr) => (
                 <button key={i} onClick={onClick} style={{
@@ -694,7 +694,7 @@ export default function WalletHome({ rpc, txBuilder, backupJson, address, public
             <div className="pf-feed">
               {txs.length === 0 ? (
                 <div style={{ padding: '20px 14px', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--dim)' }}>
-                  No account-lane transactions yet. Asset swaps and bridge mints are reflected in balances.
+                  No account-lane transactions yet. A666 mints, redemptions, and bridge claims are reflected in asset balances.
                 </div>
               ) : (
                 txs.map((tx, i) => {

@@ -83,9 +83,8 @@ export function shortenAssetId(assetId) {
   return assetId.slice(0, 8) + '...' + assetId.slice(-8);
 }
 
-// Known asset IDs on the WAN devnet
+// Current governed asset IDs on the WAN devnet.
 export const PFUSDC_ASSET_ID = '02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b';
-export const A651_ASSET_ID = 'dcddbf56e7e15f7893d0038e8e0e6089d5a41418dead75353aabb8c016cf626beeb93bc802929f29883c078d910f59d5';
 export const A666_ASSET_ID = '521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c';
 
 const buildEnv = import.meta.env || {};
@@ -108,10 +107,5 @@ export const ACCOUNT_INDEX = 0;
 // EVM chain constants for MetaMask bridge
 export const ETH_MAINNET_CHAIN_ID = 1;
 export const ETH_MAINNET_USDC = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
-export const ARBITRUM_CHAIN_ID = 42161;
-export const ARBITRUM_RPC = 'https://arb1.arbitrum.io/rpc';
-// Browser-safe RPC paths — proxied through Caddy (same-origin) to avoid CSP blocks.
-// DO NOT use these for MetaMask's wallet_addEthereumChain rpcUrls — MetaMask needs the real URL.
-export const ARBITRUM_RPC_BROWSER = '/arb-rpc';
+// Browser-safe Ethereum RPC path, proxied through the local wallet server.
 export const ETH_MAINNET_RPC_BROWSER = '/eth-rpc';
-export const USDC_CONTRACT_ARBITRUM = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'; // Arbitrum USDC

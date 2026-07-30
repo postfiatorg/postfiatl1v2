@@ -3,20 +3,9 @@
 // The wallet proxy relays confirmed vault deposits into PFTL.
 
 import {
-  ARBITRUM_CHAIN_ID,
-  ARBITRUM_RPC,
-  ARBITRUM_RPC_BROWSER,
   ETH_MAINNET_CHAIN_ID,
   ETH_MAINNET_USDC,
-  USDC_CONTRACT_ARBITRUM,
 } from './utils.js';
-
-// ERC20 ABI — minimal subset for approve + transfer + balanceOf
-const ERC20_ABI = [
-  { "constant": false, "inputs": [{ "name": "spender", "type": "address" }, { "name": "amount", "type": "uint256" }], "name": "approve", "outputs": [{ "name": "", "type": "bool" }], "type": "function" },
-  { "constant": true, "inputs": [{ "name": "owner", "type": "address" }], "name": "balanceOf", "outputs": [{ "name": "", "type": "uint256" }], "type": "function" },
-  { "constant": true, "inputs": [{ "name": "owner", "type": "address" }, { "name": "spender", "type": "address" }], "name": "allowance", "outputs": [{ "name": "", "type": "uint256" }], "type": "function" },
-];
 
 // USDC has 6 decimals
 const USDC_DECIMALS = 6;
@@ -60,39 +49,6 @@ export async function connectMetaMask() {
     return accounts[0];
   } catch (e) {
     throw new Error('MetaMask connection rejected: ' + (e.message || 'unknown error'));
-  }
-}
-
-export async function ensureArbitrum() {
-  if (!hasMetaMask()) throw new Error('MetaMask not found');
-  try {
-    const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-    if (parseInt(chainId, 16) === ARBITRUM_CHAIN_ID) return;
-    // Try to switch to Arbitrum
-    try {
-      await window.ethereum.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: '0x' + ARBITRUM_CHAIN_ID.toString(16) }],
-      });
-    } catch (switchError) {
-      // If chain not added, add it
-      if (switchError.code === 4902) {
-        await window.ethereum.request({
-          method: 'wallet_addEthereumChain',
-          params: [{
-            chainId: '0x' + ARBITRUM_CHAIN_ID.toString(16),
-            chainName: 'Arbitrum One',
-            nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-            rpcUrls: [ARBITRUM_RPC],
-            blockExplorerUrls: ['https://arbiscan.io'],
-          }],
-        });
-      } else {
-        throw switchError;
-      }
-    }
-  } catch (e) {
-    throw new Error('Could not switch to Arbitrum: ' + (e.message || 'unknown'));
   }
 }
 
@@ -379,19 +335,6 @@ export function generateNonce() {
   return '0x' + bytesToHex(bytes);
 }
 
-export async function getUsdcBalance(evmAddress) {
-  if (!hasMetaMask()) return 0n;
-  const data = encodeBalanceOf(evmAddress);
-  const result = await window.ethereum.request({
-    method: 'eth_call',
-    params: [
-      { to: USDC_CONTRACT_ARBITRUM, data },
-      'latest',
-    ],
-  });
-  return BigInt(result);
-}
-
 export async function getEthereumUsdcBalance(evmAddress) {
   if (!hasMetaMask()) return 0n;
   await ensureEthereumMainnet();
@@ -497,93 +440,6 @@ export async function depositToEthereumBridge(
   });
 }
 
-export async function getArbitrumUsdcBalance(evmAddress) {
-  const data = encodeBalanceOf(evmAddress);
-  const response = await fetch(ARBITRUM_RPC_BROWSER, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'eth_call',
-      params: [
-        { to: USDC_CONTRACT_ARBITRUM, data },
-        'latest',
-      ],
-    }),
-  });
-  const payload = await response.json();
-  if (!response.ok || payload.error) {
-    throw new Error(payload.error?.message || `Arbitrum RPC failed: ${response.status}`);
-  }
-  return BigInt(payload.result || '0x0');
-}
-
-async function fetchArbitrumRpc(method, params = []) {
-  const response = await fetch(ARBITRUM_RPC_BROWSER, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method,
-      params,
-    }),
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload.error) {
-    const error = new Error(payload.error?.message || `Arbitrum RPC ${method} failed: ${response.status}`);
-    error.code = payload.error?.code;
-    error.data = payload.error?.data;
-    throw error;
-  }
-  return payload.result;
-}
-
-export async function getArbitrumEthBalance(evmAddress) {
-  const result = await fetchArbitrumRpc('eth_getBalance', [evmAddress, 'latest']);
-  return BigInt(result || '0x0');
-}
-
-export async function getArbitrumUsdcAllowance(owner, spender) {
-  const result = await fetchArbitrumRpc('eth_call', [{
-    to: USDC_CONTRACT_ARBITRUM,
-    data: encodeAllowance(owner, spender),
-  }, 'latest']);
-  return BigInt(result || '0x0');
-}
-
-export async function estimateArbitrumTransactionFee({ from, to, data, value = '0x0' }) {
-  const tx = { from, to, data, value };
-  const [gasHex, gasPriceHex] = await Promise.all([
-    fetchArbitrumRpc('eth_estimateGas', [tx]),
-    fetchArbitrumRpc('eth_gasPrice', []),
-  ]);
-  const gas = BigInt(gasHex || '0x0');
-  const gasPrice = BigInt(gasPriceHex || '0x0');
-  return {
-    gas,
-    gasPrice,
-    maxCostWei: gas * gasPrice,
-  };
-}
-
-export async function estimateApproveUsdcFee(spender, amount, from) {
-  return estimateArbitrumTransactionFee({
-    from,
-    to: USDC_CONTRACT_ARBITRUM,
-    data: encodeApprove(spender, amount),
-  });
-}
-
-export async function estimateBridgeDepositFee(vaultContract, amount, pftlRecipient, nonce, routeBinding, from) {
-  return estimateArbitrumTransactionFee({
-    from,
-    to: vaultContract,
-    data: encodeBridgeDepositData(amount, pftlRecipient, nonce, routeBinding),
-  });
-}
-
 export async function waitForReceipt(txHash, timeoutMs = 120000, pollIntervalMs = 3000) {
   if (!hasMetaMask()) throw new Error('MetaMask not found');
   const deadline = Date.now() + timeoutMs;
@@ -607,43 +463,6 @@ export async function waitForReceipt(txHash, timeoutMs = 120000, pollIntervalMs 
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
   }
   throw new Error(`Transaction ${txHash} not confirmed within ${timeoutMs / 1000}s`);
-}
-
-export async function approveUsdc(spender, amount) {
-  if (!hasMetaMask()) throw new Error('MetaMask not found');
-  await ensureArbitrum();
-  const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-  const from = accounts[0];
-  const data = encodeApprove(spender, amount);
-
-  const tx = await window.ethereum.request({
-    method: 'eth_sendTransaction',
-    params: [{
-      from,
-      to: USDC_CONTRACT_ARBITRUM,
-      data,
-    }],
-  });
-  return tx;
-}
-
-export async function depositToBridge(vaultContract, amount, pftlRecipient, nonce, routeBinding) {
-  if (!hasMetaMask()) throw new Error('MetaMask not found');
-  await ensureArbitrum();
-  const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-  const from = accounts[0];
-
-  const data = encodeBridgeDepositData(amount, pftlRecipient, nonce, routeBinding);
-
-  const tx = await window.ethereum.request({
-    method: 'eth_sendTransaction',
-    params: [{
-      from,
-      to: vaultContract,
-      data,
-    }],
-  });
-  return tx;
 }
 
 export async function watchDepositEvent(vaultContract, txHash, expectedRouteBinding) {

@@ -10,16 +10,11 @@ import {
   ensureEthereumMainnet,
   estimateEthereumApproveUsdcFee,
   getEthereumUsdcAllowance,
-  estimateApproveUsdcFee,
-  estimateBridgeDepositFee,
   generateNonce,
   governedRouteBinding,
-  getArbitrumEthBalance,
-  getArbitrumUsdcAllowance,
   sha3_384DomainHex,
   usdcToAtoms,
 } from './evm.js';
-import { USDC_CONTRACT_ARBITRUM } from './utils.js';
 import { ETH_MAINNET_USDC } from './utils.js';
 
 const sampleRecipient = 'pf1234567890abcdef1234567890abcdef12345678';
@@ -35,23 +30,6 @@ function wordsFromCalldata(data) {
     words.push(body.slice(i, i + 64));
   }
   return words;
-}
-
-function withFetch(fetchImpl, fn) {
-  const previousFetch = globalThis.fetch;
-  Object.defineProperty(globalThis, 'fetch', {
-    value: fetchImpl,
-    configurable: true,
-  });
-  return Promise.resolve()
-    .then(fn)
-    .finally(() => {
-      if (previousFetch === undefined) {
-        delete globalThis.fetch;
-      } else {
-        Object.defineProperty(globalThis, 'fetch', { value: previousFetch, configurable: true });
-      }
-    });
 }
 
 test('bridge deposit calldata uses route-bound depositV2 selector', () => {
@@ -219,96 +197,4 @@ test('bridge contract preflight binds exact deployed bytecode hash', async () =>
     if (previousWindow === undefined) delete globalThis.window;
     else globalThis.window = previousWindow;
   }
-});
-
-test('getArbitrumEthBalance reads native ETH over the Arbitrum proxy', async () => {
-  const owner = '0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0';
-  const calls = [];
-  const balance = await withFetch(async (_url, options) => {
-    const request = JSON.parse(options.body);
-    calls.push(request);
-    return new Response(JSON.stringify({ jsonrpc: '2.0', id: request.id, result: '0x2a' }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    });
-  }, () => getArbitrumEthBalance(owner));
-
-  assert.equal(balance, 42n);
-  assert.deepEqual(calls[0].params, [owner, 'latest']);
-  assert.equal(calls[0].method, 'eth_getBalance');
-});
-
-test('getArbitrumUsdcAllowance reads allowance over the Arbitrum proxy', async () => {
-  const owner = '0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0';
-  const spender = '0x1A15e6103D6Af4e88924F748e13B829D3948DEa9';
-  const calls = [];
-  const allowance = await withFetch(async (_url, options) => {
-    const request = JSON.parse(options.body);
-    calls.push(request);
-    return new Response(JSON.stringify({ jsonrpc: '2.0', id: request.id, result: '0xf4240' }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    });
-  }, () => getArbitrumUsdcAllowance(owner, spender));
-
-  assert.equal(allowance, 1000000n);
-  assert.equal(calls[0].method, 'eth_call');
-  assert.equal(calls[0].params[0].to, USDC_CONTRACT_ARBITRUM);
-  assert.match(calls[0].params[0].data, /^0xdd62ed3e/i);
-  assert.match(calls[0].params[0].data, new RegExp(owner.slice(2).toLowerCase(), 'i'));
-  assert.match(calls[0].params[0].data, new RegExp(spender.slice(2).toLowerCase(), 'i'));
-});
-
-test('estimateApproveUsdcFee estimates approval gas before MetaMask submit', async () => {
-  const owner = '0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0';
-  const vault = '0x1A15e6103D6Af4e88924F748e13B829D3948DEa9';
-  const calls = [];
-  const fee = await withFetch(async (_url, options) => {
-    const request = JSON.parse(options.body);
-    calls.push(request);
-    const result = request.method === 'eth_estimateGas' ? '0x5208' : '0x3b9aca00';
-    return new Response(JSON.stringify({ jsonrpc: '2.0', id: request.id, result }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    });
-  }, () => estimateApproveUsdcFee(vault, 1000000n, owner));
-
-  assert.equal(fee.gas, 21000n);
-  assert.equal(fee.gasPrice, 1000000000n);
-  assert.equal(fee.maxCostWei, 21000000000000n);
-  assert.equal(calls[0].method, 'eth_estimateGas');
-  assert.equal(calls[0].params[0].from, owner);
-  assert.equal(calls[0].params[0].to, USDC_CONTRACT_ARBITRUM);
-  assert.match(calls[0].params[0].data, /^0x095ea7b3/i);
-  assert.equal(calls[1].method, 'eth_gasPrice');
-});
-
-test('estimateBridgeDepositFee estimates vault deposit gas before MetaMask submit', async () => {
-  const owner = '0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0';
-  const vault = '0x1A15e6103D6Af4e88924F748e13B829D3948DEa9';
-  const calls = [];
-  const fee = await withFetch(async (_url, options) => {
-    const request = JSON.parse(options.body);
-    calls.push(request);
-    const result = request.method === 'eth_estimateGas' ? '0x015f90' : '0x05f5e100';
-    return new Response(JSON.stringify({ jsonrpc: '2.0', id: request.id, result }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    });
-  }, () => estimateBridgeDepositFee(
-    vault,
-    1000000n,
-    sampleRecipient,
-    sampleNonce,
-    sampleRouteBinding,
-    owner,
-  ));
-
-  assert.equal(fee.gas, 90000n);
-  assert.equal(fee.gasPrice, 100000000n);
-  assert.equal(fee.maxCostWei, 9000000000000n);
-  assert.equal(calls[0].method, 'eth_estimateGas');
-  assert.equal(calls[0].params[0].from, owner);
-  assert.equal(calls[0].params[0].to, vault);
-  assert.match(calls[0].params[0].data, /^0x2391b457/i);
 });
