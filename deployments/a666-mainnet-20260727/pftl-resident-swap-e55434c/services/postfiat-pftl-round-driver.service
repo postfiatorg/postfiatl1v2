@@ -15,11 +15,11 @@ Environment=POSTFIAT_PREWARM_SHIELDED_VERIFIER=1
 Environment=POSTFIAT_PREWARM_ASSET_ORCHARD_SWAP_VERIFIER=1
 Environment=POSTFIAT_PREWARM_ASSET_ORCHARD_PRIVATE_EGRESS_VERIFIER=1
 Environment=POSTFIAT_TRANSPORT_PERSISTENT_VOTE_STREAMS=1
-ExecStart=/opt/postfiat/releases/resident-cert-timing-db929bf/postfiat-node transport-peer-certified-batch-loop \
+ExecStart=/opt/postfiat/releases/resident-qc-view0-59cd3ee/postfiat-node transport-peer-certified-batch-loop \
   --unsafe-devnet-json-storage \
   --unsafe-devnet-file-signer \
   --data-dir /var/lib/postfiat/validator-2 \
-  --topology /etc/postfiat/releases/resident-remote-proposer-5548112/topology.json \
+  --topology /etc/postfiat/releases/resident-qc-view0-59cd3ee/topology.json \
   --batch-kind shielded \
   --batch-dir /var/lib/postfiat/validator-2/pftl-swapd/batch-outbox \
   --processed-dir /var/lib/postfiat/validator-2/pftl-swapd/processed-batches \
