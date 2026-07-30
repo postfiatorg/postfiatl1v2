@@ -2581,6 +2581,70 @@ mod transport_cli_tests {
     }
 
     #[test]
+    fn processed_commit_marker_is_atomic_idempotent_and_conflict_safe() {
+        let root = unique_transport_test_ready_file("processed-commit").with_extension("data");
+        let outbox = root.join("outbox");
+        let processed = root.join("processed");
+        std::fs::create_dir_all(&outbox).expect("create processed-commit outbox");
+        let batch = outbox.join("batch-id.batch.json");
+        let certificate = root.join("certificate.json");
+        std::fs::write(&batch, b"{\"batch\":1}\n").expect("write batch fixture");
+        std::fs::write(&certificate, b"{\"certificate\":1}\n")
+            .expect("write certificate fixture");
+
+        let published =
+            publish_processed_batch_commit(&batch, &certificate, Some(&processed))
+                .expect("publish local certified commit");
+        let processed_batch = processed.join("batch-id.batch.json");
+        let processed_certificate = processed.join("batch-id.certificate.json");
+        let processed_batch_display = processed_batch.display().to_string();
+        assert_eq!(
+            published.as_deref(),
+            Some(processed_batch_display.as_str())
+        );
+        assert!(batch.exists(), "certified sends still need the outbox source");
+        assert_eq!(
+            std::fs::read(&processed_certificate).expect("read processed certificate"),
+            b"{\"certificate\":1}\n"
+        );
+        assert_eq!(
+            std::fs::read(&processed_batch).expect("read processed batch"),
+            b"{\"batch\":1}\n"
+        );
+
+        publish_processed_batch_commit(&batch, &certificate, Some(&processed))
+            .expect("matching replay is idempotent");
+        std::fs::write(&certificate, b"{\"certificate\":2}\n")
+            .expect("tamper certificate fixture");
+        let error = publish_processed_batch_commit(&batch, &certificate, Some(&processed))
+            .expect_err("conflicting certificate replay must fail");
+        assert!(error.contains("different bytes"), "{error}");
+
+        std::fs::write(&certificate, b"{\"certificate\":1}\n")
+            .expect("restore certificate fixture");
+        assert!(
+            recover_published_committed_batch_sources(
+                &root,
+                &root.join("missing-topology.json"),
+                &outbox,
+                Some(&processed),
+            )
+            .expect("recover published commit after restart")
+        );
+        assert!(
+            !batch.exists(),
+            "restart recovery removes the delivered outbox source"
+        );
+
+        std::fs::write(&batch, b"{\"batch\":1}\n").expect("restore outbox batch");
+        archive_processed_batch_file(&batch, &certificate, Some(&processed))
+            .expect("archive after synchronous fleet delivery");
+        assert!(!batch.exists(), "archive removes only the outbox source");
+        assert!(processed_batch.exists());
+        std::fs::remove_dir_all(root).expect("cleanup processed-commit fixture");
+    }
+
+    #[test]
     fn certified_send_job_is_atomic_bounded_and_idempotent() {
         let root = unique_transport_test_ready_file("durable-job").with_extension("data");
         std::fs::create_dir_all(&root).expect("create durable job root");

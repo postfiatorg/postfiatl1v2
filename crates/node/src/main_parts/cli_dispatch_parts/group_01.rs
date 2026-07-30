@@ -513,6 +513,7 @@ fn run_cli_group_01(command: &str, flags: &[String]) -> Result<(), String> {
                     retry_backoff_ms,
                     local_apply_before_certified_send,
                     defer_certified_sends,
+                    commit_processed_dir: None,
                     required_parent: None,
                 })?;
             let json = serde_json::to_string_pretty(&report).map_err(|error| {

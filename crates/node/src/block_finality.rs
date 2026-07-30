@@ -2816,6 +2816,86 @@ pub fn aggregate_block_certificate(
         options.timeout_certificate_file.as_deref(),
         options.block_height,
     )?;
+    aggregate_block_certificate_for_target(&store, &genesis, target, &options)
+}
+
+pub(crate) fn aggregate_prevalidated_proposal_block_certificate(
+    options: BlockCertificateOptions,
+    proposal: &BlockProposalFile,
+    prevalidated_unsigned_proposal: &BlockProposalFile,
+) -> io::Result<BlockCertificateFile> {
+    if options.vote_files.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "at least one block vote file is required",
+        ));
+    }
+    if options.verify_block_log {
+        verify_blocks(NodeOptions {
+            data_dir: options.data_dir.clone(),
+        })?;
+    }
+    if prevalidated_unsigned_proposal.signature.is_some() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "prevalidated proposal must be unsigned",
+        ));
+    }
+    let mut unsigned_proposal = proposal.clone();
+    unsigned_proposal.signature = None;
+    if &unsigned_proposal != prevalidated_unsigned_proposal {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "signed proposal differs from the locally prevalidated proposal",
+        ));
+    }
+    if options
+        .block_height
+        .is_some_and(|height| height != proposal.block_height)
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "prevalidated proposal height does not match certificate height",
+        ));
+    }
+
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    validate_block_proposal_file(proposal, &genesis)?;
+    verify_block_proposal_signature_if_present(&store, proposal)?;
+    validate_block_proposal_timeout_evidence(
+        &store,
+        proposal,
+        options.timeout_certificate_file.as_deref(),
+        false,
+    )?;
+    let governance =
+        governance_with_due_validator_registry_activations(&store, &genesis, proposal.block_height)?;
+    validate_bridge_exit_root_activation(proposal, &genesis, &governance)?;
+    let validators = active_validator_ids(&governance)?;
+    let expected_proposer =
+        leader_for_view(&validators, proposal.block_height, proposal.view).map_err(invalid_data)?;
+    if proposal.proposer != expected_proposer {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "prevalidated proposal has the wrong deterministic proposer",
+        ));
+    }
+    let target = BlockVoteTarget {
+        evidence: OwnedBlockEvidence::from_proposal(proposal),
+        validators,
+        block_hash: None,
+        proposal_hash: Some(block_proposal_hash(proposal)?),
+    };
+    aggregate_block_certificate_for_target(&store, &genesis, target, &options)
+}
+
+fn aggregate_block_certificate_for_target(
+    store: &NodeStore,
+    genesis: &Genesis,
+    target: BlockVoteTarget,
+    options: &BlockCertificateOptions,
+) -> io::Result<BlockCertificateFile> {
     let registry = read_validator_registry_file(&store.data_dir().join(VALIDATOR_REGISTRY_FILE))?;
 
     let mut votes_by_validator = HashMap::<String, BlockCertificateVote>::new();
@@ -2823,7 +2903,7 @@ pub fn aggregate_block_certificate(
         let vote = read_block_vote_file(vote_file)?;
         validate_block_vote_file_for_target(
             &vote,
-            &genesis,
+            genesis,
             &target.evidence,
             &target.validators,
             target.block_hash.as_deref(),
@@ -2855,7 +2935,7 @@ pub fn aggregate_block_certificate(
     for expected_validator in &target.validators {
         if let Some(vote) = votes_by_validator.remove(expected_validator) {
             verify_block_certificate_vote_for_evidence(
-                &genesis,
+                genesis,
                 &target.evidence.as_evidence(),
                 &registry,
                 &vote,
@@ -2879,7 +2959,7 @@ pub fn aggregate_block_certificate(
         votes,
     };
     let evidence_ref = target.evidence.as_evidence();
-    let certificate_id = block_certificate_id(&genesis, &evidence_ref, &certificate)?;
+    let certificate_id = block_certificate_id(genesis, &evidence_ref, &certificate)?;
     if let Some(block_hash) = target.block_hash.as_ref() {
         let blocks = store.read_blocks()?;
         let block = select_block(&blocks, options.block_height)?;
@@ -2902,7 +2982,7 @@ pub fn aggregate_block_certificate(
     let certificate_file = BlockCertificateFile {
         schema: BLOCK_CERTIFICATE_FILE_SCHEMA.to_string(),
         chain_id: genesis.chain_id.clone(),
-        genesis_hash: genesis_hash(&genesis),
+        genesis_hash: genesis_hash(genesis),
         protocol_version: genesis.protocol_version,
         block_height: target.evidence.height,
         view: target.evidence.view,

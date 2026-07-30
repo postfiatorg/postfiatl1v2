@@ -927,6 +927,51 @@ fn split_block_votes_reconstruct_certificate() {
     assert!(proposal_certificate.certificate.votes.iter().all(|vote| {
         vote.registry_root == expected_registry_root && vote.public_key_hex.is_empty()
     }));
+    let prevalidated_certificate =
+        aggregate_prevalidated_verified_block_certificate(
+            BlockCertificateOptions {
+                data_dir: data_dir.clone(),
+                verify_block_log: true,
+                batch_file: Some(batch_file.clone()),
+                proposal_file: Some(proposal_file.clone()),
+                timeout_certificate_file: None,
+                block_height: Some(proposal.block_height),
+                vote_files: vote_paths.clone(),
+                certificate_file: data_dir.join("prevalidated-proposal-certificate.json"),
+            },
+            &proposal,
+            &proposal,
+        )
+        .expect("aggregate certificate from locally prevalidated proposal");
+    assert_eq!(
+        prevalidated_certificate
+            .as_block_certificate_file()
+            .certificate_id,
+        proposal_certificate.certificate_id
+    );
+    let mut mismatched_prevalidated_proposal = proposal.clone();
+    mismatched_prevalidated_proposal.state_root = "ff".repeat(48);
+    let mismatch_error = aggregate_prevalidated_verified_block_certificate(
+        BlockCertificateOptions {
+            data_dir: data_dir.clone(),
+            verify_block_log: false,
+            batch_file: Some(batch_file.clone()),
+            proposal_file: Some(proposal_file.clone()),
+            timeout_certificate_file: None,
+            block_height: Some(proposal.block_height),
+            vote_files: vote_paths.clone(),
+            certificate_file: data_dir.join("mismatched-prevalidated-certificate.json"),
+        },
+        &proposal,
+        &mismatched_prevalidated_proposal,
+    )
+    .expect_err("mismatched prevalidated proposal must fail closed");
+    assert!(
+        mismatch_error
+            .to_string()
+            .contains("differs from the locally prevalidated proposal"),
+        "{mismatch_error}"
+    );
     let proposal_certificate_json =
         serde_json::to_string(&proposal_certificate).expect("proposal certificate json");
     assert!(!proposal_certificate_json.contains("public_key_hex"));

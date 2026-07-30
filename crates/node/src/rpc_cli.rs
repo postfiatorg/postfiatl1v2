@@ -2374,6 +2374,7 @@ fn run_rpc_serve_shield_batch_finality_inner(
         retry_backoff_ms: context.finality_retry_backoff_ms,
         local_apply_before_certified_send: true,
         defer_certified_sends: true,
+        commit_processed_dir: None,
         required_parent: None,
     })
     .map_err(|error| {

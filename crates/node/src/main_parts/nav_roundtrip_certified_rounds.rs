@@ -1139,6 +1139,7 @@ fn certified_asset_ops_direct_batch(
         retry_backoff_ms: options.retry_backoff_ms,
         local_apply_before_certified_send: options.local_apply_before_certified_send,
         defer_certified_sends: options.defer_certified_sends,
+        commit_processed_dir: None,
         required_parent: None,
     })?;
     let round_report_file = options.artifact_dir.join("peer-certified-batch-round.report.json");

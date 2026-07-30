@@ -174,6 +174,7 @@ mod transport_batch_payload_tests {
             retry_backoff_ms: 50,
             local_apply_before_certified_send: false,
             defer_certified_sends: false,
+            commit_processed_dir: None,
             required_parent: None,
         })
         .expect("consensus v2 transport round");
@@ -1140,12 +1141,18 @@ mod transport_batch_payload_tests {
             15_000,
         )
         .expect("authenticated peer health");
+        let processed_dir = root.join("processed");
+        let processed_batch = processed_dir.join(
+            batch_file
+                .file_name()
+                .expect("remote proposer batch file name"),
+        );
         let report =
             transport_peer_certified_batch_round(TransportPeerCertifiedBatchRoundOptions {
                 data_dir: collector_dir.clone(),
                 topology_file: topology_file.clone(),
                 batch_kind: Some("transparent".to_string()),
-                batch_file,
+                batch_file: batch_file.clone(),
                 key_file: collector_dir.join(VALIDATOR_KEYS_FILE),
                 proposal_key_file: Some(collector_dir.join(VALIDATOR_KEYS_FILE)),
                 require_local_proposer: false,
@@ -1159,8 +1166,9 @@ mod transport_batch_payload_tests {
                 timeout_ms: 15_000,
                 send_retries: 2,
                 retry_backoff_ms: 50,
-                local_apply_before_certified_send: false,
+                local_apply_before_certified_send: true,
                 defer_certified_sends: false,
+                commit_processed_dir: Some(processed_dir.clone()),
                 required_parent: None,
             })
             .expect("route round to remote proposer");
@@ -1192,6 +1200,16 @@ mod transport_batch_payload_tests {
             report.proposal_signature_signer.as_deref(),
             Some(proposer.as_str())
         );
+        assert!(
+            processed_batch.exists(),
+            "local certified apply must publish the processed commit marker"
+        );
+        assert!(
+            batch_file.exists(),
+            "synchronous fleet sends retain the outbox source until the round completes"
+        );
+        let processed_certificate = processed_dir.join("height-1.certificate.json");
+        assert!(processed_certificate.exists());
         clear_transport_vote_stream_pool_for_test().expect("close persistent streams");
         for (index, handle) in handles.into_iter().enumerate() {
             let node_index = if index < collector_index {

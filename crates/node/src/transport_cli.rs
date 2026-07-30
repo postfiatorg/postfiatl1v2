@@ -801,6 +801,7 @@ struct TransportPeerCertifiedBatchRoundOptions {
     retry_backoff_ms: u64,
     local_apply_before_certified_send: bool,
     defer_certified_sends: bool,
+    commit_processed_dir: Option<PathBuf>,
     required_parent: Option<RequiredBlockParent>,
 }
 
@@ -861,6 +862,7 @@ struct TransportPeerCertifiedBatchRoundTimingsReport {
     certified_sends_ms: f64,
     local_apply_ms: f64,
     post_apply_status_ms: f64,
+    local_commit_publish_ms: f64,
     client_visible_finality_ms: f64,
     verification_ms: f64,
     #[serde(skip_serializing_if = "Option::is_none")]

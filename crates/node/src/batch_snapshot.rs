@@ -303,6 +303,19 @@ pub fn aggregate_verified_block_certificate(
         .map(|certificate_file| VerifiedBlockCertificateFile { certificate_file })
 }
 
+pub fn aggregate_prevalidated_verified_block_certificate(
+    options: BlockCertificateOptions,
+    proposal: &BlockProposalFile,
+    prevalidated_unsigned_proposal: &BlockProposalFile,
+) -> io::Result<VerifiedBlockCertificateFile> {
+    aggregate_prevalidated_proposal_block_certificate(
+        options,
+        proposal,
+        prevalidated_unsigned_proposal,
+    )
+    .map(|certificate_file| VerifiedBlockCertificateFile { certificate_file })
+}
+
 pub(super) fn apply_batch_elapsed_ms(start: std::time::Instant) -> f64 {
     start.elapsed().as_secs_f64() * 1000.0
 }

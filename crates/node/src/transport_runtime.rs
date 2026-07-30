@@ -2541,6 +2541,12 @@ pub(super) fn transport_peer_certified_batch_round(
             "--defer-certified-sends requires --local-apply-before-certified-send".to_string(),
         );
     }
+    if options.commit_processed_dir.is_some() && !options.local_apply_before_certified_send {
+        return Err(
+            "early processed-commit publication requires --local-apply-before-certified-send"
+                .to_string(),
+        );
+    }
     if options.send_retries > MAX_TRANSPORT_SEND_RETRIES {
         return Err(format!(
             "--send-retries must be <= {MAX_TRANSPORT_SEND_RETRIES}"
@@ -2607,6 +2613,7 @@ pub(super) fn transport_peer_certified_batch_round(
     .map_err(|error| format!("peer certified batch round proposal failed: {error}"))?;
     let proposal_breakdown = proposal_with_timings.timings;
     let expected_unsigned_proposal = proposal_with_timings.proposal;
+    let prevalidated_unsigned_proposal = expected_unsigned_proposal.clone();
     if let Some(block_height) = options.block_height {
         if expected_unsigned_proposal.block_height != block_height {
             return Err(format!(
@@ -3029,16 +3036,20 @@ pub(super) fn transport_peer_certified_batch_round(
 
     let certificate_start = Instant::now();
     let legacy_certificate_start = Instant::now();
-    let mut verified_certificate = aggregate_verified_block_certificate(BlockCertificateOptions {
-        data_dir: options.data_dir.clone(),
-        verify_block_log: false,
-        batch_file: Some(options.batch_file.clone()),
-        proposal_file: Some(proposal_file.clone()),
-        timeout_certificate_file: options.timeout_certificate_file.clone(),
-        block_height: Some(proposal.block_height),
-        vote_files: vote_files.clone(),
-        certificate_file: certificate_file.clone(),
-    })
+    let mut verified_certificate = aggregate_prevalidated_verified_block_certificate(
+        BlockCertificateOptions {
+            data_dir: options.data_dir.clone(),
+            verify_block_log: false,
+            batch_file: Some(options.batch_file.clone()),
+            proposal_file: Some(proposal_file.clone()),
+            timeout_certificate_file: options.timeout_certificate_file.clone(),
+            block_height: Some(proposal.block_height),
+            vote_files: vote_files.clone(),
+            certificate_file: certificate_file.clone(),
+        },
+        &proposal,
+        &prevalidated_unsigned_proposal,
+    )
     .map_err(|error| format!("peer certified batch round certificate failed: {error}"))?;
     let legacy_certificate_ms = monotonic_elapsed_ms(legacy_certificate_start);
     let mut consensus_v2_prepare_qc_ms = 0.0;
@@ -3203,6 +3214,7 @@ pub(super) fn transport_peer_certified_batch_round(
     let mut local_state = None;
     let mut local_apply_ms = 0.0;
     let mut post_apply_status_ms = 0.0;
+    let mut local_commit_publish_ms = 0.0;
     let mut client_visible_finality_ms = 0.0;
     let mut local_apply_breakdown = None;
     if options.local_apply_before_certified_send {
@@ -3234,6 +3246,14 @@ pub(super) fn transport_peer_certified_batch_round(
         }
         local_state = Some(transport_hello(&topology, &local_state_status));
         post_apply_status_ms = monotonic_elapsed_ms(post_apply_status_start);
+
+        let local_commit_publish_start = Instant::now();
+        publish_processed_batch_commit(
+            &options.batch_file,
+            &certificate_file,
+            options.commit_processed_dir.as_deref(),
+        )?;
+        local_commit_publish_ms = monotonic_elapsed_ms(local_commit_publish_start);
         client_visible_finality_ms = monotonic_elapsed_ms(round_start);
         local_receipts = Some(apply_result.receipts);
     }
@@ -3481,6 +3501,7 @@ pub(super) fn transport_peer_certified_batch_round(
         certified_sends_ms,
         local_apply_ms,
         post_apply_status_ms,
+        local_commit_publish_ms,
         client_visible_finality_ms,
         verification_ms,
         proposal_breakdown: Some(proposal_breakdown),
@@ -3729,6 +3750,7 @@ pub(super) fn transport_peer_certified_mempool_round(
         retry_backoff_ms: options.retry_backoff_ms,
         local_apply_before_certified_send: options.local_apply_before_certified_send,
         defer_certified_sends: options.defer_certified_sends,
+        commit_processed_dir: None,
         required_parent: options.required_parent.clone(),
     })?;
     let local_state = status(NodeOptions {
@@ -3929,6 +3951,18 @@ pub(super) fn transport_peer_certified_batch_loop(
             std::thread::sleep(poll_duration);
             continue;
         }
+        if !recover_published_committed_batch_sources(
+            &options.data_dir,
+            &options.topology_file,
+            &options.batch_dir,
+            options.processed_dir.as_deref(),
+        )? {
+            if let Some(ready_file) = ready_file.as_ref() {
+                clear_transport_ready_file(ready_file, "peer certified batch loop")?;
+            }
+            std::thread::sleep(poll_duration);
+            continue;
+        }
         let next_batch = list_certified_loop_batch_files(&options.batch_dir)?
             .into_iter()
             .find(|path| !processed.contains(&path.display().to_string()));
@@ -3977,6 +4011,7 @@ pub(super) fn transport_peer_certified_batch_loop(
                 retry_backoff_ms: options.retry_backoff_ms,
                 local_apply_before_certified_send: options.local_apply_before_certified_send,
                 defer_certified_sends: options.defer_certified_sends,
+                commit_processed_dir: options.processed_dir.clone(),
                 required_parent: None,
             })?;
         let batch_file_display = batch_file.display().to_string();
@@ -4318,6 +4353,7 @@ pub(super) fn transport_peer_certified_private_egress_loop(
                 retry_backoff_ms: options.retry_backoff_ms,
                 local_apply_before_certified_send: options.local_apply_before_certified_send,
                 defer_certified_sends: options.defer_certified_sends,
+                commit_processed_dir: None,
                 required_parent: None,
             })?;
         let archived_egress_file = if round.round_ok {
@@ -4449,7 +4485,106 @@ fn write_private_egress_loop_ready_file(
     })
 }
 
-fn archive_processed_batch_file(
+pub(super) fn archive_processed_batch_file(
+    batch_file: &Path,
+    certificate_file: &Path,
+    processed_dir: Option<&Path>,
+) -> Result<Option<String>, String> {
+    let published =
+        publish_processed_batch_commit(batch_file, certificate_file, processed_dir)?;
+    if published.is_some() {
+        std::fs::remove_file(batch_file).map_err(|error| {
+            format!(
+                "certified batch loop processed source remove `{}` failed: {error}",
+                batch_file.display()
+            )
+        })?;
+    }
+    Ok(published)
+}
+
+pub(super) fn recover_published_committed_batch_sources(
+    data_dir: &Path,
+    topology_file: &Path,
+    batch_dir: &Path,
+    processed_dir: Option<&Path>,
+) -> Result<bool, String> {
+    let Some(processed_dir) = processed_dir else {
+        return Ok(true);
+    };
+    let published_sources = list_certified_loop_batch_files(batch_dir)?
+        .into_iter()
+        .filter(|batch_file| {
+            batch_file
+                .file_name()
+                .is_some_and(|name| processed_dir.join(name).is_file())
+        })
+        .collect::<Vec<_>>();
+    if published_sources.is_empty() {
+        return Ok(true);
+    }
+    let resumed = resume_durable_certified_send_outbox(
+        data_dir,
+        topology_file,
+        CERTIFIED_SEND_OUTBOX_MAX_JOBS,
+    )?;
+    if !resumed.all_completed {
+        return Ok(false);
+    }
+    for batch_file in published_sources {
+        let file_name = batch_file.file_name().ok_or_else(|| {
+            format!(
+                "published committed batch source `{}` has no file name",
+                batch_file.display()
+            )
+        })?;
+        let processed_batch = processed_dir.join(file_name);
+        let source_bytes = std::fs::read(&batch_file).map_err(|error| {
+            format!(
+                "published committed batch source read `{}` failed: {error}",
+                batch_file.display()
+            )
+        })?;
+        let processed_bytes = std::fs::read(&processed_batch).map_err(|error| {
+            format!(
+                "published committed batch marker read `{}` failed: {error}",
+                processed_batch.display()
+            )
+        })?;
+        if source_bytes != processed_bytes {
+            return Err(format!(
+                "published committed batch source conflicts with processed marker: {}",
+                batch_file.display()
+            ));
+        }
+        let batch_stem = file_name
+            .to_str()
+            .and_then(|name| name.strip_suffix(".batch.json"))
+            .ok_or_else(|| {
+                format!(
+                    "published committed batch source `{}` does not end in .batch.json",
+                    batch_file.display()
+                )
+            })?;
+        let processed_certificate =
+            processed_dir.join(format!("{batch_stem}.certificate.json"));
+        if !processed_certificate.is_file() {
+            return Err(format!(
+                "published committed batch marker omitted matching certificate: {}",
+                processed_certificate.display()
+            ));
+        }
+        std::fs::remove_file(&batch_file).map_err(|error| {
+            format!(
+                "published committed batch source remove `{}` failed: {error}",
+                batch_file.display()
+            )
+        })?;
+    }
+    Ok(true)
+}
+
+pub(super) fn publish_processed_batch_commit(
     batch_file: &Path,
     certificate_file: &Path,
     processed_dir: Option<&Path>,
@@ -4473,12 +4608,6 @@ fn archive_processed_batch_file(
         })?
         .to_os_string();
     let archived_path = processed_dir.join(file_name);
-    if archived_path.exists() {
-        return Err(format!(
-            "certified batch loop processed file already exists: {}",
-            archived_path.display()
-        ));
-    }
     let batch_stem = batch_file
         .file_name()
         .and_then(|name| name.to_str())
@@ -4489,6 +4618,12 @@ fn archive_processed_batch_file(
                 batch_file.display()
             )
         })?;
+    let batch_bytes = std::fs::read(batch_file).map_err(|error| {
+        format!(
+            "certified batch loop batch read `{}` failed: {error}",
+            batch_file.display()
+        )
+    })?;
     let archived_certificate = processed_dir.join(format!("{batch_stem}.certificate.json"));
     let certificate_bytes = std::fs::read(certificate_file).map_err(|error| {
         format!(
@@ -4510,20 +4645,36 @@ fn archive_processed_batch_file(
             ));
         }
     } else {
-        std::fs::write(&archived_certificate, &certificate_bytes).map_err(|error| {
+        postfiat_storage::atomic_write(&archived_certificate, &certificate_bytes).map_err(|error| {
             format!(
-                "certified batch loop certificate archive `{}` failed: {error}",
+                "certified batch loop certificate publish `{}` failed: {error}",
                 archived_certificate.display()
             )
         })?;
     }
-    std::fs::rename(batch_file, &archived_path).map_err(|error| {
-        format!(
-            "certified batch loop archive `{}` to `{}` failed: {error}",
-            batch_file.display(),
-            archived_path.display()
-        )
-    })?;
+    if archived_path.exists() {
+        let existing = std::fs::read(&archived_path).map_err(|error| {
+            format!(
+                "certified batch loop processed batch read `{}` failed: {error}",
+                archived_path.display()
+            )
+        })?;
+        if existing != batch_bytes {
+            return Err(format!(
+                "certified batch loop processed batch already exists with different bytes: {}",
+                archived_path.display()
+            ));
+        }
+    } else {
+        // The batch is the commit-observation marker, so publish it only after
+        // the matching certificate is durably present.
+        postfiat_storage::atomic_write(&archived_path, &batch_bytes).map_err(|error| {
+            format!(
+                "certified batch loop batch publish `{}` failed: {error}",
+                archived_path.display()
+            )
+        })?;
+    }
     Ok(Some(archived_path.display().to_string()))
 }
 
