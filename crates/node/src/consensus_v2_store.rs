@@ -4,8 +4,9 @@ use std::path::{Path, PathBuf};
 
 use postfiat_ordering_fast::{
     authorize_consensus_v2_precommit_vote, authorize_consensus_v2_prepare_vote,
-    authorize_consensus_v2_timeout_vote, consensus_v2_domain, initial_consensus_v2_safety_state,
-    ConsensusV2QcGraph, ConsensusV2Validator, ConsensusV2ValidatorSet,
+    authorize_consensus_v2_timeout_vote, consensus_v2_domain, consensus_v2_qc_ref,
+    initial_consensus_v2_safety_state, verify_consensus_v2_qc, ConsensusV2QcGraph,
+    ConsensusV2Validator, ConsensusV2ValidatorSet,
 };
 use postfiat_types::{
     ConsensusV2Domain, ConsensusV2Proposal, ConsensusV2QcRef, ConsensusV2QuorumCertificate,
@@ -171,10 +172,16 @@ pub fn persist_consensus_v2_qc(
     if certificate.domain != domain {
         return Err(invalid_data("consensus v2 QC does not use live domain"));
     }
-    let mut graph = read_consensus_v2_qc_graph(data_dir, &domain, &validators)?;
-    let reference = graph
-        .insert_verified(&domain, &validators, certificate.clone())
+    // A QC is self-contained: its committee, target, signatures, quorum and
+    // canonical ID can be verified without rebuilding unrelated historical
+    // QCs. Cross-QC references are resolved when proposals, timeouts and
+    // commits are verified. Re-reading the complete append-only graph here
+    // made every new QC persistence operation grow linearly with chain
+    // height without adding a safety check for this certificate.
+    verify_consensus_v2_qc(&domain, &validators, certificate)
         .map_err(|error| invalid_data(format!("consensus v2 QC: {error}")))?;
+    let reference = consensus_v2_qc_ref(certificate)
+        .map_err(|error| invalid_data(format!("consensus v2 QC reference: {error}")))?;
     with_safety_guard(data_dir, certificate.round.height, || {
         let path = consensus_v2_qc_path(data_dir, &certificate.domain, &certificate.certificate_id);
         match std::fs::read(&path) {
@@ -201,6 +208,22 @@ pub fn persist_consensus_v2_qc(
         }
         Ok(reference.clone())
     })
+}
+
+/// View-zero proposals cannot carry timeout evidence or a valid-round QC, so
+/// their verification has no historical QC dependency. Nonzero views retain
+/// complete graph reconstruction and signature verification.
+pub fn read_consensus_v2_qc_graph_for_view(
+    data_dir: &Path,
+    domain: &ConsensusV2Domain,
+    validators: &ConsensusV2ValidatorSet,
+    view: u64,
+) -> io::Result<ConsensusV2QcGraph> {
+    if view == 0 {
+        Ok(ConsensusV2QcGraph::default())
+    } else {
+        read_consensus_v2_qc_graph(data_dir, domain, validators)
+    }
 }
 
 pub fn read_consensus_v2_qc_graph(
@@ -551,8 +574,35 @@ mod tests {
             prepare_votes,
         )
         .expect("prepare QC");
+        let mut tampered_qc = prepare_qc.clone();
+        tampered_qc.votes[0]
+            .signature
+            .signature_hex
+            .replace_range(0..2, "00");
+        if tampered_qc.votes[0].signature.signature_hex
+            == prepare_qc.votes[0].signature.signature_hex
+        {
+            tampered_qc.votes[0]
+                .signature
+                .signature_hex
+                .replace_range(0..2, "ff");
+        }
+        let tampered_error = persist_consensus_v2_qc(&data_dir, &tampered_qc)
+            .expect_err("direct QC persistence must reject a tampered signature");
+        assert!(tampered_error.to_string().contains("consensus v2 QC"));
         let persisted_qc =
             persist_consensus_v2_qc(&data_dir, &prepare_qc).expect("persist verified prepare QC");
+        let view_zero_graph =
+            read_consensus_v2_qc_graph_for_view(&data_dir, &domain, &validators, 0)
+                .expect("view-zero dependency-free graph");
+        assert!(view_zero_graph
+            .resolve_verified(&domain, &validators, &persisted_qc)
+            .is_err());
+        let nonzero_graph = read_consensus_v2_qc_graph_for_view(&data_dir, &domain, &validators, 1)
+            .expect("nonzero view verified graph");
+        nonzero_graph
+            .resolve_verified(&domain, &validators, &persisted_qc)
+            .expect("nonzero view resolves persisted dependency");
         let reloaded_graph = read_consensus_v2_qc_graph(&data_dir, &domain, &validators)
             .expect("reload verified QC graph");
         reloaded_graph

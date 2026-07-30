@@ -25,9 +25,9 @@ use crate::{
     live_consensus_v2_context, persist_consensus_v2_precommit_authorization,
     persist_consensus_v2_prepare_authorization, persist_consensus_v2_qc,
     persist_consensus_v2_timeout_authorization, read_consensus_v2_qc_graph,
-    read_consensus_v2_safety_state, read_validator_key_file, select_validator_key_record,
-    validate_validator_key_file, write_block_certificate_file, BlockCertificateFile,
-    BlockProposalFile,
+    read_consensus_v2_qc_graph_for_view, read_consensus_v2_safety_state, read_validator_key_file,
+    select_validator_key_record, validate_validator_key_file, write_block_certificate_file,
+    BlockCertificateFile, BlockProposalFile,
 };
 
 pub fn consensus_v2_active_at(genesis: &Genesis, height: u64) -> bool {
@@ -43,7 +43,8 @@ pub fn create_consensus_v2_proposal_for_block(
     key_file: &Path,
 ) -> io::Result<ConsensusV2Proposal> {
     let (domain, validators) = live_consensus_v2_context(data_dir)?;
-    let graph = read_consensus_v2_qc_graph(data_dir, &domain, &validators)?;
+    let graph =
+        read_consensus_v2_qc_graph_for_view(data_dir, &domain, &validators, block_proposal.view)?;
     let valid_qc = timeout_certificate.and_then(|certificate| certificate.high_qc.clone());
     let timeout_certificate_id =
         timeout_certificate.map(|certificate| certificate.certificate_id.clone());
@@ -114,7 +115,8 @@ pub fn create_consensus_v2_prepare_vote(
     validator_id: &str,
 ) -> io::Result<ConsensusV2Vote> {
     let (domain, validators) = live_consensus_v2_context(data_dir)?;
-    let graph = read_consensus_v2_qc_graph(data_dir, &domain, &validators)?;
+    let graph =
+        read_consensus_v2_qc_graph_for_view(data_dir, &domain, &validators, proposal.round.view)?;
     persist_consensus_v2_prepare_authorization(data_dir, proposal, timeout_certificate, &graph)?;
     sign_consensus_v2_vote(
         key_file,
@@ -206,7 +208,8 @@ pub fn assemble_consensus_v2_commit(
 ) -> io::Result<ConsensusV2Commit> {
     verify_consensus_v2_proposal_matches_block(block_proposal, &proposal)?;
     let (domain, validators) = live_consensus_v2_context(data_dir)?;
-    let graph = read_consensus_v2_qc_graph(data_dir, &domain, &validators)?;
+    let graph =
+        read_consensus_v2_qc_graph_for_view(data_dir, &domain, &validators, proposal.round.view)?;
     let mut prior_references = Vec::new();
     if let Some(reference) = proposal.valid_qc.as_ref() {
         prior_references.push(reference);
@@ -247,7 +250,12 @@ pub fn verify_consensus_v2_commit_for_block(
     commit: &ConsensusV2Commit,
 ) -> io::Result<()> {
     let (domain, validators) = live_consensus_v2_context(data_dir)?;
-    let graph = read_consensus_v2_qc_graph(data_dir, &domain, &validators)?;
+    let graph = read_consensus_v2_qc_graph_for_view(
+        data_dir,
+        &domain,
+        &validators,
+        commit.proposal.round.view,
+    )?;
     let committed =
         verify_consensus_v2_commit(&domain, &validators, commit, &graph).map_err(ordering_error)?;
     verify_consensus_v2_proposal_matches_block(block_proposal, &commit.proposal)?;

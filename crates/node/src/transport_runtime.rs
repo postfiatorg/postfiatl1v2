@@ -1591,8 +1591,13 @@ fn handle_transport_block_vote_line(
                     })?;
                     let (domain, validators) = live_consensus_v2_context(data_dir)
                         .map_err(|error| format!("transport consensus v2 context: {error}"))?;
-                    let graph = read_consensus_v2_qc_graph(data_dir, &domain, &validators)
-                        .map_err(|error| format!("transport consensus v2 QC graph: {error}"))?;
+                    let graph = read_consensus_v2_qc_graph_for_view(
+                        data_dir,
+                        &domain,
+                        &validators,
+                        request.proposal.round.view,
+                    )
+                    .map_err(|error| format!("transport consensus v2 QC graph: {error}"))?;
                     postfiat_ordering_fast::verify_consensus_v2_proposal(
                         &domain,
                         &validators,
@@ -1977,8 +1982,13 @@ fn transport_block_proposal_request(
             };
             let (domain, validators) = live_consensus_v2_context(data_dir)
                 .map_err(|error| format!("transport proposal response v2 context: {error}"))?;
-            let graph = read_consensus_v2_qc_graph(data_dir, &domain, &validators)
-                .map_err(|error| format!("transport proposal response v2 QC graph: {error}"))?;
+            let graph = read_consensus_v2_qc_graph_for_view(
+                data_dir,
+                &domain,
+                &validators,
+                proposal.round.view,
+            )
+            .map_err(|error| format!("transport proposal response v2 QC graph: {error}"))?;
             postfiat_ordering_fast::verify_consensus_v2_proposal(
                 &domain,
                 &validators,
@@ -2624,7 +2634,7 @@ pub(super) fn transport_peer_certified_batch_round(
     let timeout_certificate_json = options
         .timeout_certificate_file
         .as_ref()
-        .map(|path| read_transport_payload_file(path))
+        .map(read_transport_payload_file)
         .transpose()?;
     let consensus_v2_timeout_certificate =
         if consensus_v2_active && expected_unsigned_proposal.view > 0 {
