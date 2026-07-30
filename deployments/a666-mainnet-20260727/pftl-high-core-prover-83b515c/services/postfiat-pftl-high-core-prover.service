@@ -1,0 +1,45 @@
+[Unit]
+Description=PostFiat 32-thread resident AssetOrchard prover
+After=postfiat-pftl-high-core-mount.service
+Requires=postfiat-pftl-high-core-mount.service
+BindsTo=postfiat-pftl-high-core-mount.service
+
+[Service]
+Type=simple
+Environment=STAKEHUB_PRODUCT_PROFILE_SHA256=ab04db6d0d610f6b354d0860c00fa745c93ed4faf173c1829edfb0cbd699e552
+Environment=ASSET_ORCHARD_LOCAL_SERVICE_PREWARM=1
+Environment=ASSET_ORCHARD_LOCAL_SERVICE_PREWARM_SWAP=0
+Environment=ASSET_ORCHARD_LOCAL_SERVICE_PREWARM_PRIVATE_EGRESS=1
+Environment=RAYON_NUM_THREADS=32
+ExecStartPre=/usr/bin/test -f /home/postfiat/.local/share/postfiat/pftl-high-core/validator-2/chain_tip.json
+ExecStart=/home/postfiat/.local/lib/postfiat/releases/pftl-high-core-prover-83b515c/asset-orchard-local-service \
+  --bind 127.0.0.1:18799 \
+  --data-dir /home/postfiat/.local/share/postfiat/pftl-high-core/validator-2 \
+  --logical-data-dir /var/lib/postfiat/validator-2 \
+  --vault-dir /home/postfiat/.local/share/postfiat/pftl-high-core/validator-2/asset-orchard-local-vault \
+  --prewarm-ready-file /home/postfiat/.local/share/postfiat/pftl-high-core/validator-2/asset-orchard-local-vault/prewarm-ready-high-core.json
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+KillMode=control-group
+Nice=0
+CPUWeight=100
+MemoryMax=8G
+TasksMax=192
+LimitNOFILE=4096
+LimitCORE=0
+OOMScoreAdjust=500
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/postfiat/.local/share/postfiat/pftl-high-core/validator-2
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,35 @@
+[Unit]
+Description=PostFiat loopback-only reverse tunnel to high-core prover
+After=network-online.target postfiat-pftl-high-core-prover.service
+Wants=network-online.target
+Requires=postfiat-pftl-high-core-prover.service
+BindsTo=postfiat-pftl-high-core-prover.service
+
+[Service]
+Type=simple
+EnvironmentFile=/home/postfiat/.config/postfiat/pftl-high-core.env
+ExecStart=/usr/bin/ssh -NT \
+  -o BatchMode=yes \
+  -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=15 \
+  -o ServerAliveCountMax=3 \
+  -o StrictHostKeyChecking=yes \
+  -R 127.0.0.1:8797:127.0.0.1:18799 \
+  root@${PFTL_VALIDATOR2_HOST}
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+KillMode=control-group
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+
+[Install]
+WantedBy=default.target

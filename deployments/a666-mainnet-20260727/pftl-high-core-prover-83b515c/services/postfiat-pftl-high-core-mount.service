@@ -1,0 +1,32 @@
+[Unit]
+Description=PostFiat validator-2 encrypted prover filesystem mount
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/home/postfiat/.config/postfiat/pftl-high-core.env
+ExecStartPre=/usr/bin/mkdir -p /home/postfiat/.local/share/postfiat/pftl-high-core/validator-2
+ExecStart=/home/postfiat/.local/opt/sshfs-3.7.3/rootfs/usr/bin/sshfs -f \
+  root@${PFTL_VALIDATOR2_HOST}:/var/lib/postfiat/validator-2 \
+  /home/postfiat/.local/share/postfiat/pftl-high-core/validator-2 \
+  -o reconnect,ServerAliveInterval=15,ServerAliveCountMax=3,StrictHostKeyChecking=yes
+ExecStop=/usr/bin/fusermount3 -u /home/postfiat/.local/share/postfiat/pftl-high-core/validator-2
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+KillMode=control-group
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/postfiat/.local/share/postfiat/pftl-high-core
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+
+[Install]
+WantedBy=default.target

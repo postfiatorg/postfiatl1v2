@@ -372,6 +372,7 @@ fn serve_connection(state: Arc<RuntimeState>, mut stream: TcpStream, _permit: Co
                         &json!({
                             "ok": false,
                             "error": error.kind().to_string(),
+                            "detail": public_error_detail(&error),
                             "message": public_error_message(error.kind()),
                         }),
                     )?;
@@ -691,6 +692,21 @@ fn public_error_message(kind: io::ErrorKind) -> &'static str {
         io::ErrorKind::StorageFull => "durable service capacity is exhausted",
         io::ErrorKind::AlreadyExists => "request conflicts with durable service state",
         _ => "request validation failed",
+    }
+}
+
+fn public_error_detail(error: &io::Error) -> &'static str {
+    match error.to_string().as_str() {
+        "PFTL swap intent signature metadata is invalid" => "intent_signature_metadata",
+        "PFTL swap intent signature verification failed" => "intent_signature_verification",
+        "signed PFTL swap intent does not match the quote or execution limits" => {
+            "intent_quote_limits"
+        }
+        "PFTL swap quote economics or governed policy changed before execution" => {
+            "quote_revalidation"
+        }
+        "PFTL swap input is already reserved by an active intent" => "input_reserved",
+        _ => "request_rejected",
     }
 }
 
@@ -2949,6 +2965,23 @@ mod tests {
             certified_round_certificate_file_name(&batch_hash),
             format!("{batch_hash}.certificate.json")
         );
+    }
+
+    #[test]
+    fn public_error_detail_is_bounded_and_does_not_echo_internal_text() {
+        let signature = io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "PFTL swap intent signature verification failed",
+        );
+        assert_eq!(
+            public_error_detail(&signature),
+            "intent_signature_verification"
+        );
+        let unknown = io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "private path and key material must not be reflected",
+        );
+        assert_eq!(public_error_detail(&unknown), "request_rejected");
     }
 
     #[test]

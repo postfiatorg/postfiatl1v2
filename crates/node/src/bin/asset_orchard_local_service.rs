@@ -919,7 +919,14 @@ fn handle_connection(config: &Config, stream: &mut TcpStream) -> io::Result<()> 
                     }),
                 );
             }
-            let egress = parse_private_egress_action_request(&body)?;
+            let mut egress = parse_private_egress_action_request(&body)?;
+            if let Some(path) = egress.input_note_path.as_deref() {
+                egress.input_note_path = Some(
+                    resolve_client_note_path(config, path)?
+                        .display()
+                        .to_string(),
+                );
+            }
             if reject_if_prover_not_ready(config, stream)? {
                 return Ok(());
             }
