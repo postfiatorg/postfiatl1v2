@@ -62,6 +62,7 @@ impl Drop for ProverPermit {
 struct Config {
     bind: SocketAddr,
     data_dir: PathBuf,
+    logical_data_dir: Option<PathBuf>,
     vault_dir: PathBuf,
     prewarm_ready_file: PathBuf,
     product_profile_sha256: String,
@@ -276,6 +277,9 @@ fn parse_config() -> io::Result<Config> {
     let mut vault_dir = env::var("ASSET_ORCHARD_LOCAL_VAULT_DIR")
         .ok()
         .map(PathBuf::from);
+    let mut logical_data_dir = env::var("ASSET_ORCHARD_LOGICAL_DATA_DIR")
+        .ok()
+        .map(PathBuf::from);
     let mut prewarm_ready_file = env::var("ASSET_ORCHARD_PREWARM_READY_FILE")
         .ok()
         .map(PathBuf::from);
@@ -312,6 +316,14 @@ fn parse_config() -> io::Result<Config> {
             "--vault-dir" => {
                 vault_dir = Some(PathBuf::from(args.next().ok_or_else(|| {
                     io::Error::new(io::ErrorKind::InvalidInput, "--vault-dir requires a path")
+                })?));
+            }
+            "--logical-data-dir" => {
+                logical_data_dir = Some(PathBuf::from(args.next().ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "--logical-data-dir requires a path",
+                    )
                 })?));
             }
             "--prewarm-ready-file" => {
@@ -351,6 +363,15 @@ fn parse_config() -> io::Result<Config> {
     let vault_dir = vault_dir.unwrap_or_else(default_vault_dir);
     let prewarm_ready_file =
         prewarm_ready_file.unwrap_or_else(|| vault_dir.join("prewarm-ready.json"));
+    if logical_data_dir
+        .as_ref()
+        .is_some_and(|path| !path.is_absolute())
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "--logical-data-dir must be an absolute path",
+        ));
+    }
 
     Ok(Config {
         bind,
@@ -360,6 +381,7 @@ fn parse_config() -> io::Result<Config> {
                 "POSTFIAT_DATA_DIR or --data-dir is required",
             )
         })?,
+        logical_data_dir,
         vault_dir,
         prewarm_ready_file,
         product_profile_sha256: product_profile_sha256.to_ascii_lowercase(),
@@ -368,7 +390,7 @@ fn parse_config() -> io::Result<Config> {
 
 fn print_usage() {
     println!(
-        "usage: asset-orchard-local-service [--bind 127.0.0.1:8789] --data-dir PATH [--vault-dir PATH] [--prewarm-ready-file PATH]"
+        "usage: asset-orchard-local-service [--bind 127.0.0.1:8789] --data-dir PATH [--logical-data-dir PATH] [--vault-dir PATH] [--prewarm-ready-file PATH]"
     );
 }
 
@@ -1027,6 +1049,69 @@ fn private_primary_work_dir(config: &Config, operation: &str, request_id: &str) 
         .join(request_id)
 }
 
+fn resolve_client_note_path(config: &Config, client_path: &str) -> io::Result<PathBuf> {
+    let path = Path::new(client_path);
+    let Some(logical_root) = config.logical_data_dir.as_ref() else {
+        return Ok(path.to_path_buf());
+    };
+    if !path.is_absolute() {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "private note path must be absolute",
+        ));
+    }
+    let relative = path.strip_prefix(logical_root).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "private note path is outside the logical data directory",
+        )
+    })?;
+    if relative.components().any(|component| {
+        !matches!(
+            component,
+            std::path::Component::Normal(_) | std::path::Component::CurDir
+        )
+    }) {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "private note path contains a non-local component",
+        ));
+    }
+    let data_root = config.data_dir.canonicalize()?;
+    let resolved = config
+        .data_dir
+        .join(relative)
+        .canonicalize()
+        .map_err(|error| {
+            io::Error::new(
+                error.kind(),
+                "private note path does not resolve in the mounted data directory",
+            )
+        })?;
+    if !resolved.starts_with(&data_root) || !resolved.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "private note path is outside the mounted data directory",
+        ));
+    }
+    Ok(resolved)
+}
+
+fn client_output_note_path(config: &Config, local_path: &Path) -> io::Result<String> {
+    let Some(logical_root) = config.logical_data_dir.as_ref() else {
+        return Ok(local_path.display().to_string());
+    };
+    let data_root = config.data_dir.canonicalize()?;
+    let resolved = local_path.canonicalize()?;
+    let relative = resolved.strip_prefix(&data_root).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "private output note is outside the mounted data directory",
+        )
+    })?;
+    Ok(logical_root.join(relative).display().to_string())
+}
+
 fn cached_or_prepare_private_primary_work_dir(
     config: &Config,
     operation: &str,
@@ -1066,10 +1151,11 @@ fn build_and_store_private_primary_issue_action(
 
     let total_start = Instant::now();
     reset_asset_orchard_private_egress_timings();
+    let input_note_path = resolve_client_note_path(config, &request.input_note_path)?;
     let report = match create_asset_orchard_private_primary_issue(
         AssetOrchardPrivatePrimaryIssueCreateOptions {
             data_dir: config.data_dir.clone(),
-            note_file: PathBuf::from(&request.input_note_path),
+            note_file: input_note_path,
             output_note_seed_hex: output_seed_hex,
             output_note_file: output_note_file.clone(),
             route_id: request.route_id.clone(),
@@ -1106,7 +1192,7 @@ fn build_and_store_private_primary_issue_action(
         "action": serde_json::from_slice::<Value>(&fs::read(&action_file)?).map_err(invalid_json)?,
         "batch": batch,
         "verification": report,
-        "output_note_path": output_note_file.display().to_string(),
+        "output_note_path": client_output_note_path(config, &output_note_file)?,
         "timing": {
             "total_ms": total_start.elapsed().as_secs_f64() * 1000.0,
             "proof": proof_timing
@@ -1135,10 +1221,11 @@ fn build_and_store_private_primary_redeem_action(
 
     let total_start = Instant::now();
     reset_asset_orchard_private_egress_timings();
+    let input_note_path = resolve_client_note_path(config, &request.input_note_path)?;
     let report = match create_asset_orchard_private_primary_redeem(
         AssetOrchardPrivatePrimaryRedeemCreateOptions {
             data_dir: config.data_dir.clone(),
-            note_file: PathBuf::from(&request.input_note_path),
+            note_file: input_note_path,
             output_note_seed_hex: output_seed_hex,
             output_note_file: output_note_file.clone(),
             route_id: request.route_id.clone(),
@@ -1175,7 +1262,7 @@ fn build_and_store_private_primary_redeem_action(
         "action": serde_json::from_slice::<Value>(&fs::read(&action_file)?).map_err(invalid_json)?,
         "batch": batch,
         "verification": report,
-        "output_note_path": output_note_file.display().to_string(),
+        "output_note_path": client_output_note_path(config, &output_note_file)?,
         "timing": {
             "total_ms": total_start.elapsed().as_secs_f64() * 1000.0,
             "proof": proof_timing
@@ -3225,10 +3312,44 @@ mod tests {
         Config {
             bind: "127.0.0.1:0".parse().unwrap(),
             data_dir,
+            logical_data_dir: None,
             vault_dir,
             prewarm_ready_file: root.join("prewarm-ready.json"),
             product_profile_sha256: "a".repeat(64),
         }
+    }
+
+    #[test]
+    fn logical_data_dir_maps_private_note_handles_without_expanding_scope() {
+        let root = asset_orchard_local_service_test_dir("logical_data_dir");
+        let mut config = asset_orchard_local_service_test_config(&root);
+        config.logical_data_dir = Some(PathBuf::from("/var/lib/postfiat/validator-2"));
+        let notes = config.data_dir.join("asset-orchard-local-vault");
+        fs::create_dir_all(&notes).unwrap();
+        let note = notes.join("note.json");
+        atomic_write_private_json(&note, &json!({"schema": "test"})).unwrap();
+
+        let resolved = resolve_client_note_path(
+            &config,
+            "/var/lib/postfiat/validator-2/asset-orchard-local-vault/note.json",
+        )
+        .unwrap();
+        assert_eq!(resolved, note.canonicalize().unwrap());
+        assert_eq!(
+            client_output_note_path(&config, &note).unwrap(),
+            "/var/lib/postfiat/validator-2/asset-orchard-local-vault/note.json"
+        );
+
+        let outside = resolve_client_note_path(&config, "/var/lib/postfiat/validator-1/note.json")
+            .unwrap_err();
+        assert_eq!(outside.kind(), io::ErrorKind::PermissionDenied);
+
+        let traversal = resolve_client_note_path(
+            &config,
+            "/var/lib/postfiat/validator-2/../validator-1/note.json",
+        )
+        .unwrap_err();
+        assert_eq!(traversal.kind(), io::ErrorKind::PermissionDenied);
     }
 
     #[test]
