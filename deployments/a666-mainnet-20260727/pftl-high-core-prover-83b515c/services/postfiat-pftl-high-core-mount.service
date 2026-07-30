@@ -10,22 +10,14 @@ ExecStartPre=/usr/bin/mkdir -p /home/postfiat/.local/share/postfiat/pftl-high-co
 ExecStart=/home/postfiat/.local/opt/sshfs-3.7.3/rootfs/usr/bin/sshfs -f \
   root@${PFTL_VALIDATOR2_HOST}:/var/lib/postfiat/validator-2 \
   /home/postfiat/.local/share/postfiat/pftl-high-core/validator-2 \
-  -o reconnect,ServerAliveInterval=15,ServerAliveCountMax=3,StrictHostKeyChecking=yes
+  -o sftp_server=/usr/sbin/runuser\x20-u\x20postfiat\x20--\x20/usr/lib/openssh/sftp-server \
+  -o reconnect,ServerAliveInterval=15,ServerAliveCountMax=3,StrictHostKeyChecking=yes \
+  -o idmap=file,uidfile=/home/postfiat/.config/postfiat/pftl-high-core.uidmap,gidfile=/home/postfiat/.config/postfiat/pftl-high-core.gidmap,nomap=ignore
 ExecStop=/usr/bin/fusermount3 -u /home/postfiat/.local/share/postfiat/pftl-high-core/validator-2
 Restart=always
 RestartSec=5
 TimeoutStopSec=20
 KillMode=control-group
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths=/home/postfiat/.local/share/postfiat/pftl-high-core
-RestrictSUIDSGID=true
-LockPersonality=true
-RestrictRealtime=true
-SystemCallArchitectures=native
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 UMask=0077
 
 [Install]
