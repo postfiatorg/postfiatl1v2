@@ -9,6 +9,9 @@ live value
 
 **Working name:** NAVCoin Reserve Redemption System (`NRRS`)
 
+**Immediate execution profile:** Monday, 2026-08-03, uses the deployed
+A666/pfUSDC primary route only; see section 2.2
+
 **Phase-one activated settlement asset:** the existing Ethereum-mainnet
 pfUSDC asset and route only
 
@@ -144,6 +147,237 @@ depeg path needed by every later asset.
 
 No `pfXRP`, `pfETH`, `pfStakedETH`, or `pfBTC` facility may be activated
 until the pfUSDC facility passes the phase-one release gates in section 25.
+
+### 2.2 Binding Monday demonstration profile
+
+The Monday, 2026-08-03 demonstration has one business claim:
+
+> Any normally authorized and funded user—not a privileged operator—can
+> contribute Ethereum-mainnet USDC through pfUSDC, receive newly issued A666,
+> cause that pfUSDC reserve to be counted in A666 NAV, and redeem A666 back
+> into pfUSDC under the standing primary-market policy.
+
+This is an execution and evidence demonstration of the already deployed
+A666/pfUSDC route. It is not the activation of the generic multi-facility
+NRRS state proposed by sections 8–16.
+
+The demo does **not** create a Uniswap pool. The wA666/USDC Uniswap v4 pool
+already exists. It also does not create a new pfUSDC facility. It exercises
+the deployed primary route:
+
+```text
+pftl-a666-ethereum-wA666-usdc-v1
+```
+
+#### 2.2.1 Required flow
+
+The required flow is:
+
+```text
+ordinary funded user
+  -> deposits canonical Ethereum-mainnet USDC
+  -> receives source-labeled pfUSDC on PFTL
+  -> executes pftl_uniswap_primary_subscribe_v2
+  -> receives newly issued A666
+  -> incoming base pfUSDC increases settlement_reserve_atoms
+  -> releases the unused export entitlement with pftl_uniswap_order_release
+  -> fresh StakeHub-backed NAV mark counts the updated settlement reserve
+  -> governed route epoch advance pins that fresh NAV for pricing
+  -> user executes pftl_uniswap_primary_redeem
+  -> redeemed A666 is retired
+  -> user receives pfUSDC from settlement reserve
+```
+
+The pfUSDC remains on PFTL between issue and redemption. The core demo does
+not bridge the facility reserve back to Ethereum. A final pfUSDC-to-USDC
+withdrawal may be shown only after the required PFTL accounting proof has
+passed; it is not allowed to obscure or replace that proof.
+
+The issuing and redeeming wallet may be the same wallet. It requires no
+special issuer or operator role beyond the ordinary authorizations already
+required by the deployed deposit, subscription, and redemption operations.
+The fresh NAV mark and route epoch advance remain normal market-maintenance
+operations under their existing governance authority; they are not
+per-customer trade approvals.
+
+The deployed transparent subscription creates an export entitlement even when
+the user intends to retain A666 on PFTL. The user MUST release that entitlement
+before the NAV mark and route epoch advance. Directly redeeming while leaving
+the entitlement active is not an acceptable terminal state.
+
+#### 2.2.2 Capital requirement
+
+No separate operator seed is required for this demonstration because issue
+occurs before redemption. The user's own issue payment funds the incremental
+settlement reserve.
+
+The demo redemption amount MUST be no greater than the redemption output
+supported by:
+
+```text
+the newly credited base settlement reserve
++ any separately proven unreserved legacy settlement reserve
+```
+
+The demo SHOULD rely only on the incremental reserve created in the same run.
+That makes the proof independent of undocumented prior liquidity.
+
+At A666 NAV `$1.00`, issue multiplier `1.005`, and redemption multiplier
+`0.9995`, an example round trip is:
+
+```text
+user pays                 100.500000 pfUSDC
+new A666 issued           100.000000 A666
+base reserve increase     100.000000 pfUSDC
+issue spread                0.500000 pfUSDC
+
+user redeems              100.000000 A666
+pfUSDC returned            99.950000 pfUSDC
+A666 retired              100.000000 A666
+```
+
+Exact live amounts MUST be calculated from the fresh governed NAV and policy;
+the example does not authorize a hardcoded `$1.00` NAV.
+
+#### 2.2.3 Required machine evidence
+
+The demo packet MUST contain:
+
+1. fresh preflight output proving all six validators agree on finalized
+   height and relevant state roots;
+2. the Ethereum USDC deposit transaction, finality evidence, vault event, and
+   pfUSDC claim receipt;
+3. pre-issue A666 supply, user balances, route policy, capacity usage, and
+   `settlement_reserve_atoms`;
+4. the finalized `pftl_uniswap_primary_subscribe_v2` transaction and receipt;
+5. post-issue proof that:
+
+   ```text
+   authorized_valid_supply_after
+     = authorized_valid_supply_before + issued_A666
+
+   user_A666_after
+     = user_A666_before + issued_A666
+
+   settlement_reserve_after
+     = settlement_reserve_before + base_pfUSDC
+   ```
+
+6. the finalized user-authorized `pftl_uniswap_order_release` transaction
+   removing the unused export entitlement without changing A666 supply or
+   settlement reserve;
+7. a fresh finalized StakeHub-backed NAV mark whose primary-market reserve
+   overlay contains the updated `settlement_reserve_atoms`;
+8. the finalized governed route epoch advance pinning that NAV epoch and
+   reserve packet for primary pricing;
+9. the finalized `pftl_uniswap_primary_redeem` transaction and receipt;
+10. post-redemption proof that:
+
+   ```text
+   authorized_valid_supply_final
+     = authorized_valid_supply_after - redeemed_A666
+
+   settlement_reserve_final
+     = settlement_reserve_after - redemption_pfUSDC
+
+   user_pfUSDC_final
+     = user_pfUSDC_after_issue + redemption_pfUSDC
+   ```
+
+11. zero active reservation and export-entitlement state for the demo order;
+12. six-validator convergence on the final route and NAV state; and
+13. a single machine-readable summary with transaction IDs, heights, hashes,
+    amounts, elapsed times, invariant verdicts, and artifact paths.
+
+The existing execution anchors are:
+
+- `scripts/a666-mainnet-primary-issue-ops.py`, using its reserve and subscribe
+  operations but deliberately not submitting its generated export operation;
+- `scripts/a666-build-live-nav-mark-ops.py`;
+- `scripts/a666-build-route-epoch-advance.py`;
+- `scripts/a666-build-transparent-redeem-op.py`; and
+- the deployed consensus operations and evidence patterns referenced in the
+  current-state and acceptance documents.
+
+`scripts/a666-mainnet-transparent-issue-after-deposit.sh` is reference
+evidence, not the Monday driver, because it continues directly into Ethereum
+export. The Monday driver MUST stop after subscription, release the export
+entitlement, and preserve the A666 on PFTL for the NAV mark and redemption.
+
+#### 2.2.4 Pass criteria
+
+The Monday demo passes only if:
+
+- the user is not exercising a privileged operator-only transaction path;
+- canonical Ethereum USDC produces the exact source-labeled pfUSDC;
+- issue creates new A666 rather than transferring existing inventory;
+- incoming base pfUSDC increases the route settlement reserve exactly once;
+- the unused export entitlement is released and cannot later export redeemed
+  A666;
+- the fresh NAV mark includes that updated reserve exactly once;
+- the governed route advances to that fresh pricing epoch;
+- redemption retires the exact A666 amount and releases the exact governed
+  pfUSDC amount;
+- no Uniswap swap is used to obtain or redeem the demonstrated A666;
+- no manual ledger edit, validator-local mutation, replay, or hidden
+  inventory transfer occurs;
+- all six validators converge; and
+- every claim is backed by the machine evidence in section 2.2.3.
+
+#### 2.2.5 Stop conditions
+
+The live demo MUST NOT begin if:
+
+- StakeHub NAV or pfUSDC route state is stale;
+- validator heights, state roots, policies, or route epochs disagree;
+- the user lacks confirmed USDC, ETH gas, or required PFTL authority;
+- an active reservation or in-flight operation would make the before-state
+  ambiguous;
+- issue or redemption capacity is insufficient;
+- the exact issue and redemption amounts have not passed a dry-run
+  calculation; or
+- the demo would require an emergency rolling upgrade, manual state edit, or
+  unrehearsed live-value code change.
+
+#### 2.2.6 Explicitly deferred from Monday
+
+The following are outside the Monday critical path:
+
+- implementing `NavReserveRedemptionFacilityV1`;
+- `nav_reserve_facility_post_v1` or facility-withdraw operations;
+- the new settlement-asset registry;
+- the generic settlement-price packet replacing deployed pfUSDC par pricing;
+- pfXRP, pfETH, pfStakedETH, or pfBTC;
+- new Asset-Orchard circuit work or a private demo;
+- new bridge contracts or trust classes;
+- creating, redeploying, or reseeding the Uniswap pool;
+- large-capacity or multi-user claims; and
+- public production-GA claims.
+
+These remain required for the longer-term system but are not allowed to delay
+the narrow proof that buyer-funded pfUSDC becomes A666 reserve and supports
+primary redemption.
+
+#### 2.2.7 Required preparation checklist
+
+- [ ] Implement or assemble a narrow orchestration wrapper for exactly the
+  section 2.2.1 sequence; it may compose existing operations but MUST NOT add a
+  consensus transaction kind.
+- [ ] Make every generated artifact fail on overwrite and bind it to the fresh
+  route epoch, policy hash, NAV packet, account, and amount.
+- [ ] Rehearse the exact reserve -> subscribe -> entitlement-release sequence
+  without submitting an export operation.
+- [ ] Rehearse the fresh NAV mark and governed route epoch advance with zero
+  active reservations and zero export entitlements.
+- [ ] Calculate the maximum redeemable A666 from the incremental base reserve
+  after the fresh NAV is known; do not assume the full issued amount remains
+  redeemable if NAV moves.
+- [ ] Rehearse the exact redemption and final six-validator reconciliation.
+- [ ] Produce one operator-facing command sheet with explicit stop points
+  before Ethereum deposit, PFTL issue, NAV finalization, route advance, and
+  redemption.
+- [ ] Complete at least one clean dress rehearsal using the same code,
+  topology, authorizations, and evidence schema intended for Monday.
 
 ## 3. Economic principles
 
@@ -1282,6 +1516,10 @@ For every supported pfAsset:
 - exact vault/issued-supply conservation.
 
 ## 24. Implementation phases
+
+The section 2.2 Monday demonstration occurs before these implementation
+phases. It reuses the deployed A666/pfUSDC route and MUST NOT be represented
+as completion of the proposed generic NRRS successor.
 
 ### Phase A — Economic and schema freeze
 
