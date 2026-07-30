@@ -7,6 +7,14 @@ and deployment gates
 dealer inventory, a separate redemption bucket, or market operations as a
 substitute for primary redemption.
 
+> **Architecture boundary (2026-07-30):** This document remains canonical for
+> the deployed A666 single-settlement-asset primary market. The proposed
+> [NAVCoin Reserve Redemption System](../plans/NAVCOIN-RESERVE-REDEMPTION-SYSTEM-SPEC-20260730.md)
+> generalizes that accounting into separately escrowed, two-sided facilities
+> for exact approved assets in the `pfUSD`, `pfXRP`, `pfETH`, `pfStakedETH`,
+> and `pfBTC` families. NRRS is not yet deployed and does not silently change
+> A666 v2 state or economics.
+
 ## One-sentence model
 
 Primary subscription moves the subscriber's counted settlement value into the

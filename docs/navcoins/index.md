@@ -83,17 +83,21 @@ entering or leaving the shielded pool.
 1. [A666 Current State](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md)
    records the deployed pfUSDC/A666/private-swap/bridge/Uniswap product and
    exact remaining release gates.
-2. [Canonical Primary-Market Accounting](primary-market-accounting.md)
+2. [NAVCoin Reserve Redemption System](../plans/NAVCOIN-RESERVE-REDEMPTION-SYSTEM-SPEC-20260730.md)
+   specifies the proposed registry-driven, trustlessly executable two-sided
+   primary facilities for `pfUSD`, `pfXRP`, `pfETH`, `pfStakedETH`, and
+   `pfBTC`. It is future architecture, not current deployment state.
+3. [Canonical Primary-Market Accounting](primary-market-accounting.md)
    defines the adopted subscription, redemption, capacity, fee, bridge, and
    market-support invariants.
-3. [Proof-of-Reserve Primitives](reserve-primitives.md) explains proof profiles,
+4. [Proof-of-Reserve Primitives](reserve-primitives.md) explains proof profiles,
    reserve packets, attestors, challenges, and the native NAV transaction path.
-4. [Assets And Venues](assets-and-venues.md) documents a651, a652, a666,
+5. [Assets And Venues](assets-and-venues.md) documents a651, a652, a666,
    pfUSDC, the
    Ethereum venues, and the bridge/market-operation contracts.
-5. [a651 Uniswap Pool](uniswap-pool.md) retains the legacy a651 venue, pool,
+6. [a651 Uniswap Pool](uniswap-pool.md) retains the legacy a651 venue, pool,
    launch, and migration history.
-6. [PFTL Tools](pftl-tools.md) maps the scripts, CLI commands, Python modules,
+7. [PFTL Tools](pftl-tools.md) maps the scripts, CLI commands, Python modules,
    and Solidity contracts to the evidence they produce.
-7. [Reference Posts](references.md) links the public NAVCoin series and the
+8. [Reference Posts](references.md) links the public NAVCoin series and the
    deeper local implementation documents.

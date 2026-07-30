@@ -15,6 +15,11 @@ pfUSDC, A666 primary issue/redemption, the private PFTL middle, proof-gated
 wA666, the Uniswap venue, live deployment state, and remaining production
 gates—start with
 [A666, pfUSDC, Private Swap, Bridge, and Uniswap Current State](status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
+The proposed next-generation
+[NAVCoin Reserve Redemption System](plans/NAVCOIN-RESERVE-REDEMPTION-SYSTEM-SPEC-20260730.md)
+defines separately escrowed two-sided primary facilities for approved
+`pfUSD`, `pfXRP`, `pfETH`, `pfStakedETH`, and `pfBTC` assets; it is a
+specification, not a claim about currently deployed A666 functionality.
 
 The sidebar is curated for reading. Generated governance packets and per-gate
 receipts stay searchable in the site and are collected in the
@@ -25,7 +30,7 @@ they are not listed one-by-one in the primary navigation.
 
 | Area | Current State | Where To Read |
 | --- | --- | --- |
-| A666 primary market | Mainnet components and full economic loop are functionally proven; resident private swaps remain limited availability and production GA is closed. | [A666 current state](status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md), [production hardening](plans/A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md) |
+| A666 primary market | Mainnet components and full economic loop are functionally proven; resident private swaps remain limited availability and production GA is closed. Multi-asset reserve facilities are proposed, not deployed. | [A666 current state](status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md), [production hardening](plans/A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md), [reserve redemption system](plans/NAVCOIN-RESERVE-REDEMPTION-SYSTEM-SPEC-20260730.md) |
 | Core chain | Rust L1 with accounts, signed transfers, fees, blocks, receipts, deterministic replay, and state roots. | [Architecture](architecture/overview.md) |
 | Finality | Versioned certified ordering: legacy single-view mode and activated consensus v2 with durable prepare/precommit, timeout certificates, and proposer rotation. | [Finality](architecture/finality.md) |
 | Settlement lanes | Consensus transactions, W6 dual-authorized atomic swap, FastPay payments, FastSwap DvP, and Asset-Orchard private settlement have distinct finality and recovery boundaries. | [Settlement Lanes](architecture/settlement-lanes.md) |
