@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { formatBalance, formatAssetBalance, shortenAssetId, PFUSDC_ASSET_ID, A651_ASSET_ID } from '../lib/utils.js';
+import { formatBalance, formatAssetBalance, shortenAssetId, PFUSDC_ASSET_ID, A651_ASSET_ID, A666_ASSET_ID } from '../lib/utils.js';
 
 export default function NavList({ rpc, address, swapServer, go }) {
   const [assets, setAssets] = useState([]);
@@ -37,6 +37,7 @@ export default function NavList({ rpc, address, swapServer, go }) {
   const getAssetCode = (assetId) => {
     if (assetId === PFUSDC_ASSET_ID) return 'pfUSDC';
     if (assetId === A651_ASSET_ID) return 'a651';
+    if (assetId === A666_ASSET_ID) return 'A666';
     return shortenAssetId(assetId);
   };
 

@@ -169,6 +169,23 @@ test('RpcClient exposes no unsigned account-to-owned mutation', () => {
   assert.equal(client.unwrapOwned, undefined);
 });
 
+test('RpcClient binds A666 market reads to exact route and NAV status methods', async () => {
+  const rpc = new RpcClient('ws://127.0.0.1:8080/rpc');
+  const calls = [];
+  rpc.call = async (method, params) => {
+    calls.push({ method, params });
+    return { ok: true, result: {} };
+  };
+
+  await rpc.navcoinBridgeSupplyStatus('route-a666');
+  await rpc.vaultBridgeStatus('asset-a666');
+
+  assert.deepEqual(calls, [
+    { method: 'navcoin_bridge_supply_status', params: { route_id: 'route-a666' } },
+    { method: 'vault_bridge_status', params: { asset_id: 'asset-a666' } },
+  ]);
+});
+
 test('RpcClient binds FastPay v3 mutations and recovery reads to exact RPC methods', async () => {
   const client = new RpcClient('ws://127.0.0.1:18793');
   const calls = [];

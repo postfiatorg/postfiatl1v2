@@ -203,6 +203,8 @@ const PUBLIC_READ_RPC_METHODS = new Set([
     'account_tx',
     'asset_info',
     'vault_bridge_route',
+    'vault_bridge_status',
+    'navcoin_bridge_supply_status',
     'escrow_info',
     'owned_objects',
     'owned_recovery_capabilities',

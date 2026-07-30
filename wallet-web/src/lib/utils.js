@@ -84,8 +84,9 @@ export function shortenAssetId(assetId) {
 }
 
 // Known asset IDs on the WAN devnet
-export const PFUSDC_ASSET_ID = '8751c2d04b993eb54f751b0f130c420fdb089548ec2f2a53837d11d1c397a1252e74bcc24616527e9c79b968635fae90';
+export const PFUSDC_ASSET_ID = '02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b';
 export const A651_ASSET_ID = 'dcddbf56e7e15f7893d0038e8e0e6089d5a41418dead75353aabb8c016cf626beeb93bc802929f29883c078d910f59d5';
+export const A666_ASSET_ID = '521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c';
 
 const buildEnv = import.meta.env || {};
 const processEnv = typeof process !== 'undefined' ? process.env || {} : {};

@@ -384,6 +384,10 @@ export class RpcClient {
   }
   async assetInfo(assetId) { return this.call('asset_info', { asset_id: assetId }); }
   async vaultBridgeRoute(assetId) { return this.call('vault_bridge_route', { asset_id: assetId }); }
+  async vaultBridgeStatus(assetId) { return this.call('vault_bridge_status', { asset_id: assetId }); }
+  async navcoinBridgeSupplyStatus(routeId) {
+    return this.call('navcoin_bridge_supply_status', { route_id: routeId });
+  }
   async accountAssets(address) { return this.call('account_assets', { account: address }); }
   async escrowInfo(escrowId) { return this.call('escrow_info', { escrow_id: escrowId }); }
   async ownedObjects(ownerPublicKeyHex, opts = {}) {

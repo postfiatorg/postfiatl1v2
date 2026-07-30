@@ -109,7 +109,13 @@ async function main() {
   assert.strictEqual(RPC_FLEET.length, 6);
   assert(RPC_FLEET.every((endpoint) => endpoint.host === '127.0.0.1'));
   assert(!/64\.176\.220\.75|95\.179\.184\.122|66\.42\.48\.39|149\.28\.63\.106|95\.179\.179\.206|45\.32\.110\.170/.test(DEFAULT_RPC_FLEET));
-  for (const method of ['owned_recovery_capabilities', 'owned_certificate', 'owned_recovery_status']) {
+  for (const method of [
+    'owned_recovery_capabilities',
+    'owned_certificate',
+    'owned_recovery_status',
+    'navcoin_bridge_supply_status',
+    'vault_bridge_status',
+  ]) {
     assert.strictEqual(rpcRequestRequiresAuth(method), false, `${method} is a public read`);
   }
   for (const method of ['owned_sign_v3', 'owned_apply_v3', 'owned_unwrap_sign_v3', 'owned_unwrap_apply_v3']) {

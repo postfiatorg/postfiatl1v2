@@ -20,12 +20,12 @@ import Bridge from './components/Bridge.jsx';
 import NavList from './components/NavList.jsx';
 import NavDetail from './components/NavDetail.jsx';
 import More from './components/More.jsx';
-import FastSwapDemo from './components/FastSwapDemo.jsx';
+import A666Market from './components/A666Market.jsx';
 
 const PROXY_AUTH_SESSION_KEY = 'postfiat.wallet_proxy_api_token';
 
 const NAV_ITEMS = [
-  { id: 'wallet', label: 'Wallet' }, { id: 'fastswap', label: 'Buy a651' },
+  { id: 'wallet', label: 'Wallet' }, { id: 'a666', label: 'A666 Market' },
   { id: 'send', label: 'Send' }, { id: 'swap', label: 'Swap' },
   { id: 'bridge', label: 'Bridge' },
   { id: 'nav', label: 'NavCoins' }, { id: 'more', label: 'More' },
@@ -595,8 +595,17 @@ export default function App() {
               walletFeedStatus={walletFeedStatus}
             />
           )}
-          {tab === 'fastswap' && (
-            <FastSwapDemo walletAddress={walletAddress} />
+          {tab === 'a666' && (
+            <A666Market
+              rpc={rpc}
+              txBuilder={txBuilder}
+              backupJson={backupJson}
+              address={walletAddress}
+              chainStatus={chainStatus}
+              chainCapabilities={chainCapabilities}
+              liveSnapshot={walletLiveSnapshot}
+              onToast={showToast}
+            />
           )}
           {tab === 'bridge' && (
             <Bridge
