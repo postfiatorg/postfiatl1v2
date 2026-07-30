@@ -18,6 +18,12 @@ test('production CSP does not grant arbitrary websocket origins', () => {
   assert.doesNotMatch(csp, /(?:^|\s)wss:(?:\s|;|$)/);
 });
 
+test('production CSP permits the localhost TLS RPC websocket', () => {
+  const csp = viteConfig.preview?.headers?.['Content-Security-Policy'];
+  assert.match(csp, /(?:^|\s)wss:\/\/127\.0\.0\.1:5173(?:\s|;|$)/);
+  assert.match(csp, /(?:^|\s)wss:\/\/localhost:5173(?:\s|;|$)/);
+});
+
 test('wallet settings cannot redirect the bridge money destination', () => {
   const moreSource = readFileSync(new URL('../components/More.jsx', import.meta.url), 'utf8');
   assert.doesNotMatch(moreSource, /bridgeVaultAddr/);
