@@ -18,6 +18,24 @@ and `pfBTC`
 **Current production state:**
 `../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md`
 
+**Production release gate for the existing lane:**
+`A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md`
+
+**Primary implementation anchors (deployed code this spec must extend, not
+duplicate):**
+
+- `crates/types/src/market_nav_asset_types.rs` —
+  `PftlUniswapPrimaryMarketPolicyV2`, `PftlUniswapRouteV2State`,
+  `PftlUniswapOrderReservationV2`, export entitlements/packets, trust-class
+  constants, bounded-collection validation.
+- `crates/execution/src/nav_vault_asset_execution.rs` — deterministic
+  pricing helpers, primary issue/redeem execution, vault-bridge settlement
+  top-up, `pftl_uniswap_*` deterministic error codes.
+- `crates/node/src/shielded_batch_actions.rs`, `crates/privacy_orchard/` —
+  Asset-Orchard typed-note execution.
+- `crates/node/src/market_bridge.rs`, `crates/node/src/state_commitment.rs`
+  — route state-root commitment coverage.
+
 `MUST`, `MUST NOT`, `REQUIRED`, and declarative “must” statements are
 normative. `SHOULD` is the default unless a dated exception records its owner,
 risk, and expiry. Examples are non-normative.
@@ -282,6 +300,23 @@ registry_hash
 The registry hash is included in every facility policy, quote, reservation,
 receipt, bridge packet, and state commitment.
 
+Existing anchors the registry MUST build on rather than replace:
+
+- the `nav_asset_register` and `nav_profile_register` transaction kinds and
+  their content-addressed profile records;
+- the deployed vault-bridge source-domain convention
+  (`erc20_bridge_vault:<chain_id>:<vault_address>:<token_address>`, with
+  lowercased addresses) already used for bucket selection and egress policy
+  matching; and
+- the deployed `route_config_digest` content addressing on
+  `PftlUniswapConsensusRouteState`, plus the distinct `route_profile_hash`
+  binding used by vault-bridge finality profiles and pfAsset egress scripts.
+
+A registry entry for a new pfAsset is therefore an extension of the existing
+profile/source-labeling machinery with the additional valuation, precision,
+haircut-bounds, and restriction-disclosure fields listed above — not a new
+parallel identity system.
+
 ### 8.2 Product families
 
 | Family | Required profile behavior |
@@ -375,6 +410,32 @@ NON_NAV_FEE_CUSTODY
 The default for a new product should be `NAV_RESERVE` so facility economics
 accrue to NAVCoin holders. A666 compatibility may retain
 `NON_NAV_FEE_CUSTODY`. Wallets must disclose the selected treatment.
+
+The deployed implementation already accounts spread separately as
+`non_nav_spread_atoms` on the route state; that is the existing concrete form
+of `NON_NAV_FEE_CUSTODY`. `NAV_RESERVE` is new behavior and requires the
+corresponding NAV-packet inclusion rule from section 10.
+
+### 9.3 Relationship to deployed A666 v2 types
+
+`NavReserveRedemptionFacilityV1` generalizes two deployed structures and MUST
+reuse their validation discipline rather than restate it:
+
+| Facility field group | Deployed precedent or nearest analogue |
+|---|---|
+| Multipliers, capacities, order bounds, validity heights, `maximum_nav_age_blocks`, `pricing_nav_epoch`, `pricing_nav_packet_hash`, `policy_hash` | `PftlUniswapPrimaryMarketPolicyV2` contains the semantic counterparts; NRRS normalizes several field names and adds settlement-price and haircut terms |
+| `active_reservations`, `terminal_reservation_ids`, reserved-sum accounting, pinning of every reservation to route epoch + policy epoch + policy hash | `PftlUniswapRouteV2State.active_reservations` / `terminal_reservations` validation |
+| Bounded consensus collections | `MAX_PFTL_UNISWAP_ROUTE_ENTRIES`-style constants; NRRS MUST define equivalent bounds per facility |
+| `reserve_pending_egress_atoms` | Export entitlement / export packet accounting is the nearest exact-once lifecycle precedent, but it currently moves NAVCoin rather than settlement reserve; the new settlement-asset conservation semantics require separate vectors |
+| Pause semantics | deployed `pftl_uniswap_route_pause` and the `paused` / `live_value_enabled` flags |
+
+New fields with no deployed precedent (and therefore the actual
+implementation surface): `settlement_asset_id` as a per-facility variable,
+`settlement_registry_hash`, `incoming_asset_value_bps` /
+`outgoing_asset_value_bps` haircuts, `settlement_price_epoch` /
+`settlement_price_packet_hash`, `reserve_inventory_atoms` as operator-posted
+escrow, `spread_destination` selection, and separate issue/redeem pause
+flags.
 
 ## 10. Reserve posting and double-count prevention
 
@@ -532,6 +593,16 @@ settlement_out_atoms =
 - validators must produce identical quote bytes; and
 - wallets must independently recompute every quote.
 
+The implementation MUST reuse the deployed checked-integer pricing helpers in
+`nav_vault_asset_execution.rs` (`checked_mul_div_ceil` /
+`checked_mul_div_floor`, `u128` intermediates, `u64` results, deterministic
+`pftl_uniswap_pricing_overflow`-class error codes) as the arithmetic
+foundation, extended with the settlement-price and haircut terms. The
+existing helpers encode the normative rounding directions for the multiplier
+step; the new price-division step MUST add reference vectors of its own
+(section 23.1) because it introduces a second rounding boundary the deployed
+code does not have.
+
 ### 11.5 Example: pfBTC facility
 
 Assume:
@@ -688,6 +759,30 @@ nav_reserve_external_egress_consume_v1
 nav_reserve_external_egress_cancel_v1
 ```
 
+These operations follow the existing transaction-kind registry convention
+(snake-case kind strings such as `nav_reserve_submit`,
+`pftl_uniswap_order_reserve`) and, where a deployed A666 v2 operation is
+being generalized, MUST preserve its semantics for the compatibility facility
+(section 22, Phase C):
+
+| NRRS operation | Deployed precedent generalized |
+|---|---|
+| `nav_reserve_facility_register_v1` | `pftl_uniswap_route_init` + `market_ops_policy_register` |
+| `nav_reserve_facility_epoch_advance_v1` | policy-epoch advance on the deployed route |
+| `nav_reserve_facility_pause_v1` | `pftl_uniswap_route_pause` (split into per-direction flags) |
+| `nav_reserve_quote_reserve_v1` | `pftl_uniswap_order_reserve` |
+| `nav_reserve_quote_release_v1` | `pftl_uniswap_order_release` |
+| `nav_reserve_primary_issue_v1` | `pftl_uniswap_primary_subscribe` |
+| `nav_reserve_primary_redeem_v1` | `pftl_uniswap_primary_redeem` + `NavRedeemSettleOperation` settlement |
+| `nav_reserve_external_egress_*_v1` | `pftl_uniswap_export_debit` / export packet consume / `pftl_uniswap_refund_source` provide the exact-once packet precedent; settlement-asset direction and conservation are new |
+| `nav_reserve_facility_post_v1`, `nav_reserve_facility_withdraw_v1` | **no deployed precedent** — new operator escrow lifecycle |
+
+Deterministic error codes MUST follow the deployed style: stable snake-case
+code strings (`nav_reserve_*`, mirroring the existing `pftl_uniswap_*`
+catalog such as `pftl_uniswap_reservation_policy_mismatch`,
+`pftl_uniswap_issue_capacity_exceeded`,
+`pftl_uniswap_opening_inventory_double_count`).
+
 Every operation must have:
 
 - a versioned canonical schema;
@@ -724,6 +819,16 @@ must bind:
 
 Consensus may publish aggregate facility inventory and capacity without
 publishing the user's note opening or spending authority.
+
+Deployed precedent: Asset-Orchard typed-note private primary issue and
+redemption have run on the mainnet pfUSDC facility under controlled,
+limited-availability operation
+(`shielded_batch_actions`, `pftl_uniswap_private_primary_*` validation,
+private-primary reservation replay rejection), fronted by the resident
+private swap service described in the current-state document. NRRS private
+execution extends the existing action circuits' public-input bindings with
+the facility, registry, and settlement-price commitments listed above; it
+MUST NOT introduce a second shielded execution path.
 
 The prover must not receive unrestricted wallet keys. Non-custodial release
 requires user-held spending authority and recoverable private wallet state.
@@ -776,9 +881,19 @@ Every facility must publish the actual directional trust class, for example:
 ```text
 TRUSTLESS_FINALITY
 BFT_CHECKPOINT
-OPTIMISTIC_CHALLENGE
+OPTIMISTIC
 TRANSFER_RESTRICTED_ISSUER
 ```
+
+The first two are already deployed constants
+(`PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY`,
+`PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT`), and the deployed route publishes
+`route_trust_class`, `outbound_verification_class`, and
+`return_verification_class` in its supply status. The deployed code also has
+a `CONTROLLED` trust class that forbids `live_value_enabled`; NRRS MUST
+extend the deployed string-label and validator set in place (reusing
+`OPTIMISTIC` and adding `TRANSFER_RESTRICTED_ISSUER`) rather than defining a
+parallel enum, and MUST keep the `CONTROLLED`-implies-no-live-value rule.
 
 Product copy must not collapse these into a generic “trustless bridge” claim.
 
@@ -950,15 +1065,47 @@ Recovery must be deterministic:
 
 ## 22. Current A666 delta
 
-The deployed A666 v2 implementation currently has:
+What the deployed A666 v2 implementation **already has** (NRRS reuses, not
+rebuilds):
 
-- one `settlement_asset_id`;
-- one `settlement_reserve_atoms` balance;
-- one primary-market policy;
-- pfUSDC-centered issue and redemption;
-- no supported operator top-up operation for a separate redemption reserve;
-- no multi-facility quote reservation; and
-- no arbitrary pfAsset selection.
+- one route with one `settlement_asset_id` and one
+  `settlement_reserve_atoms` balance
+  (`PftlUniswapConsensusRouteState`; its `v2` member carries the policy and
+  reservation state);
+- one primary-market policy object with multipliers, capacities, order
+  bounds, validity heights, NAV-age freshness, and pinned pricing packet
+  (`PftlUniswapPrimaryMarketPolicyV2`);
+- a working consensus reservation lifecycle: `pftl_uniswap_order_reserve` /
+  `pftl_uniswap_order_release`, bounded active/terminal reservation maps,
+  reservations pinned to route epoch + policy epoch + policy hash, expiry,
+  per-wallet reservation limits, and private-primary reservation replay
+  rejection;
+- deterministic checked-integer pricing with normative rounding directions
+  and a stable deterministic error-code catalog;
+- opening-inventory double-count rejection
+  (`pftl_uniswap_opening_inventory_double_count` and related codes);
+- directional trust classes committed in state and published in supply
+  status;
+- spread accounting as `non_nav_spread_atoms` (the `NON_NAV_FEE_CUSTODY`
+  treatment only);
+- redemption settlement top-up drawn from verified vault-bridge allocations
+  at settlement time (`NavRedeemSettleOperation`, bucket-matched by source
+  domain and policy hash); and
+- export entitlements/packets, return import, refund, and pause operations.
+
+What it **does not have** (the actual NRRS implementation surface):
+
+- more than one facility or settlement asset per NAVCoin;
+- a settlement-price packet: pfUSDC is priced at par USD, so there is no
+  finalized `P`, no price-freshness window, and no depeg handling;
+- incoming/outgoing haircut factors (`Hi` / `Ho`);
+- a standing operator-posted facility escrow with post/withdraw lifecycle
+  (the vault-bridge top-up is settlement-time sourcing, not posted
+  reserve inventory);
+- the `NAV_RESERVE` spread destination;
+- the settlement asset registry of section 8 as a first-class object;
+- in-kind (non-USD, share/index-valued) reserve facilities; and
+- per-direction reservation pause flags.
 
 NRRS should be implemented as a versioned successor or parallel facility
 layer. It must reuse:
@@ -1060,7 +1207,10 @@ For every supported pfAsset:
 
 ### Phase C — pfUSD compatibility
 
-- [ ] Register the current pfUSDC lane as one concrete `pfUSD` family asset.
+- [ ] Register the current pfUSDC lane (deployed route
+  `pftl-a666-ethereum-wA666-usdc-v1`, vault-bridge source-labeled pfUSDC)
+  as one concrete `pfUSD` family asset, priced by a real settlement-price
+  packet instead of hardcoded par.
 - [ ] Prove A666-equivalent economics through the new facility.
 - [ ] Reconcile old and new state without moving live value.
 
@@ -1132,7 +1282,11 @@ For every supported pfAsset:
 ### Gate R5 — controlled availability
 
 - sustained issue/redeem and concurrency campaigns pass;
-- p95 and worst-case latency meet the published SLO;
+- p95 and worst-case latency meet the published SLO, measured with the same
+  machine-stamped qualification discipline as the existing private-swap
+  gate (currently a `42-second` issue gate, most recently missed at p95
+  `50.365s`; NRRS facilities MUST publish their own per-asset gates rather
+  than inherit that number);
 - monitoring and rollback are proven;
 - actual available capacity is shown separately from policy capacity; and
 - all live-value limits are bounded by the smallest proven run.
