@@ -17,6 +17,8 @@ const SOURCE_PROOF_KIND = 'sp1-ethereum-finality-v1';
 const SEPOLIA_P0_PROGRAM_VKEY = '0x0077f479ed28535dbb5035f455a875334bae7d5a1eaa7c22c6f070a404eab31f';
 const SEPOLIA_P0_MANIFEST_HASH = 'dc409b424e7627b936d81a16d2fc8f4c17e21a108d654be6b992e552d7b0c6d3';
 const HASH_RE = /^(?:0x)?[0-9a-f]{64}$/;
+const HASH48_RE = /^(?:0x)?[0-9a-f]{96}$/;
+const RECEIPT_ID_RE = /^(?:0x)?(?:[0-9a-f]{64}|[0-9a-f]{96})$/;
 const STAGES = [
     'confirming_deposit',
     'waiting_for_ethereum_finality',
@@ -237,14 +239,17 @@ function assertCommonBinding(result, stage, request, config) {
     if (stage === 'waiting_for_ethereum_finality' && (result.ethereum_finalized !== true
         || !HASH_RE.test(String(result.finalized_block_hash || ''))
         || !Number.isSafeInteger(Number(result.finalized_block_number)))) throw terminalError('Ethereum finality not proven');
-    if (stage === 'capturing_state_proof' && [result.witness_sha256, result.evidence_root, result.nullifier]
-        .some((value) => !HASH_RE.test(String(value || '')))) throw terminalError('state-proof capture artifacts missing');
+    if (stage === 'capturing_state_proof' && (
+        !HASH_RE.test(String(result.witness_sha256 || ''))
+        || !HASH48_RE.test(String(result.evidence_root || ''))
+        || !HASH_RE.test(String(result.nullifier || ''))
+    )) throw terminalError('state-proof capture artifacts missing');
     if (stage === 'proving' && [result.proof_sha256, result.public_values_sha256, result.program_vkey]
         .some((value) => !HASH_RE.test(String(value || '')))) throw terminalError('SP1 proof artifacts missing');
     if (stage === 'verifying' && result.proof_verified !== true) throw terminalError('proof verification failed');
     if (stage === 'growing_backed_cap' && result.backed_cap_ready !== true) throw terminalError('backed cap growth incomplete');
     if (stage === 'claiming' && (result.receipt_code !== 'ACCEPTED'
-        || !HASH_RE.test(String(result.receipt_id || result.tx_id || '')))) throw terminalError('claim was not accepted');
+        || !RECEIPT_ID_RE.test(String(result.receipt_id || result.tx_id || '')))) throw terminalError('claim was not accepted');
 }
 
 function checkpointHash(checkpoint) {

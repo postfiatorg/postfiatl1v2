@@ -13,7 +13,11 @@ import {
 } from 'lucide-react';
 import * as evm from '../lib/evm.js';
 import * as utils from '../lib/utils.js';
-import { relayVaultDeposit } from '../lib/bridge-relay.js';
+import {
+  assertBridgeReadinessMatchesRoute,
+  loadBridgeReadiness,
+  relayVaultDeposit,
+} from '../lib/bridge-relay.js';
 import { loadGovernedVaultBridgeRoute } from '../lib/bridge-route.js';
 
 const ETHEREUM_CHAIN_ID = utils.ETH_MAINNET_CHAIN_ID || 1;
@@ -136,6 +140,7 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
   const [route, setRoute] = useState(null);
   const [routeStatus, setRouteStatus] = useState('loading');
   const [routeError, setRouteError] = useState('');
+  const [relayStatus, setRelayStatus] = useState('');
   const [error, setError] = useState('');
   const [manualOpen, setManualOpen] = useState(false);
   const [manualTx, setManualTx] = useState('');
@@ -158,6 +163,8 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
       if (expectedProfileHash && next.profileHash !== expectedProfileHash) {
         throw new Error('The governed bridge route changed. Review it before signing.');
       }
+      const readiness = await loadBridgeReadiness(next.profile.route_id);
+      assertBridgeReadinessMatchesRoute(readiness, next);
       setRoute(next);
       setRouteStatus('ready');
       return next;
@@ -235,6 +242,8 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
       evm.assertContractCodeHash(active.vaultAddress, active.vaultRuntimeCodeHash),
       evm.assertContractCodeHash(active.tokenAddress, active.tokenRuntimeCodeHash),
     ]);
+    const readiness = await loadBridgeReadiness(active.profile.route_id);
+    assertBridgeReadinessMatchesRoute(readiness, active);
     return active;
   };
 
@@ -306,9 +315,20 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
       routeProfileHash: activeRoute.profileHash,
       routeEpoch: activeRoute.routeEpoch,
       routeBinding,
+      routeId: activeRoute.profile.route_id,
+      sourceChainId: activeRoute.profile.source_chain_id,
       proxyAuthToken,
+      onStatus: (next) => setRelayStatus(next.status || ''),
     });
-    setRelayTxs(Array.isArray(result.submitted) ? result.submitted : []);
+    const relayId = result.tx_id || result.receipt_id;
+    setRelayTxs(
+      relayId
+        ? [{
+            kind: result.tx_id ? 'PFTL claim' : 'PFTL receipt',
+            tx_id: relayId,
+          }]
+        : [],
+    );
     if (result.after_balance_atoms !== undefined && result.after_balance_atoms !== null) {
       setPfusdcBalance(BigInt(result.after_balance_atoms));
     }
@@ -393,6 +413,7 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
     setDepositTx('');
     setDepositId('');
     setRelayTxs([]);
+    setRelayStatus('');
     setPfusdcBalance(null);
     setError('');
     setPhase(connectedAddress ? 'connected' : 'disconnected');
@@ -410,7 +431,7 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
   const status = routeStatus === 'error' ? 'error' : phase;
   const canApprove = Boolean(
     connectedAddress && route && address && amountAtoms && amountAtoms > 0n
-    && !amountError && !busy,
+    && proxyAuthToken && !amountError && !busy,
   );
   const canDeposit = Boolean(canApprove && approvedAtoms !== null && approvedAtoms >= amountAtoms);
 
@@ -447,6 +468,11 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
         </div>
       )}
       {error && <div className="pf-warning">{error}</div>}
+      {!proxyAuthToken && (
+        <div className="pf-warning">
+          Bridge deposits are blocked until the session-only proxy access token is entered in More.
+        </div>
+      )}
 
       <div className="pfb-manual">
         <button className="pf-link" type="button" onClick={() => setManualOpen((open) => !open)}>
@@ -559,7 +585,10 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
                 {currentStep === 4 && (
                   <div className="pfb-progress-card">
                     <strong><Loader2 size={14} className="pfb-spin" /> Proof and relay in progress</strong>
-                    <span>Keep this page open. A confirmed deposit can always be resumed by transaction hash.</span>
+                    <span>
+                      {relayStatus ? `Current stage: ${relayStatus.replaceAll('_', ' ')}. ` : ''}
+                      The backend job is durable; a confirmed deposit can be resumed by transaction hash.
+                    </span>
                   </div>
                 )}
               </>

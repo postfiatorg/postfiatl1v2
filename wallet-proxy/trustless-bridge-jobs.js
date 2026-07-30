@@ -10,6 +10,7 @@ const { keccak256 } = require('./keccak256');
 
 const TX_RE = /^0x[0-9a-f]{64}$/;
 const BYTES32_RE = /^(?:0x)?[0-9a-f]{64}$/;
+const RECEIPT_ID_RE = /^(?:0x)?(?:[0-9a-f]{64}|[0-9a-f]{96})$/;
 const PFT_RE = /^pf[0-9a-f]{40}$/;
 const EVM_RE = /^0x[0-9a-f]{40}$/;
 const ROUTE_RE = /^[a-z0-9][a-z0-9-]{2,63}$/;
@@ -311,7 +312,7 @@ function create(runtime = {}, options = {}) {
         if (state?.status === 'accepted') {
             terminalValid = state.retryable === false
                 && state.receipt_code === 'ACCEPTED'
-                && BYTES32_RE.test(String(state.receipt_id || state.tx_id || ''))
+                && RECEIPT_ID_RE.test(String(state.receipt_id || state.tx_id || ''))
                 && FILE_HASH_RE.test(String(state.terminal_checkpoint_sha256 || ''));
         } else if (state?.status === 'failed') {
             terminalValid = state.retryable === false

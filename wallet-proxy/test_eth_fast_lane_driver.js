@@ -94,7 +94,7 @@ if (stage === 'waiting_for_ethereum_finality') {
   result.finalized_block_number = 123456;
 }
 if (stage === 'capturing_state_proof') {
-  result.witness_sha256 = '66'.repeat(32); result.evidence_root = '0x' + '67'.repeat(32);
+  result.witness_sha256 = '66'.repeat(32); result.evidence_root = '0x' + '67'.repeat(48);
   result.nullifier = '0x' + '68'.repeat(32);
 }
 if (stage === 'proving') {
@@ -104,7 +104,7 @@ if (stage === 'proving') {
 if (stage === 'verifying') result.proof_verified = true;
 if (stage === 'growing_backed_cap') result.backed_cap_ready = true;
 if (stage === 'claiming') {
-  result.receipt_code = 'ACCEPTED'; result.receipt_id = '0x' + '77'.repeat(32);
+  result.receipt_code = 'ACCEPTED'; result.receipt_id = '77'.repeat(48);
   result.tx_id = '0x' + '78'.repeat(32);
 }
 if (process.env.MOCK_BAD_STAGE === stage) result.amount_atoms = '999';

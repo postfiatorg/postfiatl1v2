@@ -33,12 +33,12 @@ npm run preview
 - **Self-custody:** ML-DSA-65 keygen and signing in WASM, keys never leave the browser
 - **Encrypted vault:** AES-256-GCM with PBKDF2 (310k iterations), stored in IndexedDB
 - **PFT transfers:** Send PFT to any address
-- **Asset transfers:** Send pfUSDC, a651, and other issued assets
-- **Swap:** Transparent (pfUSDC ↔ a651) and private (Asset-Orchard shielded) swap modes
-- **Bridge:** MetaMask integration for USDC ↔ pfUSDC bridge between Arbitrum and PFTL
+- **Asset transfers:** Send pfUSDC, A666, and other issued assets
+- **Swap:** Transparent and private (Asset-Orchard shielded) swap modes
+- **Bridge:** MetaMask deposit of Ethereum-mainnet USDC into proof-verified PFTL pfUSDC
 - **DEX:** Create, cancel, and view offers on the order book
 - **History:** Transaction history with pagination
-- **Settings:** RPC endpoint, auto-lock, swap server, bridge vault configuration
+- **Settings:** RPC endpoint, auto-lock, swap service, and session proxy token
 - **Security:** CSP enforced, no third-party scripts, no eval, auto-lock
 
 ## Architecture

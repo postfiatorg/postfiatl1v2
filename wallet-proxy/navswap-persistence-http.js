@@ -1604,14 +1604,11 @@ function create(runtime) {
             }
 
             if (req.method === 'POST' && url.pathname === '/api/bridge/relay') {
-                const body = await readJsonBody(req);
-                const result = await executeNavswapIdempotentRequest({
-                    method: req.method,
-                    pathname: url.pathname,
-                    body,
-                    req,
-                }, () => executeVaultBridgeRelay(body));
-                sendJson(req, res, result.ok ? 200 : 409, result);
+                sendJson(req, res, 410, {
+                    ok: false,
+                    code: 'bridge_relay_endpoint_retired',
+                    message: 'Use the durable proof-backed /api/bridge/jobs workflow.',
+                });
                 return true;
             }
 

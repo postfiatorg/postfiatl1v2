@@ -64,7 +64,7 @@ if (stage === 'waiting_for_ethereum_finality') {
   out.finalized_block_number = 123456;
 }
 if (stage === 'capturing_state_proof') {
-  out.witness_sha256 = '66'.repeat(32); out.evidence_root = '0x' + '67'.repeat(32);
+  out.witness_sha256 = '66'.repeat(32); out.evidence_root = '0x' + '67'.repeat(48);
   out.nullifier = '0x' + '68'.repeat(32);
 }
 if (stage === 'proving') {
@@ -74,7 +74,7 @@ if (stage === 'proving') {
 if (stage === 'verifying') out.proof_verified = true;
 if (stage === 'growing_backed_cap') out.backed_cap_ready = true;
 if (stage === 'claiming') {
-  out.receipt_code = 'ACCEPTED'; out.receipt_id = '0x' + '77'.repeat(32);
+  out.receipt_code = 'ACCEPTED'; out.receipt_id = '77'.repeat(48);
   out.tx_id = '0x' + '78'.repeat(32);
 }
 process.stdout.write(JSON.stringify(out));

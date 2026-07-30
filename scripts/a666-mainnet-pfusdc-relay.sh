@@ -12,15 +12,21 @@ issuer_key=${PFTL_ISSUER_KEY:-/var/lib/postfiat/validator-2/a666-joe-e2e-2026072
 cast=${PFTL_CAST_BIN:-/var/lib/postfiat/validator-2/pfusdc-latency-20260727-run2/cast}
 proof_dir=${PFTL_PROOF_DIR:?PFTL_PROOF_DIR is required}
 resident_manifest=${A666_RESIDENT_ROUNDS_MANIFEST:-}
+relay_phase=${PFTL_RELAY_PHASE:-all}
 asset=02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b
 policy=${PFTL_POLICY_HASH:-5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158}
 vault=${PFTL_VAULT_ADDRESS:-0xaaa78fda7062efce769e95cd72fc55e507bc8183}
 issuer=pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8
-holder=pfab9b9228942e5c529633a13aa271d5297bec6353
+holder=${PFTL_HOLDER:-pfab9b9228942e5c529633a13aa271d5297bec6353}
 deposit_tx=${DEPOSIT_TX:?DEPOSIT_TX is required}
 deposit_atoms=${DEPOSIT_ATOMS:?DEPOSIT_ATOMS is required}
 expected_holder_atoms=${EXPECTED_HOLDER_ATOMS:?EXPECTED_HOLDER_ATOMS is required}
 label_suffix=${PFTL_LABEL_SUFFIX:-}
+
+case "$relay_phase" in
+  all|propose|claim) ;;
+  *) echo "PFTL_RELAY_PHASE must be all, propose, or claim" >&2; exit 2 ;;
+esac
 
 v0=$(awk '$1=="validator-0"{print $2}' "$fleet")
 v2=$(awk '$1=="validator-2"{print $2}' "$fleet")
@@ -112,9 +118,14 @@ mkdir -p "$local_evidence"
 start_height=$(ssh_v2 \
   "'$node' status --data-dir /var/lib/postfiat/validator-2" | jq -er .block_height)
 relay_height=$((start_height + 1))
-claim_height=$((start_height + 2))
+if test "$relay_phase" = all; then
+  claim_height=$((start_height + 2))
+else
+  claim_height=$((start_height + 1))
+fi
 
-ssh_v2 "set -euo pipefail
+if test "$relay_phase" != claim; then
+  ssh_v2 "set -euo pipefail
   test -x '$cast'
   test -s '$proof_dir/proof-calldata.bin'
   test -s '$proof_dir/public-values.bin'
@@ -159,13 +170,26 @@ ssh_v2 "set -euo pipefail
   test \"\$(jq '.operations|length' '$run/finalize-claim.ops.json')\" = 2
   test \"\$(jq -r '.operations[1].operation.recipient' \
     '$run/finalize-claim.ops.json')\" = '$holder'"
+else
+  ssh_v2 "set -euo pipefail
+    test -s '$run/full.ops.json'
+    test -s '$run/propose.ops.json'
+    test -s '$run/finalize-claim.ops.json'
+    test \"\$(jq -r '.operations[1].operation.recipient' \
+      '$run/finalize-claim.ops.json')\" = '$holder'"
+fi
 
-submit_round "$run/propose.ops.json" "$relay_height" 1 \
-  "joe-pfusdc-propose-h$relay_height$label_suffix"
-submit_round "$run/finalize-claim.ops.json" "$claim_height" 2 \
-  "joe-pfusdc-claim-h$claim_height$label_suffix"
+if test "$relay_phase" != claim; then
+  submit_round "$run/propose.ops.json" "$relay_height" 1 \
+    "joe-pfusdc-propose-h$relay_height$label_suffix"
+fi
+if test "$relay_phase" != propose; then
+  submit_round "$run/finalize-claim.ops.json" "$claim_height" 2 \
+    "joe-pfusdc-claim-h$claim_height$label_suffix"
+fi
 
-ssh_v2 "set -euo pipefail
+if test "$relay_phase" != propose; then
+  ssh_v2 "set -euo pipefail
   '$node' status --data-dir /var/lib/postfiat/validator-2 \
     --expect-height '$claim_height' > '$run/post-status.json'
   '$node' account-assets \
@@ -174,23 +198,34 @@ ssh_v2 "set -euo pipefail
     --asset-id '$asset' > '$run/holder-after-claim.json'
   jq -e --argjson expected '$expected_holder_atoms' \
     '.assets|any(.balance == \$expected)' '$run/holder-after-claim.json' >/dev/null"
+fi
 
-scp -q -i "$ssh_key" "root@$v2:$run/relay-bundle.report.json" \
-  "$local_evidence/relay-bundle.report.json"
-scp -q -i "$ssh_key" "root@$v2:$run/holder-after-claim.json" \
-  "$local_evidence/holder-after-claim.json"
-scp -q -i "$ssh_key" "root@$v2:$run/post-status.json" \
-  "$local_evidence/post-status.json"
+if test "$relay_phase" != claim; then
+  scp -q -i "$ssh_key" "root@$v2:$run/relay-bundle.report.json" \
+    "$local_evidence/relay-bundle.report.json"
+fi
+if test "$relay_phase" != propose; then
+  scp -q -i "$ssh_key" "root@$v2:$run/holder-after-claim.json" \
+    "$local_evidence/holder-after-claim.json"
+  scp -q -i "$ssh_key" "root@$v2:$run/post-status.json" \
+    "$local_evidence/post-status.json"
+fi
+
+completed_height=$relay_height
+if test "$relay_phase" != propose; then
+  completed_height=$claim_height
+fi
 
 jq -n \
   --argjson start_height "$start_height" \
-  --argjson finalized_height "$claim_height" \
+  --argjson finalized_height "$completed_height" \
   --argjson amount_atoms "$deposit_atoms" \
   --arg deposit_tx "$deposit_tx" \
+  --arg relay_phase "$relay_phase" \
   '{
     schema:"postfiat.a666.pfusdc_relay.v2",
     verdict:"PASS",
-    execution_mode:"two_round_propose_then_finalize_claim",
+    execution_mode:$relay_phase,
     deposit_tx:$deposit_tx,
     start_height:$start_height,
     finalized_height:$finalized_height,

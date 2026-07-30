@@ -1231,7 +1231,7 @@ function create(runtime) {
             errors.push('vault address does not match configured bridge vault');
         }
         if (normalizeVaultBridgeAddress(evidence.token_address) !== normalizeVaultBridgeAddress(config.token_address)) {
-            errors.push('token address does not match configured Arbitrum USDC');
+            errors.push('token address does not match the governed bridge token');
         }
         const evidenceTxHash = normalizeVaultBridgeTxHash(evidence.tx_hash || '', 'evidence.tx_hash');
         if (evidenceTxHash !== txHash) {

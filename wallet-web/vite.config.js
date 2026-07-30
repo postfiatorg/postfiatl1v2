@@ -61,6 +61,10 @@ export default defineConfig({
         target: 'http://127.0.0.1:8080',
         changeOrigin: true,
       },
+      '/api/bridge': {
+        target: 'http://127.0.0.1:8080',
+        changeOrigin: true,
+      },
     },
     // No CSP header in dev — Vite needs inline scripts for HMR/react-refresh
   },

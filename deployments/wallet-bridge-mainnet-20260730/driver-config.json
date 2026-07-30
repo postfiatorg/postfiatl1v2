@@ -1,0 +1,130 @@
+{
+  "schema": "postfiat-eth-fast-lane-driver-config-v1",
+  "route_id": "ethereum-mainnet-usdc-v1",
+  "source_chain_id": 1,
+  "source_proof_kind": "sp1-ethereum-finality-v1",
+  "program_vkey": "0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e",
+  "manifest_hash": "541a43e1f2ad0f37f6d98ea437b57f502cb888e9bba8151a50e2e5bfe5ce57a5",
+  "route_profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+  "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "vault_address": "0xaaa78fda7062efce769e95cd72fc55e507bc8183",
+  "vault_runtime_code_hash": "0xc6dbb722c23bfc841624bb909fcb54d84a65a2ea6ece96e2a28bf61d5dea6d05",
+  "token_address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+  "token_runtime_code_hash": "0xd80d4b7c890cb9d6a4893e6b52bc34b56b25335cb13716e0d1d31383e6b41505",
+  "pinned_files": [
+    {
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage.py",
+      "sha256": "a921fba9a0a53b3fbde68fb05336ce95d7176986a60d3624e7acafe4e0e7a97f"
+    },
+    {
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-mainnet-pfusdc-relay.sh",
+      "sha256": "f671951a2d9e3df83e12a2d777a64e212f1e697484ab2735e9d702cfc4139c67"
+    },
+    {
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/pfusdc-eth-mainnet-20260728-epoch5/route-profile.mainnet-epoch5.json",
+      "sha256": "12440fa2d4b8c84d9b6363069ca4554379dd3bb78b6657e98c039ca006d66d25"
+    }
+  ],
+  "readiness": {
+    "program": "/usr/bin/python3.12",
+    "program_sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118",
+    "args": [
+      "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage.py",
+      "--readiness"
+    ],
+    "timeout_ms": 60000
+  },
+  "stages": [
+    {
+      "stage": "confirming_deposit",
+      "program": "/usr/bin/python3.12",
+      "program_sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118",
+      "args": [
+        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage.py",
+        "--stage",
+        "confirming_deposit",
+        "--job-file",
+        "{job_file}"
+      ],
+      "timeout_ms": 120000
+    },
+    {
+      "stage": "waiting_for_ethereum_finality",
+      "program": "/usr/bin/python3.12",
+      "program_sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118",
+      "args": [
+        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage.py",
+        "--stage",
+        "waiting_for_ethereum_finality",
+        "--job-file",
+        "{job_file}"
+      ],
+      "timeout_ms": 2100000
+    },
+    {
+      "stage": "capturing_state_proof",
+      "program": "/usr/bin/python3.12",
+      "program_sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118",
+      "args": [
+        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage.py",
+        "--stage",
+        "capturing_state_proof",
+        "--job-file",
+        "{job_file}"
+      ],
+      "timeout_ms": 60000
+    },
+    {
+      "stage": "proving",
+      "program": "/usr/bin/python3.12",
+      "program_sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118",
+      "args": [
+        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage.py",
+        "--stage",
+        "proving",
+        "--job-file",
+        "{job_file}"
+      ],
+      "timeout_ms": 10800000
+    },
+    {
+      "stage": "verifying",
+      "program": "/usr/bin/python3.12",
+      "program_sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118",
+      "args": [
+        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage.py",
+        "--stage",
+        "verifying",
+        "--job-file",
+        "{job_file}"
+      ],
+      "timeout_ms": 900000
+    },
+    {
+      "stage": "growing_backed_cap",
+      "program": "/usr/bin/python3.12",
+      "program_sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118",
+      "args": [
+        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage.py",
+        "--stage",
+        "growing_backed_cap",
+        "--job-file",
+        "{job_file}"
+      ],
+      "timeout_ms": 60000
+    },
+    {
+      "stage": "claiming",
+      "program": "/usr/bin/python3.12",
+      "program_sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118",
+      "args": [
+        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage.py",
+        "--stage",
+        "claiming",
+        "--job-file",
+        "{job_file}"
+      ],
+      "timeout_ms": 900000
+    }
+  ]
+}

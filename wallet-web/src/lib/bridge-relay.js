@@ -1,5 +1,68 @@
 import { assertNoCustodyMaterial } from './custody-boundary.js';
 
+const BRIDGE_ROUTE_ID = 'ethereum-mainnet-usdc-v1';
+const BRIDGE_SOURCE_CHAIN_ID = 1;
+const TERMINAL_JOB_STATUSES = new Set(['accepted', 'failed']);
+
+async function bridgeJson(url, options = {}) {
+  const response = await fetch(url, options);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.ok !== true) {
+    const error = new Error(payload.message || `Bridge service failed with HTTP ${response.status}`);
+    error.payload = payload;
+    throw error;
+  }
+  return payload;
+}
+
+export async function loadBridgeReadiness(routeId = BRIDGE_ROUTE_ID) {
+  return bridgeJson(`/api/bridge/readiness?route=${encodeURIComponent(routeId)}`);
+}
+
+export function assertBridgeReadinessMatchesRoute(readiness, route) {
+  const profile = route?.profile || {};
+  if (
+    readiness?.ready !== true
+    || readiness.route_id !== profile.route_id
+    || Number(readiness.source_chain_id) !== Number(profile.source_chain_id)
+    || readiness.source_proof_kind !== 'sp1-ethereum-finality-v1'
+    || readiness.route_profile_hash !== route.profileHash
+    || readiness.asset_id !== profile.asset_id
+    || readiness.vault_address !== route.vaultAddress
+    || readiness.vault_runtime_code_hash !== route.vaultRuntimeCodeHash
+    || readiness.token_address !== route.tokenAddress
+    || readiness.token_runtime_code_hash !== route.tokenRuntimeCodeHash
+    || readiness.program_vkey !== profile.verifier_program_vkey
+    || readiness.observer_attestor_enabled !== false
+    || readiness.prover_authenticated !== true
+    || readiness.prover_healthy !== true
+  ) {
+    throw new Error('The proof relay is not ready for the active governed PFTL route.');
+  }
+  return readiness;
+}
+
+export async function waitForBridgeJob(
+  jobId,
+  { pollIntervalMs = 2000, timeoutMs = 30 * 60 * 1000, onStatus = null } = {},
+) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const result = await bridgeJson(`/api/bridge/jobs/${encodeURIComponent(jobId)}`);
+    onStatus?.(result);
+    if (TERMINAL_JOB_STATUSES.has(result.status)) {
+      if (result.status === 'accepted' && result.receipt_code === 'ACCEPTED') return result;
+      const error = new Error(result.message || 'The proof-backed PFTL claim failed.');
+      error.payload = result;
+      throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+  const error = new Error('The bridge job is still running. Resume it with the Ethereum transaction hash.');
+  error.code = 'bridge_job_poll_timeout';
+  throw error;
+}
+
 export async function relayVaultDeposit({
   depositTxHash,
   depositId = '',
@@ -10,9 +73,14 @@ export async function relayVaultDeposit({
   routeProfileHash = '',
   routeEpoch = 0,
   routeBinding = '',
+  routeId = BRIDGE_ROUTE_ID,
+  sourceChainId = BRIDGE_SOURCE_CHAIN_ID,
   proxyAuthToken = '',
+  onStatus = null,
 } = {}) {
   const body = {
+    route_id: routeId,
+    source_chain_id: sourceChainId,
     deposit_tx_hash: depositTxHash,
     deposit_id: depositId,
     pftl_recipient: pftlRecipient,
@@ -24,7 +92,7 @@ export async function relayVaultDeposit({
     route_binding: routeBinding,
   };
   assertNoCustodyMaterial(body, 'wallet bridge relay request');
-  const response = await fetch('/api/bridge/relay', {
+  const created = await bridgeJson('/api/bridge/jobs', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -33,11 +101,8 @@ export async function relayVaultDeposit({
     },
     body: JSON.stringify(body),
   });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload.ok !== true) {
-    const error = new Error(payload.message || `Bridge relay failed with HTTP ${response.status}`);
-    error.payload = payload;
-    throw error;
-  }
-  return payload;
+  onStatus?.(created);
+  return waitForBridgeJob(created.job_id, {
+    onStatus,
+  });
 }

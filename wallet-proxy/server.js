@@ -360,10 +360,10 @@ const RPC_CAPS = {
 };
 
 const PFUSDC_ASSET_ID = process.env.PFUSDC_ASSET_ID
-    || '8751c2d04b993eb54f751b0f130c420fdb089548ec2f2a53837d11d1c397a1252e74bcc24616527e9c79b968635fae90';
+    || '02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b';
 const VAULT_BRIDGE_RELAY_SCHEMA = 'postfiat-vault-bridge-relay-v1';
 const VAULT_BRIDGE_RELAY_SOURCE_RPC_URL = process.env.VAULT_BRIDGE_SOURCE_RPC_URL
-    || 'https://arb1.arbitrum.io/rpc';
+    || 'https://ethereum-rpc.publicnode.com';
 // Money-destination fields are deliberately absent here. The relay resolves
 // chain ID, vault/token addresses and runtime hashes, policy hash, route epoch,
 // and route binding from `vault_bridge_route` replicated state for each relay.
