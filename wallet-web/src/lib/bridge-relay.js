@@ -10,9 +10,35 @@ async function bridgeJson(url, options = {}) {
   if (!response.ok || payload.ok !== true) {
     const error = new Error(payload.message || `Bridge service failed with HTTP ${response.status}`);
     error.payload = payload;
+    error.httpStatus = response.status;
     throw error;
   }
   return payload;
+}
+
+const TRANSIENT_BRIDGE_CODES = new Set([
+  'trustless_ingress_unavailable',
+  'trustless_readiness_warming',
+  'bridge_worker_busy',
+]);
+
+function transientBridgeFailure(error) {
+  return TRANSIENT_BRIDGE_CODES.has(error?.payload?.code)
+    || Number(error?.httpStatus || 0) >= 500;
+}
+
+async function createBridgeJob(options, { attempts = 90, retryMs = 2000 } = {}) {
+  let lastError = new Error('The proof relay is temporarily unavailable.');
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await bridgeJson('/api/bridge/jobs', options);
+    } catch (error) {
+      lastError = error;
+      if (!transientBridgeFailure(error) || attempt >= attempts - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, retryMs));
+    }
+  }
+  throw lastError;
 }
 
 export async function loadBridgeReadiness(routeId = BRIDGE_ROUTE_ID) {
@@ -106,6 +132,7 @@ export async function relayVaultDeposit({
   sourceChainId = BRIDGE_SOURCE_CHAIN_ID,
   proxyAuthToken = '',
   onStatus = null,
+  jobCreateOptions = {},
 } = {}) {
   const body = {
     route_id: routeId,
@@ -121,7 +148,7 @@ export async function relayVaultDeposit({
     route_binding: routeBinding,
   };
   assertNoCustodyMaterial(body, 'wallet bridge relay request');
-  const created = await bridgeJson('/api/bridge/jobs', {
+  const created = await createBridgeJob({
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -129,7 +156,7 @@ export async function relayVaultDeposit({
       ...(proxyAuthToken ? { Authorization: `Bearer ${proxyAuthToken}` } : {}),
     },
     body: JSON.stringify(body),
-  });
+  }, jobCreateOptions);
   onStatus?.(created);
   return waitForBridgeJob(created.job_id, {
     onStatus,

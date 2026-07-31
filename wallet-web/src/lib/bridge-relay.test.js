@@ -46,6 +46,48 @@ test('vault relay carries the session proxy token outside the request body', asy
   }
 });
 
+test('vault relay retries transient post-deposit job creation', async () => {
+  const previousFetch = globalThis.fetch;
+  let createCalls = 0;
+  globalThis.fetch = async (url) => {
+    if (url === '/api/bridge/jobs') {
+      createCalls += 1;
+      const payload = createCalls < 3
+        ? { ok: false, code: 'trustless_readiness_warming', message: 'warming' }
+        : { ok: true, job_id: '0x' + '55'.repeat(32), status: 'queued' };
+      return new Response(JSON.stringify(payload), {
+        status: createCalls < 3 ? 503 : 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    return new Response(JSON.stringify({
+      ok: true,
+      status: 'accepted',
+      receipt_code: 'ACCEPTED',
+      receipt_id: '0x' + '66'.repeat(32),
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    await relayVaultDeposit({
+      depositTxHash: '0x' + '11'.repeat(32),
+      depositId: '0x' + '22'.repeat(32),
+      pftlRecipient: 'pf-test-recipient',
+      depositor: '0x3333333333333333333333333333333333333333',
+      amountAtoms: '1000000',
+      idempotencyKey: 'vault-relay:test-retry',
+      routeProfileHash: '44'.repeat(48),
+      routeEpoch: 5,
+      routeBinding: '0x' + '55'.repeat(32),
+      proxyAuthToken: 'session-only-token',
+      jobCreateOptions: { attempts: 3, retryMs: 1 },
+    });
+    assert.equal(createCalls, 3);
+  } finally {
+    if (previousFetch === undefined) delete globalThis.fetch;
+    else globalThis.fetch = previousFetch;
+  }
+});
+
 test('bridge readiness is loaded from the Ethereum mainnet route', async () => {
   const previousFetch = globalThis.fetch;
   let requested;
