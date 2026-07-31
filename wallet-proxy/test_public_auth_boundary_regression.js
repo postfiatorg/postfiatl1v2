@@ -12,6 +12,7 @@ const WebSocket = require('ws');
 delete process.env.LISTEN_HOST;
 delete process.env.ALLOWED_ORIGINS;
 process.env.WALLET_PROXY_API_TOKEN = 'test-only-wallet-proxy-token-32-bytes-minimum';
+process.env.WALLET_PROXY_LOCAL_SESSION_PRINCIPAL = 'default';
 
 const {
   DEFAULT_RPC_FLEET,
@@ -45,6 +46,29 @@ function postJson(port, pathname, body, token = '', origin = '') {
     });
     req.on('error', reject);
     req.end(payload);
+  });
+}
+
+function getLocalSession(port, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const req = http.request({
+      host: '127.0.0.1',
+      port,
+      path: '/api/bridge/local-session',
+      method: 'GET',
+      headers,
+    }, (res) => {
+      let raw = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => { raw += chunk; });
+      res.on('end', () => resolve({
+        statusCode: res.statusCode,
+        headers: res.headers,
+        body: JSON.parse(raw),
+      }));
+    });
+    req.on('error', reject);
+    req.end();
   });
 }
 
@@ -154,6 +178,7 @@ async function main() {
       LISTEN_HOST: '0.0.0.0',
       ALLOWED_ORIGINS: '',
       WALLET_PROXY_API_TOKEN: '',
+      WALLET_PROXY_LOCAL_SESSION_PRINCIPAL: '',
     },
   });
   assert.notStrictEqual(unsafeStartup.status, 0);
@@ -162,6 +187,18 @@ async function main() {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const port = server.address().port;
   try {
+    const nonBrowserLocalSession = await getLocalSession(port);
+    assert.strictEqual(nonBrowserLocalSession.statusCode, 403);
+
+    const localSession = await getLocalSession(port, {
+      'sec-fetch-site': 'same-origin',
+    });
+    assert.strictEqual(localSession.statusCode, 200);
+    assert.strictEqual(localSession.headers['cache-control'], 'no-store');
+    assert.strictEqual(localSession.body.schema, 'postfiat-local-wallet-session-v1');
+    assert.strictEqual(localSession.body.principal, 'default');
+    assert.strictEqual(localSession.body.token, process.env.WALLET_PROXY_API_TOKEN);
+
     const missingOrigin = await postJson(
       port,
       '/api/bridge/relay',

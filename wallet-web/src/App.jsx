@@ -24,6 +24,25 @@ import A666Market from './components/A666Market.jsx';
 
 const PROXY_AUTH_SESSION_KEY = 'postfiat.wallet_proxy_api_token';
 
+async function loadControlledLocalProxySession() {
+  const response = await fetch('/api/bridge/local-session', {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+    cache: 'no-store',
+  });
+  if (!response.ok) return '';
+  const payload = await response.json();
+  if (
+    payload?.ok !== true
+    || payload?.schema !== 'postfiat-local-wallet-session-v1'
+    || typeof payload?.token !== 'string'
+    || payload.token.length < 32
+  ) {
+    throw new Error('localhost wallet session response is invalid');
+  }
+  return payload.token;
+}
+
 const NAV_ITEMS = [
   { id: 'wallet', label: 'Wallet' }, { id: 'bridge', label: 'Bridge' },
   { id: 'a666', label: 'A666 Market' }, { id: 'send', label: 'Send' },
@@ -52,6 +71,7 @@ export default function App() {
   const [toast, setToast] = useState('');
   const [sendSource, setSendSource] = useState('account');
   const [proxyAuthToken, setProxyAuthToken] = useState('');
+  const [controlledLocalSession, setControlledLocalSession] = useState(false);
   const creatingRef = useRef(false);
 
   // --- Init ---
@@ -59,7 +79,11 @@ export default function App() {
     (async () => {
       setupUnloadCleanup();
       const s = await loadSettings();
-      const sessionProxyAuthToken = sessionStorage.getItem(PROXY_AUTH_SESSION_KEY) || '';
+      const controlledToken = await loadControlledLocalProxySession().catch(() => '');
+      const sessionProxyAuthToken = controlledToken
+        || sessionStorage.getItem(PROXY_AUTH_SESSION_KEY)
+        || '';
+      setControlledLocalSession(Boolean(controlledToken));
       setProxyAuthToken(sessionProxyAuthToken);
       setSettings(s);
       setAutoLockMinutes(s.autoLockMinutes || 15);
@@ -374,9 +398,16 @@ export default function App() {
 
   // --- Settings save ---
   const handleSaveSettings = async (newSettings) => {
-    const nextProxyAuthToken = String(newSettings.proxyAuthToken || '');
-    if (nextProxyAuthToken) sessionStorage.setItem(PROXY_AUTH_SESSION_KEY, nextProxyAuthToken);
-    else sessionStorage.removeItem(PROXY_AUTH_SESSION_KEY);
+    const nextProxyAuthToken = controlledLocalSession
+      ? proxyAuthToken
+      : String(newSettings.proxyAuthToken || '');
+    if (controlledLocalSession) {
+      sessionStorage.removeItem(PROXY_AUTH_SESSION_KEY);
+    } else if (nextProxyAuthToken) {
+      sessionStorage.setItem(PROXY_AUTH_SESSION_KEY, nextProxyAuthToken);
+    } else {
+      sessionStorage.removeItem(PROXY_AUTH_SESSION_KEY);
+    }
     setProxyAuthToken(nextProxyAuthToken);
     const { proxyAuthToken: _sessionOnlyProxyAuthToken, ...persistentSettings } = newSettings;
     const normalizedSettings = {
@@ -635,6 +666,7 @@ export default function App() {
             <More
               settings={settings}
               proxyAuthToken={proxyAuthToken}
+              controlledLocalSession={controlledLocalSession}
               onSave={handleSaveSettings}
               onRemove={handleRemoveWallet}
               onImportBackup={handleImportBackup}

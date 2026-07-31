@@ -48,6 +48,9 @@ const WALLET_PROXY_API_TOKENS = parseProxyApiTokens(
     process.env.WALLET_PROXY_API_TOKENS_JSON,
     process.env.WALLET_PROXY_API_TOKENS_FILE,
 );
+const WALLET_PROXY_LOCAL_SESSION_PRINCIPAL = (
+    process.env.WALLET_PROXY_LOCAL_SESSION_PRINCIPAL || ''
+).trim();
 const WALLET_STATIC_DIR = path.resolve(
     process.env.WALLET_STATIC_DIR || path.join(__dirname, '..', 'wallet-web', 'dist'),
 );
@@ -166,6 +169,72 @@ function validateProxyExposureConfig(host, allowedOrigins, apiTokens) {
 }
 
 validateProxyExposureConfig(LISTEN_HOST, ALLOWED_ORIGINS, WALLET_PROXY_API_TOKENS);
+
+function validateLocalSessionConfig(
+    host,
+    principal,
+    apiTokens,
+) {
+    if (!principal) return;
+    if (!isLoopbackHost(host)) {
+        throw new Error('automatic wallet proxy local sessions require a loopback LISTEN_HOST');
+    }
+    if (!apiTokens.has(principal)) {
+        throw new Error(
+            `WALLET_PROXY_LOCAL_SESSION_PRINCIPAL is not present in the configured token map: ${principal}`,
+        );
+    }
+}
+
+validateLocalSessionConfig(
+    LISTEN_HOST,
+    WALLET_PROXY_LOCAL_SESSION_PRINCIPAL,
+    WALLET_PROXY_API_TOKENS,
+);
+
+function isLoopbackRemoteAddress(address) {
+    const normalized = String(address || '').toLowerCase();
+    return normalized === '127.0.0.1'
+        || normalized === '::1'
+        || normalized === '::ffff:127.0.0.1';
+}
+
+function localSessionRequestAllowed(req) {
+    if (!WALLET_PROXY_LOCAL_SESSION_PRINCIPAL || !isLoopbackHost(LISTEN_HOST)) return false;
+    if (!isLoopbackRemoteAddress(req?.socket?.remoteAddress)) return false;
+    // Fetch Metadata is supplied by browsers and survives the local TLS reverse
+    // proxy. Requiring same-origin prevents a hostile web page from obtaining
+    // the credential through a cross-origin request. Local shell processes
+    // already have equivalent access to the root-owned token file.
+    return String(req?.headers?.['sec-fetch-site'] || '').toLowerCase() === 'same-origin';
+}
+
+function handleLocalSessionRequest(req, res, url) {
+    if (req.method !== 'GET' || url.pathname !== '/api/bridge/local-session') return false;
+    if (!localSessionRequestAllowed(req)) {
+        res.writeHead(403, {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+        });
+        res.end(JSON.stringify({
+            ok: false,
+            schema: 'postfiat-local-wallet-session-v1',
+            code: 'local_session_forbidden',
+        }));
+        return true;
+    }
+    res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
+    });
+    res.end(JSON.stringify({
+        ok: true,
+        schema: 'postfiat-local-wallet-session-v1',
+        principal: WALLET_PROXY_LOCAL_SESSION_PRINCIPAL,
+        token: WALLET_PROXY_API_TOKENS.get(WALLET_PROXY_LOCAL_SESSION_PRINCIPAL),
+    }));
+    return true;
+}
 
 function constantTimeTokenEqual(candidate, expected) {
     if (!candidate || !expected) return false;
@@ -716,6 +785,7 @@ Object.assign(walletProxyRuntime, require('./navswap-persistence-http').create(w
 const { annotateNavswapIdempotency,buildNavswapRunResponse,clearNavswapIdempotencyForTest,clearNavswapRunsForTest,compareNavswapRunsNewestFirst,createNavswapRun,executeNavswapAtomicTemplate,executeNavswapIdempotentRequest,executeNavswapRun,finishNavswapRun,forwardStakehubTransparentRun,handleNavswapHttp,jsonHeaders,loadNavswapIdempotencyStore,loadNavswapRunStore,markStoredNavswapRunInterrupted,navswapAsyncRunRequested,navswapIdempotencyHashBody,navswapIdempotencyStoreSnapshot,navswapListLimit,navswapRunEvents,navswapRunIsTerminal,navswapRunList,navswapRunPublic,navswapRunReceipts,navswapRunSortTime,navswapRunStoreSnapshot,navswapRunStreamSnapshot,navswapTruthyParam,normalizeAtomicTemplateParams,normalizeStoredNavswapIdempotencyRecord,normalizeStoredNavswapRun,originAllowed,persistNavswapIdempotencyRecord,persistNavswapRun,pruneNavswapIdempotencyRecords,publishNavswapRunUpdate,readJsonBody,recordNavswapRunEvent,removeNavswapRunStreamSubscriber,sanitizeNavswapRunRequest,sendJson,sendNavswapRunStream,sseHeaders,swapAtomicTemplateParams,verifyAtomicTemplateResult,verifyAtomicTemplateSymmetry,writeSseEvent } = walletProxyRuntime;
 const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+    if (handleLocalSessionRequest(req, res, url)) return;
     if (await handleNavswapHttp(req, res, url)) return;
     if (await serveWalletStatic(req, res, url)) return;
     if (req.method === 'GET' && url.pathname === '/healthz') {
@@ -1199,10 +1269,14 @@ module.exports = {
     isSequencedAccountMethod,
     finalityFailureCanAdvanceView,
     httpRequestRequiresAuth,
+    handleLocalSessionRequest,
+    isLoopbackRemoteAddress,
+    localSessionRequestAllowed,
     httpMutationPrincipal,
     rpcRequestRequiresAuth,
     serveWalletStatic,
     validateProxyExposureConfig,
+    validateLocalSessionConfig,
     buildNavswapQuoteResponse,
     buildNavswapRunResponse,
     buildNavswapNavProofResponse,

@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
 import { chromium } from 'playwright';
@@ -10,7 +10,6 @@ const walletUrl = process.env.WALLET_WEB_URL || 'https://127.0.0.1:5173';
 const ethereumRpc = process.env.ETHEREUM_RPC_URL || 'https://ethereum-rpc.publicnode.com';
 const keystore = process.env.E2E_ETH_KEYSTORE;
 const passwordFile = process.env.E2E_ETH_PASSWORD_FILE;
-const tokenFile = process.env.WALLET_PROXY_API_TOKENS_FILE;
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 const amountAtoms = 1_000_000n;
 const canonicalUsdc = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
@@ -18,18 +17,13 @@ const governedVault = '0xaaa78fda7062efce769e95cd72fc55e507bc8183';
 const approveSelector = '0x095ea7b3';
 const depositSelector = '0x2391b457';
 
-if (!keystore || !passwordFile || !tokenFile || !evidenceDir) {
+if (!keystore || !passwordFile || !evidenceDir) {
   throw new Error(
-    'E2E_ETH_KEYSTORE, E2E_ETH_PASSWORD_FILE, WALLET_PROXY_API_TOKENS_FILE, '
-    + 'and E2E_EVIDENCE_DIR are required',
+    'E2E_ETH_KEYSTORE, E2E_ETH_PASSWORD_FILE, and E2E_EVIDENCE_DIR are required',
   );
 }
 
 await mkdir(evidenceDir, { recursive: true, mode: 0o700 });
-
-const tokenMap = JSON.parse(await readFile(tokenFile, 'utf8'));
-const proxyToken = String(tokenMap['local-demo'] || '');
-if (proxyToken.length < 32) throw new Error('local-demo proxy token is unavailable');
 
 const { stdout: addressStdout } = await execFileAsync('cast', [
   'wallet',
@@ -181,12 +175,11 @@ try {
   await page.getByRole('button', { name: 'Create Wallet', exact: true }).click();
   await page.getByText(/height [1-9]\d*/).first().waitFor({ state: 'visible' });
 
-  await page.locator('.pf-sidebar .pf-nav', { hasText: 'More' }).click();
-  await page.locator('input[type="password"]').fill(proxyToken);
-  await page.getByRole('button', { name: 'Save settings', exact: true }).click();
-  await page.getByText('Settings saved', { exact: true }).waitFor({ state: 'visible' });
-
   await page.locator('.pf-sidebar .pf-nav', { hasText: 'Bridge' }).click();
+  await page.getByText(
+    'Bridge deposits are blocked until the session-only proxy access token is entered in More.',
+    { exact: true },
+  ).waitFor({ state: 'detached', timeout: 10_000 });
   const connectButton = page.getByRole('button', { name: 'Connect MetaMask', exact: true });
   if (await connectButton.count() > 0 && await connectButton.isVisible()) {
     await connectButton.click();

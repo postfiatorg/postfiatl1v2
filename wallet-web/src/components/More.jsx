@@ -14,7 +14,15 @@ function rpcSelection(endpoint) {
   return { selected: 'custom', custom: normalized };
 }
 
-export default function More({ settings, proxyAuthToken = '', onSave, onRemove, onImportBackup, onExportBackup }) {
+export default function More({
+  settings,
+  proxyAuthToken = '',
+  controlledLocalSession = false,
+  onSave,
+  onRemove,
+  onImportBackup,
+  onExportBackup,
+}) {
   const initialRpc = rpcSelection(settings?.rpcEndpoint);
   const [rpcEndpoint, setRpcEndpoint] = useState(initialRpc.selected);
   const [customRpc, setCustomRpc] = useState(initialRpc.custom);
@@ -123,16 +131,22 @@ export default function More({ settings, proxyAuthToken = '', onSave, onRemove, 
             <Field label="Optional private-route status service">
               <input className="pf-input" value={swapServerUrl} onChange={e => setSwapServerUrl(e.target.value)} />
             </Field>
-            <Field label="Proxy mutation token (session only)">
-              <input
-                className="pf-input"
-                type="password"
-                autoComplete="off"
-                placeholder="Required for PFTL mutations and bridge relay"
-                value={proxyToken}
-                onChange={e => setProxyToken(e.target.value)}
-              />
-            </Field>
+            {controlledLocalSession ? (
+              <div className="pf-success">
+                Local transaction session active. No proxy credential setup is required.
+              </div>
+            ) : (
+              <Field label="Proxy mutation token (session only)">
+                <input
+                  className="pf-input"
+                  type="password"
+                  autoComplete="off"
+                  placeholder="Required for PFTL mutations and bridge relay"
+                  value={proxyToken}
+                  onChange={e => setProxyToken(e.target.value)}
+                />
+              </Field>
+            )}
             <p style={{ margin: 0, color: 'var(--dim)', fontSize: 12, lineHeight: 1.5 }}>
               Bridge deposits use the active governed Ethereum-mainnet vault discovered from PFTL.
               The wallet verifies the route profile and deployed contract bytecode before signing;
