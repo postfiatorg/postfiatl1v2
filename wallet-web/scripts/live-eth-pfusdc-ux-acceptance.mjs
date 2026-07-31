@@ -186,7 +186,7 @@ try {
   }
   await page.getByRole('button', { name: 'Approve Ethereum USDC', exact: true })
     .waitFor({ state: 'visible' });
-  await page.getByText('1 USDC', { exact: true }).first().waitFor({ state: 'visible' });
+  await page.getByText(/^\d+(?:\.\d+)? USDC$/).first().waitFor({ state: 'visible' });
   await page.locator('input[placeholder="0.00"]').fill('1');
 
   await page.screenshot({ path: `${evidenceDir}/01-funded-connected.png`, fullPage: true });

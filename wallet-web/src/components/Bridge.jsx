@@ -196,14 +196,12 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
   useEffect(() => {
     let cancelled = false;
     let retryTimer = null;
-    let retriesRemaining = 2;
     const discover = async () => {
       try {
         await loadRoute();
       } catch (_) {
-        if (!cancelled && retriesRemaining > 0) {
-          retriesRemaining -= 1;
-          retryTimer = setTimeout(discover, 3000);
+        if (!cancelled) {
+          retryTimer = setTimeout(discover, 5000);
         }
       }
     };

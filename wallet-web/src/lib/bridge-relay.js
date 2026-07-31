@@ -44,7 +44,7 @@ export function assertBridgeReadinessMatchesRoute(readiness, route) {
 
 export async function waitForBridgeReadiness(
   route,
-  { attempts = 6, retryMs = 2000 } = {},
+  { attempts = 45, retryMs = 2000 } = {},
 ) {
   let lastError = new Error('The proof relay is not ready for the active governed PFTL route.');
   for (let attempt = 0; attempt < attempts; attempt += 1) {
