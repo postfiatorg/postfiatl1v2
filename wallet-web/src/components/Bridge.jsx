@@ -14,9 +14,8 @@ import {
 import * as evm from '../lib/evm.js';
 import * as utils from '../lib/utils.js';
 import {
-  assertBridgeReadinessMatchesRoute,
-  loadBridgeReadiness,
   relayVaultDeposit,
+  waitForBridgeReadiness,
 } from '../lib/bridge-relay.js';
 import { loadGovernedVaultBridgeRoute } from '../lib/bridge-route.js';
 import { acquireAutoLockLease } from '../lib/vault.js';
@@ -181,8 +180,7 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
       if (expectedProfileHash && next.profileHash !== expectedProfileHash) {
         throw new Error('The governed bridge route changed. Review it before signing.');
       }
-      const readiness = await loadBridgeReadiness(next.profile.route_id);
-      assertBridgeReadinessMatchesRoute(readiness, next);
+      await waitForBridgeReadiness(next);
       setRoute(next);
       setRouteStatus('ready');
       return next;
@@ -277,8 +275,7 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
       evm.assertContractCodeHash(active.vaultAddress, active.vaultRuntimeCodeHash),
       evm.assertContractCodeHash(active.tokenAddress, active.tokenRuntimeCodeHash),
     ]);
-    const readiness = await loadBridgeReadiness(active.profile.route_id);
-    assertBridgeReadinessMatchesRoute(readiness, active);
+    await waitForBridgeReadiness(active);
     return active;
   };
 

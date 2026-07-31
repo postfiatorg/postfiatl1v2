@@ -43,5 +43,7 @@ assert.match(stage, /eth-l1-mainnet-fast-lane-p0-depositor-fix-20260731/);
 assert.match(bridge, /rpc\.accountAssets\(address\)/);
 assert.match(bridge, /function pfusdcLabel/);
 assert.match(bridge, /<strong>\{pfusdcLabel\(pfusdcBalance\)\}<\/strong>/);
+assert.match(bridge, /await waitForBridgeReadiness\(active\)/);
+assert.doesNotMatch(bridge, /\bloadBridgeReadiness\b/);
 
 console.log('live Ethereum pfUSDC browser-path regression passed');

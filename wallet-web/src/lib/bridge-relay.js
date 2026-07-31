@@ -42,6 +42,35 @@ export function assertBridgeReadinessMatchesRoute(readiness, route) {
   return readiness;
 }
 
+export async function waitForBridgeReadiness(
+  route,
+  { attempts = 6, retryMs = 2000 } = {},
+) {
+  let lastError = new Error('The proof relay is not ready for the active governed PFTL route.');
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    let readiness;
+    try {
+      readiness = await loadBridgeReadiness(route?.profile?.route_id);
+    } catch (error) {
+      lastError = error;
+    }
+    if (readiness?.ready === true) {
+      // A ready response with the wrong identity is an integrity failure, not
+      // transient availability. Fail immediately instead of retrying it.
+      return assertBridgeReadinessMatchesRoute(readiness, route);
+    }
+    if (readiness) {
+      lastError = new Error(
+        readiness.message || 'The proof relay is temporarily warming. Retry shortly.',
+      );
+    }
+    if (attempt < attempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, retryMs));
+    }
+  }
+  throw lastError;
+}
+
 export async function waitForBridgeJob(
   jobId,
   { pollIntervalMs = 2000, timeoutMs = 30 * 60 * 1000, onStatus = null } = {},

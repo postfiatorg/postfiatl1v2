@@ -258,6 +258,9 @@ function create(runtime = {}, options = {}) {
         ?? env.TRUSTLESS_BRIDGE_READINESS_REFRESH_MS, 15_000, 5_000);
     const maxAgeMs = positiveInteger(options.readinessMaxAgeMs
         ?? env.TRUSTLESS_BRIDGE_READINESS_MAX_AGE_MS, 30_000, refreshMs);
+    const failureMaxAgeMs = positiveInteger(options.readinessFailureMaxAgeMs
+        ?? env.TRUSTLESS_BRIDGE_READINESS_FAILURE_MAX_AGE_MS,
+        Math.min(5_000, refreshMs), 500);
     const retryBaseMs = positiveInteger(options.retryBaseMs
         ?? env.TRUSTLESS_BRIDGE_RETRY_BASE_MS, 5_000, 100);
     const retryMaxMs = positiveInteger(options.retryMaxMs
@@ -473,7 +476,8 @@ function create(runtime = {}, options = {}) {
             };
         }
         const cached = cachedReadiness(normalized);
-        if (cached && cached.readiness_age_ms <= maxAgeMs) return cached;
+        const cacheAgeLimit = cached?.ready === true ? maxAgeMs : failureMaxAgeMs;
+        if (cached && cached.readiness_age_ms <= cacheAgeLimit) return cached;
         refreshRouteReadiness(normalized).catch(() => {});
         return {
             ok: false, ready: false, route_id: normalized,

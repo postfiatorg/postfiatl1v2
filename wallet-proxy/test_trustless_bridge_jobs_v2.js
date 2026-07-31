@@ -184,6 +184,47 @@ async function assertEthReadinessFails(label, mutate, execError = null) {
     }
 }
 
+async function assertFailedReadinessRefreshesBeforeHealthyCacheExpiry() {
+    const caseRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pft-bridge-ready-recover-'));
+    let clock = 2_000_000;
+    let calls = 0;
+    const subject = create({}, {
+        root: caseRoot,
+        routes: [routeRows[0]],
+        now: () => clock,
+        execFileAsync: async () => {
+            calls += 1;
+            if (calls === 1) throw new Error('temporary preflight failure');
+            return { stdout: JSON.stringify(readinessPayload('ethereum-mainnet-usdc-v1')) };
+        },
+        spawn: spawnMock,
+        readinessRefreshMs: 60_000,
+        readinessMaxAgeMs: 120_000,
+        readinessFailureMaxAgeMs: 1_000,
+        watchdogMs: 60_000,
+    });
+    try {
+        const failed = await subject.refreshTrustlessBridgeReadiness(
+            'ethereum-mainnet-usdc-v1',
+        );
+        assert.strictEqual(failed.ready, false);
+        clock += 1_001;
+        const warming = await subject.trustlessBridgeReadiness(
+            'ethereum-mainnet-usdc-v1',
+        );
+        assert.strictEqual(warming.code, 'trustless_readiness_warming');
+        await new Promise((resolve) => setImmediate(resolve));
+        const recovered = await subject.trustlessBridgeReadiness(
+            'ethereum-mainnet-usdc-v1',
+        );
+        assert.strictEqual(recovered.ready, true);
+        assert.strictEqual(calls, 2);
+    } finally {
+        subject.closeTrustlessBridgeJobs();
+        fs.rmSync(caseRoot, { recursive: true, force: true });
+    }
+}
+
 async function assertConcurrentSubmissionSafety() {
     const caseRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pft-bridge-submit-race-'));
     const localSpawns = [];
@@ -444,6 +485,7 @@ const bridge = create({}, {
 });
 
 async function main() {
+    await assertFailedReadinessRefreshesBeforeHealthyCacheExpiry();
     const ethReady = await bridge.refreshTrustlessBridgeReadiness('ethereum-mainnet-usdc-v1');
     const arbReady = await bridge.refreshTrustlessBridgeReadiness('arbitrum-one-usdc-v1');
     assert.strictEqual(ethReady.ready, true);
