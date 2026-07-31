@@ -114,7 +114,7 @@ try {
   await page.locator('#a666-eth-recipient').waitFor({ state: 'visible' });
   const recipient = await page.locator('#a666-eth-recipient').inputValue();
   if (recipient !== ethereumAddress) throw new Error('wallet did not bind the connected MetaMask recipient');
-  await page.locator('#a666-amount').fill('1');
+  await page.locator('#navcoin-amount').fill('1');
   await page.getByRole('button', { name: 'Mint & export 1 A666', exact: true }).waitFor({ state: 'visible' });
   await page.screenshot({ path: `${evidenceDir}/01-ready-to-export.png`, fullPage: true });
   await page.getByRole('button', { name: 'Mint & export 1 A666', exact: true }).click();
