@@ -383,7 +383,13 @@ export class RpcClient {
     return this.call('escrow_fee_quote', params);
   }
   async assetInfo(assetId) { return this.call('asset_info', { asset_id: assetId }); }
-  async vaultBridgeRoute(assetId) { return this.call('vault_bridge_route', { asset_id: assetId }); }
+  async vaultBridgeRoute(assetId) {
+    // This authenticated fleet read can take longer than a simple status read
+    // while multiple validators converge. Keep the browser socket alive long
+    // enough for the proxy's bounded fleet route instead of misclassifying a
+    // healthy 10-15 second response as a dropped connection.
+    return this.call('vault_bridge_route', { asset_id: assetId }, 30000);
+  }
   async vaultBridgeStatus(assetId) { return this.call('vault_bridge_status', { asset_id: assetId }); }
   async navcoinBridgeSupplyStatus(routeId) {
     return this.call('navcoin_bridge_supply_status', { route_id: routeId });
