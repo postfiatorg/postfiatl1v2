@@ -33,7 +33,10 @@ const ARBITRUM_STAGES = new Set([
     'capturing_state_proof', 'proving', 'verifying', 'growing_backed_cap',
     'claiming', 'accepted', 'failed',
 ]);
-const DEFAULT_MAX_AMOUNT_ATOMS = 5_000_000n;
+// Deposit amounts are consensus u64 values. There is deliberately no smaller
+// operator-configurable or route-specific business cap: every amount the
+// protocol can represent must be relayable after the vault accepts it.
+const MAX_DEPOSIT_AMOUNT_ATOMS = (1n << 64n) - 1n;
 const FILE_HASH_RE = /^[0-9a-f]{64}$/;
 const PROGRAM_VKEY_RE = /^0x[0-9a-f]{64}$/;
 const HASH48_RE = /^[0-9a-f]{96}$/;
@@ -156,6 +159,11 @@ function normalizeRoute(raw) {
     const readinessBinRaw = String(raw?.readiness_bin || driverBinRaw).trim();
     const driverArgs = raw?.driver_args;
     const readinessArgs = raw?.readiness_args;
+    if (Object.prototype.hasOwnProperty.call(raw || {}, 'max_amount_atoms')) {
+        throw new Error(
+            `bridge route ${routeId || '<missing>'} configures retired max_amount_atoms`,
+        );
+    }
     if (!ROUTE_RE.test(routeId) || sourceChainId === 0 || !proofKind
         || !PROGRAM_VKEY_RE.test(programVkey) || !FILE_HASH_RE.test(manifestHash)
         || !HASH48_RE.test(routeProfileHash) || !HASH48_RE.test(assetId)
@@ -178,8 +186,6 @@ function normalizeRoute(raw) {
         throw new Error('Sepolia P0 verifier identity cannot authorize the Ethereum mainnet route');
     }
     const ethereum = proofKind === 'sp1-ethereum-finality-v1';
-    const maxAmountAtoms = BigInt(String(raw.max_amount_atoms || DEFAULT_MAX_AMOUNT_ATOMS));
-    if (maxAmountAtoms <= 0n) throw new Error(`invalid route amount cap: ${routeId}`);
     const driverBin = validatePinnedFile(
         driverBinRaw, String(raw.driver_sha256 || '').toLowerCase(), 'bridge driver',
     );
@@ -211,7 +217,6 @@ function normalizeRoute(raw) {
         readiness_sha256: String(raw.readiness_sha256 || raw.driver_sha256).toLowerCase(),
         pinned_files: pinnedFiles,
         cwd: path.resolve(String(raw.cwd || process.cwd())),
-        max_amount_atoms: maxAmountAtoms,
         stages: ethereum ? ETH_STAGES : ARBITRUM_STAGES,
         readiness_timeout_ms: positiveInteger(raw.readiness_timeout_ms, 60_000, 1_000),
         worker_timeout_ms: positiveInteger(raw.worker_timeout_ms, 6 * 60 * 60 * 1000, 60_000),
@@ -498,12 +503,16 @@ function create(runtime = {}, options = {}) {
         const pftlRecipient = String(body?.pftl_recipient || '').trim().toLowerCase();
         const depositor = String(body?.depositor || '').trim().toLowerCase();
         const idempotencyKey = String(body?.idempotency_key || '').trim();
-        let amountAtoms;
-        try { amountAtoms = BigInt(String(body?.amount_atoms || '')); } catch (_) { amountAtoms = 0n; }
+        const amountText = typeof body?.amount_atoms === 'string'
+            ? body.amount_atoms.trim()
+            : '';
+        const amountSyntaxValid = /^[1-9][0-9]{0,19}$/.test(amountText);
+        let amountAtoms = 0n;
+        if (amountSyntaxValid) amountAtoms = BigInt(amountText);
         if (!route || sourceChainId !== route.source_chain_id
             || !TX_RE.test(depositTxHash) || !BYTES32_RE.test(depositId)
             || !PFT_RE.test(pftlRecipient) || !EVM_RE.test(depositor)
-            || amountAtoms <= 0n || amountAtoms > route.max_amount_atoms
+            || !amountSyntaxValid || amountAtoms > MAX_DEPOSIT_AMOUNT_ATOMS
             || !/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) {
             throw Object.assign(new Error('invalid trustless bridge job request'), {
                 code: 'invalid_trustless_bridge_job',

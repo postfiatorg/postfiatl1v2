@@ -61,7 +61,6 @@ const routeRows = [
         readiness_sha256: fileSha256(process.execPath),
         readiness_args: ['readiness', '--route', '{route_id}'],
         cwd: root,
-        max_amount_atoms: '5000000',
     },
     {
         route_id: 'arbitrum-one-usdc-v1',
@@ -82,7 +81,6 @@ const routeRows = [
         readiness_sha256: fileSha256(process.execPath),
         readiness_args: ['readiness', '--route', '{route_id}'],
         cwd: root,
-        max_amount_atoms: '5000000',
     },
 ];
 
@@ -111,6 +109,11 @@ assert.throws(
         manifest_hash: 'dc409b424e7627b936d81a16d2fc8f4c17e21a108d654be6b992e552d7b0c6d3',
     }),
     /Sepolia P0 verifier identity cannot authorize/,
+);
+assert.throws(
+    () => normalizeRoute({ ...routeRows[0], max_amount_atoms: '5000000' }),
+    /configures retired max_amount_atoms/,
+    'operators must not be able to reintroduce a route-specific business cap',
 );
 
 function readinessPayload(routeId) {
@@ -590,8 +593,24 @@ async function main() {
     assert.notStrictEqual(arb.job_id, expectedJobId, 'route and chain must domain-separate job IDs');
     assert.strictEqual(spawns.at(-1).bin, process.execPath);
 
+    const protocolMaximumRequest = {
+        ...request,
+        deposit_tx_hash: `0x${'91'.repeat(32)}`,
+        deposit_id: `0x${'92'.repeat(32)}`,
+        amount_atoms: '18446744073709551615',
+        idempotency_key: 'protocol-u64-maximum-deposit',
+    };
+    const protocolMaximum = await bridge.submitTrustlessBridgeJob(protocolMaximumRequest);
+    assert.match(protocolMaximum.job_id, /^0x[0-9a-f]{64}$/);
+
     await assert.rejects(
-        () => bridge.submitTrustlessBridgeJob({ ...request, amount_atoms: '5000001' }),
+        () => bridge.submitTrustlessBridgeJob({
+            ...protocolMaximumRequest,
+            deposit_tx_hash: `0x${'93'.repeat(32)}`,
+            deposit_id: `0x${'94'.repeat(32)}`,
+            amount_atoms: '18446744073709551616',
+            idempotency_key: 'above-protocol-u64-maximum',
+        }),
         (error) => error.code === 'invalid_trustless_bridge_job',
     );
     await assert.rejects(

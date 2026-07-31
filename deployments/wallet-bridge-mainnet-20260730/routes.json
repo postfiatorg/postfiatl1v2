@@ -42,7 +42,6 @@
       }
     ],
     "cwd": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724",
-    "max_amount_atoms": "100000000",
     "readiness_timeout_ms": 90000,
     "worker_timeout_ms": 14400000
   }

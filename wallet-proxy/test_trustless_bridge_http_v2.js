@@ -133,7 +133,6 @@ process.env.TRUSTLESS_BRIDGE_ROUTES_JSON = JSON.stringify([{
     pinned_files: [{ path: adapter, sha256: fileSha256(adapter) }],
     readiness_args: [adapter, 'readiness', '--config', driverConfig, '--route', '{route_id}'],
     cwd: root,
-    max_amount_atoms: '5000000',
 }]);
 
 const { server } = require('./server');
