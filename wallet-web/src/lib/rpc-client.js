@@ -277,7 +277,7 @@ export class RpcClient {
     return this.connectPromise;
   }
 
-  async call(method, params = {}, timeoutMs = 10000) {
+  async call(method, params = {}, timeoutMs = 30000) {
     assertNoCustodyMaterial(params, `wallet RPC ${method}`);
     const maxAttempts = 3;
     // Try a few times — if the first attempt fails due to a stale
@@ -398,10 +398,10 @@ export class RpcClient {
   async assetInfo(assetId) { return this.call('asset_info', { asset_id: assetId }); }
   async vaultBridgeRoute(assetId) {
     // This authenticated fleet read can take longer than a simple status read
-    // while multiple validators converge. Keep the browser socket alive long
-    // enough for the proxy's bounded fleet route instead of misclassifying a
-    // healthy 10-15 second response as a dropped connection.
-    return this.call('vault_bridge_route', { asset_id: assetId }, 30000);
+    // while multiple validators converge or a consensus round is active. Live
+    // qualification has observed healthy responses just under 30 seconds, so
+    // leave enough headroom instead of retrying at the response boundary.
+    return this.call('vault_bridge_route', { asset_id: assetId }, 60000);
   }
   async vaultBridgeStatus(assetId) { return this.call('vault_bridge_status', { asset_id: assetId }); }
   async navcoinBridgeSupplyStatus(routeId) {

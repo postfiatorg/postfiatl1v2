@@ -196,17 +196,31 @@ test('RpcClient exposes no unsigned account-to-owned mutation', () => {
 test('RpcClient binds A666 market reads to exact route and NAV status methods', async () => {
   const rpc = new RpcClient('ws://127.0.0.1:8080/rpc');
   const calls = [];
-  rpc.call = async (method, params) => {
-    calls.push({ method, params });
+  rpc.call = async (method, params, timeoutMs) => {
+    calls.push({ method, params, timeoutMs });
     return { ok: true, result: {} };
   };
 
   await rpc.navcoinBridgeSupplyStatus('route-a666');
   await rpc.vaultBridgeStatus('asset-a666');
+  await rpc.vaultBridgeRoute('asset-a666');
 
   assert.deepEqual(calls, [
-    { method: 'navcoin_bridge_supply_status', params: { route_id: 'route-a666' } },
-    { method: 'vault_bridge_status', params: { asset_id: 'asset-a666' } },
+    {
+      method: 'navcoin_bridge_supply_status',
+      params: { route_id: 'route-a666' },
+      timeoutMs: undefined,
+    },
+    {
+      method: 'vault_bridge_status',
+      params: { asset_id: 'asset-a666' },
+      timeoutMs: undefined,
+    },
+    {
+      method: 'vault_bridge_route',
+      params: { asset_id: 'asset-a666' },
+      timeoutMs: 60000,
+    },
   ]);
 });
 
