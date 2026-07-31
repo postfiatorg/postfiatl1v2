@@ -233,7 +233,18 @@ try {
   await page.screenshot({ path: `${evidenceDir}/02-approved.png`, fullPage: true });
 
   await page.getByRole('button', { name: /Deposit and relay/ }).click();
-  await page.waitForTimeout(15_000);
+  const depositRequestDeadline = Date.now() + 240_000;
+  while (
+    !sentTransactions.some((item) => item.kind === 'deposit')
+    && Date.now() < depositRequestDeadline
+  ) {
+    const bridgeError = page.locator('.pf-error')
+      .filter({ hasText: /Vault deposit failed|Deposit confirmed, but relay failed/ });
+    if (await bridgeError.count() > 0 && await bridgeError.first().isVisible()) {
+      throw new Error(`wallet bridge error: ${await bridgeError.first().innerText()}`);
+    }
+    await page.waitForTimeout(1_000);
+  }
   await page.screenshot({ path: `${evidenceDir}/02b-after-deposit-click.png`, fullPage: true });
   if (!sentTransactions.some((item) => item.kind === 'deposit')) {
     const phaseText = (await page.locator('body').innerText())
@@ -241,7 +252,7 @@ try {
       .filter((line) => /deposit|allowance|gas|failed/i.test(line))
       .slice(0, 20)
       .join(' | ');
-    throw new Error(`wallet did not request a deposit transaction within 15 seconds: ${phaseText}`);
+    throw new Error(`wallet did not request a deposit transaction within 240 seconds: ${phaseText}`);
   }
   await Promise.race([
     page.getByText('pfUSDC received on PFTL', { exact: true }).waitFor({
