@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { defaultRpcEndpoint, encryptVault, normalizeRpcEndpoint } from './vault.js';
+import {
+  acquireAutoLockLease,
+  clearAutoLock,
+  defaultRpcEndpoint,
+  encryptVault,
+  normalizeRpcEndpoint,
+  resetAutoLock,
+  setAutoLockMinutes,
+} from './vault.js';
 
 function withLocation(location, fn) {
   const previous = globalThis.window;
@@ -79,14 +87,15 @@ test('normalizeRpcEndpoint migrates stale loopback endpoints on public HTTPS wal
   });
 });
 
-test('normalizeRpcEndpoint keeps local proxy endpoint for local HTTP wallet', () => {
+test('normalizeRpcEndpoint self-heals stale local settings on the controlled wallet port', () => {
   withLocation({
     protocol: 'http:',
     hostname: '127.0.0.1',
     host: '127.0.0.1:5173',
     port: '5173',
   }, () => {
-    assert.equal(normalizeRpcEndpoint('ws://localhost:8080'), 'ws://localhost:8080');
+    assert.equal(normalizeRpcEndpoint('ws://localhost:8080'), 'ws://127.0.0.1:8080');
+    assert.equal(normalizeRpcEndpoint('wss://stale-wallet.example/rpc'), 'ws://127.0.0.1:8080');
   });
 });
 
@@ -118,5 +127,23 @@ test('encryptVault rejects clearly when crypto.subtle is unavailable (insecure o
     } else {
       Object.defineProperty(globalThis, 'window', { value: previousWindow, configurable: true });
     }
+  }
+});
+
+test('active money operation prevents idle auto-lock until its lease is released', async () => {
+  setAutoLockMinutes(0.0005);
+  let locks = 0;
+  const release = acquireAutoLockLease();
+  resetAutoLock(() => { locks += 1; });
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.equal(locks, 0);
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.equal(locks, 1);
+  } finally {
+    release();
+    clearAutoLock();
+    setAutoLockMinutes(15);
   }
 });

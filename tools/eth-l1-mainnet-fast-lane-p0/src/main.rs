@@ -510,6 +510,7 @@ async fn capture(
             == 1,
         "deposit reverted"
     );
+    let depositor = receipt_sender(&receipt)?;
     let deposit_block = qty(receipt
         .get("blockNumber")
         .ok_or_else(|| anyhow!("receipt block"))?)?;
@@ -594,7 +595,10 @@ async fn capture(
         source_chain_id: MAINNET_CHAIN_ID,
         vault_address: format!("{vault:#x}"),
         token_address: format!("{token:#x}"),
-        depositor: "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0".into(),
+        // The depositor is the transaction sender, not the vault deployer. The
+        // guest independently authenticates it against the finalized
+        // depositRecords storage proof and recomputes the Solidity deposit ID.
+        depositor: format!("{depositor:#x}"),
         pftl_recipient: d.recipient,
         pftl_recipient_hash: recipient_hash,
         amount_atoms: d.amount_atoms,
@@ -646,6 +650,16 @@ async fn capture(
     )?;
     println!("captured finalized Ethereum mainnet deposit block {deposit_block} under finalized block {final_block}; deposit {deposit_id_for_report}");
     Ok(())
+}
+
+fn receipt_sender(receipt: &Value) -> Result<Address> {
+    let sender = receipt
+        .get("from")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("receipt sender missing"))?;
+    sender
+        .parse()
+        .with_context(|| format!("invalid receipt sender `{sender}`"))
 }
 
 fn audit(witness_path: &Path, output: &Path) -> Result<()> {
@@ -1070,6 +1084,22 @@ mod tests {
 
     fn test_dir(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!("pft-eth-ingress-{label}-{}", std::process::id()))
+    }
+
+    #[test]
+    fn receipt_sender_uses_the_actual_depositor() {
+        let receipt = json!({
+            "from": "0xe909393ac44e956ad2192421775cad927da41b6a"
+        });
+        assert_eq!(
+            format!(
+                "{:#x}",
+                receipt_sender(&receipt).expect("valid receipt sender")
+            ),
+            "0xe909393ac44e956ad2192421775cad927da41b6a"
+        );
+        assert!(receipt_sender(&json!({})).is_err());
+        assert!(receipt_sender(&json!({"from": "not-an-address"})).is_err());
     }
 
     #[test]

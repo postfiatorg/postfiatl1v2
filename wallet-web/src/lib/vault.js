@@ -66,6 +66,14 @@ export function normalizeRpcEndpoint(endpoint) {
   const value = String(endpoint || '').trim();
   if (!value) return defaultRpcEndpoint();
 
+  // The controlled localhost wallet is deployed with an authenticated,
+  // same-origin /rpc edge. Never retain an older checkout's port, hostname,
+  // or validator endpoint in IndexedDB: those stale settings otherwise leave
+  // an existing wallet offline while a fresh browser profile appears healthy.
+  if (window.location.port === '5173') {
+    return defaultRpcEndpoint();
+  }
+
   let parsed;
   try {
     parsed = new URL(value);
@@ -123,6 +131,7 @@ let decryptedSeed = null;
 let decryptedBackupJson = null;
 let autoLockTimer = null;
 let autoLockMinutes = 15;
+let autoLockLeaseCount = 0;
 
 export function clearSensitiveMemory() {
   decryptedSeed = null;
@@ -149,13 +158,33 @@ export function setAutoLockMinutes(minutes) {
   autoLockMinutes = minutes;
 }
 
-export function resetAutoLock(onLock) {
+function scheduleAutoLock(onLock, delayMs = autoLockMinutes * 60 * 1000) {
   if (autoLockTimer) clearTimeout(autoLockTimer);
   autoLockTimer = setTimeout(() => {
+    if (autoLockLeaseCount > 0) {
+      // Ethereum finality and proof generation can outlive the ordinary idle
+      // timeout. Do not tear down a user-authorized money operation mid-flow.
+      scheduleAutoLock(onLock, Math.min(autoLockMinutes * 60 * 1000, 60 * 1000));
+      return;
+    }
     clearSensitiveMemory();
     autoLockTimer = null;
     if (onLock) onLock();
-  }, autoLockMinutes * 60 * 1000);
+  }, delayMs);
+}
+
+export function resetAutoLock(onLock) {
+  scheduleAutoLock(onLock);
+}
+
+export function acquireAutoLockLease() {
+  autoLockLeaseCount += 1;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    autoLockLeaseCount = Math.max(0, autoLockLeaseCount - 1);
+  };
 }
 
 export function clearAutoLock() {

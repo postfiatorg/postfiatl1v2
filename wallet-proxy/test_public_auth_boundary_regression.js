@@ -20,6 +20,7 @@ const {
   RPC_HOST,
   rpcRequestRequiresAuth,
   server,
+  websocketOriginAllowed,
 } = require('./server');
 
 function postJson(port, pathname, body, token = '', origin = '') {
@@ -104,6 +105,19 @@ function callAuthenticatedRpc(port, method) {
 }
 
 async function main() {
+  assert.strictEqual(websocketOriginAllowed({
+    headers: {
+      origin: 'https://wallet-tunnel.example:5173',
+      host: 'wallet-tunnel.example:5173',
+    },
+  }), true, 'exact browser-facing origin should be accepted');
+  assert.strictEqual(websocketOriginAllowed({
+    headers: {
+      origin: 'https://attacker.example',
+      host: 'wallet-tunnel.example:5173',
+    },
+  }), false, 'cross-origin websocket should remain forbidden');
+
   assert.strictEqual(LISTEN_HOST, '127.0.0.1');
   assert.strictEqual(RPC_HOST, '127.0.0.1');
   assert.strictEqual(RPC_FLEET.length, 6);

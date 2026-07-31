@@ -48,11 +48,14 @@ BEACON_RPC = "https://ethereum-beacon-api.publicnode.com"
 A100_HOST = os.environ.get("A666_A100_HOST", "194.228.55.129")
 A100_PORT = int(os.environ.get("A666_A100_PORT", "30886"))
 VALIDATOR2_HOST = os.environ.get("A666_VALIDATOR2_HOST", "66.42.48.39")
-A100_CAPTURE = "/workspace/a666-acceptance/bin/eth-l1-mainnet-fast-lane-p0-cuda"
+A100_CAPTURE = (
+    "/workspace/a666-acceptance/bin/"
+    "eth-l1-mainnet-fast-lane-p0-depositor-fix-20260731"
+)
 A100_PROVE = "/workspace/a666-acceptance/bin/eth-l1-mainnet-fast-lane-p0-cuda-optimized"
 A100_ELF = "/workspace/a666-acceptance/witness/pfusdc-eth-mainnet-ingress-program"
 A100_HASHES = {
-    A100_CAPTURE: "cdb3e7d87cb18333402c3904abb68008769b774a7fd4d5ffd0954126c4016c70",
+    A100_CAPTURE: "3dd960c721fa82008ad6490678e7152898aa6ff42ed54fbd44e4b5c853479ee4",
     A100_PROVE: "2e6017599d95e09541446b8e3054f2bbf3644dae24996a7327f50d3989d77fae",
     A100_ELF: "0e59a0cf7723b9028aaa4c57f9e9c0da72119a552d62a5577223ba7b2df222d3",
 }
@@ -113,7 +116,10 @@ def run(
     )
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).strip().splitlines()
-        message = detail[-1] if detail else f"exit {result.returncode}"
+        message = next(
+            (line for line in detail if line.startswith("error:")),
+            detail[-1] if detail else f"exit {result.returncode}",
+        )
         raise RuntimeError(f"{Path(argv[0]).name} failed: {message}")
     return result
 
@@ -557,7 +563,12 @@ def pftl_receipt_for_evidence(evidence_root: str) -> dict[str, Any] | None:
 
 
 def relay_phase(
-    phase: str, request: dict[str, Any], job_dir: Path, job_key: str
+    phase: str,
+    request: dict[str, Any],
+    job_dir: Path,
+    job_key: str,
+    *,
+    skip_finalize: bool = False,
 ) -> dict[str, Any]:
     baseline_file = job_dir / "pftl-baseline.json"
     if baseline_file.exists():
@@ -591,6 +602,7 @@ def relay_phase(
             "PFTL_PROOF_DIR": remote_proof,
             "PFTL_LOCAL_EVIDENCE": str(job_dir / "pftl"),
             "PFTL_RELAY_PHASE": phase,
+            "PFTL_SKIP_FINALIZE": "true" if skip_finalize else "false",
             "PFTL_HOLDER": request["pftl_recipient"],
             "PFTL_NODE_BIN": PFTL_NODE,
             "PFTL_TOPOLOGY": PFTL_TOPOLOGY,
@@ -669,7 +681,13 @@ def execute_stage(stage: str, job_file: Path) -> dict[str, Any]:
             raise RuntimeError("PFTL bridge proposal disappeared before claim")
         receipt = pftl_receipt_for_evidence(deposit["evidence_root"])
         if receipt is None:
-            relay_phase("claim", request, job_dir, job_key)
+            relay_phase(
+                "claim",
+                request,
+                job_dir,
+                job_key,
+                skip_finalize=deposit.get("status") == "finalized",
+            )
             deposit = pftl_deposit(request)
             receipt = pftl_receipt_for_evidence(deposit["evidence_root"])
         if (

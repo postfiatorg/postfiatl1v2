@@ -13,6 +13,7 @@ cast=${PFTL_CAST_BIN:-/var/lib/postfiat/validator-2/pfusdc-latency-20260727-run2
 proof_dir=${PFTL_PROOF_DIR:?PFTL_PROOF_DIR is required}
 resident_manifest=${A666_RESIDENT_ROUNDS_MANIFEST:-}
 relay_phase=${PFTL_RELAY_PHASE:-all}
+skip_finalize=${PFTL_SKIP_FINALIZE:-false}
 asset=02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b
 policy=${PFTL_POLICY_HASH:-5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158}
 vault=${PFTL_VAULT_ADDRESS:-0xaaa78fda7062efce769e95cd72fc55e507bc8183}
@@ -26,6 +27,10 @@ label_suffix=${PFTL_LABEL_SUFFIX:-}
 case "$relay_phase" in
   all|propose|claim) ;;
   *) echo "PFTL_RELAY_PHASE must be all, propose, or claim" >&2; exit 2 ;;
+esac
+case "$skip_finalize" in
+  true|false) ;;
+  *) echo "PFTL_SKIP_FINALIZE must be true or false" >&2; exit 2 ;;
 esac
 
 v0=$(awk '$1=="validator-0"{print $2}' "$fleet")
@@ -114,15 +119,73 @@ submit_round() {
     "$local_evidence/$label.report.json" >/dev/null
 }
 
+sponsor_recipient_if_needed() {
+  local height=$1
+  local label=$2
+  if ssh_v2 "set -euo pipefail
+    '$node' account --data-dir /var/lib/postfiat/validator-2 \
+      --address '$holder' 2>/dev/null \
+      | jq -e '.balance >= 10' >/dev/null"; then
+    return 1
+  fi
+
+  local sponsor_dir=$run/sponsor-recipient
+  ssh_v2 "set -euo pipefail
+    install -d -m 700 '$sponsor_dir'
+    '$node' transfer-fee-quote \
+      --data-dir /var/lib/postfiat/validator-2 \
+      --from '$issuer' \
+      --to '$holder' \
+      --amount 10 > '$sponsor_dir/quote.json'
+    '$node' wallet-sign-transfer \
+      --key-file '$issuer_key' \
+      --quote-file '$sponsor_dir/quote.json' > '$sponsor_dir/signed.json'
+    jq -e --arg from '$issuer' --arg to '$holder' \
+      '.from==\$from and .to==\$to and .amount==10
+       and .sender_meets_reserve_after_transfer==true
+       and .recipient_meets_reserve_after_transfer==true' \
+      '$sponsor_dir/quote.json' >/dev/null"
+
+  local proposer
+  proposer=$(ssh -i "$ssh_key" "root@$v0" \
+    "$node block-proposer --unsafe-devnet-json-storage \
+      --data-dir /var/lib/postfiat/validator-0 --height $height --view 0" |
+    jq -er .proposer)
+  local host
+  host=$(host_for_validator "$proposer")
+  local index=${proposer#validator-}
+  local remote_signed=/var/lib/postfiat/validator-"$index"/"$label".signed.json
+  scp -q -3 -i "$ssh_key" \
+    "root@$v2:$sponsor_dir/signed.json" \
+    "root@$host:$remote_signed"
+  ssh -i "$ssh_key" "root@$host" "set -euo pipefail
+    '$node' transport-peer-certified-mempool-round \
+      --data-dir /var/lib/postfiat/validator-$index \
+      --topology '$topology' \
+      --key-file /var/lib/postfiat/validator-$index/validator_keys.json \
+      --proposal-key-file /var/lib/postfiat/validator-$index/validator_keys.json \
+      --artifact-dir /var/lib/postfiat/validator-$index/$label \
+      --max-transactions 1 \
+      --signed-transfer-file '$remote_signed' \
+      --require-local-proposer \
+      --height '$height' \
+      --timeout-ms 180000 \
+      --send-retries 16 \
+      --retry-backoff-ms 250 \
+      --quorum-early-full-propagation \
+      --local-apply-before-certified-send" > "$local_evidence/$label.report.json"
+  jq -e --argjson height "$height" \
+    '.round_ok==true
+     and .round.certification.block_height==$height
+     and .round.all_sends_verified==true' \
+    "$local_evidence/$label.report.json" >/dev/null
+  return 0
+}
+
 mkdir -p "$local_evidence"
 start_height=$(ssh_v2 \
   "'$node' status --data-dir /var/lib/postfiat/validator-2" | jq -er .block_height)
 relay_height=$((start_height + 1))
-if test "$relay_phase" = all; then
-  claim_height=$((start_height + 2))
-else
-  claim_height=$((start_height + 1))
-fi
 
 if test "$relay_phase" != claim; then
   ssh_v2 "set -euo pipefail
@@ -166,8 +229,14 @@ if test "$relay_phase" != claim; then
       |select(.label==\"finalize\" or .label==\"claim\")
       |if .label==\"claim\" then .operation.recipient=\$holder else . end]}' \
     '$run/full.ops.json' > '$run/finalize-claim.ops.json'
+  jq '{schema,operations:[.operations[]|select(.label==\"finalize\")]}' \
+    '$run/finalize-claim.ops.json' > '$run/finalize.ops.json'
+  jq '{schema,operations:[.operations[]|select(.label==\"claim\")]}' \
+    '$run/finalize-claim.ops.json' > '$run/claim.ops.json'
   test \"\$(jq '.operations|length' '$run/propose.ops.json')\" = 1
   test \"\$(jq '.operations|length' '$run/finalize-claim.ops.json')\" = 2
+  test \"\$(jq '.operations|length' '$run/finalize.ops.json')\" = 1
+  test \"\$(jq '.operations|length' '$run/claim.ops.json')\" = 1
   test \"\$(jq -r '.operations[1].operation.recipient' \
     '$run/finalize-claim.ops.json')\" = '$holder'"
 else
@@ -175,6 +244,16 @@ else
     test -s '$run/full.ops.json'
     test -s '$run/propose.ops.json'
     test -s '$run/finalize-claim.ops.json'
+    if test ! -s '$run/finalize.ops.json'; then
+      jq '{schema,operations:[.operations[]|select(.label==\"finalize\")]}' \
+        '$run/finalize-claim.ops.json' > '$run/finalize.ops.json'
+    fi
+    if test ! -s '$run/claim.ops.json'; then
+      jq '{schema,operations:[.operations[]|select(.label==\"claim\")]}' \
+        '$run/finalize-claim.ops.json' > '$run/claim.ops.json'
+    fi
+    test \"\$(jq '.operations|length' '$run/finalize.ops.json')\" = 1
+    test \"\$(jq '.operations|length' '$run/claim.ops.json')\" = 1
     test \"\$(jq -r '.operations[1].operation.recipient' \
       '$run/finalize-claim.ops.json')\" = '$holder'"
 fi
@@ -183,9 +262,27 @@ if test "$relay_phase" != claim; then
   submit_round "$run/propose.ops.json" "$relay_height" 1 \
     "joe-pfusdc-propose-h$relay_height$label_suffix"
 fi
+completed_height=$relay_height
 if test "$relay_phase" != propose; then
-  submit_round "$run/finalize-claim.ops.json" "$claim_height" 2 \
+  operation_height=$start_height
+  if test "$relay_phase" = all; then
+    operation_height=$relay_height
+  fi
+  sponsor_height=$((operation_height + 1))
+  if sponsor_recipient_if_needed "$sponsor_height" \
+      "joe-pfusdc-sponsor-h$sponsor_height$label_suffix"; then
+    operation_height=$sponsor_height
+  fi
+  if test "$skip_finalize" = false; then
+    finalize_height=$((operation_height + 1))
+    submit_round "$run/finalize.ops.json" "$finalize_height" 1 \
+      "joe-pfusdc-finalize-h$finalize_height$label_suffix"
+    operation_height=$finalize_height
+  fi
+  claim_height=$((operation_height + 1))
+  submit_round "$run/claim.ops.json" "$claim_height" 1 \
     "joe-pfusdc-claim-h$claim_height$label_suffix"
+  completed_height=$claim_height
 fi
 
 if test "$relay_phase" != propose; then
@@ -209,11 +306,6 @@ if test "$relay_phase" != propose; then
     "$local_evidence/holder-after-claim.json"
   scp -q -i "$ssh_key" "root@$v2:$run/post-status.json" \
     "$local_evidence/post-status.json"
-fi
-
-completed_height=$relay_height
-if test "$relay_phase" != propose; then
-  completed_height=$claim_height
 fi
 
 jq -n \

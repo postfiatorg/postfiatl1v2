@@ -6,7 +6,7 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const pkg = require('./package.json');
 
-const CSP_VALUE = "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' wss://127.0.0.1:5173 wss://localhost:5173 ws://127.0.0.1:8080 ws://localhost:8080 http://127.0.0.1:8789 http://localhost:8789;";
+const CSP_VALUE = "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' wss: ws://127.0.0.1:8080 ws://localhost:8080 http://127.0.0.1:8789 http://localhost:8789;";
 
 // Inject CSP meta tag ONLY in production builds.
 // In dev mode Vite uses inline scripts (react-refresh, HMR client) that

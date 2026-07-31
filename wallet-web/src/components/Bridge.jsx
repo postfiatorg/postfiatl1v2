@@ -19,6 +19,7 @@ import {
   relayVaultDeposit,
 } from '../lib/bridge-relay.js';
 import { loadGovernedVaultBridgeRoute } from '../lib/bridge-route.js';
+import { acquireAutoLockLease } from '../lib/vault.js';
 
 const ETHEREUM_CHAIN_ID = utils.ETH_MAINNET_CHAIN_ID || 1;
 const ETHEREUM_USDC = utils.ETH_MAINNET_USDC;
@@ -67,6 +68,10 @@ function usdcLabel(atoms) {
   return `${trimUsdc(evm.atomsToUsdc(atoms || 0n))} USDC`;
 }
 
+function pfusdcLabel(atoms) {
+  return `${trimUsdc(evm.atomsToUsdc(atoms || 0n))} pfUSDC`;
+}
+
 function ethLabel(wei) {
   const n = BigInt(wei || 0n);
   const scale = 10n ** 18n;
@@ -101,6 +106,19 @@ function humanEvmError(error) {
     return 'Not enough Ethereum ETH for gas.';
   }
   return message;
+}
+
+function accountPftlBalance(response) {
+  if (response?.ok !== true || !response.result) {
+    throw new Error(response?.error?.message || 'PFTL asset balance is unavailable.');
+  }
+  const assets = Array.isArray(response.result)
+    ? response.result
+    : (response.result.assets || []);
+  const row = assets.find((item) => (
+    String(item?.asset_id || item?.id || '').toLowerCase() === utils.PFUSDC_ASSET_ID
+  ));
+  return BigInt(row?.balance ?? row?.amount ?? 0);
 }
 
 function BalanceRow({ label, value, active = false }) {
@@ -178,7 +196,24 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
   }, [rpc]);
 
   useEffect(() => {
-    loadRoute().catch(() => {});
+    let cancelled = false;
+    let retryTimer = null;
+    let retriesRemaining = 2;
+    const discover = async () => {
+      try {
+        await loadRoute();
+      } catch (_) {
+        if (!cancelled && retriesRemaining > 0) {
+          retriesRemaining -= 1;
+          retryTimer = setTimeout(discover, 3000);
+        }
+      }
+    };
+    discover();
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, [loadRoute]);
 
   const refreshBalances = useCallback(async (owner = connectedAddress) => {
@@ -331,6 +366,15 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
     );
     if (result.after_balance_atoms !== undefined && result.after_balance_atoms !== null) {
       setPfusdcBalance(BigInt(result.after_balance_atoms));
+    } else {
+      // The durable relay receipt proves acceptance, but older bridge workers
+      // do not include the resulting account balance. Read it from PFTL so the
+      // completion screen always shows what the user actually received.
+      try {
+        setPfusdcBalance(accountPftlBalance(await rpc.accountAssets(address)));
+      } catch (_) {
+        setPfusdcBalance(null);
+      }
     }
     setPhase('complete');
   };
@@ -338,6 +382,7 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
   const deposit = async () => {
     setError('');
     let confirmed = false;
+    const releaseAutoLock = acquireAutoLockLease();
     try {
       assertAmountReady();
       if (approvedAtoms === null || approvedAtoms < amountAtoms) {
@@ -380,11 +425,14 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
     } catch (failure) {
       setPhase('error');
       setError(`${confirmed ? 'Deposit confirmed, but relay failed' : 'Vault deposit failed'}: ${humanEvmError(failure)}`);
+    } finally {
+      releaseAutoLock();
     }
   };
 
   const resumeRelay = async () => {
     setError('');
+    const releaseAutoLock = acquireAutoLockLease();
     try {
       const txHash = normalizeTxHash(manualTx);
       if (!txHash) throw new Error('Enter a valid Ethereum transaction hash.');
@@ -403,6 +451,8 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
     } catch (failure) {
       setPhase('error');
       setError(`Relay recovery failed: ${humanEvmError(failure)}`);
+    } finally {
+      releaseAutoLock();
     }
   };
 
@@ -527,7 +577,7 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
                 <div className="pfb-card-head"><Check size={15} /> Complete</div>
                 <h2>pfUSDC received on PFTL</h2>
                 <p>The Ethereum vault deposit was confirmed, verified, finalized, and claimed into this PFTL wallet.</p>
-                {pfusdcBalance !== null && <div className="pfb-readout"><span>PFTL pfUSDC balance</span><strong>{usdcLabel(pfusdcBalance)}</strong></div>}
+                {pfusdcBalance !== null && <div className="pfb-readout"><span>PFTL balance</span><strong>{pfusdcLabel(pfusdcBalance)}</strong></div>}
                 <button className="pfb-secondary" type="button" onClick={reset}>Make another deposit</button>
               </>
             ) : (
@@ -611,7 +661,7 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
             </div>
             <BalanceRow label="Ethereum USDC" value={balanceLoading ? '…' : usdcLabel(usdcBalance)} active={currentStep === 2 || currentStep === 3} />
             <BalanceRow label="Ethereum gas" value={balanceLoading ? '…' : ethLabel(ethBalance)} />
-            {pfusdcBalance !== null && <BalanceRow label="PFTL pfUSDC" value={usdcLabel(pfusdcBalance)} active={phase === 'complete'} />}
+            {pfusdcBalance !== null && <BalanceRow label="PFTL pfUSDC" value={pfusdcLabel(pfusdcBalance)} active={phase === 'complete'} />}
           </div>
           <div className="pfb-side-section">
             <div className="pfb-side-title">Transaction context</div>

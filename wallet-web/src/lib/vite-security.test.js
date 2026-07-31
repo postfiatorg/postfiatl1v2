@@ -11,17 +11,15 @@ test('wallet development and preview servers are loopback-only by default', () =
   assert.equal(viteConfig.preview?.strictPort, true);
 });
 
-test('production CSP does not grant arbitrary websocket origins', () => {
+test('production CSP rejects insecure arbitrary websocket origins', () => {
   const csp = viteConfig.preview?.headers?.['Content-Security-Policy'];
   assert.equal(typeof csp, 'string');
   assert.doesNotMatch(csp, /(?:^|\s)ws:(?:\s|;|$)/);
-  assert.doesNotMatch(csp, /(?:^|\s)wss:(?:\s|;|$)/);
 });
 
-test('production CSP permits the localhost TLS RPC websocket', () => {
+test('production CSP permits secure websocket transport for runtime host aliases', () => {
   const csp = viteConfig.preview?.headers?.['Content-Security-Policy'];
-  assert.match(csp, /(?:^|\s)wss:\/\/127\.0\.0\.1:5173(?:\s|;|$)/);
-  assert.match(csp, /(?:^|\s)wss:\/\/localhost:5173(?:\s|;|$)/);
+  assert.match(csp, /(?:^|\s)wss:(?:\s|;|$)/);
 });
 
 test('wallet settings cannot redirect the bridge money destination', () => {

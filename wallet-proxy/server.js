@@ -51,7 +51,7 @@ const WALLET_PROXY_API_TOKENS = parseProxyApiTokens(
 const WALLET_STATIC_DIR = path.resolve(
     process.env.WALLET_STATIC_DIR || path.join(__dirname, '..', 'wallet-web', 'dist'),
 );
-const WALLET_CSP = "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' wss://127.0.0.1:5173 wss://localhost:5173 ws://127.0.0.1:8080 ws://localhost:8080 http://127.0.0.1:8789 http://localhost:8789;";
+const WALLET_CSP = "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' wss: ws://127.0.0.1:8080 ws://localhost:8080 http://127.0.0.1:8789 http://localhost:8789;";
 const DEFAULT_RPC_FLEET = [
     'validator-0=127.0.0.1:27650',
     'validator-1=127.0.0.1:27651',
@@ -73,6 +73,28 @@ function parseListenHost(value) {
 
 function isLoopbackHost(host) {
     return host === '127.0.0.1' || host === '::1';
+}
+
+function websocketOriginAllowed(req) {
+    const origin = String(req.headers.origin || '').trim();
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return true;
+
+    // Reverse proxies retain the browser-facing Host (or provide
+    // X-Forwarded-Host). Accept that exact same origin so SSH tunnels and
+    // localhost aliases do not require an ever-growing static allowlist.
+    // A different host remains forbidden.
+    const forwardedHost = String(req.headers['x-forwarded-host'] || '')
+        .split(',')[0]
+        .trim();
+    const requestHost = forwardedHost || String(req.headers.host || '').trim();
+    if (!requestHost) return false;
+    try {
+        const parsed = new URL(origin);
+        return (parsed.protocol === 'https:' || parsed.protocol === 'http:')
+            && parsed.host.toLowerCase() === requestHost.toLowerCase();
+    } catch (_) {
+        return false;
+    }
 }
 
 function parseProxyApiTokens(singleToken, tokensJson, tokensFile) {
@@ -708,8 +730,7 @@ const server = http.createServer(async (req, res) => {
 // requires both an authenticated principal and an allowed browser Origin.
 const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_WS_MESSAGE_BYTES });
 server.on('upgrade', (req, socket, head) => {
-    const origin = req.headers.origin || '';
-    if (origin && !ALLOWED_ORIGINS.includes(origin)) {
+    if (!websocketOriginAllowed(req)) {
         socket.write(
             'HTTP/1.1 403 Forbidden\r\n'
             + 'Connection: close\r\n'
@@ -727,7 +748,7 @@ wss.on('connection', (ws, req) => {
     // Browser WebSockets always carry Origin. Non-browser clients may omit it,
     // but all mutation methods still require the per-request bearer below.
     const origin = req.headers.origin || '';
-    if (origin && !ALLOWED_ORIGINS.includes(origin)) {
+    if (!websocketOriginAllowed(req)) {
         ws.close(1008, 'origin not allowed');
         return;
     }
@@ -1257,4 +1278,5 @@ module.exports = {
     verifyAtomicTemplateSymmetry,
     verifyTransparentNavSubscriptionAllocation,
     waitForFastpayConvergedGroup,
+    websocketOriginAllowed,
 };

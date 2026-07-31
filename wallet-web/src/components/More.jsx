@@ -23,20 +23,28 @@ export default function More({ settings, proxyAuthToken = '', onSave, onRemove, 
   const [proxyToken, setProxyToken] = useState(proxyAuthToken);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const fileInputRef = useRef(null);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const endpoint = rpcEndpoint === 'custom' ? customRpc : rpcEndpoint;
-    onSave({
-      rpcEndpoint: endpoint,
-      autoLockMinutes: autoLock,
-      swapServerUrl,
-      proxyAuthToken: proxyToken,
-    });
-    setSuccess('Settings saved');
     setError('');
-    setTimeout(() => setSuccess(''), 2000);
+    setSaving(true);
+    try {
+      await onSave({
+        rpcEndpoint: endpoint,
+        autoLockMinutes: autoLock,
+        swapServerUrl,
+        proxyAuthToken: proxyToken,
+      });
+      setSuccess('Settings saved');
+      setTimeout(() => setSuccess(''), 2000);
+    } catch (failure) {
+      setError(`Settings save failed: ${failure?.message || 'unknown error'}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleExport = () => {
@@ -143,7 +151,9 @@ export default function More({ settings, proxyAuthToken = '', onSave, onRemove, 
                 <option value="60">60</option>
               </select>
             </Field>
-            <button className="pf-primary" onClick={handleSave}>Save settings</button>
+            <button className="pf-primary" onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving settings…' : 'Save settings'}
+            </button>
             <div className="pf-even">
               <button className="pf-ghost" onClick={handleExport}>Export backup</button>
               <button className="pf-ghost" onClick={handleImportClick}>Import backup</button>
