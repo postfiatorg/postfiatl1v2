@@ -59,12 +59,18 @@ submit_round() {
   local index=${proposer#validator-}
   local remote_ops=/var/lib/postfiat/validator-"$index"/"$label".ops.json
   scp -q -3 -i "$ssh_key" "root@$v2:$ops_file" "root@$host:$remote_ops"
+  # The resident validators and RPC services own their data directories as
+  # postfiat. Running a one-shot proposer as root leaves root-owned durable
+  # certified-send jobs behind, which blocks the next browser submission when
+  # it tries to complete the same job. Normalize the copied input and execute
+  # every value-mutating proposer under the resident service account.
+  ssh -i "$ssh_key" "root@$host" \
+    "chown postfiat:postfiat '$remote_ops'; chmod 600 '$remote_ops'"
 
   if test -n "$resident_manifest"; then
     local build_dir=/var/lib/postfiat/validator-"$index"/"$label"-batch-build
     ssh -i "$ssh_key" "root@$host" "set -euo pipefail
-      test ! -e '$build_dir'
-      '$node' pftl-submit-certified-asset-ops \
+      /usr/sbin/runuser -u postfiat -- '$node' pftl-submit-certified-asset-ops \
         --data-dir /var/lib/postfiat/validator-$index \
         --topology '$topology' \
         --key-file /var/lib/postfiat/validator-$index/validator_keys.json \
@@ -79,6 +85,7 @@ submit_round() {
         --retry-backoff-ms 250 \
         --quorum-early-full-propagation \
         --local-apply-before-certified-send \
+        --resume \
         --batch-only" > "$local_evidence/$label.batch-build-report.json"
     jq -e --argjson count "$max_transactions" \
       '.batch_only==true and .round_ok==null and .operation_count==$count' \
@@ -96,7 +103,7 @@ submit_round() {
       "$local_evidence/$label.report.json"
   else
     ssh -i "$ssh_key" "root@$host" "set -euo pipefail
-      '$node' pftl-submit-certified-asset-ops \
+      /usr/sbin/runuser -u postfiat -- '$node' pftl-submit-certified-asset-ops \
         --data-dir /var/lib/postfiat/validator-$index \
         --topology '$topology' \
         --key-file /var/lib/postfiat/validator-$index/validator_keys.json \
@@ -110,7 +117,8 @@ submit_round() {
         --send-retries 16 \
         --retry-backoff-ms 250 \
         --quorum-early-full-propagation \
-        --local-apply-before-certified-send" > "$local_evidence/$label.report.json"
+        --local-apply-before-certified-send \
+        --resume" > "$local_evidence/$label.report.json"
   fi
   jq -e --argjson height "$height" \
     '(.end_height==$height)
@@ -159,7 +167,9 @@ sponsor_recipient_if_needed() {
     "root@$v2:$sponsor_dir/signed.json" \
     "root@$host:$remote_signed"
   ssh -i "$ssh_key" "root@$host" "set -euo pipefail
-    '$node' transport-peer-certified-mempool-round \
+    chown postfiat:postfiat '$remote_signed'
+    chmod 600 '$remote_signed'
+    /usr/sbin/runuser -u postfiat -- '$node' transport-peer-certified-mempool-round \
       --data-dir /var/lib/postfiat/validator-$index \
       --topology '$topology' \
       --key-file /var/lib/postfiat/validator-$index/validator_keys.json \
@@ -173,7 +183,8 @@ sponsor_recipient_if_needed() {
       --send-retries 16 \
       --retry-backoff-ms 250 \
       --quorum-early-full-propagation \
-      --local-apply-before-certified-send" > "$local_evidence/$label.report.json"
+      --local-apply-before-certified-send \
+      --resume" > "$local_evidence/$label.report.json"
   jq -e --argjson height "$height" \
     '.round_ok==true
      and .round.certification.block_height==$height

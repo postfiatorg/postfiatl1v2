@@ -12,6 +12,7 @@ const keystore = process.env.E2E_ETH_KEYSTORE;
 const passwordFile = process.env.E2E_ETH_PASSWORD_FILE;
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 const pftlBackupFile = process.env.E2E_PFTL_BACKUP_FILE || '';
+const resumeDepositTxHash = String(process.env.E2E_RESUME_DEPOSIT_TX_HASH || '').toLowerCase();
 const amountAtoms = 1_000_000n;
 const canonicalUsdc = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
 const governedVault = '0xaaa78fda7062efce769e95cd72fc55e507bc8183';
@@ -22,6 +23,9 @@ if (!keystore || !passwordFile || !evidenceDir) {
   throw new Error(
     'E2E_ETH_KEYSTORE, E2E_ETH_PASSWORD_FILE, and E2E_EVIDENCE_DIR are required',
   );
+}
+if (resumeDepositTxHash && !/^0x[0-9a-f]{64}$/.test(resumeDepositTxHash)) {
+  throw new Error('E2E_RESUME_DEPOSIT_TX_HASH must be a 32-byte Ethereum transaction hash');
 }
 
 await mkdir(evidenceDir, { recursive: true, mode: 0o700 });
@@ -221,49 +225,57 @@ try {
   if (await connectButton.count() > 0 && await connectButton.isVisible()) {
     await connectButton.click();
   }
-  await page.getByRole('button', { name: 'Approve Ethereum USDC', exact: true })
-    .waitFor({ state: 'visible' });
-  await page.getByText(/^\d+(?:\.\d+)? USDC$/).first().waitFor({ state: 'visible' });
-  await page.locator('input[placeholder="0.00"]').fill('1');
+  if (resumeDepositTxHash) {
+    await page.getByRole('button', { name: /Already deposited into the Ethereum vault/ }).click();
+    await page.locator('input[placeholder*="Ethereum vault deposit transaction"]')
+      .fill(resumeDepositTxHash);
+    await page.screenshot({ path: `${evidenceDir}/01-resume-ready.png`, fullPage: true });
+    await page.getByRole('button', { name: 'Resume relay', exact: true }).click();
+  } else {
+    await page.getByRole('button', { name: 'Approve Ethereum USDC', exact: true })
+      .waitFor({ state: 'visible' });
+    await page.getByText(/^\d+(?:\.\d+)? USDC$/).first().waitFor({ state: 'visible' });
+    await page.locator('input[placeholder="0.00"]').fill('1');
 
-  await page.screenshot({ path: `${evidenceDir}/01-funded-connected.png`, fullPage: true });
-  await page.getByRole('button', { name: 'Approve Ethereum USDC', exact: true })
-    .click({ timeout: 240_000 });
-  await page.getByRole('button', { name: /Deposit and relay/ }).waitFor({ state: 'visible' });
-  await page.screenshot({ path: `${evidenceDir}/02-approved.png`, fullPage: true });
+    await page.screenshot({ path: `${evidenceDir}/01-funded-connected.png`, fullPage: true });
+    await page.getByRole('button', { name: 'Approve Ethereum USDC', exact: true })
+      .click({ timeout: 240_000 });
+    await page.getByRole('button', { name: /Deposit and relay/ }).waitFor({ state: 'visible' });
+    await page.screenshot({ path: `${evidenceDir}/02-approved.png`, fullPage: true });
 
-  await page.getByRole('button', { name: /Deposit and relay/ }).click();
-  const depositRequestDeadline = Date.now() + 240_000;
-  while (
-    !sentTransactions.some((item) => item.kind === 'deposit')
-    && Date.now() < depositRequestDeadline
-  ) {
-    const bridgeError = page.locator('.pf-error')
-      .filter({ hasText: /Vault deposit failed|Deposit confirmed, but relay failed/ });
-    if (await bridgeError.count() > 0 && await bridgeError.first().isVisible()) {
-      throw new Error(`wallet bridge error: ${await bridgeError.first().innerText()}`);
+    await page.getByRole('button', { name: /Deposit and relay/ }).click();
+    const depositRequestDeadline = Date.now() + 240_000;
+    while (
+      !sentTransactions.some((item) => item.kind === 'deposit')
+      && Date.now() < depositRequestDeadline
+    ) {
+      const bridgeError = page.locator('.pf-error')
+        .filter({ hasText: /Vault deposit failed|Deposit confirmed, but relay failed/ });
+      if (await bridgeError.count() > 0 && await bridgeError.first().isVisible()) {
+        throw new Error(`wallet bridge error: ${await bridgeError.first().innerText()}`);
+      }
+      await page.waitForTimeout(1_000);
     }
-    await page.waitForTimeout(1_000);
-  }
-  await page.screenshot({ path: `${evidenceDir}/02b-after-deposit-click.png`, fullPage: true });
-  if (!sentTransactions.some((item) => item.kind === 'deposit')) {
-    const phaseText = (await page.locator('body').innerText())
-      .split('\n')
-      .filter((line) => /deposit|allowance|gas|failed/i.test(line))
-      .slice(0, 20)
-      .join(' | ');
-    throw new Error(`wallet did not request a deposit transaction within 240 seconds: ${phaseText}`);
+    await page.screenshot({ path: `${evidenceDir}/02b-after-deposit-click.png`, fullPage: true });
+    if (!sentTransactions.some((item) => item.kind === 'deposit')) {
+      const phaseText = (await page.locator('body').innerText())
+        .split('\n')
+        .filter((line) => /deposit|allowance|gas|failed/i.test(line))
+        .slice(0, 20)
+        .join(' | ');
+      throw new Error(`wallet did not request a deposit transaction within 240 seconds: ${phaseText}`);
+    }
   }
   await Promise.race([
     page.getByText('pfUSDC received on PFTL', { exact: true }).waitFor({
       state: 'visible',
       timeout: 2_400_000,
     }),
-    page.locator('.pf-error').filter({ hasText: /Vault deposit failed|Deposit confirmed, but relay failed/ })
+    page.locator('.pf-error').filter({ hasText: /Vault deposit failed|Deposit confirmed, but relay failed|Relay recovery failed/ })
       .waitFor({ state: 'visible', timeout: 2_400_000 })
       .then(async () => {
         const message = await page.locator('.pf-error')
-          .filter({ hasText: /Vault deposit failed|Deposit confirmed, but relay failed/ })
+          .filter({ hasText: /Vault deposit failed|Deposit confirmed, but relay failed|Relay recovery failed/ })
           .innerText();
         throw new Error(`wallet bridge error: ${message}`);
       }),
@@ -272,8 +284,14 @@ try {
 
   const body = await page.locator('body').innerText();
   const transactionKinds = sentTransactions.map((item) => item.kind);
-  if (transactionKinds.at(-1) !== 'deposit' || transactionKinds.filter((kind) => kind === 'deposit').length !== 1) {
+  if (!resumeDepositTxHash && (
+    transactionKinds.at(-1) !== 'deposit'
+    || transactionKinds.filter((kind) => kind === 'deposit').length !== 1
+  )) {
     throw new Error('browser did not submit exactly one governed-vault deposit');
+  }
+  if (resumeDepositTxHash && transactionKinds.length !== 0) {
+    throw new Error('browser recovery unexpectedly submitted an Ethereum transaction');
   }
   if (!/\b\d+(?:\.\d+)? pfUSDC\b/.test(body)) {
     throw new Error('wallet did not render the resulting pfUSDC balance');
@@ -289,6 +307,8 @@ try {
     ethereum_address: ethereumAddress,
     pftl_address: pftlAddress,
     amount_atoms: amountAtoms.toString(),
+    recovery: Boolean(resumeDepositTxHash),
+    resumed_deposit_tx_hash: resumeDepositTxHash || null,
     transactions: sentTransactions,
     elapsed_ms: Date.now() - startedAt,
     terminal_copy: 'pfUSDC received on PFTL',

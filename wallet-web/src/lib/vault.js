@@ -132,6 +132,7 @@ let decryptedBackupJson = null;
 let autoLockTimer = null;
 let autoLockMinutes = 15;
 let autoLockLeaseCount = 0;
+let autoLockCallback = null;
 
 export function clearSensitiveMemory() {
   decryptedSeed = null;
@@ -159,17 +160,20 @@ export function setAutoLockMinutes(minutes) {
 }
 
 function scheduleAutoLock(onLock, delayMs = autoLockMinutes * 60 * 1000) {
+  if (onLock) autoLockCallback = onLock;
   if (autoLockTimer) clearTimeout(autoLockTimer);
+  autoLockTimer = null;
+  if (autoLockLeaseCount > 0) return;
   autoLockTimer = setTimeout(() => {
     if (autoLockLeaseCount > 0) {
-      // Ethereum finality and proof generation can outlive the ordinary idle
-      // timeout. Do not tear down a user-authorized money operation mid-flow.
-      scheduleAutoLock(onLock, Math.min(autoLockMinutes * 60 * 1000, 60 * 1000));
+      autoLockTimer = null;
       return;
     }
     clearSensitiveMemory();
     autoLockTimer = null;
-    if (onLock) onLock();
+    const callback = autoLockCallback;
+    autoLockCallback = null;
+    if (callback) callback();
   }, delayMs);
 }
 
@@ -179,11 +183,21 @@ export function resetAutoLock(onLock) {
 
 export function acquireAutoLockLease() {
   autoLockLeaseCount += 1;
+  // A bridge proof or Ethereum finality wait can outlive the ordinary idle
+  // timeout. Cancel the pending idle timer completely while value is in
+  // flight; the final lease release starts a fresh full idle window.
+  if (autoLockTimer) {
+    clearTimeout(autoLockTimer);
+    autoLockTimer = null;
+  }
   let released = false;
   return () => {
     if (released) return;
     released = true;
     autoLockLeaseCount = Math.max(0, autoLockLeaseCount - 1);
+    if (autoLockLeaseCount === 0 && autoLockCallback) {
+      scheduleAutoLock(autoLockCallback);
+    }
   };
 }
 
@@ -192,6 +206,7 @@ export function clearAutoLock() {
     clearTimeout(autoLockTimer);
     autoLockTimer = null;
   }
+  autoLockCallback = null;
 }
 
 // --- Encryption ---

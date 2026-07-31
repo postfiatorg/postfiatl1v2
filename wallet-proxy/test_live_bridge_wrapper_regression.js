@@ -37,6 +37,10 @@ assert.doesNotMatch(
 );
 assert.match(relay, /submit_round "\$run\/finalize\.ops\.json" "\$finalize_height" 1/);
 assert.match(relay, /submit_round "\$run\/claim\.ops\.json" "\$claim_height" 1/);
+assert.match(relay, /chown postfiat:postfiat '\$remote_ops'/);
+assert.match(relay, /runuser -u postfiat -- '\$node' pftl-submit-certified-asset-ops/);
+assert.match(relay, /runuser -u postfiat -- '\$node' transport-peer-certified-mempool-round/);
+assert.match(relay, /--local-apply-before-certified-send \\\n+        --resume/);
 
 assert.match(stage, /skip_finalize=deposit\.get\("status"\) == "finalized"/);
 assert.match(stage, /eth-l1-mainnet-fast-lane-p0-depositor-fix-20260731/);

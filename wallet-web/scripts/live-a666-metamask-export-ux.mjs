@@ -112,6 +112,11 @@ try {
   await page.getByText('Live route · invariant holds', { exact: true }).waitFor({ state: 'visible' });
   await page.getByRole('button', { name: 'Connect MetaMask', exact: true }).click();
   await page.locator('#a666-eth-recipient').waitFor({ state: 'visible' });
+  await page.waitForFunction(
+    expected => document.querySelector('#a666-eth-recipient')?.value === expected,
+    ethereumAddress,
+    { timeout: 120_000 },
+  );
   const recipient = await page.locator('#a666-eth-recipient').inputValue();
   if (recipient !== ethereumAddress) throw new Error('wallet did not bind the connected MetaMask recipient');
   await page.locator('#navcoin-amount').fill('1');

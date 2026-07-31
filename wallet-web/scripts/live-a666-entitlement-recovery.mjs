@@ -17,19 +17,20 @@ const backupFile = process.env.E2E_PFTL_BACKUP_FILE;
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 const reservationId = String(process.env.E2E_RESERVATION_ID || '').toLowerCase();
 const ethereumRecipient = String(process.env.E2E_ETH_RECIPIENT || '').toLowerCase();
+const settlementAtoms = BigInt(process.env.E2E_SETTLEMENT_ATOMS || '0');
+const entitlementExpiryHeight = Number(process.env.E2E_ENTITLEMENT_EXPIRY_HEIGHT || '0');
 
 const routeId = 'pftl-a666-ethereum-wA666-usdc-v1';
 const routeConfigDigest = '12ed00ca87e29554ce4b978da1710fffc0830767e84e62f08df257f727db953efdd89bcf6ea99f5634d6e5ea8aca2933';
 const wrappedA666 = '0xee4c92edb03efdd9b519339edc19ad70c69a9be5';
 const expectedPftlAddress = 'pfab9b9228942e5c529633a13aa271d5297bec6353';
 const amountAtoms = 1_000_000n;
-const settlementAtoms = 905_664n;
-const entitlementExpiryHeight = 740;
 
 if (!backupFile || !evidenceDir || !/^[0-9a-f]{96}$/.test(reservationId)
-  || !/^0x[0-9a-f]{40}$/.test(ethereumRecipient)) {
+  || !/^0x[0-9a-f]{40}$/.test(ethereumRecipient) || settlementAtoms <= 0n
+  || !Number.isSafeInteger(entitlementExpiryHeight) || entitlementExpiryHeight <= 0) {
   throw new Error(
-    'E2E_PFTL_BACKUP_FILE, E2E_EVIDENCE_DIR, E2E_RESERVATION_ID, and E2E_ETH_RECIPIENT are required',
+    'E2E_PFTL_BACKUP_FILE, E2E_EVIDENCE_DIR, E2E_RESERVATION_ID, E2E_ETH_RECIPIENT, E2E_SETTLEMENT_ATOMS, and E2E_ENTITLEMENT_EXPIRY_HEIGHT are required',
   );
 }
 

@@ -147,3 +147,24 @@ test('active money operation prevents idle auto-lock until its lease is released
     setAutoLockMinutes(15);
   }
 });
+
+test('money operation cancels an already scheduled idle timer and restarts a full window', async () => {
+  setAutoLockMinutes(0.001);
+  let locks = 0;
+  resetAutoLock(() => { locks += 1; });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  const release = acquireAutoLockLease();
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.equal(locks, 0);
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(locks, 0);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(locks, 1);
+  } finally {
+    release();
+    clearAutoLock();
+    setAutoLockMinutes(15);
+  }
+});
