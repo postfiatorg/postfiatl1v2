@@ -1,10 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
-  A666_NATIVE_ASSET_ID,
-  A666_PRIMARY_ROUTE_ID,
-  A666_SETTLEMENT_ASSET_ID,
-  A666_WRAPPED_TOKEN,
   buildA666IssueExportDraft,
   buildA666IssueOperations,
   buildA666RedeemOperation,
@@ -59,29 +55,32 @@ async function ensureEthereumMainnet() {
   if (chainId !== '0x1') throw new Error('MetaMask must be connected to Ethereum mainnet');
 }
 
-async function readWrappedA666Balance(recipient) {
+async function readWrappedNavcoinBalance(recipient, market) {
   await ensureEthereumMainnet();
   const data = `${ERC20_BALANCE_OF_SELECTOR}${recipient.slice(2).padStart(64, '0')}`;
   const result = await window.ethereum.request({
     method: 'eth_call',
-    params: [{ to: A666_WRAPPED_TOKEN, data }, 'latest'],
+    params: [{ to: market.wrappedToken, data }, 'latest'],
   });
-  if (!/^0x[0-9a-f]+$/i.test(String(result || ''))) throw new Error('MetaMask returned a malformed wA666 balance');
+  if (!/^0x[0-9a-f]+$/i.test(String(result || ''))) throw new Error(`MetaMask returned a malformed ${market.wrappedSymbol} balance`);
   return BigInt(result);
 }
 
-async function watchWrappedA666() {
+async function watchWrappedNavcoin(market) {
   await ensureEthereumMainnet();
   return window.ethereum.request({
     method: 'wallet_watchAsset',
     params: {
       type: 'ERC20',
-      options: { address: A666_WRAPPED_TOKEN, symbol: 'wA666', decimals: 6 },
+      options: { address: market.wrappedToken, symbol: market.wrappedSymbol, decimals: market.decimals },
     },
   });
 }
 
-export default function A666Market({
+export default function NavcoinMarket({
+  market,
+  markets = [],
+  onSelectMarket,
   rpc,
   txBuilder,
   backupJson,
@@ -104,37 +103,40 @@ export default function A666Market({
   const [executing, setExecuting] = useState(false);
   const [lastCompleted, setLastCompleted] = useState(null);
   const [delivery, setDelivery] = useState('ethereum');
-  const [metamaskA666Balance, setMetamaskA666Balance] = useState(null);
+  const [metamaskNavcoinBalance, setMetamaskNavcoinBalance] = useState(null);
   const [exportPacketHash, setExportPacketHash] = useState('');
+  const navSymbol = market.symbol;
+  const wrappedSymbol = market.wrappedSymbol;
+  const settlementSymbol = market.settlementSymbol;
 
   const refresh = useCallback(async () => {
     if (!rpc || !address) return null;
     setLoading(true);
     try {
       const [routeResponse, navResponse, assetsResponse, statusResponse] = await Promise.all([
-        rpc.navcoinBridgeSupplyStatus(A666_PRIMARY_ROUTE_ID),
-        rpc.vaultBridgeStatus(A666_NATIVE_ASSET_ID),
+        rpc.navcoinBridgeSupplyStatus(market.routeId),
+        rpc.vaultBridgeStatus(market.navAssetId),
         rpc.accountAssets(address),
         rpc.status(),
       ]);
       const next = {
-        route: responseResult(routeResponse, 'A666 route'),
-        nav: responseResult(navResponse, 'A666 NAV'),
+        route: responseResult(routeResponse, `${navSymbol} route`),
+        nav: responseResult(navResponse, `${navSymbol} NAV`),
         assets: responseResult(assetsResponse, 'wallet assets'),
         chain: responseResult(statusResponse, 'chain status'),
       };
-      next.pfusdcBalance = assetBalance(next.assets, A666_SETTLEMENT_ASSET_ID);
-      next.a666Balance = assetBalance(next.assets, A666_NATIVE_ASSET_ID);
+      next.settlementBalance = assetBalance(next.assets, market.settlementAssetId);
+      next.navcoinBalance = assetBalance(next.assets, market.navAssetId);
       setSnapshot(next);
       setRefreshError('');
       return next;
     } catch (error) {
-      setRefreshError(error.message || 'Unable to load A666 market');
+      setRefreshError(error.message || `Unable to load ${navSymbol} market`);
       return null;
     } finally {
       setLoading(false);
     }
-  }, [address, rpc]);
+  }, [address, market, navSymbol, rpc]);
 
   useEffect(() => {
     refresh();
@@ -148,10 +150,10 @@ export default function A666Market({
     setSnapshot(current => current ? {
       ...current,
       assets,
-      pfusdcBalance: assetBalance(assets, A666_SETTLEMENT_ASSET_ID),
-      a666Balance: assetBalance(assets, A666_NATIVE_ASSET_ID),
+      settlementBalance: assetBalance(assets, market.settlementAssetId),
+      navcoinBalance: assetBalance(assets, market.navAssetId),
     } : current);
-  }, [liveSnapshot, snapshot?.route?.ledger_hash]);
+  }, [liveSnapshot, market, snapshot?.route?.ledger_hash]);
 
   const amountAtoms = useMemo(() => parseA666Units(amount), [amount]);
   const evaluation = useMemo(() => evaluateA666ResidentMarket({
@@ -160,8 +162,8 @@ export default function A666Market({
     chainStatus: snapshot?.chain || chainStatus,
     direction: mode,
     amountAtoms,
-    pfusdcBalanceAtoms: snapshot?.pfusdcBalance,
-    a666BalanceAtoms: snapshot?.a666Balance,
+    pfusdcBalanceAtoms: snapshot?.settlementBalance,
+    a666BalanceAtoms: snapshot?.navcoinBalance,
   }), [amountAtoms, chainStatus, mode, snapshot]);
   const quote = evaluation.quote;
 
@@ -200,12 +202,12 @@ export default function A666Market({
       if (!/^0x[0-9a-f]{40}$/.test(selected)) throw new Error('MetaMask did not return a valid Ethereum address');
       setEthereumRecipient(selected);
       try {
-        await watchWrappedA666();
+        await watchWrappedNavcoin(market);
       } catch (_) {
         // Rejecting token discovery must not hide a valid on-chain balance.
       }
-      const wrappedBalance = await readWrappedA666Balance(selected);
-      setMetamaskA666Balance(wrappedBalance.toString());
+      const wrappedBalance = await readWrappedNavcoinBalance(selected, market);
+      setMetamaskNavcoinBalance(wrappedBalance.toString());
     } catch (error) {
       setActionError(error.message || 'Unable to connect MetaMask');
     }
@@ -229,8 +231,8 @@ export default function A666Market({
         chainStatus: fresh.chain,
         direction: mode,
         amountAtoms,
-        pfusdcBalanceAtoms: fresh.pfusdcBalance,
-        a666BalanceAtoms: fresh.a666Balance,
+        pfusdcBalanceAtoms: fresh.settlementBalance,
+        a666BalanceAtoms: fresh.navcoinBalance,
       });
       if (!freshEvaluation.ok) throw new Error(freshEvaluation.blockingReasons.join('. '));
 
@@ -243,12 +245,12 @@ export default function A666Market({
           if (relayReadiness.ready !== true
             || relayReadiness.route_id !== fresh.route.route_id
             || relayReadiness.route_config_digest !== fresh.route.route_config_digest
-            || String(relayReadiness.wrapped_token || '').toLowerCase() !== A666_WRAPPED_TOKEN) {
-            throw new Error('The unattended A666 export relay is not ready for this governed route');
+            || String(relayReadiness.wrapped_token || '').toLowerCase() !== market.wrappedToken) {
+            throw new Error(`The unattended ${navSymbol} export relay is not ready for this governed route`);
           }
-          await watchWrappedA666();
-          wrappedBalanceBefore = await readWrappedA666Balance(ethereumRecipient);
-          setMetamaskA666Balance(wrappedBalanceBefore.toString());
+          await watchWrappedNavcoin(market);
+          wrappedBalanceBefore = await readWrappedNavcoinBalance(ethereumRecipient, market);
+          setMetamaskNavcoinBalance(wrappedBalanceBefore.toString());
           const draft = buildA666IssueExportDraft({
             walletAddress: address,
             ethereumRecipient,
@@ -287,21 +289,21 @@ export default function A666Market({
         }
         setProgress(delivery === 'ethereum' ? [
           { label: 'Reserve order', state: 'pending', detail: 'Bind verified NAV, capacity, and MetaMask recipient' },
-          { label: 'Mint A666', state: 'pending', detail: 'Exchange pfUSDC and increase native supply' },
-          { label: 'Export A666', state: 'pending', detail: 'Consume the entitlement and finalize the proof packet' },
-          { label: 'Mint wA666', state: 'pending', detail: 'Waiting for the trustless finality proof on Ethereum' },
+          { label: `Mint ${navSymbol}`, state: 'pending', detail: `Exchange ${settlementSymbol} and increase native supply` },
+          { label: `Export ${navSymbol}`, state: 'pending', detail: 'Consume the entitlement and finalize the proof packet' },
+          { label: `Mint ${wrappedSymbol}`, state: 'pending', detail: 'Waiting for the trustless finality proof on Ethereum' },
           { label: 'Verify MetaMask', state: 'pending', detail: 'Read the mainnet ERC-20 balance' },
         ] : [
           { label: 'Reserve order', state: 'pending', detail: 'Bind price, capacity, and recipient' },
-          { label: 'Mint A666', state: 'pending', detail: 'Exchange pfUSDC at verified NAV' },
+          { label: `Mint ${navSymbol}`, state: 'pending', detail: `Exchange ${settlementSymbol} at verified NAV` },
           { label: 'Close reservation', state: 'pending', detail: 'Release unused export entitlement' },
           { label: 'Verify balances', state: 'pending', detail: 'Read finalized PFTL state' },
         ]);
         await runStep(0, issueOperations.reserve, 'Order reservation');
         reserved = true;
-        await runStep(1, issueOperations.subscribe, 'A666 issuance');
+        await runStep(1, issueOperations.subscribe, `${navSymbol} issuance`);
         if (delivery === 'ethereum') {
-          await runStep(2, issueOperations.export, 'A666 export');
+          await runStep(2, issueOperations.export, `${navSymbol} export`);
           exported = true;
           setExportPacketHash(issueOperations.packetHash);
           updateStep(3, { state: 'running', detail: `Packet ${truncateMiddle(issueOperations.packetHash, 8)} finalized; enqueueing durable relay…` });
@@ -312,13 +314,13 @@ export default function A666Market({
               detail: status.message || `Durable relay · ${String(status.status || 'queued').replaceAll('_', ' ')}`,
             }),
           });
-          const wrappedBalance = await readWrappedA666Balance(ethereumRecipient);
+          const wrappedBalance = await readWrappedNavcoinBalance(ethereumRecipient, market);
           if (wrappedBalance < expectedBalance) {
-            throw new Error('Relay reported finality but the expected wA666 balance is not visible');
+            throw new Error(`Relay reported finality but the expected ${wrappedSymbol} balance is not visible`);
           }
-          setMetamaskA666Balance(wrappedBalance.toString());
-          updateStep(3, { state: 'done', detail: `${formatA666Units(amountAtoms)} wA666 minted · ${shortTx(relayResult.ethereum_tx_hash || 'finalized')}` });
-          updateStep(4, { state: 'done', detail: `${formatA666Units(wrappedBalance)} wA666 held by ${truncateMiddle(ethereumRecipient, 7)}` });
+          setMetamaskNavcoinBalance(wrappedBalance.toString());
+          updateStep(3, { state: 'done', detail: `${formatA666Units(amountAtoms)} ${wrappedSymbol} minted · ${shortTx(relayResult.ethereum_tx_hash || 'finalized')}` });
+          updateStep(4, { state: 'done', detail: `${formatA666Units(wrappedBalance)} ${wrappedSymbol} held by ${truncateMiddle(ethereumRecipient, 7)}` });
         } else {
           await runStep(2, issueOperations.release, 'Reservation release');
           released = true;
@@ -333,10 +335,10 @@ export default function A666Market({
           minimumSettlementAtoms: freshEvaluation.quote.settlementAtoms,
         });
         setProgress([
-          { label: 'Redeem A666', state: 'pending', detail: 'Burn A666 and receive pfUSDC' },
+          { label: `Redeem ${navSymbol}`, state: 'pending', detail: `Burn ${navSymbol} and receive ${settlementSymbol}` },
           { label: 'Verify balances', state: 'pending', detail: 'Read finalized PFTL state' },
         ]);
-        await runStep(0, operation, 'A666 redemption');
+        await runStep(0, operation, `${navSymbol} redemption`);
         updateStep(1, { state: 'running', detail: 'Refreshing finalized balances…' });
       }
 
@@ -346,13 +348,13 @@ export default function A666Market({
         const verifyIndex = mode === 'issue' ? 3 : 1;
         updateStep(verifyIndex, {
           state: 'done',
-          detail: `${formatA666Units(verified.a666Balance)} A666 · ${formatA666Units(verified.pfusdcBalance)} pfUSDC`,
+          detail: `${formatA666Units(verified.navcoinBalance)} ${navSymbol} · ${formatA666Units(verified.settlementBalance)} ${settlementSymbol}`,
         });
       }
       setLastCompleted(mode === 'issue' && delivery === 'ethereum' ? 'ethereum' : mode);
       onToast?.(mode === 'issue'
-        ? (delivery === 'ethereum' ? 'wA666 is now held in MetaMask' : 'A666 issued at verified NAV')
-        : 'A666 redeemed to pfUSDC');
+        ? (delivery === 'ethereum' ? `${wrappedSymbol} is now held in MetaMask` : `${navSymbol} issued at verified NAV`)
+        : `${navSymbol} redeemed to ${settlementSymbol}`);
     } catch (error) {
       if (issueOperations && reserved && !released && !exported) {
         try {
@@ -368,7 +370,7 @@ export default function A666Market({
           : step
       )));
       setActionError(
-        `${error.message || 'A666 transaction failed'}${issueOperations && reserved && !released
+        `${error.message || `${navSymbol} transaction failed`}${issueOperations && reserved && !released
           && !exported ? ' The reservation could not be released automatically; do not retry until route status is reconciled.'
           : ''}`,
       );
@@ -389,26 +391,40 @@ export default function A666Market({
     && route?.paused === false
     && route?.invariant_holds === true
     && navPacketMatches;
-  const displayBlockers = evaluation.blockingReasons.filter(reason => reason !== 'enter a positive A666 amount');
+  const displayBlockers = evaluation.blockingReasons
+    .filter(reason => reason !== 'enter a positive A666 amount')
+    .map(reason => reason.replaceAll('A666', navSymbol).replaceAll('pfUSDC', settlementSymbol));
 
   return (
     <section
       className="a666-page"
-      data-testid="a666-market"
+      data-testid="navcoin-market"
       data-export-packet-hash={exportPacketHash || undefined}
     >
       <header className="a666-hero">
         <div>
-          <div className="fs-kicker"><span className="fs-live-dot" /> A666 PRIMARY MARKET · PFTL</div>
-          <h1>Mint or redeem A666<br />at verified NAV.</h1>
+          <div className="fs-kicker"><span className="fs-live-dot" /> NAVCOIN PRIMARY MARKET · PFTL</div>
+          <h1>Mint or redeem {navSymbol}<br />at verified NAV.</h1>
           <p>
-            Mint new fund shares directly against pfUSDC, or redeem shares against the on-chain pfUSDC settlement reserve.
+            Mint new fund shares directly against {settlementSymbol}, or redeem shares against the on-chain {settlementSymbol} settlement reserve.
             The Uniswap pool is a separate optional venue—this trade does not consume its liquidity.
           </p>
         </div>
-        <button className="pf-button secondary" onClick={refresh} disabled={loading || executing}>
-          {loading ? 'Refreshing…' : 'Refresh market'}
-        </button>
+        <div style={{ display: 'grid', gap: 8, justifyItems: 'end' }}>
+          <label className="a666-label" htmlFor="navcoin-market-select">NAVCoin market</label>
+          <select
+            id="navcoin-market-select"
+            className="pf-input"
+            value={market.key}
+            onChange={event => onSelectMarket?.(event.target.value)}
+            disabled={executing || markets.length < 2}
+          >
+            {markets.map(option => <option key={option.key} value={option.key}>{option.symbol}</option>)}
+          </select>
+          <button className="pf-button secondary" onClick={refresh} disabled={loading || executing}>
+            {loading ? 'Refreshing…' : 'Refresh market'}
+          </button>
+        </div>
       </header>
 
       {refreshError && <div className="pf-error">{refreshError}</div>}
@@ -432,57 +448,57 @@ export default function A666Market({
       </div>
 
       <div className="a666-metrics">
-        <div><span>Verified NAV</span><strong>{formatA666Nav(nav?.nav_per_unit)}</strong><small>USD per A666 · pre-inflow</small></div>
-        <div><span>Reserve</span><strong>{formatA666Units(route?.settlement_reserve_atoms)}</strong><small>pfUSDC counted on PFTL</small></div>
-        <div><span>Mint capacity</span><strong>{formatA666Units(route?.available_issue_atoms)}</strong><small>A666 available now</small></div>
-        <div><span>Redeem capacity</span><strong>{formatA666Units(route?.available_redeem_atoms)}</strong><small>A666 available now</small></div>
+        <div><span>Verified NAV</span><strong>{formatA666Nav(nav?.nav_per_unit)}</strong><small>USD per {navSymbol} · pre-inflow</small></div>
+        <div><span>Reserve</span><strong>{formatA666Units(route?.settlement_reserve_atoms)}</strong><small>{settlementSymbol} counted on PFTL</small></div>
+        <div><span>Mint capacity</span><strong>{formatA666Units(route?.available_issue_atoms)}</strong><small>{navSymbol} available now</small></div>
+        <div><span>Redeem capacity</span><strong>{formatA666Units(route?.available_redeem_atoms)}</strong><small>{navSymbol} available now</small></div>
       </div>
 
-      <div className="a666-flow" aria-label="A666 acquisition flow">
-        <div><span>1</span><strong>Fund</strong><small>USDC → pfUSDC</small></div><i />
-        <div className="active"><span>2</span><strong>Mint</strong><small>pfUSDC → A666</small></div><i />
+      <div className="a666-flow" aria-label={`${navSymbol} acquisition flow`}>
+        <div><span>1</span><strong>Fund</strong><small>USDC → {settlementSymbol}</small></div><i />
+        <div className="active"><span>2</span><strong>Mint</strong><small>{settlementSymbol} → {navSymbol}</small></div><i />
         <div><span>3</span><strong>Export</strong><small>Proof-bound on PFTL</small></div><i />
-        <div className={delivery === 'ethereum' ? 'active' : ''}><span>4</span><strong>Hold</strong><small>wA666 in MetaMask</small></div>
+        <div className={delivery === 'ethereum' ? 'active' : ''}><span>4</span><strong>Hold</strong><small>{wrappedSymbol} in MetaMask</small></div>
       </div>
 
       <div className="a666-workspace">
         <div className="a666-trade-card">
           <div className="a666-tabs">
-            <button className={mode === 'issue' ? 'on' : ''} onClick={() => { setMode('issue'); setProgress([]); setActionError(''); }}>Mint A666</button>
+            <button className={mode === 'issue' ? 'on' : ''} onClick={() => { setMode('issue'); setProgress([]); setActionError(''); }}>Mint {navSymbol}</button>
             <button className={mode === 'redeem' ? 'on' : ''} onClick={() => { setMode('redeem'); setProgress([]); setActionError(''); }}>Redeem</button>
           </div>
 
-          <label className="a666-label" htmlFor="a666-amount">A666 amount</label>
+          <label className="a666-label" htmlFor="navcoin-amount">{navSymbol} amount</label>
           <div className="a666-amount">
-            <input id="a666-amount" inputMode="decimal" value={amount} onChange={event => setAmount(event.target.value)} disabled={executing} />
-            <strong>A666</strong>
+            <input id="navcoin-amount" inputMode="decimal" value={amount} onChange={event => setAmount(event.target.value)} disabled={executing} />
+            <strong>{navSymbol}</strong>
             <button onClick={() => {
               const maximum = mode === 'issue'
                 ? route?.available_issue_atoms
-                : (BigInt(snapshot?.a666Balance || 0) < BigInt(route?.available_redeem_atoms || 0)
-                  ? snapshot?.a666Balance
+                : (BigInt(snapshot?.navcoinBalance || 0) < BigInt(route?.available_redeem_atoms || 0)
+                  ? snapshot?.navcoinBalance
                   : route?.available_redeem_atoms);
               if (maximum) setAmount(formatA666Units(maximum));
             }}>MAX</button>
           </div>
 
           <div className="a666-quote">
-            <div><span>{mode === 'issue' ? 'You pay' : 'You receive at least'}</span><strong>{formatA666Units(quote?.settlementAtoms)} pfUSDC</strong></div>
-            <div><span>NAV reserve value</span><strong>{formatA666Units(quote?.baseReserveAtoms)} pfUSDC</strong></div>
-            <div><span>{mode === 'issue' ? 'Issuance spread' : 'Redemption spread'}</span><strong>{formatA666Units(quote?.spreadAtoms)} pfUSDC</strong></div>
+            <div><span>{mode === 'issue' ? 'You pay' : 'You receive at least'}</span><strong>{formatA666Units(quote?.settlementAtoms)} {settlementSymbol}</strong></div>
+            <div><span>NAV reserve value</span><strong>{formatA666Units(quote?.baseReserveAtoms)} {settlementSymbol}</strong></div>
+            <div><span>{mode === 'issue' ? 'Issuance spread' : 'Redemption spread'}</span><strong>{formatA666Units(quote?.spreadAtoms)} {settlementSymbol}</strong></div>
           </div>
 
           {mode === 'issue' && (
             <div className="a666-recipient">
-              <div className="a666-tabs" role="group" aria-label="A666 delivery destination">
+              <div className="a666-tabs" role="group" aria-label={`${navSymbol} delivery destination`}>
                 <button className={delivery === 'ethereum' ? 'on' : ''} onClick={() => setDelivery('ethereum')} disabled={executing}>Deliver to MetaMask</button>
                 <button className={delivery === 'pftl' ? 'on' : ''} onClick={() => setDelivery('pftl')} disabled={executing}>Keep on PFTL</button>
               </div>
               <div>
                 <label className="a666-label" htmlFor="a666-eth-recipient">Ethereum recipient</label>
                 <small>{delivery === 'ethereum'
-                  ? 'The proof-bound export mints wA666 directly to this MetaMask account.'
-                  : 'Bound for recovery safety; the purchased A666 remains native on PFTL.'}</small>
+                  ? `The proof-bound export mints ${wrappedSymbol} directly to this MetaMask account.`
+                  : `Bound for recovery safety; the purchased ${navSymbol} remains native on PFTL.`}</small>
               </div>
               <button className="pf-button secondary" onClick={connectEthereum} disabled={executing}>Connect MetaMask</button>
               <input
@@ -501,9 +517,9 @@ export default function A666Market({
               {displayBlockers.slice(0, 4).map(reason => <span key={reason}>• {reason}</span>)}
             </div>
           )}
-          {mode === 'issue' && displayBlockers.includes('wallet pfUSDC balance is insufficient') && (
+          {mode === 'issue' && evaluation.blockingReasons.includes('wallet pfUSDC balance is insufficient') && (
             <button className="pf-button secondary" onClick={() => onNavigate?.('bridge')} disabled={executing}>
-              Add pfUSDC from Ethereum
+              Add {settlementSymbol} from Ethereum
             </button>
           )}
           {!finalityReady && <div className="a666-blockers"><span>• Authenticated finality submission is not enabled for this wallet endpoint.</span></div>}
@@ -514,8 +530,8 @@ export default function A666Market({
 
           <button className="pf-primary" disabled={!canExecute} onClick={execute}>
             {executing ? (delivery === 'ethereum' ? 'Exporting to MetaMask…' : 'Finalizing on PFTL…') : mode === 'issue'
-              ? `${delivery === 'ethereum' ? 'Mint & export' : 'Mint'} ${amountAtoms ? formatA666Units(amountAtoms) : '—'} A666`
-              : `Redeem ${amountAtoms ? formatA666Units(amountAtoms) : '—'} A666`}
+              ? `${delivery === 'ethereum' ? 'Mint & export' : 'Mint'} ${amountAtoms ? formatA666Units(amountAtoms) : '—'} ${navSymbol}`
+              : `Redeem ${amountAtoms ? formatA666Units(amountAtoms) : '—'} ${navSymbol}`}
           </button>
           <p className="a666-signing">Your ML-DSA key signs locally. The proxy receives only signed transactions.</p>
         </div>
@@ -523,16 +539,16 @@ export default function A666Market({
         <aside className="a666-side">
           <div className="pf-card">
             <div className="a666-side-title"><span>YOUR PFTL BALANCES</span><small>finalized</small></div>
-            <div className="a666-balance"><span>pfUSDC</span><strong>{formatA666Units(snapshot?.pfusdcBalance)}</strong></div>
-            <div className="a666-balance"><span>A666</span><strong>{formatA666Units(snapshot?.a666Balance)}</strong></div>
-            <div className="a666-balance"><span>wA666 · MetaMask</span><strong>{formatA666Units(metamaskA666Balance)}</strong></div>
+            <div className="a666-balance"><span>{settlementSymbol}</span><strong>{formatA666Units(snapshot?.settlementBalance)}</strong></div>
+            <div className="a666-balance"><span>{navSymbol}</span><strong>{formatA666Units(snapshot?.navcoinBalance)}</strong></div>
+            <div className="a666-balance"><span>{wrappedSymbol} · MetaMask</span><strong>{formatA666Units(metamaskNavcoinBalance)}</strong></div>
           </div>
           <div className="pf-card a666-details">
             <div className="a666-side-title"><span>EXECUTION DETAILS</span><small>pinned</small></div>
             <div><span>Issue price</span><strong>{route?.issue_multiplier_bps ? `${(Number(route.issue_multiplier_bps) / 10000).toFixed(3)} × NAV` : '—'}</strong></div>
             <div><span>Redeem price</span><strong>{route?.redeem_multiplier_bps ? `${(Number(route.redeem_multiplier_bps) / 10000).toFixed(4)} × NAV` : '—'}</strong></div>
             <div><span>Route</span><strong title={route?.route_id}>{route?.route_id ? truncateMiddle(route.route_id, 12) : '—'}</strong></div>
-            <div><span>wA666</span><strong title={route?.wrapped_navcoin_token}>{route?.wrapped_navcoin_token ? truncateMiddle(route.wrapped_navcoin_token, 8) : '—'}</strong></div>
+            <div><span>{wrappedSymbol}</span><strong title={route?.wrapped_navcoin_token}>{route?.wrapped_navcoin_token ? truncateMiddle(route.wrapped_navcoin_token, 8) : '—'}</strong></div>
           </div>
         </aside>
       </div>
@@ -540,7 +556,7 @@ export default function A666Market({
       {progress.length > 0 && (
         <div className="a666-progress">
           <div className="a666-progress-head">
-            <strong>{lastCompleted ? (lastCompleted === 'ethereum' ? 'wA666 delivered to MetaMask' : lastCompleted === 'issue' ? 'A666 purchase complete' : 'A666 redemption complete') : 'Finality progress'}</strong>
+            <strong>{lastCompleted ? (lastCompleted === 'ethereum' ? `${wrappedSymbol} delivered to MetaMask` : lastCompleted === 'issue' ? `${navSymbol} purchase complete` : `${navSymbol} redemption complete`) : 'Finality progress'}</strong>
             <small>Do not close this page while a step is running.</small>
           </div>
           {progress.map((step, index) => (
@@ -553,9 +569,9 @@ export default function A666Market({
       )}
 
       <div className="a666-venue-note">
-        <strong>{delivery === 'ethereum' ? 'wA666 is delivered directly to MetaMask.' : 'A666 is delivered natively on PFTL.'}</strong>
+        <strong>{delivery === 'ethereum' ? `${wrappedSymbol} is delivered directly to MetaMask.` : `${navSymbol} is delivered natively on PFTL.`}</strong>
         <span>
-          The deployed Ethereum token is {route?.wrapped_navcoin_token ? truncateMiddle(route.wrapped_navcoin_token, 8) : 'wA666'}.
+          The deployed Ethereum token is {route?.wrapped_navcoin_token ? truncateMiddle(route.wrapped_navcoin_token, 8) : wrappedSymbol}.
           {delivery === 'ethereum'
             ? ' The wallet preserves the issuance entitlement, finalizes the PFTL export, and waits for its trustless Ethereum finality proof before reporting success.'
             : ' This mode closes the unused export entitlement and keeps the balance on PFTL.'}

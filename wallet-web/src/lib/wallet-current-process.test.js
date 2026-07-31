@@ -15,7 +15,7 @@ test('mounted wallet navigation presents the current process in order', async ()
   const expected = [
     "{ id: 'wallet', label: 'Wallet' }",
     "{ id: 'bridge', label: 'Bridge' }",
-    "{ id: 'a666', label: 'A666 Market' }",
+    "{ id: 'market', label: 'NAV Markets' }",
     "{ id: 'send', label: 'Send' }",
     "{ id: 'swap', label: 'Process' }",
     "{ id: 'nav', label: 'NavCoins' }",
@@ -46,22 +46,25 @@ test('bridge-in is Ethereum mainnet USDC and never executes a retired route', as
   assert.doesNotMatch(runtime, /cctpBridgeUsdc|ensureEthereumSepolia/);
 });
 
-test('A666 market is pinned to current governed assets and exposes proof-bound MetaMask delivery', async () => {
-  const [market, route, process] = await Promise.all([
+test('NAVCoin market UI is registry-driven while its deployed adapter remains route-pinned', async () => {
+  const [market, registry, route, process] = await Promise.all([
     source('components/A666Market.jsx'),
+    source('lib/navcoin-markets.js'),
     source('lib/a666-primary-route.js'),
     source('components/Swap.jsx'),
   ]);
 
+  assert.match(registry, /NAVCOIN_MARKETS/);
   assert.match(route, /pftl-a666-ethereum-wA666-usdc-v1/);
   assert.match(route, /521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c/);
   assert.match(route, /02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b/);
   assert.match(route, /pftl_uniswap_export_debit/);
   assert.match(market, /Deliver to MetaMask/);
-  assert.match(market, /await readWrappedA666Balance\(selected\)/);
-  assert.match(market, /setMetamaskA666Balance\(wrappedBalance\.toString\(\)\)/);
+  assert.match(market, /await readWrappedNavcoinBalance\(selected, market\)/);
+  assert.match(market, /setMetamaskNavcoinBalance\(wrappedBalance\.toString\(\)\)/);
   assert.match(market, /waits for its trustless Ethereum finality proof before reporting success/);
-  assert.match(process, /The live browser service does not currently advertise an enabled A666 private route/);
+  assert.match(process, /market\.symbol/);
+  assert.match(process, /onNavigate\?\.\('market', \{ marketKey: market\.key \}\)/);
 });
 
 test('visible asset surfaces contain no executable a651/a652 assumptions or fake verification', async () => {
@@ -75,8 +78,8 @@ test('visible asset surfaces contain no executable a651/a652 assumptions or fake
 
   assert.doesNotMatch(runtime, /A651_ASSET_ID|A652_ASSET_ID|legacy_a651_uniswap/);
   assert.doesNotMatch(runtime, /setVerified\s*\(\s*true\s*\)/);
-  assert.match(runtime, /A666 NAVCoin fund share/);
-  assert.match(runtime, /Ethereum-vault-backed settlement asset/);
+  assert.match(runtime, /NAVCoin/);
+  assert.match(runtime, /Governed PFTL settlement asset|Governed NAVCoin settlement asset/);
 });
 
 test('retired browser workflow modules and proxy are absent', async () => {

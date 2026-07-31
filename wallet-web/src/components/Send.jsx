@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { isValidAddress, formatBalance, formatAssetBalance, pftToAtoms, shortenAssetId, PFUSDC_ASSET_ID, A666_ASSET_ID } from '../lib/utils.js';
+import { isValidAddress, formatBalance, formatAssetBalance, pftToAtoms, shortenAssetId } from '../lib/utils.js';
+import { displayAssetSymbol } from '../lib/navcoin-markets.js';
 import { encodePaymentMemoFields, hasMemoFields, PAYMENT_MEMO_LIMITS } from '../lib/tx-builder.js';
 import {
   FASTPAY_OWNED_OBJECT_LOOKUP_LIMIT,
@@ -153,9 +154,7 @@ export default function Send({ rpc, txBuilder, backupJson, address, publicKeyHex
   }, [visible, rpc, address]);
 
   const getAssetCode = (assetId) => {
-    if (assetId === PFUSDC_ASSET_ID) return 'pfUSDC';
-    if (assetId === A666_ASSET_ID) return 'A666';
-    return shortenAssetId(assetId);
+    return displayAssetSymbol(assetId, shortenAssetId(assetId));
   };
 
   const currentMemos = () => ({
@@ -625,7 +624,7 @@ export default function Send({ rpc, txBuilder, backupJson, address, publicKeyHex
                 ? 'The account lane carries the full balance and finalizes through Cobalt certification. Use it for any standard transfer.'
                 : lane === 'fastpay'
                   ? 'FastPay moves owned objects directly for near-instant settlement. Best for small, frequent payments.'
-                  : 'Send current issued assets such as pfUSDC or native A666 to another PFTL account. Settles with authenticated asset finality.'}
+                  : 'Send settlement assets or native NAVCoins to another PFTL account. Settles with authenticated asset finality.'}
             </div>
           </div>
         </div>

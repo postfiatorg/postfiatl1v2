@@ -1,31 +1,31 @@
 import React, { useCallback, useEffect, useState } from 'react';
 
+import { formatA666Nav, formatA666Units } from '../lib/a666-primary-route.js';
+import { loadGovernedVaultBridgeRoute } from '../lib/bridge-route.js';
 import {
-  A666_NATIVE_ASSET_ID,
-  A666_PRIMARY_ROUTE_ID,
-  A666_SETTLEMENT_ASSET_ID,
-  formatA666Nav,
-  formatA666Units,
-} from '../lib/a666-primary-route.js';
+  NAVCOIN_MARKETS,
+  navcoinMarketForAsset,
+  navcoinMarketForSettlementAsset,
+} from '../lib/navcoin-markets.js';
 import {
   CHAIN_ID,
   GENESIS_HASH,
-  ETH_MAINNET_CHAIN_ID,
-  ETH_MAINNET_USDC,
   formatAssetBalance,
   shortenAssetId,
   truncateMiddle,
 } from '../lib/utils.js';
-import { loadGovernedVaultBridgeRoute } from '../lib/bridge-route.js';
 
 function result(response) {
   return response?.ok && response.result ? response.result : null;
 }
 
 function resolveAssetId(id) {
-  if (id === 'A666') return A666_NATIVE_ASSET_ID;
-  if (id === 'pfUSDC') return A666_SETTLEMENT_ASSET_ID;
-  return /^[0-9a-f]{96}$/.test(String(id || '')) ? id : '';
+  const value = String(id || '');
+  const bySymbol = NAVCOIN_MARKETS.find(market => (
+    market.symbol === value || market.settlementSymbol === value
+  ));
+  if (bySymbol) return bySymbol.symbol === value ? bySymbol.navAssetId : bySymbol.settlementAssetId;
+  return /^[0-9a-f]{96}$/.test(value) ? value : '';
 }
 
 function balanceFromAssets(value, assetId) {
@@ -44,8 +44,8 @@ function hasBalance(value) {
 
 export default function NavDetail({ id, rpc, address, go }) {
   const assetId = resolveAssetId(id);
-  const isA666 = assetId === A666_NATIVE_ASSET_ID;
-  const isPfusdc = assetId === A666_SETTLEMENT_ASSET_ID;
+  const market = navcoinMarketForAsset(assetId);
+  const settlementMarket = navcoinMarketForSettlementAsset(assetId);
   const [snapshot, setSnapshot] = useState(null);
   const [error, setError] = useState('');
 
@@ -58,18 +58,18 @@ export default function NavDetail({ id, rpc, address, go }) {
         address ? rpc.accountAssets(address) : Promise.resolve(null),
         rpc.status(),
       ];
-      if (isA666) {
-        requests.push(rpc.navcoinBridgeSupplyStatus(A666_PRIMARY_ROUTE_ID));
-        requests.push(rpc.vaultBridgeStatus(A666_NATIVE_ASSET_ID));
-      } else if (isPfusdc) {
+      if (market) {
+        requests.push(rpc.navcoinBridgeSupplyStatus(market.routeId));
+        requests.push(rpc.vaultBridgeStatus(market.navAssetId));
+      } else if (settlementMarket) {
         requests.push(loadGovernedVaultBridgeRoute(rpc, {
-          assetId: A666_SETTLEMENT_ASSET_ID,
+          assetId: settlementMarket.settlementAssetId,
           chainId: CHAIN_ID,
           genesisHash: GENESIS_HASH,
-          sourceChainId: ETH_MAINNET_CHAIN_ID,
-          tokenAddress: ETH_MAINNET_USDC,
+          sourceChainId: settlementMarket.settlementSourceChainId,
+          tokenAddress: settlementMarket.settlementTokenAddress,
         }));
-        requests.push(rpc.vaultBridgeStatus(A666_SETTLEMENT_ASSET_ID));
+        requests.push(rpc.vaultBridgeStatus(settlementMarket.settlementAssetId));
       }
       const values = await Promise.all(requests);
       setSnapshot({
@@ -82,7 +82,7 @@ export default function NavDetail({ id, rpc, address, go }) {
     } catch (failure) {
       setError(failure.message || 'Unable to load verified asset state');
     }
-  }, [address, assetId, isA666, isPfusdc, rpc]);
+  }, [address, assetId, market, settlementMarket, rpc]);
 
   useEffect(() => {
     refresh();
@@ -91,37 +91,37 @@ export default function NavDetail({ id, rpc, address, go }) {
   const asset = snapshot?.asset;
   const route = snapshot?.route;
   const reserve = snapshot?.reserve;
-  const a666Verified = Boolean(
-    isA666
-    && route?.route_id === A666_PRIMARY_ROUTE_ID
-    && route?.native_nav_asset_id === A666_NATIVE_ASSET_ID
-    && route?.settlement_asset_id === A666_SETTLEMENT_ASSET_ID
+  const navcoinVerified = Boolean(
+    market
+    && route?.route_id === market.routeId
+    && route?.native_nav_asset_id === market.navAssetId
+    && route?.settlement_asset_id === market.settlementAssetId
     && route?.live_value_enabled === true
     && route?.paused === false
     && route?.invariant_holds === true
-    && reserve?.asset_id === A666_NATIVE_ASSET_ID
+    && reserve?.asset_id === market.navAssetId
     && reserve?.finalized_epoch === route?.pricing_nav_epoch
     && reserve?.finalized_reserve_packet_hash === route?.pricing_reserve_packet_hash
   );
-  const pfusdcVerified = Boolean(
-    isPfusdc
-    && route?.profile?.asset_id === A666_SETTLEMENT_ASSET_ID
-    && route?.profile?.source_chain_id === ETH_MAINNET_CHAIN_ID
-    && route?.profile?.token_address === ETH_MAINNET_USDC
+  const settlementVerified = Boolean(
+    settlementMarket
+    && route?.profile?.asset_id === settlementMarket.settlementAssetId
+    && route?.profile?.source_chain_id === settlementMarket.settlementSourceChainId
+    && route?.profile?.token_address === settlementMarket.settlementTokenAddress
     && route?.evidenceTier === 'receipt-proven'
   );
-  const verified = a666Verified || pfusdcVerified;
-  const displayName = isA666
-    ? 'A666 NAVCoin fund share'
-    : isPfusdc
-      ? 'Ethereum-vault-backed PFTL settlement asset'
+  const verified = navcoinVerified || settlementVerified;
+  const displayName = market
+    ? market.name
+    : settlementMarket
+      ? 'Governed PFTL settlement asset'
       : 'Other or legacy issued asset';
-  const displayCode = isA666 ? 'A666' : isPfusdc ? 'pfUSDC' : shortenAssetId(assetId);
+  const displayCode = market?.symbol || settlementMarket?.settlementSymbol || shortenAssetId(assetId);
 
   if (!assetId) {
     return (
       <div className="pf-page">
-        <button className="pf-link" onClick={() => go('nav')}>← NavCoins</button>
+        <button className="pf-link" onClick={() => go('nav')}>← NAVCoins</button>
         <div className="pf-error">This asset is not part of the current wallet registry.</div>
       </div>
     );
@@ -129,7 +129,7 @@ export default function NavDetail({ id, rpc, address, go }) {
 
   return (
     <div className="pf-page">
-      <button className="pf-link" onClick={() => go('nav')} style={{ fontSize: 12, marginBottom: 14, alignSelf: 'start' }}>← NavCoins</button>
+      <button className="pf-link" onClick={() => go('nav')} style={{ fontSize: 12, marginBottom: 14, alignSelf: 'start' }}>← NAVCoins</button>
       <div className="pf-two">
         <div style={{ display: 'grid', gap: 20 }}>
           <div>
@@ -153,21 +153,21 @@ export default function NavDetail({ id, rpc, address, go }) {
             <div className="pf-row"><span className="pf-rk">Your balance</span><span className="pf-rv">{formatAssetBalance(assetId, snapshot?.balance || 0)}</span></div>
           </div>
 
-          {isA666 && (
+          {market && (
             <div className="pf-card" style={{ display: 'grid', gap: 12 }}>
               <div className="pf-eyebrow">Primary market</div>
               <div className="pf-row"><span className="pf-rk">Verified NAV</span><span className="pf-rv">{formatA666Nav(reserve?.nav_per_unit)}</span></div>
-              <div className="pf-row"><span className="pf-rk">pfUSDC reserve</span><span className="pf-rv">{formatA666Units(route?.settlement_reserve_atoms)}</span></div>
+              <div className="pf-row"><span className="pf-rk">{market.settlementSymbol} reserve</span><span className="pf-rv">{formatA666Units(route?.settlement_reserve_atoms)}</span></div>
               <div className="pf-row"><span className="pf-rk">Mint capacity</span><span className="pf-rv">{formatA666Units(route?.available_issue_atoms)}</span></div>
               <div className="pf-row"><span className="pf-rk">Redeem capacity</span><span className="pf-rv">{formatA666Units(route?.available_redeem_atoms)}</span></div>
-              <button className="pf-primary" onClick={() => go('a666')}>Open A666 primary market</button>
+              <button className="pf-primary" onClick={() => go('market', { marketKey: market.key })}>Open {market.symbol} primary market</button>
             </div>
           )}
 
-          {isPfusdc && (
+          {settlementMarket && (
             <div className="pf-even">
-              <button className="pf-primary" onClick={() => go('bridge')}>Add pfUSDC from Ethereum</button>
-              <button className="pf-ghost" onClick={() => go('a666')}>Use pfUSDC for A666</button>
+              <button className="pf-primary" onClick={() => go('bridge')}>Add {settlementMarket.settlementSymbol} from Ethereum</button>
+              <button className="pf-ghost" onClick={() => go('market', { marketKey: settlementMarket.key })}>Open NAVCoin markets</button>
             </div>
           )}
           <button className="pf-ghost" onClick={() => go('send', { sendSource: 'asset' })}>Send this PFTL asset →</button>
@@ -178,17 +178,17 @@ export default function NavDetail({ id, rpc, address, go }) {
             <div className="pf-eyebrow">Verification</div>
             <span className={`pf-pill${verified ? ' good' : ' warn'}`}>{verified ? 'VERIFIED' : 'BLOCKED'}</span>
           </div>
-          {isA666 && (
+          {market && (
             <>
               <div className="pf-row"><span className="pf-rk">NAV epoch</span><span className="pf-rv">{route?.pricing_nav_epoch ?? '—'}</span></div>
               <div className="pf-row"><span className="pf-rk">Reserve packet</span><span className="pf-rv">{truncateMiddle(route?.pricing_reserve_packet_hash || '—', 8)}</span></div>
               <div className="pf-row"><span className="pf-rk">Invariant</span><span className="pf-rv">{route?.invariant_holds ? 'holds' : 'not verified'}</span></div>
               <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
-                Verified only when the active A666 policy, finalized StakeHub NAV epoch, reserve packet, and route invariant all match.
+                Verified only when this market's active policy, finalized StakeHub NAV epoch, reserve packet, and route invariant all match.
               </div>
             </>
           )}
-          {isPfusdc && (
+          {settlementMarket && (
             <>
               <div className="pf-row"><span className="pf-rk">Source chain</span><span className="pf-rv">Ethereum mainnet</span></div>
               <div className="pf-row"><span className="pf-rk">Vault</span><span className="pf-rv">{truncateMiddle(route?.vaultAddress || '—', 7)}</span></div>
@@ -198,7 +198,7 @@ export default function NavDetail({ id, rpc, address, go }) {
               </div>
             </>
           )}
-          {!isA666 && !isPfusdc && (
+          {!market && !settlementMarket && (
             <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
               This historical or unregistered asset has no current market or reserve route in the wallet. It remains sendable on PFTL.
             </div>

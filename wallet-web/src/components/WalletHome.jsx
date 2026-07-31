@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { formatBalance, formatAssetBalance, shortenAssetId, PFUSDC_ASSET_ID, A666_ASSET_ID, truncateMiddle, pftToAtoms } from '../lib/utils.js';
+import { formatBalance, formatAssetBalance, shortenAssetId, truncateMiddle, pftToAtoms } from '../lib/utils.js';
+import { displayAssetSymbol, NAVCOIN_MARKETS, navcoinMarketForAsset } from '../lib/navcoin-markets.js';
 import {
   FASTPAY_OWNED_OBJECT_LOOKUP_LIMIT,
   fetchOwnedObjectsSnapshot,
@@ -416,9 +417,7 @@ export default function WalletHome({ rpc, txBuilder, backupJson, address, public
   }, [visible, fetchAccount]);
 
   const getAssetCode = (assetId) => {
-    if (assetId === PFUSDC_ASSET_ID) return 'pfUSDC';
-    if (assetId === A666_ASSET_ID) return 'A666';
-    return shortenAssetId(assetId);
+    return displayAssetSymbol(assetId, shortenAssetId(assetId));
   };
   const getAssetBalance = (asset) => asset?.balance ?? asset?.amount ?? 0;
   const getAssetBalanceLabel = (asset) => {
@@ -426,14 +425,22 @@ export default function WalletHome({ rpc, txBuilder, backupJson, address, public
     const code = getAssetCode(id);
     return `${formatAssetBalance(id, getAssetBalance(asset))} ${code}`;
   };
-  const pfusdcAsset = assets.find(a => (a.asset_id || a.id) === PFUSDC_ASSET_ID);
+  const settlementAssets = [...new Map(NAVCOIN_MARKETS.map(market => [market.settlementAssetId, market])).values()];
+  const settlementAssetIds = new Set(settlementAssets.map(market => market.settlementAssetId));
   const issuedAssetRows = [
-    ['pfUSDC', `${formatAssetBalance(PFUSDC_ASSET_ID, getAssetBalance(pfusdcAsset))} pfUSDC`, pfusdcAsset ? 'Ethereum-vault-backed settlement asset' : 'Ethereum-vault-backed settlement asset · no balance'],
+    ...settlementAssets.map(market => {
+      const asset = assets.find(item => (item.asset_id || item.id) === market.settlementAssetId);
+      return [
+        market.settlementSymbol,
+        `${formatAssetBalance(market.settlementAssetId, getAssetBalance(asset))} ${market.settlementSymbol}`,
+        asset ? 'Governed NAVCoin settlement asset' : 'Governed NAVCoin settlement asset · no balance',
+      ];
+    }),
     ...assets
-      .filter(a => (a.asset_id || a.id) !== PFUSDC_ASSET_ID)
+      .filter(a => !settlementAssetIds.has(a.asset_id || a.id))
       .map(a => {
         const code = getAssetCode(a.asset_id || a.id);
-        return [code, getAssetBalanceLabel(a), code === 'A666' ? 'active NAVCoin fund share' : 'other or legacy issued asset'];
+        return [code, getAssetBalanceLabel(a), navcoinMarketForAsset(a.asset_id || a.id) ? 'active NAVCoin fund share' : 'other or legacy issued asset'];
       }),
   ];
 
@@ -664,7 +671,7 @@ export default function WalletHome({ rpc, txBuilder, backupJson, address, public
             <div className="pf-card" style={{ padding: '6px 18px' }}>
               {[
                 ['Bridge USDC', 'Ethereum mainnet → pfUSDC', () => go('bridge')],
-                ['A666 Market', 'mint / redeem at verified NAV', () => go('a666')],
+                ['NAVCoin Markets', 'mint / redeem at verified NAV', () => go('market')],
                 ['Send Asset', 'issued assets', () => go('send', { sendSource: 'asset' })],
                 ['Process Status', 'current / unavailable legs', () => go('swap')],
                 ['Settings', 'network / backup', () => go('more')],
@@ -694,7 +701,7 @@ export default function WalletHome({ rpc, txBuilder, backupJson, address, public
             <div className="pf-feed">
               {txs.length === 0 ? (
                 <div style={{ padding: '20px 14px', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--dim)' }}>
-                  No account-lane transactions yet. A666 mints, redemptions, and bridge claims are reflected in asset balances.
+                  No account-lane transactions yet. NAVCoin mints, redemptions, and bridge claims are reflected in asset balances.
                 </div>
               ) : (
                 txs.map((tx, i) => {

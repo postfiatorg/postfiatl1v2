@@ -11,13 +11,8 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 
-import {
-  A666_NATIVE_ASSET_ID,
-  A666_PRIMARY_ROUTE_ID,
-  A666_SETTLEMENT_ASSET_ID,
-  formatA666Nav,
-  formatA666Units,
-} from '../lib/a666-primary-route.js';
+import { formatA666Nav, formatA666Units } from '../lib/a666-primary-route.js';
+import { DEFAULT_NAVCOIN_MARKET } from '../lib/navcoin-markets.js';
 import { truncateMiddle } from '../lib/utils.js';
 
 function responseResult(response, label) {
@@ -27,21 +22,21 @@ function responseResult(response, label) {
   return response.result;
 }
 
-function routeIsCurrent(route, nav) {
+function routeIsCurrent(route, nav, market) {
   return Boolean(
-    route?.route_id === A666_PRIMARY_ROUTE_ID
-    && route?.native_nav_asset_id === A666_NATIVE_ASSET_ID
-    && route?.settlement_asset_id === A666_SETTLEMENT_ASSET_ID
+    route?.route_id === market.routeId
+    && route?.native_nav_asset_id === market.navAssetId
+    && route?.settlement_asset_id === market.settlementAssetId
     && route?.live_value_enabled === true
     && route?.paused === false
     && route?.invariant_holds === true
-    && nav?.asset_id === A666_NATIVE_ASSET_ID
+    && nav?.asset_id === market.navAssetId
     && nav?.finalized_epoch === route?.pricing_nav_epoch
     && nav?.finalized_reserve_packet_hash === route?.pricing_reserve_packet_hash
   );
 }
 
-function privateA666IsReady(capabilities) {
+function privateNavcoinIsReady(capabilities, market) {
   const route = capabilities?.routes?.shielded_navswap;
   const assets = Array.isArray(route?.asset_registry) ? route.asset_registry : [];
   return Boolean(
@@ -50,7 +45,7 @@ function privateA666IsReady(capabilities) {
     && route?.can_ingress === true
     && route?.can_egress === true
     && assets.some(asset => (
-      String(asset?.asset_id || '').toLowerCase() === A666_NATIVE_ASSET_ID
+      String(asset?.asset_id || '').toLowerCase() === market.navAssetId
       && asset?.supported === true
     )),
   );
@@ -78,7 +73,7 @@ function ProcessStep({ number, title, detail, state, action, onClick, Icon }) {
   );
 }
 
-export default function Swap({ rpc, swapServer, onNavigate }) {
+export default function Swap({ rpc, swapServer, onNavigate, market = DEFAULT_NAVCOIN_MARKET }) {
   const [snapshot, setSnapshot] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -89,14 +84,14 @@ export default function Swap({ rpc, swapServer, onNavigate }) {
     setError('');
     try {
       const [routeResponse, navResponse, statusResponse, capabilities] = await Promise.all([
-        rpc.navcoinBridgeSupplyStatus(A666_PRIMARY_ROUTE_ID),
-        rpc.vaultBridgeStatus(A666_NATIVE_ASSET_ID),
+        rpc.navcoinBridgeSupplyStatus(market.routeId),
+        rpc.vaultBridgeStatus(market.navAssetId),
         rpc.status(),
         swapServer?.getNavswapCapabilities?.().catch(() => null) || null,
       ]);
       setSnapshot({
-        route: responseResult(routeResponse, 'A666 primary route'),
-        nav: responseResult(navResponse, 'A666 NAV'),
+        route: responseResult(routeResponse, `${market.symbol} primary route`),
+        nav: responseResult(navResponse, `${market.symbol} NAV`),
         chain: responseResult(statusResponse, 'PFTL status'),
         capabilities,
       });
@@ -105,7 +100,7 @@ export default function Swap({ rpc, swapServer, onNavigate }) {
     } finally {
       setLoading(false);
     }
-  }, [rpc, swapServer]);
+  }, [market, rpc, swapServer]);
 
   useEffect(() => {
     refresh();
@@ -113,8 +108,8 @@ export default function Swap({ rpc, swapServer, onNavigate }) {
 
   const route = snapshot?.route;
   const nav = snapshot?.nav;
-  const currentRoute = routeIsCurrent(route, nav);
-  const privateReady = privateA666IsReady(snapshot?.capabilities);
+  const currentRoute = routeIsCurrent(route, nav, market);
+  const privateReady = privateNavcoinIsReady(snapshot?.capabilities, market);
 
   return (
     <div className="pf-page pf-swap-page">
@@ -122,7 +117,7 @@ export default function Swap({ rpc, swapServer, onNavigate }) {
         <main className="pfs-main">
           <header className="pfs-header">
             <div className="pf-eyebrow">Current wallet process</div>
-            <h1>USDC → pfUSDC → A666</h1>
+            <h1>USDC → {market.settlementSymbol} → {market.symbol}</h1>
             <p>
               This is the supported acquisition and redemption path. Historical a651/a652,
               OTC, Sepolia, and Arbitrum workflows are not wallet routes.
@@ -139,7 +134,7 @@ export default function Swap({ rpc, swapServer, onNavigate }) {
                   ? 'Reading governed PFTL state…'
                   : currentRoute
                     ? `${formatA666Nav(nav?.nav_per_unit)} NAV · epoch ${route?.pricing_nav_epoch}`
-                    : 'The A666 route or NAV packet is unavailable or mismatched.'}
+                    : `The ${market.symbol} route or NAV packet is unavailable or mismatched.`}
               </strong>
             </div>
             <button className="pfb-secondary small" type="button" onClick={refresh} disabled={loading}>
@@ -151,7 +146,7 @@ export default function Swap({ rpc, swapServer, onNavigate }) {
           <div className="wallet-process-grid">
             <ProcessStep
               number="1"
-              title="Fund pfUSDC"
+              title={`Fund ${market.settlementSymbol}`}
               detail="Deposit canonical Ethereum mainnet USDC into the active governed vault, then proof-relay it into this PFTL wallet."
               state="ready"
               action="Open Ethereum bridge-in"
@@ -160,17 +155,17 @@ export default function Swap({ rpc, swapServer, onNavigate }) {
             />
             <ProcessStep
               number="2"
-              title="Mint or redeem A666"
-              detail="Exchange pfUSDC for newly issued A666 at the finalized pre-inflow NAV, or burn A666 to receive pfUSDC from its settlement reserve."
+              title={`Mint or redeem ${market.symbol}`}
+              detail={`Exchange ${market.settlementSymbol} for newly issued ${market.symbol} at the finalized pre-inflow NAV, or burn ${market.symbol} to receive ${market.settlementSymbol} from its settlement reserve.`}
               state={currentRoute ? 'ready' : 'blocked'}
-              action="Open A666 primary market"
-              onClick={() => onNavigate?.('a666')}
+              action={`Open ${market.symbol} primary market`}
+              onClick={() => onNavigate?.('market', { marketKey: market.key })}
               Icon={ShieldCheck}
             />
             <ProcessStep
               number="3"
               title="Move assets on PFTL"
-              detail="Send pfUSDC or native A666 to another PFTL account with locally signed, certified asset finality."
+              detail={`Send ${market.settlementSymbol} or native ${market.symbol} to another PFTL account with locally signed, certified asset finality.`}
               state="ready"
               action="Send issued asset"
               onClick={() => onNavigate?.('send', { sendSource: 'asset' })}
@@ -178,19 +173,21 @@ export default function Swap({ rpc, swapServer, onNavigate }) {
             />
             <ProcessStep
               number="4"
-              title="Private A666 execution"
+              title={`Private ${market.symbol} execution`}
               detail={privateReady
-                ? 'The resident Asset-Orchard service advertises A666 ingress, private execution, and egress for this wallet.'
-                : 'The live browser service does not currently advertise an enabled A666 private route. Operational test scripts are not presented as a user wallet feature.'}
+                ? `The resident Asset-Orchard service advertises ${market.symbol} ingress, private execution, and egress for this wallet.`
+                : `The live browser service does not currently advertise an enabled ${market.symbol} private route. Operational test scripts are not presented as a user wallet feature.`}
               state={privateReady ? 'ready' : 'blocked'}
               action={privateReady ? 'Private route available' : ''}
               Icon={Lock}
             />
             <ProcessStep
               number="5"
-              title="Bridge A666 to Ethereum"
-              detail="The route binds native A666 to wA666 on Ethereum, but this wallet does not yet expose the export transaction and proof lifecycle. Buying A666 does not automatically create wA666."
-              state="blocked"
+              title={`Export ${market.symbol} to Ethereum`}
+              detail={`The primary market can deliver ${market.wrappedSymbol} directly to MetaMask through the governed, proof-bound export route.`}
+              state={currentRoute ? 'ready' : 'blocked'}
+              action={currentRoute ? `Open ${market.symbol} export` : ''}
+              onClick={() => onNavigate?.('market', { marketKey: market.key })}
               Icon={Landmark}
             />
           </div>
@@ -198,11 +195,11 @@ export default function Swap({ rpc, swapServer, onNavigate }) {
 
         <aside className="pfs-side">
           <section className="pfs-card">
-            <div className="pfs-route-head"><span>LIVE A666 ROUTE</span></div>
+            <div className="pfs-route-head"><span>LIVE {market.symbol} ROUTE</span></div>
             <div className="pfs-detail-list">
               <div><span>Route</span><strong>{route?.route_id ? truncateMiddle(route.route_id, 10) : '—'}</strong></div>
               <div><span>Verified NAV</span><strong>{formatA666Nav(nav?.nav_per_unit)}</strong></div>
-              <div><span>pfUSDC reserve</span><strong>{formatA666Units(route?.settlement_reserve_atoms)}</strong></div>
+              <div><span>{market.settlementSymbol} reserve</span><strong>{formatA666Units(route?.settlement_reserve_atoms)}</strong></div>
               <div><span>Mint capacity</span><strong>{formatA666Units(route?.available_issue_atoms)}</strong></div>
               <div><span>Redeem capacity</span><strong>{formatA666Units(route?.available_redeem_atoms)}</strong></div>
               <div><span>PFTL height</span><strong>{snapshot?.chain?.block_height ?? '—'}</strong></div>
@@ -211,8 +208,8 @@ export default function Swap({ rpc, swapServer, onNavigate }) {
           <section className="pfs-card">
             <div className="pfs-route-head"><span>IMPORTANT</span></div>
             <p>
-              “Bridge-in” means Ethereum USDC becomes pfUSDC on PFTL.
-              “Bridge-out” means native A666 becomes wA666 on Ethereum.
+              “Bridge-in” means Ethereum USDC becomes {market.settlementSymbol} on PFTL.
+              “Export” means native {market.symbol} becomes {market.wrappedSymbol} on Ethereum.
               They are different operations.
             </p>
           </section>

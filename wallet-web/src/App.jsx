@@ -20,7 +20,8 @@ import Bridge from './components/Bridge.jsx';
 import NavList from './components/NavList.jsx';
 import NavDetail from './components/NavDetail.jsx';
 import More from './components/More.jsx';
-import A666Market from './components/A666Market.jsx';
+import NavcoinMarket from './components/NavcoinMarket.jsx';
+import { DEFAULT_NAVCOIN_MARKET, NAVCOIN_MARKETS, navcoinMarketByKey } from './lib/navcoin-markets.js';
 
 const PROXY_AUTH_SESSION_KEY = 'postfiat.wallet_proxy_api_token';
 
@@ -45,7 +46,7 @@ async function loadControlledLocalProxySession() {
 
 const NAV_ITEMS = [
   { id: 'wallet', label: 'Wallet' }, { id: 'bridge', label: 'Bridge' },
-  { id: 'a666', label: 'A666 Market' }, { id: 'send', label: 'Send' },
+  { id: 'market', label: 'NAV Markets' }, { id: 'send', label: 'Send' },
   { id: 'swap', label: 'Process' },
   { id: 'nav', label: 'NavCoins' }, { id: 'more', label: 'More' },
 ];
@@ -54,6 +55,7 @@ const isOn = (tab, id) => tab === id || (id === 'nav' && tab === 'navDetail');
 export default function App() {
   const [tab, setTab] = useState('onboard');
   const [coinId, setCoinId] = useState(null);
+  const [marketKey, setMarketKey] = useState(DEFAULT_NAVCOIN_MARKET.key);
   const [wasmReady, setWasmReady] = useState(false);
   const [rpc, setRpc] = useState(null);
   const [txBuilder, setTxBuilder] = useState(null);
@@ -462,6 +464,11 @@ export default function App() {
 
   const go = (next, payload) => {
     if (next === 'navDetail') { setCoinId(payload); setTab('navDetail'); return; }
+    if (next === 'market') {
+      if (payload?.marketKey) setMarketKey(navcoinMarketByKey(payload.marketKey).key);
+      setTab('market');
+      return;
+    }
     if (next === 'send' && payload?.sendSource) setSendSource(payload.sendSource);
     setTab(next);
   };
@@ -615,6 +622,7 @@ export default function App() {
           )}
           {tab === 'swap' && (
             <Swap
+              market={navcoinMarketByKey(marketKey)}
               rpc={rpc}
               txBuilder={txBuilder}
               backupJson={backupJson}
@@ -627,8 +635,11 @@ export default function App() {
               walletFeedStatus={walletFeedStatus}
             />
           )}
-          {tab === 'a666' && (
-            <A666Market
+          {tab === 'market' && (
+            <NavcoinMarket
+              market={navcoinMarketByKey(marketKey)}
+              markets={NAVCOIN_MARKETS}
+              onSelectMarket={setMarketKey}
               rpc={rpc}
               txBuilder={txBuilder}
               backupJson={backupJson}

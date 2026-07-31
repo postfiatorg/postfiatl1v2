@@ -108,7 +108,7 @@ try {
   await page.getByRole('button', { name: 'Confirm Import', exact: true }).click();
   await page.getByText(/height [1-9]\d*/).first().waitFor({ state: 'visible' });
 
-  await page.locator('.pf-sidebar .pf-nav', { hasText: 'A666 Market' }).click();
+  await page.locator('.pf-sidebar .pf-nav', { hasText: 'NAV Markets' }).click();
   await page.getByText('Live route · invariant holds', { exact: true }).waitFor({ state: 'visible' });
   await page.getByRole('button', { name: 'Connect MetaMask', exact: true }).click();
   await page.locator('#a666-eth-recipient').waitFor({ state: 'visible' });
@@ -119,7 +119,7 @@ try {
   await page.screenshot({ path: `${evidenceDir}/01-ready-to-export.png`, fullPage: true });
   await page.getByRole('button', { name: 'Mint & export 1 A666', exact: true }).click();
 
-  const market = page.getByTestId('a666-market');
+  const market = page.getByTestId('navcoin-market');
   const marketHandle = await market.elementHandle();
   await Promise.race([
     page.waitForFunction(

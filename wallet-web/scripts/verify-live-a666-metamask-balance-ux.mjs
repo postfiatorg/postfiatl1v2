@@ -109,7 +109,7 @@ try {
   await page.getByText(/height [1-9]\d*/).first().waitFor({ state: 'visible' });
 
   process.stderr.write('open A666 market\n');
-  await page.locator('.pf-sidebar .pf-nav', { hasText: 'A666 Market' }).click();
+  await page.locator('.pf-sidebar .pf-nav', { hasText: 'NAV Markets' }).click();
   await page.getByText('Live route · invariant holds', { exact: true }).waitFor({ state: 'visible' });
   process.stderr.write('connect MetaMask\n');
   await page.getByRole('button', { name: 'Connect MetaMask', exact: true }).click();
