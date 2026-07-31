@@ -24,7 +24,7 @@ const {
   websocketOriginAllowed,
 } = require('./server');
 
-function postJson(port, pathname, body, token = '', origin = '') {
+function postJson(port, pathname, body, token = '', origin = '', extraHeaders = {}) {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(body);
     const req = http.request({
@@ -37,6 +37,7 @@ function postJson(port, pathname, body, token = '', origin = '') {
         'content-length': Buffer.byteLength(payload),
         ...(token ? { authorization: `Bearer ${token}` } : {}),
         ...(origin ? { origin } : {}),
+        ...extraHeaders,
       },
     }, (res) => {
       let raw = '';
@@ -215,6 +216,16 @@ async function main() {
       'https://attacker.example',
     );
     assert.strictEqual(foreignOrigin.statusCode, 403);
+
+    const tunneledSameOrigin = await postJson(
+      port,
+      '/api/bridge/relay',
+      {},
+      process.env.WALLET_PROXY_API_TOKEN,
+      'https://wallet-tunnel.example:5173',
+      { host: 'wallet-tunnel.example:5173' },
+    );
+    assert.notStrictEqual(tunneledSameOrigin.statusCode, 403);
 
     const mutation = await postJson(
       port,

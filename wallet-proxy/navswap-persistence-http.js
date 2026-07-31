@@ -1492,9 +1492,26 @@ function create(runtime) {
     }
 
     function originAllowed(req, requireOrigin = false) {
-        const origin = req.headers.origin || '';
+        const origin = String(req.headers.origin || '').trim();
         if (!origin) return !requireOrigin;
-        return ALLOWED_ORIGINS.includes(origin);
+        if (ALLOWED_ORIGINS.includes(origin)) return true;
+
+        // The local wallet is frequently reached through an SSH/tmux tunnel
+        // whose browser-facing hostname cannot be known at service startup.
+        // Accept only the exact HTTP(S) origin represented by Host (or the
+        // reverse proxy's X-Forwarded-Host); foreign origins remain forbidden.
+        const forwardedHost = String(req.headers['x-forwarded-host'] || '')
+            .split(',')[0]
+            .trim();
+        const requestHost = forwardedHost || String(req.headers.host || '').trim();
+        if (!requestHost) return false;
+        try {
+            const parsed = new URL(origin);
+            return (parsed.protocol === 'https:' || parsed.protocol === 'http:')
+                && parsed.host.toLowerCase() === requestHost.toLowerCase();
+        } catch (_) {
+            return false;
+        }
     }
 
     function readJsonBody(req, maxBytes = 256 * 1024) {
