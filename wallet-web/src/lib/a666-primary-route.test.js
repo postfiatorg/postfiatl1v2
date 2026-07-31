@@ -6,12 +6,14 @@ import {
   A666_PRIMARY_ROUTE_ID,
   A666_ROUTE_CONFIG_DIGEST,
   A666_SETTLEMENT_ASSET_ID,
+  buildA666IssueExportDraft,
   buildA666IssueOperations,
   buildA666RedeemOperation,
   deriveA666IssueQuote,
   deriveA666RedeemQuote,
   evaluateA666PrimaryAcquisition,
   evaluateA666ResidentMarket,
+  finalizeA666IssueExportOperations,
   formatA666Nav,
   formatA666Units,
   parseA666Units,
@@ -217,6 +219,30 @@ test('builds the exact resident issue and redeem operation sequence', () => {
   assert.equal(issue.reserve.expires_at_height, 656);
   assert.equal(issue.subscribe.operation, 'pftl_uniswap_primary_subscribe_v2');
   assert.equal(issue.release.operation, 'pftl_uniswap_order_release');
+
+  const draft = buildA666IssueExportDraft({
+    walletAddress: wallet,
+    ethereumRecipient: `0x${'cd'.repeat(20)}`,
+    supplyStatus: route,
+    chainHeight: 556,
+    amountAtoms: '1000000',
+    settlementAtoms: '906000',
+    reservationId: '12'.repeat(48),
+    subscriptionNonce: '34'.repeat(32),
+    packetHash: '56'.repeat(48),
+    exportNonce: '78'.repeat(32),
+    destinationDeadlineSeconds: 1_924_992_000,
+    refundDelayBlocks: 100,
+  });
+  const prepared = finalizeA666IssueExportOperations(draft, {
+    schema: 'postfiat-wallet-pftl-uniswap-mint-packet-v1',
+    packet: { ...draft.mintPacket, policy_hash_commitment: '9a'.repeat(32) },
+    packet_digest: 'bc'.repeat(32),
+  });
+  assert.equal(prepared.export.operation, 'pftl_uniswap_export_debit');
+  assert.equal(prepared.export.reservation_id, '12'.repeat(48));
+  assert.equal(prepared.export.ethereum_packet_digest, 'bc'.repeat(32));
+  assert.equal(prepared.export.ethereum_packet_schema_version, 2);
 
   const redeem = buildA666RedeemOperation({
     walletAddress: wallet,

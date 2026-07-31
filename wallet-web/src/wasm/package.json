@@ -4,6 +4,10 @@
   "description": "WASM wallet core for PostFiat L1 — keygen, signing, address derivation in the browser",
   "version": "0.1.0",
   "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/postfiatorg/postfiatl1v2"
+  },
   "files": [
     "postfiat_wallet_wasm_bg.wasm",
     "postfiat_wallet_wasm.js",

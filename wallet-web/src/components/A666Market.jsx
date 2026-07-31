@@ -4,16 +4,20 @@ import {
   A666_NATIVE_ASSET_ID,
   A666_PRIMARY_ROUTE_ID,
   A666_SETTLEMENT_ASSET_ID,
+  A666_WRAPPED_TOKEN,
+  buildA666IssueExportDraft,
   buildA666IssueOperations,
   buildA666RedeemOperation,
   evaluateA666ResidentMarket,
   formatA666Nav,
   formatA666Units,
+  finalizeA666IssueExportOperations,
   parseA666Units,
 } from '../lib/a666-primary-route.js';
 import { truncateMiddle } from '../lib/utils.js';
 
 const EMPTY_PROGRESS = [];
+const ERC20_BALANCE_OF_SELECTOR = '0x70a08231';
 
 function responseResult(response, label) {
   if (!response?.ok || !response.result) {
@@ -44,6 +48,50 @@ function shortTx(value) {
   return value === 'finalized' ? value : truncateMiddle(String(value), 7);
 }
 
+async function ensureEthereumMainnet() {
+  if (!window.ethereum?.request) throw new Error('MetaMask is not available in this browser');
+  let chainId = String(await window.ethereum.request({ method: 'eth_chainId' }) || '').toLowerCase();
+  if (chainId !== '0x1') {
+    await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x1' }] });
+    chainId = String(await window.ethereum.request({ method: 'eth_chainId' }) || '').toLowerCase();
+  }
+  if (chainId !== '0x1') throw new Error('MetaMask must be connected to Ethereum mainnet');
+}
+
+async function readWrappedA666Balance(recipient) {
+  await ensureEthereumMainnet();
+  const data = `${ERC20_BALANCE_OF_SELECTOR}${recipient.slice(2).padStart(64, '0')}`;
+  const result = await window.ethereum.request({
+    method: 'eth_call',
+    params: [{ to: A666_WRAPPED_TOKEN, data }, 'latest'],
+  });
+  if (!/^0x[0-9a-f]+$/i.test(String(result || ''))) throw new Error('MetaMask returned a malformed wA666 balance');
+  return BigInt(result);
+}
+
+async function watchWrappedA666() {
+  await ensureEthereumMainnet();
+  return window.ethereum.request({
+    method: 'wallet_watchAsset',
+    params: {
+      type: 'ERC20',
+      options: { address: A666_WRAPPED_TOKEN, symbol: 'wA666', decimals: 6 },
+    },
+  });
+}
+
+async function waitForWrappedA666(recipient, minimumBalance, onBalance, timeoutMs = 30 * 60_000) {
+  const started = Date.now();
+  let last = 0n;
+  while (Date.now() - started <= timeoutMs) {
+    last = await readWrappedA666Balance(recipient);
+    onBalance?.(last);
+    if (last >= minimumBalance) return last;
+    await new Promise(resolve => setTimeout(resolve, 12_000));
+  }
+  throw new Error(`PFTL export finalized, but the trustless Ethereum proof relay has not minted wA666 yet (last balance ${formatA666Units(last)})`);
+}
+
 export default function A666Market({
   rpc,
   txBuilder,
@@ -65,6 +113,9 @@ export default function A666Market({
   const [progress, setProgress] = useState(EMPTY_PROGRESS);
   const [executing, setExecuting] = useState(false);
   const [lastCompleted, setLastCompleted] = useState(null);
+  const [delivery, setDelivery] = useState('ethereum');
+  const [metamaskA666Balance, setMetamaskA666Balance] = useState(null);
+  const [exportPacketHash, setExportPacketHash] = useState('');
 
   const refresh = useCallback(async () => {
     if (!rpc || !address) return null;
@@ -158,6 +209,13 @@ export default function A666Market({
       const selected = String(accounts?.[0] || '').toLowerCase();
       if (!/^0x[0-9a-f]{40}$/.test(selected)) throw new Error('MetaMask did not return a valid Ethereum address');
       setEthereumRecipient(selected);
+      try {
+        await watchWrappedA666();
+      } catch (_) {
+        // Rejecting token discovery must not hide a valid on-chain balance.
+      }
+      const wrappedBalance = await readWrappedA666Balance(selected);
+      setMetamaskA666Balance(wrappedBalance.toString());
     } catch (error) {
       setActionError(error.message || 'Unable to connect MetaMask');
     }
@@ -166,10 +224,12 @@ export default function A666Market({
   const execute = async () => {
     setActionError('');
     setLastCompleted(null);
+    setExportPacketHash('');
     setExecuting(true);
     let issueOperations = null;
     let reserved = false;
     let released = false;
+    let exported = false;
     try {
       const fresh = await refresh();
       if (!fresh) throw new Error('Could not refresh the market immediately before signing');
@@ -186,15 +246,41 @@ export default function A666Market({
 
       if (mode === 'issue') {
         if (!validEthereumRecipient) throw new Error('Connect or enter a lowercase Ethereum address');
-        issueOperations = buildA666IssueOperations({
-          walletAddress: address,
-          ethereumRecipient,
-          supplyStatus: fresh.route,
-          chainHeight: fresh.chain.block_height,
-          amountAtoms,
-          settlementAtoms: freshEvaluation.quote.settlementAtoms,
-        });
-        setProgress([
+        let wrappedBalanceBefore = null;
+        if (delivery === 'ethereum') {
+          await watchWrappedA666();
+          wrappedBalanceBefore = await readWrappedA666Balance(ethereumRecipient);
+          setMetamaskA666Balance(wrappedBalanceBefore.toString());
+          const draft = buildA666IssueExportDraft({
+            walletAddress: address,
+            ethereumRecipient,
+            supplyStatus: fresh.route,
+            chainHeight: fresh.chain.block_height,
+            amountAtoms,
+            settlementAtoms: freshEvaluation.quote.settlementAtoms,
+          });
+          const preparedPacket = await txBuilder.preparePftlUniswapMintPacket(
+            draft.policyHash,
+            draft.mintPacket,
+          );
+          issueOperations = finalizeA666IssueExportOperations(draft, preparedPacket);
+        } else {
+          issueOperations = buildA666IssueOperations({
+            walletAddress: address,
+            ethereumRecipient,
+            supplyStatus: fresh.route,
+            chainHeight: fresh.chain.block_height,
+            amountAtoms,
+            settlementAtoms: freshEvaluation.quote.settlementAtoms,
+          });
+        }
+        setProgress(delivery === 'ethereum' ? [
+          { label: 'Reserve order', state: 'pending', detail: 'Bind verified NAV, capacity, and MetaMask recipient' },
+          { label: 'Mint A666', state: 'pending', detail: 'Exchange pfUSDC and increase native supply' },
+          { label: 'Export A666', state: 'pending', detail: 'Consume the entitlement and finalize the proof packet' },
+          { label: 'Mint wA666', state: 'pending', detail: 'Waiting for the trustless finality proof on Ethereum' },
+          { label: 'Verify MetaMask', state: 'pending', detail: 'Read the mainnet ERC-20 balance' },
+        ] : [
           { label: 'Reserve order', state: 'pending', detail: 'Bind price, capacity, and recipient' },
           { label: 'Mint A666', state: 'pending', detail: 'Exchange pfUSDC at verified NAV' },
           { label: 'Close reservation', state: 'pending', detail: 'Release unused export entitlement' },
@@ -203,9 +289,27 @@ export default function A666Market({
         await runStep(0, issueOperations.reserve, 'Order reservation');
         reserved = true;
         await runStep(1, issueOperations.subscribe, 'A666 issuance');
-        await runStep(2, issueOperations.release, 'Reservation release');
-        released = true;
-        updateStep(3, { state: 'running', detail: 'Refreshing finalized balances…' });
+        if (delivery === 'ethereum') {
+          await runStep(2, issueOperations.export, 'A666 export');
+          exported = true;
+          setExportPacketHash(issueOperations.packetHash);
+          updateStep(3, { state: 'running', detail: `Packet ${truncateMiddle(issueOperations.packetHash, 8)} finalized; proving PFTL finality…` });
+          const expectedBalance = wrappedBalanceBefore + BigInt(amountAtoms);
+          const wrappedBalance = await waitForWrappedA666(
+            ethereumRecipient,
+            expectedBalance,
+            balance => {
+              setMetamaskA666Balance(balance.toString());
+              updateStep(3, { state: 'running', detail: `Proof relay active · ${formatA666Units(balance)} wA666 visible` });
+            },
+          );
+          updateStep(3, { state: 'done', detail: `${formatA666Units(amountAtoms)} wA666 minted on Ethereum` });
+          updateStep(4, { state: 'done', detail: `${formatA666Units(wrappedBalance)} wA666 held by ${truncateMiddle(ethereumRecipient, 7)}` });
+        } else {
+          await runStep(2, issueOperations.release, 'Reservation release');
+          released = true;
+          updateStep(3, { state: 'running', detail: 'Refreshing finalized balances…' });
+        }
       } else {
         const operation = buildA666RedeemOperation({
           walletAddress: address,
@@ -224,15 +328,19 @@ export default function A666Market({
 
       const verified = await refresh();
       if (!verified) throw new Error('Transaction finalized, but refreshed balances are unavailable');
-      const verifyIndex = mode === 'issue' ? 3 : 1;
-      updateStep(verifyIndex, {
-        state: 'done',
-        detail: `${formatA666Units(verified.a666Balance)} A666 · ${formatA666Units(verified.pfusdcBalance)} pfUSDC`,
-      });
-      setLastCompleted(mode);
-      onToast?.(mode === 'issue' ? 'A666 issued at verified NAV' : 'A666 redeemed to pfUSDC');
+      if (mode !== 'issue' || delivery !== 'ethereum') {
+        const verifyIndex = mode === 'issue' ? 3 : 1;
+        updateStep(verifyIndex, {
+          state: 'done',
+          detail: `${formatA666Units(verified.a666Balance)} A666 · ${formatA666Units(verified.pfusdcBalance)} pfUSDC`,
+        });
+      }
+      setLastCompleted(mode === 'issue' && delivery === 'ethereum' ? 'ethereum' : mode);
+      onToast?.(mode === 'issue'
+        ? (delivery === 'ethereum' ? 'wA666 is now held in MetaMask' : 'A666 issued at verified NAV')
+        : 'A666 redeemed to pfUSDC');
     } catch (error) {
-      if (issueOperations && reserved && !released) {
+      if (issueOperations && reserved && !released && !exported) {
         try {
           await txBuilder.sendAssetTransfer(backupJson, address, { operation: issueOperations.release });
           released = true;
@@ -247,7 +355,7 @@ export default function A666Market({
       )));
       setActionError(
         `${error.message || 'A666 transaction failed'}${issueOperations && reserved && !released
-          ? ' The reservation could not be released automatically; do not retry until route status is reconciled.'
+          && !exported ? ' The reservation could not be released automatically; do not retry until route status is reconciled.'
           : ''}`,
       );
       await refresh();
@@ -270,7 +378,11 @@ export default function A666Market({
   const displayBlockers = evaluation.blockingReasons.filter(reason => reason !== 'enter a positive A666 amount');
 
   return (
-    <section className="a666-page" data-testid="a666-market">
+    <section
+      className="a666-page"
+      data-testid="a666-market"
+      data-export-packet-hash={exportPacketHash || undefined}
+    >
       <header className="a666-hero">
         <div>
           <div className="fs-kicker"><span className="fs-live-dot" /> A666 PRIMARY MARKET · PFTL</div>
@@ -315,8 +427,8 @@ export default function A666Market({
       <div className="a666-flow" aria-label="A666 acquisition flow">
         <div><span>1</span><strong>Fund</strong><small>USDC → pfUSDC</small></div><i />
         <div className="active"><span>2</span><strong>Mint</strong><small>pfUSDC → A666</small></div><i />
-        <div><span>3</span><strong>Hold</strong><small>Native on PFTL</small></div><i />
-        <div><span>4</span><strong>Bridge-out</strong><small>Not yet in wallet</small></div>
+        <div><span>3</span><strong>Export</strong><small>Proof-bound on PFTL</small></div><i />
+        <div className={delivery === 'ethereum' ? 'active' : ''}><span>4</span><strong>Hold</strong><small>wA666 in MetaMask</small></div>
       </div>
 
       <div className="a666-workspace">
@@ -348,9 +460,15 @@ export default function A666Market({
 
           {mode === 'issue' && (
             <div className="a666-recipient">
+              <div className="a666-tabs" role="group" aria-label="A666 delivery destination">
+                <button className={delivery === 'ethereum' ? 'on' : ''} onClick={() => setDelivery('ethereum')} disabled={executing}>Deliver to MetaMask</button>
+                <button className={delivery === 'pftl' ? 'on' : ''} onClick={() => setDelivery('pftl')} disabled={executing}>Keep on PFTL</button>
+              </div>
               <div>
-                <label className="a666-label" htmlFor="a666-eth-recipient">Future Ethereum recipient</label>
-                <small>Required as an order binding. This purchase stays on PFTL and creates no bridge packet.</small>
+                <label className="a666-label" htmlFor="a666-eth-recipient">Ethereum recipient</label>
+                <small>{delivery === 'ethereum'
+                  ? 'The proof-bound export mints wA666 directly to this MetaMask account.'
+                  : 'Bound for recovery safety; the purchased A666 remains native on PFTL.'}</small>
               </div>
               <button className="pf-button secondary" onClick={connectEthereum} disabled={executing}>Connect MetaMask</button>
               <input
@@ -378,8 +496,8 @@ export default function A666Market({
           {actionError && <div className="pf-error">{actionError}</div>}
 
           <button className="pf-primary" disabled={!canExecute} onClick={execute}>
-            {executing ? 'Finalizing on PFTL…' : mode === 'issue'
-              ? `Mint ${amountAtoms ? formatA666Units(amountAtoms) : '—'} A666`
+            {executing ? (delivery === 'ethereum' ? 'Exporting to MetaMask…' : 'Finalizing on PFTL…') : mode === 'issue'
+              ? `${delivery === 'ethereum' ? 'Mint & export' : 'Mint'} ${amountAtoms ? formatA666Units(amountAtoms) : '—'} A666`
               : `Redeem ${amountAtoms ? formatA666Units(amountAtoms) : '—'} A666`}
           </button>
           <p className="a666-signing">Your ML-DSA key signs locally. The proxy receives only signed transactions.</p>
@@ -390,6 +508,7 @@ export default function A666Market({
             <div className="a666-side-title"><span>YOUR PFTL BALANCES</span><small>finalized</small></div>
             <div className="a666-balance"><span>pfUSDC</span><strong>{formatA666Units(snapshot?.pfusdcBalance)}</strong></div>
             <div className="a666-balance"><span>A666</span><strong>{formatA666Units(snapshot?.a666Balance)}</strong></div>
+            <div className="a666-balance"><span>wA666 · MetaMask</span><strong>{formatA666Units(metamaskA666Balance)}</strong></div>
           </div>
           <div className="pf-card a666-details">
             <div className="a666-side-title"><span>EXECUTION DETAILS</span><small>pinned</small></div>
@@ -404,7 +523,7 @@ export default function A666Market({
       {progress.length > 0 && (
         <div className="a666-progress">
           <div className="a666-progress-head">
-            <strong>{lastCompleted ? (lastCompleted === 'issue' ? 'A666 purchase complete' : 'A666 redemption complete') : 'Finality progress'}</strong>
+            <strong>{lastCompleted ? (lastCompleted === 'ethereum' ? 'wA666 delivered to MetaMask' : lastCompleted === 'issue' ? 'A666 purchase complete' : 'A666 redemption complete') : 'Finality progress'}</strong>
             <small>Do not close this page while a step is running.</small>
           </div>
           {progress.map((step, index) => (
@@ -417,11 +536,12 @@ export default function A666Market({
       )}
 
       <div className="a666-venue-note">
-        <strong>A666 is delivered natively on PFTL.</strong>
+        <strong>{delivery === 'ethereum' ? 'wA666 is delivered directly to MetaMask.' : 'A666 is delivered natively on PFTL.'}</strong>
         <span>
           The deployed Ethereum token is {route?.wrapped_navcoin_token ? truncateMiddle(route.wrapped_navcoin_token, 8) : 'wA666'}.
-          Bridge-out to that token is a separate operation and is not yet exposed by this wallet.
-          Completing a mint here delivers native A666 on PFTL only.
+          {delivery === 'ethereum'
+            ? ' The wallet preserves the issuance entitlement, finalizes the PFTL export, and waits for its trustless Ethereum finality proof before reporting success.'
+            : ' This mode closes the unused export entitlement and keeps the balance on PFTL.'}
         </span>
       </div>
     </section>

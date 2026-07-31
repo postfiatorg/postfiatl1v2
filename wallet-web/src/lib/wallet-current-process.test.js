@@ -46,7 +46,7 @@ test('bridge-in is Ethereum mainnet USDC and never executes a retired route', as
   assert.doesNotMatch(runtime, /cctpBridgeUsdc|ensureEthereumSepolia/);
 });
 
-test('A666 market is pinned to current governed assets and describes native delivery', async () => {
+test('A666 market is pinned to current governed assets and exposes proof-bound MetaMask delivery', async () => {
   const [market, route, process] = await Promise.all([
     source('components/A666Market.jsx'),
     source('lib/a666-primary-route.js'),
@@ -56,8 +56,11 @@ test('A666 market is pinned to current governed assets and describes native deli
   assert.match(route, /pftl-a666-ethereum-wA666-usdc-v1/);
   assert.match(route, /521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c/);
   assert.match(route, /02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b/);
-  assert.match(market, /Completing a mint here delivers native A666 on PFTL only/);
-  assert.match(market, /Bridge-out to that token is a separate operation and is not yet exposed/);
+  assert.match(route, /pftl_uniswap_export_debit/);
+  assert.match(market, /Deliver to MetaMask/);
+  assert.match(market, /await readWrappedA666Balance\(selected\)/);
+  assert.match(market, /setMetamaskA666Balance\(wrappedBalance\.toString\(\)\)/);
+  assert.match(market, /waits for its trustless Ethereum finality proof before reporting success/);
   assert.match(process, /The live browser service does not currently advertise an enabled A666 private route/);
 });
 

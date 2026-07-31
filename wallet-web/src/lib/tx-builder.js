@@ -668,6 +668,17 @@ export class TxBuilder {
     };
   }
 
+  async preparePftlUniswapMintPacket(policyHash, mintPacket) {
+    const wasm = await this.getWasm();
+    if (typeof wasm.wallet_prepare_pftl_uniswap_mint_packet !== 'function') {
+      throw new Error('Wallet WASM does not support proof-bound A666 export packets');
+    }
+    return wasm.wallet_prepare_pftl_uniswap_mint_packet(
+      String(policyHash || ''),
+      JSON.stringify(mintPacket),
+    );
+  }
+
   async sendEscrowTransaction(backupJson, sourceAddress, fields, options = {}) {
     const wasm = await this.getWasm();
     const operationJson = JSON.stringify(fields.operation);

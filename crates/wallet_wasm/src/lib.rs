@@ -24,7 +24,7 @@ use postfiat_rpc_sdk::{
 use postfiat_types::{
     FastPayApplyAckV1, FastPayRecoveryCapabilitiesV1, OwnedCertificateDomain, OwnedDepositV1,
     OwnedTransferCertificateV3, OwnedTransferOrder, OwnedTransferOrderV3, OwnedUnwrapCertificateV3,
-    OwnedUnwrapOrder, OwnedUnwrapOrderV3,
+    OwnedUnwrapOrder, OwnedUnwrapOrderV3, PftlUniswapMintPacketV2,
 };
 use serde::Serialize;
 
@@ -37,6 +37,35 @@ fn to_json_js_value<T: Serialize>(value: &T) -> Result<JsValue, JsValue> {
             .unwrap_or_else(|| "unknown parse error".to_string());
         JsValue::from_str(&format!("js parse: {detail}"))
     })
+}
+
+/// Fill and validate a proof-bound PFTL -> Ethereum mint packet locally.
+///
+/// The policy commitment and EVM digest are consensus-critical. Computing both
+/// in the same Rust implementation used by validators avoids a browser-side
+/// ABI reimplementation while keeping the reviewed destination/amount fields
+/// inside the wallet custody boundary.
+#[wasm_bindgen]
+pub fn wallet_prepare_pftl_uniswap_mint_packet(
+    policy_hash: &str,
+    packet_json: &str,
+) -> Result<JsValue, JsValue> {
+    let mut packet: PftlUniswapMintPacketV2 = serde_json::from_str(packet_json)
+        .map_err(|e| JsValue::from_str(&format!("mint packet parse: {e}")))?;
+    packet.policy_hash_commitment =
+        postfiat_types::pftl_uniswap_keccak_commitment48("pftl_uniswap_policy_hash", policy_hash)
+            .map_err(|e| JsValue::from_str(&format!("policy commitment: {e}")))?;
+    packet
+        .validate()
+        .map_err(|e| JsValue::from_str(&format!("mint packet validation: {e}")))?;
+    let packet_digest = packet
+        .evm_digest()
+        .map_err(|e| JsValue::from_str(&format!("mint packet digest: {e}")))?;
+    to_json_js_value(&serde_json::json!({
+        "schema": "postfiat-wallet-pftl-uniswap-mint-packet-v1",
+        "packet": packet,
+        "packet_digest": packet_digest,
+    }))
 }
 
 /// Generate a wallet backup and identity from a master seed.

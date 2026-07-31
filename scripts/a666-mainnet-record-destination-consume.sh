@@ -229,7 +229,8 @@ python3 scripts/a666-ce22-remote-finality-op.py \
   --remote-binary "$remote_node" \
   --remote-topology "$remote_topology" \
   --ops-file "$proof_dir/destination-consume.ops.json" \
-  --artifact-dir "$artifact_dir"
+  --artifact-dir "$artifact_dir" \
+  --postflight-seconds 120
 
 ssh -o BatchMode=yes "root@$validator2_host" \
   "$remote_node navcoin-bridge-supply-status \

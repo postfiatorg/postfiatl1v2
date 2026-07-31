@@ -343,6 +343,109 @@ export function buildA666IssueOperations({
   };
 }
 
+export function buildA666IssueExportDraft({
+  walletAddress,
+  ethereumRecipient,
+  supplyStatus,
+  chainHeight,
+  amountAtoms,
+  settlementAtoms,
+  reservationId = randomLowerHex(48),
+  subscriptionNonce = randomLowerHex(32),
+  packetHash = randomLowerHex(48),
+  exportNonce = randomLowerHex(32),
+  destinationDeadlineSeconds = Math.floor(Date.now() / 1000) + 86_400,
+  refundDelayBlocks = 100,
+} = {}) {
+  const status = objectValue(supplyStatus);
+  const issue = buildA666IssueOperations({
+    walletAddress,
+    ethereumRecipient,
+    supplyStatus: status,
+    chainHeight,
+    amountAtoms,
+    settlementAtoms,
+    reservationId,
+    subscriptionNonce,
+  });
+  if (!HASH48_RE.test(packetHash)) throw new Error('export packet hash is malformed');
+  if (!/^[0-9a-f]{64}$/.test(exportNonce)) throw new Error('export nonce is malformed');
+  if (!Number.isSafeInteger(destinationDeadlineSeconds) || destinationDeadlineSeconds <= Math.floor(Date.now() / 1000) + 3600) {
+    throw new Error('Ethereum destination deadline must leave at least one hour');
+  }
+  if (!Number.isSafeInteger(refundDelayBlocks) || refundDelayBlocks <= 0) {
+    throw new Error('refund delay must be a positive block count');
+  }
+  const mintPacket = {
+    route_config_digest: status.route_config_digest,
+    source_packet_hash: packetHash,
+    reservation_id: reservationId,
+    source_receipt_hash: '00'.repeat(48),
+    source_receipt_root: '00'.repeat(48),
+    settlement_asset_id: status.settlement_asset_id,
+    native_nav_asset_id: status.native_nav_asset_id,
+    pricing_reserve_packet_hash: status.pricing_reserve_packet_hash,
+    policy_hash_commitment: '',
+    route_epoch: Number(status.route_epoch),
+    pricing_nav_epoch: Number(status.pricing_nav_epoch),
+    deadline_seconds: destinationDeadlineSeconds,
+    nonce: exportNonce,
+    destination_chain_id: Number(status.ethereum_chain_id),
+    destination_controller: String(status.handoff_controller || '').toLowerCase(),
+    wrapped_token: String(status.wrapped_navcoin_token || '').toLowerCase(),
+    ethereum_recipient: ethereumRecipient,
+    mint_amount_atoms: Number(amountAtoms),
+    settlement_value_atoms: Number(settlementAtoms),
+  };
+  return {
+    ...issue,
+    packetHash,
+    exportNonce,
+    policyHash: status.policy_hash,
+    mintPacket,
+    destinationDeadlineSeconds,
+    refundDelayBlocks,
+  };
+}
+
+export function finalizeA666IssueExportOperations(draft, prepared) {
+  const packet = objectValue(prepared?.packet);
+  const digest = String(prepared?.packet_digest || '');
+  if (prepared?.schema !== 'postfiat-wallet-pftl-uniswap-mint-packet-v1') {
+    throw new Error('wallet mint-packet preparation returned an unexpected schema');
+  }
+  if (!/^[0-9a-f]{64}$/.test(digest)) throw new Error('wallet mint-packet digest is malformed');
+  if (!/^[0-9a-f]{64}$/.test(String(packet.policy_hash_commitment || ''))) {
+    throw new Error('wallet policy commitment is malformed');
+  }
+  for (const [field, expected] of Object.entries(draft.mintPacket)) {
+    if (field === 'policy_hash_commitment') continue;
+    if (String(packet[field]) !== String(expected)) {
+      throw new Error(`wallet mint-packet ${field} changed during local preparation`);
+    }
+  }
+  return {
+    ...draft,
+    mintPacket: packet,
+    packetDigest: digest,
+    export: {
+      operation: 'pftl_uniswap_export_debit',
+      owner: draft.reserve.subscriber,
+      route_id: draft.reserve.route_id,
+      packet_hash: draft.packetHash,
+      export_nonce: draft.exportNonce,
+      ethereum_recipient: draft.reserve.ethereum_recipient,
+      amount_atoms: draft.reserve.mint_amount_atoms,
+      reservation_id: draft.reservationId,
+      settlement_value_atoms: draft.subscribe.settlement_value_atoms,
+      destination_deadline_seconds: draft.destinationDeadlineSeconds,
+      refund_delay_blocks: draft.refundDelayBlocks,
+      ethereum_packet_digest: digest,
+      ethereum_packet_schema_version: 2,
+    },
+  };
+}
+
 export function buildA666RedeemOperation({
   walletAddress,
   supplyStatus,
