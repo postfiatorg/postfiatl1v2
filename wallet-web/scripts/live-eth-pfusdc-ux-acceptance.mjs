@@ -157,9 +157,30 @@ const page = await context.newPage();
 page.setDefaultTimeout(120_000);
 page.on('pageerror', (error) => browserErrors.push(`pageerror: ${error.message}`));
 page.on('console', (message) => {
-  if (message.type() === 'error' && !message.text().includes('frame-ancestors')) {
+  if (
+    message.type() === 'error'
+    && !message.text().includes('frame-ancestors')
+    // Chromium's generic network message omits the request URL. Response
+    // failures are classified below so expected readiness warming cannot
+    // conceal an unrelated HTTP failure.
+    && !message.text().startsWith('Failed to load resource:')
+  ) {
     browserErrors.push(message.text());
   }
+});
+page.on('response', (response) => {
+  if (response.status() < 400) return;
+  const url = new URL(response.url());
+  if (
+    url.pathname === '/api/bridge/readiness'
+    && response.status() === 503
+  ) return;
+  browserErrors.push(`HTTP ${response.status()} ${url.pathname}`);
+});
+page.on('requestfailed', (request) => {
+  browserErrors.push(
+    `request failed ${new URL(request.url()).pathname}: ${request.failure()?.errorText || 'unknown'}`,
+  );
 });
 
 const startedAt = Date.now();

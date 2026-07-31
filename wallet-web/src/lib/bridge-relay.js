@@ -99,7 +99,7 @@ export async function waitForBridgeReadiness(
 
 export async function waitForBridgeJob(
   jobId,
-  { pollIntervalMs = 2000, timeoutMs = 30 * 60 * 1000, onStatus = null } = {},
+  { pollIntervalMs = 2000, timeoutMs = 45 * 60 * 1000, onStatus = null } = {},
 ) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
