@@ -43,6 +43,7 @@ ISSUER = "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8"
 EXECUTION_RPCS = (
     "https://ethereum-rpc.publicnode.com",
     "https://eth.drpc.org",
+    "https://eth.merkle.io",
 )
 BEACON_RPC = "https://ethereum-beacon-api.publicnode.com"
 A100_HOST = os.environ.get("A666_A100_HOST", "194.228.55.129")
