@@ -146,6 +146,30 @@ test('RpcClient attaches the session-only proxy token to mutation requests', asy
   }
 });
 
+test('RpcClient does not close a healthy shared socket when one RPC times out', async () => {
+  const previousWebSocket = globalThis.WebSocket;
+  globalThis.WebSocket = { OPEN: 1, CLOSING: 2, CLOSED: 3 };
+  try {
+    const rpc = new RpcClient('ws://127.0.0.1:8080/rpc');
+    let closes = 0;
+    rpc.connect = async () => {};
+    rpc.ws = {
+      readyState: 1,
+      send() {},
+      close() { closes += 1; },
+    };
+
+    const response = await rpc.call('status', {}, 1);
+
+    assert.equal(response.ok, false);
+    assert.equal(response.error.code, 'rpc_timeout');
+    assert.equal(closes, 0);
+    assert.equal(rpc.ws.readyState, 1);
+  } finally {
+    globalThis.WebSocket = previousWebSocket;
+  }
+});
+
 test('RpcClient rejects registered custody material before opening a socket', async () => {
   const seed = 'a7'.repeat(32);
   registerCustodyMaterial({ seed });

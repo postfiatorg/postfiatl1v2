@@ -309,7 +309,9 @@ export class RpcClient {
         const result = await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => {
             this.pending.delete(id);
-            reject(new Error(`RPC timeout: ${method}`));
+            const error = new Error(`RPC timeout: ${method}`);
+            error.code = 'rpc_timeout';
+            reject(error);
           }, timeoutMs);
           this.pending.set(id, { resolve, reject, timeout });
           try {
@@ -320,23 +322,34 @@ export class RpcClient {
           } catch (e) {
             clearTimeout(timeout);
             this.pending.delete(id);
-            reject(new Error(`RPC send failed: ${method}`));
+            const error = new Error(`RPC send failed: ${method}`);
+            error.code = 'rpc_send_failed';
+            reject(error);
           }
         });
         return result;
       } catch (e) {
-        // Send failed — the WebSocket is probably stale. Force close and retry.
-        this._forceReconnect();
+        // A method timing out does not prove that the shared transport is
+        // stale. Closing a healthy socket here aborts unrelated in-flight
+        // reads (including governed-route discovery) and can create a
+        // reconnect loop under normal fleet latency. Reconnect only when the
+        // send failed or the socket is no longer open.
+        const transportUnavailable = e?.code === 'rpc_send_failed'
+          || !this.ws
+          || this.ws.readyState !== WebSocket.OPEN;
+        if (transportUnavailable) this._forceReconnect();
         if (attempt < maxAttempts - 1) {
           await sleep(100 * (attempt + 1));
           continue;
         }
         return {
           version: 'postfiat-local-rpc-v1',
-          id: 'send-failed',
+          id: transportUnavailable ? 'send-failed' : 'rpc-timeout',
           ok: false,
           result: null,
-          error: { code: 'connection_error', message: `wallet RPC connection dropped while sending ${method}` },
+          error: transportUnavailable
+            ? { code: 'connection_error', message: `wallet RPC connection dropped while sending ${method}` }
+            : { code: 'rpc_timeout', message: `wallet RPC timed out while waiting for ${method}` },
           events: [],
         };
       }
