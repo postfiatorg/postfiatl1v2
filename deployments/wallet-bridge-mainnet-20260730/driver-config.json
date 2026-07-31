@@ -13,8 +13,8 @@
   "token_runtime_code_hash": "0xd80d4b7c890cb9d6a4893e6b52bc34b56b25335cb13716e0d1d31383e6b41505",
   "pinned_files": [
     {
-      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage.py",
-      "sha256": "8eec5e07fa20c6f4c160680143c9103a0ee9895a724f089229571234d9da7ec7"
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage-serialized.py",
+      "sha256": "1fa02deb8b4b4716ccdfbdca4da51f810ebd8feb902b4f6064fb46c8d9345a23"
     },
     {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-mainnet-pfusdc-relay.sh",
@@ -29,7 +29,7 @@
     "program": "/usr/bin/python3.12",
     "program_sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118",
     "args": [
-      "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage.py",
+      "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage-serialized.py",
       "--readiness"
     ],
     "timeout_ms": 60000
@@ -40,7 +40,7 @@
       "program": "/usr/bin/python3.12",
       "program_sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118",
       "args": [
-        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage.py",
+        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage-serialized.py",
         "--stage",
         "confirming_deposit",
         "--job-file",
@@ -53,7 +53,7 @@
       "program": "/usr/bin/python3.12",
       "program_sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118",
       "args": [
-        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage.py",
+        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage-serialized.py",
         "--stage",
         "waiting_for_ethereum_finality",
         "--job-file",
@@ -66,7 +66,7 @@
       "program": "/usr/bin/python3.12",
       "program_sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118",
       "args": [
-        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage.py",
+        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage-serialized.py",
         "--stage",
         "capturing_state_proof",
         "--job-file",
@@ -79,7 +79,7 @@
       "program": "/usr/bin/python3.12",
       "program_sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118",
       "args": [
-        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage.py",
+        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage-serialized.py",
         "--stage",
         "proving",
         "--job-file",
@@ -92,7 +92,7 @@
       "program": "/usr/bin/python3.12",
       "program_sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118",
       "args": [
-        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage.py",
+        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage-serialized.py",
         "--stage",
         "verifying",
         "--job-file",
@@ -105,7 +105,7 @@
       "program": "/usr/bin/python3.12",
       "program_sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118",
       "args": [
-        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage.py",
+        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage-serialized.py",
         "--stage",
         "growing_backed_cap",
         "--job-file",
@@ -118,7 +118,7 @@
       "program": "/usr/bin/python3.12",
       "program_sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118",
       "args": [
-        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage.py",
+        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage-serialized.py",
         "--stage",
         "claiming",
         "--job-file",
