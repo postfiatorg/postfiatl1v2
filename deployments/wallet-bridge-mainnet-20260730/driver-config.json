@@ -14,7 +14,7 @@
   "pinned_files": [
     {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage.py",
-      "sha256": "b027636ca86f3f2c56b7f5ace48f64717a27540229ba4ca65af5f0548d20ce79"
+      "sha256": "8eec5e07fa20c6f4c160680143c9103a0ee9895a724f089229571234d9da7ec7"
     },
     {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-mainnet-pfusdc-relay.sh",

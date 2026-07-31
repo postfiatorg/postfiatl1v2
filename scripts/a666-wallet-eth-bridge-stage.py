@@ -9,6 +9,7 @@ against Ethereum and the replicated PFTL route before value can move.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -67,6 +68,12 @@ PFTL_ISSUER_KEY = "/var/lib/postfiat/validator-2/a666-joe-e2e-20260728/pfusdc-is
 PFTL_CAST = "/var/lib/postfiat/validator-2/pfusdc-latency-20260727-run2/cast"
 PFTL_CAST_HASH = "ccd95a4607ca3ebfcb88bb90e7235cdb7f0564f5f1afa17478d5fccabbb222cb"
 PFTL_RPC_PORT = int(os.environ.get("A666_PFTL_RPC_PORT", "38650"))
+PFTL_RELAY_LOCK = Path(
+    os.environ.get(
+        "A666_PFTL_RELAY_LOCK",
+        "/home/postfiat/.local/state/postfiat-a666-wallet/pftl-relay.lock",
+    )
+)
 PFTL_FLEET = os.environ.get(
     "PFTL_FLEET_FILE", "/home/postfiat/repos/wan-vultr-all-fleet.txt"
 )
@@ -613,11 +620,17 @@ def relay_phase(
             "PFTL_LABEL_SUFFIX": f"-wallet-{job_key[:10]}",
         }
     )
-    run(
-        ["bash", str(REPO / "scripts/a666-mainnet-pfusdc-relay.sh")],
-        timeout=600,
-        env=environment,
-    )
+    PFTL_RELAY_LOCK.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with PFTL_RELAY_LOCK.open("a", encoding="utf-8") as relay_lock:
+        fcntl.flock(relay_lock.fileno(), fcntl.LOCK_EX)
+        try:
+            run(
+                ["bash", str(REPO / "scripts/a666-mainnet-pfusdc-relay.sh")],
+                timeout=600,
+                env=environment,
+            )
+        finally:
+            fcntl.flock(relay_lock.fileno(), fcntl.LOCK_UN)
     return read_json(job_dir / "pftl" / "summary.json")
 
 
