@@ -15,6 +15,7 @@ import {
   parseA666Units,
 } from '../lib/a666-primary-route.js';
 import { truncateMiddle } from '../lib/utils.js';
+import { createA666ExportJob, loadA666ExportReadiness, waitForA666ExportJob } from '../lib/a666-export-relay.js';
 
 const EMPTY_PROGRESS = [];
 const ERC20_BALANCE_OF_SELECTOR = '0x70a08231';
@@ -80,18 +81,6 @@ async function watchWrappedA666() {
   });
 }
 
-async function waitForWrappedA666(recipient, minimumBalance, onBalance, timeoutMs = 30 * 60_000) {
-  const started = Date.now();
-  let last = 0n;
-  while (Date.now() - started <= timeoutMs) {
-    last = await readWrappedA666Balance(recipient);
-    onBalance?.(last);
-    if (last >= minimumBalance) return last;
-    await new Promise(resolve => setTimeout(resolve, 12_000));
-  }
-  throw new Error(`PFTL export finalized, but the trustless Ethereum proof relay has not minted wA666 yet (last balance ${formatA666Units(last)})`);
-}
-
 export default function A666Market({
   rpc,
   txBuilder,
@@ -99,6 +88,7 @@ export default function A666Market({
   address,
   chainStatus,
   chainCapabilities,
+  proxyAuthToken = '',
   liveSnapshot = null,
   onToast,
   onNavigate,
@@ -183,7 +173,7 @@ export default function A666Market({
     && Boolean(backupJson)
     && Boolean(txBuilder)
     && !executing
-    && (mode === 'redeem' || validEthereumRecipient);
+    && (mode === 'redeem' || (validEthereumRecipient && (delivery !== 'ethereum' || Boolean(proxyAuthToken))));
 
   const updateStep = (index, patch) => {
     setProgress(current => current.map((step, stepIndex) => (
@@ -248,6 +238,14 @@ export default function A666Market({
         if (!validEthereumRecipient) throw new Error('Connect or enter a lowercase Ethereum address');
         let wrappedBalanceBefore = null;
         if (delivery === 'ethereum') {
+          if (!proxyAuthToken) throw new Error('Authenticated export relay access is not available');
+          const relayReadiness = await loadA666ExportReadiness();
+          if (relayReadiness.ready !== true
+            || relayReadiness.route_id !== fresh.route.route_id
+            || relayReadiness.route_config_digest !== fresh.route.route_config_digest
+            || String(relayReadiness.wrapped_token || '').toLowerCase() !== A666_WRAPPED_TOKEN) {
+            throw new Error('The unattended A666 export relay is not ready for this governed route');
+          }
           await watchWrappedA666();
           wrappedBalanceBefore = await readWrappedA666Balance(ethereumRecipient);
           setMetamaskA666Balance(wrappedBalanceBefore.toString());
@@ -274,6 +272,19 @@ export default function A666Market({
             settlementAtoms: freshEvaluation.quote.settlementAtoms,
           });
         }
+        let exportRelayJob = null;
+        if (delivery === 'ethereum') {
+          exportRelayJob = await createA666ExportJob({
+            routeId: fresh.route.route_id,
+            routeConfigDigest: fresh.route.route_config_digest,
+            packetHash: issueOperations.packetHash,
+            packetDigest: issueOperations.packetDigest,
+            ethereumRecipient,
+            amountAtoms,
+            deadlineSeconds: issueOperations.destinationDeadlineSeconds,
+            proxyAuthToken,
+          });
+        }
         setProgress(delivery === 'ethereum' ? [
           { label: 'Reserve order', state: 'pending', detail: 'Bind verified NAV, capacity, and MetaMask recipient' },
           { label: 'Mint A666', state: 'pending', detail: 'Exchange pfUSDC and increase native supply' },
@@ -293,17 +304,20 @@ export default function A666Market({
           await runStep(2, issueOperations.export, 'A666 export');
           exported = true;
           setExportPacketHash(issueOperations.packetHash);
-          updateStep(3, { state: 'running', detail: `Packet ${truncateMiddle(issueOperations.packetHash, 8)} finalized; proving PFTL finality…` });
+          updateStep(3, { state: 'running', detail: `Packet ${truncateMiddle(issueOperations.packetHash, 8)} finalized; enqueueing durable relay…` });
           const expectedBalance = wrappedBalanceBefore + BigInt(amountAtoms);
-          const wrappedBalance = await waitForWrappedA666(
-            ethereumRecipient,
-            expectedBalance,
-            balance => {
-              setMetamaskA666Balance(balance.toString());
-              updateStep(3, { state: 'running', detail: `Proof relay active · ${formatA666Units(balance)} wA666 visible` });
-            },
-          );
-          updateStep(3, { state: 'done', detail: `${formatA666Units(amountAtoms)} wA666 minted on Ethereum` });
+          const relayResult = await waitForA666ExportJob(exportRelayJob.job_id, {
+            onStatus: status => updateStep(3, {
+              state: 'running',
+              detail: status.message || `Durable relay · ${String(status.status || 'queued').replaceAll('_', ' ')}`,
+            }),
+          });
+          const wrappedBalance = await readWrappedA666Balance(ethereumRecipient);
+          if (wrappedBalance < expectedBalance) {
+            throw new Error('Relay reported finality but the expected wA666 balance is not visible');
+          }
+          setMetamaskA666Balance(wrappedBalance.toString());
+          updateStep(3, { state: 'done', detail: `${formatA666Units(amountAtoms)} wA666 minted · ${shortTx(relayResult.ethereum_tx_hash || 'finalized')}` });
           updateStep(4, { state: 'done', detail: `${formatA666Units(wrappedBalance)} wA666 held by ${truncateMiddle(ethereumRecipient, 7)}` });
         } else {
           await runStep(2, issueOperations.release, 'Reservation release');
@@ -494,6 +508,9 @@ export default function A666Market({
           )}
           {!finalityReady && <div className="a666-blockers"><span>• Authenticated finality submission is not enabled for this wallet endpoint.</span></div>}
           {actionError && <div className="pf-error">{actionError}</div>}
+          {mode === 'issue' && delivery === 'ethereum' && !proxyAuthToken && (
+            <div className="a666-blockers"><span>• Authenticated unattended export relay access is unavailable.</span></div>
+          )}
 
           <button className="pf-primary" disabled={!canExecute} onClick={execute}>
             {executing ? (delivery === 'ethereum' ? 'Exporting to MetaMask…' : 'Finalizing on PFTL…') : mode === 'issue'

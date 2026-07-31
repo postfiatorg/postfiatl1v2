@@ -1,0 +1,14 @@
+[Unit]
+Description=PFT A666 wallet proxy and proof-backed Ethereum pfUSDC bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/postfiat/repos/a666-eth-fast-lane-combined-20260724
+ExecStart=/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/start-a666-wallet-local.sh
+Restart=always
+RestartSec=3s
+
+[Install]
+WantedBy=default.target

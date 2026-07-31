@@ -7,6 +7,7 @@ phase_dir=
 workflow_id=
 expected_recipient=
 expected_amount_atoms=
+resume=false
 a100_host=${A666_A100_HOST:-194.228.55.129}
 a100_port=${A666_A100_PORT:-30886}
 validator2_host=${A666_VALIDATOR2_HOST:-66.42.48.39}
@@ -14,6 +15,7 @@ release_id=${A666_PFTL_RELEASE_ID:-resident-local-commit-777faa0}
 
 while (($#)); do
   case "$1" in
+    --resume) resume=true; shift ;;
     --packet-hash) packet_hash=$2; shift 2 ;;
     --phase-dir) phase_dir=$2; shift 2 ;;
     --workflow-id) workflow_id=$2; shift 2 ;;
@@ -33,8 +35,25 @@ done
 
 cd "$repo"
 if test -e "$phase_dir"; then
-  echo "refusing to overwrite wallet export evidence: $phase_dir" >&2
-  exit 1
+  if ! "$resume"; then
+    echo "refusing to overwrite wallet export evidence: $phase_dir" >&2
+    exit 1
+  fi
+  phase_dir=$(realpath "$phase_dir")
+  if test -s "$phase_dir/completion.json"; then
+    jq -e \
+      --arg packet "$packet_hash" \
+      --arg recipient "$expected_recipient" \
+      --argjson amount "$expected_amount_atoms" \
+      '.verdict=="PASS" and .packet_hash==$packet
+       and (.recipient|ascii_downcase)==$recipient and .amount_atoms==$amount
+       and (.mint_tx|ascii_downcase|test("^0x[0-9a-f]{64}$"))' \
+      "$phase_dir/completion.json" >/dev/null
+    cat "$phase_dir/completion.json"
+    exit 0
+  fi
+else
+  install -d -m 700 "$phase_dir"
 fi
 install -d -m 700 "$phase_dir/a666/ops" "$phase_dir/export-proof" "$phase_dir/ethereum"
 phase_dir=$(realpath "$phase_dir")
@@ -48,7 +67,7 @@ export_elf=/workspace/a666-acceptance/witness/deployed-program-004e44.elf
 packet_file="$phase_dir/a666/export-packet-before-proof.json"
 packet_staging="$packet_file.staging"
 packet_deadline=$((SECONDS + 120))
-while true; do
+while ! test -s "$packet_file"; do
   if ssh -o BatchMode=yes "root@$validator2_host" \
     "$remote_node navcoin-bridge-packet \
       --data-dir /var/lib/postfiat/validator-2 \
@@ -60,7 +79,7 @@ while true; do
       '.packet_hash==$packet and .packet.packet_hash==$packet and .packet.status=="SourceDebited"' \
       "$packet_staging" >/dev/null 2>&1; then
     mv "$packet_staging" "$packet_file"
-    break
+    continue
   fi
   rm -f "$packet_staging"
   if ((SECONDS >= packet_deadline)); then
@@ -82,7 +101,38 @@ jq -e \
   "$phase_dir/a666/export-packet-before-proof.json" >/dev/null
 
 ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
-  "test ! -e '$a100_root'; install -d -m 700 '$a100_root/export' '$a100_root/checkpoints'"
+  "install -d -m 700 '$a100_root/export' '$a100_root/checkpoints'"
+
+if test -s "$phase_dir/ethereum/mint-state.json" \
+  && jq -e \
+    --arg recipient "$expected_recipient" \
+    --argjson amount "$expected_amount_atoms" \
+    '.phase=="minted-to-recipient"
+     and (.post_state.recipient_balance_atoms-.pre_state.recipient_balance_atoms)==$amount
+     and (.post_state.token_total_supply-.pre_state.token_total_supply)==$amount' \
+    "$phase_dir/ethereum/mint-state.json" >/dev/null; then
+  verifier_height_before=$(jq -er '.pre_state.latest_finalized_height' "$phase_dir/ethereum/mint-state.json")
+  verifier_height=$verifier_height_before
+  bash scripts/a666-mainnet-record-destination-consume.sh \
+    --resume-auto \
+    --phase-dir "$phase_dir" \
+    --workflow-id "$workflow_id" \
+    --expected-pftl-height "$((export_height + 1))"
+  jq -n \
+    --arg packet "$packet_hash" \
+    --arg recipient "$expected_recipient" \
+    --argjson amount "$expected_amount_atoms" \
+    --argjson export_height "$export_height" \
+    --argjson verifier_height_before "$verifier_height_before" \
+    --argjson receipt_prior_height "$verifier_height" \
+    --arg mint_tx "$(jq -er '.transactions[] | select(.label=="consume finalized A666 mint packet") | .tx' "$phase_dir/ethereum/mint-state.json")" \
+    '{schema:"postfiat.a666.wallet_export_completion.v1",verdict:"PASS",packet_hash:$packet,
+      recipient:$recipient,amount_atoms:$amount,export_height:$export_height,
+      verifier_height_before:$verifier_height_before,receipt_prior_height:$receipt_prior_height,
+      mint_tx:$mint_tx}' \
+    | tee "$phase_dir/completion.json"
+  exit 0
+fi
 
 verifier_height=$(ssh -o BatchMode=yes "root@$validator2_host" \
   '/var/lib/postfiat/validator-2/pfusdc-latency-20260727-run2/cast call 0xb79FF97EcC11574a8A78d0b5a9D7C8c2A94bF96A "latestFinalizedHeight()(uint64)" --rpc-url https://ethereum-rpc.publicnode.com')
@@ -213,20 +263,22 @@ ssh -o BatchMode=yes "root@$validator2_host" \
     --route-id $route_id" \
   > "$phase_dir/pftl-supply-status-after.json"
 
-scp -q -P "$a100_port" "$phase_dir/export-proof/receipt-witness.json" \
-  "root@$a100_host:$a100_root/export/receipt-witness.json"
-ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
-  "SP1_PROVER=cuda '$export_prover' receipt \
-    --witness '$a100_root/export/receipt-witness.json' \
-    --output-dir '$a100_root/export-proof' \
-    --elf '$export_elf' \
-    --prove \
-    --require-prover cuda \
-    --skip-redundant-execute"
-install -d -m 700 "$phase_dir/export-proof/proof-cuda"
-rsync -a -e "ssh -p $a100_port" \
-  "root@$a100_host:$a100_root/export-proof/" \
-  "$phase_dir/export-proof/proof-cuda/"
+if ! test -s "$phase_dir/export-proof/proof-cuda/proof-report.json"; then
+  scp -q -P "$a100_port" "$phase_dir/export-proof/receipt-witness.json" \
+    "root@$a100_host:$a100_root/export/receipt-witness.json"
+  ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
+    "SP1_PROVER=cuda '$export_prover' receipt \
+      --witness '$a100_root/export/receipt-witness.json' \
+      --output-dir '$a100_root/export-proof' \
+      --elf '$export_elf' \
+      --prove \
+      --require-prover cuda \
+      --skip-redundant-execute"
+  install -d -m 700 "$phase_dir/export-proof/proof-cuda"
+  rsync -a -e "ssh -p $a100_port" \
+    "root@$a100_host:$a100_root/export-proof/" \
+    "$phase_dir/export-proof/proof-cuda/"
+fi
 jq -e '
   .program_vkey=="0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9"
   and .proof_mode=="groth16"
@@ -252,6 +304,7 @@ jq -e \
   "$phase_dir/ethereum/mint-state.json" >/dev/null
 
 bash scripts/a666-mainnet-record-destination-consume.sh \
+  --resume-auto \
   --phase-dir "$phase_dir" \
   --workflow-id "$workflow_id" \
   --expected-pftl-height "$((export_height + 1))"

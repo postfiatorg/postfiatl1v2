@@ -46,6 +46,12 @@ async function wrappedBalance() {
   return BigInt(await ethereumRequest('eth_call', [{ to: wrappedA666, data }, 'latest']));
 }
 
+function formatA666(atoms) {
+  const whole = atoms / 1_000_000n;
+  const fraction = String(atoms % 1_000_000n).padStart(6, '0').replace(/0+$/, '');
+  return fraction ? `${whole}.${fraction}` : String(whole);
+}
+
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({
   ignoreHTTPSErrors: true,
@@ -111,8 +117,9 @@ try {
   if (balance < minimumBalanceAtoms) {
     throw new Error(`MetaMask wA666 balance ${balance} is below required ${minimumBalanceAtoms}`);
   }
+  const displayedBalance = formatA666(balance);
   const balanceCard = page.locator('.a666-balance', { hasText: 'wA666 · MetaMask' });
-  await balanceCard.getByText('1', { exact: true }).waitFor({ state: 'visible' });
+  await balanceCard.getByText(displayedBalance, { exact: true }).waitFor({ state: 'visible' });
   const recipient = await page.locator('#a666-eth-recipient').inputValue();
   if (recipient !== ethereumAddress) throw new Error('wallet displayed the wrong MetaMask recipient');
 
@@ -127,7 +134,7 @@ try {
     ethereum_address: ethereumAddress,
     wrapped_token: wrappedA666,
     wrapped_balance_atoms: balance.toString(),
-    displayed_balance: '1',
+    displayed_balance: displayedBalance,
     ethereum_transaction_requested: false,
   };
   await writeFile(`${evidenceDir}/result.json`, `${JSON.stringify(result, null, 2)}\n`, { mode: 0o600 });

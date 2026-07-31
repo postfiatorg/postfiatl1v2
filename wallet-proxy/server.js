@@ -781,6 +781,7 @@ walletProxyRuntime.executeTransparentNavswapRun = executeTransparentNavswapRunWi
 Object.assign(walletProxyRuntime, require('./navswap-shielded').create(walletProxyRuntime));
 const { ASSET_ORCHARD_ACTION_CLEAR_KEYS,buildShieldedCertifiedRoundArgs,certifiedRoundFailure,certifiedRoundHasQuorumCertificate,certifiedRoundHeight,certifiedRoundReceipts,certifyShieldedBatchViaWarmLoop,chooseShieldedCatchUpSource,cloneJson,collectShieldedTopologyStatuses,createShieldedSwapBatchViaLocalService,executeShieldedNavswapBalances,executeShieldedNavswapEgress,executeShieldedNavswapIngress,executeShieldedNavswapIngressPreflight,executeShieldedNavswapNoteCapability,executeShieldedNavswapProverReadiness,executeShieldedNavswapQuote,executeShieldedNavswapStatus,executeShieldedNavswapSwap,fileMtimeUnixMs,findAssetOrchardActionCleartext,loadShieldedTopologyPeers,majorityRootAtHeight,maxMtimeUnixMs,msSpan,navswapIdempotencyKeyFromRequest,navswapIdempotencyStorePath,navswapRunStorePath,navswapStableJson,navswapValidateIdempotencyKey,newNavswapRunId,parseShieldedPrivateEgressJson,parseShieldedSwapActionJson,runShieldedLaggardCatchUp,runShieldedRpcCatchUp,shellQuote,shieldedBatchExplicitActionIds,shieldedCatchUpLaggards,shieldedCatchUpSourceCandidates,shieldedCertifiedRoundEnv,shieldedCertifierLoopBatchFile,shieldedCertifierLoopStartHeight,shieldedCertifierLoopState,shieldedConvergenceSummary,shieldedEarlyQuorumEnabled,shieldedIngressSupportedAsset,shieldedLaggardCatchUpConfig,shieldedPrivateEgressDisclosureFields,shieldedPrivateEgressDisclosureHash,shieldedQuoteAssetByInput,shieldedQuoteFromSubmitBody,shieldedQuotePairEnabled,shieldedRemoteDataDir,shieldedRemoteWorkDir,shieldedRoundBatchIds,shieldedRoundPhaseTimings,shieldedRoundReceiptIds,shieldedSwapProxyTimingReport,startShieldedCertifierLoop,validateShieldedCertifierLoopReportForBatch,validateShieldedEgressSubmit,validateShieldedIngressPayload,validateShieldedPrivateEgressFile,validateShieldedSwapAction,validateShieldedSwapSubmit } = walletProxyRuntime;
 Object.assign(walletProxyRuntime, require('./trustless-bridge-jobs').create(walletProxyRuntime));
+Object.assign(walletProxyRuntime, require('./a666-export-jobs').create(walletProxyRuntime));
 Object.assign(walletProxyRuntime, require('./navswap-persistence-http').create(walletProxyRuntime));
 const { annotateNavswapIdempotency,buildNavswapRunResponse,clearNavswapIdempotencyForTest,clearNavswapRunsForTest,compareNavswapRunsNewestFirst,createNavswapRun,executeNavswapAtomicTemplate,executeNavswapIdempotentRequest,executeNavswapRun,finishNavswapRun,forwardStakehubTransparentRun,handleNavswapHttp,jsonHeaders,loadNavswapIdempotencyStore,loadNavswapRunStore,markStoredNavswapRunInterrupted,navswapAsyncRunRequested,navswapIdempotencyHashBody,navswapIdempotencyStoreSnapshot,navswapListLimit,navswapRunEvents,navswapRunIsTerminal,navswapRunList,navswapRunPublic,navswapRunReceipts,navswapRunSortTime,navswapRunStoreSnapshot,navswapRunStreamSnapshot,navswapTruthyParam,normalizeAtomicTemplateParams,normalizeStoredNavswapIdempotencyRecord,normalizeStoredNavswapRun,originAllowed,persistNavswapIdempotencyRecord,persistNavswapRun,pruneNavswapIdempotencyRecords,publishNavswapRunUpdate,readJsonBody,recordNavswapRunEvent,removeNavswapRunStreamSubscriber,sanitizeNavswapRunRequest,sendJson,sendNavswapRunStream,sseHeaders,swapAtomicTemplateParams,verifyAtomicTemplateResult,verifyAtomicTemplateSymmetry,writeSseEvent } = walletProxyRuntime;
 const server = http.createServer(async (req, res) => {
@@ -1182,6 +1183,35 @@ if (require.main === module) {
             console.error(`Shielded certifier loop exited before use: ${error.message || error}`);
         });
     }
+    let shuttingDown = false;
+    const shutdown = (signal) => {
+        if (shuttingDown) return;
+        shuttingDown = true;
+        console.log(`Wallet proxy received ${signal}; draining listeners and durable workers.`);
+        try { walletProxyRuntime.closeA666ExportRelayJobs?.(); } catch (_) { /* best effort */ }
+        try { walletProxyRuntime.closeTrustlessBridgeJobs?.(); } catch (_) { /* best effort */ }
+        try { closeUpstreamRpcConnections(); } catch (_) { /* best effort */ }
+        try {
+            for (const client of wss.clients) client.terminate();
+            wss.close();
+        } catch (_) { /* best effort */ }
+        // Upgraded WebSocket/long-poll clients can keep Node's close callback
+        // pending even after they have been terminated. Durable workers have
+        // already received SIGTERM above, so finish the service stop cleanly
+        // after a short bounded drain rather than making systemd report a
+        // false crash on every intentional restart.
+        const forced = setTimeout(() => process.exit(0), 3_000);
+        forced.unref?.();
+        server.close(() => {
+            clearTimeout(forced);
+            process.exit(0);
+        });
+        server.closeIdleConnections?.();
+        const closeLingering = setTimeout(() => server.closeAllConnections?.(), 1_000);
+        closeLingering.unref?.();
+    };
+    process.once('SIGTERM', () => shutdown('SIGTERM'));
+    process.once('SIGINT', () => shutdown('SIGINT'));
     server.listen(LISTEN_PORT, LISTEN_HOST, () => {
         console.log(`PostFiat RPC proxy listening on ${LISTEN_HOST}:${LISTEN_PORT} -> ${RPC_HOST}:${RPC_PORT}`);
         if (startupCertifierLoop) {

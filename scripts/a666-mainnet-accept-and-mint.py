@@ -198,7 +198,7 @@ def main() -> None:
     receipt_commitment = verifier.functions.receiptCommitment(
         mint_packet[4], mint_packet[3], mint_packet[0], bytes.fromhex(packet_digest[2:])
     ).call()
-    state: dict[str, Any] = {
+    prepared_state: dict[str, Any] = {
         "schema": "postfiat-a666-proof-gated-mint-mainnet-v1",
         "phase": "prepared",
         "chain_id": CHAIN_ID,
@@ -220,6 +220,7 @@ def main() -> None:
             "proof_sha256": hashlib.sha256(proof).hexdigest(),
         },
         "pre_state": {
+            "ethereum_block_number": int(web3.eth.block_number),
             "receipt_accepted": bool(
                 verifier.functions.acceptedReceiptCommitment(receipt_commitment).call()
             ),
@@ -239,7 +240,19 @@ def main() -> None:
         },
         "transactions": [],
     }
-    atomic_write_json(args.state_file, state)
+    if args.state_file.exists():
+        state = json.loads(args.state_file.read_text())
+        if not (
+            state.get("schema") == prepared_state["schema"]
+            and str(state.get("packet_digest", "")).lower() == packet_digest.lower()
+            and state.get("receipt_commitment") == prepared_state["receipt_commitment"]
+            and state.get("receipt_witness_sha256") == receipt_witness_sha256
+            and state.get("proof") == prepared_state["proof"]
+        ):
+            raise RuntimeError("existing mint state does not match this proof and packet")
+    else:
+        state = prepared_state
+        atomic_write_json(args.state_file, state)
     if not args.execute:
         print(json.dumps(state, indent=2, sort_keys=True))
         return
@@ -248,20 +261,7 @@ def main() -> None:
         raise RuntimeError(
             "A666 mint controller is paused; refusing to mutate governed pause state"
         )
-    if state["pre_state"]["latest_finalized_height"] > args.expected_finalized_height:
-        raise RuntimeError(
-            "PFTL verifier finalized height is already beyond the expected receipt boundary"
-        )
-    if (
-        state["pre_state"]["receipt_accepted"]
-        and state["pre_state"]["latest_finalized_height"]
-        != args.expected_finalized_height
-    ):
-        raise RuntimeError(
-            "accepted receipt does not match the expected PFTL finalized height"
-        )
-
-    if not state["pre_state"]["receipt_accepted"]:
+    if not bool(verifier.functions.acceptedReceiptCommitment(receipt_commitment).call()):
         state["transactions"].append(
             send(
                 verifier.functions.verifyAndAccept(public_values, proof),
@@ -290,6 +290,37 @@ def main() -> None:
         )
         atomic_write_json(args.state_file, state)
 
+    if not any(
+        item.get("label") == "consume finalized A666 mint packet"
+        for item in state["transactions"]
+    ):
+        event_signature = Web3.keccak(
+            text="PacketConsumed(bytes32,bytes32,bytes32,address,uint256)"
+        ).hex()
+        logs = web3.eth.get_logs(
+            {
+                "fromBlock": int(state["pre_state"].get("ethereum_block_number", 0)),
+                "toBlock": "latest",
+                "address": CONTROLLER,
+                "topics": [event_signature, packet_digest],
+            }
+        )
+        if len(logs) != 1:
+            raise RuntimeError("could not uniquely recover the finalized mint transaction")
+        recovered = web3.eth.get_transaction_receipt(logs[0]["transactionHash"])
+        state["transactions"].append(
+            {
+                "label": "consume finalized A666 mint packet",
+                "tx": Web3.to_hex(recovered.transactionHash),
+                "block_number": int(recovered.blockNumber),
+                "gas_estimate": None,
+                "gas_used": int(recovered.gasUsed),
+                "status": int(recovered.status),
+                "recovered_after_restart": True,
+            }
+        )
+        atomic_write_json(args.state_file, state)
+
     post_state = {
         "receipt_accepted": bool(
             verifier.functions.acceptedReceiptCommitment(receipt_commitment).call()
@@ -308,7 +339,7 @@ def main() -> None:
     pre_state = state["pre_state"]
     if (
         not post_state["receipt_accepted"]
-        or post_state["latest_finalized_height"] != args.expected_finalized_height
+        or post_state["latest_finalized_height"] < args.expected_finalized_height
         or post_state["mint_paused"]
         or not post_state["packet_consumed"]
         or post_state["total_minted_atoms"] - pre_state["total_minted_atoms"]

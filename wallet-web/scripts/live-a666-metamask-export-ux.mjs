@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -14,7 +15,7 @@ const pftlBackupFile = process.env.E2E_PFTL_BACKUP_FILE;
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 const amountAtoms = 1_000_000n;
 const wrappedA666 = '0xee4c92edb03efdd9b519339edc19ad70c69a9be5';
-const repo = resolve(new URL('../..', import.meta.url).pathname);
+const restartProxyAfterPacket = process.env.E2E_RESTART_PROXY_AFTER_PACKET === 'true';
 
 if (!keystore || !passwordFile || !pftlBackupFile || !evidenceDir) {
   throw new Error('E2E_ETH_KEYSTORE, E2E_ETH_PASSWORD_FILE, E2E_PFTL_BACKUP_FILE, and E2E_EVIDENCE_DIR are required');
@@ -37,6 +38,7 @@ async function ethereumRequest(method, params = []) {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', id: `a666-ux-${++rpcId}`, method, params }),
+    signal: AbortSignal.timeout(30_000),
   });
   const payload = await response.json();
   if (payload.error) throw new Error(payload.error.message || `Ethereum RPC ${method} failed`);
@@ -132,33 +134,48 @@ try {
   packetHash = String(await market.getAttribute('data-export-packet-hash'));
   await page.screenshot({ path: `${evidenceDir}/02-pftl-export-finalized.png`, fullPage: true });
 
-  const workflowId = `a666-wallet-export-${packetHash.slice(0, 12)}`;
-  const proofDir = `${evidenceDir}/trustless-proof`;
-  const { stdout: proofStdout, stderr: proofStderr } = await execFileAsync(
-    `${repo}/scripts/a666-mainnet-prove-wallet-export.sh`,
-    [
-      '--packet-hash', packetHash,
-      '--phase-dir', proofDir,
-      '--workflow-id', workflowId,
-      '--expected-recipient', ethereumAddress,
-      '--expected-amount-atoms', amountAtoms.toString(),
-    ],
-    { cwd: repo, timeout: 2_700_000, maxBuffer: 32 * 1024 * 1024 },
-  );
-  await writeFile(`${evidenceDir}/proof.stdout.txt`, proofStdout, { mode: 0o600 });
-  await writeFile(`${evidenceDir}/proof.stderr.txt`, proofStderr, { mode: 0o600 });
+  if (restartProxyAfterPacket) {
+    await execFileAsync('systemctl', ['--user', 'restart', 'pft-wallet-proxy-8080.service'], {
+      timeout: 30_000,
+    });
+  }
 
-  await page.getByText('wA666 delivered to MetaMask', { exact: true }).waitFor({
-    state: 'visible',
-    timeout: 120_000,
-  });
+  await Promise.race([
+    page.getByText('wA666 delivered to MetaMask', { exact: true }).waitFor({
+      state: 'visible',
+      timeout: 2_700_000,
+    }),
+    page.locator('.a666-trade-card .pf-error').waitFor({
+      state: 'visible',
+      timeout: 2_700_000,
+    }).then(async () => {
+      throw new Error(`wallet export relay failed: ${await page.locator('.a666-trade-card .pf-error').innerText()}`);
+    }),
+  ]);
   const balanceAfter = await wrappedBalance();
   if (balanceAfter - balanceBefore !== amountAtoms) {
     throw new Error(`wA666 balance delta was ${balanceAfter - balanceBefore}, expected ${amountAtoms}`);
   }
   await page.screenshot({ path: `${evidenceDir}/03-wa666-in-metamask.png`, fullPage: true });
-  const materialErrors = browserErrors.filter(value => !value.includes('Failed to load resource:'));
+  const materialErrors = browserErrors.filter(value => (
+    !value.includes('Failed to load resource:')
+    && !(restartProxyAfterPacket
+      && value.includes('WebSocket connection')
+      && value.includes('Unexpected response code: 502'))
+  ));
   if (materialErrors.length) throw new Error(`browser errors: ${materialErrors.join(' | ')}`);
+
+  const relayJobId = `0x${createHash('sha256')
+    .update('postfiat.a666.export-relay.job.v1\0')
+    .update(Buffer.from(packetHash, 'hex'))
+    .digest('hex')}`;
+  const relayJob = await page.evaluate(async jobId => {
+    const response = await fetch(`/api/a666/export-jobs/${encodeURIComponent(jobId)}`, { cache: 'no-store' });
+    return response.json();
+  }, relayJobId);
+  if (relayJob?.ok !== true || relayJob?.status !== 'accepted') {
+    throw new Error(`durable relay did not reach accepted: ${JSON.stringify(relayJob)}`);
+  }
 
   const result = {
     ok: true,
@@ -169,7 +186,10 @@ try {
     amount_atoms: amountAtoms.toString(),
     wrapped_balance_before_atoms: balanceBefore.toString(),
     wrapped_balance_after_atoms: balanceAfter.toString(),
-    proof_completion: JSON.parse(await readFile(`${proofDir}/completion.json`, 'utf8')),
+    relay_job_id: relayJobId,
+    relay_status: relayJob.status,
+    relay_retry_count: relayJob.retry_count,
+    proxy_restart_injected: restartProxyAfterPacket,
     elapsed_ms: Date.now() - startedAt,
     terminal_copy: 'wA666 delivered to MetaMask',
   };

@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
 import { chromium } from 'playwright';
@@ -11,6 +11,7 @@ const ethereumRpc = process.env.ETHEREUM_RPC_URL || 'https://ethereum-rpc.public
 const keystore = process.env.E2E_ETH_KEYSTORE;
 const passwordFile = process.env.E2E_ETH_PASSWORD_FILE;
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
+const pftlBackupFile = process.env.E2E_PFTL_BACKUP_FILE || '';
 const amountAtoms = 1_000_000n;
 const canonicalUsdc = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
 const governedVault = '0xaaa78fda7062efce769e95cd72fc55e507bc8183';
@@ -52,6 +53,7 @@ async function ethereumRequest(method, params = []) {
       method,
       params,
     }),
+    signal: AbortSignal.timeout(30_000),
   });
   const payload = await response.json();
   if (payload.error) {
@@ -188,12 +190,26 @@ let pftlAddress = '';
 try {
   await page.goto(walletUrl, { waitUntil: 'networkidle' });
 
-  await page.getByRole('button', { name: 'Create Wallet', exact: true }).click();
-  pftlAddress = await page.locator('text=/^pf[0-9a-f]{40}$/').first().textContent();
-  await page.getByRole('checkbox').check();
-  await page.getByPlaceholder('Encryption passphrase (min 10 chars)').fill('live-ux-acceptance-2026');
-  await page.getByPlaceholder('Confirm passphrase').fill('live-ux-acceptance-2026');
-  await page.getByRole('button', { name: 'Create Wallet', exact: true }).click();
+  if (pftlBackupFile) {
+    const backup = JSON.parse(await readFile(pftlBackupFile, 'utf8'));
+    if (!/^[0-9a-f]{64}$/.test(String(backup.master_seed_hex || ''))) {
+      throw new Error('PFTL wallet backup is missing a valid master seed');
+    }
+    await page.getByRole('button', { name: 'Import Wallet', exact: true }).click();
+    await page.getByPlaceholder(/64 hex chars/).fill(backup.master_seed_hex);
+    await page.getByRole('button', { name: 'Validate Seed', exact: true }).click();
+    pftlAddress = String(await page.locator('text=/^pf[0-9a-f]{40}$/').first().textContent()).trim();
+    await page.getByPlaceholder('Encryption passphrase (min 10 chars)').fill('live-ux-acceptance-2026');
+    await page.getByPlaceholder('Confirm passphrase').fill('live-ux-acceptance-2026');
+    await page.getByRole('button', { name: 'Confirm Import', exact: true }).click();
+  } else {
+    await page.getByRole('button', { name: 'Create Wallet', exact: true }).click();
+    pftlAddress = await page.locator('text=/^pf[0-9a-f]{40}$/').first().textContent();
+    await page.getByRole('checkbox').check();
+    await page.getByPlaceholder('Encryption passphrase (min 10 chars)').fill('live-ux-acceptance-2026');
+    await page.getByPlaceholder('Confirm passphrase').fill('live-ux-acceptance-2026');
+    await page.getByRole('button', { name: 'Create Wallet', exact: true }).click();
+  }
   await page.getByText(/height [1-9]\d*/).first().waitFor({ state: 'visible' });
 
   await page.locator('.pf-sidebar .pf-nav', { hasText: 'Bridge' }).click();
@@ -217,18 +233,39 @@ try {
   await page.screenshot({ path: `${evidenceDir}/02-approved.png`, fullPage: true });
 
   await page.getByRole('button', { name: /Deposit and relay/ }).click();
-  await page.getByText('pfUSDC received on PFTL', { exact: true }).waitFor({
-    state: 'visible',
-    timeout: 2_400_000,
-  });
+  await page.waitForTimeout(15_000);
+  await page.screenshot({ path: `${evidenceDir}/02b-after-deposit-click.png`, fullPage: true });
+  if (!sentTransactions.some((item) => item.kind === 'deposit')) {
+    const phaseText = (await page.locator('body').innerText())
+      .split('\n')
+      .filter((line) => /deposit|allowance|gas|failed/i.test(line))
+      .slice(0, 20)
+      .join(' | ');
+    throw new Error(`wallet did not request a deposit transaction within 15 seconds: ${phaseText}`);
+  }
+  await Promise.race([
+    page.getByText('pfUSDC received on PFTL', { exact: true }).waitFor({
+      state: 'visible',
+      timeout: 2_400_000,
+    }),
+    page.locator('.pf-error').filter({ hasText: /Vault deposit failed|Deposit confirmed, but relay failed/ })
+      .waitFor({ state: 'visible', timeout: 2_400_000 })
+      .then(async () => {
+        const message = await page.locator('.pf-error')
+          .filter({ hasText: /Vault deposit failed|Deposit confirmed, but relay failed/ })
+          .innerText();
+        throw new Error(`wallet bridge error: ${message}`);
+      }),
+  ]);
   await page.screenshot({ path: `${evidenceDir}/03-pfusdc-received.png`, fullPage: true });
 
   const body = await page.locator('body').innerText();
-  if (sentTransactions.map((item) => item.kind).join(',') !== 'approve,deposit') {
-    throw new Error('browser did not submit exactly one approval and one deposit');
+  const transactionKinds = sentTransactions.map((item) => item.kind);
+  if (transactionKinds.at(-1) !== 'deposit' || transactionKinds.filter((kind) => kind === 'deposit').length !== 1) {
+    throw new Error('browser did not submit exactly one governed-vault deposit');
   }
-  if (!body.includes('1 pfUSDC')) {
-    throw new Error('wallet did not render the resulting 1 pfUSDC balance');
+  if (!/\b\d+(?:\.\d+)? pfUSDC\b/.test(body)) {
+    throw new Error('wallet did not render the resulting pfUSDC balance');
   }
   if (browserErrors.length) {
     throw new Error(`browser console errors: ${browserErrors.join(' | ')}`);

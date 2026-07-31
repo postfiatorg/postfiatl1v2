@@ -590,6 +590,7 @@ export default function App() {
               publicKeyHex={walletPublicKeyHex}
               chainStatus={chainStatus}
               chainCapabilities={chainCapabilities}
+              proxyAuthToken={proxyAuthToken}
               liveSnapshot={walletLiveSnapshot}
               walletFeedStatus={walletFeedStatus}
               onCopy={showToast}
@@ -634,6 +635,7 @@ export default function App() {
               address={walletAddress}
               chainStatus={chainStatus}
               chainCapabilities={chainCapabilities}
+              proxyAuthToken={proxyAuthToken}
               liveSnapshot={walletLiveSnapshot}
               onToast={showToast}
               onNavigate={go}

@@ -5,10 +5,12 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 state_dir=${A666_WALLET_STATE_DIR:-/home/postfiat/.local/state/postfiat-a666-wallet}
 token_file=$state_dir/proxy-tokens.json
 job_root=$state_dir/bridge-jobs
+a666_job_root=$state_dir/a666-export-jobs
 routes=$repo/deployments/wallet-bridge-mainnet-20260730/routes.json
+a666_export_config=$repo/deployments/a666-export-relay-mainnet-20260731/service-config.json
 
 umask 077
-install -d -m 700 "$state_dir" "$job_root"
+install -d -m 700 "$state_dir" "$job_root" "$a666_job_root"
 if test ! -s "$token_file"; then
   token=$(openssl rand -hex 32)
   temporary=$token_file.$$.tmp
@@ -17,7 +19,9 @@ if test ! -s "$token_file"; then
   mv "$temporary" "$token_file"
 fi
 chmod 600 "$token_file" "$routes" \
-  "$repo/deployments/wallet-bridge-mainnet-20260730/driver-config.json"
+  "$repo/deployments/wallet-bridge-mainnet-20260730/driver-config.json" \
+  "$a666_export_config" \
+  "$repo/deployments/a666-export-relay-mainnet-20260731/driver-config.json"
 
 exec env \
   LISTEN_HOST=127.0.0.1 \
@@ -36,4 +40,8 @@ exec env \
   TRUSTLESS_BRIDGE_READINESS_MAX_AGE_MS=45000 \
   TRUSTLESS_BRIDGE_RETRY_BASE_MS=5000 \
   TRUSTLESS_BRIDGE_RETRY_MAX_MS=300000 \
+  A666_EXPORT_RELAY_CONFIG_FILE="$a666_export_config" \
+  A666_EXPORT_RELAY_JOB_ROOT="$a666_job_root" \
+  A666_EXPORT_RELAY_RETRY_BASE_MS=5000 \
+  A666_EXPORT_RELAY_RETRY_MAX_MS=300000 \
   node "$repo/wallet-proxy/server.js"

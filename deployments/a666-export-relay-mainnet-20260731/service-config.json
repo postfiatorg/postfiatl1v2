@@ -1,0 +1,17 @@
+{
+  "schema": "postfiat-a666-export-relay-config-v1",
+  "enabled": true,
+  "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+  "route_config_digest": "12ed00ca87e29554ce4b978da1710fffc0830767e84e62f08df257f727db953efdd89bcf6ea99f5634d6e5ea8aca2933",
+  "wrapped_token": "0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5",
+  "driver_bin": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/wallet-proxy/a666-export-relay-driver.js",
+  "driver_sha256": "203e63be8ecb13f9671cb2998dd41489aa55fd78024f77009b3d03b9d7db2b54",
+  "driver_args": ["run-job", "--config", "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/a666-export-relay-mainnet-20260731/driver-config.json", "--job-file", "{job_file}"],
+  "inspect_args": ["inspect", "--config", "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/a666-export-relay-mainnet-20260731/driver-config.json", "--packet-hash", "{packet_hash}", "--packet-digest", "{packet_digest}", "--ethereum-recipient", "{ethereum_recipient}", "--amount-atoms", "{amount_atoms}"],
+  "readiness_args": ["readiness", "--config", "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/a666-export-relay-mainnet-20260731/driver-config.json"],
+  "cwd": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724",
+  "max_amount_atoms": "250000000000",
+  "worker_timeout_ms": 14400000,
+  "inspect_timeout_ms": 60000,
+  "readiness_timeout_ms": 120000
+}

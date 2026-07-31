@@ -11,6 +11,9 @@ function create(runtime) {
     const trustlessBridgeReadiness = (...args) => runtime.trustlessBridgeReadiness(...args);
     const submitTrustlessBridgeJob = (...args) => runtime.submitTrustlessBridgeJob(...args);
     const trustlessBridgeJobStatus = (...args) => runtime.trustlessBridgeJobStatus(...args);
+    const a666ExportRelayReadiness = (...args) => runtime.a666ExportRelayReadiness(...args);
+    const submitA666ExportRelayJob = (...args) => runtime.submitA666ExportRelayJob(...args);
+    const a666ExportRelayJobStatus = (...args) => runtime.a666ExportRelayJobStatus(...args);
     const addProxyRouteEvent = (...args) => runtime.addProxyRouteEvent(...args);
     const assertNoShieldedPrivateMaterial = (...args) => runtime.assertNoShieldedPrivateMaterial(...args);
     const assertVaultBridgeEvidenceMatches = (...args) => runtime.assertVaultBridgeEvidenceMatches(...args);
@@ -1609,6 +1612,27 @@ function create(runtime) {
                     code: 'bridge_relay_endpoint_retired',
                     message: 'Use the durable proof-backed /api/bridge/jobs workflow.',
                 });
+                return true;
+            }
+
+            if (req.method === 'GET' && url.pathname === '/api/a666/export-readiness') {
+                const result = await a666ExportRelayReadiness();
+                sendJson(req, res, result.ready === true ? 200 : 503, result);
+                return true;
+            }
+
+            if (req.method === 'POST' && url.pathname === '/api/a666/export-jobs') {
+                const body = await readJsonBody(req, 16 * 1024);
+                const result = await submitA666ExportRelayJob(body);
+                sendJson(req, res, 202, { ok: true, ...result });
+                return true;
+            }
+
+            if (req.method === 'GET' && url.pathname.startsWith('/api/a666/export-jobs/')) {
+                const jobId = decodeURIComponent(url.pathname.slice('/api/a666/export-jobs/'.length));
+                const result = a666ExportRelayJobStatus(jobId);
+                sendJson(req, res, result ? 200 : 404,
+                    result ? { ok: true, ...result } : { ok: false, code: 'a666_export_job_not_found' });
                 return true;
             }
 

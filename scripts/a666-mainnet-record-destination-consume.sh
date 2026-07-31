@@ -13,10 +13,13 @@ route_id=pftl-a666-ethereum-wA666-usdc-v1
 controller=0x9A0262C0572fb4DB08765408eB225E207F40c3d9
 mint_consumed_topic=0xe6744ee565256772cd16e05e0dcf10583d6039e18553fcafabd22a4c994137f7
 ethereum_rpc=${A666_ETHEREUM_RPC:-https://ethereum-rpc.publicnode.com}
+cast_bin=${A666_CAST_BIN:-/home/postfiat/.foundry/bin/cast}
 log_index=1
 finality_timeout_seconds=1800
 resume_after_finality=false
 resume_after_vote_fanout=false
+resume_auto=false
+resume_from_empty_receipt=false
 
 while (($#)); do
   case "$1" in
@@ -27,6 +30,7 @@ while (($#)); do
     --finality-timeout-seconds) finality_timeout_seconds=$2; shift 2 ;;
     --resume-after-finality) resume_after_finality=true; shift ;;
     --resume-after-vote-fanout) resume_after_vote_fanout=true; shift ;;
+    --resume-auto) resume_auto=true; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -72,6 +76,26 @@ mint_amount=$(jq -er '.mint_amount_atoms' "$manifest")
 [[ "$packet_hash" =~ ^[0-9a-f]{96}$ ]]
 
 validator2_host=$(jq -er '."validator-2"' "$hosts_file")
+if "$resume_auto"; then
+  if test -s "$artifact_dir/summary.json" \
+    && test -s "$proof_dir/checkpoint.json" \
+    && test -s "$proof_dir/mint-receipt.json" \
+    && test -s "$phase_dir/destination-consume/pftl-supply-status-after.json"; then
+    resume_after_finality=true
+  elif test -s "$proof_dir/checkpoint-vote-fanout.json" \
+    && ! test -e "$proof_dir/checkpoint-certificate.json" \
+    && ! test -e "$artifact_dir"; then
+    resume_after_vote_fanout=true
+  elif test -d "$phase_dir/destination-consume" \
+    && test -e "$proof_dir/mint-receipt.json" \
+    && ! test -s "$proof_dir/mint-receipt.json" \
+    && test "$(find "$phase_dir/destination-consume" -type f | wc -l)" -eq 1; then
+    resume_from_empty_receipt=true
+  elif test -e "$phase_dir/destination-consume"; then
+    echo "destination acknowledgement evidence is partial at an unsupported boundary" >&2
+    exit 1
+  fi
+fi
 if "$resume_after_finality"; then
   test -s "$proof_dir/checkpoint.json"
   test -s "$proof_dir/mint-receipt.json"
@@ -93,9 +117,11 @@ else
     test ! -e "$phase_dir/destination-consume/pftl-supply-status-after.json"
     ssh -o BatchMode=yes "root@$validator2_host" "test -d '$remote_root'"
   else
-    test ! -e "$phase_dir/destination-consume"
+    if ! "$resume_from_empty_receipt"; then
+      test ! -e "$phase_dir/destination-consume"
+    fi
     mkdir -p "$proof_dir"
-    cast receipt "$mint_tx" --json --rpc-url "$ethereum_rpc" \
+    "$cast_bin" receipt "$mint_tx" --json --rpc-url "$ethereum_rpc" \
       > "$proof_dir/mint-receipt.json"
   fi
   jq -e \

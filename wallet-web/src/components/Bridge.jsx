@@ -266,6 +266,26 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
     return '';
   }, [amount, amountAtoms, usdcBalance]);
 
+  useEffect(() => {
+    if (!connectedAddress || !vault || !amountAtoms || amountAtoms <= 0n || amountError
+      || !['connected', 'approved'].includes(phase)) return undefined;
+    let cancelled = false;
+    evm.getEthereumUsdcAllowance(connectedAddress, vault).then((allowance) => {
+      if (cancelled) return;
+      if (allowance >= amountAtoms) {
+        setApprovedAtoms(allowance);
+        setPhase('approved');
+      } else {
+        setApprovedAtoms(null);
+        setPhase('connected');
+      }
+    }).catch(() => {
+      // A failed read must never be treated as approval. The explicit approve
+      // action repeats the check and surfaces a user-facing provider error.
+    });
+    return () => { cancelled = true; };
+  }, [amountAtoms, amountError, connectedAddress, phase, vault]);
+
   const refreshAndVerifyRoute = async () => {
     const active = await loadRoute({ expectedProfileHash: route?.profileHash || '' });
     await evm.ensureEthereumMainnet();
@@ -313,6 +333,15 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
       assertAmountReady();
       setPhase('approving');
       const active = await refreshAndVerifyRoute();
+      const existingAllowance = await evm.getEthereumUsdcAllowance(
+        connectedAddress,
+        active.vaultAddress,
+      );
+      if (existingAllowance >= amountAtoms) {
+        setApprovedAtoms(existingAllowance);
+        setPhase('approved');
+        return;
+      }
       const fee = await evm.estimateEthereumApproveUsdcFee(
         active.vaultAddress,
         amountAtoms,
