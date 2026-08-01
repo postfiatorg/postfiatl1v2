@@ -64,6 +64,14 @@ Epoch 3 supplied exactly 19 bounded fills for the repetition campaign and is
 now filled with zero remaining capacity. Epoch 4 supplied exactly two fills
 for the restart campaign and is also filled with zero remaining capacity.
 
+After freezing the acceptance snapshot, epoch 5 was registered with 20
+bounded fills and one private inverse reset restored the demo's starting
+inventory. The live browser is currently `FIX VERIFIED` and `Ready to
+execute`, with 19 fills remaining and an enabled exact-size swap button. This
+post-qualification reset intentionally means that rerunning the point-in-time
+acceptance auditor against mutable live note inventory will not reproduce its
+final-acquisition inventory check until another acquisition completes.
+
 ## Browser qualification
 
 The repetition campaign ran from `06:58:16Z` to `07:40:47Z`, 2,551 seconds
@@ -121,6 +129,8 @@ the actual browser origin and treats directional readiness explicitly.
   `deployments/pnok-private-fix-20260801/repeat-fix-epoch-3/public/`
 - Epoch 4 packet and status:
   `deployments/pnok-private-fix-20260801/repeat-fix-epoch-4/public/`
+- Epoch 5 packet, demo-ready status, and browser screenshot:
+  `deployments/pnok-private-fix-20260801/repeat-fix-epoch-5/public/`
 
 The acceptance auditor also reruns the expired-FIX regression and scans public
 artifacts for custody material. Its report is mode `0600` and contains no note

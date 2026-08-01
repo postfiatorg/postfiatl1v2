@@ -1,0 +1,24 @@
+{
+  "acquire_inventory_ready": true,
+  "browser_errors": [],
+  "execution_privacy": "private on PFTL",
+  "fix_epoch": 5,
+  "fix_packet_hash": "b768016c6ae186e6dd89f519ad119871c33d5037b5ee104973ca29c5e7982a9eacaefc31abb626f3775041ddc561ed5c",
+  "fix_verified": true,
+  "nullifier_occurrence_counts": [
+    1,
+    1
+  ],
+  "output_occurrence_counts": [
+    1,
+    1
+  ],
+  "remaining_fill_slots": 19,
+  "reset_job_id": "0x1a8133aa54b1995674acd30ebbec65c6c66200a7febc403ccb95af61d9489036",
+  "reset_retry_count": 1,
+  "restore_inventory_ready": false,
+  "schema": "postfiat-pnok-private-fix-demo-ready-v1",
+  "source_boundary": "controlled sandbox checkpoint",
+  "supply_unchanged": true,
+  "swap_button_enabled": true
+}
