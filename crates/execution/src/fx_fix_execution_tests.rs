@@ -188,6 +188,50 @@
     }
 
     #[test]
+    fn fx_fix_reservation_rejects_expired_packet_without_effect() {
+        let (genesis, mut ledger, operator_key, packet) = fx_fix_ledger_fixture();
+        let register = signed_asset_transaction_with_minimum_fee(
+            &genesis,
+            &ledger,
+            &operator_key,
+            postfiat_types::FX_FIX_REGISTER_TRANSACTION_KIND_V1,
+            1,
+            AssetTransactionOperation::FxFixRegisterV1(
+                postfiat_types::FxFixRegisterOperationV1 {
+                    operator: packet.operator.clone(),
+                    packet: packet.clone(),
+                },
+            ),
+        );
+        let receipt = execute_asset_transaction(&genesis, &mut ledger, &register, 10);
+        assert!(receipt.accepted, "{}: {}", receipt.code, receipt.message);
+
+        let reserve = signed_asset_transaction_with_minimum_fee(
+            &genesis,
+            &ledger,
+            &operator_key,
+            postfiat_types::FX_FIX_RESERVATION_CREATE_TRANSACTION_KIND_V1,
+            2,
+            AssetTransactionOperation::FxFixReservationCreateV1(
+                postfiat_types::FxFixReservationCreateOperationV1 {
+                    operator: packet.operator,
+                    fix_packet_hash: packet.packet_hash,
+                    action_binding_hash: "ab".repeat(64),
+                    base_atoms: 20_000_000,
+                    quote_atoms: 210,
+                    wallet_intent_hash: "bc".repeat(48),
+                    reservation_nonce: "cd".repeat(48),
+                    expires_at_height: 100,
+                },
+            ),
+        );
+        let receipt = execute_asset_transaction(&genesis, &mut ledger, &reserve, 101);
+        assert_eq!(receipt.code, "fx_fix_not_active");
+        assert!(ledger.fx_fix_reservations.is_empty());
+        assert_eq!(ledger.fx_fix_states[0].fill_count, 0);
+    }
+
+    #[test]
     fn fx_fix_reservation_rejects_wallet_intent_replay_before_new_action() {
         let (genesis, mut ledger, operator_key, mut packet) = fx_fix_ledger_fixture();
         packet.capacity_base_atoms = 40_000_000;
