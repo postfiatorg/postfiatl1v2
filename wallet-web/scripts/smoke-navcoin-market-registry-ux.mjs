@@ -34,8 +34,11 @@ try {
 
   await market.getByRole('button', { name: 'Redeem', exact: true }).click();
   await market.getByRole('button', { name: 'From MetaMask', exact: true }).waitFor({ state: 'visible' });
-  await market.getByRole('button', { name: 'From MetaMask', exact: true }).click();
+  if (!String(await market.getByRole('button', { name: 'From MetaMask', exact: true }).getAttribute('class')).includes('on')) {
+    throw new Error('redemption did not default to MetaMask when native NAVCoin balance was insufficient');
+  }
   await market.getByText(/Return wA666 trustlessly to PFTL/).waitFor({ state: 'visible' });
+  await market.getByText('Return', { exact: true }).first().waitFor({ state: 'visible' });
   await market.getByRole('button', { name: /Return & redeem/ }).waitFor({ state: 'visible' });
 
   await sidebar.getByRole('button', { name: /NavCoins/ }).click();

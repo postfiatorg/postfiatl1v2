@@ -635,11 +635,18 @@ export default function NavcoinMarket({
         <div><span>Redeem capacity</span><strong>{formatA666Units(route?.available_redeem_atoms)}</strong><small>{navSymbol} available now</small></div>
       </div>
 
-      <div className="a666-flow" aria-label={`${navSymbol} acquisition flow`}>
-        <div><span>1</span><strong>Fund</strong><small>USDC → {settlementSymbol}</small></div><i />
-        <div className="active"><span>2</span><strong>Mint</strong><small>{settlementSymbol} → {navSymbol}</small></div><i />
-        <div><span>3</span><strong>Export</strong><small>Proof-bound on PFTL</small></div><i />
-        <div className={delivery === 'ethereum' ? 'active' : ''}><span>4</span><strong>Hold</strong><small>{wrappedSymbol} in MetaMask</small></div>
+      <div className="a666-flow" aria-label={`${navSymbol} ${mode === 'redeem' ? 'redemption' : 'acquisition'} flow`}>
+        {mode === 'redeem' ? <>
+          <div className={redeemSource === 'ethereum' ? 'active' : ''}><span>1</span><strong>Return</strong><small>{wrappedSymbol} from MetaMask</small></div><i />
+          <div><span>2</span><strong>Prove</strong><small>Ethereum finality</small></div><i />
+          <div><span>3</span><strong>Restore</strong><small>{navSymbol} on PFTL</small></div><i />
+          <div className="active"><span>4</span><strong>Redeem</strong><small>{navSymbol} → {settlementSymbol}</small></div>
+        </> : <>
+          <div><span>1</span><strong>Fund</strong><small>USDC → {settlementSymbol}</small></div><i />
+          <div className="active"><span>2</span><strong>Mint</strong><small>{settlementSymbol} → {navSymbol}</small></div><i />
+          <div><span>3</span><strong>Export</strong><small>Proof-bound on PFTL</small></div><i />
+          <div className={delivery === 'ethereum' ? 'active' : ''}><span>4</span><strong>Hold</strong><small>{wrappedSymbol} in MetaMask</small></div>
+        </>}
       </div>
 
       <div className="a666-workspace">
@@ -648,8 +655,7 @@ export default function NavcoinMarket({
             <button className={mode === 'issue' ? 'on' : ''} onClick={() => { setMode('issue'); setProgress([]); setActionError(''); }}>Mint {navSymbol}</button>
             <button className={mode === 'redeem' ? 'on' : ''} onClick={() => {
               setMode('redeem');
-              if (BigInt(snapshot?.navcoinBalance || 0) < BigInt(amountAtoms || 0)
-                && BigInt(metamaskNavcoinBalance || 0) >= BigInt(amountAtoms || 0)) setRedeemSource('ethereum');
+              if (BigInt(snapshot?.navcoinBalance || 0) < BigInt(amountAtoms || 0)) setRedeemSource('ethereum');
               setProgress([]);
               setActionError('');
             }}>Redeem</button>
