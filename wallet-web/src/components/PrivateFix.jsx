@@ -111,16 +111,21 @@ export default function PrivateFix({ rpc, proxyAuthToken = '' }) {
         recovery = { ...recovery, job_id: current.job_id };
         writeRecovery(recovery);
       }
-      setJob(current);
+      if (current.status !== 'accepted') setJob(current);
       if (!TERMINAL.has(current.status)) {
         current = await waitForPnokFixJob(current.job_id, {
           signal,
-          onStatus: setJob,
+          onStatus: (status) => {
+            if (status.status !== 'accepted') setJob(status);
+          },
         });
-        setJob(current);
       }
-      if (current.status === 'failed') throw new Error(current.message || 'Private execution stopped safely');
+      if (current.status === 'failed') {
+        setJob(current);
+        throw new Error(current.message || 'Private execution stopped safely');
+      }
       await refreshCompletedMarket(current);
+      setJob(current);
     } finally {
       setExecuting(false);
     }
