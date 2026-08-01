@@ -225,9 +225,9 @@ export default function PrivateFix({ rpc, proxyAuthToken = '' }) {
             )}
 
             <button className="pf-primary" type="button" onClick={execute} disabled={!canExecute} style={{ marginTop: 16 }}>
-              {executing ? <><Loader2 size={15} className="pfb-spin" /> {stageLabel(job)}</> : accepted
-                ? <><Check size={15} /> Private swap complete</>
-                : <>Privately swap {baseDisplay} {readiness?.base_symbol || 'pfUSDC'} <ArrowRight size={15} /></>}
+              {accepted ? <><Check size={15} /> Private swap complete</>
+                : executing ? <><Loader2 size={15} className="pfb-spin" /> {stageLabel(job)}</>
+                  : <>Privately swap {baseDisplay} {readiness?.base_symbol || 'pfUSDC'} <ArrowRight size={15} /></>}
             </button>
             {!proxyAuthToken && <p className="pf-hint">Authenticated localhost wallet session is required.</p>}
             <p className="pf-hint">
