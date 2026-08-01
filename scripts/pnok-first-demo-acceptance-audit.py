@@ -193,6 +193,9 @@ def main() -> None:
     vault_balance = int(
         command(["cast", "call", "--rpc-url", SOURCE_RPC, WNOK, "balanceOf(address)(uint256)", vault])
     )
+    verifier = command(
+        ["cast", "call", "--rpc-url", SOURCE_RPC, vault, "releaseVerifier()(address)"]
+    )
     checks["vault_is_allowlisted_and_least_privilege"] = (
         allowlisted == "true"
         and role(minter_role) == "false"
@@ -203,6 +206,22 @@ def main() -> None:
         and command(["cast", "call", "--rpc-url", SOURCE_RPC, vault, "routeBinding()(bytes32)"]).lower()
         == route_binding.lower()
         and command(["cast", "call", "--rpc-url", SOURCE_RPC, vault, "paused()(bool)"]) == "false"
+    )
+    checks["controlled_redemption_path_is_bound_and_forbids_live_value"] = (
+        command(["cast", "call", "--rpc-url", SOURCE_RPC, verifier, "boundVault()(address)"]).lower()
+        == vault.lower()
+        and command(
+            ["cast", "call", "--rpc-url", SOURCE_RPC, verifier, "routeBinding()(bytes32)"]
+        ).lower()
+        == route_binding.lower()
+        and command(
+            ["cast", "call", "--rpc-url", SOURCE_RPC, verifier, "LIVE_VALUE_ENABLED()(bool)"]
+        )
+        == "false"
+        and command(
+            ["cast", "call", "--rpc-url", SOURCE_RPC, verifier, "ROUTE_TRUST_CLASS()(bytes32)"]
+        ).lower()
+        == command(["cast", "keccak", "CONTROLLED"]).lower()
     )
 
     bucket = bridge_status["buckets"][0]
