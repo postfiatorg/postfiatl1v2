@@ -104,6 +104,8 @@ pub const VAULT_BRIDGE_ROUTE_PROFILE_HASH_DOMAIN_V1: &str =
 pub const VAULT_BRIDGE_ROUTE_BINDING_DOMAIN_V1: &str = "postfiat.vault_bridge.route_binding.v1";
 pub const VAULT_BRIDGE_EVIDENCE_TIER_INDEPENDENTLY_OBSERVED: &str = "independently-observed";
 pub const VAULT_BRIDGE_EVIDENCE_TIER_RECEIPT_PROVEN: &str = "receipt-proven";
+pub const VAULT_BRIDGE_ROUTE_TRUST_CLASS_CONTROLLED: &str = "CONTROLLED";
+pub const VAULT_BRIDGE_ROUTE_TRUST_CLASS_TRUSTLESS_FINALITY: &str = "TRUSTLESS_FINALITY";
 pub const RETIRED_VAULT_BRIDGE_ADDRESS: &str = "0x1a15e6103d6af4e88924f748e13b829d3948dea9";
 
 /// Complete public route authority stored in replicated state. Signed
@@ -304,6 +306,26 @@ impl VaultBridgeRouteProfileV1 {
             "erc20_bridge_vault:{}:{}:{}",
             self.source_chain_id, self.vault_address, self.token_address
         )
+    }
+
+    /// A conservative public claim derived from the consensus verifier kind.
+    /// Observer-quorum evidence remains controlled even when several project
+    /// operators attest it; only a receipt-proof route may claim trustless
+    /// finality. This is intentionally derived rather than supplied by an RPC
+    /// caller or deployment manifest.
+    pub fn route_trust_class(&self) -> &'static str {
+        if self.evidence_tier == VAULT_BRIDGE_EVIDENCE_TIER_RECEIPT_PROVEN {
+            VAULT_BRIDGE_ROUTE_TRUST_CLASS_TRUSTLESS_FINALITY
+        } else {
+            VAULT_BRIDGE_ROUTE_TRUST_CLASS_CONTROLLED
+        }
+    }
+
+    /// Controlled bridge authorities are never eligible for public live-value
+    /// claims. The generic vault bridge does not yet govern a proof-route live
+    /// switch, so this method remains fail-closed for every profile.
+    pub fn live_value_enabled(&self) -> bool {
+        false
     }
 }
 

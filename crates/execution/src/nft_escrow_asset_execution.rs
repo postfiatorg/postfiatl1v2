@@ -1628,6 +1628,357 @@ fn apply_asset_operation(
             }
             finalize_market_ops_envelope(ledger, operation, block_height)
         }
+        AssetTransactionOperation::FxFixRegisterV1(operation) => {
+            if transaction.unsigned.transaction_kind != FX_FIX_REGISTER_TRANSACTION_KIND_V1 {
+                return Err((
+                    "wrong_transaction_kind",
+                    "fx_fix_register_v1 transaction kind mismatch".to_string(),
+                ));
+            }
+            operation
+                .packet
+                .validate()
+                .map_err(|error| ("bad_fx_fix_packet", error))?;
+            if ledger.asset_definition(&operation.packet.base_asset_id).is_none()
+                || ledger
+                    .asset_definition(&operation.packet.quote_asset_id)
+                    .is_none()
+            {
+                return Err((
+                    "fx_fix_asset_missing",
+                    "fx fix packet must reference two registered issued assets".to_string(),
+                ));
+            }
+            if ledger.fx_fix_states.len() >= MAX_FX_FIX_STATES {
+                return Err((
+                    "fx_fix_state_limit_reached",
+                    format!("fx fix state limit {MAX_FX_FIX_STATES} reached"),
+                ));
+            }
+            if ledger
+                .fx_fix_states
+                .iter()
+                .any(|state| state.packet.packet_hash == operation.packet.packet_hash)
+            {
+                return Err((
+                    "duplicate_fx_fix_packet",
+                    "fx fix packet is already registered".to_string(),
+                ));
+            }
+            if ledger.fx_fix_states.iter().any(|state| {
+                state.packet.operator == operation.operator
+                    && state.packet.base_asset_id == operation.packet.base_asset_id
+                    && state.packet.quote_asset_id == operation.packet.quote_asset_id
+                    && state.packet.epoch == operation.packet.epoch
+            }) {
+                return Err((
+                    "duplicate_fx_fix_epoch",
+                    "operator already registered this pair and fix epoch".to_string(),
+                ));
+            }
+            if let Some(previous_fix_hash) = operation.packet.previous_fix_hash.as_deref() {
+                let previous = ledger
+                    .fx_fix_states
+                    .iter()
+                    .find(|state| state.packet.packet_hash == previous_fix_hash)
+                    .ok_or_else(|| {
+                        (
+                            "fx_fix_previous_missing",
+                            "fx fix packet predecessor is not registered".to_string(),
+                        )
+                    })?;
+                if previous.packet.operator != operation.operator
+                    || previous.packet.base_asset_id != operation.packet.base_asset_id
+                    || previous.packet.quote_asset_id != operation.packet.quote_asset_id
+                    || previous.packet.epoch.checked_add(1) != Some(operation.packet.epoch)
+                {
+                    return Err((
+                        "fx_fix_previous_mismatch",
+                        "fx fix predecessor must be the immediately prior epoch for the same operator and asset pair"
+                            .to_string(),
+                    ));
+                }
+            }
+            let capacity_base_scaled = u128::from(operation.packet.capacity_base_atoms)
+                .checked_mul(u128::from(operation.packet.ratio_numerator))
+                .ok_or_else(|| {
+                    (
+                        "fx_fix_capacity_overflow",
+                        "fx fix base capacity ratio product overflowed".to_string(),
+                    )
+                })?;
+            let capacity_quote_scaled = u128::from(operation.packet.capacity_quote_atoms)
+                .checked_mul(u128::from(operation.packet.ratio_denominator))
+                .ok_or_else(|| {
+                    (
+                        "fx_fix_capacity_overflow",
+                        "fx fix quote capacity ratio product overflowed".to_string(),
+                    )
+                })?;
+            if capacity_base_scaled != capacity_quote_scaled {
+                return Err((
+                    "fx_fix_capacity_ratio_mismatch",
+                    "fx fix public capacities do not satisfy the registered ratio".to_string(),
+                ));
+            }
+            let state = FxFixStateV1 {
+                packet: operation.packet.clone(),
+                paused: false,
+                fill_count: 0,
+                registered_at_height: block_height,
+                last_updated_height: block_height,
+            };
+            state
+                .validate()
+                .map_err(|error| ("bad_fx_fix_state", error))?;
+            ledger.fx_fix_states.push(state);
+            Ok(())
+        }
+        AssetTransactionOperation::FxFixPauseV1(operation) => {
+            if transaction.unsigned.transaction_kind != FX_FIX_PAUSE_TRANSACTION_KIND_V1 {
+                return Err((
+                    "wrong_transaction_kind",
+                    "fx_fix_pause_v1 transaction kind mismatch".to_string(),
+                ));
+            }
+            let state = ledger
+                .fx_fix_states
+                .iter_mut()
+                .find(|state| state.packet.packet_hash == operation.fix_packet_hash)
+                .ok_or_else(|| {
+                    (
+                        "fx_fix_packet_missing",
+                        "fx fix packet is not registered".to_string(),
+                    )
+                })?;
+            if state.packet.operator != operation.operator {
+                return Err((
+                    "fx_fix_operator_mismatch",
+                    "fx fix pause operator does not match packet operator".to_string(),
+                ));
+            }
+            state.paused = operation.paused;
+            state.last_updated_height = block_height;
+            state
+                .validate()
+                .map_err(|error| ("bad_fx_fix_state", error))?;
+            Ok(())
+        }
+        AssetTransactionOperation::FxFixReservationCreateV1(operation) => {
+            if transaction.unsigned.transaction_kind
+                != FX_FIX_RESERVATION_CREATE_TRANSACTION_KIND_V1
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "fx_fix_reservation_create_v1 transaction kind mismatch".to_string(),
+                ));
+            }
+            let state = ledger
+                .fx_fix_states
+                .iter()
+                .find(|state| state.packet.packet_hash == operation.fix_packet_hash)
+                .ok_or_else(|| {
+                    (
+                        "fx_fix_packet_missing",
+                        "fx fix packet is not registered".to_string(),
+                    )
+                })?;
+            if state.packet.operator != operation.operator {
+                return Err((
+                    "fx_fix_operator_mismatch",
+                    "fx fix reservation operator does not match packet operator".to_string(),
+                ));
+            }
+            if !state.accepts_height(block_height) {
+                return Err((
+                    "fx_fix_not_active",
+                    "fx fix is paused, expired, not yet active, or fully filled".to_string(),
+                ));
+            }
+            if operation.expires_at_height < block_height
+                || operation.expires_at_height > state.packet.expires_at_height
+            {
+                return Err((
+                    "fx_fix_reservation_expiry_invalid",
+                    "reservation expiry must include the current height and not exceed the fix expiry"
+                        .to_string(),
+                ));
+            }
+            let (expected_quote_atoms, _) = state
+                .packet
+                .quote_atoms_for_base(operation.base_atoms)
+                .map_err(|error| ("fx_fix_reservation_amount_invalid", error))?;
+            if operation.quote_atoms != expected_quote_atoms {
+                return Err((
+                    "fx_fix_reservation_quote_mismatch",
+                    format!(
+                        "reservation quote_atoms {} does not equal deterministic quote {}",
+                        operation.quote_atoms, expected_quote_atoms
+                    ),
+                ));
+            }
+            if ledger.fx_fix_reservations.len() >= MAX_FX_FIX_RESERVATIONS {
+                return Err((
+                    "fx_fix_reservation_limit_reached",
+                    format!("fx fix reservation limit {MAX_FX_FIX_RESERVATIONS} reached"),
+                ));
+            }
+            let active_for_fix = ledger
+                .fx_fix_reservations
+                .iter()
+                .filter(|reservation| {
+                    reservation.fix_packet_hash == operation.fix_packet_hash
+                        && reservation.active_at(block_height)
+                })
+                .count();
+            if active_for_fix >= MAX_ACTIVE_FX_FIX_RESERVATIONS_PER_FIX {
+                return Err((
+                    "fx_fix_active_reservation_limit_reached",
+                    format!(
+                        "active reservation limit {MAX_ACTIVE_FX_FIX_RESERVATIONS_PER_FIX} reached for fix"
+                    ),
+                ));
+            }
+            if u32::try_from(active_for_fix)
+                .ok()
+                .and_then(|active| state.fill_count.checked_add(active))
+                .is_none_or(|committed| committed >= state.packet.max_fills)
+            {
+                return Err((
+                    "fx_fix_fill_capacity_reserved",
+                    "all remaining fix fill slots are already filled or reserved".to_string(),
+                ));
+            }
+            if ledger.fx_fix_reservations.iter().any(|reservation| {
+                reservation.action_binding_hash == operation.action_binding_hash
+            }) {
+                return Err((
+                    "duplicate_fx_fix_action_reservation",
+                    "action binding hash is already reserved or terminal".to_string(),
+                ));
+            }
+            if ledger.fx_fix_reservations.iter().any(|reservation| {
+                reservation.wallet_intent_hash == operation.wallet_intent_hash
+            }) {
+                return Err((
+                    "duplicate_fx_fix_wallet_intent",
+                    "wallet intent is already reserved or terminal".to_string(),
+                ));
+            }
+            let (committed_base_atoms, committed_quote_atoms) = ledger
+                .fx_fix_reservations
+                .iter()
+                .filter(|reservation| {
+                    reservation.fix_packet_hash == operation.fix_packet_hash
+                        && (reservation.active_at(block_height)
+                            || reservation.state == FX_FIX_RESERVATION_STATE_FILLED)
+                })
+                .try_fold((0u128, 0u128), |(base, quote), reservation| {
+                    let base = base.checked_add(u128::from(reservation.base_atoms))?;
+                    let quote = quote.checked_add(u128::from(reservation.quote_atoms))?;
+                    Some((base, quote))
+                })
+                .ok_or_else(|| {
+                    (
+                        "fx_fix_reservation_capacity_overflow",
+                        "reserved FX fix capacity overflowed u128".to_string(),
+                    )
+                })?;
+            let next_base_atoms = committed_base_atoms
+                .checked_add(u128::from(operation.base_atoms))
+                .ok_or_else(|| {
+                    (
+                        "fx_fix_reservation_capacity_overflow",
+                        "base FX fix capacity overflowed u128".to_string(),
+                    )
+                })?;
+            let next_quote_atoms = committed_quote_atoms
+                .checked_add(u128::from(operation.quote_atoms))
+                .ok_or_else(|| {
+                    (
+                        "fx_fix_reservation_capacity_overflow",
+                        "quote FX fix capacity overflowed u128".to_string(),
+                    )
+                })?;
+            if next_base_atoms > u128::from(state.packet.capacity_base_atoms)
+                || next_quote_atoms > u128::from(state.packet.capacity_quote_atoms)
+            {
+                return Err((
+                    "fx_fix_capacity_exhausted",
+                    "reservation would exceed the fix atom capacity".to_string(),
+                ));
+            }
+            let reservation_id = operation
+                .reservation_id()
+                .map_err(|error| ("bad_fx_fix_reservation_id", error))?;
+            if ledger
+                .fx_fix_reservations
+                .iter()
+                .any(|reservation| reservation.reservation_id == reservation_id)
+            {
+                return Err((
+                    "duplicate_fx_fix_reservation",
+                    "fx fix reservation ID already exists".to_string(),
+                ));
+            }
+            let reservation = FxFixReservationV1 {
+                reservation_id,
+                fix_packet_hash: operation.fix_packet_hash.clone(),
+                operator: operation.operator.clone(),
+                action_binding_hash: operation.action_binding_hash.clone(),
+                base_atoms: operation.base_atoms,
+                quote_atoms: operation.quote_atoms,
+                wallet_intent_hash: operation.wallet_intent_hash.clone(),
+                reservation_nonce: operation.reservation_nonce.clone(),
+                created_at_height: block_height,
+                expires_at_height: operation.expires_at_height,
+                state: FX_FIX_RESERVATION_STATE_ACTIVE.to_string(),
+                terminal_at_height: 0,
+            };
+            reservation
+                .validate()
+                .map_err(|error| ("bad_fx_fix_reservation", error))?;
+            ledger.fx_fix_reservations.push(reservation);
+            Ok(())
+        }
+        AssetTransactionOperation::FxFixReservationReleaseV1(operation) => {
+            if transaction.unsigned.transaction_kind
+                != FX_FIX_RESERVATION_RELEASE_TRANSACTION_KIND_V1
+            {
+                return Err((
+                    "wrong_transaction_kind",
+                    "fx_fix_reservation_release_v1 transaction kind mismatch".to_string(),
+                ));
+            }
+            let reservation = ledger
+                .fx_fix_reservations
+                .iter_mut()
+                .find(|reservation| reservation.reservation_id == operation.reservation_id)
+                .ok_or_else(|| {
+                    (
+                        "fx_fix_reservation_missing",
+                        "fx fix reservation does not exist".to_string(),
+                    )
+                })?;
+            if reservation.operator != operation.operator {
+                return Err((
+                    "fx_fix_operator_mismatch",
+                    "fx fix reservation release operator mismatch".to_string(),
+                ));
+            }
+            if reservation.state != FX_FIX_RESERVATION_STATE_ACTIVE {
+                return Err((
+                    "fx_fix_reservation_terminal",
+                    "fx fix reservation is already terminal".to_string(),
+                ));
+            }
+            reservation.state = FX_FIX_RESERVATION_STATE_RELEASED.to_string();
+            reservation.terminal_at_height = block_height;
+            reservation
+                .validate()
+                .map_err(|error| ("bad_fx_fix_reservation", error))?;
+            Ok(())
+        }
         AssetTransactionOperation::NavMintAtNav(operation) => {
             if transaction.unsigned.transaction_kind != NAV_MINT_AT_NAV_TRANSACTION_KIND {
                 return Err((

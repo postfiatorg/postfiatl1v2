@@ -1146,6 +1146,95 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "fx-fix-list" | "fx_fix_list" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let limit = flag_value(flags, "--limit")
+                .map(|value| {
+                    value
+                        .parse::<usize>()
+                        .map_err(|_| "--limit must be a usize".to_string())
+                })
+                .transpose()?;
+            let report = fx_fix_list(FxFixListOptions {
+                data_dir: PathBuf::from(data_dir),
+                base_asset_id: flag_value(flags, "--base-asset-id").map(ToString::to_string),
+                quote_asset_id: flag_value(flags, "--quote-asset-id").map(ToString::to_string),
+                active_only: flag_present(flags, "--active-only"),
+                limit,
+            })
+            .map_err(|error| format!("fx-fix-list failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&report)
+                .map_err(|error| format!("fx fix list serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
+        "fx-fix-info" | "fx_fix_info" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let fix_packet_hash =
+                flag_value(flags, "--fix-packet-hash").ok_or("missing --fix-packet-hash")?;
+            let report = fx_fix_info(FxFixInfoOptions {
+                data_dir: PathBuf::from(data_dir),
+                fix_packet_hash: fix_packet_hash.to_string(),
+            })
+            .map_err(|error| format!("fx-fix-info failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&report)
+                .map_err(|error| format!("fx fix info serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
+        "fx-fix-reservation-info" | "fx_fix_reservation_info" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let reservation_id =
+                flag_value(flags, "--reservation-id").ok_or("missing --reservation-id")?;
+            let report = fx_fix_reservation_info(FxFixReservationInfoOptions {
+                data_dir: PathBuf::from(data_dir),
+                reservation_id: reservation_id.to_string(),
+            })
+            .map_err(|error| format!("fx-fix-reservation-info failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&report).map_err(|error| {
+                format!("fx fix reservation info serialization failed: {error}")
+            })?;
+            println!("{json}");
+            Ok(())
+        }
+        "asset-orchard-action-status" | "asset_orchard_action_status" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let required = |flag: &str| {
+                flag_value(flags, flag).ok_or_else(|| format!("missing {flag}"))
+            };
+            let report = asset_orchard_action_status(AssetOrchardActionStatusOptions {
+                data_dir: PathBuf::from(data_dir),
+                nullifiers: [
+                    required("--nullifier-1")?.to_string(),
+                    required("--nullifier-2")?.to_string(),
+                ],
+                output_commitments: [
+                    required("--output-commitment-1")?.to_string(),
+                    required("--output-commitment-2")?.to_string(),
+                ],
+            })
+            .map_err(|error| format!("asset-orchard-action-status failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&report).map_err(|error| {
+                format!("Asset-Orchard action status serialization failed: {error}")
+            })?;
+            println!("{json}");
+            Ok(())
+        }
+        "fx-fix-quote" | "fx_fix_quote" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let fix_packet_hash =
+                flag_value(flags, "--fix-packet-hash").ok_or("missing --fix-packet-hash")?;
+            let report = fx_fix_quote(FxFixQuoteOptions {
+                data_dir: PathBuf::from(data_dir),
+                fix_packet_hash: fix_packet_hash.to_string(),
+                base_atoms: parse_u64_flag(flags, "--base-atoms")?,
+            })
+            .map_err(|error| format!("fx-fix-quote failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&report)
+                .map_err(|error| format!("fx fix quote serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
         "account-lines" | "account_lines" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let account = flag_value(flags, "--account").ok_or("missing --account")?;

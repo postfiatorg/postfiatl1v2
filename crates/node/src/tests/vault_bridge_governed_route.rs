@@ -1455,6 +1455,8 @@ fn route_discovery_returns_only_the_profile_authenticated_by_chain_state() {
         report.profile.profile_hash().expect("profile hash")
     );
     assert_eq!(report.governance_route_epoch, 1);
+    assert_eq!(report.route_trust_class, "CONTROLLED");
+    assert!(!report.live_value_enabled);
     assert!(report.active);
 
     let missing = vault_bridge_route(VaultBridgeRouteOptions {

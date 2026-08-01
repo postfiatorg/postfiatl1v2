@@ -396,6 +396,38 @@ export class RpcClient {
     return this.call('escrow_fee_quote', params);
   }
   async assetInfo(assetId) { return this.call('asset_info', { asset_id: assetId }); }
+  async fxFixList(opts = {}) {
+    const params = {};
+    if (opts.baseAssetId) params.base_asset_id = opts.baseAssetId;
+    if (opts.quoteAssetId) params.quote_asset_id = opts.quoteAssetId;
+    if (opts.activeOnly === true) params.active_only = true;
+    if (opts.limit !== undefined) params.limit = opts.limit;
+    return this.call('fx_fix_list', params);
+  }
+  async fxFixInfo(fixPacketHash) {
+    return this.call('fx_fix_info', { fix_packet_hash: fixPacketHash });
+  }
+  async fxFixReservationInfo(reservationId) {
+    return this.call('fx_fix_reservation_info', { reservation_id: reservationId });
+  }
+  async assetOrchardActionStatus(nullifiers, outputCommitments) {
+    if (!Array.isArray(nullifiers) || nullifiers.length !== 2
+      || !Array.isArray(outputCommitments) || outputCommitments.length !== 2) {
+      throw new Error('exactly two nullifiers and two output commitments are required');
+    }
+    return this.call('asset_orchard_action_status', {
+      nullifier_1: nullifiers[0],
+      nullifier_2: nullifiers[1],
+      output_commitment_1: outputCommitments[0],
+      output_commitment_2: outputCommitments[1],
+    });
+  }
+  async fxFixQuote(fixPacketHash, baseAtoms) {
+    return this.call('fx_fix_quote', {
+      fix_packet_hash: fixPacketHash,
+      base_atoms: String(baseAtoms),
+    });
+  }
   async vaultBridgeRoute(assetId) {
     // This authenticated fleet read can take longer than a simple status read
     // while multiple validators converge or a consensus round is active. Live

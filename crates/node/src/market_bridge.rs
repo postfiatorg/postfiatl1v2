@@ -815,6 +815,8 @@ pub fn vault_bridge_route(options: VaultBridgeRouteOptions) -> io::Result<VaultB
         } else {
             profile.vault_bridge_route_policy_hash.clone()
         },
+        route_trust_class: route.route_trust_class().to_string(),
+        live_value_enabled: route.live_value_enabled(),
         active: true,
     })
 }

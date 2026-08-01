@@ -74,7 +74,9 @@ use postfiat_node::{
     export_market_ops_replay_bundle, export_signed_snapshot,
     export_signed_snapshot_from_finalized_checkpoint, export_snapshot,
     export_snapshot_from_finalized_checkpoint, export_snapshot_publisher_public_key,
-    export_vault_bridge_reserve_replay_bundle, faucet_key, governance_agent_evidence_lineage_audit,
+    export_vault_bridge_reserve_replay_bundle, faucet_key, fx_fix_info, fx_fix_list, fx_fix_quote,
+    fx_fix_reservation_info, asset_orchard_action_status,
+    governance_agent_evidence_lineage_audit,
     governance_agent_gate_10_1, governance_agent_gate_10_5, governance_agent_gate_14,
     governance_agent_gate_15, governance_agent_gate_1_5, governance_agent_gate_3_5,
     governance_agent_gate_3_6, governance_agent_gate_7_5, governance_agent_gate_7_6,
@@ -139,8 +141,9 @@ use postfiat_node::{
     AccountOffersOptions, AccountTxIndexOptions, AccountTxQueryOptions, ApplyAmendmentOptions,
     ApplyBatchOptions, ApplyBatchTimingReport, AssetFeeQuoteOptions, AssetFeeQuoteReport,
     AssetInfoOptions, AssetOrchardEgressBatchOptions, AssetOrchardEgressCreateOptions,
-    AssetOrchardIngressBatchOptions, AssetOrchardIngressCreateOptions,
-    AssetOrchardNoteStatusOptions, AssetOrchardPrivateEgressBatchOptions,
+    AssetOrchardActionStatusOptions, AssetOrchardIngressBatchOptions,
+    AssetOrchardIngressCreateOptions, AssetOrchardNoteStatusOptions,
+    AssetOrchardPrivateEgressBatchOptions,
     AssetOrchardPrivateEgressCreateOptions, AssetOrchardPrivatePrimaryIssueBatchOptions,
     AssetOrchardPrivatePrimaryIssueCreateOptions, AssetOrchardPrivatePrimaryRedeemBatchOptions,
     AssetOrchardPrivatePrimaryRedeemCreateOptions, AssetOrchardScanOptions,
@@ -173,6 +176,7 @@ use postfiat_node::{
     GovernanceAmendmentReplayVerifyOptions, GovernanceAuthorizationSignOptions,
     GovernanceBatchOptions, GovernanceGenesisBundleOptions, GovernanceGenesisVerifyOptions,
     GovernanceReplayBuildOptions, GovernanceReplayVerifyOptions, GovernanceVerifyOptions,
+    FxFixInfoOptions, FxFixListOptions, FxFixQuoteOptions, FxFixReservationInfoOptions,
     HistoryArchiveHandoffCreateOptions, HistoryArchiveHandoffVerifyOptions,
     HistoryArchiveWindowBuildOptions, HistoryArchiveWindowBundle,
     HistoryArchiveWindowExportOptions, HistoryArchiveWindowImportOptions,
@@ -500,6 +504,16 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "atomic_settlement_template"
         | "asset-info"
         | "asset_info"
+        | "fx-fix-list"
+        | "fx_fix_list"
+        | "fx-fix-info"
+        | "fx_fix_info"
+        | "fx-fix-reservation-info"
+        | "fx_fix_reservation_info"
+        | "asset-orchard-action-status"
+        | "asset_orchard_action_status"
+        | "fx-fix-quote"
+        | "fx_fix_quote"
         | "account-lines"
         | "account_lines"
         | "account-assets"

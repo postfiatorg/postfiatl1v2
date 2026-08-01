@@ -1878,6 +1878,458 @@ pub fn asset_info(options: AssetInfoOptions) -> io::Result<AssetInfoReport> {
     })
 }
 
+fn fx_fix_status(
+    state: &FxFixStateV1,
+    active_reservation_count: u32,
+    remaining_base_atoms: u64,
+    remaining_quote_atoms: u64,
+    current_height: u64,
+) -> &'static str {
+    if state.paused {
+        "paused"
+    } else if current_height < state.packet.valid_from_height {
+        "pending"
+    } else if current_height > state.packet.expires_at_height {
+        "expired"
+    } else if state.fill_count >= state.packet.max_fills {
+        "filled"
+    } else if state.packet.fee_bps != 0 {
+        "unsupported_fee"
+    } else if remaining_base_atoms < state.packet.minimum_base_atoms
+        || remaining_quote_atoms == 0
+        || state
+            .fill_count
+            .checked_add(active_reservation_count)
+            .is_none_or(|committed| committed >= state.packet.max_fills)
+    {
+        "fully_reserved"
+    } else {
+        "active"
+    }
+}
+
+fn fx_fix_asset_report(asset: &AssetDefinition) -> io::Result<FxFixAssetReport> {
+    let tag = AssetTag::derive(&asset.asset_id).map_err(invalid_data)?;
+    Ok(FxFixAssetReport {
+        asset_id: asset.asset_id.clone(),
+        issuer: asset.issuer.clone(),
+        code: asset.code.clone(),
+        precision: asset.precision,
+        display_name: asset.display_name.clone(),
+        asset_tag_lo: format!("{:032x}", tag.lo),
+        asset_tag_hi: format!("{:032x}", tag.hi),
+    })
+}
+
+fn fx_fix_pricing_claim(state: &FxFixStateV1) -> io::Result<AssetOrchardPricingClaim> {
+    let base_tag = AssetTag::derive(&state.packet.base_asset_id).map_err(invalid_data)?;
+    let quote_tag = AssetTag::derive(&state.packet.quote_asset_id).map_err(invalid_data)?;
+    let claim = AssetOrchardPricingClaim {
+        nav_epoch: state.packet.epoch,
+        reserve_packet_hash: state.packet.packet_hash.clone(),
+        ratio_numerator: state.packet.ratio_numerator,
+        ratio_denominator: state.packet.ratio_denominator,
+        mode: "negotiated".to_string(),
+        band_bps: state.packet.band_bps,
+        base_asset_tag_lo: base_tag.lo,
+        base_asset_tag_hi: base_tag.hi,
+        quote_asset_tag_lo: quote_tag.lo,
+        quote_asset_tag_hi: quote_tag.hi,
+    };
+    claim.validate().map_err(invalid_data)?;
+    Ok(claim)
+}
+
+fn fx_fix_report_row(
+    ledger: &LedgerState,
+    state: &FxFixStateV1,
+    current_height: u64,
+) -> io::Result<FxFixReportRow> {
+    state
+        .validate()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let base_asset = ledger
+        .asset_definition(&state.packet.base_asset_id)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "fx fix base asset is missing from the issued asset registry",
+            )
+        })?;
+    let quote_asset = ledger
+        .asset_definition(&state.packet.quote_asset_id)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "fx fix quote asset is missing from the issued asset registry",
+            )
+        })?;
+    let active_reservation_count = u32::try_from(
+        ledger
+            .fx_fix_reservations
+            .iter()
+            .filter(|reservation| {
+                reservation.fix_packet_hash == state.packet.packet_hash
+                    && reservation.active_at(current_height)
+            })
+            .count(),
+    )
+    .map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "fx fix reservation count overflow",
+        )
+    })?;
+    let (committed_base_atoms_u128, committed_quote_atoms_u128) = ledger
+        .fx_fix_reservations
+        .iter()
+        .filter(|reservation| {
+            reservation.fix_packet_hash == state.packet.packet_hash
+                && (reservation.active_at(current_height)
+                    || reservation.state == postfiat_types::FX_FIX_RESERVATION_STATE_FILLED)
+        })
+        .try_fold((0u128, 0u128), |(base, quote), reservation| {
+            Some((
+                base.checked_add(u128::from(reservation.base_atoms))?,
+                quote.checked_add(u128::from(reservation.quote_atoms))?,
+            ))
+        })
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "fx fix atom commitment overflow",
+            )
+        })?;
+    let committed_base_atoms = u64::try_from(committed_base_atoms_u128).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "committed base atoms exceed u64",
+        )
+    })?;
+    let committed_quote_atoms = u64::try_from(committed_quote_atoms_u128).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "committed quote atoms exceed u64",
+        )
+    })?;
+    let remaining_base_atoms = state
+        .packet
+        .capacity_base_atoms
+        .checked_sub(committed_base_atoms)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "committed base atoms exceed fix capacity",
+            )
+        })?;
+    let remaining_quote_atoms = state
+        .packet
+        .capacity_quote_atoms
+        .checked_sub(committed_quote_atoms)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "committed quote atoms exceed fix capacity",
+            )
+        })?;
+    let committed_fill_slots = state
+        .fill_count
+        .checked_add(active_reservation_count)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "fx fix fill count overflow"))?;
+    Ok(FxFixReportRow {
+        status: fx_fix_status(
+            state,
+            active_reservation_count,
+            remaining_base_atoms,
+            remaining_quote_atoms,
+            current_height,
+        )
+        .to_string(),
+        state: state.clone(),
+        base_asset: fx_fix_asset_report(base_asset)?,
+        quote_asset: fx_fix_asset_report(quote_asset)?,
+        pricing_claim: fx_fix_pricing_claim(state)?,
+        remaining_fill_slots: state.packet.max_fills.saturating_sub(committed_fill_slots),
+        active_reservation_count,
+        committed_base_atoms,
+        committed_quote_atoms,
+        remaining_base_atoms,
+        remaining_quote_atoms,
+    })
+}
+
+pub fn fx_fix_list(options: FxFixListOptions) -> io::Result<FxFixListReport> {
+    if let Some(asset_id) = options.base_asset_id.as_deref() {
+        validate_issued_asset_query_id("base_asset_id", asset_id)?;
+    }
+    if let Some(asset_id) = options.quote_asset_id.as_deref() {
+        validate_issued_asset_query_id("quote_asset_id", asset_id)?;
+    }
+    let limit = bounded_read_query_limit(options.limit, "fx_fix_list")?;
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let ledger = store.read_ledger()?;
+    let current_height = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?.height;
+    let mut states = ledger
+        .fx_fix_states
+        .iter()
+        .filter(|state| {
+            options
+                .base_asset_id
+                .as_ref()
+                .is_none_or(|asset_id| state.packet.base_asset_id == *asset_id)
+                && options
+                    .quote_asset_id
+                    .as_ref()
+                    .is_none_or(|asset_id| state.packet.quote_asset_id == *asset_id)
+        })
+        .collect::<Vec<_>>();
+    states.sort_by(|left, right| {
+        left.packet
+            .base_asset_id
+            .cmp(&right.packet.base_asset_id)
+            .then_with(|| left.packet.quote_asset_id.cmp(&right.packet.quote_asset_id))
+            .then_with(|| left.packet.operator.cmp(&right.packet.operator))
+            .then_with(|| right.packet.epoch.cmp(&left.packet.epoch))
+            .then_with(|| left.packet.packet_hash.cmp(&right.packet.packet_hash))
+    });
+    let mut fixes = states
+        .into_iter()
+        .map(|state| fx_fix_report_row(&ledger, state, current_height))
+        .collect::<io::Result<Vec<_>>>()?;
+    if options.active_only {
+        fixes.retain(|fix| fix.status == "active");
+    }
+    let truncated = truncate_reports(&mut fixes, limit);
+    Ok(FxFixListReport {
+        schema: "postfiat-fx-fix-list-v1".to_string(),
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        protocol_version: genesis.protocol_version,
+        current_height,
+        base_asset_id: options.base_asset_id,
+        quote_asset_id: options.quote_asset_id,
+        active_only: options.active_only,
+        limit: limit as u64,
+        truncated,
+        fix_count: fixes.len() as u64,
+        fixes,
+    })
+}
+
+pub fn fx_fix_info(options: FxFixInfoOptions) -> io::Result<FxFixInfoReport> {
+    validate_lower_hex_len(
+        "fix_packet_hash",
+        &options.fix_packet_hash,
+        FX_FIX_PACKET_HASH_HEX_LEN,
+    )
+    .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let ledger = store.read_ledger()?;
+    let current_height = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?.height;
+    let fix = ledger
+        .fx_fix_states
+        .iter()
+        .find(|state| state.packet.packet_hash == options.fix_packet_hash)
+        .map(|state| fx_fix_report_row(&ledger, state, current_height))
+        .transpose()?;
+    Ok(FxFixInfoReport {
+        schema: "postfiat-fx-fix-info-v1".to_string(),
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        protocol_version: genesis.protocol_version,
+        current_height,
+        fix_packet_hash: options.fix_packet_hash,
+        found: fix.is_some(),
+        fix,
+    })
+}
+
+pub fn fx_fix_reservation_info(
+    options: FxFixReservationInfoOptions,
+) -> io::Result<FxFixReservationInfoReport> {
+    validate_lower_hex_len(
+        "reservation_id",
+        &options.reservation_id,
+        FX_FIX_RESERVATION_ID_HEX_LEN,
+    )
+    .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let ledger = store.read_ledger()?;
+    let current_height = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?.height;
+    let reservation = ledger
+        .fx_fix_reservations
+        .iter()
+        .find(|reservation| reservation.reservation_id == options.reservation_id)
+        .cloned();
+    let active = reservation
+        .as_ref()
+        .is_some_and(|reservation| reservation.active_at(current_height));
+    let fix_status = reservation
+        .as_ref()
+        .and_then(|reservation| {
+            ledger
+                .fx_fix_states
+                .iter()
+                .find(|state| state.packet.packet_hash == reservation.fix_packet_hash)
+        })
+        .map(|state| fx_fix_report_row(&ledger, state, current_height).map(|row| row.status))
+        .transpose()?;
+    Ok(FxFixReservationInfoReport {
+        schema: "postfiat-fx-fix-reservation-info-v1".to_string(),
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        protocol_version: genesis.protocol_version,
+        current_height,
+        reservation_id: options.reservation_id,
+        found: reservation.is_some(),
+        active,
+        reservation,
+        fix_status,
+    })
+}
+
+pub fn asset_orchard_action_status(
+    options: AssetOrchardActionStatusOptions,
+) -> io::Result<AssetOrchardActionStatusReport> {
+    for (index, value) in options.nullifiers.iter().enumerate() {
+        validate_lower_hex_len(&format!("nullifier_{}", index + 1), value, 64)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    }
+    for (index, value) in options.output_commitments.iter().enumerate() {
+        validate_lower_hex_len(&format!("output_commitment_{}", index + 1), value, 64)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    }
+    if options.nullifiers[0] == options.nullifiers[1]
+        || options.output_commitments[0] == options.output_commitments[1]
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Asset-Orchard action elements must be pairwise distinct by kind",
+        ));
+    }
+
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let current_height = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?.height;
+    let shielded = store.read_shielded()?;
+    let pool = shielded.orchard.ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            "Asset-Orchard pool is not initialized",
+        )
+    })?;
+    let element_status =
+        |value: &String, haystack: &[String]| -> io::Result<AssetOrchardElementStatus> {
+            let count = haystack
+                .iter()
+                .filter(|candidate| *candidate == value)
+                .count();
+            let occurrence_count = u64::try_from(count).map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Asset-Orchard element count overflow",
+                )
+            })?;
+            Ok(AssetOrchardElementStatus {
+                value: value.clone(),
+                occurrence_count,
+                present_exactly_once: occurrence_count == 1,
+            })
+        };
+    let nullifiers = [
+        element_status(&options.nullifiers[0], &pool.nullifiers)?,
+        element_status(&options.nullifiers[1], &pool.nullifiers)?,
+    ];
+    let output_commitments = [
+        element_status(&options.output_commitments[0], &pool.output_commitments)?,
+        element_status(&options.output_commitments[1], &pool.output_commitments)?,
+    ];
+    let finalized_exactly_once = nullifiers
+        .iter()
+        .chain(output_commitments.iter())
+        .all(|status| status.present_exactly_once);
+    Ok(AssetOrchardActionStatusReport {
+        schema: "postfiat-asset-orchard-action-status-v1".to_string(),
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        protocol_version: genesis.protocol_version,
+        current_height,
+        pool_id: pool.pool_id,
+        nullifiers,
+        output_commitments,
+        finalized_exactly_once,
+    })
+}
+
+pub fn fx_fix_quote(options: FxFixQuoteOptions) -> io::Result<FxFixQuoteReport> {
+    validate_lower_hex_len(
+        "fix_packet_hash",
+        &options.fix_packet_hash,
+        FX_FIX_PACKET_HASH_HEX_LEN,
+    )
+    .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let ledger = store.read_ledger()?;
+    let current_height = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?.height;
+    let state = ledger
+        .fx_fix_states
+        .iter()
+        .find(|state| state.packet.packet_hash == options.fix_packet_hash)
+        .ok_or_else(|| {
+            io::Error::new(io::ErrorKind::NotFound, "fx fix packet is not registered")
+        })?;
+    let row = fx_fix_report_row(&ledger, state, current_height)?;
+    if row.status != "active" {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("fx fix is not executable: {}", row.status),
+        ));
+    }
+    if options.base_atoms < state.packet.minimum_base_atoms
+        || options.base_atoms > state.packet.capacity_base_atoms
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "base_atoms must be in {}..={} for this fix",
+                state.packet.minimum_base_atoms, state.packet.capacity_base_atoms
+            ),
+        ));
+    }
+    let (quote_atoms, exact_division) = state
+        .packet
+        .quote_atoms_for_base(options.base_atoms)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    if options.base_atoms > row.remaining_base_atoms || quote_atoms > row.remaining_quote_atoms {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "computed quote exceeds uncommitted fix capacity",
+        ));
+    }
+    Ok(FxFixQuoteReport {
+        schema: "postfiat-fx-fix-quote-v1".to_string(),
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        protocol_version: genesis.protocol_version,
+        current_height,
+        fix_packet_hash: state.packet.packet_hash.clone(),
+        source_label: state.packet.source_label.clone(),
+        base_asset: row.base_asset,
+        quote_asset: row.quote_asset,
+        base_atoms: options.base_atoms,
+        quote_atoms,
+        exact_division,
+        fee_atoms: 0,
+        price_impact_bps: 0,
+        remaining_fill_slots: row.remaining_fill_slots,
+        pricing_claim: row.pricing_claim,
+    })
+}
+
 pub fn account_lines(options: AccountLinesOptions) -> io::Result<AccountLinesReport> {
     validate_query_text_field("account", &options.account)?;
     if let Some(issuer) = options.issuer.as_ref() {

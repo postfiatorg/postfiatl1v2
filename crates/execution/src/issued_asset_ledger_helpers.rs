@@ -743,6 +743,8 @@ fn assert_issued_supply_ledger_inventory_complete(ledger: &LedgerState) {
         nav_attestors: _,
         market_ops_policies: _,
         market_ops_envelopes: _,
+        fx_fix_states: _,
+        fx_fix_reservations: _,
         vault_bridge_receipts: _,
         vault_bridge_bucket_states: _,
         vault_bridge_allocations: _,

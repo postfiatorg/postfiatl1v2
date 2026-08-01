@@ -761,6 +761,11 @@ fn print_usage() {
   postfiat-node rpc --method account_offers [--data-dir PATH] --account ADDRESS [--state open|filled|canceled|unfunded] [--limit N]
   postfiat-node rpc --method book_offers [--data-dir PATH] --taker-gets-asset-id ASSET --taker-pays-asset-id ASSET [--limit N]
   postfiat-node rpc --method asset_info [--data-dir PATH] --asset-id ID
+  postfiat-node rpc --method fx_fix_list [--data-dir PATH] [--base-asset-id ID] [--quote-asset-id ID] [--active-only] [--limit N]
+  postfiat-node rpc --method fx_fix_info [--data-dir PATH] --fix-packet-hash HASH
+  postfiat-node rpc --method fx_fix_reservation_info [--data-dir PATH] --reservation-id ID
+  postfiat-node rpc --method asset_orchard_action_status [--data-dir PATH] --nullifier-1 HEX --nullifier-2 HEX --output-commitment-1 HEX --output-commitment-2 HEX
+  postfiat-node rpc --method fx_fix_quote [--data-dir PATH] --fix-packet-hash HASH --base-atoms N
   postfiat-node rpc --method account_lines [--data-dir PATH] --account ADDRESS [--issuer ADDRESS] [--asset-id ID] [--limit N]
   postfiat-node rpc --method account_assets [--data-dir PATH] --account ADDRESS [--asset-id ID] [--limit N]
   postfiat-node rpc --method owned_objects [--data-dir PATH] --owner-public-key-hex HEX [--asset ASSET] [--limit N]
@@ -804,7 +809,8 @@ fn print_usage() {
   postfiat-node asset-orchard-private-primary-redeem-create [--data-dir PATH] --note-file PATH --output-note-seed-hex HEX --output-note-file PATH --route-id ID --owner ACCOUNT --settlement-recipient ACCOUNT --redemption-id HEX --redemption-nonce HEX --nav-amount-atoms N --settlement-output-atoms N --expires-at-height N --action-file PATH [--pending-output-commitments HEX[,HEX]] [--overwrite]
   postfiat-node asset-orchard-note-status [--data-dir PATH] --note-file PATH
   postfiat-node asset-orchard-scan [--data-dir PATH] --note-seed-hex HEX --note-file PATH [--overwrite]
-  postfiat-node asset-orchard-swap-create [--data-dir PATH] --input-note-file-a PATH --input-note-file-b PATH --output-note-seed-hex-a HEX --output-note-seed-hex-b HEX --action-file PATH --output-note-file-a PATH --output-note-file-b PATH [--overwrite]
+  postfiat-node asset-orchard-swap-create [--data-dir PATH] --input-note-file-a PATH --input-note-file-b PATH --output-note-seed-hex-a HEX --output-note-seed-hex-b HEX --pricing-claim-file PATH --action-file PATH --output-note-file-a PATH --output-note-file-b PATH [--overwrite]
+  postfiat-node asset-orchard-swap-live-round [--data-dir PATH] --topology PATH --input-note-file-a PATH --input-note-file-b PATH --output-note-seed-hex-a HEX --output-note-seed-hex-b HEX --pricing-claim-file PATH --action-file PATH --output-note-file-a PATH --output-note-file-b PATH --batch-file PATH --key-file PATH --artifact-dir PATH [round flags]
   postfiat-node orchard-spend-create [--data-dir PATH] (--key-file PATH | --spending-key-hex HEX) --input-output-index N (--recipient-view-key-file PATH | --recipient-key-file PATH | --recipient-address-raw-hex HEX) --action-file PATH [--amount N] [--change-recipient-view-key-file PATH | --change-recipient-key-file PATH | --change-recipient-address-raw-hex HEX] [--memo-hex HEX] [--fee N] [--overwrite]
   postfiat-node orchard-withdraw-create [--data-dir PATH] (--key-file PATH | --spending-key-hex HEX) --input-output-index N --to ADDRESS --amount N --action-file PATH [--change-recipient-view-key-file PATH | --change-recipient-key-file PATH | --change-recipient-address-raw-hex HEX] [--memo-hex HEX] [--fee N] [--policy-id ID] [--disclosure-hash HEX] [--overwrite]
   postfiat-node orchard-keygen (--master-seed-hex HEX | --master-seed-hex-file PATH) [--account-index N] --key-file PATH [--overwrite]

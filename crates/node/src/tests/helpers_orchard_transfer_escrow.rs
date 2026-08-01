@@ -2500,6 +2500,124 @@
     }
 
     #[test]
+    fn negotiated_asset_orchard_swap_consumes_exact_fx_fix_reservation_once() {
+        let genesis = Genesis::new("postfiat-local");
+        let operator_key = ml_dsa_65_keygen().expect("operator keygen");
+        let operator = address_from_public_key(&operator_key.public_key);
+        let base = AssetDefinition::new(
+            &genesis.chain_id,
+            operator.clone(),
+            "PFUSDC".to_string(),
+            1,
+            6,
+        )
+        .expect("base asset");
+        let quote = AssetDefinition::new(
+            &genesis.chain_id,
+            operator.clone(),
+            "PNOK".to_string(),
+            1,
+            0,
+        )
+        .expect("quote asset");
+        let mut packet = postfiat_types::FxFixPacketV1 {
+            version: postfiat_types::FX_FIX_PACKET_VERSION_V1,
+            schema: postfiat_types::FX_FIX_PACKET_SCHEMA_V1.to_string(),
+            operator: operator.clone(),
+            base_asset_id: base.asset_id.clone(),
+            quote_asset_id: quote.asset_id.clone(),
+            epoch: 59,
+            ratio_numerator: 9,
+            ratio_denominator: 5,
+            band_bps: 0,
+            fee_bps: 0,
+            valid_from_height: 1,
+            expires_at_height: 100,
+            minimum_base_atoms: 5,
+            capacity_base_atoms: 5,
+            capacity_quote_atoms: 9,
+            max_fills: 1,
+            source_label: "demo_fix".to_string(),
+            source_observation_commitment: "11".repeat(48),
+            governance_policy_hash: "22".repeat(48),
+            previous_fix_hash: Some("55".repeat(48)),
+            packet_hash: String::new(),
+        };
+        packet.packet_hash = packet.canonical_hash();
+
+        let (_, mut verified) =
+            asset_orchard_test_action_and_verified(asset_orchard_test_encrypted_outputs());
+        let base_tag = AssetTag::derive(&base.asset_id).expect("base tag");
+        let quote_tag = AssetTag::derive(&quote.asset_id).expect("quote tag");
+        verified.pricing.claim.mode = "negotiated".to_string();
+        verified.pricing.claim.reserve_packet_hash = packet.packet_hash.clone();
+        verified.pricing.claim.base_asset_tag_lo = base_tag.lo;
+        verified.pricing.claim.base_asset_tag_hi = base_tag.hi;
+        verified.pricing.claim.quote_asset_tag_lo = quote_tag.lo;
+        verified.pricing.claim.quote_asset_tag_hi = quote_tag.hi;
+
+        let action_binding_hash = verified.pricing.action_binding_hash.as_hex().to_string();
+        let base_atoms = 5;
+        let quote_atoms = 9;
+        let wallet_intent_hash = "bc".repeat(48);
+        let reservation_nonce = "cd".repeat(48);
+        let reservation_id = postfiat_types::fx_fix_reservation_id(
+            &packet.packet_hash,
+            &operator,
+            &action_binding_hash,
+            base_atoms,
+            quote_atoms,
+            &wallet_intent_hash,
+            &reservation_nonce,
+        )
+        .expect("reservation id");
+        let mut ledger = LedgerState::new(vec![Account::new(
+            operator.clone(),
+            1_000_000,
+            Some(bytes_to_hex(&operator_key.public_key)),
+        )]);
+        ledger.asset_definitions.extend([base, quote]);
+        ledger.fx_fix_states.push(postfiat_types::FxFixStateV1 {
+            packet: packet.clone(),
+            paused: false,
+            fill_count: 0,
+            registered_at_height: 1,
+            last_updated_height: 1,
+        });
+        ledger
+            .fx_fix_reservations
+            .push(postfiat_types::FxFixReservationV1 {
+                reservation_id,
+                fix_packet_hash: packet.packet_hash,
+                operator,
+                action_binding_hash,
+                base_atoms,
+                quote_atoms,
+                wallet_intent_hash,
+                reservation_nonce,
+                created_at_height: 2,
+                expires_at_height: 90,
+                state: postfiat_types::FX_FIX_RESERVATION_STATE_ACTIVE.to_string(),
+                terminal_at_height: 0,
+            });
+
+        let plan = asset_orchard_swap_pricing_plan(&ledger, &verified, 10)
+            .expect("negotiated pricing plan")
+            .expect("FX fix plan");
+        consume_fx_fix_swap_plan(&mut ledger, plan, 10);
+        assert_eq!(ledger.fx_fix_states[0].fill_count, 1);
+        assert_eq!(
+            ledger.fx_fix_reservations[0].state,
+            postfiat_types::FX_FIX_RESERVATION_STATE_FILLED
+        );
+        assert_eq!(ledger.fx_fix_reservations[0].terminal_at_height, 10);
+
+        let replay = asset_orchard_swap_pricing_plan(&ledger, &verified, 11)
+            .expect_err("filled FIX action must not replay");
+        assert_eq!(replay.code(), "asset_orchard_fx_fix_not_active");
+    }
+
+    #[test]
     fn asset_orchard_swap_action_accounting_hides_cleartext_asset_tags_and_amounts() {
         let (action, _) =
             asset_orchard_test_action_and_verified(asset_orchard_test_encrypted_outputs());

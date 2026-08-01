@@ -453,6 +453,8 @@ fn validate_issued_supply_custody_inventory(
         nav_attestors: _,
         market_ops_policies: _,
         market_ops_envelopes: _,
+        fx_fix_states: _,
+        fx_fix_reservations: _,
         vault_bridge_receipts: _,
         vault_bridge_bucket_states: _,
         vault_bridge_allocations: _,
@@ -999,6 +1001,24 @@ pub(super) fn append_ledger_state(
         }
     }
 
+    if commit_complete_nav_state && !ledger.fx_fix_states.is_empty() {
+        let mut states = ledger.fx_fix_states.iter().collect::<Vec<_>>();
+        states.sort_by(|left, right| left.packet.packet_hash.cmp(&right.packet.packet_hash));
+        append_canonical_usize(bytes, "ledger.fx_fix_state_count", states.len());
+        for state in states {
+            append_fx_fix_state(bytes, "ledger.fx_fix_state", state);
+        }
+    }
+
+    if commit_complete_nav_state && !ledger.fx_fix_reservations.is_empty() {
+        let mut reservations = ledger.fx_fix_reservations.iter().collect::<Vec<_>>();
+        reservations.sort_by(|left, right| left.reservation_id.cmp(&right.reservation_id));
+        append_canonical_usize(bytes, "ledger.fx_fix_reservation_count", reservations.len());
+        for reservation in reservations {
+            append_fx_fix_reservation(bytes, "ledger.fx_fix_reservation", reservation);
+        }
+    }
+
     if commit_complete_nav_state && !ledger.vault_bridge_receipts.is_empty() {
         let mut vault_bridge_receipts = ledger.vault_bridge_receipts.iter().collect::<Vec<_>>();
         vault_bridge_receipts.sort_by(|left, right| left.receipt_id.cmp(&right.receipt_id));
@@ -1311,6 +1331,8 @@ fn assert_ledger_state_commitment_inventory_complete(ledger: &LedgerState) {
         nav_attestors: _,
         market_ops_policies: _,
         market_ops_envelopes: _,
+        fx_fix_states: _,
+        fx_fix_reservations: _,
         vault_bridge_receipts: _,
         vault_bridge_bucket_states: _,
         vault_bridge_allocations: _,
@@ -1985,6 +2007,169 @@ pub(super) fn append_market_ops_policy(
         bytes,
         &format!("{prefix}.deactivation_epoch"),
         policy.deactivation_epoch,
+    );
+}
+
+pub(super) fn append_fx_fix_packet(bytes: &mut Vec<u8>, prefix: &str, packet: &FxFixPacketV1) {
+    append_canonical_u32(
+        bytes,
+        &format!("{prefix}.version"),
+        u32::from(packet.version),
+    );
+    append_canonical_str(bytes, &format!("{prefix}.schema"), &packet.schema);
+    append_canonical_str(bytes, &format!("{prefix}.operator"), &packet.operator);
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.base_asset_id"),
+        &packet.base_asset_id,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.quote_asset_id"),
+        &packet.quote_asset_id,
+    );
+    append_canonical_u64(bytes, &format!("{prefix}.epoch"), packet.epoch);
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.ratio_numerator"),
+        packet.ratio_numerator,
+    );
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.ratio_denominator"),
+        packet.ratio_denominator,
+    );
+    append_canonical_u32(
+        bytes,
+        &format!("{prefix}.band_bps"),
+        u32::from(packet.band_bps),
+    );
+    append_canonical_u32(
+        bytes,
+        &format!("{prefix}.fee_bps"),
+        u32::from(packet.fee_bps),
+    );
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.valid_from_height"),
+        packet.valid_from_height,
+    );
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.expires_at_height"),
+        packet.expires_at_height,
+    );
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.minimum_base_atoms"),
+        packet.minimum_base_atoms,
+    );
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.capacity_base_atoms"),
+        packet.capacity_base_atoms,
+    );
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.capacity_quote_atoms"),
+        packet.capacity_quote_atoms,
+    );
+    append_canonical_u32(bytes, &format!("{prefix}.max_fills"), packet.max_fills);
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.source_label"),
+        &packet.source_label,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.source_observation_commitment"),
+        &packet.source_observation_commitment,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.governance_policy_hash"),
+        &packet.governance_policy_hash,
+    );
+    append_option_str(
+        bytes,
+        &format!("{prefix}.previous_fix_hash"),
+        &packet.previous_fix_hash,
+    );
+    append_canonical_str(bytes, &format!("{prefix}.packet_hash"), &packet.packet_hash);
+}
+
+pub(super) fn append_fx_fix_state(bytes: &mut Vec<u8>, prefix: &str, state: &FxFixStateV1) {
+    append_fx_fix_packet(bytes, &format!("{prefix}.packet"), &state.packet);
+    append_canonical_bool(bytes, &format!("{prefix}.paused"), state.paused);
+    append_canonical_u32(bytes, &format!("{prefix}.fill_count"), state.fill_count);
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.registered_at_height"),
+        state.registered_at_height,
+    );
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.last_updated_height"),
+        state.last_updated_height,
+    );
+}
+
+pub(super) fn append_fx_fix_reservation(
+    bytes: &mut Vec<u8>,
+    prefix: &str,
+    reservation: &FxFixReservationV1,
+) {
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.reservation_id"),
+        &reservation.reservation_id,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.fix_packet_hash"),
+        &reservation.fix_packet_hash,
+    );
+    append_canonical_str(bytes, &format!("{prefix}.operator"), &reservation.operator);
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.action_binding_hash"),
+        &reservation.action_binding_hash,
+    );
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.base_atoms"),
+        reservation.base_atoms,
+    );
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.quote_atoms"),
+        reservation.quote_atoms,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.wallet_intent_hash"),
+        &reservation.wallet_intent_hash,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.reservation_nonce"),
+        &reservation.reservation_nonce,
+    );
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.created_at_height"),
+        reservation.created_at_height,
+    );
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.expires_at_height"),
+        reservation.expires_at_height,
+    );
+    append_canonical_str(bytes, &format!("{prefix}.state"), &reservation.state);
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.terminal_at_height"),
+        reservation.terminal_at_height,
     );
 }
 

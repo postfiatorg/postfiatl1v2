@@ -3796,6 +3796,11 @@ fn rpc_serve_method_allowed_with_owned_lane(
             | "account_offers"
             | "book_offers"
             | "asset_info"
+            | "fx_fix_list"
+            | "fx_fix_info"
+            | "fx_fix_reservation_info"
+            | "asset_orchard_action_status"
+            | "fx_fix_quote"
             | "account_lines"
             | "account_assets"
             | "owned_objects"
@@ -3920,6 +3925,19 @@ mod remote_method_policy_tests {
             assert!(rpc_serve_method_allowed_with_owned_lane(
                 method, false, false, false, false
             ));
+        }
+    }
+
+    #[test]
+    fn fx_fix_discovery_and_quote_are_public_read_methods() {
+        for method in [
+            "fx_fix_list",
+            "fx_fix_info",
+            "fx_fix_reservation_info",
+            "fx_fix_quote",
+            "asset_orchard_action_status",
+        ] {
+            assert!(rpc_serve_method_allowed(method, false, false, false));
         }
     }
 }

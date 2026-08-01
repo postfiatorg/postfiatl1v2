@@ -3339,7 +3339,7 @@ pub(super) fn apply_archived_wan_devnet2_pre_pricing_swap(
 
 pub(super) fn execute_shielded_swap_action(
     genesis: &Genesis,
-    ledger: &LedgerState,
+    ledger: &mut LedgerState,
     shielded: &mut ShieldedState,
     batch_id: &str,
     block_height: u64,
@@ -3387,19 +3387,27 @@ pub(super) fn execute_shielded_swap_action(
                 );
             }
         };
-        if let Err(error) =
-            validate_asset_orchard_swap_pricing_against_ledger(ledger, &verified, block_height)
-        {
-            return Receipt::rejected(
-                shielded_action_rejection_id(batch_id, index, error.code()),
-                error.code(),
-                error.to_string(),
-            );
-        }
+        let fx_fix_plan = match asset_orchard_swap_pricing_plan(ledger, &verified, block_height) {
+            Ok(plan) => plan,
+            Err(error) => {
+                return Receipt::rejected(
+                    shielded_action_rejection_id(batch_id, index, error.code()),
+                    error.code(),
+                    error.to_string(),
+                );
+            }
+        };
         return match apply_verified_asset_orchard_swap_action_to_state(
             genesis, shielded, &action, &verified,
         ) {
-            Ok(receipt) => receipt,
+            Ok(receipt) => {
+                if receipt.accepted {
+                    if let Some(plan) = fx_fix_plan {
+                        consume_fx_fix_swap_plan(ledger, plan, block_height);
+                    }
+                }
+                receipt
+            }
             Err(error) => Receipt::rejected(
                 shielded_action_rejection_id(batch_id, index, "asset_orchard_swap_apply_error"),
                 "asset_orchard_swap_apply_error",
@@ -3495,6 +3503,21 @@ pub(super) fn validate_asset_orchard_swap_pricing_against_ledger(
     verified: &postfiat_privacy_orchard::VerifiedAssetOrchardSwap,
     block_height: u64,
 ) -> Result<(), postfiat_privacy_orchard::OrchardVerificationError> {
+    asset_orchard_swap_pricing_plan(ledger, verified, block_height).map(|_| ())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct FxFixSwapPlan {
+    state_index: usize,
+    reservation_index: usize,
+    next_fill_count: u32,
+}
+
+pub(super) fn asset_orchard_swap_pricing_plan(
+    ledger: &LedgerState,
+    verified: &postfiat_privacy_orchard::VerifiedAssetOrchardSwap,
+    block_height: u64,
+) -> Result<Option<FxFixSwapPlan>, postfiat_privacy_orchard::OrchardVerificationError> {
     use postfiat_privacy_orchard::{
         validate_asset_orchard_pricing_policy, AssetOrchardPricingPolicy, AssetTag,
         OrchardVerificationError,
@@ -3509,6 +3532,116 @@ pub(super) fn validate_asset_orchard_swap_pricing_against_ledger(
         lo: claim.quote_asset_tag_lo,
         hi: claim.quote_asset_tag_hi,
     };
+    if claim.mode == "negotiated" {
+        let matching_states = ledger
+            .fx_fix_states
+            .iter()
+            .enumerate()
+            .filter(|(_, state)| state.packet.packet_hash == claim.reserve_packet_hash)
+            .collect::<Vec<_>>();
+        if matching_states.len() != 1 {
+            return Err(OrchardVerificationError::new(
+                "asset_orchard_fx_fix_packet_mismatch",
+                "negotiated pricing packet must resolve to exactly one consensus FX fix",
+            ));
+        }
+        let (state_index, state) = matching_states[0];
+        state.validate().map_err(|error| {
+            OrchardVerificationError::new("asset_orchard_fx_fix_state_invalid", error)
+        })?;
+        if !state.accepts_height(block_height) {
+            return Err(OrchardVerificationError::new(
+                "asset_orchard_fx_fix_not_active",
+                "FX fix is paused, expired, not yet active, or fully filled",
+            ));
+        }
+        if state.packet.fee_bps != 0 || verified.fee != 0 {
+            return Err(OrchardVerificationError::new(
+                "asset_orchard_fx_fix_fee_unsupported",
+                "FX fix v1 requires zero fee",
+            ));
+        }
+        let expected_base_tag = AssetTag::derive(&state.packet.base_asset_id).map_err(|error| {
+            OrchardVerificationError::new(
+                "asset_orchard_fx_fix_base_asset_invalid",
+                error.to_string(),
+            )
+        })?;
+        let expected_quote_tag =
+            AssetTag::derive(&state.packet.quote_asset_id).map_err(|error| {
+                OrchardVerificationError::new(
+                    "asset_orchard_fx_fix_quote_asset_invalid",
+                    error.to_string(),
+                )
+            })?;
+        let base_matches = ledger
+            .asset_definitions
+            .iter()
+            .filter(|asset| AssetTag::derive(&asset.asset_id).ok().as_ref() == Some(&base_tag))
+            .count();
+        let quote_matches = ledger
+            .asset_definitions
+            .iter()
+            .filter(|asset| AssetTag::derive(&asset.asset_id).ok().as_ref() == Some(&quote_tag))
+            .count();
+        if base_matches != 1 || quote_matches != 1 {
+            return Err(OrchardVerificationError::new(
+                "asset_orchard_fx_fix_asset_mismatch",
+                "FX fix asset tags must each resolve to exactly one registered issued asset",
+            ));
+        }
+        let policy = AssetOrchardPricingPolicy {
+            nav_epoch: state.packet.epoch,
+            reserve_packet_hash: state.packet.packet_hash.clone(),
+            nav_ratio_numerator: state.packet.ratio_numerator,
+            nav_ratio_denominator: state.packet.ratio_denominator,
+            band_bps: state.packet.band_bps,
+            base_asset_tag: expected_base_tag,
+            quote_asset_tag: expected_quote_tag,
+            halted: state.paused,
+        };
+        validate_asset_orchard_pricing_policy(&verified.pricing, &policy)?;
+
+        let action_binding_hash = verified.pricing.action_binding_hash.as_hex();
+        let matching_reservations = ledger
+            .fx_fix_reservations
+            .iter()
+            .enumerate()
+            .filter(|(_, reservation)| {
+                reservation.fix_packet_hash == state.packet.packet_hash
+                    && reservation.action_binding_hash == action_binding_hash
+                    && reservation.active_at(block_height)
+            })
+            .collect::<Vec<_>>();
+        if matching_reservations.len() != 1 {
+            return Err(OrchardVerificationError::new(
+                "asset_orchard_fx_fix_reservation_mismatch",
+                "negotiated swap action must have exactly one active action-bound reservation",
+            ));
+        }
+        let (reservation_index, reservation) = matching_reservations[0];
+        reservation.validate().map_err(|error| {
+            OrchardVerificationError::new("asset_orchard_fx_fix_reservation_invalid", error)
+        })?;
+        let next_fill_count = state.fill_count.checked_add(1).ok_or_else(|| {
+            OrchardVerificationError::new(
+                "asset_orchard_fx_fix_fill_overflow",
+                "FX fix fill count would overflow",
+            )
+        })?;
+        if next_fill_count > state.packet.max_fills {
+            return Err(OrchardVerificationError::new(
+                "asset_orchard_fx_fix_capacity_exhausted",
+                "FX fix has no remaining fill capacity",
+            ));
+        }
+        return Ok(Some(FxFixSwapPlan {
+            state_index,
+            reservation_index,
+            next_fill_count,
+        }));
+    }
+
     let matching_nav_assets = ledger
         .nav_assets
         .iter()
@@ -3565,7 +3698,24 @@ pub(super) fn validate_asset_orchard_swap_pricing_against_ledger(
         quote_asset_tag: quote_tag,
         halted: nav_asset.halted,
     };
-    validate_asset_orchard_pricing_policy(&verified.pricing, &policy)
+    validate_asset_orchard_pricing_policy(&verified.pricing, &policy)?;
+    Ok(None)
+}
+
+pub(super) fn consume_fx_fix_swap_plan(
+    ledger: &mut LedgerState,
+    plan: FxFixSwapPlan,
+    block_height: u64,
+) {
+    // Every bound is checked before the shielded state transition. No fallible
+    // work remains here, so an accepted private swap and reservation fill are
+    // one deterministic state transition even outside a multi-action batch.
+    let state = &mut ledger.fx_fix_states[plan.state_index];
+    state.fill_count = plan.next_fill_count;
+    state.last_updated_height = block_height;
+    let reservation = &mut ledger.fx_fix_reservations[plan.reservation_index];
+    reservation.state = postfiat_types::FX_FIX_RESERVATION_STATE_FILLED.to_string();
+    reservation.terminal_at_height = block_height;
 }
 
 pub(super) fn execute_bridge_batch(

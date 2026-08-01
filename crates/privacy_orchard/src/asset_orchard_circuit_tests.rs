@@ -886,6 +886,57 @@ fn pricing_binding_accepts_deterministic_floor_rounding() {
 }
 
 #[test]
+fn pricing_binding_accepts_pfusdc_to_pnok_demo_fix_exactly() {
+    let mut fields = public_fields();
+    fields.pricing.base_asset_tag = AssetTag::derive("pfUSDC").expect("pfUSDC tag");
+    fields.pricing.quote_asset_tag = AssetTag::derive("pNOK").expect("pNOK tag");
+    fields.pricing.ratio_numerator = 21;
+    fields.pricing.ratio_denominator = 2_000_000;
+    let circuit = AssetOrchardSwapConservationCircuit::new(
+        [leg("pfUSDC", 20_000_000), leg("pNOK", 210)],
+        [leg("pNOK", 210), leg("pfUSDC", 20_000_000)],
+        true,
+        &fields,
+    )
+    .expect("pNOK FIX circuit");
+    let instance = circuit.public_instance().expect("pNOK FIX instance");
+    let prover = MockProver::run(
+        ASSET_ORCHARD_CONSERVATION_CORE_K,
+        &circuit,
+        vec![instance.to_vec()],
+    )
+    .expect("pNOK FIX mock prover");
+    prover.assert_satisfied();
+}
+
+#[test]
+fn pricing_binding_rejects_one_atom_pnok_demo_fix_deviation() {
+    let mut fields = public_fields();
+    fields.pricing.base_asset_tag = AssetTag::derive("pfUSDC").expect("pfUSDC tag");
+    fields.pricing.quote_asset_tag = AssetTag::derive("pNOK").expect("pNOK tag");
+    fields.pricing.ratio_numerator = 21;
+    fields.pricing.ratio_denominator = 2_000_000;
+    let circuit = AssetOrchardSwapConservationCircuit::new(
+        [leg("pfUSDC", 20_000_000), leg("pNOK", 211)],
+        [leg("pNOK", 211), leg("pfUSDC", 20_000_000)],
+        true,
+        &fields,
+    )
+    .expect("off-fix pNOK circuit");
+    let instance = circuit.public_instance().expect("off-fix pNOK instance");
+    let prover = MockProver::run(
+        ASSET_ORCHARD_CONSERVATION_CORE_K,
+        &circuit,
+        vec![instance.to_vec()],
+    )
+    .expect("off-fix pNOK mock prover");
+    assert!(
+        prover.verify().is_err(),
+        "one extra pNOK must violate the FIX"
+    );
+}
+
+#[test]
 fn pricing_binding_rejects_non_floor_rounded_private_value() {
     let mut fields = public_fields();
     fields.pricing.ratio_numerator = 820_102_177;

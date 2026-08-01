@@ -105,10 +105,12 @@ struct IngressNoteRequest {
 
 #[derive(Debug)]
 struct SwapActionRequest {
+    request_id: Option<String>,
     wallet_address: String,
     from_asset_id: String,
     to_asset_id: String,
     amount_atoms: u64,
+    wallet_commitment: Option<String>,
     liquidity_amount_atoms: u64,
     liquidity_commitment: String,
     quote_binding_hash: String,
@@ -1352,6 +1354,39 @@ fn build_and_store_note(
 }
 
 fn build_and_store_swap_action(config: &Config, request: &SwapActionRequest) -> io::Result<Value> {
+    let request_fingerprint = swap_action_request_fingerprint(request)?;
+    let durable_work_dir = request.request_id.as_deref().map(|request_id| {
+        config
+            .vault_dir
+            .join("swap-work")
+            .join("by-request")
+            .join(request_id)
+    });
+    if let Some(work_dir) = durable_work_dir.as_ref() {
+        let response_file = work_dir.join("response.json");
+        if response_file.exists() {
+            let response: Value =
+                serde_json::from_slice(&fs::read(response_file)?).map_err(invalid_json)?;
+            if string_value(&response, "request_fingerprint").as_deref()
+                != Some(request_fingerprint.as_str())
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::AlreadyExists,
+                    "swap request_id is already bound to different immutable request fields",
+                ));
+            }
+            return Ok(response);
+        }
+        if work_dir.exists() {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                format!(
+                    "swap request `{}` has incomplete prior state; finalize or audit it before retry",
+                    request.request_id.as_deref().unwrap_or("")
+                ),
+            ));
+        }
+    }
     if request.quote_expires_at_ms <= unix_ms()? {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -1369,12 +1404,18 @@ fn build_and_store_swap_action(config: &Config, request: &SwapActionRequest) -> 
         ));
     }
 
-    let work_dir =
-        config
-            .vault_dir
-            .join("swap-work")
-            .join(format!("{}-{}", std::process::id(), unix_ms()?));
-    prepare_private_dir(&work_dir)?;
+    let work_dir = if let Some(work_dir) = durable_work_dir {
+        prepare_private_dir(&work_dir)?;
+        work_dir
+    } else {
+        let work_dir = config.vault_dir.join("swap-work").join(format!(
+            "{}-{}",
+            std::process::id(),
+            unix_ms()?
+        ));
+        prepare_private_dir(&work_dir)?;
+        work_dir
+    };
     let input_a = work_dir.join("input-wallet.json");
     let input_b = work_dir.join("input-pool.json");
     let action_file = work_dir.join("swap-action.json");
@@ -1497,9 +1538,11 @@ fn build_and_store_swap_action(config: &Config, request: &SwapActionRequest) -> 
     prepare_private_dir(&swaps_dir)?;
     atomic_write_private_json(&swaps_dir.join(format!("{swap_id}.json")), &pending)?;
 
-    Ok(json!({
+    let response = json!({
         "ok": true,
         "schema": "postfiat-asset-orchard-local-swap-action-v1",
+        "request_id": request.request_id,
+        "request_fingerprint": request_fingerprint,
         "swap_id": swap_id,
         "action_json": action_json,
         "action_json_bytes": action_bytes.len(),
@@ -1526,7 +1569,33 @@ fn build_and_store_swap_action(config: &Config, request: &SwapActionRequest) -> 
         },
         "timing": timing,
         "readiness": local_readiness(config),
-    }))
+    });
+    atomic_write_private_json(&work_dir.join("response.json"), &response)?;
+    Ok(response)
+}
+
+fn swap_action_request_fingerprint(request: &SwapActionRequest) -> io::Result<String> {
+    let pricing_claim = serde_json::to_string(&request.pricing_claim).map_err(invalid_json)?;
+    let preimage = format!(
+        "request_id={}\nwallet_address={}\nfrom_asset_id={}\nto_asset_id={}\namount_atoms={}\nwallet_commitment={}\nliquidity_amount_atoms={}\nliquidity_commitment={}\nquote_binding_hash={}\nquote_expires_at_ms={}\npricing_claim={}\ninput_note_path_a={}\ninput_note_path_b={}\n",
+        request.request_id.as_deref().unwrap_or(""),
+        request.wallet_address,
+        request.from_asset_id,
+        request.to_asset_id,
+        request.amount_atoms,
+        request.wallet_commitment.as_deref().unwrap_or(""),
+        request.liquidity_amount_atoms,
+        request.liquidity_commitment,
+        request.quote_binding_hash,
+        request.quote_expires_at_ms,
+        pricing_claim,
+        request.input_note_path_a.as_deref().unwrap_or(""),
+        request.input_note_path_b.as_deref().unwrap_or(""),
+    );
+    Ok(hash_hex(
+        "postfiat.asset_orchard.local_swap_request.v1",
+        preimage.as_bytes(),
+    ))
 }
 
 fn swap_input_records(config: &Config, request: &SwapActionRequest) -> io::Result<(Value, Value)> {
@@ -1560,7 +1629,7 @@ fn swap_input_records(config: &Config, request: &SwapActionRequest) -> io::Resul
                 Some(&request.wallet_address),
                 &request.from_asset_id,
                 request.amount_atoms,
-                None,
+                request.wallet_commitment.as_deref(),
             )?,
             select_vault_note(
                 config,
@@ -2141,10 +2210,18 @@ fn parse_ingress_note_request(body: &Value) -> io::Result<IngressNoteRequest> {
 }
 
 fn parse_swap_action_request(body: &Value) -> io::Result<SwapActionRequest> {
+    let request_id = body
+        .get("request_id")
+        .map(|_| request_id_field(body))
+        .transpose()?;
     let wallet_address = string_field(body, "wallet_address")?;
     let from_asset_id = hex_field(body, "from_asset_id", 96)?;
     let to_asset_id = hex_field(body, "to_asset_id", 96)?;
     let amount_atoms = u64_field(body, "amount_atoms")?;
+    let wallet_commitment = body
+        .get("wallet_commitment")
+        .map(|_| hex_field(body, "wallet_commitment", 64))
+        .transpose()?;
     let liquidity_amount_atoms = match body.get("liquidity_amount_atoms") {
         Some(_) => u64_field(body, "liquidity_amount_atoms")?,
         None => amount_atoms,
@@ -2176,10 +2253,12 @@ fn parse_swap_action_request(body: &Value) -> io::Result<SwapActionRequest> {
         ));
     }
     Ok(SwapActionRequest {
+        request_id,
         wallet_address,
         from_asset_id,
         to_asset_id,
         amount_atoms,
+        wallet_commitment,
         liquidity_amount_atoms,
         liquidity_commitment,
         quote_binding_hash,
@@ -3625,6 +3704,60 @@ mod tests {
     }
 
     #[test]
+    fn asset_orchard_local_service_swap_request_id_is_bounded_and_fingerprint_bound() {
+        let mut body = asset_orchard_local_service_swap_body(None, None);
+        body["request_id"] = Value::String("pnok-fix-run-01".to_string());
+        let request = parse_swap_action_request(&body).unwrap();
+        assert_eq!(request.request_id.as_deref(), Some("pnok-fix-run-01"));
+        let fingerprint = swap_action_request_fingerprint(&request).unwrap();
+        assert_eq!(fingerprint.len(), 96);
+
+        body["amount_atoms"] = Value::from(43_u64);
+        let changed = parse_swap_action_request(&body).unwrap();
+        assert_ne!(
+            fingerprint,
+            swap_action_request_fingerprint(&changed).unwrap()
+        );
+
+        body["request_id"] = Value::String("../escape".to_string());
+        let error = parse_swap_action_request(&body).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(error.to_string().contains("request_id must match"));
+    }
+
+    #[test]
+    fn asset_orchard_local_service_swap_retry_recovers_cached_response_before_note_selection() {
+        let root = asset_orchard_local_service_test_dir("swap_cached_response");
+        let config = asset_orchard_local_service_test_config(&root);
+        let mut body = asset_orchard_local_service_swap_body(None, None);
+        body["request_id"] = Value::String("pnok-fix-recovery-01".to_string());
+        let request = parse_swap_action_request(&body).unwrap();
+        let fingerprint = swap_action_request_fingerprint(&request).unwrap();
+        let work_dir = config
+            .vault_dir
+            .join("swap-work/by-request/pnok-fix-recovery-01");
+        let cached = json!({
+            "ok": true,
+            "schema": "postfiat-asset-orchard-local-swap-action-v1",
+            "request_id": "pnok-fix-recovery-01",
+            "request_fingerprint": fingerprint,
+            "swap_id": "a".repeat(96),
+        });
+        atomic_write_private_json(&work_dir.join("response.json"), &cached).unwrap();
+
+        let recovered = build_and_store_swap_action(&config, &request).unwrap();
+        assert_eq!(recovered, cached);
+
+        body["amount_atoms"] = Value::from(43_u64);
+        let changed = parse_swap_action_request(&body).unwrap();
+        let error = build_and_store_swap_action(&config, &changed).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+        assert!(error
+            .to_string()
+            .contains("different immutable request fields"));
+    }
+
+    #[test]
     fn asset_orchard_local_service_swap_missing_note_path_fails_cleanly() {
         let root = asset_orchard_local_service_test_dir("swap_missing_path");
         let config = asset_orchard_local_service_test_config(&root);
@@ -4019,8 +4152,20 @@ mod tests {
             .unwrap();
         atomic_write_private_json(&vault_record_path(&config, &"2".repeat(64)), &pool_record)
             .unwrap();
-        let request =
-            parse_swap_action_request(&asset_orchard_local_service_swap_body(None, None)).unwrap();
+        atomic_write_private_json(
+            &vault_record_path(&config, &"3".repeat(64)),
+            &asset_orchard_local_service_record(
+                "pfwallet",
+                &"a".repeat(96),
+                42,
+                &"3".repeat(64),
+                "spendable",
+            ),
+        )
+        .unwrap();
+        let mut body = asset_orchard_local_service_swap_body(None, None);
+        body["wallet_commitment"] = Value::String("1".repeat(64));
+        let request = parse_swap_action_request(&body).unwrap();
 
         let (wallet, pool) = swap_input_records(&config, &request).unwrap();
 

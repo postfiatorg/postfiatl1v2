@@ -224,6 +224,56 @@ test('RpcClient binds A666 market reads to exact route and NAV status methods', 
   ]);
 });
 
+test('RpcClient binds private FIX discovery and exact atom quotes to public RPC methods', async () => {
+  const rpc = new RpcClient('ws://127.0.0.1:8080/rpc');
+  const calls = [];
+  rpc.call = async (method, params) => {
+    calls.push({ method, params });
+    return { ok: true, result: {} };
+  };
+
+  await rpc.fxFixList({
+    baseAssetId: 'aa'.repeat(48),
+    quoteAssetId: 'bb'.repeat(48),
+    activeOnly: true,
+    limit: 5,
+  });
+  await rpc.fxFixInfo('cc'.repeat(48));
+  await rpc.fxFixReservationInfo('dd'.repeat(48));
+  await rpc.assetOrchardActionStatus(
+    ['11'.repeat(32), '22'.repeat(32)],
+    ['33'.repeat(32), '44'.repeat(32)],
+  );
+  await rpc.fxFixQuote('ee'.repeat(48), 20_000_000n);
+
+  assert.deepEqual(calls, [
+    {
+      method: 'fx_fix_list',
+      params: {
+        base_asset_id: 'aa'.repeat(48),
+        quote_asset_id: 'bb'.repeat(48),
+        active_only: true,
+        limit: 5,
+      },
+    },
+    { method: 'fx_fix_info', params: { fix_packet_hash: 'cc'.repeat(48) } },
+    { method: 'fx_fix_reservation_info', params: { reservation_id: 'dd'.repeat(48) } },
+    {
+      method: 'asset_orchard_action_status',
+      params: {
+        nullifier_1: '11'.repeat(32),
+        nullifier_2: '22'.repeat(32),
+        output_commitment_1: '33'.repeat(32),
+        output_commitment_2: '44'.repeat(32),
+      },
+    },
+    {
+      method: 'fx_fix_quote',
+      params: { fix_packet_hash: 'ee'.repeat(48), base_atoms: '20000000' },
+    },
+  ]);
+});
+
 test('RpcClient binds FastPay v3 mutations and recovery reads to exact RPC methods', async () => {
   const client = new RpcClient('ws://127.0.0.1:18793');
   const calls = [];

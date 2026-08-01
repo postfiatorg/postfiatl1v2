@@ -2064,6 +2064,8 @@ pub fn native_pft_live_total(ledger: &LedgerState, shielded: &ShieldedState) -> 
         nav_attestors: _,
         market_ops_policies: _,
         market_ops_envelopes: _,
+        fx_fix_states: _,
+        fx_fix_reservations: _,
         vault_bridge_receipts: _,
         vault_bridge_bucket_states: _,
         vault_bridge_allocations: _,

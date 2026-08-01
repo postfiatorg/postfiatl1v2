@@ -761,6 +761,159 @@ impl MarketOpsPolicyRegisterOperation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FxFixRegisterOperationV1 {
+    pub operator: String,
+    pub packet: FxFixPacketV1,
+}
+
+impl FxFixRegisterOperationV1 {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_postfiat_address("fx_fix_register_v1.operator", &self.operator)?;
+        self.packet.validate()?;
+        if self.packet.operator != self.operator {
+            return Err("fx_fix_register_v1 operator must match packet operator".to_string());
+        }
+        Ok(())
+    }
+
+    fn signing_bytes(&self) -> Vec<u8> {
+        format!(
+            "operator={}\npacket_hash={}\n",
+            self.operator, self.packet.packet_hash
+        )
+        .into_bytes()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FxFixPauseOperationV1 {
+    pub operator: String,
+    pub fix_packet_hash: String,
+    pub paused: bool,
+}
+
+impl FxFixPauseOperationV1 {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_postfiat_address("fx_fix_pause_v1.operator", &self.operator)?;
+        validate_lower_hex_len(
+            "fx_fix_pause_v1.fix_packet_hash",
+            &self.fix_packet_hash,
+            FX_FIX_PACKET_HASH_HEX_LEN,
+        )
+    }
+
+    fn signing_bytes(&self) -> Vec<u8> {
+        format!(
+            "operator={}\nfix_packet_hash={}\npaused={}\n",
+            self.operator, self.fix_packet_hash, self.paused
+        )
+        .into_bytes()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FxFixReservationCreateOperationV1 {
+    pub operator: String,
+    pub fix_packet_hash: String,
+    pub action_binding_hash: String,
+    pub base_atoms: u64,
+    pub quote_atoms: u64,
+    pub wallet_intent_hash: String,
+    pub reservation_nonce: String,
+    pub expires_at_height: u64,
+}
+
+impl FxFixReservationCreateOperationV1 {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_postfiat_address("fx_fix_reservation_create_v1.operator", &self.operator)?;
+        validate_lower_hex_len(
+            "fx_fix_reservation_create_v1.fix_packet_hash",
+            &self.fix_packet_hash,
+            FX_FIX_PACKET_HASH_HEX_LEN,
+        )?;
+        validate_lower_hex_len(
+            "fx_fix_reservation_create_v1.action_binding_hash",
+            &self.action_binding_hash,
+            FX_FIX_ACTION_BINDING_HASH_HEX_LEN,
+        )?;
+        if self.base_atoms == 0 {
+            return Err("fx_fix_reservation_create_v1.base_atoms must be nonzero".to_string());
+        }
+        if self.quote_atoms == 0 {
+            return Err("fx_fix_reservation_create_v1.quote_atoms must be nonzero".to_string());
+        }
+        validate_lower_hex_len(
+            "fx_fix_reservation_create_v1.wallet_intent_hash",
+            &self.wallet_intent_hash,
+            FX_FIX_WALLET_INTENT_HASH_HEX_LEN,
+        )?;
+        validate_lower_hex_len(
+            "fx_fix_reservation_create_v1.reservation_nonce",
+            &self.reservation_nonce,
+            FX_FIX_RESERVATION_NONCE_HEX_LEN,
+        )?;
+        if self.expires_at_height == 0 {
+            return Err(
+                "fx_fix_reservation_create_v1.expires_at_height must be nonzero".to_string(),
+            );
+        }
+        Ok(())
+    }
+
+    pub fn reservation_id(&self) -> Result<String, String> {
+        fx_fix_reservation_id(
+            &self.fix_packet_hash,
+            &self.operator,
+            &self.action_binding_hash,
+            self.base_atoms,
+            self.quote_atoms,
+            &self.wallet_intent_hash,
+            &self.reservation_nonce,
+        )
+    }
+
+    fn signing_bytes(&self) -> Vec<u8> {
+        format!(
+            "operator={}\nfix_packet_hash={}\naction_binding_hash={}\nbase_atoms={}\nquote_atoms={}\nwallet_intent_hash={}\nreservation_nonce={}\nexpires_at_height={}\n",
+            self.operator,
+            self.fix_packet_hash,
+            self.action_binding_hash,
+            self.base_atoms,
+            self.quote_atoms,
+            self.wallet_intent_hash,
+            self.reservation_nonce,
+            self.expires_at_height,
+        )
+        .into_bytes()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FxFixReservationReleaseOperationV1 {
+    pub operator: String,
+    pub reservation_id: String,
+}
+
+impl FxFixReservationReleaseOperationV1 {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_postfiat_address("fx_fix_reservation_release_v1.operator", &self.operator)?;
+        validate_lower_hex_len(
+            "fx_fix_reservation_release_v1.reservation_id",
+            &self.reservation_id,
+            FX_FIX_RESERVATION_ID_HEX_LEN,
+        )
+    }
+
+    fn signing_bytes(&self) -> Vec<u8> {
+        format!(
+            "operator={}\nreservation_id={}\n",
+            self.operator, self.reservation_id
+        )
+        .into_bytes()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NavMintAtNavOperation {
     pub issuer: String,
     pub to: String,
@@ -3215,6 +3368,14 @@ pub enum AssetTransactionOperation {
     MarketOpsPolicyRegister(MarketOpsPolicyRegisterOperation),
     #[serde(rename = "market_ops_finalize")]
     MarketOpsFinalize(MarketOpsFinalizeOperation),
+    #[serde(rename = "fx_fix_register_v1")]
+    FxFixRegisterV1(FxFixRegisterOperationV1),
+    #[serde(rename = "fx_fix_pause_v1")]
+    FxFixPauseV1(FxFixPauseOperationV1),
+    #[serde(rename = "fx_fix_reservation_create_v1")]
+    FxFixReservationCreateV1(FxFixReservationCreateOperationV1),
+    #[serde(rename = "fx_fix_reservation_release_v1")]
+    FxFixReservationReleaseV1(FxFixReservationReleaseOperationV1),
     #[serde(rename = "nav_mint_at_nav")]
     NavMintAtNav(NavMintAtNavOperation),
     #[serde(rename = "nav_redeem_at_nav")]
@@ -3329,6 +3490,18 @@ impl<'de> Deserialize<'de> for AssetTransactionOperation {
             "market_ops_finalize" => {
                 decode_operation!(MarketOpsFinalizeOperation, MarketOpsFinalize)
             }
+            "fx_fix_register_v1" => {
+                decode_operation!(FxFixRegisterOperationV1, FxFixRegisterV1)
+            }
+            "fx_fix_pause_v1" => decode_operation!(FxFixPauseOperationV1, FxFixPauseV1),
+            "fx_fix_reservation_create_v1" => decode_operation!(
+                FxFixReservationCreateOperationV1,
+                FxFixReservationCreateV1
+            ),
+            "fx_fix_reservation_release_v1" => decode_operation!(
+                FxFixReservationReleaseOperationV1,
+                FxFixReservationReleaseV1
+            ),
             "nav_mint_at_nav" => decode_operation!(NavMintAtNavOperation, NavMintAtNav),
             "nav_redeem_at_nav" => decode_operation!(NavRedeemAtNavOperation, NavRedeemAtNav),
             "nav_halt" => decode_operation!(NavHaltOperation, NavHalt),
@@ -3458,6 +3631,14 @@ impl AssetTransactionOperation {
             Self::NavEpochFinalize(_) => NAV_EPOCH_FINALIZE_TRANSACTION_KIND,
             Self::MarketOpsPolicyRegister(_) => MARKET_OPS_POLICY_REGISTER_TRANSACTION_KIND,
             Self::MarketOpsFinalize(_) => MARKET_OPS_FINALIZE_TRANSACTION_KIND,
+            Self::FxFixRegisterV1(_) => FX_FIX_REGISTER_TRANSACTION_KIND_V1,
+            Self::FxFixPauseV1(_) => FX_FIX_PAUSE_TRANSACTION_KIND_V1,
+            Self::FxFixReservationCreateV1(_) => {
+                FX_FIX_RESERVATION_CREATE_TRANSACTION_KIND_V1
+            }
+            Self::FxFixReservationReleaseV1(_) => {
+                FX_FIX_RESERVATION_RELEASE_TRANSACTION_KIND_V1
+            }
             Self::NavMintAtNav(_) => NAV_MINT_AT_NAV_TRANSACTION_KIND,
             Self::NavRedeemAtNav(_) => NAV_REDEEM_AT_NAV_TRANSACTION_KIND,
             Self::NavHalt(_) => NAV_HALT_TRANSACTION_KIND,
@@ -3522,6 +3703,10 @@ impl AssetTransactionOperation {
             Self::NavEpochFinalize(operation) => operation.validate(),
             Self::MarketOpsPolicyRegister(operation) => operation.validate(),
             Self::MarketOpsFinalize(operation) => operation.validate(),
+            Self::FxFixRegisterV1(operation) => operation.validate(),
+            Self::FxFixPauseV1(operation) => operation.validate(),
+            Self::FxFixReservationCreateV1(operation) => operation.validate(),
+            Self::FxFixReservationReleaseV1(operation) => operation.validate(),
             Self::NavMintAtNav(operation) => operation.validate(),
             Self::NavRedeemAtNav(operation) => operation.validate(),
             Self::NavHalt(operation) => operation.validate(),
@@ -3580,6 +3765,10 @@ impl AssetTransactionOperation {
             Self::NavEpochFinalize(operation) => operation.issuer == source,
             Self::MarketOpsPolicyRegister(operation) => operation.issuer == source,
             Self::MarketOpsFinalize(operation) => operation.issuer == source,
+            Self::FxFixRegisterV1(operation) => operation.operator == source,
+            Self::FxFixPauseV1(operation) => operation.operator == source,
+            Self::FxFixReservationCreateV1(operation) => operation.operator == source,
+            Self::FxFixReservationReleaseV1(operation) => operation.operator == source,
             Self::NavMintAtNav(operation) => operation.issuer == source,
             Self::NavRedeemAtNav(operation) => operation.owner == source,
             Self::NavHalt(operation) => operation.issuer == source,
@@ -3655,6 +3844,18 @@ impl AssetTransactionOperation {
                 bytes.extend_from_slice(&operation.signing_bytes())
             }
             Self::MarketOpsFinalize(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::FxFixRegisterV1(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::FxFixPauseV1(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::FxFixReservationCreateV1(operation) => {
+                bytes.extend_from_slice(&operation.signing_bytes())
+            }
+            Self::FxFixReservationReleaseV1(operation) => {
                 bytes.extend_from_slice(&operation.signing_bytes())
             }
             Self::NavMintAtNav(operation) => bytes.extend_from_slice(&operation.signing_bytes()),

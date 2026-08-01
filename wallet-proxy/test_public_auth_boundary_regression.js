@@ -176,6 +176,11 @@ async function main() {
     'owned_recovery_status',
     'navcoin_bridge_supply_status',
     'vault_bridge_status',
+    'fx_fix_list',
+    'fx_fix_info',
+    'fx_fix_reservation_info',
+    'asset_orchard_action_status',
+    'fx_fix_quote',
   ]) {
     assert.strictEqual(rpcRequestRequiresAuth(method), false, `${method} is a public read`);
   }

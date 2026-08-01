@@ -26,6 +26,12 @@ pub const NAV_RESERVE_CHALLENGE_TRANSACTION_KIND: &str = "nav_reserve_challenge"
 pub const NAV_EPOCH_FINALIZE_TRANSACTION_KIND: &str = "nav_epoch_finalize";
 pub const MARKET_OPS_POLICY_REGISTER_TRANSACTION_KIND: &str = "market_ops_policy_register";
 pub const MARKET_OPS_FINALIZE_TRANSACTION_KIND: &str = "market_ops_finalize";
+pub const FX_FIX_REGISTER_TRANSACTION_KIND_V1: &str = "fx_fix_register_v1";
+pub const FX_FIX_PAUSE_TRANSACTION_KIND_V1: &str = "fx_fix_pause_v1";
+pub const FX_FIX_RESERVATION_CREATE_TRANSACTION_KIND_V1: &str =
+    "fx_fix_reservation_create_v1";
+pub const FX_FIX_RESERVATION_RELEASE_TRANSACTION_KIND_V1: &str =
+    "fx_fix_reservation_release_v1";
 pub const NAV_MINT_AT_NAV_TRANSACTION_KIND: &str = "nav_mint_at_nav";
 pub const NAV_REDEEM_AT_NAV_TRANSACTION_KIND: &str = "nav_redeem_at_nav";
 pub const NAV_HALT_TRANSACTION_KIND: &str = "nav_halt";

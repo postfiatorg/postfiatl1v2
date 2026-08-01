@@ -573,6 +573,112 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                 )],
             )
         }
+        "fx_fix_list" => {
+            let limit = flag_value(flags, "--limit")
+                .map(|value| {
+                    value
+                        .parse::<usize>()
+                        .map_err(|_| "--limit must be a usize".to_string())
+                })
+                .transpose()?;
+            let report = fx_fix_list(FxFixListOptions {
+                data_dir,
+                base_asset_id: flag_value(flags, "--base-asset-id").map(ToString::to_string),
+                quote_asset_id: flag_value(flags, "--quote-asset-id").map(ToString::to_string),
+                active_only: flag_present(flags, "--active-only"),
+                limit,
+            })
+            .map_err(|error| format!("rpc fx_fix_list failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "fx_fix_list",
+                    report.chain_id.clone(),
+                    "fx fix list queried",
+                )],
+            )
+        }
+        "fx_fix_info" => {
+            let fix_packet_hash =
+                flag_value(flags, "--fix-packet-hash").ok_or("missing --fix-packet-hash")?;
+            let report = fx_fix_info(FxFixInfoOptions {
+                data_dir,
+                fix_packet_hash: fix_packet_hash.to_string(),
+            })
+            .map_err(|error| format!("rpc fx_fix_info failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "fx_fix_info",
+                    report.fix_packet_hash.clone(),
+                    "fx fix info queried",
+                )],
+            )
+        }
+        "fx_fix_reservation_info" => {
+            let reservation_id =
+                flag_value(flags, "--reservation-id").ok_or("missing --reservation-id")?;
+            let report = fx_fix_reservation_info(FxFixReservationInfoOptions {
+                data_dir,
+                reservation_id: reservation_id.to_string(),
+            })
+            .map_err(|error| format!("rpc fx_fix_reservation_info failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "fx_fix_reservation_info",
+                    report.reservation_id.clone(),
+                    "fx fix reservation queried",
+                )],
+            )
+        }
+        "asset_orchard_action_status" => {
+            let required =
+                |flag: &str| flag_value(flags, flag).ok_or_else(|| format!("missing {flag}"));
+            let report = asset_orchard_action_status(AssetOrchardActionStatusOptions {
+                data_dir,
+                nullifiers: [
+                    required("--nullifier-1")?.to_string(),
+                    required("--nullifier-2")?.to_string(),
+                ],
+                output_commitments: [
+                    required("--output-commitment-1")?.to_string(),
+                    required("--output-commitment-2")?.to_string(),
+                ],
+            })
+            .map_err(|error| format!("rpc asset_orchard_action_status failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "asset_orchard_action_status",
+                    report.pool_id.clone(),
+                    "Asset-Orchard action elements queried",
+                )],
+            )
+        }
+        "fx_fix_quote" => {
+            let fix_packet_hash =
+                flag_value(flags, "--fix-packet-hash").ok_or("missing --fix-packet-hash")?;
+            let report = fx_fix_quote(FxFixQuoteOptions {
+                data_dir,
+                fix_packet_hash: fix_packet_hash.to_string(),
+                base_atoms: parse_u64_flag(flags, "--base-atoms")?,
+            })
+            .map_err(|error| format!("rpc fx_fix_quote failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "fx_fix_quote",
+                    report.fix_packet_hash.clone(),
+                    "fx fix quote computed",
+                )],
+            )
+        }
         "market_ops_status" => {
             let asset_id = flag_value(flags, "--asset-id").ok_or("missing --asset-id")?;
             let epoch = flag_value(flags, "--epoch")

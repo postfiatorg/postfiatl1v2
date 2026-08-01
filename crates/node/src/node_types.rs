@@ -985,6 +985,8 @@ pub struct VaultBridgeRouteReport {
     pub nav_profile_source_class: String,
     pub nav_profile_verifier_kind: String,
     pub nav_profile_policy_hash: String,
+    pub route_trust_class: String,
+    pub live_value_enabled: bool,
     pub active: bool,
 }
 
@@ -2545,6 +2547,34 @@ pub struct AssetInfoOptions {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FxFixListOptions {
+    pub data_dir: PathBuf,
+    pub base_asset_id: Option<String>,
+    pub quote_asset_id: Option<String>,
+    pub active_only: bool,
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FxFixInfoOptions {
+    pub data_dir: PathBuf,
+    pub fix_packet_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FxFixReservationInfoOptions {
+    pub data_dir: PathBuf,
+    pub reservation_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FxFixQuoteOptions {
+    pub data_dir: PathBuf,
+    pub fix_packet_hash: String,
+    pub base_atoms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AccountLinesOptions {
     pub data_dir: PathBuf,
     pub account: String,
@@ -2843,6 +2873,121 @@ pub struct AssetInfoReport {
     pub asset_id: String,
     pub found: bool,
     pub asset: Option<IssuedAssetReport>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FxFixAssetReport {
+    pub asset_id: String,
+    pub issuer: String,
+    pub code: String,
+    pub precision: u8,
+    pub display_name: String,
+    pub asset_tag_lo: String,
+    pub asset_tag_hi: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FxFixReportRow {
+    pub status: String,
+    pub state: FxFixStateV1,
+    pub base_asset: FxFixAssetReport,
+    pub quote_asset: FxFixAssetReport,
+    pub pricing_claim: AssetOrchardPricingClaim,
+    pub remaining_fill_slots: u32,
+    pub active_reservation_count: u32,
+    pub committed_base_atoms: u64,
+    pub committed_quote_atoms: u64,
+    pub remaining_base_atoms: u64,
+    pub remaining_quote_atoms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FxFixListReport {
+    pub schema: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub protocol_version: u32,
+    pub current_height: u64,
+    pub base_asset_id: Option<String>,
+    pub quote_asset_id: Option<String>,
+    pub active_only: bool,
+    pub limit: u64,
+    pub truncated: bool,
+    pub fix_count: u64,
+    pub fixes: Vec<FxFixReportRow>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FxFixInfoReport {
+    pub schema: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub protocol_version: u32,
+    pub current_height: u64,
+    pub fix_packet_hash: String,
+    pub found: bool,
+    pub fix: Option<FxFixReportRow>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FxFixReservationInfoReport {
+    pub schema: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub protocol_version: u32,
+    pub current_height: u64,
+    pub reservation_id: String,
+    pub found: bool,
+    pub active: bool,
+    pub reservation: Option<FxFixReservationV1>,
+    pub fix_status: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AssetOrchardActionStatusOptions {
+    pub data_dir: PathBuf,
+    pub nullifiers: [String; 2],
+    pub output_commitments: [String; 2],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssetOrchardElementStatus {
+    pub value: String,
+    pub occurrence_count: u64,
+    pub present_exactly_once: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssetOrchardActionStatusReport {
+    pub schema: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub protocol_version: u32,
+    pub current_height: u64,
+    pub pool_id: String,
+    pub nullifiers: [AssetOrchardElementStatus; 2],
+    pub output_commitments: [AssetOrchardElementStatus; 2],
+    pub finalized_exactly_once: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FxFixQuoteReport {
+    pub schema: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub protocol_version: u32,
+    pub current_height: u64,
+    pub fix_packet_hash: String,
+    pub source_label: String,
+    pub base_asset: FxFixAssetReport,
+    pub quote_asset: FxFixAssetReport,
+    pub base_atoms: u64,
+    pub quote_atoms: u64,
+    pub exact_division: bool,
+    pub fee_atoms: u64,
+    pub price_impact_bps: u16,
+    pub remaining_fill_slots: u32,
+    pub pricing_claim: AssetOrchardPricingClaim,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
