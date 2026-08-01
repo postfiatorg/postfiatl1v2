@@ -1,12 +1,12 @@
 {
   "schema": "postfiat-open-source-proof-public-input-inventory-v1",
   "audit_date": "2026-08-01",
-  "baseline_commit": "016c7358608fca6f62752be0cc3132d3d43ccea4",
+  "baseline_commit": "bfe0ded03033085ab1db9df274f93cc41d0d2690",
   "source_hashes": {
     "crates/privacy_orchard/src/asset_orchard.rs": "9b63632e1d4c5cb4bd7d061103552db5b8380f8404659c73f8e48f14b28ba739",
     "crates/privacy_orchard/src/asset_orchard_circuit.rs": "77ab533ed63a10a2a4a2902de11f3a94d5f2d1045afb6839d4c7f59407e9d310",
     "crates/privacy_orchard/src/verify.rs": "0b48191344297c4c1a7720b3cc54844d919205f58013bd6f4e8af3d60b72e66a",
-    "crates/execution/src/nav_sp1_verifier.rs": "8fa6988c17a19488a0f54eb7b688efd2e74b84b052b3974be7185d490c0846a8",
+    "crates/execution/src/nav_sp1_verifier.rs": "1668b4f94c4589087f9e5194dd515754b89f9ab5df8f542e8b0e1e7c66297659",
     "crates/proofs/src/lib.rs": "6ad08dd265fc25958daf6e0ae3d55bbecaa13cdebdcafc9739c2d682d0eb4527",
     "crates/types/src/nav_reserve_public_values.rs": "ffe01da1eefffa33d1f283ba0248e5e7f572e0537b88a794435aa43e2a3c5cf6",
     "tools/nav-reserve-proof/crates/reserve-proof-types/src/lib.rs": "dcdb6e229ad8b0cd9d3b5cae45e963f63e98136d403e6aecfb03b124f4b94d33",
@@ -125,7 +125,7 @@
       "name": "NAV provider-neutral reserve proof",
       "status": "public, reproducible successor implementation; profile-gated consensus verifier",
       "proof_system_id": "sp1-nav-reserve-v1",
-      "program_vkey": "0x007e32678376339d48df4db28a9825d5fb229cedb8b2e5c92295d4580c9d32f8",
+      "program_vkey": "0x000c7271e0711abce0c61d293222fd4a144599a779db8cadadc4df35e31a4100",
       "public_values_schema": "postfiat.nav_reserve_public_values.v1",
       "encoding": "fixed-width, big-endian integers, no dynamic fields",
       "public_values_length": 584,

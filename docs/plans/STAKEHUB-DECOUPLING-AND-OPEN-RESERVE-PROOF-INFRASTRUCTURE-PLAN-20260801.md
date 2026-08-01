@@ -974,7 +974,7 @@ or unaffiliated-operator gates have occurred.
 | Canonical real proof | CPU Groth16 prove and independent host verify | PASS; the controlled chain-bound fixture and consensus calldata were regenerated for the canonical identity. |
 | Execution | `cargo test -p postfiat-execution` | PASS; 176/176, including real-proof, tamper, lifecycle, and controlled-source policy checks. |
 | Node regression | `cargo test -p postfiat-node --lib` | PASS; 251 passed, 0 failed, 2 intentionally ignored local-Anvil tests. |
-| Six-validator proof finality | `provider_neutral_qnav_proof_finalizes_and_survives_six_validator_restart` | PASS in 212.18 seconds. |
+| Six-validator proof finality | `provider_neutral_qnav_proof_finalizes_and_survives_six_validator_restart` | PASS in 213.42 seconds under the canonical profile identity. |
 | Node compilation | `cargo check -p postfiat-node --all-targets` | PASS. |
 | Constrained signer | `python3 -m pytest -q python/tests/test_constrained_signer.py` | PASS; 10/10, including bounded durable-state rejection. |
 | Release artifacts | release `postfiat-node` and `fastswap_wallet_service` | PASS; both built and binary string scans contain no StakeHub route, path, socket, configuration, or provider name. |

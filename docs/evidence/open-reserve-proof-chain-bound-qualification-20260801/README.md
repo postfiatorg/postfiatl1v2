@@ -1,7 +1,9 @@
 # Chain-bound open reserve-proof qualification
 
-**Date:** 2026-08-01  
-**Result:** PASS under the path-independent, reproducibly rebuilt guest  
+**Date:** 2026-08-01
+
+**Result:** PASS under the path-independent, reproducibly rebuilt guest
+
 **Trust class:** CONTROLLED; qualification only; no live value
 
 This is the corrected end-to-end qualification of the public reserve-proof
