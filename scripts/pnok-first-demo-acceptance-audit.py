@@ -148,6 +148,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=repo / "deployments/pnok-private-fix-20260801/acceptance/public/report.json",
     )
+    parser.add_argument(
+        "--fault-report",
+        type=Path,
+        default=repo / "deployments/pnok-private-fix-20260801/recovery-faults/report.json",
+    )
     parser.add_argument("--ports", default="28650,28651,28652,28653,28654,28655")
     return parser.parse_args()
 
@@ -265,6 +270,19 @@ def main() -> None:
         and len({status.get("job_id") for status in all_jobs}) == 19
         and campaign.get("browser_errors") == []
     )
+    fault_report = load_json(args.fault_report.resolve())
+    checks["duplicate_prover_validator_and_rpc_recovery_cases_passed"] = (
+        fault_report.get("ok") is True
+        and fault_report.get("controlled_demo_only") is True
+        and fault_report.get("duplicate_submit_idempotent") is True
+        and fault_report.get("validator_restart_during_reset_recovered") is True
+        and fault_report.get("resident_prover_restart_and_full_prewarm_recovered") is True
+        and fault_report.get("wallet_proxy_restart_during_browser_acquisition_recovered") is True
+        and accepted_job(fault_report.get("reset", {}), "restore")
+        and accepted_job(fault_report.get("acquire", {}), "acquire")
+        and fault_report.get("acquire", {}).get("retry_count", 0) >= 2
+        and fault_report.get("browser_errors") == []
+    )
     checks["private_swap_supply_nullifier_output_and_replay_invariants"] = all(
         status.get("supply_unchanged") is True
         and status.get("nullifier_occurrence_counts") == [1, 1]
@@ -337,6 +355,7 @@ def main() -> None:
     public_files = [
         repo / "deployments/pnok-private-fix-20260801/browser-run-01/report.json",
         campaign_path,
+        args.fault_report.resolve(),
         repo / "deployments/pnok-private-fix-20260801/repeat-fix-epoch-3/public/fix-packet.json",
         repo / "deployments/pnok-private-fix-20260801/repeat-fix-epoch-3/public/status.json",
     ]
@@ -360,6 +379,19 @@ def main() -> None:
         and launch.get("live_value_enabled") is False
         and all(status.get("source_boundary") == "controlled sandbox checkpoint" for status in all_jobs)
     )
+    command(
+        [
+            "cargo",
+            "test",
+            "-p",
+            "postfiat-execution",
+            "fx_fix_reservation_rejects_expired_packet_without_effect",
+            "--",
+            "--nocapture",
+        ],
+        cwd=repo,
+    )
+    checks["expired_fix_rejected_without_effect_regression_passed"] = True
 
     report = {
         "schema": "postfiat-pnok-first-demo-acceptance-report-v1",
