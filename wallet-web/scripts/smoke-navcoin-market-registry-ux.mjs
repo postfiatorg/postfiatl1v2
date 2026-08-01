@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+
 import { chromium } from 'playwright';
 
 const walletUrl = process.env.WALLET_WEB_URL || 'https://127.0.0.1:5173';
@@ -12,7 +14,7 @@ try {
   await page.goto(walletUrl, { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'Create Wallet', exact: true }).click();
   await page.getByRole('checkbox', { name: /saved my seed/i }).check();
-  const passphrase = 'navcoin-registry-smoke-only';
+  const passphrase = crypto.randomBytes(24).toString('base64url');
   await page.getByPlaceholder('Encryption passphrase (min 10 chars)').fill(passphrase);
   await page.getByPlaceholder('Confirm passphrase').fill(passphrase);
   await page.getByRole('button', { name: 'Create Wallet', exact: true }).click();

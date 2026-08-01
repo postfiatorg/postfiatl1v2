@@ -45,6 +45,16 @@ export function wallet_fastpay_unwrap_lock_id(order_json: string): string;
 export function wallet_keygen(chain_id: string, master_seed_hex: string, account_index: number): any;
 
 /**
+ * Fill and validate a proof-bound PFTL -> Ethereum mint packet locally.
+ *
+ * The policy commitment and EVM digest are consensus-critical. Computing both
+ * in the same Rust implementation used by validators avoids a browser-side
+ * ABI reimplementation while keeping the reviewed destination/amount fields
+ * inside the wallet custody boundary.
+ */
+export function wallet_prepare_pftl_uniswap_mint_packet(policy_hash: string, packet_json: string): any;
+
+/**
  * Sign an asset transaction using a fee quote from the RPC server.
  *
  * backup_json: WalletBackupFile as JSON string
@@ -175,6 +185,7 @@ export interface InitOutput {
     readonly wallet_fastpay_unwrap_certificate_digest: (a: number, b: number) => [number, number, number, number];
     readonly wallet_fastpay_unwrap_lock_id: (a: number, b: number) => [number, number, number, number];
     readonly wallet_keygen: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly wallet_prepare_pftl_uniswap_mint_packet: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly wallet_sign_asset_transaction: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly wallet_sign_asset_transaction_fields: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly wallet_sign_escrow_transaction: (a: number, b: number, c: number, d: number) => [number, number, number];

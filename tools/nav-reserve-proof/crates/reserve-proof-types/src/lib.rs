@@ -679,10 +679,7 @@ pub fn opaque_commitment(label: &str, bytes: &[u8]) -> Result<String, String> {
             "opaque commitment input must be in 1..={MAX_EVIDENCE_BYTES} bytes"
         ));
     }
-    Ok(hash48(
-        OPAQUE_COMMITMENT_DOMAIN,
-        &[label.as_bytes(), bytes],
-    ))
+    Ok(hash48(OPAQUE_COMMITMENT_DOMAIN, &[label.as_bytes(), bytes]))
 }
 
 /// Verify one fully assembled evidence dimension without requiring callers to
@@ -1070,8 +1067,14 @@ mod tests {
     #[test]
     fn opaque_commitment_is_labeled_bounded_and_deterministic() {
         let first = opaque_commitment("reserve-owner", b"ethereum:0x1234").unwrap();
-        assert_eq!(first, opaque_commitment("reserve-owner", b"ethereum:0x1234").unwrap());
-        assert_ne!(first, opaque_commitment("disclosure", b"ethereum:0x1234").unwrap());
+        assert_eq!(
+            first,
+            opaque_commitment("reserve-owner", b"ethereum:0x1234").unwrap()
+        );
+        assert_ne!(
+            first,
+            opaque_commitment("disclosure", b"ethereum:0x1234").unwrap()
+        );
         assert!(opaque_commitment("bad label", b"value").is_err());
         assert!(opaque_commitment("reserve-owner", &[]).is_err());
         assert!(opaque_commitment("reserve-owner", &vec![0; MAX_EVIDENCE_BYTES + 1]).is_err());

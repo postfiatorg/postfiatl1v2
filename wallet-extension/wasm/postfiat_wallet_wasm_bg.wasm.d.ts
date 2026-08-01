@@ -10,6 +10,7 @@ export const wallet_fastpay_transfer_lock_id: (a: number, b: number) => [number,
 export const wallet_fastpay_unwrap_certificate_digest: (a: number, b: number) => [number, number, number, number];
 export const wallet_fastpay_unwrap_lock_id: (a: number, b: number) => [number, number, number, number];
 export const wallet_keygen: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+export const wallet_prepare_pftl_uniswap_mint_packet: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const wallet_sign_asset_transaction: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const wallet_sign_asset_transaction_fields: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const wallet_sign_escrow_transaction: (a: number, b: number, c: number, d: number) => [number, number, number];

@@ -49,6 +49,12 @@ POSTURE_NOTES = {
     "shield_disclose": "legacy shielded disclosure; not Orchard privacy",
     "shield_turnstile": "shielded turnstile accounting read",
     "bridge_status": "bridge simulation state read",
+    "nav_reserve_proof_status": "provider-neutral NAV reserve proof and profile status read",
+    "fx_fix_list": "public fixed-rate FX market directory read",
+    "fx_fix_info": "public fixed-rate FX market detail read",
+    "fx_fix_reservation_info": "public fixed-rate FX reservation status read",
+    "fx_fix_quote": "deterministic fixed-rate FX quote preview",
+    "asset_orchard_action_status": "public private-action finality/status read",
     "mempool_submit_signed_transfer": "controlled write edge; disabled unless explicitly enabled",
     "mempool_submit_signed_transfer_finality": "controlled in-process write/finality edge; disabled unless explicitly enabled",
     "shield_batch_orchard": "privacy-alpha batch-create edge; disabled unless explicitly enabled",
@@ -135,6 +141,12 @@ READ_ONLY_PUBLIC_METHODS = {
     "owned_certificate",
     "owned_recovery_status",
     "pfusdc_egress_witness",
+    "nav_reserve_proof_status",
+    "fx_fix_list",
+    "fx_fix_info",
+    "fx_fix_reservation_info",
+    "fx_fix_quote",
+    "asset_orchard_action_status",
 }
 
 AUTHORIZED_PROTOCOL_MUTATION_PUBLIC_METHODS = {

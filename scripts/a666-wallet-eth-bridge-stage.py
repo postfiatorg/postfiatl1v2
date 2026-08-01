@@ -46,9 +46,9 @@ EXECUTION_RPCS = (
     "https://eth.merkle.io",
 )
 BEACON_RPC = "https://ethereum-beacon-api.publicnode.com"
-A100_HOST = os.environ.get("A666_A100_HOST", "194.228.55.129")
+A100_HOST = os.environ["A666_A100_HOST"]
 A100_PORT = int(os.environ.get("A666_A100_PORT", "30886"))
-VALIDATOR2_HOST = os.environ.get("A666_VALIDATOR2_HOST", "66.42.48.39")
+VALIDATOR2_HOST = os.environ["A666_VALIDATOR2_HOST"]
 A100_CAPTURE = (
     "/workspace/a666-acceptance/bin/"
     "eth-l1-mainnet-fast-lane-p0-depositor-fix-20260731"

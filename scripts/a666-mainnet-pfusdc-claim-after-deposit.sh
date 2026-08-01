@@ -10,9 +10,9 @@ workflow_id=
 expected_pftl_height=
 expected_holder_atoms=
 resume_after_proof=false
-a100_host=${A666_A100_HOST:-194.228.55.129}
+a100_host=${A666_A100_HOST:?A666_A100_HOST is required}
 a100_port=${A666_A100_PORT:-30886}
-validator2_host=${A666_VALIDATOR2_HOST:-66.42.48.39}
+validator2_host=${A666_VALIDATOR2_HOST:?A666_VALIDATOR2_HOST is required}
 release_id=${A666_PFTL_RELEASE_ID:-resident-local-commit-777faa0}
 
 while (($#)); do

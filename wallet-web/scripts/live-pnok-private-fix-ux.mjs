@@ -7,7 +7,7 @@ import { chromium } from 'playwright';
 const walletUrl = process.env.WALLET_WEB_URL || 'http://127.0.0.1:8080';
 const evidenceDir = path.resolve(process.env.PNOK_FIX_UX_EVIDENCE_DIR
   || '../deployments/pnok-private-fix-20260801/browser-run-01');
-const passphrase = 'pnok-private-fix-browser-test-only';
+const passphrase = crypto.randomBytes(24).toString('base64url');
 const recoveryKey = 'postfiat.pnok_private_fix.active_job.v1';
 
 fs.mkdirSync(evidenceDir, { recursive: true, mode: 0o700 });

@@ -44,7 +44,7 @@ vault_verifier=0x9a45D6F1DC9DA443A88B1C336B3188FA7924D1AE
 lane_manifest=docs/evidence/a666-acceptance-20260728/phase-5-transparent-redeem-verify/pfusdc-egress/recovery-epoch5/deploy/manifest.postdeploy-enriched.json
 lane_manifest_sha256=b69417647e6a4bed5a3e7fa5069a0844b80a63f78020ba34f4796e373e92e904
 nav_source=docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-nav-aware/baseline/nav-manifest.json
-a100_host=${A666_A100_HOST:-194.228.55.129}
+a100_host=${A666_A100_HOST:?A666_A100_HOST is required}
 a100_port=${A666_A100_PORT:-30886}
 a100_root="/workspace/a666-acceptance/live/$workflow_id"
 

@@ -129,7 +129,8 @@ jobs:
         run: |
           curl --fail --location --proto '=https' --tlsv1.2 https://sp1up.succinct.xyz | bash
           "$HOME/.sp1/bin/sp1up" --version 6.3.1
-          "$HOME/.sp1/bin/cargo-prove" --version | grep -F 'cargo-prove sp1'
+          export PATH="$HOME/.sp1/bin:$PATH"
+          cargo prove --version | grep -F 'cargo-prove sp1'
       - name: Verify provider-neutral source boundary
         run: |
           if rg --ignore-case 'stake.?hub' tools/nav-reserve-proof; then

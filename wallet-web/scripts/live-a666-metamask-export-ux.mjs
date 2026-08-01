@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -102,7 +102,7 @@ try {
   if (pftlAddress !== 'pfab9b9228942e5c529633a13aa271d5297bec6353') {
     throw new Error(`backup derived unexpected PFTL address ${pftlAddress}`);
   }
-  const passphrase = 'a666-live-export-20260731';
+  const passphrase = randomBytes(24).toString('base64url');
   await page.getByPlaceholder('Encryption passphrase (min 10 chars)').fill(passphrase);
   await page.getByPlaceholder('Confirm passphrase').fill(passphrase);
   await page.getByRole('button', { name: 'Confirm Import', exact: true }).click();

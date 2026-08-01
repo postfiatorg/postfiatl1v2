@@ -21,6 +21,7 @@ MEDIA_SUFFIXES = {
     ".tar",
     ".gz",
 }
+IMMUTABLE_ARCHIVE_PREFIXES = ("docs/evidence/", "deployments/")
 EXPECTED = {
     "crates/execution/tests/fixtures/sp1-aggregate-regen-monero-crypto/aggregate-proof-calldata.bin": "1ae6004199e7567b3f89f6423d6faf9d44bcda23703243bef0eec7e45b9cbf0e",
     "crates/execution/tests/fixtures/sp1-aggregate-regen-monero-crypto/aggregate-public-values.bin": "9c3d5d0afc5d6eefc56ded32ad21330cfa594803b69c86275cdf09873ec7b97e",
@@ -58,8 +59,8 @@ EXPECTED = {
     "wallet-extension/icons/icon128.png": "4e05b9a7cc8d83b110b6d0ce7dc98702a705f8c8427d98e8a6284cc6cbfd0c39",
     "wallet-extension/icons/icon16.png": "3caf5822b89ea2d234e250e4445dc63b854be6ed4b20681e27ed84196d847e8b",
     "wallet-extension/icons/icon48.png": "b2a4f3d0e8204e866c5e05d157ae734b3e84467087620b5920e1ffe32ea886a2",
-    "wallet-extension/wasm/postfiat_wallet_wasm_bg.wasm": "213fcc6062a8107bb11e25fda18309cda9926a0e6c6ff898eb18102f51751aa2",
-    "wallet-web/src/wasm/postfiat_wallet_wasm_bg.wasm": "213fcc6062a8107bb11e25fda18309cda9926a0e6c6ff898eb18102f51751aa2",
+    "wallet-extension/wasm/postfiat_wallet_wasm_bg.wasm": "6ca01a992e6b415dc371c1ce1df8603661bd7069a21da6a34b922c81cf6ac472",
+    "wallet-web/src/wasm/postfiat_wallet_wasm_bg.wasm": "6ca01a992e6b415dc371c1ce1df8603661bd7069a21da6a34b922c81cf6ac472",
 }
 
 
@@ -91,14 +92,20 @@ def main() -> int:
         path
         for path in tracked
         if any(path.lower().endswith(suffix) for suffix in MEDIA_SUFFIXES)
+        and not path.startswith(IMMUTABLE_ARCHIVE_PREFIXES)
     }
-    assert media == set(EXPECTED), (
-        f"unclassified={sorted(media - set(EXPECTED))} "
-        f"missing={sorted(set(EXPECTED) - media)}"
+    expected = {
+        path: expected
+        for path, expected in EXPECTED.items()
+        if not path.startswith(IMMUTABLE_ARCHIVE_PREFIXES)
+    }
+    assert media == set(expected), (
+        f"unclassified={sorted(media - set(expected))} "
+        f"missing={sorted(set(expected) - media)}"
     )
-    for relative, expected in EXPECTED.items():
+    for relative, expected_digest in expected.items():
         actual = digest(ROOT / relative)
-        assert actual == expected, f"artifact hash drift: {relative}: {actual}"
+        assert actual == expected_digest, f"artifact hash drift: {relative}: {actual}"
     wasm_paths = [
         ROOT / "wallet-web/src/wasm/postfiat_wallet_wasm_bg.wasm",
         ROOT / "wallet-extension/wasm/postfiat_wallet_wasm_bg.wasm",

@@ -12,7 +12,7 @@ const firstRunReport = path.resolve(process.env.PNOK_FIX_FIRST_RUN_REPORT
 const stateFile = path.join(evidenceDir, 'campaign-state.json');
 const reportFile = path.join(evidenceDir, 'report.json');
 const recoveryKey = 'postfiat.pnok_private_fix.active_job.v1';
-const passphrase = 'pnok-private-fix-campaign-test-only';
+const passphrase = crypto.randomBytes(24).toString('base64url');
 
 fs.mkdirSync(evidenceDir, { recursive: true, mode: 0o700 });
 

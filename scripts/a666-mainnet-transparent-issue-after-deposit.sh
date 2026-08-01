@@ -14,9 +14,9 @@ resume_after_ingress_deployment=false
 resume_after_private_middle=false
 allow_recovery_timing_exception=false
 private_middle=false
-a100_host=${A666_A100_HOST:-194.228.55.129}
+a100_host=${A666_A100_HOST:?A666_A100_HOST is required}
 a100_port=${A666_A100_PORT:-30886}
-validator2_host=${A666_VALIDATOR2_HOST:-66.42.48.39}
+validator2_host=${A666_VALIDATOR2_HOST:?A666_VALIDATOR2_HOST is required}
 release_id=${A666_PFTL_RELEASE_ID:-a666-variable-nav-9ffdfb6}
 
 while (($#)); do

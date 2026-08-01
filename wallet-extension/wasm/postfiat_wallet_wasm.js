@@ -227,6 +227,29 @@ export function wallet_keygen(chain_id, master_seed_hex, account_index) {
 }
 
 /**
+ * Fill and validate a proof-bound PFTL -> Ethereum mint packet locally.
+ *
+ * The policy commitment and EVM digest are consensus-critical. Computing both
+ * in the same Rust implementation used by validators avoids a browser-side
+ * ABI reimplementation while keeping the reviewed destination/amount fields
+ * inside the wallet custody boundary.
+ * @param {string} policy_hash
+ * @param {string} packet_json
+ * @returns {any}
+ */
+export function wallet_prepare_pftl_uniswap_mint_packet(policy_hash, packet_json) {
+    const ptr0 = passStringToWasm0(policy_hash, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(packet_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.wallet_prepare_pftl_uniswap_mint_packet(ptr0, len0, ptr1, len1);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * Sign an asset transaction using a fee quote from the RPC server.
  *
  * backup_json: WalletBackupFile as JSON string

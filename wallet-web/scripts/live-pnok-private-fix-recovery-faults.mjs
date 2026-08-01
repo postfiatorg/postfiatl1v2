@@ -10,7 +10,7 @@ const repo = path.resolve('..');
 const evidenceDir = path.resolve(process.env.PNOK_FIX_FAULT_EVIDENCE_DIR
   || '../deployments/pnok-private-fix-20260801/recovery-faults');
 const recoveryKey = 'postfiat.pnok_private_fix.active_job.v1';
-const passphrase = 'pnok-private-fix-recovery-test-only';
+const passphrase = crypto.randomBytes(24).toString('base64url');
 fs.mkdirSync(evidenceDir, { recursive: true, mode: 0o700 });
 
 function atomicJson(file, value) {
