@@ -34,8 +34,9 @@ REPO=/home/postfiat/repos/a666-eth-fast-lane-combined-20260724
 HOSTS=docs/evidence/a666-joe-mainnet-e2e-20260728/proposer-hosts.json
 NODE=target/release/postfiat-node
 REMOTE_RUNNER=scripts/a666-remote-sync-round.py
-REMOTE_NODE=/opt/postfiat/releases/resident-local-commit-777faa0/postfiat-node
-REMOTE_TOPOLOGY=/etc/postfiat/releases/resident-local-commit-777faa0/topology.json
+REMOTE_NODE=/opt/postfiat/releases/pnok-private-fix-2246d25/postfiat-node
+REMOTE_NODE_SHA=05330fb20a40b8a4536000ec57da1862d879bcdc4a21bc8c0657f5c56aa8e0f5
+REMOTE_TOPOLOGY=/etc/postfiat/releases/pnok-private-fix-2246d25/topology.json
 HOLDER_KEY=/home/postfiat/tmp/pfusdc-closed-roundtrip-20260720/keys/holder.json
 LANE_MANIFEST=docs/evidence/a666-acceptance-20260728/phase-5-transparent-redeem-verify/pfusdc-egress/recovery-epoch5/deploy/manifest.postdeploy-enriched.json
 LANE_SHA=b69417647e6a4bed5a3e7fa5069a0844b80a63f78020ba34f4796e373e92e904
@@ -58,7 +59,8 @@ packets, or output directories.
 
 Before any value moves:
 
-1. Verify all six validators run revision `777faa0e`, agree on height, state
+1. Verify all six validators run revision `2246d257`, the deployed node hashes
+   to `$REMOTE_NODE_SHA`, and they agree on height, state
    root, block tip, route state, and have empty mempools.
 2. Verify the route is live, unpaused, invariant-valid, and has no active
    reservation or export entitlement attributable to this user/order.

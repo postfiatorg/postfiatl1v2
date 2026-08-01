@@ -13,6 +13,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import sys
 import time
 from datetime import UTC, datetime
@@ -49,6 +50,10 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--amount-atoms", type=int, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--pftl-recipient",
+        help="PFTL account that receives the proof-verified pfUSDC claim",
+    )
     parser.add_argument(
         "--deployment-manifest",
         type=Path,
@@ -127,6 +132,10 @@ def main() -> None:
         raise RuntimeError(f"refusing to overwrite evidence: {args.output}")
 
     base = load_base()
+    if args.pftl_recipient is not None:
+        if re.fullmatch(r"pf[0-9a-f]{40}", args.pftl_recipient) is None:
+            raise RuntimeError("--pftl-recipient must be a canonical PFTL address")
+        base.RECIPIENT = args.pftl_recipient
     if args.deployment_manifest:
         manifest_digest = apply_deployment_manifest(
             base,
