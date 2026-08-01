@@ -122,6 +122,8 @@ def build_packet(
         raise RuntimeError("max_fills must be in 1..=1024")
     if validity_blocks < 100:
         raise RuntimeError("validity_blocks must be at least 100")
+    aggregate_base_capacity = BASE_ATOMS * max_fills
+    aggregate_quote_capacity = QUOTE_ATOMS * max_fills
     policy = {
         "schema": "postfiat.pnok_demo_fix.governance_policy.v1",
         "trust_class": "CONTROLLED_DEMO",
@@ -133,10 +135,11 @@ def build_packet(
         "band_bps": 0,
         "fee_bps": 0,
         "minimum_base_atoms": BASE_ATOMS,
-        # These capacities are the exact maximum for each fill. Consensus also
-        # bounds aggregate execution through max_fills and private nullifiers.
-        "capacity_base_atoms": BASE_ATOMS,
-        "capacity_quote_atoms": QUOTE_ATOMS,
+        # Consensus interprets capacity_* as aggregate atom capacity. The exact
+        # per-fill size is fixed independently by minimum_base_atoms plus the
+        # quote ratio; max_fills is a second, non-substitutable aggregate bound.
+        "capacity_base_atoms": aggregate_base_capacity,
+        "capacity_quote_atoms": aggregate_quote_capacity,
         "max_fills": max_fills,
     }
     policy_hash = demo.domain_hash_384(
@@ -156,8 +159,8 @@ def build_packet(
         "valid_from_height": current_height + 1,
         "expires_at_height": current_height + validity_blocks,
         "minimum_base_atoms": BASE_ATOMS,
-        "capacity_base_atoms": BASE_ATOMS,
-        "capacity_quote_atoms": QUOTE_ATOMS,
+        "capacity_base_atoms": aggregate_base_capacity,
+        "capacity_quote_atoms": aggregate_quote_capacity,
         "max_fills": max_fills,
         "source_label": SOURCE_LABEL,
         "source_observation_commitment": prior["source_observation_commitment"],
@@ -215,8 +218,8 @@ def validate_packet(packet: dict[str, Any], demo: Any, max_fills: int) -> None:
         "band_bps": 0,
         "fee_bps": 0,
         "minimum_base_atoms": BASE_ATOMS,
-        "capacity_base_atoms": BASE_ATOMS,
-        "capacity_quote_atoms": QUOTE_ATOMS,
+        "capacity_base_atoms": BASE_ATOMS * max_fills,
+        "capacity_quote_atoms": QUOTE_ATOMS * max_fills,
         "max_fills": max_fills,
         "source_label": SOURCE_LABEL,
     }

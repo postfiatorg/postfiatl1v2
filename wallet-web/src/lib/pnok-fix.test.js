@@ -32,8 +32,9 @@ function fixture() {
     band_bps: 0,
     fee_bps: 0,
     minimum_base_atoms: 20_000_000,
-    capacity_base_atoms: 20_000_000,
-    capacity_quote_atoms: 210,
+    capacity_base_atoms: 20_000_000 * 19,
+    capacity_quote_atoms: 210 * 19,
+    max_fills: 19,
     expires_at_height: 900,
   };
   const list = { ok: true, result: { fixes: [{ status: 'active', remaining_fill_slots: 19, state: { packet } }] } };
@@ -61,6 +62,13 @@ test('fails closed when the backend quote differs by one atom', () => {
   const { readiness, list, quote } = fixture();
   quote.result.quote_atoms = 209;
   assert.throws(() => verifyPnokFixQuote(readiness, list, quote), /recomputation/);
+});
+
+test('fails closed when max_fills exceeds aggregate atom capacity', () => {
+  const { readiness, list, quote } = fixture();
+  list.result.fixes[0].state.packet.capacity_base_atoms = 20_000_000;
+  list.result.fixes[0].state.packet.capacity_quote_atoms = 210;
+  assert.throws(() => verifyPnokFixQuote(readiness, list, quote), /exactly one active/);
 });
 
 test('generates bounded durable request IDs', () => {

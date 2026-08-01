@@ -109,6 +109,13 @@ export function verifyPnokFixQuote(readiness, listResponse, quoteResponse) {
   const fixes = Array.isArray(listing.fixes) ? listing.fixes : [];
   const matching = fixes.filter((row) => {
     const packet = row?.state?.packet;
+    const maxFills = Number(packet?.max_fills);
+    let exactCapacity = false;
+    try {
+      exactCapacity = Number.isSafeInteger(maxFills) && maxFills > 0
+        && BigInt(String(packet?.capacity_base_atoms)) === BigInt(String(readiness.base_atoms)) * BigInt(maxFills)
+        && BigInt(String(packet?.capacity_quote_atoms)) === BigInt(String(readiness.quote_atoms)) * BigInt(maxFills);
+    } catch (_) { exactCapacity = false; }
     return row?.status === 'active'
       && packet?.base_asset_id === readiness.base_asset_id
       && packet?.quote_asset_id === readiness.quote_asset_id
@@ -118,8 +125,7 @@ export function verifyPnokFixQuote(readiness, listResponse, quoteResponse) {
       && Number(packet?.band_bps) === 0
       && Number(packet?.fee_bps) === 0
       && String(packet?.minimum_base_atoms) === String(readiness.base_atoms)
-      && String(packet?.capacity_base_atoms) === String(readiness.base_atoms)
-      && String(packet?.capacity_quote_atoms) === String(readiness.quote_atoms)
+      && exactCapacity
       && Number(row?.remaining_fill_slots) > 0;
   });
   if (matching.length !== 1) throw new Error('asset pair does not resolve to exactly one active demo FIX');

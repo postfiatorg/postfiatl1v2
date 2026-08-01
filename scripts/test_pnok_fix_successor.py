@@ -33,7 +33,7 @@ class PnokFixSuccessorTests(unittest.TestCase):
         )
         self.assertEqual(successor.packet_hash(packet, demo), packet["packet_hash"])
 
-    def test_successor_is_exact_per_fill_and_aggregate_fill_bounded(self) -> None:
+    def test_successor_has_exact_per_fill_size_and_aggregate_atom_capacity(self) -> None:
         prior = {
             "epoch": 1,
             "packet_hash": "11" * 48,
@@ -44,14 +44,29 @@ class PnokFixSuccessorTests(unittest.TestCase):
         )
 
         successor.validate_packet(packet, demo, 19)
-        self.assertEqual(packet["capacity_base_atoms"], 20_000_000)
-        self.assertEqual(packet["capacity_quote_atoms"], 210)
+        self.assertEqual(packet["minimum_base_atoms"], 20_000_000)
+        self.assertEqual(packet["capacity_base_atoms"], 20_000_000 * 19)
+        self.assertEqual(packet["capacity_quote_atoms"], 210 * 19)
         self.assertEqual(packet["max_fills"], 19)
         self.assertEqual(packet["previous_fix_hash"], "11" * 48)
         self.assertEqual(packet["valid_from_height"], 701)
         self.assertEqual(packet["expires_at_height"], 2_700)
         self.assertEqual(policy["max_fills"], 19)
+        self.assertEqual(policy["capacity_base_atoms"], 20_000_000 * 19)
+        self.assertEqual(policy["capacity_quote_atoms"], 210 * 19)
         self.assertEqual(commitments["packet"]["hash"], packet["packet_hash"])
+
+    def test_single_fill_successor_keeps_one_fill_atom_capacity(self) -> None:
+        prior = {
+            "epoch": 1,
+            "packet_hash": "11" * 48,
+            "source_observation_commitment": "22" * 48,
+        }
+        packet, _, _ = successor.build_packet(
+            demo, prior, current_height=700, max_fills=1, validity_blocks=2_000
+        )
+        self.assertEqual(packet["capacity_base_atoms"], 20_000_000)
+        self.assertEqual(packet["capacity_quote_atoms"], 210)
 
 
 if __name__ == "__main__":
