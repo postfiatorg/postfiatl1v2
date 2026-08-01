@@ -1,0 +1,19 @@
+{
+  "schema": "postfiat-a666-return-relay-driver-config-v1",
+  "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+  "route_config_digest": "12ed00ca87e29554ce4b978da1710fffc0830767e84e62f08df257f727db953efdd89bcf6ea99f5634d6e5ea8aca2933",
+  "controller": "0x9A0262C0572fb4DB08765408eB225E207F40c3d9",
+  "wrapped_token": "0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5",
+  "native_nav_asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+  "repo": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724",
+  "burn_inspect_script": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-mainnet-burn-for-return.py",
+  "burn_inspect_script_sha256": "4db2c4355a165169496d9e66cf7a67082a027d3b993e784810511b588feb586b",
+  "return_import_script": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-mainnet-return-import.sh",
+  "return_import_script_sha256": "08d940d5801223cc674926c8a93c4e23d64fd340d399c4577b0c3210a00dfc33",
+  "python": "/home/postfiat/repos/StakeHub/.venv/bin/python",
+  "node_binary": "/opt/postfiat/releases/a666-variable-nav-9ffdfb6/postfiat-node",
+  "cast_binary": "/home/postfiat/.foundry/bin/cast",
+  "ethereum_rpc": "https://ethereum-rpc.publicnode.com",
+  "validator2_host": "66.42.48.39",
+  "import_timeout_ms": 3600000
+}

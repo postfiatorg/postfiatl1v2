@@ -15,6 +15,9 @@ function create(runtime) {
     const a666ExportRelayReadiness = (...args) => runtime.a666ExportRelayReadiness(...args);
     const submitA666ExportRelayJob = (...args) => runtime.submitA666ExportRelayJob(...args);
     const a666ExportRelayJobStatus = (...args) => runtime.a666ExportRelayJobStatus(...args);
+    const a666ReturnRelayReadiness = (...args) => runtime.a666ReturnRelayReadiness(...args);
+    const submitA666ReturnRelayJob = (...args) => runtime.submitA666ReturnRelayJob(...args);
+    const a666ReturnRelayJobStatus = (...args) => runtime.a666ReturnRelayJobStatus(...args);
     const addProxyRouteEvent = (...args) => runtime.addProxyRouteEvent(...args);
     const assertNoShieldedPrivateMaterial = (...args) => runtime.assertNoShieldedPrivateMaterial(...args);
     const assertVaultBridgeEvidenceMatches = (...args) => runtime.assertVaultBridgeEvidenceMatches(...args);
@@ -1664,6 +1667,27 @@ function create(runtime) {
                 const result = a666ExportRelayJobStatus(jobId);
                 sendJson(req, res, result ? 200 : 404,
                     result ? { ok: true, ...result } : { ok: false, code: 'a666_export_job_not_found' });
+                return true;
+            }
+
+            if (req.method === 'GET' && url.pathname === '/api/a666/return-readiness') {
+                const result = await a666ReturnRelayReadiness();
+                sendJson(req, res, result.ready === true ? 200 : 503, result);
+                return true;
+            }
+
+            if (req.method === 'POST' && url.pathname === '/api/a666/return-jobs') {
+                const body = await readJsonBody(req, 16 * 1024);
+                const result = await submitA666ReturnRelayJob(body);
+                sendJson(req, res, 202, { ok: true, ...result });
+                return true;
+            }
+
+            if (req.method === 'GET' && url.pathname.startsWith('/api/a666/return-jobs/')) {
+                const jobId = decodeURIComponent(url.pathname.slice('/api/a666/return-jobs/'.length));
+                const result = a666ReturnRelayJobStatus(jobId);
+                sendJson(req, res, result ? 200 : 404,
+                    result ? { ok: true, ...result } : { ok: false, code: 'a666_return_job_not_found' });
                 return true;
             }
 

@@ -17,10 +17,10 @@ ROOT = Path(__file__).resolve().parents[1]
 STAKEHUB = Path("/home/postfiat/repos/StakeHub")
 RPC = "https://ethereum-rpc.publicnode.com"
 CHAIN_ID = 1
-OWNER = Web3.to_checksum_address("0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0")
+DEFAULT_OWNER = Web3.to_checksum_address("0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0")
 CONTROLLER = Web3.to_checksum_address("0x9A0262C0572fb4DB08765408eB225E207F40c3d9")
 TOKEN = Web3.to_checksum_address("0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5")
-PFTL_RECIPIENT = "pfab9b9228942e5c529633a13aa271d5297bec6353"
+DEFAULT_PFTL_RECIPIENT = "pfab9b9228942e5c529633a13aa271d5297bec6353"
 A666 = (
     "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452"
     "da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c"
@@ -42,6 +42,8 @@ def main() -> None:
     parser.add_argument("--transaction-hash")
     parser.add_argument("--amount-atoms", type=int, default=1_000_000)
     parser.add_argument("--return-nonce", required=True)
+    parser.add_argument("--ethereum-sender", default=DEFAULT_OWNER)
+    parser.add_argument("--pftl-recipient", default=DEFAULT_PFTL_RECIPIENT)
     args = parser.parse_args()
     if args.execute and args.transaction_hash:
         raise RuntimeError("--execute and --transaction-hash are mutually exclusive")
@@ -50,6 +52,10 @@ def main() -> None:
         raise RuntimeError("--return-nonce must be one nonzero bytes32")
     if args.amount_atoms <= 0:
         raise RuntimeError("--amount-atoms must be positive")
+    owner = Web3.to_checksum_address(args.ethereum_sender)
+    pftl_recipient = args.pftl_recipient.strip().lower()
+    if not pftl_recipient.startswith("pf") or len(pftl_recipient) != 42:
+        raise RuntimeError("--pftl-recipient must be one canonical PFTL account")
 
     web3 = Web3(Web3.HTTPProvider(RPC, request_kwargs={"timeout": 120}))
     if not web3.is_connected() or int(web3.eth.chain_id) != CHAIN_ID:
@@ -68,14 +74,14 @@ def main() -> None:
     )
     call = controller.functions.burnForPftlReturn(
         args.amount_atoms,
-        PFTL_RECIPIENT,
+        pftl_recipient,
         bytes.fromhex(A666),
         nonce,
     )
     def state_at(block_identifier: int | str = "latest") -> dict[str, Any]:
         return {
             "recipient_balance_atoms": int(
-                token.functions.balanceOf(OWNER).call(
+                    token.functions.balanceOf(owner).call(
                     block_identifier=block_identifier
                 )
             ),
@@ -94,13 +100,13 @@ def main() -> None:
             ),
         }
 
-    pre = state_at()
+    pre = None if args.transaction_hash else state_at()
     gas_estimate = None
     if not args.transaction_hash:
         gas_estimate = int(
             web3.eth.estimate_gas(
                 {
-                    "from": OWNER,
+                    "from": owner,
                     "to": CONTROLLER,
                     "data": call._encode_transaction_data(),
                     "value": 0,
@@ -114,8 +120,8 @@ def main() -> None:
         "rpc": RPC,
         "controller": CONTROLLER,
         "wrapped_token": TOKEN,
-        "ethereum_sender": OWNER,
-        "pftl_recipient": PFTL_RECIPIENT,
+        "ethereum_sender": owner,
+        "pftl_recipient": pftl_recipient,
         "native_nav_asset_id": A666,
         "amount_atoms": args.amount_atoms,
         "return_nonce": nonce.hex(),
@@ -156,8 +162,14 @@ def main() -> None:
     if int(receipt.status) != 1:
         raise RuntimeError(f"return burn reverted: {transaction_hash}")
     if args.transaction_hash:
-        pre = state_at(int(receipt.blockNumber) - 1)
-        report["pre_state"] = pre
+        transaction = web3.eth.get_transaction(transaction_hash)
+        if (
+            Web3.to_checksum_address(transaction["from"]) != owner
+            or Web3.to_checksum_address(transaction["to"]) != CONTROLLER
+            or transaction["input"].hex().lower()
+            != call._encode_transaction_data().removeprefix("0x").lower()
+        ):
+            raise RuntimeError("return burn transaction calldata binding mismatch")
     events = controller.events.ReturnBurned().process_receipt(
         receipt, errors=__import__("web3").logs.DISCARD
     )
@@ -195,8 +207,8 @@ def main() -> None:
             CONTROLLER,
             TOKEN,
             bytes.fromhex(A666),
-            OWNER,
-            PFTL_RECIPIENT,
+                owner,
+                pftl_recipient,
             args.amount_atoms,
             nonce,
             block_number,
@@ -205,14 +217,17 @@ def main() -> None:
     expected_burn_id = Web3.keccak(canonical_preimage)
     if (
         event["returnBurnId"] != expected_burn_id
-        or Web3.to_checksum_address(event["ethereumSender"]) != OWNER
+        or Web3.to_checksum_address(event["ethereumSender"]) != owner
         or event["returnNonce"] != nonce
-        or event["pftlRecipient"] != PFTL_RECIPIENT
+        or event["pftlRecipient"] != pftl_recipient
         or int(event["amountAtoms"]) != args.amount_atoms
     ):
         raise RuntimeError("ReturnBurned event does not match canonical burn preimage")
-    post = state_at(block_number)
-    if (
+    post = state_at("latest" if args.transaction_hash else block_number)
+    if args.transaction_hash:
+        if not post["nonce_consumed"] or post["total_return_burned_atoms"] < args.amount_atoms:
+            raise RuntimeError("return burn current state mismatch")
+    elif (
         pre["recipient_balance_atoms"] - post["recipient_balance_atoms"]
         != args.amount_atoms
         or pre["token_total_supply"] - post["token_total_supply"]

@@ -1,0 +1,16 @@
+{
+  "schema": "postfiat-a666-return-relay-config-v1",
+  "enabled": true,
+  "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+  "route_config_digest": "12ed00ca87e29554ce4b978da1710fffc0830767e84e62f08df257f727db953efdd89bcf6ea99f5634d6e5ea8aca2933",
+  "controller": "0x9A0262C0572fb4DB08765408eB225E207F40c3d9",
+  "wrapped_token": "0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5",
+  "driver_bin": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/wallet-proxy/a666-return-relay-driver.js",
+  "driver_sha256": "704c23816c85a583c488f260803a288af114750995e10f3f033e4a15dd250fdf",
+  "driver_args": ["run-job", "--config", "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/a666-export-relay-mainnet-20260731/return-driver-config.json", "--job-file", "{job_file}"],
+  "readiness_args": ["readiness", "--config", "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/a666-export-relay-mainnet-20260731/return-driver-config.json"],
+  "cwd": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724",
+  "max_amount_atoms": "250000000000",
+  "worker_timeout_ms": 14400000,
+  "readiness_timeout_ms": 120000
+}

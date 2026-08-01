@@ -32,6 +32,12 @@ try {
   if (configuredMarkets < 1) throw new Error('NAVCoin market registry is empty');
   if (await selector.inputValue() === 'a666') throw new Error('market selection is keyed by a product symbol instead of a route identity');
 
+  await market.getByRole('button', { name: 'Redeem', exact: true }).click();
+  await market.getByRole('button', { name: 'From MetaMask', exact: true }).waitFor({ state: 'visible' });
+  await market.getByRole('button', { name: 'From MetaMask', exact: true }).click();
+  await market.getByText(/Return wA666 trustlessly to PFTL/).waitFor({ state: 'visible' });
+  await market.getByRole('button', { name: /Return & redeem/ }).waitFor({ state: 'visible' });
+
   await sidebar.getByRole('button', { name: /NavCoins/ }).click();
   await page.getByText('Each NAVCoin has its own governed route', { exact: false }).waitFor({ state: 'visible' });
   if (browserErrors.length) throw new Error(`browser errors: ${browserErrors.join(' | ')}`);

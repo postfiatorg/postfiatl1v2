@@ -12,9 +12,21 @@ import {
 } from '../lib/a666-primary-route.js';
 import { truncateMiddle } from '../lib/utils.js';
 import { createA666ExportJob, loadA666ExportReadiness, waitForA666ExportJob } from '../lib/a666-export-relay.js';
+import {
+  buildA666ReturnBurnCalldata,
+  createA666ReturnJob,
+  createA666ReturnNonce,
+  loadA666ReturnJob,
+  loadA666ReturnReadiness,
+  waitForA666ReturnJob,
+} from '../lib/a666-return-relay.js';
 
 const EMPTY_PROGRESS = [];
 const ERC20_BALANCE_OF_SELECTOR = '0x70a08231';
+
+function returnStorageKey(routeId, walletAddress) {
+  return `postfiat:a666-return:v1:${routeId}:${String(walletAddress || '').toLowerCase()}`;
+}
 
 function responseResult(response, label) {
   if (!response?.ok || !response.result) {
@@ -103,7 +115,9 @@ export default function NavcoinMarket({
   const [executing, setExecuting] = useState(false);
   const [lastCompleted, setLastCompleted] = useState(null);
   const [delivery, setDelivery] = useState('ethereum');
+  const [redeemSource, setRedeemSource] = useState('pftl');
   const [metamaskNavcoinBalance, setMetamaskNavcoinBalance] = useState(null);
+  const [pendingReturn, setPendingReturn] = useState(null);
   const [exportPacketHash, setExportPacketHash] = useState('');
   const navSymbol = market.symbol;
   const wrappedSymbol = market.wrappedSymbol;
@@ -155,7 +169,53 @@ export default function NavcoinMarket({
     } : current);
   }, [liveSnapshot, market, snapshot?.route?.ledger_hash]);
 
+  useEffect(() => {
+    if (!address || !market?.routeId || typeof localStorage === 'undefined') return undefined;
+    const key = returnStorageKey(market.routeId, address);
+    let stopped = false;
+    const probe = async () => {
+      let stored = null;
+      try { stored = JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) { /* ignore corrupt browser state */ }
+      if (!stored || stopped) return;
+      setPendingReturn(stored);
+      try {
+        if (!stored.job_id && proxyAuthToken) {
+          const created = await createA666ReturnJob({
+            routeId: stored.route_id,
+            routeConfigDigest: stored.route_config_digest,
+            transactionHash: stored.transaction_hash,
+            ethereumSender: stored.ethereum_sender,
+            pftlRecipient: stored.pftl_recipient,
+            nativeNavAssetId: stored.native_nav_asset_id,
+            amountAtoms: stored.amount_atoms,
+            returnNonce: stored.return_nonce,
+            proxyAuthToken,
+          });
+          stored = { ...stored, job_id: created.job_id, status: created.status };
+          localStorage.setItem(key, JSON.stringify(stored));
+          setPendingReturn(stored);
+        }
+        if (!stored.job_id) return;
+        const status = await loadA666ReturnJob(stored.job_id);
+        if (stopped) return;
+        const next = { ...stored, status: status.status, message: status.message || stored.message };
+        setPendingReturn(next);
+        localStorage.setItem(key, JSON.stringify(next));
+        if (status.status === 'accepted') {
+          localStorage.removeItem(key);
+          setPendingReturn(null);
+          setRedeemSource('pftl');
+          await refresh();
+        }
+      } catch (_) { /* the durable job remains recoverable by its stored id */ }
+    };
+    probe();
+    const timer = setInterval(probe, 12_000);
+    return () => { stopped = true; clearInterval(timer); };
+  }, [address, market?.routeId, proxyAuthToken, refresh]);
+
   const amountAtoms = useMemo(() => parseA666Units(amount), [amount]);
+  const redeemBalance = redeemSource === 'ethereum' ? metamaskNavcoinBalance : snapshot?.navcoinBalance;
   const evaluation = useMemo(() => evaluateA666ResidentMarket({
     supplyStatus: snapshot?.route,
     navStatus: snapshot?.nav,
@@ -163,8 +223,8 @@ export default function NavcoinMarket({
     direction: mode,
     amountAtoms,
     pfusdcBalanceAtoms: snapshot?.settlementBalance,
-    a666BalanceAtoms: snapshot?.navcoinBalance,
-  }), [amountAtoms, chainStatus, mode, snapshot]);
+    a666BalanceAtoms: mode === 'redeem' ? redeemBalance : snapshot?.navcoinBalance,
+  }), [amountAtoms, chainStatus, mode, redeemBalance, snapshot]);
   const quote = evaluation.quote;
 
   const finalityReady = chainCapabilities?.read_only === false
@@ -175,7 +235,9 @@ export default function NavcoinMarket({
     && Boolean(backupJson)
     && Boolean(txBuilder)
     && !executing
-    && (mode === 'redeem' || (validEthereumRecipient && (delivery !== 'ethereum' || Boolean(proxyAuthToken))));
+    && (mode === 'redeem'
+      ? (redeemSource === 'pftl' || (validEthereumRecipient && Boolean(proxyAuthToken)))
+      : (validEthereumRecipient && (delivery !== 'ethereum' || Boolean(proxyAuthToken))));
 
   const updateStep = (index, patch) => {
     setProgress(current => current.map((step, stepIndex) => (
@@ -208,6 +270,8 @@ export default function NavcoinMarket({
       }
       const wrappedBalance = await readWrappedNavcoinBalance(selected, market);
       setMetamaskNavcoinBalance(wrappedBalance.toString());
+      if (mode === 'redeem' && BigInt(snapshot?.navcoinBalance || 0) < BigInt(amountAtoms || 0)
+        && wrappedBalance >= BigInt(amountAtoms || 0)) setRedeemSource('ethereum');
     } catch (error) {
       setActionError(error.message || 'Unable to connect MetaMask');
     }
@@ -222,9 +286,19 @@ export default function NavcoinMarket({
     let reserved = false;
     let released = false;
     let exported = false;
+    let returned = false;
     try {
       const fresh = await refresh();
       if (!fresh) throw new Error('Could not refresh the market immediately before signing');
+      let wrappedBalanceBefore = null;
+      if (mode === 'redeem' && redeemSource === 'ethereum') {
+        if (!proxyAuthToken) throw new Error('Authenticated unattended return relay access is not available');
+        const accounts = await window.ethereum?.request?.({ method: 'eth_requestAccounts' });
+        const selected = String(accounts?.[0] || '').toLowerCase();
+        if (selected !== ethereumRecipient) throw new Error('The connected MetaMask account changed; reconnect it before returning tokens');
+        wrappedBalanceBefore = await readWrappedNavcoinBalance(selected, market);
+        setMetamaskNavcoinBalance(wrappedBalanceBefore.toString());
+      }
       const freshEvaluation = evaluateA666ResidentMarket({
         supplyStatus: fresh.route,
         navStatus: fresh.nav,
@@ -232,7 +306,8 @@ export default function NavcoinMarket({
         direction: mode,
         amountAtoms,
         pfusdcBalanceAtoms: fresh.settlementBalance,
-        a666BalanceAtoms: fresh.navcoinBalance,
+        a666BalanceAtoms: mode === 'redeem' && redeemSource === 'ethereum'
+          ? wrappedBalanceBefore?.toString() : fresh.navcoinBalance,
       });
       if (!freshEvaluation.ok) throw new Error(freshEvaluation.blockingReasons.join('. '));
 
@@ -327,25 +402,127 @@ export default function NavcoinMarket({
           updateStep(3, { state: 'running', detail: 'Refreshing finalized balances…' });
         }
       } else {
-        const operation = buildA666RedeemOperation({
-          walletAddress: address,
-          supplyStatus: fresh.route,
-          chainHeight: fresh.chain.block_height,
-          amountAtoms,
-          minimumSettlementAtoms: freshEvaluation.quote.settlementAtoms,
-        });
-        setProgress([
-          { label: `Redeem ${navSymbol}`, state: 'pending', detail: `Burn ${navSymbol} and receive ${settlementSymbol}` },
-          { label: 'Verify balances', state: 'pending', detail: 'Read finalized PFTL state' },
-        ]);
-        await runStep(0, operation, `${navSymbol} redemption`);
-        updateStep(1, { state: 'running', detail: 'Refreshing finalized balances…' });
+        if (redeemSource === 'ethereum') {
+          const readiness = await loadA666ReturnReadiness();
+          if (readiness.ready !== true || readiness.route_id !== fresh.route.route_id
+            || readiness.route_config_digest !== fresh.route.route_config_digest
+            || String(readiness.controller || '').toLowerCase() !== String(fresh.route.handoff_controller || '').toLowerCase()) {
+            throw new Error(`The unattended ${navSymbol} return relay is not ready for this governed route`);
+          }
+          if (wrappedBalanceBefore < BigInt(amountAtoms)) throw new Error(`MetaMask ${wrappedSymbol} balance is insufficient`);
+          const returnNonce = createA666ReturnNonce();
+          const calldata = buildA666ReturnBurnCalldata({
+            amountAtoms,
+            pftlRecipient: address,
+            nativeNavAssetId: market.navAssetId,
+            returnNonce,
+          });
+          setProgress([
+            { label: `Return ${wrappedSymbol}`, state: 'running', detail: 'Confirm the self-custodial burn in MetaMask' },
+            { label: 'Confirm Ethereum burn', state: 'pending', detail: 'Durably bind the transaction to this PFTL wallet' },
+            { label: 'Prove finality', state: 'pending', detail: 'Wait for Ethereum finality and certify the receipt proof' },
+            { label: `Restore ${navSymbol}`, state: 'pending', detail: `Import native ${navSymbol} to PFTL` },
+            { label: `Redeem ${navSymbol}`, state: 'pending', detail: `Burn ${navSymbol} and receive ${settlementSymbol}` },
+            { label: 'Verify balances', state: 'pending', detail: 'Read finalized PFTL state' },
+          ]);
+          const transactionHash = String(await window.ethereum.request({
+            method: 'eth_sendTransaction',
+            params: [{ from: ethereumRecipient, to: fresh.route.handoff_controller, data: calldata, value: '0x0' }],
+          }) || '').toLowerCase();
+          if (!/^0x[0-9a-f]{64}$/.test(transactionHash)) throw new Error('MetaMask did not return a valid burn transaction hash');
+          const storageKey = returnStorageKey(fresh.route.route_id, address);
+          let recovery = {
+            route_id: fresh.route.route_id,
+            route_config_digest: fresh.route.route_config_digest,
+            transaction_hash: transactionHash,
+            ethereum_sender: ethereumRecipient,
+            pftl_recipient: address,
+            native_nav_asset_id: market.navAssetId,
+            amount_atoms: String(amountAtoms),
+            return_nonce: returnNonce,
+            status: 'ethereum_submitted',
+          };
+          localStorage.setItem(storageKey, JSON.stringify(recovery));
+          setPendingReturn(recovery);
+          updateStep(0, { state: 'done', detail: shortTx(transactionHash), txId: transactionHash });
+          updateStep(1, { state: 'running', detail: 'Registering the burn with the durable return relay…' });
+          const job = await createA666ReturnJob({
+            routeId: fresh.route.route_id,
+            routeConfigDigest: fresh.route.route_config_digest,
+            transactionHash,
+            ethereumSender: ethereumRecipient,
+            pftlRecipient: address,
+            nativeNavAssetId: market.navAssetId,
+            amountAtoms,
+            returnNonce,
+            proxyAuthToken,
+          });
+          recovery = { ...recovery, job_id: job.job_id, status: job.status };
+          localStorage.setItem(storageKey, JSON.stringify(recovery));
+          setPendingReturn(recovery);
+          updateStep(1, { state: 'done', detail: `Durable job ${truncateMiddle(job.job_id, 8)}` });
+          updateStep(2, { state: 'running', detail: job.message || 'Waiting for Ethereum finality…' });
+          const returnResult = await waitForA666ReturnJob(job.job_id, {
+            onStatus: status => {
+              const stage = ['proving_ethereum_receipt', 'submitting_pftl_import'].includes(status.status) ? 3 : 2;
+              updateStep(stage, { state: 'running', detail: status.message || String(status.status).replaceAll('_', ' ') });
+              recovery = { ...recovery, status: status.status, message: status.message };
+              localStorage.setItem(storageKey, JSON.stringify(recovery));
+              setPendingReturn(recovery);
+            },
+          });
+          returned = true;
+          updateStep(2, { state: 'done', detail: `Ethereum block ${returnResult.ethereum_block_number || 'finalized'}` });
+          updateStep(3, { state: 'done', detail: `${formatA666Units(amountAtoms)} ${navSymbol} restored on PFTL` });
+          localStorage.removeItem(storageKey);
+          setPendingReturn(null);
+          const returnedSnapshot = await refresh();
+          if (!returnedSnapshot || BigInt(returnedSnapshot.navcoinBalance || 0) < BigInt(amountAtoms)) {
+            throw new Error(`Return finalized, but the restored ${navSymbol} balance is not visible yet`);
+          }
+          const returnedEvaluation = evaluateA666ResidentMarket({
+            supplyStatus: returnedSnapshot.route,
+            navStatus: returnedSnapshot.nav,
+            chainStatus: returnedSnapshot.chain,
+            direction: 'redeem',
+            amountAtoms,
+            pfusdcBalanceAtoms: returnedSnapshot.settlementBalance,
+            a666BalanceAtoms: returnedSnapshot.navcoinBalance,
+          });
+          if (!returnedEvaluation.ok) throw new Error(`Return completed safely; redemption is blocked: ${returnedEvaluation.blockingReasons.join('. ')}`);
+          if (BigInt(returnedEvaluation.quote.settlementAtoms) < BigInt(freshEvaluation.quote.settlementAtoms)) {
+            throw new Error(`Return completed safely; the live redemption quote moved below ${formatA666Units(freshEvaluation.quote.settlementAtoms)} ${settlementSymbol}`);
+          }
+          const operation = buildA666RedeemOperation({
+            walletAddress: address,
+            supplyStatus: returnedSnapshot.route,
+            chainHeight: returnedSnapshot.chain.block_height,
+            amountAtoms,
+            minimumSettlementAtoms: freshEvaluation.quote.settlementAtoms,
+          });
+          await runStep(4, operation, `${navSymbol} redemption`);
+          updateStep(5, { state: 'running', detail: 'Refreshing finalized balances…' });
+        } else {
+          const operation = buildA666RedeemOperation({
+            walletAddress: address,
+            supplyStatus: fresh.route,
+            chainHeight: fresh.chain.block_height,
+            amountAtoms,
+            minimumSettlementAtoms: freshEvaluation.quote.settlementAtoms,
+          });
+          setProgress([
+            { label: `Redeem ${navSymbol}`, state: 'pending', detail: `Burn ${navSymbol} and receive ${settlementSymbol}` },
+            { label: 'Verify balances', state: 'pending', detail: 'Read finalized PFTL state' },
+          ]);
+          await runStep(0, operation, `${navSymbol} redemption`);
+          updateStep(1, { state: 'running', detail: 'Refreshing finalized balances…' });
+        }
       }
 
       const verified = await refresh();
       if (!verified) throw new Error('Transaction finalized, but refreshed balances are unavailable');
       if (mode !== 'issue' || delivery !== 'ethereum') {
-        const verifyIndex = mode === 'issue' ? 3 : 1;
+        const verifyIndex = mode === 'issue' ? 3 : (redeemSource === 'ethereum' ? 5 : 1);
         updateStep(verifyIndex, {
           state: 'done',
           detail: `${formatA666Units(verified.navcoinBalance)} ${navSymbol} · ${formatA666Units(verified.settlementBalance)} ${settlementSymbol}`,
@@ -372,7 +549,7 @@ export default function NavcoinMarket({
       setActionError(
         `${error.message || `${navSymbol} transaction failed`}${issueOperations && reserved && !released
           && !exported ? ' The reservation could not be released automatically; do not retry until route status is reconciled.'
-          : ''}`,
+          : ''}${returned ? ` ${navSymbol} was restored to PFTL; do not burn ${wrappedSymbol} again.` : ''}`,
       );
       await refresh();
     } finally {
@@ -393,7 +570,11 @@ export default function NavcoinMarket({
     && navPacketMatches;
   const displayBlockers = evaluation.blockingReasons
     .filter(reason => reason !== 'enter a positive A666 amount')
-    .map(reason => reason.replaceAll('A666', navSymbol).replaceAll('pfUSDC', settlementSymbol));
+    .map(reason => {
+      if (mode === 'redeem' && redeemSource === 'ethereum'
+        && reason === 'wallet A666 balance is insufficient') return `MetaMask ${wrappedSymbol} balance is insufficient or not connected`;
+      return reason.replaceAll('A666', navSymbol).replaceAll('pfUSDC', settlementSymbol);
+    });
 
   return (
     <section
@@ -465,7 +646,13 @@ export default function NavcoinMarket({
         <div className="a666-trade-card">
           <div className="a666-tabs">
             <button className={mode === 'issue' ? 'on' : ''} onClick={() => { setMode('issue'); setProgress([]); setActionError(''); }}>Mint {navSymbol}</button>
-            <button className={mode === 'redeem' ? 'on' : ''} onClick={() => { setMode('redeem'); setProgress([]); setActionError(''); }}>Redeem</button>
+            <button className={mode === 'redeem' ? 'on' : ''} onClick={() => {
+              setMode('redeem');
+              if (BigInt(snapshot?.navcoinBalance || 0) < BigInt(amountAtoms || 0)
+                && BigInt(metamaskNavcoinBalance || 0) >= BigInt(amountAtoms || 0)) setRedeemSource('ethereum');
+              setProgress([]);
+              setActionError('');
+            }}>Redeem</button>
           </div>
 
           <label className="a666-label" htmlFor="navcoin-amount">{navSymbol} amount</label>
@@ -475,8 +662,8 @@ export default function NavcoinMarket({
             <button onClick={() => {
               const maximum = mode === 'issue'
                 ? route?.available_issue_atoms
-                : (BigInt(snapshot?.navcoinBalance || 0) < BigInt(route?.available_redeem_atoms || 0)
-                  ? snapshot?.navcoinBalance
+                : (BigInt(redeemBalance || 0) < BigInt(route?.available_redeem_atoms || 0)
+                  ? redeemBalance
                   : route?.available_redeem_atoms);
               if (maximum) setAmount(formatA666Units(maximum));
             }}>MAX</button>
@@ -512,6 +699,32 @@ export default function NavcoinMarket({
             </div>
           )}
 
+          {mode === 'redeem' && (
+            <div className="a666-recipient">
+              <div className="a666-tabs" role="group" aria-label={`${navSymbol} redemption source`}>
+                <button className={redeemSource === 'pftl' ? 'on' : ''} onClick={() => setRedeemSource('pftl')} disabled={executing}>From PFTL</button>
+                <button className={redeemSource === 'ethereum' ? 'on' : ''} onClick={() => setRedeemSource('ethereum')} disabled={executing}>From MetaMask</button>
+              </div>
+              <div>
+                <label className="a666-label" htmlFor="a666-return-account">Redemption source</label>
+                <small>{redeemSource === 'ethereum'
+                  ? `Return ${wrappedSymbol} trustlessly to PFTL, then redeem it to ${settlementSymbol} in one guided flow.`
+                  : `Redeem native ${navSymbol} already held by this PFTL wallet.`}</small>
+              </div>
+              {redeemSource === 'ethereum' && <>
+                <button className="pf-button secondary" onClick={connectEthereum} disabled={executing}>Connect MetaMask</button>
+                <input id="a666-return-account" className="pf-input" placeholder="Connect MetaMask" value={ethereumRecipient} readOnly disabled={executing} />
+              </>}
+            </div>
+          )}
+
+          {pendingReturn && mode === 'redeem' && (
+            <div className="a666-blockers">
+              <span>• Existing MetaMask return: {String(pendingReturn.status || 'submitted').replaceAll('_', ' ')}.</span>
+              <span>• Transaction {truncateMiddle(pendingReturn.transaction_hash, 8)} will continue through the durable relay.</span>
+            </div>
+          )}
+
           {displayBlockers.length > 0 && (
             <div className="a666-blockers">
               {displayBlockers.slice(0, 4).map(reason => <span key={reason}>• {reason}</span>)}
@@ -527,18 +740,24 @@ export default function NavcoinMarket({
           {mode === 'issue' && delivery === 'ethereum' && !proxyAuthToken && (
             <div className="a666-blockers"><span>• Authenticated unattended export relay access is unavailable.</span></div>
           )}
+          {mode === 'redeem' && redeemSource === 'ethereum' && !proxyAuthToken && (
+            <div className="a666-blockers"><span>• Authenticated unattended return relay access is unavailable.</span></div>
+          )}
 
           <button className="pf-primary" disabled={!canExecute} onClick={execute}>
-            {executing ? (delivery === 'ethereum' ? 'Exporting to MetaMask…' : 'Finalizing on PFTL…') : mode === 'issue'
+            {executing ? (mode === 'redeem' && redeemSource === 'ethereum' ? 'Returning & redeeming…'
+              : delivery === 'ethereum' ? 'Exporting to MetaMask…' : 'Finalizing on PFTL…') : mode === 'issue'
               ? `${delivery === 'ethereum' ? 'Mint & export' : 'Mint'} ${amountAtoms ? formatA666Units(amountAtoms) : '—'} ${navSymbol}`
-              : `Redeem ${amountAtoms ? formatA666Units(amountAtoms) : '—'} ${navSymbol}`}
+              : `${redeemSource === 'ethereum' ? 'Return & redeem' : 'Redeem'} ${amountAtoms ? formatA666Units(amountAtoms) : '—'} ${navSymbol}`}
           </button>
-          <p className="a666-signing">Your ML-DSA key signs locally. The proxy receives only signed transactions.</p>
+          <p className="a666-signing">{mode === 'redeem' && redeemSource === 'ethereum'
+            ? `MetaMask signs the ${wrappedSymbol} return; your ML-DSA key signs the PFTL redemption locally.`
+            : 'Your ML-DSA key signs locally. The proxy receives only signed transactions.'}</p>
         </div>
 
         <aside className="a666-side">
           <div className="pf-card">
-            <div className="a666-side-title"><span>YOUR PFTL BALANCES</span><small>finalized</small></div>
+            <div className="a666-side-title"><span>YOUR BALANCES</span><small>finalized</small></div>
             <div className="a666-balance"><span>{settlementSymbol}</span><strong>{formatA666Units(snapshot?.settlementBalance)}</strong></div>
             <div className="a666-balance"><span>{navSymbol}</span><strong>{formatA666Units(snapshot?.navcoinBalance)}</strong></div>
             <div className="a666-balance"><span>{wrappedSymbol} · MetaMask</span><strong>{formatA666Units(metamaskNavcoinBalance)}</strong></div>
@@ -557,7 +776,7 @@ export default function NavcoinMarket({
         <div className="a666-progress">
           <div className="a666-progress-head">
             <strong>{lastCompleted ? (lastCompleted === 'ethereum' ? `${wrappedSymbol} delivered to MetaMask` : lastCompleted === 'issue' ? `${navSymbol} purchase complete` : `${navSymbol} redemption complete`) : 'Finality progress'}</strong>
-            <small>Do not close this page while a step is running.</small>
+            <small>Proof relay jobs continue safely if this page closes.</small>
           </div>
           {progress.map((step, index) => (
             <div className={`a666-progress-step ${step.state}`} key={`${step.label}-${index}`}>
@@ -569,12 +788,18 @@ export default function NavcoinMarket({
       )}
 
       <div className="a666-venue-note">
-        <strong>{delivery === 'ethereum' ? `${wrappedSymbol} is delivered directly to MetaMask.` : `${navSymbol} is delivered natively on PFTL.`}</strong>
+        <strong>{mode === 'redeem'
+          ? (redeemSource === 'ethereum' ? `${wrappedSymbol} returns through PFTL before redemption.` : `${navSymbol} redeems natively on PFTL.`)
+          : (delivery === 'ethereum' ? `${wrappedSymbol} is delivered directly to MetaMask.` : `${navSymbol} is delivered natively on PFTL.`)}</strong>
         <span>
           The deployed Ethereum token is {route?.wrapped_navcoin_token ? truncateMiddle(route.wrapped_navcoin_token, 8) : wrappedSymbol}.
-          {delivery === 'ethereum'
-            ? ' The wallet preserves the issuance entitlement, finalizes the PFTL export, and waits for its trustless Ethereum finality proof before reporting success.'
-            : ' This mode closes the unused export entitlement and keeps the balance on PFTL.'}
+          {mode === 'redeem'
+            ? (redeemSource === 'ethereum'
+              ? ` MetaMask burns the wrapped token, the durable relay restores native ${navSymbol} from finalized proof, and only then does your wallet sign redemption.`
+              : ` Native ${navSymbol} is burned only when the ${settlementSymbol} redemption finalizes.`)
+            : (delivery === 'ethereum'
+              ? ' The wallet preserves the issuance entitlement, finalizes the PFTL export, and waits for its trustless Ethereum finality proof before reporting success.'
+              : ' This mode closes the unused export entitlement and keeps the balance on PFTL.')}
         </span>
       </div>
     </section>
