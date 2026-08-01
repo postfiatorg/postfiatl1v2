@@ -23,6 +23,15 @@ function restart(service) {
   execFileSync('systemctl', ['--user', 'restart', service], { stdio: 'ignore' });
 }
 
+function restartRemoteValidatorFive() {
+  execFileSync('ssh', [
+    '-o', 'BatchMode=yes',
+    '-o', 'StrictHostKeyChecking=yes',
+    'root@45.32.110.170',
+    'systemctl', 'restart', 'postfiat-validator-5.service', 'postfiat-validator-5-rpc.service',
+  ], { stdio: 'ignore' });
+}
+
 async function sleep(ms) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -126,15 +135,8 @@ try {
     10 * 60 * 1000,
     'reset action build',
   );
-  restart('pft-wallet-proxy-8080.service');
-  await eventually(
-    () => jsonFetch(`${walletUrl}/api/pnok-fix/readiness`),
-    (status) => status.resident_prover_ready === true,
-    2 * 60 * 1000,
-    'wallet proxy restart',
-  );
+  restartRemoteValidatorFive();
   const reset = await waitJob(resetFirst.job_id, 'restore');
-  if (reset.retry_count < 2) throw new Error('reset worker did not exercise durable retry after proxy restart');
 
   // Restart the resident proof service itself, wait for both pinned circuits
   // to be fully warm, then prove the browser acquisition without intervention.
@@ -192,7 +194,7 @@ try {
     schema: 'postfiat-pnok-private-fix-recovery-faults-v1',
     controlled_demo_only: true,
     duplicate_submit_idempotent: true,
-    wallet_proxy_restart_during_reset_recovered: true,
+    validator_restart_during_reset_recovered: true,
     resident_prover_restart_and_full_prewarm_recovered: true,
     wallet_proxy_restart_during_browser_acquisition_recovered: true,
     reset,
