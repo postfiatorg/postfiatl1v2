@@ -9,7 +9,7 @@
   "burn_inspect_script": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-mainnet-burn-for-return.py",
   "burn_inspect_script_sha256": "4db2c4355a165169496d9e66cf7a67082a027d3b993e784810511b588feb586b",
   "return_import_script": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-mainnet-return-import.sh",
-  "return_import_script_sha256": "08d940d5801223cc674926c8a93c4e23d64fd340d399c4577b0c3210a00dfc33",
+  "return_import_script_sha256": "f2e20175887fae3b809ef1cacc319375c6480eff5bdb445f76d4013245cceb05",
   "python": "/home/postfiat/repos/StakeHub/.venv/bin/python",
   "node_binary": "/opt/postfiat/releases/a666-variable-nav-9ffdfb6/postfiat-node",
   "cast_binary": "/home/postfiat/.foundry/bin/cast",

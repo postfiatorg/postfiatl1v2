@@ -238,6 +238,8 @@ async function runJob(config, jobFile) {
         '--workflow-id', workflow, '--expected-pftl-height', String(expectedHeight)], {
         timeout: config.import_timeout_ms || 60 * 60 * 1000, cwd: config.repo,
         maxBuffer: 8 * 1024 * 1024,
+        env: { ...process.env, A666_CAST_BIN: config.cast_binary,
+            A666_ETHEREUM_RPC: config.ethereum_rpc },
     });
     const monitor = setInterval(() => {
         const proof = path.join(attemptDir, 'return', 'proof');

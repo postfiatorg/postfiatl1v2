@@ -15,6 +15,7 @@ wrapped_token=0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5
 a666=521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c
 return_burned_topic=0x4d6105cbfd6dce49c1a94770a1492db4e1f2b0670d8bb14fe8da318d880f2c01
 ethereum_rpc=${A666_ETHEREUM_RPC:-https://ethereum-rpc.publicnode.com}
+cast_bin=${A666_CAST_BIN:-cast}
 finality_timeout_seconds=1800
 
 while (($#)); do
@@ -66,7 +67,7 @@ test "$log_index" = 1
 [[ "$burn_event_hash" =~ ^[0-9a-f]{64}$ ]]
 [[ "$return_nonce" =~ ^[0-9a-f]{64}$ ]]
 
-cast receipt "$burn_tx" --json --rpc-url "$ethereum_rpc" \
+"$cast_bin" receipt "$burn_tx" --json --rpc-url "$ethereum_rpc" \
   > "$proof_dir/burn-receipt.json"
 jq -e \
   --arg controller "${controller,,}" \
