@@ -523,21 +523,19 @@ edits and one untracked article. Those changes predate and are independent of
 this L1/wallet handoff. They must be reviewed and committed in that repository,
 not swept into the protocol merge.
 
-## 8. Merge disposition
+## 8. Merge disposition: completed
 
-The L1/wallet branch is suitable for fast-forward integration after the final
-documentation diff and full focused test rerun pass. The safe sequence is:
+The L1/wallet branch passed the final documentation diff, wallet/proxy/build,
+Python, focused Rust, live-fleet, and bridge-readiness gates. After a fresh
+fetch, `origin/main` was still the exact ancestor: the feature branch was zero
+commits behind and 18 commits ahead. The feature branch was pushed and
+`origin/main` was fast-forwarded from `6fb0106` through the wallet/pNOK and
+handoff commits without a merge conflict. Local `main` was then advanced to
+the same remote state.
 
-```bash
-git fetch --prune origin
-git merge-base --is-ancestor origin/main HEAD
-git rev-list --left-right --count origin/main...HEAD
-git push origin feature/pnok-private-fix
-git push origin HEAD:main
-```
-
-Stop if `origin/main` is no longer an ancestor, a test fails, or the remote
-rejects the update. Do not stage with `git add .` in this worktree.
+The generated/private evidence was not added. The tracked L1 worktree was
+clean after integration; only the 9,075 intentional untracked files described
+above remained. Future work in this tree must continue to avoid `git add .`.
 
 ## 9. What remains
 
