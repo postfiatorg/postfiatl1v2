@@ -184,6 +184,80 @@ class PnokPrivateFixDemoTests(unittest.TestCase):
             requests[0]["input_note_path_b"], "/resident/imports/facility-pnok.json"
         )
 
+    def test_action_can_bind_liquidity_owned_by_a_distinct_demo_participant(self) -> None:
+        quote = {
+            "pricing_claim": {
+                "nav_epoch": 2,
+                "reserve_packet_hash": "55" * 48,
+                "ratio_numerator": 21,
+                "ratio_denominator": 2_000_000,
+                "mode": "negotiated",
+                "band_bps": 0,
+                "base_asset_tag_lo": "01" * 16,
+                "base_asset_tag_hi": "02" * 16,
+                "quote_asset_tag_lo": "03" * 16,
+                "quote_asset_tag_hi": "04" * 16,
+            }
+        }
+        action = {
+            "schema": "postfiat-asset-orchard-swap-action-v2",
+            "pool_id": "asset-orchard-v1",
+            "proof_system_id": "postfiat.privacy.asset-orchard-halo2.v1",
+            "circuit_id": "asset_orchard.swap.pricing_bound.v4",
+            "nullifiers": ["11" * 32, "22" * 32],
+            "output_commitments": ["33" * 32, "44" * 32],
+            "pricing_claim": quote["pricing_claim"],
+            "swap_binding_hash": "66" * 64,
+            "fee": 0,
+        }
+        response = {
+            "ok": True,
+            "schema": "postfiat-asset-orchard-local-swap-action-v1",
+            "request_id": "pnok-reset-01",
+            "verification": {"verified": True},
+            "action_json": json.dumps(action),
+            "swap_id": "77" * 48,
+            "vault_update": {
+                "wallet_output_commitment": "33" * 32,
+                "pool_output_commitment": "44" * 32,
+            },
+        }
+        state = {
+            "immutable": {
+                "intent_id": "pnok-reset-01",
+                "wallet_address": "pf" + "11" * 20,
+                "facility_operator": "pf" + "22" * 20,
+                "liquidity_wallet_address": "pf" + "33" * 20,
+                "base_asset_id": "88" * 48,
+                "quote_asset_id": "99" * 48,
+                "base_atoms": 20_000_000,
+                "expected_quote_atoms": 210,
+                "wallet_note_commitment": "aa" * 32,
+                "liquidity_commitment": "bb" * 32,
+                "wallet_input_note_path": None,
+                "liquidity_input_note_path": None,
+            },
+            "derived": {},
+        }
+        args = type(
+            "Args",
+            (),
+            {
+                "local_quote_lifetime_ms": 900_000,
+                "service_url": "http://127.0.0.1:1",
+                "prover_timeout_seconds": 1,
+            },
+        )()
+
+        with tempfile.TemporaryDirectory() as temporary, patch.object(
+            demo, "service_json", return_value=response
+        ) as service:
+            demo.create_or_recover_action(args, Path(temporary), state, quote)
+
+        self.assertEqual(
+            service.call_args.args[3]["liquidity_wallet_address"], "pf" + "33" * 20
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

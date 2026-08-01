@@ -21,6 +21,7 @@ import NavList from './components/NavList.jsx';
 import NavDetail from './components/NavDetail.jsx';
 import More from './components/More.jsx';
 import NavcoinMarket from './components/NavcoinMarket.jsx';
+import PrivateFix from './components/PrivateFix.jsx';
 import { DEFAULT_NAVCOIN_MARKET, NAVCOIN_MARKETS, navcoinMarketByKey } from './lib/navcoin-markets.js';
 
 const PROXY_AUTH_SESSION_KEY = 'postfiat.wallet_proxy_api_token';
@@ -47,7 +48,7 @@ async function loadControlledLocalProxySession() {
 const NAV_ITEMS = [
   { id: 'wallet', label: 'Wallet' }, { id: 'bridge', label: 'Bridge' },
   { id: 'market', label: 'NAV Markets' }, { id: 'send', label: 'Send' },
-  { id: 'swap', label: 'Process' },
+  { id: 'swap', label: 'Process' }, { id: 'fx', label: 'Private FX' },
   { id: 'nav', label: 'NavCoins' }, { id: 'more', label: 'More' },
 ];
 const isOn = (tab, id) => tab === id || (id === 'nav' && tab === 'navDetail');
@@ -634,6 +635,9 @@ export default function App() {
               liveSnapshot={walletLiveSnapshot}
               walletFeedStatus={walletFeedStatus}
             />
+          )}
+          {tab === 'fx' && (
+            <PrivateFix rpc={rpc} proxyAuthToken={proxyAuthToken} />
           )}
           {tab === 'market' && (
             <NavcoinMarket

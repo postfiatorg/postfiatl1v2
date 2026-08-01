@@ -18,6 +18,10 @@ function create(runtime) {
     const a666ReturnRelayReadiness = (...args) => runtime.a666ReturnRelayReadiness(...args);
     const submitA666ReturnRelayJob = (...args) => runtime.submitA666ReturnRelayJob(...args);
     const a666ReturnRelayJobStatus = (...args) => runtime.a666ReturnRelayJobStatus(...args);
+    const pnokFixWalletReadiness = (...args) => runtime.pnokFixWalletReadiness(...args);
+    const submitPnokFixWalletJob = (...args) => runtime.submitPnokFixWalletJob(...args);
+    const submitPnokFixRestoreJob = (...args) => runtime.submitPnokFixRestoreJob(...args);
+    const pnokFixWalletJobStatus = (...args) => runtime.pnokFixWalletJobStatus(...args);
     const addProxyRouteEvent = (...args) => runtime.addProxyRouteEvent(...args);
     const assertNoShieldedPrivateMaterial = (...args) => runtime.assertNoShieldedPrivateMaterial(...args);
     const assertVaultBridgeEvidenceMatches = (...args) => runtime.assertVaultBridgeEvidenceMatches(...args);
@@ -1700,6 +1704,34 @@ function create(runtime) {
                 return true;
             }
 
+            if (req.method === 'GET' && url.pathname === '/api/pnok-fix/readiness') {
+                const result = await pnokFixWalletReadiness();
+                sendJson(req, res, result.ready === true ? 200 : 503, result);
+                return true;
+            }
+
+            if (req.method === 'POST' && url.pathname === '/api/pnok-fix/jobs') {
+                const body = await readJsonBody(req, 16 * 1024);
+                const result = await submitPnokFixWalletJob(body);
+                sendJson(req, res, 202, result);
+                return true;
+            }
+
+            if (req.method === 'POST' && url.pathname === '/api/pnok-fix/test-restore-jobs') {
+                const body = await readJsonBody(req, 16 * 1024);
+                const result = await submitPnokFixRestoreJob(body);
+                sendJson(req, res, 202, result);
+                return true;
+            }
+
+            if (req.method === 'GET' && url.pathname.startsWith('/api/pnok-fix/jobs/')) {
+                const jobId = decodeURIComponent(url.pathname.slice('/api/pnok-fix/jobs/'.length));
+                const result = pnokFixWalletJobStatus(jobId);
+                sendJson(req, res, result ? 200 : 404,
+                    result || { ok: false, code: 'pnok_fix_wallet_job_not_found' });
+                return true;
+            }
+
             if (req.method === 'GET' && url.pathname === '/api/shielded-nav-swap/status') {
                 const result = await executeShieldedNavswapStatus();
                 sendJson(req, res, result.ok ? 200 : 409, result);
@@ -1884,6 +1916,9 @@ function create(runtime) {
                 bridge_job_binding_conflict: 409,
                 bridge_job_busy: 503,
                 trustless_ingress_unavailable: 503,
+                pnok_fix_inventory_unavailable: 409,
+                pnok_fix_job_binding_conflict: 409,
+                pnok_fix_wallet_unavailable: 503,
             };
             sendJson(req, res, errorStatuses[error.code] || 400, {
                 ok: false,

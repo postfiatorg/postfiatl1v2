@@ -792,6 +792,7 @@ const { ASSET_ORCHARD_ACTION_CLEAR_KEYS,buildShieldedCertifiedRoundArgs,certifie
 Object.assign(walletProxyRuntime, require('./trustless-bridge-jobs').create(walletProxyRuntime));
 Object.assign(walletProxyRuntime, require('./a666-export-jobs').create(walletProxyRuntime));
 Object.assign(walletProxyRuntime, require('./a666-return-jobs').create(walletProxyRuntime));
+Object.assign(walletProxyRuntime, require('./pnok-fix-jobs').create(walletProxyRuntime));
 Object.assign(walletProxyRuntime, require('./navswap-persistence-http').create(walletProxyRuntime));
 const { annotateNavswapIdempotency,buildNavswapRunResponse,clearNavswapIdempotencyForTest,clearNavswapRunsForTest,compareNavswapRunsNewestFirst,createNavswapRun,executeNavswapAtomicTemplate,executeNavswapIdempotentRequest,executeNavswapRun,finishNavswapRun,forwardStakehubTransparentRun,handleNavswapHttp,jsonHeaders,loadNavswapIdempotencyStore,loadNavswapRunStore,markStoredNavswapRunInterrupted,navswapAsyncRunRequested,navswapIdempotencyHashBody,navswapIdempotencyStoreSnapshot,navswapListLimit,navswapRunEvents,navswapRunIsTerminal,navswapRunList,navswapRunPublic,navswapRunReceipts,navswapRunSortTime,navswapRunStoreSnapshot,navswapRunStreamSnapshot,navswapTruthyParam,normalizeAtomicTemplateParams,normalizeStoredNavswapIdempotencyRecord,normalizeStoredNavswapRun,originAllowed,persistNavswapIdempotencyRecord,persistNavswapRun,pruneNavswapIdempotencyRecords,publishNavswapRunUpdate,readJsonBody,recordNavswapRunEvent,removeNavswapRunStreamSubscriber,sanitizeNavswapRunRequest,sendJson,sendNavswapRunStream,sseHeaders,swapAtomicTemplateParams,verifyAtomicTemplateResult,verifyAtomicTemplateSymmetry,writeSseEvent } = walletProxyRuntime;
 const server = http.createServer(async (req, res) => {
@@ -1200,6 +1201,7 @@ if (require.main === module) {
         console.log(`Wallet proxy received ${signal}; draining listeners and durable workers.`);
         try { walletProxyRuntime.closeA666ExportRelayJobs?.(); } catch (_) { /* best effort */ }
         try { walletProxyRuntime.closeA666ReturnRelayJobs?.(); } catch (_) { /* best effort */ }
+        try { walletProxyRuntime.closePnokFixWalletJobs?.(); } catch (_) { /* best effort */ }
         try { walletProxyRuntime.closeTrustlessBridgeJobs?.(); } catch (_) { /* best effort */ }
         try { closeUpstreamRpcConnections(); } catch (_) { /* best effort */ }
         try {

@@ -183,6 +183,15 @@ export default function Swap({ rpc, swapServer, onNavigate, market = DEFAULT_NAV
             />
             <ProcessStep
               number="5"
+              title="Private pfUSDC/pNOK FIX"
+              detail="Exchange exactly 20.000000 pfUSDC for 210 sandbox WNOK-backed pNOK at the finalized zero-fee demo fix, with private execution on PFTL."
+              state="ready"
+              action="Open private FX"
+              onClick={() => onNavigate?.('fx')}
+              Icon={ShieldCheck}
+            />
+            <ProcessStep
+              number="6"
               title={`Export ${market.symbol} to Ethereum`}
               detail={`The primary market can deliver ${market.wrappedSymbol} directly to MetaMask through the governed, proof-bound export route.`}
               state={currentRoute ? 'ready' : 'blocked'}

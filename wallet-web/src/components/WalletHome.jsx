@@ -672,6 +672,7 @@ export default function WalletHome({ rpc, txBuilder, backupJson, address, public
               {[
                 ['Bridge USDC', 'Ethereum mainnet → pfUSDC', () => go('bridge')],
                 ['NAVCoin Markets', 'mint / redeem at verified NAV', () => go('market')],
+                ['Private FX', 'pfUSDC → pNOK at demo fix', () => go('fx')],
                 ['Send Asset', 'issued assets', () => go('send', { sendSource: 'asset' })],
                 ['Process Status', 'current / unavailable legs', () => go('swap')],
                 ['Settings', 'network / backup', () => go('more')],

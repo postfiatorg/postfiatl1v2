@@ -206,7 +206,7 @@ def immutable_config(args: argparse.Namespace) -> dict[str, Any]:
         raise RuntimeError(
             "--wallet-input-note-path and --liquidity-input-note-path must be provided together"
         )
-    return {
+    config = {
         "chain_id": EXPECTED_CHAIN_ID,
         "genesis_hash": EXPECTED_GENESIS_HASH,
         "intent_id": validate_intent_id(args.intent_id),
@@ -239,6 +239,15 @@ def immutable_config(args: argparse.Namespace) -> dict[str, Any]:
         "expected_ratio_denominator": args.expected_ratio_denominator,
         "min_expiry_blocks": args.min_expiry_blocks,
     }
+    if args.liquidity_wallet_address is not None:
+        config["liquidity_wallet_address"] = validate_address(
+            "liquidity_wallet_address", args.liquidity_wallet_address
+        )
+    return config
+
+
+def liquidity_wallet_address(immutable: dict[str, Any]) -> str:
+    return immutable.get("liquidity_wallet_address", immutable["facility_operator"])
 
 
 def initialize_or_load_state(args: argparse.Namespace) -> tuple[Path, dict[str, Any]]:
@@ -525,7 +534,7 @@ def create_or_recover_action(
     request = {
         "request_id": immutable["intent_id"],
         "wallet_address": immutable["wallet_address"],
-        "liquidity_wallet_address": immutable["facility_operator"],
+        "liquidity_wallet_address": liquidity_wallet_address(immutable),
         "from_asset_id": immutable["base_asset_id"],
         "to_asset_id": immutable["quote_asset_id"],
         "amount_atoms": immutable["base_atoms"],
@@ -865,7 +874,7 @@ def finalize_local_notes(args: argparse.Namespace, root: Path, state: dict[str, 
     )
     require_note(
         facility_output,
-        owner=immutable["facility_operator"],
+        owner=liquidity_wallet_address(immutable),
         asset_id=immutable["base_asset_id"],
         amount_atoms=immutable["base_atoms"],
         state="spendable",
@@ -941,7 +950,7 @@ def run_demo(args: argparse.Namespace, root: Path, state: dict[str, Any]) -> Non
             )
             require_note(
                 facility_input,
-                owner=immutable["facility_operator"],
+                owner=liquidity_wallet_address(immutable),
                 asset_id=immutable["quote_asset_id"],
                 amount_atoms=immutable["expected_quote_atoms"],
                 state="spendable",
@@ -1063,6 +1072,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--intent-id", required=True)
     parser.add_argument("--wallet-address", required=True)
     parser.add_argument("--facility-operator", required=True)
+    parser.add_argument(
+        "--liquidity-wallet-address",
+        help="owner of the private liquidity note; defaults to the FIX operator",
+    )
     parser.add_argument("--facility-key-file", type=Path, required=True)
     parser.add_argument("--base-asset-id", default=DEFAULT_PFUSDC_ASSET_ID)
     parser.add_argument("--quote-asset-id", required=True)
