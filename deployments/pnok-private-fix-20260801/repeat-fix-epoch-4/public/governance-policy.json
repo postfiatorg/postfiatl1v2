@@ -1,0 +1,15 @@
+{
+  "band_bps": 0,
+  "base_asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "capacity_base_atoms": 40000000,
+  "capacity_quote_atoms": 420,
+  "fee_bps": 0,
+  "max_fills": 2,
+  "minimum_base_atoms": 20000000,
+  "operator": "pfb8f250e27a4ff89bf81da0f4a4bdd63f8ba45c12",
+  "private_end_to_end": false,
+  "private_execution_on_pftl": true,
+  "quote_asset_id": "4b8dd69b1f1ee425ae84d17f2fc2fe3630d904c4c356b0ff2df0e00c20109e6346d765ca4c0407ddb08edcb6525d5cc1",
+  "schema": "postfiat.pnok_demo_fix.governance_policy.v1",
+  "trust_class": "CONTROLLED_DEMO"
+}

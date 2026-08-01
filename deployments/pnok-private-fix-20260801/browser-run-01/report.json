@@ -1,0 +1,48 @@
+{
+  "ok": true,
+  "schema": "postfiat-pnok-private-fix-browser-ux-evidence-v1",
+  "wallet_url": "http://127.0.0.1:8080",
+  "recovery": {
+    "navigated_away_and_back": true,
+    "reloaded_and_unlocked": true,
+    "same_durable_job_id": true
+  },
+  "status": {
+    "ok": true,
+    "schema": "postfiat-pnok-private-fix-wallet-job-status-v1",
+    "job_id": "0x4fb34a8e512b0966ead9c1834cec6a2379f00aaef9271b2c8ede6bc11f12d53e",
+    "client_request_id": "pnok-wallet-6cc8e6685f5a068ad5af89a1",
+    "direction": "acquire",
+    "status": "accepted",
+    "execution_stage": "complete",
+    "fix_packet_hash": "0f2fef0eecc6b6d07606b254bebc2d85d6dff6473442a08dfd5d15d1f70a94218a018ecf8574127055095756f4a1c4af",
+    "reservation_id": "e2c5ca5b0b5a9815533ad0cd4c4625cbd4960ac9c6550d8e9f8c128861b1f1d766b005dc6beaae32d45215c0cf7777fc",
+    "nullifier_occurrence_counts": [
+      1,
+      1
+    ],
+    "output_occurrence_counts": [
+      1,
+      1
+    ],
+    "replay_rejected_without_effect": true,
+    "supply_unchanged": true,
+    "execution_privacy": "private on PFTL",
+    "source_boundary": "controlled sandbox checkpoint",
+    "base_symbol": "pfUSDC",
+    "quote_symbol": "pNOK",
+    "base_atoms": "20000000",
+    "quote_atoms": "210",
+    "ratio_display": "10.500000 pNOK/pfUSDC",
+    "fee_atoms": "0",
+    "price_impact_bps": 0,
+    "retry_count": 1,
+    "code": null,
+    "message": "Private FIX swap finalized and the owned output was scanned.",
+    "created_at_unix_ms": 1785567254352,
+    "updated_at_unix_ms": 1785567404342,
+    "idempotent_replay": false
+  },
+  "browser_errors": [],
+  "completed_at": "2026-08-01T06:56:46.045Z"
+}

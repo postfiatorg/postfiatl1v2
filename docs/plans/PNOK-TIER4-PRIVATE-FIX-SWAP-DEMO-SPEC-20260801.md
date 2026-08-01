@@ -1118,42 +1118,47 @@ identifiers. Secret material is never included.
 
 ### Phase 0 — freeze the exact baseline
 
-- [ ] Sync and review the current official Norges Bank development revision.
-- [ ] Pin WNOK source, bytecode, decimals, roles, allowlist behavior, and
+- [x] Sync and review the current official Norges Bank development revision.
+- [x] Pin WNOK source, bytecode, decimals, roles, allowlist behavior, and
   deployment address.
-- [ ] Pin Besu version, chain/genesis, consensus configuration, validators,
+- [x] Pin Besu version, chain/genesis, consensus configuration, validators,
   RPC, and block behavior.
-- [ ] Trace the current pfUSDC generic bridge types and list exact fields that
+- [x] Trace the current pfUSDC generic bridge types and list exact fields that
   can be reused without historical encoding changes.
-- [ ] Freeze pNOK asset, route, event, deposit, withdrawal, and fix encodings.
-- [ ] Generate mutation-sensitive Rust/Solidity/JSON conformance vectors.
+- [x] Freeze pNOK asset, route, event, deposit, withdrawal, and fix encodings.
+- [x] Generate mutation-sensitive Rust/Solidity/JSON conformance vectors.
 
 **Gate:** one reviewed protocol artifact document names every byte binding and
 trust assumption.
 
 ### Phase 1 — controlled WNOK/pNOK bridge
 
-- [ ] Implement and test `WnokBridgeVaultV1`.
-- [ ] Add pNOK route and asset types using bounded deterministic state.
-- [ ] Implement controlled checkpoint evidence under a schema that cannot be
+- [x] Implement and test `WnokBridgeVaultV1`.
+- [x] Add pNOK route and asset types using bounded deterministic state.
+- [x] Implement controlled checkpoint evidence under a schema that cannot be
   mistaken for Tier 4.
-- [ ] Implement exact pNOK claim and burn/release accounting.
-- [ ] Deploy to the sandbox and PFTL controlled fleet.
-- [ ] Pass deposit, release, conservation, and replay batteries.
+- [x] Implement exact pNOK claim and burn/release accounting.
+- [x] Deploy to the sandbox and PFTL controlled fleet.
+- [x] Pass deposit, release, conservation, and replay batteries.
 
 **Gate:** `500 WNOK -> 500 pNOK -> 500 WNOK` completes with exact balances
 and the route is visibly labeled controlled.
 
+Implementation and automated release/conservation batteries are complete. The
+live qualification deposited `500 WNOK` and issued `500 pNOK`; it deliberately
+did not execute the optional live WNOK release, so the full live round-trip
+form of this gate remains unclaimed.
+
 ### Phase 2 — fixed-rate private exchange
 
-- [ ] Implement `FxFixPacketV1`, consensus registration, pause, expiry, and
+- [x] Implement `FxFixPacketV1`, consensus registration, pause, expiry, and
   capacity.
-- [ ] Derive the existing Asset-Orchard pricing policy from the finalized fix.
-- [ ] Register pNOK in Asset-Orchard.
-- [ ] Add bounded reservation/fill state.
-- [ ] Add exact pNOK note denomination preparation for the two-output circuit.
-- [ ] Build and execute the `20 pfUSDC -> 210 pNOK` private action.
-- [ ] Verify output ownership, nullifiers, zero fee, exact fix, and replay
+- [x] Derive the existing Asset-Orchard pricing policy from the finalized fix.
+- [x] Register pNOK in Asset-Orchard.
+- [x] Add bounded reservation/fill state.
+- [x] Add exact pNOK note denomination preparation for the two-output circuit.
+- [x] Build and execute the `20 pfUSDC -> 210 pNOK` private action.
+- [x] Verify output ownership, nullifiers, zero fee, exact fix, and replay
   rejection.
 
 **Gate:** the private action finalizes atomically at the registered fix and no
@@ -1161,14 +1166,14 @@ private opening or amount appears in public artifacts.
 
 ### Phase 3 — demo UX and repetition
 
-- [ ] Add asset-driven pNOK and FX-fix discovery to the wallet.
-- [ ] Add the quote card, explicit public/private boundaries, and trust label.
-- [ ] Persist run status across navigation and refresh.
-- [ ] Add recovery by durable intent ID.
-- [ ] Run the complete controlled demo 10 consecutive times.
-- [ ] Run one expired-fix, one duplicate-submit, one prover-restart, and one
+- [x] Add asset-driven pNOK and FX-fix discovery to the wallet.
+- [x] Add the quote card, explicit public/private boundaries, and trust label.
+- [x] Persist run status across navigation and refresh.
+- [x] Add recovery by durable intent ID.
+- [x] Run the complete controlled demo 10 consecutive times.
+- [x] Run one expired-fix, one duplicate-submit, one prover-restart, and one
   validator-unavailable recovery case.
-- [ ] Produce one redacted evidence bundle per run and an aggregate report.
+- [x] Produce one redacted evidence bundle per run and an aggregate report.
 
 **Gate:** 10/10 complete without manual state edits, duplicate economic
 effects, or secret leakage.
@@ -1215,26 +1220,26 @@ correctness and separately from the controlled demo.
 
 The demo is a pass only when all of the following are true:
 
-- [ ] The exact upstream WNOK and Besu revision is pinned and recorded.
-- [ ] The WNOK vault is allowlisted and has no mint, burn, or broad settlement
+- [x] The exact upstream WNOK and Besu revision is pinned and recorded.
+- [x] The WNOK vault is allowlisted and has no mint, burn, or broad settlement
   authority.
-- [ ] `500 WNOK` deposited creates exactly `500 pNOK` once.
-- [ ] pNOK total supply exactly matches bridge accounting.
-- [ ] The facility owns a spendable private pNOK note of the exact trade size.
-- [ ] Bob owns a spendable private `20.000000 pfUSDC` note.
-- [ ] A finalized public fix says exactly `10.500000 pNOK/pfUSDC`, zero band,
+- [x] `500 WNOK` deposited creates exactly `500 pNOK` once.
+- [x] pNOK total supply exactly matches bridge accounting.
+- [x] The facility owns a spendable private pNOK note of the exact trade size.
+- [x] Bob owns a spendable private `20.000000 pfUSDC` note.
+- [x] A finalized public fix says exactly `10.500000 pNOK/pfUSDC`, zero band,
   zero fee, and a bounded expiry/capacity.
-- [ ] One Asset-Orchard proof consumes Bob's pfUSDC and facility pNOK inputs.
-- [ ] Bob scans and controls exactly `210 pNOK` after finality.
-- [ ] The facility scans and controls exactly `20.000000 pfUSDC` after
+- [x] One Asset-Orchard proof consumes Bob's pfUSDC and facility pNOK inputs.
+- [x] Bob scans and controls exactly `210 pNOK` after finality.
+- [x] The facility scans and controls exactly `20.000000 pfUSDC` after
   finality.
-- [ ] Neither asset's total supply changes during the swap.
-- [ ] Both input nullifiers are spent exactly once.
-- [ ] Exact replay fails and creates no new output.
-- [ ] Public artifacts contain the fix and tags but no note openings, private
+- [x] Neither asset's total supply changes during the swap.
+- [x] Both input nullifiers are spent exactly once.
+- [x] Exact replay fails and creates no new output.
+- [x] Public artifacts contain the fix and tags but no note openings, private
   values, owners, recipients, or secret keys.
-- [ ] The UX says `private on PFTL` and `controlled sandbox checkpoint`.
-- [ ] The complete demo passes 10 consecutive times without manual state
+- [x] The UX says `private on PFTL` and `controlled sandbox checkpoint`.
+- [x] The complete demo passes 10 consecutive times without manual state
   repair.
 - [ ] Optional backing proof releases exact WNOK only after an accepted pNOK
   burn and rejects replay.

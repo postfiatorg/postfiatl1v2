@@ -56,8 +56,10 @@ export default function PrivateFix({ rpc, proxyAuthToken = '' }) {
     if (!rpc) return;
     setLoading(true);
     setError('');
+    let ready = null;
     try {
-      const ready = await loadPnokFixReadiness();
+      ready = await loadPnokFixReadiness();
+      setReadiness(ready);
       const list = await rpc.fxFixList({
         baseAssetId: ready.base_asset_id,
         quoteAssetId: ready.quote_asset_id,
@@ -68,12 +70,14 @@ export default function PrivateFix({ rpc, proxyAuthToken = '' }) {
       if (rows.length !== 1) throw new Error('asset pair does not resolve to exactly one active demo FIX');
       const hash = rows[0]?.state?.packet?.packet_hash;
       const quote = await rpc.fxFixQuote(hash, ready.base_atoms);
-      setReadiness(ready);
       setMarket(verifyPnokFixQuote(ready, list, quote));
     } catch (failure) {
-      setReadiness(null);
-      setMarket(null);
-      setError(failure.message || 'The private FIX market is unavailable');
+      const recovery = readRecovery();
+      if (!ready) setReadiness(null);
+      if (!recovery?.job_id) {
+        setMarket(null);
+        setError(failure.message || 'The private FIX market is unavailable');
+      }
     } finally {
       setLoading(false);
     }
@@ -86,10 +90,32 @@ export default function PrivateFix({ rpc, proxyAuthToken = '' }) {
     const info = await rpc.fxFixInfo(current.fix_packet_hash);
     const finalized = info?.ok === true && info.result?.found === true ? info.result.fix : null;
     if (!finalized) throw new Error('finalized FIX state is unavailable after private execution');
-    setMarket((previous) => {
-      if (!previous || previous.packet?.packet_hash !== current.fix_packet_hash) return previous;
-      return { ...previous, row: finalized, packet: finalized.state?.packet || previous.packet };
+    const packet = finalized.state?.packet;
+    if (!packet || packet.packet_hash !== current.fix_packet_hash) {
+      throw new Error('finalized FIX packet binding differs from the completed private execution');
+    }
+    setReadiness((previous) => previous || {
+      ok: true,
+      ready: false,
+      base_asset_id: packet.base_asset_id,
+      quote_asset_id: packet.quote_asset_id,
+      base_symbol: current.base_symbol,
+      quote_symbol: current.quote_symbol,
+      base_precision: finalized.base_asset?.precision,
+      quote_precision: finalized.quote_asset?.precision,
+      base_atoms: current.base_atoms,
+      quote_atoms: current.quote_atoms,
     });
+    setMarket((previous) => ({
+      ...(previous || {}),
+      row: finalized,
+      packet,
+      quote: {
+        ...(previous?.quote || {}),
+        current_height: info.result.current_height,
+      },
+    }));
+    setError('');
   }, [rpc]);
 
   const resume = useCallback(async (recovery, signal) => {
@@ -167,6 +193,7 @@ export default function PrivateFix({ rpc, proxyAuthToken = '' }) {
   const baseDisplay = useMemo(() => formatAssetAtoms(readiness?.base_atoms, readiness?.base_precision), [readiness]);
   const quoteDisplay = useMemo(() => formatAssetAtoms(readiness?.quote_atoms, readiness?.quote_precision), [readiness]);
   const accepted = job?.status === 'accepted';
+  const displayVerified = accepted || Boolean(readiness?.ready && market);
   const canExecute = Boolean(readiness?.ready && market && proxyAuthToken && !executing && !accepted);
 
   return (
@@ -184,10 +211,10 @@ export default function PrivateFix({ rpc, proxyAuthToken = '' }) {
 
           {error && <div className="pf-error">{error}</div>}
 
-          <div className={`pfs-readiness${readiness?.ready && market ? ' ready' : ''}`}>
+          <div className={`pfs-readiness${displayVerified ? ' ready' : ''}`}>
             <div>
-              <span>{loading ? 'VERIFYING' : readiness?.ready && market ? 'FIX VERIFIED' : 'ACTION BLOCKED'}</span>
-              <strong>{loading ? 'Reading the finalized FIX and resident prover…' : stageLabel(job)}</strong>
+              <span>{accepted ? 'FIX SETTLED' : loading ? 'VERIFYING' : displayVerified ? 'FIX VERIFIED' : 'ACTION BLOCKED'}</span>
+              <strong>{accepted ? stageLabel(job) : loading ? 'Reading the finalized FIX and resident prover…' : stageLabel(job)}</strong>
             </div>
             <button className="pfb-secondary small" type="button" onClick={refresh} disabled={loading || executing}>
               {loading ? <Loader2 size={14} className="pfb-spin" /> : <RefreshCw size={14} />} Refresh

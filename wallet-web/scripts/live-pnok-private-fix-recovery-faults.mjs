@@ -43,6 +43,15 @@ async function jsonFetch(url, options = {}) {
   return payload;
 }
 
+async function readinessFetch(url) {
+  const response = await fetch(url, { cache: 'no-store' });
+  const payload = await response.json();
+  // The readiness endpoint deliberately returns 503 when only one trade
+  // direction has inventory. That is a valid state during this campaign.
+  if (payload?.ok !== true) throw new Error(payload?.message || `HTTP ${response.status}`);
+  return payload;
+}
+
 async function eventually(read, predicate, timeoutMs, label) {
   const deadline = Date.now() + timeoutMs;
   let last = null;
@@ -81,12 +90,18 @@ async function waitJob(jobId, direction) {
 
 // Epoch 3 is intentionally exhausted by the 10-run qualification. Epoch 4
 // provides exactly one inverse reset plus one acquisition for fault recovery.
-execFileSync('python3', [
-  path.join(repo, 'scripts/pnok-fix-successor.py'),
-  '--output-dir', path.join(repo, 'deployments/pnok-private-fix-20260801/repeat-fix-epoch-4'),
-  '--max-fills', '2',
-  '--validity-blocks', '2000',
-], { cwd: repo, stdio: ['ignore', 'pipe', 'pipe'] });
+const epochFourDir = path.join(repo, 'deployments/pnok-private-fix-20260801/repeat-fix-epoch-4');
+const epochFourStatusFile = path.join(epochFourDir, 'public/status.json');
+const epochFourComplete = fs.existsSync(epochFourStatusFile)
+  && JSON.parse(fs.readFileSync(epochFourStatusFile, 'utf8')).stage === 'complete';
+if (!epochFourComplete) {
+  execFileSync('python3', [
+    path.join(repo, 'scripts/pnok-fix-successor.py'),
+    '--output-dir', epochFourDir,
+    '--max-fills', '2',
+    '--validity-blocks', '2000',
+  ], { cwd: repo, stdio: ['ignore', 'pipe', 'pipe'] });
+}
 
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
@@ -105,11 +120,14 @@ try {
   await page.locator('.pf-sidebar').getByRole('button', { name: /Private FX/ })
     .waitFor({ state: 'visible' });
 
-  const ready = await jsonFetch(`${walletUrl}/api/pnok-fix/readiness`);
+  const ready = await readinessFetch(`${walletUrl}/api/pnok-fix/readiness`);
   if (ready.restore_inventory_ready !== true || ready.acquire_inventory_ready !== false) {
     throw new Error('fault campaign requires the tenth acquisition output inventory');
   }
-  const localSession = await jsonFetch(`${walletUrl}/api/bridge/local-session`);
+  const localSession = await page.evaluate(async () => {
+    const response = await fetch('/api/bridge/local-session', { cache: 'no-store' });
+    return response.json();
+  });
   if (typeof localSession.token !== 'string' || localSession.token.length < 32) {
     throw new Error('controlled localhost session token is unavailable');
   }
@@ -119,11 +137,18 @@ try {
     quote_asset_id: ready.quote_asset_id,
     base_atoms: String(ready.base_atoms),
   };
-  const submitReset = () => jsonFetch(`${walletUrl}/api/pnok-fix/test-restore-jobs`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localSession.token}` },
-    body: JSON.stringify(resetBody),
-  });
+  const submitReset = () => page.evaluate(async ({ token, body }) => {
+    const response = await fetch('/api/pnok-fix/test-restore-jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+    const payload = await response.json();
+    if (!response.ok || payload?.ok !== true) {
+      throw new Error(payload?.message || `HTTP ${response.status}`);
+    }
+    return payload;
+  }, { token: localSession.token, body: resetBody });
   const resetFirst = await submitReset();
   const resetDuplicate = await submitReset();
   if (resetDuplicate.job_id !== resetFirst.job_id || resetDuplicate.idempotent_replay !== true) {
@@ -172,7 +197,7 @@ try {
   );
   restart('pft-wallet-proxy-8080.service');
   await eventually(
-    () => jsonFetch(`${walletUrl}/api/pnok-fix/readiness`),
+    () => readinessFetch(`${walletUrl}/api/pnok-fix/readiness`),
     (status) => status.resident_prover_ready === true,
     2 * 60 * 1000,
     'second wallet proxy restart',

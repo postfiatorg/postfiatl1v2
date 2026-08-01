@@ -1,0 +1,83 @@
+{
+  "ok": true,
+  "schema": "postfiat-pnok-private-fix-recovery-faults-v1",
+  "controlled_demo_only": true,
+  "duplicate_submit_idempotent": true,
+  "validator_restart_during_reset_recovered": true,
+  "resident_prover_restart_and_full_prewarm_recovered": true,
+  "wallet_proxy_restart_during_browser_acquisition_recovered": true,
+  "reset": {
+    "ok": true,
+    "schema": "postfiat-pnok-private-fix-wallet-job-status-v1",
+    "job_id": "0x2c262823c9dc6f7254cefa6f54cad279595cdc4a8964a5c1e76d210b6a09d5d6",
+    "client_request_id": "pnok-browser-fault-reset-01",
+    "direction": "restore",
+    "status": "accepted",
+    "execution_stage": "complete",
+    "fix_packet_hash": "43e375b221a2fd8fd123bdf01fc37a16aaa3c3cd693ce239aba8eb949516b5ce62dfde2d77fb61d5eae3cdedd1a510d2",
+    "reservation_id": "36398e823da939ed84bc6f0343a0f14f88017e5f1df2e9a59cbf34514f3d6c7fcbf762953fd2478085fe104214ab7b7e",
+    "nullifier_occurrence_counts": [
+      1,
+      1
+    ],
+    "output_occurrence_counts": [
+      1,
+      1
+    ],
+    "replay_rejected_without_effect": null,
+    "supply_unchanged": true,
+    "execution_privacy": "private on PFTL",
+    "source_boundary": "controlled sandbox checkpoint",
+    "base_symbol": "pfUSDC",
+    "quote_symbol": "pNOK",
+    "base_atoms": "20000000",
+    "quote_atoms": "210",
+    "ratio_display": "10.500000 pNOK/pfUSDC",
+    "fee_atoms": "0",
+    "price_impact_bps": 0,
+    "retry_count": 1,
+    "code": null,
+    "message": "Private FIX swap finalized and the owned output was scanned.",
+    "created_at_unix_ms": 1785570352384,
+    "updated_at_unix_ms": 1785570476101,
+    "idempotent_replay": false
+  },
+  "acquire": {
+    "ok": true,
+    "schema": "postfiat-pnok-private-fix-wallet-job-status-v1",
+    "job_id": "0xb3369f1f2941e66365cef59781adc47a68b888447349b9acc92b954123021ba5",
+    "client_request_id": "pnok-wallet-1a4cac4de11f17a14527e204",
+    "direction": "acquire",
+    "status": "accepted",
+    "execution_stage": "complete",
+    "fix_packet_hash": "43e375b221a2fd8fd123bdf01fc37a16aaa3c3cd693ce239aba8eb949516b5ce62dfde2d77fb61d5eae3cdedd1a510d2",
+    "reservation_id": "6b0c5dad331979a523dcbdcd5a7571bc112fb7c4eecdc224fa1902648737de1594e87b8ea42c9ffd4fa301f39d4a610b",
+    "nullifier_occurrence_counts": [
+      1,
+      1
+    ],
+    "output_occurrence_counts": [
+      1,
+      1
+    ],
+    "replay_rejected_without_effect": true,
+    "supply_unchanged": true,
+    "execution_privacy": "private on PFTL",
+    "source_boundary": "controlled sandbox checkpoint",
+    "base_symbol": "pfUSDC",
+    "quote_symbol": "pNOK",
+    "base_atoms": "20000000",
+    "quote_atoms": "210",
+    "ratio_display": "10.500000 pNOK/pfUSDC",
+    "fee_atoms": "0",
+    "price_impact_bps": 0,
+    "retry_count": 2,
+    "code": null,
+    "message": "Private FIX swap finalized and the owned output was scanned.",
+    "created_at_unix_ms": 1785570809018,
+    "updated_at_unix_ms": 1785570964384,
+    "idempotent_replay": false
+  },
+  "browser_errors": [],
+  "completed_at": "2026-08-01T07:56:07.309Z"
+}

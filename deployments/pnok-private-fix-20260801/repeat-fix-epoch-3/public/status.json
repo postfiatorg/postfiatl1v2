@@ -1,0 +1,12 @@
+{
+  "epoch": 3,
+  "expires_at_height": 2729,
+  "max_fills": 19,
+  "packet_hash": "0f2fef0eecc6b6d07606b254bebc2d85d6dff6473442a08dfd5d15d1f70a94218a018ecf8574127055095756f4a1c4af",
+  "remaining_fill_slots": 19,
+  "schema": "postfiat-pnok-demo-fix-successor-status-v1",
+  "stage": "complete",
+  "status": "active",
+  "trust_class": "CONTROLLED",
+  "valid_from_height": 730
+}

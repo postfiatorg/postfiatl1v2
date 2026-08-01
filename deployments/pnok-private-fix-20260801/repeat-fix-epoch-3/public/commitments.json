@@ -1,0 +1,13 @@
+{
+  "governance_policy": {
+    "domain": "postfiat.pnok_demo_fix.governance_policy_hash.v1",
+    "encoding": "canonical-json-sorted-compact-utf8",
+    "hash": "3c4f12758a0ef6d1ec95dbd5d9c05ea24717f82d70dd39152267553862ab46cbe1a5b68fa9be9bf15f58a58d21270e79"
+  },
+  "packet": {
+    "domain": "postfiat.fx_fix.packet_hash.v1",
+    "encoding": "canonical-field-lines-utf8",
+    "hash": "0f2fef0eecc6b6d07606b254bebc2d85d6dff6473442a08dfd5d15d1f70a94218a018ecf8574127055095756f4a1c4af"
+  },
+  "schema": "postfiat.pnok_demo_fix.commitments.v1"
+}

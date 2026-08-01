@@ -1,0 +1,23 @@
+{
+  "band_bps": 0,
+  "base_asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "capacity_base_atoms": 380000000,
+  "capacity_quote_atoms": 3990,
+  "epoch": 3,
+  "expires_at_height": 2729,
+  "fee_bps": 0,
+  "governance_policy_hash": "3c4f12758a0ef6d1ec95dbd5d9c05ea24717f82d70dd39152267553862ab46cbe1a5b68fa9be9bf15f58a58d21270e79",
+  "max_fills": 19,
+  "minimum_base_atoms": 20000000,
+  "operator": "pfb8f250e27a4ff89bf81da0f4a4bdd63f8ba45c12",
+  "packet_hash": "0f2fef0eecc6b6d07606b254bebc2d85d6dff6473442a08dfd5d15d1f70a94218a018ecf8574127055095756f4a1c4af",
+  "previous_fix_hash": "36faf454717471854c85b115365b144e7420deb9c363ee482ad71206ea4b4001a9e88dc9bb2edd9e07c46af5e787c084",
+  "quote_asset_id": "4b8dd69b1f1ee425ae84d17f2fc2fe3630d904c4c356b0ff2df0e00c20109e6346d765ca4c0407ddb08edcb6525d5cc1",
+  "ratio_denominator": 2000000,
+  "ratio_numerator": 21,
+  "schema": "postfiat.fx_fix.packet.v1",
+  "source_label": "pnok_demo_fix",
+  "source_observation_commitment": "fd6a209305d952f05a55b0244df8d394b8272a4594c6392aed233d76d1a5ca0dce9187e6759ae4c95dfb5e589828c718",
+  "valid_from_height": 730,
+  "version": 1
+}
