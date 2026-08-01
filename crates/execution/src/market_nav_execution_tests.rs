@@ -3230,7 +3230,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
             valuation_policy_hash: "04".repeat(32),
             vault_bridge_route_policy_hash: String::new(),
             sp1_program_vkey:
-                "0x007e32678376339d48df4db28a9825d5fb229cedb8b2e5c92295d4580c9d32f8"
+                "0x000c7271e0711abce0c61d293222fd4a144599a779db8cadadc4df35e31a4100"
                     .to_string(),
             sp1_proof_encoding: "groth16".to_string(),
             max_proof_bytes: 4_096,
@@ -3258,7 +3258,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         .clone();
     assert_eq!(
         reserve_profile_id,
-        "cdef69e9711ff26a2f51671598db5b7494627fed7e19c0a3597a3ecad62aab5977522c273f0413643eba72dcb673ab02"
+        "3d78cac1f539d3d2e56f6f38c958242aa0bcd13661c733834896bc9c49a48211d716bd4cad83d478b2fa5d85b22a0c7e"
     );
 
     let register_native_nav = signed_asset_transaction_with_minimum_fee(

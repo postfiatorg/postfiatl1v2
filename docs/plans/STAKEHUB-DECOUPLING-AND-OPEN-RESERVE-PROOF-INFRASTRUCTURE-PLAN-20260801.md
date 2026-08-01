@@ -970,7 +970,8 @@ or unaffiliated-operator gates have occurred.
 | Browser production bundle | `npm run build` | PASS; rebuilt bundle also passes the provider-neutral boundary scan. |
 | Proof kit | `cargo test --locked` | PASS; 4 CLI tests and 11 proof-type/adapter tests. |
 | SP1 host integration | `cargo check --locked -p postfiat-reserve-proof --features sp1` | PASS. |
-| Guest identity | committed ELF and `program-identity.json` | PASS; SHA-256 `345f9566e066b557127f73990b85aa053e0c6adfcfb6191bcfba5065a173de6`, vkey `0x007e32678376339d48df4db28a9825d5fb229cedb8b2e5c92295d4580c9d32f8`. |
+| Guest identity | committed ELF and `program-identity.json` | PASS; canonical SP1 6.3.1 Docker builds from two distinct checkout paths match at SHA-256 `0f8476431677bfe0a8f9f19db7439abce1a879ba5736cfa3225ae7de4e5b0e52`, vkey `0x000c7271e0711abce0c61d293222fd4a144599a779db8cadadc4df35e31a4100`. |
+| Canonical real proof | CPU Groth16 prove and independent host verify | PASS; the controlled chain-bound fixture and consensus calldata were regenerated for the canonical identity. |
 | Execution | `cargo test -p postfiat-execution` | PASS; 176/176, including real-proof, tamper, lifecycle, and controlled-source policy checks. |
 | Node regression | `cargo test -p postfiat-node --lib` | PASS; 251 passed, 0 failed, 2 intentionally ignored local-Anvil tests. |
 | Six-validator proof finality | `provider_neutral_qnav_proof_finalizes_and_survives_six_validator_restart` | PASS in 212.18 seconds. |

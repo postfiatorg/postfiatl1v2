@@ -10,7 +10,7 @@
   "min_attestations": 0,
   "tolerance_bp": 0,
   "valuation_policy_hash": "0404040404040404040404040404040404040404040404040404040404040404",
-  "sp1_program_vkey": "0x007e32678376339d48df4db28a9825d5fb229cedb8b2e5c92295d4580c9d32f8",
+  "sp1_program_vkey": "0x000c7271e0711abce0c61d293222fd4a144599a779db8cadadc4df35e31a4100",
   "sp1_proof_encoding": "groth16",
   "max_proof_bytes": 4096,
   "max_public_values_bytes": 584,

@@ -598,7 +598,7 @@ fn successor_nav_profile_operation(registrant_address: &str) -> NavProfileRegist
         valuation_policy_hash: "04".repeat(32),
         vault_bridge_route_policy_hash: String::new(),
         sp1_program_vkey:
-            "0x007e32678376339d48df4db28a9825d5fb229cedb8b2e5c92295d4580c9d32f8"
+            "0x000c7271e0711abce0c61d293222fd4a144599a779db8cadadc4df35e31a4100"
                 .to_string(),
         sp1_proof_encoding: "groth16".to_string(),
         max_proof_bytes: 4_096,
@@ -1041,7 +1041,7 @@ fn resume_outbox(data_dir: &Path, topology: &Path) -> Value {
 fn provider_neutral_qnav_proof_finalizes_and_survives_six_validator_restart() {
     const QNAV_CHAIN_ID: &str = "postfiat-wan-devnet-2";
     const QNAV_ASSET_ID: &str = "3f631473a34a48cd47b4e1067546a9ccc5fcfe2f6e103655191d600d9574a5b2e6a985b7c52dcff7c9461aac872a12f5";
-    const QNAV_PROFILE_ID: &str = "cdef69e9711ff26a2f51671598db5b7494627fed7e19c0a3597a3ecad62aab5977522c273f0413643eba72dcb673ab02";
+    const QNAV_PROFILE_ID: &str = "3d78cac1f539d3d2e56f6f38c958242aa0bcd13661c733834896bc9c49a48211d716bd4cad83d478b2fa5d85b22a0c7e";
 
     let mut harness = Harness::new();
     let seed_dir = harness.root.join("qnav-seed");

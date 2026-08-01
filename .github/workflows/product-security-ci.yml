@@ -152,9 +152,17 @@ jobs:
           expected_sha="$(jq -r .elf_sha256 ../../program-identity.json)"
           expected_vkey="$(jq -r .program_vkey ../../program-identity.json)"
           rebuild_dir="$(mktemp -d)"
-          cargo prove build --locked --output-directory "$rebuild_dir"
+          cargo prove build --docker --tag v6.3.1 --locked \
+            --workspace-directory "$GITHUB_WORKSPACE" \
+            --output-directory "$rebuild_dir"
           rebuilt_elf="$rebuild_dir/postfiat-reserve-proof-guest"
-          test "$(sha256sum "$rebuilt_elf" | cut -d' ' -f1)" = "$expected_sha"
+          test -s "$rebuilt_elf"
+          actual_sha="$(sha256sum "$rebuilt_elf" | cut -d' ' -f1)"
+          if [[ "$actual_sha" != "$expected_sha" ]]; then
+            printf 'guest ELF SHA mismatch: expected %s, got %s\n' \
+              "$expected_sha" "$actual_sha" >&2
+            exit 1
+          fi
           cargo run --locked --release \
             --manifest-path ../../Cargo.toml \
             -p postfiat-reserve-proof --features sp1 -- \

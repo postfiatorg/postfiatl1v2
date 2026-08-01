@@ -60,8 +60,9 @@ different observations cannot be mixed into one valid witness.
 - protoc is required by the SP1 host SDK
 
 The workspace lockfiles are committed. Production guest builds must use
-'--locked'. A Docker build must explicitly use an SP1 6.3.1 image rather
-than relying on cargo-prove's default image tag.
+`--locked` and the pinned SP1 6.3.1 Docker image. Native `cargo prove build`
+is useful for development, but its ELF can embed the host checkout path and
+must never define a registered production identity.
 
 The committed `program-identity.json` pins the expected ELF SHA-256 and SP1
 program vkey. Any guest rebuild used for registration or proof production
@@ -74,8 +75,11 @@ an in-place reinterpretation of an existing profile.
     cargo test --locked
     cargo check --locked -p postfiat-reserve-proof --features sp1
 
+    repo_root="$(git rev-parse --show-toplevel)"
     cd programs/reserve-proof-guest
-    cargo prove build --locked --output-directory ../../elf
+    cargo prove build --docker --tag v6.3.1 --locked \
+      --workspace-directory "$repo_root" \
+      --output-directory "$repo_root/tools/nav-reserve-proof/elf"
 
 After every build, compare both the ELF SHA-256 and `program-info` vkey with
 `program-identity.json`. CI rebuilds the guest from source and performs both
@@ -116,7 +120,7 @@ build qualification.
 
 After building the guest, add '--features sp1' and
 '--elf elf/postfiat-reserve-proof-guest' to 'execute'. The command compares
-SP1 output byte-for-byte with native execution. 'prove' emits a locally
+SP1 output byte-for-byte with native execution. `prove` emits a locally
 verified Groth16 proof, calldata bytes, public values, and the program vkey.
 
 `observe` reads exactly one bounded `<source_id>.json` adapter artifact for

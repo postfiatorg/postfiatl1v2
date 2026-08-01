@@ -24,13 +24,11 @@ SUPPORTED_TRACKED_PREFIXES = (
 )
 FORBIDDEN = b"/home/" + b"postfiat"
 IPV4 = re.compile(rb"(?<![0-9.])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9.])")
-# Compiled SP1 guest ELF artifacts embed cargo-registry/source build paths as panic-location
-# strings inside the RISC-V program image. They are include_bytes! dependencies pinned to the
-# deployed program verifying key, so those bytes cannot be scrubbed without changing the vkey
-# (which would require redeploying the on-chain verifier). Portability of these artifacts is
-# governed by their reproducible build configuration, not by source scanning.
-# TODO(mainnet): rebuild the guests with --remap-path-prefix for a path-independent, reproducible
-# vkey and remove this allowlist.
+# Legacy deployed SP1 guest ELF artifacts embed cargo-registry/source build paths as
+# panic-location strings inside the RISC-V program image. They are include_bytes!
+# dependencies pinned to deployed verifying keys and therefore remain explicit exceptions.
+# The open reserve-proof guest is deliberately absent: its pinned Docker build uses a
+# canonical container path and must pass this scan without an exception.
 BINARY_ARTIFACT_ALLOWLIST = frozenset(
     {
         "programs/pfusdc-egress/elf/pfusdc-egress-program",
@@ -38,7 +36,6 @@ BINARY_ARTIFACT_ALLOWLIST = frozenset(
         "programs/pfusdc-eth-mainnet-ingress/elf/pfusdc-eth-mainnet-ingress-program",
         "programs/pfusdc-ingress/elf/pfusdc-ingress-bonded-program",
         "programs/pfusdc-ingress/elf/pfusdc-ingress-program",
-        "tools/nav-reserve-proof/elf/postfiat-reserve-proof-guest",
         "wallet-web/src/wasm/postfiat_wallet_wasm_bg.wasm",
     }
 )

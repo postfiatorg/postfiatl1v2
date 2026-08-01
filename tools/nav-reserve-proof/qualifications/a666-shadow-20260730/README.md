@@ -1,11 +1,18 @@
 # A666 provider-neutral reserve-proof shadow qualification
 
+> **Retired pre-activation candidate (2026-08-01):** this historical shadow
+> proof remains valid under its recorded vkey, but that native-built identity
+> was found to depend on the host checkout path. It was never registered or
+> activated. The production successor uses the canonical Docker-built identity
+> in `program-identity.json`; fresh A666 observations and signatures are
+> required for that new profile rather than rewriting this historical record.
+
 This fixture ports the exact reserve amounts used by the finalized A666
 epoch-3 proof on 2026-07-30 into the open, provider-neutral reserve-proof
 schema. It is a historical-observation shadow comparison, not a fresh reserve
 claim and not a live profile activation.
 
-The successor guest reproduces the old economic totals exactly:
+This candidate successor guest reproduced the old economic totals exactly:
 
 | Measure (USD e8 atoms) | Legacy proof | Successor shadow | Delta |
 |---|---:|---:|---:|
@@ -79,7 +86,7 @@ $KIT/target/release/postfiat-reserve-proof verify \
   --elf $KIT/elf/postfiat-reserve-proof-guest
 ```
 
-The expected successor profile ID is
+The retired candidate profile ID is
 `a18c1bbee443f5f9958592cf65f4c16ee837c5c717cf9144f5b54f90bea267c80b4ae161001c2f7e5267fdc424c366c3`.
 The expected public-values SHA-256 is
 `699cb8acb39a3d351549e9a08c13a7712126841b3c3d480606c684a6db4184c8`.
