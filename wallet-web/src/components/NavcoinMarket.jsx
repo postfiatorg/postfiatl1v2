@@ -1,9 +1,9 @@
 import React from 'react';
 
-import A666MainnetMarketAdapter from './A666Market.jsx';
+import PftlUniswapPrimaryMarket from './NavcoinPrimaryMarket.jsx';
 
 const MARKET_ADAPTERS = Object.freeze({
-  'a666-mainnet-v2': A666MainnetMarketAdapter,
+  'pftl-uniswap-primary-v2': PftlUniswapPrimaryMarket,
 });
 
 export default function NavcoinMarket({ market, ...props }) {

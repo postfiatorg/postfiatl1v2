@@ -1603,6 +1603,11 @@ fn atomic_swap_delta_journal_recovery_never_exposes_a_half_swap() {
         sp1_proof_encoding: String::new(),
         max_proof_bytes: 0,
         max_public_values_bytes: 0,
+        public_values_schema: String::new(),
+        source_manifest_hash: String::new(),
+        valuation_unit_id: String::new(),
+        max_observation_span_blocks: 0,
+        allow_controlled_sources: false,
     };
     let profile_id = NavProofProfile::new(
         profile_operation.registrant.clone(),

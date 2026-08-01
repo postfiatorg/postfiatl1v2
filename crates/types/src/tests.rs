@@ -1631,6 +1631,105 @@ fn nav_profile_register_omits_default_sp1_fields_for_legacy_serialization() {
 }
 
 #[test]
+fn nav_reserve_profile_identity_and_signing_bind_every_successor_field() {
+    let build_profile = |manifest: &str, unit: &str, span: u64, controlled: bool| {
+        NavProofProfile::new(
+            "pfissuer",
+            NAV_PROFILE_VERIFIER_SP1_GROTH16,
+            "manifest-driven-reserves",
+            100,
+            2,
+            1_000,
+            0,
+            0,
+            0,
+            0,
+            "11".repeat(32),
+            format!("0x{}", "22".repeat(32)),
+            NAV_SP1_PROOF_ENCODING_GROTH16,
+            1_024,
+            NAV_RESERVE_PUBLIC_VALUES_V1_BYTES as u64,
+        )
+        .expect("SP1 base profile")
+        .with_nav_reserve_bindings(
+            NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1,
+            manifest,
+            unit,
+            span,
+            controlled,
+        )
+        .expect("reserve profile")
+    };
+    let baseline = build_profile(&"33".repeat(48), &"44".repeat(48), 8, false);
+    for changed in [
+        build_profile(&"55".repeat(48), &"44".repeat(48), 8, false),
+        build_profile(&"33".repeat(48), &"66".repeat(48), 8, false),
+        build_profile(&"33".repeat(48), &"44".repeat(48), 9, false),
+        build_profile(&"33".repeat(48), &"44".repeat(48), 8, true),
+    ] {
+        assert_ne!(baseline.profile_id, changed.profile_id);
+    }
+
+    let operation = NavProfileRegisterOperation {
+        registrant: "pfissuer".to_string(),
+        verifier_kind: NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1.to_string(),
+        source_class: baseline.source_class.clone(),
+        max_snapshot_age_blocks: baseline.max_snapshot_age_blocks,
+        challenge_window_blocks: baseline.challenge_window_blocks,
+        max_epoch_gap_blocks: baseline.max_epoch_gap_blocks,
+        settle_deadline_blocks: baseline.settle_deadline_blocks,
+        min_challenge_bond: baseline.min_challenge_bond,
+        min_attestations: baseline.min_attestations,
+        tolerance_bp: baseline.tolerance_bp,
+        bridge_observer_min_confirmations: baseline.bridge_observer_min_confirmations,
+        valuation_policy_hash: baseline.valuation_policy_hash.clone(),
+        vault_bridge_route_policy_hash: baseline.vault_bridge_route_policy_hash.clone(),
+        sp1_program_vkey: baseline.sp1_program_vkey.clone(),
+        sp1_proof_encoding: baseline.sp1_proof_encoding.clone(),
+        max_proof_bytes: baseline.max_proof_bytes,
+        max_public_values_bytes: baseline.max_public_values_bytes,
+        public_values_schema: baseline.public_values_schema.clone(),
+        source_manifest_hash: baseline.source_manifest_hash.clone(),
+        valuation_unit_id: baseline.valuation_unit_id.clone(),
+        max_observation_span_blocks: baseline.max_observation_span_blocks,
+        allow_controlled_sources: baseline.allow_controlled_sources,
+    };
+    operation.validate().expect("reserve registration operation");
+    assert_eq!(
+        operation.to_profile().expect("derive registered profile"),
+        baseline,
+        "public tooling and consensus must derive one exact successor profile",
+    );
+    let unsigned = UnsignedAssetTransaction {
+        chain_id: "postfiat-local".to_string(),
+        genesis_hash: "77".repeat(48),
+        protocol_version: 1,
+        address_namespace: ADDRESS_NAMESPACE.to_string(),
+        transaction_kind: NAV_PROFILE_REGISTER_TRANSACTION_KIND.to_string(),
+        signature_algorithm_id: "ML-DSA-65".to_string(),
+        source: operation.registrant.clone(),
+        fee: 1,
+        sequence: 1,
+        operation: AssetTransactionOperation::NavProfileRegister(operation.clone()),
+    };
+    let baseline_bytes = unsigned.signing_bytes();
+    for mutate in 0..5 {
+        let mut changed = operation.clone();
+        match mutate {
+            0 => changed.public_values_schema.push_str("-changed"),
+            1 => changed.source_manifest_hash = "88".repeat(48),
+            2 => changed.valuation_unit_id = "99".repeat(48),
+            3 => changed.max_observation_span_blocks += 1,
+            4 => changed.allow_controlled_sources = true,
+            _ => unreachable!(),
+        }
+        let mut changed_unsigned = unsigned.clone();
+        changed_unsigned.operation = AssetTransactionOperation::NavProfileRegister(changed);
+        assert_ne!(baseline_bytes, changed_unsigned.signing_bytes());
+    }
+}
+
+#[test]
 fn nav_profile_register_binds_governed_route_separately_from_sp1_policy() {
     let route_hash = "33".repeat(NAV_PROFILE_ID_HEX_LEN / 2);
     let operation = NavProfileRegisterOperation {
@@ -1651,6 +1750,11 @@ fn nav_profile_register_binds_governed_route_separately_from_sp1_policy() {
         sp1_proof_encoding: NAV_SP1_PROOF_ENCODING_GROTH16.to_string(),
         max_proof_bytes: 512,
         max_public_values_bytes: 256,
+        public_values_schema: String::new(),
+        source_manifest_hash: String::new(),
+        valuation_unit_id: String::new(),
+        max_observation_span_blocks: 0,
+        allow_controlled_sources: false,
     };
     operation.validate().expect("route-bound SP1 profile");
     let json = serde_json::to_value(&operation).expect("route-bound profile JSON");
@@ -1688,6 +1792,11 @@ fn nav_sp1_profile_requires_policy_hash_and_omits_default_limits() {
         sp1_proof_encoding: NAV_SP1_PROOF_ENCODING_GROTH16.to_string(),
         max_proof_bytes: 0,
         max_public_values_bytes: 0,
+        public_values_schema: String::new(),
+        source_manifest_hash: String::new(),
+        valuation_unit_id: String::new(),
+        max_observation_span_blocks: 0,
+        allow_controlled_sources: false,
     };
     let error = missing_policy
         .validate()
@@ -2105,6 +2214,51 @@ fn nav_reserve_packet_accepts_over_collateralized_floor_nav() {
     )
     .expect("packet");
     assert_eq!(packet.nav_per_unit, nav_per_unit);
+}
+
+#[test]
+fn nav_reserve_packet_rejects_uncommitted_derived_fields_and_unbounded_sources() {
+    let base_packet = || {
+        NavReservePacket::new(
+            "aa".repeat(48),
+            "issuer",
+            "submitter",
+            2,
+            1,
+            100,
+            100,
+            "profile",
+            "bb".repeat(48),
+            "cc".repeat(48),
+            "dd".repeat(48),
+        )
+        .expect("base packet")
+    };
+
+    let mut hidden = base_packet();
+    hidden.source_manifest_hash = "11".repeat(48);
+    assert!(hidden
+        .validate()
+        .expect_err("derived field without schema must reject")
+        .contains("require a public-values schema"));
+
+    let mut unbounded = base_packet();
+    unbounded.public_values_schema = NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1.to_string();
+    unbounded.source_manifest_hash = "11".repeat(48);
+    unbounded.valuation_unit_id = "22".repeat(48);
+    unbounded.proof_verified_net_assets = 100;
+    unbounded.gross_assets = 100;
+    unbounded.source_count = NAV_RESERVE_MAX_SOURCES_V1 + 1;
+    unbounded.quantity_trust_counts.controlled = unbounded.source_count;
+    unbounded.valuation_trust_counts.controlled = unbounded.source_count;
+    unbounded.controlled_value = 100;
+    unbounded.quantity_trust_root = "33".repeat(48);
+    unbounded.valuation_trust_root = "44".repeat(48);
+    unbounded.source_disclosure_root = "55".repeat(48);
+    assert!(unbounded
+        .validate()
+        .expect_err("source count above ABI maximum must reject")
+        .contains("trust counts do not match source_count"));
 }
 
 #[test]

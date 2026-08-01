@@ -14,8 +14,8 @@ controller=0x9A0262C0572fb4DB08765408eB225E207F40c3d9
 wrapped_token=0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5
 a666=521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c
 return_burned_topic=0x4d6105cbfd6dce49c1a94770a1492db4e1f2b0670d8bb14fe8da318d880f2c01
-ethereum_rpc=${A666_ETHEREUM_RPC:-https://ethereum-rpc.publicnode.com}
-cast_bin=${A666_CAST_BIN:-cast}
+ethereum_rpc=${NAVCOIN_ETHEREUM_RPC:-${A666_ETHEREUM_RPC:-https://ethereum-rpc.publicnode.com}}
+cast_bin=${NAVCOIN_CAST_BIN:-${A666_CAST_BIN:-cast}}
 finality_timeout_seconds=1800
 
 while (($#)); do

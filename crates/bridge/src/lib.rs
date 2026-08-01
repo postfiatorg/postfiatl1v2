@@ -391,7 +391,19 @@ pub struct PftlUniswapRouteStatusRow {
     pub route_live: bool,
     pub paused: bool,
     pub native_nav_asset_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_nav_asset_code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_nav_asset_display_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_nav_asset_precision: Option<u8>,
     pub settlement_asset_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settlement_asset_code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settlement_asset_display_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settlement_asset_precision: Option<u8>,
     pub wrapped_navcoin_token: String,
     pub handoff_controller: String,
     pub settlement_adapter: String,
@@ -1818,7 +1830,7 @@ pub fn pftl_uniswap_bridge_routes_status(
         .collect::<Result<Vec<_>, _>>()?;
     routes.sort_by(|left, right| left.route_id.cmp(&right.route_id));
     Ok(PftlUniswapRoutesStatusReport {
-        schema: "postfiat-pftl-uniswap-routes-status-v1".to_string(),
+        schema: "postfiat-pftl-uniswap-routes-status-v2".to_string(),
         route_count: routes.len() as u64,
         routes,
     })
@@ -2881,7 +2893,13 @@ fn pftl_uniswap_route_status_row(
         route_live: false,
         paused: ledger.paused,
         native_nav_asset_id: ledger.native_nav_asset_id.clone(),
+        native_nav_asset_code: None,
+        native_nav_asset_display_name: None,
+        native_nav_asset_precision: None,
         settlement_asset_id: ledger.settlement_asset_id.clone(),
+        settlement_asset_code: None,
+        settlement_asset_display_name: None,
+        settlement_asset_precision: None,
         wrapped_navcoin_token: ledger.wrapped_navcoin_token.clone(),
         handoff_controller: ledger.handoff_controller.clone(),
         settlement_adapter: ledger.settlement_adapter.clone(),

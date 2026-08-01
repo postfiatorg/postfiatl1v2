@@ -22,7 +22,7 @@ import NavDetail from './components/NavDetail.jsx';
 import More from './components/More.jsx';
 import NavcoinMarket from './components/NavcoinMarket.jsx';
 import PrivateFix from './components/PrivateFix.jsx';
-import { DEFAULT_NAVCOIN_MARKET, NAVCOIN_MARKETS, navcoinMarketByKey } from './lib/navcoin-markets.js';
+import { navcoinMarketByKey, navcoinMarketsFromRoutes } from './lib/navcoin-markets.js';
 
 const PROXY_AUTH_SESSION_KEY = 'postfiat.wallet_proxy_api_token';
 
@@ -56,7 +56,8 @@ const isOn = (tab, id) => tab === id || (id === 'nav' && tab === 'navDetail');
 export default function App() {
   const [tab, setTab] = useState('onboard');
   const [coinId, setCoinId] = useState(null);
-  const [marketKey, setMarketKey] = useState(DEFAULT_NAVCOIN_MARKET.key);
+  const [markets, setMarkets] = useState([]);
+  const [marketKey, setMarketKey] = useState('');
   const [wasmReady, setWasmReady] = useState(false);
   const [rpc, setRpc] = useState(null);
   const [txBuilder, setTxBuilder] = useState(null);
@@ -123,6 +124,15 @@ export default function App() {
           const caps = await client.serverCapabilities();
           setChainCapabilities(caps);
         } catch (e) { setChainCapabilities(null); }
+        try {
+          const routes = await client.navcoinBridgeRoutes();
+          const discovered = navcoinMarketsFromRoutes(routes?.result);
+          setMarkets(discovered);
+          setMarketKey(discovered[0]?.key || '');
+        } catch (e) {
+          setMarkets([]);
+          setMarketKey('');
+        }
       } catch (e) {
         setError('RPC init failed: ' + e.message);
       }
@@ -137,13 +147,28 @@ export default function App() {
 
     const refresh = async () => {
       try {
-        const [status, caps] = await Promise.all([
+        const [status, caps, routes] = await Promise.all([
           rpc.status().catch(() => null),
           rpc.serverCapabilities().catch(() => null),
+          rpc.navcoinBridgeRoutes().catch(() => null),
         ]);
         if (disposed) return;
         setChainStatus(status?.ok ? status.result : null);
         setChainCapabilities(caps?.ok ? caps : null);
+        if (routes?.ok) {
+          try {
+            const discovered = navcoinMarketsFromRoutes(routes.result);
+            setMarkets(discovered);
+            setMarketKey(current => discovered.some(market => market.key === current)
+              ? current : (discovered[0]?.key || ''));
+          } catch (_) {
+            setMarkets([]);
+            setMarketKey('');
+          }
+        } else {
+          setMarkets([]);
+          setMarketKey('');
+        }
       } catch (_) {
         if (!disposed) {
           setChainStatus(null);
@@ -466,7 +491,10 @@ export default function App() {
   const go = (next, payload) => {
     if (next === 'navDetail') { setCoinId(payload); setTab('navDetail'); return; }
     if (next === 'market') {
-      if (payload?.marketKey) setMarketKey(navcoinMarketByKey(payload.marketKey).key);
+      if (payload?.marketKey) {
+        const selected = navcoinMarketByKey(markets, payload.marketKey);
+        if (selected) setMarketKey(selected.key);
+      }
       setTab('market');
       return;
     }
@@ -591,6 +619,7 @@ export default function App() {
 
           {tab === 'wallet' && (
             <WalletHome
+              markets={markets}
               rpc={rpc}
               txBuilder={txBuilder}
               backupJson={backupJson}
@@ -608,6 +637,7 @@ export default function App() {
           )}
           {tab === 'send' && (
             <Send
+              markets={markets}
               rpc={rpc}
               txBuilder={txBuilder}
               backupJson={backupJson}
@@ -623,7 +653,7 @@ export default function App() {
           )}
           {tab === 'swap' && (
             <Swap
-              market={navcoinMarketByKey(marketKey)}
+              market={navcoinMarketByKey(markets, marketKey)}
               rpc={rpc}
               txBuilder={txBuilder}
               backupJson={backupJson}
@@ -641,8 +671,8 @@ export default function App() {
           )}
           {tab === 'market' && (
             <NavcoinMarket
-              market={navcoinMarketByKey(marketKey)}
-              markets={NAVCOIN_MARKETS}
+              market={navcoinMarketByKey(markets, marketKey)}
+              markets={markets}
               onSelectMarket={setMarketKey}
               rpc={rpc}
               txBuilder={txBuilder}
@@ -665,6 +695,7 @@ export default function App() {
           )}
           {tab === 'nav' && (
             <NavList
+              markets={markets}
               rpc={rpc}
               address={walletAddress}
               go={go}
@@ -672,6 +703,7 @@ export default function App() {
           )}
           {tab === 'navDetail' && (
             <NavDetail
+              markets={markets}
               id={coinId}
               rpc={rpc}
               address={walletAddress}

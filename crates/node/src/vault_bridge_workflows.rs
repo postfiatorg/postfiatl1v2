@@ -204,6 +204,11 @@ pub fn vault_bridge_bootstrap_bundle(
             sp1_proof_encoding: options.sp1_proof_encoding.clone(),
             max_proof_bytes: options.max_proof_bytes,
             max_public_values_bytes: options.max_public_values_bytes,
+            public_values_schema: String::new(),
+            source_manifest_hash: String::new(),
+            valuation_unit_id: String::new(),
+            max_observation_span_blocks: 0,
+            allow_controlled_sources: false,
         });
     profile_register_operation
         .validate()

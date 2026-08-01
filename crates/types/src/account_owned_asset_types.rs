@@ -703,6 +703,44 @@ pub struct NavReservePacket {
     /// SP1 public-values blob committed by the Groth16 proof.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sp1_public_values: Vec<u8>,
+    /// Consensus-decoded provider-neutral reserve proof details. Empty/zero for
+    /// historical packet formats; populated only by `sp1-nav-reserve-v1`.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub public_values_schema: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source_manifest_hash: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub valuation_unit_id: String,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub observation_not_before: u64,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub observation_not_after: u64,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub proof_verified_net_assets: u64,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub consensus_overlay_value: u64,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub gross_assets: u64,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub total_liabilities: u64,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub cryptographically_verified_value: u64,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub attested_value: u64,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub controlled_value: u64,
+    #[serde(default)]
+    pub source_count: u32,
+    #[serde(default)]
+    pub quantity_trust_counts: NavReserveTrustCountsV1,
+    #[serde(default)]
+    pub valuation_trust_counts: NavReserveTrustCountsV1,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub quantity_trust_root: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub valuation_trust_root: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source_disclosure_root: String,
 }
 
 /// A registered observation operator. Registration is open but
@@ -788,6 +826,24 @@ impl NavReservePacket {
             attestations: Vec::new(),
             sp1_proof_bytes: Vec::new(),
             sp1_public_values: Vec::new(),
+            public_values_schema: String::new(),
+            source_manifest_hash: String::new(),
+            valuation_unit_id: String::new(),
+            observation_not_before: 0,
+            observation_not_after: 0,
+            proof_verified_net_assets: 0,
+            consensus_overlay_value: 0,
+            gross_assets: 0,
+            total_liabilities: 0,
+            cryptographically_verified_value: 0,
+            attested_value: 0,
+            controlled_value: 0,
+            source_count: 0,
+            quantity_trust_counts: NavReserveTrustCountsV1::default(),
+            valuation_trust_counts: NavReserveTrustCountsV1::default(),
+            quantity_trust_root: String::new(),
+            valuation_trust_root: String::new(),
+            source_disclosure_root: String::new(),
         };
         packet.validate()?;
         Ok(packet)
@@ -860,6 +916,72 @@ impl NavReservePacket {
             return Err(format!(
                 "nav_reserve.sp1_public_values exceeds maximum of {DEFAULT_MAX_NAV_SP1_PUBLIC_VALUES_BYTES}"
             ));
+        }
+        if !self.public_values_schema.is_empty() {
+            if self.public_values_schema != NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1 {
+                return Err("nav_reserve public-values schema is unsupported".to_string());
+            }
+            for (field, value) in [
+                ("source_manifest_hash", &self.source_manifest_hash),
+                ("valuation_unit_id", &self.valuation_unit_id),
+                ("quantity_trust_root", &self.quantity_trust_root),
+                ("valuation_trust_root", &self.valuation_trust_root),
+                ("source_disclosure_root", &self.source_disclosure_root),
+            ] {
+                validate_lower_hex_len(&format!("nav_reserve.{field}"), value, 96)?;
+            }
+            if self.observation_not_before > self.observation_not_after {
+                return Err("nav_reserve observation interval is inverted".to_string());
+            }
+            let total = self
+                .proof_verified_net_assets
+                .checked_add(self.consensus_overlay_value)
+                .ok_or_else(|| "nav_reserve proof plus overlay overflows u64".to_string())?;
+            if total != self.verified_net_assets {
+                return Err(
+                    "nav_reserve proof plus overlay must equal verified_net_assets".to_string(),
+                );
+            }
+            if self.gross_assets.checked_sub(self.total_liabilities)
+                != Some(self.proof_verified_net_assets)
+            {
+                return Err("nav_reserve gross minus liabilities mismatch".to_string());
+            }
+            let classified = self
+                .cryptographically_verified_value
+                .checked_add(self.attested_value)
+                .and_then(|value| value.checked_add(self.controlled_value));
+            if classified != Some(self.proof_verified_net_assets) {
+                return Err("nav_reserve trust-classified value mismatch".to_string());
+            }
+            if self.source_count == 0
+                || self.source_count > NAV_RESERVE_MAX_SOURCES_V1
+                || self.quantity_trust_counts.checked_total()? != self.source_count
+                || self.valuation_trust_counts.checked_total()? != self.source_count
+            {
+                return Err("nav_reserve trust counts do not match source_count".to_string());
+            }
+        } else if !self.source_manifest_hash.is_empty()
+            || !self.valuation_unit_id.is_empty()
+            || self.observation_not_before != 0
+            || self.observation_not_after != 0
+            || self.proof_verified_net_assets != 0
+            || self.consensus_overlay_value != 0
+            || self.gross_assets != 0
+            || self.total_liabilities != 0
+            || self.cryptographically_verified_value != 0
+            || self.attested_value != 0
+            || self.controlled_value != 0
+            || self.source_count != 0
+            || self.quantity_trust_counts != NavReserveTrustCountsV1::default()
+            || self.valuation_trust_counts != NavReserveTrustCountsV1::default()
+            || !self.quantity_trust_root.is_empty()
+            || !self.valuation_trust_root.is_empty()
+            || !self.source_disclosure_root.is_empty()
+        {
+            return Err(
+                "nav_reserve derived proof fields require a public-values schema".to_string(),
+            );
         }
         Ok(())
     }
@@ -3260,6 +3382,22 @@ pub struct NavProofProfile {
     /// Max SP1 public-values bytes accepted at submit. 0 = protocol default.
     #[serde(default, skip_serializing_if = "is_zero_u64")]
     pub max_public_values_bytes: u64,
+    /// Exact canonical public-values schema decoded by this immutable profile.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub public_values_schema: String,
+    /// Content-addressed, canonical source manifest committed by the proof.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source_manifest_hash: String,
+    /// Domain-separated valuation unit and precision identifier.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub valuation_unit_id: String,
+    /// Maximum permitted width of a proof observation interval, in PFTL blocks.
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub max_observation_span_blocks: u64,
+    /// Controlled evidence is never live-value eligible unless the immutable
+    /// profile opts in explicitly.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub allow_controlled_sources: bool,
 }
 
 /// PFTL-finalized authorization packet for bounded NAVCoin market operations.

@@ -1,5 +1,9 @@
 # ZK Prover Optimization — Overnight Execution Sprint
 
+> **Historical architecture:** Provider-specific orchestration below records
+> the original internal performance campaign. Current reserve-proof work uses
+> the open kit; current private-swap proving is a separate PFTL service.
+
 > **Purpose:** a self-contained, thorough work plan for autonomous overnight execution. Derived from the separate website-repository analysis `heavy-zk-optimization-v2.md`, which is not a dependency of this source tree. The orc executes this phase-by-phase, measuring real benchmarks at each step, with explicit contingency plans + stop conditions.
 >
 > **Primary deliverable:** MEASURED proving-time benchmarks at each optimization tier (the evidence gap the TIH flagged). The blog post's projected speedups must be replaced with real numbers.

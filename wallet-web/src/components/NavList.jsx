@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 
-import { formatA666Nav, formatA666Units } from '../lib/a666-primary-route.js';
-import { NAVCOIN_MARKETS } from '../lib/navcoin-markets.js';
+import { formatNavcoinNav, formatNavcoinUnits } from '../lib/navcoin-primary-route.js';
 import { formatAssetBalance, shortenAssetId } from '../lib/utils.js';
 
 function result(response) {
@@ -39,7 +38,7 @@ function marketIsVerified(market, route, nav) {
   );
 }
 
-export default function NavList({ rpc, address, go }) {
+export default function NavList({ markets = [], rpc, address, go }) {
   const [snapshot, setSnapshot] = useState(null);
   const [error, setError] = useState('');
 
@@ -48,7 +47,7 @@ export default function NavList({ rpc, address, go }) {
     setError('');
     try {
       const [marketStates, assetsResponse, statusResponse] = await Promise.all([
-        Promise.all(NAVCOIN_MARKETS.map(async market => {
+        Promise.all(markets.map(async market => {
           try {
             const [routeResponse, navResponse] = await Promise.all([
               rpc.navcoinBridgeSupplyStatus(market.routeId),
@@ -73,16 +72,16 @@ export default function NavList({ rpc, address, go }) {
     } catch (failure) {
       setError(failure.message || 'Unable to load current NAVCoins');
     }
-  }, [address, rpc]);
+  }, [address, markets, rpc]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  const marketStates = snapshot?.markets || NAVCOIN_MARKETS.map(market => ({ market, route: null, nav: null, error: '' }));
+  const marketStates = snapshot?.markets || markets.map(market => ({ market, route: null, nav: null, error: '' }));
   const assets = snapshot?.assets || [];
-  const configuredAssetIds = new Set(NAVCOIN_MARKETS.flatMap(market => [market.navAssetId, market.settlementAssetId]));
-  const settlementMarkets = [...new Map(NAVCOIN_MARKETS.map(market => [market.settlementAssetId, market])).values()];
+  const configuredAssetIds = new Set(markets.flatMap(market => [market.navAssetId, market.settlementAssetId]));
+  const settlementMarkets = [...new Map(markets.map(market => [market.settlementAssetId, market])).values()];
   const otherAssets = assets.filter(asset => !configuredAssetIds.has(String(asset?.asset_id || asset?.id || '').toLowerCase()));
 
   const rows = [
@@ -91,14 +90,14 @@ export default function NavList({ rpc, address, go }) {
       name: market.name,
       holding: assetBalance(assets, market.navAssetId),
       assetId: market.navAssetId,
-      status: marketIsVerified(market, route, nav) ? `${formatA666Nav(nav?.nav_per_unit)} verified NAV` : 'NAV verification blocked',
+      status: marketIsVerified(market, route, nav) ? `${formatNavcoinNav(nav?.nav_per_unit)} verified NAV` : 'NAV verification blocked',
     })),
     ...settlementMarkets.map(market => ({
       id: market.settlementSymbol,
       name: 'Governed NAVCoin settlement asset',
       holding: assetBalance(assets, market.settlementAssetId),
       assetId: market.settlementAssetId,
-      status: `Funds ${NAVCOIN_MARKETS.filter(item => item.settlementAssetId === market.settlementAssetId).map(item => item.symbol).join(', ')} primary markets`,
+      status: `Funds ${markets.filter(item => item.settlementAssetId === market.settlementAssetId).map(item => item.symbol).join(', ')} primary markets`,
     })),
     ...otherAssets.map(asset => {
       const assetId = String(asset?.asset_id || asset?.id || '');
@@ -166,7 +165,7 @@ export default function NavList({ rpc, address, go }) {
               <div className="pf-eyebrow">Live {market.symbol} reserve evidence</div>
               <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>
                 {verified
-                  ? 'The route policy and finalized StakeHub reserve packet match.'
+                  ? 'The route policy and finalized PFTL reserve packet match.'
                   : `${market.symbol} actions are blocked${marketError ? `: ${marketError}` : ' until the route policy and reserve packet match.'}`}
               </div>
               <button className="pf-link" onClick={() => go('market', { marketKey: market.key })} style={{ marginTop: 8 }}>
@@ -174,8 +173,8 @@ export default function NavList({ rpc, address, go }) {
               </button>
             </div>
             <div className="pf-evidence-stats">
-              <div><div className="pf-eyebrow" style={{ fontSize: 10 }}>NAV</div><div style={{ fontFamily: 'var(--mono)', fontSize: 16 }}>{formatA666Nav(nav?.nav_per_unit)}</div></div>
-              <div><div className="pf-eyebrow" style={{ fontSize: 10 }}>{market.settlementSymbol} reserve</div><div style={{ fontFamily: 'var(--mono)', fontSize: 16 }}>{formatA666Units(route?.settlement_reserve_atoms)}</div></div>
+              <div><div className="pf-eyebrow" style={{ fontSize: 10 }}>NAV</div><div style={{ fontFamily: 'var(--mono)', fontSize: 16 }}>{formatNavcoinNav(nav?.nav_per_unit)}</div></div>
+              <div><div className="pf-eyebrow" style={{ fontSize: 10 }}>{market.settlementSymbol} reserve</div><div style={{ fontFamily: 'var(--mono)', fontSize: 16 }}>{formatNavcoinUnits(route?.settlement_reserve_atoms, market.settlementDecimals)}</div></div>
               <div><div className="pf-eyebrow" style={{ fontSize: 10 }}>Ledger</div><div style={{ fontFamily: 'var(--mono)', fontSize: 16 }}>{snapshot?.chain?.block_height ?? '—'}</div></div>
             </div>
           </div>

@@ -1,0 +1,13 @@
+{
+  "schema": "postfiat.reserve_shadow_source_descriptor.v1",
+  "source_id": "aave-arbitrum",
+  "reserve_owner": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+  "source_domain": "evm:42161:aave-v3",
+  "historical_observation": "docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/aave-witness.json",
+  "historical_metadata_hash": "263adfd363b69bbc688c1dec33e73f0961d0d52a788a0792ad3fdadf9f8257d1",
+  "gross_assets_usd_e8": 57542112446,
+  "total_liabilities_usd_e8": 20088300169,
+  "old_quantity_trust": "cryptographic",
+  "old_valuation_trust": "cryptographic",
+  "successor_shadow_trust": "attested"
+}

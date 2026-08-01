@@ -922,17 +922,18 @@ fn pftl_uniswap_consensus_routes_status(
     let mut routes = ledger
         .pftl_uniswap_routes
         .iter()
-        .map(pftl_uniswap_consensus_route_status_row)
+        .map(|route| pftl_uniswap_consensus_route_status_row(ledger, route))
         .collect::<io::Result<Vec<_>>>()?;
     routes.sort_by(|left, right| left.route_id.cmp(&right.route_id));
     Ok(PftlUniswapRoutesStatusReport {
-        schema: "postfiat-pftl-uniswap-routes-status-v1".to_string(),
+        schema: "postfiat-pftl-uniswap-routes-status-v2".to_string(),
         route_count: routes.len() as u64,
         routes,
     })
 }
 
 fn pftl_uniswap_consensus_route_status_row(
+    ledger: &LedgerState,
     route: &PftlUniswapConsensusRouteState,
 ) -> io::Result<PftlUniswapRouteStatusRow> {
     route
@@ -980,6 +981,8 @@ fn pftl_uniswap_consensus_route_status_row(
         .values()
         .filter(|import| import.status == PFTL_UNISWAP_RETURN_STATUS_IMPORTED)
         .count() as u64;
+    let native_asset = ledger.asset_definition(&route.native_nav_asset_id);
+    let settlement_asset = ledger.asset_definition(&route.settlement_asset_id);
     Ok(PftlUniswapRouteStatusRow {
         route_id: route.route_id.clone(),
         route_family: route.route_family.clone(),
@@ -999,7 +1002,13 @@ fn pftl_uniswap_consensus_route_status_row(
             && route.route_trust_class != ROUTE_TRUST_CLASS_DISABLED,
         paused: route.paused,
         native_nav_asset_id: route.native_nav_asset_id.clone(),
+        native_nav_asset_code: native_asset.map(|asset| asset.code.clone()),
+        native_nav_asset_display_name: native_asset.map(|asset| asset.display_name.clone()),
+        native_nav_asset_precision: native_asset.map(|asset| asset.precision),
         settlement_asset_id: route.settlement_asset_id.clone(),
+        settlement_asset_code: settlement_asset.map(|asset| asset.code.clone()),
+        settlement_asset_display_name: settlement_asset.map(|asset| asset.display_name.clone()),
+        settlement_asset_precision: settlement_asset.map(|asset| asset.precision),
         wrapped_navcoin_token: route.wrapped_navcoin_token.clone(),
         handoff_controller: route.handoff_controller.clone(),
         settlement_adapter: route.settlement_adapter.clone(),

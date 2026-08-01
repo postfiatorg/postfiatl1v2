@@ -10,6 +10,12 @@ pfUSDC.
 Uniswap liquidity changes, generic NRRS code, another settlement asset, or a
 validator upgrade.
 
+> **Frozen demonstration release.** This runbook intentionally records the
+> legacy internal reserve-operator path used by the already deployed validator
+> release. It is independent of the provider-neutral reserve-proof migration.
+> Do not run these commands from the decoupling branch and do not deploy a new
+> node, wallet, proof profile, program vkey, or signer for this demonstration.
+
 The qualifying live rehearsal and exact transaction record are in
 [`../evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/README.md`](../evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/README.md).
 
@@ -30,7 +36,13 @@ then execute issue, NAV refresh, route advance, and a partial redemption live.
 ## Fixed production anchors
 
 ```bash
-REPO=/home/postfiat/repos/a666-eth-fast-lane-combined-20260724
+SOURCE_REPO=/home/postfiat/repos/a666-eth-fast-lane-combined-20260724
+DEMO_REV=2246d2573de7958a549449ca240a0fd3a0f884f5
+DEMO_REPO=/home/postfiat/tmp/a666-pfusdc-monday-demo-2246d257
+test -e "$DEMO_REPO" || git -C "$SOURCE_REPO" worktree add --detach "$DEMO_REPO" "$DEMO_REV"
+test "$(git -C "$DEMO_REPO" rev-parse HEAD)" = "$DEMO_REV"
+test -z "$(git -C "$DEMO_REPO" status --porcelain)"
+REPO=$DEMO_REPO
 HOSTS=docs/evidence/a666-joe-mainnet-e2e-20260728/proposer-hosts.json
 NODE=target/release/postfiat-node
 REMOTE_RUNNER=scripts/a666-remote-sync-round.py
@@ -118,7 +130,8 @@ and amount match the Ethereum event, and all six validators converge.
 ## Gate 3 — fresh governed reserve proof and pre-issue NAV
 
 Generate the six-leg StakeHub witness and Groth16 proof before the
-audience-facing segment. Copy it to a new `"$RUN/por-preissue"` and validate:
+audience-facing segment. Copy it to a new
+`"$RUN/por-preissue"` and validate:
 
 - exact governed ELF SHA-256 and vkey;
 - execute, preview, and proved public values are byte-identical;

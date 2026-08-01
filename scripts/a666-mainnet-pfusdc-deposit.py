@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Submit one exact buyer-funded pfUSDC deposit through StakeHub.
-
-Approval and deposit intentionally use distinct launch sessions. StakeHub
-accounts the approved USDC amount against the approval session, so combining
-both actions can exhaust a session before the deposit is submitted.
-"""
+"""Submit one exact buyer-funded pfUSDC deposit with the constrained signer."""
 
 from __future__ import annotations
 
@@ -16,7 +11,6 @@ import os
 import re
 import sys
 import time
-from datetime import UTC, datetime
 from pathlib import Path
 
 from eth_abi import encode
@@ -24,6 +18,9 @@ from web3 import Web3
 
 
 REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "python"))
+from postfiat_ops.constrained_signer import signer_status, submit_evm_transaction  # noqa: E402
+
 BASE = (
     REPO
     / "docs/evidence/pfusdc-eth-campaign-20260725/lane-mainnet/"
@@ -62,6 +59,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--expected-manifest-sha256",
         help="Required content digest when --deployment-manifest is used",
+    )
+    parser.add_argument(
+        "--signer-socket",
+        type=Path,
+        default=Path(os.environ.get("POSTFIAT_SIGNER_SOCKET", "/run/postfiat/a666-signer.sock")),
+        help="Provider-neutral constrained-signer Unix socket",
+    )
+    parser.add_argument(
+        "--maximum-fee-wei",
+        type=int,
+        default=10_000_000_000_000_000,
+        help="Per-transaction fee ceiling enforced again by signer policy",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
@@ -151,9 +160,6 @@ def main() -> None:
         if manifest_digest != base.EXPECTED_MANIFEST_SHA256:
             raise RuntimeError("authorized pfUSDC deployment manifest changed")
 
-    sys.path.insert(0, str(REPO.parent / "StakeHub"))
-    from stakehub.agentd import call
-
     w3 = Web3(Web3.HTTPProvider(base.RPC, request_kwargs={"timeout": 60}))
     if not w3.is_connected() or w3.eth.chain_id != base.CHAIN_ID:
         raise RuntimeError("Ethereum mainnet RPC is unavailable or on the wrong chain")
@@ -162,6 +168,9 @@ def main() -> None:
     verifier_address = Web3.to_checksum_address(base.VERIFIER)
     usdc_address = Web3.to_checksum_address(base.USDC)
     wallet_address = Web3.to_checksum_address(base.WALLET)
+    status = signer_status(args.signer_socket)
+    if not status.get("ready") or Web3.to_checksum_address(status["address"]) != wallet_address:
+        raise RuntimeError("constrained signer is locked or controls the wrong wallet")
     if Web3.keccak(w3.eth.get_code(vault_address)).hex().removeprefix("0x") != (
         base.EXPECTED_VAULT_RUNTIME_KECCAK
     ):
@@ -185,9 +194,9 @@ def main() -> None:
         "pending_nonce": w3.eth.get_transaction_count(wallet_address, "pending"),
     }
     if before["wallet_usdc_atoms"] < amount:
-        raise RuntimeError("StakeHub wallet has insufficient USDC")
+        raise RuntimeError("constrained-signer wallet has insufficient USDC")
     if before["pending_nonce"] != before["confirmed_nonce"]:
-        raise RuntimeError("StakeHub wallet has a pending Ethereum transaction")
+        raise RuntimeError("constrained-signer wallet has a pending Ethereum transaction")
 
     builder = base.load_builder()
     nonce = os.urandom(32)
@@ -253,92 +262,41 @@ def main() -> None:
         ).hexdigest(),
         "pre_state": before,
     }
-    active_session: str | None = None
-
-    def close_session() -> None:
-        nonlocal active_session
-        if active_session is None:
-            return
-        response = call(
-            {"op": "close_launch_session", "session_id": active_session}, timeout=30
-        )
-        evidence.setdefault("closed_sessions", []).append(
-            {
-                "session_id": active_session,
-                "response": base.public_agent_response(response or {}),
-            }
-        )
-        active_session = None
-
-    def open_session(action: str, calldata: str) -> str:
-        nonlocal active_session
-        session = (
-            f"a666-pfusdc-{action}-"
-            f"{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%fZ')}"
-        )
-        response = call(
-            {
-                "op": "open_launch_session",
-                "session_id": session,
-                "chain_id": base.CHAIN_ID,
-                "allowlist": [base.WALLET, base.USDC, base.VAULT],
-                "expected_deploys": [
-                    {
-                        "label": f"a666-pfusdc-{action}-calldata",
-                        "bytecode_hash": Web3.to_hex(Web3.keccak(hexstr=calldata)),
-                        "bytecode_len": len(bytes.fromhex(calldata[2:])),
-                    }
-                ],
-                "usdc_address": base.USDC,
-                "usdc_budget": amount,
-                "close_after_action": action,
-                "ttl_seconds": 1800,
-            },
-            timeout=60,
-        )
-        if not response or not response.get("ok"):
-            raise RuntimeError(f"StakeHub {action} session failed to open: {response}")
-        active_session = session
-        evidence.setdefault("opened_sessions", []).append(
-            {
-                "session_id": session,
-                "action": action,
-                "response": base.public_agent_response(response),
-            }
-        )
-        return session
-
     def send(action: str, to: str, calldata: str) -> tuple[str, object]:
-        session = open_session(action, calldata)
-        response = call(
-            {
-                "op": "evm_contract_tx",
-                "to": to,
-                "data": calldata,
-                "rpc_url": base.RPC,
-                "chain_id": base.CHAIN_ID,
-                "session_id": session,
-                "session_action": action,
-                "label": f"A666 pfUSDC {action} {amount} atoms",
-                "gas_usd": 10,
-            },
+        idempotency_key = hashlib.sha256(
+            (
+                "postfiat.pfusdc.deposit.signer.v1|"
+                f"{base.CHAIN_ID}|{base.ROUTE_BINDING}|{action}|{to.lower()}|"
+                f"{calldata.lower()}"
+            ).encode()
+        ).hexdigest()
+        response = submit_evm_transaction(
+            args.signer_socket,
+            chain_id=base.CHAIN_ID,
+            transaction_kind=f"pfusdc_{action}",
+            target_contract=to,
+            calldata=calldata,
+            native_value_wei=0,
+            maximum_fee_wei=args.maximum_fee_wei,
+            route_id="ethereum-mainnet-usdc-v1",
+            route_config_digest=base.ROUTE_BINDING,
+            label=f"pfUSDC {action} {amount} atoms",
+            idempotency_key=idempotency_key,
             timeout=1200,
         )
-        if not response or not response.get("ok"):
-            raise RuntimeError(f"StakeHub {action} transaction failed: {response}")
-        transaction_hash = base.tx_hash(response)
+        transaction_hash = str(response["transaction_hash"])
         receipt = base.wait_receipt(w3, transaction_hash)
         if receipt.status != 1:
             raise RuntimeError(f"{action} transaction reverted: {transaction_hash}")
         evidence[action] = {
-            "response": base.public_agent_response(response),
+            "signer_receipt": response,
+            "idempotency_key": idempotency_key,
             "tx_hash": transaction_hash,
             "block_number": receipt.blockNumber,
             "block_hash": receipt.blockHash.hex(),
             "gas_used": receipt.gasUsed,
             "effective_gas_price_wei": receipt.effectiveGasPrice,
         }
-        close_session()
         return transaction_hash, receipt
 
     try:
@@ -440,7 +398,6 @@ def main() -> None:
         evidence["error"] = str(error)
         raise
     finally:
-        close_session()
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
 

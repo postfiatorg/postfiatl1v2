@@ -150,7 +150,7 @@ class LatencyTests(unittest.TestCase):
         self.assertEqual(summary["proxy_route_converged_count"], 6)
         self.assertEqual(summary["proxy_route"]["proposer"], "validator-0")
 
-    def test_load_wallet_descriptor_accepts_stakehub_metadata(self) -> None:
+    def test_load_wallet_descriptor_accepts_provider_neutral_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "wallet.json"
             backup = Path(tmp) / "buyer.backup.json"

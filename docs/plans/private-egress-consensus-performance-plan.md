@@ -1,5 +1,9 @@
 # Private Egress Consensus Performance Plan
 
+> **Historical architecture:** This June 2026 performance plan records the
+> A651/Arbitrum internal-operator campaign. Provider names below identify that
+> evidence lineage, not a current protocol or wallet dependency.
+
 Date: 2026-06-23
 Repo: `postfiatl1v2`
 Scope: controlled-testnet performance work for `AssetOrchardPrivateEgressV1` inside the current peer-certified shielded batch path.

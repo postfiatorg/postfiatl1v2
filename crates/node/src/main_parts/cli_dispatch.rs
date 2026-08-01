@@ -42,6 +42,7 @@ use postfiat_node::{
     assemble_signed_fastswap_governance_bootstrap, assemble_signed_governance_amendment,
     assemble_signed_validator_registry_update,
     assemble_signed_vault_bridge_route_profile_governance, asset_fee_quote, asset_info,
+    nav_reserve_proof_status,
     asset_orchard_note_status, asset_orchard_scan, atomic_settlement_template,
     atomic_swap_fee_quote, atomic_swap_fee_quote_typed_error_code, batch_archive, block_proposer,
     blocks, book_offers, bridge_pause, bridge_state, bridge_transfer, bridge_upsert_domain,
@@ -140,7 +141,7 @@ use postfiat_node::{
     AccountAssetsOptions, AccountEscrowsOptions, AccountLinesOptions, AccountNftsOptions,
     AccountOffersOptions, AccountTxIndexOptions, AccountTxQueryOptions, ApplyAmendmentOptions,
     ApplyBatchOptions, ApplyBatchTimingReport, AssetFeeQuoteOptions, AssetFeeQuoteReport,
-    AssetInfoOptions, AssetOrchardEgressBatchOptions, AssetOrchardEgressCreateOptions,
+    AssetInfoOptions, NavReserveProofStatusOptions, AssetOrchardEgressBatchOptions, AssetOrchardEgressCreateOptions,
     AssetOrchardActionStatusOptions, AssetOrchardIngressBatchOptions,
     AssetOrchardIngressCreateOptions, AssetOrchardNoteStatusOptions,
     AssetOrchardPrivateEgressBatchOptions,
@@ -360,14 +361,8 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "transport-peer-certified-mempool-round"
         | "pftl-submit-certified-asset-ops"
         | "submit-certified-asset-ops"
-        | "pftl-certified-asset-ops-from-bundle"
-        | "nav-roundtrip-dashboard-status"
-        | "nav-roundtrip-benchmark-base-args"
-        | "nav-roundtrip-benchmark-plan"
-        | "nav-roundtrip-benchmark-verify"
-        | "nav-roundtrip-replay-corpus-verify" => run_cli_group_01(command, flags),
-        "nav-roundtrip-live-demo"
-        | "tx-latency-benchmark"
+        | "pftl-certified-asset-ops-from-bundle" => run_cli_group_01(command, flags),
+        "tx-latency-benchmark"
         | "real-transaction-latency-benchmark" => run_cli_group_02(command, flags),
         "transport-certified-batch-loop"
         | "transport-peer-certified-batch-loop"

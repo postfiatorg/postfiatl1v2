@@ -610,6 +610,11 @@ pub fn status(options: NodeOptions) -> io::Result<StatusReport> {
                 tolerance_bp: profile.tolerance_bp,
                 bridge_observer_min_confirmations: profile.bridge_observer_min_confirmations,
                 valuation_policy_hash: profile.valuation_policy_hash.clone(),
+                public_values_schema: profile.public_values_schema.clone(),
+                source_manifest_hash: profile.source_manifest_hash.clone(),
+                valuation_unit_id: profile.valuation_unit_id.clone(),
+                max_observation_span_blocks: profile.max_observation_span_blocks,
+                allow_controlled_sources: profile.allow_controlled_sources,
                 finalized_epoch: asset.finalized_epoch,
                 nav_per_unit: asset.nav_per_unit,
                 finalized_reserve_packet_hash: asset.finalized_reserve_packet_hash.clone(),
@@ -1875,6 +1880,75 @@ pub fn asset_info(options: AssetInfoOptions) -> io::Result<AssetInfoReport> {
         asset_id: options.asset_id,
         found: asset.is_some(),
         asset,
+    })
+}
+
+pub fn nav_reserve_proof_status(
+    options: NavReserveProofStatusOptions,
+) -> io::Result<NavReserveProofStatusReport> {
+    validate_issued_asset_query_id("asset_id", &options.asset_id)?;
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let ledger = store.read_ledger()?;
+    let current_height = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?.height;
+    let nav_asset = ledger.nav_asset(&options.asset_id);
+    let active_profile = nav_asset
+        .and_then(|asset| ledger.nav_proof_profile(&asset.proof_profile))
+        .cloned();
+    let mut packets = ledger
+        .nav_reserve_packets
+        .iter()
+        .filter(|packet| packet.asset_id == options.asset_id)
+        .collect::<Vec<_>>();
+    packets.sort_by(|left, right| {
+        right
+            .epoch
+            .cmp(&left.epoch)
+            .then(right.submitted_at_height.cmp(&left.submitted_at_height))
+            .then(right.packet_id.cmp(&left.packet_id))
+    });
+    packets.truncate(16);
+    let packets = packets
+        .into_iter()
+        .map(|packet| NavReservePacketProofStatus {
+            packet_id: packet.packet_id.clone(),
+            epoch: packet.epoch,
+            state: packet.state.clone(),
+            reserve_packet_hash: packet.reserve_packet_hash.clone(),
+            nav_per_unit: packet.nav_per_unit,
+            circulating_supply: packet.circulating_supply,
+            verified_net_assets: packet.verified_net_assets,
+            submitted_at_height: packet.submitted_at_height,
+            public_values_schema: packet.public_values_schema.clone(),
+            source_manifest_hash: packet.source_manifest_hash.clone(),
+            valuation_unit_id: packet.valuation_unit_id.clone(),
+            observation_not_before: packet.observation_not_before,
+            observation_not_after: packet.observation_not_after,
+            proof_verified_net_assets: packet.proof_verified_net_assets,
+            consensus_overlay_value: packet.consensus_overlay_value,
+            gross_assets: packet.gross_assets,
+            total_liabilities: packet.total_liabilities,
+            cryptographically_verified_value: packet.cryptographically_verified_value,
+            attested_value: packet.attested_value,
+            controlled_value: packet.controlled_value,
+            source_count: packet.source_count,
+            quantity_trust_counts: packet.quantity_trust_counts,
+            valuation_trust_counts: packet.valuation_trust_counts,
+            quantity_trust_root: packet.quantity_trust_root.clone(),
+            valuation_trust_root: packet.valuation_trust_root.clone(),
+            source_disclosure_root: packet.source_disclosure_root.clone(),
+        })
+        .collect();
+    Ok(NavReserveProofStatusReport {
+        schema: "postfiat.nav_reserve_proof_status.v1".to_string(),
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        protocol_version: genesis.protocol_version,
+        current_height,
+        asset_id: options.asset_id,
+        found: nav_asset.is_some(),
+        active_profile,
+        packets,
     })
 }
 

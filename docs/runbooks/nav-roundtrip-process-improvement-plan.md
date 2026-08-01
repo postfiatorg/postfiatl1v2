@@ -1,5 +1,9 @@
 # NAV Roundtrip Process Improvement Plan
 
+> **Historical architecture:** This A651/Arbitrum process record used an
+> internal operator wallet and signer. It is retained for operational history;
+> new NAVCoin work uses the open reserve-proof kit and constrained signer.
+
 Status: operational improvement plan
 Date: 2026-06-21
 Version: 2026-06-21.6

@@ -1,19 +1,132 @@
 'use strict';
 
 function create(runtime) {
-    const { A651_ASSET_ID,A652_ASSET_ID,ALLOWED_ORIGINS,ASSET_ORCHARD_ACTION_CLEAR_KEYS,ASSET_ORCHARD_INGRESS_FILE_SCHEMA,ASSET_ORCHARD_POOL_ID,ASSET_ORCHARD_PRIVATE_EGRESS_ACTION_SCHEMA,ASSET_ORCHARD_PRIVATE_EGRESS_FILE_SCHEMA,ASSET_ORCHARD_SWAP_ACTION_SCHEMA,DEFAULT_ASSET_ORCHARD_LOCAL_SERVICE_READINESS_TIMEOUT_MS,DEFAULT_ASSET_ORCHARD_LOCAL_SERVICE_URL,DEFAULT_RPC_FLEET,ENABLE_FINALITY_RESPONDER_READ_CACHE,ENABLE_FIRST_READY_SEQUENCED_READ,ENABLE_NATIVE_WALLET_SIGNER,ENABLE_PROPOSER_ROUTING,ENABLE_RPC_PARENT_WAIT_FINALITY_ROUTE,ENABLE_RPC_PARENT_WAIT_SEQUENCED_READ_ROUTE,ENABLE_UPSTREAM_KEEPALIVE,ETHEREUM_USDC_TOKEN,FASTPAY_BROADCAST_METHODS,FASTPAY_FLEET_STATUS_CACHE_MS,FASTPAY_OWNED_OBJECT_LOOKUP_LIMIT,FASTPAY_REQUIRE_PRIMARY_SUCCESS,FASTPAY_ROUTE_RETRY_MS,FASTPAY_ROUTE_TIMEOUT_MS,FINALITY_METHODS,FIRST_READY_SEQUENCED_READ_PROPOSERS,INJECT_RPC_CAPS,LEGACY_A651_ETH_TOKEN,LEGACY_A651_UNISWAP_POOL_ID,LISTEN_PORT,MAX_TCP_PER_WS,MAX_WS_MESSAGE_BYTES,NATIVE_WALLET_SIGNER_BIN,NATIVE_WALLET_SIGNER_TIMEOUT_MS,NAVSWAP_CAPABILITIES_SCHEMA,NAVSWAP_DEVNET_FUNDING_SCHEMA,NAVSWAP_IDEMPOTENCY_STORE_DEFAULT_PATH,NAVSWAP_IDEMPOTENCY_STORE_SCHEMA,NAVSWAP_IDEMPOTENCY_TTL_MS,NAVSWAP_MAX_LIVE_USD,NAVSWAP_NAV_PROOF_SCHEMA,NAVSWAP_PRIMARY_MINT_ROUTE_FAMILY,NAVSWAP_QUOTE_FRESHNESS_TTL_MS,NAVSWAP_QUOTE_SCHEMA,NAVSWAP_READINESS_SCHEMA,NAVSWAP_ROUTE_TRUST_CLASSES,NAVSWAP_RUN_EVENTS_SCHEMA,NAVSWAP_RUN_LIST_SCHEMA,NAVSWAP_RUN_RECEIPTS_SCHEMA,NAVSWAP_RUN_SCHEMA,NAVSWAP_RUN_STATUS_SCHEMA,NAVSWAP_RUN_STORE_DEFAULT_PATH,NAVSWAP_RUN_STORE_SCHEMA,NAVSWAP_RUN_STREAM_EVENT_SCHEMA,NAVSWAP_RUN_STREAM_SCHEMA,NAVSWAP_SETTLEMENT_RECEIPT_MAX_SNAPSHOT_AGE_BLOCKS,NAVSWAP_SETTLEMENT_RECEIPT_SAFETY_BLOCKS,NAVSWAP_STAKEHUB_TRANSPARENT_ACTION,NAVSWAP_TRANSPARENT_PLANNER_INPUTS_SCHEMA,NAVSWAP_WALLET_ACTION_BATCH_PREPARE_SCHEMA,NAVSWAP_WALLET_ACTION_PREPARE_SCHEMA,NAVSWAP_WALLET_ACTION_SCHEMA,OPTIMISTIC_CACHED_FINALITY_ROUTE,PFUSDC_ASSET_ID,PREFERRED_SEQUENCED_READ_VALIDATORS,PROPOSER_READY_RETRY_MS,PROPOSER_ROUTE_CACHE_MS,PROPOSER_ROUTE_RETRY_MS,PROPOSER_ROUTE_TIMEOUT_MS,RPC_CAPS,RPC_FLEET,RPC_HOST,RPC_PORT,SEQUENCED_ACCOUNT_METHODS,SHIELDED_NAVSWAP_EGRESS_POLICY_ID,SHIELDED_NAVSWAP_EGRESS_SCHEMA,SHIELDED_NAVSWAP_INGRESS_SCHEMA,SHIELDED_NAVSWAP_LIQUIDITY_MODES,SHIELDED_NAVSWAP_PREFLIGHT_SCHEMA,SHIELDED_NAVSWAP_QUOTE_SCHEMA,SHIELDED_NAVSWAP_STATUS_SCHEMA,SHIELDED_NAVSWAP_SWAP_SCHEMA,SHIELDED_ROUND_TIMEOUT_DEFAULT_MS,TCP_TIMEOUT_MS,UpstreamRpcConnection,VAULT_BRIDGE_ALLOCATION_PURPOSE_NAV_SUBSCRIPTION,VAULT_BRIDGE_ALLOCATION_PURPOSE_SUPPLY,VAULT_BRIDGE_BUCKET_STATUS_ACTIVE,VAULT_BRIDGE_RECEIPT_STATUS_COUNTED,VAULT_BRIDGE_RECIPIENT_SPONSOR_AMOUNT,VAULT_BRIDGE_RECIPIENT_SPONSOR_MIN_AMOUNT_ATOMS,VAULT_BRIDGE_RELAY_DEFAULT_ACCOUNT,VAULT_BRIDGE_RELAY_EXPIRES_AT_HEIGHT,VAULT_BRIDGE_RELAY_POLICY_HASH,VAULT_BRIDGE_RELAY_SCHEMA,VAULT_BRIDGE_RELAY_SOURCE_CHAIN_ID,VAULT_BRIDGE_RELAY_SOURCE_RPC_URL,VAULT_BRIDGE_RELAY_TOKEN_ADDRESS,VAULT_BRIDGE_RELAY_VAULT_ADDRESS,WALLET_SUBSCRIPTION_INTERVAL_MS,WALLET_SUBSCRIPTION_MIN_INTERVAL_MS,WALLET_SUBSCRIPTION_READ_TIMEOUT_MS,crypto,execFileAsync,fs,http,navswapDevnetFundingUsage,navswapIdempotencyRecords,navswapRunStreams,navswapRuns,net,os,path,server,upstreamRpcConnections,wss } = runtime;
+    const { A651_ASSET_ID,
+A652_ASSET_ID,
+ALLOWED_ORIGINS,
+ASSET_ORCHARD_ACTION_CLEAR_KEYS,
+ASSET_ORCHARD_INGRESS_FILE_SCHEMA,
+ASSET_ORCHARD_POOL_ID,
+ASSET_ORCHARD_PRIVATE_EGRESS_ACTION_SCHEMA,
+ASSET_ORCHARD_PRIVATE_EGRESS_FILE_SCHEMA,
+ASSET_ORCHARD_SWAP_ACTION_SCHEMA,
+DEFAULT_ASSET_ORCHARD_LOCAL_SERVICE_READINESS_TIMEOUT_MS,
+DEFAULT_ASSET_ORCHARD_LOCAL_SERVICE_URL,
+DEFAULT_RPC_FLEET,
+ENABLE_FINALITY_RESPONDER_READ_CACHE,
+ENABLE_FIRST_READY_SEQUENCED_READ,
+ENABLE_NATIVE_WALLET_SIGNER,
+ENABLE_PROPOSER_ROUTING,
+ENABLE_RPC_PARENT_WAIT_FINALITY_ROUTE,
+ENABLE_RPC_PARENT_WAIT_SEQUENCED_READ_ROUTE,
+ENABLE_UPSTREAM_KEEPALIVE,
+ETHEREUM_USDC_TOKEN,
+FASTPAY_BROADCAST_METHODS,
+FASTPAY_FLEET_STATUS_CACHE_MS,
+FASTPAY_OWNED_OBJECT_LOOKUP_LIMIT,
+FASTPAY_REQUIRE_PRIMARY_SUCCESS,
+FASTPAY_ROUTE_RETRY_MS,
+FASTPAY_ROUTE_TIMEOUT_MS,
+FINALITY_METHODS,
+FIRST_READY_SEQUENCED_READ_PROPOSERS,
+INJECT_RPC_CAPS,
+LEGACY_A651_ETH_TOKEN,
+LEGACY_A651_UNISWAP_POOL_ID,
+LISTEN_PORT,
+MAX_TCP_PER_WS,
+MAX_WS_MESSAGE_BYTES,
+NATIVE_WALLET_SIGNER_BIN,
+NATIVE_WALLET_SIGNER_TIMEOUT_MS,
+NAVSWAP_CAPABILITIES_SCHEMA,
+NAVSWAP_DEVNET_FUNDING_SCHEMA,
+NAVSWAP_IDEMPOTENCY_STORE_DEFAULT_PATH,
+NAVSWAP_IDEMPOTENCY_STORE_SCHEMA,
+NAVSWAP_IDEMPOTENCY_TTL_MS,
+NAVSWAP_MAX_LIVE_USD,
+NAVSWAP_PRIMARY_MINT_ROUTE_FAMILY,
+NAVSWAP_QUOTE_FRESHNESS_TTL_MS,
+NAVSWAP_QUOTE_SCHEMA,
+NAVSWAP_READINESS_SCHEMA,
+NAVSWAP_ROUTE_TRUST_CLASSES,
+NAVSWAP_RUN_EVENTS_SCHEMA,
+NAVSWAP_RUN_LIST_SCHEMA,
+NAVSWAP_RUN_RECEIPTS_SCHEMA,
+NAVSWAP_RUN_SCHEMA,
+NAVSWAP_RUN_STATUS_SCHEMA,
+NAVSWAP_RUN_STORE_DEFAULT_PATH,
+NAVSWAP_RUN_STORE_SCHEMA,
+NAVSWAP_RUN_STREAM_EVENT_SCHEMA,
+NAVSWAP_RUN_STREAM_SCHEMA,
+NAVSWAP_SETTLEMENT_RECEIPT_MAX_SNAPSHOT_AGE_BLOCKS,
+NAVSWAP_SETTLEMENT_RECEIPT_SAFETY_BLOCKS,
+NAVSWAP_TRANSPARENT_PLANNER_INPUTS_SCHEMA,
+NAVSWAP_WALLET_ACTION_BATCH_PREPARE_SCHEMA,
+NAVSWAP_WALLET_ACTION_PREPARE_SCHEMA,
+NAVSWAP_WALLET_ACTION_SCHEMA,
+OPTIMISTIC_CACHED_FINALITY_ROUTE,
+PFUSDC_ASSET_ID,
+PREFERRED_SEQUENCED_READ_VALIDATORS,
+PROPOSER_READY_RETRY_MS,
+PROPOSER_ROUTE_CACHE_MS,
+PROPOSER_ROUTE_RETRY_MS,
+PROPOSER_ROUTE_TIMEOUT_MS,
+RPC_CAPS,
+RPC_FLEET,
+RPC_HOST,
+RPC_PORT,
+SEQUENCED_ACCOUNT_METHODS,
+SHIELDED_NAVSWAP_EGRESS_POLICY_ID,
+SHIELDED_NAVSWAP_EGRESS_SCHEMA,
+SHIELDED_NAVSWAP_INGRESS_SCHEMA,
+SHIELDED_NAVSWAP_LIQUIDITY_MODES,
+SHIELDED_NAVSWAP_PREFLIGHT_SCHEMA,
+SHIELDED_NAVSWAP_QUOTE_SCHEMA,
+SHIELDED_NAVSWAP_STATUS_SCHEMA,
+SHIELDED_NAVSWAP_SWAP_SCHEMA,
+SHIELDED_ROUND_TIMEOUT_DEFAULT_MS,
+TCP_TIMEOUT_MS,
+UpstreamRpcConnection,
+VAULT_BRIDGE_ALLOCATION_PURPOSE_NAV_SUBSCRIPTION,
+VAULT_BRIDGE_ALLOCATION_PURPOSE_SUPPLY,
+VAULT_BRIDGE_BUCKET_STATUS_ACTIVE,
+VAULT_BRIDGE_RECEIPT_STATUS_COUNTED,
+VAULT_BRIDGE_RECIPIENT_SPONSOR_AMOUNT,
+VAULT_BRIDGE_RECIPIENT_SPONSOR_MIN_AMOUNT_ATOMS,
+VAULT_BRIDGE_RELAY_DEFAULT_ACCOUNT,
+VAULT_BRIDGE_RELAY_EXPIRES_AT_HEIGHT,
+VAULT_BRIDGE_RELAY_POLICY_HASH,
+VAULT_BRIDGE_RELAY_SCHEMA,
+VAULT_BRIDGE_RELAY_SOURCE_CHAIN_ID,
+VAULT_BRIDGE_RELAY_SOURCE_RPC_URL,
+VAULT_BRIDGE_RELAY_TOKEN_ADDRESS,
+VAULT_BRIDGE_RELAY_VAULT_ADDRESS,
+WALLET_SUBSCRIPTION_INTERVAL_MS,
+WALLET_SUBSCRIPTION_MIN_INTERVAL_MS,
+WALLET_SUBSCRIPTION_READ_TIMEOUT_MS,
+crypto,
+execFileAsync,
+fs,
+http,
+navswapDevnetFundingUsage,
+navswapIdempotencyRecords,
+navswapRunStreams,
+navswapRuns,
+net,
+os,
+path,
+server,
+upstreamRpcConnections,
+wss } = runtime;
     let { fastpayFleetStatusCache,fastpayFleetStatusInFlight,latestFinalizedReadCache,preferredSequencedReadIndex,proposerRouteCache,shieldedCertifierLoopState } = runtime;
     const addProxyRouteEvent = (...args) => runtime.addProxyRouteEvent(...args);
     const annotateNavswapIdempotency = (...args) => runtime.annotateNavswapIdempotency(...args);
     const assetIdForNavswapSymbol = (...args) => runtime.assetIdForNavswapSymbol(...args);
     const bftQuorumThreshold = (...args) => runtime.bftQuorumThreshold(...args);
     const broadcastFastpayMutation = (...args) => runtime.broadcastFastpayMutation(...args);
-    const buildNavswapNavProofResponse = (...args) => runtime.buildNavswapNavProofResponse(...args);
     const buildNavswapQuoteResponse = (...args) => runtime.buildNavswapQuoteResponse(...args);
     const buildNavswapRunResponse = (...args) => runtime.buildNavswapRunResponse(...args);
     const buildPftlUniswapReceiptVerification = (...args) => runtime.buildPftlUniswapReceiptVerification(...args);
     const buildShieldedCertifiedRoundArgs = (...args) => runtime.buildShieldedCertifiedRoundArgs(...args);
-    const buildStakehubTransparentPreflight = (...args) => runtime.buildStakehubTransparentPreflight(...args);
     const buildTransparentNavswapReceiptVerification = (...args) => runtime.buildTransparentNavswapReceiptVerification(...args);
     const buildTransparentNavswapRedeemReceiptVerification = (...args) => runtime.buildTransparentNavswapRedeemReceiptVerification(...args);
     const buildUrl = (...args) => runtime.buildUrl(...args);
@@ -74,7 +187,6 @@ function create(runtime) {
     const finishNavswapRun = (...args) => runtime.finishNavswapRun(...args);
     const firstReadyEndpointForRoute = (...args) => runtime.firstReadyEndpointForRoute(...args);
     const firstStructuredFastpayResult = (...args) => runtime.firstStructuredFastpayResult(...args);
-    const forwardStakehubTransparentRun = (...args) => runtime.forwardStakehubTransparentRun(...args);
     const handleNavswapHttp = (...args) => runtime.handleNavswapHttp(...args);
     const invalidateProposerRouteCache = (...args) => runtime.invalidateProposerRouteCache(...args);
     const isFastpayBroadcastMethod = (...args) => runtime.isFastpayBroadcastMethod(...args);
@@ -117,7 +229,6 @@ function create(runtime) {
     const navswapIdempotencyStoreSnapshot = (...args) => runtime.navswapIdempotencyStoreSnapshot(...args);
     const navswapListLimit = (...args) => runtime.navswapListLimit(...args);
     const navswapNativeAccountBalanceAtoms = (...args) => runtime.navswapNativeAccountBalanceAtoms(...args);
-    const navswapNavProofStub = (...args) => runtime.navswapNavProofStub(...args);
     const navswapNavRedemptionId = (...args) => runtime.navswapNavRedemptionId(...args);
     const navswapPftlUniswapControlledAttestationTxHash = (...args) => runtime.navswapPftlUniswapControlledAttestationTxHash(...args);
     const navswapPftlUniswapDefaultDeadlineSeconds = (...args) => runtime.navswapPftlUniswapDefaultDeadlineSeconds(...args);
@@ -175,7 +286,6 @@ function create(runtime) {
     const parseRpcFleet = (...args) => runtime.parseRpcFleet(...args);
     const parseShieldedPrivateEgressJson = (...args) => runtime.parseShieldedPrivateEgressJson(...args);
     const parseShieldedSwapActionJson = (...args) => runtime.parseShieldedSwapActionJson(...args);
-    const parseStakehubTransparentAmount = (...args) => runtime.parseStakehubTransparentAmount(...args);
     const persistNavswapIdempotencyRecord = (...args) => runtime.persistNavswapIdempotencyRecord(...args);
     const persistNavswapRun = (...args) => runtime.persistNavswapRun(...args);
     const pftlUniswapCompletionError = (...args) => runtime.pftlUniswapCompletionError(...args);
@@ -241,7 +351,6 @@ function create(runtime) {
     const signWalletOwnedOrder = (...args) => runtime.signWalletOwnedOrder(...args);
     const sleep = (...args) => runtime.sleep(...args);
     const sseHeaders = (...args) => runtime.sseHeaders(...args);
-    const stakehubTransparentAmountError = (...args) => runtime.stakehubTransparentAmountError(...args);
     const startCachedSelectionReadinessProbe = (...args) => runtime.startCachedSelectionReadinessProbe(...args);
     const startShieldedCertifierLoop = (...args) => runtime.startShieldedCertifierLoop(...args);
     const startWalletSubscription = (...args) => runtime.startWalletSubscription(...args);
@@ -435,17 +544,17 @@ function create(runtime) {
             {
                 action: 'primary_pftl_mint',
                 label: 'Primary issuance',
-                description: 'Creates new a666 supply at the finalized pre-inflow NAV.',
+                description: 'Creates new NAVCoin supply at the finalized pre-inflow NAV.',
             },
             {
-                action: 'bridge_export_wa666',
-                label: 'Bridge export → wA666',
-                description: 'Moves issued a666 supply to Ethereum as wA666.',
+                action: 'bridge_export_wrapped_navcoin',
+                label: 'Bridge export → wrapped NAVCoin',
+                description: 'Moves issued NAVCoin supply to its governed Ethereum wrapper.',
             },
             {
                 action: 'uniswap_trade',
                 label: 'Uniswap trade',
-                description: 'Buys or sells existing wA666 at the AMM price.',
+                description: 'Buys or sells the governed wrapped NAVCoin at the AMM price.',
             },
         ];
 
@@ -609,35 +718,6 @@ function create(runtime) {
             ok: true,
             binding,
             binding_hash: crypto.createHash('sha256').update(navswapStableJson(binding)).digest('hex'),
-        };
-    }
-
-    function navswapStakehubTransparentConfig() {
-        const baseUrl = presentEnv('NAVSWAP_STAKEHUB_BASE_URL') || presentEnv('NAVSWAP_STAKEHUB_URL');
-        const actionPath = presentEnv('NAVSWAP_STAKEHUB_ACTION_PATH') || '/api/shielded-nav-swap/action';
-        const navcoinPath = presentEnv('NAVSWAP_STAKEHUB_NAVCOIN_PATH') || '/api/navcoin';
-        const navcoinStatusPath = presentEnv('NAVSWAP_STAKEHUB_NAVCOIN_STATUS_PATH') || '/api/navcoin/status';
-        const balancesPath = presentEnv('NAVSWAP_STAKEHUB_BALANCES_PATH') || '/api/shielded-nav-swap/balances';
-        const swapStatusPath = presentEnv('NAVSWAP_STAKEHUB_SWAP_STATUS_PATH') || '/api/shielded-nav-swap/status';
-        const runsEnabled = ['1', 'true', 'yes'].includes(lower(process.env.NAVSWAP_ENABLE_STAKEHUB_TRANSPARENT_RUNS));
-        const maxWholeA651 = Number.parseInt(process.env.NAVSWAP_STAKEHUB_MAX_A651_AMOUNT || '1', 10);
-        const timeoutMs = Number.parseInt(process.env.NAVSWAP_STAKEHUB_TIMEOUT_MS || '600000', 10);
-        const readTimeoutMs = Number.parseInt(process.env.NAVSWAP_STAKEHUB_READ_TIMEOUT_MS || '15000', 10);
-        return {
-            configured: Boolean(baseUrl),
-            base_url: baseUrl,
-            action_path: actionPath.startsWith('/') ? actionPath : `/${actionPath}`,
-            navcoin_path: navcoinPath.startsWith('/') ? navcoinPath : `/${navcoinPath}`,
-            navcoin_status_path: navcoinStatusPath.startsWith('/') ? navcoinStatusPath : `/${navcoinStatusPath}`,
-            balances_path: balancesPath.startsWith('/') ? balancesPath : `/${balancesPath}`,
-            swap_status_path: swapStatusPath.startsWith('/') ? swapStatusPath : `/${swapStatusPath}`,
-            runs_enabled: runsEnabled,
-            max_whole_a651_amount: Number.isInteger(maxWholeA651) && maxWholeA651 > 0 ? maxWholeA651 : 1,
-            timeout_ms: Number.isInteger(timeoutMs) && timeoutMs > 0 ? timeoutMs : 600000,
-            read_timeout_ms: Number.isInteger(readTimeoutMs) && readTimeoutMs > 0 ? readTimeoutMs : 15000,
-            action: NAVSWAP_STAKEHUB_TRANSPARENT_ACTION,
-            custody_boundary: 'stakehub-operator-wallet',
-            amount_semantics: 'positive decimal a651 amount',
         };
     }
 
@@ -1967,7 +2047,6 @@ function create(runtime) {
     function navswapCapabilities(now = new Date()) {
         const bridge = navswapBridgeConfig();
         const uniswapBeta = navswapUniswapBetaRouteState(bridge);
-        const stakehubTransparent = navswapStakehubTransparentConfig();
         const transparentOperator = navswapTransparentOperatorConfig();
         const devnetFunding = navswapDevnetPfusdcFundingConfig();
         const shieldedIngress = shieldedNavswapIngressConfig();
@@ -2180,28 +2259,6 @@ function create(runtime) {
                     },
                     operator_demo_paths: ['/api/shielded-nav-swap/status', '/api/shielded-nav-swap/quote', '/api/shielded-nav-swap/swap', '/api/shielded-nav-swap/egress'],
                 },
-                stakehub_transparent_roundtrip: {
-                    label: 'StakeHub transparent roundtrip',
-                    status: stakehubTransparent.configured
-                        ? (stakehubTransparent.runs_enabled ? 'operator_run_enabled' : 'operator_quote_only')
-                        : 'operator_not_configured',
-                    enabled: stakehubTransparent.configured,
-                    can_quote: stakehubTransparent.configured,
-                    can_run: stakehubTransparent.configured && stakehubTransparent.runs_enabled,
-                    reason: stakehubTransparent.configured
-                        ? 'Existing StakeHub transparent no-Orchard PFTL roundtrip is reachable through the adapter; it uses the StakeHub operator wallet, not browser-local signing.'
-                        : 'Set NAVSWAP_STAKEHUB_BASE_URL to expose the existing StakeHub transparent no-Orchard PFTL roundtrip as an operator-backed smoke route.',
-                    privacy: navswapRoutePrivacy({
-                        mode: 'public_operator_backed',
-                        label: 'Public operator route',
-                        disclosureLabel: 'Operator-backed smoke route; wallet-local custody is not claimed.',
-                        publicFields: ['wallet_address', 'amount', 'operator_run_status', 'receipts'],
-                        disclosedFields: ['stakehub_operator_request'],
-                        privateFields: ['wallet_seed', 'wallet_private_key'],
-                    }),
-                    config: stakehubTransparent,
-                    supported_pairs: ['pfUSDC->a651 smoke amount'],
-                },
                 pftl_atomic_settlement: {
                     label: 'PFTL atomic settlement',
                     status: 'template_ready',
@@ -2298,24 +2355,64 @@ function create(runtime) {
     }
 
     async function executeNavswapCapabilities(now = new Date()) {
-        const caps = navswapCapabilities(now);
-        const route = caps.routes?.stakehub_transparent_roundtrip;
-        if (!route?.enabled) return caps;
-
-        const preflight = await buildStakehubTransparentPreflight();
-        route.preflight = preflight;
-        if (preflight.ok !== true) {
-            route.status = preflight.code || 'preflight_unavailable';
-            route.enabled = false;
-            route.can_quote = false;
-            route.can_run = false;
-            route.reason = preflight.message || 'StakeHub transparent roundtrip preflight is unavailable.';
-        }
-        return caps;
+        return navswapCapabilities(now);
     }
 
 
-    return { SHIELDED_PRIVATE_KEY_PATTERNS,assertNoShieldedPrivateMaterial,assertVaultBridgeEvidenceMatches,assetOrchardLocalServiceConfig,buildUniswapHandoffQuoteBinding,buildVaultBridgeRelayBundle,clearNavswapDevnetFundingUsageForTest,currentA652AssetId,ensureVaultBridgeRecipientAccount,executeNavswapCapabilities,executeVaultBridgeRelay,findShieldedPrivateMaterialPaths,governedVaultBridgeRelayConfig,isBadSequenceSubmitResponse,isReplayableVaultBridgeRelayDuplicate,lower,navswapBridgeConfig,navswapCapabilities,navswapDevnetFundingUsageSnapshot,navswapDevnetFundingWindowUsage,navswapDevnetPfusdcFundingConfig,navswapInferTrustClass,navswapNormalizeTrustClass,navswapRoutePrivacy,navswapStakehubTransparentConfig,navswapTransparentOperatorConfig,navswapTrustlessFinalityAgreement,navswapUniswapBetaRouteState,normalizeShieldedKey,normalizeShieldedLiquidityMode,normalizeVaultBridgeAddress,normalizeVaultBridgeBytes32,normalizeVaultBridgeTxHash,parseUniswapHandoffBytes32,parseUniswapHandoffPositiveInteger,presentEnv,presentPositiveSafeIntegerEnv,readNavswapKeyFileAddress,releaseNavswapDevnetFundingUsage,reserveNavswapDevnetFundingUsage,routedRpcRead,shieldedLiquidityModeLabel,shieldedNavswapEgressConfig,shieldedNavswapIngressConfig,shieldedNavswapQuoteConfig,shieldedNavswapSwapConfig,shieldedQuotePolicyHash,signAndSubmitVaultBridgeRecipientSponsor,signAndSubmitVaultBridgeRelayOperation,vaultBridgeAccountAssets,vaultBridgeBodyTxHash,vaultBridgeEvidenceFromPlan,vaultBridgeExpectedField,vaultBridgePftlAccountExists,vaultBridgeRelayConfig };
+    return { SHIELDED_PRIVATE_KEY_PATTERNS,
+assertNoShieldedPrivateMaterial,
+assertVaultBridgeEvidenceMatches,
+assetOrchardLocalServiceConfig,
+buildUniswapHandoffQuoteBinding,
+buildVaultBridgeRelayBundle,
+clearNavswapDevnetFundingUsageForTest,
+currentA652AssetId,
+ensureVaultBridgeRecipientAccount,
+executeNavswapCapabilities,
+executeVaultBridgeRelay,
+findShieldedPrivateMaterialPaths,
+governedVaultBridgeRelayConfig,
+isBadSequenceSubmitResponse,
+isReplayableVaultBridgeRelayDuplicate,
+lower,
+navswapBridgeConfig,
+navswapCapabilities,
+navswapDevnetFundingUsageSnapshot,
+navswapDevnetFundingWindowUsage,
+navswapDevnetPfusdcFundingConfig,
+navswapInferTrustClass,
+navswapNormalizeTrustClass,
+navswapRoutePrivacy,
+navswapTransparentOperatorConfig,
+navswapTrustlessFinalityAgreement,
+navswapUniswapBetaRouteState,
+normalizeShieldedKey,
+normalizeShieldedLiquidityMode,
+normalizeVaultBridgeAddress,
+normalizeVaultBridgeBytes32,
+normalizeVaultBridgeTxHash,
+parseUniswapHandoffBytes32,
+parseUniswapHandoffPositiveInteger,
+presentEnv,
+presentPositiveSafeIntegerEnv,
+readNavswapKeyFileAddress,
+releaseNavswapDevnetFundingUsage,
+reserveNavswapDevnetFundingUsage,
+routedRpcRead,
+shieldedLiquidityModeLabel,
+shieldedNavswapEgressConfig,
+shieldedNavswapIngressConfig,
+shieldedNavswapQuoteConfig,
+shieldedNavswapSwapConfig,
+shieldedQuotePolicyHash,
+signAndSubmitVaultBridgeRecipientSponsor,
+signAndSubmitVaultBridgeRelayOperation,
+vaultBridgeAccountAssets,
+vaultBridgeBodyTxHash,
+vaultBridgeEvidenceFromPlan,
+vaultBridgeExpectedField,
+vaultBridgePftlAccountExists,
+vaultBridgeRelayConfig };
 }
 
 module.exports = { create };

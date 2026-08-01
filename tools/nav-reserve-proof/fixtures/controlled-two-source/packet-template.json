@@ -1,0 +1,10 @@
+{
+  "schema": "postfiat.reserve_packet_template.v1",
+  "issuer": "pf0fae169e4293feebc8c9119febb4fd995a667b37",
+  "submitter": "pf0fae169e4293feebc8c9119febb4fd995a667b37",
+  "nav_per_unit": 1000000,
+  "circulating_supply": 1100,
+  "source_root": "f4bdaca02e5445e7d2c666ca692d45d63fe1c423f6b03067e9eee19f5f9334fe60920b8528feff2656d5dbe7d28d415f",
+  "attestor_root": "cb34590e25db391724491b01795dee8bdbbadba3bba36fb5fc4f96bce1a87fa311426e0b76ce5ff4d775b091d94147df",
+  "reserve_packet_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+}

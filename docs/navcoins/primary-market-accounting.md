@@ -28,7 +28,7 @@ counted reserves in  <->  valid NAVCoin supply out
 No second pool of redemption principal is required.
 
 The a666 launch has one explicit successor-conversion exception to the normal
-subscription flow. Fresh StakeHub proof value can create the opening a666
+subscription flow. Fresh finalized reserve-proof value can create the opening a666
 supply, but every resulting wA666 atom is locked in the ownerless migration
 contract. It becomes spendable only when the contract burns the corresponding
 legacy a651 amount. Thus the opening issue changes denomination; it does not
@@ -95,7 +95,7 @@ resulting NAV accretion explicitly.
 
 ## a651 successor conversion
 
-At the 2026-07-27 StakeHub snapshot:
+At the 2026-07-27 historical internal-operator snapshot:
 
 ```text
 verified net assets       = $31,386.19745591
@@ -107,7 +107,7 @@ rounding overcollateral   = $0.00000091
 ```
 
 PFTL mints the opening supply to one route-inventory holder only after the
-fresh StakeHub proof is finalized. Route initialization must prove that the
+fresh registered reserve proof is finalized. Route initialization must prove that the
 holder balance, issued supply, and NAV circulating supply are exactly equal.
 The full opening supply is then exported to
 `A651ToA666MigrationV1`, not to the operator.

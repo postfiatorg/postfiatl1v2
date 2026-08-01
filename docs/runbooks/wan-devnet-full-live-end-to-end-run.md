@@ -1,5 +1,9 @@
 # WAN Devnet Full Live End-to-End Run
 
+> **Historical architecture:** This A651/Arbitrum live-run record used the
+> internal operator wallet and signer. Do not use it as the current pfUSDC,
+> NAVCoin, browser-wallet, reserve-proof, or relay procedure.
+
 Status: operator runbook
 Audience: PFTL operator, StakeHub operator, protocol engineer
 Date: 2026-06-21

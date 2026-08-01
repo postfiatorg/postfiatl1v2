@@ -1,0 +1,59 @@
+{
+  "schema": "postfiat.constrained_signer.config.v1",
+  "backend": "local_keystore",
+  "keystore_path": "/var/lib/postfiat-signer/a666-operator.keystore.json",
+  "state_path": "/var/lib/postfiat-signer/a666-idempotency.json",
+  "socket_path": "/run/postfiat/a666-signer.sock",
+  "chains": {
+    "1": {
+      "rpc_url": "https://ethereum-rpc.publicnode.com",
+      "contracts": {
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": {
+          "selectors": [
+            "0x095ea7b3"
+          ],
+          "transaction_kinds": [
+            "pfusdc_approve"
+          ]
+        },
+        "0x8583409ddbac984ec195dfa06a21103d92403c1e": {
+          "selectors": [
+            "0x2391b457"
+          ],
+          "transaction_kinds": [
+            "pfusdc_deposit"
+          ]
+        },
+        "0xb79ff97ecc11574a8a78d0b5a9d7c8c2a94bf96a": {
+          "selectors": [
+            "0xc1a5ebbd",
+            "0xf19c58e6"
+          ],
+          "transaction_kinds": [
+            "a666_checkpoint_advance",
+            "a666_export_finalize"
+          ]
+        },
+        "0x9a0262c0572fb4db08765408eb225e207f40c3d9": {
+          "selectors": [
+            "0x4ea44490",
+            "0xf34c595b"
+          ],
+          "transaction_kinds": [
+            "a666_export_finalize",
+            "a666_return_burn"
+          ]
+        }
+      }
+    }
+  },
+  "routes": {
+    "ethereum-mainnet-usdc-v1": "f062a7b19a33ab9674457b0fd7b8c98a42f43c240806e3a25ef035da3fa643f3",
+    "pftl-a666-ethereum-wA666-usdc-v1": "12ed00ca87e29554ce4b978da1710fffc0830767e84e62f08df257f727db953efdd89bcf6ea99f5634d6e5ea8aca2933"
+  },
+  "maximum_native_value_wei_per_call": 0,
+  "maximum_fee_wei_per_call": 10000000000000000,
+  "rolling_native_value_limit_wei": 0,
+  "rolling_window_seconds": 86400,
+  "maximum_calldata_bytes": 262144
+}

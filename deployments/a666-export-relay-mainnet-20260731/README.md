@@ -31,12 +31,12 @@ After a reviewed browser change, run `npm run build` in `wallet-web`; Caddy's re
 Readiness:
 
 ```bash
-curl -ksS https://127.0.0.1:5173/api/a666/export-readiness | jq .
+curl -ksS https://127.0.0.1:5173/api/navcoin/pftl-a666-ethereum-wA666-usdc-v1/export-readiness | jq .
 ```
 
-`ready:true` requires the live PFTL invariant, correct Ethereum chain/contracts/vkey, unpaused minting, pinned remote prover binary and ELF, and an unlocked StakeHub signer whose policy permits the verifier and controller.
+`ready:true` requires the live PFTL invariant, correct Ethereum chain/contracts/vkey, unpaused minting, pinned remote prover binary and ELF, and an unlocked PostFiat constrained signer whose committed policy permits the verifier and controller for this exact route digest.
 
-The enabled signer unit matches `stakehub-pfusdc-wallet-agent.service` in this directory. The StakeHub signer intentionally fails closed after an agent restart. An operator must unlock it; the relay never stores the vault passphrase. This is an availability dependency, not a user-custody dependency. Readiness blocks all PFTL value movement before a user begins if the signer is locked.
+Install `postfiat-a666-constrained-signer.service` from this directory with the owner-only policy described in `tools/postfiat-signer/README.md`. The signer intentionally fails closed after a restart. An operator must unlock its encrypted keystore; the relay never stores the passphrase or private key. Readiness blocks all PFTL value movement before a user begins if the signer is locked, on the wrong chain, or running a policy whose hash, address, route, contract, or selector differs from the deployment pins.
 
 ## Recovery
 

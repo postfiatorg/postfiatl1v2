@@ -2062,9 +2062,9 @@ fn apply_asset_orchard_private_primary_action_to_state(
             is_redeem,
         )?,
         if is_redeem {
-            "private A666 was atomically retired by the governed primary route and encrypted pfUSDC was issued"
+            "private NAVCoin was atomically retired by the governed primary route and an encrypted settlement asset was issued"
         } else {
-            "private pfUSDC was atomically consumed by the governed primary route and encrypted A666 was issued"
+            "private settlement asset was atomically consumed by the governed primary route and an encrypted NAVCoin was issued"
         },
     ))
 }

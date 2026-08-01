@@ -1,0 +1,19 @@
+{
+  "source_id": "hyperliquid",
+  "observed_at_block": 547,
+  "gross_assets": 1789640753296,
+  "total_liabilities": 0,
+  "quantity_evidence": {
+    "kind": "attested_ed25519",
+    "evidence_commitment": "d73a3f6cd2e715ba2be6a900a21ce06965b343acce307044abc0b4d25f57b65a5c18194073ad9a3e6bacd3de1c66ecd2",
+    "verifier_public_key": "89b8a67ab1659a27e026dbe13024af1ef9f1453fe4218dbe7371165267aa1036",
+    "signature": "c8b00c9ea9ce516f0eeb096adf9488fdc24cf45f8391de988961eb3bcc0c8148a6c5430c3871c7d1ac3b32d7d851ea40c33c3c482b098167417d4204349ae208"
+  },
+  "valuation_evidence": {
+    "kind": "attested_ed25519",
+    "evidence_commitment": "1a83784a231f3947e15de18e46221d0722c81150d2cf755a8fc5efdd1bc0a9c5d3f32d05527ebc406b377de852b96a29",
+    "verifier_public_key": "89b8a67ab1659a27e026dbe13024af1ef9f1453fe4218dbe7371165267aa1036",
+    "signature": "554d444d80698775caeaa0f11f7c728ee118516281ab9e92cc08d238e6926316aea0fd7f9f1350512d328520e2960565cc820bd959f74bb5b61d535670adfb04"
+  },
+  "disclosure_commitment": "58c0247cd035b2fb26f32c5e2d650886efb4c1f0b26a71b7f7b2f61072ddb4457629e8b86d3f28ccef12647a1481540a"
+}

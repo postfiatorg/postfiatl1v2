@@ -16,9 +16,15 @@ from web3 import Web3
 
 
 ROOT = Path(__file__).resolve().parents[1]
-STAKEHUB = Path("/home/postfiat/repos/StakeHub")
+sys.path.insert(0, str(ROOT / "python"))
+from postfiat_ops.constrained_signer import submit_evm_transaction
+
 RPC = "https://ethereum-rpc.publicnode.com"
 CHAIN_ID = 1
+ROUTE_ID = "pftl-a666-ethereum-wA666-usdc-v1"
+ROUTE_CONFIG_DIGEST = "12ed00ca87e29554ce4b978da1710fffc0830767e84e62f08df257f727db953efdd89bcf6ea99f5634d6e5ea8aca2933"
+SIGNER_SOCKET = Path(os.environ.get("POSTFIAT_SIGNER_SOCKET", "/run/postfiat/a666-signer.sock"))
+MAXIMUM_FEE_WEI = int(os.environ.get("POSTFIAT_SIGNER_MAXIMUM_FEE_WEI", "10000000000000000"))
 OWNER = Web3.to_checksum_address("0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0")
 VERIFIER = Web3.to_checksum_address("0xb79FF97EcC11574a8A78d0b5a9D7C8c2A94bF96A")
 CONTROLLER = Web3.to_checksum_address("0x9A0262C0572fb4DB08765408eB225E207F40c3d9")
@@ -67,25 +73,24 @@ def send(call: Any, web3: Web3, label: str) -> dict[str, Any]:
             {"from": OWNER, "to": call.address, "data": calldata, "value": 0}
         )
     )
-    sys.path.insert(0, str(STAKEHUB))
-    from stakehub.agentd import call as agent_call
-
-    response = agent_call(
-        {
-            "op": "evm_contract_tx",
-            "to": call.address,
-            "data": calldata,
-            "rpc_url": RPC,
-            "chain_id": CHAIN_ID,
-            "label": label,
-            "value_wei": 0,
-            "gas_usd": 10,
-        },
+    idempotency_key = "a666-" + hashlib.sha256(
+        f"{ROUTE_CONFIG_DIGEST}:{call.address.lower()}:{calldata.lower()}".encode()
+    ).hexdigest()
+    response = submit_evm_transaction(
+        SIGNER_SOCKET,
+        chain_id=CHAIN_ID,
+        transaction_kind="a666_export_finalize",
+        target_contract=call.address.lower(),
+        calldata=calldata,
+        native_value_wei=0,
+        maximum_fee_wei=MAXIMUM_FEE_WEI,
+        route_id=ROUTE_ID,
+        route_config_digest=ROUTE_CONFIG_DIGEST,
+        label=label,
+        idempotency_key=idempotency_key,
         timeout=1200.0,
     )
-    if not response or not response.get("ok"):
-        raise RuntimeError(f"{label} rejected: {response}")
-    transaction_hash = normalize_tx_hash(response["tx"])
+    transaction_hash = normalize_tx_hash(response["transaction_hash"])
     receipt = web3.eth.get_transaction_receipt(transaction_hash)
     if int(receipt.status) != 1:
         raise RuntimeError(f"{label} reverted: {transaction_hash}")

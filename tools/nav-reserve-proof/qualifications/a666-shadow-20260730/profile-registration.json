@@ -1,0 +1,22 @@
+{
+  "registrant": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+  "verifier_kind": "sp1-nav-reserve-v1",
+  "source_class": "manifest-driven-a666-reserves-v1",
+  "max_snapshot_age_blocks": 900,
+  "challenge_window_blocks": 1,
+  "max_epoch_gap_blocks": 128,
+  "settle_deadline_blocks": 256,
+  "min_challenge_bond": 0,
+  "min_attestations": 0,
+  "tolerance_bp": 0,
+  "valuation_policy_hash": "076c071e44127158ef82350e7feeb64e0be0a06bf8ba4be5f0374ac36b992ac7",
+  "sp1_program_vkey": "0x007e32678376339d48df4db28a9825d5fb229cedb8b2e5c92295d4580c9d32f8",
+  "sp1_proof_encoding": "groth16",
+  "max_proof_bytes": 4096,
+  "max_public_values_bytes": 584,
+  "public_values_schema": "postfiat.nav_reserve_public_values.v1",
+  "source_manifest_hash": "56fdd19addb6d4e19e0e60094576bf481602498f0252c99cc37ab480621f21ce8d68e348261b65ba78aa5648ec88e5aa",
+  "valuation_unit_id": "c67872c31caa85cbe6dd287a1e060f0f5cfc0e9f3c5bd85a7569897fd0cefb031583b7afc001e7d1afa492e9abf77d60",
+  "max_observation_span_blocks": 8,
+  "allow_controlled_sources": false
+}

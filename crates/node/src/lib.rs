@@ -417,6 +417,8 @@ use state_commitment::{
     LegacyJsonGovernanceState, LegacyJsonLedgerState, LegacyJsonShieldedState,
 };
 mod execution_actions;
+#[cfg(test)]
+use execution_actions::validate_asset_orchard_swap_pricing_against_ledger;
 #[allow(unused_imports)]
 use execution_actions::{
     apply_archived_wan_devnet2_pre_pricing_swap, apply_governance_amendment_with_lifecycle_records,
@@ -443,7 +445,6 @@ use execution_actions::{
     governance_amendment_current_value, governance_amendment_lifecycle_rejection,
     governance_amendment_rollback_record, governance_amendment_rollback_record_id,
     governance_amendment_supersession_record, governance_amendment_supersession_record_id,
-    validate_asset_orchard_swap_pricing_against_ledger,
     validate_governance_agent_dry_run_amendment, validate_governance_agent_dry_run_record,
     validate_vault_bridge_route_profile_against_ledger,
     verify_governance_amendment_activation_record, verify_governance_amendment_activation_records,

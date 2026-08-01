@@ -29,6 +29,7 @@ exclude = [
     "third_party/fips204",
     "tools/pfusdc-tier4-prover",
     "tools/pftl-uniswap-prover",
+    "tools/nav-reserve-proof",
 ]
 resolver = "2"
 

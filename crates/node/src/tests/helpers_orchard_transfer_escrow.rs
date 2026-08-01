@@ -2737,6 +2737,37 @@
         );
         assert_ne!(empty_root, root_for(&with_profile));
 
+        let mut with_successor_profile = with_profile.clone();
+        with_successor_profile.nav_proof_profiles.push(
+            NavProofProfile::new(
+                "pfissuer",
+                postfiat_types::NAV_PROFILE_VERIFIER_SP1_GROTH16,
+                "manifest-driven-reserves",
+                100,
+                1,
+                1_000,
+                0,
+                0,
+                0,
+                0,
+                "33".repeat(32),
+                format!("0x{}", "44".repeat(32)),
+                postfiat_types::NAV_SP1_PROOF_ENCODING_GROTH16,
+                1_024,
+                postfiat_types::NAV_RESERVE_PUBLIC_VALUES_V1_BYTES as u64,
+            )
+            .expect("SP1 base profile")
+            .with_nav_reserve_bindings(
+                postfiat_types::NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1,
+                "55".repeat(48),
+                "66".repeat(48),
+                8,
+                false,
+            )
+            .expect("successor reserve profile"),
+        );
+        assert_ne!(root_for(&with_profile), root_for(&with_successor_profile));
+
         let mut base_packet = NavReservePacket {
             packet_id: "01".repeat(48),
             asset_id: "02".repeat(48),
@@ -2759,6 +2790,24 @@
             attestations: Vec::new(),
             sp1_proof_bytes: Vec::new(),
             sp1_public_values: Vec::new(),
+            public_values_schema: String::new(),
+            source_manifest_hash: String::new(),
+            valuation_unit_id: String::new(),
+            observation_not_before: 0,
+            observation_not_after: 0,
+            proof_verified_net_assets: 0,
+            consensus_overlay_value: 0,
+            gross_assets: 0,
+            total_liabilities: 0,
+            cryptographically_verified_value: 0,
+            attested_value: 0,
+            controlled_value: 0,
+            source_count: 0,
+            quantity_trust_counts: Default::default(),
+            valuation_trust_counts: Default::default(),
+            quantity_trust_root: String::new(),
+            valuation_trust_root: String::new(),
+            source_disclosure_root: String::new(),
         };
         let mut without_evidence = LedgerState::empty();
         without_evidence.nav_reserve_packets.push(base_packet.clone());
@@ -2768,8 +2817,60 @@
         base_packet.sp1_proof_bytes = vec![1, 2, 3];
         base_packet.sp1_public_values = vec![4, 5, 6];
         let mut with_evidence = LedgerState::empty();
-        with_evidence.nav_reserve_packets.push(base_packet);
+        with_evidence.nav_reserve_packets.push(base_packet.clone());
         assert_ne!(without_evidence_root, root_for(&with_evidence));
+
+        base_packet.public_values_schema =
+            postfiat_types::NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1.to_string();
+        base_packet.source_manifest_hash = "07".repeat(48);
+        base_packet.valuation_unit_id = "08".repeat(48);
+        base_packet.observation_not_before = 6;
+        base_packet.observation_not_after = 7;
+        base_packet.proof_verified_net_assets = 31;
+        base_packet.gross_assets = 32;
+        base_packet.total_liabilities = 1;
+        base_packet.cryptographically_verified_value = 20;
+        base_packet.attested_value = 11;
+        base_packet.source_count = 2;
+        base_packet.quantity_trust_counts.cryptographic = 1;
+        base_packet.quantity_trust_counts.attested = 1;
+        base_packet.valuation_trust_counts.attested = 2;
+        base_packet.quantity_trust_root = "09".repeat(48);
+        base_packet.valuation_trust_root = "0a".repeat(48);
+        base_packet.source_disclosure_root = "0b".repeat(48);
+        let mut with_successor_packet = LedgerState::empty();
+        with_successor_packet
+            .nav_reserve_packets
+            .push(base_packet.clone());
+        let successor_root = root_for(&with_successor_packet);
+        assert_ne!(root_for(&with_evidence), successor_root);
+
+        for mutate in 0..17 {
+            let mut changed = base_packet.clone();
+            match mutate {
+                0 => changed.source_manifest_hash = "17".repeat(48),
+                1 => changed.valuation_unit_id = "18".repeat(48),
+                2 => changed.observation_not_before += 1,
+                3 => changed.observation_not_after += 1,
+                4 => changed.proof_verified_net_assets += 1,
+                5 => changed.consensus_overlay_value += 1,
+                6 => changed.gross_assets += 1,
+                7 => changed.total_liabilities += 1,
+                8 => changed.cryptographically_verified_value += 1,
+                9 => changed.attested_value += 1,
+                10 => changed.controlled_value += 1,
+                11 => changed.source_count += 1,
+                12 => changed.quantity_trust_counts.cryptographic += 1,
+                13 => changed.valuation_trust_counts.attested += 1,
+                14 => changed.quantity_trust_root = "19".repeat(48),
+                15 => changed.valuation_trust_root = "1a".repeat(48),
+                16 => changed.source_disclosure_root = "1b".repeat(48),
+                _ => unreachable!(),
+            }
+            let mut ledger = LedgerState::empty();
+            ledger.nav_reserve_packets.push(changed);
+            assert_ne!(successor_root, root_for(&ledger), "mutation {mutate}");
+        }
     }
 
     #[test]

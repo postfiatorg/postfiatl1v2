@@ -1,0 +1,19 @@
+{
+  "source_id": "ethereum-spot",
+  "observed_at_block": 547,
+  "gross_assets": 70781930347,
+  "total_liabilities": 0,
+  "quantity_evidence": {
+    "kind": "attested_ed25519",
+    "evidence_commitment": "ba095d1c309412293b45be6ed12f8c0bcdbf312793a986016837c25429aedcd42c874a92113c492804512b2ab51125da",
+    "verifier_public_key": "89b8a67ab1659a27e026dbe13024af1ef9f1453fe4218dbe7371165267aa1036",
+    "signature": "78fadcaa56c07b56c6cc625fda2ad006314b25e0c19c6df3fd1c66800b954886f6f83e561d8c56d8d6702d7781371367869c3a40260fc8353eda5e3a9a5d3701"
+  },
+  "valuation_evidence": {
+    "kind": "attested_ed25519",
+    "evidence_commitment": "3cf88a32a82aaa951bb5864a4909ba79ad68ab89c75dd60edc24002ffa772aa174316c1b928cdb2d27493ad206bae523",
+    "verifier_public_key": "89b8a67ab1659a27e026dbe13024af1ef9f1453fe4218dbe7371165267aa1036",
+    "signature": "f4c80ef675cd61164f71d0cb0115805d47ee6d0e88b1970df8cc4933a403866b678fd08f56b162ae216d778d59f2c4f376c40a8feb5b6bf1a7ebc80ba266b30c"
+  },
+  "disclosure_commitment": "afe5166182ce0cae218fd41f3093a31ec2cf7e3c15ed7753b32040ce8c01b8ed819a4cc4ee374f487141682f34589fbd"
+}

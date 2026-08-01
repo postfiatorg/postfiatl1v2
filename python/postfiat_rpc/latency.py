@@ -72,7 +72,7 @@ def read_proxy_auth_token_file(path: str | Path) -> str:
 
 
 def load_wallet_descriptor(path: str | Path) -> TransparentWallet:
-    """Load a transparent wallet from a StakeHub descriptor or key report."""
+    """Load a transparent wallet from a provider-neutral key report."""
 
     path = Path(path)
     data = json.loads(path.read_text(encoding="utf-8"))

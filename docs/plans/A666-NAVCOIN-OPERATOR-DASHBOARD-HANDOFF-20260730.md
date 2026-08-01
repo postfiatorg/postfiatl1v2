@@ -87,7 +87,8 @@ remain disabled until the production-hardening gates authorize them.
 
 These controls are visibly separated from ordinary wallet actions:
 
-1. Capture and prove the current StakeHub reserve packet.
+1. Capture and prove the current reserve packet through the open,
+   provider-neutral reserve-proof kit.
 2. Build and submit `nav_reserve_submit`.
 3. Build and submit `nav_epoch_finalize`.
 4. Build and submit `pftl_uniswap_route_epoch_advance`.

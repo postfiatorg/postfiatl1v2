@@ -1,5 +1,15 @@
 # PostFiat Web Wallet — Spec
 
+> **Architecture amendment (2026-08-01):** The implementation has moved past
+> this early A651-oriented server sketch. The browser now discovers NAVCoin
+> markets from finalized PFTL route state and uses route-generic durable
+> services. StakeHub is not a wallet dependency or public proof service. Read
+> references below to StakeHub only as historical prototype lineage; new work
+> follows the
+> [open reserve-proof plan](../plans/STAKEHUB-DECOUPLING-AND-OPEN-RESERVE-PROOF-INFRASTRUCTURE-PLAN-20260801.md)
+> and the
+> [generic export/return runbook](../runbooks/NAVCOIN-GENERIC-EXPORT-RETURN-RELAY-20260801.md).
+
 ## Objective
 
 A browser-based self-custody wallet for PostFiat L1, built as a Vite + React web app. All key material is generated, encrypted, and signed entirely in the browser via WASM. The server never sees seeds, passphrases, or private keys. The operator is not a money transmitter.
@@ -421,7 +431,7 @@ User wallet (pfUSDC balance)
 
 The private swap uses the Asset-Orchard shielded layer. The swap middle is private: asset ids, amounts, counterparties, and bilateral price are hidden from public observers. Ingress and egress edges are visible.
 
-**Flow (based on StakeHub's 12-step shielded NAV swap):**
+**Historical flow (derived from the original internal 12-step shielded NAV swap):**
 ```
 Step 0:  Create PFTL wallet (browser-side, WASM keygen)
 Step 1:  Fund PFTL gas (faucet or existing balance)
@@ -489,9 +499,11 @@ The web app needs these additional screens beyond the basic wallet:
 
 ### Server API for Private Swap (Separate from Web App)
 
-The web app needs a companion server API for the proof-heavy steps. This is NOT part of the web app build — it's a separate service (like StakeHub's dashboard_server). The web app calls it via HTTP.
+The web app needs a companion server API for proof-heavy steps. This is not
+part of the web app build; it is a separate provider-neutral service. The web
+app calls it through bounded, authenticated HTTP routes.
 
-**Endpoints (reference, based on StakeHub):**
+**Historical endpoint sketch:**
 ```
 GET  /api/swap/status                    — current run state
 GET  /api/swap/balances                  — pfUSDC, a651, PFTL balances
@@ -856,7 +868,9 @@ This separation is what keeps the operator out of money transmitter territory: t
 
 ### Gate 15: Swap Server API Integration
 
-**Objective:** The web app can communicate with the companion swap server API for proof-heavy operations. This gate validates the integration layer, not the server itself (which is a separate build, based on StakeHub).
+**Objective:** The web app can communicate with the provider-neutral companion
+service for proof-heavy operations. This gate validates the integration layer,
+not the server itself.
 
 - [ ] G15.1: Create `src/lib/swap-server.js` — HTTP client for the swap server API
 - [ ] G15.2: `swapServer.getStatus()` → `GET /api/swap/status` returns run state
@@ -957,7 +971,8 @@ npm run preview
 - Address book / contacts
 - Background notifications (requires extension or service worker)
 - Cross-origin signing (requires extension with `externally_connectable`)
-- Swap server itself — the companion API for proof generation is a separate build (based on StakeHub's `dashboard_server.py`); this spec covers the web app that calls it
+- Swap server itself — the provider-neutral companion API for proof generation
+  is a separate build; this spec covers the web app that calls it
 - Account/login system — this is a crypto-only app; no GitHub, OAuth, email, or accounts; the wallet IS the identity
 
 ## Transaction Finality Model

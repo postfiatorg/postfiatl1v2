@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { formatBalance, formatAssetBalance, shortenAssetId, truncateMiddle, pftToAtoms } from '../lib/utils.js';
-import { displayAssetSymbol, NAVCOIN_MARKETS, navcoinMarketForAsset } from '../lib/navcoin-markets.js';
+import { displayAssetSymbol, navcoinMarketForAsset } from '../lib/navcoin-markets.js';
 import {
   FASTPAY_OWNED_OBJECT_LOOKUP_LIMIT,
   fetchOwnedObjectsSnapshot,
@@ -15,7 +15,7 @@ import {
   saveFastPayRecovery,
 } from '../lib/fastpay-recovery-store.js';
 
-export default function WalletHome({ rpc, txBuilder, backupJson, address, publicKeyHex, chainStatus, chainCapabilities, liveSnapshot = null, walletFeedStatus = null, onCopy, go, visible = true }) {
+export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, address, publicKeyHex, chainStatus, chainCapabilities, liveSnapshot = null, walletFeedStatus = null, onCopy, go, visible = true }) {
   const fastpayEnabled = chainCapabilities?.owned_lane_enabled === true;
   const [balance, setBalance] = useState(null);
   const [sequence, setSequence] = useState(null);
@@ -417,7 +417,7 @@ export default function WalletHome({ rpc, txBuilder, backupJson, address, public
   }, [visible, fetchAccount]);
 
   const getAssetCode = (assetId) => {
-    return displayAssetSymbol(assetId, shortenAssetId(assetId));
+    return displayAssetSymbol(markets, assetId, shortenAssetId(assetId));
   };
   const getAssetBalance = (asset) => asset?.balance ?? asset?.amount ?? 0;
   const getAssetBalanceLabel = (asset) => {
@@ -425,7 +425,7 @@ export default function WalletHome({ rpc, txBuilder, backupJson, address, public
     const code = getAssetCode(id);
     return `${formatAssetBalance(id, getAssetBalance(asset))} ${code}`;
   };
-  const settlementAssets = [...new Map(NAVCOIN_MARKETS.map(market => [market.settlementAssetId, market])).values()];
+  const settlementAssets = [...new Map(markets.map(market => [market.settlementAssetId, market])).values()];
   const settlementAssetIds = new Set(settlementAssets.map(market => market.settlementAssetId));
   const issuedAssetRows = [
     ...settlementAssets.map(market => {
@@ -440,7 +440,7 @@ export default function WalletHome({ rpc, txBuilder, backupJson, address, public
       .filter(a => !settlementAssetIds.has(a.asset_id || a.id))
       .map(a => {
         const code = getAssetCode(a.asset_id || a.id);
-        return [code, getAssetBalanceLabel(a), navcoinMarketForAsset(a.asset_id || a.id) ? 'active NAVCoin fund share' : 'other or legacy issued asset'];
+        return [code, getAssetBalanceLabel(a), navcoinMarketForAsset(markets, a.asset_id || a.id) ? 'active NAVCoin fund share' : 'other or legacy issued asset'];
       }),
   ];
 

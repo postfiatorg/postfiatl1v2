@@ -1,0 +1,22 @@
+{
+  "registrant": "pf0fae169e4293feebc8c9119febb4fd995a667b37",
+  "verifier_kind": "sp1-nav-reserve-v1",
+  "source_class": "manifest-driven",
+  "max_snapshot_age_blocks": 10000,
+  "challenge_window_blocks": 1,
+  "max_epoch_gap_blocks": 100,
+  "settle_deadline_blocks": 0,
+  "min_challenge_bond": 0,
+  "min_attestations": 0,
+  "tolerance_bp": 0,
+  "valuation_policy_hash": "0404040404040404040404040404040404040404040404040404040404040404",
+  "sp1_program_vkey": "0x007e32678376339d48df4db28a9825d5fb229cedb8b2e5c92295d4580c9d32f8",
+  "sp1_proof_encoding": "groth16",
+  "max_proof_bytes": 4096,
+  "max_public_values_bytes": 584,
+  "public_values_schema": "postfiat.nav_reserve_public_values.v1",
+  "source_manifest_hash": "9da4e2ba55939f138475026946d2728d9b40d3f4c7762289a70aae94584eac924b9a788c6df25c9276cc83f1616ef0e5",
+  "valuation_unit_id": "050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505",
+  "max_observation_span_blocks": 8,
+  "allow_controlled_sources": true
+}

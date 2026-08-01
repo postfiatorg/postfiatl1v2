@@ -1828,6 +1828,82 @@ pub(super) fn append_nav_reserve_packet(
             &packet.sp1_public_values,
         );
     }
+    if !packet.public_values_schema.is_empty() {
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.public_values_schema"),
+            &packet.public_values_schema,
+        );
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.source_manifest_hash"),
+            &packet.source_manifest_hash,
+        );
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.valuation_unit_id"),
+            &packet.valuation_unit_id,
+        );
+        for (field, value) in [
+            ("observation_not_before", packet.observation_not_before),
+            ("observation_not_after", packet.observation_not_after),
+            (
+                "proof_verified_net_assets",
+                packet.proof_verified_net_assets,
+            ),
+            ("consensus_overlay_value", packet.consensus_overlay_value),
+            ("gross_assets", packet.gross_assets),
+            ("total_liabilities", packet.total_liabilities),
+            (
+                "cryptographically_verified_value",
+                packet.cryptographically_verified_value,
+            ),
+            ("attested_value", packet.attested_value),
+            ("controlled_value", packet.controlled_value),
+        ] {
+            append_canonical_u64(bytes, &format!("{prefix}.{field}"), value);
+        }
+        append_canonical_u64(
+            bytes,
+            &format!("{prefix}.source_count"),
+            u64::from(packet.source_count),
+        );
+        for (group, counts) in [
+            ("quantity", packet.quantity_trust_counts),
+            ("valuation", packet.valuation_trust_counts),
+        ] {
+            append_canonical_u64(
+                bytes,
+                &format!("{prefix}.{group}_cryptographic_sources"),
+                u64::from(counts.cryptographic),
+            );
+            append_canonical_u64(
+                bytes,
+                &format!("{prefix}.{group}_attested_sources"),
+                u64::from(counts.attested),
+            );
+            append_canonical_u64(
+                bytes,
+                &format!("{prefix}.{group}_controlled_sources"),
+                u64::from(counts.controlled),
+            );
+        }
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.quantity_trust_root"),
+            &packet.quantity_trust_root,
+        );
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.valuation_trust_root"),
+            &packet.valuation_trust_root,
+        );
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.source_disclosure_root"),
+            &packet.source_disclosure_root,
+        );
+    }
 }
 
 pub(super) fn append_nav_reserve_attestation(
@@ -1950,6 +2026,33 @@ pub(super) fn append_nav_proof_profile(
         &format!("{prefix}.max_public_values_bytes"),
         profile.max_public_values_bytes,
     );
+    if !profile.public_values_schema.is_empty() {
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.public_values_schema"),
+            &profile.public_values_schema,
+        );
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.source_manifest_hash"),
+            &profile.source_manifest_hash,
+        );
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.valuation_unit_id"),
+            &profile.valuation_unit_id,
+        );
+        append_canonical_u64(
+            bytes,
+            &format!("{prefix}.max_observation_span_blocks"),
+            profile.max_observation_span_blocks,
+        );
+        append_canonical_bool(
+            bytes,
+            &format!("{prefix}.allow_controlled_sources"),
+            profile.allow_controlled_sources,
+        );
+    }
 }
 
 pub(super) fn append_nav_attestor(bytes: &mut Vec<u8>, prefix: &str, attestor: &NavAttestor) {

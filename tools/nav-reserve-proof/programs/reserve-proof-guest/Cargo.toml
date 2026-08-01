@@ -1,0 +1,16 @@
+[package]
+name = "postfiat-reserve-proof-guest"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+reserve-proof-types = { path = "../../crates/reserve-proof-types" }
+serde_cbor = "0.11.2"
+sp1-zkvm = { version = "=6.3.1" }
+
+[workspace]
+
+[patch.crates-io]
+sha3-v0-10-8 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha3", tag = "patch-sha3-0.10.8-sp1-6.0.0" }

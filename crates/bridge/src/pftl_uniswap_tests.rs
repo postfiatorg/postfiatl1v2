@@ -963,7 +963,7 @@ fn pftl_uniswap_status_reports_expose_route_packet_claims_and_supply() {
     let other_ledger = pftl_uniswap_ledger(&other_config);
     let routes =
         pftl_uniswap_bridge_routes_status(&[ledger.clone(), other_ledger]).expect("routes status");
-    assert_eq!(routes.schema, "postfiat-pftl-uniswap-routes-status-v1");
+    assert_eq!(routes.schema, "postfiat-pftl-uniswap-routes-status-v2");
     assert_eq!(routes.route_count, 2);
     assert_eq!(routes.routes[0].route_id, other_config.route_id);
     assert_eq!(routes.routes[1].route_id, config.route_id);

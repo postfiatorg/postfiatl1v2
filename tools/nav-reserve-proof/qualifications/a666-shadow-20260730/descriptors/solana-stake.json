@@ -1,0 +1,13 @@
+{
+  "schema": "postfiat.reserve_shadow_source_descriptor.v1",
+  "source_id": "solana-stake",
+  "reserve_owner": "FtZHrCLEhDnBpM2qPJ2LTkN3TNxxaoYatPcx7vS4j6Ay",
+  "source_domain": "solana:mainnet",
+  "historical_observation": "docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/solana-witness.json",
+  "historical_metadata_hash": "7fad48aef59afe4ebeffbe1086836be0d66f8d62ae4e22ab9b63c31c3d220b9b",
+  "gross_assets_usd_e8": 108046548000,
+  "total_liabilities_usd_e8": 0,
+  "old_quantity_trust": "attested",
+  "old_valuation_trust": "attested",
+  "successor_shadow_trust": "attested"
+}

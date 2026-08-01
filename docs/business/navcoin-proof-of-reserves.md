@@ -2,11 +2,20 @@
 
 > **Production lineage notice (2026-07-30):** This page explains the
 > proof-of-reserves primitives and earlier devnet phases. The current A666
-> deployment, StakeHub NAV policy, live supply/reserve state, and production
+> deployment, finalized reserve-proof policy, live supply/reserve state, and production
 > limitations are summarized in
 > [A666 current state](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
 > Nothing in this page should be read as a claim that the current A666 service
 > has passed production GA.
+
+> **Current architecture boundary (2026-08-01):** StakeHub is an internal
+> operator product, not a public protocol component or trust anchor. New proof
+> profiles use the provider-neutral public-values ABI and the open
+> [`tools/nav-reserve-proof`](../../tools/nav-reserve-proof/README.md) kit.
+> Existing provider-named profiles and packets remain immutable historical
+> state; wallets execute only from finalized PFTL proof, packet, and route
+> state. See the
+> [decoupling plan](../plans/STAKEHUB-DECOUPLING-AND-OPEN-RESERVE-PROOF-INFRASTRUCTURE-PLAN-20260801.md).
 
 Status: Phase 0 + Phase 1 live on devnet
 Plan: `NAVCOIN_POR_V2_PLAN.md` (repo root)

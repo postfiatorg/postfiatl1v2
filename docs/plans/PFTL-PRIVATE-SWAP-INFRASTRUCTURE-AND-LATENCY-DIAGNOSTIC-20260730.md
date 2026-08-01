@@ -61,10 +61,11 @@ under [Recommended overnight execution plan](#recommended-overnight-execution-pl
   - Pass condition: 10/10 issues and redeems, no operator intervention, fresh
     governed NAV throughout, and every correctness and latency gate below.
   - Result: stopped safely in cycle 5 after four complete cycles. The fifth
-    issue failed before publication because the finalized StakeHub NAV packet
+    issue failed before publication because the finalized reserve-proof NAV packet
     exceeded the consensus freshness window (`stale_pftl_uniswap_pricing`).
-- [ ] Add governed StakeHub NAV refresh to the qualification runner.
-  - Fetch and verify real StakeHub reserves, publish/finalize the next NAV
+- [ ] Add governed provider-neutral NAV refresh to the qualification runner.
+  - Collect and verify real reserve source artifacts with the open proof kit,
+    publish/finalize the next NAV
     packet through the ordinary PFTL path, wait for six-node convergence, then
     obtain a new quote. Never bypass the freshness check or reuse a quote whose
     pricing epoch changed.
@@ -606,7 +607,7 @@ recorded the same swap exactly once.
 #### F. Ten-cycle qualification gate
 
 - [!] Confirm the private-output-to-next-input loop can run unattended.
-  - Failed at cycle 5 because the runner did not refresh the governed StakeHub
+  - Failed at cycle 5 because the runner did not refresh the governed reserve-proof
     NAV before its consensus freshness window elapsed.
 - [x] Confirm a restart recovery test passed before beginning the campaign.
 - [!] Run ten consecutive private issue/redeem cycles without manual state
@@ -681,9 +682,10 @@ Final classification: **improved but still limited-availability**. The live
 resident service remains on the reviewed P0 build and is healthy. It is not
 qualified for 100/100.
 
-Single next action: add an authenticated, fail-closed governed StakeHub NAV
-refresh step to the qualification runner, including six-validator convergence
-and fresh-quote acquisition, then restart the ten-cycle gate from cycle 1.
+Single next action: add an authenticated, fail-closed governed
+provider-neutral reserve-proof NAV refresh step to the qualification runner,
+including six-validator convergence and fresh-quote acquisition, then restart
+the ten-cycle gate from cycle 1.
 
 ### Phase 0: preserve the current known-good state
 

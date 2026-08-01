@@ -1,4 +1,7 @@
 use super::*;
+use postfiat_types::{
+    NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1, NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1,
+};
 
 pub(super) fn dummy_block_record(height: u64) -> BlockRecord {
     BlockRecord {
@@ -122,6 +125,20 @@ fn wan_devnet_legacy_nav_profile_id_replays_optional_field_schema() {
     else {
         panic!("fixture transaction is not nav_profile_register");
     };
+    let mut successor_transaction = transaction.clone();
+    let AssetTransactionOperation::NavProfileRegister(successor_operation) =
+        &mut successor_transaction.unsigned.operation
+    else {
+        unreachable!();
+    };
+    successor_operation.verifier_kind =
+        NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1.to_string();
+    successor_operation.public_values_schema =
+        NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1.to_string();
+    successor_operation.source_manifest_hash = "12".repeat(48);
+    successor_operation.valuation_unit_id = "13".repeat(48);
+    successor_operation.max_observation_span_blocks = 8;
+    assert!(legacy_nav_profile_register_signing_byte_candidates(&successor_transaction).is_empty());
 
     let current_profile = NavProofProfile::new(
         operation.registrant.clone(),

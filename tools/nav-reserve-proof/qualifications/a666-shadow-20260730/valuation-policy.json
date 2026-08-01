@@ -1,0 +1,8 @@
+{
+  "schema": "postfiat.a666.shadow_valuation_policy.v1",
+  "legacy_policy_hash": "076c071e44127158ef82350e7feeb64e0be0a06bf8ba4be5f0374ac36b992ac7",
+  "valuation_unit": "USD",
+  "valuation_scale": 100000000,
+  "mapping": "exact historical USD-e8 gross assets and liabilities; no Uniswap price; no trust-class promotion",
+  "source_evidence_date": "2026-07-30"
+}

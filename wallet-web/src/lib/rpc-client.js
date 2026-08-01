@@ -439,6 +439,10 @@ export class RpcClient {
   async navcoinBridgeSupplyStatus(routeId) {
     return this.call('navcoin_bridge_supply_status', { route_id: routeId });
   }
+  async navcoinBridgeRoutes() { return this.call('navcoin_bridge_routes', {}); }
+  async navReserveProofStatus(assetId) {
+    return this.call('nav_reserve_proof_status', { asset_id: assetId });
+  }
   async accountAssets(address) { return this.call('account_assets', { account: address }); }
   async escrowInfo(escrowId) { return this.call('escrow_info', { escrow_id: escrowId }); }
   async ownedObjects(ownerPublicKeyHex, opts = {}) {

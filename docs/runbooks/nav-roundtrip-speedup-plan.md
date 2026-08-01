@@ -1,5 +1,9 @@
 # NAV Round Trip Speedup Plan
 
+> **Historical architecture:** This A651/Arbitrum speed plan records the
+> former internal operator workflow. It is not a current wallet, proof,
+> bridge, or signer runbook.
+
 Status: implementation plan
 Audience: PFTL operator, StakeHub operator, protocol engineer
 Date: 2026-06-20

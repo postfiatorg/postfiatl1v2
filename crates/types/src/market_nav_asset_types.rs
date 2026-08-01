@@ -504,6 +504,11 @@ impl NavProofProfile {
             sp1_proof_encoding,
             max_proof_bytes,
             max_public_values_bytes,
+            public_values_schema: String::new(),
+            source_manifest_hash: String::new(),
+            valuation_unit_id: String::new(),
+            max_observation_span_blocks: 0,
+            allow_controlled_sources: false,
         };
         profile.validate()?;
         Ok(profile)
@@ -544,6 +549,7 @@ impl NavProofProfile {
         if matches!(
             self.verifier_kind.as_str(),
             NAV_PROFILE_VERIFIER_SP1_GROTH16
+                | NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1
                 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
                 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
         )
@@ -562,6 +568,7 @@ impl NavProofProfile {
             let expected_len = if matches!(
                 self.verifier_kind.as_str(),
                 NAV_PROFILE_VERIFIER_SP1_GROTH16
+                    | NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1
                     | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
                     | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
             ) {
@@ -591,24 +598,69 @@ impl NavProofProfile {
                 NAV_PROFILE_ID_HEX_LEN,
             )?;
         }
-        let expected = nav_proof_profile_id_with_route_policy(
-            &self.verifier_kind,
-            &self.source_class,
-            self.max_snapshot_age_blocks,
-            self.challenge_window_blocks,
-            self.max_epoch_gap_blocks,
-            self.settle_deadline_blocks,
-            self.min_challenge_bond,
-            self.min_attestations,
-            self.tolerance_bp,
-            self.bridge_observer_min_confirmations,
-            &self.valuation_policy_hash,
-            &self.sp1_program_vkey,
-            &self.sp1_proof_encoding,
-            self.max_proof_bytes,
-            self.max_public_values_bytes,
-            &self.vault_bridge_route_policy_hash,
-        )?;
+        let is_reserve_v1 = self.verifier_kind == NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1;
+        if is_reserve_v1 {
+            if self.public_values_schema != NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1 {
+                return Err(format!(
+                    "nav_profile.public_values_schema must be {NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1}"
+                ));
+            }
+            validate_lower_hex_len(
+                "nav_profile.source_manifest_hash",
+                &self.source_manifest_hash,
+                NAV_PROFILE_ID_HEX_LEN,
+            )?;
+            validate_lower_hex_len(
+                "nav_profile.valuation_unit_id",
+                &self.valuation_unit_id,
+                NAV_PROFILE_ID_HEX_LEN,
+            )?;
+            if self.max_observation_span_blocks == 0 {
+                return Err(
+                    "nav_profile.max_observation_span_blocks must be nonzero for sp1-nav-reserve-v1"
+                        .to_string(),
+                );
+            }
+            if self.max_public_values_bytes != 0
+                && self.max_public_values_bytes < NAV_RESERVE_PUBLIC_VALUES_V1_BYTES as u64
+            {
+                return Err(format!(
+                    "nav_profile.max_public_values_bytes must permit the {NAV_RESERVE_PUBLIC_VALUES_V1_BYTES}-byte reserve ABI"
+                ));
+            }
+        } else if !self.public_values_schema.is_empty()
+            || !self.source_manifest_hash.is_empty()
+            || !self.valuation_unit_id.is_empty()
+            || self.max_observation_span_blocks != 0
+            || self.allow_controlled_sources
+        {
+            return Err(
+                "nav reserve profile bindings require sp1-nav-reserve-v1 verifier kind"
+                    .to_string(),
+            );
+        }
+        let expected = if is_reserve_v1 {
+            nav_reserve_proof_profile_id_v2(self)?
+        } else {
+            nav_proof_profile_id_with_route_policy(
+                &self.verifier_kind,
+                &self.source_class,
+                self.max_snapshot_age_blocks,
+                self.challenge_window_blocks,
+                self.max_epoch_gap_blocks,
+                self.settle_deadline_blocks,
+                self.min_challenge_bond,
+                self.min_attestations,
+                self.tolerance_bp,
+                self.bridge_observer_min_confirmations,
+                &self.valuation_policy_hash,
+                &self.sp1_program_vkey,
+                &self.sp1_proof_encoding,
+                self.max_proof_bytes,
+                self.max_public_values_bytes,
+                &self.vault_bridge_route_policy_hash,
+            )?
+        };
         if self.profile_id != expected {
             return Err("nav_profile.profile_id does not match profile parameters".to_string());
         }
@@ -620,27 +672,87 @@ impl NavProofProfile {
         route_policy_hash: impl Into<String>,
     ) -> Result<Self, String> {
         self.vault_bridge_route_policy_hash = route_policy_hash.into();
-        self.profile_id = nav_proof_profile_id_with_route_policy(
-            &self.verifier_kind,
-            &self.source_class,
-            self.max_snapshot_age_blocks,
-            self.challenge_window_blocks,
-            self.max_epoch_gap_blocks,
-            self.settle_deadline_blocks,
-            self.min_challenge_bond,
-            self.min_attestations,
-            self.tolerance_bp,
-            self.bridge_observer_min_confirmations,
-            &self.valuation_policy_hash,
-            &self.sp1_program_vkey,
-            &self.sp1_proof_encoding,
-            self.max_proof_bytes,
-            self.max_public_values_bytes,
-            &self.vault_bridge_route_policy_hash,
-        )?;
+        self.profile_id = if self.verifier_kind == NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1 {
+            nav_reserve_proof_profile_id_v2(&self)?
+        } else {
+            nav_proof_profile_id_with_route_policy(
+                &self.verifier_kind,
+                &self.source_class,
+                self.max_snapshot_age_blocks,
+                self.challenge_window_blocks,
+                self.max_epoch_gap_blocks,
+                self.settle_deadline_blocks,
+                self.min_challenge_bond,
+                self.min_attestations,
+                self.tolerance_bp,
+                self.bridge_observer_min_confirmations,
+                &self.valuation_policy_hash,
+                &self.sp1_program_vkey,
+                &self.sp1_proof_encoding,
+                self.max_proof_bytes,
+                self.max_public_values_bytes,
+                &self.vault_bridge_route_policy_hash,
+            )?
+        };
         self.validate()?;
         Ok(self)
     }
+
+    pub fn with_nav_reserve_bindings(
+        mut self,
+        public_values_schema: impl Into<String>,
+        source_manifest_hash: impl Into<String>,
+        valuation_unit_id: impl Into<String>,
+        max_observation_span_blocks: u64,
+        allow_controlled_sources: bool,
+    ) -> Result<Self, String> {
+        if self.verifier_kind == NAV_PROFILE_VERIFIER_SP1_GROTH16 {
+            self.verifier_kind = NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1.to_string();
+        } else if self.verifier_kind != NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1 {
+            return Err(
+                "nav reserve profile bindings require an SP1 Groth16 base profile".to_string(),
+            );
+        }
+        self.public_values_schema = public_values_schema.into();
+        self.source_manifest_hash = source_manifest_hash.into();
+        self.valuation_unit_id = valuation_unit_id.into();
+        self.max_observation_span_blocks = max_observation_span_blocks;
+        self.allow_controlled_sources = allow_controlled_sources;
+        self.profile_id = nav_reserve_proof_profile_id_v2(&self)?;
+        self.validate()?;
+        Ok(self)
+    }
+}
+
+fn nav_reserve_proof_profile_id_v2(profile: &NavProofProfile) -> Result<String, String> {
+    if profile.verifier_kind != NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1 {
+        return Err("nav reserve v2 profile id requires sp1-nav-reserve-v1".to_string());
+    }
+    let preimage = format!(
+        "verifier_kind={}\nsource_class={}\nmax_snapshot_age_blocks={}\nchallenge_window_blocks={}\nmax_epoch_gap_blocks={}\nsettle_deadline_blocks={}\nmin_challenge_bond={}\nmin_attestations={}\ntolerance_bp={}\nbridge_observer_min_confirmations={}\nvaluation_policy_hash={}\nvault_bridge_route_policy_hash={}\nsp1_program_vkey={}\nsp1_proof_encoding={}\nmax_proof_bytes={}\nmax_public_values_bytes={}\npublic_values_schema={}\nsource_manifest_hash={}\nvaluation_unit_id={}\nmax_observation_span_blocks={}\nallow_controlled_sources={}\n",
+        profile.verifier_kind,
+        profile.source_class,
+        profile.max_snapshot_age_blocks,
+        profile.challenge_window_blocks,
+        profile.max_epoch_gap_blocks,
+        profile.settle_deadline_blocks,
+        profile.min_challenge_bond,
+        profile.min_attestations,
+        profile.tolerance_bp,
+        profile.bridge_observer_min_confirmations,
+        profile.valuation_policy_hash,
+        profile.vault_bridge_route_policy_hash,
+        profile.sp1_program_vkey,
+        profile.sp1_proof_encoding,
+        profile.max_proof_bytes,
+        profile.max_public_values_bytes,
+        profile.public_values_schema,
+        profile.source_manifest_hash,
+        profile.valuation_unit_id,
+        profile.max_observation_span_blocks,
+        profile.allow_controlled_sources,
+    );
+    Ok(hash_hex_domain(NAV_PROFILE_ID_DOMAIN_V2, preimage.as_bytes()))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -757,6 +869,7 @@ fn nav_proof_profile_id_with_route_policy(
     if matches!(
         verifier_kind,
         NAV_PROFILE_VERIFIER_SP1_GROTH16
+            | NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
     ) && valuation_policy_hash.is_empty()
@@ -788,6 +901,7 @@ fn validate_nav_profile_sp1_fields(
     if matches!(
         verifier_kind,
         NAV_PROFILE_VERIFIER_SP1_GROTH16
+            | NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
     ) {
@@ -823,6 +937,7 @@ fn validate_nav_profile_verifier_kind(verifier_kind: &str) -> Result<(), String>
         | NAV_PROFILE_VERIFIER_PLACEHOLDER
         | NAV_PROFILE_VERIFIER_MULTI_FETCH
         | NAV_PROFILE_VERIFIER_SP1_GROTH16
+        | NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1
         | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
         | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 => Ok(()),
         _ => Err(format!(
@@ -2660,7 +2775,7 @@ pub struct PftlUniswapRouteV2State {
     pub redeem_capacity_used_atoms: u64,
     /// Issue and redemption spread retained outside counted NAV reserves.
     /// Redemption principal is paid from `settlement_reserve_atoms`, which is
-    /// funded by the same subscriptions that create a666 supply.
+    /// funded by the same subscriptions that create native NAVCoin supply.
     pub non_nav_spread_atoms: u64,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub active_reservations: BTreeMap<String, PftlUniswapOrderReservationV2>,

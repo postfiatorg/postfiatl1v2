@@ -329,13 +329,14 @@ and reserve/supply conservation held. The first complete run required repair.
 The later optimized issue took `29m36s`, missing the 25-minute issue target by
 `4m36s`; redemption recovery took `14m48s`, inside the target.
 
-### 4.5 Variable size and real StakeHub NAV
+### 4.5 Variable size and finalized reserve-aware NAV
 
 A separate campaign proved the requested size variation and repricing flow:
 
 1. transparent issue/export of `1.000000 A666`;
 2. private issue/export of `100.000000 A666`;
-3. a new six-leg StakeHub reserve proof and NAV mark;
+3. a new six-leg reserve proof and finalized NAV mark produced by the
+   historical internal operator path;
 4. transparent return/redemption of `1.000000 A666`; and
 5. private return/redemption of `100.000000 A666`.
 
@@ -551,7 +552,8 @@ validator upgrade during the live segment.
 
 ### 9.2 A666 production hardening
 
-- automate fresh StakeHub reserve/NAV generation and policy advancement;
+- migrate A666 to the provider-neutral proof ABI, then automate fresh reserve
+  proof/NAV generation and policy advancement through the open proof kit;
 - eliminate remaining prover-readiness races and manual recovery prefixes;
 - repeat transparent and private issue/redeem at the target sizes without
   intervention;

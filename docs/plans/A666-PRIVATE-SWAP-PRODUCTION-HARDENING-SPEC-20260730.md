@@ -66,7 +66,7 @@ As of the final 2026-07-30 audit:
 - the PFTL-only resident private service completed four qualification cycles;
 - its four-sample issue p95 was `50.365 seconds`;
 - its four-sample redeem p95 was `38.862 seconds`; and
-- cycle 5 stopped before publication because finalized StakeHub pricing was
+- cycle 5 stopped before publication because finalized reserve-proof pricing was
   stale.
 
 The current resident service is limited to one controlled wallet, one active
@@ -128,7 +128,7 @@ The product MUST disclose:
   verifier.
 - Ethereum -> PFTL return currently depends on the disclosed PFTL validator
   checkpoint policy and is not equivalent to an Ethereum light client.
-- StakeHub proof correctness does not prove an omitted asset or liability does
+- Reserve-proof correctness does not prove an omitted asset or liability does
   not exist; it proves the declared reserve computation under the pinned
   source and proof policy.
 
@@ -204,7 +204,7 @@ The production path consists of independently health-checked components:
 Ethereum watcher / finality source
   -> SP1 ingress proof service
   -> pfUSDC relay
-  -> StakeHub NAV publisher
+  -> provider-neutral reserve-proof/NAV publisher
   -> authenticated swap API and durable workflow journal
   -> private wallet / note service
   -> resident proof service
@@ -254,15 +254,16 @@ before GA by a dedicated authenticated prover protocol with:
 **Exit gate A:** six-node convergence and exact supply/reserve reconciliation;
 no live, ambiguous, or unpublished value transition.
 
-## 8. Phase B — Automate governed StakeHub NAV freshness
+## 8. Phase B — Automate governed reserve-proof NAV freshness
 
 The cycle-5 stale-pricing rejection proves freshness enforcement works and
 that the runner is incomplete.
 
 ### 8.1 Required behavior
 
-- [ ] Implement an authenticated NAV refresh worker that fetches the governed
-  StakeHub reserve inputs and verifies their source identity and freshness.
+- [ ] Implement an authenticated NAV refresh worker that collects the governed
+  source-adapter artifacts through the open reserve-proof kit and verifies
+  their identity and freshness.
 - [ ] Generate the next reserve packet and NAV mark using integer/fixed-point
   arithmetic only.
 - [ ] Bind the packet to chain, genesis, protocol, asset, valuation policy,
@@ -801,7 +802,8 @@ not evidence unless its machine-verifiable source artifacts exist.
 This is the authoritative next-work checklist:
 
 - [ ] **P0.1:** Reconcile and freeze the current height-528 state.
-- [ ] **P0.2:** Implement and test automated governed StakeHub NAV refresh.
+- [ ] **P0.2:** Implement and test automated governed provider-neutral reserve
+  proof/NAV refresh.
 - [ ] **P0.3:** Make the campaign runner wait for exact prover, service,
   round-driver, and six-validator mirror convergence at every boundary.
 - [ ] **P0.4:** Complete ten unattended one-A666 private cycles.

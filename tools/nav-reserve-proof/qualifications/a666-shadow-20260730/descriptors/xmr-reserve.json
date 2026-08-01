@@ -1,0 +1,13 @@
+{
+  "schema": "postfiat.reserve_shadow_source_descriptor.v1",
+  "source_id": "xmr-reserve",
+  "reserve_owner": "4ADLBk3PnUARCFR1nmHHKUHdPzxd3BPQNRrcw2VyTvGsNpb7vhauAAuR7yt4QsTCnPFK9WnMBbvuFb4haBTkwFGh8YgaXBk",
+  "source_domain": "monero:mainnet",
+  "historical_observation": "docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/xmr-sidecar.json",
+  "historical_metadata_hash": "0264c7576d4ff815acd14f6af6addd18164e9c39dc38d78a42296fea78c5da1c",
+  "gross_assets_usd_e8": 0,
+  "total_liabilities_usd_e8": 0,
+  "old_quantity_trust": "attested",
+  "old_valuation_trust": "attested",
+  "successor_shadow_trust": "attested"
+}

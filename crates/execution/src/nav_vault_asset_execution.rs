@@ -3760,16 +3760,21 @@ fn apply_pftl_uniswap_route_init_v2(
     if native_definition.precision != 6 || settlement_definition.precision != 6 {
         return Err((
             "pftl_uniswap_v2_precision_mismatch",
-            "a666 v2 route requires six-decimal native and settlement assets".to_string(),
+            "PFTL-Uniswap v2 currently requires six-decimal native and settlement assets"
+                .to_string(),
         ));
     }
-    if native_definition.code != "A666"
-        || native_definition.version != 2
-        || native_definition.max_supply.is_some()
-    {
+    // The route is a generic NAVCoin primary market. Asset identity and
+    // version are already bound by native_nav_asset_id, its finalized reserve
+    // packet, and the governed route/policy hashes. Restricting this path to
+    // the literal A666/v2 tuple made independent issuers impossible without
+    // adding any security property. Elastic primary issuance does, however,
+    // require that no permanent asset-definition ceiling can conflict with
+    // the route's governed capacity accounting.
+    if native_definition.max_supply.is_some() {
         return Err((
             "pftl_uniswap_v2_asset_policy_mismatch",
-            "production v2 route requires the six-decimal A666 v2 asset with no permanent max supply"
+            "PFTL-Uniswap v2 native NAV assets must not have a permanent max supply"
                 .to_string(),
         ));
     }
@@ -5131,29 +5136,17 @@ fn apply_pftl_uniswap_route_epoch_advance(
                 .to_string(),
         ));
     }
-    if operation.next_primary_market_policy.issue_multiplier_bps
-        != postfiat_types::PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS
-        || operation.next_primary_market_policy.redeem_multiplier_bps
-            != postfiat_types::PFTL_UNISWAP_A666_REDEEM_MULTIPLIER_BPS
-        || operation.next_primary_market_policy.issue_capacity_atoms
-            != next_route.route_supply_cap_atoms
+    if operation.next_primary_market_policy.issue_capacity_atoms
+        > next_route.route_supply_cap_atoms
         || operation.next_primary_market_policy.redeem_capacity_atoms
-            != next_route.route_supply_cap_atoms
-        || operation
-            .next_primary_market_policy
-            .max_order_atoms
-            .checked_mul(2)
-            .is_none_or(|amount| amount != next_route.route_supply_cap_atoms)
-        || next_route
-            .packet_notional_cap_atoms
-            .checked_mul(4)
-            .is_none_or(|amount| {
-                amount != operation.next_primary_market_policy.max_order_atoms
-            })
+            > next_route.route_supply_cap_atoms
+        || next_route.packet_notional_cap_atoms
+            > operation.next_primary_market_policy.max_order_atoms
     {
         return Err((
             "pftl_uniswap_route_epoch_policy_mismatch",
-            "next policy must retain governed a666 pricing and capacity ratios".to_string(),
+            "next policy capacities must fit the route supply cap and packet notional cap must fit max order"
+                .to_string(),
         ));
     }
     v2.route_epoch = operation.next_route_epoch;

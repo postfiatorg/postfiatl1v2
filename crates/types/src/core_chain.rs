@@ -94,6 +94,7 @@ pub const MARKET_OPS_EVIDENCE_ROOT_DOMAIN: &str = "postfiat.market_ops_evidence_
 pub const MARKET_OPS_EVM_EVIDENCE_ROOT_DOMAIN: &str = "postfiat.market_ops_evm_evidence_root.v1";
 pub const NAV_REDEMPTION_ID_DOMAIN: &str = "postfiat.nav_redemption_id.v1";
 pub const NAV_PROFILE_ID_DOMAIN: &str = "postfiat.nav_proof_profile_id.v1";
+pub const NAV_PROFILE_ID_DOMAIN_V2: &str = "postfiat.nav_proof_profile_id.v2";
 pub const VAULT_BRIDGE_RECEIPT_ID_DOMAIN: &str = "postfiat.vault_bridge_receipt_id.v1";
 pub const VAULT_BRIDGE_BUCKET_ID_DOMAIN: &str = "postfiat.vault_bridge_bucket_id.v1";
 pub const VAULT_BRIDGE_ALLOCATION_ID_DOMAIN: &str = "postfiat.vault_bridge_allocation_id.v1";
@@ -168,6 +169,9 @@ pub const NAV_PROFILE_VERIFIER_PLACEHOLDER: &str = "placeholder";
 pub const NAV_PROFILE_VERIFIER_MULTI_FETCH: &str = "multi-fetch-quorum";
 /// NAV proof profile verifier kind for SP1 Groth16 aggregate reserve proofs.
 pub const NAV_PROFILE_VERIFIER_SP1_GROTH16: &str = "sp1-groth16";
+/// Provider-neutral, fixed-width reserve proof public values. This is a new
+/// verifier kind so the deployed `sp1-groth16` ABI remains immutable.
+pub const NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1: &str = "sp1-nav-reserve-v1";
 /// Dedicated verifier kind for a proof that follows Ethereum finality through
 /// an Arbitrum assertion and proves one exact successful vault-deposit log.
 /// This is deliberately distinct from the NAV aggregate-reserve program.
@@ -426,6 +430,16 @@ pub struct ActiveNavProfileStatus {
     pub tolerance_bp: u64,
     pub bridge_observer_min_confirmations: u64,
     pub valuation_policy_hash: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub public_values_schema: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source_manifest_hash: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub valuation_unit_id: String,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub max_observation_span_blocks: u64,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub allow_controlled_sources: bool,
     pub finalized_epoch: u64,
     pub nav_per_unit: u64,
     pub finalized_reserve_packet_hash: String,

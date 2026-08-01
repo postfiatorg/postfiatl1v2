@@ -46,23 +46,22 @@ test('bridge-in is Ethereum mainnet USDC and never executes a retired route', as
   assert.doesNotMatch(runtime, /cctpBridgeUsdc|ensureEthereumSepolia/);
 });
 
-test('NAVCoin market UI is registry-driven while its deployed adapter remains route-pinned', async () => {
+test('NAVCoin market UI is registry-driven and has no hard-coded asset identity', async () => {
   const [market, registry, route, process] = await Promise.all([
-    source('components/A666Market.jsx'),
+    source('components/NavcoinPrimaryMarket.jsx'),
     source('lib/navcoin-markets.js'),
-    source('lib/a666-primary-route.js'),
+    source('lib/navcoin-primary-route.js'),
     source('components/Swap.jsx'),
   ]);
 
-  assert.match(registry, /NAVCOIN_MARKETS/);
-  assert.match(route, /pftl-a666-ethereum-wA666-usdc-v1/);
-  assert.match(route, /521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c/);
-  assert.match(route, /02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b/);
+  assert.match(registry, /navcoinMarketsFromRoutes/);
+  assert.doesNotMatch(registry, /A666|a666|521c6c630bb48d4a37ab/);
   assert.match(route, /pftl_uniswap_export_debit/);
   assert.match(market, /Deliver to MetaMask/);
   assert.match(market, /await readWrappedNavcoinBalance\(selected, market\)/);
   assert.match(market, /setMetamaskNavcoinBalance\(wrappedBalance\.toString\(\)\)/);
-  assert.match(market, /waits for its trustless Ethereum finality proof before reporting success/);
+  assert.match(market, /verificationCopy\(route\?\.outbound_verification_class\)/);
+  assert.doesNotMatch(market, /Return \$\{wrappedSymbol\} trustlessly/);
   assert.match(process, /market\.symbol/);
   assert.match(process, /onNavigate\?\.\('market', \{ marketKey: market\.key \}\)/);
 });

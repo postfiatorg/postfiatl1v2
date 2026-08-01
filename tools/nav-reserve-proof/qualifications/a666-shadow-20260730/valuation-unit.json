@@ -1,0 +1,6 @@
+{
+  "schema": "postfiat.reserve_valuation_unit.v1",
+  "unit": "USD",
+  "scale": 100000000,
+  "rounding": "source amounts are already valued in integer USD-e8 before aggregation"
+}

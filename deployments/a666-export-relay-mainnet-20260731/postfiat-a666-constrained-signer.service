@@ -1,0 +1,21 @@
+[Unit]
+Description=PostFiat A666 policy-constrained Ethereum signer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/postfiat/repos/a666-eth-fast-lane-combined-20260724
+ExecStart=/opt/postfiat-signer/venv/bin/python tools/postfiat-signer/postfiat_signer.py daemon --config /etc/postfiat/a666-signer.json
+Restart=always
+RestartSec=3s
+MemoryMax=2G
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/run/postfiat /var/lib/postfiat-signer
+
+[Install]
+WantedBy=default.target

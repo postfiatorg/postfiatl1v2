@@ -2547,6 +2547,12 @@ pub struct AssetInfoOptions {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NavReserveProofStatusOptions {
+    pub data_dir: PathBuf,
+    pub asset_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FxFixListOptions {
     pub data_dir: PathBuf,
     pub base_asset_id: Option<String>,
@@ -2873,6 +2879,53 @@ pub struct AssetInfoReport {
     pub asset_id: String,
     pub found: bool,
     pub asset: Option<IssuedAssetReport>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NavReservePacketProofStatus {
+    pub packet_id: String,
+    pub epoch: u64,
+    pub state: String,
+    pub reserve_packet_hash: String,
+    pub nav_per_unit: u64,
+    pub circulating_supply: u64,
+    pub verified_net_assets: u64,
+    pub submitted_at_height: u64,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub public_values_schema: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source_manifest_hash: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub valuation_unit_id: String,
+    pub observation_not_before: u64,
+    pub observation_not_after: u64,
+    pub proof_verified_net_assets: u64,
+    pub consensus_overlay_value: u64,
+    pub gross_assets: u64,
+    pub total_liabilities: u64,
+    pub cryptographically_verified_value: u64,
+    pub attested_value: u64,
+    pub controlled_value: u64,
+    pub source_count: u32,
+    pub quantity_trust_counts: postfiat_types::NavReserveTrustCountsV1,
+    pub valuation_trust_counts: postfiat_types::NavReserveTrustCountsV1,
+    pub quantity_trust_root: String,
+    pub valuation_trust_root: String,
+    pub source_disclosure_root: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NavReserveProofStatusReport {
+    pub schema: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub protocol_version: u32,
+    pub current_height: u64,
+    pub asset_id: String,
+    pub found: bool,
+    pub active_profile: Option<NavProofProfile>,
+    /// Newest-first and bounded to the latest sixteen packets for this asset.
+    pub packets: Vec<NavReservePacketProofStatus>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

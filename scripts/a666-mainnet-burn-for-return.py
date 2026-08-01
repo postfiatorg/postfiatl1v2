@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import sys
 from typing import Any
@@ -14,9 +15,15 @@ from web3 import Web3
 
 
 ROOT = Path(__file__).resolve().parents[1]
-STAKEHUB = Path("/home/postfiat/repos/StakeHub")
+sys.path.insert(0, str(ROOT / "python"))
+from postfiat_ops.constrained_signer import submit_evm_transaction
+
 RPC = "https://ethereum-rpc.publicnode.com"
 CHAIN_ID = 1
+ROUTE_ID = "pftl-a666-ethereum-wA666-usdc-v1"
+ROUTE_CONFIG_DIGEST = "12ed00ca87e29554ce4b978da1710fffc0830767e84e62f08df257f727db953efdd89bcf6ea99f5634d6e5ea8aca2933"
+SIGNER_SOCKET = Path(os.environ.get("POSTFIAT_SIGNER_SOCKET", "/run/postfiat/a666-signer.sock"))
+MAXIMUM_FEE_WEI = int(os.environ.get("POSTFIAT_SIGNER_MAXIMUM_FEE_WEI", "10000000000000000"))
 DEFAULT_OWNER = Web3.to_checksum_address("0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0")
 CONTROLLER = Web3.to_checksum_address("0x9A0262C0572fb4DB08765408eB225E207F40c3d9")
 TOKEN = Web3.to_checksum_address("0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5")
@@ -139,25 +146,24 @@ def main() -> None:
         if pre["recipient_balance_atoms"] < args.amount_atoms:
             raise RuntimeError("insufficient wA666 balance")
 
-        sys.path.insert(0, str(STAKEHUB))
-        from stakehub.agentd import call as agent_call
-
-        response = agent_call(
-            {
-                "op": "evm_contract_tx",
-                "to": CONTROLLER,
-                "data": call._encode_transaction_data(),
-                "rpc_url": RPC,
-                "chain_id": CHAIN_ID,
-                "label": "burn proof-minted wA666 for PFTL return",
-                "value_wei": 0,
-                "gas_usd": 10,
-            },
+        calldata = call._encode_transaction_data()
+        response = submit_evm_transaction(
+            SIGNER_SOCKET,
+            chain_id=CHAIN_ID,
+            transaction_kind="a666_return_burn",
+            target_contract=CONTROLLER.lower(),
+            calldata=calldata,
+            native_value_wei=0,
+            maximum_fee_wei=MAXIMUM_FEE_WEI,
+            route_id=ROUTE_ID,
+            route_config_digest=ROUTE_CONFIG_DIGEST,
+            label="burn proof-minted wA666 for PFTL return",
+            idempotency_key="a666-return-" + hashlib.sha256(
+                f"{ROUTE_CONFIG_DIGEST}:{CONTROLLER.lower()}:{calldata.lower()}".encode()
+            ).hexdigest(),
             timeout=1200.0,
         )
-        if not response or not response.get("ok"):
-            raise RuntimeError(f"StakeHub rejected return burn: {response}")
-        transaction_hash = normalize_tx_hash(response["tx"])
+        transaction_hash = normalize_tx_hash(response["transaction_hash"])
     receipt = web3.eth.get_transaction_receipt(transaction_hash)
     if int(receipt.status) != 1:
         raise RuntimeError(f"return burn reverted: {transaction_hash}")

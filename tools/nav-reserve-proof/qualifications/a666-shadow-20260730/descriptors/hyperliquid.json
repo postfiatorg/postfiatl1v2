@@ -1,0 +1,13 @@
+{
+  "schema": "postfiat.reserve_shadow_source_descriptor.v1",
+  "source_id": "hyperliquid",
+  "reserve_owner": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+  "source_domain": "hyperliquid:mainnet",
+  "historical_observation": "docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/hl-receipt-witness.json",
+  "historical_metadata_hash": "209dbb11ef4d47bcde6a161fd3a38dba06acdc7c89bac03e68235de389ac7fd7",
+  "gross_assets_usd_e8": 1789640753296,
+  "total_liabilities_usd_e8": 0,
+  "old_quantity_trust": "cryptographic",
+  "old_valuation_trust": "cryptographic",
+  "successor_shadow_trust": "attested"
+}

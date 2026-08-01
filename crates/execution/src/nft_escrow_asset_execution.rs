@@ -1173,6 +1173,8 @@ fn apply_asset_operation(
                 ));
             }
             let profile = nav_profile_for_asset(ledger, &nav_asset).cloned();
+            let mut decoded_reserve_public_values = None;
+            let mut reserve_overlay_value = 0_u64;
             if let Some(profile) = &profile {
                 if profile.verifier_kind == NAV_PROFILE_VERIFIER_MULTI_FETCH
                     && operation.reserve_accounts.is_empty()
@@ -1265,6 +1267,52 @@ fn apply_asset_operation(
                         }
                     }
                 }
+                if profile.verifier_kind == NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1 {
+                    let overlay = nav_subscription_reserve_overlay(ledger, &nav_asset)?;
+                    let proof_verified_net_assets = if let Some(overlay) = overlay.as_ref() {
+                        operation
+                            .verified_net_assets
+                            .checked_sub(overlay.value_nav_units)
+                            .ok_or_else(|| {
+                                (
+                                    "nav_subscription_overlay_exceeds_assets",
+                                    "nav subscription overlay exceeds submitted verified_net_assets"
+                                        .to_string(),
+                                )
+                            })?
+                    } else {
+                        operation.verified_net_assets
+                    };
+                    let expected_genesis_hash = genesis_hash(genesis);
+                    let context = NavReserveVerifyContext {
+                        pftl_genesis_hash: &expected_genesis_hash,
+                        nav_asset_id: &operation.asset_id,
+                        proof_profile_id: &operation.proof_profile,
+                        valuation_policy_hash: &profile.valuation_policy_hash,
+                        source_manifest_hash: &profile.source_manifest_hash,
+                        valuation_unit_id: &profile.valuation_unit_id,
+                        observation_epoch: operation.epoch,
+                        current_height: block_height,
+                        expected_proof_net_assets: proof_verified_net_assets,
+                        packet_source_root: &operation.source_root,
+                        packet_attestor_root: &operation.attestor_root,
+                        subscription_overlay_source_root: overlay
+                            .as_ref()
+                            .map(|value| value.source_root.as_str()),
+                        subscription_overlay_value: overlay
+                            .as_ref()
+                            .map_or(0, |value| value.value_nav_units),
+                    };
+                    let decoded = verify_nav_reserve_sp1_groth16(
+                        profile,
+                        &context,
+                        &operation.sp1_proof_bytes,
+                        &operation.sp1_public_values,
+                    )
+                    .map_err(|error| (error.code(), error.message()))?;
+                    reserve_overlay_value = context.subscription_overlay_value;
+                    decoded_reserve_public_values = Some(decoded);
+                }
                 if profile.source_class.starts_with(VAULT_BRIDGE_PROFILE_SOURCE_CLASS_PREFIX) {
                     validate_vault_bridge_reserve_packet_fields(ledger, &nav_asset, profile, operation)?;
                 }
@@ -1289,6 +1337,30 @@ fn apply_asset_operation(
             packet.reserve_accounts = operation.reserve_accounts.clone();
             packet.sp1_proof_bytes = operation.sp1_proof_bytes.clone();
             packet.sp1_public_values = operation.sp1_public_values.clone();
+            if let Some(values) = decoded_reserve_public_values {
+                packet.public_values_schema = values.schema;
+                packet.source_manifest_hash = values.source_manifest_hash;
+                packet.valuation_unit_id = values.valuation_unit_id;
+                packet.observation_not_before = values.observation_not_before;
+                packet.observation_not_after = values.observation_not_after;
+                packet.proof_verified_net_assets = values.verified_net_assets;
+                packet.consensus_overlay_value = reserve_overlay_value;
+                packet.gross_assets = values.gross_assets;
+                packet.total_liabilities = values.total_liabilities;
+                packet.cryptographically_verified_value =
+                    values.cryptographically_verified_value;
+                packet.attested_value = values.attested_value;
+                packet.controlled_value = values.controlled_value;
+                packet.source_count = values.source_count;
+                packet.quantity_trust_counts = values.quantity_trust_counts;
+                packet.valuation_trust_counts = values.valuation_trust_counts;
+                packet.quantity_trust_root = values.quantity_trust_root;
+                packet.valuation_trust_root = values.valuation_trust_root;
+                packet.source_disclosure_root = values.source_disclosure_root;
+                packet
+                    .validate()
+                    .map_err(|error| ("bad_nav_reserve_packet", error))?;
+            }
             ledger.nav_reserve_packets.push(packet);
             Ok(())
         }
@@ -2214,32 +2286,9 @@ fn apply_asset_operation(
                     "nav_profile_register transaction kind mismatch".to_string(),
                 ));
             }
-            let mut profile = NavProofProfile::new_with_bridge_observer_min_confirmations(
-                operation.registrant.clone(),
-                operation.verifier_kind.clone(),
-                operation.effective_source_class(),
-                operation.max_snapshot_age_blocks,
-                operation.challenge_window_blocks,
-                operation.max_epoch_gap_blocks,
-                operation.settle_deadline_blocks,
-                operation.min_challenge_bond,
-                operation.min_attestations,
-                operation.tolerance_bp,
-                operation.bridge_observer_min_confirmations,
-                operation.valuation_policy_hash.clone(),
-                operation.sp1_program_vkey.clone(),
-                operation.sp1_proof_encoding.clone(),
-                operation.max_proof_bytes,
-                operation.max_public_values_bytes,
-            )
-            .map_err(|error| ("bad_nav_profile", error))?;
-            if !operation.vault_bridge_route_policy_hash.is_empty() {
-                profile = profile
-                    .with_vault_bridge_route_policy_hash(
-                        operation.vault_bridge_route_policy_hash.clone(),
-                    )
-                    .map_err(|error| ("bad_nav_profile", error))?;
-            }
+            let profile = operation
+                .to_profile()
+                .map_err(|error| ("bad_nav_profile", error))?;
             if ledger.nav_proof_profile(&profile.profile_id).is_some() {
                 return Err((
                     "duplicate_nav_profile",

@@ -815,6 +815,18 @@ pub(super) fn legacy_nav_profile_register_signing_byte_candidates(
     else {
         return Vec::new();
     };
+    // The archived signing schemas predate the reserve-proof ABI bindings.
+    // Never let an operation carrying successor-profile semantics fall back to
+    // bytes that omit those semantics, even on a legacy replay domain.
+    if operation.verifier_kind == postfiat_types::NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1
+        || !operation.public_values_schema.is_empty()
+        || !operation.source_manifest_hash.is_empty()
+        || !operation.valuation_unit_id.is_empty()
+        || operation.max_observation_span_blocks != 0
+        || operation.allow_controlled_sources
+    {
+        return Vec::new();
+    }
     let has_sp1_fields = !operation.sp1_program_vkey.is_empty()
         || !operation.sp1_proof_encoding.is_empty()
         || operation.max_proof_bytes != 0

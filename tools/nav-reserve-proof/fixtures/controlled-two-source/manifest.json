@@ -1,0 +1,41 @@
+{
+  "schema": "postfiat.reserve_source_manifest.v1",
+  "sources": [
+    {
+      "source_id": "cash-primary",
+      "adapter_kind": "controlled-fixture-v1",
+      "source_domain": "fixture",
+      "asset_or_position_id": "cash:primary",
+      "reserve_owner_commitment": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+      "quantity_verifier_commitment": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "valuation_verifier_commitment": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "quantity_evidence_class": "controlled",
+      "valuation_evidence_class": "controlled",
+      "freshness_policy": {
+        "max_age_blocks": 10,
+        "max_observation_span_blocks": 10
+      },
+      "haircut_policy_hash": "222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
+      "liability_treatment": "asset",
+      "adapter_schema_version": 1
+    },
+    {
+      "source_id": "treasury-secondary",
+      "adapter_kind": "controlled-fixture-v1",
+      "source_domain": "fixture",
+      "asset_or_position_id": "treasury:secondary",
+      "reserve_owner_commitment": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+      "quantity_verifier_commitment": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "valuation_verifier_commitment": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "quantity_evidence_class": "controlled",
+      "valuation_evidence_class": "controlled",
+      "freshness_policy": {
+        "max_age_blocks": 10,
+        "max_observation_span_blocks": 10
+      },
+      "haircut_policy_hash": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+      "liability_treatment": "asset",
+      "adapter_schema_version": 1
+    }
+  ]
+}

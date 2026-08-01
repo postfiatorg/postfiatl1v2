@@ -1125,6 +1125,16 @@ pub struct NavProfileRegisterOperation {
     pub max_proof_bytes: u64,
     #[serde(default, skip_serializing_if = "is_zero_u64")]
     pub max_public_values_bytes: u64,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub public_values_schema: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source_manifest_hash: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub valuation_unit_id: String,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub max_observation_span_blocks: u64,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub allow_controlled_sources: bool,
 }
 
 impl NavProfileRegisterOperation {
@@ -1138,9 +1148,25 @@ impl NavProfileRegisterOperation {
 
     pub fn validate(&self) -> Result<(), String> {
         validate_text_field("nav_profile_register.registrant", &self.registrant)?;
-        let profile = NavProofProfile::new_with_bridge_observer_min_confirmations(
+        self.to_profile().map(|_| ())
+    }
+
+    /// Derive the exact immutable profile that consensus will register.
+    ///
+    /// Public tooling uses this helper so profile IDs cannot drift from the
+    /// execution path through a second implementation of the profile preimage.
+    pub fn to_profile(&self) -> Result<NavProofProfile, String> {
+        validate_text_field("nav_profile_register.registrant", &self.registrant)?;
+        let constructor_verifier_kind = if self.verifier_kind
+            == NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1
+        {
+            NAV_PROFILE_VERIFIER_SP1_GROTH16
+        } else {
+            self.verifier_kind.as_str()
+        };
+        let mut profile = NavProofProfile::new_with_bridge_observer_min_confirmations(
             &self.registrant,
-            &self.verifier_kind,
+            constructor_verifier_kind,
             self.effective_source_class(),
             self.max_snapshot_age_blocks,
             self.challenge_window_blocks,
@@ -1157,11 +1183,25 @@ impl NavProfileRegisterOperation {
             self.max_public_values_bytes,
         )?;
         if !self.vault_bridge_route_policy_hash.is_empty() {
-            profile.with_vault_bridge_route_policy_hash(
+            profile = profile.with_vault_bridge_route_policy_hash(
                 self.vault_bridge_route_policy_hash.clone(),
             )?;
         }
-        Ok(())
+        if !self.public_values_schema.is_empty()
+            || !self.source_manifest_hash.is_empty()
+            || !self.valuation_unit_id.is_empty()
+            || self.max_observation_span_blocks != 0
+            || self.allow_controlled_sources
+        {
+            profile = profile.with_nav_reserve_bindings(
+                self.public_values_schema.clone(),
+                self.source_manifest_hash.clone(),
+                self.valuation_unit_id.clone(),
+                self.max_observation_span_blocks,
+                self.allow_controlled_sources,
+            )?;
+        }
+        Ok(profile)
     }
 
     fn signing_bytes(&self) -> Vec<u8> {
@@ -1205,6 +1245,30 @@ impl NavProfileRegisterOperation {
                 "max_public_values_bytes={}\n",
                 self.max_public_values_bytes
             ));
+        }
+        if !self.public_values_schema.is_empty() {
+            out.push_str(&format!(
+                "public_values_schema={}\n",
+                self.public_values_schema
+            ));
+        }
+        if !self.source_manifest_hash.is_empty() {
+            out.push_str(&format!(
+                "source_manifest_hash={}\n",
+                self.source_manifest_hash
+            ));
+        }
+        if !self.valuation_unit_id.is_empty() {
+            out.push_str(&format!("valuation_unit_id={}\n", self.valuation_unit_id));
+        }
+        if self.max_observation_span_blocks != 0 {
+            out.push_str(&format!(
+                "max_observation_span_blocks={}\n",
+                self.max_observation_span_blocks
+            ));
+        }
+        if self.allow_controlled_sources {
+            out.push_str("allow_controlled_sources=true\n");
         }
         out.into_bytes()
     }
@@ -2602,26 +2666,12 @@ impl PftlUniswapRouteInitV2Operation {
                     .to_string(),
             );
         }
-        if self.primary_market_policy.issue_multiplier_bps
-            != PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS
-            || self.primary_market_policy.redeem_multiplier_bps
-                != PFTL_UNISWAP_A666_REDEEM_MULTIPLIER_BPS
-            || self.route_supply_cap_atoms
-                != self.primary_market_policy.issue_capacity_atoms
-            || self.primary_market_policy.issue_capacity_atoms
-                != self.primary_market_policy.redeem_capacity_atoms
-            || self
-                .packet_notional_cap_atoms
-                .checked_mul(4)
-                .is_none_or(|amount| amount != self.primary_market_policy.max_order_atoms)
-            || self
-                .primary_market_policy
-                .max_order_atoms
-                .checked_mul(2)
-                .is_none_or(|amount| amount != self.primary_market_policy.issue_capacity_atoms)
+        if self.primary_market_policy.issue_capacity_atoms > self.route_supply_cap_atoms
+            || self.primary_market_policy.redeem_capacity_atoms > self.route_supply_cap_atoms
+            || self.packet_notional_cap_atoms > self.primary_market_policy.max_order_atoms
         {
             return Err(
-                "pftl_uniswap_route_init_v2 must use the governed a666 1.005/0.9995 pricing and 4-packet/2-order capacity ratios"
+                "pftl_uniswap_route_init_v2 policy capacities must fit the route supply cap and packet notional cap must fit max order"
                     .to_string(),
             );
         }

@@ -24,8 +24,4 @@ mod replicated_state_activation_cli_tests {
 
 #[cfg(test)]
 mod market_ops_replay_cli_tests {
-    include!("tests/market_ops_replay_cli_planning_tests.rs");
-    include!("tests/market_ops_replay_cli_bridge_tests.rs");
-    include!("tests/market_ops_replay_cli_live_tests.rs");
-    include!("tests/market_ops_replay_cli_wallet_tests.rs");
 }

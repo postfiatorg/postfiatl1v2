@@ -11,8 +11,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 
-import { formatA666Nav, formatA666Units } from '../lib/a666-primary-route.js';
-import { DEFAULT_NAVCOIN_MARKET } from '../lib/navcoin-markets.js';
+import { formatNavcoinNav, formatNavcoinUnits } from '../lib/navcoin-primary-route.js';
 import { truncateMiddle } from '../lib/utils.js';
 
 function responseResult(response, label) {
@@ -23,6 +22,7 @@ function responseResult(response, label) {
 }
 
 function routeIsCurrent(route, nav, market) {
+  if (!market) return false;
   return Boolean(
     route?.route_id === market.routeId
     && route?.native_nav_asset_id === market.navAssetId
@@ -37,6 +37,7 @@ function routeIsCurrent(route, nav, market) {
 }
 
 function privateNavcoinIsReady(capabilities, market) {
+  if (!market) return false;
   const route = capabilities?.routes?.shielded_navswap;
   const assets = Array.isArray(route?.asset_registry) ? route.asset_registry : [];
   return Boolean(
@@ -73,13 +74,13 @@ function ProcessStep({ number, title, detail, state, action, onClick, Icon }) {
   );
 }
 
-export default function Swap({ rpc, swapServer, onNavigate, market = DEFAULT_NAVCOIN_MARKET }) {
+export default function Swap({ rpc, swapServer, onNavigate, market = null }) {
   const [snapshot, setSnapshot] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const refresh = useCallback(async () => {
-    if (!rpc) return;
+    if (!rpc || !market) return;
     setLoading(true);
     setError('');
     try {
@@ -111,6 +112,10 @@ export default function Swap({ rpc, swapServer, onNavigate, market = DEFAULT_NAV
   const currentRoute = routeIsCurrent(route, nav, market);
   const privateReady = privateNavcoinIsReady(snapshot?.capabilities, market);
 
+  if (!market) {
+    return <div className="pf-page"><div className="pf-error">No governed NAVCoin market is registered on this network.</div></div>;
+  }
+
   return (
     <div className="pf-page pf-swap-page">
       <div className="pfs-shell wallet-process-shell">
@@ -133,7 +138,7 @@ export default function Swap({ rpc, swapServer, onNavigate, market = DEFAULT_NAV
                 {loading
                   ? 'Reading governed PFTL state…'
                   : currentRoute
-                    ? `${formatA666Nav(nav?.nav_per_unit)} NAV · epoch ${route?.pricing_nav_epoch}`
+                    ? `${formatNavcoinNav(nav?.nav_per_unit)} NAV · epoch ${route?.pricing_nav_epoch}`
                     : `The ${market.symbol} route or NAV packet is unavailable or mismatched.`}
               </strong>
             </div>
@@ -207,10 +212,10 @@ export default function Swap({ rpc, swapServer, onNavigate, market = DEFAULT_NAV
             <div className="pfs-route-head"><span>LIVE {market.symbol} ROUTE</span></div>
             <div className="pfs-detail-list">
               <div><span>Route</span><strong>{route?.route_id ? truncateMiddle(route.route_id, 10) : '—'}</strong></div>
-              <div><span>Verified NAV</span><strong>{formatA666Nav(nav?.nav_per_unit)}</strong></div>
-              <div><span>{market.settlementSymbol} reserve</span><strong>{formatA666Units(route?.settlement_reserve_atoms)}</strong></div>
-              <div><span>Mint capacity</span><strong>{formatA666Units(route?.available_issue_atoms)}</strong></div>
-              <div><span>Redeem capacity</span><strong>{formatA666Units(route?.available_redeem_atoms)}</strong></div>
+              <div><span>Verified NAV</span><strong>{formatNavcoinNav(nav?.nav_per_unit)}</strong></div>
+              <div><span>{market.settlementSymbol} reserve</span><strong>{formatNavcoinUnits(route?.settlement_reserve_atoms, market.settlementDecimals)}</strong></div>
+              <div><span>Mint capacity</span><strong>{formatNavcoinUnits(route?.available_issue_atoms, market.decimals)}</strong></div>
+              <div><span>Redeem capacity</span><strong>{formatNavcoinUnits(route?.available_redeem_atoms, market.decimals)}</strong></div>
               <div><span>PFTL height</span><strong>{snapshot?.chain?.block_height ?? '—'}</strong></div>
             </div>
           </section>

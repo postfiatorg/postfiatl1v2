@@ -1,5 +1,10 @@
 # NAVSwap Wallet Overnight Progress - 2026-06-29
 
+> **Historical architecture:** This is the append-only A651/Arbitrum wallet
+> campaign record. Its internal operator route has been removed from shipped
+> wallet/proxy code. Provider names and endpoints below are historical evidence,
+> not current product dependencies.
+
 Scope: progress against `docs/plans/trustless-navswap-wallet-integration-spec.md`
 `Overnight Job: No-New-Pool Wiring Pass`.
 

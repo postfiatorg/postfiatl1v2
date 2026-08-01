@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+provider_pattern='stake[ _-]?hub'
+retired_route_pattern='stakehub_transparent_roundtrip|NAVSWAP_STAKEHUB_'
+paths=(
+  wallet-web/src
+  wallet-proxy
+  crates
+  scripts
+  tools
+  deployments/a666-export-relay-mainnet-20260731
+)
+if [[ -d wallet-web/dist ]]; then
+  paths+=(wallet-web/dist)
+fi
+
+if rg -n -i \
+  --glob '!**/*.test.js' \
+  --glob '!**/*.test.jsx' \
+  --glob '!**/*_tests.rs' \
+  --glob '!**/tests/**' \
+  --glob '!**/testdata/**' \
+  --glob '!**/fixtures/**' \
+  --glob '!**/target/**' \
+  --glob '!wallet-proxy/test_*.js' \
+  --glob '!wallet-proxy/node_modules/**' \
+  --glob '!wallet-web/node_modules/**' \
+  --glob '!scripts/check-provider-neutral-wallet-boundary' \
+  "$provider_pattern|$retired_route_pattern" "${paths[@]}"; then
+  echo 'provider-neutral shipped-code boundary check failed' >&2
+  exit 1
+fi
+
+if rg -n -i \
+  --glob '!**/*.test.js' \
+  --glob '!**/*.test.jsx' \
+  --glob '!wallet-proxy/test_*.js' \
+  --glob '!wallet-proxy/fixtures/**' \
+  --glob '!wallet-proxy/node_modules/**' \
+  --glob '!wallet-web/node_modules/**' \
+  --glob '!wallet-web/dist/**' \
+  '(^|[^a-z0-9])(w?a666)([^a-z0-9]|$)' wallet-web/src wallet-proxy; then
+  echo 'route-generic wallet boundary check failed: hard-coded A666 identity found' >&2
+  exit 1
+fi
+
+echo 'provider-neutral shipped-code boundary check passed'

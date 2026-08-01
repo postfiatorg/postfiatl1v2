@@ -1,11 +1,20 @@
 # a666 v2 Mainnet Primary-Market Deployment
 
+> **Historical architecture notice (2026-08-01):** This records the original
+> A666 deployment lineage, which used an internal StakeHub-operated proof
+> profile. It is retained for deployment and evidence integrity. It is not the
+> current public reserve-proof architecture and must not be used to introduce
+> a StakeHub dependency into a wallet, public proxy, validator, signer, or new
+> NAVCoin. A provider-neutral A666 successor requires the governed migration
+> in the
+> [StakeHub decoupling plan](../plans/STAKEHUB-DECOUPLING-AND-OPEN-RESERVE-PROOF-INFRASTRUCTURE-PLAN-20260801.md).
+
 **Status:** executed through empty-pool initialization; proof-backed export,
 seeding, and public activation remain pending
 **Canonical spec:** `docs/plans/A666-END-TO-END-MAINNET-PRIMARY-ISSUANCE-SPEC-20260727.md`
 
 This runbook records the production a666 v2 launch sequence. The native asset,
-StakeHub NAV, paused Ethereum stack, and empty hookless Uniswap pool were
+historical internal-operator NAV profile, paused Ethereum stack, and empty hookless Uniswap pool were
 deployed on 2026-07-27 under explicit production-owner authorization. It does
 not authorize further customer-principal movement, redemption execution, or LP
 funding. Omit `--broadcast` for the remaining steps until the production owner
@@ -176,7 +185,7 @@ After explicit authorization:
 1. deploy wA666, receipt verifier, and primary-market controller;
 2. lock the token controller and transfer token ownership to governance;
 3. verify all Ethereum code and immutable bindings;
-4. register a666 v2 and its StakeHub SP1 profile, finalize the fresh NAV
+4. register a666 v2 and its historically deployed SP1 profile, finalize the fresh NAV
    packet, mint the exact proof-backed opening supply, and initialize the
    disabled route with that supply as opening inventory;
 5. verify identical PFTL state/route digests on all validators;

@@ -113,6 +113,55 @@ jobs:
           npm audit --audit-level=moderate
           npm test
           npm run build
+      - name: Verify provider-neutral wallet and proxy boundary
+        run: scripts/check-provider-neutral-wallet-boundary
+
+  open-reserve-proof-kit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install pinned Rust toolchain and protobuf compiler
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal --component rustfmt
+          sudo apt-get update
+          sudo apt-get install --yes protobuf-compiler
+      - name: Install pinned SP1 guest toolchain
+        run: |
+          curl --fail --location --proto '=https' --tlsv1.2 https://sp1up.succinct.xyz | bash
+          "$HOME/.sp1/bin/sp1up" --version 6.3.1
+          "$HOME/.sp1/bin/cargo-prove" --version | grep -F 'cargo-prove sp1'
+      - name: Verify provider-neutral source boundary
+        run: |
+          if rg --ignore-case 'stake.?hub' tools/nav-reserve-proof; then
+            echo 'open reserve-proof kit contains an internal-provider reference' >&2
+            exit 1
+          fi
+      - name: Test and format-check the open proof kit
+        working-directory: tools/nav-reserve-proof
+        run: |
+          cargo test --locked
+          cargo fmt --all -- --check
+      - name: Compile the pinned SP1 host integration
+        working-directory: tools/nav-reserve-proof
+        run: cargo check --locked -p postfiat-reserve-proof --features sp1
+      - name: Rebuild and verify the committed guest identity
+        working-directory: tools/nav-reserve-proof/programs/reserve-proof-guest
+        run: |
+          export PATH="$HOME/.sp1/bin:$PATH"
+          expected_sha="$(jq -r .elf_sha256 ../../program-identity.json)"
+          expected_vkey="$(jq -r .program_vkey ../../program-identity.json)"
+          rebuild_dir="$(mktemp -d)"
+          cargo prove build --locked --output-directory "$rebuild_dir"
+          rebuilt_elf="$rebuild_dir/postfiat-reserve-proof-guest"
+          test "$(sha256sum "$rebuilt_elf" | cut -d' ' -f1)" = "$expected_sha"
+          cargo run --locked --release \
+            --manifest-path ../../Cargo.toml \
+            -p postfiat-reserve-proof --features sp1 -- \
+            program-info --elf "$rebuilt_elf" \
+            > /tmp/postfiat-reserve-program-info.json
+          jq -e --arg sha "$expected_sha" --arg vkey "$expected_vkey" \
+            '.elf_sha256 == $sha and .program_vkey == $vkey' \
+            /tmp/postfiat-reserve-program-info.json
 
   evm-contracts:
     runs-on: ubuntu-latest

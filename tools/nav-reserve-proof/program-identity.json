@@ -1,0 +1,6 @@
+{
+  "schema": "postfiat.reserve_program_identity.v1",
+  "sp1_version": "6.3.1",
+  "elf_sha256": "345f9566e066b5571277f73990b85aa053e0c6adfcfb6191bcfba5065a173de6",
+  "program_vkey": "0x007e32678376339d48df4db28a9825d5fb229cedb8b2e5c92295d4580c9d32f8"
+}

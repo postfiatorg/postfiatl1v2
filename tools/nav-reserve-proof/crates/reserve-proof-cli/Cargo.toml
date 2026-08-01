@@ -1,0 +1,29 @@
+[package]
+name = "postfiat-reserve-proof"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish = false
+
+[features]
+default = []
+sp1 = ["dep:sp1-sdk", "dep:tokio", "dep:bincode", "dep:sha2"]
+sp1-cuda = ["sp1", "sp1-sdk/cuda"]
+
+[dependencies]
+alloy-primitives.workspace = true
+anyhow.workspace = true
+bincode = { workspace = true, optional = true }
+clap.workspace = true
+hex.workspace = true
+postfiat-types.workspace = true
+reserve-proof-types.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_cbor = "0.11.2"
+serde_json.workspace = true
+sha2 = { workspace = true, optional = true }
+sp1-sdk = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }

@@ -1,0 +1,88 @@
+{
+  "schema": "postfiat.reserve_proof_witness.v1",
+  "context": {
+    "pftl_genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "nav_asset_id": "3f631473a34a48cd47b4e1067546a9ccc5fcfe2f6e103655191d600d9574a5b2e6a985b7c52dcff7c9461aac872a12f5",
+    "proof_profile_id": "cdef69e9711ff26a2f51671598db5b7494627fed7e19c0a3597a3ecad62aab5977522c273f0413643eba72dcb673ab02",
+    "valuation_policy_hash": "0404040404040404040404040404040404040404040404040404040404040404",
+    "source_manifest_hash": "9da4e2ba55939f138475026946d2728d9b40d3f4c7762289a70aae94584eac924b9a788c6df25c9276cc83f1616ef0e5",
+    "valuation_unit_id": "050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505050505",
+    "valuation_scale": 1000000,
+    "observation_epoch": 7,
+    "observation_not_before": 1,
+    "observation_not_after": 3
+  },
+  "manifest": {
+    "schema": "postfiat.reserve_source_manifest.v1",
+    "sources": [
+      {
+        "source_id": "cash-primary",
+        "adapter_kind": "controlled-fixture-v1",
+        "source_domain": "fixture",
+        "asset_or_position_id": "cash:primary",
+        "reserve_owner_commitment": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+        "quantity_verifier_commitment": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "valuation_verifier_commitment": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "quantity_evidence_class": "controlled",
+        "valuation_evidence_class": "controlled",
+        "freshness_policy": {
+          "max_age_blocks": 10,
+          "max_observation_span_blocks": 10
+        },
+        "haircut_policy_hash": "222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
+        "liability_treatment": "asset",
+        "adapter_schema_version": 1
+      },
+      {
+        "source_id": "treasury-secondary",
+        "adapter_kind": "controlled-fixture-v1",
+        "source_domain": "fixture",
+        "asset_or_position_id": "treasury:secondary",
+        "reserve_owner_commitment": "333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+        "quantity_verifier_commitment": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "valuation_verifier_commitment": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "quantity_evidence_class": "controlled",
+        "valuation_evidence_class": "controlled",
+        "freshness_policy": {
+          "max_age_blocks": 10,
+          "max_observation_span_blocks": 10
+        },
+        "haircut_policy_hash": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+        "liability_treatment": "asset",
+        "adapter_schema_version": 1
+      }
+    ]
+  },
+  "observations": [
+    {
+      "source_id": "cash-primary",
+      "observed_at_block": 1,
+      "gross_assets": 900,
+      "total_liabilities": 100,
+      "quantity_evidence": {
+        "kind": "controlled",
+        "evidence_commitment": "666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666"
+      },
+      "valuation_evidence": {
+        "kind": "controlled",
+        "evidence_commitment": "777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777"
+      },
+      "disclosure_commitment": "888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888"
+    },
+    {
+      "source_id": "treasury-secondary",
+      "observed_at_block": 2,
+      "gross_assets": 500,
+      "total_liabilities": 200,
+      "quantity_evidence": {
+        "kind": "controlled",
+        "evidence_commitment": "999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+      },
+      "valuation_evidence": {
+        "kind": "controlled",
+        "evidence_commitment": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "disclosure_commitment": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  ]
+}

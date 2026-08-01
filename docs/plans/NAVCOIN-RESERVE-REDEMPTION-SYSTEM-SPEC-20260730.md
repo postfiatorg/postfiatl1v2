@@ -206,7 +206,7 @@ ordinary funded user
   -> receives newly issued A666
   -> incoming base pfUSDC increases settlement_reserve_atoms
   -> releases the unused export entitlement with pftl_uniswap_order_release
-  -> fresh StakeHub-backed NAV mark counts the updated settlement reserve
+  -> fresh finalized PFTL reserve proof counts the updated settlement reserve
   -> governed route epoch advance pins that fresh NAV for pricing
   -> user executes pftl_uniswap_primary_redeem
   -> redeemed A666 is retired
@@ -291,7 +291,7 @@ The demo packet MUST contain:
 6. the finalized user-authorized `pftl_uniswap_order_release` transaction
    removing the unused export entitlement without changing A666 supply or
    settlement reserve;
-7. a fresh finalized StakeHub-backed NAV mark whose primary-market reserve
+7. a fresh finalized PFTL reserve proof whose primary-market reserve
    overlay contains the updated `settlement_reserve_atoms`;
 8. the finalized governed route epoch advance pinning that NAV epoch and
    reserve packet for primary pricing;
@@ -353,7 +353,7 @@ The Monday demo passes only if:
 
 The live demo MUST NOT begin if:
 
-- StakeHub NAV or pfUSDC route state is stale;
+- the registered NAV proof or pfUSDC route state is stale;
 - validator heights, state roots, policies, or route epochs disagree;
 - the user lacks confirmed USDC, ETH gas, or required PFTL authority;
 - an active reservation or in-flight operation would make the before-state

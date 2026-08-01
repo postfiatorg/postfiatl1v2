@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -15,9 +16,15 @@ from web3 import Web3
 
 
 ROOT = Path(__file__).resolve().parents[1]
-STAKEHUB = Path("/home/postfiat/repos/StakeHub")
+sys.path.insert(0, str(ROOT / "python"))
+from postfiat_ops.constrained_signer import submit_evm_transaction
+
 RPC = "https://ethereum-rpc.publicnode.com"
 CHAIN_ID = 1
+ROUTE_ID = "pftl-a666-ethereum-wA666-usdc-v1"
+ROUTE_CONFIG_DIGEST = "12ed00ca87e29554ce4b978da1710fffc0830767e84e62f08df257f727db953efdd89bcf6ea99f5634d6e5ea8aca2933"
+SIGNER_SOCKET = Path(os.environ.get("POSTFIAT_SIGNER_SOCKET", "/run/postfiat/a666-signer.sock"))
+MAXIMUM_FEE_WEI = int(os.environ.get("POSTFIAT_SIGNER_MAXIMUM_FEE_WEI", "10000000000000000"))
 OWNER = Web3.to_checksum_address("0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0")
 VERIFIER = Web3.to_checksum_address("0xb79FF97EcC11574a8A78d0b5a9D7C8c2A94bF96A")
 PROGRAM_VKEY = "0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9"
@@ -121,25 +128,24 @@ def main() -> None:
         print(json.dumps(state, indent=2, sort_keys=True))
         return
 
-    sys.path.insert(0, str(STAKEHUB))
-    from stakehub.agentd import call as agent_call
-
-    response = agent_call(
-        {
-            "op": "evm_contract_tx",
-            "to": VERIFIER,
-            "data": function._encode_transaction_data(),
-            "rpc_url": RPC,
-            "chain_id": CHAIN_ID,
-            "label": f"advance A666 PFTL checkpoint {args.prior_height}->{args.target_height}",
-            "value_wei": 0,
-            "gas_usd": 10,
-        },
+    calldata = function._encode_transaction_data()
+    response = submit_evm_transaction(
+        SIGNER_SOCKET,
+        chain_id=CHAIN_ID,
+        transaction_kind="a666_checkpoint_advance",
+        target_contract=VERIFIER.lower(),
+        calldata=calldata,
+        native_value_wei=0,
+        maximum_fee_wei=MAXIMUM_FEE_WEI,
+        route_id=ROUTE_ID,
+        route_config_digest=ROUTE_CONFIG_DIGEST,
+        label=f"advance A666 PFTL checkpoint {args.prior_height}->{args.target_height}",
+        idempotency_key="a666-checkpoint-" + hashlib.sha256(
+            f"{ROUTE_CONFIG_DIGEST}:{VERIFIER.lower()}:{calldata.lower()}".encode()
+        ).hexdigest(),
         timeout=1200.0,
     )
-    if not response or not response.get("ok"):
-        raise RuntimeError(f"checkpoint transaction rejected: {response}")
-    raw_tx = response.get("tx_hash") or response.get("tx")
+    raw_tx = response.get("transaction_hash")
     if not raw_tx:
         raise RuntimeError("checkpoint transaction response omitted its hash")
     transaction_hash = normalize_tx_hash(raw_tx)

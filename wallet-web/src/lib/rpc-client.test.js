@@ -193,7 +193,7 @@ test('RpcClient exposes no unsigned account-to-owned mutation', () => {
   assert.equal(client.unwrapOwned, undefined);
 });
 
-test('RpcClient binds A666 market reads to exact route and NAV status methods', async () => {
+test('RpcClient discovers governed NAVCoin routes and reads exact route/NAV state', async () => {
   const rpc = new RpcClient('ws://127.0.0.1:8080/rpc');
   const calls = [];
   rpc.call = async (method, params, timeoutMs) => {
@@ -201,18 +201,30 @@ test('RpcClient binds A666 market reads to exact route and NAV status methods', 
     return { ok: true, result: {} };
   };
 
-  await rpc.navcoinBridgeSupplyStatus('route-a666');
+  await rpc.navcoinBridgeRoutes();
+  await rpc.navcoinBridgeSupplyStatus('route-qnav');
   await rpc.vaultBridgeStatus('asset-a666');
+  await rpc.navReserveProofStatus('asset-a666');
   await rpc.vaultBridgeRoute('asset-a666');
 
   assert.deepEqual(calls, [
     {
+      method: 'navcoin_bridge_routes',
+      params: {},
+      timeoutMs: undefined,
+    },
+    {
       method: 'navcoin_bridge_supply_status',
-      params: { route_id: 'route-a666' },
+      params: { route_id: 'route-qnav' },
       timeoutMs: undefined,
     },
     {
       method: 'vault_bridge_status',
+      params: { asset_id: 'asset-a666' },
+      timeoutMs: undefined,
+    },
+    {
+      method: 'nav_reserve_proof_status',
       params: { asset_id: 'asset-a666' },
       timeoutMs: undefined,
     },

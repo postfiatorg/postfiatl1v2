@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 
-import { formatA666Nav, formatA666Units } from '../lib/a666-primary-route.js';
+import { formatNavcoinNav, formatNavcoinUnits } from '../lib/navcoin-primary-route.js';
 import { loadGovernedVaultBridgeRoute } from '../lib/bridge-route.js';
 import {
-  NAVCOIN_MARKETS,
   navcoinMarketForAsset,
   navcoinMarketForSettlementAsset,
 } from '../lib/navcoin-markets.js';
@@ -19,9 +18,9 @@ function result(response) {
   return response?.ok && response.result ? response.result : null;
 }
 
-function resolveAssetId(id) {
+function resolveAssetId(markets, id) {
   const value = String(id || '');
-  const bySymbol = NAVCOIN_MARKETS.find(market => (
+  const bySymbol = markets.find(market => (
     market.symbol === value || market.settlementSymbol === value
   ));
   if (bySymbol) return bySymbol.symbol === value ? bySymbol.navAssetId : bySymbol.settlementAssetId;
@@ -42,10 +41,10 @@ function hasBalance(value) {
   }
 }
 
-export default function NavDetail({ id, rpc, address, go }) {
-  const assetId = resolveAssetId(id);
-  const market = navcoinMarketForAsset(assetId);
-  const settlementMarket = navcoinMarketForSettlementAsset(assetId);
+export default function NavDetail({ markets = [], id, rpc, address, go }) {
+  const assetId = resolveAssetId(markets, id);
+  const market = navcoinMarketForAsset(markets, assetId);
+  const settlementMarket = navcoinMarketForSettlementAsset(markets, assetId);
   const [snapshot, setSnapshot] = useState(null);
   const [error, setError] = useState('');
 
@@ -66,8 +65,6 @@ export default function NavDetail({ id, rpc, address, go }) {
           assetId: settlementMarket.settlementAssetId,
           chainId: CHAIN_ID,
           genesisHash: GENESIS_HASH,
-          sourceChainId: settlementMarket.settlementSourceChainId,
-          tokenAddress: settlementMarket.settlementTokenAddress,
         }));
         requests.push(rpc.vaultBridgeStatus(settlementMarket.settlementAssetId));
       }
@@ -106,8 +103,6 @@ export default function NavDetail({ id, rpc, address, go }) {
   const settlementVerified = Boolean(
     settlementMarket
     && route?.profile?.asset_id === settlementMarket.settlementAssetId
-    && route?.profile?.source_chain_id === settlementMarket.settlementSourceChainId
-    && route?.profile?.token_address === settlementMarket.settlementTokenAddress
     && route?.evidenceTier === 'receipt-proven'
   );
   const verified = navcoinVerified || settlementVerified;
@@ -149,17 +144,17 @@ export default function NavDetail({ id, rpc, address, go }) {
             <div className="pf-row"><span className="pf-rk">Asset ID</span><span className="pf-rv">{shortenAssetId(assetId)}</span></div>
             <div className="pf-row"><span className="pf-rk">Issuer</span><span className="pf-rv">{truncateMiddle(asset?.issuer || '—', 12)}</span></div>
             <div className="pf-row"><span className="pf-rk">Precision</span><span className="pf-rv">{asset?.precision ?? '—'}</span></div>
-            <div className="pf-row"><span className="pf-rk">Outstanding supply</span><span className="pf-rv">{formatA666Units(asset?.outstanding_supply)}</span></div>
+            <div className="pf-row"><span className="pf-rk">Outstanding supply</span><span className="pf-rv">{formatNavcoinUnits(asset?.outstanding_supply, market.decimals)}</span></div>
             <div className="pf-row"><span className="pf-rk">Your balance</span><span className="pf-rv">{formatAssetBalance(assetId, snapshot?.balance || 0)}</span></div>
           </div>
 
           {market && (
             <div className="pf-card" style={{ display: 'grid', gap: 12 }}>
               <div className="pf-eyebrow">Primary market</div>
-              <div className="pf-row"><span className="pf-rk">Verified NAV</span><span className="pf-rv">{formatA666Nav(reserve?.nav_per_unit)}</span></div>
-              <div className="pf-row"><span className="pf-rk">{market.settlementSymbol} reserve</span><span className="pf-rv">{formatA666Units(route?.settlement_reserve_atoms)}</span></div>
-              <div className="pf-row"><span className="pf-rk">Mint capacity</span><span className="pf-rv">{formatA666Units(route?.available_issue_atoms)}</span></div>
-              <div className="pf-row"><span className="pf-rk">Redeem capacity</span><span className="pf-rv">{formatA666Units(route?.available_redeem_atoms)}</span></div>
+              <div className="pf-row"><span className="pf-rk">Verified NAV</span><span className="pf-rv">{formatNavcoinNav(reserve?.nav_per_unit)}</span></div>
+              <div className="pf-row"><span className="pf-rk">{market.settlementSymbol} reserve</span><span className="pf-rv">{formatNavcoinUnits(route?.settlement_reserve_atoms, market.settlementDecimals)}</span></div>
+              <div className="pf-row"><span className="pf-rk">Mint capacity</span><span className="pf-rv">{formatNavcoinUnits(route?.available_issue_atoms, market.decimals)}</span></div>
+              <div className="pf-row"><span className="pf-rk">Redeem capacity</span><span className="pf-rv">{formatNavcoinUnits(route?.available_redeem_atoms, market.decimals)}</span></div>
               <button className="pf-primary" onClick={() => go('market', { marketKey: market.key })}>Open {market.symbol} primary market</button>
             </div>
           )}
@@ -184,7 +179,7 @@ export default function NavDetail({ id, rpc, address, go }) {
               <div className="pf-row"><span className="pf-rk">Reserve packet</span><span className="pf-rv">{truncateMiddle(route?.pricing_reserve_packet_hash || '—', 8)}</span></div>
               <div className="pf-row"><span className="pf-rk">Invariant</span><span className="pf-rv">{route?.invariant_holds ? 'holds' : 'not verified'}</span></div>
               <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
-                Verified only when this market's active policy, finalized StakeHub NAV epoch, reserve packet, and route invariant all match.
+                Verified only when this market's active policy, finalized PFTL NAV epoch, reserve packet, and route invariant all match.
               </div>
             </>
           )}

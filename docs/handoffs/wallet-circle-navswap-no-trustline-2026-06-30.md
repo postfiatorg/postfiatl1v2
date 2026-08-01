@@ -1,5 +1,9 @@
 # Wallet Circle Bridge and No-Trustline NAVSwap Handoff
 
+> **Historical architecture:** This June 2026 handoff records the retired
+> Arbitrum/A651 and internal operator path. It is retained for evidence
+> integrity and is not the current public wallet or reserve-proof architecture.
+
 Date: 2026-06-30 UTC  
 Hosted wallet: https://192.0.2.20:5173/
 Repo: `$POSTFIAT_REPO`

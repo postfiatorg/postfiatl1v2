@@ -1,0 +1,19 @@
+{
+  "source_id": "aave-arbitrum",
+  "observed_at_block": 547,
+  "gross_assets": 57542112446,
+  "total_liabilities": 20088300169,
+  "quantity_evidence": {
+    "kind": "attested_ed25519",
+    "evidence_commitment": "71f55f02f26a49822797a6fa85e7d95387ac8f26b4457503d3689be63d57bfdd67a12c87d9f9719e7116225191c79e7c",
+    "verifier_public_key": "89b8a67ab1659a27e026dbe13024af1ef9f1453fe4218dbe7371165267aa1036",
+    "signature": "af7351e0ebe5c31d5746872cba26866dd78b92d4f4b257c974f108679854b9609c3dcf35ff60c6f47f3ba76cc5297cb22f4f8454b62e0a293d47d8f99ffb4503"
+  },
+  "valuation_evidence": {
+    "kind": "attested_ed25519",
+    "evidence_commitment": "e04272f3b12ee7ef840f4cf0b2c016c667c13c254db0c2e1d505329f8c1c9242d9881665fb08ec2cc6adab56f08e2ac0",
+    "verifier_public_key": "89b8a67ab1659a27e026dbe13024af1ef9f1453fe4218dbe7371165267aa1036",
+    "signature": "fc539fa94d5c70c616193760fba7765728073f9dc2ffd0777aab4b9ef7a85fb0fca681c6f0a50fdc2c453e5a96ae3af65798ff338b3e9026f806a50307611602"
+  },
+  "disclosure_commitment": "fb51427a031e33af73de3b875d1b80b43a50876c215ca48e3bb228d74273fa217baa5ffe47dd4c2c3f17be2599c76e4f"
+}

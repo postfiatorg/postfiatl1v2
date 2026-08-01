@@ -547,6 +547,11 @@ fn vault_bridge_wraps_counted_source_erc20_receipt_on_pftl() {
             sp1_proof_encoding: String::new(),
             max_proof_bytes: 0,
             max_public_values_bytes: 0,
+            public_values_schema: String::new(),
+            source_manifest_hash: String::new(),
+            valuation_unit_id: String::new(),
+            max_observation_span_blocks: 0,
+            allow_controlled_sources: false,
         }),
     );
     assert!(execute_asset_transaction(&genesis, &mut ledger, &profile_register, 1).accepted);
@@ -1193,6 +1198,11 @@ fn vault_bridge_deposit_claim_mints_swappable_erc20_bridge_to_recipient() {
             sp1_proof_encoding: String::new(),
             max_proof_bytes: 0,
             max_public_values_bytes: 0,
+            public_values_schema: String::new(),
+            source_manifest_hash: String::new(),
+            valuation_unit_id: String::new(),
+            max_observation_span_blocks: 0,
+            allow_controlled_sources: false,
         }),
     );
     assert!(execute_asset_transaction(&genesis, &mut ledger, &profile_register, 1).accepted);
@@ -1641,6 +1651,11 @@ fn vault_bridge_sp1_bridge_deposit_requires_source_proof_commitments() {
             sp1_proof_encoding: NAV_SP1_PROOF_ENCODING_GROTH16.to_string(),
             max_proof_bytes: 0,
             max_public_values_bytes: 0,
+            public_values_schema: String::new(),
+            source_manifest_hash: String::new(),
+            valuation_unit_id: String::new(),
+            max_observation_span_blocks: 0,
+            allow_controlled_sources: false,
         }),
     );
     assert!(execute_asset_transaction(&genesis, &mut ledger, &profile_register, 1).accepted);
@@ -2332,6 +2347,11 @@ fn vault_bridge_challenged_bridge_deposit_cannot_be_counted() {
             sp1_proof_encoding: String::new(),
             max_proof_bytes: 0,
             max_public_values_bytes: 0,
+            public_values_schema: String::new(),
+            source_manifest_hash: String::new(),
+            valuation_unit_id: String::new(),
+            max_observation_span_blocks: 0,
+            allow_controlled_sources: false,
         }),
     );
     assert!(execute_asset_transaction(&genesis, &mut ledger, &profile_register, 1).accepted);
@@ -2509,6 +2529,11 @@ fn nav_subscription_vault_bridge_consumes_counted_receipt_allocation_once() {
             sp1_proof_encoding: String::new(),
             max_proof_bytes: 0,
             max_public_values_bytes: 0,
+            public_values_schema: String::new(),
+            source_manifest_hash: String::new(),
+            valuation_unit_id: String::new(),
+            max_observation_span_blocks: 0,
+            allow_controlled_sources: false,
         }),
     );
     assert!(execute_asset_transaction(&genesis, &mut ledger, &profile_register, 1).accepted);
@@ -3054,13 +3079,37 @@ fn nav_subscription_vault_bridge_consumes_counted_receipt_allocation_once() {
 
 #[test]
 fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
-    let genesis = Genesis::new("postfiat-local");
-    let issuer_key = ml_dsa_65_keygen().expect("issuer keygen");
+    // Exercise the complete primary-market and wrapper lifecycle with the
+    // independently reproducible, provider-neutral qNAV qualification
+    // identity. This is deliberately not an A666/legacy-profile fixture.
+    let mut genesis = Genesis::new_with_validator_count("postfiat-wan-devnet-2", 6);
+    genesis.consensus_v2_activation_height = Some(1);
+    assert_eq!(
+        genesis_hash(&genesis),
+        "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9"
+    );
+    let issuer_derivation_payload = serde_json::to_vec(&(
+        "postfiat.wallet.seed.v1",
+        "ML-DSA-65",
+        genesis.chain_id.as_str(),
+        0_u32,
+        "transparent-spend",
+        "66".repeat(32),
+    ))
+    .expect("serialize deterministic qualification issuer derivation");
+    let issuer_digest = postfiat_crypto_provider::hash_bytes(
+        "postfiat.wallet.seed.v1",
+        &issuer_derivation_payload,
+    );
+    let mut issuer_seed = [0_u8; 32];
+    issuer_seed.copy_from_slice(&issuer_digest[..32]);
+    let issuer_key = ml_dsa_65_keygen_from_seed(&issuer_seed);
     let operator_key = ml_dsa_65_keygen().expect("operator keygen");
     let subscriber_key = ml_dsa_65_keygen().expect("subscriber keygen");
     let issuer = address_from_public_key(&issuer_key.public_key);
     let operator = address_from_public_key(&operator_key.public_key);
     let subscriber = address_from_public_key(&subscriber_key.public_key);
+    assert_eq!(issuer, "pf0fae169e4293feebc8c9119febb4fd995a667b37");
     let mut ledger = LedgerState::new(vec![
         Account::new(
             issuer.clone(),
@@ -3114,10 +3163,10 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         2,
         AssetTransactionOperation::AssetCreate(AssetCreateOperation {
             issuer: issuer.clone(),
-            code: "A666".to_string(),
-            version: 2,
+            code: "qNAV".to_string(),
+            version: 1,
             precision: 6,
-            display_name: "NAV Coin a666".to_string(),
+            display_name: "Provider-neutral qualification NAVCoin".to_string(),
             max_supply: None,
             requires_authorization: false,
             freeze_enabled: true,
@@ -3132,6 +3181,10 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
     );
     assert!(receipt.accepted, "{receipt:?}");
     let native_nav_asset_id = ledger.asset_definitions[1].asset_id.clone();
+    assert_eq!(
+        native_nav_asset_id,
+        "3f631473a34a48cd47b4e1067546a9ccc5fcfe2f6e103655191d600d9574a5b2e6a985b7c52dcff7c9461aac872a12f5"
+    );
 
     let register_settlement_nav = signed_asset_transaction_with_minimum_fee(
         &genesis,
@@ -3156,17 +3209,69 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
     );
     assert!(receipt.accepted, "{receipt:?}");
 
+    let register_reserve_profile = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &issuer_key,
+        NAV_PROFILE_REGISTER_TRANSACTION_KIND,
+        4,
+        AssetTransactionOperation::NavProfileRegister(NavProfileRegisterOperation {
+            registrant: issuer.clone(),
+            verifier_kind: postfiat_types::NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1.to_string(),
+            source_class: "manifest-driven".to_string(),
+            max_snapshot_age_blocks: 10_000,
+            challenge_window_blocks: 1,
+            max_epoch_gap_blocks: 100,
+            settle_deadline_blocks: 0,
+            min_challenge_bond: 0,
+            min_attestations: 0,
+            tolerance_bp: 0,
+            bridge_observer_min_confirmations: 0,
+            valuation_policy_hash: "04".repeat(32),
+            vault_bridge_route_policy_hash: String::new(),
+            sp1_program_vkey:
+                "0x007e32678376339d48df4db28a9825d5fb229cedb8b2e5c92295d4580c9d32f8"
+                    .to_string(),
+            sp1_proof_encoding: "groth16".to_string(),
+            max_proof_bytes: 4_096,
+            max_public_values_bytes: postfiat_types::NAV_RESERVE_PUBLIC_VALUES_V1_BYTES as u64,
+            public_values_schema:
+                postfiat_types::NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1.to_string(),
+            source_manifest_hash: "9da4e2ba55939f138475026946d2728d9b40d3f4c7762289a70aae94584eac924b9a788c6df25c9276cc83f1616ef0e5".to_string(),
+            valuation_unit_id: "05".repeat(48),
+            max_observation_span_blocks: 8,
+            allow_controlled_sources: true,
+        }),
+    );
+    let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut ledger,
+        &register_reserve_profile,
+        4,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let reserve_profile_id = ledger
+        .nav_proof_profiles
+        .first()
+        .expect("provider-neutral reserve profile")
+        .profile_id
+        .clone();
+    assert_eq!(
+        reserve_profile_id,
+        "cdef69e9711ff26a2f51671598db5b7494627fed7e19c0a3597a3ecad62aab5977522c273f0413643eba72dcb673ab02"
+    );
+
     let register_native_nav = signed_asset_transaction_with_minimum_fee(
         &genesis,
         &ledger,
         &issuer_key,
         NAV_ASSET_REGISTER_TRANSACTION_KIND,
-        4,
+        5,
         AssetTransactionOperation::NavAssetRegister(NavAssetRegisterOperation {
             issuer: issuer.clone(),
             asset_id: native_nav_asset_id.clone(),
             reserve_operator: operator.clone(),
-            proof_profile: "pftl-uniswap-consensus-test".to_string(),
+            proof_profile: reserve_profile_id.clone(),
             valuation_unit: "USDC".to_string(),
             redemption_account: issuer.clone(),
         }),
@@ -3175,7 +3280,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         &genesis,
         &mut ledger,
         &register_native_nav,
-        4,
+        5,
     );
     assert!(receipt.accepted, "{receipt:?}");
 
@@ -3187,7 +3292,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         1,
         AssetTransactionOperation::PftlUniswapRouteInit(PftlUniswapRouteInitOperation {
             operator: operator.clone(),
-            route_id: "unfinalized-pftl-uniswap-a651".to_string(),
+            route_id: "unfinalized-independent-qnav".to_string(),
             route_config_digest: "13".repeat(48),
             route_trust_class: "CONTROLLED".to_string(),
             native_nav_asset_id: native_nav_asset_id.clone(),
@@ -3214,13 +3319,23 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
     assert!(receipt.accepted, "{receipt:?}");
     assert_eq!(
         zero_epoch_ledger
-            .pftl_uniswap_route("unfinalized-pftl-uniswap-a651")
+            .pftl_uniswap_route("unfinalized-independent-qnav")
             .expect("zero epoch route")
             .latest_finalized_nav_epoch,
         0
     );
 
     let pricing_reserve_packet_hash = "55".repeat(48);
+    let reserve_proof = hex_to_bytes(include_str!(
+        "../testdata/nav-reserve-v1-qualified-proof-calldata.hex"
+    )
+    .trim())
+    .expect("decode provider-neutral qNAV proof");
+    let reserve_public_values = hex_to_bytes(include_str!(
+        "../testdata/nav-reserve-v1-qualified-public-values.hex"
+    )
+    .trim())
+    .expect("decode provider-neutral qNAV public values");
     let reserve_submit = signed_asset_transaction_with_minimum_fee(
         &genesis,
         &ledger,
@@ -3234,14 +3349,14 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
             epoch: 7,
             nav_per_unit: 7_000_000,
             circulating_supply: 0,
-            verified_net_assets: 0,
-            proof_profile: "pftl-uniswap-consensus-test".to_string(),
-            source_root: "51".repeat(48),
-            attestor_root: "52".repeat(48),
+            verified_net_assets: 1_100,
+            proof_profile: reserve_profile_id,
+            source_root: "f4bdaca02e5445e7d2c666ca692d45d63fe1c423f6b03067e9eee19f5f9334fe60920b8528feff2656d5dbe7d28d415f".to_string(),
+            attestor_root: "cb34590e25db391724491b01795dee8bdbbadba3bba36fb5fc4f96bce1a87fa311426e0b76ce5ff4d775b091d94147df".to_string(),
             reserve_packet_hash: pricing_reserve_packet_hash.clone(),
             reserve_accounts: Vec::new(),
-            sp1_proof_bytes: Vec::new(),
-            sp1_public_values: Vec::new(),
+            sp1_proof_bytes: reserve_proof,
+            sp1_public_values: reserve_public_values,
         }),
     );
     let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
@@ -3252,12 +3367,41 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
     );
     assert!(receipt.accepted, "{receipt:?}");
 
+    let after_reserve_submit = ledger.clone();
+    let exact_replay = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut ledger,
+        &reserve_submit,
+        5,
+    );
+    assert!(!exact_replay.accepted);
+    assert_eq!(exact_replay.code, "bad_sequence");
+    assert_eq!(ledger, after_reserve_submit);
+
+    let packet_replay = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &operator_key,
+        NAV_RESERVE_SUBMIT_TRANSACTION_KIND,
+        2,
+        reserve_submit.unsigned.operation.clone(),
+    );
+    let packet_replay_receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut ledger,
+        &packet_replay,
+        5,
+    );
+    assert!(!packet_replay_receipt.accepted);
+    assert_eq!(packet_replay_receipt.code, "duplicate_nav_reserve_packet");
+    assert_eq!(ledger, after_reserve_submit);
+
     let finalize_nav = signed_asset_transaction_with_minimum_fee(
         &genesis,
         &ledger,
         &issuer_key,
         NAV_EPOCH_FINALIZE_TRANSACTION_KIND,
-        5,
+        6,
         AssetTransactionOperation::NavEpochFinalize(NavEpochFinalizeOperation {
             issuer: issuer.clone(),
             asset_id: native_nav_asset_id.clone(),
@@ -3336,7 +3480,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         &ledger,
         &issuer_key,
         ISSUED_PAYMENT_TRANSACTION_KIND,
-        6,
+        ledger.account(&issuer).expect("issuer").sequence + 1,
         AssetTransactionOperation::IssuedPayment(IssuedPaymentOperation {
             from: issuer.clone(),
             to: subscriber.clone(),
@@ -3353,7 +3497,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
     );
     assert!(receipt.accepted, "{receipt:?}");
 
-    let route_id = "pftl-uniswap-a651".to_string();
+    let route_id = "independent-operator-qnav".to_string();
     let unauthorized_route_init = signed_asset_transaction_with_minimum_fee(
         &genesis,
         &ledger,
@@ -3362,7 +3506,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         3,
         AssetTransactionOperation::PftlUniswapRouteInit(PftlUniswapRouteInitOperation {
             operator: subscriber.clone(),
-            route_id: "unauthorized-pftl-uniswap-a651".to_string(),
+            route_id: "unauthorized-independent-qnav".to_string(),
             route_config_digest: "10".repeat(48),
             route_trust_class: "CONTROLLED".to_string(),
             native_nav_asset_id: native_nav_asset_id.clone(),
@@ -3398,7 +3542,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         2,
         AssetTransactionOperation::PftlUniswapRouteInit(PftlUniswapRouteInitOperation {
             operator: operator.clone(),
-            route_id: "mismatched-epoch-pftl-uniswap-a651".to_string(),
+            route_id: "mismatched-epoch-independent-qnav".to_string(),
             route_config_digest: "12".repeat(48),
             route_trust_class: "CONTROLLED".to_string(),
             native_nav_asset_id: native_nav_asset_id.clone(),
@@ -3523,7 +3667,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         2,
         AssetTransactionOperation::PftlUniswapRouteInit(PftlUniswapRouteInitOperation {
             operator: operator.clone(),
-            route_id: "verified-pftl-uniswap-a651".to_string(),
+            route_id: "verified-independent-qnav".to_string(),
             route_config_digest: "14".repeat(48),
             route_trust_class: "BFT_CHECKPOINT".to_string(),
             native_nav_asset_id: native_nav_asset_id.clone(),
@@ -3548,7 +3692,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
     );
     assert!(verified_receipt.accepted, "{verified_receipt:?}");
     assert!(verified_route_ledger
-        .pftl_uniswap_route("verified-pftl-uniswap-a651")
+        .pftl_uniswap_route("verified-independent-qnav")
         .and_then(|route| route.ethereum_verification_policy.as_ref())
         .is_some());
 
@@ -3561,7 +3705,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         AssetTransactionOperation::PftlUniswapPrimarySubscribe(
             PftlUniswapPrimarySubscribeOperation {
                 subscriber: subscriber.clone(),
-                route_id: "verified-pftl-uniswap-a651".to_string(),
+                route_id: "verified-independent-qnav".to_string(),
                 settlement_asset_id: settlement_asset_id.clone(),
                 subscription_nonce: "15".repeat(32),
                 settlement_value_atoms: 280,
@@ -3591,7 +3735,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         4,
         AssetTransactionOperation::PftlUniswapExportDebit(PftlUniswapExportDebitOperation {
             owner: subscriber.clone(),
-            route_id: "verified-pftl-uniswap-a651".to_string(),
+            route_id: "verified-independent-qnav".to_string(),
             packet_hash: verified_packet_hash.clone(),
             export_nonce: "17".repeat(32),
             ethereum_recipient: "0x4444444444444444444444444444444444444444".to_string(),
@@ -3616,7 +3760,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
     );
     assert_eq!(
         verified_route_ledger
-            .pftl_uniswap_route("verified-pftl-uniswap-a651")
+            .pftl_uniswap_route("verified-independent-qnav")
             .and_then(|route| route.export_packets.get(&verified_packet_hash))
             .expect("signed export created pending packet")
             .status,
@@ -3643,7 +3787,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         AssetTransactionOperation::PftlUniswapPrimarySubscribe(
             PftlUniswapPrimarySubscribeOperation {
                 subscriber: subscriber.clone(),
-                route_id: "verified-pftl-uniswap-a651".to_string(),
+                route_id: "verified-independent-qnav".to_string(),
                 settlement_asset_id: settlement_asset_id.clone(),
                 subscription_nonce: "18".repeat(32),
                 settlement_value_atoms: 7,
@@ -3693,7 +3837,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
     let checkpoint = EthereumFinalizedCheckpointV1 {
         schema_version: ETHEREUM_CHECKPOINT_SCHEMA_V1,
         pftl_domain: authority.domain.chain.clone(),
-        route_id: "verified-pftl-uniswap-a651".to_string(),
+        route_id: "verified-independent-qnav".to_string(),
         route_config_digest: FastSwapOpaqueHashV1([0x14; 48]),
         ethereum_chain_id: 1,
         block_number: 100,
@@ -3719,7 +3863,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         AssetTransactionOperation::PftlUniswapDestinationConsume(
             PftlUniswapDestinationConsumeOperation {
                 operator: operator.clone(),
-                route_id: "verified-pftl-uniswap-a651".to_string(),
+                route_id: "verified-independent-qnav".to_string(),
                 packet_hash: verified_packet_hash.clone(),
                 ethereum_consume_tx_hash: "52".repeat(32),
                 consumed_height: 100,
@@ -3758,7 +3902,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         AssetTransactionOperation::PftlUniswapDestinationConsume(
             PftlUniswapDestinationConsumeOperation {
                 operator: operator.clone(),
-                route_id: "verified-pftl-uniswap-a651".to_string(),
+                route_id: "verified-independent-qnav".to_string(),
                 packet_hash: verified_packet_hash.clone(),
                 ethereum_consume_tx_hash: "53".repeat(32),
                 consumed_height: 100,
@@ -3855,10 +3999,10 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         3,
         AssetTransactionOperation::PftlUniswapRefundSource(PftlUniswapRefundSourceOperation {
             operator: operator.clone(),
-            route_id: "verified-pftl-uniswap-a651".to_string(),
+            route_id: "verified-independent-qnav".to_string(),
             packet_hash: verified_packet_hash.clone(),
             non_consumption_proof_hash: pftl_uniswap_non_consumption_proof_hash(
-                "verified-pftl-uniswap-a651",
+                "verified-independent-qnav",
                 &verified_packet_hash,
                 13,
             )
@@ -3876,7 +4020,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
     assert!(refund_receipt.accepted, "{refund_receipt:?}");
     assert_eq!(
         refunded_ledger
-            .pftl_uniswap_route("verified-pftl-uniswap-a651")
+            .pftl_uniswap_route("verified-independent-qnav")
             .and_then(|route| route.export_packets.get(&verified_packet_hash))
             .expect("refunded packet")
             .status,
@@ -3912,7 +4056,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         super::execute_asset_transaction(&genesis, &mut verified_route_ledger, &consume, 11);
     assert!(consume_receipt.accepted, "{consume_receipt:?}");
     let consumed_route = verified_route_ledger
-        .pftl_uniswap_route("verified-pftl-uniswap-a651")
+        .pftl_uniswap_route("verified-independent-qnav")
         .expect("consumed verified route");
     assert_eq!(consumed_route.outstanding_bridge_claims_atoms, 0);
     assert_eq!(consumed_route.ethereum_spendable_supply_atoms, 40);
@@ -4004,7 +4148,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         4,
         AssetTransactionOperation::PftlUniswapReturnImport(PftlUniswapReturnImportOperation {
             operator: operator.clone(),
-            route_id: "verified-pftl-uniswap-a651".to_string(),
+            route_id: "verified-independent-qnav".to_string(),
             burn_event_hash: return_burn_id.clone(),
             ethereum_chain_id: 1,
             bridge_controller: "0x1111111111111111111111111111111111111111".to_string(),
@@ -4028,7 +4172,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         super::execute_asset_transaction(&genesis, &mut returned_ledger, &return_import, 10);
     assert!(return_receipt.accepted, "{return_receipt:?}");
     let returned_route = returned_ledger
-        .pftl_uniswap_route("verified-pftl-uniswap-a651")
+        .pftl_uniswap_route("verified-independent-qnav")
         .expect("returned verified route");
     assert_eq!(returned_route.ethereum_spendable_supply_atoms, 23);
     assert_eq!(returned_route.pftl_spendable_supply_atoms, 17);
@@ -5086,8 +5230,8 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
     let mut primary_policy = PftlUniswapPrimaryMarketPolicyV2 {
         policy_hash: String::new(),
         policy_epoch: 1,
-        issue_multiplier_bps: PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS,
-        redeem_multiplier_bps: PFTL_UNISWAP_A666_REDEEM_MULTIPLIER_BPS,
+        issue_multiplier_bps: 10_050,
+        redeem_multiplier_bps: 9_995,
         issue_capacity_atoms: 800,
         redeem_capacity_atoms: 800,
         max_order_atoms: 400,
@@ -5099,7 +5243,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         pricing_reserve_packet_hash: pricing_reserve_packet_hash.clone(),
     };
     primary_policy.policy_hash = primary_policy.computed_hash();
-    let v2_route_id = "pftl-uniswap-a666-v2".to_string();
+    let v2_route_id = "independent-operator-qnav-v2".to_string();
     let v2_route_operation = PftlUniswapRouteInitV2Operation {
         operator: operator.clone(),
         route_id: v2_route_id.clone(),
@@ -5131,7 +5275,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
     opening_inventory_ledger.pftl_uniswap_routes.clear();
     opening_inventory_ledger.pftl_uniswap_receipts.clear();
     let mut opening_operation = v2_route_operation.clone();
-    opening_operation.route_id = "pftl-uniswap-a666-opening-inventory".to_string();
+    opening_operation.route_id = "independent-operator-qnav-opening-inventory".to_string();
     opening_operation.opening_inventory_atoms = 100;
     opening_operation.opening_inventory_holder = subscriber.clone();
     let opening_route_init = signed_asset_transaction_with_minimum_fee(
@@ -5308,7 +5452,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
     mismatched_opening_ledger.pftl_uniswap_routes.clear();
     mismatched_opening_ledger.pftl_uniswap_receipts.clear();
     let mut mismatched_opening_operation = opening_operation.clone();
-    mismatched_opening_operation.route_id = "pftl-uniswap-a666-bad-opening".to_string();
+    mismatched_opening_operation.route_id = "independent-operator-qnav-bad-opening".to_string();
     mismatched_opening_operation.opening_inventory_atoms = 99;
     let mismatched_opening_init = signed_asset_transaction_with_minimum_fee(
         &genesis,

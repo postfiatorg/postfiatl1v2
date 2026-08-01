@@ -58,7 +58,8 @@ use postfiat_types::{
     FastSwapEffectsDigestV1, FastSwapEffectsV1, FastSwapIntentV1, FastSwapOpaqueHashV1,
     FastSwapPartyV1, FastSwapPhaseV1, FastSwapPolicyHashV1, FastSwapPolicySnapshotV1,
     FastSwapQuoteRoundingV1, FastSwapReceiptV1, FastSwapStatusResponseV1, FastSwapVoteV1, Genesis,
-    GovernanceAmendment, GovernanceState, LedgerState, MempoolEntry, MempoolState, Offer,
+    GovernanceAmendment, GovernanceState, LedgerState, MempoolEntry, MempoolState,
+    NavReservePublicValuesV1, NavReserveSubmitOperation, NavReserveTrustCountsV1, Offer,
     OrchardPoolState, OwnedObject, PftlUniswapConsensusRouteState, ShieldedState,
     SignedAtomicSwapTransaction, SignedFastAssetControlCommandV1, SignedFastSwapIntentV1,
     SignedTransfer, TrustLine, UnsignedAtomicSwapTransaction, UnsignedTransfer, ADDRESS_NAMESPACE,
@@ -152,6 +153,8 @@ fn run() -> Result<(), Box<dyn Error>> {
             fuzz_orchard_parser(iterations)?,
             fuzz_governance_amendment_invariants(iterations)?,
             fuzz_proof_adapter(iterations)?,
+            fuzz_nav_reserve_public_values(iterations)?,
+            fuzz_nav_reserve_submit_operation(iterations)?,
         ],
         "transaction-codec" => vec![fuzz_transaction_codec(iterations)?],
         "atomic-swap-codec" => vec![fuzz_atomic_swap_codec(iterations)?],
@@ -177,6 +180,10 @@ fn run() -> Result<(), Box<dyn Error>> {
             vec![fuzz_governance_amendment_invariants(iterations)?]
         }
         "proof-adapter" => vec![fuzz_proof_adapter(iterations)?],
+        "nav-reserve-public-values" => vec![fuzz_nav_reserve_public_values(iterations)?],
+        "nav-reserve-submit-operation" => {
+            vec![fuzz_nav_reserve_submit_operation(iterations)?]
+        }
         other => return Err(format!("unknown fuzz target `{other}`").into()),
     };
 
@@ -2888,6 +2895,101 @@ fn fuzz_proof_adapter(iterations: usize) -> Result<FuzzTargetReport, Box<dyn Err
 
 fn repeated_hex(ch: char) -> String {
     std::iter::repeat_n(ch, 96).collect()
+}
+
+fn fuzz_nav_reserve_public_values(iterations: usize) -> Result<FuzzTargetReport, Box<dyn Error>> {
+    let values = NavReservePublicValuesV1 {
+        schema: postfiat_types::NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1.to_string(),
+        pftl_genesis_hash: "11".repeat(48),
+        nav_asset_id: "22".repeat(48),
+        proof_profile_id: "33".repeat(48),
+        valuation_policy_hash: "44".repeat(32),
+        source_manifest_hash: "55".repeat(48),
+        valuation_unit_id: "66".repeat(48),
+        valuation_scale: 100_000_000,
+        observation_epoch: 7,
+        observation_not_before: 90,
+        observation_not_after: 95,
+        source_observation_root: "77".repeat(48),
+        gross_assets: 1_100,
+        total_liabilities: 100,
+        verified_net_assets: 1_000,
+        cryptographically_verified_value: 600,
+        attested_value: 400,
+        controlled_value: 0,
+        source_count: 2,
+        quantity_trust_counts: NavReserveTrustCountsV1 {
+            cryptographic: 1,
+            attested: 1,
+            controlled: 0,
+        },
+        valuation_trust_counts: NavReserveTrustCountsV1 {
+            cryptographic: 0,
+            attested: 2,
+            controlled: 0,
+        },
+        quantity_trust_root: "88".repeat(48),
+        valuation_trust_root: "99".repeat(48),
+        source_disclosure_root: "aa".repeat(48),
+    };
+    let seed = values.encode()?;
+    let mut report = FuzzTargetReport::new(
+        "nav-reserve-public-values",
+        iterations,
+        seed.len() + iterations + 1,
+    );
+    for length in 0..seed.len() {
+        report.assert_invariant(NavReservePublicValuesV1::decode(&seed[..length]).is_err());
+    }
+    for input in mutated_inputs(&seed, iterations) {
+        match NavReservePublicValuesV1::decode(&input) {
+            Ok(decoded) => {
+                report.record_parse(true);
+                report.assert_invariant(decoded.validate().is_ok());
+                report.assert_invariant(decoded.encode().is_ok_and(|encoded| encoded == input));
+            }
+            Err(_) => report.record_parse(false),
+        }
+    }
+    Ok(report)
+}
+
+fn fuzz_nav_reserve_submit_operation(
+    iterations: usize,
+) -> Result<FuzzTargetReport, Box<dyn Error>> {
+    let valid = NavReserveSubmitOperation {
+        issuer: "pfissuer".to_string(),
+        submitter: "pfsubmitter".to_string(),
+        asset_id: "11".repeat(48),
+        epoch: 1,
+        nav_per_unit: 1_000_000,
+        circulating_supply: 100,
+        verified_net_assets: 100,
+        proof_profile: "22".repeat(48),
+        source_root: "33".repeat(48),
+        attestor_root: "44".repeat(48),
+        reserve_packet_hash: "55".repeat(48),
+        reserve_accounts: Vec::new(),
+        sp1_proof_bytes: vec![1, 2, 3],
+        sp1_public_values: vec![4, 5, 6],
+    };
+    valid.validate()?;
+    let seed = serde_json::to_vec(&valid)?;
+    let mut report = FuzzTargetReport::new("nav-reserve-submit-operation", iterations, 1);
+    for input in mutated_inputs(&seed, iterations) {
+        match serde_json::from_slice::<NavReserveSubmitOperation>(&input) {
+            Ok(operation) => {
+                report.record_parse(true);
+                if operation == valid {
+                    report.assert_invariant(operation.validate().is_ok());
+                } else {
+                    let _ = operation.validate();
+                }
+            }
+            Err(_) => report.record_parse(false),
+        }
+    }
+    Ok(report)
 }
 
 fn is_lower_hex_96(value: &str) -> bool {

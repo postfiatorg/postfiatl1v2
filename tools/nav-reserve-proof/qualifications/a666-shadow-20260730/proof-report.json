@@ -1,0 +1,16 @@
+{
+  "schema": "postfiat.reserve_groth16_proof.v1",
+  "program_vkey": "0x007e32678376339d48df4db28a9825d5fb229cedb8b2e5c92295d4580c9d32f8",
+  "guest_elf_sha256": "345f9566e066b5571277f73990b85aa053e0c6adfcfb6191bcfba5065a173de6",
+  "witness_sha256": "3c7f637f03392fe869e4cd6fc8ac3db7a732051284ae16f5bd5a2e5152dfdd57",
+  "proof_envelope_sha256": "d900758f162f530fe41cd3218e3a3e6bf27f4fe0e1a4721b942d95157f9082a2",
+  "proof_calldata_sha256": "147d02b60b7705d3bd5a16cec57fde80b6784927409f090aec0879fdddc58478",
+  "public_values_sha256": "699cb8acb39a3d351549e9a08c13a7712126841b3c3d480606c684a6db4184c8",
+  "proof_bytes": 356,
+  "public_values_bytes": 584,
+  "host_verified": true,
+  "consensus_verified": true,
+  "consensus_proof_fixture": "crates/execution/testdata/a666-nav-reserve-v1-shadow-proof-calldata.hex",
+  "consensus_public_values_fixture": "crates/execution/testdata/a666-nav-reserve-v1-shadow-public-values.hex",
+  "consensus_test": "unit_tests::a666_successor_shadow_real_proof_verifies_in_consensus"
+}

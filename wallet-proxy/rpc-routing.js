@@ -1,19 +1,131 @@
 'use strict';
 
 function create(runtime) {
-    const { A651_ASSET_ID,A652_ASSET_ID,ALLOWED_ORIGINS,ASSET_ORCHARD_ACTION_CLEAR_KEYS,ASSET_ORCHARD_INGRESS_FILE_SCHEMA,ASSET_ORCHARD_POOL_ID,ASSET_ORCHARD_PRIVATE_EGRESS_ACTION_SCHEMA,ASSET_ORCHARD_PRIVATE_EGRESS_FILE_SCHEMA,ASSET_ORCHARD_SWAP_ACTION_SCHEMA,DEFAULT_ASSET_ORCHARD_LOCAL_SERVICE_READINESS_TIMEOUT_MS,DEFAULT_ASSET_ORCHARD_LOCAL_SERVICE_URL,DEFAULT_RPC_FLEET,ENABLE_FINALITY_RESPONDER_READ_CACHE,ENABLE_FIRST_READY_SEQUENCED_READ,ENABLE_PROPOSER_ROUTING,ENABLE_RPC_PARENT_WAIT_FINALITY_ROUTE,ENABLE_RPC_PARENT_WAIT_SEQUENCED_READ_ROUTE,ENABLE_UPSTREAM_KEEPALIVE,ETHEREUM_USDC_TOKEN,FASTPAY_BROADCAST_METHODS,FASTPAY_CERTIFICATE_FINALITY_ENABLED,FASTPAY_CERTIFICATE_RETRY_MS,FASTPAY_FLEET_STATUS_CACHE_MS,FASTPAY_OWNED_OBJECT_LOOKUP_LIMIT,FASTPAY_REQUIRE_PRIMARY_SUCCESS,FASTPAY_ROUTE_RETRY_MS,FASTPAY_ROUTE_TIMEOUT_MS,FINALITY_METHODS,FIRST_READY_SEQUENCED_READ_PROPOSERS,INJECT_RPC_CAPS,LEGACY_A651_ETH_TOKEN,LEGACY_A651_UNISWAP_POOL_ID,LISTEN_PORT,MAX_TCP_PER_WS,MAX_WS_MESSAGE_BYTES,NAVSWAP_CAPABILITIES_SCHEMA,NAVSWAP_DEVNET_FUNDING_SCHEMA,NAVSWAP_IDEMPOTENCY_STORE_DEFAULT_PATH,NAVSWAP_IDEMPOTENCY_STORE_SCHEMA,NAVSWAP_IDEMPOTENCY_TTL_MS,NAVSWAP_MAX_LIVE_USD,NAVSWAP_NAV_PROOF_SCHEMA,NAVSWAP_PRIMARY_MINT_ROUTE_FAMILY,NAVSWAP_QUOTE_FRESHNESS_TTL_MS,NAVSWAP_QUOTE_SCHEMA,NAVSWAP_READINESS_SCHEMA,NAVSWAP_ROUTE_TRUST_CLASSES,NAVSWAP_RUN_EVENTS_SCHEMA,NAVSWAP_RUN_LIST_SCHEMA,NAVSWAP_RUN_RECEIPTS_SCHEMA,NAVSWAP_RUN_SCHEMA,NAVSWAP_RUN_STATUS_SCHEMA,NAVSWAP_RUN_STORE_DEFAULT_PATH,NAVSWAP_RUN_STORE_SCHEMA,NAVSWAP_RUN_STREAM_EVENT_SCHEMA,NAVSWAP_RUN_STREAM_SCHEMA,NAVSWAP_SETTLEMENT_RECEIPT_MAX_SNAPSHOT_AGE_BLOCKS,NAVSWAP_SETTLEMENT_RECEIPT_SAFETY_BLOCKS,NAVSWAP_STAKEHUB_TRANSPARENT_ACTION,NAVSWAP_TRANSPARENT_PLANNER_INPUTS_SCHEMA,NAVSWAP_WALLET_ACTION_BATCH_PREPARE_SCHEMA,NAVSWAP_WALLET_ACTION_PREPARE_SCHEMA,NAVSWAP_WALLET_ACTION_SCHEMA,OPTIMISTIC_CACHED_FINALITY_ROUTE,PFUSDC_ASSET_ID,PREFERRED_SEQUENCED_READ_VALIDATORS,PROPOSER_READY_RETRY_MS,PROPOSER_ROUTE_CACHE_MS,PROPOSER_ROUTE_RETRY_MS,PROPOSER_ROUTE_TIMEOUT_MS,RPC_CAPS,RPC_FLEET,RPC_HOST,RPC_PORT,SEQUENCED_ACCOUNT_METHODS,SHIELDED_NAVSWAP_EGRESS_POLICY_ID,SHIELDED_NAVSWAP_EGRESS_SCHEMA,SHIELDED_NAVSWAP_INGRESS_SCHEMA,SHIELDED_NAVSWAP_LIQUIDITY_MODES,SHIELDED_NAVSWAP_PREFLIGHT_SCHEMA,SHIELDED_NAVSWAP_QUOTE_SCHEMA,SHIELDED_NAVSWAP_STATUS_SCHEMA,SHIELDED_NAVSWAP_SWAP_SCHEMA,SHIELDED_PRIVATE_KEY_PATTERNS,SHIELDED_ROUND_TIMEOUT_DEFAULT_MS,TCP_TIMEOUT_MS,VAULT_BRIDGE_ALLOCATION_PURPOSE_NAV_SUBSCRIPTION,VAULT_BRIDGE_ALLOCATION_PURPOSE_SUPPLY,VAULT_BRIDGE_BUCKET_STATUS_ACTIVE,VAULT_BRIDGE_RECEIPT_STATUS_COUNTED,VAULT_BRIDGE_RECIPIENT_SPONSOR_AMOUNT,VAULT_BRIDGE_RECIPIENT_SPONSOR_MIN_AMOUNT_ATOMS,VAULT_BRIDGE_RELAY_DEFAULT_ACCOUNT,VAULT_BRIDGE_RELAY_EXPIRES_AT_HEIGHT,VAULT_BRIDGE_RELAY_POLICY_HASH,VAULT_BRIDGE_RELAY_SCHEMA,VAULT_BRIDGE_RELAY_SOURCE_CHAIN_ID,VAULT_BRIDGE_RELAY_SOURCE_RPC_URL,VAULT_BRIDGE_RELAY_TOKEN_ADDRESS,VAULT_BRIDGE_RELAY_VAULT_ADDRESS,WALLET_SUBSCRIPTION_INTERVAL_MS,WALLET_SUBSCRIPTION_MIN_INTERVAL_MS,WALLET_SUBSCRIPTION_READ_TIMEOUT_MS,crypto,execFileAsync,fastpayCertificateOutbox,fs,http,navswapDevnetFundingUsage,navswapIdempotencyRecords,navswapRunStreams,navswapRuns,net,os,path,server,wss } = runtime;
+    const { A651_ASSET_ID,
+A652_ASSET_ID,
+ALLOWED_ORIGINS,
+ASSET_ORCHARD_ACTION_CLEAR_KEYS,
+ASSET_ORCHARD_INGRESS_FILE_SCHEMA,
+ASSET_ORCHARD_POOL_ID,
+ASSET_ORCHARD_PRIVATE_EGRESS_ACTION_SCHEMA,
+ASSET_ORCHARD_PRIVATE_EGRESS_FILE_SCHEMA,
+ASSET_ORCHARD_SWAP_ACTION_SCHEMA,
+DEFAULT_ASSET_ORCHARD_LOCAL_SERVICE_READINESS_TIMEOUT_MS,
+DEFAULT_ASSET_ORCHARD_LOCAL_SERVICE_URL,
+DEFAULT_RPC_FLEET,
+ENABLE_FINALITY_RESPONDER_READ_CACHE,
+ENABLE_FIRST_READY_SEQUENCED_READ,
+ENABLE_PROPOSER_ROUTING,
+ENABLE_RPC_PARENT_WAIT_FINALITY_ROUTE,
+ENABLE_RPC_PARENT_WAIT_SEQUENCED_READ_ROUTE,
+ENABLE_UPSTREAM_KEEPALIVE,
+ETHEREUM_USDC_TOKEN,
+FASTPAY_BROADCAST_METHODS,
+FASTPAY_CERTIFICATE_FINALITY_ENABLED,
+FASTPAY_CERTIFICATE_RETRY_MS,
+FASTPAY_FLEET_STATUS_CACHE_MS,
+FASTPAY_OWNED_OBJECT_LOOKUP_LIMIT,
+FASTPAY_REQUIRE_PRIMARY_SUCCESS,
+FASTPAY_ROUTE_RETRY_MS,
+FASTPAY_ROUTE_TIMEOUT_MS,
+FINALITY_METHODS,
+FIRST_READY_SEQUENCED_READ_PROPOSERS,
+INJECT_RPC_CAPS,
+LEGACY_A651_ETH_TOKEN,
+LEGACY_A651_UNISWAP_POOL_ID,
+LISTEN_PORT,
+MAX_TCP_PER_WS,
+MAX_WS_MESSAGE_BYTES,
+NAVSWAP_CAPABILITIES_SCHEMA,
+NAVSWAP_DEVNET_FUNDING_SCHEMA,
+NAVSWAP_IDEMPOTENCY_STORE_DEFAULT_PATH,
+NAVSWAP_IDEMPOTENCY_STORE_SCHEMA,
+NAVSWAP_IDEMPOTENCY_TTL_MS,
+NAVSWAP_MAX_LIVE_USD,
+NAVSWAP_PRIMARY_MINT_ROUTE_FAMILY,
+NAVSWAP_QUOTE_FRESHNESS_TTL_MS,
+NAVSWAP_QUOTE_SCHEMA,
+NAVSWAP_READINESS_SCHEMA,
+NAVSWAP_ROUTE_TRUST_CLASSES,
+NAVSWAP_RUN_EVENTS_SCHEMA,
+NAVSWAP_RUN_LIST_SCHEMA,
+NAVSWAP_RUN_RECEIPTS_SCHEMA,
+NAVSWAP_RUN_SCHEMA,
+NAVSWAP_RUN_STATUS_SCHEMA,
+NAVSWAP_RUN_STORE_DEFAULT_PATH,
+NAVSWAP_RUN_STORE_SCHEMA,
+NAVSWAP_RUN_STREAM_EVENT_SCHEMA,
+NAVSWAP_RUN_STREAM_SCHEMA,
+NAVSWAP_SETTLEMENT_RECEIPT_MAX_SNAPSHOT_AGE_BLOCKS,
+NAVSWAP_SETTLEMENT_RECEIPT_SAFETY_BLOCKS,
+NAVSWAP_TRANSPARENT_PLANNER_INPUTS_SCHEMA,
+NAVSWAP_WALLET_ACTION_BATCH_PREPARE_SCHEMA,
+NAVSWAP_WALLET_ACTION_PREPARE_SCHEMA,
+NAVSWAP_WALLET_ACTION_SCHEMA,
+OPTIMISTIC_CACHED_FINALITY_ROUTE,
+PFUSDC_ASSET_ID,
+PREFERRED_SEQUENCED_READ_VALIDATORS,
+PROPOSER_READY_RETRY_MS,
+PROPOSER_ROUTE_CACHE_MS,
+PROPOSER_ROUTE_RETRY_MS,
+PROPOSER_ROUTE_TIMEOUT_MS,
+RPC_CAPS,
+RPC_FLEET,
+RPC_HOST,
+RPC_PORT,
+SEQUENCED_ACCOUNT_METHODS,
+SHIELDED_NAVSWAP_EGRESS_POLICY_ID,
+SHIELDED_NAVSWAP_EGRESS_SCHEMA,
+SHIELDED_NAVSWAP_INGRESS_SCHEMA,
+SHIELDED_NAVSWAP_LIQUIDITY_MODES,
+SHIELDED_NAVSWAP_PREFLIGHT_SCHEMA,
+SHIELDED_NAVSWAP_QUOTE_SCHEMA,
+SHIELDED_NAVSWAP_STATUS_SCHEMA,
+SHIELDED_NAVSWAP_SWAP_SCHEMA,
+SHIELDED_PRIVATE_KEY_PATTERNS,
+SHIELDED_ROUND_TIMEOUT_DEFAULT_MS,
+TCP_TIMEOUT_MS,
+VAULT_BRIDGE_ALLOCATION_PURPOSE_NAV_SUBSCRIPTION,
+VAULT_BRIDGE_ALLOCATION_PURPOSE_SUPPLY,
+VAULT_BRIDGE_BUCKET_STATUS_ACTIVE,
+VAULT_BRIDGE_RECEIPT_STATUS_COUNTED,
+VAULT_BRIDGE_RECIPIENT_SPONSOR_AMOUNT,
+VAULT_BRIDGE_RECIPIENT_SPONSOR_MIN_AMOUNT_ATOMS,
+VAULT_BRIDGE_RELAY_DEFAULT_ACCOUNT,
+VAULT_BRIDGE_RELAY_EXPIRES_AT_HEIGHT,
+VAULT_BRIDGE_RELAY_POLICY_HASH,
+VAULT_BRIDGE_RELAY_SCHEMA,
+VAULT_BRIDGE_RELAY_SOURCE_CHAIN_ID,
+VAULT_BRIDGE_RELAY_SOURCE_RPC_URL,
+VAULT_BRIDGE_RELAY_TOKEN_ADDRESS,
+VAULT_BRIDGE_RELAY_VAULT_ADDRESS,
+WALLET_SUBSCRIPTION_INTERVAL_MS,
+WALLET_SUBSCRIPTION_MIN_INTERVAL_MS,
+WALLET_SUBSCRIPTION_READ_TIMEOUT_MS,
+crypto,
+execFileAsync,
+fastpayCertificateOutbox,
+fs,
+http,
+navswapDevnetFundingUsage,
+navswapIdempotencyRecords,
+navswapRunStreams,
+navswapRuns,
+net,
+os,
+path,
+server,
+wss } = runtime;
     let { fastpayFleetStatusCache,fastpayFleetStatusInFlight,latestFinalizedReadCache,preferredSequencedReadIndex,proposerRouteCache,shieldedCertifierLoopState } = runtime;
     const annotateNavswapIdempotency = (...args) => runtime.annotateNavswapIdempotency(...args);
     const assertNoShieldedPrivateMaterial = (...args) => runtime.assertNoShieldedPrivateMaterial(...args);
     const assertVaultBridgeEvidenceMatches = (...args) => runtime.assertVaultBridgeEvidenceMatches(...args);
     const assetIdForNavswapSymbol = (...args) => runtime.assetIdForNavswapSymbol(...args);
     const assetOrchardLocalServiceConfig = (...args) => runtime.assetOrchardLocalServiceConfig(...args);
-    const buildNavswapNavProofResponse = (...args) => runtime.buildNavswapNavProofResponse(...args);
     const buildNavswapQuoteResponse = (...args) => runtime.buildNavswapQuoteResponse(...args);
     const buildNavswapRunResponse = (...args) => runtime.buildNavswapRunResponse(...args);
     const buildPftlUniswapReceiptVerification = (...args) => runtime.buildPftlUniswapReceiptVerification(...args);
     const buildShieldedCertifiedRoundArgs = (...args) => runtime.buildShieldedCertifiedRoundArgs(...args);
-    const buildStakehubTransparentPreflight = (...args) => runtime.buildStakehubTransparentPreflight(...args);
     const buildTransparentNavswapReceiptVerification = (...args) => runtime.buildTransparentNavswapReceiptVerification(...args);
     const buildTransparentNavswapRedeemReceiptVerification = (...args) => runtime.buildTransparentNavswapRedeemReceiptVerification(...args);
     const buildUniswapHandoffQuoteBinding = (...args) => runtime.buildUniswapHandoffQuoteBinding(...args);
@@ -63,7 +175,6 @@ function create(runtime) {
     const findAssetOrchardActionCleartext = (...args) => runtime.findAssetOrchardActionCleartext(...args);
     const findShieldedPrivateMaterialPaths = (...args) => runtime.findShieldedPrivateMaterialPaths(...args);
     const finishNavswapRun = (...args) => runtime.finishNavswapRun(...args);
-    const forwardStakehubTransparentRun = (...args) => runtime.forwardStakehubTransparentRun(...args);
     const handleNavswapHttp = (...args) => runtime.handleNavswapHttp(...args);
     const isBadSequenceSubmitResponse = (...args) => runtime.isBadSequenceSubmitResponse(...args);
     const isIssuedAsset = (...args) => runtime.isIssuedAsset(...args);
@@ -110,7 +221,6 @@ function create(runtime) {
     const navswapInferTrustClass = (...args) => runtime.navswapInferTrustClass(...args);
     const navswapListLimit = (...args) => runtime.navswapListLimit(...args);
     const navswapNativeAccountBalanceAtoms = (...args) => runtime.navswapNativeAccountBalanceAtoms(...args);
-    const navswapNavProofStub = (...args) => runtime.navswapNavProofStub(...args);
     const navswapNavRedemptionId = (...args) => runtime.navswapNavRedemptionId(...args);
     const navswapNormalizeTrustClass = (...args) => runtime.navswapNormalizeTrustClass(...args);
     const navswapPftlUniswapControlledAttestationTxHash = (...args) => runtime.navswapPftlUniswapControlledAttestationTxHash(...args);
@@ -147,7 +257,6 @@ function create(runtime) {
     const navswapSettlementReceiptFreshnessConfig = (...args) => runtime.navswapSettlementReceiptFreshnessConfig(...args);
     const navswapSettlementReceiptHash = (...args) => runtime.navswapSettlementReceiptHash(...args);
     const navswapStableJson = (...args) => runtime.navswapStableJson(...args);
-    const navswapStakehubTransparentConfig = (...args) => runtime.navswapStakehubTransparentConfig(...args);
     const navswapSubscriptionId = (...args) => runtime.navswapSubscriptionId(...args);
     const navswapTransparentOperatorConfig = (...args) => runtime.navswapTransparentOperatorConfig(...args);
     const navswapTrustlessFinalityAgreement = (...args) => runtime.navswapTrustlessFinalityAgreement(...args);
@@ -177,7 +286,6 @@ function create(runtime) {
     const parseRpcFleet = (...args) => runtime.parseRpcFleet(...args);
     const parseShieldedPrivateEgressJson = (...args) => runtime.parseShieldedPrivateEgressJson(...args);
     const parseShieldedSwapActionJson = (...args) => runtime.parseShieldedSwapActionJson(...args);
-    const parseStakehubTransparentAmount = (...args) => runtime.parseStakehubTransparentAmount(...args);
     const parseUniswapHandoffBytes32 = (...args) => runtime.parseUniswapHandoffBytes32(...args);
     const parseUniswapHandoffPositiveInteger = (...args) => runtime.parseUniswapHandoffPositiveInteger(...args);
     const persistNavswapIdempotencyRecord = (...args) => runtime.persistNavswapIdempotencyRecord(...args);
@@ -242,7 +350,6 @@ function create(runtime) {
     const signAndSubmitVaultBridgeRecipientSponsor = (...args) => runtime.signAndSubmitVaultBridgeRecipientSponsor(...args);
     const signAndSubmitVaultBridgeRelayOperation = (...args) => runtime.signAndSubmitVaultBridgeRelayOperation(...args);
     const sseHeaders = (...args) => runtime.sseHeaders(...args);
-    const stakehubTransparentAmountError = (...args) => runtime.stakehubTransparentAmountError(...args);
     const startShieldedCertifierLoop = (...args) => runtime.startShieldedCertifierLoop(...args);
     const swapAtomicTemplateParams = (...args) => runtime.swapAtomicTemplateParams(...args);
     const transparentCompletionError = (...args) => runtime.transparentCompletionError(...args);
@@ -2200,7 +2307,67 @@ function create(runtime) {
     }
 
 
-    return { UpstreamRpcConnection,addProxyRouteEvent,bftQuorumThreshold,broadcastFastpayMutation,cachedSelection,canonicalReadResult,chooseOwnedVoteEndpoint,chooseProposerEndpointCached,chooseProposerEndpointFromStatuses,chooseProposerEndpointWithRetry,chooseSequencedAccountReadEndpoint,clearFastpayFleetStatusCache,closeUpstreamRpcConnections,collectFastpayFleetStatuses,collectFinalityTimeoutVotes,collectFleetStatuses,conciseRpcError,convergedFleetGroup,deterministicProposer,endpointStatusMeetsRoute,endpointStatusMeetsSequencedReadRoute,exactParentStatus,fetchWalletSnapshot,finalityFailureCanAdvanceView,firstReadyEndpointForRoute,firstStructuredFastpayResult,invalidateProposerRouteCache,isFastpayBroadcastMethod,isFastpayCertificateApplyMethod,isFinalityMethod,isSequencedAccountMethod,normalizeFastpayBroadcastRequest,normalizeWalletSubscriptionParams,preferredSequencedReadEndpoint,primeNextProposerRouteCache,primeNextProposerRouteCacheFromResponse,proposerEndpointForHeight,readFleetRpcMajority,readGroupKey,recoverFinalityAcrossViews,rememberFinalizedReadEndpoint,requestWithProxyReadiness,resolveRpcTarget,responseEnvelope,rpcTcpRequest,rpcTcpRequestLine,rpcTcpRequestOneShotLine,sendWalletNotification,shouldUseFirstReadySequencedRead,sleep,startCachedSelectionReadinessProbe,startFastpayCertificateRecovery,startFastpayRouteWarmup,startWalletSubscription,stopWalletSubscription,upstreamEndpointKey,upstreamRpcConnection,upstreamRpcConnections,waitForCachedSelectionReady,waitForFastpayConvergedGroup,walletSnapshotDigest };
+    return { UpstreamRpcConnection,
+addProxyRouteEvent,
+bftQuorumThreshold,
+broadcastFastpayMutation,
+cachedSelection,
+canonicalReadResult,
+chooseOwnedVoteEndpoint,
+chooseProposerEndpointCached,
+chooseProposerEndpointFromStatuses,
+chooseProposerEndpointWithRetry,
+chooseSequencedAccountReadEndpoint,
+clearFastpayFleetStatusCache,
+closeUpstreamRpcConnections,
+collectFastpayFleetStatuses,
+collectFinalityTimeoutVotes,
+collectFleetStatuses,
+conciseRpcError,
+convergedFleetGroup,
+deterministicProposer,
+endpointStatusMeetsRoute,
+endpointStatusMeetsSequencedReadRoute,
+exactParentStatus,
+fetchWalletSnapshot,
+finalityFailureCanAdvanceView,
+firstReadyEndpointForRoute,
+firstStructuredFastpayResult,
+invalidateProposerRouteCache,
+isFastpayBroadcastMethod,
+isFastpayCertificateApplyMethod,
+isFinalityMethod,
+isSequencedAccountMethod,
+normalizeFastpayBroadcastRequest,
+normalizeWalletSubscriptionParams,
+preferredSequencedReadEndpoint,
+primeNextProposerRouteCache,
+primeNextProposerRouteCacheFromResponse,
+proposerEndpointForHeight,
+readFleetRpcMajority,
+readGroupKey,
+recoverFinalityAcrossViews,
+rememberFinalizedReadEndpoint,
+requestWithProxyReadiness,
+resolveRpcTarget,
+responseEnvelope,
+rpcTcpRequest,
+rpcTcpRequestLine,
+rpcTcpRequestOneShotLine,
+sendWalletNotification,
+shouldUseFirstReadySequencedRead,
+sleep,
+startCachedSelectionReadinessProbe,
+startFastpayCertificateRecovery,
+startFastpayRouteWarmup,
+startWalletSubscription,
+stopWalletSubscription,
+upstreamEndpointKey,
+upstreamRpcConnection,
+upstreamRpcConnections,
+waitForCachedSelectionReady,
+waitForFastpayConvergedGroup,
+walletSnapshotDigest };
 }
 
 module.exports = { create };

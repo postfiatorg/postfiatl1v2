@@ -184,10 +184,8 @@ struct Service {
     backups: Vec<(Vec<u8>, WalletBackupFile)>,
     state_path: PathBuf,
     evidence_root: PathBuf,
-    faucet_python: PathBuf,
     faucet_runner: PathBuf,
-    faucet_stakehub_root: PathBuf,
-    faucet_profile: PathBuf,
+    faucet_config: PathBuf,
     faucet_evidence_root: PathBuf,
     api_token: String,
     state: Mutex<DemoState>,
@@ -625,13 +623,10 @@ impl Service {
 
     fn run_faucet_adapter(&self, address: &str, status_only: bool) -> Result<Value, String> {
         let run_dir = self.faucet_evidence_root.join(address);
-        let mut command = Command::new(&self.faucet_python);
+        let mut command = Command::new(&self.faucet_runner);
         command
-            .arg(&self.faucet_runner)
-            .arg("--stakehub-root")
-            .arg(&self.faucet_stakehub_root)
-            .arg("--profile")
-            .arg(&self.faucet_profile)
+            .arg("--config")
+            .arg(&self.faucet_config)
             .arg("--run-dir")
             .arg(&run_dir)
             .arg("--address")
@@ -1042,16 +1037,10 @@ fn main() -> Result<(), String> {
     let template_path = PathBuf::from(flag(&args, "--template-session")?);
     let state_path = PathBuf::from(flag(&args, "--state")?);
     let evidence_root = PathBuf::from(flag(&args, "--evidence-root")?);
-    let faucet_python = PathBuf::from(flag(&args, "--faucet-python")?);
     let faucet_runner = PathBuf::from(flag(&args, "--faucet-runner")?);
-    let faucet_stakehub_root = PathBuf::from(flag(&args, "--faucet-stakehub-root")?);
-    let faucet_profile = PathBuf::from(flag(&args, "--faucet-profile")?);
+    let faucet_config = PathBuf::from(flag(&args, "--faucet-config")?);
     let faucet_evidence_root = PathBuf::from(flag(&args, "--faucet-evidence-root")?);
-    if !faucet_python.is_file()
-        || !faucet_runner.is_file()
-        || !faucet_stakehub_root.is_dir()
-        || !faucet_profile.is_file()
-    {
+    if !faucet_runner.is_file() || !faucet_config.is_file() {
         return Err("configured devnet faucet authority is unavailable".to_owned());
     }
     let bind = flag(&args, "--bind")?;
@@ -1110,10 +1099,8 @@ fn main() -> Result<(), String> {
         backups,
         state_path,
         evidence_root,
-        faucet_python,
         faucet_runner,
-        faucet_stakehub_root,
-        faucet_profile,
+        faucet_config,
         faucet_evidence_root,
         api_token,
         state: Mutex::new(DemoState {

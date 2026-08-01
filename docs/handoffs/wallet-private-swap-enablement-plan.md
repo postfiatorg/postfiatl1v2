@@ -1,5 +1,10 @@
 # Wallet Private Swap Enablement Plan
 
+> **Historical architecture:** This A651-era planning record used the internal
+> operator service as a reference implementation. It is retained for design
+> history and must not be used to restore that service as a public wallet,
+> proof, custody, or relay dependency.
+
 Date: 2026-07-02
 Status: foundation Steps 1-4 implemented on branch `wallet-private-swap-foundation`; stopped before Step 5 value movement
 Scope: enable user-facing wallet private swaps after the merged

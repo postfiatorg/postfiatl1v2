@@ -205,12 +205,13 @@ See [Python RPC Client](python-rpc-client.md) and
 [Python Wallet Functions](../python/wallet-functions.md) for the full
 helper surface.
 
-## StakeHub Dashboard
+## Historical internal dashboard adapter
 
-The StakeHub dashboard server (`stakehub/dashboard_server.py`) wraps the
-same `batch-transfer` + `apply-batch` flow behind the `pftl_faucet_fund`
-action. It uses the PostFiat repo's `postfiat-node` binary and the PFTL
-wallet data directory. See the StakeHub repo for details.
+The former StakeHub dashboard server wrapped the same `batch-transfer` plus
+`apply-batch` flow behind the `pftl_faucet_fund` action. That adapter is an
+internal historical convenience, not part of the public faucet, wallet, or
+protocol boundary. New tooling should invoke the documented PostFiat CLI/RPC
+surface directly.
 
 ## Fee
 

@@ -1,7 +1,123 @@
 'use strict';
 
 function create(runtime) {
-    const { A651_ASSET_ID,A652_ASSET_ID,ALLOWED_ORIGINS,ASSET_ORCHARD_ACTION_CLEAR_KEYS,ASSET_ORCHARD_INGRESS_FILE_SCHEMA,ASSET_ORCHARD_POOL_ID,ASSET_ORCHARD_PRIVATE_EGRESS_ACTION_SCHEMA,ASSET_ORCHARD_PRIVATE_EGRESS_FILE_SCHEMA,ASSET_ORCHARD_SWAP_ACTION_SCHEMA,DEFAULT_ASSET_ORCHARD_LOCAL_SERVICE_READINESS_TIMEOUT_MS,DEFAULT_ASSET_ORCHARD_LOCAL_SERVICE_URL,DEFAULT_RPC_FLEET,ENABLE_FINALITY_RESPONDER_READ_CACHE,ENABLE_FIRST_READY_SEQUENCED_READ,ENABLE_NATIVE_WALLET_SIGNER,ENABLE_PROPOSER_ROUTING,ENABLE_RPC_PARENT_WAIT_FINALITY_ROUTE,ENABLE_RPC_PARENT_WAIT_SEQUENCED_READ_ROUTE,ENABLE_UPSTREAM_KEEPALIVE,ETHEREUM_USDC_TOKEN,FASTPAY_BROADCAST_METHODS,FASTPAY_FLEET_STATUS_CACHE_MS,FASTPAY_OWNED_OBJECT_LOOKUP_LIMIT,FASTPAY_REQUIRE_PRIMARY_SUCCESS,FASTPAY_ROUTE_RETRY_MS,FASTPAY_ROUTE_TIMEOUT_MS,FINALITY_METHODS,FIRST_READY_SEQUENCED_READ_PROPOSERS,INJECT_RPC_CAPS,LEGACY_A651_ETH_TOKEN,LEGACY_A651_UNISWAP_POOL_ID,LISTEN_PORT,MAX_TCP_PER_WS,MAX_WS_MESSAGE_BYTES,NATIVE_WALLET_SIGNER_BIN,NATIVE_WALLET_SIGNER_TIMEOUT_MS,NAVSWAP_CAPABILITIES_SCHEMA,NAVSWAP_DEVNET_FUNDING_SCHEMA,NAVSWAP_IDEMPOTENCY_STORE_DEFAULT_PATH,NAVSWAP_IDEMPOTENCY_STORE_SCHEMA,NAVSWAP_IDEMPOTENCY_TTL_MS,NAVSWAP_MAX_LIVE_USD,NAVSWAP_NAV_PROOF_SCHEMA,NAVSWAP_PRIMARY_MINT_ROUTE_FAMILY,NAVSWAP_QUOTE_FRESHNESS_TTL_MS,NAVSWAP_QUOTE_SCHEMA,NAVSWAP_READINESS_SCHEMA,NAVSWAP_ROUTE_TRUST_CLASSES,NAVSWAP_RUN_EVENTS_SCHEMA,NAVSWAP_RUN_LIST_SCHEMA,NAVSWAP_RUN_RECEIPTS_SCHEMA,NAVSWAP_RUN_SCHEMA,NAVSWAP_RUN_STATUS_SCHEMA,NAVSWAP_RUN_STORE_DEFAULT_PATH,NAVSWAP_RUN_STORE_SCHEMA,NAVSWAP_RUN_STREAM_EVENT_SCHEMA,NAVSWAP_RUN_STREAM_SCHEMA,NAVSWAP_SETTLEMENT_RECEIPT_MAX_SNAPSHOT_AGE_BLOCKS,NAVSWAP_SETTLEMENT_RECEIPT_SAFETY_BLOCKS,NAVSWAP_STAKEHUB_TRANSPARENT_ACTION,NAVSWAP_TRANSPARENT_PLANNER_INPUTS_SCHEMA,NAVSWAP_WALLET_ACTION_BATCH_PREPARE_SCHEMA,NAVSWAP_WALLET_ACTION_PREPARE_SCHEMA,NAVSWAP_WALLET_ACTION_SCHEMA,OPTIMISTIC_CACHED_FINALITY_ROUTE,PFUSDC_ASSET_ID,PREFERRED_SEQUENCED_READ_VALIDATORS,PROPOSER_READY_RETRY_MS,PROPOSER_ROUTE_CACHE_MS,PROPOSER_ROUTE_RETRY_MS,PROPOSER_ROUTE_TIMEOUT_MS,RPC_CAPS,RPC_FLEET,RPC_HOST,RPC_PORT,SEQUENCED_ACCOUNT_METHODS,SHIELDED_NAVSWAP_EGRESS_POLICY_ID,SHIELDED_NAVSWAP_EGRESS_SCHEMA,SHIELDED_NAVSWAP_INGRESS_SCHEMA,SHIELDED_NAVSWAP_LIQUIDITY_MODES,SHIELDED_NAVSWAP_PREFLIGHT_SCHEMA,SHIELDED_NAVSWAP_QUOTE_SCHEMA,SHIELDED_NAVSWAP_STATUS_SCHEMA,SHIELDED_NAVSWAP_SWAP_SCHEMA,SHIELDED_PRIVATE_KEY_PATTERNS,SHIELDED_ROUND_TIMEOUT_DEFAULT_MS,TCP_TIMEOUT_MS,UpstreamRpcConnection,VAULT_BRIDGE_ALLOCATION_PURPOSE_NAV_SUBSCRIPTION,VAULT_BRIDGE_ALLOCATION_PURPOSE_SUPPLY,VAULT_BRIDGE_BUCKET_STATUS_ACTIVE,VAULT_BRIDGE_RECEIPT_STATUS_COUNTED,VAULT_BRIDGE_RECIPIENT_SPONSOR_AMOUNT,VAULT_BRIDGE_RECIPIENT_SPONSOR_MIN_AMOUNT_ATOMS,VAULT_BRIDGE_RELAY_DEFAULT_ACCOUNT,VAULT_BRIDGE_RELAY_EXPIRES_AT_HEIGHT,VAULT_BRIDGE_RELAY_POLICY_HASH,VAULT_BRIDGE_RELAY_SCHEMA,VAULT_BRIDGE_RELAY_SOURCE_CHAIN_ID,VAULT_BRIDGE_RELAY_SOURCE_RPC_URL,VAULT_BRIDGE_RELAY_TOKEN_ADDRESS,VAULT_BRIDGE_RELAY_VAULT_ADDRESS,WALLET_SUBSCRIPTION_INTERVAL_MS,WALLET_SUBSCRIPTION_MIN_INTERVAL_MS,WALLET_SUBSCRIPTION_READ_TIMEOUT_MS,crypto,execFileAsync,fs,http,navswapDevnetFundingUsage,navswapIdempotencyRecords,navswapRunStreams,navswapRuns,net,os,path,server,upstreamRpcConnections,wss } = runtime;
+    const { A651_ASSET_ID,
+A652_ASSET_ID,
+ALLOWED_ORIGINS,
+ASSET_ORCHARD_ACTION_CLEAR_KEYS,
+ASSET_ORCHARD_INGRESS_FILE_SCHEMA,
+ASSET_ORCHARD_POOL_ID,
+ASSET_ORCHARD_PRIVATE_EGRESS_ACTION_SCHEMA,
+ASSET_ORCHARD_PRIVATE_EGRESS_FILE_SCHEMA,
+ASSET_ORCHARD_SWAP_ACTION_SCHEMA,
+DEFAULT_ASSET_ORCHARD_LOCAL_SERVICE_READINESS_TIMEOUT_MS,
+DEFAULT_ASSET_ORCHARD_LOCAL_SERVICE_URL,
+DEFAULT_RPC_FLEET,
+ENABLE_FINALITY_RESPONDER_READ_CACHE,
+ENABLE_FIRST_READY_SEQUENCED_READ,
+ENABLE_NATIVE_WALLET_SIGNER,
+ENABLE_PROPOSER_ROUTING,
+ENABLE_RPC_PARENT_WAIT_FINALITY_ROUTE,
+ENABLE_RPC_PARENT_WAIT_SEQUENCED_READ_ROUTE,
+ENABLE_UPSTREAM_KEEPALIVE,
+ETHEREUM_USDC_TOKEN,
+FASTPAY_BROADCAST_METHODS,
+FASTPAY_FLEET_STATUS_CACHE_MS,
+FASTPAY_OWNED_OBJECT_LOOKUP_LIMIT,
+FASTPAY_REQUIRE_PRIMARY_SUCCESS,
+FASTPAY_ROUTE_RETRY_MS,
+FASTPAY_ROUTE_TIMEOUT_MS,
+FINALITY_METHODS,
+FIRST_READY_SEQUENCED_READ_PROPOSERS,
+INJECT_RPC_CAPS,
+LEGACY_A651_ETH_TOKEN,
+LEGACY_A651_UNISWAP_POOL_ID,
+LISTEN_PORT,
+MAX_TCP_PER_WS,
+MAX_WS_MESSAGE_BYTES,
+NATIVE_WALLET_SIGNER_BIN,
+NATIVE_WALLET_SIGNER_TIMEOUT_MS,
+NAVSWAP_CAPABILITIES_SCHEMA,
+NAVSWAP_DEVNET_FUNDING_SCHEMA,
+NAVSWAP_IDEMPOTENCY_STORE_DEFAULT_PATH,
+NAVSWAP_IDEMPOTENCY_STORE_SCHEMA,
+NAVSWAP_IDEMPOTENCY_TTL_MS,
+NAVSWAP_MAX_LIVE_USD,
+NAVSWAP_PRIMARY_MINT_ROUTE_FAMILY,
+NAVSWAP_QUOTE_FRESHNESS_TTL_MS,
+NAVSWAP_QUOTE_SCHEMA,
+NAVSWAP_READINESS_SCHEMA,
+NAVSWAP_ROUTE_TRUST_CLASSES,
+NAVSWAP_RUN_EVENTS_SCHEMA,
+NAVSWAP_RUN_LIST_SCHEMA,
+NAVSWAP_RUN_RECEIPTS_SCHEMA,
+NAVSWAP_RUN_SCHEMA,
+NAVSWAP_RUN_STATUS_SCHEMA,
+NAVSWAP_RUN_STORE_DEFAULT_PATH,
+NAVSWAP_RUN_STORE_SCHEMA,
+NAVSWAP_RUN_STREAM_EVENT_SCHEMA,
+NAVSWAP_RUN_STREAM_SCHEMA,
+NAVSWAP_SETTLEMENT_RECEIPT_MAX_SNAPSHOT_AGE_BLOCKS,
+NAVSWAP_SETTLEMENT_RECEIPT_SAFETY_BLOCKS,
+NAVSWAP_TRANSPARENT_PLANNER_INPUTS_SCHEMA,
+NAVSWAP_WALLET_ACTION_BATCH_PREPARE_SCHEMA,
+NAVSWAP_WALLET_ACTION_PREPARE_SCHEMA,
+NAVSWAP_WALLET_ACTION_SCHEMA,
+OPTIMISTIC_CACHED_FINALITY_ROUTE,
+PFUSDC_ASSET_ID,
+PREFERRED_SEQUENCED_READ_VALIDATORS,
+PROPOSER_READY_RETRY_MS,
+PROPOSER_ROUTE_CACHE_MS,
+PROPOSER_ROUTE_RETRY_MS,
+PROPOSER_ROUTE_TIMEOUT_MS,
+RPC_CAPS,
+RPC_FLEET,
+RPC_HOST,
+RPC_PORT,
+SEQUENCED_ACCOUNT_METHODS,
+SHIELDED_NAVSWAP_EGRESS_POLICY_ID,
+SHIELDED_NAVSWAP_EGRESS_SCHEMA,
+SHIELDED_NAVSWAP_INGRESS_SCHEMA,
+SHIELDED_NAVSWAP_LIQUIDITY_MODES,
+SHIELDED_NAVSWAP_PREFLIGHT_SCHEMA,
+SHIELDED_NAVSWAP_QUOTE_SCHEMA,
+SHIELDED_NAVSWAP_STATUS_SCHEMA,
+SHIELDED_NAVSWAP_SWAP_SCHEMA,
+SHIELDED_PRIVATE_KEY_PATTERNS,
+SHIELDED_ROUND_TIMEOUT_DEFAULT_MS,
+TCP_TIMEOUT_MS,
+UpstreamRpcConnection,
+VAULT_BRIDGE_ALLOCATION_PURPOSE_NAV_SUBSCRIPTION,
+VAULT_BRIDGE_ALLOCATION_PURPOSE_SUPPLY,
+VAULT_BRIDGE_BUCKET_STATUS_ACTIVE,
+VAULT_BRIDGE_RECEIPT_STATUS_COUNTED,
+VAULT_BRIDGE_RECIPIENT_SPONSOR_AMOUNT,
+VAULT_BRIDGE_RECIPIENT_SPONSOR_MIN_AMOUNT_ATOMS,
+VAULT_BRIDGE_RELAY_DEFAULT_ACCOUNT,
+VAULT_BRIDGE_RELAY_EXPIRES_AT_HEIGHT,
+VAULT_BRIDGE_RELAY_POLICY_HASH,
+VAULT_BRIDGE_RELAY_SCHEMA,
+VAULT_BRIDGE_RELAY_SOURCE_CHAIN_ID,
+VAULT_BRIDGE_RELAY_SOURCE_RPC_URL,
+VAULT_BRIDGE_RELAY_TOKEN_ADDRESS,
+VAULT_BRIDGE_RELAY_VAULT_ADDRESS,
+WALLET_SUBSCRIPTION_INTERVAL_MS,
+WALLET_SUBSCRIPTION_MIN_INTERVAL_MS,
+WALLET_SUBSCRIPTION_READ_TIMEOUT_MS,
+crypto,
+execFileAsync,
+fs,
+http,
+navswapDevnetFundingUsage,
+navswapIdempotencyRecords,
+navswapRunStreams,
+navswapRuns,
+net,
+os,
+path,
+server,
+upstreamRpcConnections,
+wss } = runtime;
     let { fastpayFleetStatusCache,fastpayFleetStatusInFlight,latestFinalizedReadCache,preferredSequencedReadIndex,proposerRouteCache,shieldedCertifierLoopState } = runtime;
     const addProxyRouteEvent = (...args) => runtime.addProxyRouteEvent(...args);
     const annotateNavswapIdempotency = (...args) => runtime.annotateNavswapIdempotency(...args);
@@ -67,7 +183,6 @@ function create(runtime) {
     const finishNavswapRun = (...args) => runtime.finishNavswapRun(...args);
     const firstReadyEndpointForRoute = (...args) => runtime.firstReadyEndpointForRoute(...args);
     const firstStructuredFastpayResult = (...args) => runtime.firstStructuredFastpayResult(...args);
-    const forwardStakehubTransparentRun = (...args) => runtime.forwardStakehubTransparentRun(...args);
     const handleNavswapHttp = (...args) => runtime.handleNavswapHttp(...args);
     const invalidateProposerRouteCache = (...args) => runtime.invalidateProposerRouteCache(...args);
     const isBadSequenceSubmitResponse = (...args) => runtime.isBadSequenceSubmitResponse(...args);
@@ -109,7 +224,6 @@ function create(runtime) {
     const navswapRunStoreSnapshot = (...args) => runtime.navswapRunStoreSnapshot(...args);
     const navswapRunStreamSnapshot = (...args) => runtime.navswapRunStreamSnapshot(...args);
     const navswapStableJson = (...args) => runtime.navswapStableJson(...args);
-    const navswapStakehubTransparentConfig = (...args) => runtime.navswapStakehubTransparentConfig(...args);
     const navswapTransparentOperatorConfig = (...args) => runtime.navswapTransparentOperatorConfig(...args);
     const navswapTrustlessFinalityAgreement = (...args) => runtime.navswapTrustlessFinalityAgreement(...args);
     const navswapTruthyParam = (...args) => runtime.navswapTruthyParam(...args);
@@ -1942,25 +2056,6 @@ function create(runtime) {
         return route;
     }
 
-    function parseStakehubTransparentAmount(amount) {
-        const value = String(amount ?? '').trim();
-        if (!/^(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)$/.test(value)) return null;
-        const parsed = Number.parseFloat(value);
-        if (!Number.isFinite(parsed) || parsed <= 0) return null;
-        return value.replace(/^0+(?=\d)/, '') || '0';
-    }
-
-    function stakehubTransparentAmountError(route, amount) {
-        return {
-            ok: false,
-            schema: NAVSWAP_QUOTE_SCHEMA,
-            route,
-            code: 'stakehub_transparent_amount_invalid',
-            message: 'StakeHub transparent roundtrip amount must be a positive a651 decimal.',
-            amount,
-        };
-    }
-
     function buildUrl(baseUrl, pathName, params = {}) {
         const url = new URL(pathName, baseUrl);
         for (const [key, value] of Object.entries(params)) {
@@ -1990,186 +2085,6 @@ function create(runtime) {
             return payload;
         } finally {
             clearTimeout(timer);
-        }
-    }
-
-    function navswapNavProofStub(assetId, phase, message) {
-        return {
-            ok: true,
-            schema: NAVSWAP_NAV_PROOF_SCHEMA,
-            asset_id: assetId,
-            phase,
-            proof_available: false,
-            source: 'wallet-proxy',
-            message: message || 'NAV proof passthrough is stubbed on the wallet proxy; routes requiring fresh NAV proof remain disabled until a proof source is configured.',
-        };
-    }
-
-    async function buildNavswapNavProofResponse(searchParams = new URLSearchParams()) {
-        const assetId = assetIdForNavswapSymbol(searchParams.get('asset_id') || searchParams.get('asset') || 'a651');
-        const phase = searchParams.get('phase') || 'current';
-        const config = navswapStakehubTransparentConfig();
-        if (!config.configured) {
-            return navswapNavProofStub(assetId, phase, 'Set NAVSWAP_STAKEHUB_BASE_URL to read the StakeHub NAV proof snapshot.');
-        }
-
-        let navcoinUrl;
-        let statusUrl;
-        try {
-            navcoinUrl = buildUrl(config.base_url, config.navcoin_path);
-            statusUrl = buildUrl(config.base_url, config.navcoin_status_path, { asset_id: assetId });
-        } catch (_) {
-            return {
-                ok: false,
-                schema: NAVSWAP_NAV_PROOF_SCHEMA,
-                asset_id: assetId,
-                phase,
-                proof_available: false,
-                code: 'stakehub_nav_proof_invalid_url',
-                message: 'NAVSWAP_STAKEHUB_BASE_URL is not a valid HTTP(S) URL.',
-            };
-        }
-
-        try {
-            const [navcoin, status] = await Promise.all([
-                fetchJsonWithTimeout(navcoinUrl, config.read_timeout_ms),
-                fetchJsonWithTimeout(statusUrl, config.read_timeout_ms).catch((error) => ({
-                    available: false,
-                    error: error?.message || String(error),
-                })),
-            ]);
-            const proof = navcoin?.proof || {};
-            const token = navcoin?.token || {};
-            const pftl = navcoin?.pftl || {};
-            const proofAvailable = Boolean(proof && Object.keys(proof).length > 0 && proof.stale !== true);
-            return {
-                ok: true,
-                schema: NAVSWAP_NAV_PROOF_SCHEMA,
-                asset_id: assetId,
-                phase,
-                proof_available: proofAvailable,
-                source: 'stakehub:/api/navcoin',
-                chain_id: pftl.chain_id || proof.chain_id || status.chain_id || null,
-                current_pftl_height: pftl.current_height || pftl.height || proof.current_height || status.current_height || null,
-                nav_epoch: proof.envelope_epoch || proof.epoch || status.envelope_epoch || null,
-                reserve_packet_hash: proof.reserve_packet_hash || proof.packet_hash || status.accepted_policy_hash || null,
-                freshness_deadline_height: proof.freshness_deadline_height || null,
-                nav_per_unit: proof.nav_per_unit ?? token.nav_per_unit ?? null,
-                supply: token.supply ?? proof.supply ?? null,
-                proof_status: proof.proof_status || status.market_operations_status || (proofAvailable ? 'available' : 'missing'),
-                stale: proof.stale === true,
-                source_receipt_hashes: proof.source_receipt_hashes || proof.receipt_hashes || [],
-                proof,
-                token,
-                status,
-            };
-        } catch (error) {
-            return {
-                ok: false,
-                schema: NAVSWAP_NAV_PROOF_SCHEMA,
-                asset_id: assetId,
-                phase,
-                proof_available: false,
-                code: error?.name === 'AbortError' ? 'stakehub_nav_proof_timeout' : 'stakehub_nav_proof_unavailable',
-                message: error?.name === 'AbortError'
-                    ? `StakeHub NAV proof read timed out after ${config.read_timeout_ms} ms.`
-                    : (error?.message || 'StakeHub NAV proof read failed.'),
-                source: 'stakehub:/api/navcoin',
-            };
-        }
-    }
-
-    async function buildStakehubTransparentPreflight() {
-        const config = navswapStakehubTransparentConfig();
-        if (!config.configured) {
-            return {
-                ok: false,
-                code: 'stakehub_transparent_operator_not_configured',
-                message: 'Set NAVSWAP_STAKEHUB_BASE_URL before reading StakeHub transparent preflight state.',
-            };
-        }
-
-        let balancesUrl;
-        let statusUrl;
-        try {
-            balancesUrl = buildUrl(config.base_url, config.balances_path);
-            statusUrl = buildUrl(config.base_url, config.swap_status_path);
-        } catch (_) {
-            return {
-                ok: false,
-                code: 'stakehub_transparent_invalid_url',
-                message: 'NAVSWAP_STAKEHUB_BASE_URL is not a valid HTTP(S) URL.',
-            };
-        }
-
-        try {
-            const [balances, swapStatus] = await Promise.all([
-                fetchJsonWithTimeout(balancesUrl, config.read_timeout_ms),
-                fetchJsonWithTimeout(statusUrl, config.read_timeout_ms).catch((error) => ({
-                    ok: false,
-                    error: error?.message || String(error),
-                })),
-            ]);
-            const errors = Array.isArray(balances?.errors) ? balances.errors.filter(Boolean) : [];
-            if (errors.length > 0) {
-                return {
-                    ok: false,
-                    code: 'stakehub_transparent_balances_unavailable',
-                    message: `StakeHub transparent balances returned errors: ${errors.join('; ')}`,
-                    balances,
-                    swap_status: swapStatus,
-                };
-            }
-            const transparentRoundtrip = swapStatus?.transparent_roundtrip || swapStatus?.transparentRoundtrip || null;
-            if (
-                transparentRoundtrip?.finality_recovery_required === true
-                || transparentRoundtrip?.status === 'needs_timeout_certificate'
-            ) {
-                return {
-                    ok: false,
-                    code: 'stakehub_transparent_finality_recovery_required',
-                    message: transparentRoundtrip?.message
-                        || 'StakeHub transparent roundtrip requires PFTL finality recovery before another live run.',
-                    balances,
-                    swap_status: swapStatus,
-                };
-            }
-            if (
-                transparentRoundtrip?.transport_recovery_required === true
-                || transparentRoundtrip?.status === 'transport_recovery_required'
-            ) {
-                return {
-                    ok: false,
-                    code: 'stakehub_transparent_transport_recovery_required',
-                    message: transparentRoundtrip?.message
-                        || 'StakeHub transparent roundtrip transport recovery is required before another live run.',
-                    balances,
-                    swap_status: swapStatus,
-                };
-            }
-            return {
-                ok: true,
-                balances: {
-                    address: balances?.address || null,
-                    pfusdc: balances?.pfusdc || null,
-                    a651: balances?.a651 || null,
-                },
-                swap_status: {
-                    status: swapStatus?.status || null,
-                    ok: swapStatus?.ok ?? null,
-                    run_dir: swapStatus?.run_dir || null,
-                    error: swapStatus?.error || null,
-                    transparent_roundtrip: transparentRoundtrip,
-                },
-            };
-        } catch (error) {
-            return {
-                ok: false,
-                code: error?.name === 'AbortError' ? 'stakehub_transparent_preflight_timeout' : 'stakehub_transparent_preflight_unavailable',
-                message: error?.name === 'AbortError'
-                    ? `StakeHub transparent preflight timed out after ${config.read_timeout_ms} ms.`
-                    : (error?.message || 'StakeHub transparent preflight read failed.'),
-            };
         }
     }
 
@@ -2262,50 +2177,6 @@ function create(runtime) {
             };
         }
 
-        if (route === 'stakehub_transparent_roundtrip') {
-            const config = navswapStakehubTransparentConfig();
-            const parsedAmount = parseStakehubTransparentAmount(amount);
-            if (parsedAmount === null) return stakehubTransparentAmountError(route, amount);
-            if (Number(parsedAmount) > config.max_whole_a651_amount) {
-                return {
-                    ok: false,
-                    schema: NAVSWAP_QUOTE_SCHEMA,
-                    route,
-                    code: 'stakehub_transparent_amount_exceeds_limit',
-                    message: `StakeHub transparent roundtrip amount exceeds the configured ${config.max_whole_a651_amount} a651 smoke-test limit.`,
-                    amount,
-                    max_whole_a651_amount: config.max_whole_a651_amount,
-                };
-            }
-            if (!config.configured) {
-                return {
-                    ok: false,
-                    schema: NAVSWAP_QUOTE_SCHEMA,
-                    route,
-                    code: 'stakehub_transparent_operator_not_configured',
-                    message: 'Set NAVSWAP_STAKEHUB_BASE_URL before quoting the existing StakeHub transparent roundtrip.',
-                    config,
-                };
-            }
-            return {
-                ok: true,
-                schema: NAVSWAP_QUOTE_SCHEMA,
-                route,
-                status: config.runs_enabled ? 'operator_run_enabled' : 'operator_quote_only',
-                can_run: config.runs_enabled,
-                from_asset: fromAsset,
-                to_asset: toAsset,
-                amount: parsedAmount,
-                expected_output: parsedAmount,
-                expected_output_asset: 'a651',
-                custody_boundary: config.custody_boundary,
-                message: config.runs_enabled
-                    ? 'StakeHub transparent roundtrip is configured for operator-backed execution.'
-                    : 'StakeHub transparent roundtrip is configured for adapter preflight only; set NAVSWAP_ENABLE_STAKEHUB_TRANSPARENT_RUNS=true to allow live runs.',
-                config,
-            };
-        }
-
         if (route === 'pftl_atomic_settlement') {
             if (fromAsset && toAsset && !isPftAsset(fromAsset) && !isPftAsset(toAsset)) {
                 return {
@@ -2358,7 +2229,7 @@ function create(runtime) {
                 schema: NAVSWAP_QUOTE_SCHEMA,
                 route,
                 code: 'shielded_navswap_operator_demo_only',
-                message: 'Shielded NAVSwap is currently an operator-demo StakeHub flow, not a wallet-safe route.',
+                message: 'Shielded NAVSwap is currently an operator-demo flow, not a wallet-safe route.',
             };
         }
 
@@ -4401,57 +4272,108 @@ function create(runtime) {
             };
         }
 
-        const quote = buildNavswapQuoteResponse(body);
-        if (quote.ok !== true || route !== 'stakehub_transparent_roundtrip') return quote;
-
-        const proof = await buildNavswapNavProofResponse(new URLSearchParams({
-            asset_id: 'a651',
-            phase: body.phase || 'current',
-        }));
-        if (!navswapProofIsFresh(proof)) {
-            return {
-                ok: false,
-                schema: NAVSWAP_QUOTE_SCHEMA,
-                route,
-                code: proof.ok === false ? (proof.code || 'stakehub_nav_proof_unavailable') : 'stakehub_nav_proof_not_fresh',
-                message: proof.message || 'StakeHub transparent roundtrip requires a fresh NAV proof before quote/run.',
-                nav_proof: proof,
-            };
-        }
-        const preflight = await buildStakehubTransparentPreflight();
-        if (preflight.ok !== true) {
-            return {
-                ok: false,
-                schema: NAVSWAP_QUOTE_SCHEMA,
-                route,
-                code: preflight.code || 'stakehub_transparent_preflight_unavailable',
-                message: preflight.message || 'StakeHub transparent preflight is unavailable.',
-                nav_proof: proof,
-                stakehub_preflight: preflight,
-            };
-        }
-
-        return {
-            ...quote,
-            nav_proof: {
-                asset_id: proof.asset_id,
-                chain_id: proof.chain_id,
-                current_pftl_height: proof.current_pftl_height,
-                nav_epoch: proof.nav_epoch,
-                reserve_packet_hash: proof.reserve_packet_hash,
-                freshness_deadline_height: proof.freshness_deadline_height,
-                nav_per_unit: proof.nav_per_unit,
-                supply: proof.supply,
-                proof_status: proof.proof_status,
-                stale: proof.stale,
-                source_receipt_hashes: proof.source_receipt_hashes,
-            },
-            stakehub_preflight: preflight,
-        };
+        return buildNavswapQuoteResponse(body);
     }
 
 
-    return { assetIdForNavswapSymbol,buildNavswapNavProofResponse,buildNavswapQuoteResponse,buildPftlUniswapReceiptVerification,buildStakehubTransparentPreflight,buildTransparentNavswapReceiptVerification,buildTransparentNavswapRedeemReceiptVerification,buildUrl,completePftlUniswapHandoffRun,completeTransparentNavswapRun,executeNavswapDevnetPfusdcFunding,executeNavswapQuote,executePftlUniswapHandoffRun,executePftlUniswapWalletQuote,executeTransparentNavswapQuote,executeTransparentNavswapReadiness,executeTransparentNavswapRun,fetchJsonWithTimeout,isIssuedAsset,isPftAsset,loadPftlUniswapWalletActionContext,navswapAccountAssetItems,navswapAccountBalanceAtoms,navswapActionAutoPlanRequested,navswapActionPrepareError,navswapAllocationRemainingAtoms,navswapAssetInfoAsset,navswapAssetInfoIssuer,navswapAssetIssuer,navswapAssetPrecision,navswapCompletionConsumerIds,navswapCompletionOperationTemplate,navswapCompletionSubmittedChainId,navswapCompletionSubmittedSequence,navswapConsumerMatchesRecipient,navswapDecimalAmountToAtoms,navswapFreshnessFromBody,navswapFreshnessPayload,navswapHashHexDomain,navswapNativeAccountBalanceAtoms,navswapNavProofStub,navswapNavRedemptionId,navswapPftlUniswapControlledAttestationTxHash,navswapPftlUniswapDefaultDeadlineSeconds,navswapPftlUniswapDefaultEthereumRecipient,navswapPftlUniswapDefaultRefundDelayBlocks,navswapPftlUniswapDestinationHeights,navswapPftlUniswapPacketHash,navswapPftlUniswapRouteRow,navswapPlannerCurrentHeight,navswapPlannerError,navswapPlannerNumber,navswapPlannerPositiveNumber,navswapPlannerRemainingAtoms,navswapPrimaryMintIntentFields,navswapProofIsFresh,navswapRandomHex,navswapReceiptFreshness,navswapRedeemCompletionOperationTemplate,navswapRequiredVaultBridgeSettlementAtoms,navswapRouteFromBody,navswapRpcRead,navswapSafeU64Number,navswapSettlementReceiptFreshnessConfig,navswapSettlementReceiptHash,navswapSubscriptionId,navswapValuationUnitScale,navswapWalletActionBatchItems,navswapWalletActionId,normalizePftlUniswapPacketStatus,parseAtomicInteger,parseNavswapActionInteger,parseNavswapDisplayOrAtomAmount,parseNavswapEvmAddress,parseNavswapHexId,parseNavswapWalletAddress,parseStakehubTransparentAmount,pftlUniswapCompletionError,pftlUniswapCompletionQuote,pftlUniswapPreparedAction,planTransparentNavswapWalletActions,preflightNavswapPreparedActionFees,prepareNavswapWalletAction,prepareNavswapWalletActionBatch,prepareNavswapWalletNavRedeemAtNavAction,prepareNavswapWalletNavSubscriptionAllocateAction,preparePftlUniswapWalletActionBatch,selectNavswapIssuedSettlementSource,selectTransparentRedeemSettlementAllocation,signAndSubmitNavswapOperatorAssetTransaction,stakehubTransparentAmountError,transparentCompletionError,transparentCompletionPreparedAction,transparentCompletionQuote,transparentCompletionStage,transparentCompletionSubmission,transparentCompletionWalletResult,validateNavswapPlannerMarketStatus,verifyPftlUniswapExportPacket,verifyPftlUniswapWalletCompletionInput,verifyTransparentNavRedeemSettlement,verifyTransparentNavSubscriptionAllocation,verifyTransparentWalletCompletionInput };
+    return { assetIdForNavswapSymbol,
+buildNavswapQuoteResponse,
+buildPftlUniswapReceiptVerification,
+buildTransparentNavswapReceiptVerification,
+buildTransparentNavswapRedeemReceiptVerification,
+buildUrl,
+completePftlUniswapHandoffRun,
+completeTransparentNavswapRun,
+executeNavswapDevnetPfusdcFunding,
+executeNavswapQuote,
+executePftlUniswapHandoffRun,
+executePftlUniswapWalletQuote,
+executeTransparentNavswapQuote,
+executeTransparentNavswapReadiness,
+executeTransparentNavswapRun,
+fetchJsonWithTimeout,
+isIssuedAsset,
+isPftAsset,
+loadPftlUniswapWalletActionContext,
+navswapAccountAssetItems,
+navswapAccountBalanceAtoms,
+navswapActionAutoPlanRequested,
+navswapActionPrepareError,
+navswapAllocationRemainingAtoms,
+navswapAssetInfoAsset,
+navswapAssetInfoIssuer,
+navswapAssetIssuer,
+navswapAssetPrecision,
+navswapCompletionConsumerIds,
+navswapCompletionOperationTemplate,
+navswapCompletionSubmittedChainId,
+navswapCompletionSubmittedSequence,
+navswapConsumerMatchesRecipient,
+navswapDecimalAmountToAtoms,
+navswapFreshnessFromBody,
+navswapFreshnessPayload,
+navswapHashHexDomain,
+navswapNativeAccountBalanceAtoms,
+navswapNavRedemptionId,
+navswapPftlUniswapControlledAttestationTxHash,
+navswapPftlUniswapDefaultDeadlineSeconds,
+navswapPftlUniswapDefaultEthereumRecipient,
+navswapPftlUniswapDefaultRefundDelayBlocks,
+navswapPftlUniswapDestinationHeights,
+navswapPftlUniswapPacketHash,
+navswapPftlUniswapRouteRow,
+navswapPlannerCurrentHeight,
+navswapPlannerError,
+navswapPlannerNumber,
+navswapPlannerPositiveNumber,
+navswapPlannerRemainingAtoms,
+navswapPrimaryMintIntentFields,
+navswapProofIsFresh,
+navswapRandomHex,
+navswapReceiptFreshness,
+navswapRedeemCompletionOperationTemplate,
+navswapRequiredVaultBridgeSettlementAtoms,
+navswapRouteFromBody,
+navswapRpcRead,
+navswapSafeU64Number,
+navswapSettlementReceiptFreshnessConfig,
+navswapSettlementReceiptHash,
+navswapSubscriptionId,
+navswapValuationUnitScale,
+navswapWalletActionBatchItems,
+navswapWalletActionId,
+normalizePftlUniswapPacketStatus,
+parseAtomicInteger,
+parseNavswapActionInteger,
+parseNavswapDisplayOrAtomAmount,
+parseNavswapEvmAddress,
+parseNavswapHexId,
+parseNavswapWalletAddress,
+pftlUniswapCompletionError,
+pftlUniswapCompletionQuote,
+pftlUniswapPreparedAction,
+planTransparentNavswapWalletActions,
+preflightNavswapPreparedActionFees,
+prepareNavswapWalletAction,
+prepareNavswapWalletActionBatch,
+prepareNavswapWalletNavRedeemAtNavAction,
+prepareNavswapWalletNavSubscriptionAllocateAction,
+preparePftlUniswapWalletActionBatch,
+selectNavswapIssuedSettlementSource,
+selectTransparentRedeemSettlementAllocation,
+signAndSubmitNavswapOperatorAssetTransaction,
+transparentCompletionError,
+transparentCompletionPreparedAction,
+transparentCompletionQuote,
+transparentCompletionStage,
+transparentCompletionSubmission,
+transparentCompletionWalletResult,
+validateNavswapPlannerMarketStatus,
+verifyPftlUniswapExportPacket,
+verifyPftlUniswapWalletCompletionInput,
+verifyTransparentNavRedeemSettlement,
+verifyTransparentNavSubscriptionAllocation,
+verifyTransparentWalletCompletionInput };
 }
 
 module.exports = { create };

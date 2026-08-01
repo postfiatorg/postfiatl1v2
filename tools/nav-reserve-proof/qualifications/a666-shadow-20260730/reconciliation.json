@@ -1,0 +1,121 @@
+{
+  "schema": "postfiat.a666_reserve_proof_reconciliation.v1",
+  "qualification_mode": "historical-observation-shadow",
+  "observation_label": "a666-live-20260730-epoch-3",
+  "valuation_scale": 100000000,
+  "old_proof": {
+    "profile_id": "a94a392926967722b2cceb88b19c4108726381f5b184007185a27e91f3e27c63dcc713a28f6cc4cf765826564e2b5f52",
+    "program_vkey": "0x00580ee8c389192568a29dc23d54c22e73a3a45203b22e3d5a934801871e11a7",
+    "proof_sha256": "8646c38202fd4493eb59427dc85a6905d941c5d4b85cf31407186e440dd2f303",
+    "public_values_sha256": "e842676cc4a2b7f604651b6396559813b186d50c703942c45282e38c7523eb90",
+    "gross_assets": 2846461376975,
+    "total_liabilities": 20088300169,
+    "verified_net_assets": 2826373076806,
+    "source_trust": [
+      {
+        "source_id": "aave-arbitrum",
+        "quantity": "cryptographic",
+        "valuation": "cryptographic"
+      },
+      {
+        "source_id": "ethereum-spot",
+        "quantity": "cryptographic",
+        "valuation": "attested"
+      },
+      {
+        "source_id": "hyperliquid",
+        "quantity": "cryptographic",
+        "valuation": "cryptographic"
+      },
+      {
+        "source_id": "near-stake",
+        "quantity": "cryptographic",
+        "valuation": "attested"
+      },
+      {
+        "source_id": "solana-stake",
+        "quantity": "attested",
+        "valuation": "attested"
+      },
+      {
+        "source_id": "xmr-reserve",
+        "quantity": "attested",
+        "valuation": "attested"
+      }
+    ]
+  },
+  "successor_shadow": {
+    "profile_id": "a18c1bbee443f5f9958592cf65f4c16ee837c5c717cf9144f5b54f90bea267c80b4ae161001c2f7e5267fdc424c366c3",
+    "program_vkey": "0x007e32678376339d48df4db28a9825d5fb229cedb8b2e5c92295d4580c9d32f8",
+    "source_manifest_hash": "56fdd19addb6d4e19e0e60094576bf481602498f0252c99cc37ab480621f21ce8d68e348261b65ba78aa5648ec88e5aa",
+    "source_observation_root": "4662691ec3dfa5f88c9404b50670383ce87a7881911d878a2c02eceef84dcebbd54a6d870c9bb337720dc8a45ed10f4f",
+    "public_values_sha256": "699cb8acb39a3d351549e9a08c13a7712126841b3c3d480606c684a6db4184c8",
+    "gross_assets": 2846461376975,
+    "total_liabilities": 20088300169,
+    "verified_net_assets": 2826373076806,
+    "cryptographically_verified_value": 0,
+    "attested_value": 2826373076806,
+    "controlled_value": 0,
+    "quantity_trust_counts": {
+      "cryptographic": 0,
+      "attested": 6,
+      "controlled": 0
+    },
+    "valuation_trust_counts": {
+      "cryptographic": 0,
+      "attested": 6,
+      "controlled": 0
+    },
+    "sp1_guest_executed": true,
+    "groth16_proof_generated": true,
+    "groth16_host_verified": true,
+    "groth16_consensus_verified": true,
+    "proof_envelope_sha256": "d900758f162f530fe41cd3218e3a3e6bf27f4fe0e1a4721b942d95157f9082a2",
+    "proof_calldata_sha256": "147d02b60b7705d3bd5a16cec57fde80b6784927409f090aec0879fdddc58478"
+  },
+  "source_amounts": [
+    {
+      "source_id": "aave-arbitrum",
+      "gross_assets": 57542112446,
+      "total_liabilities": 20088300169
+    },
+    {
+      "source_id": "ethereum-spot",
+      "gross_assets": 70781930347,
+      "total_liabilities": 0
+    },
+    {
+      "source_id": "hyperliquid",
+      "gross_assets": 1789640753296,
+      "total_liabilities": 0
+    },
+    {
+      "source_id": "near-stake",
+      "gross_assets": 820450032886,
+      "total_liabilities": 0
+    },
+    {
+      "source_id": "solana-stake",
+      "gross_assets": 108046548000,
+      "total_liabilities": 0
+    },
+    {
+      "source_id": "xmr-reserve",
+      "gross_assets": 0,
+      "total_liabilities": 0
+    }
+  ],
+  "comparison": {
+    "gross_assets_delta": 0,
+    "total_liabilities_delta": 0,
+    "verified_net_assets_delta": 0,
+    "amounts_reconcile": true,
+    "trust_classes_reconcile": false,
+    "trust_class_explanation": "The open shadow profile conservatively classifies all six ported observations as Ed25519-attested. It does not inherit cryptographic labels from legacy provider-specific witness formats that the open guest does not yet verify."
+  },
+  "historical_evidence": {
+    "aggregate_witness_report": "docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/aggregate-witness-report.json",
+    "old_live_nav_mark": "docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/nav-epoch-3/live-nav-mark-manifest.json",
+    "old_reconcile_report": "docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/reconcile-report.json"
+  }
+}

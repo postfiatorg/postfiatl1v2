@@ -1,5 +1,9 @@
 # A666 Variable-Size Transparent/Private NAV Round-Trip Spec
 
+> **Historical execution record:** This campaign used the original internal
+> A666 reserve-proof operator path. It is retained for evidence integrity and
+> does not define the provider-neutral successor architecture.
+
 **Date:** 2026-07-28
 **Priority:** P0
 **Status:** executed — business flow PASS, release gate FAIL

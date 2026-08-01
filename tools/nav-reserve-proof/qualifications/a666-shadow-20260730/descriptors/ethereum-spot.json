@@ -1,0 +1,13 @@
+{
+  "schema": "postfiat.reserve_shadow_source_descriptor.v1",
+  "source_id": "ethereum-spot",
+  "reserve_owner": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+  "source_domain": "evm:multi:spot",
+  "historical_observation": "docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/evm-spot-witness.json",
+  "historical_metadata_hash": "ba682afd123479a77866244cfd5a476e2aa67a6e2916ae79d3329e8a73e1d29c",
+  "gross_assets_usd_e8": 70781930347,
+  "total_liabilities_usd_e8": 0,
+  "old_quantity_trust": "cryptographic",
+  "old_valuation_trust": "attested",
+  "successor_shadow_trust": "attested"
+}

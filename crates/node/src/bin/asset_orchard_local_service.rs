@@ -292,12 +292,13 @@ fn parse_config() -> io::Result<Config> {
     let mut prewarm_ready_file = env::var("ASSET_ORCHARD_PREWARM_READY_FILE")
         .ok()
         .map(PathBuf::from);
-    let product_profile_sha256 = env::var("STAKEHUB_PRODUCT_PROFILE_SHA256").map_err(|_| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "STAKEHUB_PRODUCT_PROFILE_SHA256 is required",
-        )
-    })?;
+    let product_profile_sha256 = env::var("POSTFIAT_ASSET_ORCHARD_PRODUCT_PROFILE_SHA256")
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "POSTFIAT_ASSET_ORCHARD_PRODUCT_PROFILE_SHA256 is required",
+            )
+        })?;
     if product_profile_sha256.len() != 64
         || !product_profile_sha256
             .bytes()
@@ -305,7 +306,7 @@ fn parse_config() -> io::Result<Config> {
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "STAKEHUB_PRODUCT_PROFILE_SHA256 must be 64 hexadecimal characters",
+            "POSTFIAT_ASSET_ORCHARD_PRODUCT_PROFILE_SHA256 must be 64 hexadecimal characters",
         ));
     }
 

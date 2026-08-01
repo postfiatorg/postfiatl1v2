@@ -1,5 +1,9 @@
 # NAV Roundtrip Performance Improvement And Test Plan
 
+> **Historical architecture:** This A651/Arbitrum runbook depended on an
+> internal operator wallet and signer. It is retained for benchmark history
+> and must not be used as the current NAVCoin, pfUSDC, wallet, or signer path.
+
 Status: Phase 1 runner/verifier implemented; fast fleet-preflight reuse enforced; Phase 2 default compression-class gate hardened; warm launch-session setup/cleanup is outside protocol clock; allowance setup and smoke commands generated; smoke fleet preflight refreshed; live approval and benchmark execution pending
 Date: 2026-06-21
 Owner: protocol runner / operator

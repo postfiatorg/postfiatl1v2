@@ -6,18 +6,20 @@ use std::process::{Child, Command, Output, Stdio};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use postfiat_crypto_provider::bytes_to_hex;
+use postfiat_crypto_provider::{bytes_to_hex, hex_to_bytes, ml_dsa_65_sign, ML_DSA_65_ALGORITHM};
 use postfiat_execution::genesis_hash;
 use postfiat_network::{local_topology, NetworkDomain};
 use postfiat_node::{
-    apply_batch, asset_fee_quote, create_mempool_batch, create_transfer_batch, init,
-    submit_signed_asset_transaction_json_to_mempool, ApplyBatchOptions, AssetFeeQuoteOptions,
-    BatchTransferOptions, InitOptions, MempoolBatchOptions, NodeOptions,
-    SignedAssetTransactionJsonSubmitOptions,
+    apply_batch, asset_fee_quote, create_mempool_batch, create_transfer_batch, export_snapshot,
+    faucet_key, import_snapshot, init, submit_signed_asset_transaction_json_to_mempool,
+    verify_blocks, ApplyBatchOptions, AssetFeeQuoteOptions, BatchTransferOptions, DevKeyFile,
+    InitOptions, MempoolBatchOptions, NodeOptions, SignedAssetTransactionJsonSubmitOptions,
+    SnapshotExportOptions, SnapshotImportOptions,
 };
 use postfiat_rpc_sdk::{
-    atomic_swap_fee_quote_request, decode_atomic_swap_fee_quote_summary,
-    decode_atomic_swap_finality_summary, decode_transfer_fee_quote_summary,
+    asset_fee_quote_request, atomic_swap_fee_quote_request, decode_asset_fee_quote_summary,
+    decode_atomic_swap_fee_quote_summary, decode_atomic_swap_finality_summary,
+    decode_transfer_fee_quote_summary,
     mempool_submit_signed_atomic_swap_transaction_finality_from_quote_request,
     mempool_submit_signed_transfer_json_request, receipts_request, status_request,
     transfer_fee_quote_request, tx_request, verify_state_request, wallet_backup_from_master_seed,
@@ -32,8 +34,10 @@ use postfiat_types::{
     MarketOpsFinalizeOperation, MarketOpsMintLimits, MarketOpsPolicyInputs,
     MarketOpsPolicyRegisterOperation, MarketOpsPolicyRegistration, MarketOpsReserveDeployLimits,
     MarketOpsVenueObservation, MempoolState, NavAssetRegisterOperation, NavEpochFinalizeOperation,
-    NavProfileRegisterOperation, NavProofProfile, NavReserveSubmitOperation,
-    NAV_PROFILE_VERIFIER_PLACEHOLDER,
+    NavProfileRegisterOperation, NavProofProfile, NavReserveSubmitOperation, SignedTransfer,
+    UnsignedTransfer, ADDRESS_NAMESPACE, NAV_PROFILE_VERIFIER_PLACEHOLDER,
+    NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1, NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1,
+    NAV_RESERVE_PUBLIC_VALUES_V1_BYTES, TRANSFER_TRANSACTION_KIND,
 };
 use serde_json::{json, Value};
 
@@ -163,6 +167,36 @@ fn activate_atomic_swaps_in_fresh_genesis(data_dir: &Path) {
         ),
     )
     .expect("align initial chain tip with activated genesis");
+}
+
+fn activate_consensus_v2_in_fresh_genesis(data_dir: &Path) {
+    let path = data_dir.join("genesis.json");
+    let mut genesis: Value =
+        serde_json::from_slice(&fs::read(&path).expect("read genesis")).expect("parse genesis");
+    genesis["consensus_v2_activation_height"] = json!(1);
+    fs::write(
+        &path,
+        format!(
+            "{}\n",
+            serde_json::to_string_pretty(&genesis).expect("serialize consensus-v2 genesis")
+        ),
+    )
+    .expect("activate consensus v2 in fresh integration genesis");
+    let genesis: Genesis = serde_json::from_slice(&fs::read(&path).expect("read updated genesis"))
+        .expect("parse updated genesis type");
+    let mut chain_tip: Value = serde_json::from_slice(
+        &fs::read(data_dir.join("chain_tip.json")).expect("read initial chain tip"),
+    )
+    .expect("parse initial chain tip");
+    chain_tip["genesis_hash"] = json!(genesis_hash(&genesis));
+    fs::write(
+        data_dir.join("chain_tip.json"),
+        format!(
+            "{}\n",
+            serde_json::to_string_pretty(&chain_tip).expect("serialize initial chain tip")
+        ),
+    )
+    .expect("align initial chain tip with consensus-v2 genesis");
 }
 
 fn split_validator_key(data_dir: &Path, validator: &str) -> PathBuf {
@@ -342,6 +376,11 @@ fn backup(seed_byte: u8) -> WalletBackupFile {
         .expect("deterministic wallet backup")
 }
 
+fn backup_for_chain(chain_id: &str, seed_byte: u8) -> WalletBackupFile {
+    wallet_backup_from_master_seed(chain_id, format!("{seed_byte:02x}").repeat(32), 0)
+        .expect("deterministic chain-bound wallet backup")
+}
+
 fn usd_e8(amount: u128) -> u128 {
     amount * 100_000_000
 }
@@ -492,6 +531,11 @@ fn register_placeholder_nav_profile(
         sp1_proof_encoding: String::new(),
         max_proof_bytes: 0,
         max_public_values_bytes: 0,
+        public_values_schema: String::new(),
+        source_manifest_hash: String::new(),
+        valuation_unit_id: String::new(),
+        max_observation_span_blocks: 0,
+        allow_controlled_sources: false,
     };
     let profile = NavProofProfile::new(
         operation.registrant.clone(),
@@ -518,6 +562,53 @@ fn register_placeholder_nav_profile(
         name,
     );
     profile.profile_id
+}
+
+fn register_successor_nav_profile(
+    data_dir: &Path,
+    registrant: &WalletBackupFile,
+    registrant_address: &str,
+) -> String {
+    let operation = successor_nav_profile_operation(registrant_address);
+    let profile = operation
+        .to_profile()
+        .expect("derive provider-neutral successor profile through consensus path");
+    apply_asset_operation(
+        data_dir,
+        registrant,
+        AssetTransactionOperation::NavProfileRegister(operation),
+        "register-provider-neutral-successor-profile",
+    );
+    profile.profile_id
+}
+
+fn successor_nav_profile_operation(registrant_address: &str) -> NavProfileRegisterOperation {
+    NavProfileRegisterOperation {
+        registrant: registrant_address.to_string(),
+        verifier_kind: NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1.to_string(),
+        source_class: "manifest-driven".to_string(),
+        max_snapshot_age_blocks: 10_000,
+        challenge_window_blocks: 1,
+        max_epoch_gap_blocks: 100,
+        settle_deadline_blocks: 0,
+        min_challenge_bond: 0,
+        min_attestations: 0,
+        tolerance_bp: 0,
+        bridge_observer_min_confirmations: 0,
+        valuation_policy_hash: "04".repeat(32),
+        vault_bridge_route_policy_hash: String::new(),
+        sp1_program_vkey:
+            "0x007e32678376339d48df4db28a9825d5fb229cedb8b2e5c92295d4580c9d32f8"
+                .to_string(),
+        sp1_proof_encoding: "groth16".to_string(),
+        max_proof_bytes: 4_096,
+        max_public_values_bytes: NAV_RESERVE_PUBLIC_VALUES_V1_BYTES as u64,
+        public_values_schema: NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1.to_string(),
+        source_manifest_hash: "9da4e2ba55939f138475026946d2728d9b40d3f4c7762289a70aae94584eac924b9a788c6df25c9276cc83f1616ef0e5".to_string(),
+        valuation_unit_id: "05".repeat(48),
+        max_observation_span_blocks: 8,
+        allow_controlled_sources: true,
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -625,7 +716,7 @@ fn spawn_services(harness: &mut Harness, topology: &Path, ports: &[u16]) -> Vec<
                     .to_str()
                     .expect("vote dir UTF-8"),
                 "--max-connections",
-                "2",
+                "100",
                 "--timeout-ms",
                 "90000",
             ])
@@ -664,7 +755,7 @@ fn spawn_services(harness: &mut Harness, topology: &Path, ports: &[u16]) -> Vec<
                 "--port",
                 &port.to_string(),
                 "--max-requests",
-                "100",
+                "10000",
                 "--timeout-ms",
                 "90000",
                 "--child-timeout-ms",
@@ -734,6 +825,195 @@ fn wait_exact_six(ports: &[u16], expected: &(u64, String, String)) {
     }
 }
 
+fn submit_asset_finality(
+    harness: &Harness,
+    ports: &[u16],
+    signer: &WalletBackupFile,
+    operation: AssetTransactionOperation,
+    label: &str,
+) -> (u64, String, String) {
+    let parent = status_tuple(ports[0], &format!("{label}-parent"));
+    let next_height = parent.0 + 1;
+    let proposer_json = command_json(&[
+        "block-proposer",
+        "--data-dir",
+        harness.node(0).to_str().expect("node path UTF-8"),
+        "--height",
+        &next_height.to_string(),
+        "--view",
+        "0",
+    ]);
+    let proposer_index = proposer_json["proposer"]
+        .as_str()
+        .expect("asset-finality proposer")
+        .strip_prefix("validator-")
+        .expect("validator proposer prefix")
+        .parse::<usize>()
+        .expect("validator proposer index");
+    let proposer_port = ports[proposer_index];
+    let identity = wallet_identity_from_backup(signer).expect("asset-finality signer identity");
+    let quote_response = rpc_call(
+        proposer_port,
+        &asset_fee_quote_request(
+            format!("{label}-quote"),
+            identity.address,
+            serde_json::to_string(&operation).expect("serialize finality operation"),
+            None,
+        ),
+    );
+    let quote = decode_asset_fee_quote_summary(&quote_response).expect("decode asset quote");
+    let signed = wallet_sign_asset_transaction_from_fields(
+        signer,
+        WalletSignAssetTransactionFields {
+            chain_id: quote.chain_id,
+            genesis_hash: quote.genesis_hash,
+            protocol_version: quote.protocol_version,
+            source: quote.source,
+            fee: quote.minimum_fee,
+            sequence: quote.sequence,
+            operation,
+        },
+    )
+    .expect("sign asset-finality operation");
+    let response = rpc_call(
+        proposer_port,
+        &RpcRequest::new(
+            format!("{label}-finality"),
+            "mempool_submit_signed_asset_transaction_finality",
+            json!({
+                "signed_asset_transaction_json": serde_json::to_string(&signed)
+                    .expect("serialize signed asset-finality transaction")
+            }),
+        ),
+    );
+    let result = response.result.expect("asset-finality result");
+    let finality = &result["finality"];
+    assert_eq!(finality["confirmed"], true, "{label} confirmation");
+    assert_eq!(
+        finality["receipt"]["accepted"], true,
+        "{label} receipt: {finality}"
+    );
+    let expected = (
+        finality["block"]["header"]["height"]
+            .as_u64()
+            .expect("asset-finality block height"),
+        finality["block"]["header"]["block_hash"]
+            .as_str()
+            .expect("asset-finality block hash")
+            .to_string(),
+        finality["tip_state_root"]
+            .as_str()
+            .expect("asset-finality state root")
+            .to_string(),
+    );
+    assert_eq!(expected.0, next_height, "{label} next height");
+    wait_exact_six(ports, &expected);
+    expected
+}
+
+fn submit_faucet_transfer_finality(
+    harness: &Harness,
+    ports: &[u16],
+    faucet: &DevKeyFile,
+    recipient: &str,
+    amount: u64,
+    label: &str,
+) -> (u64, String, String) {
+    assert_eq!(
+        faucet.algorithm_id, ML_DSA_65_ALGORITHM,
+        "test faucet must use the transaction signature algorithm"
+    );
+    let parent = status_tuple(ports[0], &format!("{label}-parent"));
+    let next_height = parent.0 + 1;
+    let proposer_json = command_json(&[
+        "block-proposer",
+        "--data-dir",
+        harness.node(0).to_str().expect("node path UTF-8"),
+        "--height",
+        &next_height.to_string(),
+        "--view",
+        "0",
+    ]);
+    let proposer_index = proposer_json["proposer"]
+        .as_str()
+        .expect("transfer-finality proposer")
+        .strip_prefix("validator-")
+        .expect("validator proposer prefix")
+        .parse::<usize>()
+        .expect("validator proposer index");
+    let proposer_port = ports[proposer_index];
+    let quote_response = rpc_call(
+        proposer_port,
+        &transfer_fee_quote_request(
+            format!("{label}-quote"),
+            faucet.address.clone(),
+            recipient.to_string(),
+            amount,
+            None,
+        ),
+    );
+    let quote = decode_transfer_fee_quote_summary(&quote_response).expect("decode transfer quote");
+    assert_eq!(quote.from, faucet.address, "{label} quote sender");
+    assert_eq!(quote.to, recipient, "{label} quote recipient");
+    assert_eq!(quote.amount, amount, "{label} quote amount");
+    let unsigned = UnsignedTransfer {
+        chain_id: quote.chain_id,
+        genesis_hash: quote.genesis_hash,
+        protocol_version: quote.protocol_version,
+        address_namespace: ADDRESS_NAMESPACE.to_string(),
+        transaction_kind: TRANSFER_TRANSACTION_KIND.to_string(),
+        signature_algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        from: quote.from,
+        to: quote.to,
+        amount: quote.amount,
+        fee: quote.minimum_fee,
+        sequence: quote.sequence,
+    };
+    let private_key = hex_to_bytes(&faucet.private_key_hex).expect("decode test faucet key");
+    let signature =
+        ml_dsa_65_sign(&private_key, &unsigned.signing_bytes()).expect("sign test faucet transfer");
+    let signed = SignedTransfer {
+        unsigned,
+        algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        public_key_hex: faucet.public_key_hex.clone(),
+        signature_hex: bytes_to_hex(&signature),
+    };
+    let response = rpc_call(
+        proposer_port,
+        &RpcRequest::new(
+            format!("{label}-finality"),
+            "mempool_submit_signed_transfer_finality",
+            json!({
+                "signed_transfer_json": serde_json::to_string(&signed)
+                    .expect("serialize signed transfer-finality transaction")
+            }),
+        ),
+    );
+    let result = response.result.expect("transfer-finality result");
+    let finality = &result["finality"];
+    assert_eq!(finality["confirmed"], true, "{label} confirmation");
+    assert_eq!(
+        finality["receipt"]["accepted"], true,
+        "{label} receipt: {finality}"
+    );
+    let expected = (
+        finality["block"]["header"]["height"]
+            .as_u64()
+            .expect("transfer-finality block height"),
+        finality["block"]["header"]["block_hash"]
+            .as_str()
+            .expect("transfer-finality block hash")
+            .to_string(),
+        finality["tip_state_root"]
+            .as_str()
+            .expect("transfer-finality state root")
+            .to_string(),
+    );
+    assert_eq!(expected.0, next_height, "{label} next height");
+    wait_exact_six(ports, &expected);
+    expected
+}
+
 fn resume_outbox(data_dir: &Path, topology: &Path) -> Value {
     let output = Command::new(node_bin())
         .args([
@@ -754,6 +1034,289 @@ fn resume_outbox(data_dir: &Path, topology: &Path) -> Value {
         String::from_utf8_lossy(&output.stderr)
     );
     serde_json::from_slice(&output.stdout).expect("parse durable outbox report")
+}
+
+#[test]
+#[ignore = "mandatory provider-neutral reserve proof six-validator finality/restart smoke"]
+fn provider_neutral_qnav_proof_finalizes_and_survives_six_validator_restart() {
+    const QNAV_CHAIN_ID: &str = "postfiat-wan-devnet-2";
+    const QNAV_ASSET_ID: &str = "3f631473a34a48cd47b4e1067546a9ccc5fcfe2f6e103655191d600d9574a5b2e6a985b7c52dcff7c9461aac872a12f5";
+    const QNAV_PROFILE_ID: &str = "cdef69e9711ff26a2f51671598db5b7494627fed7e19c0a3597a3ecad62aab5977522c273f0413643eba72dcb673ab02";
+
+    let mut harness = Harness::new();
+    let seed_dir = harness.root.join("qnav-seed");
+    init(InitOptions {
+        data_dir: seed_dir.clone(),
+        chain_id: QNAV_CHAIN_ID.to_string(),
+        node_id: "validator-0".to_string(),
+        validator_count: VALIDATORS as u32,
+    })
+    .expect("initialize qNAV six-validator seed");
+    activate_consensus_v2_in_fresh_genesis(&seed_dir);
+    let qualified_genesis: Genesis = serde_json::from_slice(
+        &fs::read(seed_dir.join("genesis.json")).expect("read qNAV genesis"),
+    )
+    .expect("parse qNAV genesis");
+    assert_eq!(
+        genesis_hash(&qualified_genesis),
+        "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9"
+    );
+
+    let issuer = backup_for_chain(QNAV_CHAIN_ID, 0x66);
+    let operator = backup_for_chain(QNAV_CHAIN_ID, 0x77);
+    let issuer_id = wallet_identity_from_backup(&issuer).expect("qNAV issuer identity");
+    let operator_id = wallet_identity_from_backup(&operator).expect("qNAV operator identity");
+    assert_eq!(
+        issuer_id.address,
+        "pf0fae169e4293feebc8c9119febb4fd995a667b37"
+    );
+    let faucet = faucet_key(NodeOptions {
+        data_dir: seed_dir.clone(),
+    })
+    .expect("read qNAV test faucet");
+    assert_eq!(
+        issued_asset_id(QNAV_CHAIN_ID, &issuer_id.address, "qNAV", 1)
+            .expect("derive qNAV asset ID"),
+        QNAV_ASSET_ID
+    );
+    let profile_operation = successor_nav_profile_operation(&issuer_id.address);
+    let profile_id = profile_operation
+        .to_profile()
+        .expect("derive qNAV provider-neutral profile")
+        .profile_id;
+    assert_eq!(profile_id, QNAV_PROFILE_ID);
+
+    for index in 0..VALIDATORS {
+        copy_dir(&seed_dir, &harness.node(index));
+        rewrite_node_identity(&harness.node(index), &format!("validator-{index}"));
+    }
+    let base_port = free_base_port();
+    let topology_path = harness.root.join("qnav-topology.json");
+    let topology = local_topology(
+        NetworkDomain {
+            chain_id: qualified_genesis.chain_id.clone(),
+            genesis_hash: genesis_hash(&qualified_genesis),
+            protocol_version: qualified_genesis.protocol_version,
+        },
+        VALIDATORS as u32,
+        base_port,
+    )
+    .expect("build qNAV topology");
+    fs::write(
+        &topology_path,
+        format!(
+            "{}\n",
+            serde_json::to_string_pretty(&topology).expect("serialize qNAV topology")
+        ),
+    )
+    .expect("write qNAV topology");
+    let rpc_ports = topology
+        .peers
+        .iter()
+        .map(|peer| peer.rpc_port)
+        .collect::<Vec<_>>();
+    let ready = spawn_services(&mut harness, &topology_path, &rpc_ports);
+    for path in &ready {
+        wait_for_file(path, Duration::from_secs(90));
+    }
+
+    submit_faucet_transfer_finality(
+        &harness,
+        &rpc_ports,
+        &faucet,
+        &issuer_id.address,
+        1_000_000,
+        "fund-qnav-issuer",
+    );
+    submit_faucet_transfer_finality(
+        &harness,
+        &rpc_ports,
+        &faucet,
+        &operator_id.address,
+        1_000_000,
+        "fund-qnav-operator",
+    );
+    submit_asset_finality(
+        &harness,
+        &rpc_ports,
+        &issuer,
+        AssetTransactionOperation::AssetCreate(AssetCreateOperation {
+            issuer: issuer_id.address.clone(),
+            code: "qNAV".to_string(),
+            version: 1,
+            precision: 6,
+            display_name: "Independent provider-neutral qualification NAVCoin".to_string(),
+            max_supply: None,
+            requires_authorization: false,
+            freeze_enabled: true,
+            clawback_enabled: false,
+        }),
+        "create-qnav",
+    );
+    submit_asset_finality(
+        &harness,
+        &rpc_ports,
+        &issuer,
+        AssetTransactionOperation::NavProfileRegister(profile_operation),
+        "register-qnav-proof-profile",
+    );
+    submit_asset_finality(
+        &harness,
+        &rpc_ports,
+        &issuer,
+        AssetTransactionOperation::NavAssetRegister(NavAssetRegisterOperation {
+            issuer: issuer_id.address.clone(),
+            asset_id: QNAV_ASSET_ID.to_string(),
+            reserve_operator: operator_id.address.clone(),
+            proof_profile: profile_id,
+            valuation_unit: "qualification-unit".to_string(),
+            redemption_account: issuer_id.address.clone(),
+        }),
+        "register-qnav",
+    );
+
+    let proof = postfiat_crypto_provider::hex_to_bytes(
+        include_str!("../../execution/testdata/nav-reserve-v1-qualified-proof-calldata.hex").trim(),
+    )
+    .expect("decode qNAV proof fixture");
+    let public_values = postfiat_crypto_provider::hex_to_bytes(
+        include_str!("../../execution/testdata/nav-reserve-v1-qualified-public-values.hex").trim(),
+    )
+    .expect("decode qNAV public values fixture");
+    let reserve_packet_hash = "55".repeat(48);
+    let submitted = submit_asset_finality(
+        &harness,
+        &rpc_ports,
+        &operator,
+        AssetTransactionOperation::NavReserveSubmit(NavReserveSubmitOperation {
+            issuer: issuer_id.address.clone(),
+            submitter: operator_id.address.clone(),
+            asset_id: QNAV_ASSET_ID.to_string(),
+            epoch: 7,
+            nav_per_unit: 7_000_000,
+            circulating_supply: 0,
+            verified_net_assets: 1_100,
+            proof_profile: QNAV_PROFILE_ID.to_string(),
+            source_root: "f4bdaca02e5445e7d2c666ca692d45d63fe1c423f6b03067e9eee19f5f9334fe60920b8528feff2656d5dbe7d28d415f".to_string(),
+            attestor_root: "cb34590e25db391724491b01795dee8bdbbadba3bba36fb5fc4f96bce1a87fa311426e0b76ce5ff4d775b091d94147df".to_string(),
+            reserve_packet_hash: reserve_packet_hash.clone(),
+            reserve_accounts: Vec::new(),
+            sp1_proof_bytes: proof,
+            sp1_public_values: public_values,
+        }),
+        "qnav-reserve-submit",
+    );
+    let finalized = submit_asset_finality(
+        &harness,
+        &rpc_ports,
+        &issuer,
+        AssetTransactionOperation::NavEpochFinalize(NavEpochFinalizeOperation {
+            issuer: issuer_id.address.clone(),
+            asset_id: QNAV_ASSET_ID.to_string(),
+            epoch: 7,
+            reserve_packet_hash: reserve_packet_hash.clone(),
+        }),
+        "qnav-epoch-finalize",
+    );
+    assert_eq!(finalized.0, submitted.0 + 1);
+
+    for index in 0..VALIDATORS {
+        let ledger: LedgerState = serde_json::from_slice(
+            &fs::read(harness.node(index).join("ledger.json")).expect("read qNAV ledger"),
+        )
+        .expect("parse qNAV ledger");
+        let profile = ledger
+            .nav_proof_profile(QNAV_PROFILE_ID)
+            .expect("qNAV profile after finality");
+        assert_eq!(
+            profile.verifier_kind,
+            NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1
+        );
+        let packet = ledger
+            .nav_reserve_packets
+            .iter()
+            .find(|packet| packet.asset_id == QNAV_ASSET_ID && packet.epoch == 7)
+            .expect("qNAV packet after finality");
+        assert_eq!(packet.state, "finalized", "validator {index}");
+        assert_eq!(packet.proof_verified_net_assets, 1_100, "validator {index}");
+        assert_eq!(packet.controlled_value, 1_100, "validator {index}");
+        assert_eq!(packet.sp1_proof_bytes.len(), 356, "validator {index}");
+        assert_eq!(packet.sp1_public_values.len(), 584, "validator {index}");
+    }
+
+    for child in &mut harness.children {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    harness.children.clear();
+    for path in &ready {
+        let _ = fs::remove_file(path);
+    }
+    let restarted_ready = spawn_services(&mut harness, &topology_path, &rpc_ports);
+    for path in &restarted_ready {
+        wait_for_file(path, Duration::from_secs(90));
+    }
+    wait_exact_six(&rpc_ports, &finalized);
+    for (index, port) in rpc_ports.iter().enumerate() {
+        let verified = rpc_call(
+            *port,
+            &verify_state_request(format!("qnav-restart-{index}")),
+        );
+        assert_eq!(
+            verified.result.expect("qNAV verify_state result")["verified"],
+            true,
+            "validator {index} qNAV restart verification"
+        );
+    }
+
+    for child in &mut harness.children {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    harness.children.clear();
+    let snapshot_dir = harness.root.join("qnav-finalized.snapshot");
+    let restored_dir = harness.root.join("qnav-finalized-restored");
+    let snapshot = export_snapshot(SnapshotExportOptions {
+        data_dir: harness.node(0),
+        snapshot_dir: snapshot_dir.clone(),
+    })
+    .expect("export finalized provider-neutral qNAV snapshot");
+    assert_eq!(snapshot.block_height, finalized.0);
+    assert_eq!(snapshot.block_tip_hash, finalized.1);
+    assert_eq!(snapshot.state_root, finalized.2);
+    let restored = import_snapshot(SnapshotImportOptions {
+        data_dir: restored_dir.clone(),
+        snapshot_dir,
+        node_id: Some("qnav-snapshot-restored".to_string()),
+    })
+    .expect("restore finalized provider-neutral qNAV snapshot");
+    assert_eq!(restored.block_height, finalized.0);
+    assert_eq!(restored.block_tip_hash, finalized.1);
+    assert_eq!(restored.state_root, finalized.2);
+    verify_blocks(NodeOptions {
+        data_dir: restored_dir.clone(),
+    })
+    .expect("replay finalized provider-neutral qNAV snapshot history");
+    let restored_ledger: LedgerState = serde_json::from_slice(
+        &fs::read(restored_dir.join("ledger.json")).expect("read restored qNAV ledger"),
+    )
+    .expect("parse restored qNAV ledger");
+    assert_eq!(
+        restored_ledger
+            .nav_proof_profile(QNAV_PROFILE_ID)
+            .expect("restored qNAV profile")
+            .source_manifest_hash,
+        "9da4e2ba55939f138475026946d2728d9b40d3f4c7762289a70aae94584eac924b9a788c6df25c9276cc83f1616ef0e5"
+    );
+    assert_eq!(
+        restored_ledger
+            .nav_reserve_packets
+            .iter()
+            .find(|packet| packet.asset_id == QNAV_ASSET_ID && packet.epoch == 7)
+            .expect("restored qNAV packet")
+            .public_values_schema,
+        NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1
+    );
 }
 
 #[test]
@@ -876,6 +1439,8 @@ fn atomic_swap_local_six_validator_tcp_finality_and_catch_up() {
         "a651-market-nav",
         "register-a651-profile",
     );
+    let successor_profile_id =
+        register_successor_nav_profile(&seed_dir, &a651_issuer, &a651_issuer_id.address);
     let pfusdc_reserve_packet_hash = "b0".repeat(48);
     finalize_nav_epoch(
         &seed_dir,
@@ -935,6 +1500,24 @@ fn atomic_swap_local_six_validator_tcp_finality_and_catch_up() {
         seeded_ledger.nav_asset(&a651_asset_id).is_some(),
         "a651 must remain NAV-tracked"
     );
+    let successor_profile = seeded_ledger
+        .nav_proof_profile(&successor_profile_id)
+        .expect("provider-neutral successor profile must survive seed replay");
+    assert_eq!(
+        successor_profile.verifier_kind,
+        NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1
+    );
+    assert_eq!(
+        successor_profile.public_values_schema,
+        NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1
+    );
+    assert_eq!(
+        successor_profile.source_manifest_hash,
+        "9da4e2ba55939f138475026946d2728d9b40d3f4c7762289a70aae94584eac924b9a788c6df25c9276cc83f1616ef0e5"
+    );
+    assert_eq!(successor_profile.valuation_unit_id, "05".repeat(48));
+    assert_eq!(successor_profile.max_observation_span_blocks, 8);
+    assert!(successor_profile.allow_controlled_sources);
     assert_eq!(
         seeded_ledger.market_ops_envelopes.len(),
         1,

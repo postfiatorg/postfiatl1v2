@@ -12,7 +12,7 @@
     };
     use postfiat_types::{
         pftl_uniswap_non_consumption_proof_hash, EthereumRouteVerificationPolicyV1,
-        FastSwapCommitteeRootV1, LedgerState,
+        AssetDefinition, FastSwapCommitteeRootV1, LedgerState,
         PftlUniswapConsensusExportPacket, PftlUniswapConsensusRouteState,
         PftlUniswapConsensusReceipt,
         PFTL_UNISWAP_EXPORT_STATUS_DESTINATION_CONSUMED,
@@ -375,6 +375,32 @@
         std::fs::create_dir_all(&data_dir).expect("test dir");
         let (legacy_ledger, packet_hash) = pftl_uniswap_test_ledger("pftl-uniswap-a777");
         let mut ledger = LedgerState::new(Vec::new());
+        ledger.asset_definitions.extend([
+            AssetDefinition {
+                asset_id: legacy_ledger.native_nav_asset_id.clone(),
+                issuer: "pf1111111111111111111111111111111111111111".to_string(),
+                code: "qNAV".to_string(),
+                version: 1,
+                precision: 6,
+                display_name: "Qualified NAVCoin".to_string(),
+                max_supply: None,
+                requires_authorization: false,
+                freeze_enabled: false,
+                clawback_enabled: false,
+            },
+            AssetDefinition {
+                asset_id: legacy_ledger.settlement_asset_id.clone(),
+                issuer: "pf2222222222222222222222222222222222222222".to_string(),
+                code: "qUSD".to_string(),
+                version: 1,
+                precision: 6,
+                display_name: "Qualified settlement asset".to_string(),
+                max_supply: None,
+                requires_authorization: false,
+                freeze_enabled: false,
+                clawback_enabled: false,
+            },
+        ]);
         ledger
             .pftl_uniswap_routes
             .push(pftl_uniswap_consensus_route_from_legacy_fixture(
@@ -396,6 +422,9 @@
         );
         assert_eq!(routes.routes[0].outstanding_bridge_claims_atoms, 40);
         assert_eq!(routes.routes[0].outstanding_export_packet_count, 1);
+        assert_eq!(routes.routes[0].native_nav_asset_code.as_deref(), Some("qNAV"));
+        assert_eq!(routes.routes[0].native_nav_asset_precision, Some(6));
+        assert_eq!(routes.routes[0].settlement_asset_code.as_deref(), Some("qUSD"));
 
         let packet = navcoin_bridge_packet(NavcoinBridgePacketOptions {
             data_dir: data_dir.clone(),

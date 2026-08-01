@@ -1,0 +1,13 @@
+{
+  "schema": "postfiat.reserve_shadow_source_descriptor.v1",
+  "source_id": "near-stake",
+  "reserve_owner": "eed15bedebb4ac46d1528187a8c2f00aa59b441398d3e346c44eb2dcb2fc1d9a",
+  "source_domain": "near:mainnet:astro-stakers.poolv1.near",
+  "historical_observation": "docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/near-receipt-witness.json",
+  "historical_metadata_hash": "d58074ab7aaf961c15d22246bdabb71f3a8ebb8e16c54b184d6485fbdbde5258",
+  "gross_assets_usd_e8": 820450032886,
+  "total_liabilities_usd_e8": 0,
+  "old_quantity_trust": "cryptographic",
+  "old_valuation_trust": "attested",
+  "successor_shadow_trust": "attested"
+}

@@ -13,7 +13,7 @@ import {
 import { resolveFastpayRecipientPublicKey } from '../lib/fastpay.js';
 import { saveFastPayRecovery } from '../lib/fastpay-recovery-store.js';
 
-export default function Send({ rpc, txBuilder, backupJson, address, publicKeyHex, initialSource = 'account', onToast, chainCapabilities, liveSnapshot = null, walletFeedStatus = null, visible = true }) {
+export default function Send({ markets = [], rpc, txBuilder, backupJson, address, publicKeyHex, initialSource = 'account', onToast, chainCapabilities, liveSnapshot = null, walletFeedStatus = null, visible = true }) {
   const fastpayEnabled = chainCapabilities?.owned_lane_enabled === true;
   const [lane, setLane] = useState(initialSource === 'asset' ? 'asset' : initialSource);
   const [amt, setAmt] = useState('');
@@ -154,7 +154,7 @@ export default function Send({ rpc, txBuilder, backupJson, address, publicKeyHex
   }, [visible, rpc, address]);
 
   const getAssetCode = (assetId) => {
-    return displayAssetSymbol(assetId, shortenAssetId(assetId));
+    return displayAssetSymbol(markets, assetId, shortenAssetId(assetId));
   };
 
   const currentMemos = () => ({

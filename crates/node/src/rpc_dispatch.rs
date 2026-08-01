@@ -573,6 +573,23 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                 )],
             )
         }
+        "nav_reserve_proof_status" => {
+            let asset_id = flag_value(flags, "--asset-id").ok_or("missing --asset-id")?;
+            let report = nav_reserve_proof_status(NavReserveProofStatusOptions {
+                data_dir,
+                asset_id: asset_id.to_string(),
+            })
+            .map_err(|error| format!("rpc nav_reserve_proof_status failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "nav_reserve_proof_status",
+                    report.asset_id.clone(),
+                    "NAV reserve proof status queried",
+                )],
+            )
+        }
         "fx_fix_list" => {
             let limit = flag_value(flags, "--limit")
                 .map(|value| {

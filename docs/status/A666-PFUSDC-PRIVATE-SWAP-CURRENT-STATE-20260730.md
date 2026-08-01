@@ -1,5 +1,14 @@
 # A666, pfUSDC, Private Swap, Bridge, and Uniswap Current State
 
+> **Architecture update (2026-08-01):** This remains the authoritative record
+> of the July 30 deployed state and evidence. New production work is governed
+> by the
+> [StakeHub decoupling and open reserve-proof plan](../plans/STAKEHUB-DECOUPLING-AND-OPEN-RESERVE-PROOF-INFRASTRUCTURE-PLAN-20260801.md).
+> StakeHub is an internal operator product, not a wallet, consensus, signer, or
+> public proof dependency. Provider-named proof profiles and packets below are
+> immutable deployment history; the live A666 route must move only through an
+> explicit governed successor-profile transition.
+
 **As of:** 2026-07-30 UTC
 **Document role:** authoritative program status and documentation index
 **Release determination:** functionally proven; limited availability only;
@@ -63,7 +72,7 @@ This is not yet a public production product. The current resident private
 service remains restricted to one controlled wallet, one active request,
 loopback access, and a maximum request of `1.000000 A666`. The most recent
 qualification completed four issue/redeem cycles and then correctly stopped
-before publication when governed StakeHub NAV pricing became stale. The issue
+before publication when governed reserve-proof NAV pricing became stale. The issue
 latency gate also missed: four-sample p95 was `50.365 seconds` against the
 current `42-second` qualification gate.
 
@@ -316,15 +325,15 @@ proving, authenticated validator peers, remote proposer routing, local apply
 before certified send, exact consensus certificate verification, and recovery
 after a restart following publication.
 
-### 5.5 Variable-size issue, real StakeHub NAV, and redemption
+### 5.5 Variable-size issue, real reserve-aware NAV, and redemption
 
 A separate live-value campaign proved the requested `1x`/`100x` business
 flow:
 
 1. transparently issue and export `1.000000 A666`;
 2. privately issue and export `100.000000 A666`;
-3. build and finalize a new A666 NAV mark from the real StakeHub six-leg
-   source path;
+3. build and finalize a new A666 NAV mark from the historical internal
+   six-leg source path;
 4. transparently return and redeem the `1.000000 A666`; and
 5. privately return and redeem the `100.000000 A666`.
 
@@ -451,7 +460,7 @@ PFTL-Uniswap finalized NAV pricing is older than the consensus freshness window
 
 This was a correct safety result: stale governed pricing could not create a
 valid swap. It also exposed missing production automation. The runner must
-refresh StakeHub reserve/NAV inputs, wait for finalized six-validator
+refresh the registered reserve-proof/NAV inputs, wait for finalized six-validator
 convergence, and reacquire a quote before the freshness boundary.
 
 The ten-cycle campaign was stopped after four complete cycles. The decision is
@@ -519,7 +528,8 @@ level, remaining work is:
 - finish exact reconciliation of the cycle-5 egressed pfUSDC against the
   controlled balance and global conservation report;
 - freeze and independently restore a signed content-addressed checkpoint;
-- automate authenticated StakeHub reserve/NAV refresh;
+- migrate to and automate authenticated provider-neutral reserve-proof/NAV
+  refresh;
 - make the resident orchestrator fully exact-once across every crash prefix;
 - remove prover-mirror readiness races;
 - complete safe rollback and redacted baseline manifests; and
@@ -616,7 +626,7 @@ gate.
 | Ethereum pfUSDC functional and latency runs | `../evidence/pfusdc-eth-campaign-20260725/` and `../evidence/pfusdc-eth-mainnet-latency-20260727-run2/` |
 | A666 deployment and opening export | `A666-MAINNET-DEPLOYMENT-20260727.md` and `../../deployments/a666-mainnet-20260727/` |
 | Transparent/private acceptance | `../evidence/a666-acceptance-20260728/` |
-| Variable-size issue, real StakeHub NAV mark, and redemption | `../evidence/a666-variable-size-nav-roundtrip-20260728/README.md` |
+| Variable-size issue, real reserve-aware NAV mark, and redemption | `../evidence/a666-variable-size-nav-roundtrip-20260728/README.md` |
 | Optimized full private round trip | `../evidence/a666-optimization-run-20260729/` and `A666-CHAIN-OPTIMIZATION-RUN-REPORT-20260729.md` |
 | Resident private service | `PFTL-RESIDENT-SWAP-LIMITED-AVAILABILITY-20260729.md` |
 | Latest view-aware observer and partial qualification | `../evidence/pftl-private-swap-p0-20260730/README.md` |

@@ -1,5 +1,9 @@
 # Private NAV OTC Shielded Swap on WAN Devnet
 
+> **Historical architecture:** This records the original A651/Arbitrum
+> internal-operator demonstration. It is retained as evidence and does not
+> define the current A666 primary market or provider-neutral proof boundary.
+
 Status: controlled-devnet runbook and execution record
 Date: 2026-06-20
 Audience: protocol engineering, validator operators, bridge operators
