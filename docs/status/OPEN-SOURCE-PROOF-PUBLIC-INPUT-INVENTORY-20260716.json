@@ -1,13 +1,16 @@
 {
   "schema": "postfiat-open-source-proof-public-input-inventory-v1",
-  "audit_date": "2026-07-16",
-  "baseline_commit": "4b5af7bc6bb6e793ed8a60219d13d6d35be03058",
+  "audit_date": "2026-08-01",
+  "baseline_commit": "016c7358608fca6f62752be0cc3132d3d43ccea4",
   "source_hashes": {
-    "crates/privacy_orchard/src/asset_orchard.rs": "0e311ffca9c97096d270124ccdcb8a8010b4d4fad0c053ec10f2fc1dd06d158e",
-    "crates/privacy_orchard/src/asset_orchard_circuit.rs": "806d3ce4d6c8cf34c2d99813093683ca38ecf6578992b9096219c0aefe779748",
-    "crates/privacy_orchard/src/verify.rs": "7b1bdf76dd5093aa8a938c597c9516c1a956571b214b04db6cf4cb7b234a64b1",
-    "crates/execution/src/nav_sp1_verifier.rs": "4ec31cf5e29e921b94ef2112c6384733ae5861bed0bc83e8a1aa3a5724185385",
-    "crates/proofs/src/lib.rs": "6ad08dd265fc25958daf6e0ae3d55bbecaa13cdebdcafc9739c2d682d0eb4527"
+    "crates/privacy_orchard/src/asset_orchard.rs": "9b63632e1d4c5cb4bd7d061103552db5b8380f8404659c73f8e48f14b28ba739",
+    "crates/privacy_orchard/src/asset_orchard_circuit.rs": "77ab533ed63a10a2a4a2902de11f3a94d5f2d1045afb6839d4c7f59407e9d310",
+    "crates/privacy_orchard/src/verify.rs": "0b48191344297c4c1a7720b3cc54844d919205f58013bd6f4e8af3d60b72e66a",
+    "crates/execution/src/nav_sp1_verifier.rs": "8fa6988c17a19488a0f54eb7b688efd2e74b84b052b3974be7185d490c0846a8",
+    "crates/proofs/src/lib.rs": "6ad08dd265fc25958daf6e0ae3d55bbecaa13cdebdcafc9739c2d682d0eb4527",
+    "crates/types/src/nav_reserve_public_values.rs": "ffe01da1eefffa33d1f283ba0248e5e7f572e0537b88a794435aa43e2a3c5cf6",
+    "tools/nav-reserve-proof/crates/reserve-proof-types/src/lib.rs": "dcdb6e229ad8b0cd9d3b5cae45e963f63e98136d403e6aecfb03b124f4b94d33",
+    "tools/nav-reserve-proof/programs/reserve-proof-guest/src/main.rs": "1f3caf2e7b1adb64afc14c5f5e81a4690d25a232d116ad95b3e0126420b8c655"
   },
   "systems": [
     {
@@ -103,8 +106,8 @@
       "compatibility_note": "H_action retains the v1 proof-binding constant while live proof verification requires the v2 VK; v1 is archive-replay-only."
     },
     {
-      "name": "NAV SP1 Groth16 aggregate",
-      "status": "profile-gated consensus verifier; real-value provenance incomplete",
+      "name": "Legacy NAV SP1 Groth16 aggregate",
+      "status": "historical profile compatibility only; real-value provenance incomplete",
       "proof_system_id": "sp1-groth16",
       "proof_binding": "Groth16Verifier verifies the entire public-values byte string against the profile-bound 32-byte SP1 program vkey and the pinned sp1-verifier Groth16 VK",
       "host_decoded_fields": [
@@ -119,6 +122,61 @@
       "bounded_bridge_verify": "verify_bounded_sp1_groth16 (nav_sp1_verifier.rs) cryptographically verifies a size-bounded SP1 Groth16 proof against the profile-bound program vkey and pinned Groth16 VK without decoding the NAV aggregate ABI; dedicated bridge programs (e.g. pfUSDC Tier-4 ingress/egress) decode and bind their own public values after this check. Fail-closed on verifier-kind mismatch, empty proof/public-values, or oversize inputs."
     },
     {
+      "name": "NAV provider-neutral reserve proof",
+      "status": "public, reproducible successor implementation; profile-gated consensus verifier",
+      "proof_system_id": "sp1-nav-reserve-v1",
+      "program_vkey": "0x007e32678376339d48df4db28a9825d5fb229cedb8b2e5c92295d4580c9d32f8",
+      "public_values_schema": "postfiat.nav_reserve_public_values.v1",
+      "encoding": "fixed-width, big-endian integers, no dynamic fields",
+      "public_values_length": 584,
+      "public_values": [
+        {"byte_offset": 0, "byte_length": 8, "name": "magic", "binding": "must equal ASCII PFNAV001"},
+        {"byte_offset": 8, "byte_length": 4, "name": "version", "binding": "must equal 1"},
+        {"byte_offset": 12, "byte_length": 48, "name": "pftl_genesis_hash", "binding": "host requires the active chain genesis hash"},
+        {"byte_offset": 60, "byte_length": 48, "name": "nav_asset_id", "binding": "host requires the reserve packet NAV asset"},
+        {"byte_offset": 108, "byte_length": 48, "name": "proof_profile_id", "binding": "host requires the governed proof profile"},
+        {"byte_offset": 156, "byte_length": 32, "name": "valuation_policy_hash", "binding": "host requires the profile valuation policy hash"},
+        {"byte_offset": 188, "byte_length": 48, "name": "source_manifest_hash", "binding": "host requires the manifest pinned by the profile"},
+        {"byte_offset": 236, "byte_length": 48, "name": "valuation_unit_id", "binding": "host requires the profile valuation unit"},
+        {"byte_offset": 284, "byte_length": 8, "name": "valuation_scale", "binding": "nonzero scale committed by the guest"},
+        {"byte_offset": 292, "byte_length": 8, "name": "observation_epoch", "binding": "host requires the reserve packet epoch"},
+        {"byte_offset": 300, "byte_length": 8, "name": "observation_not_before", "binding": "host checks interval ordering and maximum span"},
+        {"byte_offset": 308, "byte_length": 8, "name": "observation_not_after", "binding": "host checks future and staleness bounds against current height"},
+        {"byte_offset": 316, "byte_length": 48, "name": "source_observation_root", "binding": "host requires the packet source root, or binds it into the explicit subscription-overlay composite root"},
+        {"byte_offset": 364, "byte_length": 8, "name": "gross_assets", "binding": "guest checks asset aggregation with checked arithmetic"},
+        {"byte_offset": 372, "byte_length": 8, "name": "total_liabilities", "binding": "guest checks liabilities do not exceed gross assets"},
+        {"byte_offset": 380, "byte_length": 8, "name": "verified_net_assets", "binding": "guest requires gross assets minus liabilities; host requires the packet proof-backed value"},
+        {"byte_offset": 388, "byte_length": 8, "name": "cryptographically_verified_value", "binding": "guest classifies verified value by manifest-pinned evidence type"},
+        {"byte_offset": 396, "byte_length": 8, "name": "attested_value", "binding": "guest classifies attested value separately"},
+        {"byte_offset": 404, "byte_length": 8, "name": "controlled_value", "binding": "host rejects nonzero controlled value when the profile forbids controlled sources"},
+        {"byte_offset": 412, "byte_length": 4, "name": "source_count", "binding": "guest requires 1 through 64 sources and exact manifest/observation cardinality"},
+        {"byte_offset": 416, "byte_length": 4, "name": "quantity_cryptographic_count", "binding": "guest-derived quantity-evidence trust count"},
+        {"byte_offset": 420, "byte_length": 4, "name": "quantity_attested_count", "binding": "guest-derived quantity-evidence trust count"},
+        {"byte_offset": 424, "byte_length": 4, "name": "quantity_controlled_count", "binding": "guest-derived quantity-evidence trust count and host controlled-source gate"},
+        {"byte_offset": 428, "byte_length": 4, "name": "valuation_cryptographic_count", "binding": "guest-derived valuation-evidence trust count"},
+        {"byte_offset": 432, "byte_length": 4, "name": "valuation_attested_count", "binding": "guest-derived valuation-evidence trust count"},
+        {"byte_offset": 436, "byte_length": 4, "name": "valuation_controlled_count", "binding": "guest-derived valuation-evidence trust count and host controlled-source gate"},
+        {"byte_offset": 440, "byte_length": 48, "name": "quantity_trust_root", "binding": "guest commits source identities and quantity evidence classes"},
+        {"byte_offset": 488, "byte_length": 48, "name": "valuation_trust_root", "binding": "host requires the reserve packet attestor root"},
+        {"byte_offset": 536, "byte_length": 48, "name": "source_disclosure_root", "binding": "guest commits source disclosure commitments independently of trust classification"}
+      ],
+      "private_witnesses": [
+        "canonical CBOR reserve witness bounded to 8 MiB",
+        "manifest entries for up to 64 ordered provider-neutral sources",
+        "source observations and adapter-specific evidence",
+        "signatures or state proofs selected by each manifest-pinned adapter"
+      ],
+      "proof_binding": "The public SP1 guest validates the manifest, source evidence, trust classification, liabilities and context, then commits exactly 584 bytes. Groth16Verifier verifies those bytes against the profile-bound program vkey and the pinned SP1 Groth16 VK.",
+      "host_only_checks": [
+        "chain genesis, NAV asset, proof profile, manifest, valuation policy and valuation unit equality",
+        "packet epoch, observation interval, maximum snapshot age and maximum observation span",
+        "packet proof-backed value, source root or subscription-overlay composite root, and valuation trust root",
+        "profile policy forbidding controlled sources",
+        "floating-NAV reserve floor and consensus state-transition invariants"
+      ],
+      "reproduction_evidence": "The repository contains the guest, shared types, adapters, CLI, fixture vectors, build metadata and pinned ELF. A clean public checkout reproduced execution and a CPU Groth16 proof with this program vkey on 2026-08-01."
+    },
+    {
       "name": "Debug shielded proof adapter",
       "status": "test/benchmark and legacy replay support only",
       "proof_system_id": "postfiat.debug-proof.v1",
@@ -127,7 +185,7 @@
     }
   ],
   "verdict": {
-    "source_publication": "AssetOrchard live public-instance and witness bindings are fully inventoried; SP1 and debug-system limitations are explicitly contained and cannot be marketed as independently reproducible production proof systems.",
-    "real_value": "blocked pending independent circuit review, SP1 guest/program reproduction, production activation/rollback ceremony and exact candidate-run evidence"
+    "source_publication": "AssetOrchard live public-instance and witness bindings and the provider-neutral NAV reserve proof ABI are fully inventoried. The successor NAV guest, build recipe, adapters and deterministic vectors are public and locally reproducible. The legacy NAV aggregate and debug adapter remain explicitly contained compatibility surfaces.",
+    "real_value": "The successor proof implementation is locally qualified, but live real-value activation remains gated on governed profile/program registration, validator rollout and rollback evidence, fresh A666 epochs, an independent operator reproduction, and exact live candidate-run evidence."
   }
 }

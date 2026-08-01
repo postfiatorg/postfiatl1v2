@@ -24,6 +24,8 @@ def main() -> None:
             )
 
     systems = {item["name"]: item for item in document["systems"]}
+    if len(systems) != 5:
+        raise SystemExit("proof inventory must classify exactly five proof systems")
     expected_layouts = {
         "AssetOrchard swap": (28, "ASSET_ORCHARD_PUBLIC_INSTANCE_LEN: usize = 28"),
         "AssetOrchard private egress": (
@@ -50,7 +52,48 @@ def main() -> None:
         ROOT / "crates/execution/src/nav_sp1_verifier.rs"
     ).read_text(encoding="utf-8"):
         raise SystemExit("SP1 Groth16 verification call missing")
-    print("proof_public_input_inventory=ok systems=4 public_fields=41 source_hashes=5")
+
+    reserve = systems["NAV provider-neutral reserve proof"]
+    if reserve["proof_system_id"] != "sp1-nav-reserve-v1":
+        raise SystemExit("provider-neutral NAV proof-system ID mismatch")
+    if reserve["public_values_length"] != 584:
+        raise SystemExit("provider-neutral NAV public-values length mismatch")
+    reserve_fields = reserve["public_values"]
+    if any(not field.get("name") or not field.get("binding") for field in reserve_fields):
+        raise SystemExit("provider-neutral NAV public fields need names and bindings")
+    expected_offset = 0
+    for field in reserve_fields:
+        if field["byte_offset"] != expected_offset or field["byte_length"] <= 0:
+            raise SystemExit("provider-neutral NAV public fields are not contiguous")
+        expected_offset += field["byte_length"]
+    if expected_offset != 584:
+        raise SystemExit("provider-neutral NAV public fields do not cover exactly 584 bytes")
+
+    reserve_types = (
+        ROOT / "crates/types/src/nav_reserve_public_values.rs"
+    ).read_text(encoding="utf-8")
+    for marker in (
+        'NAV_RESERVE_PUBLIC_VALUES_MAGIC_V1: &[u8; 8] = b"PFNAV001"',
+        "NAV_RESERVE_PUBLIC_VALUES_VERSION_V1: u32 = 1",
+        "NAV_RESERVE_PUBLIC_VALUES_V1_BYTES: usize = 584",
+    ):
+        if marker not in reserve_types:
+            raise SystemExit(f"provider-neutral NAV source marker missing: {marker}")
+    reserve_guest = (
+        ROOT / "tools/nav-reserve-proof/programs/reserve-proof-guest/src/main.rs"
+    ).read_text(encoding="utf-8")
+    if "sp1_zkvm::io::commit_slice(&public_values)" not in reserve_guest:
+        raise SystemExit("provider-neutral NAV guest public-values commitment missing")
+
+    public_fields = sum(
+        len(system.get("public_instances", system.get("public_values", [])))
+        for system in systems.values()
+    )
+    print(
+        "proof_public_input_inventory=ok "
+        f"systems={len(systems)} public_fields={public_fields} "
+        f"source_hashes={len(document['source_hashes'])}"
+    )
 
 
 if __name__ == "__main__":
