@@ -81,6 +81,17 @@ export default function PrivateFix({ rpc, proxyAuthToken = '' }) {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  const refreshCompletedMarket = useCallback(async (current) => {
+    if (!rpc || current?.status !== 'accepted' || !current?.fix_packet_hash) return;
+    const info = await rpc.fxFixInfo(current.fix_packet_hash);
+    const finalized = info?.ok === true && info.result?.found === true ? info.result.fix : null;
+    if (!finalized) throw new Error('finalized FIX state is unavailable after private execution');
+    setMarket((previous) => {
+      if (!previous || previous.packet?.packet_hash !== current.fix_packet_hash) return previous;
+      return { ...previous, row: finalized, packet: finalized.state?.packet || previous.packet };
+    });
+  }, [rpc]);
+
   const resume = useCallback(async (recovery, signal) => {
     if (!recovery) return;
     setExecuting(true);
@@ -109,10 +120,11 @@ export default function PrivateFix({ rpc, proxyAuthToken = '' }) {
         setJob(current);
       }
       if (current.status === 'failed') throw new Error(current.message || 'Private execution stopped safely');
+      await refreshCompletedMarket(current);
     } finally {
       setExecuting(false);
     }
-  }, [proxyAuthToken]);
+  }, [proxyAuthToken, refreshCompletedMarket]);
 
   useEffect(() => {
     const recovery = readRecovery();
