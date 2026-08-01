@@ -26,7 +26,7 @@ use postfiat_privacy_orchard::{
     encrypt_asset_orchard_wallet_note, reset_asset_orchard_private_egress_timings,
     take_asset_orchard_private_egress_timings, AssetOrchardPricingClaim,
     AssetOrchardPrivateEgressProvingKey, AssetOrchardPrivateEgressVerifyingKey,
-    AssetOrchardSwapProvingKey, AssetOrchardSwapVerifyingKey,
+    AssetOrchardSwapProvingKey, AssetOrchardSwapVerifyingKey, AssetTag,
 };
 use postfiat_storage::NodeStore;
 use postfiat_types::ShieldedActionBatch;
@@ -118,6 +118,12 @@ struct SwapActionRequest {
     pricing_claim: AssetOrchardPricingClaim,
     input_note_path_a: Option<String>,
     input_note_path_b: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SwapCircuitOrder {
+    WalletIsBase,
+    WalletIsQuote,
 }
 
 #[derive(Debug)]
@@ -1353,6 +1359,32 @@ fn build_and_store_note(
     ))
 }
 
+fn swap_circuit_order(request: &SwapActionRequest) -> io::Result<SwapCircuitOrder> {
+    let wallet_tag = AssetTag::derive(&request.from_asset_id)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error.to_string()))?;
+    let facility_tag = AssetTag::derive(&request.to_asset_id)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error.to_string()))?;
+    let base_tag = AssetTag {
+        lo: request.pricing_claim.base_asset_tag_lo,
+        hi: request.pricing_claim.base_asset_tag_hi,
+    };
+    let quote_tag = AssetTag {
+        lo: request.pricing_claim.quote_asset_tag_lo,
+        hi: request.pricing_claim.quote_asset_tag_hi,
+    };
+    match (
+        wallet_tag == base_tag && facility_tag == quote_tag,
+        wallet_tag == quote_tag && facility_tag == base_tag,
+    ) {
+        (true, false) => Ok(SwapCircuitOrder::WalletIsBase),
+        (false, true) => Ok(SwapCircuitOrder::WalletIsQuote),
+        _ => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "swap assets do not match the pricing claim base/quote tags",
+        )),
+    }
+}
+
 fn build_and_store_swap_action(config: &Config, request: &SwapActionRequest) -> io::Result<Value> {
     let request_fingerprint = swap_action_request_fingerprint(request)?;
     let durable_work_dir = request.request_id.as_deref().map(|request_id| {
@@ -1427,19 +1459,30 @@ fn build_and_store_swap_action(config: &Config, request: &SwapActionRequest) -> 
     let pricing_claim_json = serde_json::to_value(&request.pricing_claim).map_err(invalid_json)?;
     atomic_write_private_json(&pricing_claim_file, &pricing_claim_json)?;
 
+    // The circuit requires [base, quote] inputs and returns [quote, base].
+    // Wallet-facing `from`/`to` is independent of that canonical order: NAV
+    // primary routes historically put the wallet on the quote side, while a
+    // pfUSDC -> pNOK FIX puts it on the base side. Derive the ordering from the
+    // finalized pricing-claim tags instead of assuming either market shape.
+    let (input_note_files, output_note_files) = match swap_circuit_order(request)? {
+        SwapCircuitOrder::WalletIsBase => (
+            [input_a.clone(), input_b.clone()],
+            [output_a.clone(), output_b.clone()],
+        ),
+        SwapCircuitOrder::WalletIsQuote => (
+            [input_b.clone(), input_a.clone()],
+            [output_b.clone(), output_a.clone()],
+        ),
+    };
+
     reset_asset_orchard_private_egress_timings();
     let report = match create_asset_orchard_swap_action(AssetOrchardSwapCreateOptions {
         data_dir: config.data_dir.clone(),
-        // The pricing-bound circuit's canonical private order is NAV base,
-        // then settlement quote. The service API remains wallet-from/pool-to,
-        // so the pool input must be presented first to the circuit.
-        input_note_files: [input_b, input_a],
+        input_note_files,
         output_note_seed_hexes: [bytes_to_hex(&random_seed()?), bytes_to_hex(&random_seed()?)],
         pricing_claim_file,
         action_file: action_file.clone(),
-        // build_asset_orchard_swap_action swaps the two ordered inputs. With
-        // pool/base first, output[1] is the wallet's acquired NAV note.
-        output_note_files: [output_b.clone(), output_a.clone()],
+        output_note_files,
         overwrite: true,
     }) {
         Ok(report) => report,
@@ -3701,6 +3744,51 @@ mod tests {
             Some(30_000_000)
         );
         assert_eq!(pool.get("amount_atoms").and_then(Value::as_u64), Some(5));
+    }
+
+    #[test]
+    fn asset_orchard_local_service_swap_orders_both_fix_directions_from_asset_tags() {
+        let reverse =
+            parse_swap_action_request(&asset_orchard_local_service_swap_body(None, None)).unwrap();
+        assert_eq!(
+            swap_circuit_order(&reverse).unwrap(),
+            SwapCircuitOrder::WalletIsQuote
+        );
+
+        let mut forward_body = asset_orchard_local_service_swap_body(None, None);
+        let wallet_base = AssetTag::derive(&"a".repeat(96)).unwrap();
+        let facility_quote = AssetTag::derive(&"b".repeat(96)).unwrap();
+        forward_body["pricing_claim"]["base_asset_tag_lo"] =
+            Value::String(format!("{:032x}", wallet_base.lo));
+        forward_body["pricing_claim"]["base_asset_tag_hi"] =
+            Value::String(format!("{:032x}", wallet_base.hi));
+        forward_body["pricing_claim"]["quote_asset_tag_lo"] =
+            Value::String(format!("{:032x}", facility_quote.lo));
+        forward_body["pricing_claim"]["quote_asset_tag_hi"] =
+            Value::String(format!("{:032x}", facility_quote.hi));
+        let forward = parse_swap_action_request(&forward_body).unwrap();
+        assert_eq!(
+            swap_circuit_order(&forward).unwrap(),
+            SwapCircuitOrder::WalletIsBase
+        );
+    }
+
+    #[test]
+    fn asset_orchard_local_service_swap_rejects_pricing_tags_for_another_pair() {
+        let mut body = asset_orchard_local_service_swap_body(None, None);
+        let unrelated = AssetTag::derive(&"c".repeat(96)).unwrap();
+        body["pricing_claim"]["base_asset_tag_lo"] =
+            Value::String(format!("{:032x}", unrelated.lo));
+        body["pricing_claim"]["base_asset_tag_hi"] =
+            Value::String(format!("{:032x}", unrelated.hi));
+        let request = parse_swap_action_request(&body).unwrap();
+
+        let error = swap_circuit_order(&request).unwrap_err();
+
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(error
+            .to_string()
+            .contains("do not match the pricing claim base/quote tags"));
     }
 
     #[test]
