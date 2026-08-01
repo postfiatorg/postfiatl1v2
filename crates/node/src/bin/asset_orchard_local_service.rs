@@ -107,6 +107,7 @@ struct IngressNoteRequest {
 struct SwapActionRequest {
     request_id: Option<String>,
     wallet_address: String,
+    liquidity_wallet_address: Option<String>,
     from_asset_id: String,
     to_asset_id: String,
     amount_atoms: u64,
@@ -1564,6 +1565,7 @@ fn build_and_store_swap_action(config: &Config, request: &SwapActionRequest) -> 
         "quote_binding_hash": request.quote_binding_hash,
         "quote_expires_at_ms": request.quote_expires_at_ms.to_string(),
         "wallet_address": request.wallet_address,
+        "liquidity_wallet_address": request.liquidity_wallet_address,
         "from_asset_id": request.from_asset_id,
         "to_asset_id": request.to_asset_id,
         "amount_atoms": request.amount_atoms,
@@ -1619,22 +1621,43 @@ fn build_and_store_swap_action(config: &Config, request: &SwapActionRequest) -> 
 
 fn swap_action_request_fingerprint(request: &SwapActionRequest) -> io::Result<String> {
     let pricing_claim = serde_json::to_string(&request.pricing_claim).map_err(invalid_json)?;
-    let preimage = format!(
-        "request_id={}\nwallet_address={}\nfrom_asset_id={}\nto_asset_id={}\namount_atoms={}\nwallet_commitment={}\nliquidity_amount_atoms={}\nliquidity_commitment={}\nquote_binding_hash={}\nquote_expires_at_ms={}\npricing_claim={}\ninput_note_path_a={}\ninput_note_path_b={}\n",
-        request.request_id.as_deref().unwrap_or(""),
-        request.wallet_address,
-        request.from_asset_id,
-        request.to_asset_id,
-        request.amount_atoms,
-        request.wallet_commitment.as_deref().unwrap_or(""),
-        request.liquidity_amount_atoms,
-        request.liquidity_commitment,
-        request.quote_binding_hash,
-        request.quote_expires_at_ms,
-        pricing_claim,
-        request.input_note_path_a.as_deref().unwrap_or(""),
-        request.input_note_path_b.as_deref().unwrap_or(""),
-    );
+    let preimage = match request.liquidity_wallet_address.as_deref() {
+        Some(liquidity_wallet_address) => format!(
+            "request_id={}\nwallet_address={}\nliquidity_wallet_address={}\nfrom_asset_id={}\nto_asset_id={}\namount_atoms={}\nwallet_commitment={}\nliquidity_amount_atoms={}\nliquidity_commitment={}\nquote_binding_hash={}\nquote_expires_at_ms={}\npricing_claim={}\ninput_note_path_a={}\ninput_note_path_b={}\n",
+            request.request_id.as_deref().unwrap_or(""),
+            request.wallet_address,
+            liquidity_wallet_address,
+            request.from_asset_id,
+            request.to_asset_id,
+            request.amount_atoms,
+            request.wallet_commitment.as_deref().unwrap_or(""),
+            request.liquidity_amount_atoms,
+            request.liquidity_commitment,
+            request.quote_binding_hash,
+            request.quote_expires_at_ms,
+            pricing_claim,
+            request.input_note_path_a.as_deref().unwrap_or(""),
+            request.input_note_path_b.as_deref().unwrap_or(""),
+        ),
+        // Preserve the exact v1 preimage for in-flight requests created before
+        // liquidity ownership became an explicit request field.
+        None => format!(
+            "request_id={}\nwallet_address={}\nfrom_asset_id={}\nto_asset_id={}\namount_atoms={}\nwallet_commitment={}\nliquidity_amount_atoms={}\nliquidity_commitment={}\nquote_binding_hash={}\nquote_expires_at_ms={}\npricing_claim={}\ninput_note_path_a={}\ninput_note_path_b={}\n",
+            request.request_id.as_deref().unwrap_or(""),
+            request.wallet_address,
+            request.from_asset_id,
+            request.to_asset_id,
+            request.amount_atoms,
+            request.wallet_commitment.as_deref().unwrap_or(""),
+            request.liquidity_amount_atoms,
+            request.liquidity_commitment,
+            request.quote_binding_hash,
+            request.quote_expires_at_ms,
+            pricing_claim,
+            request.input_note_path_a.as_deref().unwrap_or(""),
+            request.input_note_path_b.as_deref().unwrap_or(""),
+        ),
+    };
     Ok(hash_hex(
         "postfiat.asset_orchard.local_swap_request.v1",
         preimage.as_bytes(),
@@ -1660,7 +1683,7 @@ fn swap_input_records(config: &Config, request: &SwapActionRequest) -> io::Resul
                 config,
                 "input_note_path_b",
                 path_b,
-                None,
+                request.liquidity_wallet_address.as_deref(),
                 &request.to_asset_id,
                 request.liquidity_amount_atoms,
                 Some(&request.liquidity_commitment),
@@ -1676,7 +1699,7 @@ fn swap_input_records(config: &Config, request: &SwapActionRequest) -> io::Resul
             )?,
             select_vault_note(
                 config,
-                None,
+                request.liquidity_wallet_address.as_deref(),
                 &request.to_asset_id,
                 request.liquidity_amount_atoms,
                 Some(&request.liquidity_commitment),
@@ -2258,6 +2281,10 @@ fn parse_swap_action_request(body: &Value) -> io::Result<SwapActionRequest> {
         .map(|_| request_id_field(body))
         .transpose()?;
     let wallet_address = string_field(body, "wallet_address")?;
+    let liquidity_wallet_address = body
+        .get("liquidity_wallet_address")
+        .map(|_| string_field(body, "liquidity_wallet_address"))
+        .transpose()?;
     let from_asset_id = hex_field(body, "from_asset_id", 96)?;
     let to_asset_id = hex_field(body, "to_asset_id", 96)?;
     let amount_atoms = u64_field(body, "amount_atoms")?;
@@ -2298,6 +2325,7 @@ fn parse_swap_action_request(body: &Value) -> io::Result<SwapActionRequest> {
     Ok(SwapActionRequest {
         request_id,
         wallet_address,
+        liquidity_wallet_address,
         from_asset_id,
         to_asset_id,
         amount_atoms,
@@ -3717,6 +3745,34 @@ mod tests {
     }
 
     #[test]
+    fn asset_orchard_local_service_swap_binds_imported_liquidity_wallet() {
+        let root = asset_orchard_local_service_test_dir("swap_liquidity_wallet");
+        let config = asset_orchard_local_service_test_config(&root);
+        let note_a = root.join("note-a.json");
+        let note_b = root.join("note-b.json");
+        atomic_write_private_json(
+            &note_a,
+            &asset_orchard_local_service_note(&"a".repeat(96), 42, &"1".repeat(64)),
+        )
+        .unwrap();
+        atomic_write_private_json(
+            &note_b,
+            &asset_orchard_local_service_note(&"b".repeat(96), 42, &"2".repeat(64)),
+        )
+        .unwrap();
+        let mut body = asset_orchard_local_service_swap_body(Some(&note_a), Some(&note_b));
+        body["liquidity_wallet_address"] = Value::String("pffacility".to_string());
+        let request = parse_swap_action_request(&body).unwrap();
+
+        let (_, liquidity) = swap_input_records(&config, &request).unwrap();
+
+        assert_eq!(
+            liquidity.get("wallet_address").and_then(Value::as_str),
+            Some("pffacility")
+        );
+    }
+
+    #[test]
     fn asset_orchard_local_service_swap_accepts_distinct_pool_note_amount() {
         let root = asset_orchard_local_service_test_dir("swap_distinct_pool_amount");
         let config = asset_orchard_local_service_test_config(&root);
@@ -3805,6 +3861,14 @@ mod tests {
         assert_ne!(
             fingerprint,
             swap_action_request_fingerprint(&changed).unwrap()
+        );
+
+        body["amount_atoms"] = Value::from(42_u64);
+        body["liquidity_wallet_address"] = Value::String("pffacility".to_string());
+        let changed_liquidity_wallet = parse_swap_action_request(&body).unwrap();
+        assert_ne!(
+            fingerprint,
+            swap_action_request_fingerprint(&changed_liquidity_wallet).unwrap()
         );
 
         body["request_id"] = Value::String("../escape".to_string());

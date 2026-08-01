@@ -18,6 +18,31 @@ SPEC.loader.exec_module(demo)
 
 
 class PnokPrivateFixDemoTests(unittest.TestCase):
+    def test_persist_progress_never_regresses_a_recovered_finalized_intent(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "private").mkdir()
+            (root / "public").mkdir()
+            state = {
+                "schema": demo.SCHEMA,
+                "stage": "finalized",
+                "immutable": {
+                    "intent_id": "pnok-run-01",
+                    "chain_id": demo.EXPECTED_CHAIN_ID,
+                    "genesis_hash": demo.EXPECTED_GENESIS_HASH,
+                },
+                "derived": {},
+                "last_error": {"type": "RuntimeError", "message": "prior interruption"},
+            }
+
+            demo.persist_progress(root, state, "quote_verified")
+
+            persisted = json.loads((root / "private/intent.json").read_text())
+            self.assertEqual(persisted["stage"], "finalized")
+            self.assertIsNone(persisted["last_error"])
+            public = json.loads((root / "public/status.json").read_text())
+            self.assertEqual(public["stage"], "finalized")
+
     def test_reservation_id_matches_canonical_domain_and_fields(self) -> None:
         operation = {
             "operator": "pf" + "11" * 20,
@@ -114,12 +139,15 @@ class PnokPrivateFixDemoTests(unittest.TestCase):
             "immutable": {
                 "intent_id": "pnok-run-01",
                 "wallet_address": "pf" + "11" * 20,
+                "facility_operator": "pf" + "22" * 20,
                 "base_asset_id": "88" * 48,
                 "quote_asset_id": "99" * 48,
                 "base_atoms": 20_000_000,
                 "expected_quote_atoms": 210,
                 "wallet_note_commitment": "aa" * 32,
                 "liquidity_commitment": "bb" * 32,
+                "wallet_input_note_path": "/resident/imports/bob-pfusdc.json",
+                "liquidity_input_note_path": "/resident/imports/facility-pnok.json",
             },
             "derived": {},
         }
@@ -148,6 +176,13 @@ class PnokPrivateFixDemoTests(unittest.TestCase):
         self.assertEqual(requests[0], requests[1])
         self.assertEqual(requests[0]["wallet_commitment"], "aa" * 32)
         self.assertEqual(requests[0]["liquidity_commitment"], "bb" * 32)
+        self.assertEqual(requests[0]["liquidity_wallet_address"], "pf" + "22" * 20)
+        self.assertEqual(
+            requests[0]["input_note_path_a"], "/resident/imports/bob-pfusdc.json"
+        )
+        self.assertEqual(
+            requests[0]["input_note_path_b"], "/resident/imports/facility-pnok.json"
+        )
 
 
 if __name__ == "__main__":

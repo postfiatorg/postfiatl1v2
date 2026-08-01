@@ -200,6 +200,12 @@ def stage_at_least(state: dict[str, Any], stage: str) -> bool:
 
 
 def immutable_config(args: argparse.Namespace) -> dict[str, Any]:
+    wallet_input_note_path = args.wallet_input_note_path
+    liquidity_input_note_path = args.liquidity_input_note_path
+    if (wallet_input_note_path is None) != (liquidity_input_note_path is None):
+        raise RuntimeError(
+            "--wallet-input-note-path and --liquidity-input-note-path must be provided together"
+        )
     return {
         "chain_id": EXPECTED_CHAIN_ID,
         "genesis_hash": EXPECTED_GENESIS_HASH,
@@ -217,6 +223,12 @@ def immutable_config(args: argparse.Namespace) -> dict[str, Any]:
         "liquidity_commitment": validate_hex(
             "liquidity_commitment", args.liquidity_commitment, 64
         ),
+        # These are paths on the resident service host. They are optional
+        # because notes created by the service are selected from its vault by
+        # commitment. Imported notes use the service's existing strict
+        # schema/asset/value/commitment validation instead.
+        "wallet_input_note_path": wallet_input_note_path,
+        "liquidity_input_note_path": liquidity_input_note_path,
         "fix_packet_hash": (
             validate_hex("fix_packet_hash", args.fix_packet_hash, 96)
             if args.fix_packet_hash
@@ -274,6 +286,14 @@ def persist_state(root: Path, state: dict[str, Any], stage: str | None = None) -
     state["last_error"] = None
     atomic_write_json(root / "private/intent.json", state, 0o600)
     publish_redacted_status(root, state)
+
+
+def persist_progress(root: Path, state: dict[str, Any], stage: str) -> None:
+    """Persist recovered work without ever regressing the durable stage."""
+    if STAGES.index(stage) > STAGES.index(state["stage"]):
+        persist_state(root, state, stage)
+    else:
+        persist_state(root, state)
 
 
 def publish_redacted_status(root: Path, state: dict[str, Any]) -> None:
@@ -505,6 +525,7 @@ def create_or_recover_action(
     request = {
         "request_id": immutable["intent_id"],
         "wallet_address": immutable["wallet_address"],
+        "liquidity_wallet_address": immutable["facility_operator"],
         "from_asset_id": immutable["base_asset_id"],
         "to_asset_id": immutable["quote_asset_id"],
         "amount_atoms": immutable["base_atoms"],
@@ -515,6 +536,11 @@ def create_or_recover_action(
         "quote_expires_at_ms": str(local_expiry),
         "pricing_claim": quote["pricing_claim"],
     }
+    wallet_input_note_path = immutable.get("wallet_input_note_path")
+    liquidity_input_note_path = immutable.get("liquidity_input_note_path")
+    if wallet_input_note_path is not None and liquidity_input_note_path is not None:
+        request["input_note_path_a"] = wallet_input_note_path
+        request["input_note_path_b"] = liquidity_input_note_path
     response = service_json(
         args.service_url,
         "POST",
@@ -890,64 +916,65 @@ def run_demo(args: argparse.Namespace, root: Path, state: dict[str, Any]) -> Non
         state["derived"]["supplies_before"] = snapshot_supplies(args, rpc, ports, state)
     atomic_write_json(root / "public/fix-packet.json", row["state"]["packet"], 0o644)
     atomic_write_json(root / "private/fix-quote.json", quote, 0o600)
-    persist_state(root, state, "quote_verified")
+    persist_progress(root, state, "quote_verified")
     if args.stop_after == "quote_verified":
         return
 
-    notes_response = service_json(
-        args.service_url, "GET", "/asset-orchard/notes", None, args.rpc_timeout_seconds
-    )
-    notes = notes_response.get("notes")
-    if not isinstance(notes, list):
-        raise RuntimeError("resident service note list is malformed")
     if not stage_at_least(state, "action_built") and not state["derived"].get(
         "action_request_attempted"
     ):
-        wallet_input = note_by_commitment(notes, immutable["wallet_note_commitment"])
-        facility_input = note_by_commitment(notes, immutable["liquidity_commitment"])
-        require_note(
-            wallet_input,
-            owner=immutable["wallet_address"],
-            asset_id=immutable["base_asset_id"],
-            amount_atoms=immutable["base_atoms"],
-            state="spendable",
-        )
-        require_note(
-            facility_input,
-            owner=immutable["facility_operator"],
-            asset_id=immutable["quote_asset_id"],
-            amount_atoms=immutable["expected_quote_atoms"],
-            state="spendable",
-        )
+        if immutable.get("wallet_input_note_path") is None:
+            notes_response = service_json(
+                args.service_url, "GET", "/asset-orchard/notes", None, args.rpc_timeout_seconds
+            )
+            notes = notes_response.get("notes")
+            if not isinstance(notes, list):
+                raise RuntimeError("resident service note list is malformed")
+            wallet_input = note_by_commitment(notes, immutable["wallet_note_commitment"])
+            facility_input = note_by_commitment(notes, immutable["liquidity_commitment"])
+            require_note(
+                wallet_input,
+                owner=immutable["wallet_address"],
+                asset_id=immutable["base_asset_id"],
+                amount_atoms=immutable["base_atoms"],
+                state="spendable",
+            )
+            require_note(
+                facility_input,
+                owner=immutable["facility_operator"],
+                asset_id=immutable["quote_asset_id"],
+                amount_atoms=immutable["expected_quote_atoms"],
+                state="spendable",
+            )
         state["derived"]["action_request_attempted"] = True
-        persist_state(root, state, "quote_verified")
+        persist_progress(root, state, "quote_verified")
     response = create_or_recover_action(args, root, state, quote)
-    persist_state(root, state, "action_built")
+    persist_progress(root, state, "action_built")
     if args.stop_after == "action_built":
         return
 
     operation = build_reservation_operation(state, row)
     ensure_reservation(args, root, state, rpc, ports, operation)
-    persist_state(root, state, "reservation_finalized")
+    persist_progress(root, state, "reservation_finalized")
     if args.stop_after == "reservation_finalized":
         return
 
     batch_file = root / "private/swap-batch.json"
     if not batch_file.exists():
         batch_file = build_batch(args, root, response)
-    persist_state(root, state, "batch_built")
+    persist_progress(root, state, "batch_built")
     if args.stop_after == "batch_built":
         return
 
     status = action_status(args, rpc, ports, state)
     if status.get("finalized_exactly_once") is not True:
         result = submit_batch(args, root, state, rpc, ports, batch_file)
-        persist_state(root, state, "submitted")
+        persist_progress(root, state, "submitted")
         status = action_status(args, rpc, ports, state)
         if status.get("finalized_exactly_once") is not True:
             raise RuntimeError(f"private swap did not finalize exactly once; runner exit={result.returncode}")
     elif not stage_at_least(state, "submitted"):
-        persist_state(root, state, "submitted")
+        persist_progress(root, state, "submitted")
     reservation = reservation_status(args, rpc, ports, state["derived"]["reservation_id"])
     if reservation.get("reservation", {}).get("state") != "filled":
         raise RuntimeError("private swap finalized without atomically filling its reservation")
@@ -958,12 +985,12 @@ def run_demo(args: argparse.Namespace, root: Path, state: dict[str, Any]) -> Non
         entry["occurrence_count"] for entry in status["output_commitments"]
     ]
     atomic_write_json(root / "public/swap-finality.json", status, 0o644)
-    persist_state(root, state, "finalized")
+    persist_progress(root, state, "finalized")
     if args.stop_after == "finalized":
         return
 
     finalize_local_notes(args, root, state)
-    persist_state(root, state, "local_finalized")
+    persist_progress(root, state, "local_finalized")
 
     supplies_after = snapshot_supplies(args, rpc, ports, state)
     state["derived"]["supplies_after"] = supplies_after
@@ -996,7 +1023,7 @@ def run_demo(args: argparse.Namespace, root: Path, state: dict[str, Any]) -> Non
             },
             0o644,
         )
-    persist_state(root, state, "complete")
+    persist_progress(root, state, "complete")
 
 
 def abort_demo(args: argparse.Namespace, root: Path, state: dict[str, Any]) -> None:
@@ -1043,13 +1070,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expected-quote-atoms", type=int, default=210)
     parser.add_argument("--wallet-note-commitment", required=True)
     parser.add_argument("--liquidity-commitment", required=True)
+    parser.add_argument(
+        "--wallet-input-note-path",
+        help="absolute wallet-note path readable by the resident service",
+    )
+    parser.add_argument(
+        "--liquidity-input-note-path",
+        help="absolute facility-note path readable by the resident service",
+    )
     parser.add_argument("--fix-packet-hash")
     parser.add_argument("--expected-source-label", default="pnok_demo_fix")
     parser.add_argument("--expected-ratio-numerator", type=int, default=21)
     parser.add_argument("--expected-ratio-denominator", type=int, default=2_000_000)
     parser.add_argument("--min-expiry-blocks", type=int, default=8)
     parser.add_argument("--local-quote-lifetime-ms", type=int, default=900_000)
-    parser.add_argument("--service-url", default="http://127.0.0.1:28799")
+    parser.add_argument("--service-url", default="http://127.0.0.1:18799")
     parser.add_argument("--ports", default="28650,28651,28652,28653,28654,28655")
     parser.add_argument("--rpc-timeout-seconds", type=float, default=45.0)
     parser.add_argument("--convergence-timeout-seconds", type=float, default=60.0)
@@ -1082,11 +1117,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--remote-binary",
-        default="/opt/postfiat/releases/resident-local-commit-777faa0/postfiat-node",
+        default="/opt/postfiat/releases/pnok-private-fix-2246d25/postfiat-node",
     )
     parser.add_argument(
         "--remote-topology",
-        default="/etc/postfiat/releases/resident-local-commit-777faa0/topology.json",
+        default="/etc/postfiat/releases/pnok-private-fix-2246d25/topology.json",
     )
     parser.add_argument("--resident-manifest", type=Path)
     parser.add_argument("--stop-after", choices=STAGES[1:-1])
