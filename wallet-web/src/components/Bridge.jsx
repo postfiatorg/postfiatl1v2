@@ -161,6 +161,7 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
   const [routeError, setRouteError] = useState('');
   const [relayStatus, setRelayStatus] = useState('');
   const [error, setError] = useState('');
+  const [recoveryWarning, setRecoveryWarning] = useState('');
   const [manualOpen, setManualOpen] = useState(false);
   const [manualTx, setManualTx] = useState('');
 
@@ -396,6 +397,7 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
     const controller = new AbortController();
     const restore = async () => {
       try {
+        setRecoveryWarning('');
         const listed = await loadBridgeJobs(address, proxyAuthToken, 20);
         const latest = listed.jobs?.[0];
         if (!latest || controller.signal.aborted) return;
@@ -421,8 +423,10 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
         if (!controller.signal.aborted) await applyRelayResult(result);
       } catch (failure) {
         if (failure?.name !== 'AbortError' && !controller.signal.aborted) {
-          setPhase('error');
-          setError(`Bridge status recovery failed: ${humanEvmError(failure)}`);
+          // Background discovery must not move an otherwise usable bridge
+          // back to the approval step or label it blocked. A confirmed
+          // deposit remains recoverable by its Ethereum transaction hash.
+          setRecoveryWarning(`Automatic bridge status recovery failed: ${humanEvmError(failure)}`);
         }
       }
     };
@@ -540,6 +544,7 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
     setRelayStatus('');
     setPfusdcBalance(null);
     setError('');
+    setRecoveryWarning('');
     setPhase(connectedAddress ? 'connected' : 'disconnected');
     if (connectedAddress) refreshBalances(connectedAddress).catch(() => {});
   };
@@ -592,6 +597,7 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
         </div>
       )}
       {error && <div className="pf-warning">{error}</div>}
+      {recoveryWarning && <div className="pf-warning">{recoveryWarning}</div>}
       {!proxyAuthToken && (
         <div className="pf-warning">
           Bridge deposits are blocked until the session-only proxy access token is entered in More.

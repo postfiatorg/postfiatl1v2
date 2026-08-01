@@ -1497,7 +1497,16 @@ function create(runtime) {
 
     function originAllowed(req, requireOrigin = false) {
         const origin = String(req.headers.origin || '').trim();
-        if (!origin) return !requireOrigin;
+        if (!origin) {
+            if (!requireOrigin) return true;
+            // Browsers normally omit Origin on same-origin GET requests. Job
+            // discovery is authenticated but read-only, so accept it only
+            // when browser-controlled Fetch Metadata proves this is a
+            // same-origin navigation context. Authenticated writes still
+            // require an explicit, validated Origin below.
+            return req.method === 'GET'
+                && String(req.headers['sec-fetch-site'] || '').toLowerCase() === 'same-origin';
+        }
         if (ALLOWED_ORIGINS.includes(origin)) return true;
 
         // The local wallet is frequently reached through an SSH/tmux tunnel

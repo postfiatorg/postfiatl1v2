@@ -73,6 +73,28 @@ function getLocalSession(port, headers = {}) {
   });
 }
 
+function getJson(port, pathname, token = '', headers = {}) {
+  return new Promise((resolve, reject) => {
+    const req = http.request({
+      host: '127.0.0.1',
+      port,
+      path: pathname,
+      method: 'GET',
+      headers: {
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...headers,
+      },
+    }, (res) => {
+      let raw = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => { raw += chunk; });
+      res.on('end', () => resolve({ statusCode: res.statusCode, body: JSON.parse(raw) }));
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 function callRemovedWalletSigner(port) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://127.0.0.1:${port}`);
@@ -199,6 +221,23 @@ async function main() {
     assert.strictEqual(localSession.body.schema, 'postfiat-local-wallet-session-v1');
     assert.strictEqual(localSession.body.principal, 'default');
     assert.strictEqual(localSession.body.token, process.env.WALLET_PROXY_API_TOKEN);
+
+    const sameOriginJobDiscovery = await getJson(
+      port,
+      `/api/bridge/jobs?recipient=pf${'ab'.repeat(20)}&limit=20`,
+      process.env.WALLET_PROXY_API_TOKEN,
+      { 'sec-fetch-site': 'same-origin' },
+    );
+    assert.strictEqual(sameOriginJobDiscovery.statusCode, 200);
+    assert.strictEqual(sameOriginJobDiscovery.body.ok, true);
+
+    const forgedCrossSiteJobDiscovery = await getJson(
+      port,
+      `/api/bridge/jobs?recipient=pf${'ab'.repeat(20)}&limit=20`,
+      process.env.WALLET_PROXY_API_TOKEN,
+      { 'sec-fetch-site': 'cross-site' },
+    );
+    assert.strictEqual(forgedCrossSiteJobDiscovery.statusCode, 403);
 
     const missingOrigin = await postJson(
       port,
