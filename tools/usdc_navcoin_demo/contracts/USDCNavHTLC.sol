@@ -2,6 +2,7 @@
 pragma solidity 0.8.30;
 
 interface IERC20 {
+    function balanceOf(address account) external view returns (uint256);
     function transfer(address to, uint256 value) external returns (bool);
     function transferFrom(address from, address to, uint256 value) external returns (bool);
 }
@@ -32,7 +33,20 @@ contract USDCNavHTLC {
 
     constructor(address tokenAddress) {
         require(tokenAddress != address(0), "ZERO_TOKEN");
+        require(tokenAddress.code.length != 0, "TOKEN_NOT_CONTRACT");
         token = IERC20(tokenAddress);
+    }
+
+    function _safeTransfer(address to, uint256 amount) private {
+        (bool success, bytes memory result) =
+            address(token).call(abi.encodeCall(IERC20.transfer, (to, amount)));
+        require(success && (result.length == 0 || abi.decode(result, (bool))), "TRANSFER_OUT");
+    }
+
+    function _safeTransferFrom(address from, address to, uint256 amount) private {
+        (bool success, bytes memory result) =
+            address(token).call(abi.encodeCall(IERC20.transferFrom, (from, to, amount)));
+        require(success && (result.length == 0 || abi.decode(result, (bool))), "TRANSFER_IN");
     }
 
     function lock(
@@ -54,7 +68,9 @@ contract USDCNavHTLC {
             hashlock: hashlock,
             state: 1
         });
-        require(token.transferFrom(msg.sender, address(this), amount), "TRANSFER_IN");
+        uint256 beforeBalance = token.balanceOf(address(this));
+        _safeTransferFrom(msg.sender, address(this), amount);
+        require(token.balanceOf(address(this)) == beforeBalance + amount, "INEXACT_TRANSFER_IN");
         emit Locked(swapId, msg.sender, recipient, amount, hashlock, refundTime);
     }
 
@@ -64,18 +80,16 @@ contract USDCNavHTLC {
         require(block.timestamp < swap.refundTime, "EXPIRED");
         require(sha256(abi.encodePacked(preimage)) == swap.hashlock, "WRONG_PREIMAGE");
         swap.state = 2;
-        require(token.transfer(swap.recipient, swap.amount), "TRANSFER_OUT");
+        _safeTransfer(swap.recipient, swap.amount);
         emit Redeemed(swapId, preimage);
     }
 
     function refund(bytes32 swapId) external {
         Swap storage swap = swaps[swapId];
         require(swap.state == 1, "NOT_OPEN");
-        require(msg.sender == swap.refundAddress, "NOT_REFUNDER");
         require(block.timestamp >= swap.refundTime, "TOO_EARLY");
         swap.state = 3;
-        require(token.transfer(swap.refundAddress, swap.amount), "TRANSFER_OUT");
+        _safeTransfer(swap.refundAddress, swap.amount);
         emit Refunded(swapId);
     }
 }
-

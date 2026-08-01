@@ -14,6 +14,7 @@ contract USDCNavHTLCTest {
     Vm private constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
     address private constant USER = address(0x1001);
     address private constant COORDINATOR = address(0x2002);
+    address private constant WATCHTOWER = address(0x3003);
     bytes32 private constant PREIMAGE = bytes32(uint256(0xA11CE));
     bytes32 private constant HASHLOCK =
         0x16f62e786d3b8845fb7a54b53a7ebcb64c6c86ab05e75577302e4f152d857847;
@@ -49,7 +50,7 @@ contract USDCNavHTLCTest {
         vm.warp(block.timestamp + 60);
         vm.expectRevert(bytes("EXPIRED"));
         htlc.redeem(bytes32("refund"), PREIMAGE);
-        vm.prank(USER);
+        vm.prank(WATCHTOWER);
         htlc.refund(bytes32("refund"));
         require(usdc.balanceOf(USER) == 1_000_000, "refund conservation");
     }

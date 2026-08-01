@@ -27,8 +27,9 @@ is used.
 swap ID. `lock` transfers the exact principal into the contract. `redeem`
 requires `block.timestamp < refundTime` and an exact SHA-256 preimage. It emits
 the preimage publicly before the paired PFTL finish uses it. `refund` requires
-`block.timestamp >= refundTime` and the original locker. State is changed
-before the ERC-20 transfer, and terminal swaps reject duplicates.
+`block.timestamp >= refundTime`. Any caller may trigger it, but the contract
+always returns the principal to the original fixed refund address. State is
+changed before the ERC-20 transfer, and terminal swaps reject duplicates.
 
 The first locker receives the longer timeout; the second locker receives the
 shorter timeout; the second mover claims first. EVM wall time and PFTL block
