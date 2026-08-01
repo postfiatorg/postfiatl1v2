@@ -20,6 +20,156 @@ ISSUER = "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b"
 RESERVE_OPERATOR = "pfd0c86d9084915e1fefd22eab891806397d5a5937"
 VERIFIER_KIND = "sp1-nav-reserve-v1"
 PUBLIC_VALUES_SCHEMA = "postfiat.nav_reserve_public_values.v1"
+NAV_VALUATION_UNIT = "USD_1E8"
+
+
+def hash_domain(domain: str, payload: bytes) -> str:
+    return hashlib.sha3_384(domain.encode() + b"\0" + payload).hexdigest()
+
+
+def valuation_scale(unit: str, precision: int) -> int:
+    normalized = unit.strip().lower()
+    if normalized.startswith("usd_1e"):
+        return 10 ** int(normalized.removeprefix("usd_1e"))
+    if normalized in {"usdc", "micro_usd"}:
+        return 10**precision
+    return 10**precision
+
+
+def settlement_to_nav_value(
+    atoms: int, settlement_unit: str, settlement_precision: int
+) -> int:
+    nav_scale = valuation_scale(NAV_VALUATION_UNIT, settlement_precision)
+    settlement_scale = valuation_scale(settlement_unit, settlement_precision)
+    return atoms * nav_scale // settlement_scale
+
+
+def build_overlay(
+    route: dict[str, Any], vault: dict[str, Any]
+) -> tuple[int, str, dict[str, Any]]:
+    """Commit proof-backed settlement inventory into the NAV overlay.
+
+    This remains provider-neutral: it consumes only finalized PFTL route and
+    vault status, and refuses to count primary-market inventory beyond the
+    active proof-backed vault balance.
+    """
+
+    settlement_asset = route["settlement_asset_id"]
+    if vault.get("asset_id") != settlement_asset:
+        raise RuntimeError("vault status does not describe the route settlement asset")
+    settlement_unit = vault["valuation_unit"]
+    precision = 6
+
+    buckets = {bucket["bucket_id"]: bucket for bucket in vault["buckets"]}
+    receipts = {receipt["receipt_id"]: receipt for receipt in vault["receipts"]}
+    allocation_rows: list[dict[str, Any]] = []
+    for allocation in vault["allocations"]:
+        if (
+            allocation.get("purpose") != "nav_subscription"
+            or not allocation.get("consumer_id", "").startswith(
+                f"nav_subscription:{ASSET_ID}"
+            )
+            or allocation.get("retired_at_height", 0) == 0
+            or allocation.get("remaining_atoms", 0) == 0
+        ):
+            continue
+        bucket = buckets[allocation["bucket_id"]]
+        receipt = receipts[allocation["receipt_id"]]
+        if (
+            bucket["status"] != "active"
+            or receipt["status"] != "counted"
+            or receipt.get("asset_id", settlement_asset) != settlement_asset
+        ):
+            raise RuntimeError("NAV subscription overlay is not active and counted")
+        row = dict(allocation)
+        row["value_nav_units"] = settlement_to_nav_value(
+            allocation["remaining_atoms"], settlement_unit, precision
+        )
+        row["bucket"] = bucket
+        allocation_rows.append(row)
+    allocation_rows.sort(key=lambda row: row["allocation_id"])
+
+    active_bucket_backing = sum(
+        bucket["outstanding_vault_bridge_atoms"]
+        for bucket in vault["buckets"]
+        if bucket["status"] == "active"
+        and bucket.get("asset_id", settlement_asset) == settlement_asset
+    )
+    settlement_reserve = int(route["settlement_reserve_atoms"])
+    if settlement_reserve < 0:
+        raise RuntimeError("primary-market reserve cannot be negative")
+    if settlement_reserve > active_bucket_backing:
+        raise RuntimeError("primary-market reserve exceeds proof-backed vault backing")
+    route_rows: list[dict[str, Any]] = []
+    if settlement_reserve:
+        route_rows.append(
+            {
+                "route_id": route["route_id"],
+                "route_config_digest": route["route_config_digest"],
+                "settlement_asset_id": settlement_asset,
+                "settlement_reserve_atoms": settlement_reserve,
+                "value_nav_units": settlement_to_nav_value(
+                    settlement_reserve, settlement_unit, precision
+                ),
+                "active_bucket_backing_atoms": active_bucket_backing,
+                "live_value_enabled": route["live_value_enabled"],
+                "paused": route["paused"],
+            }
+        )
+
+    overlay_value = 0
+    preimage = (
+        f"nav_asset_id={ASSET_ID}\n"
+        f"nav_valuation_unit_bytes={len(NAV_VALUATION_UNIT)}\n"
+        f"nav_valuation_unit={NAV_VALUATION_UNIT}\n"
+        f"allocation_count={len(allocation_rows)}\n"
+        f"primary_market_route_count={len(route_rows)}\n"
+    )
+    for index, row in enumerate(allocation_rows):
+        bucket = row["bucket"]
+        overlay_value += row["value_nav_units"]
+        preimage += (
+            f"allocation[{index}].allocation_id={row['allocation_id']}\n"
+            f"allocation[{index}].settlement_asset_id={settlement_asset}\n"
+            f"allocation[{index}].bucket_id={row['bucket_id']}\n"
+            f"allocation[{index}].receipt_id={row['receipt_id']}\n"
+            f"allocation[{index}].amount_atoms={row['amount_atoms']}\n"
+            f"allocation[{index}].released_atoms={row['released_atoms']}\n"
+            f"allocation[{index}].remaining_atoms={row['remaining_atoms']}\n"
+            f"allocation[{index}].value_nav_units={row['value_nav_units']}\n"
+            f"allocation[{index}].retired_at_height={row['retired_at_height']}\n"
+            f"allocation[{index}].bucket_source_domain_bytes={len(bucket['source_domain'])}\n"
+            f"allocation[{index}].bucket_source_domain={bucket['source_domain']}\n"
+            f"allocation[{index}].bucket_policy_hash={bucket['policy_hash']}\n"
+            f"allocation[{index}].bucket_gross_receipt_atoms={bucket['gross_receipt_atoms']}\n"
+            f"allocation[{index}].bucket_counted_value_atoms={bucket['counted_value_atoms']}\n"
+            f"allocation[{index}].bucket_nav_subscription_allocations_atoms={bucket['nav_subscription_allocations_atoms']}\n"
+            f"allocation[{index}].bucket_redemption_queue_atoms={bucket['redemption_queue_atoms']}\n"
+            f"allocation[{index}].bucket_outstanding_vault_bridge_atoms={bucket['outstanding_vault_bridge_atoms']}\n"
+            f"allocation[{index}].bucket_status={bucket['status']}\n"
+        )
+    for index, row in enumerate(route_rows):
+        overlay_value += row["value_nav_units"]
+        preimage += (
+            f"primary_market[{index}].route_id_bytes={len(row['route_id'])}\n"
+            f"primary_market[{index}].route_id={row['route_id']}\n"
+            f"primary_market[{index}].route_config_digest={row['route_config_digest']}\n"
+            f"primary_market[{index}].settlement_asset_id={row['settlement_asset_id']}\n"
+            f"primary_market[{index}].settlement_reserve_atoms={row['settlement_reserve_atoms']}\n"
+            f"primary_market[{index}].value_nav_units={row['value_nav_units']}\n"
+            f"primary_market[{index}].active_bucket_backing_atoms={row['active_bucket_backing_atoms']}\n"
+            f"primary_market[{index}].live_value_enabled={str(row['live_value_enabled']).lower()}\n"
+            f"primary_market[{index}].paused={str(row['paused']).lower()}\n"
+        )
+    overlay_root = hash_domain(
+        "postfiat.nav_subscription_source_root.v1", preimage.encode()
+    )
+    return overlay_value, overlay_root, {
+        "allocation_rows": allocation_rows,
+        "primary_market_rows": route_rows,
+        "value_nav_units": overlay_value,
+        "source_root": overlay_root,
+    }
 
 
 def parse_args() -> argparse.Namespace:
