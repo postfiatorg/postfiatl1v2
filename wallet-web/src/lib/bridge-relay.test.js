@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   assertBridgeReadinessMatchesRoute,
+  loadBridgeJobs,
   loadBridgeReadiness,
   relayVaultDeposit,
   waitForBridgeReadiness,
@@ -82,6 +83,31 @@ test('vault relay retries transient post-deposit job creation', async () => {
       jobCreateOptions: { attempts: 3, retryMs: 1 },
     });
     assert.equal(createCalls, 3);
+  } finally {
+    if (previousFetch === undefined) delete globalThis.fetch;
+    else globalThis.fetch = previousFetch;
+  }
+});
+
+test('bridge job discovery is recipient-scoped and authenticated', async () => {
+  const previousFetch = globalThis.fetch;
+  let captured;
+  globalThis.fetch = async (url, options = {}) => {
+    captured = { url, options };
+    return new Response(JSON.stringify({ ok: true, jobs: [] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+  try {
+    const recipient = `pf${'ab'.repeat(20)}`;
+    const result = await loadBridgeJobs(recipient, 'session-token', 7);
+    assert.deepEqual(result.jobs, []);
+    assert.equal(
+      captured.url,
+      `/api/bridge/jobs?recipient=${encodeURIComponent(recipient)}&limit=7`,
+    );
+    assert.equal(captured.options.headers.Authorization, 'Bearer session-token');
   } finally {
     if (previousFetch === undefined) delete globalThis.fetch;
     else globalThis.fetch = previousFetch;

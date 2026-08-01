@@ -99,11 +99,20 @@ export async function waitForBridgeReadiness(
 
 export async function waitForBridgeJob(
   jobId,
-  { pollIntervalMs = 2000, timeoutMs = 45 * 60 * 1000, onStatus = null } = {},
+  {
+    pollIntervalMs = 2000,
+    timeoutMs = 45 * 60 * 1000,
+    onStatus = null,
+    signal = undefined,
+  } = {},
 ) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const result = await bridgeJson(`/api/bridge/jobs/${encodeURIComponent(jobId)}`);
+    if (signal?.aborted) throw new DOMException('Bridge status polling aborted', 'AbortError');
+    const result = await bridgeJson(
+      `/api/bridge/jobs/${encodeURIComponent(jobId)}`,
+      { signal },
+    );
     onStatus?.(result);
     if (TERMINAL_JOB_STATUSES.has(result.status)) {
       if (result.status === 'accepted' && result.receipt_code === 'ACCEPTED') return result;
@@ -111,11 +120,31 @@ export async function waitForBridgeJob(
       error.payload = result;
       throw error;
     }
-    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    await new Promise((resolve, reject) => {
+      const onAbort = () => {
+        clearTimeout(timer);
+        reject(new DOMException('Bridge status polling aborted', 'AbortError'));
+      };
+      const timer = setTimeout(() => {
+        signal?.removeEventListener('abort', onAbort);
+        resolve();
+      }, pollIntervalMs);
+      signal?.addEventListener('abort', onAbort, { once: true });
+    });
   }
   const error = new Error('The bridge job is still running. Resume it with the Ethereum transaction hash.');
   error.code = 'bridge_job_poll_timeout';
   throw error;
+}
+
+export async function loadBridgeJobs(pftlRecipient, proxyAuthToken, limit = 20) {
+  const query = new URLSearchParams({
+    recipient: String(pftlRecipient || ''),
+    limit: String(limit),
+  });
+  return bridgeJson(`/api/bridge/jobs?${query.toString()}`, {
+    headers: proxyAuthToken ? { Authorization: `Bearer ${proxyAuthToken}` } : {},
+  });
 }
 
 export async function relayVaultDeposit({

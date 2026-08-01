@@ -203,6 +203,13 @@ async function main() {
         const unauthenticated = await request(port, 'POST', '/api/bridge/jobs', body);
         assert.strictEqual(unauthenticated.status, 403);
 
+        const unauthenticatedList = await request(
+            port,
+            'GET',
+            `/api/bridge/jobs?recipient=${encodeURIComponent(body.pftl_recipient)}`,
+        );
+        assert.strictEqual(unauthenticatedList.status, 403);
+
         const created = await request(port, 'POST', '/api/bridge/jobs', body, true);
         assert.strictEqual(created.status, 202);
         assert.match(created.body.job_id, /^0x[0-9a-f]{64}$/);
@@ -220,6 +227,18 @@ async function main() {
             root, 'jobs', created.body.job_id.slice(2), 'checkpoints',
         );
         assert.strictEqual(fs.readdirSync(checkpointDir).length, STAGES.length);
+
+        const listed = await request(
+            port,
+            'GET',
+            `/api/bridge/jobs?recipient=${encodeURIComponent(body.pftl_recipient)}`,
+            undefined,
+            true,
+        );
+        assert.strictEqual(listed.status, 200);
+        assert.strictEqual(listed.body.schema, 'postfiat-trustless-bridge-job-list-v1');
+        assert.strictEqual(listed.body.jobs.length, 1);
+        assert.strictEqual(listed.body.jobs[0].job_id, created.body.job_id);
 
         const replay = await request(port, 'POST', '/api/bridge/jobs', {
             ...body,

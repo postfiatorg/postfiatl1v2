@@ -11,6 +11,7 @@ function create(runtime) {
     const trustlessBridgeReadiness = (...args) => runtime.trustlessBridgeReadiness(...args);
     const submitTrustlessBridgeJob = (...args) => runtime.submitTrustlessBridgeJob(...args);
     const trustlessBridgeJobStatus = (...args) => runtime.trustlessBridgeJobStatus(...args);
+    const trustlessBridgeJobsForRecipient = (...args) => runtime.trustlessBridgeJobsForRecipient(...args);
     const a666ExportRelayReadiness = (...args) => runtime.a666ExportRelayReadiness(...args);
     const submitA666ExportRelayJob = (...args) => runtime.submitA666ExportRelayJob(...args);
     const a666ExportRelayJobStatus = (...args) => runtime.a666ExportRelayJobStatus(...args);
@@ -1612,6 +1613,19 @@ function create(runtime) {
                 const body = await readJsonBody(req);
                 const result = await submitTrustlessBridgeJob(body);
                 sendJson(req, res, 202, { ok: true, ...result });
+                return true;
+            }
+
+            if (req.method === 'GET' && url.pathname === '/api/bridge/jobs') {
+                const recipient = String(url.searchParams.get('recipient') || '');
+                const limit = Number(url.searchParams.get('limit') || 20);
+                const jobs = trustlessBridgeJobsForRecipient(recipient, limit);
+                sendJson(req, res, 200, {
+                    ok: true,
+                    schema: 'postfiat-trustless-bridge-job-list-v1',
+                    recipient: recipient.trim().toLowerCase(),
+                    jobs,
+                });
                 return true;
             }
 

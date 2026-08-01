@@ -14,7 +14,9 @@ import {
 import * as evm from '../lib/evm.js';
 import * as utils from '../lib/utils.js';
 import {
+  loadBridgeJobs,
   relayVaultDeposit,
+  waitForBridgeJob,
   waitForBridgeReadiness,
 } from '../lib/bridge-relay.js';
 import { loadGovernedVaultBridgeRoute } from '../lib/bridge-route.js';
@@ -236,14 +238,20 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
     window.ethereum.request({ method: 'eth_accounts' }).then(async (accounts) => {
       if (!active || !accounts?.length) return;
       setConnectedAddress(accounts[0]);
-      setPhase('connected');
+      setPhase((current) => (
+        ['relaying', 'complete'].includes(current) ? current : 'connected'
+      ));
       await refreshBalances(accounts[0]).catch(() => {});
     }).catch(() => {});
     const accountsChanged = (accounts) => {
       const owner = accounts?.[0] || '';
       setConnectedAddress(owner);
       setApprovedAtoms(null);
-      setPhase(owner ? 'connected' : 'disconnected');
+      setPhase((current) => (
+        owner && ['relaying', 'complete'].includes(current)
+          ? current
+          : (owner ? 'connected' : 'disconnected')
+      ));
       if (owner) refreshBalances(owner).catch(() => {});
     };
     const chainChanged = (next) => {
@@ -361,6 +369,67 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
     }
   };
 
+  const applyRelayResult = useCallback(async (result) => {
+    const relayId = result.tx_id || result.receipt_id;
+    setRelayTxs(
+      relayId
+        ? [{
+            kind: result.tx_id ? 'PFTL claim' : 'PFTL receipt',
+            tx_id: relayId,
+          }]
+        : [],
+    );
+    if (result.after_balance_atoms !== undefined && result.after_balance_atoms !== null) {
+      setPfusdcBalance(BigInt(result.after_balance_atoms));
+    } else {
+      try {
+        setPfusdcBalance(accountPftlBalance(await rpc.accountAssets(address)));
+      } catch (_) {
+        setPfusdcBalance(null);
+      }
+    }
+    setPhase('complete');
+  }, [address, rpc]);
+
+  useEffect(() => {
+    if (!address || !proxyAuthToken) return undefined;
+    const controller = new AbortController();
+    const restore = async () => {
+      try {
+        const listed = await loadBridgeJobs(address, proxyAuthToken, 20);
+        const latest = listed.jobs?.[0];
+        if (!latest || controller.signal.aborted) return;
+        const request = latest.request || {};
+        setDepositTx(request.deposit_tx_hash || '');
+        setDepositId(request.deposit_id || '');
+        setAmount(request.amount_atoms ? evm.atomsToUsdc(BigInt(request.amount_atoms)) : '');
+        setRelayStatus(latest.status || 'queued');
+        if (latest.status === 'accepted' && latest.receipt_code === 'ACCEPTED') {
+          await applyRelayResult(latest);
+          return;
+        }
+        if (latest.status === 'failed') {
+          setPhase('error');
+          setError(latest.message || 'The proof-backed PFTL claim failed.');
+          return;
+        }
+        setPhase('relaying');
+        const result = await waitForBridgeJob(latest.job_id, {
+          signal: controller.signal,
+          onStatus: (next) => setRelayStatus(next.status || ''),
+        });
+        if (!controller.signal.aborted) await applyRelayResult(result);
+      } catch (failure) {
+        if (failure?.name !== 'AbortError' && !controller.signal.aborted) {
+          setPhase('error');
+          setError(`Bridge status recovery failed: ${humanEvmError(failure)}`);
+        }
+      }
+    };
+    restore();
+    return () => controller.abort();
+  }, [address, applyRelayResult, proxyAuthToken]);
+
   const relay = async ({ txHash, event, activeRoute }) => {
     setPhase('relaying');
     const routeBinding = evm.governedRouteBinding(activeRoute.profileHash, activeRoute.routeEpoch);
@@ -377,30 +446,11 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
       routeId: activeRoute.profile.route_id,
       sourceChainId: activeRoute.profile.source_chain_id,
       proxyAuthToken,
-      onStatus: (next) => setRelayStatus(next.status || ''),
+      onStatus: (next) => {
+        setRelayStatus(next.status || '');
+      },
     });
-    const relayId = result.tx_id || result.receipt_id;
-    setRelayTxs(
-      relayId
-        ? [{
-            kind: result.tx_id ? 'PFTL claim' : 'PFTL receipt',
-            tx_id: relayId,
-          }]
-        : [],
-    );
-    if (result.after_balance_atoms !== undefined && result.after_balance_atoms !== null) {
-      setPfusdcBalance(BigInt(result.after_balance_atoms));
-    } else {
-      // The durable relay receipt proves acceptance, but older bridge workers
-      // do not include the resulting account balance. Read it from PFTL so the
-      // completion screen always shows what the user actually received.
-      try {
-        setPfusdcBalance(accountPftlBalance(await rpc.accountAssets(address)));
-      } catch (_) {
-        setPfusdcBalance(null);
-      }
-    }
-    setPhase('complete');
+    await applyRelayResult(result);
   };
 
   const deposit = async () => {

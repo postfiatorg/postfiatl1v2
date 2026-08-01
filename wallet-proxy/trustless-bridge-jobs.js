@@ -840,6 +840,27 @@ function create(runtime = {}, options = {}) {
         return spawnWorker(normalized);
     }
 
+    function jobsForRecipient(pftlRecipient, limit = 20) {
+        const recipient = String(pftlRecipient || '').trim().toLowerCase();
+        if (!PFT_RE.test(recipient)) {
+            throw Object.assign(new Error('invalid PFTL bridge recipient'), {
+                code: 'invalid_bridge_recipient',
+            });
+        }
+        const boundedLimit = Math.min(100, Math.max(1, positiveInteger(limit, 20, 1)));
+        const jobs = [];
+        for (const name of fs.readdirSync(jobsRoot).filter((entry) => /^[0-9a-f]{64}$/.test(entry))) {
+            try {
+                const job = readJob(`0x${name}`);
+                if (job?.request?.pftl_recipient === recipient) jobs.push(job);
+            } catch (_) { /* malformed jobs are quarantined by the watchdog, not exposed */ }
+        }
+        jobs.sort((left, right) => (
+            Number(right.created_at_unix || 0) - Number(left.created_at_unix || 0)
+        ));
+        return jobs.slice(0, boundedLimit);
+    }
+
     function resumeJobs() {
         for (const name of fs.readdirSync(jobsRoot).filter((entry) => /^[0-9a-f]{64}$/.test(entry))) {
             try { spawnWorker(`0x${name}`); } catch (_) { /* bounded watchdog retries */ }
@@ -871,6 +892,7 @@ function create(runtime = {}, options = {}) {
         refreshTrustlessBridgeReadiness: refreshRouteReadiness,
         submitTrustlessBridgeJob: submit,
         trustlessBridgeJobStatus: status,
+        trustlessBridgeJobsForRecipient: jobsForRecipient,
         closeTrustlessBridgeJobs: close,
         canonicalTrustlessBridgeJobKey: canonicalJobKey,
         _reconcileTrustlessBridgeWorkerExitForTest: reconcileWorkerExit,

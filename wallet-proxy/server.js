@@ -278,6 +278,10 @@ const PUBLIC_READ_ONLY_POST_PATHS = new Set([
 ]);
 
 function httpRequestRequiresAuth(method, pathname) {
+    // Job discovery is account-scoped operational data. Require the local
+    // wallet session even though it is read-only; individual job lookups stay
+    // capability-addressed by their unguessable job IDs.
+    if (method === 'GET' && pathname === '/api/bridge/jobs') return true;
     // POST is fail-closed: new endpoints require authentication until they are
     // deliberately classified as side-effect-free and added to this list.
     return method === 'POST' && !PUBLIC_READ_ONLY_POST_PATHS.has(pathname);

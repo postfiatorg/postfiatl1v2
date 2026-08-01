@@ -41,5 +41,7 @@ for (const route of publicReadOnlyPosts) {
 }
 assert.strictEqual(httpRequestRequiresAuth('POST', '/api/future-unclassified-write'), true);
 assert.strictEqual(httpRequestRequiresAuth('GET', '/api/future-unclassified-write'), false);
+assert.strictEqual(httpRequestRequiresAuth('GET', '/api/bridge/jobs'), true);
+assert.strictEqual(httpRequestRequiresAuth('GET', '/api/bridge/jobs/0xabc'), false);
 
 console.log(`HTTP POST authorization inventory passed (${postRoutes.length} routes)`);
