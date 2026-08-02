@@ -4507,6 +4507,8 @@ name = "postfiat-reserve-proof"
 version = "0.1.0"
 dependencies = [
  "alloy-primitives",
+ "alloy-rlp",
+ "alloy-trie",
  "anyhow",
  "bincode",
  "clap",

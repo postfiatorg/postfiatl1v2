@@ -27,6 +27,8 @@ const EVIDENCE_COMMITMENT_DOMAIN: &[u8] = b"postfiat.reserve_hyperliquid_receipt
 const OWNER_COMMITMENT_DOMAIN: &[u8] = b"postfiat.reserve_hyperliquid_owner_commitment.v1";
 const OWNER_AUTHORIZATION_DOMAIN: &[u8] = b"postfiat.reserve_hyperliquid_owner_authorization.v1";
 const METADATA_DOMAIN: &[u8] = b"postfiat.reserve_hyperliquid_receipt_metadata.v1";
+const SOURCE_STATE_COMMITMENT_DOMAIN: &[u8] =
+    b"postfiat.reserve_hyperliquid_source_state_commitment.v1";
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -41,6 +43,8 @@ pub struct HyperliquidReceiptPolicyV1 {
     pub source_domain: String,
     pub hyperevm_chain_id: u64,
     pub reader_contract: Address,
+    pub reader_code_hash: B256,
+    pub required_perps: Vec<u32>,
     pub allowed_spot_tokens: Vec<HyperliquidSpotTokenPolicyV1>,
 }
 
@@ -115,6 +119,7 @@ pub enum HlReceiptLegError {
     BadReceiptProof,
     BadReceipt,
     MissingSnapshotLog,
+    DuplicateSnapshotLog,
     WrongReaderContract,
     WrongEventTopic,
     BadCommitment,
@@ -123,6 +128,8 @@ pub enum HlReceiptLegError {
     NegativeAccountValue,
     WithdrawableExceedsAccountValue,
     BadSpotToken,
+    BadPerpPosition,
+    PerpNotionalMismatch,
     BadSpotBalance,
     BadPrice,
     DuplicateRow,
@@ -138,6 +145,8 @@ impl HyperliquidReceiptPolicyV1 {
     pub fn validate(&self) -> Result<(), HlReceiptLegError> {
         if self.hyperevm_chain_id == 0
             || self.reader_contract == Address::ZERO
+            || self.reader_code_hash == B256::ZERO
+            || self.source_domain != format!("eip155:{}", self.hyperevm_chain_id)
             || self.source_domain.is_empty()
             || self.source_domain.len() > 256
             || !self.source_domain.bytes().enumerate().all(|(index, byte)| {
@@ -147,12 +156,23 @@ impl HyperliquidReceiptPolicyV1 {
             })
             || self.allowed_spot_tokens.is_empty()
             || self.allowed_spot_tokens.len() > MAX_HYPERLIQUID_ALLOWED_SPOT_TOKENS
+            || self.required_perps.len() > MAX_HYPERLIQUID_PERP_ROWS
         {
             return Err(HlReceiptLegError::PolicyMismatch);
         }
+        let mut previous_perp = None;
+        for perp in &self.required_perps {
+            if *perp > u32::from(u16::MAX) || previous_perp >= Some(*perp) {
+                return Err(HlReceiptLegError::PolicyMismatch);
+            }
+            previous_perp = Some(*perp);
+        }
         let mut previous = None;
         for token in &self.allowed_spot_tokens {
-            if token.token == 0 || token.wei_decimals > 18 || previous >= Some(token.token) {
+            if !matches!(token.token, 150 | 404)
+                || token.wei_decimals != 8
+                || previous >= Some(token.token)
+            {
                 return Err(HlReceiptLegError::PolicyMismatch);
             }
             previous = Some(token.token);
@@ -167,7 +187,12 @@ impl HyperliquidReceiptPolicyV1 {
         append_bytes(&mut bytes, self.source_domain.as_bytes())?;
         bytes.extend_from_slice(&self.hyperevm_chain_id.to_be_bytes());
         bytes.extend_from_slice(self.reader_contract.as_slice());
+        bytes.extend_from_slice(self.reader_code_hash.as_slice());
         append_hex(&mut bytes, committee_root, 48)?;
+        append_u32(&mut bytes, self.required_perps.len())?;
+        for perp in &self.required_perps {
+            bytes.extend_from_slice(&perp.to_be_bytes());
+        }
         append_u32(&mut bytes, self.allowed_spot_tokens.len())?;
         for token in &self.allowed_spot_tokens {
             bytes.extend_from_slice(&token.token.to_be_bytes());
@@ -259,12 +284,53 @@ pub fn hyperliquid_owner_commitment(owner: Address) -> String {
     hash48(OWNER_COMMITMENT_DOMAIN, &[owner.as_slice()])
 }
 
+pub fn hyperliquid_source_state_commitment_v1(
+    receipts_root: B256,
+    reader_contract: Address,
+    reader_code_hash: B256,
+) -> B256 {
+    let mut bytes = Vec::with_capacity(SOURCE_STATE_COMMITMENT_DOMAIN.len() + 4 + 32 + 20 + 32);
+    bytes.extend_from_slice(&(SOURCE_STATE_COMMITMENT_DOMAIN.len() as u32).to_be_bytes());
+    bytes.extend_from_slice(SOURCE_STATE_COMMITMENT_DOMAIN);
+    bytes.extend_from_slice(receipts_root.as_slice());
+    bytes.extend_from_slice(reader_contract.as_slice());
+    bytes.extend_from_slice(reader_code_hash.as_slice());
+    keccak256(bytes)
+}
+
 pub fn hyperliquid_owner_authorization_statement(
     proof: &HyperliquidReceiptProofV1,
     context: &HyperliquidReceiptVerifyContextV1<'_>,
     committee_root: &str,
 ) -> Result<Vec<u8>, HlReceiptLegError> {
-    let policy_commitment = proof.policy.commitment(committee_root)?;
+    if proof
+        .checkpoint_certificate
+        .committee
+        .root()
+        .map_err(|_| HlReceiptLegError::CheckpointMismatch)?
+        != committee_root
+    {
+        return Err(HlReceiptLegError::CheckpointMismatch);
+    }
+    hyperliquid_owner_authorization_statement_for_policy_v1(
+        &proof.policy,
+        &proof.checkpoint_certificate,
+        proof.owner,
+        context,
+    )
+}
+
+pub fn hyperliquid_owner_authorization_statement_for_policy_v1(
+    policy: &HyperliquidReceiptPolicyV1,
+    checkpoint_certificate: &BftSourceCheckpointCertificateV1,
+    owner: Address,
+    context: &HyperliquidReceiptVerifyContextV1<'_>,
+) -> Result<Vec<u8>, HlReceiptLegError> {
+    let committee_root = checkpoint_certificate
+        .committee
+        .root()
+        .map_err(|_| HlReceiptLegError::CheckpointMismatch)?;
+    let policy_commitment = policy.commitment(&committee_root)?;
     let mut statement = Vec::new();
     append_hex(&mut statement, context.pftl_genesis_hash, 48)?;
     append_hex(&mut statement, context.nav_asset_id, 48)?;
@@ -274,12 +340,11 @@ pub fn hyperliquid_owner_authorization_statement(
     append_bytes(&mut statement, context.source_id.as_bytes())?;
     append_bytes(&mut statement, context.source_domain.as_bytes())?;
     append_bytes(&mut statement, context.asset_or_position_id.as_bytes())?;
-    statement.extend_from_slice(proof.owner.as_slice());
-    statement.extend_from_slice(proof.policy.reader_contract.as_slice());
+    statement.extend_from_slice(owner.as_slice());
+    statement.extend_from_slice(policy.reader_contract.as_slice());
     append_hex(&mut statement, &policy_commitment, 48)?;
     statement.extend_from_slice(
-        proof
-            .checkpoint_certificate
+        checkpoint_certificate
             .checkpoint
             .source_block_hash
             .as_slice(),
@@ -384,6 +449,15 @@ pub fn verify_hyperliquid_receipt_proof_v1(
     }
     let (receipts_root, block_timestamp_seconds) =
         receipts_root_and_timestamp_from_header(&proof.block_header_rlp)?;
+    if checkpoint.source_state_commitment
+        != hyperliquid_source_state_commitment_v1(
+            receipts_root,
+            proof.policy.reader_contract,
+            proof.policy.reader_code_hash,
+        )
+    {
+        return Err(HlReceiptLegError::CheckpointMismatch);
+    }
     verify_receipt_inclusion(
         receipts_root,
         proof.receipt_index,
@@ -462,13 +536,14 @@ fn compute_values(
         return Err(HlReceiptLegError::WithdrawableExceedsAccountValue);
     }
 
-    let mut seen_perps = Vec::with_capacity(payload.perps.len());
+    if payload.perps.len() != policy.required_perps.len() {
+        return Err(HlReceiptLegError::BadPerpPosition);
+    }
     let mut perp_notional = 0u128;
-    for perp in &payload.perps {
-        if seen_perps.contains(&perp.perp) {
-            return Err(HlReceiptLegError::DuplicateRow);
+    for (perp, required_perp) in payload.perps.iter().zip(&policy.required_perps) {
+        if perp.perp != *required_perp {
+            return Err(HlReceiptLegError::BadPerpPosition);
         }
-        seen_perps.push(perp.perp);
         if perp.szi == 0 {
             continue;
         }
@@ -486,6 +561,12 @@ fn compute_values(
         perp_notional = perp_notional
             .checked_add(row)
             .ok_or(HlReceiptLegError::ArithmeticOverflow)?;
+    }
+    let account_perp_notional = u128::from(payload.margin_summary.ntl_pos)
+        .checked_mul(100)
+        .ok_or(HlReceiptLegError::ArithmeticOverflow)?;
+    if perp_notional != account_perp_notional {
+        return Err(HlReceiptLegError::PerpNotionalMismatch);
     }
 
     let mut seen_spots = Vec::with_capacity(payload.spots.len());
@@ -667,6 +748,7 @@ fn find_snapshot_log(
     let logs = decode_receipt_logs(receipt)?;
     let topic0 = hl_receipt_event_topic0();
     let mut wrong_contract = false;
+    let mut matching_log = None;
     for log in logs {
         if log.topics.first().copied() != Some(topic0) {
             continue;
@@ -678,9 +760,13 @@ fn find_snapshot_log(
         if log.topics.len() != 2 {
             return Err(HlReceiptLegError::WrongEventTopic);
         }
-        return Ok(log);
+        if matching_log.replace(log).is_some() {
+            return Err(HlReceiptLegError::DuplicateSnapshotLog);
+        }
     }
-    if wrong_contract {
+    if let Some(log) = matching_log {
+        Ok(log)
+    } else if wrong_contract {
         Err(HlReceiptLegError::WrongReaderContract)
     } else {
         Err(HlReceiptLegError::MissingSnapshotLog)
@@ -1166,7 +1252,7 @@ mod tests {
         payload.extend_from_slice(&word_address(owner));
         payload.extend_from_slice(&word_i64(10_000_000));
         payload.extend_from_slice(&word_u64(1_000_000));
-        payload.extend_from_slice(&word_u64(2_000_000));
+        payload.extend_from_slice(&word_u64(100_000_000));
         payload.extend_from_slice(&word_i64(9_000_000));
         payload.extend_from_slice(&word_u64(4_000_000));
         payload.extend_from_slice(&word_u64(perps_offset as u64));
@@ -1227,12 +1313,13 @@ mod tests {
         rlp_bytes(&bytes[first..])
     }
 
-    fn receipt_and_root(
+    fn snapshot_receipt(
         reader: Address,
         owner: Address,
         salt: B256,
         timestamp_seconds: u64,
-    ) -> (Vec<u8>, B256, Vec<Vec<u8>>) {
+        snapshot_log_count: usize,
+    ) -> Vec<u8> {
         let payload = snapshot_payload(owner);
         let mut commitment_preimage = payload.clone();
         commitment_preimage.extend_from_slice(salt.as_slice());
@@ -1250,10 +1337,20 @@ mod tests {
             rlp_bytes(commitment.as_slice()),
         ]);
         let log = rlp_list(&[rlp_bytes(reader.as_slice()), topics, rlp_bytes(&event_data)]);
-        let logs = rlp_list(&[log]);
+        let logs = rlp_list(&vec![log; snapshot_log_count]);
         let receipt_body = rlp_list(&[rlp_u64(1), rlp_u64(21_000), rlp_bytes(&[0u8; 256]), logs]);
         let mut receipt = vec![2u8];
         receipt.extend_from_slice(&receipt_body);
+        receipt
+    }
+
+    fn receipt_and_root(
+        reader: Address,
+        owner: Address,
+        salt: B256,
+        timestamp_seconds: u64,
+    ) -> (Vec<u8>, B256, Vec<Vec<u8>>) {
+        let receipt = snapshot_receipt(reader, owner, salt, timestamp_seconds, 1);
 
         let path = receipt_trie_key(0);
         let mut builder =
@@ -1296,6 +1393,7 @@ mod tests {
         let ownership_key = SigningKey::from_bytes((&[0x22; 32]).into()).unwrap();
         let owner = Address::from_private_key(&ownership_key);
         let reader = Address::repeat_byte(0x33);
+        let reader_code_hash = B256::repeat_byte(0x66);
         let salt = B256::repeat_byte(0x44);
         let timestamp_seconds = 1_781_366_498;
         let (receipt, receipts_root, proof_nodes) =
@@ -1311,7 +1409,11 @@ mod tests {
             source_height: 1_000,
             source_timestamp_ms: timestamp_seconds * 1_000,
             source_block_hash: block_hash,
-            source_state_commitment: B256::repeat_byte(0x55),
+            source_state_commitment: hyperliquid_source_state_commitment_v1(
+                receipts_root,
+                reader,
+                reader_code_hash,
+            ),
             observed_source_head: 1_012,
             minimum_depth: 12,
             pftl_observation_height: 200,
@@ -1346,6 +1448,8 @@ mod tests {
             source_domain: "eip155:999".to_string(),
             hyperevm_chain_id: 999,
             reader_contract: reader,
+            reader_code_hash,
+            required_perps: vec![7],
             allowed_spot_tokens: vec![HyperliquidSpotTokenPolicyV1 {
                 token: 404,
                 wei_decimals: 8,
@@ -1445,6 +1549,11 @@ mod tests {
             source_domain: "eip155:999".to_string(),
             hyperevm_chain_id: 999,
             reader_contract: witness.reader_contract,
+            // The historical witness predates policy-pinned reader code. This
+            // test reconstructs the receipt payload only; full successor
+            // fixtures must supply and verify the actual governed code hash.
+            reader_code_hash: B256::repeat_byte(0x42),
+            required_perps: payload.perps.iter().map(|row| row.perp).collect(),
             allowed_spot_tokens: payload
                 .spots
                 .iter()
@@ -1456,6 +1565,10 @@ mod tests {
         };
         let values = compute_values(&payload, &policy).unwrap();
         assert!(values.gross_assets_usd_e8 > 0);
+        assert_eq!(
+            values.perp_notional_usd_e8,
+            payload.margin_summary.ntl_pos * 100
+        );
     }
 
     #[test]
@@ -1565,11 +1678,39 @@ mod tests {
             source_domain: "eip155:999".to_string(),
             hyperevm_chain_id: 999,
             reader_contract: Address::repeat_byte(1),
+            reader_code_hash: B256::repeat_byte(3),
+            required_perps: vec![7],
             allowed_spot_tokens: vec![HyperliquidSpotTokenPolicyV1 {
                 token: 404,
                 wei_decimals: 8,
             }],
         };
+        let mut payload =
+            decode_snapshot_payload(&snapshot_payload(Address::repeat_byte(2))).unwrap();
+        payload.perps.clear();
+        assert_eq!(
+            compute_values(&payload, &policy).map(|_| ()),
+            Err(HlReceiptLegError::BadPerpPosition)
+        );
+
+        let mut payload =
+            decode_snapshot_payload(&snapshot_payload(Address::repeat_byte(2))).unwrap();
+        payload.perps[0].perp = 8;
+        assert_eq!(
+            compute_values(&payload, &policy).map(|_| ()),
+            Err(HlReceiptLegError::BadPerpPosition)
+        );
+
+        let mut omitted_policy = policy.clone();
+        omitted_policy.required_perps.clear();
+        let mut omitted_payload =
+            decode_snapshot_payload(&snapshot_payload(Address::repeat_byte(2))).unwrap();
+        omitted_payload.perps.clear();
+        assert_eq!(
+            compute_values(&omitted_payload, &omitted_policy).map(|_| ()),
+            Err(HlReceiptLegError::PerpNotionalMismatch)
+        );
+
         let mut payload =
             decode_snapshot_payload(&snapshot_payload(Address::repeat_byte(2))).unwrap();
         payload.spots.push(payload.spots[0].clone());
@@ -1609,6 +1750,84 @@ mod tests {
         assert_eq!(
             compute_values(&payload, &policy).map(|_| ()),
             Err(HlReceiptLegError::ArithmeticOverflow)
+        );
+    }
+
+    #[test]
+    fn policy_and_checkpoint_commitments_bind_complete_reader_configuration() {
+        let (proof, _) = fixture();
+        let root = B256::repeat_byte(0x11);
+        let base = hyperliquid_source_state_commitment_v1(
+            root,
+            proof.policy.reader_contract,
+            proof.policy.reader_code_hash,
+        );
+        assert_ne!(
+            base,
+            hyperliquid_source_state_commitment_v1(
+                B256::repeat_byte(0x12),
+                proof.policy.reader_contract,
+                proof.policy.reader_code_hash,
+            )
+        );
+        assert_ne!(
+            base,
+            hyperliquid_source_state_commitment_v1(
+                root,
+                Address::repeat_byte(0x13),
+                proof.policy.reader_code_hash,
+            )
+        );
+        assert_ne!(
+            base,
+            hyperliquid_source_state_commitment_v1(
+                root,
+                proof.policy.reader_contract,
+                B256::repeat_byte(0x14),
+            )
+        );
+
+        let mut bad_policy = proof.policy.clone();
+        bad_policy.required_perps = vec![7, 7];
+        assert_eq!(
+            bad_policy.validate(),
+            Err(HlReceiptLegError::PolicyMismatch)
+        );
+        let mut bad_policy = proof.policy;
+        bad_policy.reader_code_hash = B256::ZERO;
+        assert_eq!(
+            bad_policy.validate(),
+            Err(HlReceiptLegError::PolicyMismatch)
+        );
+
+        let (proof, _) = fixture();
+        let mut bad_policy = proof.policy.clone();
+        bad_policy.required_perps = vec![u32::from(u16::MAX) + 1];
+        assert_eq!(
+            bad_policy.validate(),
+            Err(HlReceiptLegError::PolicyMismatch)
+        );
+        let mut bad_policy = proof.policy;
+        bad_policy.source_domain = "eip155:1".to_string();
+        assert_eq!(
+            bad_policy.validate(),
+            Err(HlReceiptLegError::PolicyMismatch)
+        );
+    }
+
+    #[test]
+    fn duplicate_snapshot_events_fail_closed() {
+        let reader = Address::repeat_byte(0x31);
+        let receipt = snapshot_receipt(
+            reader,
+            Address::repeat_byte(0x32),
+            B256::repeat_byte(0x33),
+            1_781_366_498,
+            2,
+        );
+        assert_eq!(
+            find_snapshot_log(&receipt, reader),
+            Err(HlReceiptLegError::DuplicateSnapshotLog)
         );
     }
 }

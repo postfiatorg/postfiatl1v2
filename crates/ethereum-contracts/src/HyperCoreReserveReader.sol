@@ -8,8 +8,7 @@ contract HyperCoreReserveReader {
     address internal constant SPOT_BALANCE_PRECOMPILE = 0x0000000000000000000000000000000000000801;
     address internal constant WITHDRAWABLE_PRECOMPILE = 0x0000000000000000000000000000000000000803;
     address internal constant MARK_PX_PRECOMPILE = 0x0000000000000000000000000000000000000806;
-    address internal constant ACCOUNT_MARGIN_SUMMARY_PRECOMPILE =
-        0x000000000000000000000000000000000000080F;
+    address internal constant ACCOUNT_MARGIN_SUMMARY_PRECOMPILE = 0x000000000000000000000000000000000000080F;
 
     event HyperCoreSnapshot(bytes32 indexed commitment, uint64 blockTimeMs, bytes payload);
 
@@ -57,25 +56,21 @@ contract HyperCoreReserveReader {
 
     /// @notice Reads official HyperCore precompiles for one account and emits
     /// one canonical receipt log.
-    function snapshot(
-        address account,
-        uint32[] calldata perps,
-        SpotRequest[] calldata spots,
-        uint32 perpDexIndex,
-        bytes32 salt
-    ) external returns (bytes32 commitment, bytes memory payload) {
+    function snapshot(address account, uint32[] calldata perps, SpotRequest[] calldata spots, bytes32 salt)
+        external
+        returns (bytes32 commitment, bytes memory payload)
+    {
         require(account != address(0), "ZERO_ACCOUNT");
+        require(block.timestamp <= type(uint64).max / 1000, "TIMESTAMP_OVERFLOW");
         require(_strictlyIncreasingPerps(perps), "BAD_PERP_SET");
         require(_strictlyIncreasingSpots(spots), "BAD_SPOT_SET");
-        AccountMarginSummary memory marginSummary = _accountMarginSummary(perpDexIndex, account);
+        // The public A666 successor is bound to the primary HyperCore perp DEX.
+        // Do not accept caller-selected market state that the receipt payload
+        // cannot independently disclose and bind.
+        AccountMarginSummary memory marginSummary = _accountMarginSummary(0, account);
         uint64 withdrawable = _withdrawable(account);
-        payload = abi.encode(
-            account,
-            marginSummary,
-            withdrawable,
-            _readPerps(account, perps),
-            _readSpots(account, spots)
-        );
+        payload =
+            abi.encode(account, marginSummary, withdrawable, _readPerps(account, perps), _readSpots(account, spots));
         commitment = keccak256(abi.encodePacked(payload, salt));
         emit HyperCoreSnapshot(commitment, uint64(block.timestamp * 1000), payload);
     }
@@ -88,11 +83,7 @@ contract HyperCoreReserveReader {
         snapshots = new PerpSnapshot[](perps.length);
         for (uint256 i = 0; i < perps.length; i++) {
             Position memory position = _position(account, perps[i]);
-            snapshots[i] = PerpSnapshot({
-                perp: perps[i],
-                szi: position.szi,
-                markPx: _markPx(perps[i])
-            });
+            snapshots[i] = PerpSnapshot({perp: perps[i], szi: position.szi, markPx: _markPx(perps[i])});
         }
     }
 
@@ -117,19 +108,13 @@ contract HyperCoreReserveReader {
     function _position(address account, uint32 perp) internal view returns (Position memory) {
         require(perp <= type(uint16).max, "PERP_INDEX_GT_UINT16");
         // forge-lint: disable-next-line(unsafe-typecast)
-        (bool success, bytes memory result) =
-            POSITION_PRECOMPILE.staticcall(abi.encode(account, uint16(perp)));
+        (bool success, bytes memory result) = POSITION_PRECOMPILE.staticcall(abi.encode(account, uint16(perp)));
         require(success, "POSITION_READ_FAILED");
         return abi.decode(result, (Position));
     }
 
-    function _spotBalance(address account, uint64 token)
-        internal
-        view
-        returns (SpotBalance memory)
-    {
-        (bool success, bytes memory result) =
-            SPOT_BALANCE_PRECOMPILE.staticcall(abi.encode(account, token));
+    function _spotBalance(address account, uint64 token) internal view returns (SpotBalance memory) {
+        (bool success, bytes memory result) = SPOT_BALANCE_PRECOMPILE.staticcall(abi.encode(account, token));
         require(success, "SPOT_BALANCE_READ_FAILED");
         return abi.decode(result, (SpotBalance));
     }

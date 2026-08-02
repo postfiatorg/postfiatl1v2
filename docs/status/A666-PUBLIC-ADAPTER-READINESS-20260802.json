@@ -21,8 +21,8 @@
       "id": "hyperliquid",
       "status": "partial",
       "production_qualified": false,
-      "public_implementation": "tools/nav-reserve-proof/crates/reserve-proof-types/src/hyperliquid_receipt.rs; crates/ethereum-contracts/src/HyperCoreReserveReader.sol",
-      "note": "A provider-neutral verifier now checks the HyperEVM reader receipt, BFT-certified header, owner authorization, complete policy-pinned spot set, positions, holds, values, liabilities, bounds, and guest dispatch, with historical receipt reconstruction. The hardened HyperCore receipt-reader contract and its canonical position-set checks now live in the public repository. Public deployment and receipt-proof collection, fuzzing, fresh epochs, full A666 reconciliation, and production qualification remain open."
+      "public_implementation": "tools/nav-reserve-proof/crates/reserve-proof-types/src/hyperliquid_receipt.rs; tools/nav-reserve-proof/crates/reserve-proof-cli/src/hyperliquid_adapter.rs; crates/ethereum-contracts/src/HyperCoreReserveReader.sol",
+      "note": "A provider-neutral verifier now checks the HyperEVM reader receipt, BFT-certified header, owner authorization, reader bytecode hash, exact policy-pinned spot and perpetual sets, positions, holds, values, liabilities, bounds, and guest dispatch. The hardened public HyperCore reader and public unsigned snapshot/checkpoint/owner/receipt-proof collection workflow reconstruct a real historical block and receipts trie without any StakeHub runtime input. HyperEVM does not expose a usable account state root or eth_getProof, so reader-code identity is explicitly BFT-checkpointed by independent validators while receipt inclusion and payload values remain cryptographic. Public deployment, governed A666 policy/committee inputs, fuzzing, fresh epochs, full A666 reconciliation, independent reproduction, and production qualification remain open."
     },
     {
       "id": "staked-near",

@@ -250,8 +250,56 @@ prices from pinned HyperCore mark-price assets, and emits the exact
 `HyperCoreSnapshot` commitment consumed by the public verifier. The verifier
 treats `allowed_spot_tokens` as the complete required spot set: omission,
 addition, reordering, duplicate token, or decimal substitution fails closed.
-Public deployment and receipt-proof collection tooling remain required before
-this adapter is production-qualified.
+It likewise treats `required_perps` as the exact set and pins the deployed
+reader's bytecode hash. The verifier also requires the sum of every requested
+perpetual's notional to equal HyperCore's account-wide `ntlPos` exactly, so an
+unlisted live perpetual cannot be hidden by omitting it from the request.
+
+The public CLI implements the complete unsigned snapshot and proof-collection
+workflow. It never accepts a transaction-signing key:
+
+    postfiat-reserve-proof adapter hyperliquid snapshot-request \
+      --policy hyperliquid-policy.json \
+      --owner 0x... \
+      --salt 0x... \
+      --output snapshot-request.json
+
+Sign and submit that exact zero-value transaction with an external HyperEVM
+wallet. Once it is included deeply enough, each checkpoint validator runs
+`checkpoint-candidate` independently at the same height. The candidate binds
+the reconstructed header hash and receipts root, required source depth,
+governed reader address, and reader bytecode hash. Assemble the independently
+signed candidates with the generic `source-checkpoint` commands, then derive
+the exact reserve-owner statement:
+
+    postfiat-reserve-proof adapter hyperliquid owner-authorization \
+      --manifest manifest.json \
+      --context context.json \
+      --source-id hyperliquid \
+      --policy hyperliquid-policy.json \
+      --checkpoint-certificate checkpoint-certificate.json \
+      --owner 0x... \
+      --output owner-authorization.bin
+
+After the owner signs that EIP-191 statement externally, `collect` downloads
+the exact certified block and all of its receipts, rejects missing or
+non-contiguous receipt indexes, reconstructs the receipts trie, extracts the
+minimal inclusion proof for the exact snapshot transaction, and runs the full
+public verifier before writing an observation. Use `--help` for the bounded
+inputs; the command requires reviewed expected gross-assets and liability
+values and rejects them unless the receipt independently recomputes exactly
+the same values.
+
+HyperEVM currently returns a zero `stateRoot` and does not implement
+`eth_getProof`. Consequently, the reader bytecode hash cannot be account-MPT
+proven under that header. It is instead part of the quorum-certified source
+checkpoint: validators must independently query the reader code at the exact
+height before signing. The receipt inclusion, payload, quantities, positions,
+and HyperCore-derived prices remain cryptographically verified under the
+certified receipts root. A public deployment of this hardened reader,
+governed A666 policy/committee material, fuzz qualification, and fresh
+multi-epoch reconciliation remain required before the adapter is
+production-qualified.
 
 Quantity and valuation remain separate. Derive the exact manifest commitment
 for an Ed25519 attestation or protocol-receipt key first:

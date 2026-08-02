@@ -270,7 +270,7 @@ not yet the desired public architecture.
 |---|---|---:|---|
 | Aave on Arbitrum | Provider-neutral verifier and public checkpoint/collection workflow implemented; partial | No | Add governed A666 policy/committee inputs, fuzz, run fresh epochs and complete A666 reconciliation, and qualify |
 | Complete EVM spot set | Provider-neutral quantity verifier and public checkpoint/collection workflow implemented; partial | No | Add the governed A666 policy/committee fixture, bind separately disclosed valuation evidence, fuzz, run fresh epochs and complete A666 reconciliation, and qualify |
-| Hyperliquid | Provider-neutral verifier and public HyperCore receipt-reader contract implemented; partial | No | Add public deployment/receipt-proof collection, fuzz, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
+| Hyperliquid | Provider-neutral verifier, public HyperCore receipt-reader contract, unsigned snapshot construction, checkpoint/owner workflow, and receipt-proof collector implemented; partial | No | Deploy the hardened public reader, govern policy/committee inputs, fuzz, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
 | Staked NEAR | Provider-neutral quantity verifier implemented; partial | No | Add public collection and fuzzing, reproduce complete historical and fresh epochs, bind governed public NEAR/USD valuation evidence under section 2, complete full A666 reconciliation, and qualify |
 | Staked Solana | Provider-neutral attested-RPC verifier implemented as an interim scaffold; production proof path absent | No | Implement public finalized source-state verification and collection that does not trust an operator/RPC signature for the quantity, then fuzz, run fresh epochs, reconcile, and qualify |
 | Monero | Provider-neutral cryptographic quantity verifier implemented; partial | No | Add the public collector, produce a fresh governed nonzero proof with certified head chain and spent-status set, bind separately disclosed XMR/USD valuation evidence, fuzz, complete A666 reconciliation, and qualify |
@@ -491,10 +491,31 @@ Internal migration inputs include:
 The reader contract has now been ported, hardened, and tested publicly at
 `crates/ethereum-contracts/src/HyperCoreReserveReader.sol`. The verifier now
 also requires the receipt's spot rows to equal the complete policy-pinned set,
-not merely be members of an allowlist. The private paths above are historical
-migration references only; they are not acceptable runtime or build inputs.
-Public transaction construction plus block-header/receipt-trie proof
-collection remains open.
+not merely be members of an allowlist. It requires the exact policy-pinned
+perpetual set and requires its recomputed total notional to equal HyperCore's
+account-wide `ntlPos`, preventing an unlisted live perpetual from being hidden
+by request omission. Duplicate snapshot events fail closed. The private paths
+above are historical migration references only; they are not acceptable
+runtime or build inputs.
+Public transaction construction, block-header validation, reader-code
+checking, receipt retrieval, canonical receipt RLP, receipt-trie
+reconstruction, inclusion proof extraction, source checkpoint creation, owner
+authorization, and verified observation output now live in
+`tools/nav-reserve-proof/crates/reserve-proof-cli/src/hyperliquid_adapter.rs`.
+The CLI accepts no private key and its historical public-RPC test reproduces
+the existing certified receipts root.
+
+HyperEVM currently exposes a zero block `stateRoot` and rejects
+`eth_getProof`, so reader bytecode identity cannot be account-MPT proven under
+the header. The successor therefore makes this trust boundary explicit: the
+quorum-certified source checkpoint commits the receipts root, reader address,
+and reader bytecode hash, and every checkpoint validator must independently
+reproduce the exact header, code hash, and minimum depth before signing. The
+snapshot receipt, payload, exact position sets, quantities, liabilities, and
+HyperCore-derived prices are still cryptographically checked under that
+certified receipts root. Deployment of the hardened reader, governed A666
+policy/committee inputs, fuzz qualification, fresh epochs, and full A666
+reconciliation remain open.
 
 The current A666 shadow marks Hyperliquid quantity and valuation as attested.
 That is not equivalent to the historical receipt validation and cannot be the
@@ -656,10 +677,10 @@ existing guest ELF SHA exactly.
 - [x] Implement and register the public Hyperliquid adapter.
 - [x] Port and test the HyperCore receipt-reader contract publicly and reject
   omitted, added, reordered, or duplicated governed spot rows.
-- [ ] Implement public HyperCore snapshot transaction construction plus
-  HyperEVM header, receipt, and receipt-trie proof collection. It may accept a
-  transaction hash signed and submitted by an external wallet; it must never
-  require a private key inside the proof kit.
+- [x] Implement public HyperCore snapshot transaction construction plus
+  HyperEVM header, receipt, and receipt-trie proof collection. It accepts a
+  transaction hash signed and submitted by an external wallet and never
+  requires a private key inside the proof kit.
 - [x] Implement and register the public staked-NEAR adapter.
 - [ ] Implement the public NEAR reader invocation and complete finalized
   outcome/block proof collector.
@@ -984,10 +1005,12 @@ Then:
 
 1. Fix the immutable-legacy-guest CI archive/rebuild failure, dispatch an
    exact-tip run, and require green CI. Preserve the pinned legacy ELF and vkey.
-2. Finish Hyperliquid: public snapshot calldata construction, externally
-   signed transaction workflow, block/header/receipt retrieval, receipt RLP,
-   receipts-trie reconstruction, inclusion proof, source checkpoint, owner
-   authorization, and verified observation output.
+2. Qualify Hyperliquid: deploy the hardened public reader, publish governed
+   A666 policy and committee inputs, collect fresh externally signed snapshots,
+   add parser fuzzing and adversarial network fixtures, reconcile at least two
+   fresh epochs, and independently reproduce the workflow. The public snapshot,
+   checkpoint, owner-authorization, and receipt-proof collection code is now
+   implemented; it is not yet production-qualified.
 3. Finish NEAR: public reader invocation, finalized head acquisition,
    outcome/block Merkle proof collection, code/account/pool pinning, ownership,
    source checkpoint, and verified observation output.

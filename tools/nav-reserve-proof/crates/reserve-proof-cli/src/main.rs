@@ -22,6 +22,7 @@ use reserve_proof_types::{
 use serde::{Deserialize, Serialize};
 
 mod evm_adapter;
+mod hyperliquid_adapter;
 mod source_checkpoint;
 
 use evm_adapter::AdapterCommand;

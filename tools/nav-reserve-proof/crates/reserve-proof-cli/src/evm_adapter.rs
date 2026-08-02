@@ -43,6 +43,8 @@ use reserve_proof_types::{
 };
 use serde::Deserialize;
 
+use crate::hyperliquid_adapter::{self, HyperliquidCommand};
+
 const MAX_RPC_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
 const RPC_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -65,6 +67,12 @@ pub enum AdapterCommand {
     EvmSpot {
         #[command(subcommand)]
         command: EvmSpotCommand,
+    },
+    /// Build and verify public HyperCore reader receipt proofs under a
+    /// governed HyperEVM header checkpoint.
+    Hyperliquid {
+        #[command(subcommand)]
+        command: HyperliquidCommand,
     },
     /// Emit the canonical statement for an Ed25519 attestation or protocol
     /// receipt already represented in a source observation.
@@ -523,6 +531,7 @@ pub fn run(command: AdapterCommand) -> Result<()> {
                 output,
             }),
         },
+        AdapterCommand::Hyperliquid { command } => hyperliquid_adapter::run(command),
         AdapterCommand::Ed25519EvidenceStatement {
             manifest,
             context,
@@ -1947,7 +1956,7 @@ fn collect(args: CollectArgs) -> Result<()> {
     Ok(())
 }
 
-fn load_source(
+pub(crate) fn load_source(
     manifest_path: &Path,
     context_path: &Path,
     source_id: &str,
@@ -2001,7 +2010,7 @@ fn validate_evm_manifest_entry(
     Ok(())
 }
 
-fn validate_rpc_url(raw: &str) -> Result<Url> {
+pub(crate) fn validate_rpc_url(raw: &str) -> Result<Url> {
     let url = Url::parse(raw).context("parse Ethereum RPC URL")?;
     anyhow::ensure!(
         url.username().is_empty() && url.password().is_none(),
@@ -2019,7 +2028,7 @@ fn validate_rpc_url(raw: &str) -> Result<Url> {
     Ok(url)
 }
 
-fn rpc_call<T: serde::de::DeserializeOwned>(
+pub(crate) fn rpc_call<T: serde::de::DeserializeOwned>(
     client: &Client,
     url: &Url,
     method: &str,
@@ -2117,11 +2126,11 @@ struct RpcStorageProof {
     proof: Vec<String>,
 }
 
-fn parse_address(label: &str, value: &str) -> Result<Address> {
+pub(crate) fn parse_address(label: &str, value: &str) -> Result<Address> {
     Address::from_str(value).with_context(|| format!("{label} is not a canonical EVM address"))
 }
 
-fn parse_b256(label: &str, value: &str) -> Result<B256> {
+pub(crate) fn parse_b256(label: &str, value: &str) -> Result<B256> {
     B256::from_str(value).with_context(|| format!("{label} is not a 32-byte hex value"))
 }
 
@@ -2131,12 +2140,12 @@ fn parse_u256(label: &str, value: &str) -> Result<U256> {
     U256::from_str_radix(digits, 16).with_context(|| format!("{label} is not a hex quantity"))
 }
 
-fn parse_u64_quantity(label: &str, value: &str) -> Result<u64> {
+pub(crate) fn parse_u64_quantity(label: &str, value: &str) -> Result<u64> {
     let parsed = parse_u256(label, value)?;
     u64::try_from(parsed).with_context(|| format!("{label} exceeds u64"))
 }
 
-fn decode_hex(label: &str, value: &str, expected_bytes: usize) -> Result<Vec<u8>> {
+pub(crate) fn decode_hex(label: &str, value: &str, expected_bytes: usize) -> Result<Vec<u8>> {
     let digits = value.strip_prefix("0x").unwrap_or(value);
     anyhow::ensure!(
         digits.len() == expected_bytes.saturating_mul(2),
@@ -2175,7 +2184,7 @@ fn validate_hex(label: &str, value: &str, bytes: usize) -> Result<()> {
     Ok(())
 }
 
-fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
+pub(crate) fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
     let metadata = fs::metadata(path).with_context(|| format!("stat {}", path.display()))?;
     anyhow::ensure!(
         metadata.is_file() && metadata.len() <= MAX_WITNESS_BYTES as u64,
@@ -2185,7 +2194,7 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
     serde_json::from_slice(&fs::read(path)?).with_context(|| format!("decode {}", path.display()))
 }
 
-fn write_new(path: &Path, bytes: &[u8]) -> Result<()> {
+pub(crate) fn write_new(path: &Path, bytes: &[u8]) -> Result<()> {
     anyhow::ensure!(!path.exists(), "refusing to overwrite {}", path.display());
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
