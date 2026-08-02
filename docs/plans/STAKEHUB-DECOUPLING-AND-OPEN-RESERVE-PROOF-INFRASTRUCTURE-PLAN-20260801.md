@@ -141,7 +141,7 @@ crates/execution/src/nav_sp1_verifier.rs
 Machine-readable A666 source-adapter readiness lives at:
 
 ```text
-tools/nav-reserve-proof/a666-adapter-readiness.json
+docs/status/A666-PUBLIC-ADAPTER-READINESS-20260802.json
 ```
 
 CI rejects a claim that StakeHub is deprecated unless every required adapter

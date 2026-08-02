@@ -30,6 +30,7 @@ if rg -n -i \
   --glob '!wallet-proxy/node_modules/**' \
   --glob '!wallet-web/node_modules/**' \
   --glob '!scripts/check-provider-neutral-wallet-boundary' \
+  --glob '!scripts/check-a666-public-adapter-readiness' \
   "$provider_pattern|$retired_route_pattern" "${paths[@]}"; then
   echo 'provider-neutral shipped-code boundary check failed' >&2
   exit 1
