@@ -7,6 +7,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 CHECKER = runpy.run_path(str(ROOT / "scripts/check-a666-public-adapter-readiness"))
 validate_deprecation_state = CHECKER["validate_deprecation_state"]
+validate_public_implementation = CHECKER["validate_public_implementation"]
 
 
 def passing_plan() -> str:
@@ -49,3 +50,19 @@ def test_deprecation_accepts_all_adapters_and_all_gates() -> None:
         all_qualified=True,
         plan=passing_plan(),
     )
+
+
+def test_multiple_public_implementation_paths_are_checked() -> None:
+    validate_public_implementation(
+        "test-adapter",
+        "scripts/check-a666-public-adapter-readiness; "
+        "docs/status/A666-PUBLIC-ADAPTER-READINESS-20260802.json",
+    )
+
+
+def test_missing_public_implementation_path_is_rejected() -> None:
+    with pytest.raises(SystemExit, match="does not exist: missing-public-adapter.rs"):
+        validate_public_implementation(
+            "test-adapter",
+            "scripts/check-a666-public-adapter-readiness; missing-public-adapter.rs",
+        )

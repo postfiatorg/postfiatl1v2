@@ -46,6 +46,18 @@ def validate_deprecation_state(*, deprecated: bool, all_qualified: bool, plan: s
                 )
 
 
+def validate_public_implementation(adapter_id: str, implementation: object) -> None:
+    """Validate every path in the semicolon-delimited implementation inventory."""
+    if not isinstance(implementation, str) or not implementation.strip():
+        fail(f"{adapter_id}: public implementation is required")
+    paths = [part.strip() for part in implementation.split(";")]
+    if any(not path for path in paths):
+        fail(f"{adapter_id}: public implementation contains an empty path")
+    for path in paths:
+        if not (ROOT / path).is_file():
+            fail(f"{adapter_id}: public implementation does not exist: {path}")
+
+
 def main() -> None:
     if RETIRED_HANDOFF.exists():
         fail("retired continuation handoff must remain deleted; update the canonical plan")
@@ -82,11 +94,7 @@ def main() -> None:
         if qualified != (status == "qualified"):
             fail(f"{adapter_id}: qualified status/boolean mismatch")
         if status in {"implemented", "qualified"}:
-            if not isinstance(implementation, str) or not implementation:
-                fail(f"{adapter_id}: public implementation is required")
-            path = ROOT / implementation
-            if not path.is_file():
-                fail(f"{adapter_id}: public implementation does not exist")
+            validate_public_implementation(adapter_id, implementation)
         if status == "missing" and implementation is not None:
             fail(f"{adapter_id}: missing adapter cannot name an implementation")
         if not isinstance(entry.get("note"), str) or not entry["note"].strip():
