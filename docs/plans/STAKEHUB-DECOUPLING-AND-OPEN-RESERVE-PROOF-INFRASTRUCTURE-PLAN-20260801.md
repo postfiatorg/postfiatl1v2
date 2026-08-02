@@ -784,7 +784,13 @@ existing guest ELF SHA exactly.
 - [x] Run formatting and check targets required by CI, and `git diff
   --check`.
 - [x] Commit and push the narrow patch without live governance operations.
-- [ ] Require green exact-tip remote CI.
+- [x] Require green exact-tip remote CI. Product-security run
+  `30753373194` passed at implementation tip
+  `45801200cb0f63b6752373b5db397c10ac87b4a3`, including the ten-target
+  attacker-input fuzz campaign, deterministic public reader rebuilds, pinned
+  SP1 host compile, and immutable legacy guest identity rebuild. This closes
+  the Phase 1 implementation gate; it does not qualify any live source or make
+  `G3` pass.
 
 ### Phase 2 — port the source validators
 
@@ -1118,7 +1124,7 @@ Repository and branch at this update:
 /home/postfiat/repos/a666-eth-fast-lane-combined-20260724
 feature/pnok-private-fix
 pushed implementation baseline covered by this documentation update:
-ff62947 Remove internal provenance paths from proof kit
+4580120 Update public reserve proof completion state
 origin/feature/pnok-private-fix contained that baseline before this document-only update
 ```
 
@@ -1165,7 +1171,15 @@ bbc72fb Bind A666 EVM spot valuation to Chainlink proofs
 78b52bd Publish public A666 Monero reserve policies
 a7b81ce Publish A666 NEAR and Solana valuation policies
 ff62947 Remove internal provenance paths from proof kit
+4580120 Update public reserve proof completion state
 ```
+
+Exact implementation-tip product-security run `30753373194` passed on
+`45801200cb0f63b6752373b5db397c10ac87b4a3`. Every configured job completed
+successfully. The optional official Ethereum mainnet-fork job accurately
+recorded that `ETHEREUM_MAINNET_RPC_URL` was not configured and therefore did
+not run the real-value fork assertion; it is not counted as source
+qualification.
 
 This work implements the pfUSDC overlay, provider-neutral source checkpoint
 assembly, all six initial verifier modules, complete public Aave and EVM-spot
@@ -1173,9 +1187,8 @@ collection workflows, public HyperCore and NEAR reader contracts, the public
 Monero collector, and the public Solana reader/collector with a pinned
 reproducible SBF identity. This continuation also implements the public
 Chainlink account/storage-proof valuation successor described in section 3.4.
-It is not remotely qualified until the commit containing it has green exact-tip
-CI. None of this completes a source's production qualification or changes live
-A666.
+Its implementation tip has green exact-tip CI. None of this completes a
+source's production qualification or changes live A666.
 
 Current machine gates:
 
