@@ -415,6 +415,18 @@ fn validate_lower_hex(label: &str, value: &str, bytes: usize) -> Result<()> {
 }
 
 fn committee_root(committee: &BftCheckpointCommitteeV1) -> Result<String> {
+    let minimum_bft_quorum = committee
+        .validators
+        .len()
+        .checked_mul(2)
+        .map(|doubled| (doubled / 3) + 1)
+        .ok_or_else(|| anyhow!("checkpoint committee quorum overflow"))?;
+    if usize::from(committee.quorum) < minimum_bft_quorum {
+        bail!(
+            "checkpoint committee quorum {} is below BFT minimum {minimum_bft_quorum}",
+            committee.quorum
+        );
+    }
     committee.root().map_err(anyhow::Error::msg)
 }
 
@@ -611,5 +623,12 @@ mod tests {
         let mut build = evm_spot_build();
         build.sources[0].valuation_verifier = ValuationVerifierBuildV1::SameAsQuantity;
         assert!(build_manifest(build).is_err());
+
+        let mut weak = committee();
+        weak.validators.push(BftCheckpointValidatorV1 {
+            validator_id: "validator-1".to_string(),
+            public_key: ml_dsa_65_keygen_from_seed(&[8; 32]).public_key,
+        });
+        assert!(committee_root(&weak).is_err());
     }
 }

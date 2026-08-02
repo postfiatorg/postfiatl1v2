@@ -824,6 +824,14 @@ existing guest ELF SHA exactly.
   context drift, and any price-row/quantity-position or decimal mismatch.
   The actual governed A666 input bundle remains open until the public reader
   deployments and real policy values are complete.
+- [x] Derive and publish the candidate source-checkpoint committee from the
+  public six-validator PFTL registry. The generic builder accepts only
+  ML-DSA-65 public keys, canonicalizes validator ordering, rejects quorums
+  below the BFT threshold, and derives its root. The manifest builder repeats
+  the BFT-threshold check. A666's candidate is epoch 1, quorum 5,
+  committee root
+  `99b0a3b8af49f3c91537d24a698e47f5761eec65890d00cdc4070ec99b18b333dfe514199c258cda5b81bec33821e245`.
+  It contains no validator private keys.
 - [ ] Preserve or strengthen historical cryptographic trust classifications.
 - [ ] Eliminate operator-signed aggregate quantity, liability, and NAV inputs;
   permit signed external data only under the exact restrictions in section 2.
@@ -1057,7 +1065,7 @@ Current machine gates:
 ```text
 scripts/test-proof-public-input-inventory
   passed after the current valuation continuation; 5 systems, 70 public fields,
-  46 source hashes
+  50 source hashes
 
 scripts/check-nav-reserve-proof-fuzz-smoke
   passed locally against guarded temporary corpora. In addition to the initial
@@ -1076,6 +1084,15 @@ scripts/check-a666-public-adapter-readiness
 scripts/check-provider-neutral-wallet-boundary
   passed
 
+scripts/check-a666-public-reader-candidates
+  passed locally; the hardened HyperEVM runtime, public NEAR Wasm, and
+  reproducible Solana SBF identities match their pinned candidate artifacts.
+  This is a build-identity gate, not a deployment qualification. Public chain
+  checks on 2026-08-02 prove that the historical HyperEVM reader runtime
+  (`0x7e4007...74f8`) differs from the public candidate (`0xc252f3...0db3`),
+  the historical NEAR reader code (`4mdew...wUhx`) differs from the public
+  candidate (`C3RZ...9C4S`), and the Solana candidate remains undeployed.
+
 public Solidity suite after HyperCore reader addition
   143 passed, 0 failed
 
@@ -1088,10 +1105,14 @@ The legacy archive/rebuild CI defect is fixed. Exact-tip runs `30732980432`,
 the deterministic Solana reader and immutable legacy guest rebuilds. Run
 `30749886246` correctly rejected `b4447c8`: its fuzz runner referenced one
 local untracked Solana seed that did not exist in a clean checkout. The seed
-did not exercise the new reader parser and the dependency is removed in the
-current continuation; a new exact-tip run must pass before this continuation
-is remotely qualified. A green older run is not permission to mark a newer
-unverified tip green or to overwrite the immutable legacy ELF or vkey.
+did not exercise the new reader parser and that dependency is removed.
+Exact-tip run `30750345429` then reached the SP1 installation step but GitHub
+rate-limited the installer's unauthenticated release lookup with HTTP 403;
+none of the proof-kit tests ran. The workflow now supplies the scoped
+read-only workflow token to the pinned SP1 installer and must pass on a new
+exact-tip run before this continuation is remotely qualified. A green older
+run is not permission to mark a newer unverified tip green or to overwrite the
+immutable legacy ELF or vkey.
 
 ```text
 https://github.com/postfiatorg/postfiatl1v2/actions/runs/30732561619

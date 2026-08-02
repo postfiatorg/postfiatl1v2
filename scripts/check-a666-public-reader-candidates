@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+identity="$repo_root/tools/nav-reserve-proof/manifests/a666/reader-deployment-candidates.json"
+
+jq -e '
+  .schema == "postfiat.a666.public_reader_deployment_candidates.v1" and
+  .status == "deployment_required" and
+  .hyperliquid.deployment_status == "not_deployed" and
+  .near.deployment_status == "not_deployed" and
+  .solana.deployment_status == "not_deployed" and
+  (.hyperliquid.historical_reader_is_candidate | not) and
+  (.near.historical_reader_is_candidate | not)
+' "$identity" >/dev/null
+
+forge build --root "$repo_root/crates/ethereum-contracts" >/dev/null 2>&1
+hyper_runtime="$(
+  forge inspect \
+    --root "$repo_root/crates/ethereum-contracts" \
+    src/HyperCoreReserveReader.sol:HyperCoreReserveReader \
+    deployedBytecode
+)"
+hyper_bytes="$(( (${#hyper_runtime} - 2) / 2 ))"
+hyper_hash="$(cast keccak "$hyper_runtime")"
+test "$hyper_bytes" = "$(jq -r .hyperliquid.candidate_runtime_bytes "$identity")"
+test "${hyper_hash#0x}" = "$(jq -r .hyperliquid.candidate_runtime_keccak256 "$identity")"
+
+rustup target add wasm32-unknown-unknown >/dev/null 2>&1
+cargo build \
+  --manifest-path "$repo_root/tools/nav-reserve-proof/contracts/near-stake-reader/Cargo.toml" \
+  --target wasm32-unknown-unknown \
+  --release \
+  --locked >/dev/null
+near_wasm="$repo_root/tools/nav-reserve-proof/contracts/near-stake-reader/target/wasm32-unknown-unknown/release/postfiat_near_stake_reader.wasm"
+near_bytes="$(wc -c < "$near_wasm" | tr -d ' ')"
+near_hash="$(sha256sum "$near_wasm" | cut -d' ' -f1)"
+test "$near_bytes" = "$(jq -r .near.candidate_wasm_bytes "$identity")"
+test "$near_hash" = "$(jq -r .near.candidate_wasm_sha256 "$identity")"
+
+solana_identity="$repo_root/$(jq -r .solana.identity "$identity")"
+test "$(jq -r .executable_program_hash "$solana_identity")" = \
+  "$(jq -r .solana.candidate_executable_program_hash "$identity")"
+test "$(jq -r .raw_elf_sha256 "$solana_identity")" = \
+  "$(jq -r .solana.candidate_raw_elf_sha256 "$identity")"
+test "$(jq -r .raw_elf_bytes "$solana_identity")" = \
+  "$(jq -r .solana.candidate_raw_elf_bytes "$identity")"
+
+printf 'A666 public reader candidates match pinned public builds; all three still require new deployments.\n'

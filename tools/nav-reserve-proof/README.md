@@ -98,6 +98,13 @@ quantity-verifier, valuation-verifier, and haircut commitments itself; those
 hashes are never accepted as operator-entered manifest fields:
 
     cargo run --locked -p postfiat-reserve-proof -- \
+      source-checkpoint committee-from-registry \
+      --validator-registry ../../deployments/a666-mainnet-20260727/12-opening-export-proof-snapshot/validator_registry.json \
+      --epoch 1 \
+      --quorum 5 \
+      --output manifests/a666/checkpoint-committee.json
+
+    cargo run --locked -p postfiat-reserve-proof -- \
       manifest build \
       --input manifests/a666/manifest-build.json \
       --output target/a666/manifest.json
@@ -111,6 +118,21 @@ valuation. Every other source must supply an EVM Chainlink state-proof policy.
 The builder rejects missing or substituted committees, mismatched owners,
 position sets, valuation contexts, quantity decimals, price rows, and
 haircuts. It emits only cryptographic quantity and valuation classifications.
+The committee command accepts only canonical lowercase ML-DSA-65 public keys,
+sorts validators, rejects any quorum below the BFT threshold, and reports the
+derived committee root. The manifest builder independently applies the same
+threshold. The committed A666 committee is the six-validator, five-vote
+BFT threshold derived from the public live registry; it contains no private
+key material.
+
+The HyperEVM, NEAR, and Solana reader build identities are pinned in
+`manifests/a666/reader-deployment-candidates.json`. Rebuild them with:
+
+    ../../scripts/check-a666-public-reader-candidates
+
+That check deliberately reports all three as requiring new deployments. The
+historical HyperEVM and NEAR deployments do not match the current public
+builds and therefore cannot be governed into the public A666 successor.
 
     cd tools/nav-reserve-proof
 

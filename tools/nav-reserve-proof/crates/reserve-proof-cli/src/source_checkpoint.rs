@@ -3,15 +3,28 @@ use std::{fs, path::PathBuf};
 use anyhow::{Context, Result};
 use clap::Subcommand;
 use reserve_proof_types::bft_checkpoint::{
-    BftCheckpointCommitteeV1, BftSourceCheckpointCertificateV1, BftSourceCheckpointV1,
-    BftSourceCheckpointVoteV1, MAX_BFT_CHECKPOINT_VALIDATORS,
+    BftCheckpointCommitteeV1, BftCheckpointValidatorV1, BftSourceCheckpointCertificateV1,
+    BftSourceCheckpointV1, BftSourceCheckpointVoteV1, MAX_BFT_CHECKPOINT_VALIDATORS,
 };
 use reserve_proof_types::MAX_WITNESS_BYTES;
+use serde::Deserialize;
 
 use crate::{read_json, write_new};
 
 #[derive(Debug, Subcommand)]
 pub enum SourceCheckpointCommand {
+    /// Derive a public source-checkpoint committee from an L1 validator
+    /// registry containing ML-DSA-65 public keys. Private keys are never read.
+    CommitteeFromRegistry {
+        #[arg(long)]
+        validator_registry: PathBuf,
+        #[arg(long)]
+        epoch: u64,
+        #[arg(long)]
+        quorum: u16,
+        #[arg(long)]
+        output: PathBuf,
+    },
     /// Emit the exact bytes one governed validator signs with the public
     /// source-checkpoint ML-DSA context.
     VoteStatement {
@@ -42,6 +55,12 @@ pub enum SourceCheckpointCommand {
 
 pub fn run(command: SourceCheckpointCommand) -> Result<()> {
     match command {
+        SourceCheckpointCommand::CommitteeFromRegistry {
+            validator_registry,
+            epoch,
+            quorum,
+            output,
+        } => committee_from_registry(validator_registry, epoch, quorum, output),
         SourceCheckpointCommand::VoteStatement {
             checkpoint,
             validator_id,
@@ -55,6 +74,101 @@ pub fn run(command: SourceCheckpointCommand) -> Result<()> {
         } => assemble(committee, checkpoint, vote, output),
         SourceCheckpointCommand::Validate { certificate } => validate(certificate),
     }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PublicValidatorRegistryV1 {
+    validators: Vec<PublicValidatorRegistryEntryV1>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PublicValidatorRegistryEntryV1 {
+    node_id: String,
+    algorithm_id: String,
+    public_key_hex: String,
+}
+
+fn committee_from_registry(
+    registry_path: PathBuf,
+    epoch: u64,
+    quorum: u16,
+    output: PathBuf,
+) -> Result<()> {
+    let registry: PublicValidatorRegistryV1 = read_json(&registry_path)?;
+    let committee = build_committee(registry, epoch, quorum)?;
+    let committee_root = committee.root().map_err(anyhow::Error::msg)?;
+    let mut committee_json = serde_json::to_vec(&committee)?;
+    committee_json.push(b'\n');
+    write_new(&output, &committee_json)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "schema": "postfiat.reserve_source_checkpoint_committee_build.v1",
+            "validator_registry": registry_path,
+            "output": output,
+            "epoch": committee.epoch,
+            "quorum": committee.quorum,
+            "validator_count": committee.validators.len(),
+            "committee_root": committee_root,
+        }))?
+    );
+    Ok(())
+}
+
+fn build_committee(
+    registry: PublicValidatorRegistryV1,
+    epoch: u64,
+    quorum: u16,
+) -> Result<BftCheckpointCommitteeV1> {
+    anyhow::ensure!(
+        registry.validators.len() <= MAX_BFT_CHECKPOINT_VALIDATORS,
+        "validator registry exceeds {MAX_BFT_CHECKPOINT_VALIDATORS} entries"
+    );
+    let mut validators = registry
+        .validators
+        .into_iter()
+        .map(|validator| {
+            anyhow::ensure!(
+                validator.algorithm_id == "ML-DSA-65",
+                "source checkpoint validator {} does not use ML-DSA-65",
+                validator.node_id
+            );
+            anyhow::ensure!(
+                validator.public_key_hex.len() % 2 == 0
+                    && validator
+                        .public_key_hex
+                        .bytes()
+                        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)),
+                "source checkpoint validator {} public key is not canonical lowercase hex",
+                validator.node_id
+            );
+            Ok(BftCheckpointValidatorV1 {
+                validator_id: validator.node_id,
+                public_key: hex::decode(validator.public_key_hex)?,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    validators.sort_by(|left, right| left.validator_id.cmp(&right.validator_id));
+    let committee = BftCheckpointCommitteeV1 {
+        epoch,
+        quorum,
+        validators,
+    };
+    committee.validate().map_err(anyhow::Error::msg)?;
+    let minimum_bft_quorum = committee
+        .validators
+        .len()
+        .checked_mul(2)
+        .map(|doubled| (doubled / 3) + 1)
+        .ok_or_else(|| anyhow::anyhow!("source checkpoint committee quorum overflow"))?;
+    anyhow::ensure!(
+        usize::from(committee.quorum) >= minimum_bft_quorum,
+        "source checkpoint quorum {} is below BFT minimum {minimum_bft_quorum}",
+        committee.quorum
+    );
+    Ok(committee)
 }
 
 fn vote_statement(checkpoint_path: PathBuf, validator_id: String, output: PathBuf) -> Result<()> {
@@ -166,6 +280,9 @@ pub(crate) fn fuzz_external_input(data: &[u8]) {
         let _ = committee.validate();
         let _ = committee.root();
     }
+    if let Ok(registry) = serde_json::from_slice::<PublicValidatorRegistryV1>(data) {
+        let _ = build_committee(registry, 1, 1);
+    }
     if let Ok(checkpoint) = serde_json::from_slice::<BftSourceCheckpointV1>(data) {
         let _ = checkpoint.canonical_bytes();
         let _ = checkpoint.vote_signing_statement("fuzz-validator");
@@ -184,6 +301,52 @@ mod tests {
     use reserve_proof_types::bft_checkpoint::{
         BftCheckpointValidatorV1, BFT_SOURCE_CHECKPOINT_SIGNATURE_CONTEXT_V1,
     };
+
+    #[test]
+    fn builds_sorted_committee_from_public_registry_and_rejects_bad_algorithm() {
+        let keys = (0u8..2)
+            .map(|index| ml_dsa_65_keygen_from_seed(&[index + 1; 32]))
+            .collect::<Vec<_>>();
+        let registry = PublicValidatorRegistryV1 {
+            validators: vec![
+                PublicValidatorRegistryEntryV1 {
+                    node_id: "validator-1".to_string(),
+                    algorithm_id: "ML-DSA-65".to_string(),
+                    public_key_hex: hex::encode(&keys[1].public_key),
+                },
+                PublicValidatorRegistryEntryV1 {
+                    node_id: "validator-0".to_string(),
+                    algorithm_id: "ML-DSA-65".to_string(),
+                    public_key_hex: hex::encode(&keys[0].public_key),
+                },
+            ],
+        };
+        let committee = build_committee(registry, 3, 2).unwrap();
+        assert_eq!(committee.validators[0].validator_id, "validator-0");
+        assert!(committee.root().is_ok());
+
+        let invalid = PublicValidatorRegistryV1 {
+            validators: vec![PublicValidatorRegistryEntryV1 {
+                node_id: "validator-0".to_string(),
+                algorithm_id: "ed25519".to_string(),
+                public_key_hex: hex::encode(&keys[0].public_key),
+            }],
+        };
+        assert!(build_committee(invalid, 1, 1).is_err());
+
+        let weak = PublicValidatorRegistryV1 {
+            validators: keys
+                .iter()
+                .enumerate()
+                .map(|(index, key)| PublicValidatorRegistryEntryV1 {
+                    node_id: format!("validator-{index}"),
+                    algorithm_id: "ML-DSA-65".to_string(),
+                    public_key_hex: hex::encode(&key.public_key),
+                })
+                .collect(),
+        };
+        assert!(build_committee(weak, 1, 1).is_err());
+    }
 
     fn fixture() -> (
         BftCheckpointCommitteeV1,

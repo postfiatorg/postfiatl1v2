@@ -11,16 +11,18 @@
     "crates/proofs/src/lib.rs": "6ad08dd265fc25958daf6e0ae3d55bbecaa13cdebdcafc9739c2d682d0eb4527",
     "crates/types/src/nav_reserve_public_values.rs": "ffe01da1eefffa33d1f283ba0248e5e7f572e0537b88a794435aa43e2a3c5cf6",
     "crates/ethereum-contracts/src/HyperCoreReserveReader.sol": "29eb7f908bd7fca14c1970c56835c0e77911b55f0d9ed0a15c75565b81662d26",
+    "deployments/a666-mainnet-20260727/12-opening-export-proof-snapshot/validator_registry.json": "d78f507c0d3eebfb6955fa62ded40a91ade99a3c2ec28cfc0efd1a8365ffd942",
+    "scripts/check-a666-public-reader-candidates": "e6ad5599be17e755157c1fba87780a2c6d9c42adb7f58b897ad3935438e75390",
     "scripts/check-nav-reserve-proof-fuzz-smoke": "d9bae0c68f8448eba9c99092546a7780026b277901980bec56730b5d66418d79",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/lib.rs": "801fdcebac428fe04af3986ab1d83053fba8cffc3c8bdac3f3ef54a271e09c1c",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/main.rs": "8edea244fdb7d4b503645fc4d93c9b8f494abe238f1c9b01ec045600f0241d3c",
-    "tools/nav-reserve-proof/crates/reserve-proof-cli/src/manifest_builder.rs": "b99d792819b0dbb70d50753d8dd0501a6a7a5d46f51fe8b51aa3cf1456431e27",
+    "tools/nav-reserve-proof/crates/reserve-proof-cli/src/manifest_builder.rs": "fdc929fb2284afe789ea64e660809f1b5306a5bce91de113d38a93c13dab1dc8",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/evm_adapter.rs": "a31d1f62102b83b8fb1895b68a4e6530b7185c5f004c2d6f9500e1881660e599",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/hyperliquid_adapter.rs": "ccb8a90bad4d425d6f65796e8cd8abe50e6e4c24138af56f5487fa975c48e108",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/near_adapter.rs": "2d3404af2cc46c68055a26cd20ba24d60514a6e9db21cfb9acd051fd198cd0b6",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/monero_adapter.rs": "47b002b1e009840184aadee027dd961bd09957ddfc8b0a23c8cdd08ea4fa8d11",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/solana_adapter.rs": "ea5b17c0d5177b6615d6f61028829d08bbc30cf990ec02d2976593169179253b",
-    "tools/nav-reserve-proof/crates/reserve-proof-cli/src/source_checkpoint.rs": "143d984218cfae4016ba4804c9f3fcef9d0af87d39f3fbd06ee680dcd5e10c9f",
+    "tools/nav-reserve-proof/crates/reserve-proof-cli/src/source_checkpoint.rs": "bcf53545c023a936719ab69a7c167661a311cdfe0aecf59a7cf73924446c03b3",
     "tools/nav-reserve-proof/crates/reserve-proof-types/src/lib.rs": "506d8e106a796e200f12c5286ff3c4db895769a899bdda8a0308c730b99832f2",
     "tools/nav-reserve-proof/crates/reserve-proof-types/src/aave_v3.rs": "766bd2f026927b0ae6235de179951a69c5b61cec05a34cb46cbb4cc8f4ae5b04",
     "tools/nav-reserve-proof/crates/reserve-proof-types/src/evm_chainlink_valuation.rs": "4e61b079589a8497b7544404579f0664cad4ff15bda957805255e14614ebf4da",
@@ -48,7 +50,9 @@
     "tools/nav-reserve-proof/contracts/near-stake-reader/Cargo.toml": "519305ac57289aa55220e66f30a4a986dad907df9212109d428ab9d1dd061166",
     "tools/nav-reserve-proof/contracts/near-stake-reader/src/lib.rs": "11acff4790b45168a81323700c419fccc3555e678dfddbc376bf2a5b44b6312c",
     "tools/nav-reserve-proof/contracts/solana-stake-reader/Cargo.toml": "15ff163a724a4ef2185b8a9d52cb4334e81e48533e9613a2e43ccea2ea82e719",
-    "tools/nav-reserve-proof/contracts/solana-stake-reader/src/lib.rs": "fbf46bb20fb13abca07ad14cc7d5205c5cf358b151779a52f658ef79f8a33d65"
+    "tools/nav-reserve-proof/contracts/solana-stake-reader/src/lib.rs": "fbf46bb20fb13abca07ad14cc7d5205c5cf358b151779a52f658ef79f8a33d65",
+    "tools/nav-reserve-proof/manifests/a666/checkpoint-committee.json": "4e1242c38c1a8cff83184983872e4fb171ebe24001ca82a7d15edddf483e1ea7",
+    "tools/nav-reserve-proof/manifests/a666/reader-deployment-candidates.json": "d70af1ee2d6c963bfd2533393580d9c1d2f8d82c17ae48e2b647383242aa218d"
   },
   "systems": [
     {
