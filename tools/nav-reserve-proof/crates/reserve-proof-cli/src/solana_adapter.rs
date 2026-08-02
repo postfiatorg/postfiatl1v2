@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
+use crate::checkpoint_signing::{maybe_sign_reproduced_checkpoint, CheckpointSigningArgs};
 use crate::evm_adapter::{
     decode_hex, load_source, read_json, rpc_call, validate_rpc_url, write_new,
 };
@@ -78,6 +79,8 @@ pub enum SolanaCommand {
         prepared_output: PathBuf,
         #[arg(long)]
         checkpoint_output: PathBuf,
+        #[command(flatten)]
+        signing: CheckpointSigningArgs,
     },
     /// Attach the assembled checkpoint certificate and emit the exact
     /// reserve-owner statement for external signing.
@@ -145,6 +148,7 @@ pub fn run(command: SolanaCommand) -> Result<()> {
             rpc_url,
             prepared_output,
             checkpoint_output,
+            signing,
         } => prepare(PrepareArgs {
             manifest,
             context,
@@ -158,6 +162,7 @@ pub fn run(command: SolanaCommand) -> Result<()> {
             rpc_url,
             prepared_output,
             checkpoint_output,
+            signing,
         }),
         SolanaCommand::OwnerStatement {
             manifest,
@@ -309,6 +314,7 @@ struct PrepareArgs {
     rpc_url: String,
     prepared_output: PathBuf,
     checkpoint_output: PathBuf,
+    signing: CheckpointSigningArgs,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -469,6 +475,11 @@ fn prepare(args: PrepareArgs) -> Result<()> {
         .checkpoint
         .canonical_bytes()
         .map_err(anyhow::Error::msg)?;
+    maybe_sign_reproduced_checkpoint(
+        &proof.checkpoint_certificate.checkpoint,
+        &proof.checkpoint_certificate.committee,
+        &args.signing,
+    )?;
     let prepared = PreparedSolanaStakeV1 {
         schema: "postfiat.reserve_solana_prepared.v1".to_string(),
         proof,

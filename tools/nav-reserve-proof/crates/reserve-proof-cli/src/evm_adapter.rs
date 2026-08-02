@@ -46,6 +46,7 @@ use reserve_proof_types::{
 };
 use serde::Deserialize;
 
+use crate::checkpoint_signing::{maybe_sign_reproduced_checkpoint, CheckpointSigningArgs};
 use crate::hyperliquid_adapter::{self, HyperliquidCommand};
 use crate::monero_adapter::{self, MoneroCommand};
 use crate::near_adapter::{self, NearCommand};
@@ -169,6 +170,8 @@ pub enum AaveV3Command {
         rpc_url: String,
         #[arg(long)]
         output: PathBuf,
+        #[command(flatten)]
+        signing: CheckpointSigningArgs,
     },
     /// Emit the EIP-191 statement authorizing the governed Aave policy and
     /// exact certified checkpoint.
@@ -319,6 +322,8 @@ pub enum EvmSpotCommand {
         rpc_url: String,
         #[arg(long)]
         output: PathBuf,
+        #[command(flatten)]
+        signing: CheckpointSigningArgs,
     },
     /// Emit the EIP-191 statement authorizing the exact policy and certified
     /// source checkpoints for one observation.
@@ -391,6 +396,8 @@ pub enum EvmChainlinkValuationCommand {
         rpc_url: String,
         #[arg(long)]
         output: PathBuf,
+        #[command(flatten)]
+        signing: CheckpointSigningArgs,
     },
     /// Collect every policy-pinned feed at the certified EVM block, attach it
     /// to an observation containing a real quantity proof, and verify the
@@ -427,6 +434,7 @@ pub fn run(command: AdapterCommand) -> Result<()> {
                 committee,
                 rpc_url,
                 output,
+                signing,
             } => aave_v3_checkpoint_candidate(AaveV3CheckpointCandidateArgs {
                 pftl_genesis_hash,
                 policy,
@@ -436,6 +444,7 @@ pub fn run(command: AdapterCommand) -> Result<()> {
                 committee,
                 rpc_url,
                 output,
+                signing,
             }),
             AaveV3Command::OwnerAuthorization {
                 manifest,
@@ -548,6 +557,7 @@ pub fn run(command: AdapterCommand) -> Result<()> {
                 committee,
                 rpc_url,
                 output,
+                signing,
             } => evm_spot_checkpoint_candidate(EvmSpotCheckpointCandidateArgs {
                 pftl_genesis_hash,
                 policy,
@@ -558,6 +568,7 @@ pub fn run(command: AdapterCommand) -> Result<()> {
                 committee,
                 rpc_url,
                 output,
+                signing,
             }),
             EvmSpotCommand::OwnerAuthorization {
                 manifest,
@@ -616,6 +627,7 @@ pub fn run(command: AdapterCommand) -> Result<()> {
                 committee,
                 rpc_url,
                 output,
+                signing,
             } => evm_chainlink_valuation_checkpoint_candidate(
                 EvmChainlinkValuationCheckpointCandidateArgs {
                     pftl_genesis_hash,
@@ -626,6 +638,7 @@ pub fn run(command: AdapterCommand) -> Result<()> {
                     committee,
                     rpc_url,
                     output,
+                    signing,
                 },
             ),
             EvmChainlinkValuationCommand::Collect {
@@ -840,6 +853,7 @@ struct AaveV3CheckpointCandidateArgs {
     committee: PathBuf,
     rpc_url: String,
     output: PathBuf,
+    signing: CheckpointSigningArgs,
 }
 
 struct EvmChainlinkValuationCollectArgs {
@@ -862,6 +876,7 @@ struct EvmChainlinkValuationCheckpointCandidateArgs {
     committee: PathBuf,
     rpc_url: String,
     output: PathBuf,
+    signing: CheckpointSigningArgs,
 }
 
 fn evm_chainlink_valuation_checkpoint_candidate(
@@ -931,6 +946,7 @@ fn evm_chainlink_valuation_checkpoint_candidate(
         committee_root,
     };
     checkpoint.canonical_bytes().map_err(anyhow::Error::msg)?;
+    maybe_sign_reproduced_checkpoint(&checkpoint, &committee, &args.signing)?;
     write_new(&args.output, &serde_json::to_vec_pretty(&checkpoint)?)?;
     println!(
         "{}",
@@ -1243,6 +1259,7 @@ fn aave_v3_checkpoint_candidate(args: AaveV3CheckpointCandidateArgs) -> Result<(
         committee_root,
     };
     checkpoint.canonical_bytes().map_err(anyhow::Error::msg)?;
+    maybe_sign_reproduced_checkpoint(&checkpoint, &committee, &args.signing)?;
     write_new(&args.output, &serde_json::to_vec_pretty(&checkpoint)?)?;
     println!(
         "{}",
@@ -1750,6 +1767,7 @@ struct EvmSpotCheckpointCandidateArgs {
     committee: PathBuf,
     rpc_url: String,
     output: PathBuf,
+    signing: CheckpointSigningArgs,
 }
 
 struct EvmSpotCollectArgs {
@@ -1846,6 +1864,7 @@ fn evm_spot_checkpoint_candidate(args: EvmSpotCheckpointCandidateArgs) -> Result
         committee_root,
     };
     checkpoint.canonical_bytes().map_err(anyhow::Error::msg)?;
+    maybe_sign_reproduced_checkpoint(&checkpoint, &committee, &args.signing)?;
     write_new(&args.output, &serde_json::to_vec_pretty(&checkpoint)?)?;
     println!(
         "{}",

@@ -29,6 +29,7 @@ use reserve_proof_types::{
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use crate::checkpoint_signing::{maybe_sign_reproduced_checkpoint, CheckpointSigningArgs};
 use crate::evm_adapter::{load_source, read_json, validate_rpc_url, write_new};
 
 const RESERVE_PROOF_V2_PREFIX: &str = "ReserveProofV2";
@@ -80,6 +81,8 @@ pub enum MoneroCommand {
         prepared_output: PathBuf,
         #[arg(long)]
         checkpoint_output: PathBuf,
+        #[command(flatten)]
+        signing: CheckpointSigningArgs,
     },
     /// Attach the independently assembled checkpoint certificate, verify the
     /// complete quantity and valuation evidence, and write the observation.
@@ -136,6 +139,7 @@ pub fn run(command: MoneroCommand) -> Result<()> {
             daemon_url,
             prepared_output,
             checkpoint_output,
+            signing,
         } => prepare(PrepareArgs {
             manifest,
             context,
@@ -148,6 +152,7 @@ pub fn run(command: MoneroCommand) -> Result<()> {
             daemon_url,
             prepared_output,
             checkpoint_output,
+            signing,
         }),
         MoneroCommand::Collect {
             manifest,
@@ -224,6 +229,7 @@ struct PrepareArgs {
     daemon_url: String,
     prepared_output: PathBuf,
     checkpoint_output: PathBuf,
+    signing: CheckpointSigningArgs,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -416,6 +422,7 @@ fn prepare(args: PrepareArgs) -> Result<()> {
         committee_root,
     };
     checkpoint.canonical_bytes().map_err(anyhow::Error::msg)?;
+    maybe_sign_reproduced_checkpoint(&checkpoint, &committee, &args.signing)?;
     let prepared = PreparedMoneroReserveV1 {
         schema: "postfiat.reserve_monero_prepared.v1".to_string(),
         policy,

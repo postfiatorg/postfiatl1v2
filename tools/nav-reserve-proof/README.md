@@ -179,10 +179,29 @@ internal API may define the artifact semantics. No credential or signing
 authority is included in the witness.
 
 All adapters that use a governed external-source checkpoint share one public
-certificate workflow. Each validator obtains the exact statement bytes and
-signs them in its isolated signer; the proof kit never receives its private
-key. After collecting the bounded vote JSON files, assemble and validate the
-certificate:
+certificate workflow. A validator may inspect the exact statement bytes, but
+production voting uses the adapter's atomic signing mode: the adapter first
+reproduces the governed source checkpoint from the validator-selected RPC and
+only then reads the local ML-DSA key and writes a vote. There is deliberately
+no command that signs an arbitrary checkpoint file. The signing mode checks
+that the key is permission-restricted and belongs to the governed committee,
+and it durably rejects a conflicting checkpoint at the same source, committee
+epoch, and source height.
+
+Add these four options to any Aave, EVM spot, Chainlink valuation,
+Hyperliquid, or NEAR `checkpoint-candidate` command, or to a Solana or Monero
+`prepare` command:
+
+    --validator-id validator-0 \
+    --validator-key-file /validator-private/validator-keys.json \
+    --signing-state-dir /validator-private/reserve-checkpoint-state \
+    --vote-output checkpoint-validator-0.vote.json
+
+All four options are required together. The validator private key is used
+only inside that validator-local reproduce-and-sign invocation. It is never
+included in a checkpoint, vote, certificate, observation, witness, proof, or
+packet. After collecting the bounded public vote JSON files, assemble and
+validate the certificate:
 
     postfiat-reserve-proof source-checkpoint vote-statement \
       --checkpoint checkpoint.json \
@@ -238,8 +257,10 @@ votes are assembled with `source-checkpoint assemble`.
 The reserve owner signs `near-owner.statement` with its policy-pinned Ed25519
 key outside this process. `near collect` attaches that signature and a
 separate policy-approved valuation evidence object, verifies both evidence
-dimensions, and writes the bounded source observation. No reserve-owner or
-checkpoint-validator private key enters the proof kit.
+dimensions, and writes the bounded source observation. No reserve-owner key
+enters the proof kit. A checkpoint-validator key enters only the optional
+validator-local atomic signing mode described above; it never enters proof
+construction or any public artifact.
 
 The NEAR receipt and Merkle paths are cryptographic. Until a direct NEAR
 consensus verifier is governed, the exact finalized head and both deployed
@@ -284,8 +305,9 @@ attaches the assembled certificate and emits the exact statement for the
 policy-pinned withdraw authority to sign externally. `adapter solana collect`
 attaches that signature and separate policy-approved SOL/USD valuation
 evidence, executes both evidence verifiers, and writes the bounded observation.
-No fee-payer, reserve-owner, or checkpoint-validator private key enters the
-proof kit.
+No fee-payer or reserve-owner private key enters the proof kit. A
+checkpoint-validator key enters only the optional validator-local atomic
+signing mode described above; it never enters proof construction.
 
 This adapter is cryptographic relative to the disclosed BFT checkpoint. It is
 not direct verification of Solana consensus. The reader now has an
@@ -327,7 +349,9 @@ source block, output anchors, and sorted key-image statuses before signing.
 After `source-checkpoint assemble`, `monero collect` attaches that certificate
 and a separate policy-approved XMR/USD valuation evidence object, runs the
 complete public verifier, and writes the observation. The proof kit receives
-no wallet seed, spend key, view key, or checkpoint-validator private key.
+no wallet seed, spend key, or view key. A checkpoint-validator key enters only
+the optional validator-local atomic signing mode described above; it never
+enters proof construction.
 
 Assembly sorts votes canonically and rejects an invalid committee binding,
 sub-quorum set, duplicate or unknown validator, malformed signature, or bad
@@ -391,9 +415,11 @@ schema and must contain precisely the policy's source domains:
       }
     }
 
-No checkpoint, owner, or validator private key enters any proof-kit command.
-RPC credentials may be supplied operationally, but all artifact construction
-and validation semantics are public here.
+No reserve-owner private key enters any proof-kit command. A validator key may
+enter only an adapter command that atomically reproduces source state before
+signing and maintains durable anti-equivocation state; no arbitrary-file
+signer exists. RPC credentials may be supplied operationally, but all artifact
+construction and validation semantics are public here.
 
 For EVM spot, staked NEAR, staked Solana, and Monero, the separate valuation
 dimension can use `evm-chainlink-valuation`. Its policy pins the Ethereum
@@ -543,7 +569,9 @@ lowercase-hex Ed25519 signature:
       --output ethereum-usdc.json
 
 The final `observe` command verifies every dimension again in complete
-manifest order. No adapter command receives a private key.
+manifest order. Adapter collection commands never receive reserve-owner keys;
+the only private-key input is the optional validator-local atomic checkpoint
+mode described above.
 
 Opaque reserve-owner, haircut-policy, evidence, and disclosure artifacts can
 be committed without inventing a local hash convention:

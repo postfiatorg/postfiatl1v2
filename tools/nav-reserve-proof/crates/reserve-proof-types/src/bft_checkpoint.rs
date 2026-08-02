@@ -73,6 +73,17 @@ impl BftCheckpointCommitteeV1 {
         {
             return Err("source checkpoint committee bounds are invalid".to_string());
         }
+        let minimum_bft_quorum = self
+            .validators
+            .len()
+            .checked_mul(2)
+            .map(|doubled| (doubled / 3) + 1)
+            .ok_or_else(|| "source checkpoint BFT quorum overflows".to_string())?;
+        if usize::from(self.quorum) < minimum_bft_quorum {
+            return Err(format!(
+                "source checkpoint quorum is below BFT minimum {minimum_bft_quorum}"
+            ));
+        }
         let mut previous = None;
         for validator in &self.validators {
             validate_identifier("source checkpoint validator", &validator.validator_id)?;

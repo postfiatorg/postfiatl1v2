@@ -195,8 +195,13 @@ For this A666 migration, these additional rules are absolute:
   production-qualified; section 3.4 records the exact remaining work.
 - The public CLI emits source-checkpoint vote statements, canonically assembles
   independently signed ML-DSA votes, and rejects invalid committee bindings,
-  sub-quorum certificates, duplicates, unknown validators, and bad signatures.
-  It does not receive validator private keys.
+  sub-BFT-quorum certificates, duplicates, unknown validators, and bad
+  signatures. Every source adapter also has an optional validator-local atomic
+  mode that reproduces governed source state from the validator's RPC before
+  reading its permission-restricted key, then persists anti-equivocation state
+  and emits only the public vote. There is no arbitrary-checkpoint signing
+  command, and no private key enters a checkpoint, certificate, observation,
+  witness, proof, or packet.
 - The generic ABI and route lifecycle passed a controlled six-validator qNAV
   qualification.
 
@@ -516,8 +521,11 @@ checking, receipt retrieval, canonical receipt RLP, receipt-trie
 reconstruction, inclusion proof extraction, source checkpoint creation, owner
 authorization, and verified observation output now live in
 `tools/nav-reserve-proof/crates/reserve-proof-cli/src/hyperliquid_adapter.rs`.
-The CLI accepts no private key and its historical public-RPC test reproduces
-the existing certified receipts root.
+The snapshot and collection path accepts no owner private key and its
+historical public-RPC test reproduces the existing certified receipts root.
+The optional validator-local checkpoint mode reads only that validator's
+permission-restricted ML-DSA key after reproducing the header, reader code,
+and confirmation depth, and never exports the key.
 
 HyperEVM currently exposes a zero block `stateRoot` and rejects
 `eth_getProof`, so reader bytecode identity cannot be account-MPT proven under
@@ -634,9 +642,12 @@ BFT checkpoint candidate. The successor verifier checks the transaction
 signature and exact message/account/instruction structure, reader output and
 return-data hash, all position/authority/vote bindings, owner authorization,
 and the assembled ML-DSA checkpoint certificate before producing quantity
-evidence. No Solana, reserve-owner, or validator private key enters the proof
-kit. This proves the source values relative to the disclosed BFT checkpoint;
-it does not claim direct Solana consensus verification.
+evidence. No Solana or reserve-owner private key enters the proof kit. The
+optional validator-local checkpoint mode reads a permission-restricted PFTL
+validator key only after reproducing the complete Solana source checkpoint,
+persists anti-equivocation state, and exports only its vote. This proves the
+source values relative to the disclosed BFT checkpoint; it does not claim
+direct Solana consensus verification.
 
 This code is still partial. A `solana-verify` 0.5.1 build under the exact
 published Docker image digest was repeated and produced the same executable
@@ -687,8 +698,10 @@ historical anchor, queries the exact key-image status set, and emits the source
 checkpoint candidate for independent validator reproduction and signing. It
 then attaches the assembled certificate, runs the complete public quantity
 verifier and separate valuation verifier, and writes the source observation.
-No wallet seed, spend key, view key, or checkpoint-validator private key enters
-the proof kit.
+No wallet seed, spend key, or view key enters the proof kit. The optional
+validator-local checkpoint mode reads a permission-restricted PFTL validator
+key only after reproducing the complete Monero source checkpoint, persists
+anti-equivocation state, and exports only its vote.
 
 The public parser has successfully decoded an existing real wallet-created
 proof and the public RPC client has independently decoded and hash-checked a
@@ -760,7 +773,13 @@ existing guest ELF SHA exactly.
 
 - [x] Implement the shared provider-neutral BFT checkpoint statement,
   certificate assembly, and validation workflow without centralizing signer
-  private keys.
+  private keys. Require the BFT threshold in the shared verifier, not only in
+  manifest construction.
+- [x] Implement validator-local atomic reproduce-and-sign mode for Aave, EVM
+  spot, Chainlink valuation, Hyperliquid, NEAR, Solana, and Monero. Validate
+  permission-restricted key ownership against the governed committee, emit no
+  secret material, persist same-source/epoch/height anti-equivocation state,
+  and expose no arbitrary-checkpoint signer.
 - [x] Implement and register the public Aave adapter.
 - [x] Implement the public Aave checkpoint candidate, owner authorization,
   and complete RPC proof collector; policy-pin the user balance mapping slots.

@@ -25,6 +25,7 @@ clap.workspace = true
 hex.workspace = true
 monero.workspace = true
 postfiat-nav-reserve-protocol.workspace = true
+postfiat-crypto-provider.workspace = true
 postfiat-types.workspace = true
 reserve-proof-types.workspace = true
 reqwest.workspace = true
@@ -34,6 +35,6 @@ serde_json.workspace = true
 sha2.workspace = true
 sp1-sdk = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
+zeroize.workspace = true
 
 [dev-dependencies]
-postfiat-crypto-provider.workspace = true

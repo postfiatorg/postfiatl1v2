@@ -5,6 +5,7 @@
 //! independent integrators. Private operator software is not part of this
 //! boundary.
 
+mod checkpoint_signing;
 mod evm_adapter;
 mod hyperliquid_adapter;
 mod manifest_builder;

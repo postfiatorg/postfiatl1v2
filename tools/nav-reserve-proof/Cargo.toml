@@ -45,6 +45,7 @@ sha3 = "0.10"
 thiserror = "2"
 sp1-sdk = { version = "=6.3.1", features = ["network"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+zeroize = { version = "1", features = ["serde"] }
 
 [profile.release]
 codegen-units = 1

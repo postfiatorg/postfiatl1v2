@@ -29,6 +29,7 @@ use reserve_proof_types::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::checkpoint_signing::{maybe_sign_reproduced_checkpoint, CheckpointSigningArgs};
 use crate::evm_adapter::{
     decode_hex, load_source, parse_address, parse_b256, parse_u64_quantity, read_json, rpc_call,
     validate_rpc_url, write_new,
@@ -73,6 +74,8 @@ pub enum HyperliquidCommand {
         rpc_url: String,
         #[arg(long)]
         output: PathBuf,
+        #[command(flatten)]
+        signing: CheckpointSigningArgs,
     },
     /// Emit the exact EIP-191 statement authorizing the governed reader,
     /// policy, and source checkpoint.
@@ -143,6 +146,7 @@ pub fn run(command: HyperliquidCommand) -> Result<()> {
             committee,
             rpc_url,
             output,
+            signing,
         } => checkpoint_candidate(CheckpointCandidateArgs {
             pftl_genesis_hash,
             policy,
@@ -152,6 +156,7 @@ pub fn run(command: HyperliquidCommand) -> Result<()> {
             committee,
             rpc_url,
             output,
+            signing,
         }),
         HyperliquidCommand::OwnerAuthorization {
             manifest,
@@ -272,6 +277,7 @@ struct CheckpointCandidateArgs {
     committee: PathBuf,
     rpc_url: String,
     output: PathBuf,
+    signing: CheckpointSigningArgs,
 }
 
 fn checkpoint_candidate(args: CheckpointCandidateArgs) -> Result<()> {
@@ -333,6 +339,7 @@ fn checkpoint_candidate(args: CheckpointCandidateArgs) -> Result<()> {
         committee_root,
     };
     checkpoint.canonical_bytes().map_err(anyhow::Error::msg)?;
+    maybe_sign_reproduced_checkpoint(&checkpoint, &committee, &args.signing)?;
     write_new(&args.output, &serde_json::to_vec_pretty(&checkpoint)?)?;
     println!(
         "{}",
