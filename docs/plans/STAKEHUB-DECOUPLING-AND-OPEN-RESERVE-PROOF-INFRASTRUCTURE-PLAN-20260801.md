@@ -844,7 +844,7 @@ second asset operated by the implementation team.
 | `G0` — wallet boundary | Production wallet and public proxy expose no StakeHub route, copy, URL, token, or configuration requirement. |
 | `G1` — L1 standard | A versioned, bounded, canonical public-values schema binds chain, asset, profile, manifest, policy, time, totals, and trust breakdown. |
 | `G2` — adversarial verification | Wrong asset/genesis/profile/vkey/policy/manifest, stale time, malformed encoding, overflow, duplicate source, tampered proof, and replay all fail deterministically. |
-| `G3` — reproducible kit | A fresh public checkout builds the same guest/vkey, executes fixtures, proves, verifies, and constructs a valid packet without StakeHub. |
+| `G3` — reproducible kit | A fresh public checkout builds the same guest/vkey, executes fixtures, proves, verifies, and constructs a valid packet without StakeHub. Canonical CPU proving is sufficient for this reproducibility gate; CUDA or authenticated network proving is a separate operational-acceleration sub-gate. |
 | `G4` — generic signer | Export/return operate through the constrained signer interface with no StakeHub import or absolute StakeHub runtime path. |
 | `G5` — A666 migration | Old and successor proof results reconcile; the governed successor profile completes transparent/private issue, redeem, export, and return. |
 | `G6` — independent asset | A second asset/operator with a distinct manifest completes the same lifecycle without internal tooling. |
@@ -924,7 +924,7 @@ Current implementation status:
 | Wallet/public proxy boundary | PASS in source, tests, and rebuilt browser bundle. |
 | Finalized-state/registered-route execution | PASS; the wallet has no static production NAVCoin registry or A666 identity fallback. |
 | Provider-specific node workflow removal | PASS in source and all-target compilation; release binary scan is rerun for each release artifact. |
-| Public reserve-proof implementation | PASS for build, CPU execute/prove/verify, packet construction, consensus verification, and tamper rejection; accelerated proving remains `G3`-open. |
+| Public reserve-proof implementation | PASS for `G3`: a clean checkout reproduces the guest/vkey and completes CPU execute/prove/verify, packet construction, consensus verification, and tamper rejection. The optional operational-acceleration sub-gate remains OPEN because this host has neither CUDA nor an authenticated network-prover credential. |
 | Full public-values bindings | PASS. |
 | A666 governed successor live | OPEN; prohibited before fresh shadow epochs, authority approval, and a separate validator rollout. |
 | Generic constrained-signer export/return | PASS in source, policy tests, multi-route durable-job tests, and checked A666 deployment config; live successor cutover remains part of the A666 rollout. |
@@ -956,11 +956,11 @@ The governing architectural rule is:
 > quote, primary-market operation, or bridge operation may require the
 > StakeHub package, filesystem, API, agent socket, credentials, or naming.
 
-## 15. Local qualification ledger
+## 15. Qualification ledger
 
-The following gates were rerun against the implementation on 2026-08-01.
-They are local qualification evidence, not a claim that the open live-rollout
-or unaffiliated-operator gates have occurred.
+The following gates were rerun against the implementation on 2026-08-01 and
+2026-08-02. They are local and remote qualification evidence, not a claim that
+the open live-rollout or unaffiliated-operator gates have occurred.
 
 | Surface | Command or artifact | Result |
 |---|---|---|
@@ -972,6 +972,7 @@ or unaffiliated-operator gates have occurred.
 | SP1 host integration | `cargo check --locked -p postfiat-reserve-proof --features sp1` | PASS. |
 | Guest identity | committed ELF and `program-identity.json` | PASS; canonical SP1 6.3.1 Docker builds from two distinct checkout paths match at SHA-256 `0f8476431677bfe0a8f9f19db7439abce1a879ba5736cfa3225ae7de4e5b0e52`, vkey `0x000c7271e0711abce0c61d293222fd4a144599a779db8cadadc4df35e31a4100`. |
 | Canonical real proof | CPU Groth16 prove and independent host verify | PASS; the controlled chain-bound fixture and consensus calldata were regenerated for the canonical identity. |
+| Clean-checkout reproduction | detached checkout of `931a053af4c5debf14789498dfbe8146912d6310` in `/home/postfiat/tmp/reserve-proof-final-931a053` | PASS; the pinned Docker build reproduced the committed ELF and vkey exactly, the fresh release CLI passed all 15 proof-kit tests, manifest/profile/observe/witness/execute passed, and a second CPU Groth16 proof independently verified. Public values were deterministic at SHA-256 `95bc0bc04ddb66dac961911754111bf0fc4f56f6d4641f75991d6003d3a16d64`; proof bytes are not required to match because Groth16 proving is randomized. |
 | Execution | `cargo test -p postfiat-execution` | PASS; 176/176, including real-proof, tamper, lifecycle, and controlled-source policy checks. |
 | Node regression | `cargo test -p postfiat-node --lib` | PASS; 251 passed, 0 failed, 2 intentionally ignored local-Anvil tests. |
 | Six-validator proof finality | `provider_neutral_qnav_proof_finalizes_and_survives_six_validator_restart` | PASS in 213.42 seconds under the canonical profile identity. |
@@ -979,6 +980,7 @@ or unaffiliated-operator gates have occurred.
 | Constrained signer | `python3 -m pytest -q python/tests/test_constrained_signer.py` | PASS; 10/10, including bounded durable-state rejection. |
 | Release artifacts | release `postfiat-node` and `fastswap_wallet_service` | PASS; both built and binary string scans contain no StakeHub route, path, socket, configuration, or provider name. |
 | Formatting and patch integrity | `cargo fmt --all -- --check`; `git diff --check` | PASS. |
+| Remote product-security CI | [GitHub Actions run 30723966367](https://github.com/postfiatorg/postfiatl1v2/actions/runs/30723966367) at `931a053af4c5debf14789498dfbe8146912d6310` | PASS on 2026-08-02; all seven jobs completed successfully, including the canonical Docker guest-identity rebuild in `open-reserve-proof-kit`. `official-mainnet-fork` passed only as the explicit `UNCONFIGURED` gate because `ETHEREUM_MAINNET_RPC_URL` was absent; it is not evidence of a live fork run. |
 
 The audit also corrected three fail-closed defects before recording these
 results:
