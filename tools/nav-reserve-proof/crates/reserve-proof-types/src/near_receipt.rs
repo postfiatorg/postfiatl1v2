@@ -385,6 +385,8 @@ pub enum NearReceiptLegError {
     ReaderMismatch,
     #[error("snapshot event missing")]
     MissingSnapshotEvent,
+    #[error("multiple matching snapshot events were present")]
+    DuplicateSnapshotEvent,
     #[error("snapshot event malformed or inconsistent")]
     BadSnapshotEvent,
     #[error("payload malformed")]
@@ -416,6 +418,9 @@ pub enum NearReceiptLegError {
 impl NearReceiptPolicyV1 {
     pub fn validate(&self) -> Result<(), NearReceiptLegError> {
         validate_identifier(&self.source_domain)?;
+        if self.source_domain != "near:mainnet" {
+            return Err(NearReceiptLegError::PolicyMismatch);
+        }
         validate_near_account_id(&self.reader_account_id, MAX_NEAR_NAMED_ACCOUNT_ID_BYTES)?;
         validate_near_account_id(&self.pool_id, MAX_NEAR_NAMED_ACCOUNT_ID_BYTES)?;
         decode_hash(&self.reader_code_hash)?;
@@ -723,6 +728,7 @@ pub fn near_snapshot_event_from_logs(
     if logs.len() > MAX_NEAR_LOGS {
         return Err(NearReceiptLegError::BoundsExceeded);
     }
+    let mut matching_event = None;
     for log in logs {
         if log.len() > MAX_NEAR_LOG_BYTES {
             return Err(NearReceiptLegError::BoundsExceeded);
@@ -751,13 +757,16 @@ pub fn near_snapshot_event_from_logs(
         if payload.len() > MAX_NEAR_PAYLOAD_BYTES || sha256(&payload) != commitment {
             return Err(NearReceiptLegError::BadSnapshotEvent);
         }
-        return Ok(NearSnapshotEvent {
+        let event = NearSnapshotEvent {
             commitment: row.commitment,
             block_timestamp: row.block_timestamp,
             payload,
-        });
+        };
+        if matching_event.replace(event).is_some() {
+            return Err(NearReceiptLegError::DuplicateSnapshotEvent);
+        }
     }
-    Err(NearReceiptLegError::MissingSnapshotEvent)
+    matching_event.ok_or(NearReceiptLegError::MissingSnapshotEvent)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1887,6 +1896,27 @@ mod tests {
             context.expected_evidence_commitment
         );
         assert_ne!(verified.metadata_hash, B256::ZERO);
+    }
+
+    #[test]
+    fn rejects_duplicate_matching_snapshot_events() {
+        let (witness, _) = fixture();
+        let event_log = witness.proof.outcome_proof.outcome.logs[0].clone();
+        assert_eq!(
+            near_snapshot_event_from_logs(&[event_log.clone(), event_log], &witness.policy)
+                .unwrap_err(),
+            NearReceiptLegError::DuplicateSnapshotEvent
+        );
+    }
+
+    #[test]
+    fn rejects_non_mainnet_source_domain() {
+        let (mut witness, _) = fixture();
+        witness.policy.source_domain = "near:testnet".to_string();
+        assert_eq!(
+            witness.policy.validate().unwrap_err(),
+            NearReceiptLegError::PolicyMismatch
+        );
     }
 
     #[test]

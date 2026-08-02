@@ -158,6 +158,52 @@ certificate:
     postfiat-reserve-proof source-checkpoint validate \
       --certificate checkpoint.certificate.json
 
+### Public staked-NEAR workflow
+
+The public NEAR reader contract is in `contracts/near-stake-reader`. It is
+stateless, accepts no funds, calls the standard staking-pool balance methods,
+and emits the same canonical payload it returns. Build it independently with:
+
+    cargo build --manifest-path contracts/near-stake-reader/Cargo.toml \
+      --target wasm32-unknown-unknown --release --locked
+
+After governance pins the deployed reader account/code hash, pool/code hash,
+owner key, and checkpoint committee in the source policy and manifest, the
+public CLI workflow is:
+
+    postfiat-reserve-proof near snapshot-request \
+      --policy near-policy.json \
+      --account-id <implicit-owner-account> \
+      --salt <32-byte-lower-hex> \
+      --output near-snapshot-request.json
+
+An external NEAR wallet signs and submits that exact zero-deposit call. Once
+its callback receipt exists, each checkpoint validator independently runs the
+`near checkpoint-candidate` command for an exact finalized head at or after
+the receipt, signs the shared source-checkpoint statement externally, and the
+votes are assembled with `source-checkpoint assemble`.
+
+    postfiat-reserve-proof near prepare \
+      --manifest manifest.json --context context.json \
+      --source-id near-stake --policy near-policy.json \
+      --checkpoint-certificate near-checkpoint.certificate.json \
+      --account-id <implicit-owner-account> \
+      --receipt-id <callback-receipt-id> \
+      --salt <32-byte-lower-hex> --rpc-url <public-near-rpc> \
+      --proof-output near-prepared-proof.json \
+      --owner-statement-output near-owner.statement
+
+The reserve owner signs `near-owner.statement` with its policy-pinned Ed25519
+key outside this process. `near collect` attaches that signature and a
+separate policy-approved valuation evidence object, verifies both evidence
+dimensions, and writes the bounded source observation. No reserve-owner or
+checkpoint-validator private key enters the proof kit.
+
+The NEAR receipt and Merkle paths are cryptographic. Until a direct NEAR
+consensus verifier is governed, the exact finalized head and both deployed
+code identities are explicitly quorum-checkpointed. A public RPC response is
+never sufficient by itself.
+
 Assembly sorts votes canonically and rejects an invalid committee binding,
 sub-quorum set, duplicate or unknown validator, malformed signature, or bad
 signature. Adapter-specific collectors must still validate that the certified

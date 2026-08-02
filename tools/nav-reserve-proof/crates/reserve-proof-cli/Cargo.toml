@@ -9,7 +9,7 @@ publish = false
 
 [features]
 default = []
-sp1 = ["dep:sp1-sdk", "dep:tokio", "dep:bincode", "dep:sha2"]
+sp1 = ["dep:sp1-sdk", "dep:tokio", "dep:bincode"]
 sp1-cuda = ["sp1", "sp1-sdk/cuda"]
 
 [dependencies]
@@ -17,7 +17,9 @@ alloy-primitives.workspace = true
 alloy-rlp.workspace = true
 alloy-trie.workspace = true
 anyhow.workspace = true
+base64.workspace = true
 bincode = { workspace = true, optional = true }
+bs58.workspace = true
 clap.workspace = true
 hex.workspace = true
 postfiat-nav-reserve-protocol.workspace = true
@@ -27,7 +29,7 @@ reqwest.workspace = true
 serde.workspace = true
 serde_cbor = "0.11.2"
 serde_json.workspace = true
-sha2 = { workspace = true, optional = true }
+sha2.workspace = true
 sp1-sdk = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 

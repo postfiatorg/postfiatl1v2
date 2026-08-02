@@ -1,0 +1,28 @@
+[workspace]
+
+[package]
+name = "postfiat-near-stake-reader"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+rust-version = "1.85"
+repository = "https://github.com/postfiatorg/postfiatl1v2"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+borsh = { version = "1.6.1", features = ["unstable__schema"] }
+near-sdk = "=5.28.1"
+
+[dev-dependencies]
+base64 = "0.22"
+near-sdk = { version = "=5.28.1", features = ["unit-testing"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "z"
+panic = "abort"
+strip = "symbols"

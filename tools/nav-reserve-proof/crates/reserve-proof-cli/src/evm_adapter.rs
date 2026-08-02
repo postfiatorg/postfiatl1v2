@@ -44,6 +44,7 @@ use reserve_proof_types::{
 use serde::Deserialize;
 
 use crate::hyperliquid_adapter::{self, HyperliquidCommand};
+use crate::near_adapter::{self, NearCommand};
 
 const MAX_RPC_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
 const RPC_TIMEOUT: Duration = Duration::from_secs(30);
@@ -73,6 +74,12 @@ pub enum AdapterCommand {
     Hyperliquid {
         #[command(subcommand)]
         command: HyperliquidCommand,
+    },
+    /// Build and verify public staked-NEAR callback receipt proofs under a
+    /// governed finalized-head checkpoint.
+    Near {
+        #[command(subcommand)]
+        command: NearCommand,
     },
     /// Emit the canonical statement for an Ed25519 attestation or protocol
     /// receipt already represented in a source observation.
@@ -532,6 +539,7 @@ pub fn run(command: AdapterCommand) -> Result<()> {
             }),
         },
         AdapterCommand::Hyperliquid { command } => hyperliquid_adapter::run(command),
+        AdapterCommand::Near { command } => near_adapter::run(command),
         AdapterCommand::Ed25519EvidenceStatement {
             manifest,
             context,
@@ -2043,10 +2051,10 @@ pub(crate) fn rpc_call<T: serde::de::DeserializeOwned>(
             "params": params,
         }))
         .send()
-        .with_context(|| format!("Ethereum RPC {method}"))?;
+        .with_context(|| format!("JSON-RPC {method}"))?;
     anyhow::ensure!(
         response.status().is_success(),
-        "Ethereum RPC {method} returned HTTP {}",
+        "JSON-RPC {method} returned HTTP {}",
         response.status()
     );
     let mut bytes = Vec::new();
@@ -2056,24 +2064,24 @@ pub(crate) fn rpc_call<T: serde::de::DeserializeOwned>(
         .read_to_end(&mut bytes)?;
     anyhow::ensure!(
         bytes.len() <= MAX_RPC_RESPONSE_BYTES,
-        "Ethereum RPC {method} response exceeds {MAX_RPC_RESPONSE_BYTES} bytes"
+        "JSON-RPC {method} response exceeds {MAX_RPC_RESPONSE_BYTES} bytes"
     );
     let envelope: RpcEnvelope<T> =
-        serde_json::from_slice(&bytes).with_context(|| format!("decode Ethereum RPC {method}"))?;
+        serde_json::from_slice(&bytes).with_context(|| format!("decode JSON-RPC {method}"))?;
     anyhow::ensure!(
         envelope.jsonrpc == "2.0" && envelope.id == serde_json::json!(1),
-        "Ethereum RPC {method} returned a mismatched JSON-RPC envelope"
+        "JSON-RPC {method} returned a mismatched envelope"
     );
     if let Some(error) = envelope.error {
         bail!(
-            "Ethereum RPC {method} failed with {}: {}",
+            "JSON-RPC {method} failed with {}: {}",
             error.code,
             error.message
         );
     }
     envelope
         .result
-        .with_context(|| format!("Ethereum RPC {method} omitted result"))
+        .with_context(|| format!("JSON-RPC {method} omitted result"))
 }
 
 #[derive(Deserialize)]

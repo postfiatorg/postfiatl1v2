@@ -3,7 +3,10 @@ members = [
     "crates/reserve-proof-types",
     "crates/reserve-proof-cli",
 ]
-exclude = ["programs/reserve-proof-guest"]
+exclude = [
+    "contracts/near-stake-reader",
+    "programs/reserve-proof-guest",
+]
 resolver = "2"
 
 [workspace.package]

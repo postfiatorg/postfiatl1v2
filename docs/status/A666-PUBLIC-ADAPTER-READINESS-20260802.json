@@ -28,8 +28,8 @@
       "id": "staked-near",
       "status": "partial",
       "production_qualified": false,
-      "public_implementation": "tools/nav-reserve-proof/crates/reserve-proof-types/src/near_receipt.rs",
-      "note": "A provider-neutral verifier now checks certified-head, outcome, block, reader, pool, implicit-account ownership, quantity, bounds, and guest dispatch, with historical Merkle reconstruction. Valuation remains separately attested by design. Public collection, fuzzing, fresh epochs, full A666 reconciliation, and production qualification remain open."
+      "public_implementation": "tools/nav-reserve-proof/crates/reserve-proof-types/src/near_receipt.rs; tools/nav-reserve-proof/crates/reserve-proof-cli/src/near_adapter.rs; tools/nav-reserve-proof/contracts/near-stake-reader/src/lib.rs",
+      "note": "A provider-neutral verifier now checks certified-head, outcome, block, reader, pool, implicit-account ownership, quantity, bounds, duplicate events, mainnet domain, and guest dispatch, with historical Merkle reconstruction. The public stateless reader accepts no funds and emits a canonical provider-neutral snapshot. The public CLI emits unsigned external-wallet invocation data, constructs an exact finalized-head checkpoint candidate, verifies policy-pinned reader and pool code hashes, collects and reconstructs the outcome/block proof, emits the exact owner statement, and verifies the complete quantity evidence without receiving a private key. Code identity and finality are explicitly BFT-checkpointed rather than mislabeled as direct NEAR consensus verification. Public reader deployment, governed policy/committee inputs, public NEAR/USD valuation evidence, fuzzing, fresh epochs, full A666 reconciliation, independent reproduction, and production qualification remain open."
     },
     {
       "id": "staked-solana",

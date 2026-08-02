@@ -271,7 +271,7 @@ not yet the desired public architecture.
 | Aave on Arbitrum | Provider-neutral verifier and public checkpoint/collection workflow implemented; partial | No | Add governed A666 policy/committee inputs, fuzz, run fresh epochs and complete A666 reconciliation, and qualify |
 | Complete EVM spot set | Provider-neutral quantity verifier and public checkpoint/collection workflow implemented; partial | No | Add the governed A666 policy/committee fixture, bind separately disclosed valuation evidence, fuzz, run fresh epochs and complete A666 reconciliation, and qualify |
 | Hyperliquid | Provider-neutral verifier, public HyperCore receipt-reader contract, unsigned snapshot construction, checkpoint/owner workflow, and receipt-proof collector implemented; partial | No | Deploy the hardened public reader, govern policy/committee inputs, fuzz, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
-| Staked NEAR | Provider-neutral quantity verifier implemented; partial | No | Add public collection and fuzzing, reproduce complete historical and fresh epochs, bind governed public NEAR/USD valuation evidence under section 2, complete full A666 reconciliation, and qualify |
+| Staked NEAR | Provider-neutral quantity verifier, public reader contract, unsigned invocation construction, finalized-head checkpoint workflow, owner authorization, and outcome/block-proof collector implemented; partial | No | Deploy the public reader, govern policy/committee inputs, add fuzzing, reproduce complete historical and fresh epochs, bind governed public NEAR/USD valuation evidence under section 2, complete full A666 reconciliation, and qualify |
 | Staked Solana | Provider-neutral attested-RPC verifier implemented as an interim scaffold; production proof path absent | No | Implement public finalized source-state verification and collection that does not trust an operator/RPC signature for the quantity, then fuzz, run fresh epochs, reconcile, and qualify |
 | Monero | Provider-neutral cryptographic quantity verifier implemented; partial | No | Add the public collector, produce a fresh governed nonzero proof with certified head chain and spent-status set, bind separately disclosed XMR/USD valuation evidence, fuzz, complete A666 reconciliation, and qualify |
 | pfUSDC overlay | Implemented and pushed | Not sufficient by itself | Exact-tip remote CI must pass; this covers only PFTL-accounted subscription reserves, not the six external source families |
@@ -546,6 +546,31 @@ Internal migration inputs include:
 /home/postfiat/repos/StakeHub/zk/script/src/bin/fetch_near_receipt_leg.rs
 ```
 
+The provider-neutral successor implementation now lives publicly at:
+
+```text
+tools/nav-reserve-proof/contracts/near-stake-reader/
+tools/nav-reserve-proof/crates/reserve-proof-cli/src/near_adapter.rs
+tools/nav-reserve-proof/crates/reserve-proof-types/src/near_receipt.rs
+```
+
+The public reader accepts no funds, queries the standard staking-pool
+interface, emits the canonical `postfiat-nav` snapshot event, and returns the
+same raw payload. The public CLI emits an unsigned external-wallet invocation,
+constructs an independently reproducible finalized-head checkpoint candidate,
+checks the policy-pinned reader and pool code hashes at that exact head,
+collects the callback receipt outcome/block Merkle proof, emits the exact
+reserve-owner signing statement, and verifies the complete quantity evidence
+before writing an observation. The proof kit never receives a NEAR private
+key. Code identity and the finalized head are explicitly BFT-checkpointed;
+the RPC response is not mislabeled as trustless NEAR consensus finality.
+
+The reader is not deployed under a governed successor account yet. Governed
+policy/committee inputs, public NEAR/USD valuation evidence, parser fuzzing,
+fresh multi-epoch collection, full A666 reconciliation, and independent
+production qualification remain open. Therefore this implementation does not
+yet make the staked-NEAR source production-qualified.
+
 The current A666 shadow marks staked-NEAR quantity as attested. That is not
 equivalent to the historical receipt/light-client validation.
 
@@ -682,7 +707,7 @@ existing guest ELF SHA exactly.
   transaction hash signed and submitted by an external wallet and never
   requires a private key inside the proof kit.
 - [x] Implement and register the public staked-NEAR adapter.
-- [ ] Implement the public NEAR reader invocation and complete finalized
+- [x] Implement the public NEAR reader invocation and complete finalized
   outcome/block proof collector.
 - [x] Implement the interim public staked-Solana attested-RPC verifier for
   historical reconstruction.
