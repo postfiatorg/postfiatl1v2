@@ -870,9 +870,8 @@ mod tests {
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../docs/evidence");
         let historical_aave: serde_json::Value = serde_json::from_slice(
             &std::fs::read(
-                evidence_root.join(
-                    "a666-variable-size-nav-roundtrip-20260728/stakehub-nav-mark/proof/aave-witness.json",
-                ),
+                manifest_dir
+                    .join("../../fixtures/a666-historical/aave-arbitrum-state-proof-20260728.json"),
             )
             .unwrap(),
         )
