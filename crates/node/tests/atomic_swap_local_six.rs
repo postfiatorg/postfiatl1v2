@@ -2250,6 +2250,8 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
     const A666_RESERVE_OPERATOR: &str = "pfd0c86d9084915e1fefd22eab891806397d5a5937";
     const A666_SUCCESSOR_PROFILE: &str = "f8784629ff7338002d836c1988b8e2c0f19caf448429e0eb7fdc39fa2b08f7d9a44171fc1e7239bc25e06ad833c14e91";
     const A666_CIRCULATING_SUPPLY: u64 = 31_597_197_455;
+    const A666_VALUATION_UNIT: &str = "USD_1E8";
+    const PFUSDC_VALUATION_UNIT: &str = "USDC";
 
     let issuer = read_dev_key_from_env("POSTFIAT_A666_ISSUER_KEY_FILE");
     let reserve_operator = read_dev_key_from_env("POSTFIAT_A666_RESERVE_KEY_FILE");
@@ -2461,7 +2463,7 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
             asset_id: A666_ASSET_ID.to_string(),
             reserve_operator: A666_RESERVE_OPERATOR.to_string(),
             proof_profile: A666_SUCCESSOR_PROFILE.to_string(),
-            valuation_unit: "USD_1E8".to_string(),
+            valuation_unit: A666_VALUATION_UNIT.to_string(),
             redemption_account: A666_ISSUER.to_string(),
         }),
         "rebind-a666-public-successor",
@@ -2658,7 +2660,7 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
             asset_id: PFUSDC_ASSET_ID.to_string(),
             reserve_operator: pfusdc_issuer.address.clone(),
             proof_profile: pfusdc_profile.clone(),
-            valuation_unit: "USD_1E8".to_string(),
+            valuation_unit: PFUSDC_VALUATION_UNIT.to_string(),
             redemption_account: pfusdc_issuer.address.clone(),
         }),
         "register-pfusdc-accounting-nav",
@@ -2775,8 +2777,15 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
     );
 
     let transparent_mint_atoms = 2_000_000;
-    let transparent_base_atoms =
-        checked_mul_div_ceil(transparent_mint_atoms, nav_per_unit, 100_000_000);
+    let transparent_base_atoms = postfiat_execution::required_vault_bridge_settlement_atoms(
+        transparent_mint_atoms,
+        6,
+        nav_per_unit,
+        A666_VALUATION_UNIT,
+        PFUSDC_VALUATION_UNIT,
+        6,
+    )
+    .expect("derive transparent A666 base settlement from registered valuation units");
     let transparent_settlement_atoms = checked_mul_div_ceil(
         transparent_base_atoms,
         u64::from(policy.issue_multiplier_bps),
@@ -2822,7 +2831,15 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
     );
 
     let private_mint_atoms = 1_000_000;
-    let private_base_atoms = checked_mul_div_ceil(private_mint_atoms, nav_per_unit, 100_000_000);
+    let private_base_atoms = postfiat_execution::required_vault_bridge_settlement_atoms(
+        private_mint_atoms,
+        6,
+        nav_per_unit,
+        A666_VALUATION_UNIT,
+        PFUSDC_VALUATION_UNIT,
+        6,
+    )
+    .expect("derive private A666 base settlement from registered valuation units");
     let private_settlement_atoms = checked_mul_div_ceil(
         private_base_atoms,
         u64::from(policy.issue_multiplier_bps),
@@ -3091,8 +3108,15 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
     );
 
     let transparent_redeem_atoms = 500_000;
-    let transparent_redeem_base =
-        checked_mul_div_ceil(transparent_redeem_atoms, nav_per_unit, 100_000_000);
+    let transparent_redeem_base = postfiat_execution::required_vault_bridge_settlement_atoms(
+        transparent_redeem_atoms,
+        6,
+        nav_per_unit,
+        A666_VALUATION_UNIT,
+        PFUSDC_VALUATION_UNIT,
+        6,
+    )
+    .expect("derive transparent A666 redemption base from registered valuation units");
     let transparent_redeem_output = checked_mul_div_floor(
         transparent_redeem_base,
         u64::from(policy.redeem_multiplier_bps),
