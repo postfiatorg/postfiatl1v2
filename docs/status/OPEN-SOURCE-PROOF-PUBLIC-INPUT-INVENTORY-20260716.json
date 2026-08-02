@@ -39,7 +39,7 @@
     "tools/nav-reserve-proof/crates/reserve-proof-types/src/solana_stake.rs": "18b1f611ff5bfe62daebda759a7f6740515b115e304163c8b59b32cc01364431",
     "tools/nav-reserve-proof/crates/reserve-proof-types/src/monero_reserve.rs": "fcb8564adf3d9e61e3b1f4a0d7d3d15015d71f78d8a0782e6da5007b6a2fe777",
     "tools/nav-reserve-proof/fuzz/Cargo.toml": "db1cdb4c1492532649c69f7f3634aa80e3991797d1873ee16baac7ce7977218e",
-    "tools/nav-reserve-proof/fuzz/Cargo.lock": "a7ac32cbec21d4a03858594c294abc23f39fffca2bfbc0cec6c0c8e492e6f4f4",
+    "tools/nav-reserve-proof/fuzz/Cargo.lock": "70dbefef7d534dcc0d5d5d26c533e7fa1eaba247af8bd2dd8771879a417ca104",
     "tools/nav-reserve-proof/fuzz/README.md": "c275abec755ed49e92eb67a2d866ebdbc728d580c50e53164abf5d2240c04181",
     "tools/nav-reserve-proof/fuzz/fuzz_targets/source_evidence_json.rs": "dbc80377e6ae9d85b0efc54ed60b765833284baed64859ed0cb952d07b5b082c",
     "tools/nav-reserve-proof/fuzz/fuzz_targets/witness_json.rs": "519265e532cbbae90f335bbae69faf275485654d5586bc0bf1271489d80b7eb0",
