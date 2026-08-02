@@ -838,11 +838,21 @@ existing guest ELF SHA exactly.
   quantity and valuation dimension.
 - [x] Implement the generic typed manifest builder. It derives reserve-owner,
   quantity-verifier, valuation-verifier, and haircut commitments from the
-  actual public policies and complete committees; it rejects arbitrary pasted
-  hashes, missing committees, unsupported integrated valuation, valuation
-  context drift, and any price-row/quantity-position or decimal mismatch.
+  actual public policies and complete committees. It also derives the global
+  32-byte valuation-policy hash from a typed, domain-separated policy binding
+  the NAV asset, valuation unit and scale, exact source/position set, valuation
+  method, and asset/liability treatment. It rejects arbitrary pasted hashes,
+  policy/manifest source drift, missing committees, unsupported integrated
+  valuation, valuation context drift, and any price-row/quantity-position or
+  decimal mismatch.
   The actual governed A666 input bundle remains open until the public reader
   deployments and real policy values are complete.
+- [x] Publish the typed six-source A666 candidate portfolio valuation policy
+  and its independently derivable hash
+  `350eaee0a1ca12ba51637781ba52661b8685f868657a7c5e7d07c31b2899869c`.
+  This is not a live policy or a source qualification; it removes the legacy
+  pasted-hash dependency and gives every source-specific candidate policy one
+  public successor valuation context.
 - [x] Derive and publish the candidate source-checkpoint committee from the
   public six-validator PFTL registry. The generic builder accepts only
   ML-DSA-65 public keys, canonicalizes validator ordering, rejects quorums

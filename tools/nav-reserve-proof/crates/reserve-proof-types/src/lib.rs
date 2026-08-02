@@ -25,6 +25,8 @@ pub mod monero_reserve;
 #[cfg(feature = "a666-public-adapters-v2")]
 pub mod near_receipt;
 #[cfg(feature = "a666-public-adapters-v2")]
+pub mod portfolio_valuation;
+#[cfg(feature = "a666-public-adapters-v2")]
 pub mod solana_stake;
 
 #[cfg(feature = "a666-public-adapters-v2")]

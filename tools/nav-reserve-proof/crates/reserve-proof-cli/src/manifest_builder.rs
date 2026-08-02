@@ -15,6 +15,7 @@ use reserve_proof_types::{
         monero_reserve_owner_commitment, MoneroReservePolicyV1, MONERO_RESERVE_ADAPTER_KIND_V1,
     },
     near_receipt::{NearReceiptPolicyV1, NEAR_RECEIPT_QUANTITY_ADAPTER_KIND_V1},
+    portfolio_valuation::{PortfolioValuationMethodV1, PortfolioValuationPolicyV1},
     solana_stake::{
         solana_stake_owner_commitment, SolanaStakeReaderPolicyV1,
         SOLANA_STAKE_READER_ADAPTER_KIND_V1,
@@ -33,9 +34,7 @@ const MAX_MANIFEST_BUILD_BYTES: usize = 8 * 1024 * 1024;
 #[serde(deny_unknown_fields)]
 struct ManifestBuildV1 {
     schema: String,
-    valuation_policy_hash: String,
-    valuation_unit_id: String,
-    valuation_scale: u64,
+    valuation_policy: PortfolioValuationPolicyV1,
     sources: Vec<ManifestSourceBuildV1>,
 }
 
@@ -131,11 +130,39 @@ struct ManifestBuildReportV1 {
     output: PathBuf,
 }
 
+#[derive(Debug, Serialize)]
+struct ValuationPolicyHashReportV1 {
+    schema: &'static str,
+    valuation_policy_hash: String,
+    nav_asset_id: String,
+    valuation_unit_id: String,
+    valuation_scale: u64,
+    source_count: usize,
+}
+
+pub fn run_valuation_policy_hash(input: PathBuf, output: Option<PathBuf>) -> Result<()> {
+    let policy: PortfolioValuationPolicyV1 = read_json(&input)?;
+    let report = ValuationPolicyHashReportV1 {
+        schema: "postfiat.reserve_portfolio_valuation_policy_hash_report.v1",
+        valuation_policy_hash: policy.hash().map_err(anyhow::Error::msg)?,
+        nav_asset_id: policy.nav_asset_id,
+        valuation_unit_id: policy.valuation_unit_id,
+        valuation_scale: policy.valuation_scale,
+        source_count: policy.sources.len(),
+    };
+    let json = serde_json::to_string_pretty(&report)?;
+    if let Some(output) = output {
+        write_new(&output, format!("{json}\n").as_bytes())?;
+    }
+    println!("{json}");
+    Ok(())
+}
+
 pub fn run(input: PathBuf, output: PathBuf) -> Result<()> {
     let build: ManifestBuildV1 = read_json(&input)?;
-    let valuation_policy_hash = build.valuation_policy_hash.clone();
-    let valuation_unit_id = build.valuation_unit_id.clone();
-    let valuation_scale = build.valuation_scale;
+    let valuation_policy_hash = build.valuation_policy.hash().map_err(anyhow::Error::msg)?;
+    let valuation_unit_id = build.valuation_policy.valuation_unit_id.clone();
+    let valuation_scale = build.valuation_policy.valuation_scale;
     let manifest = build_manifest(build)?;
     let source_manifest_hash = manifest.hash().map_err(anyhow::Error::msg)?;
     write_new(&output, &serde_json::to_vec_pretty(&manifest)?)?;
@@ -166,20 +193,46 @@ fn build_manifest(build: ManifestBuildV1) -> Result<SourceManifestV1> {
     if build.schema != BUILD_SCHEMA_V1 {
         bail!("reserve manifest build schema mismatch");
     }
-    validate_lower_hex("valuation_policy_hash", &build.valuation_policy_hash, 32)?;
-    validate_lower_hex("valuation_unit_id", &build.valuation_unit_id, 48)?;
-    if build.valuation_scale == 0 {
-        bail!("valuation_scale must be nonzero");
+    build
+        .valuation_policy
+        .validate()
+        .map_err(anyhow::Error::msg)?;
+    let valuation_policy_hash = build.valuation_policy.hash().map_err(anyhow::Error::msg)?;
+    if build.sources.len() != build.valuation_policy.sources.len() {
+        bail!("manifest sources do not exactly match valuation policy sources");
     }
+    let valuation_sources = build
+        .valuation_policy
+        .sources
+        .iter()
+        .map(|source| (source.source_id.as_str(), source))
+        .collect::<BTreeMap<_, _>>();
     let mut sources = build
         .sources
         .into_iter()
         .map(|source| {
+            let valuation_source = valuation_sources
+                .get(source.source_id.as_str())
+                .ok_or_else(|| {
+                    anyhow!(
+                        "source {} is absent from valuation policy",
+                        source.source_id
+                    )
+                })?;
+            if source.asset_or_position_id != valuation_source.asset_or_position_id
+                || source.liability_treatment != valuation_source.liability_treatment
+                || valuation_method(&source.valuation_verifier) != valuation_source.valuation_method
+            {
+                bail!(
+                    "source {} does not match its typed valuation-policy row",
+                    source.source_id
+                );
+            }
             build_source(
                 source,
-                &build.valuation_policy_hash,
-                &build.valuation_unit_id,
-                build.valuation_scale,
+                &valuation_policy_hash,
+                &build.valuation_policy.valuation_unit_id,
+                build.valuation_policy.valuation_scale,
             )
         })
         .collect::<Result<Vec<_>>>()?;
@@ -190,6 +243,17 @@ fn build_manifest(build: ManifestBuildV1) -> Result<SourceManifestV1> {
     };
     manifest.validate().map_err(anyhow::Error::msg)?;
     Ok(manifest)
+}
+
+fn valuation_method(verifier: &ValuationVerifierBuildV1) -> PortfolioValuationMethodV1 {
+    match verifier {
+        ValuationVerifierBuildV1::SameAsQuantity => {
+            PortfolioValuationMethodV1::IntegratedSourceProof
+        }
+        ValuationVerifierBuildV1::EvmChainlink { .. } => {
+            PortfolioValuationMethodV1::EvmChainlinkStateProof
+        }
+    }
 }
 
 fn build_source(
@@ -403,17 +467,6 @@ fn evm_spot_valuation_rows(policy: &EvmSpotPolicyV1) -> Result<BTreeMap<String, 
     Ok(unique)
 }
 
-fn validate_lower_hex(label: &str, value: &str, bytes: usize) -> Result<()> {
-    if value.len() != bytes * 2
-        || !value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-    {
-        bail!("{label} must be lowercase hexadecimal with exactly {bytes} bytes");
-    }
-    Ok(())
-}
-
 fn committee_root(committee: &BftCheckpointCommitteeV1) -> Result<String> {
     let minimum_bft_quorum = committee
         .validators
@@ -496,6 +549,7 @@ mod tests {
         bft_checkpoint::BftCheckpointValidatorV1,
         evm_chainlink_valuation::EvmChainlinkValuationRowPolicyV1,
         evm_spot::{EvmSpotChainPolicyV1, EvmSpotTokenPolicyV1},
+        portfolio_valuation::{PortfolioValuationSourceV1, PORTFOLIO_VALUATION_POLICY_SCHEMA_V1},
     };
 
     use super::*;
@@ -515,11 +569,24 @@ mod tests {
     fn evm_spot_build() -> ManifestBuildV1 {
         let committee = committee();
         let committee_root = committee.root().unwrap();
+        let valuation_policy = PortfolioValuationPolicyV1 {
+            schema: PORTFOLIO_VALUATION_POLICY_SCHEMA_V1.to_string(),
+            nav_asset_id: "10".repeat(48),
+            valuation_unit_id: "22".repeat(48),
+            valuation_scale: 100_000_000,
+            sources: vec![PortfolioValuationSourceV1 {
+                source_id: "evm-spot".to_string(),
+                asset_or_position_id: "evm-spot-set:a666-v1".to_string(),
+                valuation_method: PortfolioValuationMethodV1::EvmChainlinkStateProof,
+                liability_treatment: LiabilityTreatmentV1::Asset,
+            }],
+        };
+        let valuation_policy_hash = valuation_policy.hash().unwrap();
         let valuation = EvmChainlinkValuationPolicyV1 {
             source_domain: "eip155:1".to_string(),
             chain_id: 1,
             committee_root: committee_root.clone(),
-            valuation_policy_hash: "11".repeat(32),
+            valuation_policy_hash,
             valuation_unit_id: "22".repeat(48),
             valuation_scale: 100_000_000,
             proxy_phase_slot_index: 2,
@@ -549,9 +616,7 @@ mod tests {
         };
         ManifestBuildV1 {
             schema: BUILD_SCHEMA_V1.to_string(),
-            valuation_policy_hash: "11".repeat(32),
-            valuation_unit_id: "22".repeat(48),
-            valuation_scale: 100_000_000,
+            valuation_policy,
             sources: vec![ManifestSourceBuildV1 {
                 source_id: "evm-spot".to_string(),
                 asset_or_position_id: "evm-spot-set:a666-v1".to_string(),
@@ -622,6 +687,10 @@ mod tests {
 
         let mut build = evm_spot_build();
         build.sources[0].valuation_verifier = ValuationVerifierBuildV1::SameAsQuantity;
+        assert!(build_manifest(build).is_err());
+
+        let mut build = evm_spot_build();
+        build.valuation_policy.sources[0].asset_or_position_id = "wrong-position".to_string();
         assert!(build_manifest(build).is_err());
 
         let mut weak = committee();

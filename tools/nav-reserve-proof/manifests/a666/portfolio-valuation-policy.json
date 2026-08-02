@@ -1,0 +1,44 @@
+{
+  "schema": "postfiat.reserve_portfolio_valuation_policy.v1",
+  "nav_asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+  "valuation_unit_id": "c67872c31caa85cbe6dd287a1e060f0f5cfc0e9f3c5bd85a7569897fd0cefb031583b7afc001e7d1afa492e9abf77d60",
+  "valuation_scale": 100000000,
+  "sources": [
+    {
+      "source_id": "aave-arbitrum",
+      "asset_or_position_id": "aave-v3:aggregate-collateral-and-debt",
+      "valuation_method": "integrated_source_proof",
+      "liability_treatment": "asset"
+    },
+    {
+      "source_id": "ethereum-spot",
+      "asset_or_position_id": "multi-chain-spot-aggregate",
+      "valuation_method": "evm_chainlink_state_proof",
+      "liability_treatment": "asset"
+    },
+    {
+      "source_id": "hyperliquid",
+      "asset_or_position_id": "aggregate-spot-and-cash",
+      "valuation_method": "integrated_source_proof",
+      "liability_treatment": "asset"
+    },
+    {
+      "source_id": "near-stake",
+      "asset_or_position_id": "near-staked-balance",
+      "valuation_method": "evm_chainlink_state_proof",
+      "liability_treatment": "asset"
+    },
+    {
+      "source_id": "solana-stake",
+      "asset_or_position_id": "sol-staked-balance",
+      "valuation_method": "evm_chainlink_state_proof",
+      "liability_treatment": "asset"
+    },
+    {
+      "source_id": "xmr-reserve",
+      "asset_or_position_id": "monero-reserve-balance",
+      "valuation_method": "evm_chainlink_state_proof",
+      "liability_treatment": "asset"
+    }
+  ]
+}

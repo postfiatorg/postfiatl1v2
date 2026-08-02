@@ -105,25 +105,42 @@ hashes are never accepted as operator-entered manifest fields:
       --output manifests/a666/checkpoint-committee.json
 
     cargo run --locked -p postfiat-reserve-proof -- \
+      manifest valuation-policy-hash \
+      --policy manifests/a666/portfolio-valuation-policy.json \
+      --output target/a666/portfolio-valuation-policy-hash.json
+
+    cargo run --locked -p postfiat-reserve-proof -- \
       manifest build \
       --input manifests/a666/manifest-build.json \
       --output target/a666/manifest.json
 
-The `postfiat.reserve_manifest_build.v1` input carries one global valuation
-policy hash, valuation unit, and scale. Each source selects a typed Aave, EVM
-spot, Hyperliquid receipt, NEAR receipt, Solana reader, or Monero quantity
-policy plus its complete public checkpoint committee. Aave and Hyperliquid may
-select `same_as_quantity` only because those quantity proofs also derive their
-valuation. Every other source must supply an EVM Chainlink state-proof policy.
-The builder rejects missing or substituted committees, mismatched owners,
-position sets, valuation contexts, quantity decimals, price rows, and
-haircuts. It emits only cryptographic quantity and valuation classifications.
+The `postfiat.reserve_manifest_build.v1` input carries a typed
+`postfiat.reserve_portfolio_valuation_policy.v1`, not an operator-entered
+valuation-policy hash. That policy canonically binds the NAV asset, valuation
+unit and scale, exact source/position set, valuation method, and asset versus
+liability treatment. The builder derives its domain-separated SHA-256 and
+requires the manifest sources and each source valuation context to match it
+exactly. Each source selects a typed Aave, EVM spot, Hyperliquid receipt, NEAR
+receipt, Solana reader, or Monero quantity policy plus its complete public
+checkpoint committee. Aave and Hyperliquid may select `same_as_quantity` only
+because those quantity proofs also derive their valuation. Every other source
+must supply an EVM Chainlink state-proof policy. The builder rejects raw pasted
+policy hashes, missing or substituted committees, mismatched owners, position
+sets, valuation contexts, quantity decimals, price rows, and haircuts. It emits
+only cryptographic quantity and valuation classifications.
 The committee command accepts only canonical lowercase ML-DSA-65 public keys,
 sorts validators, rejects any quorum below the BFT threshold, and reports the
 derived committee root. The manifest builder independently applies the same
 threshold. The committed A666 committee is the six-validator, five-vote
 BFT threshold derived from the public live registry; it contains no private
 key material.
+
+The committed A666 candidate portfolio policy has six sources and derives
+valuation-policy hash
+`350eaee0a1ca12ba51637781ba52661b8685f868657a7c5e7d07c31b2899869c`.
+It is a public candidate, not a live governed profile; the source-specific
+policies, reader deployments, qualification, and activation gates below still
+must complete before it can govern real value.
 
 The HyperEVM, NEAR, and Solana reader build identities are pinned in
 `manifests/a666/reader-deployment-candidates.json`. Rebuild them with:

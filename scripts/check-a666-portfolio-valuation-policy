@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+policy="$repo_root/tools/nav-reserve-proof/manifests/a666/portfolio-valuation-policy.json"
+expected="$repo_root/tools/nav-reserve-proof/manifests/a666/portfolio-valuation-policy-hash.json"
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf -- "$tmp_dir"' EXIT
+actual="$tmp_dir/portfolio-valuation-policy-hash.json"
+
+cargo run \
+  --quiet \
+  --locked \
+  --manifest-path "$repo_root/tools/nav-reserve-proof/Cargo.toml" \
+  -p postfiat-reserve-proof \
+  -- manifest valuation-policy-hash \
+  --policy "$policy" \
+  --output "$actual" \
+  >/dev/null
+
+cmp "$expected" "$actual"
+test "$(jq -r .source_count "$actual")" = 6
+test "$(jq -r .nav_asset_id "$actual")" = \
+  "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c"
+
+printf 'A666 typed portfolio valuation policy matches its pinned derived hash.\n'

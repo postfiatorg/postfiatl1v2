@@ -10,8 +10,8 @@ use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use postfiat_nav_reserve_protocol::nav_reserve_subscription_composite_source_root_v1;
 use postfiat_reserve_proof::{
-    run_adapter, run_manifest_builder, run_source_checkpoint, AdapterCommand,
-    SourceCheckpointCommand,
+    run_adapter, run_manifest_builder, run_source_checkpoint, run_valuation_policy_hash,
+    AdapterCommand, SourceCheckpointCommand,
 };
 use postfiat_types::{
     AssetTransactionOperation, NavProfileRegisterOperation, NavProofProfile,
@@ -132,6 +132,14 @@ enum ManifestCommand {
         #[arg(long)]
         output: PathBuf,
     },
+    /// Validate a typed portfolio valuation policy and derive its canonical,
+    /// domain-separated 32-byte policy hash before source policies are built.
+    ValuationPolicyHash {
+        #[arg(long)]
+        policy: PathBuf,
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -237,6 +245,9 @@ fn main() -> Result<()> {
         Command::Manifest {
             command: ManifestCommand::Build { input, output },
         } => run_manifest_builder(input, output),
+        Command::Manifest {
+            command: ManifestCommand::ValuationPolicyHash { policy, output },
+        } => run_valuation_policy_hash(policy, output),
         Command::Profile {
             command:
                 ProfileCommand::Derive {
