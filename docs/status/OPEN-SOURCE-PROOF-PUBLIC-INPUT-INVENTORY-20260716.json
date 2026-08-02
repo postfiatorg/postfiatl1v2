@@ -12,7 +12,7 @@
     "crates/types/src/nav_reserve_public_values.rs": "ffe01da1eefffa33d1f283ba0248e5e7f572e0537b88a794435aa43e2a3c5cf6",
     "crates/ethereum-contracts/src/HyperCoreReserveReader.sol": "29eb7f908bd7fca14c1970c56835c0e77911b55f0d9ed0a15c75565b81662d26",
     "deployments/a666-mainnet-20260727/12-opening-export-proof-snapshot/validator_registry.json": "d78f507c0d3eebfb6955fa62ded40a91ade99a3c2ec28cfc0efd1a8365ffd942",
-    "scripts/check-a666-public-reader-candidates": "e6ad5599be17e755157c1fba87780a2c6d9c42adb7f58b897ad3935438e75390",
+    "scripts/check-a666-public-reader-candidates": "5e335e8ccd2fc3671297676dcb069482efc14ce1c5c80dc78fa3edb525fcf3d1",
     "scripts/check-nav-reserve-proof-fuzz-smoke": "d9bae0c68f8448eba9c99092546a7780026b277901980bec56730b5d66418d79",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/lib.rs": "6f0e21c7a44eaa89bd570501452e9ea5fae2af563af8c0ed9554fa9e2b3833ad",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/checkpoint_signing.rs": "59a8174b9299cdb1d74344a87dcc00d27902c3ee7a058c5b45f733ab00607770",
@@ -54,7 +54,7 @@
     "tools/nav-reserve-proof/contracts/solana-stake-reader/Cargo.toml": "15ff163a724a4ef2185b8a9d52cb4334e81e48533e9613a2e43ccea2ea82e719",
     "tools/nav-reserve-proof/contracts/solana-stake-reader/src/lib.rs": "fbf46bb20fb13abca07ad14cc7d5205c5cf358b151779a52f658ef79f8a33d65",
     "tools/nav-reserve-proof/manifests/a666/checkpoint-committee.json": "4e1242c38c1a8cff83184983872e4fb171ebe24001ca82a7d15edddf483e1ea7",
-    "tools/nav-reserve-proof/manifests/a666/reader-deployment-candidates.json": "d70af1ee2d6c963bfd2533393580d9c1d2f8d82c17ae48e2b647383242aa218d"
+    "tools/nav-reserve-proof/manifests/a666/reader-deployment-candidates.json": "cf8de1d91e2bad3ee0c8fa485b4c35c6c84dc304dce972f5d9702024c5cb391e"
   },
   "systems": [
     {

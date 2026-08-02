@@ -27,7 +27,11 @@ test "$hyper_bytes" = "$(jq -r .hyperliquid.candidate_runtime_bytes "$identity")
 test "${hyper_hash#0x}" = "$(jq -r .hyperliquid.candidate_runtime_keccak256 "$identity")"
 
 rustup target add wasm32-unknown-unknown >/dev/null 2>&1
-cargo build \
+# Rust and dependency panic locations otherwise embed runner-specific absolute
+# paths in the Wasm. Remap both the checkout and toolchain/cache home so the
+# deployment artifact is identical across independent builders.
+near_rustflags="--remap-path-prefix=$repo_root=/workspace/postfiatl1v2 --remap-path-prefix=$HOME=/workspace/home"
+RUSTFLAGS="$near_rustflags" cargo build \
   --manifest-path "$repo_root/tools/nav-reserve-proof/contracts/near-stake-reader/Cargo.toml" \
   --target wasm32-unknown-unknown \
   --release \
@@ -35,8 +39,13 @@ cargo build \
 near_wasm="$repo_root/tools/nav-reserve-proof/contracts/near-stake-reader/target/wasm32-unknown-unknown/release/postfiat_near_stake_reader.wasm"
 near_bytes="$(wc -c < "$near_wasm" | tr -d ' ')"
 near_hash="$(sha256sum "$near_wasm" | cut -d' ' -f1)"
-test "$near_bytes" = "$(jq -r .near.candidate_wasm_bytes "$identity")"
-test "$near_hash" = "$(jq -r .near.candidate_wasm_sha256 "$identity")"
+expected_near_bytes="$(jq -r .near.candidate_wasm_bytes "$identity")"
+expected_near_hash="$(jq -r .near.candidate_wasm_sha256 "$identity")"
+if test "$near_bytes" != "$expected_near_bytes" || test "$near_hash" != "$expected_near_hash"; then
+  printf 'NEAR reader identity mismatch: bytes=%s expected_bytes=%s sha256=%s expected_sha256=%s\n' \
+    "$near_bytes" "$expected_near_bytes" "$near_hash" "$expected_near_hash" >&2
+  exit 1
+fi
 
 solana_identity="$repo_root/$(jq -r .solana.identity "$identity")"
 test "$(jq -r .executable_program_hash "$solana_identity")" = \

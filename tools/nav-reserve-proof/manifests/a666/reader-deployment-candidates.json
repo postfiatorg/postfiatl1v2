@@ -16,9 +16,9 @@
   },
   "near": {
     "source": "tools/nav-reserve-proof/contracts/near-stake-reader/src/lib.rs",
-    "candidate_wasm_bytes": 147654,
-    "candidate_wasm_sha256": "a40f7c070c984d4444e226d03a5228651d3e16979944b0df50581398453d1083",
-    "candidate_near_code_hash": "C3RZJhzJNePwKQWBFBVMGF6NwBKaMBrZnZKySipW9C4S",
+    "candidate_wasm_bytes": 147678,
+    "candidate_wasm_sha256": "68713935d27592d5450eda6dc402825701f621b361010239cc1f1049923e7c17",
+    "candidate_near_code_hash": "82hY643BJFaqysTmPoWMaPQHzSZzxKSWH8ECxvCH1mQJ",
     "deployment_status": "not_deployed",
     "historical_reader_account": "eed15bedebb4ac46d1528187a8c2f00aa59b441398d3e346c44eb2dcb2fc1d9a",
     "historical_near_code_hash": "4mdewfmqBVSbXzgbKfThp6vnXJA6KxhMrcLSj6ZMwUhx",

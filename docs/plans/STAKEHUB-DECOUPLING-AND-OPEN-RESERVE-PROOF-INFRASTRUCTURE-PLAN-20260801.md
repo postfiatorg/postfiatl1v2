@@ -1106,11 +1106,16 @@ scripts/check-provider-neutral-wallet-boundary
 scripts/check-a666-public-reader-candidates
   passed locally; the hardened HyperEVM runtime, public NEAR Wasm, and
   reproducible Solana SBF identities match their pinned candidate artifacts.
+  The NEAR release build remaps checkout and toolchain/cache paths before
+  compilation; independent archive checkouts at different absolute paths
+  reproduced the same 147678-byte artifact, SHA-256
+  `68713935d27592d5450eda6dc402825701f621b361010239cc1f1049923e7c17`,
+  and NEAR code hash `82hY643BJFaqysTmPoWMaPQHzSZzxKSWH8ECxvCH1mQJ`.
   This is a build-identity gate, not a deployment qualification. Public chain
   checks on 2026-08-02 prove that the historical HyperEVM reader runtime
   (`0x7e4007...74f8`) differs from the public candidate (`0xc252f3...0db3`),
   the historical NEAR reader code (`4mdew...wUhx`) differs from the public
-  candidate (`C3RZ...9C4S`), and the Solana candidate remains undeployed.
+  candidate (`82hY...mQJ`), and the Solana candidate remains undeployed.
 
 public Solidity suite after HyperCore reader addition
   143 passed, 0 failed
