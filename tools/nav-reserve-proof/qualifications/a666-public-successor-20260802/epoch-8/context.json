@@ -1,0 +1,12 @@
+{
+  "pftl_genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "nav_asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+  "proof_profile_id": "f8784629ff7338002d836c1988b8e2c0f19caf448429e0eb7fdc39fa2b08f7d9a44171fc1e7239bc25e06ad833c14e91",
+  "valuation_policy_hash": "350eaee0a1ca12ba51637781ba52661b8685f868657a7c5e7d07c31b2899869c",
+  "source_manifest_hash": "8abe3e59198b72945d4778a7fa91e5af157a6c65032d8940cca486850ffe59fcb567268ca5942669ff6977ef32dd3a41",
+  "valuation_unit_id": "c67872c31caa85cbe6dd287a1e060f0f5cfc0e9f3c5bd85a7569897fd0cefb031583b7afc001e7d1afa492e9abf77d60",
+  "valuation_scale": 100000000,
+  "observation_epoch": 8,
+  "observation_not_before": 776,
+  "observation_not_after": 784
+}

@@ -1,0 +1,57 @@
+{
+  "schema": "postfiat.a666_public_successor_qualification.v1",
+  "pftl_genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "nav_asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+  "proof_profile_id": "f8784629ff7338002d836c1988b8e2c0f19caf448429e0eb7fdc39fa2b08f7d9a44171fc1e7239bc25e06ad833c14e91",
+  "source_manifest_hash": "8abe3e59198b72945d4778a7fa91e5af157a6c65032d8940cca486850ffe59fcb567268ca5942669ff6977ef32dd3a41",
+  "valuation_policy_hash": "350eaee0a1ca12ba51637781ba52661b8685f868657a7c5e7d07c31b2899869c",
+  "valuation_unit_id": "c67872c31caa85cbe6dd287a1e060f0f5cfc0e9f3c5bd85a7569897fd0cefb031583b7afc001e7d1afa492e9abf77d60",
+  "valuation_scale": 100000000,
+  "program": {
+    "source_commit": "5b8f0317375af6fb46d586d9d9152b511457b802",
+    "elf_sha256": "2b41e4e8095b1dacdc519b2f0a2b4831ebc57cc8003a4d3686f6d9e4687e81df",
+    "sp1_program_vkey": "0x00f3857f96ef97e00bd15b4030acd8d6b0a72740b28c6160d154bc2c9bb141bf"
+  },
+  "epochs": [
+    {
+      "observation_epoch": 7,
+      "observation_not_before": 776,
+      "observation_not_after": 784,
+      "source_observation_root": "15c4b7cabf230c52afffd6116da608d1db33f7dfad8a99cbf6796267832015855c7f5f4a092ca214f1b4ae05d6585246",
+      "gross_assets": 2855886091629,
+      "total_liabilities": 20094872960,
+      "verified_net_assets": 2835791218669,
+      "cryptographically_verified_value": 2835791218669,
+      "attested_value": 0,
+      "controlled_value": 0,
+      "source_count": 6,
+      "quantity_trust_counts": { "cryptographic": 6, "attested": 0, "controlled": 0 },
+      "valuation_trust_counts": { "cryptographic": 6, "attested": 0, "controlled": 0 },
+      "quantity_trust_root": "e731e579291deccd3e7ee3df12e4f5c5bc87c1ef3efc53322d8290ee9d7350a26ba48b42784b1f019c8f63249472a260",
+      "valuation_trust_root": "0eea6b18e1b65f6ebf544c55e045055211016e1d536b92af9567254e789294a0de64bb2f3a5988be1351af4a58d7ee54",
+      "source_disclosure_root": "55d841cb8090f99d5237b2c664ff8af1c7abafaebb1f5d2666d389060c57d74eb2b4b44491c17aea7f361d3d6e500dc7",
+      "witness_cbor_sha256": "8f4538b111a6cebf97a71406895af40d4bc4c6ed369c3ecd540b6050765b6dd6",
+      "public_values_sha256": "a215726624267dc5c5a60ac2829b24a149855a3edcfc798c965826e17bca7e68"
+    },
+    {
+      "observation_epoch": 8,
+      "observation_not_before": 776,
+      "observation_not_after": 784,
+      "source_observation_root": "184be8c3977681e0a5d8a29f87e8d43c3d7c9ce3b0e4a293a2322850141371d1a3ff4657c2a2036e7133a392e56c8f05",
+      "gross_assets": 2859789254961,
+      "total_liabilities": 20094965843,
+      "verified_net_assets": 2839694289118,
+      "cryptographically_verified_value": 2839694289118,
+      "attested_value": 0,
+      "controlled_value": 0,
+      "source_count": 6,
+      "quantity_trust_counts": { "cryptographic": 6, "attested": 0, "controlled": 0 },
+      "valuation_trust_counts": { "cryptographic": 6, "attested": 0, "controlled": 0 },
+      "quantity_trust_root": "e731e579291deccd3e7ee3df12e4f5c5bc87c1ef3efc53322d8290ee9d7350a26ba48b42784b1f019c8f63249472a260",
+      "valuation_trust_root": "0eea6b18e1b65f6ebf544c55e045055211016e1d536b92af9567254e789294a0de64bb2f3a5988be1351af4a58d7ee54",
+      "source_disclosure_root": "55d841cb8090f99d5237b2c664ff8af1c7abafaebb1f5d2666d389060c57d74eb2b4b44491c17aea7f361d3d6e500dc7",
+      "witness_cbor_sha256": "4bb36f68ebee3537afe62f6d9ed61d68513a96c747fffc3622024b0a2f9efe89",
+      "public_values_sha256": "1bc443108e0f2b78d92037d986378cd6df51bd3fc069e64594a521f83a36b9dd"
+    }
+  ]
+}

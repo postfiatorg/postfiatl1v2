@@ -269,6 +269,75 @@ jobs:
             '.elf_sha256 == $sha and .program_vkey == $vkey' \
             /tmp/a666-public-successor-program-info.json
 
+          qualification="$GITHUB_WORKSPACE/tools/nav-reserve-proof/qualifications/a666-public-successor-20260802"
+          expected_results="$qualification/expected-results.json"
+          for epoch in 7 8; do
+            epoch_run="$(mktemp -d)"
+            cargo run --locked --release \
+              --manifest-path "$host_manifest" \
+              -p postfiat-reserve-proof --features sp1 -- \
+              observe \
+              --manifest "$qualification/manifest.json" \
+              --context "$qualification/epoch-$epoch/context.json" \
+              --input-dir "$qualification/epoch-$epoch/inputs" \
+              --output "$epoch_run/observations.json"
+            cargo run --locked --release \
+              --manifest-path "$host_manifest" \
+              -p postfiat-reserve-proof --features sp1 -- \
+              witness build \
+              --input "$epoch_run/observations.json" \
+              --output "$epoch_run/witness.cbor"
+            cargo run --locked --release \
+              --manifest-path "$host_manifest" \
+              -p postfiat-reserve-proof --features sp1 -- \
+              execute \
+              --witness "$epoch_run/witness.cbor" \
+              --elf "$rebuilt_elf" \
+              --output "$epoch_run/public-values.bin"
+            cargo run --locked --release \
+              --manifest-path "$host_manifest" \
+              -p postfiat-reserve-proof --features sp1 -- \
+              verify --public-values "$epoch_run/public-values.bin" \
+              > "$epoch_run/decoded-public-values.json"
+
+            expected_witness="$(jq -r --argjson epoch "$epoch" \
+              '.epochs[] | select(.observation_epoch == $epoch) | .witness_cbor_sha256' \
+              "$expected_results")"
+            expected_public_values="$(jq -r --argjson epoch "$epoch" \
+              '.epochs[] | select(.observation_epoch == $epoch) | .public_values_sha256' \
+              "$expected_results")"
+            actual_witness="$(sha256sum "$epoch_run/witness.cbor" | cut -d' ' -f1)"
+            actual_public_values="$(sha256sum "$epoch_run/public-values.bin" | cut -d' ' -f1)"
+            test "$actual_witness" = "$expected_witness"
+            test "$actual_public_values" = "$expected_public_values"
+
+            jq -e --argjson epoch "$epoch" --slurpfile pins "$expected_results" '
+              ($pins[0].epochs[] | select(.observation_epoch == $epoch)) as $pin |
+              .pftl_genesis_hash == $pins[0].pftl_genesis_hash and
+              .nav_asset_id == $pins[0].nav_asset_id and
+              .proof_profile_id == $pins[0].proof_profile_id and
+              .source_manifest_hash == $pins[0].source_manifest_hash and
+              .valuation_policy_hash == $pins[0].valuation_policy_hash and
+              .valuation_unit_id == $pins[0].valuation_unit_id and
+              .valuation_scale == $pins[0].valuation_scale and
+              .observation_epoch == $pin.observation_epoch and
+              .observation_not_before == $pin.observation_not_before and
+              .observation_not_after == $pin.observation_not_after and
+              .source_observation_root == $pin.source_observation_root and
+              .gross_assets == $pin.gross_assets and
+              .total_liabilities == $pin.total_liabilities and
+              .verified_net_assets == $pin.verified_net_assets and
+              .cryptographically_verified_value == $pin.cryptographically_verified_value and
+              .attested_value == 0 and .controlled_value == 0 and
+              .source_count == 6 and
+              .quantity_trust_counts == $pin.quantity_trust_counts and
+              .valuation_trust_counts == $pin.valuation_trust_counts and
+              .quantity_trust_root == $pin.quantity_trust_root and
+              .valuation_trust_root == $pin.valuation_trust_root and
+              .source_disclosure_root == $pin.source_disclosure_root
+            ' "$epoch_run/decoded-public-values.json"
+          done
+
   evm-contracts:
     runs-on: ubuntu-latest
     steps:

@@ -406,6 +406,56 @@ activation. A second independently collected fresh epoch, retained fuzz
 campaigns, independent reproduction, successor guest build/proof, complete
 NAV/supply reconciliation, and the controlled migration gates remain open.
 
+### 3.6 Fresh public epochs 7 and 8 and immutable successor identity
+
+Two additional fresh six-source observations were subsequently collected
+through the same public adapters. Their complete bounded source inputs,
+contexts, result pins, and reproduction procedure are published at:
+
+```text
+tools/nav-reserve-proof/qualifications/a666-public-successor-20260802/
+```
+
+Both epochs bind the exact existing A666 asset, PFTL genesis, public source
+manifest, valuation policy, and immutable successor proof profile. Each has
+six cryptographic quantity claims, six cryptographic valuation claims, zero
+attested value, and zero controlled value. No aggregate amount, liability,
+valuation, or NAV attestation is present.
+
+| Result (USD e8 atoms) | Epoch 7 | Epoch 8 |
+|---|---:|---:|
+| PFTL observation window | 776–784 | 776–784 |
+| Gross assets | 2,855,886,091,629 | 2,859,789,254,961 |
+| Liabilities | 20,094,872,960 | 20,094,965,843 |
+| Verified net assets | 2,835,791,218,669 | 2,839,694,289,118 |
+| Canonical witness bytes | 1,340,409 | 1,339,971 |
+| Witness SHA-256 | `8f4538b111a6cebf97a71406895af40d4bc4c6ed369c3ecd540b6050765b6dd6` | `4bb36f68ebee3537afe62f6d9ed61d68513a96c747fffc3622024b0a2f9efe89` |
+| Public-values SHA-256 | `a215726624267dc5c5a60ac2829b24a149855a3edcfc798c965826e17bca7e68` | `1bc443108e0f2b78d92037d986378cd6df51bd3fc069e64594a521f83a36b9dd` |
+
+The successor is a new immutable proof profile for the same NAVCoin, not a
+mutation of the legacy guest and not a new asset:
+
+```text
+source commit: 5b8f0317375af6fb46d586d9d9152b511457b802
+ELF SHA-256: 2b41e4e8095b1dacdc519b2f0a2b4831ebc57cc8003a4d3686f6d9e4687e81df
+SP1 vkey: 0x00f3857f96ef97e00bd15b4030acd8d6b0a72740b28c6160d154bc2c9bb141bf
+profile ID: f8784629ff7338002d836c1988b8e2c0f19caf448429e0eb7fdc39fa2b08f7d9a44171fc1e7239bc25e06ad833c14e91
+```
+
+Two isolated Docker builds from the pinned public source commit produced the
+same ELF and vkey. A clean public checkout reassembled both witnesses
+byte-for-byte. It also executed epoch 8 under the exact successor ELF and
+reproduced the 584-byte public values byte-for-byte. CI now enforces the same
+manifest/profile/ELF bindings and regenerates both published qualification
+epochs.
+
+The fresh multi-epoch source collection requirement is therefore satisfied at
+the artifact level. Production qualification remains open until the retained
+fuzz campaign, Groth16 proof verification, exact six-validator migration
+rehearsal, NAV/supply/overlay reconciliation, and controlled lifecycle gates
+record passing evidence. No live profile, route, reserve packet, balance, or
+validator state was changed by this qualification work.
+
 ## 4. Required public code boundary
 
 All code required to interpret and verify NAVCoin reserve claims must live in:
