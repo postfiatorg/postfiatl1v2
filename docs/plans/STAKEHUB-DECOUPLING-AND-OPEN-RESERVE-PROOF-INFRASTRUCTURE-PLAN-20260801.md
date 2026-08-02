@@ -797,6 +797,11 @@ existing guest ELF SHA exactly.
 - [ ] Remove all provider-specific hash domains and compiled operator identities
   from successor semantics.
 - [ ] Add public fixtures and adversarial tests for every adapter.
+- [x] Add the initial coverage-guided full-witness and tagged source-evidence
+  fuzz harness, guarded temporary-corpus runner, and fixed-duration CI smoke
+  campaigns. The first local campaigns completed 1,860,664 full-witness and
+  3,340,640 source-evidence executions without a crash, timeout, or OOM. This
+  broad harness does not replace the required parser-specific targets below.
 - [ ] Add fuzz targets for every new parser handling external proof material.
 - [ ] Prove malformed or unsupported adapter evidence fails closed without
   panic or unbounded work.
@@ -1034,7 +1039,13 @@ Current machine gates:
 ```text
 scripts/test-proof-public-input-inventory
   passed after the current valuation continuation; 5 systems, 70 public fields,
-  28 source hashes
+  31 source hashes
+
+scripts/check-nav-reserve-proof-fuzz-smoke
+  passed locally against guarded temporary corpora; the initial retained run
+  counts were 1,860,664 full-witness and 3,340,640 source-evidence executions,
+  with no crash, timeout, or OOM. Exact-tip CI must reproduce the pinned smoke
+  campaigns; source-specific raw-parser fuzzing remains open.
 
 scripts/check-a666-public-adapter-readiness
   passed; qualified=0/6, stakehub_deprecated=false

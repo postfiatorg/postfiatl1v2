@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+proof_root="$repository_root/tools/nav-reserve-proof"
+fuzz_seconds="${POSTFIAT_NAV_FUZZ_SECONDS:-10}"
+fuzz_toolchain="${POSTFIAT_NAV_FUZZ_TOOLCHAIN:-nightly-2026-07-15}"
+
+if [[ ! "$fuzz_seconds" =~ ^[1-9][0-9]*$ ]]; then
+  echo "POSTFIAT_NAV_FUZZ_SECONDS must be a positive integer" >&2
+  exit 2
+fi
+if [[ ! "$fuzz_toolchain" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "POSTFIAT_NAV_FUZZ_TOOLCHAIN contains invalid characters" >&2
+  exit 2
+fi
+
+fuzz_root="$(mktemp -d /tmp/postfiat-nav-reserve-fuzz.XXXXXX)"
+case "$fuzz_root" in
+  /tmp/postfiat-nav-reserve-fuzz.*) ;;
+  *)
+    echo "refusing unsafe fuzz corpus path: $fuzz_root" >&2
+    exit 2
+    ;;
+esac
+cleanup() {
+  rm -rf -- "$fuzz_root"
+}
+trap cleanup EXIT
+
+witness_corpus="$fuzz_root/witness"
+evidence_corpus="$fuzz_root/evidence"
+mkdir -p "$witness_corpus" "$evidence_corpus"
+cp "$proof_root/fixtures/controlled-two-source/witness.json" \
+  "$witness_corpus/controlled-two-source.json"
+
+jq -c '.observations[] | .quantity_evidence, .valuation_evidence' \
+  "$proof_root/fixtures/controlled-two-source/witness.json" |
+while IFS= read -r evidence; do
+  evidence_hash="$(printf '%s' "$evidence" | sha256sum | cut -d' ' -f1)"
+  printf '%s\n' "$evidence" > "$evidence_corpus/$evidence_hash.json"
+done
+
+run_target() {
+  local target="$1"
+  local corpus="$2"
+  local max_length="$3"
+  cargo "+$fuzz_toolchain" fuzz run \
+    --fuzz-dir "$proof_root/fuzz" \
+    --sanitizer none \
+    "$target" "$corpus" -- \
+    "-max_total_time=$fuzz_seconds" \
+    -timeout=3 \
+    -rss_limit_mb=4096 \
+    "-max_len=$max_length" \
+    -print_final_stats=1
+}
+
+run_target witness_json "$witness_corpus" 8388608
+run_target source_evidence_json "$evidence_corpus" 2097152

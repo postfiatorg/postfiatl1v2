@@ -126,8 +126,10 @@ jobs:
       - name: Install pinned Rust toolchain and protobuf compiler
         run: |
           rustup toolchain install 1.95.0 --profile minimal --component rustfmt
+          rustup toolchain install nightly-2026-07-15 --profile minimal
           sudo apt-get update
           sudo apt-get install --yes protobuf-compiler
+          cargo +nightly-2026-07-15 install cargo-fuzz --version 0.13.2 --locked
       - name: Install pinned SP1 guest toolchain
         run: |
           curl --fail --location --proto '=https' --tlsv1.2 https://sp1up.succinct.xyz | bash
@@ -146,6 +148,12 @@ jobs:
           cargo test --locked
           cargo fmt --all -- --check
           cargo test --manifest-path contracts/solana-stake-reader/Cargo.toml --locked
+          cargo +nightly-2026-07-15 fuzz check --fuzz-dir fuzz --sanitizer none
+      - name: Fuzz attacker-controlled reserve proof inputs
+        env:
+          POSTFIAT_NAV_FUZZ_SECONDS: 10
+          POSTFIAT_NAV_FUZZ_TOOLCHAIN: nightly-2026-07-15
+        run: scripts/check-nav-reserve-proof-fuzz-smoke
       - name: Rebuild the public Solana stake reader deterministically
         run: |
           cargo install solana-verify --version 0.5.1 --locked
