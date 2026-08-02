@@ -31,6 +31,21 @@ def fail(message: str) -> None:
     raise SystemExit(f"a666 public-adapter readiness: {message}")
 
 
+def validate_deprecation_state(*, deprecated: bool, all_qualified: bool, plan: str) -> None:
+    """Keep adapter qualification distinct from complete StakeHub deprecation."""
+    if deprecated and not all_qualified:
+        fail("StakeHub cannot be marked deprecated before all six adapters are qualified")
+    if deprecated:
+        for gate in range(8):
+            marker = f"| `G{gate}`"
+            rows = [line for line in plan.splitlines() if line.startswith(marker)]
+            if len(rows) != 1 or "| PASS |" not in rows[0]:
+                fail(
+                    "StakeHub cannot be marked deprecated until the canonical plan "
+                    f"records a passing G{gate}"
+                )
+
+
 def main() -> None:
     if RETIRED_HANDOFF.exists():
         fail("retired continuation handoff must remain deleted; update the canonical plan")
@@ -81,16 +96,15 @@ def main() -> None:
     deprecated = document.get("stakehub_deprecated")
     if not isinstance(deprecated, bool):
         fail("stakehub_deprecated must be boolean")
-    if deprecated != all_qualified:
-        fail("StakeHub may be marked deprecated iff all six adapters are qualified")
-
     plan = PLAN.read_text(encoding="utf-8")
     if "**Sole authoritative Markdown:** this file" not in plan:
         fail("canonical plan does not declare the single-document rule")
-    if deprecated:
-        if "| `G3` Public A666 adapters" not in plan or "| PASS |" not in plan:
-            fail("canonical plan does not record a passing G3")
-    else:
+    validate_deprecation_state(
+        deprecated=deprecated,
+        all_qualified=all_qualified,
+        plan=plan,
+    )
+    if not deprecated:
         required_markers = (
             "**Status:** **INCOMPLETE — StakeHub is not deprecated",
             "| `G3` Public A666 adapters",
