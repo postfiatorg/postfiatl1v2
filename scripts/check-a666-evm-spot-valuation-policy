@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+policy="$repo_root/tools/nav-reserve-proof/manifests/a666/evm-spot-chainlink-valuation-policy.json"
+expected="$repo_root/tools/nav-reserve-proof/manifests/a666/evm-spot-chainlink-valuation-policy-commitment.json"
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+actual="$tmp_dir/evm-spot-chainlink-valuation-policy-commitment.json"
+
+cargo +1.95.0 run --quiet \
+  --manifest-path "$repo_root/tools/nav-reserve-proof/Cargo.toml" \
+  -p postfiat-reserve-proof -- \
+  manifest evm-chainlink-policy-commitment \
+  --policy "$policy" \
+  --output "$actual" >/dev/null
+
+cmp "$expected" "$actual"
+echo "A666 EVM spot Chainlink valuation policy commitment verified"

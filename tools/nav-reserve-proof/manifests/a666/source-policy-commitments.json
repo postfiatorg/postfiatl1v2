@@ -6,15 +6,18 @@
       "source_id": "aave-arbitrum",
       "policy": "tools/nav-reserve-proof/manifests/a666/aave-arbitrum-policy.json",
       "quantity_and_valuation_verifier_commitment": "48c7f466100b4dc7d72f57cfff3c9dadb6d84c7c13869adb09be59a8f6043ca1b2d1fed77b2681f91cd13d22aa6eb969",
-      "historical_source": "docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/aave-witness.json",
+      "historical_source": "docs/evidence/a666-variable-size-nav-roundtrip-20260728/stakehub-nav-mark/proof/aave-witness.json",
       "status": "candidate_not_qualified"
     },
     {
       "source_id": "ethereum-spot",
       "policy": "tools/nav-reserve-proof/manifests/a666/evm-spot-policy.json",
       "quantity_verifier_commitment": "4e7bee12bfa7cefa615210d08d74f773eaf58e8c492837222a6e36ddbe23d21f96fe1f7634d441db401c102be00b6d54",
+      "valuation_policy": "tools/nav-reserve-proof/manifests/a666/evm-spot-chainlink-valuation-policy.json",
+      "valuation_verifier_commitment": "39f33f6763ff108f7f6ab88e50325a3438125ef2ebaa88fc23d2059c43b61103335269d1dca231117d6a5b187084ade6",
       "historical_source": "docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/evm-spot-witness.json",
-      "status": "candidate_quantity_only_not_qualified"
+      "historical_valuation_source": "docs/evidence/a666-variable-size-nav-roundtrip-20260728/stakehub-nav-mark/proof/aave-witness.json",
+      "status": "candidate_quantity_and_valuation_not_qualified"
     }
   ]
 }

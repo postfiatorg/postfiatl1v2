@@ -165,6 +165,7 @@ jobs:
         run: |
           scripts/check-a666-public-reader-candidates
           scripts/check-a666-portfolio-valuation-policy
+          scripts/check-a666-evm-spot-valuation-policy
       - name: Rebuild the public Solana stake reader deterministically
         run: |
           cargo install solana-verify --version 0.5.1 --locked

@@ -17,7 +17,9 @@ mod source_checkpoint;
 pub(crate) use evm_adapter::{read_json, write_new};
 
 pub use evm_adapter::{run as run_adapter, AdapterCommand};
-pub use manifest_builder::{run as run_manifest_builder, run_valuation_policy_hash};
+pub use manifest_builder::{
+    run as run_manifest_builder, run_evm_chainlink_policy_commitment, run_valuation_policy_hash,
+};
 pub use source_checkpoint::{run as run_source_checkpoint, SourceCheckpointCommand};
 
 /// Direct entry points for coverage-guided testing of attacker-controlled

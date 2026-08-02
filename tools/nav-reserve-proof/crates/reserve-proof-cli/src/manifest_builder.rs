@@ -140,6 +140,18 @@ struct ValuationPolicyHashReportV1 {
     source_count: usize,
 }
 
+#[derive(Debug, Serialize)]
+struct EvmChainlinkPolicyCommitmentReportV1 {
+    schema: &'static str,
+    verifier_commitment: String,
+    source_domain: String,
+    chain_id: u64,
+    valuation_policy_hash: String,
+    valuation_unit_id: String,
+    valuation_scale: u64,
+    row_count: usize,
+}
+
 pub fn run_valuation_policy_hash(input: PathBuf, output: Option<PathBuf>) -> Result<()> {
     let policy: PortfolioValuationPolicyV1 = read_json(&input)?;
     let report = ValuationPolicyHashReportV1 {
@@ -149,6 +161,28 @@ pub fn run_valuation_policy_hash(input: PathBuf, output: Option<PathBuf>) -> Res
         valuation_unit_id: policy.valuation_unit_id,
         valuation_scale: policy.valuation_scale,
         source_count: policy.sources.len(),
+    };
+    let json = serde_json::to_string_pretty(&report)?;
+    if let Some(output) = output {
+        write_new(&output, format!("{json}\n").as_bytes())?;
+    }
+    println!("{json}");
+    Ok(())
+}
+
+pub fn run_evm_chainlink_policy_commitment(input: PathBuf, output: Option<PathBuf>) -> Result<()> {
+    let policy: EvmChainlinkValuationPolicyV1 = read_json(&input)?;
+    let report = EvmChainlinkPolicyCommitmentReportV1 {
+        schema: "postfiat.reserve_evm_chainlink_policy_commitment_report.v1",
+        verifier_commitment: policy
+            .commitment()
+            .map_err(|error| anyhow!("Chainlink valuation policy is invalid: {error:?}"))?,
+        source_domain: policy.source_domain,
+        chain_id: policy.chain_id,
+        valuation_policy_hash: policy.valuation_policy_hash,
+        valuation_unit_id: policy.valuation_unit_id,
+        valuation_scale: policy.valuation_scale,
+        row_count: policy.rows.len(),
     };
     let json = serde_json::to_string_pretty(&report)?;
     if let Some(output) = output {
@@ -718,19 +752,36 @@ mod tests {
             &std::fs::read(manifest_dir.join("evm-spot-policy.json")).unwrap(),
         )
         .unwrap();
-        let evidence_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
-            "../../../../docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue",
-        );
-        let historical_aave: serde_json::Value =
-            serde_json::from_slice(&std::fs::read(evidence_dir.join("aave-witness.json")).unwrap())
-                .unwrap();
+        let spot_valuation: EvmChainlinkValuationPolicyV1 = serde_json::from_slice(
+            &std::fs::read(manifest_dir.join("evm-spot-chainlink-valuation-policy.json")).unwrap(),
+        )
+        .unwrap();
+        let portfolio: PortfolioValuationPolicyV1 = serde_json::from_slice(
+            &std::fs::read(manifest_dir.join("portfolio-valuation-policy.json")).unwrap(),
+        )
+        .unwrap();
+        let evidence_root =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../docs/evidence");
+        let historical_aave: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(
+                evidence_root.join(
+                    "a666-variable-size-nav-roundtrip-20260728/stakehub-nav-mark/proof/aave-witness.json",
+                ),
+            )
+            .unwrap(),
+        )
+        .unwrap();
         let historical_spot: serde_json::Value = serde_json::from_slice(
-            &std::fs::read(evidence_dir.join("evm-spot-witness.json")).unwrap(),
+            &std::fs::read(evidence_root.join(
+                "a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/evm-spot-witness.json",
+            ))
+            .unwrap(),
         )
         .unwrap();
 
         let aave_commitment = aave.commitment(&root).unwrap();
         let spot_commitment = spot.commitment().unwrap();
+        let spot_valuation_commitment = spot_valuation.commitment().unwrap();
         let commitments: serde_json::Value = serde_json::from_slice(
             &std::fs::read(manifest_dir.join("source-policy-commitments.json")).unwrap(),
         )
@@ -738,6 +789,27 @@ mod tests {
         assert_eq!(aave.positions.len(), 2);
         assert_eq!(spot.chains.len(), 2);
         assert!(spot.chains.iter().all(|chain| chain.committee_root == root));
+        assert_eq!(spot_valuation.committee_root, root);
+        assert_eq!(
+            spot_valuation.valuation_policy_hash,
+            portfolio.hash().unwrap()
+        );
+        let expected_positions = spot
+            .chains
+            .iter()
+            .flat_map(|chain| {
+                std::iter::once(chain.native_position_id.as_str())
+                    .chain(chain.tokens.iter().map(|token| token.position_id.as_str()))
+            })
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(
+            spot_valuation
+                .rows
+                .iter()
+                .map(|row| row.position_id.as_str())
+                .collect::<std::collections::BTreeSet<_>>(),
+            expected_positions
+        );
         assert_eq!(
             aave.pool_address,
             serde_json::from_value::<Address>(
@@ -787,6 +859,35 @@ mod tests {
                 .unwrap()
             );
         }
+        for row in &spot_valuation.rows {
+            let historical_feed = if row.position_id.ends_with("native-eth") {
+                &historical_aave["collateral"]["oracle"]["chainlink"]
+            } else {
+                assert!(row.position_id.ends_with("usdc"));
+                &historical_aave["debt"]["oracle"]["chainlink"]
+            };
+            assert_eq!(
+                row.proxy_address,
+                serde_json::from_value::<Address>(
+                    historical_feed["proxy_account"]["address"].clone()
+                )
+                .unwrap()
+            );
+            assert_eq!(
+                row.proxy_code_hash,
+                serde_json::from_value::<B256>(
+                    historical_feed["proxy_account"]["code_hash"].clone()
+                )
+                .unwrap()
+            );
+            assert_eq!(
+                row.aggregator_code_hash,
+                serde_json::from_value::<B256>(
+                    historical_feed["aggregator_account"]["code_hash"].clone()
+                )
+                .unwrap()
+            );
+        }
         assert_eq!(
             commitments["checkpoint_committee_root"].as_str(),
             Some(root.as_str())
@@ -798,6 +899,10 @@ mod tests {
         assert_eq!(
             commitments["policies"][1]["quantity_verifier_commitment"].as_str(),
             Some(spot_commitment.as_str())
+        );
+        assert_eq!(
+            commitments["policies"][1]["valuation_verifier_commitment"].as_str(),
+            Some(spot_valuation_commitment.as_str())
         );
     }
 }
