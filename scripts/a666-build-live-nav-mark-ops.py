@@ -241,8 +241,8 @@ def validate_packet(packet: dict[str, Any], profile: dict[str, Any]) -> None:
         if packet.get(field) != expected:
             raise RuntimeError(f"packet {field} differs from governed A666 state")
     epoch = packet.get("epoch")
-    if not isinstance(epoch, int) or epoch != int(profile.get("finalized_epoch", 0)) + 1:
-        raise RuntimeError("packet epoch must immediately follow the finalized A666 epoch")
+    if not isinstance(epoch, int) or epoch <= int(profile.get("finalized_epoch", 0)):
+        raise RuntimeError("packet epoch must be newer than the finalized A666 epoch")
     for field in ("nav_per_unit", "verified_net_assets"):
         if not isinstance(packet.get(field), int) or packet[field] <= 0:
             raise RuntimeError(f"packet {field} must be positive")

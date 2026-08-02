@@ -73,8 +73,10 @@ def main() -> None:
         raise RuntimeError("A666 route must have live value enabled")
     if route["active_reservation_count"] or route["export_entitlement_count"]:
         raise RuntimeError("route epoch cannot advance with active order state")
-    if nav["epoch"] != route["pricing_nav_epoch"] + 1:
-        raise RuntimeError("NAV manifest does not advance the route pricing epoch by one")
+    if nav.get("prior_epoch") != route["pricing_nav_epoch"]:
+        raise RuntimeError("NAV manifest prior epoch does not match route pricing state")
+    if nav["epoch"] <= route["pricing_nav_epoch"]:
+        raise RuntimeError("NAV manifest does not advance the route pricing epoch")
 
     next_policy: dict[str, Any] = {
         "policy_hash": "",

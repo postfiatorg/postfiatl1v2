@@ -61,3 +61,54 @@ def test_primary_market_reserve_is_scaled_and_bound() -> None:
 def test_primary_market_reserve_cannot_exceed_vault_backing() -> None:
     with pytest.raises(RuntimeError, match="exceeds proof-backed vault backing"):
         MODULE.build_overlay(route_status(204_000_001), vault_status(204_000_000))
+
+
+def test_packet_epoch_may_skip_shadow_only_epochs() -> None:
+    packet = {
+        "issuer": MODULE.ISSUER,
+        "submitter": MODULE.RESERVE_OPERATOR,
+        "asset_id": MODULE.ASSET_ID,
+        "proof_profile": "11" * 48,
+        "epoch": 7,
+        "nav_per_unit": 90_000_000,
+        "verified_net_assets": 2_800_000_000_000,
+        "circulating_supply": 31_000_000_000,
+        "source_root": "22" * 48,
+        "attestor_root": "33" * 48,
+        "reserve_packet_hash": "44" * 48,
+        "sp1_proof_bytes": [1],
+        "sp1_public_values": [0] * 584,
+    }
+    profile = {
+        "profile_id": "11" * 48,
+        "finalized_epoch": 5,
+        "max_proof_bytes": 4096,
+        "max_public_values_bytes": 584,
+    }
+    MODULE.validate_packet(packet, profile)
+
+
+def test_packet_epoch_must_be_newer_than_finalized_epoch() -> None:
+    packet = {
+        "issuer": MODULE.ISSUER,
+        "submitter": MODULE.RESERVE_OPERATOR,
+        "asset_id": MODULE.ASSET_ID,
+        "proof_profile": "11" * 48,
+        "epoch": 5,
+        "nav_per_unit": 90_000_000,
+        "verified_net_assets": 2_800_000_000_000,
+        "circulating_supply": 31_000_000_000,
+        "source_root": "22" * 48,
+        "attestor_root": "33" * 48,
+        "reserve_packet_hash": "44" * 48,
+        "sp1_proof_bytes": [1],
+        "sp1_public_values": [0] * 584,
+    }
+    profile = {
+        "profile_id": "11" * 48,
+        "finalized_epoch": 5,
+        "max_proof_bytes": 4096,
+        "max_public_values_bytes": 584,
+    }
+    with pytest.raises(RuntimeError, match="newer than"):
+        MODULE.validate_packet(packet, profile)

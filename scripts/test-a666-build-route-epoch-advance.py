@@ -35,7 +35,13 @@ def route(*, paused: bool, live_value_enabled: bool = True) -> dict[str, object]
 
 
 class RouteEpochAdvanceTests(unittest.TestCase):
-    def run_builder(self, route_status: dict[str, object]) -> subprocess.CompletedProcess[str]:
+    def run_builder(
+        self,
+        route_status: dict[str, object],
+        *,
+        nav_epoch: int = 7,
+        nav_prior_epoch: int = 6,
+    ) -> subprocess.CompletedProcess[str]:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
@@ -45,7 +51,8 @@ class RouteEpochAdvanceTests(unittest.TestCase):
         nav_path.write_text(
             json.dumps(
                 {
-                    "epoch": 7,
+                    "prior_epoch": nav_prior_epoch,
+                    "epoch": nav_epoch,
                     "reserve_packet_hash": "22" * 48,
                     "nav_per_unit_usd_1e8": 100_000_000,
                 }
@@ -88,6 +95,15 @@ class RouteEpochAdvanceTests(unittest.TestCase):
         result = self.run_builder(status)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("active order state", result.stderr)
+
+    def test_shadow_epoch_gap_can_advance_from_exact_prior_route_epoch(self) -> None:
+        result = self.run_builder(route(paused=True), nav_epoch=9)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_mismatched_prior_route_epoch_is_rejected(self) -> None:
+        result = self.run_builder(route(paused=True), nav_prior_epoch=5)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("prior epoch does not match", result.stderr)
 
 
 if __name__ == "__main__":
