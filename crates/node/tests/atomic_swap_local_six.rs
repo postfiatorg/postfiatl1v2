@@ -694,6 +694,25 @@ fn stop_services(harness: &mut Harness) {
     harness.children.clear();
 }
 
+fn stop_validator_services(harness: &mut Harness, validator_index: usize) {
+    assert_eq!(
+        harness.children.len(),
+        VALIDATORS * 2,
+        "partial-outage stop requires one transport and one RPC child per validator"
+    );
+    assert!(
+        validator_index < VALIDATORS,
+        "partial-outage validator index"
+    );
+    let rpc_index = validator_index * 2 + 1;
+    let transport_index = validator_index * 2;
+    for index in [rpc_index, transport_index] {
+        let mut child = harness.children.remove(index);
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+}
+
 fn start_services(harness: &mut Harness, topology_path: &Path, rpc_ports: &[u16]) -> Vec<PathBuf> {
     let ready = spawn_services(harness, topology_path, rpc_ports);
     for path in &ready {
@@ -1631,6 +1650,15 @@ fn status_tuple(port: u16, id: &str) -> (u64, String, String) {
 }
 
 fn wait_exact_six(ports: &[u16], expected: &(u64, String, String)) {
+    assert_eq!(ports.len(), VALIDATORS, "six-validator observer count");
+    wait_exact_ports(ports, expected);
+}
+
+fn wait_exact_ports(ports: &[u16], expected: &(u64, String, String)) {
+    assert!(
+        !ports.is_empty(),
+        "finality observer ports must not be empty"
+    );
     let deadline = Instant::now() + Duration::from_secs(90);
     loop {
         let observed = ports
@@ -1643,7 +1671,7 @@ fn wait_exact_six(ports: &[u16], expected: &(u64, String, String)) {
         }
         assert!(
             Instant::now() < deadline,
-            "six-validator convergence timeout: expected {expected:?}, observed {observed:?}"
+            "validator convergence timeout: expected {expected:?}, observed {observed:?}"
         );
         thread::sleep(Duration::from_millis(50));
     }
@@ -1742,6 +1770,17 @@ fn submit_dev_key_asset_finality(
     operation: AssetTransactionOperation,
     label: &str,
 ) -> (u64, String, String) {
+    submit_dev_key_asset_finality_observed(harness, ports, ports, signer, operation, label)
+}
+
+fn submit_dev_key_asset_finality_observed(
+    harness: &Harness,
+    ports: &[u16],
+    observer_ports: &[u16],
+    signer: &DevKeyFile,
+    operation: AssetTransactionOperation,
+    label: &str,
+) -> (u64, String, String) {
     assert_eq!(
         signer.algorithm_id, ML_DSA_65_ALGORITHM,
         "dev-key asset signer algorithm"
@@ -1829,7 +1868,7 @@ fn submit_dev_key_asset_finality(
             .to_string(),
     );
     assert_eq!(expected.0, next_height, "{label} next height");
-    wait_exact_six(ports, &expected);
+    wait_exact_ports(observer_ports, &expected);
     expected
 }
 
@@ -2793,9 +2832,37 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
     );
     let transparent_reservation_id = "b1".repeat(48);
     let transparent_expiry = finalized.0 + 200;
-    submit_dev_key_asset_finality(
+    let outage_proposer = command_json(&[
+        "block-proposer",
+        "--data-dir",
+        harness.node(0).to_str().expect("node path UTF-8"),
+        "--height",
+        &(finalized.0 + 1).to_string(),
+        "--view",
+        "0",
+    ])["proposer"]
+        .as_str()
+        .expect("partial-outage proposer")
+        .strip_prefix("validator-")
+        .expect("partial-outage proposer prefix")
+        .parse::<usize>()
+        .expect("partial-outage proposer index");
+    let offline_validator = if outage_proposer == VALIDATORS - 1 {
+        VALIDATORS - 2
+    } else {
+        VALIDATORS - 1
+    };
+    stop_validator_services(&mut harness, offline_validator);
+    let online_ports = rpc_ports
+        .iter()
+        .copied()
+        .enumerate()
+        .filter_map(|(index, port)| (index != offline_validator).then_some(port))
+        .collect::<Vec<_>>();
+    finalized = submit_dev_key_asset_finality_observed(
         &harness,
         &rpc_ports,
+        &online_ports,
         &holder,
         AssetTransactionOperation::PftlUniswapOrderReserve(PftlUniswapOrderReserveOperation {
             subscriber: holder.address.clone(),
@@ -2809,8 +2876,14 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
             max_settlement_value_atoms: transparent_settlement_atoms,
             expires_at_height: transparent_expiry,
         }),
-        "reserve-transparent-a666-issue",
+        "reserve-transparent-a666-issue-with-one-validator-offline",
     );
+    stop_services(&mut harness);
+    for path in &ready {
+        let _ = fs::remove_file(path);
+    }
+    ready = start_services(&mut harness, &topology_path, &rpc_ports);
+    wait_exact_six(&rpc_ports, &finalized);
     let _transparent_issue_finalized = submit_dev_key_asset_finality(
         &harness,
         &rpc_ports,
