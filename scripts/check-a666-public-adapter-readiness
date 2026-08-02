@@ -13,6 +13,10 @@ PLAN = ROOT / (
     "docs/plans/"
     "STAKEHUB-DECOUPLING-AND-OPEN-RESERVE-PROOF-INFRASTRUCTURE-PLAN-20260801.md"
 )
+RETIRED_HANDOFF = ROOT / (
+    "docs/handoffs/"
+    "STAKEHUB-DECOUPLING-CONTINUATION-HANDOFF-20260802.md"
+)
 REQUIRED = {
     "aave-arbitrum",
     "evm-spot",
@@ -28,6 +32,16 @@ def fail(message: str) -> None:
 
 
 def main() -> None:
+    if RETIRED_HANDOFF.exists():
+        fail("retired continuation handoff must remain deleted; update the canonical plan")
+    architecture_documents = sorted(
+        path
+        for directory in (ROOT / "docs/plans", ROOT / "docs/handoffs")
+        for path in directory.glob("*STAKEHUB*DECOUPLING*.md")
+    )
+    if architecture_documents != [PLAN]:
+        fail("exactly one StakeHub-deprecation Markdown must exist: the canonical plan")
+
     document = json.loads(READINESS.read_text(encoding="utf-8"))
     if document.get("schema") != "postfiat-a666-public-adapter-readiness-v1":
         fail("schema mismatch")
@@ -71,6 +85,8 @@ def main() -> None:
         fail("StakeHub may be marked deprecated iff all six adapters are qualified")
 
     plan = PLAN.read_text(encoding="utf-8")
+    if "**Sole authoritative Markdown:** this file" not in plan:
+        fail("canonical plan does not declare the single-document rule")
     if deprecated:
         if "| `G3` Public A666 adapters" not in plan or "| PASS |" not in plan:
             fail("canonical plan does not record a passing G3")
