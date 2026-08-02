@@ -279,7 +279,7 @@ not yet the desired public architecture.
 | Hyperliquid | Provider-neutral verifier, public HyperCore receipt-reader contract, unsigned snapshot construction, checkpoint/owner workflow, and receipt-proof collector implemented; partial | No | Deploy the hardened public reader, govern policy/committee inputs, fuzz, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
 | Staked NEAR | Provider-neutral quantity verifier, public reader contract, unsigned invocation construction, finalized-head checkpoint workflow, owner authorization, outcome/block-proof collector, and public Chainlink state-proof valuation successor implemented; partial | No | Deploy the public reader, govern quantity/valuation policy and committee inputs, collect exact NEAR/USD proofs, add fuzzing, reproduce historical and fresh epochs, complete full A666 reconciliation, and qualify |
 | Staked Solana | Public stateless reserve-reader program, exact unsigned transaction construction, finalized transaction/block collector, immutable program identity check, owner authorization, BFT source checkpoint, bounded parser, successor verifier, guest dispatch, public Chainlink state-proof valuation successor, and independently repeated reproducible SBF build implemented; partial. The old attested-RPC adapter remains separately labeled historical evidence. | No | Deploy the exact built reader immutably, publish its on-chain ProgramData identity and governed A666 quantity/valuation policy and committee inputs, collect exact SOL/USD proofs, fuzz, run fresh epochs, reconcile, independently reproduce, and qualify |
-| Monero | Provider-neutral cryptographic quantity verifier, context-bound challenge, public ReserveProofV2 parser, transaction/block/header collector, certified key-image status workflow, and public Chainlink state-proof valuation successor implemented; partial | No | Produce a fresh governed nonzero proof and independently signed checkpoint, govern and collect the exact XMR/USD proof, fuzz, complete A666 reconciliation, independently reproduce, and qualify |
+| Monero | Provider-neutral cryptographic quantity verifier, context-bound challenge, public ReserveProofV2 parser, transaction/block/header collector, certified key-image status workflow, typed mainnet reserve policy, and typed Optimism XMR/USD Chainlink state-proof valuation policy implemented; partial | No | Review the candidate freshness bound, produce a fresh governed nonzero proof and independently signed Monero and Optimism checkpoints, collect the exact XMR/USD proof, fuzz, reconcile, independently reproduce, and qualify |
 | pfUSDC overlay | Implemented and pushed | Not sufficient by itself | Exact-tip remote CI must pass; this covers only PFTL-accounted subscription reserves, not the six external source families |
 
 The Aave, complete-EVM-spot, Hyperliquid, NEAR, Solana, and Monero verifiers
@@ -875,6 +875,21 @@ existing guest ELF SHA exactly.
   These remain unqualified candidates; fresh committee-certified feed proofs,
   freshness-bound review, reconciliation, and independent qualification remain
   open.
+- [x] Publish typed Monero quantity and Optimism XMR/USD valuation candidate
+  policies. The quantity policy derives the spend and view keys from the public
+  mainnet reserve address and matches the tracked real nonzero proof fixture. Its
+  verifier commitment is
+  `cb82196be2ff0dbfa3c6926bc92329e763dbaf00c4ec60c562ffab06ef7cae103c3f1dc21fc275f2434999fde1eee004`.
+  The valuation policy pins the official Chainlink registry proxy, its live
+  phase aggregator, exact proxy/aggregator code hashes, OCR2 storage slots,
+  portfolio policy, committee, decimals, and haircut. Its verifier commitment
+  is
+  `7451679e24a92e5839545f42b51619acaac98ecb304e1d5826eb90db1de0e5e1aea4490974550bae5880a1fd945e34c6`.
+  The public provenance record pins the official registry commit and the
+  independently queried Optimism block/state root. This remains an unqualified
+  candidate pending fresh committee certificates, the context-bound nonzero
+  wallet proof, collected price proof, freshness review, reconciliation, and
+  independent reproduction.
 - [x] Derive and publish the candidate source-checkpoint committee from the
   public six-validator PFTL registry. The generic builder accepts only
   ML-DSA-65 public keys, canonicalizes validator ordering, rejects quorums
@@ -1116,7 +1131,7 @@ Current machine gates:
 ```text
 scripts/test-proof-public-input-inventory
   passed after the current valuation continuation; 5 systems, 70 public fields,
-  50 source hashes
+  68 source hashes
 
 scripts/check-nav-reserve-proof-fuzz-smoke
   passed locally against guarded temporary corpora. In addition to the initial

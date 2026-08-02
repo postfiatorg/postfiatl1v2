@@ -1,0 +1,23 @@
+{
+  "source_domain": "eip155:10",
+  "chain_id": 10,
+  "committee_root": "99b0a3b8af49f3c91537d24a698e47f5761eec65890d00cdc4070ec99b18b333dfe514199c258cda5b81bec33821e245",
+  "valuation_policy_hash": "350eaee0a1ca12ba51637781ba52661b8685f868657a7c5e7d07c31b2899869c",
+  "valuation_unit_id": "c67872c31caa85cbe6dd287a1e060f0f5cfc0e9f3c5bd85a7569897fd0cefb031583b7afc001e7d1afa492e9abf77d60",
+  "valuation_scale": 100000000,
+  "proxy_phase_slot_index": 2,
+  "hot_vars_slot_index": 11,
+  "transmissions_slot_index": 12,
+  "max_oracle_age_seconds": 86400,
+  "rows": [
+    {
+      "position_id": "monero-reserve-balance",
+      "quantity_decimals": 12,
+      "price_decimals": 8,
+      "haircut_bps": 10000,
+      "proxy_address": "0x2a8d91686a048e98e6ccf1a89e82f40d14312672",
+      "proxy_code_hash": "0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2",
+      "aggregator_code_hash": "0x16f41184f797cb8f8918680df0ebf2a97cc3192aa6b104615f61096fc674f2aa"
+    }
+  ]
+}

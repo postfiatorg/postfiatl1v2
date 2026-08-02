@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+manifest_dir="$repo_root/tools/nav-reserve-proof/manifests/a666"
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+
+cargo +1.95.0 run --quiet \
+  --manifest-path "$repo_root/tools/nav-reserve-proof/Cargo.toml" \
+  -p postfiat-reserve-proof -- \
+  manifest quantity-policy-commitment \
+  --kind monero_reserve \
+  --policy "$manifest_dir/monero-reserve-policy.json" \
+  --committee "$manifest_dir/checkpoint-committee.json" \
+  --output "$tmp_dir/quantity.json" >/dev/null
+
+cargo +1.95.0 run --quiet \
+  --manifest-path "$repo_root/tools/nav-reserve-proof/Cargo.toml" \
+  -p postfiat-reserve-proof -- \
+  manifest evm-chainlink-policy-commitment \
+  --policy "$manifest_dir/monero-chainlink-valuation-policy.json" \
+  --output "$tmp_dir/valuation.json" >/dev/null
+
+cmp "$manifest_dir/monero-reserve-policy-commitment.json" "$tmp_dir/quantity.json"
+cmp "$manifest_dir/monero-chainlink-valuation-policy-commitment.json" "$tmp_dir/valuation.json"
+echo "A666 Monero quantity and XMR/USD valuation policy commitments verified"

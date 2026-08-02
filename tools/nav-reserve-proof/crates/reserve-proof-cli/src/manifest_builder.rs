@@ -152,6 +152,14 @@ struct EvmChainlinkPolicyCommitmentReportV1 {
     row_count: usize,
 }
 
+#[derive(Debug, Serialize)]
+struct QuantityPolicyCommitmentReportV1 {
+    schema: &'static str,
+    adapter_kind: &'static str,
+    source_domain: String,
+    verifier_commitment: String,
+}
+
 pub fn run_valuation_policy_hash(input: PathBuf, output: Option<PathBuf>) -> Result<()> {
     let policy: PortfolioValuationPolicyV1 = read_json(&input)?;
     let report = ValuationPolicyHashReportV1 {
@@ -183,6 +191,104 @@ pub fn run_evm_chainlink_policy_commitment(input: PathBuf, output: Option<PathBu
         valuation_unit_id: policy.valuation_unit_id,
         valuation_scale: policy.valuation_scale,
         row_count: policy.rows.len(),
+    };
+    let json = serde_json::to_string_pretty(&report)?;
+    if let Some(output) = output {
+        write_new(&output, format!("{json}\n").as_bytes())?;
+    }
+    println!("{json}");
+    Ok(())
+}
+
+pub fn run_quantity_policy_commitment(
+    kind: &str,
+    policy_path: PathBuf,
+    committee_path: PathBuf,
+    output: Option<PathBuf>,
+) -> Result<()> {
+    let committee: BftCheckpointCommitteeV1 = read_json(&committee_path)?;
+    let (adapter_kind, source_domain, verifier_commitment) = match kind {
+        "aave_v3" => {
+            let policy: AaveV3PolicyV1 = read_json(&policy_path)?;
+            let root = committee_root(&committee)?;
+            let commitment = policy
+                .commitment(&root)
+                .map_err(|error| anyhow!("invalid Aave policy: {error:?}"))?;
+            (AAVE_V3_ADAPTER_KIND_V1, policy.source_domain, commitment)
+        }
+        "evm_spot" => {
+            let policy: EvmSpotPolicyV1 = read_json(&policy_path)?;
+            require_exact_committee_roots(
+                std::slice::from_ref(&committee),
+                policy
+                    .chains
+                    .iter()
+                    .map(|chain| chain.committee_root.as_str()),
+            )?;
+            let commitment = policy
+                .commitment()
+                .map_err(|error| anyhow!("invalid EVM spot policy: {error:?}"))?;
+            (
+                EVM_SPOT_ADAPTER_KIND_V1,
+                policy.aggregate_source_domain,
+                commitment,
+            )
+        }
+        "hyperliquid_receipt" => {
+            let policy: HyperliquidReceiptPolicyV1 = read_json(&policy_path)?;
+            let root = committee_root(&committee)?;
+            let commitment = policy
+                .commitment(&root)
+                .map_err(|error| anyhow!("invalid Hyperliquid policy: {error:?}"))?;
+            (
+                HYPERLIQUID_RECEIPT_ADAPTER_KIND_V1,
+                policy.source_domain,
+                commitment,
+            )
+        }
+        "near_receipt" => {
+            let policy: NearReceiptPolicyV1 = read_json(&policy_path)?;
+            let root = committee_root(&committee)?;
+            let commitment = policy
+                .commitment(&root)
+                .map_err(|error| anyhow!("invalid NEAR policy: {error:?}"))?;
+            (
+                NEAR_RECEIPT_QUANTITY_ADAPTER_KIND_V1,
+                policy.source_domain,
+                commitment,
+            )
+        }
+        "solana_stake_reader" => {
+            let policy: SolanaStakeReaderPolicyV1 = read_json(&policy_path)?;
+            require_committee_root(&committee, &policy.checkpoint_committee_root)?;
+            let commitment = policy
+                .commitment()
+                .map_err(|error| anyhow!("invalid Solana reader policy: {error:?}"))?;
+            (
+                SOLANA_STAKE_READER_ADAPTER_KIND_V1,
+                policy.source_domain,
+                commitment,
+            )
+        }
+        "monero_reserve" => {
+            let policy: MoneroReservePolicyV1 = read_json(&policy_path)?;
+            require_committee_root(&committee, &policy.checkpoint_committee_root)?;
+            let commitment = policy
+                .commitment()
+                .map_err(|error| anyhow!("invalid Monero policy: {error:?}"))?;
+            (
+                MONERO_RESERVE_ADAPTER_KIND_V1,
+                policy.source_domain,
+                commitment,
+            )
+        }
+        _ => bail!("unsupported quantity policy kind {kind}"),
+    };
+    let report = QuantityPolicyCommitmentReportV1 {
+        schema: "postfiat.reserve_quantity_policy_commitment_report.v1",
+        adapter_kind,
+        source_domain,
+        verifier_commitment,
     };
     let json = serde_json::to_string_pretty(&report)?;
     if let Some(output) = output {
@@ -903,6 +1009,87 @@ mod tests {
         assert_eq!(
             commitments["policies"][1]["valuation_verifier_commitment"].as_str(),
             Some(spot_valuation_commitment.as_str())
+        );
+    }
+
+    #[test]
+    fn tracked_a666_monero_policies_bind_address_fixture_and_feed_provenance() {
+        let manifest_dir =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../manifests/a666");
+        let committee: BftCheckpointCommitteeV1 = serde_json::from_slice(
+            &std::fs::read(manifest_dir.join("checkpoint-committee.json")).unwrap(),
+        )
+        .unwrap();
+        let quantity: MoneroReservePolicyV1 = serde_json::from_slice(
+            &std::fs::read(manifest_dir.join("monero-reserve-policy.json")).unwrap(),
+        )
+        .unwrap();
+        let valuation: EvmChainlinkValuationPolicyV1 = serde_json::from_slice(
+            &std::fs::read(manifest_dir.join("monero-chainlink-valuation-policy.json")).unwrap(),
+        )
+        .unwrap();
+        let provenance: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(manifest_dir.join("monero-policy-provenance.json")).unwrap(),
+        )
+        .unwrap();
+        let fixture: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
+                "../../../../docs/fixtures/open-reserve-proof/xmr_reserve_stage_b_witness.json",
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+        let commitments: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(manifest_dir.join("source-policy-commitments.json")).unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            quantity.checkpoint_committee_root,
+            committee_root(&committee).unwrap()
+        );
+        assert_eq!(
+            quantity.address_spend_public_key,
+            serde_json::from_value::<B256>(fixture["address_spend_public_key"].clone()).unwrap()
+        );
+        assert_eq!(
+            quantity.address_view_public_key,
+            serde_json::from_value::<B256>(fixture["address_view_public_key"].clone()).unwrap()
+        );
+        assert_eq!(valuation.rows.len(), 1);
+        assert_eq!(valuation.rows[0].position_id, quantity.position_id);
+        assert_eq!(valuation.rows[0].quantity_decimals, 12);
+        assert_eq!(
+            valuation.rows[0].proxy_address,
+            serde_json::from_value::<Address>(provenance["feed_registry_proxy"].clone()).unwrap()
+        );
+        assert_eq!(
+            valuation.rows[0].proxy_code_hash,
+            serde_json::from_value::<B256>(provenance["proxy_code_hash"].clone()).unwrap()
+        );
+        assert_eq!(
+            valuation.rows[0].aggregator_code_hash,
+            serde_json::from_value::<B256>(provenance["aggregator_code_hash"].clone()).unwrap()
+        );
+        assert_eq!(
+            valuation.hot_vars_slot_index,
+            provenance["aggregator_hot_vars_slot_index"]
+                .as_u64()
+                .unwrap()
+        );
+        assert_eq!(
+            valuation.transmissions_slot_index,
+            provenance["aggregator_transmissions_slot_index"]
+                .as_u64()
+                .unwrap()
+        );
+        assert_eq!(
+            commitments["policies"][2]["quantity_verifier_commitment"].as_str(),
+            Some(quantity.commitment().unwrap().as_str())
+        );
+        assert_eq!(
+            commitments["policies"][2]["valuation_verifier_commitment"].as_str(),
+            Some(valuation.commitment().unwrap().as_str())
         );
     }
 }
