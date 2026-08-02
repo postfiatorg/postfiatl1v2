@@ -192,23 +192,26 @@ not yet the desired public architecture.
 | A666 source family | Public implementation state | Production-qualified | What remains |
 |---|---|---:|---|
 | Aave on Arbitrum | Provider-neutral verifier implemented; partial | No | Add public collection and fuzzing, run fresh epochs and complete A666 reconciliation, and qualify |
-| Complete EVM spot set | Partial | No | The generic ERC-20 MPT adapter exists; the governed A666 token/account set, ownership, valuation, fixtures, and full qualification do not |
+| Complete EVM spot set | Provider-neutral quantity verifier implemented; partial | No | Add the public collector and governed A666 policy fixture, bind separately disclosed valuation evidence, fuzz, run fresh epochs and complete A666 reconciliation, and qualify |
 | Hyperliquid | Provider-neutral verifier implemented; partial | No | Add public collection and fuzzing, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
 | Staked NEAR | Provider-neutral quantity verifier implemented; partial | No | Add public collection and fuzzing, reproduce complete historical and fresh epochs, bind separately attested valuation, complete full A666 reconciliation, and qualify |
 | Staked Solana | Missing | No | Public collector, canonical proof/attestation statement at the governed trust level, ownership/state/freshness checks, fixtures, and qualification |
 | Monero | Missing | No | Public reserve-proof verifier and collector, fresh ownership challenge, replay protection, zero/nonzero fixtures, fuzzing, and qualification |
 | pfUSDC overlay | Implemented and pushed | Not sufficient by itself | Exact-tip remote CI must pass; this covers only PFTL-accounted subscription reserves, not the six external source families |
 
-The Aave, Hyperliquid, and NEAR verifiers pass their source tests and
-registered guest dispatch tests. Aave reproduces the historical A666
-collateral and debt results; Hyperliquid and NEAR reconstruct their historical
-receipt/Merkle evidence. The implementations pass strict verifier-crate lint
-and the provider-neutral shipped-code boundary. They are feature-isolated from
-the immutable legacy guest; its rebuilt ELF hash and vkey remain unchanged.
-They do not change the `0/6` production-qualification result and cannot be
-cited as evidence that StakeHub is deprecated. Their collectors, fuzz targets,
-fresh source epochs, complete A666 reconciliation, and production
-qualification remain open.
+The Aave, complete-EVM-spot, Hyperliquid, and NEAR verifiers pass their source
+tests and registered guest dispatch tests. Aave reproduces the historical A666
+collateral and debt results; EVM spot reconstructs every historical native and
+ERC-20 account/storage proof; Hyperliquid and NEAR reconstruct their historical
+receipt/Merkle evidence. The EVM spot adapter proves reserve quantities only;
+it deliberately leaves USD prices in the separately declared valuation trust
+dimension. The implementations pass strict verifier-crate lint and the
+provider-neutral shipped-code boundary. They are feature-isolated from the
+immutable legacy guest; its rebuilt ELF hash and vkey remain unchanged. They
+do not change the `0/6` production-qualification result and cannot be cited as
+evidence that StakeHub is deprecated. Their collectors, fuzz targets, fresh
+source epochs, complete A666 reconciliation, and production qualification
+remain open.
 
 ## 4. Required public code boundary
 
@@ -505,10 +508,10 @@ existing guest ELF SHA exactly.
 
 ### Phase 2 — port the source validators
 
-- [ ] Implement and register the public Aave adapter.
-- [ ] Implement and register the complete public EVM spot adapter set.
-- [ ] Implement and register the public Hyperliquid adapter.
-- [ ] Implement and register the public staked-NEAR adapter.
+- [x] Implement and register the public Aave adapter.
+- [x] Implement and register the complete public EVM spot quantity adapter set.
+- [x] Implement and register the public Hyperliquid adapter.
+- [x] Implement and register the public staked-NEAR adapter.
 - [ ] Implement the public staked-Solana collector/verifier at its governed
   trust level.
 - [ ] Implement and register the public XMR reserve-proof adapter.

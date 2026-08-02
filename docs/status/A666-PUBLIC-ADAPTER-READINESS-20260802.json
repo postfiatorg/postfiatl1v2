@@ -14,8 +14,8 @@
       "id": "evm-spot",
       "status": "partial",
       "production_qualified": false,
-      "public_implementation": "tools/nav-reserve-proof/crates/reserve-proof-types/src/evm_checkpoint.rs",
-      "note": "A generic checkpoint/MPT ERC-20 balance adapter exists, but the complete A666 EVM spot source set, ownership bindings, liabilities, and valuation policy are not yet qualified."
+      "public_implementation": "tools/nav-reserve-proof/crates/reserve-proof-types/src/evm_spot.rs",
+      "note": "A provider-neutral successor verifier now checks an exact governed multichain native/ERC-20 position set, quorum-certified state roots and timestamps, account/storage MPT proofs, code hashes, owner authorization, decimals, omissions, duplicates, checked bounds, and guest dispatch. It reconstructs every native and ERC-20 proof in the historical A666 artifact. Prices remain a separate disclosed valuation trust dimension. Public collection, the governed A666 policy fixture, fuzzing, fresh epochs, full A666 reconciliation, and production qualification remain open."
     },
     {
       "id": "hyperliquid",
