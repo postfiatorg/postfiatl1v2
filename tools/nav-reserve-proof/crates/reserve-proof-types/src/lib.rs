@@ -18,6 +18,8 @@ pub mod evm_spot;
 pub mod hyperliquid_receipt;
 #[cfg(feature = "a666-public-adapters-v2")]
 pub mod near_receipt;
+#[cfg(feature = "a666-public-adapters-v2")]
+pub mod solana_stake;
 
 #[cfg(feature = "a666-public-adapters-v2")]
 use aave_v3::{
@@ -38,6 +40,11 @@ use hyperliquid_receipt::{
 use near_receipt::{
     verify_near_receipt_quantity_proof_v1, NearReceiptQuantityProofV1, NearReceiptVerifyContextV1,
     NEAR_RECEIPT_QUANTITY_ADAPTER_KIND_V1,
+};
+#[cfg(feature = "a666-public-adapters-v2")]
+use solana_stake::{
+    verify_solana_stake_attested_proof_v1, SolanaStakeAttestedProofV1, SolanaStakeVerifyContextV1,
+    SOLANA_STAKE_ADAPTER_KIND_V1,
 };
 
 pub const MANIFEST_SCHEMA_V1: &str = "postfiat.reserve_source_manifest.v1";
@@ -198,6 +205,13 @@ pub enum SourceEvidenceV1 {
         evidence_commitment: String,
         proof: Box<EvmSpotQuantityProofV1>,
     },
+    /// Publicly specified and independently signed Solana stake snapshots.
+    /// The manifest truthfully classifies this quantity evidence as attested.
+    #[cfg(feature = "a666-public-adapters-v2")]
+    SolanaStakeAttested {
+        evidence_commitment: String,
+        proof: Box<SolanaStakeAttestedProofV1>,
+    },
     AdapterProof {
         evidence_commitment: String,
         proof: Vec<u8>,
@@ -217,6 +231,8 @@ impl SourceEvidenceV1 {
             | Self::NearReceiptQuantity { .. }
             | Self::AaveV3 { .. }
             | Self::EvmSpotQuantity { .. } => TrustClassV1::Cryptographic,
+            #[cfg(feature = "a666-public-adapters-v2")]
+            Self::SolanaStakeAttested { .. } => TrustClassV1::Attested,
         }
     }
 
@@ -255,6 +271,11 @@ impl SourceEvidenceV1 {
                 ..
             }
             | Self::EvmSpotQuantity {
+                evidence_commitment,
+                ..
+            } => evidence_commitment,
+            #[cfg(feature = "a666-public-adapters-v2")]
+            Self::SolanaStakeAttested {
                 evidence_commitment,
                 ..
             } => evidence_commitment,
@@ -815,6 +836,50 @@ fn verify_evidence(
             .map_err(|error| {
                 format!(
                     "source {} EVM spot quantity verification failed: {error:?}",
+                    entry.source_id
+                )
+            })
+        }
+        #[cfg(feature = "a666-public-adapters-v2")]
+        SourceEvidenceV1::SolanaStakeAttested {
+            evidence_commitment,
+            proof,
+        } => {
+            if dimension != "quantity" {
+                return Err(format!(
+                    "source {} Solana stake proof is only valid for quantity evidence",
+                    entry.source_id
+                ));
+            }
+            if entry.adapter_kind != SOLANA_STAKE_ADAPTER_KIND_V1
+                || entry.adapter_schema_version != 1
+            {
+                return Err(format!(
+                    "source {} Solana stake proof requires {SOLANA_STAKE_ADAPTER_KIND_V1} adapter schema 1",
+                    entry.source_id
+                ));
+            }
+            verify_solana_stake_attested_proof_v1(
+                proof,
+                &SolanaStakeVerifyContextV1 {
+                    pftl_genesis_hash: &context.pftl_genesis_hash,
+                    nav_asset_id: &context.nav_asset_id,
+                    proof_profile_id: &context.proof_profile_id,
+                    valuation_policy_hash: &context.valuation_policy_hash,
+                    source_manifest_hash: &context.source_manifest_hash,
+                    source_id: &entry.source_id,
+                    source_domain: &entry.source_domain,
+                    asset_or_position_id: &entry.asset_or_position_id,
+                    reserve_owner_commitment: &entry.reserve_owner_commitment,
+                    quantity_verifier_commitment: &entry.quantity_verifier_commitment,
+                    observed_at_pftl_height: observation.observed_at_block,
+                    expected_evidence_commitment: evidence_commitment,
+                },
+            )
+            .map(|_| ())
+            .map_err(|error| {
+                format!(
+                    "source {} Solana stake quantity verification failed: {error:?}",
                     entry.source_id
                 )
             })

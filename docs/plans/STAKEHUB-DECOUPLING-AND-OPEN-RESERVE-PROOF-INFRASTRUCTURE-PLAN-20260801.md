@@ -195,23 +195,27 @@ not yet the desired public architecture.
 | Complete EVM spot set | Provider-neutral quantity verifier implemented; partial | No | Add the public collector and governed A666 policy fixture, bind separately disclosed valuation evidence, fuzz, run fresh epochs and complete A666 reconciliation, and qualify |
 | Hyperliquid | Provider-neutral verifier implemented; partial | No | Add public collection and fuzzing, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
 | Staked NEAR | Provider-neutral quantity verifier implemented; partial | No | Add public collection and fuzzing, reproduce complete historical and fresh epochs, bind separately attested valuation, complete full A666 reconciliation, and qualify |
-| Staked Solana | Missing | No | Public collector, canonical proof/attestation statement at the governed trust level, ownership/state/freshness checks, fixtures, and qualification |
+| Staked Solana | Provider-neutral attested-state verifier implemented; partial | No | Add the public collector and governed independent signer/policy fixture, fuzz, run fresh epochs and complete A666 reconciliation, and qualify at the accurately disclosed attested quantity trust level |
 | Monero | Missing | No | Public reserve-proof verifier and collector, fresh ownership challenge, replay protection, zero/nonzero fixtures, fuzzing, and qualification |
 | pfUSDC overlay | Implemented and pushed | Not sufficient by itself | Exact-tip remote CI must pass; this covers only PFTL-accounted subscription reserves, not the six external source families |
 
-The Aave, complete-EVM-spot, Hyperliquid, and NEAR verifiers pass their source
-tests and registered guest dispatch tests. Aave reproduces the historical A666
-collateral and debt results; EVM spot reconstructs every historical native and
-ERC-20 account/storage proof; Hyperliquid and NEAR reconstruct their historical
-receipt/Merkle evidence. The EVM spot adapter proves reserve quantities only;
-it deliberately leaves USD prices in the separately declared valuation trust
-dimension. The implementations pass strict verifier-crate lint and the
-provider-neutral shipped-code boundary. They are feature-isolated from the
-immutable legacy guest; its rebuilt ELF hash and vkey remain unchanged. They
-do not change the `0/6` production-qualification result and cannot be cited as
-evidence that StakeHub is deprecated. Their collectors, fuzz targets, fresh
-source epochs, complete A666 reconciliation, and production qualification
-remain open.
+The Aave, complete-EVM-spot, Hyperliquid, NEAR, and Solana verifiers pass their
+source tests and registered guest dispatch tests. Aave reproduces the
+historical A666 collateral and debt results; EVM spot reconstructs every
+historical native and ERC-20 account/storage proof; Hyperliquid and NEAR
+reconstruct their historical receipt/Merkle evidence; Solana reconstructs the
+historical stake quantities and authority data. The EVM spot adapter proves
+reserve quantities only and deliberately leaves USD prices in the separately
+declared valuation trust dimension. The Solana adapter does not relabel RPC
+snapshots as cryptographic: it publicly verifies the exact position set,
+stake/withdraw/vote authorities, state parsing, signer policy, agreement, and
+signatures while retaining an `attested` quantity classification. The
+implementations pass strict verifier-crate lint and the provider-neutral
+shipped-code boundary. They are feature-isolated from the immutable legacy
+guest; its rebuilt ELF hash and vkey remain unchanged. They do not change the
+`0/6` production-qualification result and cannot be cited as evidence that
+StakeHub is deprecated. Their collectors, fuzz targets, fresh source epochs,
+complete A666 reconciliation, and production qualification remain open.
 
 ## 4. Required public code boundary
 
