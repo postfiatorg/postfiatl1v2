@@ -86,7 +86,7 @@
     "tools/nav-reserve-proof/manifests/a666/reader-deployment-candidates.json": "56b056f676b89cc1c2224c954b6c6e7ef4b05a9c781ff39bc8c8949b3bf2cae9",
     "tools/nav-reserve-proof/contracts/solana-stake-reader/program-identity.json": "3715d5fa06b209f851328e8a5291b00ec1ae5510c445d007e9f6fb36b6f909b6",
     "tools/nav-reserve-proof/manifests/a666/public-reader-deployments-20260802.json": "d3be342a5eb8cfcae1fd1d0c4225196854e168f3798364472f7626c2ab2c2b15",
-    "tools/nav-reserve-proof/a666-successor-program-identity.json": "3efb9d45ba14fa9799b7cf057d85a9c97d808ea44d0151ee6212c9f40451b85c",
+    "tools/nav-reserve-proof/a666-successor-program-identity.json": "b53e851de88f1f6483f20c64b9258a218c3e57206e6c47bb2731c2a0dec07365",
     "tools/nav-reserve-proof/manifests/a666/profile-registration-public-successor.json": "a818911a5b477c4abb37405e2d510c4cd334b2e7313793afe74d9dc2f22914b7"
   },
   "systems": [
