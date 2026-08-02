@@ -204,6 +204,53 @@ consensus verifier is governed, the exact finalized head and both deployed
 code identities are explicitly quorum-checkpointed. A public RPC response is
 never sufficient by itself.
 
+### Public staked-Solana workflow
+
+The production-successor source is separate from the historical signed-RPC
+adapter. Its stateless reader program is in `contracts/solana-stake-reader`.
+It reads the exact policy-ordered stake accounts, validates standard delegated
+stake state and authorities, and emits a canonical salted snapshot. A pinned
+Solana SBF build and immutable deployment are required before live use.
+
+First construct the exact unsigned transaction for an external wallet:
+
+    postfiat-reserve-proof adapter solana snapshot-request \
+      --policy solana-policy.json \
+      --fee-payer <solana-pubkey> \
+      --recent-blockhash <finalized-blockhash> \
+      --salt <32-byte-lower-hex> \
+      --output solana-snapshot-request.json
+
+After that wallet signs and submits the exact message, collect the finalized
+transaction, containing block, immutable reader identity, canonical output,
+and checkpoint candidate:
+
+    postfiat-reserve-proof adapter solana prepare \
+      --manifest manifest.json --context context.json \
+      --source-id solana-stake --policy solana-policy.json \
+      --committee checkpoint-committee.json \
+      --transaction-signature <base58-signature> \
+      --salt <32-byte-lower-hex> \
+      --pftl-observation-height <height> --minimum-depth 32 \
+      --rpc-url <public-solana-rpc> \
+      --prepared-output solana-prepared.json \
+      --checkpoint-output solana-checkpoint.json
+
+Every checkpoint validator independently repeats those checks before signing
+the generic source-checkpoint statement. `adapter solana owner-statement`
+attaches the assembled certificate and emits the exact statement for the
+policy-pinned withdraw authority to sign externally. `adapter solana collect`
+attaches that signature and separate policy-approved SOL/USD valuation
+evidence, executes both evidence verifiers, and writes the bounded observation.
+No fee-payer, reserve-owner, or checkpoint-validator private key enters the
+proof kit.
+
+This adapter is cryptographic relative to the disclosed BFT checkpoint. It is
+not direct verification of Solana consensus. Until the public reader is built
+and deployed immutably and the governed A666 inputs, fuzzing, fresh epochs,
+reconciliation, and independent reproduction pass, it remains partial and
+must not be represented as production-qualified.
+
 ### Public Monero reserve workflow
 
 The Monero workflow starts by emitting the exact context-bound message for an

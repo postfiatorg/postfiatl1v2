@@ -5,12 +5,17 @@
 //! attested, not cryptographic. It makes the attestors, exact stake-account
 //! set, ownership, parser, slot, and stake state publicly auditable.
 
+use alloy_primitives::{keccak256, B256};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sha3::{Digest as Sha3Digest, Sha3_384};
 
+use crate::bft_checkpoint::BftSourceCheckpointCertificateV1;
+
 pub const SOLANA_STAKE_ADAPTER_KIND_V1: &str = "solana-stake-attested-state-v1";
+pub const SOLANA_STAKE_READER_ADAPTER_KIND_V1: &str = "solana-stake-reader-bft-checkpoint-v1";
+pub const SOLANA_STAKE_READER_CHECKPOINT_KIND_V1: &str = "solana-stake-reader-receipt-v1";
 pub const SOLANA_DEACTIVATION_EPOCH_DISABLED: u64 = u64::MAX;
 pub const STAKE_STATE_V2_DELEGATED: u32 = 2;
 pub const CLOCK_EPOCH_OFFSET: usize = 16;
@@ -25,6 +30,15 @@ const OWNER_COMMITMENT_DOMAIN: &[u8] = b"postfiat.reserve_solana_stake_owner.v1"
 const OWNER_AUTHORIZATION_DOMAIN: &[u8] = b"postfiat.reserve_solana_stake_owner_authorization.v1";
 const ATTESTATION_DOMAIN: &[u8] = b"postfiat.reserve_solana_stake_attestation.v1";
 const EVIDENCE_COMMITMENT_DOMAIN: &[u8] = b"postfiat.reserve_solana_stake_evidence.v1";
+const READER_POLICY_COMMITMENT_DOMAIN: &[u8] = b"postfiat.reserve_solana_reader_policy.v1";
+const READER_STATE_COMMITMENT_DOMAIN: &[u8] = b"postfiat.reserve_solana_reader_state.v1";
+const READER_OWNER_AUTHORIZATION_DOMAIN: &[u8] =
+    b"postfiat.reserve_solana_reader_owner_authorization.v1";
+const READER_EVIDENCE_COMMITMENT_DOMAIN: &[u8] = b"postfiat.reserve_solana_reader_evidence.v1";
+const READER_INSTRUCTION_MAGIC: &[u8; 8] = b"PFSOL001";
+const READER_SNAPSHOT_MAGIC: &[u8; 8] = b"PFSNAP01";
+const READER_SNAPSHOT_VERSION: u16 = 1;
+const SOLANA_CLOCK_SYSVAR_ID: &str = "SysvarC1ock11111111111111111111111111111111";
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -110,6 +124,61 @@ pub struct SolanaStakeAttestedProofV1 {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct SolanaStakeReaderPolicyV1 {
+    pub source_domain: String,
+    pub position_set_id: String,
+    pub stake_program: String,
+    pub reader_program: String,
+    pub reader_program_data: String,
+    pub reader_program_data_hash: [u8; 32],
+    pub wallet: String,
+    pub wallet_pubkey: [u8; 32],
+    pub stake_authority: [u8; 32],
+    pub withdraw_authority: [u8; 32],
+    pub positions: Vec<SolanaStakePositionPolicyV1>,
+    pub checkpoint_committee_root: String,
+    /// Minimum number of finalized slots which must follow the reader
+    /// transaction before it can be certified.
+    pub minimum_finalized_depth: u32,
+    /// Maximum distance between the reader transaction and the finalized head
+    /// observed by the checkpoint committee.
+    pub maximum_finalized_slot_lag: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct SolanaStakeReaderProofV1 {
+    pub policy: SolanaStakeReaderPolicyV1,
+    pub checkpoint_certificate: BftSourceCheckpointCertificateV1,
+    pub ownership_signature: Vec<u8>,
+    pub transaction_signature: Vec<u8>,
+    pub transaction_message: Vec<u8>,
+    pub instruction_salt: [u8; 32],
+    pub reader_payload: Vec<u8>,
+    pub reader_return_data_hash: [u8; 32],
+    pub reader_slot: u64,
+    pub reader_epoch: u64,
+    pub positions: Vec<SolanaStakeReaderPositionV1>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct SolanaStakeReaderPositionV1 {
+    pub index: u32,
+    pub address: String,
+    pub lamports: u64,
+    pub owner_program: String,
+    pub data_hash: [u8; 32],
+    pub stake_authority: [u8; 32],
+    pub withdraw_authority: [u8; 32],
+    pub vote_account: [u8; 32],
+    pub delegated_lamports: u64,
+    pub activation_epoch: u64,
+    pub deactivation_epoch: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SolanaParsedStakePositionV1 {
     pub index: u32,
     pub address: String,
@@ -161,6 +230,9 @@ pub enum SolanaStakeError {
     Clock,
     EvidenceCommitment,
     ArithmeticOverflow,
+    CheckpointMismatch,
+    ReaderMismatch,
+    Transaction,
 }
 
 impl SolanaStakePolicyV1 {
@@ -261,6 +333,215 @@ impl SolanaStakePolicyV1 {
             out.extend_from_slice(&position.vote_account);
         }
         Ok(hash48(POLICY_COMMITMENT_DOMAIN, &[&out]))
+    }
+}
+
+impl SolanaStakeReaderPolicyV1 {
+    pub fn validate(&self) -> Result<(), SolanaStakeError> {
+        validate_identifier(&self.source_domain)?;
+        if self.source_domain != "solana:mainnet" {
+            return Err(SolanaStakeError::PolicyMismatch);
+        }
+        validate_identifier(&self.position_set_id)?;
+        for value in [
+            &self.stake_program,
+            &self.reader_program,
+            &self.reader_program_data,
+            &self.wallet,
+        ] {
+            validate_text(value)?;
+            decode_pubkey(value)?;
+        }
+        validate_hex(&self.checkpoint_committee_root, 48)?;
+        if decode_pubkey(&self.wallet)? != self.wallet_pubkey
+            || self.wallet_pubkey == [0; 32]
+            || self.stake_authority == [0; 32]
+            || self.withdraw_authority == [0; 32]
+            || self.reader_program_data_hash == [0; 32]
+            || self.minimum_finalized_depth == 0
+            || self.maximum_finalized_slot_lag < u64::from(self.minimum_finalized_depth)
+            || self.positions.is_empty()
+            || self.positions.len() > MAX_SOLANA_STAKE_ACCOUNTS
+        {
+            return Err(SolanaStakeError::PolicyMismatch);
+        }
+        let mut previous_index = None;
+        let mut previous_address = None;
+        let mut addresses = Vec::with_capacity(self.positions.len());
+        for position in &self.positions {
+            validate_text(&position.address)?;
+            let address = decode_pubkey(&position.address)?;
+            if previous_index >= Some(position.index)
+                || previous_address >= Some(address)
+                || position.vote_account == [0; 32]
+                || addresses.contains(&position.address)
+            {
+                return Err(SolanaStakeError::PolicyMismatch);
+            }
+            previous_index = Some(position.index);
+            previous_address = Some(address);
+            addresses.push(position.address.clone());
+        }
+        Ok(())
+    }
+
+    pub fn commitment(&self) -> Result<String, SolanaStakeError> {
+        self.validate()?;
+        let bytes = serde_json::to_vec(self).map_err(|_| SolanaStakeError::BoundsExceeded)?;
+        Ok(hash48(READER_POLICY_COMMITMENT_DOMAIN, &[&bytes]))
+    }
+}
+
+pub fn solana_stake_reader_state_commitment_v1(
+    proof: &SolanaStakeReaderProofV1,
+) -> Result<B256, SolanaStakeError> {
+    proof.policy.validate()?;
+    validate_reader_bounds(proof)?;
+    let mut out = Vec::new();
+    append_hex(&mut out, &proof.policy.commitment()?, 48)?;
+    append_bytes(&mut out, &proof.policy.reader_program_data_hash)?;
+    append_bytes(&mut out, &proof.transaction_signature)?;
+    append_bytes(&mut out, &proof.transaction_message)?;
+    out.extend_from_slice(&proof.instruction_salt);
+    append_bytes(&mut out, &proof.reader_payload)?;
+    out.extend_from_slice(&proof.reader_return_data_hash);
+    out.extend_from_slice(&proof.reader_slot.to_be_bytes());
+    out.extend_from_slice(&proof.reader_epoch.to_be_bytes());
+    append_u32(&mut out, proof.positions.len())?;
+    for position in &proof.positions {
+        append_reader_position(&mut out, position)?;
+    }
+    Ok(keccak256(domain_message(
+        READER_STATE_COMMITMENT_DOMAIN,
+        &out,
+    )))
+}
+
+pub fn solana_stake_reader_owner_statement_v1(
+    proof: &SolanaStakeReaderProofV1,
+    context: &SolanaStakeVerifyContextV1<'_>,
+) -> Result<Vec<u8>, SolanaStakeError> {
+    let mut out = context_prefix(context)?;
+    append_hex(&mut out, &proof.policy.commitment()?, 48)?;
+    out.extend_from_slice(solana_stake_reader_state_commitment_v1(proof)?.as_slice());
+    out.extend_from_slice(
+        proof
+            .checkpoint_certificate
+            .checkpoint
+            .source_block_hash
+            .as_slice(),
+    );
+    out.extend_from_slice(
+        &proof
+            .checkpoint_certificate
+            .checkpoint
+            .source_height
+            .to_be_bytes(),
+    );
+    Ok(domain_message(READER_OWNER_AUTHORIZATION_DOMAIN, &out))
+}
+
+pub fn verify_solana_stake_reader_proof_v1(
+    proof: &SolanaStakeReaderProofV1,
+    context: &SolanaStakeVerifyContextV1<'_>,
+) -> Result<SolanaStakeVerificationV1, SolanaStakeError> {
+    proof.policy.validate()?;
+    validate_reader_bounds(proof)?;
+    if proof.policy.source_domain != context.source_domain
+        || proof.policy.position_set_id != context.asset_or_position_id
+        || solana_stake_owner_commitment(proof.policy.wallet_pubkey)
+            != context.reserve_owner_commitment
+        || proof.policy.commitment()? != context.quantity_verifier_commitment
+    {
+        return Err(SolanaStakeError::PolicyMismatch);
+    }
+    proof
+        .checkpoint_certificate
+        .verify()
+        .map_err(|_| SolanaStakeError::CheckpointMismatch)?;
+    let checkpoint = &proof.checkpoint_certificate.checkpoint;
+    if checkpoint.pftl_genesis_hash != context.pftl_genesis_hash
+        || checkpoint.checkpoint_kind != SOLANA_STAKE_READER_CHECKPOINT_KIND_V1
+        || checkpoint.source_domain != proof.policy.source_domain
+        || checkpoint.pftl_observation_height != context.observed_at_pftl_height
+        || checkpoint.committee_root != proof.policy.checkpoint_committee_root
+        || checkpoint.minimum_depth < proof.policy.minimum_finalized_depth
+        || checkpoint
+            .observed_source_head
+            .saturating_sub(checkpoint.source_height)
+            > proof.policy.maximum_finalized_slot_lag
+        || checkpoint.source_state_commitment != solana_stake_reader_state_commitment_v1(proof)?
+    {
+        return Err(SolanaStakeError::CheckpointMismatch);
+    }
+    verify_ed25519(
+        proof.policy.withdraw_authority,
+        &solana_stake_reader_owner_statement_v1(proof, context)?,
+        &proof.ownership_signature,
+    )
+    .map_err(|_| SolanaStakeError::OwnerAuthorization)?;
+    verify_reader_transaction(proof)?;
+    let slot = proof.reader_slot;
+    let current_epoch = proof.reader_epoch;
+    if slot != checkpoint.source_height || proof.positions.len() != proof.policy.positions.len() {
+        return Err(SolanaStakeError::PositionMismatch);
+    }
+    let expected_payload = reader_payload(proof, slot, current_epoch)?;
+    let payload_hash: [u8; 32] = Sha256::digest(&proof.reader_payload).into();
+    if proof.reader_payload != expected_payload || payload_hash != proof.reader_return_data_hash {
+        return Err(SolanaStakeError::ReaderMismatch);
+    }
+    let evidence_commitment = proof.evidence_commitment()?;
+    if evidence_commitment != context.expected_evidence_commitment {
+        return Err(SolanaStakeError::EvidenceCommitment);
+    }
+    let mut total = 0u64;
+    let mut locked = 0u64;
+    let mut liquid = 0u64;
+    let mut positions = Vec::with_capacity(proof.positions.len());
+    for (position, snapshot) in proof.policy.positions.iter().zip(&proof.positions) {
+        if snapshot.index != position.index || snapshot.address != position.address {
+            return Err(SolanaStakeError::PositionMismatch);
+        }
+        let parsed = parse_reader_position(&proof.policy, position, snapshot, current_epoch)?;
+        total = total
+            .checked_add(parsed.total_lamports)
+            .ok_or(SolanaStakeError::ArithmeticOverflow)?;
+        locked = locked
+            .checked_add(parsed.locked_lamports)
+            .ok_or(SolanaStakeError::ArithmeticOverflow)?;
+        liquid = liquid
+            .checked_add(parsed.liquid_lamports)
+            .ok_or(SolanaStakeError::ArithmeticOverflow)?;
+        positions.push(parsed);
+    }
+    if locked
+        .checked_add(liquid)
+        .ok_or(SolanaStakeError::ArithmeticOverflow)?
+        != total
+    {
+        return Err(SolanaStakeError::StakeState);
+    }
+    Ok(SolanaStakeVerificationV1 {
+        finalized_slot: slot,
+        current_epoch,
+        total_lamports: total,
+        locked_lamports: locked,
+        liquid_lamports: liquid,
+        positions,
+        evidence_commitment,
+    })
+}
+
+impl SolanaStakeReaderProofV1 {
+    pub fn evidence_commitment(&self) -> Result<String, SolanaStakeError> {
+        let state = solana_stake_reader_state_commitment_v1(self)?;
+        let certificate = serde_json::to_vec(&self.checkpoint_certificate)
+            .map_err(|_| SolanaStakeError::BoundsExceeded)?;
+        Ok(hash48(
+            READER_EVIDENCE_COMMITMENT_DOMAIN,
+            &[state.as_slice(), &certificate, &self.ownership_signature],
+        ))
     }
 }
 
@@ -491,6 +772,351 @@ pub fn derive_stake_address(
     Ok(bs58::encode(hasher.finalize()).into_string())
 }
 
+fn parse_reader_position(
+    policy: &SolanaStakeReaderPolicyV1,
+    position: &SolanaStakePositionPolicyV1,
+    snapshot: &SolanaStakeReaderPositionV1,
+    current_epoch: u64,
+) -> Result<SolanaParsedStakePositionV1, SolanaStakeError> {
+    if snapshot.owner_program != policy.stake_program
+        || snapshot.data_hash == [0; 32]
+        || snapshot.stake_authority != policy.stake_authority
+        || snapshot.withdraw_authority != policy.withdraw_authority
+        || snapshot.vote_account != position.vote_account
+    {
+        return Err(SolanaStakeError::StakeState);
+    }
+    if snapshot.delegated_lamports > snapshot.lamports {
+        return Err(SolanaStakeError::StakeState);
+    }
+    let is_liquid = snapshot.deactivation_epoch != SOLANA_DEACTIVATION_EPOCH_DISABLED
+        && snapshot.deactivation_epoch < current_epoch;
+    Ok(SolanaParsedStakePositionV1 {
+        index: snapshot.index,
+        address: snapshot.address.clone(),
+        total_lamports: snapshot.lamports,
+        delegated_lamports: snapshot.delegated_lamports,
+        activation_epoch: snapshot.activation_epoch,
+        deactivation_epoch: snapshot.deactivation_epoch,
+        locked_lamports: if is_liquid { 0 } else { snapshot.lamports },
+        liquid_lamports: if is_liquid { snapshot.lamports } else { 0 },
+    })
+}
+
+fn reader_payload(
+    proof: &SolanaStakeReaderProofV1,
+    slot: u64,
+    epoch: u64,
+) -> Result<Vec<u8>, SolanaStakeError> {
+    let mut out = Vec::new();
+    out.extend_from_slice(READER_SNAPSHOT_MAGIC);
+    out.extend_from_slice(&READER_SNAPSHOT_VERSION.to_le_bytes());
+    out.extend_from_slice(&slot.to_le_bytes());
+    out.extend_from_slice(&epoch.to_le_bytes());
+    out.extend_from_slice(&proof.instruction_salt);
+    out.extend_from_slice(
+        &u16::try_from(proof.positions.len())
+            .map_err(|_| SolanaStakeError::BoundsExceeded)?
+            .to_le_bytes(),
+    );
+    for (position, snapshot) in proof.policy.positions.iter().zip(&proof.positions) {
+        if snapshot.index != position.index
+            || snapshot.address != position.address
+            || snapshot.owner_program != proof.policy.stake_program
+        {
+            return Err(SolanaStakeError::PositionMismatch);
+        }
+        out.extend_from_slice(&decode_pubkey(&snapshot.address)?);
+        out.extend_from_slice(&snapshot.lamports.to_le_bytes());
+        out.extend_from_slice(&decode_pubkey(&snapshot.owner_program)?);
+        out.extend_from_slice(&snapshot.data_hash);
+        out.extend_from_slice(&snapshot.stake_authority);
+        out.extend_from_slice(&snapshot.withdraw_authority);
+        out.extend_from_slice(&snapshot.vote_account);
+        out.extend_from_slice(&snapshot.delegated_lamports.to_le_bytes());
+        out.extend_from_slice(&snapshot.activation_epoch.to_le_bytes());
+        out.extend_from_slice(&snapshot.deactivation_epoch.to_le_bytes());
+    }
+    Ok(out)
+}
+
+fn verify_reader_transaction(proof: &SolanaStakeReaderProofV1) -> Result<(), SolanaStakeError> {
+    let message = parse_legacy_message(&proof.transaction_message)?;
+    let expected_account_count = proof
+        .policy
+        .positions
+        .len()
+        .checked_add(3)
+        .ok_or(SolanaStakeError::ArithmeticOverflow)?;
+    if message.required_signatures != 1
+        || message.readonly_signed_accounts != 0
+        || usize::from(message.readonly_unsigned_accounts) != expected_account_count - 1
+        || message.account_keys.len() != expected_account_count
+        || message.recent_blockhash == [0; 32]
+    {
+        return Err(SolanaStakeError::Transaction);
+    }
+    for index in 0..message.account_keys.len() {
+        if message.account_keys[..index].contains(&message.account_keys[index]) {
+            return Err(SolanaStakeError::Transaction);
+        }
+    }
+    verify_ed25519(
+        message.account_keys[0],
+        &proof.transaction_message,
+        &proof.transaction_signature,
+    )
+    .map_err(|_| SolanaStakeError::Transaction)?;
+    if message.instructions.len() != 1 {
+        return Err(SolanaStakeError::Transaction);
+    }
+    let instruction = &message.instructions[0];
+    let expected_program_index =
+        u8::try_from(expected_account_count - 1).map_err(|_| SolanaStakeError::BoundsExceeded)?;
+    if instruction.program_id_index != expected_program_index {
+        return Err(SolanaStakeError::Transaction);
+    }
+    let program = *message
+        .account_keys
+        .get(usize::from(instruction.program_id_index))
+        .ok_or(SolanaStakeError::Transaction)?;
+    if program != decode_pubkey(&proof.policy.reader_program)? {
+        return Err(SolanaStakeError::ReaderMismatch);
+    }
+    let expected_accounts = std::iter::once(decode_pubkey(SOLANA_CLOCK_SYSVAR_ID)?)
+        .chain(
+            proof
+                .policy
+                .positions
+                .iter()
+                .map(|position| decode_pubkey(&position.address))
+                .collect::<Result<Vec<_>, _>>()?,
+        )
+        .collect::<Vec<_>>();
+    let actual_accounts = instruction
+        .account_indices
+        .iter()
+        .map(|index| {
+            message
+                .account_keys
+                .get(usize::from(*index))
+                .copied()
+                .ok_or(SolanaStakeError::Transaction)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let expected_indices = (1..expected_account_count - 1)
+        .map(|index| u8::try_from(index).map_err(|_| SolanaStakeError::BoundsExceeded))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut expected_data = Vec::from(READER_INSTRUCTION_MAGIC);
+    expected_data.extend_from_slice(&proof.instruction_salt);
+    expected_data.extend_from_slice(
+        &u16::try_from(proof.policy.positions.len())
+            .map_err(|_| SolanaStakeError::BoundsExceeded)?
+            .to_le_bytes(),
+    );
+    if actual_accounts != expected_accounts
+        || instruction.account_indices != expected_indices
+        || instruction.data != expected_data
+    {
+        return Err(SolanaStakeError::ReaderMismatch);
+    }
+    Ok(())
+}
+
+struct LegacyMessage {
+    required_signatures: u8,
+    readonly_signed_accounts: u8,
+    readonly_unsigned_accounts: u8,
+    account_keys: Vec<[u8; 32]>,
+    recent_blockhash: [u8; 32],
+    instructions: Vec<LegacyInstruction>,
+}
+
+struct LegacyInstruction {
+    program_id_index: u8,
+    account_indices: Vec<u8>,
+    data: Vec<u8>,
+}
+
+fn parse_legacy_message(bytes: &[u8]) -> Result<LegacyMessage, SolanaStakeError> {
+    if bytes.len() < 3 || bytes[0] & 0x80 != 0 {
+        return Err(SolanaStakeError::Transaction);
+    }
+    let mut reader = SolanaReader::new(bytes);
+    let required_signatures = reader.byte()?;
+    let readonly_signed_accounts = reader.byte()?;
+    let readonly_unsigned_accounts = reader.byte()?;
+    let account_count = reader.short_vec()?;
+    if required_signatures == 0
+        || account_count == 0
+        || account_count > MAX_SOLANA_STAKE_ACCOUNTS + 4
+    {
+        return Err(SolanaStakeError::Transaction);
+    }
+    let mut account_keys = Vec::with_capacity(account_count);
+    for _ in 0..account_count {
+        account_keys.push(reader.array_32()?);
+    }
+    let recent_blockhash = reader.array_32()?;
+    let instruction_count = reader.short_vec()?;
+    if instruction_count == 0 || instruction_count > 8 {
+        return Err(SolanaStakeError::Transaction);
+    }
+    let mut instructions = Vec::with_capacity(instruction_count);
+    for _ in 0..instruction_count {
+        let program_id_index = reader.byte()?;
+        let account_len = reader.short_vec()?;
+        if account_len > MAX_SOLANA_STAKE_ACCOUNTS + 1 {
+            return Err(SolanaStakeError::Transaction);
+        }
+        let account_indices = reader.bytes(account_len)?.to_vec();
+        let data_len = reader.short_vec()?;
+        if data_len > 1024 {
+            return Err(SolanaStakeError::Transaction);
+        }
+        let data = reader.bytes(data_len)?.to_vec();
+        instructions.push(LegacyInstruction {
+            program_id_index,
+            account_indices,
+            data,
+        });
+    }
+    reader.finish()?;
+    Ok(LegacyMessage {
+        required_signatures,
+        readonly_signed_accounts,
+        readonly_unsigned_accounts,
+        account_keys,
+        recent_blockhash,
+        instructions,
+    })
+}
+
+struct SolanaReader<'a> {
+    bytes: &'a [u8],
+    offset: usize,
+}
+
+impl<'a> SolanaReader<'a> {
+    fn new(bytes: &'a [u8]) -> Self {
+        Self { bytes, offset: 0 }
+    }
+
+    fn byte(&mut self) -> Result<u8, SolanaStakeError> {
+        let value = self
+            .bytes
+            .get(self.offset)
+            .copied()
+            .ok_or(SolanaStakeError::Transaction)?;
+        self.offset += 1;
+        Ok(value)
+    }
+
+    fn short_vec(&mut self) -> Result<usize, SolanaStakeError> {
+        let start = self.offset;
+        let mut value = 0usize;
+        let mut shift = 0u32;
+        loop {
+            let byte = self.byte()?;
+            if shift >= usize::BITS || (shift + 7 >= usize::BITS && byte > 1) {
+                return Err(SolanaStakeError::Transaction);
+            }
+            value |= usize::from(byte & 0x7f) << shift;
+            if byte & 0x80 == 0 {
+                let mut canonical = Vec::new();
+                write_short_vec(value, &mut canonical);
+                if self.bytes[start..self.offset] != canonical {
+                    return Err(SolanaStakeError::Transaction);
+                }
+                return Ok(value);
+            }
+            shift += 7;
+        }
+    }
+
+    fn bytes(&mut self, len: usize) -> Result<&'a [u8], SolanaStakeError> {
+        let end = self
+            .offset
+            .checked_add(len)
+            .ok_or(SolanaStakeError::Transaction)?;
+        let value = self
+            .bytes
+            .get(self.offset..end)
+            .ok_or(SolanaStakeError::Transaction)?;
+        self.offset = end;
+        Ok(value)
+    }
+
+    fn array_32(&mut self) -> Result<[u8; 32], SolanaStakeError> {
+        self.bytes(32)?
+            .try_into()
+            .map_err(|_| SolanaStakeError::Transaction)
+    }
+
+    fn finish(&self) -> Result<(), SolanaStakeError> {
+        if self.offset != self.bytes.len() {
+            return Err(SolanaStakeError::Transaction);
+        }
+        Ok(())
+    }
+}
+
+fn write_short_vec(mut value: usize, out: &mut Vec<u8>) {
+    while value >= 0x80 {
+        out.push((value as u8 & 0x7f) | 0x80);
+        value >>= 7;
+    }
+    out.push(value as u8);
+}
+
+fn validate_reader_bounds(proof: &SolanaStakeReaderProofV1) -> Result<(), SolanaStakeError> {
+    if proof.ownership_signature.len() != 64
+        || proof.transaction_signature.len() != 64
+        || proof.transaction_message.is_empty()
+        || proof.transaction_message.len() > 4096
+        || proof.instruction_salt == [0; 32]
+        || proof.reader_payload.is_empty()
+        || proof.reader_payload.len() > 16 * 1024
+        || proof.reader_slot == 0
+        || proof.positions.len() != proof.policy.positions.len()
+    {
+        return Err(SolanaStakeError::BoundsExceeded);
+    }
+    let mut total = 0usize;
+    for position in &proof.positions {
+        validate_text(&position.address)?;
+        validate_text(&position.owner_program)?;
+        if position.data_hash == [0; 32] {
+            return Err(SolanaStakeError::BoundsExceeded);
+        }
+        total = total
+            .checked_add(196)
+            .ok_or(SolanaStakeError::ArithmeticOverflow)?;
+    }
+    if total > MAX_SOLANA_TOTAL_DATA_BYTES {
+        return Err(SolanaStakeError::BoundsExceeded);
+    }
+    Ok(())
+}
+
+fn append_reader_position(
+    out: &mut Vec<u8>,
+    position: &SolanaStakeReaderPositionV1,
+) -> Result<(), SolanaStakeError> {
+    out.extend_from_slice(&position.index.to_be_bytes());
+    append_bytes(out, position.address.as_bytes())?;
+    out.extend_from_slice(&position.lamports.to_be_bytes());
+    append_bytes(out, position.owner_program.as_bytes())?;
+    out.extend_from_slice(&position.data_hash);
+    out.extend_from_slice(&position.stake_authority);
+    out.extend_from_slice(&position.withdraw_authority);
+    out.extend_from_slice(&position.vote_account);
+    out.extend_from_slice(&position.delegated_lamports.to_be_bytes());
+    out.extend_from_slice(&position.activation_epoch.to_be_bytes());
+    out.extend_from_slice(&position.deactivation_epoch.to_be_bytes());
+    Ok(())
+}
+
 fn validate_bounds(proof: &SolanaStakeAttestedProofV1) -> Result<(), SolanaStakeError> {
     if proof.ownership_signature.len() != 64
         || proof.attestations.is_empty()
@@ -678,7 +1304,15 @@ fn hash48(domain: &[u8], parts: &[&[u8]]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::bft_checkpoint::{
+        BftCheckpointCommitteeV1, BftCheckpointValidatorV1, BftSourceCheckpointCertificateV1,
+        BftSourceCheckpointV1, BftSourceCheckpointVoteV1,
+        BFT_SOURCE_CHECKPOINT_SIGNATURE_CONTEXT_V1,
+    };
     use ed25519_dalek::{Signer, SigningKey};
+    use postfiat_crypto_provider::{
+        ml_dsa_65_keygen_from_seed, ml_dsa_65_sign_with_context_seed, MlDsa65KeyPair,
+    };
 
     const STAKE_PROGRAM: &str = "Stake11111111111111111111111111111111111111";
 
@@ -808,6 +1442,200 @@ mod tests {
         proof.ownership_signature = owner.sign(&statement).to_bytes().to_vec();
     }
 
+    fn checkpoint_committee() -> (BftCheckpointCommitteeV1, Vec<MlDsa65KeyPair>) {
+        let keys = (0u8..4)
+            .map(|index| ml_dsa_65_keygen_from_seed(&[index + 1; 32]))
+            .collect::<Vec<_>>();
+        (
+            BftCheckpointCommitteeV1 {
+                epoch: 9,
+                quorum: 3,
+                validators: keys
+                    .iter()
+                    .enumerate()
+                    .map(|(index, key)| BftCheckpointValidatorV1 {
+                        validator_id: format!("validator-{index}"),
+                        public_key: key.public_key.clone(),
+                    })
+                    .collect(),
+            },
+            keys,
+        )
+    }
+
+    fn reader_context<'a>(
+        proof: &SolanaStakeReaderProofV1,
+        commitment: &'a str,
+    ) -> SolanaStakeVerifyContextV1<'a> {
+        SolanaStakeVerifyContextV1 {
+            pftl_genesis_hash: "11".repeat(48).leak(),
+            nav_asset_id: "22".repeat(48).leak(),
+            proof_profile_id: "33".repeat(48).leak(),
+            valuation_policy_hash: "44".repeat(32).leak(),
+            source_manifest_hash: "55".repeat(48).leak(),
+            source_id: "solana-stake-primary",
+            source_domain: proof.policy.source_domain.clone().leak(),
+            asset_or_position_id: proof.policy.position_set_id.clone().leak(),
+            reserve_owner_commitment: solana_stake_owner_commitment(proof.policy.wallet_pubkey)
+                .leak(),
+            quantity_verifier_commitment: proof.policy.commitment().unwrap().leak(),
+            observed_at_pftl_height: 500,
+            expected_evidence_commitment: commitment,
+        }
+    }
+
+    fn reader_fixture() -> SolanaStakeReaderProofV1 {
+        let owner = SigningKey::from_bytes(&[8; 32]);
+        let owner_pubkey = *owner.verifying_key().as_bytes();
+        let position_address = [7u8; 32];
+        let vote = [9u8; 32];
+        let reader_program = [4u8; 32];
+        let reader_program_data = [5u8; 32];
+        let (committee, checkpoint_keys) = checkpoint_committee();
+        let policy = SolanaStakeReaderPolicyV1 {
+            source_domain: "solana:mainnet".to_string(),
+            position_set_id: "solana-stake-set:a666-v2".to_string(),
+            stake_program: STAKE_PROGRAM.to_string(),
+            reader_program: bs58::encode(reader_program).into_string(),
+            reader_program_data: bs58::encode(reader_program_data).into_string(),
+            reader_program_data_hash: [6; 32],
+            wallet: bs58::encode(owner_pubkey).into_string(),
+            wallet_pubkey: owner_pubkey,
+            stake_authority: owner_pubkey,
+            withdraw_authority: owner_pubkey,
+            positions: vec![SolanaStakePositionPolicyV1 {
+                index: 0,
+                address: bs58::encode(position_address).into_string(),
+                vote_account: vote,
+            }],
+            checkpoint_committee_root: committee.root().unwrap(),
+            minimum_finalized_depth: 32,
+            maximum_finalized_slot_lag: 512,
+        };
+        let stake_account_data = stake_data(owner_pubkey, vote, SOLANA_DEACTIVATION_EPOCH_DISABLED);
+        let position = SolanaStakeReaderPositionV1 {
+            index: 0,
+            address: bs58::encode(position_address).into_string(),
+            lamports: 10_000_000_000,
+            owner_program: STAKE_PROGRAM.to_string(),
+            data_hash: Sha256::digest(&stake_account_data).into(),
+            stake_authority: owner_pubkey,
+            withdraw_authority: owner_pubkey,
+            vote_account: vote,
+            delegated_lamports: 9_900_000_000,
+            activation_epoch: 100,
+            deactivation_epoch: SOLANA_DEACTIVATION_EPOCH_DISABLED,
+        };
+        let salt = [0x42; 32];
+        let clock_key = decode_pubkey(SOLANA_CLOCK_SYSVAR_ID).unwrap();
+        let mut instruction_data = Vec::from(READER_INSTRUCTION_MAGIC);
+        instruction_data.extend_from_slice(&salt);
+        instruction_data.extend_from_slice(&1u16.to_le_bytes());
+        let mut message = vec![1, 0, 3, 4];
+        message.extend_from_slice(&owner_pubkey);
+        message.extend_from_slice(&clock_key);
+        message.extend_from_slice(&position_address);
+        message.extend_from_slice(&reader_program);
+        message.extend_from_slice(&[0x66; 32]);
+        message.push(1);
+        message.push(3);
+        message.push(2);
+        message.extend_from_slice(&[1, 2]);
+        message.push(u8::try_from(instruction_data.len()).unwrap());
+        message.extend_from_slice(&instruction_data);
+        let transaction_signature = owner.sign(&message).to_bytes().to_vec();
+        let checkpoint = BftSourceCheckpointV1 {
+            pftl_genesis_hash: "11".repeat(48),
+            checkpoint_kind: SOLANA_STAKE_READER_CHECKPOINT_KIND_V1.to_string(),
+            source_domain: policy.source_domain.clone(),
+            source_height: 77,
+            source_timestamp_ms: 1_785_000_000_000,
+            source_block_hash: B256::repeat_byte(0x77),
+            source_state_commitment: B256::repeat_byte(1),
+            observed_source_head: 109,
+            minimum_depth: 32,
+            pftl_observation_height: 500,
+            committee_epoch: committee.epoch,
+            committee_root: committee.root().unwrap(),
+        };
+        let certificate = BftSourceCheckpointCertificateV1 {
+            committee,
+            checkpoint,
+            votes: Vec::new(),
+        };
+        let mut proof = SolanaStakeReaderProofV1 {
+            policy,
+            checkpoint_certificate: certificate,
+            ownership_signature: vec![0; 64],
+            transaction_signature,
+            transaction_message: message,
+            instruction_salt: salt,
+            reader_payload: Vec::new(),
+            reader_return_data_hash: [0; 32],
+            reader_slot: 77,
+            reader_epoch: 500,
+            positions: vec![position],
+        };
+        proof.reader_payload = reader_payload(&proof, 77, 500).unwrap();
+        proof.reader_return_data_hash = Sha256::digest(&proof.reader_payload).into();
+        proof
+            .checkpoint_certificate
+            .checkpoint
+            .source_state_commitment = solana_stake_reader_state_commitment_v1(&proof).unwrap();
+        proof.checkpoint_certificate.votes = (0..3)
+            .map(|index| {
+                let validator_id = format!("validator-{index}");
+                let statement = proof
+                    .checkpoint_certificate
+                    .checkpoint
+                    .vote_signing_statement(&validator_id)
+                    .unwrap();
+                BftSourceCheckpointVoteV1 {
+                    validator_id,
+                    signature: ml_dsa_65_sign_with_context_seed(
+                        &checkpoint_keys[index].private_key,
+                        &statement,
+                        BFT_SOURCE_CHECKPOINT_SIGNATURE_CONTEXT_V1,
+                        &[0x80 + index as u8; 32],
+                    )
+                    .unwrap(),
+                }
+            })
+            .collect();
+        let statement =
+            solana_stake_reader_owner_statement_v1(&proof, &reader_context(&proof, "")).unwrap();
+        proof.ownership_signature = owner.sign(&statement).to_bytes().to_vec();
+        proof
+    }
+
+    fn resign_reader_checkpoint_and_owner(proof: &mut SolanaStakeReaderProofV1) {
+        let (_, checkpoint_keys) = checkpoint_committee();
+        proof.checkpoint_certificate.votes = (0..3)
+            .map(|index| {
+                let validator_id = format!("validator-{index}");
+                let statement = proof
+                    .checkpoint_certificate
+                    .checkpoint
+                    .vote_signing_statement(&validator_id)
+                    .unwrap();
+                BftSourceCheckpointVoteV1 {
+                    validator_id,
+                    signature: ml_dsa_65_sign_with_context_seed(
+                        &checkpoint_keys[index].private_key,
+                        &statement,
+                        BFT_SOURCE_CHECKPOINT_SIGNATURE_CONTEXT_V1,
+                        &[0xa0 + index as u8; 32],
+                    )
+                    .unwrap(),
+                }
+            })
+            .collect();
+        let owner = SigningKey::from_bytes(&[8; 32]);
+        let statement =
+            solana_stake_reader_owner_statement_v1(proof, &reader_context(proof, "")).unwrap();
+        proof.ownership_signature = owner.sign(&statement).to_bytes().to_vec();
+    }
+
     #[test]
     fn verifies_independent_attestors_owner_and_stake_state() {
         let (mut proof, owner, keys) = fixture();
@@ -818,6 +1646,150 @@ mod tests {
         assert_eq!(verified.total_lamports, 10_000_000_000);
         assert_eq!(verified.locked_lamports, 10_000_000_000);
         assert_eq!(verified.liquid_lamports, 0);
+    }
+
+    #[test]
+    fn verifies_public_reader_transaction_checkpoint_owner_and_reader_state() {
+        let proof = reader_fixture();
+        let commitment = proof.evidence_commitment().unwrap();
+        let verified =
+            verify_solana_stake_reader_proof_v1(&proof, &reader_context(&proof, &commitment))
+                .unwrap();
+        assert_eq!(verified.finalized_slot, 77);
+        assert_eq!(verified.total_lamports, 10_000_000_000);
+        assert_eq!(verified.locked_lamports, 10_000_000_000);
+    }
+
+    #[test]
+    fn reader_proof_rejects_transaction_payload_state_and_checkpoint_substitution() {
+        let proof = reader_fixture();
+
+        let mut tampered = proof.clone();
+        tampered.transaction_message[3] ^= 1;
+        let commitment = tampered.evidence_commitment().unwrap();
+        assert_eq!(
+            verify_solana_stake_reader_proof_v1(&tampered, &reader_context(&tampered, &commitment)),
+            Err(SolanaStakeError::CheckpointMismatch)
+        );
+
+        let mut tampered = proof.clone();
+        tampered.reader_payload[0] ^= 1;
+        let commitment = tampered.evidence_commitment().unwrap();
+        assert_eq!(
+            verify_solana_stake_reader_proof_v1(&tampered, &reader_context(&tampered, &commitment)),
+            Err(SolanaStakeError::CheckpointMismatch)
+        );
+
+        let mut tampered = proof;
+        tampered.positions[0].delegated_lamports ^= 1;
+        let commitment = tampered.evidence_commitment().unwrap();
+        assert_eq!(
+            verify_solana_stake_reader_proof_v1(&tampered, &reader_context(&tampered, &commitment)),
+            Err(SolanaStakeError::CheckpointMismatch)
+        );
+    }
+
+    #[test]
+    fn reader_rejects_noncanonical_transaction_and_weak_or_stale_finality() {
+        let proof = reader_fixture();
+        assert_eq!(verify_reader_transaction(&proof), Ok(()));
+
+        let signer = SigningKey::from_bytes(&[8; 32]);
+        let mut noncanonical = proof.clone();
+        noncanonical.transaction_message[2] -= 1;
+        noncanonical.transaction_signature = signer
+            .sign(&noncanonical.transaction_message)
+            .to_bytes()
+            .to_vec();
+        assert_eq!(
+            verify_reader_transaction(&noncanonical),
+            Err(SolanaStakeError::Transaction)
+        );
+
+        let mut weak = proof.clone();
+        weak.checkpoint_certificate.checkpoint.minimum_depth = 1;
+        resign_reader_checkpoint_and_owner(&mut weak);
+        let commitment = weak.evidence_commitment().unwrap();
+        assert_eq!(
+            verify_solana_stake_reader_proof_v1(&weak, &reader_context(&weak, &commitment)),
+            Err(SolanaStakeError::CheckpointMismatch)
+        );
+
+        let mut stale = proof;
+        stale.checkpoint_certificate.checkpoint.observed_source_head = 590;
+        resign_reader_checkpoint_and_owner(&mut stale);
+        let commitment = stale.evidence_commitment().unwrap();
+        assert_eq!(
+            verify_solana_stake_reader_proof_v1(&stale, &reader_context(&stale, &commitment)),
+            Err(SolanaStakeError::CheckpointMismatch)
+        );
+    }
+
+    #[test]
+    fn registered_guest_dispatch_executes_reader_proof_as_cryptographic() {
+        use crate::{
+            verify_observation_evidence, EvidenceDimensionV1, FreshnessPolicyV1,
+            LiabilityTreatmentV1, ReserveProofContextV1, SourceEvidenceV1, SourceManifestEntryV1,
+            SourceObservationV1, TrustClassV1,
+        };
+
+        let proof = reader_fixture();
+        let evidence_commitment = proof.evidence_commitment().unwrap();
+        let context = ReserveProofContextV1 {
+            pftl_genesis_hash: "11".repeat(48),
+            nav_asset_id: "22".repeat(48),
+            proof_profile_id: "33".repeat(48),
+            valuation_policy_hash: "44".repeat(32),
+            source_manifest_hash: "55".repeat(48),
+            valuation_unit_id: "66".repeat(48),
+            valuation_scale: 100_000_000,
+            observation_epoch: 1,
+            observation_not_before: 500,
+            observation_not_after: 500,
+        };
+        let entry = SourceManifestEntryV1 {
+            source_id: "solana-stake-primary".to_string(),
+            adapter_kind: SOLANA_STAKE_READER_ADAPTER_KIND_V1.to_string(),
+            source_domain: proof.policy.source_domain.clone(),
+            asset_or_position_id: proof.policy.position_set_id.clone(),
+            reserve_owner_commitment: solana_stake_owner_commitment(proof.policy.wallet_pubkey),
+            quantity_verifier_commitment: proof.policy.commitment().unwrap(),
+            valuation_verifier_commitment: "77".repeat(48),
+            quantity_evidence_class: TrustClassV1::Cryptographic,
+            valuation_evidence_class: TrustClassV1::Controlled,
+            freshness_policy: FreshnessPolicyV1 {
+                max_age_blocks: 10,
+                max_observation_span_blocks: 10,
+            },
+            haircut_policy_hash: "88".repeat(48),
+            liability_treatment: LiabilityTreatmentV1::Asset,
+            adapter_schema_version: 1,
+        };
+        let observation = SourceObservationV1 {
+            source_id: entry.source_id.clone(),
+            observed_at_block: 500,
+            gross_assets: 1,
+            total_liabilities: 0,
+            quantity_evidence: SourceEvidenceV1::SolanaStakeReader {
+                evidence_commitment,
+                proof: Box::new(proof),
+            },
+            valuation_evidence: SourceEvidenceV1::Controlled {
+                evidence_commitment: "99".repeat(48),
+            },
+            disclosure_commitment: "aa".repeat(48),
+        };
+        assert_eq!(
+            observation.quantity_evidence.class(),
+            TrustClassV1::Cryptographic
+        );
+        verify_observation_evidence(
+            &context,
+            &entry,
+            &observation,
+            EvidenceDimensionV1::Quantity,
+        )
+        .unwrap();
     }
 
     #[test]

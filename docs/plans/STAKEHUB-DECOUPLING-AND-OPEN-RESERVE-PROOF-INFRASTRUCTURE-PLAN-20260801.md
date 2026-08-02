@@ -160,9 +160,10 @@ For this A666 migration, these additional rules are absolute:
 - a signed oracle price is acceptable only when the public verifier checks the
   governed oracle identity, exact signed payload, freshness, scale, and source
   binding; an operator-entered price is not;
-- the current Solana RPC-attestation verifier is an interim compatibility
-  scaffold, not a production proof path and not evidence that StakeHub has
-  been deprecated; and
+- the legacy Solana RPC-attestation verifier is an interim compatibility
+  scaffold. The public reserve-reader successor is implemented but remains
+  non-production until its immutable deployment, governed inputs, fuzzing,
+  fresh epochs, reconciliation, and independent reproduction pass; and
 - if a required source cannot meet the public verification standard, the
   successor profile is not qualified. The source cannot be hidden inside an
   aggregate attestation to make the gate pass.
@@ -186,12 +187,12 @@ For this A666 migration, these additional rules are absolute:
   exact consensus verification.
 - The public framework implements generic Ed25519 attestation and
   protocol-receipt evidence.
-- The successor feature implements public source-specific verifier code for
-  Aave, the complete EVM spot set, Hyperliquid, staked NEAR, staked Solana, and
-  Monero. The Solana verifier currently validates an attested RPC statement,
-  which is deliberately disqualified as the production quantity proof. None
-  of the six source families is production-qualified; section 3.4 records the
-  exact remaining work.
+- The successor feature implements public source-specific verifier and
+  collector code for Aave, the complete EVM spot set, Hyperliquid, staked
+  NEAR, staked Solana, and Monero. Solana retains the old attested-RPC adapter
+  only for historical compatibility and adds a separate cryptographic
+  reserve-reader/BFT-checkpoint adapter. None of the six source families is
+  production-qualified; section 3.4 records the exact remaining work.
 - The public CLI emits source-checkpoint vote statements, canonically assembles
   independently signed ML-DSA votes, and rejects invalid committee bindings,
   sub-quorum certificates, duplicates, unknown validators, and bad signatures.
@@ -272,7 +273,7 @@ not yet the desired public architecture.
 | Complete EVM spot set | Provider-neutral quantity verifier and public checkpoint/collection workflow implemented; partial | No | Add the governed A666 policy/committee fixture, bind separately disclosed valuation evidence, fuzz, run fresh epochs and complete A666 reconciliation, and qualify |
 | Hyperliquid | Provider-neutral verifier, public HyperCore receipt-reader contract, unsigned snapshot construction, checkpoint/owner workflow, and receipt-proof collector implemented; partial | No | Deploy the hardened public reader, govern policy/committee inputs, fuzz, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
 | Staked NEAR | Provider-neutral quantity verifier, public reader contract, unsigned invocation construction, finalized-head checkpoint workflow, owner authorization, and outcome/block-proof collector implemented; partial | No | Deploy the public reader, govern policy/committee inputs, add fuzzing, reproduce complete historical and fresh epochs, bind governed public NEAR/USD valuation evidence under section 2, complete full A666 reconciliation, and qualify |
-| Staked Solana | Provider-neutral attested-RPC verifier implemented as an interim scaffold; production proof path absent | No | Implement public finalized source-state verification and collection that does not trust an operator/RPC signature for the quantity, then fuzz, run fresh epochs, reconcile, and qualify |
+| Staked Solana | Public stateless reserve-reader program, exact unsigned transaction construction, finalized transaction/block collector, immutable program identity check, owner authorization, BFT source checkpoint, bounded parser, successor verifier, and guest dispatch implemented; partial. The old attested-RPC adapter remains separately labeled historical evidence. | No | Build the reader with the pinned Solana SBF toolchain, deploy it immutably, publish governed A666 policy/committee/valuation inputs, fuzz, run fresh epochs, reconcile, independently reproduce, and qualify |
 | Monero | Provider-neutral cryptographic quantity verifier, context-bound challenge, public ReserveProofV2 parser, transaction/block/header collector, and certified key-image status workflow implemented; partial | No | Produce a fresh governed nonzero proof and independently signed checkpoint, bind separately disclosed XMR/USD valuation evidence, fuzz, complete A666 reconciliation, independently reproduce, and qualify |
 | pfUSDC overlay | Implemented and pushed | Not sufficient by itself | Exact-tip remote CI must pass; this covers only PFTL-accounted subscription reserves, not the six external source families |
 
@@ -288,24 +289,30 @@ closed. Aave remains unqualified pending governed A666 inputs, adversarial/fuzz
 coverage, fresh epochs, and reconciliation. EVM spot reconstructs every
 historical native and ERC-20 account/storage proof; Hyperliquid and NEAR
 reconstruct their historical receipt/Merkle evidence; Solana reconstructs the
-historical stake quantities and authority data. Monero reconstructs the real
+historical stake quantities and authority data. Its successor uses a public
+reader transaction whose exact message, ordered accounts, canonical output,
+reader program-data hash, absent upgrade authority, slot, owner signature,
+and quorum-certified finalized checkpoint are verified in public code. This
+is cryptographic relative to the disclosed BFT checkpoint, not direct Solana
+consensus verification. Monero reconstructs the real
 historical nonzero transaction/RingCT/ownership/inclusion proof and also
 verifies a synthetic context-bound zero-reserve test vector without treating
-an aggregate amount signature as proof. Its production path still lacks a
-public collector, a fresh governed nonzero header-chain/spent-status proof, and
-separate XMR/USD valuation evidence. The EVM spot adapter proves
+an aggregate amount signature as proof. Its public collector parses the wallet
+ReserveProofV2 and collects complete transactions, Merkle inclusion, bounded
+header anchors, and certified key-image status. Its production path still
+lacks a fresh governed nonzero header-chain/spent-status proof and separate
+XMR/USD valuation evidence. The EVM spot adapter proves
 reserve quantities only and deliberately leaves USD prices in the separately
 declared valuation trust dimension. Its public CLI now constructs deterministic
 per-chain checkpoint candidates from pinned RPC heights, supports independent
 checkpoint voting and assembly, emits the exact owner-authorization statement,
 and collects the complete native/ERC-20 proof set from an exact reviewed RPC
 map. It is still unqualified until governed A666 inputs, adversarial/fuzz
-coverage, fresh epochs, and reconciliation exist. The Solana adapter does not
-relabel RPC snapshots as cryptographic: it publicly verifies the exact
-position set, stake/withdraw/vote authorities, state parsing, signer policy,
-agreement, and signatures while retaining an `attested` quantity
-classification. That honesty is useful for historical reconstruction, but it
-is not the required production proof and cannot satisfy `G3`. The
+coverage, fresh epochs, and reconciliation exist. The Solana implementation
+does not relabel the old RPC snapshots: that adapter remains `attested`, while
+the distinct reserve-reader adapter is classified `cryptographic` only under
+its policy-pinned public reader and BFT checkpoint. It is still partial and
+cannot satisfy `G3` until the deployment and qualification gates pass. The
 implementations pass strict verifier-crate lint and the provider-neutral
 shipped-code boundary. They are excluded from the immutable legacy profile.
 That identity is reproduced from the exact public source commit pinned beside
@@ -606,6 +613,31 @@ checkpoint, complete account set, account state, and reserve ownership. The
 exact mechanism must be selected and qualified in public code. Signing an
 amount returned by RPC is not sufficient.
 
+The selected successor is now implemented in public source. The stateless
+`contracts/solana-stake-reader` program reads the exact ordered, read-only
+stake-account set and Clock sysvar, rejects wrong owners, duplicates,
+writable/executable accounts, malformed stake state, and invalid delegation
+amounts, and
+emits a canonical salted snapshot. The public CLI constructs the exact legacy
+transaction message for an external wallet, fetches the successful finalized
+transaction and containing block, enforces policy-pinned finality depth and
+maximum slot lag, verifies that the reader is an immutable upgradeable-loader
+deployment with the exact policy-pinned ProgramData hash, and emits the shared
+BFT checkpoint candidate. The successor verifier checks the transaction
+signature and exact message/account/instruction structure, reader output and
+return-data hash, all position/authority/vote bindings, owner authorization,
+and the assembled ML-DSA checkpoint certificate before producing quantity
+evidence. No Solana, reserve-owner, or validator private key enters the proof
+kit. This proves the source values relative to the disclosed BFT checkpoint;
+it does not claim direct Solana consensus verification.
+
+This code is still partial. No pinned Solana SBF build or immutable public
+deployment has been recorded, no governed A666 reader/policy/committee/SOL-USD
+valuation bundle exists, and parser fuzzing, fresh multi-epoch collection,
+full A666 reconciliation, and independent production reproduction remain
+open. Therefore staked Solana remains `0/1` qualified and does not make `G3`
+pass.
+
 ### 5.6 Monero reserves
 
 The public adapter must verify:
@@ -738,8 +770,13 @@ existing guest ELF SHA exactly.
   outcome/block proof collector.
 - [x] Implement the interim public staked-Solana attested-RPC verifier for
   historical reconstruction.
-- [ ] Replace the interim Solana quantity attestation with the public
-  finalized source-state proof and collector described in section 5.5.
+- [x] Implement the separate public Solana reserve-reader, finalized
+  transaction/block collector, owner authorization, source checkpoint,
+  successor verifier, bounded parser, and guest dispatch described in section
+  5.5; keep the interim signed-RPC adapter explicitly attested.
+- [ ] Build and deploy the Solana reader immutably, publish governed A666
+  policy/committee/valuation inputs, fuzz it, reproduce fresh epochs, reconcile
+  the complete A666 profile, and qualify it independently.
 - [x] Implement and register the public XMR reserve-proof quantity adapter.
 - [x] Implement the public Monero reserve-proof, header-chain, transaction
   inclusion, ownership, and key-image spent-status collector for zero and
@@ -1055,24 +1092,26 @@ git diff -- \
 
 Then:
 
-1. Fix the immutable-legacy-guest CI archive/rebuild failure, dispatch an
-   exact-tip run, and require green CI. Preserve the pinned legacy ELF and vkey.
+1. Require green exact-tip CI while preserving the pinned legacy ELF and vkey.
+   The legacy archive/rebuild defect is fixed; do not rewrite that identity.
 2. Qualify Hyperliquid: deploy the hardened public reader, publish governed
    A666 policy and committee inputs, collect fresh externally signed snapshots,
    add parser fuzzing and adversarial network fixtures, reconcile at least two
    fresh epochs, and independently reproduce the workflow. The public snapshot,
    checkpoint, owner-authorization, and receipt-proof collection code is now
    implemented; it is not yet production-qualified.
-3. Finish NEAR: public reader invocation, finalized head acquisition,
-   outcome/block Merkle proof collection, code/account/pool pinning, ownership,
-   source checkpoint, and verified observation output.
-4. Finish Solana with an actual public finalized source-state mechanism. The
-   signed-RPC amount scaffold is not production-qualifying. Implement the
-   reader/inclusion/finality approach selected under section 5.5, complete
-   stake-state and authority checks, and emit a verified observation.
-5. Finish Monero: public reserve-proof generation/ingestion, transaction and
-   RingCT artifacts, ownership proof, inclusion/header chain, fresh challenge,
-   key-image spent-status set, zero/nonzero support, and verified observation.
+3. Qualify NEAR: deploy the implemented reader, publish governed A666
+   policy/committee and public valuation inputs, fuzz the public parsers,
+   reproduce fresh epochs independently, and reconcile the full profile.
+4. Qualify Solana: install and pin the Solana SBF toolchain, reproducibly build
+   and immutably deploy the implemented reader, publish its ProgramData hash
+   and governed A666 policy/committee/SOL-USD valuation inputs, fuzz the
+   transaction/payload/program-state parsers, collect fresh epochs, reconcile,
+   and reproduce independently. The old signed-RPC adapter remains ineligible.
+5. Qualify Monero: create a fresh context-bound nonzero wallet proof, assemble
+   an independently reproduced checkpoint and spent-status certificate, bind
+   public XMR/USD valuation evidence, fuzz the implemented parsers, collect
+   fresh epochs, and reconcile the full profile.
 6. Finish public valuation for every source. Bind governed price origin,
    signature or chain proof, scale, timestamp, freshness, asset identity,
    haircut, and rounding. Do not accept operator-entered aggregate USD values.

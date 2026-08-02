@@ -46,6 +46,7 @@ use serde::Deserialize;
 use crate::hyperliquid_adapter::{self, HyperliquidCommand};
 use crate::monero_adapter::{self, MoneroCommand};
 use crate::near_adapter::{self, NearCommand};
+use crate::solana_adapter::{self, SolanaCommand};
 
 const MAX_RPC_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
 const RPC_TIMEOUT: Duration = Duration::from_secs(30);
@@ -87,6 +88,12 @@ pub enum AdapterCommand {
     Monero {
         #[command(subcommand)]
         command: MoneroCommand,
+    },
+    /// Build and verify public Solana stake-reader transactions under a
+    /// governed finalized-slot checkpoint.
+    Solana {
+        #[command(subcommand)]
+        command: SolanaCommand,
     },
     /// Emit the canonical statement for an Ed25519 attestation or protocol
     /// receipt already represented in a source observation.
@@ -548,6 +555,7 @@ pub fn run(command: AdapterCommand) -> Result<()> {
         AdapterCommand::Hyperliquid { command } => hyperliquid_adapter::run(command),
         AdapterCommand::Near { command } => near_adapter::run(command),
         AdapterCommand::Monero { command } => monero_adapter::run(command),
+        AdapterCommand::Solana { command } => solana_adapter::run(command),
         AdapterCommand::Ed25519EvidenceStatement {
             manifest,
             context,

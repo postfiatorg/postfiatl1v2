@@ -25,6 +25,7 @@ mod evm_adapter;
 mod hyperliquid_adapter;
 mod monero_adapter;
 mod near_adapter;
+mod solana_adapter;
 mod source_checkpoint;
 
 use evm_adapter::AdapterCommand;

@@ -5,6 +5,7 @@ members = [
 ]
 exclude = [
     "contracts/near-stake-reader",
+    "contracts/solana-stake-reader",
     "programs/reserve-proof-guest",
 ]
 resolver = "2"

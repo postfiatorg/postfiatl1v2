@@ -50,8 +50,9 @@ use near_receipt::{
 };
 #[cfg(feature = "a666-public-adapters-v2")]
 use solana_stake::{
-    verify_solana_stake_attested_proof_v1, SolanaStakeAttestedProofV1, SolanaStakeVerifyContextV1,
-    SOLANA_STAKE_ADAPTER_KIND_V1,
+    verify_solana_stake_attested_proof_v1, verify_solana_stake_reader_proof_v1,
+    SolanaStakeAttestedProofV1, SolanaStakeReaderProofV1, SolanaStakeVerifyContextV1,
+    SOLANA_STAKE_ADAPTER_KIND_V1, SOLANA_STAKE_READER_ADAPTER_KIND_V1,
 };
 
 pub const MANIFEST_SCHEMA_V1: &str = "postfiat.reserve_source_manifest.v1";
@@ -219,6 +220,13 @@ pub enum SourceEvidenceV1 {
         evidence_commitment: String,
         proof: Box<SolanaStakeAttestedProofV1>,
     },
+    /// Exact stake-account state and public reader output bound to a
+    /// finalized Solana block by an independently governed BFT checkpoint.
+    #[cfg(feature = "a666-public-adapters-v2")]
+    SolanaStakeReader {
+        evidence_commitment: String,
+        proof: Box<SolanaStakeReaderProofV1>,
+    },
     /// Monero reserve proof with transaction/RingCT verification, governed
     /// head anchoring, and certified key-image spent status.
     #[cfg(feature = "a666-public-adapters-v2")]
@@ -245,6 +253,7 @@ impl SourceEvidenceV1 {
             | Self::NearReceiptQuantity { .. }
             | Self::AaveV3 { .. }
             | Self::EvmSpotQuantity { .. }
+            | Self::SolanaStakeReader { .. }
             | Self::MoneroReserve { .. } => TrustClassV1::Cryptographic,
             #[cfg(feature = "a666-public-adapters-v2")]
             Self::SolanaStakeAttested { .. } => TrustClassV1::Attested,
@@ -286,6 +295,10 @@ impl SourceEvidenceV1 {
                 ..
             }
             | Self::EvmSpotQuantity {
+                evidence_commitment,
+                ..
+            }
+            | Self::SolanaStakeReader {
                 evidence_commitment,
                 ..
             }
@@ -899,6 +912,50 @@ fn verify_evidence(
             .map_err(|error| {
                 format!(
                     "source {} Solana stake quantity verification failed: {error:?}",
+                    entry.source_id
+                )
+            })
+        }
+        #[cfg(feature = "a666-public-adapters-v2")]
+        SourceEvidenceV1::SolanaStakeReader {
+            evidence_commitment,
+            proof,
+        } => {
+            if dimension != "quantity" {
+                return Err(format!(
+                    "source {} Solana reader proof is only valid for quantity evidence",
+                    entry.source_id
+                ));
+            }
+            if entry.adapter_kind != SOLANA_STAKE_READER_ADAPTER_KIND_V1
+                || entry.adapter_schema_version != 1
+            {
+                return Err(format!(
+                    "source {} Solana reader proof requires {SOLANA_STAKE_READER_ADAPTER_KIND_V1} adapter schema 1",
+                    entry.source_id
+                ));
+            }
+            verify_solana_stake_reader_proof_v1(
+                proof,
+                &SolanaStakeVerifyContextV1 {
+                    pftl_genesis_hash: &context.pftl_genesis_hash,
+                    nav_asset_id: &context.nav_asset_id,
+                    proof_profile_id: &context.proof_profile_id,
+                    valuation_policy_hash: &context.valuation_policy_hash,
+                    source_manifest_hash: &context.source_manifest_hash,
+                    source_id: &entry.source_id,
+                    source_domain: &entry.source_domain,
+                    asset_or_position_id: &entry.asset_or_position_id,
+                    reserve_owner_commitment: &entry.reserve_owner_commitment,
+                    quantity_verifier_commitment: &entry.quantity_verifier_commitment,
+                    observed_at_pftl_height: observation.observed_at_block,
+                    expected_evidence_commitment: evidence_commitment,
+                },
+            )
+            .map(|_| ())
+            .map_err(|error| {
+                format!(
+                    "source {} Solana reader quantity verification failed: {error:?}",
                     entry.source_id
                 )
             })
