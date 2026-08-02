@@ -241,6 +241,18 @@ state. The CLI accepts the expected collateral and liability values as an
 explicit reviewed assertion, then independently recomputes and rejects either
 on any mismatch; it does not trust those values as evidence.
 
+Hyperliquid receipt production no longer relies on an unpublished reader
+contract. `crates/ethereum-contracts/src/HyperCoreReserveReader.sol` is the
+public source for the HyperEVM contract whose address is policy-pinned by the
+receipt verifier. It reads only official HyperCore precompiles, requires
+canonical ordered position sets, derives the supported XMR1 and HYPE spot
+prices from pinned HyperCore mark-price assets, and emits the exact
+`HyperCoreSnapshot` commitment consumed by the public verifier. The verifier
+treats `allowed_spot_tokens` as the complete required spot set: omission,
+addition, reordering, duplicate token, or decimal substitution fails closed.
+Public deployment and receipt-proof collection tooling remain required before
+this adapter is production-qualified.
+
 Quantity and valuation remain separate. Derive the exact manifest commitment
 for an Ed25519 attestation or protocol-receipt key first:
 

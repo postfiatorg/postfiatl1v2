@@ -201,7 +201,7 @@ not yet the desired public architecture.
 |---|---|---:|---|
 | Aave on Arbitrum | Provider-neutral verifier and public checkpoint/collection workflow implemented; partial | No | Add governed A666 policy/committee inputs, fuzz, run fresh epochs and complete A666 reconciliation, and qualify |
 | Complete EVM spot set | Provider-neutral quantity verifier and public checkpoint/collection workflow implemented; partial | No | Add the governed A666 policy/committee fixture, bind separately disclosed valuation evidence, fuzz, run fresh epochs and complete A666 reconciliation, and qualify |
-| Hyperliquid | Provider-neutral verifier implemented; partial | No | Add public collection and fuzzing, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
+| Hyperliquid | Provider-neutral verifier and public HyperCore receipt-reader contract implemented; partial | No | Add public deployment/receipt-proof collection, fuzz, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
 | Staked NEAR | Provider-neutral quantity verifier implemented; partial | No | Add public collection and fuzzing, reproduce complete historical and fresh epochs, bind separately attested valuation, complete full A666 reconciliation, and qualify |
 | Staked Solana | Provider-neutral attested-state verifier implemented; partial | No | Add the public collector and governed independent signer/policy fixture, fuzz, run fresh epochs and complete A666 reconciliation, and qualify at the accurately disclosed attested quantity trust level |
 | Monero | Provider-neutral cryptographic quantity verifier implemented; partial | No | Add the public collector, produce a fresh governed nonzero proof with certified head chain and spent-status set, bind separately disclosed XMR/USD valuation evidence, fuzz, complete A666 reconciliation, and qualify |
@@ -398,6 +398,14 @@ Internal migration inputs include:
 /home/postfiat/repos/StakeHub/zk/contracts/src/HyperCoreReader.sol
 ```
 
+The reader contract has now been ported, hardened, and tested publicly at
+`crates/ethereum-contracts/src/HyperCoreReserveReader.sol`. The verifier now
+also requires the receipt's spot rows to equal the complete policy-pinned set,
+not merely be members of an allowlist. The private paths above are historical
+migration references only; they are not acceptable runtime or build inputs.
+Public transaction construction plus block-header/receipt-trie proof
+collection remains open.
+
 The current A666 shadow marks Hyperliquid quantity and valuation as attested.
 That is not equivalent to the historical receipt validation and cannot be the
 live successor.
@@ -550,6 +558,8 @@ existing guest ELF SHA exactly.
 - [x] Implement the public complete-EVM-spot checkpoint candidate, owner
   authorization, and multichain RPC collector workflow.
 - [x] Implement and register the public Hyperliquid adapter.
+- [x] Port and test the HyperCore receipt-reader contract publicly and reject
+  omitted, added, reordered, or duplicated governed spot rows.
 - [x] Implement and register the public staked-NEAR adapter.
 - [ ] Implement the public staked-Solana collector/verifier at its governed
   trust level.

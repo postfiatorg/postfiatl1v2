@@ -489,13 +489,21 @@ fn compute_values(
     }
 
     let mut seen_spots = Vec::with_capacity(payload.spots.len());
-    let mut spot_locked = 0u128;
-    let mut spot_unlocked = 0u128;
     for spot in &payload.spots {
         if seen_spots.contains(&spot.token) {
             return Err(HlReceiptLegError::DuplicateRow);
         }
         seen_spots.push(spot.token);
+    }
+    if payload.spots.len() != policy.allowed_spot_tokens.len() {
+        return Err(HlReceiptLegError::BadSpotToken);
+    }
+    let mut spot_locked = 0u128;
+    let mut spot_unlocked = 0u128;
+    for (spot, governed) in payload.spots.iter().zip(&policy.allowed_spot_tokens) {
+        if spot.token != governed.token || spot.wei_decimals != governed.wei_decimals {
+            return Err(HlReceiptLegError::BadSpotToken);
+        }
         policy.validate_spot_token(spot.token, spot.wei_decimals)?;
         if spot.hold > spot.total {
             return Err(HlReceiptLegError::BadSpotBalance);
@@ -1568,6 +1576,14 @@ mod tests {
         assert_eq!(
             compute_values(&payload, &policy).map(|_| ()),
             Err(HlReceiptLegError::DuplicateRow)
+        );
+
+        let mut payload =
+            decode_snapshot_payload(&snapshot_payload(Address::repeat_byte(2))).unwrap();
+        payload.spots.clear();
+        assert_eq!(
+            compute_values(&payload, &policy).map(|_| ()),
+            Err(HlReceiptLegError::BadSpotToken)
         );
 
         let mut payload =

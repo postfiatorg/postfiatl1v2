@@ -21,8 +21,8 @@
       "id": "hyperliquid",
       "status": "partial",
       "production_qualified": false,
-      "public_implementation": "tools/nav-reserve-proof/crates/reserve-proof-types/src/hyperliquid_receipt.rs",
-      "note": "A provider-neutral verifier now checks the HyperEVM reader receipt, BFT-certified header, owner authorization, positions, holds, values, liabilities, bounds, and guest dispatch, with historical receipt reconstruction. Public collection, fuzzing, fresh epochs, full A666 reconciliation, and production qualification remain open."
+      "public_implementation": "tools/nav-reserve-proof/crates/reserve-proof-types/src/hyperliquid_receipt.rs; crates/ethereum-contracts/src/HyperCoreReserveReader.sol",
+      "note": "A provider-neutral verifier now checks the HyperEVM reader receipt, BFT-certified header, owner authorization, complete policy-pinned spot set, positions, holds, values, liabilities, bounds, and guest dispatch, with historical receipt reconstruction. The hardened HyperCore receipt-reader contract and its canonical position-set checks now live in the public repository. Public deployment and receipt-proof collection, fuzzing, fresh epochs, full A666 reconciliation, and production qualification remain open."
     },
     {
       "id": "staked-near",
