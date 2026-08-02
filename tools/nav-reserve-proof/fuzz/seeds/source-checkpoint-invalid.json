@@ -1,0 +1,22 @@
+{
+  "committee": {
+    "epoch": 1,
+    "quorum": 1,
+    "validators": []
+  },
+  "checkpoint": {
+    "pftl_genesis_hash": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+    "checkpoint_kind": "fuzz-head-v1",
+    "source_domain": "fuzz:mainnet",
+    "source_height": 1,
+    "source_timestamp_ms": 1,
+    "source_block_hash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+    "source_state_commitment": "0x3333333333333333333333333333333333333333333333333333333333333333",
+    "observed_source_head": 2,
+    "minimum_depth": 1,
+    "pftl_observation_height": 1,
+    "committee_epoch": 1,
+    "committee_root": "444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "votes": []
+}

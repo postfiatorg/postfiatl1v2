@@ -9,6 +9,9 @@ use std::{
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use postfiat_nav_reserve_protocol::nav_reserve_subscription_composite_source_root_v1;
+use postfiat_reserve_proof::{
+    run_adapter, run_source_checkpoint, AdapterCommand, SourceCheckpointCommand,
+};
 use postfiat_types::{
     AssetTransactionOperation, NavProfileRegisterOperation, NavProofProfile,
     NavReservePublicValuesV1, NavReserveSubmitOperation, SignedAssetTransaction,
@@ -20,16 +23,6 @@ use reserve_proof_types::{
     WITNESS_SCHEMA_V1,
 };
 use serde::{Deserialize, Serialize};
-
-mod evm_adapter;
-mod hyperliquid_adapter;
-mod monero_adapter;
-mod near_adapter;
-mod solana_adapter;
-mod source_checkpoint;
-
-use evm_adapter::AdapterCommand;
-use source_checkpoint::SourceCheckpointCommand;
 
 #[cfg(feature = "sp1")]
 use bincode::Options as _;
@@ -224,8 +217,8 @@ struct DerivedProfileV1 {
 fn main() -> Result<()> {
     let args = Args::parse();
     match args.command {
-        Command::Adapter { command } => evm_adapter::run(*command),
-        Command::SourceCheckpoint { command } => source_checkpoint::run(command),
+        Command::Adapter { command } => run_adapter(*command),
+        Command::SourceCheckpoint { command } => run_source_checkpoint(command),
         Command::Manifest {
             command: ManifestCommand::Validate { manifest },
         } => manifest_validate(manifest),

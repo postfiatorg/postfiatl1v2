@@ -802,7 +802,14 @@ existing guest ELF SHA exactly.
   campaigns. The first local campaigns completed 1,860,664 full-witness and
   3,340,640 source-evidence executions without a crash, timeout, or OOM. This
   broad harness does not replace the required parser-specific targets below.
-- [ ] Add fuzz targets for every new parser handling external proof material.
+- [x] Add coverage-guided targets for every current public reserve-proof input
+  boundary: canonical witness JSON and CBOR, tagged source evidence, shared EVM
+  RPC quantities/state proofs, HyperEVM headers/receipts/tries, NEAR
+  heads/light proofs, Solana program/transaction/reader payloads, Monero
+  ReserveProofV2/transactions, and source-checkpoint committee/vote/certificate
+  material. A clean nine-target smoke campaign on 2026-08-02 completed
+  4,010,896 executions without a crash, timeout, or OOM. This closes target
+  coverage, not the retained per-source production fuzz qualification below.
 - [ ] Prove malformed or unsupported adapter evidence fails closed without
   panic or unbounded work.
 
@@ -1039,13 +1046,15 @@ Current machine gates:
 ```text
 scripts/test-proof-public-input-inventory
   passed after the current valuation continuation; 5 systems, 70 public fields,
-  31 source hashes
+  43 source hashes
 
 scripts/check-nav-reserve-proof-fuzz-smoke
-  passed locally against guarded temporary corpora; the initial retained run
-  counts were 1,860,664 full-witness and 3,340,640 source-evidence executions,
-  with no crash, timeout, or OOM. Exact-tip CI must reproduce the pinned smoke
-  campaigns; source-specific raw-parser fuzzing remains open.
+  passed locally against guarded temporary corpora. In addition to the initial
+  retained witness/evidence campaigns, a clean 2026-08-02 run exercised all
+  nine current boundaries for 4,010,896 executions with no crash, timeout, or
+  OOM. Exact-tip CI must reproduce the pinned smoke campaigns. Longer retained
+  per-source campaigns and regression-corpus review remain open and are part of
+  production qualification.
 
 scripts/check-a666-public-adapter-readiness
   passed; qualified=0/6, stakehub_deprecated=false
@@ -1137,22 +1146,23 @@ Then:
    The legacy archive/rebuild defect is fixed; do not rewrite that identity.
 2. Qualify Hyperliquid: deploy the hardened public reader, publish governed
    A666 policy and committee inputs, collect fresh externally signed snapshots,
-   add parser fuzzing and adversarial network fixtures, reconcile at least two
+   retain longer parser-fuzz campaigns and add adversarial network fixtures,
+   reconcile at least two
    fresh epochs, and independently reproduce the workflow. The public snapshot,
    checkpoint, owner-authorization, and receipt-proof collection code is now
    implemented; it is not yet production-qualified.
 3. Qualify NEAR: deploy the implemented reader, publish governed A666
-   policy/committee and public valuation inputs, fuzz the public parsers,
+   policy/committee and public valuation inputs, retain longer fuzz campaigns,
    reproduce fresh epochs independently, and reconcile the full profile.
 4. Qualify Solana: immutably deploy the exact reproducibly built reader,
    publish its ProgramData hash and governed A666
-   policy/committee/SOL-USD valuation inputs, fuzz the
+   policy/committee/SOL-USD valuation inputs, retain longer fuzz campaigns for the
    transaction/payload/program-state parsers, collect fresh epochs, reconcile,
    and reproduce independently. The pinned SBF build identity is complete and
    CI-rebuilt; the old signed-RPC adapter remains ineligible.
 5. Qualify Monero: create a fresh context-bound nonzero wallet proof, assemble
    an independently reproduced checkpoint and spent-status certificate, bind
-   public XMR/USD valuation evidence, fuzz the implemented parsers, collect
+   public XMR/USD valuation evidence, retain longer fuzz campaigns, collect
    fresh epochs, and reconcile the full profile.
 6. Finish public valuation for every source. Bind governed price origin,
    signature or chain proof, scale, timestamp, freshness, asset identity,

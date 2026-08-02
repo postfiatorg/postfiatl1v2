@@ -29,16 +29,61 @@ cleanup() {
 trap cleanup EXIT
 
 witness_corpus="$fuzz_root/witness"
+witness_cbor_corpus="$fuzz_root/witness-cbor"
 evidence_corpus="$fuzz_root/evidence"
-mkdir -p "$witness_corpus" "$evidence_corpus"
+evm_corpus="$fuzz_root/evm"
+hyperliquid_corpus="$fuzz_root/hyperliquid"
+near_corpus="$fuzz_root/near"
+solana_corpus="$fuzz_root/solana"
+monero_corpus="$fuzz_root/monero"
+checkpoint_corpus="$fuzz_root/checkpoint"
+mkdir -p \
+  "$witness_corpus" \
+  "$witness_cbor_corpus" \
+  "$evidence_corpus" \
+  "$evm_corpus" \
+  "$hyperliquid_corpus" \
+  "$near_corpus" \
+  "$solana_corpus" \
+  "$monero_corpus" \
+  "$checkpoint_corpus"
 cp "$proof_root/fixtures/controlled-two-source/witness.json" \
   "$witness_corpus/controlled-two-source.json"
+cargo run --locked --quiet \
+  --manifest-path "$proof_root/Cargo.toml" \
+  -p postfiat-reserve-proof -- \
+  witness build \
+  --input "$proof_root/fixtures/controlled-two-source/witness.json" \
+  --output "$witness_cbor_corpus/controlled-two-source.cbor" \
+  >/dev/null
 
 jq -c '.observations[] | .quantity_evidence, .valuation_evidence' \
   "$proof_root/fixtures/controlled-two-source/witness.json" |
 while IFS= read -r evidence; do
   evidence_hash="$(printf '%s' "$evidence" | sha256sum | cut -d' ' -f1)"
   printf '%s\n' "$evidence" > "$evidence_corpus/$evidence_hash.json"
+done
+
+evidence_root="$repository_root/docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue"
+printf '%s\n' '["0x80"]' > "$evm_corpus/minimal-proof-nodes.json"
+cp "$evidence_root/evm-spot-witness.json" "$evm_corpus/historical-spot.json"
+cp "$evidence_root/hl-receipt-witness.json" \
+  "$hyperliquid_corpus/historical-receipt-proof.json"
+cp "$evidence_root/near-receipt-witness.json" \
+  "$near_corpus/historical-light-proof.json"
+cp "$evidence_root/solana-witness.json" \
+  "$solana_corpus/historical-attested-proof.json"
+printf '\x01' > "$solana_corpus/legacy-transaction-prefix.bin"
+printf '\x00\x01\x00' > "$monero_corpus/zero-output-reserve-proof.bin"
+dd if=/dev/zero bs=96 count=1 status=none \
+  >> "$monero_corpus/zero-output-reserve-proof.bin"
+cp "$proof_root/fuzz/seeds/source-checkpoint-invalid.json" \
+  "$checkpoint_corpus/certificate.json"
+jq -c '.committee, .checkpoint, {validator_id:"fuzz-validator",signature:[]}' \
+  "$proof_root/fuzz/seeds/source-checkpoint-invalid.json" |
+while IFS= read -r checkpoint_input; do
+  checkpoint_hash="$(printf '%s' "$checkpoint_input" | sha256sum | cut -d' ' -f1)"
+  printf '%s\n' "$checkpoint_input" > "$checkpoint_corpus/$checkpoint_hash.json"
 done
 
 run_target() {
@@ -57,4 +102,11 @@ run_target() {
 }
 
 run_target witness_json "$witness_corpus" 8388608
+run_target witness_cbor "$witness_cbor_corpus" 8388608
 run_target source_evidence_json "$evidence_corpus" 2097152
+run_target evm_external_input "$evm_corpus" 2097152
+run_target hyperliquid_external_input "$hyperliquid_corpus" 2097152
+run_target near_external_input "$near_corpus" 2097152
+run_target solana_external_input "$solana_corpus" 2097152
+run_target monero_external_input "$monero_corpus" 131072
+run_target source_checkpoint_external_input "$checkpoint_corpus" 8388608

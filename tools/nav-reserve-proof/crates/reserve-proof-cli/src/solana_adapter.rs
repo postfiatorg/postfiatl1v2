@@ -33,6 +33,7 @@ const INSTRUCTION_MAGIC: &[u8; 8] = b"PFSOL001";
 const SNAPSHOT_MAGIC: &[u8; 8] = b"PFSNAP01";
 const SNAPSHOT_VERSION: u16 = 1;
 const RPC_TIMEOUT: Duration = Duration::from_secs(30);
+const MAX_SOLANA_FUZZ_INPUT_BYTES: usize = 2 * 1024 * 1024;
 
 #[derive(Debug, Subcommand)]
 pub enum SolanaCommand {
@@ -977,6 +978,26 @@ fn write_short_vec(mut value: usize, out: &mut Vec<u8>) {
         value >>= 7;
     }
     out.push(value as u8);
+}
+
+pub(crate) fn fuzz_external_input(data: &[u8]) {
+    if data.len() > MAX_SOLANA_FUZZ_INPUT_BYTES {
+        return;
+    }
+    let _ = verify_immutable_program_data(data);
+    let _ = split_legacy_transaction(data);
+
+    #[derive(Deserialize)]
+    struct ReaderPayloadInput {
+        payload: Vec<u8>,
+        policy: SolanaStakeReaderPolicyV1,
+        salt: [u8; 32],
+    }
+    if let Ok(input) = serde_json::from_slice::<ReaderPayloadInput>(data) {
+        if input.payload.len() <= 16 * 1024 {
+            let _ = parse_reader_payload(&input.payload, &input.policy, input.salt);
+        }
+    }
 }
 
 fn rpc_client() -> Result<Client> {

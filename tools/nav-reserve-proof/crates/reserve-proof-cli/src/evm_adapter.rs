@@ -2615,6 +2615,25 @@ fn validate_hex(label: &str, value: &str, bytes: usize) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn fuzz_external_input(data: &[u8]) {
+    if data.len() > MAX_RPC_RESPONSE_BYTES {
+        return;
+    }
+    if let Ok(text) = std::str::from_utf8(data) {
+        let _ = parse_u256("fuzz EVM quantity", text);
+        let _ = parse_u64_quantity("fuzz EVM u64 quantity", text);
+        let _ = parse_address("fuzz EVM address", text);
+        let _ = parse_b256("fuzz EVM hash", text);
+        let _ = decode_hex("fuzz EVM word", text, 32);
+    }
+    if let Ok(nodes) = serde_json::from_slice::<Vec<String>>(data) {
+        let _ = decode_proof_nodes("fuzz EVM proof", &nodes);
+    }
+    if let Ok(proof) = serde_json::from_slice::<RpcAccountProof>(data) {
+        let _ = rpc_account_proof("fuzz EVM account", proof);
+    }
+}
+
 pub(crate) fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
     let metadata = fs::metadata(path).with_context(|| format!("stat {}", path.display()))?;
     anyhow::ensure!(

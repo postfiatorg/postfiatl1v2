@@ -39,6 +39,7 @@ const SNAPSHOT_FUNCTION_SIGNATURE: &[u8] =
     b"snapshot(address,uint32[],(uint64,uint8,uint32,uint8)[],bytes32)";
 const RPC_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_BLOCK_RECEIPTS: usize = 8_192;
+const MAX_HYPEREVM_FUZZ_INPUT_BYTES: usize = 2 * 1024 * 1024;
 
 #[derive(Debug, Subcommand)]
 pub enum HyperliquidCommand {
@@ -1287,6 +1288,45 @@ fn required_str<'a>(value: &'a Value, field: &str) -> Result<&'a str> {
 
 fn has_non_null(value: &Value, field: &str) -> bool {
     value.get(field).is_some_and(|field| !field.is_null())
+}
+
+pub(crate) fn fuzz_external_input(data: &[u8]) {
+    if data.len() > MAX_HYPEREVM_FUZZ_INPUT_BYTES {
+        return;
+    }
+    if let Ok(text) = std::str::from_utf8(data) {
+        let _ = parse_rpc_quantity("fuzz HyperEVM quantity", text);
+        let _ = decode_data("fuzz HyperEVM data", text, MAX_HYPEREVM_FUZZ_INPUT_BYTES);
+        let _ = rlp_quantity("fuzz HyperEVM RLP quantity", text);
+    }
+    if let Ok(block) = serde_json::from_slice::<Value>(data) {
+        let expected_height = block
+            .get("number")
+            .and_then(Value::as_str)
+            .and_then(|value| parse_rpc_quantity("fuzz block number", value).ok())
+            .unwrap_or_default();
+        let _ = validate_and_encode_block(&block, expected_height);
+    }
+    if let Ok(receipts) = serde_json::from_slice::<Vec<RpcReceipt>>(data) {
+        if receipts.is_empty() || receipts.len() > MAX_BLOCK_RECEIPTS {
+            return;
+        }
+        let encoded = receipts
+            .iter()
+            .map(encode_receipt)
+            .collect::<Result<Vec<_>>>();
+        if let Ok(encoded) = encoded {
+            let _ = build_receipts_trie_with_proof(&encoded, 0);
+        }
+        if let Some(first) = receipts.first() {
+            if let (Ok(height), Ok(hash)) = (
+                parse_rpc_quantity("fuzz receipt block", &first.block_number),
+                parse_b256("fuzz receipt hash", &first.block_hash),
+            ) {
+                let _ = validate_and_order_receipts(receipts, height, hash);
+            }
+        }
+    }
 }
 
 #[cfg(test)]

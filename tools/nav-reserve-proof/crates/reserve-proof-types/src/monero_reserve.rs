@@ -868,6 +868,15 @@ fn parse_transaction(bytes: &[u8]) -> Result<Transaction, XmrReserveLegError> {
     deserialize::<Transaction>(bytes).map_err(|_| XmrReserveLegError::BadTransaction)
 }
 
+/// Coverage-guided entry point for the exact Monero transaction decoder used
+/// by the reserve verifier. It deliberately exposes no parsed value.
+#[doc(hidden)]
+pub fn fuzz_monero_transaction_bytes(bytes: &[u8]) {
+    if bytes.len() <= XMR_RESERVE_MAX_TRANSACTION_BYTES {
+        let _ = parse_transaction(bytes);
+    }
+}
+
 fn validate_no_duplicates(witness: &XmrReserveWitness) -> Result<(), XmrReserveLegError> {
     let mut key_images = Vec::with_capacity(witness.entries.len());
     let mut outputs = Vec::with_capacity(witness.entries.len());

@@ -6,6 +6,7 @@ use reserve_proof_types::bft_checkpoint::{
     BftCheckpointCommitteeV1, BftSourceCheckpointCertificateV1, BftSourceCheckpointV1,
     BftSourceCheckpointVoteV1, MAX_BFT_CHECKPOINT_VALIDATORS,
 };
+use reserve_proof_types::MAX_WITNESS_BYTES;
 
 use crate::{read_json, write_new};
 
@@ -155,6 +156,24 @@ fn build_certificate(
     };
     certificate.verify().map_err(anyhow::Error::msg)?;
     Ok(certificate)
+}
+
+pub(crate) fn fuzz_external_input(data: &[u8]) {
+    if data.len() > MAX_WITNESS_BYTES {
+        return;
+    }
+    if let Ok(committee) = serde_json::from_slice::<BftCheckpointCommitteeV1>(data) {
+        let _ = committee.validate();
+        let _ = committee.root();
+    }
+    if let Ok(checkpoint) = serde_json::from_slice::<BftSourceCheckpointV1>(data) {
+        let _ = checkpoint.canonical_bytes();
+        let _ = checkpoint.vote_signing_statement("fuzz-validator");
+    }
+    if let Ok(certificate) = serde_json::from_slice::<BftSourceCheckpointCertificateV1>(data) {
+        let _ = certificate.verify();
+    }
+    let _ = serde_json::from_slice::<BftSourceCheckpointVoteV1>(data);
 }
 
 #[cfg(test)]

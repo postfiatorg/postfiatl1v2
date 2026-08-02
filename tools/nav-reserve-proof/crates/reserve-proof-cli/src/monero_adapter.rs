@@ -15,12 +15,13 @@ use reserve_proof_types::{
         BftCheckpointCommitteeV1, BftSourceCheckpointCertificateV1, BftSourceCheckpointV1,
     },
     monero_reserve::{
-        monero_reserve_challenge_v1, monero_reserve_owner_commitment, monero_status_commitment,
-        verify_monero_reserve_proof_v1, verify_xmr_reserve_witness, MoneroKeyImageStatusV1,
-        MoneroReservePolicyV1, MoneroReserveProofV1, MoneroReserveVerifyContextV1, XmrBlockAnchor,
-        XmrBlockHeaderLink, XmrReserveOutputWitness, XmrReserveWitness, XmrSignature,
-        XmrSubaddrSpendKeyProof, XmrTxTreeProof, MONERO_CHECKPOINT_KIND_V1,
-        MONERO_RESERVE_ADAPTER_KIND_V1, XMR_RESERVE_MAX_OUTPUTS,
+        fuzz_monero_transaction_bytes, monero_reserve_challenge_v1,
+        monero_reserve_owner_commitment, monero_status_commitment, verify_monero_reserve_proof_v1,
+        verify_xmr_reserve_witness, MoneroKeyImageStatusV1, MoneroReservePolicyV1,
+        MoneroReserveProofV1, MoneroReserveVerifyContextV1, XmrBlockAnchor, XmrBlockHeaderLink,
+        XmrReserveOutputWitness, XmrReserveWitness, XmrSignature, XmrSubaddrSpendKeyProof,
+        XmrTxTreeProof, MONERO_CHECKPOINT_KIND_V1, MONERO_RESERVE_ADAPTER_KIND_V1,
+        XMR_RESERVE_MAX_OUTPUTS,
     },
     verify_observation_evidence, EvidenceDimensionV1, ReserveProofContextV1, SourceEvidenceV1,
     SourceManifestEntryV1, SourceObservationV1, TrustClassV1,
@@ -655,7 +656,15 @@ fn parse_reserve_proof_v2(signature: &str) -> Result<ParsedReserveProofV2> {
         decoded.len() <= MAX_RESERVE_PROOF_TEXT_BYTES,
         "decoded ReserveProofV2 exceeds bound"
     );
-    let mut reader = ProofReader::new(&decoded);
+    parse_reserve_proof_v2_bytes(&decoded)
+}
+
+fn parse_reserve_proof_v2_bytes(decoded: &[u8]) -> Result<ParsedReserveProofV2> {
+    anyhow::ensure!(
+        decoded.len() <= MAX_RESERVE_PROOF_TEXT_BYTES,
+        "decoded ReserveProofV2 exceeds bound"
+    );
+    let mut reader = ProofReader::new(decoded);
     let entry_count = usize::try_from(reader.read_varint()?)?;
     anyhow::ensure!(
         entry_count <= XMR_RESERVE_MAX_OUTPUTS,
@@ -1087,6 +1096,17 @@ fn validate_lower_hex(label: &str, value: &str, bytes: usize) -> Result<()> {
         "{label} must be canonical lowercase hex"
     );
     Ok(())
+}
+
+pub(crate) fn fuzz_external_input(data: &[u8]) {
+    if data.len() > MAX_RESERVE_PROOF_TEXT_BYTES {
+        return;
+    }
+    let _ = parse_reserve_proof_v2_bytes(data);
+    fuzz_monero_transaction_bytes(data);
+    if let Ok(text) = std::str::from_utf8(data) {
+        let _ = parse_reserve_proof_v2(text);
+    }
 }
 
 #[cfg(test)]

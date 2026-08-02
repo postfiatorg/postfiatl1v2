@@ -797,6 +797,31 @@ fn validate_lower_hex(label: &str, value: &str, bytes: usize) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn fuzz_external_input(data: &[u8]) {
+    if data.len() > MAX_NEAR_CODE_BYTES {
+        return;
+    }
+    if let Ok(text) = std::str::from_utf8(data) {
+        let _ = decode_near_hash("fuzz NEAR hash", text);
+    }
+    if let Ok(head) = serde_json::from_slice::<NearHeadBlock>(data) {
+        let _ = near_head_block_hash(&head.header);
+    }
+    if let Ok(proof) = serde_json::from_slice::<NearLightClientProof>(data) {
+        let _ = near_block_hash_from_lite(&proof.block_header_lite);
+        let _ = near_outcome_root(&proof);
+        let _ = near_block_merkle_root_from_proof(&proof);
+    }
+    #[derive(Deserialize)]
+    struct CombinedProof {
+        proof: NearLightClientProof,
+        head: NearHeadBlock,
+    }
+    if let Ok(combined) = serde_json::from_slice::<CombinedProof>(data) {
+        let _ = validate_light_proof_foundations(&combined.proof, &combined.head);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

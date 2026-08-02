@@ -1,11 +1,15 @@
 # NAV reserve proof fuzzing
 
-These targets treat reserve witnesses and source evidence as attacker-controlled
-input. `witness_json` sends every successfully decoded witness through the same
-deterministic `execute_reserve_proof` entry point used by the SP1 guest, so all
-registered Aave, EVM spot, Hyperliquid, NEAR, Solana, Monero, and Chainlink
-valuation dispatch paths are in scope. `source_evidence_json` isolates the
-tagged evidence decoder and its bounded commitment/classification surface.
+These targets treat reserve witnesses, source evidence, and raw upstream
+formats as attacker-controlled input. `witness_json` sends every successfully
+decoded witness through the same deterministic `execute_reserve_proof` entry
+point used by the SP1 guest, so all registered Aave, EVM spot, Hyperliquid,
+NEAR, Solana, Monero, and Chainlink valuation dispatch paths are in scope.
+`witness_cbor` exercises the exact SP1 guest input decoder, and
+`source_evidence_json` isolates the tagged evidence decoder. Six additional
+targets directly exercise the EVM, Hyperliquid, NEAR, Solana, Monero, and
+source-checkpoint parsing surfaces through the production library, without
+network access or state mutation.
 
 Run the repository smoke campaign with cargo-fuzz 0.13.2 and the pinned
 nightly toolchain:

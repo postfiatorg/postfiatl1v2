@@ -10,7 +10,9 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "=0.4.13"
 serde_json = "1"
+serde_cbor = "0.11.2"
 reserve-proof-types = { path = "../crates/reserve-proof-types" }
+postfiat-reserve-proof = { path = "../crates/reserve-proof-cli" }
 
 [[bin]]
 name = "witness_json"
@@ -22,6 +24,55 @@ bench = false
 [[bin]]
 name = "source_evidence_json"
 path = "fuzz_targets/source_evidence_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "evm_external_input"
+path = "fuzz_targets/evm_external_input.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "hyperliquid_external_input"
+path = "fuzz_targets/hyperliquid_external_input.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "near_external_input"
+path = "fuzz_targets/near_external_input.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "solana_external_input"
+path = "fuzz_targets/solana_external_input.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "monero_external_input"
+path = "fuzz_targets/monero_external_input.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "source_checkpoint_external_input"
+path = "fuzz_targets/source_checkpoint_external_input.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "witness_cbor"
+path = "fuzz_targets/witness_cbor.rs"
 test = false
 doc = false
 bench = false
