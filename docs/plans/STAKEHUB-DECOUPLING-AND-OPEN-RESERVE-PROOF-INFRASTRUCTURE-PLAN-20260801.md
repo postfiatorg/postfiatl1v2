@@ -11,6 +11,10 @@
 **Canonical document:** this is the sole implementation plan and continuation
 handoff for this work.
 
+The deleted continuation handoff is not a second source of truth. The JSON
+readiness file referenced below is only a machine-enforced status ledger; it
+does not define architecture or weaken any requirement in this document.
+
 ## 1. Objective
 
 A NAVCoin represents a governed claim on a portfolio's net asset value. The
@@ -182,6 +186,25 @@ route, moved funds, modified validator state, or changed deposited pfUSDC.
 This preserves current behavior, but it also means fresh A666 reserve
 publication still depends on the internal implementation. The live system is
 not yet the desired public architecture.
+
+### 3.4 Exact adapter implementation truth on 2026-08-02
+
+| A666 source family | Public implementation state | Production-qualified | What remains |
+|---|---|---:|---|
+| Aave on Arbitrum | Missing | No | Public collateral, debt, ownership, state, price, freshness, and liability verification |
+| Complete EVM spot set | Partial | No | The generic ERC-20 MPT adapter exists; the governed A666 token/account set, ownership, valuation, fixtures, and full qualification do not |
+| Hyperliquid | Work in progress, uncommitted | No | Finish review and guest integration, add public collection/fixtures/fuzzing, reproduce historical and fresh epochs, and qualify |
+| Staked NEAR | Unsafe mechanical port only, uncommitted | No | Remove internal domains and hard-coded identities; add a public certified-head trust anchor, ownership binding, bounded parsers, guest integration, fixtures, fuzzing, and qualification |
+| Staked Solana | Missing | No | Public collector, canonical proof/attestation statement at the governed trust level, ownership/state/freshness checks, fixtures, and qualification |
+| Monero | Missing | No | Public reserve-proof verifier and collector, fresh ownership challenge, replay protection, zero/nonzero fixtures, fuzzing, and qualification |
+| pfUSDC overlay | Implemented and pushed | Not sufficient by itself | Exact-tip remote CI must pass; this covers only PFTL-accounted subscription reserves, not the six external source families |
+
+The uncommitted Hyperliquid and NEAR files are development material. They are
+not part of the pushed public release, do not change the `0/6` readiness
+result, and cannot be cited as evidence that StakeHub is deprecated. In
+particular, the current NEAR import still contains internal names and fails
+the provider-neutral shipped-code boundary. It must be refactored or removed
+before commit; the boundary check must not be weakened.
 
 ## 4. Required public code boundary
 
@@ -473,7 +496,7 @@ existing guest ELF SHA exactly.
 - [x] Run full `postfiat-types`, `postfiat-execution`, and proof-kit suites.
 - [x] Run formatting and check targets required by CI, and `git diff
   --check`.
-- [ ] Commit and push the narrow patch without live governance operations.
+- [x] Commit and push the narrow patch without live governance operations.
 - [ ] Require green exact-tip remote CI.
 
 ### Phase 2 — port the source validators
@@ -673,8 +696,9 @@ Repository and branch:
 ```text
 /home/postfiat/repos/a666-eth-fast-lane-combined-20260724
 feature/pnok-private-fix
-current local HEAD: af9ae4e
-upstream before push: 1b1f7cef6f302c3ee15064a53b4a41c115f6ab92
+implementation baseline before this document update:
+c763e6a8f12197efe202657a6f30202215e00fbd
+upstream matched that baseline when audited
 ```
 
 Frozen demonstration checkout — do not modify:
@@ -683,10 +707,13 @@ Frozen demonstration checkout — do not modify:
 /home/postfiat/tmp/a666-pfusdc-monday-demo-2246d257
 ```
 
-The pfUSDC overlay protocol-boundary and readiness-gate patch is committed as:
+The pfUSDC overlay protocol boundary, canonical-plan consolidation, and
+readiness-gate placement are pushed as:
 
 ```text
 af9ae4e Harden public reserve overlay protocol boundary
+14f3697 Make public reserve verification plan canonical
+c763e6a Keep adapter readiness outside shipped proof kit
 ```
 
 It implements the pfUSDC overlay packet path described in section 5.7, keeps
@@ -726,10 +753,17 @@ git diff --check
   passed
 ```
 
-Push and exact-tip remote CI are still required to close Phase 1. The worktree
-also contains hundreds of unrelated untracked deployment and evidence paths.
-Never use `git add .`, bulk clean, or delete untracked evidence. Stage only
-explicitly reviewed files.
+At the time of this document update, the exact-tip remote CI run for the
+`c763e6a` implementation baseline was still in progress:
+
+```text
+https://github.com/postfiatorg/postfiatl1v2/actions/runs/30727267430
+```
+
+Do not close Phase 1 until that exact SHA is green. The worktree also contains
+the uncommitted adapter development described in section 3.4 and hundreds of
+unrelated untracked deployment and evidence paths. Never use `git add .`, bulk
+clean, or delete untracked evidence. Stage only explicitly reviewed files.
 
 Current canonical reserve-proof vkey:
 
@@ -795,14 +829,18 @@ git diff -- \
 
 Then:
 
-1. Finish and commit the narrow pfUSDC overlay patch under Phase 1.
-2. Inventory the complete internal source validators named in section 5,
+1. Confirm exact-tip CI for `c763e6a`; fix any failure without touching live
+   governance or the frozen demonstration checkout.
+2. Finish the provider-neutral Hyperliquid adapter and refactor the NEAR
+   mechanical import into the public architecture in sections 4 and 5. Do not
+   commit the current internal names or weaken the shipped-code boundary.
+3. Inventory the complete internal source validators named in section 5,
    including their fixtures and negative tests.
-3. Write provider-neutral adapter specifications and public schemas before
+4. Write provider-neutral adapter specifications and public schemas before
    copying implementation code.
-4. Port and qualify one source at a time, beginning with the source that
+5. Port and qualify one source at a time, beginning with the source that
    exercises the most specialized validation boundary: Hyperliquid or NEAR.
-5. Keep the live A666 route and frozen Monday checkout untouched until every
+6. Keep the live A666 route and frozen Monday checkout untouched until every
    controlled migration gate passes.
 
 ## 12. Definition of done
