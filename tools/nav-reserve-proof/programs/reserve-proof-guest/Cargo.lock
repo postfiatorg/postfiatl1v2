@@ -1941,12 +1941,17 @@ dependencies = [
  "alloy-primitives",
  "alloy-rlp",
  "alloy-trie",
+ "base64",
+ "bs58",
  "ed25519-dalek",
  "hex",
  "postfiat-crypto-provider",
  "postfiat-types",
  "serde",
+ "serde_json",
+ "sha2",
  "sha3 0.10.8",
+ "thiserror",
 ]
 
 [[package]]

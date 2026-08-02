@@ -5014,6 +5014,8 @@ dependencies = [
  "alloy-primitives",
  "alloy-rlp",
  "alloy-trie",
+ "base64",
+ "bs58",
  "ed25519-dalek",
  "hex",
  "k256",
@@ -5021,7 +5023,9 @@ dependencies = [
  "postfiat-types",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "sha3 0.10.9",
+ "thiserror 2.0.19",
 ]
 
 [[package]]

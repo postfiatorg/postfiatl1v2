@@ -5,8 +5,12 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 publish = false
 
+[features]
+default = []
+a666-public-adapters-v2 = ["reserve-proof-types/a666-public-adapters-v2"]
+
 [dependencies]
-reserve-proof-types = { path = "../../crates/reserve-proof-types" }
+reserve-proof-types = { path = "../../crates/reserve-proof-types", default-features = false }
 serde_cbor = "0.11.2"
 sp1-zkvm = { version = "=6.3.1" }
 

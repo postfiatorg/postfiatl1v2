@@ -193,18 +193,20 @@ not yet the desired public architecture.
 |---|---|---:|---|
 | Aave on Arbitrum | Missing | No | Public collateral, debt, ownership, state, price, freshness, and liability verification |
 | Complete EVM spot set | Partial | No | The generic ERC-20 MPT adapter exists; the governed A666 token/account set, ownership, valuation, fixtures, and full qualification do not |
-| Hyperliquid | Work in progress, uncommitted | No | Finish review and guest integration, add public collection/fixtures/fuzzing, reproduce historical and fresh epochs, and qualify |
-| Staked NEAR | Unsafe mechanical port only, uncommitted | No | Remove internal domains and hard-coded identities; add a public certified-head trust anchor, ownership binding, bounded parsers, guest integration, fixtures, fuzzing, and qualification |
+| Hyperliquid | Provider-neutral verifier implemented; partial | No | Add public collection and fuzzing, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
+| Staked NEAR | Provider-neutral quantity verifier implemented; partial | No | Add public collection and fuzzing, reproduce complete historical and fresh epochs, bind separately attested valuation, complete full A666 reconciliation, and qualify |
 | Staked Solana | Missing | No | Public collector, canonical proof/attestation statement at the governed trust level, ownership/state/freshness checks, fixtures, and qualification |
 | Monero | Missing | No | Public reserve-proof verifier and collector, fresh ownership challenge, replay protection, zero/nonzero fixtures, fuzzing, and qualification |
 | pfUSDC overlay | Implemented and pushed | Not sufficient by itself | Exact-tip remote CI must pass; this covers only PFTL-accounted subscription reserves, not the six external source families |
 
-The uncommitted Hyperliquid and NEAR files are development material. They are
-not part of the pushed public release, do not change the `0/6` readiness
-result, and cannot be cited as evidence that StakeHub is deprecated. In
-particular, the current NEAR import still contains internal names and fails
-the provider-neutral shipped-code boundary. It must be refactored or removed
-before commit; the boundary check must not be weakened.
+The Hyperliquid and NEAR verifiers pass their source tests, registered guest
+dispatch tests, historical receipt/Merkle reconstruction tests, strict
+verifier-crate lint, and the provider-neutral shipped-code boundary. They are
+feature-isolated from the immutable legacy guest; its rebuilt ELF hash and
+vkey remain unchanged. They do not change the `0/6` production-qualification
+result and cannot be cited as evidence that StakeHub is deprecated. Their
+collectors, fuzz targets, fresh source epochs, complete A666 reconciliation,
+and production qualification remain open.
 
 ## 4. Required public code boundary
 

@@ -7,9 +7,25 @@ use postfiat_types::{
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Sha3_384};
 
+#[cfg(feature = "a666-public-adapters-v2")]
+pub mod bft_checkpoint;
 pub mod evm_checkpoint;
+#[cfg(feature = "a666-public-adapters-v2")]
+pub mod hyperliquid_receipt;
+#[cfg(feature = "a666-public-adapters-v2")]
+pub mod near_receipt;
 
 use evm_checkpoint::{EvmErc20BalanceProofV1, EVM_ERC20_ADAPTER_KIND_V1};
+#[cfg(feature = "a666-public-adapters-v2")]
+use hyperliquid_receipt::{
+    verify_hyperliquid_receipt_proof_v1, HyperliquidReceiptProofV1,
+    HyperliquidReceiptVerifyContextV1, HYPERLIQUID_RECEIPT_ADAPTER_KIND_V1,
+};
+#[cfg(feature = "a666-public-adapters-v2")]
+use near_receipt::{
+    verify_near_receipt_quantity_proof_v1, NearReceiptQuantityProofV1, NearReceiptVerifyContextV1,
+    NEAR_RECEIPT_QUANTITY_ADAPTER_KIND_V1,
+};
 
 pub const MANIFEST_SCHEMA_V1: &str = "postfiat.reserve_source_manifest.v1";
 pub const WITNESS_SCHEMA_V1: &str = "postfiat.reserve_proof_witness.v1";
@@ -139,6 +155,21 @@ pub enum SourceEvidenceV1 {
         evidence_commitment: String,
         proof: Box<EvmErc20BalanceProofV1>,
     },
+    /// HyperCore state and prices emitted by a governed reader contract in a
+    /// HyperEVM receipt included under a quorum-certified block header.
+    #[cfg(feature = "a666-public-adapters-v2")]
+    HyperliquidReceipt {
+        evidence_commitment: String,
+        proof: Box<HyperliquidReceiptProofV1>,
+    },
+    /// Staked and unstaked yoctoNEAR proven by a reader callback receipt and
+    /// Merkle paths beneath a quorum-certified NEAR head. Valuation remains a
+    /// separate evidence dimension.
+    #[cfg(feature = "a666-public-adapters-v2")]
+    NearReceiptQuantity {
+        evidence_commitment: String,
+        proof: Box<NearReceiptQuantityProofV1>,
+    },
     AdapterProof {
         evidence_commitment: String,
         proof: Vec<u8>,
@@ -153,6 +184,10 @@ impl SourceEvidenceV1 {
             Self::ProtocolReceiptEd25519 { .. }
             | Self::EvmErc20BftCheckpointMpt { .. }
             | Self::AdapterProof { .. } => TrustClassV1::Cryptographic,
+            #[cfg(feature = "a666-public-adapters-v2")]
+            Self::HyperliquidReceipt { .. } | Self::NearReceiptQuantity { .. } => {
+                TrustClassV1::Cryptographic
+            }
         }
     }
 
@@ -174,6 +209,15 @@ impl SourceEvidenceV1 {
                 ..
             }
             | Self::AdapterProof {
+                evidence_commitment,
+                ..
+            } => evidence_commitment,
+            #[cfg(feature = "a666-public-adapters-v2")]
+            Self::HyperliquidReceipt {
+                evidence_commitment,
+                ..
+            }
+            | Self::NearReceiptQuantity {
                 evidence_commitment,
                 ..
             } => evidence_commitment,
@@ -571,6 +615,91 @@ fn verify_evidence(
                 observation.observed_at_block,
                 evidence_commitment,
             )
+        }
+        #[cfg(feature = "a666-public-adapters-v2")]
+        SourceEvidenceV1::HyperliquidReceipt {
+            evidence_commitment,
+            proof,
+        } => {
+            if entry.adapter_kind != HYPERLIQUID_RECEIPT_ADAPTER_KIND_V1
+                || entry.adapter_schema_version != 1
+            {
+                return Err(format!(
+                    "source {} Hyperliquid receipt requires {HYPERLIQUID_RECEIPT_ADAPTER_KIND_V1} adapter schema 1",
+                    entry.source_id
+                ));
+            }
+            verify_hyperliquid_receipt_proof_v1(
+                proof,
+                &HyperliquidReceiptVerifyContextV1 {
+                    pftl_genesis_hash: &context.pftl_genesis_hash,
+                    nav_asset_id: &context.nav_asset_id,
+                    proof_profile_id: &context.proof_profile_id,
+                    valuation_policy_hash: &context.valuation_policy_hash,
+                    source_manifest_hash: &context.source_manifest_hash,
+                    source_id: &entry.source_id,
+                    source_domain: &entry.source_domain,
+                    asset_or_position_id: &entry.asset_or_position_id,
+                    reserve_owner_commitment: &entry.reserve_owner_commitment,
+                    quantity_verifier_commitment: &entry.quantity_verifier_commitment,
+                    valuation_verifier_commitment: &entry.valuation_verifier_commitment,
+                    observed_at_pftl_height: observation.observed_at_block,
+                    expected_gross_assets: observation.gross_assets,
+                    expected_total_liabilities: observation.total_liabilities,
+                    expected_evidence_commitment: evidence_commitment,
+                },
+            )
+            .map(|_| ())
+            .map_err(|error| {
+                format!(
+                    "source {} {dimension} Hyperliquid receipt verification failed: {error:?}",
+                    entry.source_id
+                )
+            })
+        }
+        #[cfg(feature = "a666-public-adapters-v2")]
+        SourceEvidenceV1::NearReceiptQuantity {
+            evidence_commitment,
+            proof,
+        } => {
+            if dimension != "quantity" {
+                return Err(format!(
+                    "source {} NEAR receipt proof is only valid for quantity evidence",
+                    entry.source_id
+                ));
+            }
+            if entry.adapter_kind != NEAR_RECEIPT_QUANTITY_ADAPTER_KIND_V1
+                || entry.adapter_schema_version != 1
+            {
+                return Err(format!(
+                    "source {} NEAR receipt requires {NEAR_RECEIPT_QUANTITY_ADAPTER_KIND_V1} adapter schema 1",
+                    entry.source_id
+                ));
+            }
+            verify_near_receipt_quantity_proof_v1(
+                proof,
+                &NearReceiptVerifyContextV1 {
+                    pftl_genesis_hash: &context.pftl_genesis_hash,
+                    nav_asset_id: &context.nav_asset_id,
+                    proof_profile_id: &context.proof_profile_id,
+                    valuation_policy_hash: &context.valuation_policy_hash,
+                    source_manifest_hash: &context.source_manifest_hash,
+                    source_id: &entry.source_id,
+                    source_domain: &entry.source_domain,
+                    asset_or_position_id: &entry.asset_or_position_id,
+                    reserve_owner_commitment: &entry.reserve_owner_commitment,
+                    quantity_verifier_commitment: &entry.quantity_verifier_commitment,
+                    observed_at_pftl_height: observation.observed_at_block,
+                    expected_evidence_commitment: evidence_commitment,
+                },
+            )
+            .map(|_| ())
+            .map_err(|error| {
+                format!(
+                    "source {} NEAR quantity receipt verification failed: {error:?}",
+                    entry.source_id
+                )
+            })
         }
         SourceEvidenceV1::AdapterProof { proof, .. } => {
             if proof.len() > MAX_EVIDENCE_BYTES {

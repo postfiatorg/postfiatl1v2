@@ -19,17 +19,17 @@
     },
     {
       "id": "hyperliquid",
-      "status": "missing",
+      "status": "partial",
       "production_qualified": false,
-      "public_implementation": null,
-      "note": "Public code does not yet verify Hyperliquid reader receipts, account commitments, positions, holds, withdrawable value, liabilities, and valuation."
+      "public_implementation": "tools/nav-reserve-proof/crates/reserve-proof-types/src/hyperliquid_receipt.rs",
+      "note": "A provider-neutral verifier now checks the HyperEVM reader receipt, BFT-certified header, owner authorization, positions, holds, values, liabilities, bounds, and guest dispatch, with historical receipt reconstruction. Public collection, fuzzing, fresh epochs, full A666 reconciliation, and production qualification remain open."
     },
     {
       "id": "staked-near",
-      "status": "missing",
+      "status": "partial",
       "production_qualified": false,
-      "public_implementation": null,
-      "note": "Public code does not yet verify NEAR account, staking-pool, outcome, block, ownership, freshness, and valuation evidence."
+      "public_implementation": "tools/nav-reserve-proof/crates/reserve-proof-types/src/near_receipt.rs",
+      "note": "A provider-neutral verifier now checks certified-head, outcome, block, reader, pool, implicit-account ownership, quantity, bounds, and guest dispatch, with historical Merkle reconstruction. Valuation remains separately attested by design. Public collection, fuzzing, fresh epochs, full A666 reconciliation, and production qualification remain open."
     },
     {
       "id": "staked-solana",
