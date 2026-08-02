@@ -2943,6 +2943,25 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             print!("{json}");
             Ok(())
         }
+        "snapshot-import-finalized-checkpoint" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let snapshot_dir =
+                flag_value(flags, "--snapshot-dir").ok_or("missing --snapshot-dir")?;
+            let node_id = flag_value(flags, "--node-id").map(str::to_string);
+            let report = import_snapshot_from_finalized_checkpoint(SnapshotImportOptions {
+                data_dir: PathBuf::from(data_dir),
+                snapshot_dir: PathBuf::from(snapshot_dir),
+                node_id,
+            })
+            .map_err(|error| {
+                format!("snapshot-import-finalized-checkpoint failed: {error}")
+            })?;
+            let json = report.to_json().map_err(|error| {
+                format!("finalized checkpoint snapshot import report serialization failed: {error}")
+            })?;
+            print!("{json}");
+            Ok(())
+        }
         "verify-finalized-checkpoint" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let report = verify_finalized_checkpoint(NodeOptions {

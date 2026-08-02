@@ -1518,7 +1518,7 @@ fn export_snapshot_with_basis(
 
     let mut files = Vec::new();
     for &file_name in SNAPSHOT_FILES {
-        let bytes = snapshot_file_bytes(&store, &options.data_dir, file_name)?;
+        let bytes = snapshot_file_bytes(&store, &options.data_dir, file_name, basis)?;
         atomic_write(snapshot_dir.join(file_name), &bytes)?;
         files.push(SnapshotFile {
             name: (*file_name).to_string(),
@@ -2915,17 +2915,45 @@ fn restore_consensus_v2_artifact_snapshot(
     Ok(())
 }
 
-fn snapshot_file_bytes(store: &NodeStore, data_dir: &Path, file_name: &str) -> io::Result<Vec<u8>> {
+fn empty_consensus_v2_artifact_snapshot_bytes(directory: &str) -> io::Result<Vec<u8>> {
+    snapshot_json_bytes(&ConsensusV2ArtifactSnapshot {
+        schema: CONSENSUS_V2_ARTIFACT_SNAPSHOT_SCHEMA.to_string(),
+        directory: directory.to_string(),
+        files: Vec::new(),
+    })
+}
+
+fn snapshot_file_bytes(
+    store: &NodeStore,
+    data_dir: &Path,
+    file_name: &str,
+    basis: SnapshotVerificationBasis,
+) -> io::Result<Vec<u8>> {
     match file_name {
         BLOCKS_FILE => snapshot_json_bytes(&store.read_blocks()?),
         BATCH_ARCHIVE_FILE => snapshot_json_bytes(&store.read_batch_archive()?),
         ORDERED_BATCHES_FILE => snapshot_json_bytes(&store.read_ordered_batches()?),
         RECEIPTS_FILE => snapshot_json_bytes(&store.read_receipts()?),
         CONSENSUS_V2_SAFETY_SNAPSHOT_FILE => {
-            consensus_v2_artifact_snapshot_bytes(data_dir, CONSENSUS_V2_SAFETY_DIR)
+            if basis == SnapshotVerificationBasis::FinalizedCheckpoint {
+                // The certified checkpoint fixes every state transition through
+                // the durable tip.  A restored signer starts at tip + 1, so
+                // completed-height anti-equivocation records are obsolete and
+                // must not make checkpoint snapshots grow without bound.
+                empty_consensus_v2_artifact_snapshot_bytes(CONSENSUS_V2_SAFETY_DIR)
+            } else {
+                consensus_v2_artifact_snapshot_bytes(data_dir, CONSENSUS_V2_SAFETY_DIR)
+            }
         }
         CONSENSUS_V2_QC_SNAPSHOT_FILE => {
-            consensus_v2_artifact_snapshot_bytes(data_dir, CONSENSUS_V2_QC_DIR)
+            if basis == SnapshotVerificationBasis::FinalizedCheckpoint {
+                // The tip block embeds its independently verified consensus-v2
+                // commit.  Historical QCs remain in the retained block log and
+                // are not required for a new view-zero round at tip + 1.
+                empty_consensus_v2_artifact_snapshot_bytes(CONSENSUS_V2_QC_DIR)
+            } else {
+                consensus_v2_artifact_snapshot_bytes(data_dir, CONSENSUS_V2_QC_DIR)
+            }
         }
         OWNED_LOCKS_FILE => snapshot_json_bytes(&load_owned_input_locks_for_snapshot(data_dir)?),
         OWNED_LOCKS_WAL_FILE => Ok(Vec::new()),

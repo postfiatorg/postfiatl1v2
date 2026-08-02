@@ -835,6 +835,7 @@ fn print_usage() {
   postfiat-node snapshot-export [--data-dir PATH] --snapshot-dir PATH
   postfiat-node snapshot-export-finalized-checkpoint [--data-dir PATH] --snapshot-dir PATH
   postfiat-node snapshot-import [--data-dir PATH] --snapshot-dir PATH [--node-id ID]
+  postfiat-node snapshot-import-finalized-checkpoint [--data-dir PATH] --snapshot-dir PATH [--node-id ID]
   postfiat-node snapshot-publisher-key-export --publisher-key-file PATH --public-key-file PATH
   postfiat-node snapshot-export-signed [--data-dir PATH] --snapshot-dir PATH --publisher-key-file PATH
   postfiat-node snapshot-export-signed-finalized-checkpoint [--data-dir PATH] --snapshot-dir PATH --publisher-key-file PATH

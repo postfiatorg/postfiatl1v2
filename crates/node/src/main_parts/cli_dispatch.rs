@@ -86,7 +86,8 @@ use postfiat_node::{
     governance_agent_round_seed_input_from_optional_parts, history_checkpoint_rebuild_from_archive,
     history_prune, history_prune_plan, history_prune_recover, history_status,
     import_history_archive_window, import_signed_snapshot,
-    import_signed_snapshot_from_finalized_checkpoint, import_snapshot, init, init_consensus_v2,
+    import_signed_snapshot_from_finalized_checkpoint, import_snapshot,
+    import_snapshot_from_finalized_checkpoint, init, init_consensus_v2,
     issuer_assets, issuer_nfts, live_consensus_v2_context, market_ops_operation_bundle,
     market_ops_status, mempool_state, metrics, navcoin_bridge_claims,
     navcoin_bridge_destination_consume, navcoin_bridge_export_debit, navcoin_bridge_import_return,
@@ -648,6 +649,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "snapshot-export"
         | "snapshot-export-finalized-checkpoint"
         | "snapshot-import"
+        | "snapshot-import-finalized-checkpoint"
         | "snapshot-publisher-key-export"
         | "snapshot-export-signed"
         | "snapshot-export-signed-finalized-checkpoint"

@@ -1806,11 +1806,55 @@ fn finalized_checkpoint_snapshot_accepts_certified_legacy_governance_anomaly_and
         data_dir: data_dir.clone(),
     })
     .expect("raw receipt journal count may exceed canonical terminal receipts");
-    export_snapshot_from_finalized_checkpoint(SnapshotExportOptions {
+    let checkpoint_snapshot = export_snapshot_from_finalized_checkpoint(SnapshotExportOptions {
         data_dir: data_dir.clone(),
-        snapshot_dir,
+        snapshot_dir: snapshot_dir.clone(),
     })
     .expect("export from finalized checkpoint");
+    for artifact in [
+        CONSENSUS_V2_SAFETY_SNAPSHOT_FILE,
+        CONSENSUS_V2_QC_SNAPSHOT_FILE,
+    ] {
+        let entry = checkpoint_snapshot
+            .files
+            .iter()
+            .find(|entry| entry.name == artifact)
+            .expect("checkpoint consensus artifact entry");
+        assert!(
+            entry.bytes < 512,
+            "finalized checkpoint artifact {artifact} must be compact, got {} bytes",
+            entry.bytes
+        );
+        let value: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(snapshot_dir.join(artifact)).expect("read compact checkpoint artifact"),
+        )
+        .expect("parse compact checkpoint artifact");
+        assert_eq!(value["files"], serde_json::json!([]));
+    }
+    let restored_dir = root.join("checkpoint-restored");
+    let restored = import_snapshot_from_finalized_checkpoint(SnapshotImportOptions {
+        data_dir: restored_dir.clone(),
+        snapshot_dir: snapshot_dir.clone(),
+        node_id: Some("validator-checkpoint-restored".to_string()),
+    })
+    .expect("import compact finalized checkpoint snapshot");
+    assert_eq!(restored.block_height, checkpoint.checkpoint_height);
+    assert_eq!(restored.block_tip_hash, checkpoint.checkpoint_block_hash);
+    assert_eq!(restored.state_root, checkpoint.checkpoint_state_root);
+    assert!(restored_dir.join(CONSENSUS_V2_SAFETY_DIR).is_dir());
+    assert!(restored_dir.join(CONSENSUS_V2_QC_DIR).is_dir());
+    assert_eq!(
+        std::fs::read_dir(restored_dir.join(CONSENSUS_V2_SAFETY_DIR))
+            .expect("read restored compact safety directory")
+            .count(),
+        0
+    );
+    assert_eq!(
+        std::fs::read_dir(restored_dir.join(CONSENSUS_V2_QC_DIR))
+            .expect("read restored compact QC directory")
+            .count(),
+        0
+    );
 
     let mut undersized_tip = legacy_retry_tip.clone();
     undersized_tip.receipt_count = 0;
