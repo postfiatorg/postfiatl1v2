@@ -200,7 +200,7 @@ not yet the desired public architecture.
 | A666 source family | Public implementation state | Production-qualified | What remains |
 |---|---|---:|---|
 | Aave on Arbitrum | Provider-neutral verifier implemented; partial | No | Add public collection and fuzzing, run fresh epochs and complete A666 reconciliation, and qualify |
-| Complete EVM spot set | Provider-neutral quantity verifier implemented; partial | No | Add the public collector and governed A666 policy fixture, bind separately disclosed valuation evidence, fuzz, run fresh epochs and complete A666 reconciliation, and qualify |
+| Complete EVM spot set | Provider-neutral quantity verifier and public checkpoint/collection workflow implemented; partial | No | Add the governed A666 policy/committee fixture, bind separately disclosed valuation evidence, fuzz, run fresh epochs and complete A666 reconciliation, and qualify |
 | Hyperliquid | Provider-neutral verifier implemented; partial | No | Add public collection and fuzzing, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
 | Staked NEAR | Provider-neutral quantity verifier implemented; partial | No | Add public collection and fuzzing, reproduce complete historical and fresh epochs, bind separately attested valuation, complete full A666 reconciliation, and qualify |
 | Staked Solana | Provider-neutral attested-state verifier implemented; partial | No | Add the public collector and governed independent signer/policy fixture, fuzz, run fresh epochs and complete A666 reconciliation, and qualify at the accurately disclosed attested quantity trust level |
@@ -219,8 +219,13 @@ an aggregate amount signature as proof. Its production path still lacks a
 public collector, a fresh governed nonzero header-chain/spent-status proof, and
 separate XMR/USD valuation evidence. The EVM spot adapter proves
 reserve quantities only and deliberately leaves USD prices in the separately
-declared valuation trust dimension. The Solana adapter does not relabel RPC
-snapshots as cryptographic: it publicly verifies the exact position set,
+declared valuation trust dimension. Its public CLI now constructs deterministic
+per-chain checkpoint candidates from pinned RPC heights, supports independent
+checkpoint voting and assembly, emits the exact owner-authorization statement,
+and collects the complete native/ERC-20 proof set from an exact reviewed RPC
+map. It is still unqualified until governed A666 inputs, adversarial/fuzz
+coverage, fresh epochs, and reconciliation exist. The Solana adapter does not
+relabel RPC snapshots as cryptographic: it publicly verifies the exact position set,
 stake/withdraw/vote authorities, state parsing, signer policy, agreement, and
 signatures while retaining an `attested` quantity classification. The
 implementations pass strict verifier-crate lint and the provider-neutral
@@ -530,6 +535,8 @@ existing guest ELF SHA exactly.
   private keys.
 - [x] Implement and register the public Aave adapter.
 - [x] Implement and register the complete public EVM spot quantity adapter set.
+- [x] Implement the public complete-EVM-spot checkpoint candidate, owner
+  authorization, and multichain RPC collector workflow.
 - [x] Implement and register the public Hyperliquid adapter.
 - [x] Implement and register the public staked-NEAR adapter.
 - [ ] Implement the public staked-Solana collector/verifier at its governed
@@ -859,8 +866,9 @@ Then:
 1. Require green exact-tip remote CI for the latest public-adapter commit; fix
    failures without touching live governance or the frozen demonstration
    checkout.
-2. Implement public collectors for Aave, the exact EVM spot set,
-   Hyperliquid, NEAR, Solana, and Monero. Each collector must independently
+2. Implement public collectors for Aave, Hyperliquid, NEAR, Solana, and
+   Monero; adversarially qualify the implemented exact-EVM-spot collector.
+   Each collector must independently
    validate the certified source state before emitting an observation.
 3. Add structured fuzz targets and complete the adversarial matrix in section
    8 for every externally sourced parser and proof type.

@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeMap,
     fs,
     io::Read,
     net::IpAddr,
@@ -12,12 +13,21 @@ use anyhow::{bail, Context, Result};
 use clap::{Subcommand, ValueEnum};
 use reqwest::{blocking::Client, redirect::Policy, Url};
 use reserve_proof_types::{
+    bft_checkpoint::{
+        BftCheckpointCommitteeV1, BftSourceCheckpointCertificateV1, BftSourceCheckpointV1,
+    },
     ed25519_evidence_signing_statement, ed25519_verifier_commitment,
     evm_checkpoint::{
         erc20_balance_slot, evm_owner_authorization_statement, evm_owner_commitment,
         EvmAccountProofV1, EvmErc20BalanceProofV1, EvmStateCheckpointCertificateV1,
         EvmStateCheckpointV1, EvmStorageProofV1, EVM_ERC20_ADAPTER_KIND_V1,
         MAX_EVM_PROOF_TOTAL_BYTES,
+    },
+    evm_spot::{
+        erc20_balance_slot as spot_balance_slot, evm_spot_owner_authorization_statement_v1,
+        evm_spot_owner_commitment, verify_evm_spot_quantity_proof_v1, EvmSpotChainProofV1,
+        EvmSpotPolicyV1, EvmSpotQuantityProofV1, EvmSpotTokenProofV1, EvmSpotVerifyContextV1,
+        EVM_SPOT_ADAPTER_KIND_V1, EVM_SPOT_CHECKPOINT_KIND_V1,
     },
     verify_observation_evidence, EvidenceDimensionV1, ReserveProofContextV1, SourceEvidenceV1,
     SourceManifestEntryV1, SourceManifestV1, SourceObservationV1, TrustClassV1, MAX_WITNESS_BYTES,
@@ -34,6 +44,12 @@ pub enum AdapterCommand {
     EvmErc20 {
         #[command(subcommand)]
         command: EvmErc20Command,
+    },
+    /// Collect the exact governed multichain native/ERC-20 spot set beneath
+    /// independently certified EVM state roots.
+    EvmSpot {
+        #[command(subcommand)]
+        command: EvmSpotCommand,
     },
     /// Emit the canonical statement for an Ed25519 attestation or protocol
     /// receipt already represented in a source observation.
@@ -157,6 +173,80 @@ pub enum EvmErc20Command {
     },
 }
 
+#[derive(Debug, Subcommand)]
+pub enum EvmSpotCommand {
+    /// Query one governed EVM RPC and emit the deterministic checkpoint a
+    /// validator may independently reproduce before signing.
+    CheckpointCandidate {
+        #[arg(long)]
+        pftl_genesis_hash: String,
+        #[arg(long)]
+        policy: PathBuf,
+        #[arg(long)]
+        source_domain: String,
+        #[arg(long)]
+        source_height: u64,
+        #[arg(long)]
+        minimum_depth: u32,
+        #[arg(long)]
+        pftl_observation_height: u64,
+        #[arg(long)]
+        committee: PathBuf,
+        #[arg(long)]
+        rpc_url: String,
+        #[arg(long)]
+        output: PathBuf,
+    },
+    /// Emit the EIP-191 statement authorizing the exact policy and certified
+    /// source checkpoints for one observation.
+    OwnerAuthorization {
+        #[arg(long)]
+        manifest: PathBuf,
+        #[arg(long)]
+        context: PathBuf,
+        #[arg(long)]
+        source_id: String,
+        #[arg(long)]
+        policy: PathBuf,
+        #[arg(long)]
+        owner: String,
+        #[arg(long, required = true, num_args = 1..)]
+        checkpoint_certificate: Vec<PathBuf>,
+        #[arg(long)]
+        output: PathBuf,
+    },
+    /// Query each governed EVM source at its certified block and emit a
+    /// complete quantity observation. RPC URLs come from a reviewed map file.
+    Collect {
+        #[arg(long)]
+        manifest: PathBuf,
+        #[arg(long)]
+        context: PathBuf,
+        #[arg(long)]
+        source_id: String,
+        #[arg(long)]
+        policy: PathBuf,
+        #[arg(long)]
+        owner: String,
+        #[arg(long)]
+        ownership_signature: String,
+        #[arg(long, required = true, num_args = 1..)]
+        checkpoint_certificate: Vec<PathBuf>,
+        #[arg(long)]
+        rpc_map: PathBuf,
+        #[arg(long)]
+        valuation_evidence: PathBuf,
+        #[arg(long)]
+        gross_assets: u64,
+        #[arg(long, default_value_t = 0)]
+        total_liabilities: u64,
+        #[arg(long)]
+        disclosure_commitment: String,
+        #[arg(long)]
+        output: PathBuf,
+    },
+}
+
 pub fn run(command: AdapterCommand) -> Result<()> {
     match command {
         AdapterCommand::EvmErc20 { command } => match command {
@@ -211,6 +301,75 @@ pub fn run(command: AdapterCommand) -> Result<()> {
                 total_liabilities,
                 disclosure_commitment,
                 ethereum_rpc_url,
+                output,
+            }),
+        },
+        AdapterCommand::EvmSpot { command } => match command {
+            EvmSpotCommand::CheckpointCandidate {
+                pftl_genesis_hash,
+                policy,
+                source_domain,
+                source_height,
+                minimum_depth,
+                pftl_observation_height,
+                committee,
+                rpc_url,
+                output,
+            } => evm_spot_checkpoint_candidate(EvmSpotCheckpointCandidateArgs {
+                pftl_genesis_hash,
+                policy,
+                source_domain,
+                source_height,
+                minimum_depth,
+                pftl_observation_height,
+                committee,
+                rpc_url,
+                output,
+            }),
+            EvmSpotCommand::OwnerAuthorization {
+                manifest,
+                context,
+                source_id,
+                policy,
+                owner,
+                checkpoint_certificate,
+                output,
+            } => evm_spot_owner_authorization(EvmSpotOwnerAuthorizationArgs {
+                manifest,
+                context,
+                source_id,
+                policy,
+                owner,
+                checkpoint_certificates: checkpoint_certificate,
+                output,
+            }),
+            EvmSpotCommand::Collect {
+                manifest,
+                context,
+                source_id,
+                policy,
+                owner,
+                ownership_signature,
+                checkpoint_certificate,
+                rpc_map,
+                valuation_evidence,
+                gross_assets,
+                total_liabilities,
+                disclosure_commitment,
+                output,
+            } => evm_spot_collect(EvmSpotCollectArgs {
+                manifest,
+                context,
+                source_id,
+                policy,
+                owner,
+                ownership_signature,
+                checkpoint_certificates: checkpoint_certificate,
+                rpc_map,
+                valuation_evidence,
+                gross_assets,
+                total_liabilities,
+                disclosure_commitment,
                 output,
             }),
         },
@@ -391,6 +550,515 @@ struct CollectArgs {
     disclosure_commitment: String,
     ethereum_rpc_url: String,
     output: PathBuf,
+}
+
+struct EvmSpotOwnerAuthorizationArgs {
+    manifest: PathBuf,
+    context: PathBuf,
+    source_id: String,
+    policy: PathBuf,
+    owner: String,
+    checkpoint_certificates: Vec<PathBuf>,
+    output: PathBuf,
+}
+
+struct EvmSpotCheckpointCandidateArgs {
+    pftl_genesis_hash: String,
+    policy: PathBuf,
+    source_domain: String,
+    source_height: u64,
+    minimum_depth: u32,
+    pftl_observation_height: u64,
+    committee: PathBuf,
+    rpc_url: String,
+    output: PathBuf,
+}
+
+struct EvmSpotCollectArgs {
+    manifest: PathBuf,
+    context: PathBuf,
+    source_id: String,
+    policy: PathBuf,
+    owner: String,
+    ownership_signature: String,
+    checkpoint_certificates: Vec<PathBuf>,
+    rpc_map: PathBuf,
+    valuation_evidence: PathBuf,
+    gross_assets: u64,
+    total_liabilities: u64,
+    disclosure_commitment: String,
+    output: PathBuf,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EvmSpotRpcMapV1 {
+    schema: String,
+    sources: BTreeMap<String, String>,
+}
+
+fn evm_spot_checkpoint_candidate(args: EvmSpotCheckpointCandidateArgs) -> Result<()> {
+    validate_hex("pftl_genesis_hash", &args.pftl_genesis_hash, 48)?;
+    anyhow::ensure!(
+        args.source_height > 0 && args.minimum_depth > 0 && args.pftl_observation_height > 0,
+        "checkpoint heights and minimum depth must be nonzero"
+    );
+    let policy: EvmSpotPolicyV1 = read_json(&args.policy)?;
+    policy
+        .validate()
+        .map_err(|error| anyhow::anyhow!("EVM spot policy is invalid: {error:?}"))?;
+    let chain_policy = policy
+        .chains
+        .iter()
+        .find(|chain| chain.source_domain == args.source_domain)
+        .context("source domain is not governed by the EVM spot policy")?;
+    let committee: BftCheckpointCommitteeV1 = read_json(&args.committee)?;
+    let committee_root = committee.root().map_err(anyhow::Error::msg)?;
+    anyhow::ensure!(
+        committee_root == chain_policy.committee_root,
+        "checkpoint committee does not match the governed chain policy"
+    );
+    let rpc_url = validate_rpc_url(&args.rpc_url)?;
+    let client = Client::builder()
+        .timeout(RPC_TIMEOUT)
+        .redirect(Policy::none())
+        .build()?;
+    let chain_id: String = rpc_call(&client, &rpc_url, "eth_chainId", serde_json::json!([]))?;
+    anyhow::ensure!(
+        parse_u64_quantity("eth_chainId", &chain_id)? == chain_policy.chain_id,
+        "EVM RPC chain ID does not match policy"
+    );
+    let observed_head_raw: String =
+        rpc_call(&client, &rpc_url, "eth_blockNumber", serde_json::json!([]))?;
+    let observed_source_head = parse_u64_quantity("latest block", &observed_head_raw)?;
+    let required_head = args
+        .source_height
+        .checked_add(u64::from(args.minimum_depth))
+        .context("checkpoint confirmation depth overflows")?;
+    anyhow::ensure!(
+        observed_source_head >= required_head,
+        "EVM source block has not reached the required confirmation depth"
+    );
+    let block_tag = format!("0x{:x}", args.source_height);
+    let block: RpcBlock = rpc_call(
+        &client,
+        &rpc_url,
+        "eth_getBlockByNumber",
+        serde_json::json!([block_tag, false]),
+    )?;
+    anyhow::ensure!(
+        parse_u64_quantity("block.number", &block.number)? == args.source_height,
+        "EVM RPC substituted a different source block"
+    );
+    let source_timestamp_ms = parse_u64_quantity("block.timestamp", &block.timestamp)?
+        .checked_mul(1_000)
+        .context("EVM block timestamp milliseconds overflow")?;
+    let checkpoint = BftSourceCheckpointV1 {
+        pftl_genesis_hash: args.pftl_genesis_hash,
+        checkpoint_kind: EVM_SPOT_CHECKPOINT_KIND_V1.to_string(),
+        source_domain: chain_policy.source_domain.clone(),
+        source_height: args.source_height,
+        source_timestamp_ms,
+        source_block_hash: parse_b256("block.hash", &block.hash)?,
+        source_state_commitment: parse_b256("block.stateRoot", &block.state_root)?,
+        observed_source_head,
+        minimum_depth: args.minimum_depth,
+        pftl_observation_height: args.pftl_observation_height,
+        committee_epoch: committee.epoch,
+        committee_root,
+    };
+    checkpoint.canonical_bytes().map_err(anyhow::Error::msg)?;
+    write_new(&args.output, &serde_json::to_vec_pretty(&checkpoint)?)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "schema": "postfiat.reserve_evm_spot_checkpoint_candidate.v1",
+            "output": args.output,
+            "source_domain": checkpoint.source_domain,
+            "source_height": checkpoint.source_height,
+            "source_timestamp_ms": checkpoint.source_timestamp_ms,
+            "source_block_hash": checkpoint.source_block_hash,
+            "source_state_commitment": checkpoint.source_state_commitment,
+            "observed_source_head": checkpoint.observed_source_head,
+            "minimum_depth": checkpoint.minimum_depth,
+            "committee_epoch": checkpoint.committee_epoch,
+            "committee_root": checkpoint.committee_root,
+            "next_required_check": "each validator independently reproduces this candidate before signing its vote statement",
+        }))?
+    );
+    Ok(())
+}
+
+fn evm_spot_owner_authorization(args: EvmSpotOwnerAuthorizationArgs) -> Result<()> {
+    let (_, context, entry) = load_source(&args.manifest, &args.context, &args.source_id)?;
+    let policy: EvmSpotPolicyV1 = read_json(&args.policy)?;
+    let owner = parse_address("owner", &args.owner)?;
+    validate_evm_spot_manifest_entry(&entry, &policy, owner)?;
+    let certificates = load_evm_spot_certificates(
+        &args.checkpoint_certificates,
+        &policy,
+        &context.pftl_genesis_hash,
+    )?;
+    let observed_at_pftl_height = common_pftl_observation_height(&certificates)?;
+    let verify_context = EvmSpotVerifyContextV1 {
+        pftl_genesis_hash: &context.pftl_genesis_hash,
+        nav_asset_id: &context.nav_asset_id,
+        proof_profile_id: &context.proof_profile_id,
+        valuation_policy_hash: &context.valuation_policy_hash,
+        source_manifest_hash: &context.source_manifest_hash,
+        source_id: &entry.source_id,
+        source_domain: &entry.source_domain,
+        asset_or_position_id: &entry.asset_or_position_id,
+        reserve_owner_commitment: &entry.reserve_owner_commitment,
+        quantity_verifier_commitment: &entry.quantity_verifier_commitment,
+        observed_at_pftl_height,
+        expected_evidence_commitment: "",
+    };
+    let certificate_refs = certificates.iter().collect::<Vec<_>>();
+    let statement = evm_spot_owner_authorization_statement_v1(
+        &policy,
+        owner,
+        &certificate_refs,
+        &verify_context,
+    )
+    .map_err(|error| anyhow::anyhow!("EVM spot owner statement failed: {error:?}"))?;
+    write_new(&args.output, &statement)?;
+    print_report(
+        "postfiat.reserve_evm_spot_owner_authorization.v1",
+        &args.output,
+        &statement,
+    )
+}
+
+fn evm_spot_collect(args: EvmSpotCollectArgs) -> Result<()> {
+    anyhow::ensure!(
+        args.total_liabilities <= args.gross_assets,
+        "total liabilities exceed gross assets"
+    );
+    validate_hex("disclosure_commitment", &args.disclosure_commitment, 48)?;
+    let (_, context, entry) = load_source(&args.manifest, &args.context, &args.source_id)?;
+    let policy: EvmSpotPolicyV1 = read_json(&args.policy)?;
+    let owner = parse_address("owner", &args.owner)?;
+    validate_evm_spot_manifest_entry(&entry, &policy, owner)?;
+    let certificates = load_evm_spot_certificates(
+        &args.checkpoint_certificates,
+        &policy,
+        &context.pftl_genesis_hash,
+    )?;
+    let observed_at_pftl_height = common_pftl_observation_height(&certificates)?;
+    anyhow::ensure!(
+        observed_at_pftl_height >= context.observation_not_before
+            && observed_at_pftl_height <= context.observation_not_after,
+        "EVM spot checkpoint PFTL height is outside the observation interval"
+    );
+    let rpc_map: EvmSpotRpcMapV1 = read_json(&args.rpc_map)?;
+    anyhow::ensure!(
+        rpc_map.schema == "postfiat.reserve_evm_spot_rpc_map.v1",
+        "EVM spot RPC map schema mismatch"
+    );
+    let expected_domains = policy
+        .chains
+        .iter()
+        .map(|chain| chain.source_domain.clone())
+        .collect::<Vec<_>>();
+    anyhow::ensure!(
+        rpc_map.sources.len() == expected_domains.len()
+            && expected_domains
+                .iter()
+                .all(|domain| rpc_map.sources.contains_key(domain)),
+        "EVM spot RPC map must contain exactly the governed source domains"
+    );
+    let ownership_signature = decode_hex("ownership_signature", &args.ownership_signature, 65)?;
+    let valuation_evidence: SourceEvidenceV1 = read_json(&args.valuation_evidence)?;
+    anyhow::ensure!(
+        valuation_evidence.class() == entry.valuation_evidence_class,
+        "valuation evidence trust class does not match manifest"
+    );
+
+    let mut chains = Vec::with_capacity(policy.chains.len());
+    for (chain_policy, certificate) in policy.chains.iter().zip(certificates) {
+        let raw_url = rpc_map
+            .sources
+            .get(&chain_policy.source_domain)
+            .context("governed EVM spot RPC source is absent")?;
+        let rpc_url = validate_rpc_url(raw_url)?;
+        chains.push(collect_evm_spot_chain(
+            chain_policy,
+            certificate,
+            owner,
+            &rpc_url,
+        )?);
+    }
+    let proof = EvmSpotQuantityProofV1 {
+        policy,
+        owner,
+        ownership_signature,
+        chains,
+    };
+    let evidence_commitment = proof
+        .evidence_commitment()
+        .map_err(|error| anyhow::anyhow!("EVM spot evidence commitment failed: {error:?}"))?;
+    let verify_context = EvmSpotVerifyContextV1 {
+        pftl_genesis_hash: &context.pftl_genesis_hash,
+        nav_asset_id: &context.nav_asset_id,
+        proof_profile_id: &context.proof_profile_id,
+        valuation_policy_hash: &context.valuation_policy_hash,
+        source_manifest_hash: &context.source_manifest_hash,
+        source_id: &entry.source_id,
+        source_domain: &entry.source_domain,
+        asset_or_position_id: &entry.asset_or_position_id,
+        reserve_owner_commitment: &entry.reserve_owner_commitment,
+        quantity_verifier_commitment: &entry.quantity_verifier_commitment,
+        observed_at_pftl_height,
+        expected_evidence_commitment: &evidence_commitment,
+    };
+    let verified = verify_evm_spot_quantity_proof_v1(&proof, &verify_context)
+        .map_err(|error| anyhow::anyhow!("EVM spot quantity proof failed: {error:?}"))?;
+    let observation = SourceObservationV1 {
+        source_id: entry.source_id.clone(),
+        observed_at_block: observed_at_pftl_height,
+        gross_assets: args.gross_assets,
+        total_liabilities: args.total_liabilities,
+        quantity_evidence: SourceEvidenceV1::EvmSpotQuantity {
+            evidence_commitment: evidence_commitment.clone(),
+            proof: Box::new(proof),
+        },
+        valuation_evidence,
+        disclosure_commitment: args.disclosure_commitment,
+    };
+    verify_observation_evidence(
+        &context,
+        &entry,
+        &observation,
+        EvidenceDimensionV1::Quantity,
+    )
+    .map_err(anyhow::Error::msg)?;
+    write_new(&args.output, &serde_json::to_vec_pretty(&observation)?)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "schema": "postfiat.reserve_evm_spot_collection.v1",
+            "output": args.output,
+            "source_id": observation.source_id,
+            "pftl_observation_height": observed_at_pftl_height,
+            "chain_count": proof_chain_count(&observation.quantity_evidence),
+            "position_count": verified.rows.len(),
+            "minimum_source_timestamp_ms": verified.minimum_source_timestamp_ms,
+            "maximum_source_timestamp_ms": verified.maximum_source_timestamp_ms,
+            "quantity_evidence_commitment": evidence_commitment,
+            "quantity_trust": "cryptographic_bft_checkpoint_mpt",
+            "valuation_trust": format!("{:?}", entry.valuation_evidence_class).to_lowercase(),
+            "next_required_check": "attach complete valuation evidence, then run observe for the full manifest",
+        }))?
+    );
+    Ok(())
+}
+
+fn proof_chain_count(evidence: &SourceEvidenceV1) -> usize {
+    match evidence {
+        SourceEvidenceV1::EvmSpotQuantity { proof, .. } => proof.chains.len(),
+        _ => 0,
+    }
+}
+
+fn validate_evm_spot_manifest_entry(
+    entry: &SourceManifestEntryV1,
+    policy: &EvmSpotPolicyV1,
+    owner: Address,
+) -> Result<()> {
+    policy
+        .validate()
+        .map_err(|error| anyhow::anyhow!("EVM spot policy is invalid: {error:?}"))?;
+    anyhow::ensure!(
+        entry.adapter_kind == EVM_SPOT_ADAPTER_KIND_V1 && entry.adapter_schema_version == 1,
+        "source does not use {EVM_SPOT_ADAPTER_KIND_V1} schema 1"
+    );
+    anyhow::ensure!(
+        entry.quantity_evidence_class == TrustClassV1::Cryptographic,
+        "EVM spot quantity source must be classified cryptographic"
+    );
+    anyhow::ensure!(
+        entry.source_domain == policy.aggregate_source_domain
+            && entry.asset_or_position_id == policy.aggregate_position_id,
+        "EVM spot policy identity does not match manifest"
+    );
+    anyhow::ensure!(
+        entry.reserve_owner_commitment == evm_spot_owner_commitment(owner),
+        "EVM spot owner does not match manifest reserve_owner_commitment"
+    );
+    anyhow::ensure!(
+        entry.quantity_verifier_commitment
+            == policy
+                .commitment()
+                .map_err(|error| anyhow::anyhow!("EVM spot policy commitment failed: {error:?}"))?,
+        "EVM spot policy does not match manifest quantity verifier"
+    );
+    Ok(())
+}
+
+fn load_evm_spot_certificates(
+    paths: &[PathBuf],
+    policy: &EvmSpotPolicyV1,
+    pftl_genesis_hash: &str,
+) -> Result<Vec<BftSourceCheckpointCertificateV1>> {
+    anyhow::ensure!(
+        paths.len() == policy.chains.len(),
+        "one checkpoint certificate is required for every governed EVM chain"
+    );
+    let mut by_domain = BTreeMap::new();
+    for path in paths {
+        let certificate: BftSourceCheckpointCertificateV1 = read_json(path)?;
+        certificate.verify().map_err(anyhow::Error::msg)?;
+        let checkpoint = &certificate.checkpoint;
+        anyhow::ensure!(
+            checkpoint.pftl_genesis_hash == pftl_genesis_hash
+                && checkpoint.checkpoint_kind == EVM_SPOT_CHECKPOINT_KIND_V1,
+            "EVM spot checkpoint has the wrong chain or kind"
+        );
+        anyhow::ensure!(
+            by_domain
+                .insert(checkpoint.source_domain.clone(), certificate)
+                .is_none(),
+            "duplicate EVM spot checkpoint source domain"
+        );
+    }
+    policy
+        .chains
+        .iter()
+        .map(|chain| {
+            let certificate = by_domain
+                .remove(&chain.source_domain)
+                .with_context(|| format!("missing checkpoint for {}", chain.source_domain))?;
+            anyhow::ensure!(
+                certificate.checkpoint.committee_root == chain.committee_root,
+                "EVM spot checkpoint committee does not match policy for {}",
+                chain.source_domain
+            );
+            Ok(certificate)
+        })
+        .collect()
+}
+
+fn common_pftl_observation_height(
+    certificates: &[BftSourceCheckpointCertificateV1],
+) -> Result<u64> {
+    let first = certificates
+        .first()
+        .context("EVM spot checkpoint set is empty")?
+        .checkpoint
+        .pftl_observation_height;
+    anyhow::ensure!(
+        certificates
+            .iter()
+            .all(|certificate| certificate.checkpoint.pftl_observation_height == first),
+        "EVM spot checkpoints do not share one PFTL observation height"
+    );
+    Ok(first)
+}
+
+fn collect_evm_spot_chain(
+    policy: &reserve_proof_types::evm_spot::EvmSpotChainPolicyV1,
+    certificate: BftSourceCheckpointCertificateV1,
+    owner: Address,
+    rpc_url: &Url,
+) -> Result<EvmSpotChainProofV1> {
+    let client = Client::builder()
+        .timeout(RPC_TIMEOUT)
+        .redirect(Policy::none())
+        .build()?;
+    let checkpoint = &certificate.checkpoint;
+    let chain_id: String = rpc_call(&client, rpc_url, "eth_chainId", serde_json::json!([]))?;
+    anyhow::ensure!(
+        parse_u64_quantity("eth_chainId", &chain_id)? == policy.chain_id,
+        "EVM RPC chain ID does not match policy"
+    );
+    let block_tag = format!("0x{:x}", checkpoint.source_height);
+    let block: RpcBlock = rpc_call(
+        &client,
+        rpc_url,
+        "eth_getBlockByNumber",
+        serde_json::json!([block_tag, false]),
+    )?;
+    let timestamp_ms = parse_u64_quantity("block.timestamp", &block.timestamp)?
+        .checked_mul(1_000)
+        .context("EVM block timestamp milliseconds overflow")?;
+    anyhow::ensure!(
+        parse_u64_quantity("block.number", &block.number)? == checkpoint.source_height
+            && parse_b256("block.hash", &block.hash)? == checkpoint.source_block_hash
+            && parse_b256("block.stateRoot", &block.state_root)?
+                == checkpoint.source_state_commitment
+            && timestamp_ms == checkpoint.source_timestamp_ms,
+        "EVM RPC block does not match the certified checkpoint"
+    );
+    let latest: String = rpc_call(&client, rpc_url, "eth_blockNumber", serde_json::json!([]))?;
+    anyhow::ensure!(
+        parse_u64_quantity("latest block", &latest)? >= checkpoint.observed_source_head,
+        "EVM RPC head is behind the certified observation head"
+    );
+
+    let native_rpc: RpcAccountProof = rpc_call(
+        &client,
+        rpc_url,
+        "eth_getProof",
+        serde_json::json!([format!("{owner:#x}"), Vec::<String>::new(), block_tag]),
+    )?;
+    anyhow::ensure!(
+        parse_address("native eth_getProof.address", &native_rpc.address)? == owner
+            && native_rpc.storage_proof.is_empty(),
+        "native eth_getProof returned a substituted account or storage proof"
+    );
+    let native_account = rpc_account_proof("native account", native_rpc)?;
+
+    let mut tokens = Vec::with_capacity(policy.tokens.len());
+    for token in &policy.tokens {
+        let storage_key = spot_balance_slot(owner, token.balance_slot_index);
+        let rpc_proof: RpcAccountProof = rpc_call(
+            &client,
+            rpc_url,
+            "eth_getProof",
+            serde_json::json!([
+                format!("{:#x}", token.token),
+                [format!("{storage_key:#x}")],
+                format!("0x{:x}", checkpoint.source_height)
+            ]),
+        )?;
+        anyhow::ensure!(
+            parse_address("token eth_getProof.address", &rpc_proof.address)? == token.token
+                && rpc_proof.storage_proof.len() == 1,
+            "token eth_getProof returned a substituted account or storage set"
+        );
+        let storage = &rpc_proof.storage_proof[0];
+        anyhow::ensure!(
+            parse_b256("storageProof.key", &storage.key)? == storage_key,
+            "token storage proof key does not match the governed balance slot"
+        );
+        let balance = EvmStorageProofV1 {
+            key: storage_key,
+            value: parse_u256("storageProof.value", &storage.value)?,
+            proof: decode_proof_nodes("storageProof", &storage.proof)?,
+        };
+        tokens.push(EvmSpotTokenProofV1 {
+            position_id: token.position_id.clone(),
+            token_account: rpc_account_proof("token account", rpc_proof)?,
+            balance,
+        });
+    }
+    Ok(EvmSpotChainProofV1 {
+        checkpoint_certificate: certificate,
+        native_account,
+        tokens,
+    })
+}
+
+fn rpc_account_proof(label: &str, proof: RpcAccountProof) -> Result<EvmAccountProofV1> {
+    Ok(EvmAccountProofV1 {
+        address: parse_address(&format!("{label}.address"), &proof.address)?,
+        nonce: parse_u64_quantity(&format!("{label}.nonce"), &proof.nonce)?,
+        balance: parse_u256(&format!("{label}.balance"), &proof.balance)?,
+        storage_root: parse_b256(&format!("{label}.storageHash"), &proof.storage_hash)?,
+        code_hash: parse_b256(&format!("{label}.codeHash"), &proof.code_hash)?,
+        proof: decode_proof_nodes(&format!("{label}.accountProof"), &proof.account_proof)?,
+    })
 }
 
 fn collect(args: CollectArgs) -> Result<()> {
@@ -686,6 +1354,7 @@ struct RpcBlock {
     number: String,
     hash: String,
     state_root: String,
+    timestamp: String,
     #[serde(flatten)]
     _extra: std::collections::BTreeMap<String, serde_json::Value>,
 }

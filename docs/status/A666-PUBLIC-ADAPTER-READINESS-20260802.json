@@ -14,8 +14,8 @@
       "id": "evm-spot",
       "status": "partial",
       "production_qualified": false,
-      "public_implementation": "tools/nav-reserve-proof/crates/reserve-proof-types/src/evm_spot.rs",
-      "note": "A provider-neutral successor verifier now checks an exact governed multichain native/ERC-20 position set, quorum-certified state roots and timestamps, account/storage MPT proofs, code hashes, owner authorization, decimals, omissions, duplicates, checked bounds, and guest dispatch. It reconstructs every native and ERC-20 proof in the historical A666 artifact. Prices remain a separate disclosed valuation trust dimension. Public collection, the governed A666 policy fixture, fuzzing, fresh epochs, full A666 reconciliation, and production qualification remain open."
+      "public_implementation": "tools/nav-reserve-proof/crates/reserve-proof-types/src/evm_spot.rs; tools/nav-reserve-proof/crates/reserve-proof-cli/src/evm_adapter.rs",
+      "note": "A provider-neutral successor verifier now checks an exact governed multichain native/ERC-20 position set, quorum-certified state roots and timestamps, account/storage MPT proofs, code hashes, owner authorization, decimals, omissions, duplicates, checked bounds, and guest dispatch. Its public workflow deterministically constructs each checkpoint candidate from a pinned RPC height, supports independent checkpoint voting/assembly, emits the complete owner-authorization statement, and collects the governed proof set from an exact RPC map. It reconstructs every native and ERC-20 proof in the historical A666 artifact. Prices remain a separate disclosed valuation trust dimension. The governed A666 policy/committee fixture, adversarial and fuzz qualification, fresh epochs, full A666 reconciliation, and production qualification remain open."
     },
     {
       "id": "hyperliquid",

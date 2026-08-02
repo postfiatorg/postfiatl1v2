@@ -357,7 +357,17 @@ fn verify_owner_authorization(
         .map_err(|_| EvmSpotError::OwnerAuthorization)?;
     let signature =
         Signature::from_raw_array(&signature).map_err(|_| EvmSpotError::OwnerAuthorization)?;
-    let statement = owner_authorization_statement(proof, context)?;
+    let checkpoints = proof
+        .chains
+        .iter()
+        .map(|chain| &chain.checkpoint_certificate)
+        .collect::<Vec<_>>();
+    let statement = evm_spot_owner_authorization_statement_v1(
+        &proof.policy,
+        proof.owner,
+        &checkpoints,
+        context,
+    )?;
     let recovered = signature
         .recover_address_from_msg(&statement)
         .map_err(|_| EvmSpotError::OwnerAuthorization)?;
@@ -367,10 +377,16 @@ fn verify_owner_authorization(
     Ok(())
 }
 
-fn owner_authorization_statement(
-    proof: &EvmSpotQuantityProofV1,
+pub fn evm_spot_owner_authorization_statement_v1(
+    policy: &EvmSpotPolicyV1,
+    owner: Address,
+    checkpoint_certificates: &[&BftSourceCheckpointCertificateV1],
     context: &EvmSpotVerifyContextV1<'_>,
 ) -> Result<Vec<u8>, EvmSpotError> {
+    policy.validate()?;
+    if checkpoint_certificates.len() != policy.chains.len() {
+        return Err(EvmSpotError::CheckpointMismatch);
+    }
     let mut out = Vec::new();
     for (value, bytes) in [
         (context.pftl_genesis_hash, 48usize),
@@ -383,11 +399,16 @@ fn owner_authorization_statement(
     }
     validate_identifier(context.source_id)?;
     append_bytes(&mut out, context.source_id.as_bytes())?;
-    append_hex(&mut out, &proof.policy.commitment()?, 48)?;
-    out.extend_from_slice(proof.owner.as_slice());
-    append_u32(&mut out, proof.chains.len())?;
-    for chain in &proof.chains {
-        append_checkpoint(&mut out, &chain.checkpoint_certificate.checkpoint)?;
+    append_hex(&mut out, &policy.commitment()?, 48)?;
+    out.extend_from_slice(owner.as_slice());
+    append_u32(&mut out, checkpoint_certificates.len())?;
+    for (chain_policy, certificate) in policy.chains.iter().zip(checkpoint_certificates) {
+        if certificate.checkpoint.source_domain != chain_policy.source_domain
+            || certificate.checkpoint.committee_root != chain_policy.committee_root
+        {
+            return Err(EvmSpotError::CheckpointMismatch);
+        }
+        append_checkpoint(&mut out, &certificate.checkpoint)?;
     }
     Ok(domain_message(OWNER_AUTHORIZATION_DOMAIN, &out))
 }
@@ -838,7 +859,18 @@ mod tests {
 
     fn authorize(proof: &mut EvmSpotQuantityProofV1, key: &SigningKey) {
         let context = context(proof, "00");
-        let statement = owner_authorization_statement(proof, &context).unwrap();
+        let checkpoints = proof
+            .chains
+            .iter()
+            .map(|chain| &chain.checkpoint_certificate)
+            .collect::<Vec<_>>();
+        let statement = evm_spot_owner_authorization_statement_v1(
+            &proof.policy,
+            proof.owner,
+            &checkpoints,
+            &context,
+        )
+        .unwrap();
         let digest = eip191_hash_message(&statement);
         let (signature, recovery_id) = key.sign_prehash_recoverable(digest.as_slice()).unwrap();
         proof.ownership_signature = Signature::from((signature, recovery_id))
@@ -914,7 +946,18 @@ mod tests {
             observed_at_pftl_height: 500,
             expected_evidence_commitment: "00",
         };
-        let statement = owner_authorization_statement(&proof, &verify_context).unwrap();
+        let checkpoints = proof
+            .chains
+            .iter()
+            .map(|chain| &chain.checkpoint_certificate)
+            .collect::<Vec<_>>();
+        let statement = evm_spot_owner_authorization_statement_v1(
+            &proof.policy,
+            proof.owner,
+            &checkpoints,
+            &verify_context,
+        )
+        .unwrap();
         let digest = eip191_hash_message(&statement);
         let (signature, recovery_id) = key.sign_prehash_recoverable(digest.as_slice()).unwrap();
         proof.ownership_signature = Signature::from((signature, recovery_id))

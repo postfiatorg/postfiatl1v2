@@ -183,6 +183,44 @@ block/state roots fail closed. The collector verifies the checkpoint quorum,
 manifest owner/token/committee pins, owner signature, and account/storage MPT
 proof before emitting a `SourceObservationV1`.
 
+The successor complete-EVM-spot adapter applies the same boundary to every
+native and ERC-20 position in one governed multichain policy. For each chain,
+validators independently construct the exact checkpoint candidate from the
+same pinned source height before producing their isolated ML-DSA vote:
+
+    postfiat-reserve-proof adapter evm-spot checkpoint-candidate \
+      --pftl-genesis-hash 0123... \
+      --policy evm-spot-policy.json \
+      --source-domain eip155:1 \
+      --source-height 12345678 \
+      --minimum-depth 64 \
+      --pftl-observation-height 500 \
+      --committee ethereum-checkpoint-committee.json \
+      --rpc-url https://ethereum.example \
+      --output ethereum-checkpoint.json
+
+The command verifies chain ID, required depth, block number, hash, timestamp,
+state root, committee epoch, and policy-pinned committee root. After generic
+checkpoint certificate assembly, `adapter evm-spot owner-authorization`
+emits the EIP-191 bytes binding the owner to the complete policy and every
+certificate. `adapter evm-spot collect` then queries each governed RPC at its
+certified height, verifies every native-account and ERC-20 storage proof, and
+emits one complete quantity observation. Its reviewed RPC map has this exact
+schema and must contain precisely the policy's source domains:
+
+    {
+      "schema": "postfiat.reserve_evm_spot_rpc_map.v1",
+      "sources": {
+        "eip155:1": "https://ethereum.example",
+        "eip155:42161": "https://arbitrum.example"
+      }
+    }
+
+No checkpoint, owner, or validator private key enters any proof-kit command.
+RPC credentials may be supplied operationally, but all artifact construction
+and validation semantics are public here. EVM-spot valuation remains a
+separately disclosed evidence dimension.
+
 Quantity and valuation remain separate. Derive the exact manifest commitment
 for an Ed25519 attestation or protocol-receipt key first:
 
