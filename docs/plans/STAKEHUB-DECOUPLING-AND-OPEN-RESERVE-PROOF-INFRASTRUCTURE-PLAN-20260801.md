@@ -153,8 +153,9 @@ in that file is implemented and production-qualified.
 
 ### 3.2 What is not complete
 
-The public repository does not contain complete source-specific verification
-for:
+The public repository does not yet contain a production-complete,
+independently reproducible path for any of these required A666 source
+families:
 
 - Aave collateral and debt;
 - A666's complete Ethereum spot portfolio;
@@ -196,15 +197,20 @@ not yet the desired public architecture.
 | Hyperliquid | Provider-neutral verifier implemented; partial | No | Add public collection and fuzzing, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
 | Staked NEAR | Provider-neutral quantity verifier implemented; partial | No | Add public collection and fuzzing, reproduce complete historical and fresh epochs, bind separately attested valuation, complete full A666 reconciliation, and qualify |
 | Staked Solana | Provider-neutral attested-state verifier implemented; partial | No | Add the public collector and governed independent signer/policy fixture, fuzz, run fresh epochs and complete A666 reconciliation, and qualify at the accurately disclosed attested quantity trust level |
-| Monero | Missing | No | Public reserve-proof verifier and collector, fresh ownership challenge, replay protection, zero/nonzero fixtures, fuzzing, and qualification |
+| Monero | Provider-neutral cryptographic quantity verifier implemented; partial | No | Add the public collector, produce a fresh governed nonzero proof with certified head chain and spent-status set, bind separately disclosed XMR/USD valuation evidence, fuzz, complete A666 reconciliation, and qualify |
 | pfUSDC overlay | Implemented and pushed | Not sufficient by itself | Exact-tip remote CI must pass; this covers only PFTL-accounted subscription reserves, not the six external source families |
 
-The Aave, complete-EVM-spot, Hyperliquid, NEAR, and Solana verifiers pass their
-source tests and registered guest dispatch tests. Aave reproduces the
+The Aave, complete-EVM-spot, Hyperliquid, NEAR, Solana, and Monero verifiers
+pass their source tests and registered guest dispatch tests. Aave reproduces the
 historical A666 collateral and debt results; EVM spot reconstructs every
 historical native and ERC-20 account/storage proof; Hyperliquid and NEAR
 reconstruct their historical receipt/Merkle evidence; Solana reconstructs the
-historical stake quantities and authority data. The EVM spot adapter proves
+historical stake quantities and authority data. Monero reconstructs the real
+historical nonzero transaction/RingCT/ownership/inclusion proof and also
+verifies a synthetic context-bound zero-reserve test vector without treating
+an aggregate amount signature as proof. Its production path still lacks a
+public collector, a fresh governed nonzero header-chain/spent-status proof, and
+separate XMR/USD valuation evidence. The EVM spot adapter proves
 reserve quantities only and deliberately leaves USD prices in the separately
 declared valuation trust dimension. The Solana adapter does not relabel RPC
 snapshots as cryptographic: it publicly verifies the exact position set,
@@ -518,7 +524,7 @@ existing guest ELF SHA exactly.
 - [x] Implement and register the public staked-NEAR adapter.
 - [ ] Implement the public staked-Solana collector/verifier at its governed
   trust level.
-- [ ] Implement and register the public XMR reserve-proof adapter.
+- [x] Implement and register the public XMR reserve-proof quantity adapter.
 - [ ] Remove all provider-specific hash domains and compiled operator identities
   from successor semantics.
 - [ ] Add public fixtures and adversarial tests for every adapter.

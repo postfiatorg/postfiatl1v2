@@ -12,6 +12,9 @@ default = ["a666-public-adapters-v2"]
 a666-public-adapters-v2 = [
     "dep:base64",
     "dep:bs58",
+    "dep:curve25519-dalek",
+    "dep:monero",
+    "dep:monero-generators-mirror",
     "dep:serde_json",
     "dep:sha2",
     "dep:thiserror",
@@ -23,8 +26,11 @@ alloy-rlp.workspace = true
 alloy-trie.workspace = true
 base64 = { workspace = true, optional = true }
 bs58 = { workspace = true, optional = true }
+curve25519-dalek = { workspace = true, optional = true }
 ed25519-dalek.workspace = true
 hex.workspace = true
+monero = { workspace = true, optional = true }
+monero-generators-mirror = { workspace = true, optional = true }
 postfiat-crypto-provider.workspace = true
 postfiat-types.workspace = true
 serde.workspace = true

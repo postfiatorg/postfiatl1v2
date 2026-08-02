@@ -11,7 +11,13 @@
     "crates/proofs/src/lib.rs": "6ad08dd265fc25958daf6e0ae3d55bbecaa13cdebdcafc9739c2d682d0eb4527",
     "crates/types/src/nav_reserve_public_values.rs": "ffe01da1eefffa33d1f283ba0248e5e7f572e0537b88a794435aa43e2a3c5cf6",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/main.rs": "51a1814847ed3452463672171bbb0c9fbe97546e60020f629189348681e9dfc5",
-    "tools/nav-reserve-proof/crates/reserve-proof-types/src/lib.rs": "c59f702199d8da9f21548897a650d3e6c162e0510dc9bd4b8bc621dde2872d5b",
+    "tools/nav-reserve-proof/crates/reserve-proof-types/src/lib.rs": "89ccdc2100ba45999ec90b5d88fd80002997594195b511075fdc81d208b00ccf",
+    "tools/nav-reserve-proof/crates/reserve-proof-types/src/aave_v3.rs": "fbd6e51cc3011cac7ba78fd7aa243965e50bafade5aa8a0d047fc7397a5defcf",
+    "tools/nav-reserve-proof/crates/reserve-proof-types/src/evm_spot.rs": "7132e389fbd11d68aa4e28ba1a023e47c9f6bba6e302a9e7ccb11cd44d3fd226",
+    "tools/nav-reserve-proof/crates/reserve-proof-types/src/hyperliquid_receipt.rs": "26ea6651ec1a97aaf9286553f803c475d5eccc3a36ff1c1ce723e3d7f2201dac",
+    "tools/nav-reserve-proof/crates/reserve-proof-types/src/near_receipt.rs": "888974858d042186f69a27edf503a7867b8463b23b625e6bad5a661dad47ed78",
+    "tools/nav-reserve-proof/crates/reserve-proof-types/src/solana_stake.rs": "4d2ac6b278e91b3e8b0cd1d93f971f381900ebb8b9938514d29b1ae48fe0952a",
+    "tools/nav-reserve-proof/crates/reserve-proof-types/src/monero_reserve.rs": "40c0e39209e6b95f04835c1868bf31204fc2f779b1e3be7f1d81501455fcdf9b",
     "tools/nav-reserve-proof/programs/reserve-proof-guest/src/main.rs": "1f3caf2e7b1adb64afc14c5f5e81a4690d25a232d116ad95b3e0126420b8c655"
   },
   "systems": [
@@ -188,6 +194,6 @@
   ],
   "verdict": {
     "source_publication": "AssetOrchard live public-instance and witness bindings and the provider-neutral NAV reserve proof ABI are fully inventoried. The successor NAV guest, build recipe, adapters and deterministic vectors are public and locally reproducible. The legacy NAV aggregate and debug adapter remain explicitly contained compatibility surfaces.",
-    "real_value": "The successor proof implementation is locally qualified, but live real-value activation remains gated on governed profile/program registration, validator rollout and rollback evidence, fresh A666 epochs, an independent operator reproduction, and exact live candidate-run evidence."
+    "real_value": "The provider-neutral framework is locally qualified, but the six A666 source adapters are 0/6 production-qualified. Live real-value activation remains gated on public collectors, adversarial and fuzz qualification, fresh A666 epochs and complete reconciliation, a reproducible successor guest/program identity, governed profile/program registration, validator rollout and rollback evidence, an independent operator reproduction, and exact live candidate-run evidence."
   }
 }

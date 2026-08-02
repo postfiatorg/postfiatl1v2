@@ -40,10 +40,10 @@
     },
     {
       "id": "xmr-reserve",
-      "status": "missing",
+      "status": "partial",
       "production_qualified": false,
-      "public_implementation": null,
-      "note": "Public code does not yet verify Monero reserve proofs, ownership challenges, replay/freshness, zero and nonzero balances, and separate XMR/USD valuation evidence."
+      "public_implementation": "tools/nav-reserve-proof/crates/reserve-proof-types/src/monero_reserve.rs",
+      "note": "A provider-neutral cryptographic quantity verifier now checks Monero transaction decoding and hashes, tx public keys, shared-secret ownership proofs, key-image ring signatures, subaddress spend-key proofs, RingCT amount recovery and commitments, transaction inclusion, block-header anchoring, BFT-certified head and key-image spent status, bounded inputs, exact NAV/profile/manifest/policy/epoch context, and guest dispatch. It cryptographically reconstructs the historical nonzero A666 fixture and verifies a context-bound zero-reserve proof without an aggregate amount attestation. Public collection, a fresh governed nonzero proof with a certified head chain/status set, separate XMR/USD valuation evidence, fuzzing, full A666 reconciliation, and production qualification remain open."
     }
   ]
 }

@@ -17,6 +17,8 @@ pub mod evm_spot;
 #[cfg(feature = "a666-public-adapters-v2")]
 pub mod hyperliquid_receipt;
 #[cfg(feature = "a666-public-adapters-v2")]
+pub mod monero_reserve;
+#[cfg(feature = "a666-public-adapters-v2")]
 pub mod near_receipt;
 #[cfg(feature = "a666-public-adapters-v2")]
 pub mod solana_stake;
@@ -35,6 +37,11 @@ use evm_spot::{
 use hyperliquid_receipt::{
     verify_hyperliquid_receipt_proof_v1, HyperliquidReceiptProofV1,
     HyperliquidReceiptVerifyContextV1, HYPERLIQUID_RECEIPT_ADAPTER_KIND_V1,
+};
+#[cfg(feature = "a666-public-adapters-v2")]
+use monero_reserve::{
+    verify_monero_reserve_proof_v1, MoneroReserveProofV1, MoneroReserveVerifyContextV1,
+    MONERO_RESERVE_ADAPTER_KIND_V1,
 };
 #[cfg(feature = "a666-public-adapters-v2")]
 use near_receipt::{
@@ -212,6 +219,13 @@ pub enum SourceEvidenceV1 {
         evidence_commitment: String,
         proof: Box<SolanaStakeAttestedProofV1>,
     },
+    /// Monero reserve proof with transaction/RingCT verification, governed
+    /// head anchoring, and certified key-image spent status.
+    #[cfg(feature = "a666-public-adapters-v2")]
+    MoneroReserve {
+        evidence_commitment: String,
+        proof: Box<MoneroReserveProofV1>,
+    },
     AdapterProof {
         evidence_commitment: String,
         proof: Vec<u8>,
@@ -230,7 +244,8 @@ impl SourceEvidenceV1 {
             Self::HyperliquidReceipt { .. }
             | Self::NearReceiptQuantity { .. }
             | Self::AaveV3 { .. }
-            | Self::EvmSpotQuantity { .. } => TrustClassV1::Cryptographic,
+            | Self::EvmSpotQuantity { .. }
+            | Self::MoneroReserve { .. } => TrustClassV1::Cryptographic,
             #[cfg(feature = "a666-public-adapters-v2")]
             Self::SolanaStakeAttested { .. } => TrustClassV1::Attested,
         }
@@ -271,6 +286,10 @@ impl SourceEvidenceV1 {
                 ..
             }
             | Self::EvmSpotQuantity {
+                evidence_commitment,
+                ..
+            }
+            | Self::MoneroReserve {
                 evidence_commitment,
                 ..
             } => evidence_commitment,
@@ -880,6 +899,53 @@ fn verify_evidence(
             .map_err(|error| {
                 format!(
                     "source {} Solana stake quantity verification failed: {error:?}",
+                    entry.source_id
+                )
+            })
+        }
+        #[cfg(feature = "a666-public-adapters-v2")]
+        SourceEvidenceV1::MoneroReserve {
+            evidence_commitment,
+            proof,
+        } => {
+            if dimension != "quantity" {
+                return Err(format!(
+                    "source {} Monero proof is only valid for quantity evidence",
+                    entry.source_id
+                ));
+            }
+            if entry.adapter_kind != MONERO_RESERVE_ADAPTER_KIND_V1
+                || entry.adapter_schema_version != 1
+            {
+                return Err(format!(
+                    "source {} Monero proof requires {MONERO_RESERVE_ADAPTER_KIND_V1} adapter schema 1",
+                    entry.source_id
+                ));
+            }
+            verify_monero_reserve_proof_v1(
+                proof,
+                &MoneroReserveVerifyContextV1 {
+                    pftl_genesis_hash: &context.pftl_genesis_hash,
+                    nav_asset_id: &context.nav_asset_id,
+                    proof_profile_id: &context.proof_profile_id,
+                    valuation_policy_hash: &context.valuation_policy_hash,
+                    source_manifest_hash: &context.source_manifest_hash,
+                    source_id: &entry.source_id,
+                    source_domain: &entry.source_domain,
+                    asset_or_position_id: &entry.asset_or_position_id,
+                    reserve_owner_commitment: &entry.reserve_owner_commitment,
+                    quantity_verifier_commitment: &entry.quantity_verifier_commitment,
+                    observation_epoch: context.observation_epoch,
+                    observation_not_before: context.observation_not_before,
+                    observation_not_after: context.observation_not_after,
+                    observed_at_pftl_height: observation.observed_at_block,
+                    expected_evidence_commitment: evidence_commitment,
+                },
+            )
+            .map(|_| ())
+            .map_err(|error| {
+                format!(
+                    "source {} Monero quantity verification failed: {error:?}",
                     entry.source_id
                 )
             })

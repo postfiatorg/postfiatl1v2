@@ -14,6 +14,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ahash"
+version = "0.8.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
+dependencies = [
+ "cfg-if",
+ "once_cell",
+ "version_check",
+ "zerocopy",
+]
+
+[[package]]
 name = "alloy-primitives"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -76,7 +88,7 @@ dependencies = [
  "nybbles",
  "serde",
  "smallvec",
- "thiserror",
+ "thiserror 2.0.19",
  "tracing",
 ]
 
@@ -386,6 +398,15 @@ name = "base16ct"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c7f02d4ea65f2c1853089ffd8d2787bdbc63de2f0d29dedbcf8ccdfa0ccd4cf"
+
+[[package]]
+name = "base58-monero"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "174416d4074aa8a817937521f15c35d50f70bf0dcb4662a2795d49f777803265"
+dependencies = [
+ "thiserror 2.0.19",
+]
 
 [[package]]
 name = "base64"
@@ -702,6 +723,8 @@ dependencies = [
  "curve25519-dalek-derive",
  "digest 0.10.7",
  "fiat-crypto",
+ "group",
+ "rand_core 0.6.4",
  "rustc_version 0.4.1",
  "subtle",
  "zeroize",
@@ -716,6 +739,23 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "dalek-ff-group-mirror"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2eeccd55215877bdbd8984b0330bae38681cae504a27068db34afaf3886aa97"
+dependencies = [
+ "crypto-bigint",
+ "curve25519-dalek",
+ "digest 0.10.7",
+ "ff",
+ "group",
+ "rand_core 0.6.4",
+ "rustversion",
+ "subtle",
+ "zeroize",
 ]
 
 [[package]]
@@ -1188,6 +1228,15 @@ checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 
 [[package]]
 name = "hashbrown"
+version = "0.14.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
+dependencies = [
+ "ahash",
+]
+
+[[package]]
+name = "hashbrown"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
@@ -1196,6 +1245,12 @@ dependencies = [
  "serde",
  "serde_core",
 ]
+
+[[package]]
+name = "heck"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
 
 [[package]]
 name = "hex"
@@ -1220,6 +1275,12 @@ checksum = "35431185f361ccf3ffc58254628af5f1f5d5f28531da2e02e5d6c82bbc282a10"
 dependencies = [
  "arrayvec",
 ]
+
+[[package]]
+name = "hex-literal"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6fe2267d4ed49bc07b63801559be28c718ea06c4738b7a03c94df7386d2cde46"
 
 [[package]]
 name = "hmac"
@@ -1451,6 +1512,47 @@ name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
+
+[[package]]
+name = "monero"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f25218523ad4a171ddda05251669afb788cdc2f0df94082aab856a2b09541c3f"
+dependencies = [
+ "base58-monero",
+ "curve25519-dalek",
+ "fixed-hash",
+ "hex",
+ "hex-literal",
+ "sealed",
+ "thiserror 1.0.69",
+ "tiny-keccak",
+]
+
+[[package]]
+name = "monero-generators-mirror"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b651dda82cb500ee8461d7a62d83d9a67d8e768315cf926f1d98f54c9ed957dc"
+dependencies = [
+ "curve25519-dalek",
+ "dalek-ff-group-mirror",
+ "group",
+ "monero-io-mirror",
+ "sha3 0.10.8",
+ "std-shims-mirror",
+ "subtle",
+]
+
+[[package]]
+name = "monero-io-mirror"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baf172c6416b3e56737045c1dfb2e8f58e6a910190f90c9cc8a0b02d57b03bda"
+dependencies = [
+ "curve25519-dalek",
+ "std-shims-mirror",
+]
 
 [[package]]
 name = "num-bigint"
@@ -1943,15 +2045,18 @@ dependencies = [
  "alloy-trie",
  "base64",
  "bs58",
+ "curve25519-dalek",
  "ed25519-dalek",
  "hex",
+ "monero",
+ "monero-generators-mirror",
  "postfiat-crypto-provider",
  "postfiat-types",
  "serde",
  "serde_json",
  "sha2",
  "sha3 0.10.8",
- "thiserror",
+ "thiserror 2.0.19",
 ]
 
 [[package]]
@@ -2079,6 +2184,18 @@ dependencies = [
  "ref-cast",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "sealed"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4a8caec23b7800fb97971a1c6ae365b6239aaeddfb934d6265f8505e795699d"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -2418,6 +2535,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "spin"
+version = "0.9.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3763264f6b73151db08c50ff20d7d8a0b8796e021cdea7ceedad07b80155fa0e"
+
+[[package]]
 name = "spki"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2432,6 +2555,16 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
+name = "std-shims-mirror"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75607eda3a2e9fff2e85af7f411137a83c6ab843ce6fda98545883a067d37a21"
+dependencies = [
+ "hashbrown 0.14.5",
+ "spin",
+]
 
 [[package]]
 name = "subtle"
@@ -2480,11 +2613,31 @@ checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
 name = "thiserror"
+version = "1.0.69"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
+dependencies = [
+ "thiserror-impl 1.0.69",
+]
+
+[[package]]
+name = "thiserror"
 version = "2.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09a43598840e33d5b0331f38c5e30d13bb11c11210a4b58f0d9b18a5a5eefcd9"
 dependencies = [
- "thiserror-impl",
+ "thiserror-impl 2.0.19",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "1.0.69"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -2526,6 +2679,15 @@ checksum = "7e689342a48d2ea927c87ea50cabf8594854bf940e9310208848d680d668ed85"
 dependencies = [
  "num-conv",
  "time-core",
+]
+
+[[package]]
+name = "tiny-keccak"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c9d3793400a45f954c52e73d068316d76b6f4e36977e3fcebb13a2721e80237"
+dependencies = [
+ "crunchy",
 ]
 
 [[package]]
