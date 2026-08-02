@@ -1,0 +1,13 @@
+{
+  "schema": "postfiat.reserve_program_identity.v1",
+  "sp1_version": "6.3.1",
+  "source_commit": "5b8f0317375af6fb46d586d9d9152b511457b802",
+  "identity_role": "a666_public_reserve_successor",
+  "guest_features": [
+    "a666-public-adapters-v2"
+  ],
+  "elf_sha256": "2b41e4e8095b1dacdc519b2f0a2b4831ebc57cc8003a4d3686f6d9e4687e81df",
+  "program_vkey": "0x00f3857f96ef97e00bd15b4030acd8d6b0a72740b28c6160d154bc2c9bb141bf",
+  "reproduction_count": 2,
+  "reproduction_result": "byte_identical"
+}

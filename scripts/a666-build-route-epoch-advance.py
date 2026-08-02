@@ -69,8 +69,8 @@ def main() -> None:
     nav = json.loads(args.nav_manifest.read_text())
     if route["route_id"] != ROUTE_ID:
         raise RuntimeError("route status is not the governed A666 route")
-    if route["paused"] or not route["live_value_enabled"]:
-        raise RuntimeError("A666 route must be live and unpaused")
+    if not route["live_value_enabled"]:
+        raise RuntimeError("A666 route must have live value enabled")
     if route["active_reservation_count"] or route["export_entitlement_count"]:
         raise RuntimeError("route epoch cannot advance with active order state")
     if nav["epoch"] != route["pricing_nav_epoch"] + 1:
