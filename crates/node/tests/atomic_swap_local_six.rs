@@ -1699,6 +1699,7 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
     const A666_ISSUER: &str = "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b";
     const A666_RESERVE_OPERATOR: &str = "pfd0c86d9084915e1fefd22eab891806397d5a5937";
     const A666_SUCCESSOR_PROFILE: &str = "f8784629ff7338002d836c1988b8e2c0f19caf448429e0eb7fdc39fa2b08f7d9a44171fc1e7239bc25e06ad833c14e91";
+    const A666_CIRCULATING_SUPPLY: u64 = 31_597_197_455;
 
     let issuer = read_dev_key_from_env("POSTFIAT_A666_ISSUER_KEY_FILE");
     let reserve_operator = read_dev_key_from_env("POSTFIAT_A666_RESERVE_KEY_FILE");
@@ -1817,6 +1818,19 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         issued_asset_id(A666_CHAIN_ID, A666_ISSUER, "A666", 2).expect("derive exact A666 ID"),
         A666_ASSET_ID
     );
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &issuer,
+        AssetTransactionOperation::IssuedPayment(IssuedPaymentOperation {
+            from: A666_ISSUER.to_string(),
+            to: A666_RESERVE_OPERATOR.to_string(),
+            issuer: A666_ISSUER.to_string(),
+            asset_id: A666_ASSET_ID.to_string(),
+            amount: A666_CIRCULATING_SUPPLY,
+        }),
+        "recreate-exact-a666-circulating-supply",
+    );
     let legacy_profile_operation = NavProfileRegisterOperation {
         registrant: A666_ISSUER.to_string(),
         verifier_kind: NAV_PROFILE_VERIFIER_PLACEHOLDER.to_string(),
@@ -1895,6 +1909,9 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         }),
         "rebind-a666-public-successor",
     );
+    let nav_per_unit = (u128::from(public_values.verified_net_assets) * 1_000_000_u128
+        / u128::from(A666_CIRCULATING_SUPPLY)) as u64;
+    assert_eq!(nav_per_unit, 89_748_188);
     let reserve_packet_hash = "a6".repeat(48);
     let submitted = submit_dev_key_asset_finality(
         &harness,
@@ -1905,8 +1922,8 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
             submitter: A666_RESERVE_OPERATOR.to_string(),
             asset_id: A666_ASSET_ID.to_string(),
             epoch: public_values.observation_epoch,
-            nav_per_unit: 90_000_000,
-            circulating_supply: 0,
+            nav_per_unit,
+            circulating_supply: A666_CIRCULATING_SUPPLY,
             verified_net_assets: public_values.verified_net_assets,
             proof_profile: A666_SUCCESSOR_PROFILE.to_string(),
             source_root: public_values.source_observation_root.clone(),
@@ -1959,6 +1976,11 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
             })
             .expect("A666 public reserve packet after finality");
         assert_eq!(packet.state, "finalized", "validator {index}");
+        assert_eq!(packet.nav_per_unit, nav_per_unit, "validator {index}");
+        assert_eq!(
+            packet.circulating_supply, A666_CIRCULATING_SUPPLY,
+            "validator {index}"
+        );
         assert_eq!(
             packet.proof_verified_net_assets, public_values.verified_net_assets,
             "validator {index}"
