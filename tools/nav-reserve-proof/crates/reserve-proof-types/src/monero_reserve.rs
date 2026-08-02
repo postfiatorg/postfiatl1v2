@@ -256,6 +256,9 @@ pub fn verify_xmr_reserve_witness(
 impl MoneroReservePolicyV1 {
     pub fn validate(&self) -> Result<(), XmrReserveLegError> {
         validate_identifier(&self.source_domain)?;
+        if self.source_domain != "monero:mainnet" {
+            return Err(XmrReserveLegError::UnsupportedShape);
+        }
         validate_identifier(&self.position_id)?;
         validate_lower_hex(&self.checkpoint_committee_root, 48)?;
         if self.address_spend_public_key == B256::ZERO
@@ -1263,6 +1266,16 @@ mod tests {
             verify_monero_reserve_proof_v1(&proof, &context(&proof.policy, &commitment)).unwrap();
         assert_eq!(verified.xmr_atomic, 0);
         assert!(verified.key_images.is_empty());
+    }
+
+    #[test]
+    fn rejects_non_mainnet_policy_domain() {
+        let mut proof = zero_fixture();
+        proof.policy.source_domain = "monero:stagenet".to_string();
+        assert_eq!(
+            proof.policy.validate(),
+            Err(XmrReserveLegError::UnsupportedShape)
+        );
     }
 
     #[test]

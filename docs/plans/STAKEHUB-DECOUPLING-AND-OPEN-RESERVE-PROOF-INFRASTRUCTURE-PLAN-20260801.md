@@ -273,7 +273,7 @@ not yet the desired public architecture.
 | Hyperliquid | Provider-neutral verifier, public HyperCore receipt-reader contract, unsigned snapshot construction, checkpoint/owner workflow, and receipt-proof collector implemented; partial | No | Deploy the hardened public reader, govern policy/committee inputs, fuzz, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
 | Staked NEAR | Provider-neutral quantity verifier, public reader contract, unsigned invocation construction, finalized-head checkpoint workflow, owner authorization, and outcome/block-proof collector implemented; partial | No | Deploy the public reader, govern policy/committee inputs, add fuzzing, reproduce complete historical and fresh epochs, bind governed public NEAR/USD valuation evidence under section 2, complete full A666 reconciliation, and qualify |
 | Staked Solana | Provider-neutral attested-RPC verifier implemented as an interim scaffold; production proof path absent | No | Implement public finalized source-state verification and collection that does not trust an operator/RPC signature for the quantity, then fuzz, run fresh epochs, reconcile, and qualify |
-| Monero | Provider-neutral cryptographic quantity verifier implemented; partial | No | Add the public collector, produce a fresh governed nonzero proof with certified head chain and spent-status set, bind separately disclosed XMR/USD valuation evidence, fuzz, complete A666 reconciliation, and qualify |
+| Monero | Provider-neutral cryptographic quantity verifier, context-bound challenge, public ReserveProofV2 parser, transaction/block/header collector, and certified key-image status workflow implemented; partial | No | Produce a fresh governed nonzero proof and independently signed checkpoint, bind separately disclosed XMR/USD valuation evidence, fuzz, complete A666 reconciliation, independently reproduce, and qualify |
 | pfUSDC overlay | Implemented and pushed | Not sufficient by itself | Exact-tip remote CI must pass; this covers only PFTL-accounted subscription reserves, not the six external source families |
 
 The Aave, complete-EVM-spot, Hyperliquid, NEAR, Solana, and Monero verifiers
@@ -630,6 +630,33 @@ Internal migration inputs include:
 /home/postfiat/repos/StakeHub/stakehub/monero_scan.py
 ```
 
+The provider-neutral successor implementation now lives publicly at:
+
+```text
+tools/nav-reserve-proof/crates/reserve-proof-cli/src/monero_adapter.rs
+tools/nav-reserve-proof/crates/reserve-proof-types/src/monero_reserve.rs
+```
+
+The public CLI emits the exact NAVCoin/profile/manifest/policy/epoch-bound
+challenge for an external Monero wallet, parses the wallet-created
+`ReserveProofV2` with bounded canonical decoding, fetches each complete
+transaction and source block, reconstructs the transaction-tree branch,
+builds a bounded header-chain anchor or an explicitly policy-allowed pinned
+historical anchor, queries the exact key-image status set, and emits the source
+checkpoint candidate for independent validator reproduction and signing. It
+then attaches the assembled certificate, runs the complete public quantity
+verifier and separate valuation verifier, and writes the source observation.
+No wallet seed, spend key, view key, or checkpoint-validator private key enters
+the proof kit.
+
+The public parser has successfully decoded an existing real wallet-created
+proof and the public RPC client has independently decoded and hash-checked a
+finalized Monero mainnet block. The old proof is intentionally rejected by the
+new collection workflow because its message predates the context-bound public
+challenge. A fresh nonzero wallet proof, independently signed source
+checkpoint, governed XMR/USD valuation evidence, fuzzing, multi-epoch A666
+reconciliation, and independent production reproduction remain open.
+
 A zero XMR balance in one historical epoch does not remove the requirement.
 The adapter must correctly verify both zero and nonzero reserves before it can
 be part of the production profile.
@@ -714,7 +741,7 @@ existing guest ELF SHA exactly.
 - [ ] Replace the interim Solana quantity attestation with the public
   finalized source-state proof and collector described in section 5.5.
 - [x] Implement and register the public XMR reserve-proof quantity adapter.
-- [ ] Implement the public Monero reserve-proof, header-chain, transaction
+- [x] Implement the public Monero reserve-proof, header-chain, transaction
   inclusion, ownership, and key-image spent-status collector for zero and
   nonzero reserves.
 - [ ] Remove all provider-specific hash domains and compiled operator identities

@@ -204,6 +204,41 @@ consensus verifier is governed, the exact finalized head and both deployed
 code identities are explicitly quorum-checkpointed. A public RPC response is
 never sufficient by itself.
 
+### Public Monero reserve workflow
+
+The Monero workflow starts by emitting the exact context-bound message for an
+external wallet. This ensures an old reserve proof cannot be replayed under a
+different NAVCoin, profile, manifest, policy, epoch, or observation interval.
+
+    postfiat-reserve-proof monero challenge \
+      --manifest manifest.json --context context.json \
+      --source-id xmr-reserve --policy monero-policy.json \
+      --pftl-observation-height <height> \
+      --output monero-challenge.json
+
+Create a `ReserveProofV2` for the emitted message with an external Monero
+wallet. Then collect the complete public transactions, transaction-tree
+branches, output-block headers, bounded header anchors, and key-image status
+set, while emitting the checkpoint candidate for independent validator
+reproduction:
+
+    postfiat-reserve-proof monero prepare \
+      --manifest manifest.json --context context.json \
+      --source-id xmr-reserve --policy monero-policy.json \
+      --reserve-proof wallet-reserve-proof.json \
+      --committee checkpoint-committee.json \
+      --pftl-observation-height <height> --minimum-depth 12 \
+      --daemon-url <public-monero-daemon> \
+      --prepared-output monero-prepared.json \
+      --checkpoint-output monero-checkpoint.json
+
+Each checkpoint validator must independently reproduce the exact finalized
+source block, output anchors, and sorted key-image statuses before signing.
+After `source-checkpoint assemble`, `monero collect` attaches that certificate
+and a separate policy-approved XMR/USD valuation evidence object, runs the
+complete public verifier, and writes the observation. The proof kit receives
+no wallet seed, spend key, view key, or checkpoint-validator private key.
+
 Assembly sorts votes canonically and rejects an invalid committee binding,
 sub-quorum set, duplicate or unknown validator, malformed signature, or bad
 signature. Adapter-specific collectors must still validate that the certified

@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 
 mod evm_adapter;
 mod hyperliquid_adapter;
+mod monero_adapter;
 mod near_adapter;
 mod source_checkpoint;
 

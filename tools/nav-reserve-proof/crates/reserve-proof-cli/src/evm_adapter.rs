@@ -44,6 +44,7 @@ use reserve_proof_types::{
 use serde::Deserialize;
 
 use crate::hyperliquid_adapter::{self, HyperliquidCommand};
+use crate::monero_adapter::{self, MoneroCommand};
 use crate::near_adapter::{self, NearCommand};
 
 const MAX_RPC_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
@@ -80,6 +81,12 @@ pub enum AdapterCommand {
     Near {
         #[command(subcommand)]
         command: NearCommand,
+    },
+    /// Collect and verify a public Monero reserve proof and certified
+    /// key-image status checkpoint.
+    Monero {
+        #[command(subcommand)]
+        command: MoneroCommand,
     },
     /// Emit the canonical statement for an Ed25519 attestation or protocol
     /// receipt already represented in a source observation.
@@ -540,6 +547,7 @@ pub fn run(command: AdapterCommand) -> Result<()> {
         },
         AdapterCommand::Hyperliquid { command } => hyperliquid_adapter::run(command),
         AdapterCommand::Near { command } => near_adapter::run(command),
+        AdapterCommand::Monero { command } => monero_adapter::run(command),
         AdapterCommand::Ed25519EvidenceStatement {
             manifest,
             context,
