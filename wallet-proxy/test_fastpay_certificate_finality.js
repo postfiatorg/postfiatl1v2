@@ -12,6 +12,7 @@ async function main() {
   const servers = [];
   const ports = [];
   let durableBeforeApply = true;
+  let slowApplyReplies = 0;
 
   for (let i = 0; i < VALIDATOR_COUNT; i += 1) {
     const validatorId = `validator-${i}`;
@@ -32,25 +33,28 @@ async function main() {
             }
           }
           const delay = request.method === 'owned_apply' ? (i === 2 ? 5 : 180) : 0;
-          setTimeout(() => socket.write(`${JSON.stringify({
-            version: 'postfiat-local-rpc-v1',
-            id: request.id,
-            ok: true,
-            result: request.method === 'status' ? {
-              block_height: 100,
-              block_tip_hash: 'tip',
-              state_root: 'root',
-              validator_id: validatorId,
-              validator_count: VALIDATOR_COUNT,
-              chain_id: 'postfiat-wan-devnet',
-            } : {
-              schema: 'postfiat-owned-apply-report-v1',
-              summary: `applied on ${validatorId}`,
-              created_objects: [],
-            },
-            error: null,
-            events: [],
-          })}\n`), delay);
+          setTimeout(() => {
+            if (request.method === 'owned_apply' && i !== 2) slowApplyReplies += 1;
+            socket.write(`${JSON.stringify({
+              version: 'postfiat-local-rpc-v1',
+              id: request.id,
+              ok: true,
+              result: request.method === 'status' ? {
+                block_height: 100,
+                block_tip_hash: 'tip',
+                state_root: 'root',
+                validator_id: validatorId,
+                validator_count: VALIDATOR_COUNT,
+                chain_id: 'postfiat-wan-devnet',
+              } : {
+                schema: 'postfiat-owned-apply-report-v1',
+                summary: `applied on ${validatorId}`,
+                created_objects: [],
+              },
+              error: null,
+              events: [],
+            })}\n`);
+          }, delay);
         }
       });
     });
@@ -70,21 +74,23 @@ async function main() {
     owner_signature_hex: 'signature',
     votes: Array.from({ length: 5 }, (_, i) => ({ validator_id: `validator-${i}`, signature_hex: `sig-${i}` })),
   };
-  const started = Date.now();
   const response = await broadcastFastpayMutation({
     version: 'postfiat-local-rpc-v1',
     id: 'certificate-finality',
     method: 'owned_apply',
     params: { cert_json: JSON.stringify(cert) },
   });
-  const duration = Date.now() - started;
   assert.strictEqual(response.ok, true);
   assert.strictEqual(response.result.certificate_final, true);
   assert.strictEqual(response.result.certificate_quorum, 5);
   assert.strictEqual(response.result.certificate_vote_count, 5);
   assert.strictEqual(response.result.apply_ack_validator, 'validator-2');
   assert.strictEqual(response.result.applied_count, 1);
-  assert.ok(duration < 150, `critical path waited for replication: ${duration}ms`);
+  assert.strictEqual(
+    slowApplyReplies,
+    0,
+    'critical path must return before any slow replication acknowledgement',
+  );
   assert.strictEqual(durableBeforeApply, true, 'certificate must be durable before apply');
 
   await new Promise(resolve => setTimeout(resolve, 300));
