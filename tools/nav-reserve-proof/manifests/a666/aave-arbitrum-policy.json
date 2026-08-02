@@ -1,0 +1,50 @@
+{
+  "source_domain": "eip155:42161",
+  "ethereum_chain_id": 42161,
+  "pool_address": "0x794a61358d6845594f94dc1db02a252b5b4814ad",
+  "pool_code_hash": "0xf168c2e9e4d04292c7d5d526a9a917175a44369ab63a2f9997537acf0ffaaf2e",
+  "oracle_address": "0xb56c2f0b653b2e0b10c9b928c8580ac5df02c7c7",
+  "oracle_code_hash": "0xe9b8d7ac606312698d9b24a55f8d479d196482542f5553dc78887cfa305df8aa",
+  "reserve_mapping_slot_index": 52,
+  "oracle_sources_slot_index": 0,
+  "chainlink_proxy_phase_slot_index": 2,
+  "chainlink_hot_vars_slot_index": 13,
+  "chainlink_transmissions_slot_index": 17,
+  "seconds_per_year": 31536000,
+  "max_oracle_age_seconds": 86400,
+  "positions": [
+    {
+      "position_id": "collateral-weth",
+      "kind": "collateral",
+      "underlying_asset": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+      "token_address": "0xe50fa9b3c56ffb159cb0fca61f5c9d750e8128c8",
+      "token_code_hash": "0x3ebcd59bd9d51bd49cafbb0419423ba025e8e477f34cefa1a71ea3c29b78fa1f",
+      "user_state_slot_index": "0x34",
+      "decimals": 18,
+      "chainlink_proxy_code_hash": "0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2",
+      "chainlink_aggregator_code_hash": "0xa00998c539373f22c2230d3bb75dfc28fc42242f764f0635a7fa86980786defd",
+      "oracle_source": {
+        "kind": "direct_chainlink",
+        "proxy_address": "0xbd41b1548a5a06544cbcf87c0c54864312842c00"
+      }
+    },
+    {
+      "position_id": "debt-usdc",
+      "kind": "variable_debt",
+      "underlying_asset": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+      "token_address": "0xf611aeb5013fd2c0511c9cd55c7dc5c1140741a6",
+      "token_code_hash": "0xc3aa4c3619e0f36aac996ce2308856466850ac4ef7033e5fef29a8807d2ae6e8",
+      "user_state_slot_index": "0x38",
+      "decimals": 6,
+      "chainlink_proxy_code_hash": "0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2",
+      "chainlink_aggregator_code_hash": "0xc338b5eda60b5b0a6a55861656dc445d38cce1ea2874d441c5031bed97dd5eb8",
+      "oracle_source": {
+        "kind": "capped_stable",
+        "adapter_address": "0xb0c9a7122aab68f75cffd9851e867144dbff113b",
+        "adapter_code_hash": "0xc2ed16f0ec5ac687b030c99baf4011dc6d0f133aec122c071a94b244c487d0e6",
+        "chainlink_proxy_address": "0xdbff913e9058c1e60446150d23bb0ffe9144d531",
+        "price_cap_slot_index": 1
+      }
+    }
+  ]
+}

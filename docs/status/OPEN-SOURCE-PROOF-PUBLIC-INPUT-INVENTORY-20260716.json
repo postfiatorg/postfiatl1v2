@@ -18,7 +18,7 @@
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/lib.rs": "d76313dbdd8bb16e587987d169951a37007c36711840ed1474cb3f8fa7f05389",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/checkpoint_signing.rs": "59a8174b9299cdb1d74344a87dcc00d27902c3ee7a058c5b45f733ab00607770",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/main.rs": "9850aee633c8de29dd72476ed2ed664542b956dccb3d0447e38234050ad4bdb3",
-    "tools/nav-reserve-proof/crates/reserve-proof-cli/src/manifest_builder.rs": "823480e5bc2fbdaff952e4388bb9ccbb2ca36b0de0f59f564b4b4f392b875bb8",
+    "tools/nav-reserve-proof/crates/reserve-proof-cli/src/manifest_builder.rs": "be676858c046f32a1c57efe3771b02fa1433b11b971c39a8c2e06f1001bb5f46",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/evm_adapter.rs": "6ffc9e2dc0bb0b8989b5a7b32c30ab82b252c20026bb65254144dda002c6b484",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/hyperliquid_adapter.rs": "75587ffa2bb14b0b12f1467c305b1418d635cf58c2d67692777a8a4a94b390db",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/near_adapter.rs": "4c7f2c2a6805d4b40086b7eae0f9c372e84760bf63aa7f4b727ced7c1f9bc05d",
@@ -56,8 +56,11 @@
     "tools/nav-reserve-proof/contracts/solana-stake-reader/Cargo.toml": "15ff163a724a4ef2185b8a9d52cb4334e81e48533e9613a2e43ccea2ea82e719",
     "tools/nav-reserve-proof/contracts/solana-stake-reader/src/lib.rs": "fbf46bb20fb13abca07ad14cc7d5205c5cf358b151779a52f658ef79f8a33d65",
     "tools/nav-reserve-proof/manifests/a666/checkpoint-committee.json": "4e1242c38c1a8cff83184983872e4fb171ebe24001ca82a7d15edddf483e1ea7",
+    "tools/nav-reserve-proof/manifests/a666/aave-arbitrum-policy.json": "29ac748a268ac5de73837f4054a18f327ec36d109c85757624857b9d4e1dc71f",
+    "tools/nav-reserve-proof/manifests/a666/evm-spot-policy.json": "8dd0f9d07181ab38659bff6e25a17871a0e972deae870a2893693e98d98b998b",
     "tools/nav-reserve-proof/manifests/a666/portfolio-valuation-policy.json": "aa1cb95cdf7db2bc9d2c48277425df239400bafaa4f23eef5014ae578b9e7278",
     "tools/nav-reserve-proof/manifests/a666/portfolio-valuation-policy-hash.json": "23c902e112064c5e9d21382a78064a46fd5ab63a30e37a1fad4ec038df1207b2",
+    "tools/nav-reserve-proof/manifests/a666/source-policy-commitments.json": "aeeb87fdf40e7d8f501905d00df434e64269d19413af07599a8e73f67e20848f",
     "tools/nav-reserve-proof/manifests/a666/reader-deployment-candidates.json": "1e732241abf6ef3280a5a783c8bc2e53058c0f73e339210f834b862d6a3715dd"
   },
   "systems": [

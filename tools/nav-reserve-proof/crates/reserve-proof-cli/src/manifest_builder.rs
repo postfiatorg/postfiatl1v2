@@ -700,4 +700,104 @@ mod tests {
         });
         assert!(committee_root(&weak).is_err());
     }
+
+    #[test]
+    fn tracked_a666_aave_and_evm_spot_policies_are_typed_and_valid() {
+        let manifest_dir =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../manifests/a666");
+        let committee: BftCheckpointCommitteeV1 = serde_json::from_slice(
+            &std::fs::read(manifest_dir.join("checkpoint-committee.json")).unwrap(),
+        )
+        .unwrap();
+        let root = committee_root(&committee).unwrap();
+        let aave: AaveV3PolicyV1 = serde_json::from_slice(
+            &std::fs::read(manifest_dir.join("aave-arbitrum-policy.json")).unwrap(),
+        )
+        .unwrap();
+        let spot: EvmSpotPolicyV1 = serde_json::from_slice(
+            &std::fs::read(manifest_dir.join("evm-spot-policy.json")).unwrap(),
+        )
+        .unwrap();
+        let evidence_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
+            "../../../../docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue",
+        );
+        let historical_aave: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(evidence_dir.join("aave-witness.json")).unwrap())
+                .unwrap();
+        let historical_spot: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(evidence_dir.join("evm-spot-witness.json")).unwrap(),
+        )
+        .unwrap();
+
+        let aave_commitment = aave.commitment(&root).unwrap();
+        let spot_commitment = spot.commitment().unwrap();
+        let commitments: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(manifest_dir.join("source-policy-commitments.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(aave.positions.len(), 2);
+        assert_eq!(spot.chains.len(), 2);
+        assert!(spot.chains.iter().all(|chain| chain.committee_root == root));
+        assert_eq!(
+            aave.pool_address,
+            serde_json::from_value::<Address>(
+                historical_aave["collateral"]["reserve"]["pool_account"]["address"].clone()
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            aave.oracle_address,
+            serde_json::from_value::<Address>(
+                historical_aave["collateral"]["oracle"]["aave_oracle_account"]["address"].clone()
+            )
+            .unwrap()
+        );
+        for (candidate, historical) in spot
+            .chains
+            .iter()
+            .zip(historical_spot["chains"].as_array().unwrap().iter())
+        {
+            assert_eq!(candidate.chain_id, historical["chain_id"].as_u64().unwrap());
+            assert_eq!(
+                candidate.native_account_code_hash,
+                serde_json::from_value::<B256>(historical["native_account"]["code_hash"].clone())
+                    .unwrap()
+            );
+            assert_eq!(
+                candidate.tokens.len(),
+                historical["erc20s"].as_array().unwrap().len()
+            );
+            assert_eq!(
+                candidate.tokens[0].token,
+                serde_json::from_value::<Address>(historical["erc20s"][0]["token"].clone())
+                    .unwrap()
+            );
+            assert_eq!(
+                candidate.tokens[0].token_code_hash,
+                serde_json::from_value::<B256>(
+                    historical["erc20s"][0]["token_account"]["code_hash"].clone()
+                )
+                .unwrap()
+            );
+            assert_eq!(
+                candidate.tokens[0].balance_slot_index,
+                serde_json::from_value::<U256>(
+                    historical["erc20s"][0]["balance_slot_index"].clone()
+                )
+                .unwrap()
+            );
+        }
+        assert_eq!(
+            commitments["checkpoint_committee_root"].as_str(),
+            Some(root.as_str())
+        );
+        assert_eq!(
+            commitments["policies"][0]["quantity_and_valuation_verifier_commitment"].as_str(),
+            Some(aave_commitment.as_str())
+        );
+        assert_eq!(
+            commitments["policies"][1]["quantity_verifier_commitment"].as_str(),
+            Some(spot_commitment.as_str())
+        );
+    }
 }

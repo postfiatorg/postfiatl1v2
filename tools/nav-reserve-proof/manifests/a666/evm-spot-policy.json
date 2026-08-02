@@ -1,0 +1,41 @@
+{
+  "aggregate_source_domain": "evm-multichain:a666-v1",
+  "aggregate_position_id": "multi-chain-spot-aggregate",
+  "maximum_timestamp_skew_ms": 60000,
+  "chains": [
+    {
+      "chain_id": 1,
+      "source_domain": "eip155:1",
+      "committee_root": "99b0a3b8af49f3c91537d24a698e47f5761eec65890d00cdc4070ec99b18b333dfe514199c258cda5b81bec33821e245",
+      "native_position_id": "ethereum-native-eth",
+      "native_account_code_hash": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+      "native_decimals": 18,
+      "tokens": [
+        {
+          "position_id": "ethereum-usdc",
+          "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "token_code_hash": "0xd80d4b7c890cb9d6a4893e6b52bc34b56b25335cb13716e0d1d31383e6b41505",
+          "balance_slot_index": "0x9",
+          "decimals": 6
+        }
+      ]
+    },
+    {
+      "chain_id": 42161,
+      "source_domain": "eip155:42161",
+      "committee_root": "99b0a3b8af49f3c91537d24a698e47f5761eec65890d00cdc4070ec99b18b333dfe514199c258cda5b81bec33821e245",
+      "native_position_id": "arbitrum-native-eth",
+      "native_account_code_hash": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+      "native_decimals": 18,
+      "tokens": [
+        {
+          "position_id": "arbitrum-usdc",
+          "token": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+          "token_code_hash": "0xad30d819dbc47814b7e6cb837fd7cc57fcb591479a38596ee93de4fc52e8c435",
+          "balance_slot_index": "0x9",
+          "decimals": 6
+        }
+      ]
+    }
+  ]
+}

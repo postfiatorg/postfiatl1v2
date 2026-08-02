@@ -274,8 +274,8 @@ not yet the desired public architecture.
 
 | A666 source family | Public implementation state | Production-qualified | What remains |
 |---|---|---:|---|
-| Aave on Arbitrum | Provider-neutral verifier and public checkpoint/collection workflow implemented; partial | No | Add governed A666 policy/committee inputs, fuzz, run fresh epochs and complete A666 reconciliation, and qualify |
-| Complete EVM spot set | Provider-neutral quantity verifier, public checkpoint/collection workflow, and public Chainlink state-proof valuation successor implemented; partial | No | Add the governed A666 quantity and valuation policy/committee fixtures, collect exact price proofs, fuzz, run fresh epochs and complete A666 reconciliation, and qualify |
+| Aave on Arbitrum | Provider-neutral verifier, public checkpoint/collection workflow, and typed candidate policy/committee commitment derived from historical public state proofs implemented; partial | No | Review/tighten the candidate freshness bound, retain production fuzz campaigns, run fresh epochs and complete A666 reconciliation, independently reproduce, and qualify |
+| Complete EVM spot set | Provider-neutral quantity verifier, public checkpoint/collection workflow, public Chainlink state-proof valuation successor, and typed two-chain quantity policy/committee commitment derived from historical public state proofs implemented; partial | No | Publish the governed Chainlink valuation policy and exact feed proofs, retain production fuzz campaigns, run fresh epochs and complete A666 reconciliation, independently reproduce, and qualify |
 | Hyperliquid | Provider-neutral verifier, public HyperCore receipt-reader contract, unsigned snapshot construction, checkpoint/owner workflow, and receipt-proof collector implemented; partial | No | Deploy the hardened public reader, govern policy/committee inputs, fuzz, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
 | Staked NEAR | Provider-neutral quantity verifier, public reader contract, unsigned invocation construction, finalized-head checkpoint workflow, owner authorization, outcome/block-proof collector, and public Chainlink state-proof valuation successor implemented; partial | No | Deploy the public reader, govern quantity/valuation policy and committee inputs, collect exact NEAR/USD proofs, add fuzzing, reproduce historical and fresh epochs, complete full A666 reconciliation, and qualify |
 | Staked Solana | Public stateless reserve-reader program, exact unsigned transaction construction, finalized transaction/block collector, immutable program identity check, owner authorization, BFT source checkpoint, bounded parser, successor verifier, guest dispatch, public Chainlink state-proof valuation successor, and independently repeated reproducible SBF build implemented; partial. The old attested-RPC adapter remains separately labeled historical evidence. | No | Deploy the exact built reader immutably, publish its on-chain ProgramData identity and governed A666 quantity/valuation policy and committee inputs, collect exact SOL/USD proofs, fuzz, run fresh epochs, reconcile, independently reproduce, and qualify |
@@ -853,6 +853,16 @@ existing guest ELF SHA exactly.
   This is not a live policy or a source qualification; it removes the legacy
   pasted-hash dependency and gives every source-specific candidate policy one
   public successor valuation context.
+- [x] Publish typed Aave-Arbitrum and two-chain EVM-spot candidate quantity
+  policies and pinned verifier commitments. Tests deserialize the public
+  policies, derive the commitments against the six-validator committee, and
+  match contract, position, slot, and code-hash fields back to the retained
+  historical public state-proof artifacts. Aave's candidate commitment is
+  `48c7f466100b4dc7d72f57cfff3c9dadb6d84c7c13869adb09be59a8f6043ca1b2d1fed77b2681f91cd13d22aa6eb969`;
+  EVM spot's is
+  `4e7bee12bfa7cefa615210d08d74f773eaf58e8c492837222a6e36ddbe23d21f96fe1f7634d441db401c102be00b6d54`.
+  These remain unqualified candidates; EVM spot still needs its exact public
+  Chainlink valuation policy and proofs.
 - [x] Derive and publish the candidate source-checkpoint committee from the
   public six-validator PFTL registry. The generic builder accepts only
   ML-DSA-65 public keys, canonicalizes validator ordering, rejects quorums
