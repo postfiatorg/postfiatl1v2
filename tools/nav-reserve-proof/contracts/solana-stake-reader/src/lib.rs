@@ -32,6 +32,40 @@ const STAKE_PROGRAM_ID: Pubkey =
 
 entrypoint!(process_instruction);
 
+// solana-program-entrypoint 3.0.0's exported default-heap macro constructs
+// private BumpAllocator fields when expanded by a downstream crate. Keep the
+// SDK's fixed heap layout while defining the allocator in this crate, where it
+// remains independently auditable and works with the pinned 3.0.0 SBF image.
+#[cfg(target_os = "solana")]
+struct ReaderBumpAllocator;
+
+#[cfg(target_os = "solana")]
+#[global_allocator]
+static READER_ALLOCATOR: ReaderBumpAllocator = ReaderBumpAllocator;
+
+#[cfg(target_os = "solana")]
+unsafe impl std::alloc::GlobalAlloc for ReaderBumpAllocator {
+    unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {
+        use core::{mem::size_of, ptr::null_mut};
+
+        let start = solana_program::entrypoint::HEAP_START_ADDRESS as usize;
+        let position_pointer = start as *mut usize;
+        let mut position = unsafe { *position_pointer };
+        if position == 0 {
+            position = start + solana_program::entrypoint::HEAP_LENGTH;
+        }
+        position = position.saturating_sub(layout.size());
+        position &= !(layout.align().wrapping_sub(1));
+        if position < start + size_of::<*mut u8>() {
+            return null_mut();
+        }
+        unsafe { *position_pointer = position };
+        position as *mut u8
+    }
+
+    unsafe fn dealloc(&self, _pointer: *mut u8, _layout: std::alloc::Layout) {}
+}
+
 /// Reads an exact caller-supplied set of standard stake accounts and emits a
 /// canonical snapshot. The transaction message commits the ordered account
 /// list; the public reserve verifier checks this output and immutable reader

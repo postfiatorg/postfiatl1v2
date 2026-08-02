@@ -5,12 +5,16 @@ name = "postfiat-solana-stake-reader"
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-rust-version = "1.85"
+rust-version = "1.84"
 repository = "https://github.com/postfiatorg/postfiatl1v2"
 publish = false
 
 [lib]
 crate-type = ["cdylib", "lib"]
+
+[features]
+default = ["custom-heap"]
+custom-heap = []
 
 [dependencies]
 solana-program = "=3.0.0"

@@ -28,8 +28,8 @@
     "tools/nav-reserve-proof/programs/reserve-proof-guest/src/main.rs": "1f3caf2e7b1adb64afc14c5f5e81a4690d25a232d116ad95b3e0126420b8c655",
     "tools/nav-reserve-proof/contracts/near-stake-reader/Cargo.toml": "519305ac57289aa55220e66f30a4a986dad907df9212109d428ab9d1dd061166",
     "tools/nav-reserve-proof/contracts/near-stake-reader/src/lib.rs": "11acff4790b45168a81323700c419fccc3555e678dfddbc376bf2a5b44b6312c",
-    "tools/nav-reserve-proof/contracts/solana-stake-reader/Cargo.toml": "59926799509e39447e1074d9b5b680056d98c8abaf98e3b4dab714a74d8d6538",
-    "tools/nav-reserve-proof/contracts/solana-stake-reader/src/lib.rs": "894bc478ad0a44b5d640cccd277a27cad77831d3e05dc1c833406729580772d5"
+    "tools/nav-reserve-proof/contracts/solana-stake-reader/Cargo.toml": "15ff163a724a4ef2185b8a9d52cb4334e81e48533e9613a2e43ccea2ea82e719",
+    "tools/nav-reserve-proof/contracts/solana-stake-reader/src/lib.rs": "fbf46bb20fb13abca07ad14cc7d5205c5cf358b151779a52f658ef79f8a33d65"
   },
   "systems": [
     {
