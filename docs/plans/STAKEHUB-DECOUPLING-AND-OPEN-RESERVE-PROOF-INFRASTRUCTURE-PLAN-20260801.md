@@ -1,4 +1,4 @@
-# StakeHub Deprecation and Public NAVCoin Reserve Verification Plan
+# StakeHub Deprecation and Public NAVCoin Reserve Verification — Canonical Execution Plan
 
 **Created:** 2026-08-01
 
@@ -8,12 +8,22 @@
 
 **Status:** **INCOMPLETE — StakeHub is not deprecated for A666 reserve publication**
 
-**Canonical document:** this is the sole implementation plan and continuation
-handoff for this work.
+**Sole authoritative Markdown:** this file is the implementation plan, current
+status, continuation handoff, and definition of done for StakeHub deprecation.
+The former
+`docs/handoffs/STAKEHUB-DECOUPLING-CONTINUATION-HANDOFF-20260802.md` was merged
+into this file and deleted. It must not be restored or maintained in parallel.
 
-The deleted continuation handoff is not a second source of truth. The JSON
-readiness file referenced below is only a machine-enforced status ledger; it
-does not define architecture or weaken any requirement in this document.
+Machine-readable readiness JSON and historical evidence may support this plan,
+but neither is a second architecture document and neither can weaken a
+requirement here. Historical paths may retain `stakehub` in their names for
+evidence integrity; no new executable path, manifest, policy, or runbook may
+depend on them.
+
+**Current bottom line:** the wallet boundary and generic proof framework are
+public, but the complete A666 reserve proof is not. The readiness gate is
+`0/6`, the live A666 proof lineage remains historical, and
+`stakehub_deprecated=false`.
 
 ## 1. Objective
 
@@ -50,6 +60,42 @@ not StakeHub deprecation. Building a generic proof framework is necessary, but
 it is not StakeHub deprecation. Replacing cryptographic source validation with
 operator attestations is a security downgrade, not StakeHub deprecation.
 
+### 1.1 Plain-English end state
+
+An auditor starting from a clean public checkout must be able to answer all of
+these questions without asking the NAVCoin operator or reading StakeHub:
+
+1. Which accounts, contracts, staking positions, exchange positions, tokens,
+   debts, and liabilities are included in the NAVCoin?
+2. Which public source artifacts establish each balance, position, debt, and
+   ownership claim at a specific finalized source state?
+3. Which public code validates those artifacts, and exactly which facts does
+   it prove?
+4. Which public evidence supplies each price, haircut, decimal conversion, and
+   valuation rule?
+5. How are verified assets and liabilities aggregated into NAV?
+6. Which immutable proof program ran that code, and how can its ELF and vkey be
+   reproduced?
+7. How does PFTL bind the proof to the correct NAVCoin, policy, manifest,
+   reserve epoch, circulating supply, and pfUSDC reserve overlay?
+
+The required public pipeline is:
+
+```text
+public source state
+  -> public collector emits bounded raw artifacts
+  -> public source verifier checks inclusion, ownership, quantity, and debt
+  -> public valuation verifier checks price, scale, haircut, and freshness
+  -> public aggregate guest computes assets - liabilities and NAV
+  -> reproducible SP1 proof commits the complete public context
+  -> PFTL verifies the proof and finalizes the NAV packet
+```
+
+After deprecation, StakeHub may remain an optional internal dashboard or an
+alternative client of this public pipeline. It may not contain the only
+collector, validation rule, source mapping, valuation rule, policy, proof
+builder, or explanation of what the proof means.
+
 ## 2. Non-negotiable NAVCoin verification model
 
 For a NAVCoin with circulating supply `S`, the system establishes:
@@ -80,10 +126,11 @@ semantics. The complete public system must bind:
 - source, observation, attestor, and disclosure roots; and
 - packet uniqueness, finality, expiry, and replay protection.
 
-Quantity and valuation are separate claims. A source can have a
-cryptographically verified balance and an attested USD price. The system must
-display and enforce that distinction rather than collapsing both into a vague
-“proof of reserves” label.
+Quantity and valuation are separate claims, and both require public evidence.
+A cryptographically verified balance does not prove its USD price. A verified
+price does not prove that the reserve owns the asset. The public profile must
+state and enforce the verification method for each dimension rather than
+collapsing them into a vague “proof of reserves” label.
 
 Trust classes mean:
 
@@ -98,6 +145,27 @@ An adapter cannot claim `CRYPTOGRAPHIC` merely because an SP1 proof aggregated
 its result. The SP1 guest must execute that adapter's verification. A source
 that was cryptographically verified in the historical A666 proof cannot be
 silently converted to `ATTESTED` in the successor.
+
+For this A666 migration, these additional rules are absolute:
+
+- no operator, StakeHub service, or replacement service may sign aggregate
+  balances, liabilities, or NAV and have that signature presented as reserve
+  verification;
+- no source quantity or liability that can be established from public chain
+  state, protocol state, receipts, ownership proofs, or reserve proofs may be
+  downgraded to `ATTESTED`;
+- a BFT source checkpoint is an anchor for independently validated source
+  state, not a committee attestation to asset amounts; each voter must run the
+  public deterministic source validation before signing the header/root;
+- a signed oracle price is acceptable only when the public verifier checks the
+  governed oracle identity, exact signed payload, freshness, scale, and source
+  binding; an operator-entered price is not;
+- the current Solana RPC-attestation verifier is an interim compatibility
+  scaffold, not a production proof path and not evidence that StakeHub has
+  been deprecated; and
+- if a required source cannot meet the public verification standard, the
+  successor profile is not qualified. The source cannot be hidden inside an
+  aggregate attestation to make the gate pass.
 
 ## 3. Current state
 
@@ -118,11 +186,12 @@ silently converted to `ATTESTED` in the successor.
   exact consensus verification.
 - The public framework implements generic Ed25519 attestation and
   protocol-receipt evidence.
-- The successor feature implements public source-specific verifiers for Aave,
-  the complete EVM spot set, Hyperliquid, staked NEAR, staked Solana at its
-  accurately disclosed attested trust level, and Monero. These verifiers are
-  implemented but not production-qualified; section 3.4 records the exact
-  remaining work.
+- The successor feature implements public source-specific verifier code for
+  Aave, the complete EVM spot set, Hyperliquid, staked NEAR, staked Solana, and
+  Monero. The Solana verifier currently validates an attested RPC statement,
+  which is deliberately disqualified as the production quantity proof. None
+  of the six source families is production-qualified; section 3.4 records the
+  exact remaining work.
 - The public CLI emits source-checkpoint vote statements, canonically assembles
   independently signed ML-DSA votes, and rejects invalid committee bindings,
   sub-quorum certificates, duplicates, unknown validators, and bad signatures.
@@ -202,8 +271,8 @@ not yet the desired public architecture.
 | Aave on Arbitrum | Provider-neutral verifier and public checkpoint/collection workflow implemented; partial | No | Add governed A666 policy/committee inputs, fuzz, run fresh epochs and complete A666 reconciliation, and qualify |
 | Complete EVM spot set | Provider-neutral quantity verifier and public checkpoint/collection workflow implemented; partial | No | Add the governed A666 policy/committee fixture, bind separately disclosed valuation evidence, fuzz, run fresh epochs and complete A666 reconciliation, and qualify |
 | Hyperliquid | Provider-neutral verifier and public HyperCore receipt-reader contract implemented; partial | No | Add public deployment/receipt-proof collection, fuzz, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
-| Staked NEAR | Provider-neutral quantity verifier implemented; partial | No | Add public collection and fuzzing, reproduce complete historical and fresh epochs, bind separately attested valuation, complete full A666 reconciliation, and qualify |
-| Staked Solana | Provider-neutral attested-state verifier implemented; partial | No | Add the public collector and governed independent signer/policy fixture, fuzz, run fresh epochs and complete A666 reconciliation, and qualify at the accurately disclosed attested quantity trust level |
+| Staked NEAR | Provider-neutral quantity verifier implemented; partial | No | Add public collection and fuzzing, reproduce complete historical and fresh epochs, bind governed public NEAR/USD valuation evidence under section 2, complete full A666 reconciliation, and qualify |
+| Staked Solana | Provider-neutral attested-RPC verifier implemented as an interim scaffold; production proof path absent | No | Implement public finalized source-state verification and collection that does not trust an operator/RPC signature for the quantity, then fuzz, run fresh epochs, reconcile, and qualify |
 | Monero | Provider-neutral cryptographic quantity verifier implemented; partial | No | Add the public collector, produce a fresh governed nonzero proof with certified head chain and spent-status set, bind separately disclosed XMR/USD valuation evidence, fuzz, complete A666 reconciliation, and qualify |
 | pfUSDC overlay | Implemented and pushed | Not sufficient by itself | Exact-tip remote CI must pass; this covers only PFTL-accounted subscription reserves, not the six external source families |
 
@@ -232,9 +301,11 @@ checkpoint voting and assembly, emits the exact owner-authorization statement,
 and collects the complete native/ERC-20 proof set from an exact reviewed RPC
 map. It is still unqualified until governed A666 inputs, adversarial/fuzz
 coverage, fresh epochs, and reconciliation exist. The Solana adapter does not
-relabel RPC snapshots as cryptographic: it publicly verifies the exact position set,
-stake/withdraw/vote authorities, state parsing, signer policy, agreement, and
-signatures while retaining an `attested` quantity classification. The
+relabel RPC snapshots as cryptographic: it publicly verifies the exact
+position set, stake/withdraw/vote authorities, state parsing, signer policy,
+agreement, and signatures while retaining an `attested` quantity
+classification. That honesty is useful for historical reconstruction, but it
+is not the required production proof and cannot satisfy `G3`. The
 implementations pass strict verifier-crate lint and the provider-neutral
 shipped-code boundary. They are excluded from the immutable legacy profile.
 That identity is reproduced from the exact public source commit pinned beside
@@ -253,6 +324,25 @@ All code required to interpret and verify NAVCoin reserve claims must live in:
 2. a separate public repository that is licensed, release-tagged, pinned by
    exact commit and artifact hashes, reproducibly built in CI, and consumed by
    `postfiatl1v2` qualification tests.
+
+For the current A666 work, the decided implementation home is this public
+`postfiatl1v2` repository. Do not create another private service or repository
+to finish the missing adapters. A later extraction is acceptable only into a
+genuinely public repository under the pinning and reproducibility rules above.
+
+Code ownership inside this repository is:
+
+| Responsibility | Public location |
+|---|---|
+| Source schemas, policies, and verification logic | `tools/nav-reserve-proof/crates/reserve-proof-types/` |
+| Collectors, checkpoint assembly, witness construction, proving, and packet CLI | `tools/nav-reserve-proof/crates/reserve-proof-cli/` |
+| SP1 aggregate guest | `tools/nav-reserve-proof/programs/reserve-proof-guest/` |
+| Public source-reader contracts/programs | `crates/ethereum-contracts/` and source-specific public program directories added under the same repository |
+| A666 source manifest and governed policy fixtures | `tools/nav-reserve-proof/manifests/a666/` |
+| Historical/adversarial fixtures and qualification outputs | `tools/nav-reserve-proof/fixtures/` and `tools/nav-reserve-proof/qualifications/` |
+| Provider-neutral public-values ABI and packet construction | `crates/types/` and `crates/nav_reserve_protocol/` |
+| Deterministic L1 proof/profile/packet enforcement | `crates/execution/` |
+| Machine readiness truth | `docs/status/A666-PUBLIC-ADAPTER-READINESS-20260802.json` plus CI gates |
 
 The preferred structure is:
 
@@ -460,9 +550,15 @@ Internal migration inputs include:
 /home/postfiat/repos/StakeHub/zk/script/src/bin/fetch_solana_leg.rs
 ```
 
-If Solana quantity remains intentionally attested, the public collector,
-canonical statement, ownership binding, signature verification, and wallet
-trust disclosure must still be complete. It must not depend on StakeHub.
+The current signed-RPC snapshot path may remain as labeled historical or
+diagnostic evidence, but it is not the production successor. The production
+path must add a public source-state mechanism, for example a governed public
+Solana reserve-reader program that reads the exact policy-pinned stake
+accounts and emits a commitment, combined with public verification of the
+reader program identity, transaction/block inclusion, finalized source
+checkpoint, complete account set, account state, and reserve ownership. The
+exact mechanism must be selected and qualified in public code. Signing an
+amount returned by RPC is not sufficient.
 
 ### 5.6 Monero reserves
 
@@ -560,10 +656,21 @@ existing guest ELF SHA exactly.
 - [x] Implement and register the public Hyperliquid adapter.
 - [x] Port and test the HyperCore receipt-reader contract publicly and reject
   omitted, added, reordered, or duplicated governed spot rows.
+- [ ] Implement public HyperCore snapshot transaction construction plus
+  HyperEVM header, receipt, and receipt-trie proof collection. It may accept a
+  transaction hash signed and submitted by an external wallet; it must never
+  require a private key inside the proof kit.
 - [x] Implement and register the public staked-NEAR adapter.
-- [ ] Implement the public staked-Solana collector/verifier at its governed
-  trust level.
+- [ ] Implement the public NEAR reader invocation and complete finalized
+  outcome/block proof collector.
+- [x] Implement the interim public staked-Solana attested-RPC verifier for
+  historical reconstruction.
+- [ ] Replace the interim Solana quantity attestation with the public
+  finalized source-state proof and collector described in section 5.5.
 - [x] Implement and register the public XMR reserve-proof quantity adapter.
+- [ ] Implement the public Monero reserve-proof, header-chain, transaction
+  inclusion, ownership, and key-image spent-status collector for zero and
+  nonzero reserves.
 - [ ] Remove all provider-specific hash domains and compiled operator identities
   from successor semantics.
 - [ ] Add public fixtures and adversarial tests for every adapter.
@@ -576,8 +683,10 @@ existing guest ELF SHA exactly.
 - [ ] Create a public A666 source manifest selecting the real adapter for each
   quantity and valuation dimension.
 - [ ] Preserve or strengthen historical cryptographic trust classifications.
-- [ ] Permit attestation only where explicitly intended and accurately
-  disclosed.
+- [ ] Eliminate operator-signed aggregate quantity, liability, and NAV inputs;
+  permit signed external data only under the exact restrictions in section 2.
+- [ ] Implement and bind public valuation evidence for every non-pfUSDC source;
+  a quantity proof without its governed price does not establish NAV.
 - [ ] Bind reserve owners, verifier keys/committees, source domains, position
   identities, freshness policies, haircuts, and valuation policy.
 - [ ] Rebuild the canonical SP1 guest in the pinned Docker toolchain.
@@ -720,7 +829,7 @@ Source-specific minimums:
 | `G0` Wallet/runtime boundary | Shipped wallet, proxy, node, signer, and relays require no StakeHub code, API, path, token, or agent. | PASS |
 | `G1` Public proof standard | Versioned bounded ABI and immutable profiles bind the complete proof context and trust classes. | PASS |
 | `G2` Generic proof framework | Clean checkout reproduces generic guest/vkey and CPU execute/prove/verify/packet flow. | PASS |
-| `G3` Public A666 adapters | Aave, EVM spot, Hyperliquid, NEAR, Solana, and XMR are publicly implemented, guest-registered where cryptographic, and adversarially qualified. | **FAIL/OPEN** |
+| `G3` Public A666 adapters | Aave, EVM spot, Hyperliquid, NEAR, Solana, and XMR have public collectors, source-state/ownership/quantity/liability verifiers, valuation verifiers, bounded parsers, adversarial tests, and fuzz qualification with no aggregate-operator-attestation shortcut. | **FAIL/OPEN — 0/6 production-qualified** |
 | `G4` Source-equivalent A666 proof | Fresh public A666 proofs reproduce source results and NAV without StakeHub and without unapproved trust downgrades. | **FAIL/OPEN** |
 | `G5` Controlled migration | Six validators complete activation, transparent/private issue/redeem, export/return, restart, replay, conservation, pause, and rollback. | OPEN |
 | `G6` Live migration | Existing A666 route is governed to the public successor and passes all live verification. | OPEN |
@@ -752,9 +861,9 @@ Repository and branch:
 ```text
 /home/postfiat/repos/a666-eth-fast-lane-combined-20260724
 feature/pnok-private-fix
-implementation baseline before this document update:
-c763e6a8f12197efe202657a6f30202215e00fbd
-upstream matched that baseline when audited
+implementation HEAD before this documentation consolidation:
+3d3915b Publish HyperCore reserve reader
+origin/feature/pnok-private-fix matched that HEAD when audited
 ```
 
 Frozen demonstration checkout — do not modify:
@@ -763,72 +872,73 @@ Frozen demonstration checkout — do not modify:
 /home/postfiat/tmp/a666-pfusdc-monday-demo-2246d257
 ```
 
-The pfUSDC overlay protocol boundary, canonical-plan consolidation, and
-readiness-gate placement are pushed as:
+The public implementation completed and pushed so far is:
 
 ```text
 af9ae4e Harden public reserve overlay protocol boundary
 14f3697 Make public reserve verification plan canonical
 c763e6a Keep adapter readiness outside shipped proof kit
+36e0a5f Add complete public EVM spot quantity verifier
+03dde8c Add public Solana stake attestation verifier
+dc501db Add public Monero reserve verifier
+303d071 Keep migration fixture outside public proof kit
+36fbb18 Add public source checkpoint assembly
+6ac6897 Add public EVM spot collection workflow
+2e56111 Add public Aave collection workflow
+3d3915b Publish HyperCore reserve reader
 ```
 
-It implements the pfUSDC overlay packet path described in section 5.7, keeps
-the proof guest identity unchanged, and adds the machine-readable adapter
-readiness gate. Verification completed before commit:
+This work implements the pfUSDC overlay, provider-neutral source checkpoint
+assembly, all six initial verifier modules, complete public Aave and EVM-spot
+collection workflows, and the public HyperCore reader contract. It does not
+complete any source's production qualification and does not change live A666.
+
+Current machine gates:
 
 ```text
-cargo test -p postfiat-types
-  119 passed
-
-cargo test -p postfiat-nav-reserve-protocol
-  1 passed
-
-cargo test -p postfiat-execution
-  176 passed
-
-cd tools/nav-reserve-proof
-cargo test --locked
-  18 passed
-cargo check --locked -p postfiat-reserve-proof --features sp1
-  passed
-
-cargo check --workspace --all-targets
-  passed
-
 scripts/test-proof-public-input-inventory
-  passed; 5 systems, 70 public fields, 10 source hashes
+  passed; 5 systems, 70 public fields, 19 source hashes
 
 scripts/check-a666-public-adapter-readiness
-  passed; 0/6 production-qualified, StakeHub deprecated=false
+  passed; qualified=0/6, stakehub_deprecated=false
 
-pinned Docker SP1 guest rebuild
-  expected ELF SHA: 0f8476431677bfe0a8f9f19db7439abce1a879ba5736cfa3225ae7de4e5b0e52
-  rebuilt  ELF SHA: 0f8476431677bfe0a8f9f19db7439abce1a879ba5736cfa3225ae7de4e5b0e52
-
-git diff --check
+scripts/check-provider-neutral-wallet-boundary
   passed
+
+public Solidity suite after HyperCore reader addition
+  143 passed, 0 failed
+
+proof-kit verifier/CLI suites and strict clippy after each adapter change
+  passed locally
 ```
 
-At the time of this document update, the exact-tip remote CI run for the
-`c763e6a` implementation baseline was still in progress:
+Remote CI is **red**, not green. Run `30730306614` for `2e56111` failed in the
+immutable-legacy-guest rebuild step because the workflow's extracted archive
+did not contain the path it attempted to enter. Earlier runs also failed the
+legacy guest check. An exact-tip run for `3d3915b` has not yet qualified the
+branch. This is an infrastructure/reproducibility failure and must be fixed;
+it is not permission to overwrite the immutable legacy ELF or vkey.
 
 ```text
-https://github.com/postfiatorg/postfiatl1v2/actions/runs/30727267430
+https://github.com/postfiatorg/postfiatl1v2/actions/runs/30730306614
 ```
 
-Do not close Phase 1 until that exact SHA is green. The worktree also contains
-the uncommitted adapter development described in section 3.4 and hundreds of
+Do not close Phase 1 until exact-tip CI is green. The worktree contains many
 unrelated untracked deployment and evidence paths. Never use `git add .`, bulk
 clean, or delete untracked evidence. Stage only explicitly reviewed files.
 
-Current canonical reserve-proof vkey:
+The current program identity is an immutable legacy reference reproduced from
+public source commit `bfe0ded03033085ab1db9df274f93cc41d0d2690`:
 
 ```text
+ELF SHA-256: 0f8476431677bfe0a8f9f19db7439abce1a879ba5736cfa3225ae7de4e5b0e52
+program vkey:
 0x000c7271e0711abce0c61d293222fd4a144599a779db8cadadc4df35e31a4100
 ```
 
-The retired A666 shadow used an obsolete vkey and must be regenerated only
-after the real source adapters are ported.
+Do not mutate that identity to absorb successor adapter work. After every
+source collector, verifier, valuation path, and policy is qualified, build a
+distinct reproducible successor guest and register its distinct identity.
 
 Two genuine historical observation epochs are available for later
 source-by-source reconciliation:
@@ -851,21 +961,11 @@ Historical totals:
 Historical epoch 4 reused the epoch-3 external proof with a changed pfUSDC
 overlay. It is not a third independent source-observation epoch.
 
-A new encrypted Ed25519 attestor key exists outside the repository at:
-
-```text
-/home/postfiat/.pft/a666-reserve-proof-v1
-```
-
-It may be used only for source dimensions intentionally governed as
-`ATTESTED`. It must not be used to sign all six old aggregate numbers as a
-shortcut around porting source validators. Before legitimate live use, it
-requires a secure off-host backup. Never print or commit its private key or
-passphrase.
-
-Existing A666 issuer and reserve-operator keys remain owner-only under the
-existing `.pft` runtime trees. Never copy their contents into this repository,
-logs, evidence, or new temporary paths.
+Existing attestor, issuer, and reserve-operator keys remain outside the public
+repository. No attestor key may be used to sign the six aggregate source
+amounts as a shortcut around public validation. Never copy private-key
+contents or passphrases into the repository, logs, evidence, or temporary
+paths.
 
 ## 11. Current continuation actions
 
@@ -877,32 +977,54 @@ git status --short --branch
 git rev-parse HEAD
 git diff --check
 git diff -- \
-  crates/types/src/nav_reserve_public_values.rs \
-  crates/execution/src/nav_sp1_verifier.rs \
-  tools/nav-reserve-proof/crates/reserve-proof-cli/src/main.rs \
   docs/plans/STAKEHUB-DECOUPLING-AND-OPEN-RESERVE-PROOF-INFRASTRUCTURE-PLAN-20260801.md
 ```
 
 Then:
 
-1. Require green exact-tip remote CI for the latest public-adapter commit; fix
-   failures without touching live governance or the frozen demonstration
-   checkout.
-2. Implement public collectors for Hyperliquid, NEAR, Solana, and Monero;
-   adversarially qualify the implemented Aave and exact-EVM-spot collectors.
-   Each collector must independently
-   validate the certified source state before emitting an observation.
-3. Add structured fuzz targets and complete the adversarial matrix in section
-   8 for every externally sourced parser and proof type.
-4. Create the governed A666 manifest, quantity/valuation policies, committee
-   fixtures, and successor guest build only after all six adapters have their
-   public production inputs. Do not rotate the immutable legacy guest once per
-   adapter.
-5. Reproduce both historical epochs and at least two fresh independently
-   collected epochs, reconcile every source and the pfUSDC overlay, and retain
-   negative evidence for omission, replay, staleness, and source substitution.
-6. Keep the live A666 route and frozen Monday checkout untouched until every
-   controlled migration gate passes.
+1. Fix the immutable-legacy-guest CI archive/rebuild failure, dispatch an
+   exact-tip run, and require green CI. Preserve the pinned legacy ELF and vkey.
+2. Finish Hyperliquid: public snapshot calldata construction, externally
+   signed transaction workflow, block/header/receipt retrieval, receipt RLP,
+   receipts-trie reconstruction, inclusion proof, source checkpoint, owner
+   authorization, and verified observation output.
+3. Finish NEAR: public reader invocation, finalized head acquisition,
+   outcome/block Merkle proof collection, code/account/pool pinning, ownership,
+   source checkpoint, and verified observation output.
+4. Finish Solana with an actual public finalized source-state mechanism. The
+   signed-RPC amount scaffold is not production-qualifying. Implement the
+   reader/inclusion/finality approach selected under section 5.5, complete
+   stake-state and authority checks, and emit a verified observation.
+5. Finish Monero: public reserve-proof generation/ingestion, transaction and
+   RingCT artifacts, ownership proof, inclusion/header chain, fresh challenge,
+   key-image spent-status set, zero/nonzero support, and verified observation.
+6. Finish public valuation for every source. Bind governed price origin,
+   signature or chain proof, scale, timestamp, freshness, asset identity,
+   haircut, and rounding. Do not accept operator-entered aggregate USD values.
+7. Adversarially harden the existing Aave and complete-EVM-spot collectors and
+   every new collector. Add bounded parsers, property tests, fuzz targets,
+   malformed-proof tests, omission tests, and deterministic replay vectors.
+8. Create the public A666 source manifest and per-source quantity/valuation
+   policies, owners, committees, source domains, freshness rules, haircuts,
+   bounds, and pfUSDC overlay binding. No item may refer to a private path,
+   provider-specific domain, compiled operator identity, or StakeHub API.
+9. Reproduce both historical epochs source by source, then collect at least two
+   fresh epochs entirely through the public pipeline. Reconcile every asset,
+   liability, trust classification, price, overlay value, total, supply, and
+   NAV; explain every difference.
+10. Build one distinct successor guest only after the preceding inputs are
+    stable. Reproduce its ELF and vkey from clean independent checkouts and
+    publish the immutable profile ID, manifest, policies, and test vectors.
+11. Run the controlled six-validator migration, full transparent/private
+    issue/redeem and Ethereum export/return lifecycle, restart/outage/replay/
+    rollback tests, and conservation checks.
+12. Only after `G0` through `G5` are green, govern the existing A666 asset to
+    the public successor, verify the live lifecycle, complete clean-checkout
+    reproduction, and set `stakehub_deprecated=true`.
+
+Throughout all steps, keep the live A666 route and frozen Monday checkout
+untouched until the controlled migration gate authorizes the exact governed
+change.
 
 ## 12. Definition of done
 

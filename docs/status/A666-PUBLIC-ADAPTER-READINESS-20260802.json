@@ -36,7 +36,7 @@
       "status": "partial",
       "production_qualified": false,
       "public_implementation": "tools/nav-reserve-proof/crates/reserve-proof-types/src/solana_stake.rs",
-      "note": "A provider-neutral verifier now checks a governed exact stake-account set, derived addresses, stake/withdraw/vote authorities, stake activation/deactivation state, lamports, finalized-slot snapshot agreement, bounded data, owner authorization, independent signer policy, signatures, and guest dispatch. It reconstructs the historical A666 stake quantities and retains the historically accurate attested quantity classification instead of claiming cryptographic state proof. The public collector, governed production signer/policy fixture, fuzzing, fresh epochs, full A666 reconciliation, and production qualification remain open."
+      "note": "A provider-neutral verifier now checks a governed exact stake-account set, derived addresses, stake/withdraw/vote authorities, stake activation/deactivation state, lamports, finalized-slot snapshot agreement, bounded data, owner authorization, independent signer policy, signatures, and guest dispatch. It reconstructs the historical A666 stake quantities and honestly labels that evidence attested. This is an interim historical/diagnostic scaffold, not the production successor: a public finalized source-state verification and collection mechanism that does not trust an operator or RPC signature for the quantity is required. That mechanism, fuzzing, fresh epochs, full A666 reconciliation, and production qualification remain open."
     },
     {
       "id": "xmr-reserve",
