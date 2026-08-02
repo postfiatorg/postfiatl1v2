@@ -1310,6 +1310,21 @@ fn apply_asset_operation(
                         &operation.sp1_public_values,
                     )
                     .map_err(|error| (error.code(), error.message()))?;
+                    if operation.circulating_supply != 0 {
+                        let exact_nav = nav_per_unit_floor_with_unit_scale(
+                            operation.verified_net_assets,
+                            operation.circulating_supply,
+                            nav_unit_scale,
+                        )
+                        .map_err(|error| ("nav_reserve_nav_floor_mismatch", error))?;
+                        if operation.nav_per_unit != exact_nav {
+                            return Err((
+                                "nav_reserve_nav_floor_mismatch",
+                                "provider-neutral reserve packet NAV must equal the exact conservative floor of verified assets over circulating supply"
+                                    .to_string(),
+                            ));
+                        }
+                    }
                     reserve_overlay_value = context.subscription_overlay_value;
                     decoded_reserve_public_values = Some(decoded);
                 }

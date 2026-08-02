@@ -8,6 +8,7 @@ use std::{
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
+use postfiat_crypto_provider::hash_hex;
 use postfiat_nav_reserve_protocol::nav_reserve_subscription_composite_source_root_v1;
 use postfiat_reserve_proof::{
     run_adapter, run_evm_chainlink_policy_commitment, run_manifest_builder,
@@ -15,8 +16,8 @@ use postfiat_reserve_proof::{
     AdapterCommand, SourceCheckpointCommand,
 };
 use postfiat_types::{
-    AssetTransactionOperation, NavProfileRegisterOperation, NavProofProfile,
-    NavReservePublicValuesV1, NavReserveSubmitOperation, SignedAssetTransaction,
+    nav_per_unit_floor_with_unit_scale, AssetTransactionOperation, NavProfileRegisterOperation,
+    NavProofProfile, NavReservePublicValuesV1, NavReserveSubmitOperation, SignedAssetTransaction,
     DEFAULT_MAX_NAV_SP1_PROOF_BYTES,
 };
 use reserve_proof_types::{
@@ -201,6 +202,26 @@ enum WitnessCommand {
 
 #[derive(Debug, Subcommand)]
 enum PacketCommand {
+    /// Derive exact NAV, roots, and a content-bound packet identifier from
+    /// canonical proof public values plus an optional finalized PFTL overlay.
+    Prepare {
+        #[arg(long)]
+        issuer: String,
+        #[arg(long)]
+        submitter: String,
+        #[arg(long)]
+        circulating_supply: u64,
+        #[arg(long)]
+        asset_precision: u8,
+        #[arg(long)]
+        public_values: PathBuf,
+        #[arg(long)]
+        subscription_overlay_source_root: Option<String>,
+        #[arg(long, default_value_t = 0)]
+        subscription_overlay_value: u64,
+        #[arg(long)]
+        output: PathBuf,
+    },
     Build {
         #[arg(long)]
         template: PathBuf,
@@ -238,6 +259,10 @@ struct PacketTemplateV1 {
     source_root: String,
     attestor_root: String,
     reserve_packet_hash: String,
+    /// Present and mandatory for v2 templates. The builder uses it to enforce
+    /// exact floor NAV instead of accepting an operator-entered discount.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    asset_precision: Option<u8>,
     /// Optional consensus-accounted NAV subscription reserve. When present,
     /// `source_root` must be the exact composite root over the proof public
     /// values and this overlay, and the packet carries base proof assets plus
@@ -321,6 +346,28 @@ fn main() -> Result<()> {
             elf,
         } => verify(public_values, proof, elf),
         Command::ProgramInfo { elf } => program_info(elf),
+        Command::Packet {
+            command:
+                PacketCommand::Prepare {
+                    issuer,
+                    submitter,
+                    circulating_supply,
+                    asset_precision,
+                    public_values,
+                    subscription_overlay_source_root,
+                    subscription_overlay_value,
+                    output,
+                },
+        } => packet_prepare(
+            issuer,
+            submitter,
+            circulating_supply,
+            asset_precision,
+            public_values,
+            subscription_overlay_source_root,
+            subscription_overlay_value,
+            output,
+        ),
         Command::Packet {
             command:
                 PacketCommand::Build {
@@ -684,7 +731,10 @@ fn packet_build(
 ) -> Result<()> {
     let template: PacketTemplateV1 = read_json(&template_path)?;
     anyhow::ensure!(
-        template.schema == "postfiat.reserve_packet_template.v1",
+        matches!(
+            template.schema.as_str(),
+            "postfiat.reserve_packet_template.v1" | "postfiat.reserve_packet_template.v2"
+        ),
         "packet template schema mismatch"
     );
     let public_values_bytes = read_bounded(
@@ -713,52 +763,207 @@ fn packet_build(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
+fn packet_prepare(
+    issuer: String,
+    submitter: String,
+    circulating_supply: u64,
+    asset_precision: u8,
+    public_values_path: PathBuf,
+    subscription_overlay_source_root: Option<String>,
+    subscription_overlay_value: u64,
+    output: PathBuf,
+) -> Result<()> {
+    let public_values_bytes = read_bounded(
+        &public_values_path,
+        MAX_PUBLIC_VALUES_INPUT_BYTES,
+        "reserve public values",
+    )?;
+    let values =
+        NavReservePublicValuesV1::decode(&public_values_bytes).map_err(anyhow::Error::msg)?;
+    let template = prepare_packet_template(
+        issuer,
+        submitter,
+        circulating_supply,
+        asset_precision,
+        &values,
+        &public_values_bytes,
+        subscription_overlay_source_root,
+        subscription_overlay_value,
+    )?;
+    write_new(&output, &serde_json::to_vec_pretty(&template)?)?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn prepare_packet_template(
+    issuer: String,
+    submitter: String,
+    circulating_supply: u64,
+    asset_precision: u8,
+    values: &NavReservePublicValuesV1,
+    public_values_bytes: &[u8],
+    subscription_overlay_source_root: Option<String>,
+    subscription_overlay_value: u64,
+) -> Result<PacketTemplateV1> {
+    values.validate().map_err(anyhow::Error::msg)?;
+    anyhow::ensure!(
+        values.encode().map_err(anyhow::Error::msg)? == public_values_bytes,
+        "decoded public values do not round-trip to the supplied canonical bytes"
+    );
+    anyhow::ensure!(
+        circulating_supply != 0,
+        "circulating supply must be nonzero"
+    );
+    let (source_root, verified_net_assets) = packet_source_root_and_assets(
+        values,
+        subscription_overlay_source_root.as_deref(),
+        subscription_overlay_value,
+    )?;
+    let asset_unit_scale = 10_u128
+        .checked_pow(asset_precision.into())
+        .context("asset precision scale would overflow")?;
+    let nav_per_unit = nav_per_unit_floor_with_unit_scale(
+        verified_net_assets,
+        circulating_supply,
+        asset_unit_scale,
+    )
+    .map_err(anyhow::Error::msg)?;
+    anyhow::ensure!(nav_per_unit != 0, "derived NAV per unit is zero");
+    let mut template = PacketTemplateV1 {
+        schema: "postfiat.reserve_packet_template.v2".to_string(),
+        issuer,
+        submitter,
+        nav_per_unit,
+        circulating_supply,
+        source_root,
+        attestor_root: values.valuation_trust_root.clone(),
+        reserve_packet_hash: String::new(),
+        asset_precision: Some(asset_precision),
+        subscription_overlay_source_root,
+        subscription_overlay_value,
+    };
+    template.reserve_packet_hash =
+        derived_reserve_packet_hash(&template, values, public_values_bytes)?;
+    Ok(template)
+}
+
+fn packet_source_root_and_assets(
+    values: &NavReservePublicValuesV1,
+    overlay_source_root: Option<&str>,
+    overlay_value: u64,
+) -> Result<(String, u64)> {
+    match overlay_source_root {
+        Some(overlay_root) => {
+            nav_reserve_subscription_composite_source_root_v1(values, overlay_root, overlay_value)
+                .map_err(anyhow::Error::msg)
+        }
+        None => {
+            anyhow::ensure!(
+                overlay_value == 0,
+                "subscription overlay value requires a source root"
+            );
+            Ok((
+                values.source_observation_root.clone(),
+                values.verified_net_assets,
+            ))
+        }
+    }
+}
+
+fn derived_reserve_packet_hash(
+    template: &PacketTemplateV1,
+    values: &NavReservePublicValuesV1,
+    public_values_bytes: &[u8],
+) -> Result<String> {
+    anyhow::ensure!(
+        template.schema == "postfiat.reserve_packet_template.v2",
+        "derived packet hash requires a v2 template"
+    );
+    let asset_precision = template
+        .asset_precision
+        .context("v2 packet template requires asset_precision")?;
+    let public_values_hash = hash_hex(
+        "postfiat.nav_reserve_public_values_hash.v1",
+        public_values_bytes,
+    );
+    let overlay_root = template
+        .subscription_overlay_source_root
+        .as_deref()
+        .unwrap_or("");
+    let preimage = format!(
+        "issuer={}\nsubmitter={}\nasset_id={}\nepoch={}\nproof_profile={}\nsource_manifest_hash={}\nvaluation_policy_hash={}\nvaluation_unit_id={}\npublic_values_hash={}\ncirculating_supply={}\nasset_precision={}\nnav_per_unit={}\nsource_root={}\nattestor_root={}\nsubscription_overlay_source_root={}\nsubscription_overlay_value={}\n",
+        template.issuer,
+        template.submitter,
+        values.nav_asset_id,
+        values.observation_epoch,
+        values.proof_profile_id,
+        values.source_manifest_hash,
+        values.valuation_policy_hash,
+        values.valuation_unit_id,
+        public_values_hash,
+        template.circulating_supply,
+        asset_precision,
+        template.nav_per_unit,
+        template.source_root,
+        template.attestor_root,
+        overlay_root,
+        template.subscription_overlay_value,
+    );
+    Ok(hash_hex(
+        "postfiat.nav_reserve_packet_hash.v2",
+        preimage.as_bytes(),
+    ))
+}
+
 fn build_packet_operation(
     template: PacketTemplateV1,
     values: &NavReservePublicValuesV1,
     proof_bytes: Vec<u8>,
     public_values_bytes: Vec<u8>,
 ) -> Result<NavReserveSubmitOperation> {
-    let (source_root, verified_net_assets) = match template.subscription_overlay_source_root {
-        Some(overlay_root) => {
-            anyhow::ensure!(
-                overlay_root.len() == 96
-                    && overlay_root
-                        .bytes()
-                        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)),
-                "subscription overlay source root must be 48-byte lowercase hex"
-            );
-            anyhow::ensure!(
-                template.subscription_overlay_value != 0,
-                "subscription overlay value must be nonzero when its source root is present"
-            );
-            let encoded = values.encode().map_err(anyhow::Error::msg)?;
-            anyhow::ensure!(
-                encoded == public_values_bytes,
-                "decoded public values do not round-trip to the supplied canonical bytes"
-            );
-            nav_reserve_subscription_composite_source_root_v1(
-                values,
-                &overlay_root,
-                template.subscription_overlay_value,
-            )
-            .map_err(anyhow::Error::msg)?
-        }
-        None => {
-            anyhow::ensure!(
-                template.subscription_overlay_value == 0,
-                "subscription overlay value requires a source root"
-            );
-            (
-                values.source_observation_root.clone(),
-                values.verified_net_assets,
-            )
-        }
-    };
+    let encoded = values.encode().map_err(anyhow::Error::msg)?;
+    anyhow::ensure!(
+        encoded == public_values_bytes,
+        "decoded public values do not round-trip to the supplied canonical bytes"
+    );
+    let (source_root, verified_net_assets) = packet_source_root_and_assets(
+        values,
+        template.subscription_overlay_source_root.as_deref(),
+        template.subscription_overlay_value,
+    )?;
     anyhow::ensure!(
         template.source_root == source_root,
         "packet template source root does not match proven public values and subscription overlay"
     );
+    if template.schema == "postfiat.reserve_packet_template.v2" {
+        let asset_precision = template
+            .asset_precision
+            .context("v2 packet template requires asset_precision")?;
+        let asset_unit_scale = 10_u128
+            .checked_pow(asset_precision.into())
+            .context("asset precision scale would overflow")?;
+        let expected_nav = nav_per_unit_floor_with_unit_scale(
+            verified_net_assets,
+            template.circulating_supply,
+            asset_unit_scale,
+        )
+        .map_err(anyhow::Error::msg)?;
+        anyhow::ensure!(
+            template.nav_per_unit == expected_nav,
+            "v2 packet template NAV is not the exact conservative floor"
+        );
+        anyhow::ensure!(
+            template.reserve_packet_hash
+                == derived_reserve_packet_hash(&template, values, &public_values_bytes)?,
+            "v2 reserve packet hash does not match the canonical packet statement"
+        );
+    } else {
+        anyhow::ensure!(
+            template.asset_precision.is_none(),
+            "v1 packet template cannot set asset_precision"
+        );
+    }
     Ok(NavReserveSubmitOperation {
         issuer: template.issuer,
         submitter: template.submitter,
@@ -1082,6 +1287,7 @@ mod tests {
                 "cb34590e25db391724491b01795dee8bdbbadba3bba36fb5fc4f96bce1a87fa311426e0b76ce5ff4d775b091d94147df"
                     .to_string(),
             reserve_packet_hash: "55".repeat(48),
+            asset_precision: None,
             subscription_overlay_source_root: None,
             subscription_overlay_value: 0,
         }
@@ -1120,6 +1326,45 @@ mod tests {
         mismatched.subscription_overlay_source_root = Some("0b".repeat(48));
         mismatched.subscription_overlay_value = overlay_value;
         assert!(build_packet_operation(mismatched, &values, vec![1], bytes).is_err());
+    }
+
+    #[test]
+    fn packet_prepare_v2_derives_exact_nav_and_rejects_tampering() {
+        let (values, bytes) = qualified_public_values();
+        let overlay_root = "0b".repeat(48);
+        let overlay_value = 500;
+        let template = prepare_packet_template(
+            "pf1111111111111111111111111111111111111111".to_string(),
+            "pf2222222222222222222222222222222222222222".to_string(),
+            1_100,
+            6,
+            &values,
+            &bytes,
+            Some(overlay_root),
+            overlay_value,
+        )
+        .expect("derive v2 packet template");
+        assert_eq!(template.schema, "postfiat.reserve_packet_template.v2");
+        assert_eq!(template.asset_precision, Some(6));
+        assert_eq!(template.reserve_packet_hash.len(), 96);
+        let expected_nav = nav_per_unit_floor_with_unit_scale(
+            values.verified_net_assets + overlay_value,
+            1_100,
+            1_000_000,
+        )
+        .expect("floor NAV");
+        assert_eq!(template.nav_per_unit, expected_nav);
+        let operation = build_packet_operation(template.clone(), &values, vec![1], bytes.clone())
+            .expect("build exact v2 packet");
+        assert_eq!(operation.nav_per_unit, expected_nav);
+
+        let mut wrong_nav = template.clone();
+        wrong_nav.nav_per_unit -= 1;
+        assert!(build_packet_operation(wrong_nav, &values, vec![1], bytes.clone()).is_err());
+
+        let mut wrong_hash = template;
+        wrong_hash.reserve_packet_hash = "ff".repeat(48);
+        assert!(build_packet_operation(wrong_hash, &values, vec![1], bytes).is_err());
     }
 
     #[test]

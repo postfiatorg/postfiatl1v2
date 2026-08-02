@@ -3359,6 +3359,34 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
             sp1_public_values: reserve_public_values,
         }),
     );
+    let mut understated_operation = match reserve_submit.unsigned.operation.clone() {
+        AssetTransactionOperation::NavReserveSubmit(operation) => operation,
+        _ => unreachable!("reserve submit fixture"),
+    };
+    understated_operation.circulating_supply = 100;
+    understated_operation.nav_per_unit = 1;
+    understated_operation.reserve_packet_hash = "54".repeat(48);
+    let understated_submit = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &operator_key,
+        NAV_RESERVE_SUBMIT_TRANSACTION_KIND,
+        1,
+        AssetTransactionOperation::NavReserveSubmit(understated_operation),
+    );
+    let mut understated_ledger = ledger.clone();
+    let understated_receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut understated_ledger,
+        &understated_submit,
+        5,
+    );
+    assert!(!understated_receipt.accepted);
+    assert_eq!(
+        understated_receipt.code,
+        "nav_reserve_nav_floor_mismatch"
+    );
+    assert_eq!(understated_ledger, ledger);
     let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
         &genesis,
         &mut ledger,

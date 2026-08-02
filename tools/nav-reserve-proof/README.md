@@ -652,9 +652,31 @@ same Groth16 proof before writing it. For a proof that must survive terminal or
 agent restarts, run this command under an ordinary supervised service and
 retain the service result plus output hashes in the qualification evidence.
 
-`packet build` combines reviewed packet metadata, proof calldata, and decoded
-public values into a validated `NavReserveSubmitOperation`. Obtain an ordinary
-PFTL asset fee quote and sign it locally with `postfiat-node
+`packet prepare` derives a version-2 packet template from canonical public
+values instead of accepting an operator-entered NAV or packet identifier. It
+computes the exact conservative floor NAV using the issued asset precision,
+derives the proof/overlay composite source root, binds the valuation trust
+root, and derives a domain-separated 48-byte packet hash from the complete
+statement:
+
+```bash
+postfiat-reserve-proof packet prepare \
+  --issuer "$ISSUER" \
+  --submitter "$RESERVE_OPERATOR" \
+  --circulating-supply "$ISSUED_SUPPLY_ATOMS" \
+  --asset-precision 6 \
+  --public-values "$RUN/public-values.bin" \
+  --subscription-overlay-source-root "$OVERLAY_ROOT" \
+  --subscription-overlay-value "$OVERLAY_VALUE" \
+  --output "$RUN/packet-template.v2.json"
+```
+
+`packet build` combines that template, proof calldata, and decoded public
+values into a validated `NavReserveSubmitOperation`. For a v2 template it
+recomputes and rejects any change to the NAV, packet hash, source root,
+valuation root, supply, precision, or overlay binding. Version-1 templates
+remain supported only for historical compatibility. Obtain an ordinary PFTL
+asset fee quote and sign it locally with `postfiat-node
 wallet-sign-asset-transaction`; the proof kit never receives an issuer key.
 
 The packet template accepts two optional, backward-compatible fields for a

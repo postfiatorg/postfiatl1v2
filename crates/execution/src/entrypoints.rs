@@ -10,7 +10,7 @@ use postfiat_types::{
     vault_bridge_deposit_public_values_hash,
     proof_bounded_nav_cap_checkpoint_hash,
     vault_bridge_counted_value_for_asset, vault_bridge_source_root_for_asset,
-    validate_nav_reserve_collateralization_with_unit_scale,
+    validate_nav_reserve_collateralization_with_unit_scale, nav_per_unit_floor_with_unit_scale,
     vault_bridge_withdrawal_execution_observation_root,
     vault_bridge_withdrawal_packet_legacy_domainless_evm_digest,
     vault_bridge_withdrawal_packet_legacy_domainless_hash, AssetDefinition,

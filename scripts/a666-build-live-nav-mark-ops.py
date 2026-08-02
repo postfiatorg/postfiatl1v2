@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -174,7 +175,14 @@ def build_overlay(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--packet-operation", type=Path, required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--packet-operation", type=Path)
+    source.add_argument("--public-values", type=Path)
+    parser.add_argument("--proof-calldata", type=Path)
+    parser.add_argument("--proof-cli", type=Path)
+    parser.add_argument("--route-status", type=Path)
+    parser.add_argument("--settlement-vault-status", type=Path)
+    parser.add_argument("--nav-status", type=Path)
     parser.add_argument("--pftl-status", type=Path, required=True)
     parser.add_argument("--issuer-key-file", type=Path, required=True)
     parser.add_argument("--reserve-key-file", type=Path, required=True)
@@ -267,6 +275,103 @@ def validate_packet(packet: dict[str, Any], profile: dict[str, Any]) -> None:
             raise RuntimeError(f"packet {label} must be a byte array")
 
 
+def derive_packet_operation(
+    args: argparse.Namespace,
+    profile: dict[str, Any],
+    output_dir: Path,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    required = {
+        "public values": args.public_values,
+        "proof calldata": args.proof_calldata,
+        "proof CLI": args.proof_cli,
+        "route status": args.route_status,
+        "settlement vault status": args.settlement_vault_status,
+        "NAV status": args.nav_status,
+    }
+    for label, path in required.items():
+        if path is None or not path.is_file():
+            raise RuntimeError(f"{label} is required and must be a file")
+    if not os.access(args.proof_cli, os.X_OK):
+        raise RuntimeError("proof CLI is not executable")
+
+    route = load_json(args.route_status)
+    vault = load_json(args.settlement_vault_status)
+    nav = load_json(args.nav_status)
+    if route.get("native_nav_asset_id") != ASSET_ID:
+        raise RuntimeError("route status does not describe A666")
+    if nav.get("asset_id") != ASSET_ID:
+        raise RuntimeError("NAV status does not describe A666")
+    if nav.get("proof_profile") != profile.get("profile_id"):
+        raise RuntimeError("A666 NAV status and active profile disagree")
+    if nav.get("valuation_unit") != NAV_VALUATION_UNIT:
+        raise RuntimeError("A666 NAV status valuation unit is not USD_1E8")
+    circulating_supply = nav.get("issued_supply_atoms")
+    if not isinstance(circulating_supply, int) or circulating_supply <= 0:
+        raise RuntimeError("A666 issued supply must be a positive integer")
+
+    overlay_value, overlay_root, overlay = build_overlay(route, vault)
+    if overlay_value <= 0:
+        raise RuntimeError("A666 finalized pfUSDC overlay must be nonzero")
+    overlay_evidence = {
+        "schema": "postfiat.a666.finalized_subscription_overlay.v1",
+        "asset_id": ASSET_ID,
+        "pftl_genesis_hash": load_json(args.pftl_status).get("genesis_hash"),
+        "pftl_block_height": load_json(args.pftl_status).get("block_height"),
+        "pftl_state_root": load_json(args.pftl_status).get("state_root"),
+        "route_status_sha256": hashlib.sha256(args.route_status.read_bytes()).hexdigest(),
+        "vault_status_sha256": hashlib.sha256(
+            args.settlement_vault_status.read_bytes()
+        ).hexdigest(),
+        "nav_status_sha256": hashlib.sha256(args.nav_status.read_bytes()).hexdigest(),
+        "circulating_supply_atoms": circulating_supply,
+        "overlay": overlay,
+    }
+    write_json(output_dir / "finalized-subscription-overlay.json", overlay_evidence)
+
+    template_path = output_dir / "reserve-packet-template.v2.json"
+    packet_path = output_dir / "reserve-packet.operation.json"
+    prepare_command = [
+        str(args.proof_cli.resolve()),
+        "packet",
+        "prepare",
+        "--issuer",
+        ISSUER,
+        "--submitter",
+        RESERVE_OPERATOR,
+        "--circulating-supply",
+        str(circulating_supply),
+        "--asset-precision",
+        "6",
+        "--public-values",
+        str(args.public_values.resolve()),
+        "--subscription-overlay-source-root",
+        overlay_root,
+        "--subscription-overlay-value",
+        str(overlay_value),
+        "--output",
+        str(template_path.resolve()),
+    ]
+    build_command = [
+        str(args.proof_cli.resolve()),
+        "packet",
+        "build",
+        "--template",
+        str(template_path.resolve()),
+        "--public-values",
+        str(args.public_values.resolve()),
+        "--proof-calldata",
+        str(args.proof_calldata.resolve()),
+        "--output",
+        str(packet_path.resolve()),
+    ]
+    for label, command in (("packet prepare", prepare_command), ("packet build", build_command)):
+        completed = subprocess.run(command, capture_output=True, text=True, check=False)
+        if completed.returncode != 0:
+            detail = (completed.stderr or completed.stdout).strip()
+            raise RuntimeError(f"{label} failed: {detail[-2000:]}")
+    return load_json(packet_path), overlay_evidence
+
+
 def main() -> None:
     args = parse_args()
     if args.output_dir.exists():
@@ -277,9 +382,14 @@ def main() -> None:
     ):
         if not path.is_file():
             raise RuntimeError(f"{label} key file is unavailable")
-    packet = load_json(args.packet_operation)
     status = load_json(args.pftl_status)
     profile = active_profile(status)
+    args.output_dir.mkdir(parents=True, mode=0o700)
+    overlay_evidence = None
+    if args.packet_operation is not None:
+        packet = load_json(args.packet_operation)
+    else:
+        packet, overlay_evidence = derive_packet_operation(args, profile, args.output_dir)
     validate_packet(packet, profile)
     epoch = packet["epoch"]
     reserve_body = {"operation": "nav_reserve_submit", **packet}
@@ -291,7 +401,6 @@ def main() -> None:
         "reserve_packet_hash": packet["reserve_packet_hash"],
     }
 
-    args.output_dir.mkdir(parents=True, mode=0o700)
     write_json(
         args.output_dir / "01-reserve-submit.ops.json",
         certified_operation(
@@ -331,6 +440,14 @@ def main() -> None:
         "attestor_root": packet["attestor_root"],
         "reserve_packet_hash": packet["reserve_packet_hash"],
     }
+    if overlay_evidence is not None:
+        manifest["subscription_overlay"] = {
+            "source_root": overlay_evidence["overlay"]["source_root"],
+            "value_nav_units": overlay_evidence["overlay"]["value_nav_units"],
+            "circulating_supply_atoms": overlay_evidence["circulating_supply_atoms"],
+            "pftl_block_height": overlay_evidence["pftl_block_height"],
+            "pftl_state_root": overlay_evidence["pftl_state_root"],
+        }
     write_json(args.output_dir / "live-nav-mark-manifest.json", manifest)
     print(json.dumps(manifest, indent=2, sort_keys=True))
 
