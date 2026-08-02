@@ -53,6 +53,8 @@ pub struct AaveV3PositionPolicyV1 {
     pub underlying_asset: Address,
     pub token_address: Address,
     pub token_code_hash: B256,
+    /// Storage mapping slot for this token's per-user scaled balance.
+    pub user_state_slot_index: U256,
     pub decimals: u8,
     pub chainlink_proxy_code_hash: B256,
     pub chainlink_aggregator_code_hash: B256,
@@ -276,6 +278,7 @@ impl AaveV3PolicyV1 {
             out.extend_from_slice(position.underlying_asset.as_slice());
             out.extend_from_slice(position.token_address.as_slice());
             out.extend_from_slice(position.token_code_hash.as_slice());
+            out.extend_from_slice(&position.user_state_slot_index.to_be_bytes::<32>());
             out.push(position.decimals);
             out.extend_from_slice(position.chainlink_proxy_code_hash.as_slice());
             out.extend_from_slice(position.chainlink_aggregator_code_hash.as_slice());
@@ -449,17 +452,36 @@ pub fn aave_v3_owner_authorization_statement_v1(
 ) -> Result<Vec<u8>, AaveV3Error> {
     validate_proof_bounds(proof)?;
     validate_context(context)?;
-    let committee_root = proof
-        .checkpoint_certificate
+    aave_v3_owner_authorization_statement_for_policy_v1(
+        &proof.policy,
+        &proof.checkpoint_certificate,
+        proof.owner,
+        context,
+    )
+}
+
+pub fn aave_v3_owner_authorization_statement_for_policy_v1(
+    policy: &AaveV3PolicyV1,
+    checkpoint_certificate: &BftSourceCheckpointCertificateV1,
+    owner: Address,
+    context: &AaveV3VerifyContextV1<'_>,
+) -> Result<Vec<u8>, AaveV3Error> {
+    policy.validate()?;
+    validate_context(context)?;
+    checkpoint_certificate
+        .verify()
+        .map_err(|_| AaveV3Error::CheckpointMismatch)?;
+    let committee_root = checkpoint_certificate
         .committee
         .root()
         .map_err(|_| AaveV3Error::CheckpointMismatch)?;
-    let policy_commitment = proof.policy.commitment(&committee_root)?;
+    let policy_commitment = policy.commitment(&committee_root)?;
     owner_authorization_statement(
-        proof,
+        policy,
+        owner,
         context,
         &policy_commitment,
-        &proof.checkpoint_certificate.checkpoint,
+        &checkpoint_certificate.checkpoint,
     )
 }
 
@@ -476,7 +498,13 @@ fn verify_owner_authorization(
         .map_err(|_| AaveV3Error::OwnerAuthorization)?;
     let signature =
         Signature::from_raw_array(&signature).map_err(|_| AaveV3Error::OwnerAuthorization)?;
-    let statement = owner_authorization_statement(proof, context, policy_commitment, checkpoint)?;
+    let statement = owner_authorization_statement(
+        &proof.policy,
+        proof.owner,
+        context,
+        policy_commitment,
+        checkpoint,
+    )?;
     let recovered = signature
         .recover_address_from_prehash(&eip191_hash_message(&statement))
         .map_err(|_| AaveV3Error::OwnerAuthorization)?;
@@ -488,7 +516,8 @@ fn verify_owner_authorization(
 }
 
 fn owner_authorization_statement(
-    proof: &AaveV3ProofV1,
+    policy: &AaveV3PolicyV1,
+    owner: Address,
     context: &AaveV3VerifyContextV1<'_>,
     policy_commitment: &str,
     checkpoint: &BftSourceCheckpointV1,
@@ -511,7 +540,10 @@ fn owner_authorization_statement(
             .canonical_bytes()
             .map_err(|_| AaveV3Error::CheckpointMismatch)?,
     )?;
-    out.extend_from_slice(proof.owner.as_slice());
+    if policy.source_domain != checkpoint.source_domain {
+        return Err(AaveV3Error::CheckpointMismatch);
+    }
+    out.extend_from_slice(owner.as_slice());
     Ok(domain_message(OWNER_AUTHORIZATION_DOMAIN, &out))
 }
 
@@ -529,8 +561,10 @@ fn verify_position(
         return Err(AaveV3Error::PositionMismatch);
     }
     verify_account_proof(state_root, &position.token_account)?;
-    let expected_user_slot = mapping_slot_address(owner, position.user_state_slot_index);
-    if position.user_state.key != expected_user_slot {
+    let expected_user_slot = mapping_slot_address(owner, policy.user_state_slot_index);
+    if position.user_state_slot_index != policy.user_state_slot_index
+        || position.user_state.key != expected_user_slot
+    {
         return Err(AaveV3Error::PositionMismatch);
     }
     verify_storage_proof(position.token_account.storage_root, &position.user_state)?;
@@ -986,7 +1020,7 @@ fn address_from_low_160(value: U256) -> Address {
     Address::from_slice(&bytes[12..])
 }
 
-fn current_phase_aggregator(value: U256) -> Result<Address, AaveV3Error> {
+pub fn current_phase_aggregator(value: U256) -> Result<Address, AaveV3Error> {
     let phase_id = value & U256::from(u16::MAX);
     let aggregator =
         address_from_low_160((value >> 16usize) & ((U256::from(1) << 160usize) - U256::from(1)));
@@ -996,7 +1030,7 @@ fn current_phase_aggregator(value: U256) -> Result<Address, AaveV3Error> {
     Ok(aggregator)
 }
 
-fn chainlink_latest_round(value: U256) -> Result<u32, AaveV3Error> {
+pub fn chainlink_latest_round(value: U256) -> Result<u32, AaveV3Error> {
     let round = ((value >> 48usize) & U256::from(u32::MAX)).to::<u32>();
     if round == 0 {
         Err(AaveV3Error::OracleProof)
@@ -1549,6 +1583,7 @@ mod tests {
             underlying_asset: underlying,
             token_address: token,
             token_code_hash: code_hash,
+            user_state_slot_index: user_slot_index,
             decimals: 18,
             chainlink_proxy_code_hash: code_hash,
             chainlink_aggregator_code_hash: code_hash,
@@ -1773,6 +1808,18 @@ mod tests {
             Err(AaveV3Error::BoundsExceeded)
         );
 
+        let (mut substituted_slot, context) = synthetic_fixture();
+        substituted_slot.positions[0].user_state_slot_index += U256::from(1u8);
+        let evidence = Box::leak(substituted_slot.commitment().unwrap().into_boxed_str());
+        let bad_context = AaveV3VerifyContextV1 {
+            expected_evidence_commitment: evidence,
+            ..context
+        };
+        assert_eq!(
+            verify_aave_v3_proof_v1(&substituted_slot, &bad_context),
+            Err(AaveV3Error::PositionMismatch)
+        );
+
         let (proof, mut context) = synthetic_fixture();
         context.expected_gross_assets += 1;
         assert_eq!(
@@ -1790,6 +1837,7 @@ mod tests {
             underlying_asset: historical.collateral.underlying_asset,
             token_address: historical.collateral.token_account.address,
             token_code_hash: historical.collateral.token_account.code_hash,
+            user_state_slot_index: historical.collateral.user_state_slot_index,
             decimals: historical.collateral.decimals,
             chainlink_proxy_code_hash: historical
                 .collateral
@@ -1826,6 +1874,7 @@ mod tests {
             underlying_asset: historical.debt.underlying_asset,
             token_address: historical.debt.token_account.address,
             token_code_hash: historical.debt.token_account.code_hash,
+            user_state_slot_index: historical.debt.user_state_slot_index,
             decimals: historical.debt.decimals,
             chainlink_proxy_code_hash: historical.debt.oracle.chainlink.proxy_account.code_hash,
             chainlink_aggregator_code_hash: historical

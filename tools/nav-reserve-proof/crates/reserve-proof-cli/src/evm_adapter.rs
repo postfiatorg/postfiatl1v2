@@ -13,6 +13,15 @@ use anyhow::{bail, Context, Result};
 use clap::{Subcommand, ValueEnum};
 use reqwest::{blocking::Client, redirect::Policy, Url};
 use reserve_proof_types::{
+    aave_v3::{
+        aave_reserve_storage_slot, aave_v3_owner_authorization_statement_for_policy_v1,
+        aave_v3_owner_commitment, chainlink_latest_round, chainlink_transmission_slot,
+        current_phase_aggregator, fixed_storage_slot, mapping_slot_address,
+        verify_aave_v3_proof_v1, AaveOraclePriceProofV1, AaveOracleSourcePolicyV1,
+        AaveOracleSourceProofV1, AaveV3PolicyV1, AaveV3PositionPolicyV1, AaveV3PositionProofV1,
+        AaveV3ProofV1, AaveV3ReserveProofV1, AaveV3VerifyContextV1, ChainlinkFeedProofV1,
+        AAVE_EVM_CHECKPOINT_KIND_V1, AAVE_V3_ADAPTER_KIND_V1,
+    },
     bft_checkpoint::{
         BftCheckpointCommitteeV1, BftSourceCheckpointCertificateV1, BftSourceCheckpointV1,
     },
@@ -39,6 +48,12 @@ const RPC_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Subcommand)]
 pub enum AdapterCommand {
+    /// Collect Aave V3 collateral, debt, reserve-index, and oracle proofs
+    /// beneath an independently certified EVM state root.
+    AaveV3 {
+        #[command(subcommand)]
+        command: AaveV3Command,
+    },
     /// Provider-neutral ERC-20 state-proof collection under a governed BFT
     /// checkpoint.
     EvmErc20 {
@@ -92,6 +107,76 @@ pub enum AdapterCommand {
         public_key: String,
         #[arg(long)]
         output: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum AaveV3Command {
+    /// Query the governed EVM RPC and emit the deterministic checkpoint a
+    /// validator independently reproduces before signing.
+    CheckpointCandidate {
+        #[arg(long)]
+        pftl_genesis_hash: String,
+        #[arg(long)]
+        policy: PathBuf,
+        #[arg(long)]
+        source_height: u64,
+        #[arg(long)]
+        minimum_depth: u32,
+        #[arg(long)]
+        pftl_observation_height: u64,
+        #[arg(long)]
+        committee: PathBuf,
+        #[arg(long)]
+        rpc_url: String,
+        #[arg(long)]
+        output: PathBuf,
+    },
+    /// Emit the EIP-191 statement authorizing the governed Aave policy and
+    /// exact certified checkpoint.
+    OwnerAuthorization {
+        #[arg(long)]
+        manifest: PathBuf,
+        #[arg(long)]
+        context: PathBuf,
+        #[arg(long)]
+        source_id: String,
+        #[arg(long)]
+        policy: PathBuf,
+        #[arg(long)]
+        checkpoint_certificate: PathBuf,
+        #[arg(long)]
+        owner: String,
+        #[arg(long)]
+        output: PathBuf,
+    },
+    /// Query every policy-pinned Aave, token, reserve, and oracle storage
+    /// location at the certified block and emit a fully verified observation.
+    Collect {
+        #[arg(long)]
+        manifest: PathBuf,
+        #[arg(long)]
+        context: PathBuf,
+        #[arg(long)]
+        source_id: String,
+        #[arg(long)]
+        policy: PathBuf,
+        #[arg(long)]
+        checkpoint_certificate: PathBuf,
+        #[arg(long)]
+        owner: String,
+        #[arg(long)]
+        ownership_signature: String,
+        #[arg(long)]
+        gross_assets: u64,
+        #[arg(long)]
+        total_liabilities: u64,
+        #[arg(long)]
+        disclosure_commitment: String,
+        #[arg(long)]
+        rpc_url: String,
+        #[arg(long)]
+        output: PathBuf,
     },
 }
 
@@ -249,6 +334,71 @@ pub enum EvmSpotCommand {
 
 pub fn run(command: AdapterCommand) -> Result<()> {
     match command {
+        AdapterCommand::AaveV3 { command } => match command {
+            AaveV3Command::CheckpointCandidate {
+                pftl_genesis_hash,
+                policy,
+                source_height,
+                minimum_depth,
+                pftl_observation_height,
+                committee,
+                rpc_url,
+                output,
+            } => aave_v3_checkpoint_candidate(AaveV3CheckpointCandidateArgs {
+                pftl_genesis_hash,
+                policy,
+                source_height,
+                minimum_depth,
+                pftl_observation_height,
+                committee,
+                rpc_url,
+                output,
+            }),
+            AaveV3Command::OwnerAuthorization {
+                manifest,
+                context,
+                source_id,
+                policy,
+                checkpoint_certificate,
+                owner,
+                output,
+            } => aave_v3_owner_authorization(AaveV3OwnerAuthorizationArgs {
+                manifest,
+                context,
+                source_id,
+                policy,
+                checkpoint_certificate,
+                owner,
+                output,
+            }),
+            AaveV3Command::Collect {
+                manifest,
+                context,
+                source_id,
+                policy,
+                checkpoint_certificate,
+                owner,
+                ownership_signature,
+                gross_assets,
+                total_liabilities,
+                disclosure_commitment,
+                rpc_url,
+                output,
+            } => aave_v3_collect(AaveV3CollectArgs {
+                manifest,
+                context,
+                source_id,
+                policy,
+                checkpoint_certificate,
+                owner,
+                ownership_signature,
+                gross_assets,
+                total_liabilities,
+                disclosure_commitment,
+                rpc_url,
+                output,
+            }),
+        },
         AdapterCommand::EvmErc20 { command } => match command {
             EvmErc20Command::CheckpointVoteStatement {
                 checkpoint,
@@ -550,6 +700,594 @@ struct CollectArgs {
     disclosure_commitment: String,
     ethereum_rpc_url: String,
     output: PathBuf,
+}
+
+struct AaveV3CheckpointCandidateArgs {
+    pftl_genesis_hash: String,
+    policy: PathBuf,
+    source_height: u64,
+    minimum_depth: u32,
+    pftl_observation_height: u64,
+    committee: PathBuf,
+    rpc_url: String,
+    output: PathBuf,
+}
+
+struct AaveV3OwnerAuthorizationArgs {
+    manifest: PathBuf,
+    context: PathBuf,
+    source_id: String,
+    policy: PathBuf,
+    checkpoint_certificate: PathBuf,
+    owner: String,
+    output: PathBuf,
+}
+
+struct AaveV3CollectArgs {
+    manifest: PathBuf,
+    context: PathBuf,
+    source_id: String,
+    policy: PathBuf,
+    checkpoint_certificate: PathBuf,
+    owner: String,
+    ownership_signature: String,
+    gross_assets: u64,
+    total_liabilities: u64,
+    disclosure_commitment: String,
+    rpc_url: String,
+    output: PathBuf,
+}
+
+fn aave_v3_checkpoint_candidate(args: AaveV3CheckpointCandidateArgs) -> Result<()> {
+    validate_hex("pftl_genesis_hash", &args.pftl_genesis_hash, 48)?;
+    anyhow::ensure!(
+        args.source_height > 0 && args.minimum_depth > 0 && args.pftl_observation_height > 0,
+        "checkpoint heights and minimum depth must be nonzero"
+    );
+    let policy: AaveV3PolicyV1 = read_json(&args.policy)?;
+    policy
+        .validate()
+        .map_err(|error| anyhow::anyhow!("Aave V3 policy is invalid: {error:?}"))?;
+    let committee: BftCheckpointCommitteeV1 = read_json(&args.committee)?;
+    let committee_root = committee.root().map_err(anyhow::Error::msg)?;
+    policy
+        .commitment(&committee_root)
+        .map_err(|error| anyhow::anyhow!("Aave V3 policy commitment failed: {error:?}"))?;
+    let rpc_url = validate_rpc_url(&args.rpc_url)?;
+    let client = Client::builder()
+        .timeout(RPC_TIMEOUT)
+        .redirect(Policy::none())
+        .build()?;
+    let chain_id: String = rpc_call(&client, &rpc_url, "eth_chainId", serde_json::json!([]))?;
+    anyhow::ensure!(
+        parse_u64_quantity("eth_chainId", &chain_id)? == policy.ethereum_chain_id,
+        "Aave RPC chain ID does not match policy"
+    );
+    let observed_head_raw: String =
+        rpc_call(&client, &rpc_url, "eth_blockNumber", serde_json::json!([]))?;
+    let observed_source_head = parse_u64_quantity("latest block", &observed_head_raw)?;
+    let required_head = args
+        .source_height
+        .checked_add(u64::from(args.minimum_depth))
+        .context("Aave checkpoint confirmation depth overflows")?;
+    anyhow::ensure!(
+        observed_source_head >= required_head,
+        "Aave source block has not reached the required confirmation depth"
+    );
+    let block_tag = format!("0x{:x}", args.source_height);
+    let block: RpcBlock = rpc_call(
+        &client,
+        &rpc_url,
+        "eth_getBlockByNumber",
+        serde_json::json!([block_tag, false]),
+    )?;
+    anyhow::ensure!(
+        parse_u64_quantity("block.number", &block.number)? == args.source_height,
+        "Aave RPC substituted a different source block"
+    );
+    let source_timestamp_ms = parse_u64_quantity("block.timestamp", &block.timestamp)?
+        .checked_mul(1_000)
+        .context("Aave block timestamp milliseconds overflow")?;
+    let checkpoint = BftSourceCheckpointV1 {
+        pftl_genesis_hash: args.pftl_genesis_hash,
+        checkpoint_kind: AAVE_EVM_CHECKPOINT_KIND_V1.to_string(),
+        source_domain: policy.source_domain,
+        source_height: args.source_height,
+        source_timestamp_ms,
+        source_block_hash: parse_b256("block.hash", &block.hash)?,
+        source_state_commitment: parse_b256("block.stateRoot", &block.state_root)?,
+        observed_source_head,
+        minimum_depth: args.minimum_depth,
+        pftl_observation_height: args.pftl_observation_height,
+        committee_epoch: committee.epoch,
+        committee_root,
+    };
+    checkpoint.canonical_bytes().map_err(anyhow::Error::msg)?;
+    write_new(&args.output, &serde_json::to_vec_pretty(&checkpoint)?)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "schema": "postfiat.reserve_aave_v3_checkpoint_candidate.v1",
+            "output": args.output,
+            "source_domain": checkpoint.source_domain,
+            "source_height": checkpoint.source_height,
+            "source_timestamp_ms": checkpoint.source_timestamp_ms,
+            "source_block_hash": checkpoint.source_block_hash,
+            "source_state_commitment": checkpoint.source_state_commitment,
+            "observed_source_head": checkpoint.observed_source_head,
+            "minimum_depth": checkpoint.minimum_depth,
+            "committee_epoch": checkpoint.committee_epoch,
+            "committee_root": checkpoint.committee_root,
+            "next_required_check": "each validator independently reproduces this candidate before signing its vote statement",
+        }))?
+    );
+    Ok(())
+}
+
+fn aave_v3_owner_authorization(args: AaveV3OwnerAuthorizationArgs) -> Result<()> {
+    let (_, context, entry) = load_source(&args.manifest, &args.context, &args.source_id)?;
+    let policy: AaveV3PolicyV1 = read_json(&args.policy)?;
+    let certificate: BftSourceCheckpointCertificateV1 = read_json(&args.checkpoint_certificate)?;
+    let owner = parse_address("owner", &args.owner)?;
+    validate_aave_manifest_entry(
+        &entry,
+        &policy,
+        &certificate,
+        owner,
+        &context.pftl_genesis_hash,
+    )?;
+    let checkpoint = &certificate.checkpoint;
+    let observed_at_pftl_height = checkpoint.pftl_observation_height;
+    let verify_context = AaveV3VerifyContextV1 {
+        pftl_genesis_hash: &context.pftl_genesis_hash,
+        nav_asset_id: &context.nav_asset_id,
+        proof_profile_id: &context.proof_profile_id,
+        valuation_policy_hash: &context.valuation_policy_hash,
+        source_manifest_hash: &context.source_manifest_hash,
+        source_id: &entry.source_id,
+        source_domain: &entry.source_domain,
+        asset_or_position_id: &entry.asset_or_position_id,
+        reserve_owner_commitment: &entry.reserve_owner_commitment,
+        quantity_verifier_commitment: &entry.quantity_verifier_commitment,
+        valuation_verifier_commitment: &entry.valuation_verifier_commitment,
+        observed_at_pftl_height,
+        expected_gross_assets: 0,
+        expected_total_liabilities: 0,
+        expected_evidence_commitment: &"00".repeat(48),
+    };
+    let statement = aave_v3_owner_authorization_statement_for_policy_v1(
+        &policy,
+        &certificate,
+        owner,
+        &verify_context,
+    )
+    .map_err(|error| anyhow::anyhow!("Aave V3 owner statement failed: {error:?}"))?;
+    write_new(&args.output, &statement)?;
+    print_report(
+        "postfiat.reserve_aave_v3_owner_authorization.v1",
+        &args.output,
+        &statement,
+    )
+}
+
+fn aave_v3_collect(args: AaveV3CollectArgs) -> Result<()> {
+    anyhow::ensure!(
+        args.total_liabilities <= args.gross_assets,
+        "total liabilities exceed gross assets"
+    );
+    validate_hex("disclosure_commitment", &args.disclosure_commitment, 48)?;
+    let (_, context, entry) = load_source(&args.manifest, &args.context, &args.source_id)?;
+    let policy: AaveV3PolicyV1 = read_json(&args.policy)?;
+    let certificate: BftSourceCheckpointCertificateV1 = read_json(&args.checkpoint_certificate)?;
+    let owner = parse_address("owner", &args.owner)?;
+    validate_aave_manifest_entry(
+        &entry,
+        &policy,
+        &certificate,
+        owner,
+        &context.pftl_genesis_hash,
+    )?;
+    let checkpoint = &certificate.checkpoint;
+    let observed_at_pftl_height = checkpoint.pftl_observation_height;
+    anyhow::ensure!(
+        observed_at_pftl_height >= context.observation_not_before
+            && observed_at_pftl_height <= context.observation_not_after,
+        "Aave checkpoint PFTL height is outside the observation interval"
+    );
+    let rpc_url = validate_rpc_url(&args.rpc_url)?;
+    let client = Client::builder()
+        .timeout(RPC_TIMEOUT)
+        .redirect(Policy::none())
+        .build()?;
+    validate_certified_aave_rpc(&client, &rpc_url, &policy, checkpoint)?;
+    let block_tag = format!("0x{:x}", checkpoint.source_height);
+    let mut positions = Vec::with_capacity(policy.positions.len());
+    for position in &policy.positions {
+        positions.push(collect_aave_position(
+            &client, &rpc_url, &block_tag, &policy, position, owner,
+        )?);
+    }
+    let proof = AaveV3ProofV1 {
+        policy,
+        checkpoint_certificate: certificate,
+        owner,
+        ownership_signature: decode_hex("ownership_signature", &args.ownership_signature, 65)?,
+        positions,
+    };
+    let evidence_commitment = proof
+        .commitment()
+        .map_err(|error| anyhow::anyhow!("Aave V3 evidence commitment failed: {error:?}"))?;
+    let verify_context = AaveV3VerifyContextV1 {
+        pftl_genesis_hash: &context.pftl_genesis_hash,
+        nav_asset_id: &context.nav_asset_id,
+        proof_profile_id: &context.proof_profile_id,
+        valuation_policy_hash: &context.valuation_policy_hash,
+        source_manifest_hash: &context.source_manifest_hash,
+        source_id: &entry.source_id,
+        source_domain: &entry.source_domain,
+        asset_or_position_id: &entry.asset_or_position_id,
+        reserve_owner_commitment: &entry.reserve_owner_commitment,
+        quantity_verifier_commitment: &entry.quantity_verifier_commitment,
+        valuation_verifier_commitment: &entry.valuation_verifier_commitment,
+        observed_at_pftl_height,
+        expected_gross_assets: args.gross_assets,
+        expected_total_liabilities: args.total_liabilities,
+        expected_evidence_commitment: &evidence_commitment,
+    };
+    let verified = verify_aave_v3_proof_v1(&proof, &verify_context)
+        .map_err(|error| anyhow::anyhow!("Aave V3 proof failed: {error:?}"))?;
+    let evidence = SourceEvidenceV1::AaveV3 {
+        evidence_commitment: evidence_commitment.clone(),
+        proof: Box::new(proof),
+    };
+    let observation = SourceObservationV1 {
+        source_id: entry.source_id.clone(),
+        observed_at_block: observed_at_pftl_height,
+        gross_assets: verified.collateral_usd_e8,
+        total_liabilities: verified.liability_usd_e8,
+        quantity_evidence: evidence.clone(),
+        valuation_evidence: evidence,
+        disclosure_commitment: args.disclosure_commitment,
+    };
+    verify_observation_evidence(
+        &context,
+        &entry,
+        &observation,
+        EvidenceDimensionV1::Quantity,
+    )
+    .map_err(anyhow::Error::msg)?;
+    verify_observation_evidence(
+        &context,
+        &entry,
+        &observation,
+        EvidenceDimensionV1::Valuation,
+    )
+    .map_err(anyhow::Error::msg)?;
+    write_new(&args.output, &serde_json::to_vec_pretty(&observation)?)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "schema": "postfiat.reserve_aave_v3_collection.v1",
+            "output": args.output,
+            "source_id": observation.source_id,
+            "ethereum_block_number": verified.block_number,
+            "pftl_observation_height": observation.observed_at_block,
+            "collateral_usd_e8": verified.collateral_usd_e8,
+            "liability_usd_e8": verified.liability_usd_e8,
+            "position_count": proof_position_count(&observation.quantity_evidence),
+            "evidence_commitment": evidence_commitment,
+            "quantity_trust": "cryptographic_bft_checkpoint_mpt",
+            "valuation_trust": "cryptographic_bft_checkpoint_mpt_chainlink",
+            "next_required_check": "postfiat-reserve-proof observe validates this source again in the complete manifest",
+        }))?
+    );
+    Ok(())
+}
+
+fn proof_position_count(evidence: &SourceEvidenceV1) -> usize {
+    match evidence {
+        SourceEvidenceV1::AaveV3 { proof, .. } => proof.positions.len(),
+        _ => 0,
+    }
+}
+
+fn validate_aave_manifest_entry(
+    entry: &SourceManifestEntryV1,
+    policy: &AaveV3PolicyV1,
+    certificate: &BftSourceCheckpointCertificateV1,
+    owner: Address,
+    pftl_genesis_hash: &str,
+) -> Result<()> {
+    policy
+        .validate()
+        .map_err(|error| anyhow::anyhow!("Aave V3 policy is invalid: {error:?}"))?;
+    certificate.verify().map_err(anyhow::Error::msg)?;
+    let checkpoint = &certificate.checkpoint;
+    anyhow::ensure!(
+        checkpoint.pftl_genesis_hash == pftl_genesis_hash
+            && checkpoint.checkpoint_kind == AAVE_EVM_CHECKPOINT_KIND_V1
+            && checkpoint.source_domain == policy.source_domain,
+        "Aave checkpoint does not match the chain, kind, or policy"
+    );
+    let committee_root = certificate.committee.root().map_err(anyhow::Error::msg)?;
+    let policy_commitment = policy
+        .commitment(&committee_root)
+        .map_err(|error| anyhow::anyhow!("Aave V3 policy commitment failed: {error:?}"))?;
+    anyhow::ensure!(
+        entry.adapter_kind == AAVE_V3_ADAPTER_KIND_V1 && entry.adapter_schema_version == 1,
+        "source does not use {AAVE_V3_ADAPTER_KIND_V1} schema 1"
+    );
+    anyhow::ensure!(
+        entry.quantity_evidence_class == TrustClassV1::Cryptographic
+            && entry.valuation_evidence_class == TrustClassV1::Cryptographic,
+        "Aave quantity and valuation must both be classified cryptographic"
+    );
+    anyhow::ensure!(
+        entry.source_domain == policy.source_domain
+            && entry.asset_or_position_id == format!("aave-v3:account:{owner:#x}")
+            && entry.reserve_owner_commitment == aave_v3_owner_commitment(owner)
+            && entry.quantity_verifier_commitment == policy_commitment
+            && entry.valuation_verifier_commitment == policy_commitment,
+        "Aave manifest identity, owner, or policy commitment mismatch"
+    );
+    Ok(())
+}
+
+fn validate_certified_aave_rpc(
+    client: &Client,
+    rpc_url: &Url,
+    policy: &AaveV3PolicyV1,
+    checkpoint: &BftSourceCheckpointV1,
+) -> Result<()> {
+    let chain_id: String = rpc_call(client, rpc_url, "eth_chainId", serde_json::json!([]))?;
+    anyhow::ensure!(
+        parse_u64_quantity("eth_chainId", &chain_id)? == policy.ethereum_chain_id,
+        "Aave RPC chain ID does not match policy"
+    );
+    let block_tag = format!("0x{:x}", checkpoint.source_height);
+    let block: RpcBlock = rpc_call(
+        client,
+        rpc_url,
+        "eth_getBlockByNumber",
+        serde_json::json!([block_tag, false]),
+    )?;
+    let timestamp_ms = parse_u64_quantity("block.timestamp", &block.timestamp)?
+        .checked_mul(1_000)
+        .context("Aave block timestamp milliseconds overflow")?;
+    anyhow::ensure!(
+        parse_u64_quantity("block.number", &block.number)? == checkpoint.source_height
+            && parse_b256("block.hash", &block.hash)? == checkpoint.source_block_hash
+            && parse_b256("block.stateRoot", &block.state_root)?
+                == checkpoint.source_state_commitment
+            && timestamp_ms == checkpoint.source_timestamp_ms,
+        "Aave RPC block does not match the certified checkpoint"
+    );
+    let latest: String = rpc_call(client, rpc_url, "eth_blockNumber", serde_json::json!([]))?;
+    anyhow::ensure!(
+        parse_u64_quantity("latest block", &latest)? >= checkpoint.observed_source_head,
+        "Aave RPC head is behind the certified observation head"
+    );
+    Ok(())
+}
+
+fn collect_aave_position(
+    client: &Client,
+    rpc_url: &Url,
+    block_tag: &str,
+    policy: &AaveV3PolicyV1,
+    position: &AaveV3PositionPolicyV1,
+    owner: Address,
+) -> Result<AaveV3PositionProofV1> {
+    let user_key = mapping_slot_address(owner, position.user_state_slot_index);
+    let (token_account, mut token_storage) = rpc_account_with_storage(
+        client,
+        rpc_url,
+        position.token_address,
+        &[user_key],
+        block_tag,
+    )?;
+    let user_state = take_storage(&mut token_storage, user_key, "Aave user state")?;
+
+    let reserve_base = U256::from(policy.reserve_mapping_slot_index);
+    let reserve_keys = [1u64, 2, 3, 4, 6]
+        .map(|offset| aave_reserve_storage_slot(position.underlying_asset, reserve_base, offset));
+    let (pool_account, mut pool_storage) = rpc_account_with_storage(
+        client,
+        rpc_url,
+        policy.pool_address,
+        &reserve_keys,
+        block_tag,
+    )?;
+    let reserve = AaveV3ReserveProofV1 {
+        pool_account,
+        indexes_and_rates_1: take_storage(
+            &mut pool_storage,
+            reserve_keys[0],
+            "Aave reserve indexes/rates 1",
+        )?,
+        indexes_and_rates_2: take_storage(
+            &mut pool_storage,
+            reserve_keys[1],
+            "Aave reserve indexes/rates 2",
+        )?,
+        metadata: take_storage(&mut pool_storage, reserve_keys[2], "Aave reserve metadata")?,
+        a_token_address: take_storage(&mut pool_storage, reserve_keys[3], "Aave aToken address")?,
+        variable_debt_token_address: take_storage(
+            &mut pool_storage,
+            reserve_keys[4],
+            "Aave variable-debt token address",
+        )?,
+    };
+
+    let source_key = mapping_slot_address(
+        position.underlying_asset,
+        U256::from(policy.oracle_sources_slot_index),
+    );
+    let (oracle_account, mut oracle_storage) = rpc_account_with_storage(
+        client,
+        rpc_url,
+        policy.oracle_address,
+        &[source_key],
+        block_tag,
+    )?;
+    let source = take_storage(&mut oracle_storage, source_key, "Aave oracle source")?;
+    let source_address = address_from_storage("Aave oracle source", source.value)?;
+    let (proxy_address, source_kind) = match &position.oracle_source {
+        AaveOracleSourcePolicyV1::DirectChainlink { proxy_address } => {
+            anyhow::ensure!(
+                source_address == *proxy_address,
+                "Aave oracle source does not match direct Chainlink policy"
+            );
+            (*proxy_address, AaveOracleSourceProofV1::DirectChainlink)
+        }
+        AaveOracleSourcePolicyV1::CappedStable {
+            adapter_address,
+            chainlink_proxy_address,
+            price_cap_slot_index,
+            ..
+        } => {
+            anyhow::ensure!(
+                source_address == *adapter_address,
+                "Aave oracle source does not match capped-stable policy"
+            );
+            let cap_key = fixed_storage_slot(*price_cap_slot_index);
+            let (adapter_account, mut adapter_storage) =
+                rpc_account_with_storage(client, rpc_url, *adapter_address, &[cap_key], block_tag)?;
+            let price_cap = take_storage(
+                &mut adapter_storage,
+                cap_key,
+                "Aave capped-stable price cap",
+            )?;
+            (
+                *chainlink_proxy_address,
+                AaveOracleSourceProofV1::CappedStable {
+                    adapter_account: Box::new(adapter_account),
+                    price_cap: Box::new(price_cap),
+                },
+            )
+        }
+    };
+
+    let phase_key = fixed_storage_slot(policy.chainlink_proxy_phase_slot_index);
+    let (proxy_account, mut proxy_storage) =
+        rpc_account_with_storage(client, rpc_url, proxy_address, &[phase_key], block_tag)?;
+    let current_phase = take_storage(&mut proxy_storage, phase_key, "Chainlink current phase")?;
+    let aggregator = current_phase_aggregator(current_phase.value)
+        .map_err(|error| anyhow::anyhow!("Chainlink phase decoding failed: {error:?}"))?;
+    let hot_key = fixed_storage_slot(policy.chainlink_hot_vars_slot_index);
+    let (_, mut first_hot_storage) =
+        rpc_account_with_storage(client, rpc_url, aggregator, &[hot_key], block_tag)?;
+    let first_hot = take_storage(&mut first_hot_storage, hot_key, "Chainlink hot variables")?;
+    let latest_round = chainlink_latest_round(first_hot.value)
+        .map_err(|error| anyhow::anyhow!("Chainlink latest round decoding failed: {error:?}"))?;
+    let transmission_key =
+        chainlink_transmission_slot(latest_round, policy.chainlink_transmissions_slot_index);
+    let (aggregator_account, mut aggregator_storage) = rpc_account_with_storage(
+        client,
+        rpc_url,
+        aggregator,
+        &[hot_key, transmission_key],
+        block_tag,
+    )?;
+    let hot_vars = take_storage(&mut aggregator_storage, hot_key, "Chainlink hot variables")?;
+    anyhow::ensure!(
+        hot_vars.value == first_hot.value,
+        "Chainlink hot variables changed within a pinned-block collection"
+    );
+    let transmission = take_storage(
+        &mut aggregator_storage,
+        transmission_key,
+        "Chainlink transmission",
+    )?;
+    Ok(AaveV3PositionProofV1 {
+        position_id: position.position_id.clone(),
+        token_account,
+        user_state_slot_index: position.user_state_slot_index,
+        user_state,
+        reserve,
+        oracle: AaveOraclePriceProofV1 {
+            oracle_account,
+            source,
+            source_kind,
+            chainlink: ChainlinkFeedProofV1 {
+                proxy_account,
+                current_phase,
+                aggregator_account,
+                hot_vars,
+                transmission,
+                decimals: 8,
+            },
+        },
+    })
+}
+
+fn rpc_account_with_storage(
+    client: &Client,
+    rpc_url: &Url,
+    address: Address,
+    keys: &[B256],
+    block_tag: &str,
+) -> Result<(EvmAccountProofV1, BTreeMap<B256, EvmStorageProofV1>)> {
+    let key_params = keys
+        .iter()
+        .map(|key| format!("{key:#x}"))
+        .collect::<Vec<_>>();
+    let rpc_proof: RpcAccountProof = rpc_call(
+        client,
+        rpc_url,
+        "eth_getProof",
+        serde_json::json!([format!("{address:#x}"), key_params, block_tag]),
+    )?;
+    anyhow::ensure!(
+        parse_address("eth_getProof.address", &rpc_proof.address)? == address
+            && rpc_proof.storage_proof.len() == keys.len(),
+        "eth_getProof returned a substituted account or storage set"
+    );
+    let expected = keys
+        .iter()
+        .copied()
+        .collect::<std::collections::BTreeSet<_>>();
+    anyhow::ensure!(
+        expected.len() == keys.len(),
+        "requested storage proof keys contain duplicates"
+    );
+    let mut storage = BTreeMap::new();
+    for item in &rpc_proof.storage_proof {
+        let key = parse_b256("storageProof.key", &item.key)?;
+        anyhow::ensure!(
+            expected.contains(&key) && !storage.contains_key(&key),
+            "eth_getProof returned an unexpected or duplicate storage key"
+        );
+        storage.insert(
+            key,
+            EvmStorageProofV1 {
+                key,
+                value: parse_u256("storageProof.value", &item.value)?,
+                proof: decode_proof_nodes("storageProof", &item.proof)?,
+            },
+        );
+    }
+    let account = rpc_account_proof("account", rpc_proof)?;
+    Ok((account, storage))
+}
+
+fn take_storage(
+    storage: &mut BTreeMap<B256, EvmStorageProofV1>,
+    key: B256,
+    label: &str,
+) -> Result<EvmStorageProofV1> {
+    storage
+        .remove(&key)
+        .with_context(|| format!("{label} proof is missing"))
+}
+
+fn address_from_storage(label: &str, value: U256) -> Result<Address> {
+    let bytes = value.to_be_bytes::<32>();
+    anyhow::ensure!(
+        bytes[..12].iter().all(|byte| *byte == 0),
+        "{label} contains non-address high bits"
+    );
+    Ok(Address::from_slice(&bytes[12..]))
 }
 
 struct EvmSpotOwnerAuthorizationArgs {

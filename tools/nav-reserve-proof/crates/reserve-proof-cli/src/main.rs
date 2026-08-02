@@ -286,7 +286,11 @@ fn main() -> Result<()> {
     }
 }
 
-const MAX_OBSERVATION_JSON_BYTES: u64 = 64 * 1024;
+// Aave state proofs contain many MPT nodes and are carried in both evidence
+// dimensions because one proof verifies quantity and oracle valuation. Keep
+// this below the 8 MiB complete-witness bound while permitting that canonical
+// JSON representation.
+const MAX_OBSERVATION_JSON_BYTES: u64 = 4 * 1024 * 1024;
 #[cfg(feature = "sp1")]
 const MAX_GUEST_ELF_BYTES: usize = 64 * 1024 * 1024;
 #[cfg(feature = "sp1")]

@@ -121,6 +121,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
       - name: Install pinned Rust toolchain and protobuf compiler
         run: |
           rustup toolchain install 1.95.0 --profile minimal --component rustfmt
@@ -146,15 +148,20 @@ jobs:
       - name: Compile the pinned SP1 host integration
         working-directory: tools/nav-reserve-proof
         run: cargo check --locked -p postfiat-reserve-proof --features sp1
-      - name: Rebuild and verify the committed guest identity
+      - name: Rebuild and verify the immutable legacy guest identity
         working-directory: tools/nav-reserve-proof/programs/reserve-proof-guest
         run: |
           export PATH="$HOME/.sp1/bin:$PATH"
           expected_sha="$(jq -r .elf_sha256 ../../program-identity.json)"
           expected_vkey="$(jq -r .program_vkey ../../program-identity.json)"
+          expected_source="$(jq -r .source_commit ../../program-identity.json)"
+          test "$(git cat-file -t "$expected_source")" = commit
+          legacy_workspace="$(mktemp -d)"
+          git archive "$expected_source" | tar -x -C "$legacy_workspace"
           rebuild_dir="$(mktemp -d)"
+          cd "$legacy_workspace/tools/nav-reserve-proof/programs/reserve-proof-guest"
           cargo prove build --docker --tag v6.3.1 --locked \
-            --workspace-directory "$GITHUB_WORKSPACE" \
+            --workspace-directory "$legacy_workspace" \
             --output-directory "$rebuild_dir"
           rebuilt_elf="$rebuild_dir/postfiat-reserve-proof-guest"
           test -s "$rebuilt_elf"
@@ -165,7 +172,7 @@ jobs:
             exit 1
           fi
           cargo run --locked --release \
-            --manifest-path ../../Cargo.toml \
+            --manifest-path "$GITHUB_WORKSPACE/tools/nav-reserve-proof/Cargo.toml" \
             -p postfiat-reserve-proof --features sp1 -- \
             program-info --elf "$rebuilt_elf" \
             > /tmp/postfiat-reserve-program-info.json

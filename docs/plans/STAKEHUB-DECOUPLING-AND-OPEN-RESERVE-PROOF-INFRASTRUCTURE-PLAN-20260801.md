@@ -199,7 +199,7 @@ not yet the desired public architecture.
 
 | A666 source family | Public implementation state | Production-qualified | What remains |
 |---|---|---:|---|
-| Aave on Arbitrum | Provider-neutral verifier implemented; partial | No | Add public collection and fuzzing, run fresh epochs and complete A666 reconciliation, and qualify |
+| Aave on Arbitrum | Provider-neutral verifier and public checkpoint/collection workflow implemented; partial | No | Add governed A666 policy/committee inputs, fuzz, run fresh epochs and complete A666 reconciliation, and qualify |
 | Complete EVM spot set | Provider-neutral quantity verifier and public checkpoint/collection workflow implemented; partial | No | Add the governed A666 policy/committee fixture, bind separately disclosed valuation evidence, fuzz, run fresh epochs and complete A666 reconciliation, and qualify |
 | Hyperliquid | Provider-neutral verifier implemented; partial | No | Add public collection and fuzzing, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
 | Staked NEAR | Provider-neutral quantity verifier implemented; partial | No | Add public collection and fuzzing, reproduce complete historical and fresh epochs, bind separately attested valuation, complete full A666 reconciliation, and qualify |
@@ -209,7 +209,14 @@ not yet the desired public architecture.
 
 The Aave, complete-EVM-spot, Hyperliquid, NEAR, Solana, and Monero verifiers
 pass their source tests and registered guest dispatch tests. Aave reproduces the
-historical A666 collateral and debt results; EVM spot reconstructs every
+historical A666 collateral and debt results. Its public CLI now constructs the
+source checkpoint candidate, emits owner authorization, and collects every
+policy-pinned token, user mapping slot, reserve-index, rate, oracle source,
+Chainlink round, and capped-stable proof from the certified EVM block. During
+collector implementation, the previously witness-selected per-user token
+mapping slot was moved into the policy commitment; substitution now fails
+closed. Aave remains unqualified pending governed A666 inputs, adversarial/fuzz
+coverage, fresh epochs, and reconciliation. EVM spot reconstructs every
 historical native and ERC-20 account/storage proof; Hyperliquid and NEAR
 reconstruct their historical receipt/Merkle evidence; Solana reconstructs the
 historical stake quantities and authority data. Monero reconstructs the real
@@ -229,8 +236,11 @@ relabel RPC snapshots as cryptographic: it publicly verifies the exact position 
 stake/withdraw/vote authorities, state parsing, signer policy, agreement, and
 signatures while retaining an `attested` quantity classification. The
 implementations pass strict verifier-crate lint and the provider-neutral
-shipped-code boundary. They are feature-isolated from the immutable legacy
-guest; its rebuilt ELF hash and vkey remain unchanged. They do not change the
+shipped-code boundary. They are excluded from the immutable legacy profile.
+That identity is reproduced from the exact public source commit pinned beside
+its ELF hash and vkey; current-checkout Cargo metadata is not mistaken for the
+legacy source. The successor receives a distinct identity only after full
+qualification. These changes do not alter the
 `0/6` production-qualification result and cannot be cited as evidence that
 StakeHub is deprecated. Their collectors, fuzz targets, fresh source epochs,
 complete A666 reconciliation, and production qualification remain open.
@@ -534,6 +544,8 @@ existing guest ELF SHA exactly.
   certificate assembly, and validation workflow without centralizing signer
   private keys.
 - [x] Implement and register the public Aave adapter.
+- [x] Implement the public Aave checkpoint candidate, owner authorization,
+  and complete RPC proof collector; policy-pin the user balance mapping slots.
 - [x] Implement and register the complete public EVM spot quantity adapter set.
 - [x] Implement the public complete-EVM-spot checkpoint candidate, owner
   authorization, and multichain RPC collector workflow.
@@ -866,8 +878,8 @@ Then:
 1. Require green exact-tip remote CI for the latest public-adapter commit; fix
    failures without touching live governance or the frozen demonstration
    checkout.
-2. Implement public collectors for Aave, Hyperliquid, NEAR, Solana, and
-   Monero; adversarially qualify the implemented exact-EVM-spot collector.
+2. Implement public collectors for Hyperliquid, NEAR, Solana, and Monero;
+   adversarially qualify the implemented Aave and exact-EVM-spot collectors.
    Each collector must independently
    validate the certified source state before emitting an observation.
 3. Add structured fuzz targets and complete the adversarial matrix in section

@@ -64,10 +64,13 @@ The workspace lockfiles are committed. Production guest builds must use
 is useful for development, but its ELF can embed the host checkout path and
 must never define a registered production identity.
 
-The committed `program-identity.json` pins the expected ELF SHA-256 and SP1
-program vkey. Any guest rebuild used for registration or proof production
-must match both values; a change requires a new immutable proof profile, not
-an in-place reinterpretation of an existing profile.
+The committed `program-identity.json` pins the immutable legacy reference's
+source commit, ELF SHA-256, and SP1 program vkey. CI rebuilds that exact public
+source commit, not the evolving successor checkout. Any guest rebuild used for
+the legacy registration must match both values. The complete public A666
+adapter guest will receive a new identity and proof profile only after all
+source collectors and qualification gates pass; the legacy identity is never
+rewritten in place.
 
 ## Build and test
 
@@ -81,10 +84,11 @@ an in-place reinterpretation of an existing profile.
       --workspace-directory "$repo_root" \
       --output-directory "$repo_root/tools/nav-reserve-proof/elf"
 
-After every build, compare both the ELF SHA-256 and `program-info` vkey with
-`program-identity.json`. CI rebuilds the guest from source and performs both
-comparisons; merely hashing a previously committed ELF is not a reproducible
-build qualification.
+After every legacy build, compare both the ELF SHA-256 and `program-info` vkey
+with `program-identity.json`. CI archives and rebuilds the pinned source commit
+and performs both comparisons; merely hashing a previously committed ELF is
+not a reproducible build qualification. A successor build must instead be
+recorded in a distinct identity artifact and governed as a new proof profile.
 
 ## Reference workflow
 
@@ -220,6 +224,22 @@ No checkpoint, owner, or validator private key enters any proof-kit command.
 RPC credentials may be supplied operationally, but all artifact construction
 and validation semantics are public here. EVM-spot valuation remains a
 separately disclosed evidence dimension.
+
+The Aave V3 adapter exposes the same three public steps under `adapter
+aave-v3`: `checkpoint-candidate`, `owner-authorization`, and `collect`. Its
+governed policy pins the chain, pool and oracle contracts and code hashes,
+complete collateral/debt position set, each aToken or variable-debt-token
+contract, each per-user storage mapping slot, reserve mapping layout,
+Chainlink proxy/aggregator code hashes and storage layout, capped-stable
+adapter and cap slot where applicable, decimals, accrual constants, and price
+freshness. Collection queries only the certified block, proves every account
+and storage value with `eth_getProof`, reconstructs accrued collateral and
+debt conservatively, and verifies the resulting USD values before writing the
+observation. Quantity and valuation both remain cryptographic because the one
+proof includes the reserve indexes and pinned Chainlink/capped-stable oracle
+state. The CLI accepts the expected collateral and liability values as an
+explicit reviewed assertion, then independently recomputes and rejects either
+on any mismatch; it does not trust those values as evidence.
 
 Quantity and valuation remain separate. Derive the exact manifest commitment
 for an Ed25519 attestation or protocol-receipt key first:

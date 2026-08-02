@@ -1,6 +1,8 @@
 {
   "schema": "postfiat.reserve_program_identity.v1",
   "sp1_version": "6.3.1",
+  "source_commit": "bfe0ded03033085ab1db9df274f93cc41d0d2690",
+  "identity_role": "immutable_legacy_reference",
   "elf_sha256": "0f8476431677bfe0a8f9f19db7439abce1a879ba5736cfa3225ae7de4e5b0e52",
   "program_vkey": "0x000c7271e0711abce0c61d293222fd4a144599a779db8cadadc4df35e31a4100"
 }

@@ -7,8 +7,8 @@
       "id": "aave-arbitrum",
       "status": "partial",
       "production_qualified": false,
-      "public_implementation": "tools/nav-reserve-proof/crates/reserve-proof-types/src/aave_v3.rs",
-      "note": "A provider-neutral verifier now checks governed Aave V3 collateral and variable-debt positions, MPT account/storage proofs, reserve indexes, owner authorization, contract code hashes, Chainlink/capped-stable prices and freshness, conservative rounding, liabilities, and guest dispatch. It reproduces the historical A666 collateral and debt values. Public collection, fuzzing, fresh epochs, full A666 reconciliation, and production qualification remain open."
+      "public_implementation": "tools/nav-reserve-proof/crates/reserve-proof-types/src/aave_v3.rs; tools/nav-reserve-proof/crates/reserve-proof-cli/src/evm_adapter.rs",
+      "note": "A provider-neutral verifier now checks governed Aave V3 collateral and variable-debt positions, policy-pinned per-user token mapping slots, MPT account/storage proofs, reserve indexes, owner authorization, contract code hashes, Chainlink/capped-stable prices and freshness, conservative rounding, liabilities, and guest dispatch. Its public workflow constructs the deterministic checkpoint candidate, emits owner authorization, and collects every governed account and storage proof at the certified block. It reproduces the historical A666 collateral and debt values. Governed A666 policy/committee inputs, adversarial and fuzz qualification, fresh epochs, full A666 reconciliation, and production qualification remain open."
     },
     {
       "id": "evm-spot",
