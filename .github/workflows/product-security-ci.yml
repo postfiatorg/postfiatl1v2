@@ -155,6 +155,8 @@ jobs:
           cargo test --locked
           cargo fmt --all -- --check
           python3 ../../scripts/test-a666-build-live-nav-mark-ops.py
+          python3 ../../scripts/test-a666-build-route-epoch-advance.py
+          python3 ../../scripts/test-a666-build-route-migration-control-ops.py
           cargo test --manifest-path contracts/solana-stake-reader/Cargo.toml --locked
           cargo +nightly-2026-07-15 fuzz check --fuzz-dir fuzz --sanitizer none
       - name: Fuzz attacker-controlled reserve proof inputs
