@@ -203,6 +203,7 @@ impl HyperliquidReceiptProofV1 {
         append_bytes(&mut bytes, checkpoint.checkpoint_kind.as_bytes())?;
         append_bytes(&mut bytes, checkpoint.source_domain.as_bytes())?;
         bytes.extend_from_slice(&checkpoint.source_height.to_be_bytes());
+        bytes.extend_from_slice(&checkpoint.source_timestamp_ms.to_be_bytes());
         bytes.extend_from_slice(checkpoint.source_block_hash.as_slice());
         bytes.extend_from_slice(checkpoint.source_state_commitment.as_slice());
         bytes.extend_from_slice(&checkpoint.observed_source_head.to_be_bytes());
@@ -395,6 +396,7 @@ pub fn verify_hyperliquid_receipt_proof_v1(
         .checked_mul(1_000)
         .ok_or(HlReceiptLegError::ArithmeticOverflow)?
         != block_time_ms
+        || checkpoint.source_timestamp_ms != block_time_ms
     {
         return Err(HlReceiptLegError::BadBlockHeader);
     }
@@ -1299,6 +1301,7 @@ mod tests {
             checkpoint_kind: "hyperevm-header".to_string(),
             source_domain: "eip155:999".to_string(),
             source_height: 1_000,
+            source_timestamp_ms: timestamp_seconds * 1_000,
             source_block_hash: block_hash,
             source_state_commitment: B256::repeat_byte(0x55),
             observed_source_head: 1_012,

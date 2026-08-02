@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use sha3::{Digest, Sha3_384};
 
 #[cfg(feature = "a666-public-adapters-v2")]
+pub mod aave_v3;
+#[cfg(feature = "a666-public-adapters-v2")]
 pub mod bft_checkpoint;
 pub mod evm_checkpoint;
 #[cfg(feature = "a666-public-adapters-v2")]
@@ -15,6 +17,10 @@ pub mod hyperliquid_receipt;
 #[cfg(feature = "a666-public-adapters-v2")]
 pub mod near_receipt;
 
+#[cfg(feature = "a666-public-adapters-v2")]
+use aave_v3::{
+    verify_aave_v3_proof_v1, AaveV3ProofV1, AaveV3VerifyContextV1, AAVE_V3_ADAPTER_KIND_V1,
+};
 use evm_checkpoint::{EvmErc20BalanceProofV1, EVM_ERC20_ADAPTER_KIND_V1};
 #[cfg(feature = "a666-public-adapters-v2")]
 use hyperliquid_receipt::{
@@ -170,6 +176,13 @@ pub enum SourceEvidenceV1 {
         evidence_commitment: String,
         proof: Box<NearReceiptQuantityProofV1>,
     },
+    /// Aave V3 collateral, debt, reserve-index, and oracle state proven
+    /// beneath a quorum-certified EVM state root.
+    #[cfg(feature = "a666-public-adapters-v2")]
+    AaveV3 {
+        evidence_commitment: String,
+        proof: Box<AaveV3ProofV1>,
+    },
     AdapterProof {
         evidence_commitment: String,
         proof: Vec<u8>,
@@ -185,9 +198,9 @@ impl SourceEvidenceV1 {
             | Self::EvmErc20BftCheckpointMpt { .. }
             | Self::AdapterProof { .. } => TrustClassV1::Cryptographic,
             #[cfg(feature = "a666-public-adapters-v2")]
-            Self::HyperliquidReceipt { .. } | Self::NearReceiptQuantity { .. } => {
-                TrustClassV1::Cryptographic
-            }
+            Self::HyperliquidReceipt { .. }
+            | Self::NearReceiptQuantity { .. }
+            | Self::AaveV3 { .. } => TrustClassV1::Cryptographic,
         }
     }
 
@@ -218,6 +231,10 @@ impl SourceEvidenceV1 {
                 ..
             }
             | Self::NearReceiptQuantity {
+                evidence_commitment,
+                ..
+            }
+            | Self::AaveV3 {
                 evidence_commitment,
                 ..
             } => evidence_commitment,
@@ -697,6 +714,45 @@ fn verify_evidence(
             .map_err(|error| {
                 format!(
                     "source {} NEAR quantity receipt verification failed: {error:?}",
+                    entry.source_id
+                )
+            })
+        }
+        #[cfg(feature = "a666-public-adapters-v2")]
+        SourceEvidenceV1::AaveV3 {
+            evidence_commitment,
+            proof,
+        } => {
+            if entry.adapter_kind != AAVE_V3_ADAPTER_KIND_V1 || entry.adapter_schema_version != 1 {
+                return Err(format!(
+                    "source {} Aave proof requires {AAVE_V3_ADAPTER_KIND_V1} adapter schema 1",
+                    entry.source_id
+                ));
+            }
+            verify_aave_v3_proof_v1(
+                proof,
+                &AaveV3VerifyContextV1 {
+                    pftl_genesis_hash: &context.pftl_genesis_hash,
+                    nav_asset_id: &context.nav_asset_id,
+                    proof_profile_id: &context.proof_profile_id,
+                    valuation_policy_hash: &context.valuation_policy_hash,
+                    source_manifest_hash: &context.source_manifest_hash,
+                    source_id: &entry.source_id,
+                    source_domain: &entry.source_domain,
+                    asset_or_position_id: &entry.asset_or_position_id,
+                    reserve_owner_commitment: &entry.reserve_owner_commitment,
+                    quantity_verifier_commitment: &entry.quantity_verifier_commitment,
+                    valuation_verifier_commitment: &entry.valuation_verifier_commitment,
+                    observed_at_pftl_height: observation.observed_at_block,
+                    expected_gross_assets: observation.gross_assets,
+                    expected_total_liabilities: observation.total_liabilities,
+                    expected_evidence_commitment: evidence_commitment,
+                },
+            )
+            .map(|_| ())
+            .map_err(|error| {
+                format!(
+                    "source {} {dimension} Aave verification failed: {error:?}",
                     entry.source_id
                 )
             })

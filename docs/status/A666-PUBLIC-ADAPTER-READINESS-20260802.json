@@ -5,10 +5,10 @@
   "required_adapters": [
     {
       "id": "aave-arbitrum",
-      "status": "missing",
+      "status": "partial",
       "production_qualified": false,
-      "public_implementation": null,
-      "note": "Public code does not yet verify the complete Aave collateral, debt, reserve, ownership, and valuation state used by A666."
+      "public_implementation": "tools/nav-reserve-proof/crates/reserve-proof-types/src/aave_v3.rs",
+      "note": "A provider-neutral verifier now checks governed Aave V3 collateral and variable-debt positions, MPT account/storage proofs, reserve indexes, owner authorization, contract code hashes, Chainlink/capped-stable prices and freshness, conservative rounding, liabilities, and guest dispatch. It reproduces the historical A666 collateral and debt values. Public collection, fuzzing, fresh epochs, full A666 reconciliation, and production qualification remain open."
     },
     {
       "id": "evm-spot",

@@ -11,7 +11,7 @@
     "crates/proofs/src/lib.rs": "6ad08dd265fc25958daf6e0ae3d55bbecaa13cdebdcafc9739c2d682d0eb4527",
     "crates/types/src/nav_reserve_public_values.rs": "ffe01da1eefffa33d1f283ba0248e5e7f572e0537b88a794435aa43e2a3c5cf6",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/main.rs": "51a1814847ed3452463672171bbb0c9fbe97546e60020f629189348681e9dfc5",
-    "tools/nav-reserve-proof/crates/reserve-proof-types/src/lib.rs": "24c07cd5bd5f4dda944a98da96550b151ddf0712b13ecec9b349549b521e9893",
+    "tools/nav-reserve-proof/crates/reserve-proof-types/src/lib.rs": "1fb94680c474d9d4ce2b2b5d0309a2468c315f81e97cc5ef9aa8a91a1b11afd3",
     "tools/nav-reserve-proof/programs/reserve-proof-guest/src/main.rs": "1f3caf2e7b1adb64afc14c5f5e81a4690d25a232d116ad95b3e0126420b8c655"
   },
   "systems": [

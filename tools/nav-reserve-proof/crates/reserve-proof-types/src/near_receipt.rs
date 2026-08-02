@@ -540,6 +540,7 @@ pub fn verify_near_receipt_quantity_proof_v1(
     if B256::from(head_hash) != checkpoint.source_block_hash
         || checkpoint.source_height != witness.head.head_height
         || checkpoint.source_height != witness.head.header.height
+        || checkpoint.source_timestamp_ms != witness.head.header.timestamp / 1_000_000
         || witness.head.head_hash != to_base58(&head_hash)
         || witness.head.header.hash != witness.head.head_hash
         || witness.head.head_block_merkle_root != witness.head.header.block_merkle_root
@@ -1811,6 +1812,7 @@ mod tests {
             checkpoint_kind: NEAR_CHECKPOINT_KIND_V1.to_string(),
             source_domain: source_domain.clone(),
             source_height: head.header.height,
+            source_timestamp_ms: head.header.timestamp / 1_000_000,
             source_block_hash: B256::from(head_hash),
             source_state_commitment,
             observed_source_head: head.header.height + 3,

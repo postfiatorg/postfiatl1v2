@@ -37,6 +37,8 @@ pub struct BftSourceCheckpointV1 {
     pub checkpoint_kind: String,
     pub source_domain: String,
     pub source_height: u64,
+    /// Milliseconds since Unix epoch for the certified source block/header.
+    pub source_timestamp_ms: u64,
     pub source_block_hash: B256,
     pub source_state_commitment: B256,
     pub observed_source_head: u64,
@@ -108,6 +110,7 @@ impl BftSourceCheckpointV1 {
         validate_identifier("checkpoint source domain", &self.source_domain)?;
         validate_hex("checkpoint committee root", &self.committee_root, 48)?;
         if self.source_height == 0
+            || self.source_timestamp_ms == 0
             || self.source_block_hash == B256::ZERO
             || self.source_state_commitment == B256::ZERO
             || self.observed_source_head == 0
@@ -129,6 +132,7 @@ impl BftSourceCheckpointV1 {
         append_bytes(&mut bytes, self.checkpoint_kind.as_bytes())?;
         append_bytes(&mut bytes, self.source_domain.as_bytes())?;
         bytes.extend_from_slice(&self.source_height.to_be_bytes());
+        bytes.extend_from_slice(&self.source_timestamp_ms.to_be_bytes());
         bytes.extend_from_slice(self.source_block_hash.as_slice());
         bytes.extend_from_slice(self.source_state_commitment.as_slice());
         bytes.extend_from_slice(&self.observed_source_head.to_be_bytes());
@@ -286,6 +290,7 @@ mod tests {
             checkpoint_kind: "external-head-v1".to_string(),
             source_domain: "example:mainnet".to_string(),
             source_height: 1_000,
+            source_timestamp_ms: 1_785_000_000_000,
             source_block_hash: B256::repeat_byte(0x22),
             source_state_commitment: B256::repeat_byte(0x33),
             observed_source_head: 1_012,

@@ -191,7 +191,7 @@ not yet the desired public architecture.
 
 | A666 source family | Public implementation state | Production-qualified | What remains |
 |---|---|---:|---|
-| Aave on Arbitrum | Missing | No | Public collateral, debt, ownership, state, price, freshness, and liability verification |
+| Aave on Arbitrum | Provider-neutral verifier implemented; partial | No | Add public collection and fuzzing, run fresh epochs and complete A666 reconciliation, and qualify |
 | Complete EVM spot set | Partial | No | The generic ERC-20 MPT adapter exists; the governed A666 token/account set, ownership, valuation, fixtures, and full qualification do not |
 | Hyperliquid | Provider-neutral verifier implemented; partial | No | Add public collection and fuzzing, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
 | Staked NEAR | Provider-neutral quantity verifier implemented; partial | No | Add public collection and fuzzing, reproduce complete historical and fresh epochs, bind separately attested valuation, complete full A666 reconciliation, and qualify |
@@ -199,14 +199,16 @@ not yet the desired public architecture.
 | Monero | Missing | No | Public reserve-proof verifier and collector, fresh ownership challenge, replay protection, zero/nonzero fixtures, fuzzing, and qualification |
 | pfUSDC overlay | Implemented and pushed | Not sufficient by itself | Exact-tip remote CI must pass; this covers only PFTL-accounted subscription reserves, not the six external source families |
 
-The Hyperliquid and NEAR verifiers pass their source tests, registered guest
-dispatch tests, historical receipt/Merkle reconstruction tests, strict
-verifier-crate lint, and the provider-neutral shipped-code boundary. They are
-feature-isolated from the immutable legacy guest; its rebuilt ELF hash and
-vkey remain unchanged. They do not change the `0/6` production-qualification
-result and cannot be cited as evidence that StakeHub is deprecated. Their
-collectors, fuzz targets, fresh source epochs, complete A666 reconciliation,
-and production qualification remain open.
+The Aave, Hyperliquid, and NEAR verifiers pass their source tests and
+registered guest dispatch tests. Aave reproduces the historical A666
+collateral and debt results; Hyperliquid and NEAR reconstruct their historical
+receipt/Merkle evidence. The implementations pass strict verifier-crate lint
+and the provider-neutral shipped-code boundary. They are feature-isolated from
+the immutable legacy guest; its rebuilt ELF hash and vkey remain unchanged.
+They do not change the `0/6` production-qualification result and cannot be
+cited as evidence that StakeHub is deprecated. Their collectors, fuzz targets,
+fresh source epochs, complete A666 reconciliation, and production
+qualification remain open.
 
 ## 4. Required public code boundary
 
