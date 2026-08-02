@@ -299,71 +299,31 @@ not yet the desired public architecture.
 
 | A666 source family | Public implementation state | Production-qualified | What remains |
 |---|---|---:|---|
-| Aave on Arbitrum | Provider-neutral verifier, public checkpoint/collection workflow, and typed candidate policy/committee commitment derived from historical public state proofs implemented; partial | No | Review/tighten the candidate freshness bound, retain production fuzz campaigns, run fresh epochs and complete A666 reconciliation, independently reproduce, and qualify |
-| Complete EVM spot set | Provider-neutral quantity verifier, public checkpoint/collection workflow, public Chainlink state-proof valuation successor, typed two-chain quantity policy, and typed Arbitrum ETH/USD + USDC/USD valuation policy/committee commitments derived from retained historical state proofs implemented; partial | No | Review the candidate freshness bound, collect fresh committee-certified feed proofs, retain production fuzz campaigns, run fresh epochs and complete A666 reconciliation, independently reproduce, and qualify |
-| Hyperliquid | Provider-neutral verifier, public HyperCore receipt-reader contract, unsigned snapshot construction, checkpoint/owner workflow, receipt-proof collector, and exact public-reader deployment implemented; partial | No | Govern policy/committee inputs, fuzz, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
-| Staked NEAR | Provider-neutral quantity verifier, public reader contract, deployed exact Wasm, finalized snapshot invocation, finalized-head checkpoint workflow, owner authorization, outcome/block-proof collector, public Chainlink state-proof valuation successor, adversarial tests, and parser fuzz target implemented; partial | No | Govern quantity policy and committee inputs, collect exact NEAR/USD proofs, retain production fuzz campaigns, reproduce historical and fresh epochs, complete full A666 reconciliation, and qualify |
-| Staked Solana | Public stateless reserve-reader program, exact unsigned transaction construction, finalized transaction/block collector, immutable exact-build mainnet deployment, program identity check, owner authorization, BFT source checkpoint, bounded parser, successor verifier, guest dispatch, public Chainlink state-proof valuation successor, adversarial tests, parser fuzz target, and independently repeated reproducible SBF build implemented; partial. The old attested-RPC adapter remains separately labeled historical evidence. | No | Publish governed A666 quantity policy and committee inputs, collect exact SOL/USD proofs, retain production fuzz campaigns, run fresh epochs, reconcile, independently reproduce, and qualify |
-| Monero | Provider-neutral cryptographic quantity verifier, context-bound challenge, public ReserveProofV2 parser, transaction/block/header collector, certified key-image status workflow, typed mainnet reserve policy, typed Optimism XMR/USD Chainlink state-proof valuation policy, and first live six-validator nonzero observation implemented; partial | No | Collect a second fresh epoch, retain production fuzz campaigns, reconcile, independently reproduce, and qualify |
-| pfUSDC overlay | Implemented and pushed | Not sufficient by itself | Exact-tip remote CI must pass; this covers only PFTL-accounted subscription reserves, not the six external source families |
+| Aave on Arbitrum | Public collector and verifier bind checkpoint, owner, positions, token mapping slots, reserve indexes, rates, code, prices, liabilities, and conservative valuation. Two fresh governed epochs reproduce nonzero collateral and debt with distinct cryptographic commitments; retained fuzz passed. | No | Verify both aggregate Groth16 proofs, close exact controlled migration/lifecycle evidence, and record the final per-source qualification decision. |
+| Complete EVM spot set | Public multichain account/storage proof collector and quantity verifier plus policy-pinned Chainlink state-proof valuation. Two fresh governed epochs reproduce the complete position set and prices with distinct cryptographic commitments; retained fuzz passed. | No | Verify both aggregate Groth16 proofs, close exact controlled migration/lifecycle evidence, and record the final per-source qualification decision. |
+| Hyperliquid | Public reader contract, unsigned snapshot construction, BFT checkpoint/owner workflow, receipt-proof collector, receipt-trie verifier, and exact reader identity. Two fresh governed epochs produce distinct cryptographic receipt commitments; retained fuzz passed. | No | Verify both aggregate Groth16 proofs, close exact controlled migration/lifecycle evidence, and record the final per-source qualification decision. |
+| Staked NEAR | Public stateless reader, exact deployed Wasm identity, finalized invocation, checkpoint/owner workflow, outcome/block proof verification, and Chainlink state-proof valuation. Two fresh governed epochs produce distinct cryptographic quantity/valuation commitments; retained fuzz passed. | No | Verify both aggregate Groth16 proofs, close exact controlled migration/lifecycle evidence, and record the final per-source qualification decision. |
+| Staked Solana | Public stateless reader, reproducible immutable SBF identity, finalized transaction/block collector, program identity and authority checks, BFT checkpoint, and Chainlink state-proof valuation. Two fresh governed epochs produce cryptographic commitments; retained fuzz passed. The historical signed-RPC adapter remains separately labeled attested and is not used by the successor. | No | Verify both aggregate Groth16 proofs, close exact controlled migration/lifecycle evidence, and record the final per-source qualification decision. |
+| Monero | Public ReserveProofV2, transaction/RingCT/ownership/inclusion/header and key-image-status verification plus Chainlink state-proof valuation. Two fresh governed nonzero epochs produce distinct cryptographic quantity/valuation commitments; retained fuzz passed. | No | Verify both aggregate Groth16 proofs, close exact controlled migration/lifecycle evidence, and record the final per-source qualification decision. |
+| pfUSDC overlay | Provider-neutral finalized PFTL route/vault/supply derivation and version-2 packet binding are implemented. Exact NAV, supply, precision, overlay, source root, valuation root, and packet hash tampering fail closed. | Not sufficient by itself | Use fresh six-validator snapshots after the base proof completes, then exercise the exact controlled and live migration gates. |
 
-The Aave, complete-EVM-spot, Hyperliquid, NEAR, Solana, and Monero verifiers
-pass their source tests and registered guest dispatch tests. Aave reproduces the
-historical A666 collateral and debt results. Its public CLI now constructs the
-source checkpoint candidate, emits owner authorization, and collects every
-policy-pinned token, user mapping slot, reserve-index, rate, oracle source,
-Chainlink round, and capped-stable proof from the certified EVM block. During
-collector implementation, the previously witness-selected per-user token
-mapping slot was moved into the policy commitment; substitution now fails
-closed. Aave remains unqualified pending governed A666 inputs, adversarial/fuzz
-coverage, fresh epochs, and reconciliation. EVM spot reconstructs every
-historical native and ERC-20 account/storage proof; Hyperliquid and NEAR
-reconstruct their historical receipt/Merkle evidence; Solana reconstructs the
-historical stake quantities and authority data. Its successor uses a public
-reader transaction whose exact message, ordered accounts, canonical output,
-reader program-data hash, absent upgrade authority, slot, owner signature,
-and quorum-certified finalized checkpoint are verified in public code. This
-is cryptographic relative to the disclosed BFT checkpoint, not direct Solana
-consensus verification. Monero reconstructs the real
-historical nonzero transaction/RingCT/ownership/inclusion proof and also
-verifies a synthetic context-bound zero-reserve test vector without treating
-an aggregate amount signature as proof. Its public collector parses the wallet
-ReserveProofV2 and collects complete transactions, Merkle inclusion, bounded
-header anchors, and certified key-image status. Its production path still
-lacks a fresh governed nonzero header-chain/spent-status proof and separate
-XMR/USD valuation evidence. The EVM spot adapter proves
-reserve quantities only and deliberately leaves USD prices in the separately
-declared valuation trust dimension. That dimension now has a public
-`evm-chainlink-state-proof-valuation-v1` successor: it reruns the registered
-quantity verifier, proves policy-pinned Chainlink feed state beneath a
-quorum-certified EVM state root, applies governed haircuts, and recomputes the
-aggregate valuation with checked conservative rounding. It accepts neither an
-operator-signed aggregate value nor an RPC-returned price as proof. The
-candidate A666 EVM-spot policy now pins the Arbitrum ETH/USD and USDC/USD
-proxy/aggregator identities proven in the retained historical Aave witness,
-and derives verifier commitment
-`39f33f6763ff108f7f6ab88e50325a3438125ef2ebaa88fc23d2059c43b61103335269d1dca231117d6a5b187084ade6`.
-Fresh committee-certified price proofs and freshness-policy review remain
-open. The EVM
-spot public CLI constructs deterministic
-per-chain checkpoint candidates from pinned RPC heights, supports independent
-checkpoint voting and assembly, emits the exact owner-authorization statement,
-and collects the complete native/ERC-20 proof set from an exact reviewed RPC
-map. It is still unqualified until governed A666 inputs, adversarial/fuzz
-coverage, fresh epochs, and reconciliation exist. The Solana implementation
-does not relabel the old RPC snapshots: that adapter remains `attested`, while
-the distinct reserve-reader adapter is classified `cryptographic` only under
-its policy-pinned public reader and BFT checkpoint. It is still partial and
-cannot satisfy `G3` until the deployment and qualification gates pass. The
-implementations pass strict verifier-crate lint and the provider-neutral
-shipped-code boundary. They are excluded from the immutable legacy profile.
-That identity is reproduced from the exact public source commit pinned beside
-its ELF hash and vkey; current-checkout Cargo metadata is not mistaken for the
-legacy source. The successor receives a distinct identity only after full
-qualification. These changes do not alter the
-`0/6` production-qualification result and cannot be cited as evidence that
-StakeHub is deprecated. Their collectors, fuzz targets, fresh source epochs,
-complete A666 reconciliation, and production qualification remain open.
+The public successor no longer lacks collectors, governed A666 inputs, fresh
+epochs, valuation proofs, or retained fuzz evidence. Those prerequisites are
+published in
+`tools/nav-reserve-proof/qualifications/a666-public-successor-20260802/`.
+Every source has two independently collected bounded inputs and two distinct
+quantity/valuation commitments. Both complete witnesses execute under the
+immutable successor guest and report six cryptographic quantity claims, six
+cryptographic valuation claims, zero attested value, and zero controlled
+value. A clean public checkout reproduced the witnesses and public values.
+
+The remaining `0/6` result is deliberate: source implementation evidence is
+not the same as production activation. The two CPU Groth16 proofs, exact
+nonzero-supply six-validator migration, overlay-aware packet rehearsal,
+complete transparent/private/export/return lifecycle, rollback, and final
+clean public reproduction must still pass. Until those gates close, none of
+the six rows may be marked production-qualified and StakeHub is not
+deprecated.
 
 ### 3.5 First complete live public shadow epoch
 
@@ -401,10 +361,11 @@ attested and controlled value are both zero. The canonical CBOR witness is
 The 584-byte public values have SHA-256
 `d02a243f6cf684843ffb7cdf458c0dc41daa9799b0b9d966cbb71875e22953f6`.
 
-This is a qualification milestone, not production qualification or live
-activation. A second independently collected fresh epoch, retained fuzz
-campaigns, independent reproduction, successor guest build/proof, complete
-NAV/supply reconciliation, and the controlled migration gates remain open.
+This was a qualification milestone, not production qualification or live
+activation. At that checkpoint the second fresh epoch and retained fuzz were
+still open; Section 3.6 records their subsequent completion. Aggregate proof
+verification, complete NAV/supply/overlay reconciliation, and the controlled
+migration gates remain open.
 
 ### 3.6 Fresh public epochs 7 and 8 and immutable successor identity
 
@@ -662,8 +623,10 @@ mainnet at `0xddb4ed1edf1f0d81f7531cddb27810080601a2cb` in transaction
 `0xcad045dbe7edcdbccbcdebae357525fd0bb5fe86e53f3b5a72417a92c5e37237`.
 Its 5,729-byte runtime has the pinned Keccak-256
 `c252f32acd9fdcfe2b4f9b1d70c3de17acf83649a6313fc3ab9155bca1010db3`.
-Governed A666 policy/committee inputs, fuzz qualification, fresh epochs, and
-full A666 reconciliation remain open.
+The governed A666 policy/committee inputs are published, two fresh epochs
+carry distinct receipt commitments, and the retained fuzz campaign passed.
+Aggregate Groth16 verification and the controlled migration/lifecycle gates
+remain before production qualification.
 
 The current A666 shadow marks Hyperliquid quantity and valuation as attested.
 That is not equivalent to the historical receipt validation and cannot be the
@@ -723,11 +686,10 @@ registry feed, live aggregator, exact code hashes and OCR2 storage slots,
 committee, valuation context, decimals, and haircut. Its verifier commitment is
 `260ce714ab04e1f1d48676a0067b9a58894d4dc5673bd0f5356491ab90f6c2703071348906f362e17eb8f735dcb63015`.
 The deployment identity now exists and is publicly pinned. Governed quantity
-inputs, a fresh
-committee-certified NEAR/USD proof, freshness-bound review, fresh multi-epoch
-collection, full A666 reconciliation, and independent production qualification
-remain open. Therefore this implementation does not yet make the staked-NEAR
-source production-qualified.
+inputs and NEAR/USD proofs are published in two fresh governed epochs with
+distinct cryptographic commitments, and the retained fuzz campaign passed.
+Aggregate Groth16 verification and the controlled migration/lifecycle gates
+remain. Therefore this implementation is not yet production-qualified.
 
 The current A666 shadow marks staked-NEAR quantity as attested. That is not
 equivalent to the historical receipt/light-client validation.
@@ -785,7 +747,8 @@ persists anti-equivocation state, and exports only its vote. This proves the
 source values relative to the disclosed BFT checkpoint; it does not claim
 direct Solana consensus verification.
 
-This code is still partial. A `solana-verify` 0.5.1 build under the exact
+The public implementation and immutable deployment are complete. A
+`solana-verify` 0.5.1 build under the exact
 published Docker image digest was repeated and produced the same executable
 program hash, raw ELF hash, and byte length. That identity is machine checked
 by `scripts/check-solana-stake-reader-identity`. A typed candidate Ethereum
@@ -798,11 +761,11 @@ as program `Gp2oTn6VjFF22n98H6YSH4uVvQxWFHNCL7pp1tcAPF36`, with ProgramData
 account `9xVv6Q8Z1AJsK4aWKydhYyEGeA7Ai8k6t3gpreR7QBh8` and no upgrade authority.
 The on-chain bytes match raw ELF SHA-256
 `af70e82df3f1d519da5c5c7ddb62ab594d7babdd95dbc67c1692c2d6cea96716`.
-Governed quantity inputs, a fresh committee-certified SOL/USD proof,
-freshness-bound review, fresh
-multi-epoch collection, full A666 reconciliation, and independent production
-reproduction remain open.
-Therefore staked Solana remains `0/1` qualified and does not make `G3` pass.
+Governed quantity inputs and SOL/USD proofs are published in two fresh epochs
+with cryptographic commitments, the clean checkout reproduced them, and the
+retained fuzz campaign passed. Aggregate Groth16 verification and the
+controlled migration/lifecycle gates remain. Therefore staked Solana remains
+`0/1` production-qualified and does not yet make `G3` pass.
 
 ### 5.6 Monero reserves
 
@@ -861,9 +824,10 @@ checkpoint, the Optimism XMR/USD Chainlink state proof valued XMR at
 `$363.352`, and the resulting `$56.02533208` source observation passed the
 public aggregate verifier. No aggregate amount attestation was used.
 
-The adapter must still pass a second fresh epoch, retained fuzz campaigns,
-independent reproduction, complete A666 reconciliation, and successor-profile
-qualification before it can be activated in production.
+The adapter now has a second fresh nonzero epoch, distinct quantity and
+valuation commitments, retained fuzz evidence, and clean-checkout
+reproduction. Aggregate Groth16 verification and the controlled
+migration/lifecycle gates remain before production qualification.
 
 ### 5.7 pfUSDC NAV-subscription reserve overlay
 
@@ -958,11 +922,12 @@ existing guest ELF SHA exactly.
   transaction/block collector, owner authorization, source checkpoint,
   successor verifier, bounded parser, and guest dispatch described in section
   5.5; keep the interim signed-RPC adapter explicitly attested.
-- [ ] Publish governed A666 Solana policy/committee/valuation inputs, retain
-  production fuzz campaigns, reproduce fresh epochs, reconcile the complete
-  A666 profile, and qualify it independently. The exact reader build and
-  immutable mainnet-beta deployment are complete; this combined qualification
-  item remains open.
+- [x] Publish governed A666 Solana policy/committee/valuation inputs, retain
+  the production fuzz campaign, reproduce two fresh epochs, and reconcile the
+  complete A666 profile. The exact reader build and immutable mainnet-beta
+  deployment are also complete.
+- [ ] Record the final independent Solana production-qualification decision
+  after both aggregate proofs and the controlled lifecycle gates pass.
 - [x] Implement and register the public XMR reserve-proof quantity adapter.
 - [x] Implement the public Monero reserve-proof, header-chain, transaction
   inclusion, ownership, and key-image spent-status collector for zero and
@@ -986,8 +951,9 @@ existing guest ELF SHA exactly.
   separately tests the successor reader transaction/program identity; Monero
   reconstructs a retained nonzero reserve proof and context-bound zero vector.
   Per-adapter tests reject policy, owner, position, omission, duplicate,
-  freshness, proof, checkpoint, and value substitutions. Longer retained fuzz
-  campaigns and fresh production artifacts remain separate qualification gates.
+  freshness, proof, checkpoint, and value substitutions. The retained
+  ten-target campaign and two fresh production-shaped epochs subsequently
+  passed as recorded in Sections 3.6 and 10.2.
 - [x] Add the initial coverage-guided full-witness and tagged source-evidence
   fuzz harness, guarded temporary-corpus runner, and fixed-duration CI smoke
   campaigns. The first local campaigns completed 1,860,664 full-witness and
@@ -1000,13 +966,15 @@ existing guest ELF SHA exactly.
   ReserveProofV2/transactions, and source-checkpoint committee/vote/certificate
   material. A clean nine-target smoke campaign on 2026-08-02 completed
   4,010,896 executions without a crash, timeout, or OOM. This closes target
-  coverage, not the retained per-source production fuzz qualification below.
-- [ ] Prove malformed or unsupported adapter evidence fails closed without
-  panic or unbounded work.
+  coverage; the retained campaign below subsequently closed the longer fuzz
+  prerequisite.
+- [x] Prove malformed or unsupported adapter evidence fails closed without
+  panic or unbounded work. The ten-target retained campaign completed
+  `326,405,841` executions with no crash, timeout, or OOM.
 
 ### Phase 3 — build the source-equivalent A666 profile
 
-- [ ] Create a public A666 source manifest selecting the real adapter for each
+- [x] Create a public A666 source manifest selecting the real adapter for each
   quantity and valuation dimension.
 - [x] Implement the generic typed manifest builder. It derives reserve-owner,
   quantity-verifier, valuation-verifier, and haircut commitments from the
@@ -1017,8 +985,8 @@ existing guest ELF SHA exactly.
   policy/manifest source drift, missing committees, unsupported integrated
   valuation, valuation context drift, and any price-row/quantity-position or
   decimal mismatch.
-  The actual governed A666 input bundle remains open until the public reader
-  deployments and real policy values are complete.
+  The governed A666 input bundle and exact public reader identities are now
+  published in the successor qualification fixture.
 - [x] Publish the typed six-source A666 candidate portfolio valuation policy
   and its independently derivable hash
   `350eaee0a1ca12ba51637781ba52661b8685f868657a7c5e7d07c31b2899869c`.
@@ -1039,9 +1007,9 @@ existing guest ELF SHA exactly.
   commitment
   `39f33f6763ff108f7f6ab88e50325a3438125ef2ebaa88fc23d2059c43b61103335269d1dca231117d6a5b187084ade6`.
   Tests match its feed identities to the retained historical Aave state proofs.
-  These remain unqualified candidates; fresh committee-certified feed proofs,
-  freshness-bound review, reconciliation, and independent qualification remain
-  open.
+  Two fresh committee-certified proof sets now use these policies and reconcile
+  under the successor guest. Final independent production qualification remains
+  open pending aggregate proof and controlled lifecycle gates.
 - [x] Publish typed Monero quantity and Optimism XMR/USD valuation candidate
   policies. The quantity policy derives the spend and view keys from the public
   mainnet reserve address and matches the tracked real nonzero proof fixture. Its
@@ -1053,10 +1021,10 @@ existing guest ELF SHA exactly.
   is
   `7451679e24a92e5839545f42b51619acaac98ecb304e1d5826eb90db1de0e5e1aea4490974550bae5880a1fd945e34c6`.
   The public provenance record pins the official registry commit and the
-  independently queried Optimism block/state root. This remains an unqualified
-  candidate pending fresh committee certificates, the context-bound nonzero
-  wallet proof, collected price proof, freshness review, reconciliation, and
-  independent reproduction.
+  independently queried Optimism block/state root. Two fresh context-bound
+  nonzero quantity/price proofs now reconcile under the successor guest. Final
+  production qualification remains open pending aggregate proof and controlled
+  lifecycle gates.
 - [x] Publish typed NEAR/USD and SOL/USD Chainlink valuation candidates. The
   NEAR policy uses the active Arbitrum feed because the registry-listed
   Ethereum NEAR/USD proxy is decommissioned; the Solana policy uses the active
@@ -1067,10 +1035,11 @@ existing guest ELF SHA exactly.
   `260ce714ab04e1f1d48676a0067b9a58894d4dc5673bd0f5356491ab90f6c2703071348906f362e17eb8f735dcb63015`
   and
   `1ae3bf34e5433836b81710c6c5d41b0ec46c469c15d8a21e6ac735893676104fe5465af51441980dfee00ce01e274756`.
-  The corresponding public NEAR and Solana quantity policies are now published
-  against the exact deployed reader identities. Fresh committee-certified
-  quantity and price proofs, freshness review, reconciliation, and independent
-  qualification remain open.
+  The corresponding public NEAR and Solana quantity policies are published
+  against the exact deployed reader identities. Two fresh committee-certified
+  quantity and price proof sets now reconcile under the successor guest. Final
+  production qualification remains open pending aggregate proof and controlled
+  lifecycle gates.
 - [x] Derive and publish the candidate source-checkpoint committee from the
   public six-validator PFTL registry. The generic builder accepts only
   ML-DSA-65 public keys, canonicalizes validator ordering, rejects quorums
@@ -1079,26 +1048,26 @@ existing guest ELF SHA exactly.
   committee root
   `99b0a3b8af49f3c91537d24a698e47f5761eec65890d00cdc4070ec99b18b333dfe514199c258cda5b81bec33821e245`.
   It contains no validator private keys.
-- [ ] Preserve or strengthen historical cryptographic trust classifications.
-- [ ] Eliminate operator-signed aggregate quantity, liability, and NAV inputs;
+- [x] Preserve or strengthen historical cryptographic trust classifications.
+- [x] Eliminate operator-signed aggregate quantity, liability, and NAV inputs;
   permit signed external data only under the exact restrictions in section 2.
-- [ ] Implement and bind public valuation evidence for every non-pfUSDC source;
+- [x] Implement and bind public valuation evidence for every non-pfUSDC source;
   a quantity proof without its governed price does not establish NAV.
-- [ ] Bind reserve owners, verifier keys/committees, source domains, position
+- [x] Bind reserve owners, verifier keys/committees, source domains, position
   identities, freshness policies, haircuts, and valuation policy.
-- [ ] Rebuild the canonical SP1 guest in the pinned Docker toolchain.
-- [ ] Reproduce the ELF hash and vkey from independent checkout paths.
-- [ ] Register nothing live; first derive the immutable candidate profile ID
+- [x] Rebuild the canonical SP1 guest in the pinned Docker toolchain.
+- [x] Reproduce the ELF hash and vkey from independent checkout paths.
+- [x] Register nothing live; first derive the immutable candidate profile ID
   and publish its complete manifest and program identity for review.
 
 ### Phase 4 — source-by-source qualification
 
 - [ ] Reconstruct at least two historical A666 epochs with the public adapters
   where source artifacts remain available.
-- [ ] Compare each public adapter output against the historical source result,
+- [x] Compare each public adapter output against the historical source result,
   not merely the aggregate NAV.
 - [ ] Explain and govern every conservative difference.
-- [ ] Reject any unexplained trust downgrade.
+- [x] Reject any unexplained trust downgrade.
 - [x] Run at least two fresh A666 shadow epochs from newly collected source
   artifacts without StakeHub.
 - [ ] Verify gross assets, liabilities, net assets, trust buckets, supply,
@@ -1108,9 +1077,9 @@ existing guest ELF SHA exactly.
   exact floor NAV, supply, overlay roots, valuation roots, and packet identity
   from canonical proof and finalized PFTL inputs.
 - [ ] Construct overlay-aware reserve packets with the public CLI.
-- [ ] Prove wrong source, owner, profile, vkey, policy, manifest, epoch,
+- [x] Prove wrong source, owner, profile, vkey, policy, manifest, epoch,
   interval, valuation, overlay, and proof substitutions fail.
-- [ ] Preserve the old profile and packets as immutable historical records.
+- [x] Preserve the old profile and packets as immutable historical records.
 
 CPU proof production is sufficient for correctness qualification. CUDA or an
 authenticated network prover is a separate operational-throughput gate and
@@ -1266,7 +1235,7 @@ Repository and pushed implementation tip at this update:
 ```text
 repository: /home/postfiat/repos/a666-eth-fast-lane-combined-20260724
 branch: feature/pnok-private-fix
-tip: 0c942aef3d7b067c649b054395c00721dda09346
+tip: 843554ba23bf8dc11c4d42e7547c6241d4e6da89
 remote: origin/feature/pnok-private-fix
 ```
 
@@ -1283,6 +1252,8 @@ c53e872 Refresh reserve proof source inventory
 d5e4476 Rehearse exact A666 public proof migration
 4a450e2 Publish fresh A666 public qualification epochs
 0c942ae Derive A666 public NAV packets fail closed
+92f17ff Test A666 successor against live supply shape
+843554b Exercise reserve packet tamper boundaries
 ```
 
 The worktree has no tracked modification at this checkpoint. It still contains
@@ -1380,6 +1351,13 @@ boundary gate, and the complete transparent route lifecycle regression pass.
 The exact live-state overlay-aware packet is still pending the completed
 Groth16 proof and fresh pre-migration fleet snapshots.
 
+The version-2 derivation path was also exercised against the real epoch-7
+public values and the last observed A666 supply. With a deliberately synthetic
+overlay root and the last observed `21,032,560,900` USD-e8 overlay value, it
+derived NAV `0.90413834` and a content-bound 48-byte packet hash. This proves
+the arithmetic and binding path only; the synthetic root is not a migration
+artifact and cannot be submitted.
+
 ### 10.4 Long proof and controlled migration status
 
 The epoch-7 CPU Groth16 proof remains active under the supervised service:
@@ -1403,7 +1381,10 @@ The ignored exact migration test is committed at
 `crates/node/tests/atomic_swap_local_six.rs`. It binds the exact A666 asset,
 genesis, successor profile, proof paths, six independent validators, finality,
 restart, snapshot/import, and replay. It has compiled in release mode but has
-not yet run because the epoch-7 proof is not complete.
+not yet run because the epoch-7 proof is not complete. Commit `92f17ff`
+removed its zero-supply bootstrap shortcut: the rehearsal now recreates the
+known `31,597,197,455`-atom A666 supply and requires the proof-derived
+pre-overlay NAV floor `0.89748188`.
 
 The broader provider-neutral controlled route test passes transparent
 subscribe, export, return/refund, replay, malformed input, restart-state, and
@@ -1413,10 +1394,11 @@ issue/redeem, export/return, outage, pause, rollback, and conservation checks.
 
 ### 10.5 CI and live-state truth
 
-Exact-tip product-security CI for `0c942ae` must complete green before any
-release or live migration. Run `30770170862` covers prior tip `4a450e2`;
-all completed jobs were green at the last check, while the open proof-kit job
-was still running. An older green run is not evidence for the new tip. The
+Exact-tip product-security CI for `843554b` must complete green before any
+release or live migration. Run `30771049323` covers that exact tip. Run
+`30770789317` covers prior tip `fa017e1`; its public-tree inventory correction
+passed, while its open proof-kit job was still running at the last check. An
+older green run is not evidence for the current tip. The
 official Ethereum fork job may accurately record that no mainnet RPC secret is
 configured; that skipped real-value assertion is not source qualification.
 
@@ -1454,7 +1436,7 @@ Execute in this order:
 1. Preserve and monitor
    `pft-a666-public-reserve-proof-epoch7-bounded`; do not start another
    high-memory proof concurrently.
-2. Require exact-tip CI for `0c942ae` to finish green. Fix any failure,
+2. Require exact-tip CI for `843554b` to finish green. Fix any failure,
    commit, push, and require the replacement exact-tip run to pass.
 3. When epoch 7 completes, independently run `packet verify`, compare the
    public values byte-for-byte with the committed epoch-7 pins, hash every
