@@ -622,6 +622,25 @@ operator's secret manager. The remote prover receives only the bounded witness
 and ELF; the CLI locally verifies every returned proof before writing it and
 never gives the prover a PFTL or Ethereum signing key.
 
+The SP1 6.3.1 default local worker topology can exceed 100 GiB while wrapping a
+large multi-source witness. On a 128 GiB host, use the checked-in bounded-memory
+launcher instead of setting only `RAYON_NUM_THREADS`; SP1 core, recursion,
+deferred, and queue worker counts are separate controls:
+
+```bash
+scripts/nav-reserve-proof-cpu-bounded \
+  --witness "$RUN/witness.cbor" \
+  --elf "$KIT/elf/postfiat-reserve-proof-guest" \
+  --output-dir "$RUN/proof"
+```
+
+`--dry-run` prints the exact environment and command. The launcher deliberately
+overrides inherited SP1 worker settings with the reviewed bounded profile. It
+changes throughput and memory use only; the CLI still locally verifies the
+same Groth16 proof before writing it. For a proof that must survive terminal or
+agent restarts, run this command under an ordinary supervised service and
+retain the service result plus output hashes in the qualification evidence.
+
 `packet build` combines reviewed packet metadata, proof calldata, and decoded
 public values into a validated `NavReserveSubmitOperation`. Obtain an ordinary
 PFTL asset fee quote and sign it locally with `postfiat-node

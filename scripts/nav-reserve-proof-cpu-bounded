@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+"""Run the pinned SP1 CPU prover with a bounded-memory worker topology."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_PROVER = ROOT / "tools/nav-reserve-proof/target/release/postfiat-reserve-proof"
+
+BOUNDED_ENVIRONMENT = {
+    "SP1_PROVER": "cpu",
+    "RAYON_NUM_THREADS": "6",
+    "MALLOC_ARENA_MAX": "1",
+    "SP1_WORKER_NUM_SPLICING_WORKERS": "1",
+    "SP1_WORKER_SPLICING_BUFFER_SIZE": "1",
+    "SP1_WORKER_NUMBER_OF_SEND_SPLICE_WORKERS_PER_SPLICE": "1",
+    "SP1_WORKER_SEND_SPLICE_INPUT_BUFFER_SIZE_PER_SPLICE": "1",
+    "SP1_WORKER_GLOBAL_MEMORY_BUFFER_SIZE": "1",
+    "SP1_WORKER_NUM_CORE_WORKERS": "2",
+    "SP1_WORKER_CORE_BUFFER_SIZE": "1",
+    "SP1_WORKER_NUM_SETUP_WORKERS": "1",
+    "SP1_WORKER_SETUP_BUFFER_SIZE": "1",
+    "SP1_WORKER_NORMALIZE_PROGRAM_CACHE_SIZE": "1",
+    "SP1_WORKER_NUM_PREPARE_REDUCE_WORKERS": "1",
+    "SP1_WORKER_PREPARE_REDUCE_BUFFER_SIZE": "1",
+    "SP1_WORKER_NUM_RECURSION_EXECUTOR_WORKERS": "1",
+    "SP1_WORKER_RECURSION_EXECUTOR_BUFFER_SIZE": "1",
+    "SP1_WORKER_NUM_RECURSION_PROVER_WORKERS": "1",
+    "SP1_WORKER_RECURSION_PROVER_BUFFER_SIZE": "1",
+    "SP1_WORKER_NUM_DEFERRED_WORKERS": "1",
+    "SP1_WORKER_DEFERRED_BUFFER_SIZE": "1",
+    "SP1_WORKER_NUMBER_OF_GAS_EXECUTORS": "1",
+    "SP1_WORKER_GAS_EXECUTOR_BUFFER_SIZE": "1",
+}
+
+
+def bounded_environment(base: dict[str, str] | None = None) -> dict[str, str]:
+    environment = dict(os.environ if base is None else base)
+    environment.update(BOUNDED_ENVIRONMENT)
+    return environment
+
+
+def build_command(
+    *, prover: Path, witness: Path, elf: Path, output_dir: Path
+) -> list[str]:
+    return [
+        str(prover),
+        "prove",
+        "--witness",
+        str(witness),
+        "--elf",
+        str(elf),
+        "--output-dir",
+        str(output_dir),
+    ]
+
+
+def existing_file(parser: argparse.ArgumentParser, value: str, label: str) -> Path:
+    path = Path(value).expanduser().resolve()
+    if not path.is_file():
+        parser.error(f"{label} does not exist or is not a file: {path}")
+    return path
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run the pinned SP1 CPU prover with bounded core, recursion, deferred, "
+            "and queue concurrency for hosts with 128 GiB RAM."
+        )
+    )
+    parser.add_argument("--witness", required=True)
+    parser.add_argument("--elf", required=True)
+    parser.add_argument("--output-dir", required=True)
+    parser.add_argument("--prover", default=str(DEFAULT_PROVER))
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print the exact environment and command without starting the prover",
+    )
+    args = parser.parse_args()
+
+    prover = existing_file(parser, args.prover, "prover")
+    if not os.access(prover, os.X_OK):
+        parser.error(f"prover is not executable: {prover}")
+    witness = existing_file(parser, args.witness, "witness")
+    elf = existing_file(parser, args.elf, "ELF")
+    output_dir = Path(args.output_dir).expanduser().resolve()
+    command = build_command(
+        prover=prover,
+        witness=witness,
+        elf=elf,
+        output_dir=output_dir,
+    )
+    environment = bounded_environment()
+
+    if args.dry_run:
+        print(
+            json.dumps(
+                {
+                    "schema": "postfiat.nav-reserve-cpu-bounded-command.v1",
+                    "environment": {
+                        key: environment[key] for key in sorted(BOUNDED_ENVIRONMENT)
+                    },
+                    "command": command,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return
+
+    os.execvpe(command[0], command, environment)
+
+
+if __name__ == "__main__":
+    main()
