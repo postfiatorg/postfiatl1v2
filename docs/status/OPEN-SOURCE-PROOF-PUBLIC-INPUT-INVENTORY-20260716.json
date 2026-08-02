@@ -12,7 +12,7 @@
     "crates/types/src/nav_reserve_public_values.rs": "ffe01da1eefffa33d1f283ba0248e5e7f572e0537b88a794435aa43e2a3c5cf6",
     "crates/ethereum-contracts/src/HyperCoreReserveReader.sol": "29eb7f908bd7fca14c1970c56835c0e77911b55f0d9ed0a15c75565b81662d26",
     "deployments/a666-mainnet-20260727/12-opening-export-proof-snapshot/validator_registry.json": "d78f507c0d3eebfb6955fa62ded40a91ade99a3c2ec28cfc0efd1a8365ffd942",
-    "scripts/check-a666-public-reader-candidates": "5e335e8ccd2fc3671297676dcb069482efc14ce1c5c80dc78fa3edb525fcf3d1",
+    "scripts/check-a666-public-reader-candidates": "d4e98b50b7d8634aef66064197844853d07292937a78f8c7af97a41b7e146b00",
     "scripts/check-a666-portfolio-valuation-policy": "6dd27caf1e6745c5108af87471c5dd0c5ebe35c54bea14411e983003e99495aa",
     "scripts/check-nav-reserve-proof-fuzz-smoke": "d9bae0c68f8448eba9c99092546a7780026b277901980bec56730b5d66418d79",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/lib.rs": "d76313dbdd8bb16e587987d169951a37007c36711840ed1474cb3f8fa7f05389",
@@ -58,7 +58,7 @@
     "tools/nav-reserve-proof/manifests/a666/checkpoint-committee.json": "4e1242c38c1a8cff83184983872e4fb171ebe24001ca82a7d15edddf483e1ea7",
     "tools/nav-reserve-proof/manifests/a666/portfolio-valuation-policy.json": "aa1cb95cdf7db2bc9d2c48277425df239400bafaa4f23eef5014ae578b9e7278",
     "tools/nav-reserve-proof/manifests/a666/portfolio-valuation-policy-hash.json": "23c902e112064c5e9d21382a78064a46fd5ab63a30e37a1fad4ec038df1207b2",
-    "tools/nav-reserve-proof/manifests/a666/reader-deployment-candidates.json": "cf8de1d91e2bad3ee0c8fa485b4c35c6c84dc304dce972f5d9702024c5cb391e"
+    "tools/nav-reserve-proof/manifests/a666/reader-deployment-candidates.json": "1e732241abf6ef3280a5a783c8bc2e53058c0f73e339210f834b862d6a3715dd"
   },
   "systems": [
     {

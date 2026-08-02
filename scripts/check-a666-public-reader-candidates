@@ -28,10 +28,15 @@ test "${hyper_hash#0x}" = "$(jq -r .hyperliquid.candidate_runtime_keccak256 "$id
 
 rustup target add wasm32-unknown-unknown >/dev/null 2>&1
 # Rust and dependency panic locations otherwise embed runner-specific absolute
-# paths in the Wasm. Remap both the checkout and toolchain/cache home so the
-# deployment artifact is identical across independent builders.
-near_rustflags="--remap-path-prefix=$repo_root=/workspace/postfiatl1v2 --remap-path-prefix=$HOME=/workspace/home"
-RUSTFLAGS="$near_rustflags" cargo build \
+# paths in the Wasm. Remap the checkout, toolchain/cache home, and an installed
+# rust-src tree to the compiler's canonical /rustc/<commit> source prefix. The
+# last mapping matters on builders which have the optional rust-src component.
+near_toolchain="1.95.0"
+near_rust_sysroot="$(rustc +"$near_toolchain" --print sysroot)"
+near_rust_commit="$(rustc +"$near_toolchain" -Vv | awk '/^commit-hash:/{print $2}')"
+test -n "$near_rust_commit"
+near_rustflags="--remap-path-prefix=$repo_root=/workspace/postfiatl1v2 --remap-path-prefix=$HOME=/workspace/home --remap-path-prefix=$near_rust_sysroot/lib/rustlib/src/rust=/rustc/$near_rust_commit"
+RUSTFLAGS="$near_rustflags" cargo +"$near_toolchain" build \
   --manifest-path "$repo_root/tools/nav-reserve-proof/contracts/near-stake-reader/Cargo.toml" \
   --target wasm32-unknown-unknown \
   --release \

@@ -1116,16 +1116,17 @@ scripts/check-provider-neutral-wallet-boundary
 scripts/check-a666-public-reader-candidates
   passed locally; the hardened HyperEVM runtime, public NEAR Wasm, and
   reproducible Solana SBF identities match their pinned candidate artifacts.
-  The NEAR release build remaps checkout and toolchain/cache paths before
-  compilation; independent archive checkouts at different absolute paths
-  reproduced the same 147678-byte artifact, SHA-256
-  `68713935d27592d5450eda6dc402825701f621b361010239cc1f1049923e7c17`,
-  and NEAR code hash `82hY643BJFaqysTmPoWMaPQHzSZzxKSWH8ECxvCH1mQJ`.
+  The NEAR release build pins Rust 1.95.0 and remaps checkout, toolchain/cache,
+  and optional local `rust-src` paths to the compiler's canonical source
+  prefix. Independent archive checkouts and the clean GitHub runner reproduced
+  the same 147398-byte artifact, SHA-256
+  `013fec10bba9cd623af8800c465f702f50e5950cc13443799c7a8661940dd01d`,
+  and NEAR code hash `5swZhNNqpD6HsqFXhNjRUiSYoXtnkWPipiW8hRbrkbN`.
   This is a build-identity gate, not a deployment qualification. Public chain
   checks on 2026-08-02 prove that the historical HyperEVM reader runtime
   (`0x7e4007...74f8`) differs from the public candidate (`0xc252f3...0db3`),
   the historical NEAR reader code (`4mdew...wUhx`) differs from the public
-  candidate (`82hY...mQJ`), and the Solana candidate remains undeployed.
+  candidate (`5swZ...kbN`), and the Solana candidate remains undeployed.
 
 public Solidity suite after HyperCore reader addition
   143 passed, 0 failed
