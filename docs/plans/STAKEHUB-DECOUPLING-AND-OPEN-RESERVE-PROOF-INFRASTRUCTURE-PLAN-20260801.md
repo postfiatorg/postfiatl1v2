@@ -277,8 +277,8 @@ not yet the desired public architecture.
 | Aave on Arbitrum | Provider-neutral verifier, public checkpoint/collection workflow, and typed candidate policy/committee commitment derived from historical public state proofs implemented; partial | No | Review/tighten the candidate freshness bound, retain production fuzz campaigns, run fresh epochs and complete A666 reconciliation, independently reproduce, and qualify |
 | Complete EVM spot set | Provider-neutral quantity verifier, public checkpoint/collection workflow, public Chainlink state-proof valuation successor, typed two-chain quantity policy, and typed Arbitrum ETH/USD + USDC/USD valuation policy/committee commitments derived from retained historical state proofs implemented; partial | No | Review the candidate freshness bound, collect fresh committee-certified feed proofs, retain production fuzz campaigns, run fresh epochs and complete A666 reconciliation, independently reproduce, and qualify |
 | Hyperliquid | Provider-neutral verifier, public HyperCore receipt-reader contract, unsigned snapshot construction, checkpoint/owner workflow, and receipt-proof collector implemented; partial | No | Deploy the hardened public reader, govern policy/committee inputs, fuzz, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
-| Staked NEAR | Provider-neutral quantity verifier, public reader contract, unsigned invocation construction, finalized-head checkpoint workflow, owner authorization, outcome/block-proof collector, and public Chainlink state-proof valuation successor implemented; partial | No | Deploy the public reader, govern quantity/valuation policy and committee inputs, collect exact NEAR/USD proofs, add fuzzing, reproduce historical and fresh epochs, complete full A666 reconciliation, and qualify |
-| Staked Solana | Public stateless reserve-reader program, exact unsigned transaction construction, finalized transaction/block collector, immutable program identity check, owner authorization, BFT source checkpoint, bounded parser, successor verifier, guest dispatch, public Chainlink state-proof valuation successor, and independently repeated reproducible SBF build implemented; partial. The old attested-RPC adapter remains separately labeled historical evidence. | No | Deploy the exact built reader immutably, publish its on-chain ProgramData identity and governed A666 quantity/valuation policy and committee inputs, collect exact SOL/USD proofs, fuzz, run fresh epochs, reconcile, independently reproduce, and qualify |
+| Staked NEAR | Provider-neutral quantity verifier, public reader contract, unsigned invocation construction, finalized-head checkpoint workflow, owner authorization, outcome/block-proof collector, public Chainlink state-proof valuation successor, adversarial tests, and parser fuzz target implemented; partial | No | Deploy the public reader, govern quantity policy and committee inputs, collect exact NEAR/USD proofs, retain production fuzz campaigns, reproduce historical and fresh epochs, complete full A666 reconciliation, and qualify |
+| Staked Solana | Public stateless reserve-reader program, exact unsigned transaction construction, finalized transaction/block collector, immutable program identity check, owner authorization, BFT source checkpoint, bounded parser, successor verifier, guest dispatch, public Chainlink state-proof valuation successor, adversarial tests, parser fuzz target, and independently repeated reproducible SBF build implemented; partial. The old attested-RPC adapter remains separately labeled historical evidence. | No | Deploy the exact built reader immutably, publish its on-chain ProgramData identity and governed A666 quantity policy and committee inputs, collect exact SOL/USD proofs, retain production fuzz campaigns, run fresh epochs, reconcile, independently reproduce, and qualify |
 | Monero | Provider-neutral cryptographic quantity verifier, context-bound challenge, public ReserveProofV2 parser, transaction/block/header collector, certified key-image status workflow, typed mainnet reserve policy, and typed Optimism XMR/USD Chainlink state-proof valuation policy implemented; partial | No | Review the candidate freshness bound, produce a fresh governed nonzero proof and independently signed Monero and Optimism checkpoints, collect the exact XMR/USD proof, fuzz, reconcile, independently reproduce, and qualify |
 | pfUSDC overlay | Implemented and pushed | Not sufficient by itself | Exact-tip remote CI must pass; this covers only PFTL-accounted subscription reserves, not the six external source families |
 
@@ -830,9 +830,23 @@ existing guest ELF SHA exactly.
   valuation adapter and collector that reruns the registered EVM-spot, NEAR,
   Solana-reader, or Monero quantity verifier and derives the exact valued
   amount and governed haircut without an aggregate operator attestation.
-- [ ] Remove all provider-specific hash domains and compiled operator identities
-  from successor semantics.
-- [ ] Add public fixtures and adversarial tests for every adapter.
+- [x] Remove all provider-specific hash domains and compiled operator identities
+  from successor semantics. CI rejects the internal provider name anywhere in
+  the public proof-kit tree. The successor commits typed governed owners,
+  committees, reader identities, source domains, and policy fields supplied by
+  public manifests; it does not compile a private service identity or opaque
+  provider hash into verification. The retained Aave state proof used for
+  policy reproduction is published under a neutral, integrity-inventoried
+  fixture path.
+- [x] Add public fixtures and adversarial tests for every adapter. Aave and EVM
+  spot reconstruct retained account/storage proofs; Hyperliquid reconstructs a
+  retained header, receipt trie, and payload; NEAR reconstructs retained
+  outcome/block Merkle evidence; Solana reconstructs retained stake state and
+  separately tests the successor reader transaction/program identity; Monero
+  reconstructs a retained nonzero reserve proof and context-bound zero vector.
+  Per-adapter tests reject policy, owner, position, omission, duplicate,
+  freshness, proof, checkpoint, and value substitutions. Longer retained fuzz
+  campaigns and fresh production artifacts remain separate qualification gates.
 - [x] Add the initial coverage-guided full-witness and tagged source-evidence
   fuzz harness, guarded temporary-corpus runner, and fixed-duration CI smoke
   campaigns. The first local campaigns completed 1,860,664 full-witness and
@@ -1098,14 +1112,14 @@ Attempting a live proof-profile migration before `G3`–`G5` pass is prohibited.
 
 ## 10. Exact continuation state
 
-Repository and branch:
+Repository and branch at this update:
 
 ```text
 /home/postfiat/repos/a666-eth-fast-lane-combined-20260724
 feature/pnok-private-fix
-pushed baseline before the current valuation continuation:
-3183350 Pin Solana reader artifact identity
-origin/feature/pnok-private-fix matched that baseline when this continuation began
+pushed implementation baseline covered by this documentation update:
+ff62947 Remove internal provenance paths from proof kit
+origin/feature/pnok-private-fix contained that baseline before this document-only update
 ```
 
 Frozen demonstration checkout — do not modify:
@@ -1140,6 +1154,17 @@ aef4ce8 Prove reserve valuations from public chain state
 dfce1ff Enforce one canonical StakeHub deprecation plan
 4024dea Fuzz public reserve proof inputs
 b4447c8 Fuzz every public reserve proof parser
+f2aaa29 Derive governed reserve manifests from public policies
+55e6bb5 Pin public A666 reader and committee inputs
+687962f Sign public reserve checkpoints safely
+6f75e64 Make NEAR reader build path-independent
+a3649db Derive A666 valuation policy from public inputs
+5c2d773 Normalize NEAR reader rust source paths
+500f7b6 Publish A666 Aave and EVM spot policies
+bbc72fb Bind A666 EVM spot valuation to Chainlink proofs
+78b52bd Publish public A666 Monero reserve policies
+a7b81ce Publish A666 NEAR and Solana valuation policies
+ff62947 Remove internal provenance paths from proof kit
 ```
 
 This work implements the pfUSDC overlay, provider-neutral source checkpoint
@@ -1157,7 +1182,7 @@ Current machine gates:
 ```text
 scripts/test-proof-public-input-inventory
   passed after the current valuation continuation; 5 systems, 70 public fields,
-  68 source hashes
+  75 source hashes
 
 scripts/check-nav-reserve-proof-fuzz-smoke
   passed locally against guarded temporary corpora. In addition to the initial
@@ -1190,6 +1215,16 @@ scripts/check-a666-public-reader-candidates
   (`0x7e4007...74f8`) differs from the public candidate (`0xc252f3...0db3`),
   the historical NEAR reader code (`4mdew...wUhx`) differs from the public
   candidate (`5swZ...kbN`), and the Solana candidate remains undeployed.
+
+public deployment prerequisites on the current host
+  are absent: no HyperEVM deployment signer, funded NEAR deployment account,
+  funded Solana deployment keypair, validator checkpoint-signing keys, or
+  reserve-owner signing keys are available to this checkout; the `near` and
+  `solana` deployment CLIs are also not installed. The exact public reader
+  artifacts are built and pinned, but fabricating deployment identities or
+  copying private keys into this repository is prohibited. HyperEVM, NEAR, and
+  Solana policy finalization and fresh certified epochs therefore require the
+  authorized external signers and funded deployment accounts.
 
 public Solidity suite after HyperCore reader addition
   143 passed, 0 failed
