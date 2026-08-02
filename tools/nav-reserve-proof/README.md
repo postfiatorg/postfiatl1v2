@@ -210,6 +210,23 @@ never gives the prover a PFTL or Ethereum signing key.
 public values into a validated `NavReserveSubmitOperation`. Obtain an ordinary
 PFTL asset fee quote and sign it locally with `postfiat-node
 wallet-sign-asset-transaction`; the proof kit never receives an issuer key.
+
+The packet template accepts two optional, backward-compatible fields for a
+consensus-accounted NAV subscription reserve overlay:
+
+    "subscription_overlay_source_root": "<48-byte lowercase hex>",
+    "subscription_overlay_value": <nonzero u64>
+
+When both are present, `packet build` derives the versioned composite source
+root over the proven public values and the overlay using the shared consensus
+helper (`postfiat.nav_reserve_subscription_composite_source_root.v1` in
+`postfiat-types`), requires the template's `source_root` to equal that exact
+composite root, and sets the packet's `verified_net_assets` to the base proof
+assets plus the overlay value with checked arithmetic. When the fields are
+absent or defaulted, the original proof-only behavior is unchanged. See
+`fixtures/controlled-two-source/packet-template-subscription-overlay.json`
+for a worked overlay template against the qualified controlled-two-source
+public values; the CLI test suite pins that fixture's composite root.
 Then submit the signed transaction to one or more validator endpoints:
 
     cargo run --locked -p postfiat-reserve-proof -- \

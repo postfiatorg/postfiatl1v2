@@ -209,6 +209,54 @@ impl NavReservePublicValuesV1 {
     }
 }
 
+/// Derive the exact consensus source root and total assets for a reserve proof
+/// plus a PFTL-accounted NAV-subscription overlay. Keeping this construction
+/// beside the canonical public-values codec prevents the public proof kit and
+/// validator execution from drifting on an immutable packet hash input.
+pub fn nav_reserve_subscription_composite_source_root_v1(
+    values: &NavReservePublicValuesV1,
+    overlay_source_root: &str,
+    overlay_value: u64,
+) -> Result<(String, u64), String> {
+    values.validate()?;
+    validate_fixed_lower_hex(
+        "subscription_overlay_source_root",
+        overlay_source_root,
+        48,
+    )?;
+    if overlay_value == 0 {
+        return Err("subscription overlay value must be nonzero".to_string());
+    }
+    let total = values
+        .verified_net_assets
+        .checked_add(overlay_value)
+        .ok_or_else(|| "subscription overlay value overflows verified net assets".to_string())?;
+    let encoded = values.encode()?;
+    let public_values_hash = hash_hex_domain(
+        "postfiat.nav_reserve_public_values_hash.v1",
+        &encoded,
+    );
+    let preimage = format!(
+        "asset_id={}\nprofile_id={}\nsource_manifest_hash={}\nproof_source_observation_root={}\npublic_values_hash={}\nproof_verified_net_assets={}\nsubscription_overlay_source_root={}\nsubscription_overlay_value={}\ntotal_verified_net_assets={}\n",
+        values.nav_asset_id,
+        values.proof_profile_id,
+        values.source_manifest_hash,
+        values.source_observation_root,
+        public_values_hash,
+        values.verified_net_assets,
+        overlay_source_root,
+        overlay_value,
+        total,
+    );
+    Ok((
+        hash_hex_domain(
+            "postfiat.nav_reserve_subscription_composite_source_root.v1",
+            preimage.as_bytes(),
+        ),
+        total,
+    ))
+}
+
 pub fn nav_reserve_valuation_unit_id(valuation_unit: &str) -> Result<String, String> {
     validate_text_field("nav reserve valuation unit", valuation_unit)?;
     Ok(hash_hex_domain(
@@ -389,5 +437,42 @@ mod nav_reserve_public_values_tests {
             nav_reserve_valuation_unit_id("NOK:6")
         );
         assert!(nav_reserve_valuation_unit_id("").is_err());
+    }
+
+    #[test]
+    fn nav_reserve_subscription_composite_root_has_stable_vector_and_bounds() {
+        let value = fixture();
+        let overlay_root = "0b".repeat(48);
+        let (root, total) = nav_reserve_subscription_composite_source_root_v1(
+            &value,
+            &overlay_root,
+            75,
+        )
+        .expect("valid subscription overlay");
+        assert_eq!(total, 1_000_075);
+        assert_eq!(
+            root,
+            "de231528d015f5f4b7290b59837e343d13fc4b392dcd0beab8d87ba2959470c2173a413ae94b2c53dc2a16af21063ab4"
+        );
+        assert!(nav_reserve_subscription_composite_source_root_v1(
+            &value,
+            &overlay_root,
+            0,
+        )
+        .is_err());
+        assert!(nav_reserve_subscription_composite_source_root_v1(&value, "0b", 75).is_err());
+
+        let mut overflowing = value;
+        overflowing.gross_assets = u64::MAX;
+        overflowing.total_liabilities = 0;
+        overflowing.verified_net_assets = u64::MAX;
+        overflowing.cryptographically_verified_value = u64::MAX;
+        overflowing.attested_value = 0;
+        assert!(nav_reserve_subscription_composite_source_root_v1(
+            &overflowing,
+            &overlay_root,
+            1,
+        )
+        .is_err());
     }
 }

@@ -9,9 +9,9 @@ use std::{
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use postfiat_types::{
-    AssetTransactionOperation, NavProfileRegisterOperation, NavProofProfile,
-    NavReservePublicValuesV1, NavReserveSubmitOperation, SignedAssetTransaction,
-    DEFAULT_MAX_NAV_SP1_PROOF_BYTES,
+    nav_reserve_subscription_composite_source_root_v1, AssetTransactionOperation,
+    NavProfileRegisterOperation, NavProofProfile, NavReservePublicValuesV1,
+    NavReserveSubmitOperation, SignedAssetTransaction, DEFAULT_MAX_NAV_SP1_PROOF_BYTES,
 };
 use reserve_proof_types::{
     execute_reserve_proof, opaque_commitment, ReserveProofContextV1, ReserveProofWitnessV1,
@@ -191,6 +191,14 @@ struct PacketTemplateV1 {
     source_root: String,
     attestor_root: String,
     reserve_packet_hash: String,
+    /// Optional consensus-accounted NAV subscription reserve. When present,
+    /// `source_root` must be the exact composite root over the proof public
+    /// values and this overlay, and the packet carries base proof assets plus
+    /// the overlay value. This is the A666/pfUSDC primary-market shape.
+    #[serde(default)]
+    subscription_overlay_source_root: Option<String>,
+    #[serde(default)]
+    subscription_overlay_value: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -615,36 +623,86 @@ fn packet_build(
     let values =
         NavReservePublicValuesV1::decode(&public_values_bytes).map_err(anyhow::Error::msg)?;
     anyhow::ensure!(
-        template.source_root == values.source_observation_root,
-        "packet template source root does not match proven public values"
-    );
-    anyhow::ensure!(
         template.attestor_root == values.valuation_trust_root,
         "packet template attestor root does not match proven valuation trust root"
     );
-    let operation = NavReserveSubmitOperation {
-        issuer: template.issuer,
-        submitter: template.submitter,
-        asset_id: values.nav_asset_id,
-        epoch: values.observation_epoch,
-        nav_per_unit: template.nav_per_unit,
-        circulating_supply: template.circulating_supply,
-        verified_net_assets: values.verified_net_assets,
-        proof_profile: values.proof_profile_id,
-        source_root: values.source_observation_root,
-        attestor_root: values.valuation_trust_root,
-        reserve_packet_hash: template.reserve_packet_hash,
-        reserve_accounts: Vec::new(),
-        sp1_proof_bytes: read_bounded(
+    let operation = build_packet_operation(
+        template,
+        &values,
+        read_bounded(
             &proof_path,
             DEFAULT_MAX_NAV_SP1_PROOF_BYTES as usize,
             "SP1 Groth16 calldata",
         )?,
-        sp1_public_values: public_values_bytes,
-    };
+        public_values_bytes,
+    )?;
     operation.validate().map_err(anyhow::Error::msg)?;
     write_new(&output, &serde_json::to_vec_pretty(&operation)?)?;
     Ok(())
+}
+
+fn build_packet_operation(
+    template: PacketTemplateV1,
+    values: &NavReservePublicValuesV1,
+    proof_bytes: Vec<u8>,
+    public_values_bytes: Vec<u8>,
+) -> Result<NavReserveSubmitOperation> {
+    let (source_root, verified_net_assets) = match template.subscription_overlay_source_root {
+        Some(overlay_root) => {
+            anyhow::ensure!(
+                overlay_root.len() == 96
+                    && overlay_root
+                        .bytes()
+                        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)),
+                "subscription overlay source root must be 48-byte lowercase hex"
+            );
+            anyhow::ensure!(
+                template.subscription_overlay_value != 0,
+                "subscription overlay value must be nonzero when its source root is present"
+            );
+            let encoded = values.encode().map_err(anyhow::Error::msg)?;
+            anyhow::ensure!(
+                encoded == public_values_bytes,
+                "decoded public values do not round-trip to the supplied canonical bytes"
+            );
+            nav_reserve_subscription_composite_source_root_v1(
+                values,
+                &overlay_root,
+                template.subscription_overlay_value,
+            )
+            .map_err(anyhow::Error::msg)?
+        }
+        None => {
+            anyhow::ensure!(
+                template.subscription_overlay_value == 0,
+                "subscription overlay value requires a source root"
+            );
+            (
+                values.source_observation_root.clone(),
+                values.verified_net_assets,
+            )
+        }
+    };
+    anyhow::ensure!(
+        template.source_root == source_root,
+        "packet template source root does not match proven public values and subscription overlay"
+    );
+    Ok(NavReserveSubmitOperation {
+        issuer: template.issuer,
+        submitter: template.submitter,
+        asset_id: values.nav_asset_id.clone(),
+        epoch: values.observation_epoch,
+        nav_per_unit: template.nav_per_unit,
+        circulating_supply: template.circulating_supply,
+        verified_net_assets,
+        proof_profile: values.proof_profile_id.clone(),
+        source_root,
+        attestor_root: values.valuation_trust_root.clone(),
+        reserve_packet_hash: template.reserve_packet_hash,
+        reserve_accounts: Vec::new(),
+        sp1_proof_bytes: proof_bytes,
+        sp1_public_values: public_values_bytes,
+    })
 }
 
 const MAX_PFTL_RPC_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
@@ -897,5 +955,87 @@ mod tests {
     fn packet_rpc_address_rejects_url_schemes() {
         assert!(resolve_rpc_address("http://127.0.0.1:28650").is_err());
         assert!(resolve_rpc_address("127.0.0.1:28650").is_ok());
+    }
+
+    fn qualified_public_values() -> (NavReservePublicValuesV1, Vec<u8>) {
+        let bytes = hex::decode(
+            include_str!(
+            "../../../../../crates/execution/testdata/nav-reserve-v1-qualified-public-values.hex"
+        )
+            .trim(),
+        )
+        .expect("decode qualified public-values fixture");
+        let values =
+            NavReservePublicValuesV1::decode(&bytes).expect("decode qualified public-values ABI");
+        (values, bytes)
+    }
+
+    fn packet_template(source_root: String) -> PacketTemplateV1 {
+        PacketTemplateV1 {
+            schema: "postfiat.reserve_packet_template.v1".to_string(),
+            issuer: "pf1111111111111111111111111111111111111111".to_string(),
+            submitter: "pf2222222222222222222222222222222222222222".to_string(),
+            nav_per_unit: 1,
+            circulating_supply: 0,
+            source_root,
+            attestor_root:
+                "cb34590e25db391724491b01795dee8bdbbadba3bba36fb5fc4f96bce1a87fa311426e0b76ce5ff4d775b091d94147df"
+                    .to_string(),
+            reserve_packet_hash: "55".repeat(48),
+            subscription_overlay_source_root: None,
+            subscription_overlay_value: 0,
+        }
+    }
+
+    #[test]
+    fn packet_builder_preserves_proof_only_shape() {
+        let (values, bytes) = qualified_public_values();
+        let template = packet_template(values.source_observation_root.clone());
+        let operation = build_packet_operation(template, &values, vec![1], bytes)
+            .expect("proof-only packet operation");
+        assert_eq!(operation.source_root, values.source_observation_root);
+        assert_eq!(operation.verified_net_assets, values.verified_net_assets);
+    }
+
+    #[test]
+    fn packet_builder_constructs_and_checks_subscription_overlay() {
+        let (values, bytes) = qualified_public_values();
+        let overlay_root = "0b".repeat(48);
+        let overlay_value = 500;
+        let (composite_root, total) = nav_reserve_subscription_composite_source_root_v1(
+            &values,
+            &overlay_root,
+            overlay_value,
+        )
+        .expect("derive composite root");
+        let mut template = packet_template(composite_root.clone());
+        template.subscription_overlay_source_root = Some(overlay_root);
+        template.subscription_overlay_value = overlay_value;
+        let operation = build_packet_operation(template, &values, vec![1], bytes.clone())
+            .expect("overlay packet operation");
+        assert_eq!(operation.source_root, composite_root);
+        assert_eq!(operation.verified_net_assets, total);
+
+        let mut mismatched = packet_template("ff".repeat(48));
+        mismatched.subscription_overlay_source_root = Some("0b".repeat(48));
+        mismatched.subscription_overlay_value = overlay_value;
+        assert!(build_packet_operation(mismatched, &values, vec![1], bytes).is_err());
+    }
+
+    #[test]
+    fn subscription_overlay_fixture_template_builds_expected_packet() {
+        let (values, bytes) = qualified_public_values();
+        let template: PacketTemplateV1 = serde_json::from_str(include_str!(
+            "../../../fixtures/controlled-two-source/packet-template-subscription-overlay.json"
+        ))
+        .expect("parse subscription overlay packet-template fixture");
+        let expected_root = template.source_root.clone();
+        let operation = build_packet_operation(template, &values, vec![1], bytes)
+            .expect("fixture overlay packet operation");
+        assert_eq!(operation.source_root, expected_root);
+        assert_eq!(
+            operation.verified_net_assets,
+            values.verified_net_assets + 500
+        );
     }
 }

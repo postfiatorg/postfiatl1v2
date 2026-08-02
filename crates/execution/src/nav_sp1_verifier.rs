@@ -1,7 +1,7 @@
 use postfiat_types::{
     AGGREGATE_PUBLIC_VALUES_V2_SCHEMA_VERSION, DEFAULT_MAX_NAV_SP1_PROOF_BYTES,
     DEFAULT_MAX_NAV_SP1_PUBLIC_VALUES_BYTES, NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1,
-    NavReservePublicValuesV1,
+    NavReservePublicValuesV1, nav_reserve_subscription_composite_source_root_v1,
 };
 #[cfg(test)]
 use postfiat_types::NAV_SP1_POLICY_HASH_HEX_LEN;
@@ -264,33 +264,13 @@ pub fn validate_nav_reserve_public_values_context(
         return Err(NavSp1VerifyError::PublicValuesMismatch);
     }
     let expected_source_root = if let Some(overlay_root) = context.subscription_overlay_source_root {
-        let total = values
-            .verified_net_assets
-            .checked_add(context.subscription_overlay_value)
-            .ok_or(NavSp1VerifyError::PublicValuesDecode)?;
-        let encoded = values
-            .encode()
-            .map_err(|_| NavSp1VerifyError::PublicValuesDecode)?;
-        let public_values_hash = hash_hex(
-            "postfiat.nav_reserve_public_values_hash.v1",
-            &encoded,
-        );
-        let preimage = format!(
-            "asset_id={}\nprofile_id={}\nsource_manifest_hash={}\nproof_source_observation_root={}\npublic_values_hash={}\nproof_verified_net_assets={}\nsubscription_overlay_source_root={}\nsubscription_overlay_value={}\ntotal_verified_net_assets={}\n",
-            values.nav_asset_id,
-            profile.profile_id,
-            values.source_manifest_hash,
-            values.source_observation_root,
-            public_values_hash,
-            values.verified_net_assets,
+        nav_reserve_subscription_composite_source_root_v1(
+            values,
             overlay_root,
             context.subscription_overlay_value,
-            total,
-        );
-        hash_hex(
-            "postfiat.nav_reserve_subscription_composite_source_root.v1",
-            preimage.as_bytes(),
         )
+        .map_err(|_| NavSp1VerifyError::PublicValuesDecode)?
+        .0
     } else {
         if context.subscription_overlay_value != 0 {
             return Err(NavSp1VerifyError::SourceRootMismatch);
