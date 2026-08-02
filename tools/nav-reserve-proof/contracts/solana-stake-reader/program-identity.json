@@ -1,0 +1,13 @@
+{
+  "schema": "postfiat-solana-stake-reader-program-identity-v1",
+  "source_commit": "ce9c6e0e0157396a01b7bc2aa96c08b4c97fc6cd",
+  "solana_sdk_version": "3.0.0",
+  "solana_verify_version": "0.5.1",
+  "solana_verify_image": "solanafoundation/solana-verifiable-build@sha256:2fc14309065785484919e85cdc40136c8e8f6f074e9d3d087f7a08015d9733a9",
+  "sbpf_arch": "v0",
+  "library_name": "postfiat_solana_stake_reader",
+  "executable_program_hash": "1e0290cc9faa3b440b41e15e15f33ef34afcef4cc0cf65a719ab64fab4abad62",
+  "raw_elf_sha256": "af70e82df3f1d519da5c5c7ddb62ab594d7babdd95dbc67c1692c2d6cea96716",
+  "raw_elf_bytes": 33120,
+  "deployment_status": "not_deployed"
+}

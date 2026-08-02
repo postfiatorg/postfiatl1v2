@@ -273,7 +273,7 @@ not yet the desired public architecture.
 | Complete EVM spot set | Provider-neutral quantity verifier and public checkpoint/collection workflow implemented; partial | No | Add the governed A666 policy/committee fixture, bind separately disclosed valuation evidence, fuzz, run fresh epochs and complete A666 reconciliation, and qualify |
 | Hyperliquid | Provider-neutral verifier, public HyperCore receipt-reader contract, unsigned snapshot construction, checkpoint/owner workflow, and receipt-proof collector implemented; partial | No | Deploy the hardened public reader, govern policy/committee inputs, fuzz, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
 | Staked NEAR | Provider-neutral quantity verifier, public reader contract, unsigned invocation construction, finalized-head checkpoint workflow, owner authorization, and outcome/block-proof collector implemented; partial | No | Deploy the public reader, govern policy/committee inputs, add fuzzing, reproduce complete historical and fresh epochs, bind governed public NEAR/USD valuation evidence under section 2, complete full A666 reconciliation, and qualify |
-| Staked Solana | Public stateless reserve-reader program, exact unsigned transaction construction, finalized transaction/block collector, immutable program identity check, owner authorization, BFT source checkpoint, bounded parser, successor verifier, and guest dispatch implemented; partial. The old attested-RPC adapter remains separately labeled historical evidence. | No | Build the reader with the pinned Solana SBF toolchain, deploy it immutably, publish governed A666 policy/committee/valuation inputs, fuzz, run fresh epochs, reconcile, independently reproduce, and qualify |
+| Staked Solana | Public stateless reserve-reader program, exact unsigned transaction construction, finalized transaction/block collector, immutable program identity check, owner authorization, BFT source checkpoint, bounded parser, successor verifier, guest dispatch, and independently repeated reproducible SBF build implemented; partial. The old attested-RPC adapter remains separately labeled historical evidence. | No | Deploy the exact built reader immutably, publish its on-chain ProgramData identity and governed A666 policy/committee/valuation inputs, fuzz, run fresh epochs, reconcile, independently reproduce, and qualify |
 | Monero | Provider-neutral cryptographic quantity verifier, context-bound challenge, public ReserveProofV2 parser, transaction/block/header collector, and certified key-image status workflow implemented; partial | No | Produce a fresh governed nonzero proof and independently signed checkpoint, bind separately disclosed XMR/USD valuation evidence, fuzz, complete A666 reconciliation, independently reproduce, and qualify |
 | pfUSDC overlay | Implemented and pushed | Not sufficient by itself | Exact-tip remote CI must pass; this covers only PFTL-accounted subscription reserves, not the six external source families |
 
@@ -631,12 +631,14 @@ evidence. No Solana, reserve-owner, or validator private key enters the proof
 kit. This proves the source values relative to the disclosed BFT checkpoint;
 it does not claim direct Solana consensus verification.
 
-This code is still partial. No pinned Solana SBF build or immutable public
-deployment has been recorded, no governed A666 reader/policy/committee/SOL-USD
-valuation bundle exists, and parser fuzzing, fresh multi-epoch collection,
-full A666 reconciliation, and independent production reproduction remain
-open. Therefore staked Solana remains `0/1` qualified and does not make `G3`
-pass.
+This code is still partial. A `solana-verify` 0.5.1 build under the exact
+published Docker image digest was repeated and produced the same executable
+program hash, raw ELF hash, and byte length. That identity is machine checked
+by `scripts/check-solana-stake-reader-identity`. No immutable public deployment
+has been recorded, no governed A666 reader/policy/committee/SOL-USD valuation
+bundle exists, and parser fuzzing, fresh multi-epoch collection, full A666
+reconciliation, and independent production reproduction remain open.
+Therefore staked Solana remains `0/1` qualified and does not make `G3` pass.
 
 ### 5.6 Monero reserves
 
@@ -1103,11 +1105,12 @@ Then:
 3. Qualify NEAR: deploy the implemented reader, publish governed A666
    policy/committee and public valuation inputs, fuzz the public parsers,
    reproduce fresh epochs independently, and reconcile the full profile.
-4. Qualify Solana: install and pin the Solana SBF toolchain, reproducibly build
-   and immutably deploy the implemented reader, publish its ProgramData hash
-   and governed A666 policy/committee/SOL-USD valuation inputs, fuzz the
+4. Qualify Solana: immutably deploy the exact reproducibly built reader,
+   publish its ProgramData hash and governed A666
+   policy/committee/SOL-USD valuation inputs, fuzz the
    transaction/payload/program-state parsers, collect fresh epochs, reconcile,
-   and reproduce independently. The old signed-RPC adapter remains ineligible.
+   and reproduce independently. The pinned SBF build identity is complete and
+   CI-rebuilt; the old signed-RPC adapter remains ineligible.
 5. Qualify Monero: create a fresh context-bound nonzero wallet proof, assemble
    an independently reproduced checkpoint and spent-status certificate, bind
    public XMR/USD valuation evidence, fuzz the implemented parsers, collect

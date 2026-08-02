@@ -145,6 +145,11 @@ jobs:
         run: |
           cargo test --locked
           cargo fmt --all -- --check
+          cargo test --manifest-path contracts/solana-stake-reader/Cargo.toml --locked
+      - name: Rebuild the public Solana stake reader deterministically
+        run: |
+          cargo install solana-verify --version 0.5.1 --locked
+          scripts/check-solana-stake-reader-identity --build
       - name: Compile the pinned SP1 host integration
         working-directory: tools/nav-reserve-proof
         run: cargo check --locked -p postfiat-reserve-proof --features sp1

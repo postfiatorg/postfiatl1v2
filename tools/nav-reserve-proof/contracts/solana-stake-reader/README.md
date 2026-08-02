@@ -23,3 +23,18 @@ cargo test --manifest-path contracts/solana-stake-reader/Cargo.toml --locked
 A deployable SBF artifact additionally requires the audited Solana/Agave SBF
 toolchain. The deployed program-data account hash and immutable/upgrade
 authority state must be pinned in governance before any real-value use.
+
+The reproducible build identity is in `program-identity.json`. It pins the
+public source commit, Solana SDK 3.0.0, `solana-verify` 0.5.1, exact Docker
+image digest, SBPF architecture, executable program hash, raw ELF SHA-256, and
+byte length. Rebuild and compare every field with:
+
+```text
+scripts/check-solana-stake-reader-identity --build
+```
+
+The independently repeated executable program hash is
+`1e0290cc9faa3b440b41e15e15f33ef34afcef4cc0cf65a719ab64fab4abad62`.
+The program has not been deployed. A deployment is not qualified until the
+on-chain program is made immutable and its exact ProgramData account and hash
+are published in the governed policy.

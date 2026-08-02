@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+reader_rel="tools/nav-reserve-proof/contracts/solana-stake-reader"
+reader_dir="$repo_root/$reader_rel"
+identity="$reader_dir/program-identity.json"
+
+test "$(jq -r .schema "$identity")" = \
+  "postfiat-solana-stake-reader-program-identity-v1"
+source_commit="$(jq -r .source_commit "$identity")"
+if ! git -C "$repo_root" cat-file -e "$source_commit^{commit}" 2>/dev/null; then
+  echo "Solana reader identity source commit is unavailable: $source_commit" >&2
+  exit 1
+fi
+
+for relative in Cargo.toml Cargo.lock src/lib.rs; do
+  if ! git -C "$repo_root" diff --quiet "$source_commit" -- "$reader_rel/$relative"; then
+    echo "Solana reader source drifted from identity commit: $relative" >&2
+    exit 1
+  fi
+done
+
+test "$(jq -r .solana_sdk_version "$identity")" = "3.0.0"
+test "$(jq -r .solana_verify_version "$identity")" = "0.5.1"
+test "$(jq -r .sbpf_arch "$identity")" = "v0"
+test "$(jq -r .library_name "$identity")" = \
+  "postfiat_solana_stake_reader"
+test "$(jq -r .deployment_status "$identity")" = "not_deployed"
+
+case "${1:-}" in
+  ""|--build) ;;
+  *)
+    echo "usage: $0 [--build]" >&2
+    exit 2
+    ;;
+esac
+
+if test "${1:-}" = "--build"; then
+  test "$(solana-verify --version)" = "solana-verify 0.5.1"
+  solana-verify build "$reader_dir" \
+    --library-name postfiat_solana_stake_reader --arch v0
+  expected_image="$(jq -r .solana_verify_image "$identity")"
+  docker image inspect "$expected_image" >/dev/null
+  executable="$reader_dir/target/deploy/postfiat_solana_stake_reader.so"
+  test -s "$executable"
+  expected_program_hash="$(jq -r .executable_program_hash "$identity")"
+  expected_raw_hash="$(jq -r .raw_elf_sha256 "$identity")"
+  expected_size="$(jq -r .raw_elf_bytes "$identity")"
+  actual_program_hash="$(solana-verify get-executable-hash "$executable")"
+  actual_raw_hash="$(sha256sum "$executable" | cut -d' ' -f1)"
+  actual_size="$(stat -c %s "$executable")"
+  test "$actual_program_hash" = "$expected_program_hash"
+  test "$actual_raw_hash" = "$expected_raw_hash"
+  test "$actual_size" = "$expected_size"
+fi
+
+echo "solana_stake_reader_identity=ok source_commit=$source_commit build=${1:-metadata}"

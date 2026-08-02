@@ -246,10 +246,11 @@ No fee-payer, reserve-owner, or checkpoint-validator private key enters the
 proof kit.
 
 This adapter is cryptographic relative to the disclosed BFT checkpoint. It is
-not direct verification of Solana consensus. Until the public reader is built
-and deployed immutably and the governed A666 inputs, fuzzing, fresh epochs,
-reconciliation, and independent reproduction pass, it remains partial and
-must not be represented as production-qualified.
+not direct verification of Solana consensus. The reader now has an
+independently repeated, pinned `solana-verify` build identity; it is not yet
+deployed. Until it is deployed immutably and the governed A666 inputs,
+fuzzing, fresh epochs, reconciliation, and independent reproduction pass, it
+remains partial and must not be represented as production-qualified.
 
 ### Public Monero reserve workflow
 
