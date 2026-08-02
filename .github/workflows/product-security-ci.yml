@@ -157,7 +157,8 @@ jobs:
           expected_source="$(jq -r .source_commit ../../program-identity.json)"
           test "$(git cat-file -t "$expected_source")" = commit
           legacy_workspace="$(mktemp -d)"
-          git archive "$expected_source" | tar -x -C "$legacy_workspace"
+          git -C "$GITHUB_WORKSPACE" archive "$expected_source" | \
+            tar -x -C "$legacy_workspace"
           rebuild_dir="$(mktemp -d)"
           cd "$legacy_workspace/tools/nav-reserve-proof/programs/reserve-proof-guest"
           cargo prove build --docker --tag v6.3.1 --locked \
