@@ -118,8 +118,15 @@ silently converted to `ATTESTED` in the successor.
   exact consensus verification.
 - The public framework implements generic Ed25519 attestation and
   protocol-receipt evidence.
-- The public framework implements one source-specific quantity adapter:
-  `evm-erc20-bft-checkpoint-mpt-v1`.
+- The successor feature implements public source-specific verifiers for Aave,
+  the complete EVM spot set, Hyperliquid, staked NEAR, staked Solana at its
+  accurately disclosed attested trust level, and Monero. These verifiers are
+  implemented but not production-qualified; section 3.4 records the exact
+  remaining work.
+- The public CLI emits source-checkpoint vote statements, canonically assembles
+  independently signed ML-DSA votes, and rejects invalid committee bindings,
+  sub-quorum certificates, duplicates, unknown validators, and bad signatures.
+  It does not receive validator private keys.
 - The generic ABI and route lifecycle passed a controlled six-validator qNAV
   qualification.
 
@@ -518,6 +525,9 @@ existing guest ELF SHA exactly.
 
 ### Phase 2 — port the source validators
 
+- [x] Implement the shared provider-neutral BFT checkpoint statement,
+  certificate assembly, and validation workflow without centralizing signer
+  private keys.
 - [x] Implement and register the public Aave adapter.
 - [x] Implement and register the complete public EVM spot quantity adapter set.
 - [x] Implement and register the public Hyperliquid adapter.
@@ -828,7 +838,7 @@ Existing A666 issuer and reserve-operator keys remain owner-only under the
 existing `.pft` runtime trees. Never copy their contents into this repository,
 logs, evidence, or new temporary paths.
 
-## 11. First actions for the implementing agent
+## 11. Current continuation actions
 
 Start read-only:
 
@@ -846,17 +856,21 @@ git diff -- \
 
 Then:
 
-1. Confirm exact-tip CI for `c763e6a`; fix any failure without touching live
-   governance or the frozen demonstration checkout.
-2. Finish the provider-neutral Hyperliquid adapter and refactor the NEAR
-   mechanical import into the public architecture in sections 4 and 5. Do not
-   commit the current internal names or weaken the shipped-code boundary.
-3. Inventory the complete internal source validators named in section 5,
-   including their fixtures and negative tests.
-4. Write provider-neutral adapter specifications and public schemas before
-   copying implementation code.
-5. Port and qualify one source at a time, beginning with the source that
-   exercises the most specialized validation boundary: Hyperliquid or NEAR.
+1. Require green exact-tip remote CI for the latest public-adapter commit; fix
+   failures without touching live governance or the frozen demonstration
+   checkout.
+2. Implement public collectors for Aave, the exact EVM spot set,
+   Hyperliquid, NEAR, Solana, and Monero. Each collector must independently
+   validate the certified source state before emitting an observation.
+3. Add structured fuzz targets and complete the adversarial matrix in section
+   8 for every externally sourced parser and proof type.
+4. Create the governed A666 manifest, quantity/valuation policies, committee
+   fixtures, and successor guest build only after all six adapters have their
+   public production inputs. Do not rotate the immutable legacy guest once per
+   adapter.
+5. Reproduce both historical epochs and at least two fresh independently
+   collected epochs, reconcile every source and the pfUSDC overlay, and retain
+   negative evidence for omission, replay, staleness, and source substitution.
 6. Keep the live A666 route and frozen Monday checkout untouched until every
    controlled migration gate passes.
 

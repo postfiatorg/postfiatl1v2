@@ -126,9 +126,38 @@ verified Groth16 proof, calldata bytes, public values, and the program vkey.
 `observe` reads exactly one bounded `<source_id>.json` adapter artifact for
 every manifest entry. It orders those artifacts by the manifest rather than
 filesystem order and executes all evidence checks before writing a witness.
-Source-specific collectors can remain private processes with private API
-credentials; their artifact schema and the verifier that consumes it are
-public. No credential or signing authority is included in the witness.
+Every source-specific collector required to reproduce a live NAVCoin must be
+public, versioned, and auditable. A deployment may supply RPC credentials from
+its secret manager, but neither a private collector nor an undocumented
+internal API may define the artifact semantics. No credential or signing
+authority is included in the witness.
+
+All adapters that use a governed external-source checkpoint share one public
+certificate workflow. Each validator obtains the exact statement bytes and
+signs them in its isolated signer; the proof kit never receives its private
+key. After collecting the bounded vote JSON files, assemble and validate the
+certificate:
+
+    postfiat-reserve-proof source-checkpoint vote-statement \
+      --checkpoint checkpoint.json \
+      --validator-id validator-0 \
+      --output checkpoint-validator-0.statement
+
+    postfiat-reserve-proof source-checkpoint assemble \
+      --committee committee.json \
+      --checkpoint checkpoint.json \
+      --vote checkpoint-validator-0.vote.json \
+      --vote checkpoint-validator-1.vote.json \
+      --vote checkpoint-validator-2.vote.json \
+      --output checkpoint.certificate.json
+
+    postfiat-reserve-proof source-checkpoint validate \
+      --certificate checkpoint.certificate.json
+
+Assembly sorts votes canonically and rejects an invalid committee binding,
+sub-quorum set, duplicate or unknown validator, malformed signature, or bad
+signature. Adapter-specific collectors must still validate that the certified
+source block and commitment match their independently queried source state.
 
 The open EVM adapter also provides the complete public construction boundary:
 

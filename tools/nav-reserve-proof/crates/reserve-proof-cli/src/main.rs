@@ -22,8 +22,10 @@ use reserve_proof_types::{
 use serde::{Deserialize, Serialize};
 
 mod evm_adapter;
+mod source_checkpoint;
 
 use evm_adapter::AdapterCommand;
+use source_checkpoint::SourceCheckpointCommand;
 
 #[cfg(feature = "sp1")]
 use bincode::Options as _;
@@ -48,7 +50,13 @@ struct Args {
 enum Command {
     Adapter {
         #[command(subcommand)]
-        command: AdapterCommand,
+        command: Box<AdapterCommand>,
+    },
+    /// Build and validate provider-neutral BFT certificates for external
+    /// source checkpoints. Signing remains isolated to each validator.
+    SourceCheckpoint {
+        #[command(subcommand)]
+        command: SourceCheckpointCommand,
     },
     Manifest {
         #[command(subcommand)]
@@ -212,7 +220,8 @@ struct DerivedProfileV1 {
 fn main() -> Result<()> {
     let args = Args::parse();
     match args.command {
-        Command::Adapter { command } => evm_adapter::run(command),
+        Command::Adapter { command } => evm_adapter::run(*command),
+        Command::SourceCheckpoint { command } => source_checkpoint::run(command),
         Command::Manifest {
             command: ManifestCommand::Validate { manifest },
         } => manifest_validate(manifest),

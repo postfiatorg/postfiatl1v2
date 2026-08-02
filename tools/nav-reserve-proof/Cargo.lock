@@ -4511,6 +4511,7 @@ dependencies = [
  "bincode",
  "clap",
  "hex",
+ "postfiat-crypto-provider",
  "postfiat-nav-reserve-protocol",
  "postfiat-types",
  "reqwest",
