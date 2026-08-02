@@ -1562,7 +1562,7 @@ mod tests {
 
     fn stage_b_fixture() -> XmrReserveWitness {
         serde_json::from_str(include_str!(
-            "../tests/fixtures/xmr_reserve_stage_b_witness.json"
+            "../../../../../docs/fixtures/open-reserve-proof/xmr_reserve_stage_b_witness.json"
         ))
         .unwrap()
     }
