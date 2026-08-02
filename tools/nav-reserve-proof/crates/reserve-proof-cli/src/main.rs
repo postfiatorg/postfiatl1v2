@@ -419,7 +419,7 @@ fn observe(
         observations,
     };
     let values = execute_reserve_proof(&witness).map_err(anyhow::Error::msg)?;
-    write_new(&output, &serde_json::to_vec_pretty(&witness)?)?;
+    write_new(&output, &encode_bounded_witness_json(&witness)?)?;
     println!(
         "{}",
         serde_json::to_string_pretty(&serde_json::json!({
@@ -955,6 +955,15 @@ fn encode_human_readable_cbor<T: Serialize>(value: &T) -> Result<Vec<u8>> {
     Ok(serde_cbor::to_vec(&serde_json::to_value(value)?)?)
 }
 
+fn encode_bounded_witness_json(witness: &ReserveProofWitnessV1) -> Result<Vec<u8>> {
+    let encoded = serde_json::to_vec(witness)?;
+    anyhow::ensure!(
+        encoded.len() <= MAX_WITNESS_BYTES,
+        "canonical JSON witness exceeds {MAX_WITNESS_BYTES} bytes"
+    );
+    Ok(encoded)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -975,6 +984,23 @@ mod tests {
         let decoded: FixedBytesRoundTrip =
             serde_cbor::from_slice(&encoded).expect("decode fixed bytes");
         assert_eq!(decoded, expected);
+    }
+
+    #[test]
+    fn observed_witness_json_is_compact_bounded_and_round_trips() {
+        let witness: ReserveProofWitnessV1 = serde_json::from_str(include_str!(
+            "../../../fixtures/controlled-two-source/witness.json"
+        ))
+        .expect("parse controlled witness fixture");
+        let encoded = encode_bounded_witness_json(&witness).expect("encode bounded witness JSON");
+        assert!(encoded.len() <= MAX_WITNESS_BYTES);
+        assert!(!encoded.contains(&b'\n'));
+        let decoded: ReserveProofWitnessV1 =
+            serde_json::from_slice(&encoded).expect("decode bounded witness JSON");
+        assert_eq!(
+            execute_reserve_proof(&decoded).expect("execute decoded witness"),
+            execute_reserve_proof(&witness).expect("execute source witness")
+        );
     }
 
     fn rpc_fixture(response: serde_json::Value) -> SocketAddr {

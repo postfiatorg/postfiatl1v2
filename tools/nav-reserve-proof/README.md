@@ -180,6 +180,12 @@ match the public builds.
       --input target/reference/witness.json \
       --output target/reference/witness.cbor
 
+`observe` writes canonical compact JSON so its output remains inside the same
+bounded witness limit enforced by `witness build`, even when the source proofs
+contain large public Merkle paths or committee certificates. Pipe a copy
+through `jq` for human review; do not replace the canonical input with an
+unbounded pretty-printed representation.
+
     cargo run --locked -p postfiat-reserve-proof -- \
       execute \
       --witness target/reference/witness.cbor \
