@@ -10,11 +10,15 @@ use postfiat_crypto_provider::{bytes_to_hex, hex_to_bytes, ml_dsa_65_sign, ML_DS
 use postfiat_execution::genesis_hash;
 use postfiat_network::{local_topology, NetworkDomain};
 use postfiat_node::{
-    apply_batch, asset_fee_quote, create_mempool_batch, create_transfer_batch, export_snapshot,
-    faucet_key, import_snapshot, init, submit_signed_asset_transaction_json_to_mempool,
-    verify_blocks, ApplyBatchOptions, AssetFeeQuoteOptions, BatchTransferOptions, DevKeyFile,
-    InitOptions, MempoolBatchOptions, NodeOptions, SignedAssetTransactionJsonSubmitOptions,
-    SnapshotExportOptions, SnapshotImportOptions,
+    apply_batch, assemble_consensus_v2_commit, asset_fee_quote,
+    certify_and_persist_consensus_v2_votes, certify_batch_round,
+    create_consensus_v2_precommit_vote, create_consensus_v2_prepare_vote,
+    create_consensus_v2_proposal_for_block, create_mempool_batch, create_transfer_batch,
+    export_snapshot, faucet_key, import_snapshot, init,
+    submit_signed_asset_transaction_json_to_mempool, verify_blocks, ApplyBatchOptions,
+    AssetFeeQuoteOptions, BatchCertificateRoundOptions, BatchTransferOptions, BlockCertificateFile,
+    BlockProposalFile, DevKeyFile, InitOptions, MempoolBatchOptions, NodeOptions,
+    SignedAssetTransactionJsonSubmitOptions, SnapshotExportOptions, SnapshotImportOptions,
 };
 use postfiat_rpc_sdk::{
     asset_fee_quote_request, atomic_swap_fee_quote_request, decode_asset_fee_quote_summary,
@@ -34,7 +38,8 @@ use postfiat_types::{
     MarketOpsFinalizeOperation, MarketOpsMintLimits, MarketOpsPolicyInputs,
     MarketOpsPolicyRegisterOperation, MarketOpsPolicyRegistration, MarketOpsReserveDeployLimits,
     MarketOpsVenueObservation, MempoolState, NavAssetRegisterOperation, NavEpochFinalizeOperation,
-    NavProfileRegisterOperation, NavProofProfile, NavReserveSubmitOperation, SignedTransfer,
+    NavProfileRegisterOperation, NavProofProfile, NavReservePublicValuesV1,
+    NavReserveSubmitOperation, SignedAssetTransaction, SignedTransfer, UnsignedAssetTransaction,
     UnsignedTransfer, ADDRESS_NAMESPACE, NAV_PROFILE_VERIFIER_PLACEHOLDER,
     NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1, NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1,
     NAV_RESERVE_PUBLIC_VALUES_V1_BYTES, TRANSFER_TRANSACTION_KIND,
@@ -309,6 +314,242 @@ fn apply_seed_batch(data_dir: &Path, name: &str) {
         !receipts.is_empty() && receipts.iter().all(|receipt| receipt.accepted),
         "seed batch {name} rejected: {receipts:?}"
     );
+}
+
+fn advance_certified_chain_to_height(data_dirs: &[PathBuf], target_height: u64) {
+    assert_eq!(data_dirs.len(), VALIDATORS, "padding validator count");
+    let data_dir = &data_dirs[0];
+    let current = command_json(&[
+        "status",
+        "--data-dir",
+        data_dir.to_str().expect("padding data dir UTF-8"),
+    ])["block_height"]
+        .as_u64()
+        .expect("padding start height");
+    assert!(
+        current <= target_height,
+        "padding target {target_height} is below current height {current}"
+    );
+    for (index, validator_dir) in data_dirs.iter().enumerate() {
+        split_validator_key(data_dir, &format!("validator-{index}"));
+        if index != 0 {
+            split_validator_key(validator_dir, &format!("validator-{index}"));
+        }
+    }
+    for height in (current + 1)..=target_height {
+        let stem = format!("proof-height-padding-{height:04}");
+        let batch_file = data_dir.join(format!("{stem}.batch.json"));
+        create_transfer_batch(BatchTransferOptions {
+            data_dir: data_dir.to_path_buf(),
+            key_file: None,
+            to: "pfproofheightpadding000000000000000000".to_string(),
+            amount: 10,
+            batch_file: batch_file.clone(),
+        })
+        .unwrap_or_else(|error| panic!("create proof-height padding batch {height}: {error}"));
+        let certificate_file = data_dir.join(format!("{stem}.certificate.json"));
+        certify_batch_round(BatchCertificateRoundOptions {
+            data_dir: data_dir.to_path_buf(),
+            batch_kind: Some("transparent".to_string()),
+            batch_file: batch_file.clone(),
+            validator_key_dir: data_dir.to_path_buf(),
+            vote_dir: data_dir.join(format!("{stem}.votes")),
+            proposal_file: data_dir.join(format!("{stem}.proposal.json")),
+            certificate_file: certificate_file.clone(),
+            block_height: Some(height),
+            view: None,
+            timeout_certificate_file: None,
+            skip_block_log_verify: true,
+        })
+        .unwrap_or_else(|error| panic!("certify proof-height padding block {height}: {error}"));
+        let proposal_file = data_dir.join(format!("{stem}.proposal.json"));
+        let block_proposal: BlockProposalFile = serde_json::from_slice(
+            &fs::read(&proposal_file)
+                .unwrap_or_else(|error| panic!("read proof-height proposal {height}: {error}")),
+        )
+        .unwrap_or_else(|error| panic!("parse proof-height proposal {height}: {error}"));
+        let proposer_key =
+            data_dir.join(format!("{}.validator_keys.json", block_proposal.proposer));
+        let consensus_proposal =
+            create_consensus_v2_proposal_for_block(data_dir, &block_proposal, None, &proposer_key)
+                .unwrap_or_else(|error| {
+                    panic!("create proof-height v2 proposal {height}: {error}")
+                });
+        let prepare_votes = thread::scope(|scope| {
+            let handles = data_dirs
+                .iter()
+                .enumerate()
+                .map(|(index, validator_dir)| {
+                    let proposal = &consensus_proposal;
+                    scope.spawn(move || {
+                        create_consensus_v2_prepare_vote(
+                            validator_dir,
+                            proposal,
+                            None,
+                            &validator_dir.join(format!("validator-{index}.validator_keys.json")),
+                            &format!("validator-{index}"),
+                        )
+                        .unwrap_or_else(|error| {
+                            panic!("create proof-height prepare vote {height}/{index}: {error}")
+                        })
+                    })
+                })
+                .collect::<Vec<_>>();
+            handles
+                .into_iter()
+                .map(|handle| handle.join().expect("join proof-height prepare vote"))
+                .collect::<Vec<_>>()
+        });
+        let prepare_qc = certify_and_persist_consensus_v2_votes(
+            data_dir,
+            consensus_proposal.round,
+            postfiat_types::ConsensusV2Phase::Prepare,
+            Some(consensus_proposal.block.clone()),
+            prepare_votes,
+        )
+        .unwrap_or_else(|error| panic!("certify proof-height prepare QC {height}: {error}"));
+        let precommit_votes = thread::scope(|scope| {
+            let handles = data_dirs
+                .iter()
+                .enumerate()
+                .map(|(index, validator_dir)| {
+                    let qc = &prepare_qc;
+                    scope.spawn(move || {
+                        create_consensus_v2_precommit_vote(
+                            validator_dir,
+                            qc,
+                            &validator_dir.join(format!("validator-{index}.validator_keys.json")),
+                            &format!("validator-{index}"),
+                        )
+                        .unwrap_or_else(|error| {
+                            panic!("create proof-height precommit vote {height}/{index}: {error}")
+                        })
+                    })
+                })
+                .collect::<Vec<_>>();
+            handles
+                .into_iter()
+                .map(|handle| handle.join().expect("join proof-height precommit vote"))
+                .collect::<Vec<_>>()
+        });
+        let precommit_qc = certify_and_persist_consensus_v2_votes(
+            data_dir,
+            consensus_proposal.round,
+            postfiat_types::ConsensusV2Phase::Precommit,
+            Some(consensus_proposal.block.clone()),
+            precommit_votes,
+        )
+        .unwrap_or_else(|error| panic!("certify proof-height precommit QC {height}: {error}"));
+        let commit = assemble_consensus_v2_commit(
+            data_dir,
+            &block_proposal,
+            consensus_proposal,
+            None,
+            prepare_qc,
+            precommit_qc,
+        )
+        .unwrap_or_else(|error| panic!("assemble proof-height v2 commit {height}: {error}"));
+        let mut certificate: BlockCertificateFile = serde_json::from_slice(
+            &fs::read(&certificate_file)
+                .unwrap_or_else(|error| panic!("read proof-height certificate {height}: {error}")),
+        )
+        .unwrap_or_else(|error| panic!("parse proof-height certificate {height}: {error}"));
+        certificate.consensus_v2_commit = Some(commit);
+        fs::write(
+            &certificate_file,
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&certificate).unwrap_or_else(|error| {
+                    panic!("serialize proof-height certificate {height}: {error}")
+                })
+            ),
+        )
+        .unwrap_or_else(|error| panic!("write proof-height certificate {height}: {error}"));
+        for (index, validator_dir) in data_dirs.iter().enumerate() {
+            let receipts = apply_batch(ApplyBatchOptions {
+                data_dir: validator_dir.clone(),
+                batch_file: batch_file.clone(),
+                certificate_file: Some(certificate_file.clone()),
+            })
+            .unwrap_or_else(|error| {
+                panic!("apply proof-height padding block {height}/{index}: {error}")
+            });
+            assert!(
+                !receipts.is_empty() && receipts.iter().all(|receipt| receipt.accepted),
+                "proof-height padding block {height}/{index} rejected: {receipts:?}"
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore = "qualification helper for reserve proofs observed above genesis height"]
+fn certified_chain_padding_reaches_requested_height() {
+    let harness = Harness::new();
+    let seed_dir = harness.root.join("proof-height-padding-seed");
+    init(InitOptions {
+        data_dir: seed_dir.clone(),
+        chain_id: "postfiat-wan-devnet-2".to_string(),
+        node_id: "validator-0".to_string(),
+        validator_count: VALIDATORS as u32,
+    })
+    .expect("initialize proof-height padding seed");
+    activate_consensus_v2_in_fresh_genesis(&seed_dir);
+    let target_height = std::env::var("POSTFIAT_PROOF_PADDING_TARGET_HEIGHT")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(8);
+    let data_dirs = (0..VALIDATORS)
+        .map(|index| {
+            let data_dir = harness.node(index);
+            copy_dir(&seed_dir, &data_dir);
+            rewrite_node_identity(&data_dir, &format!("validator-{index}"));
+            data_dir
+        })
+        .collect::<Vec<_>>();
+    advance_certified_chain_to_height(&data_dirs, target_height);
+    let mut roots = Vec::new();
+    for data_dir in data_dirs {
+        let verified = verify_blocks(NodeOptions {
+            data_dir: data_dir.clone(),
+        })
+        .expect("replay proof-height padded chain");
+        assert_eq!(verified.block_count, target_height as usize);
+        roots.push(verified.state_root);
+    }
+    assert!(roots.iter().all(|root| root == &roots[0]));
+}
+
+fn required_env_path(name: &str) -> PathBuf {
+    std::env::var_os(name)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| panic!("{name} is required for the exact A666 migration rehearsal"))
+}
+
+fn read_dev_key_from_env(name: &str) -> DevKeyFile {
+    let path = required_env_path(name);
+    serde_json::from_slice(
+        &fs::read(&path)
+            .unwrap_or_else(|error| panic!("read {name} at {}: {error}", path.display())),
+    )
+    .unwrap_or_else(|error| panic!("parse {name} at {}: {error}", path.display()))
+}
+
+fn read_raw_or_hex_from_env(name: &str) -> Vec<u8> {
+    let path = required_env_path(name);
+    let bytes = fs::read(&path)
+        .unwrap_or_else(|error| panic!("read {name} at {}: {error}", path.display()));
+    if let Ok(text) = std::str::from_utf8(&bytes) {
+        let trimmed = text.trim();
+        if !trimmed.is_empty()
+            && trimmed.len() % 2 == 0
+            && trimmed.bytes().all(|byte| byte.is_ascii_hexdigit())
+        {
+            return hex_to_bytes(trimmed)
+                .unwrap_or_else(|error| panic!("decode {name} at {}: {error}", path.display()));
+        }
+    }
+    bytes
 }
 
 fn fund_wallet(data_dir: &Path, address: &str, name: &str) {
@@ -611,6 +852,39 @@ fn successor_nav_profile_operation(registrant_address: &str) -> NavProfileRegist
     }
 }
 
+fn a666_public_successor_profile_operation(
+    registrant_address: &str,
+) -> NavProfileRegisterOperation {
+    NavProfileRegisterOperation {
+        registrant: registrant_address.to_string(),
+        verifier_kind: NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1.to_string(),
+        source_class: "manifest-driven-a666-public-reserves-v1".to_string(),
+        max_snapshot_age_blocks: 900,
+        challenge_window_blocks: 1,
+        max_epoch_gap_blocks: 128,
+        settle_deadline_blocks: 256,
+        min_challenge_bond: 0,
+        min_attestations: 0,
+        tolerance_bp: 0,
+        bridge_observer_min_confirmations: 0,
+        valuation_policy_hash:
+            "350eaee0a1ca12ba51637781ba52661b8685f868657a7c5e7d07c31b2899869c"
+                .to_string(),
+        vault_bridge_route_policy_hash: String::new(),
+        sp1_program_vkey:
+            "0x00f3857f96ef97e00bd15b4030acd8d6b0a72740b28c6160d154bc2c9bb141bf"
+                .to_string(),
+        sp1_proof_encoding: "groth16".to_string(),
+        max_proof_bytes: 4_096,
+        max_public_values_bytes: NAV_RESERVE_PUBLIC_VALUES_V1_BYTES as u64,
+        public_values_schema: NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1.to_string(),
+        source_manifest_hash: "8abe3e59198b72945d4778a7fa91e5af157a6c65032d8940cca486850ffe59fcb567268ca5942669ff6977ef32dd3a41".to_string(),
+        valuation_unit_id: "c67872c31caa85cbe6dd287a1e060f0f5cfc0e9f3c5bd85a7569897fd0cefb031583b7afc001e7d1afa492e9abf77d60".to_string(),
+        max_observation_span_blocks: 8,
+        allow_controlled_sources: false,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn finalize_nav_epoch(
     data_dir: &Path,
@@ -904,6 +1178,104 @@ fn submit_asset_finality(
         finality["tip_state_root"]
             .as_str()
             .expect("asset-finality state root")
+            .to_string(),
+    );
+    assert_eq!(expected.0, next_height, "{label} next height");
+    wait_exact_six(ports, &expected);
+    expected
+}
+
+fn submit_dev_key_asset_finality(
+    harness: &Harness,
+    ports: &[u16],
+    signer: &DevKeyFile,
+    operation: AssetTransactionOperation,
+    label: &str,
+) -> (u64, String, String) {
+    assert_eq!(
+        signer.algorithm_id, ML_DSA_65_ALGORITHM,
+        "dev-key asset signer algorithm"
+    );
+    let parent = status_tuple(ports[0], &format!("{label}-parent"));
+    let next_height = parent.0 + 1;
+    let proposer_json = command_json(&[
+        "block-proposer",
+        "--data-dir",
+        harness.node(0).to_str().expect("node path UTF-8"),
+        "--height",
+        &next_height.to_string(),
+        "--view",
+        "0",
+    ]);
+    let proposer_index = proposer_json["proposer"]
+        .as_str()
+        .expect("dev-key asset-finality proposer")
+        .strip_prefix("validator-")
+        .expect("validator proposer prefix")
+        .parse::<usize>()
+        .expect("validator proposer index");
+    let proposer_port = ports[proposer_index];
+    let quote_response = rpc_call(
+        proposer_port,
+        &asset_fee_quote_request(
+            format!("{label}-quote"),
+            signer.address.clone(),
+            serde_json::to_string(&operation).expect("serialize dev-key asset operation"),
+            None,
+        ),
+    );
+    let quote =
+        decode_asset_fee_quote_summary(&quote_response).expect("decode dev-key asset quote");
+    let unsigned = UnsignedAssetTransaction {
+        chain_id: quote.chain_id,
+        genesis_hash: quote.genesis_hash,
+        protocol_version: quote.protocol_version,
+        address_namespace: ADDRESS_NAMESPACE.to_string(),
+        transaction_kind: quote.transaction_kind,
+        signature_algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        source: quote.source,
+        fee: quote.minimum_fee,
+        sequence: quote.sequence,
+        operation,
+    };
+    let private_key = hex_to_bytes(&signer.private_key_hex).expect("decode dev-key asset signer");
+    let signature = ml_dsa_65_sign(&private_key, &unsigned.signing_bytes())
+        .expect("sign dev-key asset transaction");
+    let signed = SignedAssetTransaction {
+        unsigned,
+        algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        public_key_hex: signer.public_key_hex.clone(),
+        signature_hex: bytes_to_hex(&signature),
+    };
+    let response = rpc_call(
+        proposer_port,
+        &RpcRequest::new(
+            format!("{label}-finality"),
+            "mempool_submit_signed_asset_transaction_finality",
+            json!({
+                "signed_asset_transaction_json": serde_json::to_string(&signed)
+                    .expect("serialize dev-key asset-finality transaction")
+            }),
+        ),
+    );
+    let result = response.result.expect("dev-key asset-finality result");
+    let finality = &result["finality"];
+    assert_eq!(finality["confirmed"], true, "{label} confirmation");
+    assert_eq!(
+        finality["receipt"]["accepted"], true,
+        "{label} receipt: {finality}"
+    );
+    let expected = (
+        finality["block"]["header"]["height"]
+            .as_u64()
+            .expect("dev-key asset-finality block height"),
+        finality["block"]["header"]["block_hash"]
+            .as_str()
+            .expect("dev-key asset-finality block hash")
+            .to_string(),
+        finality["tip_state_root"]
+            .as_str()
+            .expect("dev-key asset-finality state root")
             .to_string(),
     );
     assert_eq!(expected.0, next_height, "{label} next height");
@@ -1316,6 +1688,346 @@ fn provider_neutral_qnav_proof_finalizes_and_survives_six_validator_restart() {
             .expect("restored qNAV packet")
             .public_values_schema,
         NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1
+    );
+}
+
+#[test]
+#[ignore = "exact A666 public-successor six-validator migration rehearsal"]
+fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
+    const A666_CHAIN_ID: &str = "postfiat-wan-devnet-2";
+    const A666_ASSET_ID: &str = "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c";
+    const A666_ISSUER: &str = "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b";
+    const A666_RESERVE_OPERATOR: &str = "pfd0c86d9084915e1fefd22eab891806397d5a5937";
+    const A666_SUCCESSOR_PROFILE: &str = "f8784629ff7338002d836c1988b8e2c0f19caf448429e0eb7fdc39fa2b08f7d9a44171fc1e7239bc25e06ad833c14e91";
+
+    let issuer = read_dev_key_from_env("POSTFIAT_A666_ISSUER_KEY_FILE");
+    let reserve_operator = read_dev_key_from_env("POSTFIAT_A666_RESERVE_KEY_FILE");
+    assert_eq!(issuer.address, A666_ISSUER);
+    assert_eq!(reserve_operator.address, A666_RESERVE_OPERATOR);
+    let proof = read_raw_or_hex_from_env("POSTFIAT_A666_PROOF_CALLDATA_FILE");
+    let public_values_bytes = read_raw_or_hex_from_env("POSTFIAT_A666_PUBLIC_VALUES_FILE");
+    assert!(!proof.is_empty() && proof.len() <= 4_096);
+    let public_values = NavReservePublicValuesV1::decode(&public_values_bytes)
+        .expect("decode exact A666 public values");
+    assert_eq!(public_values.pftl_genesis_hash, "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9");
+    assert_eq!(public_values.nav_asset_id, A666_ASSET_ID);
+    assert_eq!(public_values.proof_profile_id, A666_SUCCESSOR_PROFILE);
+    assert_eq!(public_values.quantity_trust_counts.cryptographic, 6);
+    assert_eq!(public_values.valuation_trust_counts.cryptographic, 6);
+    assert_eq!(public_values.attested_value, 0);
+    assert_eq!(public_values.controlled_value, 0);
+
+    let mut harness = Harness::new();
+    let seed_dir = harness.root.join("a666-public-successor-seed");
+    init(InitOptions {
+        data_dir: seed_dir.clone(),
+        chain_id: A666_CHAIN_ID.to_string(),
+        node_id: "validator-0".to_string(),
+        validator_count: VALIDATORS as u32,
+    })
+    .expect("initialize exact A666 migration seed");
+    activate_consensus_v2_in_fresh_genesis(&seed_dir);
+    let qualified_genesis: Genesis = serde_json::from_slice(
+        &fs::read(seed_dir.join("genesis.json")).expect("read exact A666 genesis"),
+    )
+    .expect("parse exact A666 genesis");
+    assert_eq!(
+        genesis_hash(&qualified_genesis),
+        public_values.pftl_genesis_hash
+    );
+    let faucet = faucet_key(NodeOptions {
+        data_dir: seed_dir.clone(),
+    })
+    .expect("read exact A666 rehearsal faucet");
+    let data_dirs = (0..VALIDATORS)
+        .map(|index| {
+            let data_dir = harness.node(index);
+            copy_dir(&seed_dir, &data_dir);
+            rewrite_node_identity(&data_dir, &format!("validator-{index}"));
+            data_dir
+        })
+        .collect::<Vec<_>>();
+    advance_certified_chain_to_height(&data_dirs, public_values.observation_not_after);
+
+    let base_port = free_base_port();
+    let topology_path = harness.root.join("a666-public-successor-topology.json");
+    let topology = local_topology(
+        NetworkDomain {
+            chain_id: qualified_genesis.chain_id.clone(),
+            genesis_hash: genesis_hash(&qualified_genesis),
+            protocol_version: qualified_genesis.protocol_version,
+        },
+        VALIDATORS as u32,
+        base_port,
+    )
+    .expect("build exact A666 migration topology");
+    fs::write(
+        &topology_path,
+        format!(
+            "{}\n",
+            serde_json::to_string_pretty(&topology)
+                .expect("serialize exact A666 migration topology")
+        ),
+    )
+    .expect("write exact A666 migration topology");
+    let rpc_ports = topology
+        .peers
+        .iter()
+        .map(|peer| peer.rpc_port)
+        .collect::<Vec<_>>();
+    let ready = spawn_services(&mut harness, &topology_path, &rpc_ports);
+    for path in &ready {
+        wait_for_file(path, Duration::from_secs(90));
+    }
+
+    submit_faucet_transfer_finality(
+        &harness,
+        &rpc_ports,
+        &faucet,
+        A666_ISSUER,
+        1_000_000,
+        "fund-a666-issuer",
+    );
+    submit_faucet_transfer_finality(
+        &harness,
+        &rpc_ports,
+        &faucet,
+        A666_RESERVE_OPERATOR,
+        1_000_000,
+        "fund-a666-reserve-operator",
+    );
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &issuer,
+        AssetTransactionOperation::AssetCreate(AssetCreateOperation {
+            issuer: A666_ISSUER.to_string(),
+            code: "A666".to_string(),
+            version: 2,
+            precision: 6,
+            display_name: "Post Fiat NAVCoin a666".to_string(),
+            max_supply: None,
+            requires_authorization: true,
+            freeze_enabled: true,
+            clawback_enabled: false,
+        }),
+        "create-exact-a666-v2",
+    );
+    assert_eq!(
+        issued_asset_id(A666_CHAIN_ID, A666_ISSUER, "A666", 2).expect("derive exact A666 ID"),
+        A666_ASSET_ID
+    );
+    let legacy_profile_operation = NavProfileRegisterOperation {
+        registrant: A666_ISSUER.to_string(),
+        verifier_kind: NAV_PROFILE_VERIFIER_PLACEHOLDER.to_string(),
+        source_class: "a666-legacy-migration-rehearsal".to_string(),
+        max_snapshot_age_blocks: 0,
+        challenge_window_blocks: 0,
+        max_epoch_gap_blocks: 0,
+        settle_deadline_blocks: 0,
+        min_challenge_bond: 0,
+        min_attestations: 0,
+        tolerance_bp: 0,
+        bridge_observer_min_confirmations: 0,
+        valuation_policy_hash: String::new(),
+        vault_bridge_route_policy_hash: String::new(),
+        sp1_program_vkey: String::new(),
+        sp1_proof_encoding: String::new(),
+        max_proof_bytes: 0,
+        max_public_values_bytes: 0,
+        public_values_schema: String::new(),
+        source_manifest_hash: String::new(),
+        valuation_unit_id: String::new(),
+        max_observation_span_blocks: 0,
+        allow_controlled_sources: false,
+    };
+    let legacy_profile_id = legacy_profile_operation
+        .to_profile()
+        .expect("derive legacy A666 rehearsal profile")
+        .profile_id;
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &issuer,
+        AssetTransactionOperation::NavProfileRegister(legacy_profile_operation),
+        "register-a666-legacy-profile",
+    );
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &issuer,
+        AssetTransactionOperation::NavAssetRegister(NavAssetRegisterOperation {
+            issuer: A666_ISSUER.to_string(),
+            asset_id: A666_ASSET_ID.to_string(),
+            reserve_operator: A666_RESERVE_OPERATOR.to_string(),
+            proof_profile: legacy_profile_id,
+            valuation_unit: "USD_1E8".to_string(),
+            redemption_account: A666_ISSUER.to_string(),
+        }),
+        "bind-a666-legacy-profile",
+    );
+    let successor_operation = a666_public_successor_profile_operation(A666_ISSUER);
+    assert_eq!(
+        successor_operation
+            .to_profile()
+            .expect("derive exact A666 successor profile")
+            .profile_id,
+        A666_SUCCESSOR_PROFILE
+    );
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &issuer,
+        AssetTransactionOperation::NavProfileRegister(successor_operation),
+        "register-a666-public-successor",
+    );
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &issuer,
+        AssetTransactionOperation::NavAssetRegister(NavAssetRegisterOperation {
+            issuer: A666_ISSUER.to_string(),
+            asset_id: A666_ASSET_ID.to_string(),
+            reserve_operator: A666_RESERVE_OPERATOR.to_string(),
+            proof_profile: A666_SUCCESSOR_PROFILE.to_string(),
+            valuation_unit: "USD_1E8".to_string(),
+            redemption_account: A666_ISSUER.to_string(),
+        }),
+        "rebind-a666-public-successor",
+    );
+    let reserve_packet_hash = "a6".repeat(48);
+    let submitted = submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &reserve_operator,
+        AssetTransactionOperation::NavReserveSubmit(NavReserveSubmitOperation {
+            issuer: A666_ISSUER.to_string(),
+            submitter: A666_RESERVE_OPERATOR.to_string(),
+            asset_id: A666_ASSET_ID.to_string(),
+            epoch: public_values.observation_epoch,
+            nav_per_unit: 90_000_000,
+            circulating_supply: 0,
+            verified_net_assets: public_values.verified_net_assets,
+            proof_profile: A666_SUCCESSOR_PROFILE.to_string(),
+            source_root: public_values.source_observation_root.clone(),
+            attestor_root: public_values.valuation_trust_root.clone(),
+            reserve_packet_hash: reserve_packet_hash.clone(),
+            reserve_accounts: Vec::new(),
+            sp1_proof_bytes: proof,
+            sp1_public_values: public_values_bytes,
+        }),
+        "submit-a666-public-reserve-proof",
+    );
+    let finalized = submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &issuer,
+        AssetTransactionOperation::NavEpochFinalize(NavEpochFinalizeOperation {
+            issuer: A666_ISSUER.to_string(),
+            asset_id: A666_ASSET_ID.to_string(),
+            epoch: public_values.observation_epoch,
+            reserve_packet_hash: reserve_packet_hash.clone(),
+        }),
+        "finalize-a666-public-reserve-proof",
+    );
+    assert_eq!(finalized.0, submitted.0 + 1);
+
+    for index in 0..VALIDATORS {
+        let ledger: LedgerState = serde_json::from_slice(
+            &fs::read(harness.node(index).join("ledger.json")).expect("read A666 ledger"),
+        )
+        .expect("parse A666 ledger");
+        assert_eq!(
+            ledger
+                .nav_assets
+                .iter()
+                .find(|asset| asset.asset_id == A666_ASSET_ID)
+                .expect("A666 NAV binding")
+                .proof_profile,
+            A666_SUCCESSOR_PROFILE,
+            "validator {index}"
+        );
+        let profile = ledger
+            .nav_proof_profile(A666_SUCCESSOR_PROFILE)
+            .expect("A666 successor profile after finality");
+        assert!(!profile.allow_controlled_sources, "validator {index}");
+        let packet = ledger
+            .nav_reserve_packets
+            .iter()
+            .find(|packet| {
+                packet.asset_id == A666_ASSET_ID && packet.epoch == public_values.observation_epoch
+            })
+            .expect("A666 public reserve packet after finality");
+        assert_eq!(packet.state, "finalized", "validator {index}");
+        assert_eq!(
+            packet.proof_verified_net_assets, public_values.verified_net_assets,
+            "validator {index}"
+        );
+        assert_eq!(packet.attested_value, 0, "validator {index}");
+        assert_eq!(packet.controlled_value, 0, "validator {index}");
+    }
+
+    for child in &mut harness.children {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    harness.children.clear();
+    for path in &ready {
+        let _ = fs::remove_file(path);
+    }
+    let restarted_ready = spawn_services(&mut harness, &topology_path, &rpc_ports);
+    for path in &restarted_ready {
+        wait_for_file(path, Duration::from_secs(90));
+    }
+    wait_exact_six(&rpc_ports, &finalized);
+    for (index, port) in rpc_ports.iter().enumerate() {
+        let verified = rpc_call(
+            *port,
+            &verify_state_request(format!("a666-successor-restart-{index}")),
+        );
+        assert_eq!(
+            verified.result.expect("A666 verify_state result")["verified"],
+            true,
+            "validator {index} A666 restart verification"
+        );
+    }
+
+    for child in &mut harness.children {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    harness.children.clear();
+    let snapshot_dir = harness.root.join("a666-public-successor.snapshot");
+    let restored_dir = harness.root.join("a666-public-successor-restored");
+    let snapshot = export_snapshot(SnapshotExportOptions {
+        data_dir: harness.node(0),
+        snapshot_dir: snapshot_dir.clone(),
+    })
+    .expect("export finalized A666 successor snapshot");
+    assert_eq!(snapshot.block_height, finalized.0);
+    let restored = import_snapshot(SnapshotImportOptions {
+        data_dir: restored_dir.clone(),
+        snapshot_dir,
+        node_id: Some("a666-public-successor-restored".to_string()),
+    })
+    .expect("restore finalized A666 successor snapshot");
+    assert_eq!(restored.block_height, finalized.0);
+    assert_eq!(restored.block_tip_hash, finalized.1);
+    assert_eq!(restored.state_root, finalized.2);
+    verify_blocks(NodeOptions {
+        data_dir: restored_dir.clone(),
+    })
+    .expect("replay finalized A666 successor snapshot history");
+    let restored_ledger: LedgerState = serde_json::from_slice(
+        &fs::read(restored_dir.join("ledger.json")).expect("read restored A666 ledger"),
+    )
+    .expect("parse restored A666 ledger");
+    assert_eq!(
+        restored_ledger
+            .nav_proof_profile(A666_SUCCESSOR_PROFILE)
+            .expect("restored A666 successor profile")
+            .source_manifest_hash,
+        public_values.source_manifest_hash
     );
 }
 
