@@ -5,7 +5,7 @@
     {
       "source_id": "aave-arbitrum",
       "policy": "tools/nav-reserve-proof/manifests/a666/aave-arbitrum-policy.json",
-      "quantity_and_valuation_verifier_commitment": "48c7f466100b4dc7d72f57cfff3c9dadb6d84c7c13869adb09be59a8f6043ca1b2d1fed77b2681f91cd13d22aa6eb969",
+      "quantity_and_valuation_verifier_commitment": "5d5f28f1ffd4b0d8804848873f0caabdb0ada8c57b8485a3048cd70fc7754eafed6b58c06b8356cde1d09f532a147007",
       "historical_source": "tools/nav-reserve-proof/fixtures/a666-historical/aave-arbitrum-state-proof-20260728.json",
       "status": "candidate_not_qualified"
     },
@@ -22,30 +22,39 @@
     {
       "source_id": "xmr-reserve",
       "policy": "tools/nav-reserve-proof/manifests/a666/monero-reserve-policy.json",
-      "quantity_verifier_commitment": "cb82196be2ff0dbfa3c6926bc92329e763dbaf00c4ec60c562ffab06ef7cae103c3f1dc21fc275f2434999fde1eee004",
+      "quantity_verifier_commitment": "03a4611a401edb8de6b45ec52e57c1a9d7593053e3dbd148428eb381da593e1d0247420bb8878f1e2b3adb8bce3ec76b",
       "valuation_policy": "tools/nav-reserve-proof/manifests/a666/monero-chainlink-valuation-policy.json",
       "valuation_verifier_commitment": "7451679e24a92e5839545f42b51619acaac98ecb304e1d5826eb90db1de0e5e1aea4490974550bae5880a1fd945e34c6",
       "historical_quantity_source": "docs/fixtures/open-reserve-proof/xmr_reserve_stage_b_witness.json",
       "policy_provenance": "tools/nav-reserve-proof/manifests/a666/monero-policy-provenance.json",
       "status": "candidate_quantity_and_valuation_not_qualified"
-    }
-  ],
-  "valuation_only_candidates": [
+    },
+    {
+      "source_id": "hyperliquid",
+      "policy": "tools/nav-reserve-proof/manifests/a666/hyperliquid-policy.json",
+      "quantity_and_valuation_verifier_commitment": "17fdb99bec941ef12877189124333d35e966661d0d5edc97b69f8693ee90169493c65ee8c84020e1121a9f1033aafd1b",
+      "deployment_identity": "tools/nav-reserve-proof/manifests/a666/public-reader-deployments-20260802.json",
+      "status": "candidate_quantity_and_valuation_not_qualified"
+    },
     {
       "source_id": "near-stake",
+      "policy": "tools/nav-reserve-proof/manifests/a666/near-receipt-policy.json",
+      "quantity_verifier_commitment": "75b18cc9af90f1a7eb9efa86419d844b28018f4b4fac6bd7a1045864b312ed4db29104399bdb3edcbfa53712a69d7c67",
       "valuation_policy": "tools/nav-reserve-proof/manifests/a666/near-chainlink-valuation-policy.json",
       "valuation_verifier_commitment": "260ce714ab04e1f1d48676a0067b9a58894d4dc5673bd0f5356491ab90f6c2703071348906f362e17eb8f735dcb63015",
+      "deployment_identity": "tools/nav-reserve-proof/manifests/a666/public-reader-deployments-20260802.json",
       "policy_provenance": "tools/nav-reserve-proof/manifests/a666/near-solana-valuation-provenance.json",
-      "quantity_policy_status": "blocked_pending_public_reader_deployment",
-      "status": "candidate_valuation_only_not_qualified"
+      "status": "candidate_quantity_and_valuation_not_qualified"
     },
     {
       "source_id": "solana-stake",
+      "policy": "tools/nav-reserve-proof/manifests/a666/solana-stake-reader-policy.json",
+      "quantity_verifier_commitment": "fd34a6632af9ccafae078647749a593bffd54ac710be4f3de11643a04a4932c72d9616efe39bec3e16e7cc0820f2c42a",
       "valuation_policy": "tools/nav-reserve-proof/manifests/a666/solana-chainlink-valuation-policy.json",
       "valuation_verifier_commitment": "1ae3bf34e5433836b81710c6c5d41b0ec46c469c15d8a21e6ac735893676104fe5465af51441980dfee00ce01e274756",
+      "deployment_identity": "tools/nav-reserve-proof/manifests/a666/public-reader-deployments-20260802.json",
       "policy_provenance": "tools/nav-reserve-proof/manifests/a666/near-solana-valuation-provenance.json",
-      "quantity_policy_status": "blocked_pending_immutable_public_reader_deployment",
-      "status": "candidate_valuation_only_not_qualified"
+      "status": "candidate_quantity_and_valuation_not_qualified"
     }
   ]
 }

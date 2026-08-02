@@ -1,0 +1,6 @@
+{
+  "schema": "postfiat.reserve_quantity_policy_commitment_report.v1",
+  "adapter_kind": "near-stake-receipt-bft-checkpoint-v1",
+  "source_domain": "near:mainnet",
+  "verifier_commitment": "75b18cc9af90f1a7eb9efa86419d844b28018f4b4fac6bd7a1045864b312ed4db29104399bdb3edcbfa53712a69d7c67"
+}

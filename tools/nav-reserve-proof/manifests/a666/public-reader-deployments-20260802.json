@@ -1,0 +1,41 @@
+{
+  "schema": "postfiat.a666.public_reader_deployments.v1",
+  "recorded_at": "2026-08-02",
+  "qualification_status": "not_qualified",
+  "custody_boundary": "An external custody signer signed deployment transactions; public PostFiat code built the artifacts and independently verifies source evidence. No custody-provider aggregate NAV attestation is accepted.",
+  "hyperliquid": {
+    "network": "HyperEVM mainnet",
+    "chain_id": 999,
+    "reader_address": "0xddb4ed1edf1f0d81f7531cddb27810080601a2cb",
+    "deployment_transaction": "0xcad045dbe7edcdbccbcdebae357525fd0bb5fe86e53f3b5a72417a92c5e37237",
+    "deployment_block": 42122304,
+    "receipt_status": 1,
+    "gas_used": 1291664,
+    "runtime_bytes": 5729,
+    "runtime_keccak256": "c252f32acd9fdcfe2b4f9b1d70c3de17acf83649a6313fc3ab9155bca1010db3"
+  },
+  "near": {
+    "network": "NEAR mainnet",
+    "reader_account": "eed15bedebb4ac46d1528187a8c2f00aa59b441398d3e346c44eb2dcb2fc1d9a",
+    "code_hash": "5swZhNNqpD6HsqFXhNjRUiSYoXtnkWPipiW8hRbrkbN",
+    "first_snapshot_transaction": "BVEXnwEuYmZKrc36VJnnjPHFAev8QvuDuS5994mXpEmJ",
+    "first_snapshot_receipt": "8sVGQN1xw9FUvTBDxgT84eDQxb5WrqVApfiouBpGC7iG",
+    "first_snapshot_block_height": 209629087,
+    "first_snapshot_block_hash": "3ztJjz38t7tftURrkjwU9z7ddrmLo7UGtifUcd69bgAH",
+    "final_execution_status": "FINAL"
+  },
+  "solana": {
+    "network": "Solana mainnet-beta",
+    "program_id": "Gp2oTn6VjFF22n98H6YSH4uVvQxWFHNCL7pp1tcAPF36",
+    "programdata_address": "9xVv6Q8Z1AJsK4aWKydhYyEGeA7Ai8k6t3gpreR7QBh8",
+    "create_buffer_transaction": "KttJHrCtLQrfLyWFQz8ZjbevRV2FraDGDgAkbaNpboCNgnoFa2y7yEScPkGXWGqRxPUNJkBJdx9aG7SrN23SCEf",
+    "deploy_transaction": "4dzK5hPL4uWLZJwr59qGhAF9yUyDXPb63MHZjcQvCXpmwT6hMjZm28AxaMGLeLEWSLRrM2nPiCDy8TNCdqX2hpBM",
+    "make_immutable_transaction": "4h8yhSx6bmEhS7SciPfXyQDp9QwnK3VSRybfj2DngpTfqNjHeTM7iBBCShoFr8463T64KxoLCUuXUnUPYVXnWwbb",
+    "deployment_slot": 436801488,
+    "raw_elf_bytes": 33120,
+    "raw_elf_sha256": "af70e82df3f1d519da5c5c7ddb62ab594d7babdd95dbc67c1692c2d6cea96716",
+    "program_account_data_sha256": "468bb5e5f2380c138d95a5f52afbd7a959f3dce80f5aa43dd5b77b3ca4817053",
+    "programdata_account_data_sha256": "455070640f5e75ec9148cefab2e62317666aab7784364ffadda64beb30fe9d6e",
+    "upgrade_authority": null
+  }
+}

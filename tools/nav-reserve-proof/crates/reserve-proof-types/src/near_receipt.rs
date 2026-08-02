@@ -38,6 +38,7 @@ const METADATA_DOMAIN: &[u8] = b"postfiat.reserve_near_receipt_metadata.v1";
 #[serde(deny_unknown_fields)]
 pub struct NearReceiptPolicyV1 {
     pub source_domain: String,
+    pub position_id: String,
     pub reader_account_id: String,
     pub reader_code_hash: String,
     pub pool_id: String,
@@ -418,6 +419,7 @@ pub enum NearReceiptLegError {
 impl NearReceiptPolicyV1 {
     pub fn validate(&self) -> Result<(), NearReceiptLegError> {
         validate_identifier(&self.source_domain)?;
+        validate_identifier(&self.position_id)?;
         if self.source_domain != "near:mainnet" {
             return Err(NearReceiptLegError::PolicyMismatch);
         }
@@ -446,6 +448,7 @@ impl NearReceiptPolicyV1 {
         validate_lower_hex(committee_root, 48)?;
         let mut out = Vec::new();
         append_bytes(&mut out, self.source_domain.as_bytes())?;
+        append_bytes(&mut out, self.position_id.as_bytes())?;
         append_bytes(&mut out, self.reader_account_id.as_bytes())?;
         out.extend_from_slice(&decode_hash(&self.reader_code_hash)?);
         append_bytes(&mut out, self.pool_id.as_bytes())?;
@@ -505,6 +508,7 @@ pub fn verify_near_receipt_quantity_proof_v1(
     let policy_commitment = witness.policy.commitment(&committee_root)?;
     if policy_commitment != context.quantity_verifier_commitment
         || witness.policy.source_domain != context.source_domain
+        || witness.policy.position_id != context.asset_or_position_id
     {
         return Err(NearReceiptLegError::PolicyMismatch);
     }
@@ -1755,6 +1759,7 @@ mod tests {
         let pool_id = "public-pool.poolv1.near".to_string();
         let policy = NearReceiptPolicyV1 {
             source_domain: source_domain.clone(),
+            position_id: "near-staked-balance".to_string(),
             reader_account_id: "public-reader.near".to_string(),
             reader_code_hash: to_base58(&[0x31; 32]),
             pool_id: pool_id.clone(),
@@ -1852,7 +1857,7 @@ mod tests {
             source_manifest_hash: "55".repeat(48),
             source_id: "near-stake".to_string(),
             source_domain,
-            asset_or_position_id: format!("near:stake:{}", witness.policy.pool_id),
+            asset_or_position_id: witness.policy.position_id.clone(),
             reserve_owner_commitment,
             quantity_verifier_commitment,
             observed_at_pftl_height: 200,

@@ -142,14 +142,16 @@ It is a public candidate, not a live governed profile; the source-specific
 policies, reader deployments, qualification, and activation gates below still
 must complete before it can govern real value.
 
-The HyperEVM, NEAR, and Solana reader build identities are pinned in
+The HyperEVM, NEAR, and Solana reader build and deployment identities are pinned in
 `manifests/a666/reader-deployment-candidates.json`. Rebuild them with:
 
     ../../scripts/check-a666-public-reader-candidates
 
-That check deliberately reports all three as requiring new deployments. The
-historical HyperEVM and NEAR deployments do not match the current public
-builds and therefore cannot be governed into the public A666 successor.
+The exact public builds were deployed on 2026-08-02. The check proves the
+committed deployment identities still refer to those pinned build artifacts;
+it does not perform live RPC checks and does not qualify any source. The
+historical HyperEVM and NEAR deployments remain ineligible because they do not
+match the public builds.
 
     cd tools/nav-reserve-proof
 
@@ -204,6 +206,14 @@ no command that signs an arbitrary checkpoint file. The signing mode checks
 that the key is permission-restricted and belongs to the governed committee,
 and it durably rejects a conflicting checkpoint at the same source, committee
 epoch, and source height.
+
+Checkpoint coordination pins both `source_height` and
+`observed_source_head`. The latter must be at least `source_height +
+minimum_depth`. Every validator independently fetches its current finalized
+head and refuses to sign unless it has reached the pinned observation head.
+The live RPC head itself is deliberately not inserted into the signed
+checkpoint: validators querying a fast chain one block apart must still
+reproduce byte-identical statements.
 
 Add these four options to any Aave, EVM spot, Chainlink valuation,
 Hyperliquid, or NEAR `checkpoint-candidate` command, or to a Solana or Monero
@@ -311,7 +321,8 @@ and checkpoint candidate:
       --committee checkpoint-committee.json \
       --transaction-signature <base58-signature> \
       --salt <32-byte-lower-hex> \
-      --pftl-observation-height <height> --minimum-depth 32 \
+      --pftl-observation-height <height> \
+      --observed-source-head <finalized-slot> --minimum-depth 32 \
       --rpc-url <public-solana-rpc> \
       --prepared-output solana-prepared.json \
       --checkpoint-output solana-checkpoint.json
@@ -328,9 +339,9 @@ signing mode described above; it never enters proof construction.
 
 This adapter is cryptographic relative to the disclosed BFT checkpoint. It is
 not direct verification of Solana consensus. The reader now has an
-independently repeated, pinned `solana-verify` build identity; it is not yet
-deployed. Until it is deployed immutably and the governed A666 inputs,
-fuzzing, fresh epochs, reconciliation, and independent reproduction pass, it
+independently repeated, pinned `solana-verify` build identity and an immutable
+mainnet-beta deployment. Until the governed A666 inputs, fuzzing, fresh epochs,
+reconciliation, and independent reproduction pass, it
 remains partial and must not be represented as production-qualified.
 
 ### Public Monero reserve workflow
@@ -339,7 +350,7 @@ The Monero workflow starts by emitting the exact context-bound message for an
 external wallet. This ensures an old reserve proof cannot be replayed under a
 different NAVCoin, profile, manifest, policy, epoch, or observation interval.
 
-    postfiat-reserve-proof monero challenge \
+    postfiat-reserve-proof adapter monero challenge \
       --manifest manifest.json --context context.json \
       --source-id xmr-reserve --policy monero-policy.json \
       --pftl-observation-height <height> \
@@ -351,12 +362,13 @@ branches, output-block headers, bounded header anchors, and key-image status
 set, while emitting the checkpoint candidate for independent validator
 reproduction:
 
-    postfiat-reserve-proof monero prepare \
+    postfiat-reserve-proof adapter monero prepare \
       --manifest manifest.json --context context.json \
       --source-id xmr-reserve --policy monero-policy.json \
       --reserve-proof wallet-reserve-proof.json \
       --committee checkpoint-committee.json \
-      --pftl-observation-height <height> --minimum-depth 12 \
+      --pftl-observation-height <height> \
+      --observed-source-head <daemon-height> --minimum-depth 12 \
       --daemon-url <public-monero-daemon> \
       --prepared-output monero-prepared.json \
       --checkpoint-output monero-checkpoint.json
@@ -409,6 +421,7 @@ same pinned source height before producing their isolated ML-DSA vote:
       --policy evm-spot-policy.json \
       --source-domain eip155:1 \
       --source-height 12345678 \
+      --observed-source-head 12345742 \
       --minimum-depth 64 \
       --pftl-observation-height 500 \
       --committee ethereum-checkpoint-committee.json \
@@ -451,6 +464,7 @@ generic `source-checkpoint` commands described above:
       --pftl-genesis-hash "$PFTL_GENESIS_HASH" \
       --policy solana-usd-valuation-policy.json \
       --source-height 24000000 \
+      --observed-source-head 24000064 \
       --minimum-depth 64 \
       --pftl-observation-height 900 \
       --committee ethereum-price-committee.json \
@@ -549,7 +563,7 @@ proven under that header. It is instead part of the quorum-certified source
 checkpoint: validators must independently query the reader code at the exact
 height before signing. The receipt inclusion, payload, quantities, positions,
 and HyperCore-derived prices remain cryptographically verified under the
-certified receipts root. A public deployment of this hardened reader,
+certified receipts root. The exact hardened reader is now publicly deployed;
 governed A666 policy/committee material, fuzz qualification, and fresh
 multi-epoch reconciliation remain required before the adapter is
 production-qualified.

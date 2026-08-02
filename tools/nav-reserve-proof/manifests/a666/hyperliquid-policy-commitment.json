@@ -1,0 +1,6 @@
+{
+  "schema": "postfiat.reserve_quantity_policy_commitment_report.v1",
+  "adapter_kind": "hyperliquid-hyperevm-receipt-v1",
+  "source_domain": "eip155:999",
+  "verifier_commitment": "17fdb99bec941ef12877189124333d35e966661d0d5edc97b69f8693ee90169493c65ee8c84020e1121a9f1033aafd1b"
+}

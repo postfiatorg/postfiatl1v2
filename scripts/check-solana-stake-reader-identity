@@ -26,7 +26,14 @@ test "$(jq -r .solana_verify_version "$identity")" = "0.5.1"
 test "$(jq -r .sbpf_arch "$identity")" = "v0"
 test "$(jq -r .library_name "$identity")" = \
   "postfiat_solana_stake_reader"
-test "$(jq -r .deployment_status "$identity")" = "not_deployed"
+test "$(jq -r .deployment_status "$identity")" = \
+  "deployed_immutable_not_qualified"
+test "$(jq -r .cluster "$identity")" = "mainnet-beta"
+test "$(jq -r .program_id "$identity")" = \
+  "Gp2oTn6VjFF22n98H6YSH4uVvQxWFHNCL7pp1tcAPF36"
+test "$(jq -r .programdata_address "$identity")" = \
+  "9xVv6Q8Z1AJsK4aWKydhYyEGeA7Ai8k6t3gpreR7QBh8"
+test "$(jq -r .upgrade_authority "$identity")" = "null"
 
 case "${1:-}" in
   ""|--build) ;;

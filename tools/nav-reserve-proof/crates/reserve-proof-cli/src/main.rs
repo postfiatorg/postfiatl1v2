@@ -452,9 +452,11 @@ fn manifest_validate(path: PathBuf) -> Result<()> {
 fn witness_build(input: PathBuf, output: PathBuf) -> Result<()> {
     let witness: ReserveProofWitnessV1 = read_json(&input)?;
     let expected = execute_reserve_proof(&witness).map_err(anyhow::Error::msg)?;
-    let mut value = serde_cbor::value::to_value(&witness)?;
-    normalize_cbor_bytes(&mut value);
-    let encoded = serde_cbor::to_vec(&value)?;
+    // Preserve the human-readable representation before CBOR encoding.
+    // Alloy fixed-byte types currently serialize as CBOR bytes but deserialize
+    // only from their `0x`-prefixed hex form; the JSON value representation
+    // keeps that round trip symmetric while retaining deterministic map order.
+    let encoded = encode_human_readable_cbor(&witness)?;
     anyhow::ensure!(
         encoded.len() <= MAX_WITNESS_BYTES,
         "canonical witness exceeds {MAX_WITNESS_BYTES} bytes"
@@ -949,22 +951,8 @@ fn write_new(path: &PathBuf, bytes: &[u8]) -> Result<()> {
         .with_context(|| format!("sync {}", path.display()))
 }
 
-fn normalize_cbor_bytes(value: &mut serde_cbor::Value) {
-    match value {
-        serde_cbor::Value::Bytes(bytes) => {
-            *value = serde_cbor::Value::Array(
-                bytes
-                    .iter()
-                    .copied()
-                    .map(|byte| serde_cbor::Value::Integer(byte.into()))
-                    .collect(),
-            );
-        }
-        serde_cbor::Value::Array(values) => values.iter_mut().for_each(normalize_cbor_bytes),
-        serde_cbor::Value::Map(values) => values.values_mut().for_each(normalize_cbor_bytes),
-        serde_cbor::Value::Tag(_, value) => normalize_cbor_bytes(value),
-        _ => {}
-    }
+fn encode_human_readable_cbor<T: Serialize>(value: &T) -> Result<Vec<u8>> {
+    Ok(serde_cbor::to_vec(&serde_json::to_value(value)?)?)
 }
 
 #[cfg(test)]
@@ -972,6 +960,22 @@ mod tests {
     use super::*;
     use std::net::TcpListener;
     use std::thread;
+
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    struct FixedBytesRoundTrip {
+        value: alloy_primitives::B256,
+    }
+
+    #[test]
+    fn human_readable_cbor_round_trips_alloy_fixed_bytes() {
+        let expected = FixedBytesRoundTrip {
+            value: alloy_primitives::B256::from([0x5a; 32]),
+        };
+        let encoded = encode_human_readable_cbor(&expected).expect("encode fixed bytes");
+        let decoded: FixedBytesRoundTrip =
+            serde_cbor::from_slice(&encoded).expect("decode fixed bytes");
+        assert_eq!(decoded, expected);
+    }
 
     fn rpc_fixture(response: serde_json::Value) -> SocketAddr {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();

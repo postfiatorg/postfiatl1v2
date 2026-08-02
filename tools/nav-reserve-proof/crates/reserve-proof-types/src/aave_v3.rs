@@ -65,6 +65,9 @@ pub struct AaveV3PositionPolicyV1 {
 #[serde(deny_unknown_fields)]
 pub struct AaveV3PolicyV1 {
     pub source_domain: String,
+    /// Stable portfolio position represented by the complete governed Aave
+    /// position set. This must not be inferred from an operator address.
+    pub aggregate_position_id: String,
     pub ethereum_chain_id: u64,
     pub pool_address: Address,
     pub pool_code_hash: B256,
@@ -193,6 +196,7 @@ pub enum AaveV3Error {
 impl AaveV3PolicyV1 {
     pub fn validate(&self) -> Result<(), AaveV3Error> {
         validate_identifier(&self.source_domain)?;
+        validate_identifier(&self.aggregate_position_id)?;
         if self.ethereum_chain_id == 0
             || self.source_domain != format!("eip155:{}", self.ethereum_chain_id)
             || self.pool_address == Address::ZERO
@@ -252,6 +256,7 @@ impl AaveV3PolicyV1 {
         validate_lower_hex(committee_root, 48)?;
         let mut out = Vec::new();
         append_bytes(&mut out, self.source_domain.as_bytes())?;
+        append_bytes(&mut out, self.aggregate_position_id.as_bytes())?;
         out.extend_from_slice(&self.ethereum_chain_id.to_be_bytes());
         out.extend_from_slice(self.pool_address.as_slice());
         out.extend_from_slice(self.pool_code_hash.as_slice());
@@ -310,7 +315,10 @@ pub fn aave_v3_owner_commitment(owner: Address) -> String {
     hash48(OWNER_COMMITMENT_DOMAIN, &[owner.as_slice()])
 }
 
-pub fn verify_aave_v3_proof_v1(
+/// Verify every cryptographic component and derive the exact collateral and
+/// liability values. This deliberately does not compare caller-supplied
+/// aggregate amounts; `verify_aave_v3_proof_v1` adds that final binding.
+pub fn derive_aave_v3_proof_v1(
     proof: &AaveV3ProofV1,
     context: &AaveV3VerifyContextV1<'_>,
 ) -> Result<AaveV3VerificationV1, AaveV3Error> {
@@ -343,8 +351,7 @@ pub fn verify_aave_v3_proof_v1(
     if policy_commitment != context.quantity_verifier_commitment
         || policy_commitment != context.valuation_verifier_commitment
         || aave_v3_owner_commitment(proof.owner) != context.reserve_owner_commitment
-        || context.asset_or_position_id
-            != format!("aave-v3:account:0x{}", hex::encode(proof.owner.as_slice()))
+        || context.asset_or_position_id != proof.policy.aggregate_position_id
     {
         return Err(AaveV3Error::PolicyMismatch);
     }
@@ -388,11 +395,6 @@ pub fn verify_aave_v3_proof_v1(
         u64::try_from(collateral).map_err(|_| AaveV3Error::ArithmeticOverflow)?;
     let liability_usd_e8 =
         u64::try_from(liabilities).map_err(|_| AaveV3Error::ArithmeticOverflow)?;
-    if collateral_usd_e8 != context.expected_gross_assets
-        || liability_usd_e8 != context.expected_total_liabilities
-    {
-        return Err(AaveV3Error::EvidenceCommitment);
-    }
     let mut metadata = Vec::new();
     append_hex(&mut metadata, &policy_commitment, 48)?;
     metadata.extend_from_slice(checkpoint.source_block_hash.as_slice());
@@ -410,6 +412,19 @@ pub fn verify_aave_v3_proof_v1(
         evidence_commitment,
         metadata_hash: keccak256(domain_message(METADATA_DOMAIN, &metadata)),
     })
+}
+
+pub fn verify_aave_v3_proof_v1(
+    proof: &AaveV3ProofV1,
+    context: &AaveV3VerifyContextV1<'_>,
+) -> Result<AaveV3VerificationV1, AaveV3Error> {
+    let verified = derive_aave_v3_proof_v1(proof, context)?;
+    if verified.collateral_usd_e8 != context.expected_gross_assets
+        || verified.liability_usd_e8 != context.expected_total_liabilities
+    {
+        return Err(AaveV3Error::EvidenceCommitment);
+    }
+    Ok(verified)
 }
 
 impl AaveV3ProofV1 {
@@ -1631,6 +1646,7 @@ mod tests {
         };
         let policy = AaveV3PolicyV1 {
             source_domain: "eip155:42161".to_string(),
+            aggregate_position_id: "aave-v3-aggregate".to_string(),
             ethereum_chain_id: 42_161,
             pool_address: pool,
             pool_code_hash: code_hash,
@@ -1721,9 +1737,7 @@ mod tests {
         };
         let owner_commitment = Box::leak(aave_v3_owner_commitment(owner).into_boxed_str());
         let policy_static = Box::leak(policy_commitment.into_boxed_str());
-        let position_static = Box::leak(
-            format!("aave-v3:account:0x{}", hex::encode(owner.as_slice())).into_boxed_str(),
-        );
+        let position_static = "aave-v3-aggregate";
         let placeholder = AaveV3VerifyContextV1 {
             pftl_genesis_hash: Box::leak("11".repeat(48).into_boxed_str()),
             nav_asset_id: Box::leak("22".repeat(48).into_boxed_str()),
@@ -1934,6 +1948,7 @@ mod tests {
         );
         let policy = AaveV3PolicyV1 {
             source_domain: "eip155:42161".to_string(),
+            aggregate_position_id: "aave-v3-aggregate".to_string(),
             ethereum_chain_id: 42_161,
             pool_address: historical.collateral.reserve.pool_account.address,
             pool_code_hash: historical.collateral.reserve.pool_account.code_hash,

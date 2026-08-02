@@ -60,7 +60,32 @@ not StakeHub deprecation. Building a generic proof framework is necessary, but
 it is not StakeHub deprecation. Replacing cryptographic source validation with
 operator attestations is a security downgrade, not StakeHub deprecation.
 
-### 1.1 Plain-English end state
+### 1.1 Custody is allowed; private proof meaning is not
+
+StakeHub is installed on the operator machine, its agent is unlocked, and it
+holds the reserve accounts used by A666. That is not itself the architecture
+defect. A custody tool may unlock a key and sign an exact transaction or
+domain-separated reserve-owner statement constructed by public code. It may
+also submit a public-reader invocation or pay deployment gas and rent.
+
+What is forbidden is treating StakeHub as the authority that decides what the
+portfolio owns, what a source balance means, what price applies, or what NAV
+is. Those facts must be collected, validated, valued, and aggregated by public
+PostFiat code. For BFT-checkpointed sources, five of the six PFTL validators
+must independently reproduce the source checkpoint and sign with their own
+local validator keys. The proof kit then assembles and verifies that public
+certificate. An old StakeHub aggregate NAV or balance attestation is never a
+substitute.
+
+In this document, an "external signer" means a key outside the public proof
+process, not a person or machine unavailable to the operator. On this host,
+StakeHub supplies the reserve-owner and deployment signatures without
+exporting its keys. The PFTL validator hosts supply checkpoint votes without
+exporting their keys. A clean public checkout must still be able to construct
+every exact statement, verify every signature, and reproduce every asserted
+quantity and valuation.
+
+### 1.2 Plain-English end state
 
 An auditor starting from a clean public checkout must be able to answer all of
 these questions without asking the NAVCoin operator or reading StakeHub:
@@ -276,10 +301,10 @@ not yet the desired public architecture.
 |---|---|---:|---|
 | Aave on Arbitrum | Provider-neutral verifier, public checkpoint/collection workflow, and typed candidate policy/committee commitment derived from historical public state proofs implemented; partial | No | Review/tighten the candidate freshness bound, retain production fuzz campaigns, run fresh epochs and complete A666 reconciliation, independently reproduce, and qualify |
 | Complete EVM spot set | Provider-neutral quantity verifier, public checkpoint/collection workflow, public Chainlink state-proof valuation successor, typed two-chain quantity policy, and typed Arbitrum ETH/USD + USDC/USD valuation policy/committee commitments derived from retained historical state proofs implemented; partial | No | Review the candidate freshness bound, collect fresh committee-certified feed proofs, retain production fuzz campaigns, run fresh epochs and complete A666 reconciliation, independently reproduce, and qualify |
-| Hyperliquid | Provider-neutral verifier, public HyperCore receipt-reader contract, unsigned snapshot construction, checkpoint/owner workflow, and receipt-proof collector implemented; partial | No | Deploy the hardened public reader, govern policy/committee inputs, fuzz, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
-| Staked NEAR | Provider-neutral quantity verifier, public reader contract, unsigned invocation construction, finalized-head checkpoint workflow, owner authorization, outcome/block-proof collector, public Chainlink state-proof valuation successor, adversarial tests, and parser fuzz target implemented; partial | No | Deploy the public reader, govern quantity policy and committee inputs, collect exact NEAR/USD proofs, retain production fuzz campaigns, reproduce historical and fresh epochs, complete full A666 reconciliation, and qualify |
-| Staked Solana | Public stateless reserve-reader program, exact unsigned transaction construction, finalized transaction/block collector, immutable program identity check, owner authorization, BFT source checkpoint, bounded parser, successor verifier, guest dispatch, public Chainlink state-proof valuation successor, adversarial tests, parser fuzz target, and independently repeated reproducible SBF build implemented; partial. The old attested-RPC adapter remains separately labeled historical evidence. | No | Deploy the exact built reader immutably, publish its on-chain ProgramData identity and governed A666 quantity policy and committee inputs, collect exact SOL/USD proofs, retain production fuzz campaigns, run fresh epochs, reconcile, independently reproduce, and qualify |
-| Monero | Provider-neutral cryptographic quantity verifier, context-bound challenge, public ReserveProofV2 parser, transaction/block/header collector, certified key-image status workflow, typed mainnet reserve policy, and typed Optimism XMR/USD Chainlink state-proof valuation policy implemented; partial | No | Review the candidate freshness bound, produce a fresh governed nonzero proof and independently signed Monero and Optimism checkpoints, collect the exact XMR/USD proof, fuzz, reconcile, independently reproduce, and qualify |
+| Hyperliquid | Provider-neutral verifier, public HyperCore receipt-reader contract, unsigned snapshot construction, checkpoint/owner workflow, receipt-proof collector, and exact public-reader deployment implemented; partial | No | Govern policy/committee inputs, fuzz, reproduce complete historical and fresh epochs, complete full A666 reconciliation, and qualify |
+| Staked NEAR | Provider-neutral quantity verifier, public reader contract, deployed exact Wasm, finalized snapshot invocation, finalized-head checkpoint workflow, owner authorization, outcome/block-proof collector, public Chainlink state-proof valuation successor, adversarial tests, and parser fuzz target implemented; partial | No | Govern quantity policy and committee inputs, collect exact NEAR/USD proofs, retain production fuzz campaigns, reproduce historical and fresh epochs, complete full A666 reconciliation, and qualify |
+| Staked Solana | Public stateless reserve-reader program, exact unsigned transaction construction, finalized transaction/block collector, immutable exact-build mainnet deployment, program identity check, owner authorization, BFT source checkpoint, bounded parser, successor verifier, guest dispatch, public Chainlink state-proof valuation successor, adversarial tests, parser fuzz target, and independently repeated reproducible SBF build implemented; partial. The old attested-RPC adapter remains separately labeled historical evidence. | No | Publish governed A666 quantity policy and committee inputs, collect exact SOL/USD proofs, retain production fuzz campaigns, run fresh epochs, reconcile, independently reproduce, and qualify |
+| Monero | Provider-neutral cryptographic quantity verifier, context-bound challenge, public ReserveProofV2 parser, transaction/block/header collector, certified key-image status workflow, typed mainnet reserve policy, typed Optimism XMR/USD Chainlink state-proof valuation policy, and first live six-validator nonzero observation implemented; partial | No | Collect a second fresh epoch, retain production fuzz campaigns, reconcile, independently reproduce, and qualify |
 | pfUSDC overlay | Implemented and pushed | Not sufficient by itself | Exact-tip remote CI must pass; this covers only PFTL-accounted subscription reserves, not the six external source families |
 
 The Aave, complete-EVM-spot, Hyperliquid, NEAR, Solana, and Monero verifiers
@@ -339,6 +364,47 @@ qualification. These changes do not alter the
 `0/6` production-qualification result and cannot be cited as evidence that
 StakeHub is deprecated. Their collectors, fuzz targets, fresh source epochs,
 complete A666 reconciliation, and production qualification remain open.
+
+### 3.5 First complete live public shadow epoch
+
+On 2026-08-02 the public pipeline completed its first six-source,
+context-bound A666 shadow epoch. This is the first end-to-end evidence that the
+public implementation can verify the real portfolio without accepting a
+StakeHub aggregate balance or NAV attestation. StakeHub was used only to sign
+the exact public reserve-owner challenges with keys already in its custody.
+All source checkpoint statements were independently reproduced by the six
+PFTL validators; every assembled certificate contains six valid votes against
+a quorum of five.
+
+The qualification-only epoch-6 witness binds PFTL observation window
+`776..784`, source-manifest hash
+`8abe3e59198b72945d4778a7fa91e5af157a6c65032d8940cca486850ffe59fcb567268ca5942669ff6977ef32dd3a41`,
+and source-observation root
+`4aabb014d0fef575ffb65feca9f74aaa9938ea200ac6b811c0bd05a776bd8bee81d96e5f833a723602370f04234e1e7f`.
+Native execution produced:
+
+| Source | Gross value (USD scale 1e8) | Liabilities |
+|---|---:|---:|
+| Aave on Arbitrum | 56,041,873,124 | 20,095,433,833 |
+| Complete EVM spot | 63,509,977,968 | 0 |
+| Hyperliquid | 1,802,523,722,983 | 0 |
+| Staked NEAR | 827,968,163,344 | 0 |
+| Staked Solana | 105,346,569,694 | 0 |
+| Monero (`0.15419024 XMR`) | 5,602,533,208 | 0 |
+| **Total** | **2,860,992,840,321** | **20,095,433,833** |
+
+Verified net assets are `2,840,897,406,488`, or `$28,408.97406488`.
+All six quantity claims and all six valuation claims are cryptographic;
+attested and controlled value are both zero. The canonical CBOR witness is
+1,338,874 bytes with SHA-256
+`b9bb2c155fa1654c73f2e4013bf77060e8fa1d6ca0059e2cf38f38c2e0007447`.
+The 584-byte public values have SHA-256
+`d02a243f6cf684843ffb7cdf458c0dc41daa9799b0b9d966cbb71875e22953f6`.
+
+This is a qualification milestone, not production qualification or live
+activation. A second independently collected fresh epoch, retained fuzz
+campaigns, independent reproduction, successor guest build/proof, complete
+NAV/supply reconciliation, and the controlled migration gates remain open.
 
 ## 4. Required public code boundary
 
@@ -540,9 +606,13 @@ and reader bytecode hash, and every checkpoint validator must independently
 reproduce the exact header, code hash, and minimum depth before signing. The
 snapshot receipt, payload, exact position sets, quantities, liabilities, and
 HyperCore-derived prices are still cryptographically checked under that
-certified receipts root. Deployment of the hardened reader, governed A666
-policy/committee inputs, fuzz qualification, fresh epochs, and full A666
-reconciliation remain open.
+certified receipts root. The hardened public runtime was deployed to HyperEVM
+mainnet at `0xddb4ed1edf1f0d81f7531cddb27810080601a2cb` in transaction
+`0xcad045dbe7edcdbccbcdebae357525fd0bb5fe86e53f3b5a72417a92c5e37237`.
+Its 5,729-byte runtime has the pinned Keccak-256
+`c252f32acd9fdcfe2b4f9b1d70c3de17acf83649a6313fc3ab9155bca1010db3`.
+Governed A666 policy/committee inputs, fuzz qualification, fresh epochs, and
+full A666 reconciliation remain open.
 
 The current A666 shadow marks Hyperliquid quantity and valuation as attested.
 That is not equivalent to the historical receipt validation and cannot be the
@@ -592,13 +662,17 @@ before writing an observation. The proof kit never receives a NEAR private
 key. Code identity and the finalized head are explicitly BFT-checkpointed;
 the RPC response is not mislabeled as trustless NEAR consensus finality.
 
-The reader is not deployed under a governed successor account yet. A typed
-candidate Arbitrum NEAR/USD Chainlink valuation policy now pins the official
+The exact public Wasm is deployed on NEAR mainnet at
+`eed15bedebb4ac46d1528187a8c2f00aa59b441398d3e346c44eb2dcb2fc1d9a`,
+with code hash `5swZhNNqpD6HsqFXhNjRUiSYoXtnkWPipiW8hRbrkbN`. Transaction
+`BVEXnwEuYmZKrc36VJnnjPHFAev8QvuDuS5994mXpEmJ` successfully executed the
+first snapshot and finalized. A typed candidate Arbitrum NEAR/USD Chainlink
+valuation policy now pins the official
 registry feed, live aggregator, exact code hashes and OCR2 storage slots,
 committee, valuation context, decimals, and haircut. Its verifier commitment is
 `260ce714ab04e1f1d48676a0067b9a58894d4dc5673bd0f5356491ab90f6c2703071348906f362e17eb8f735dcb63015`.
-The quantity policy cannot be finalized until the public reader deployment
-identity exists. Reader deployment, governed quantity inputs, a fresh
+The deployment identity now exists and is publicly pinned. Governed quantity
+inputs, a fresh
 committee-certified NEAR/USD proof, freshness-bound review, fresh multi-epoch
 collection, full A666 reconciliation, and independent production qualification
 remain open. Therefore this implementation does not yet make the staked-NEAR
@@ -668,9 +742,13 @@ SOL/USD Chainlink valuation policy now pins the official registry feed, live
 aggregator, exact code hashes and OCR2 storage slots, committee, valuation
 context, decimals, and haircut. Its verifier commitment is
 `1ae3bf34e5433836b81710c6c5d41b0ec46c469c15d8a21e6ac735893676104fe5465af51441980dfee00ce01e274756`.
-No immutable public reader deployment has been recorded, so the governed
-quantity policy cannot yet be finalized. Deployment, governed quantity inputs,
-a fresh committee-certified SOL/USD proof, freshness-bound review, fresh
+The exact 33,120-byte artifact is now immutably deployed on Solana mainnet-beta
+as program `Gp2oTn6VjFF22n98H6YSH4uVvQxWFHNCL7pp1tcAPF36`, with ProgramData
+account `9xVv6Q8Z1AJsK4aWKydhYyEGeA7Ai8k6t3gpreR7QBh8` and no upgrade authority.
+The on-chain bytes match raw ELF SHA-256
+`af70e82df3f1d519da5c5c7ddb62ab594d7babdd95dbc67c1692c2d6cea96716`.
+Governed quantity inputs, a fresh committee-certified SOL/USD proof,
+freshness-bound review, fresh
 multi-epoch collection, full A666 reconciliation, and independent production
 reproduction remain open.
 Therefore staked Solana remains `0/1` qualified and does not make `G3` pass.
@@ -720,17 +798,21 @@ validator-local checkpoint mode reads a permission-restricted PFTL validator
 key only after reproducing the complete Monero source checkpoint, persists
 anti-equivocation state, and exports only its vote.
 
-The public parser has successfully decoded an existing real wallet-created
-proof and the public RPC client has independently decoded and hash-checked a
-finalized Monero mainnet block. The old proof is intentionally rejected by the
-new collection workflow because its message predates the context-bound public
-challenge. A fresh nonzero wallet proof, independently signed source
-checkpoint, governed XMR/USD valuation evidence, fuzzing, multi-epoch A666
-reconciliation, and independent production reproduction remain open.
+The public parser has now verified the live reserve's `0.15419024 XMR` as
+unspent. The earlier zero result was false: the temporary wallet scanner
+defaulted to a recent 4,320-block window even though the unspent reserve output
+was created at height `3694232`. The scanner now defaults to a genesis-safe
+restore height, while an explicitly supplied bounded restore height remains
+supported. The policy permits a pinned historical output block only while the
+validators independently reproduce and certify current key-image spent status.
+For the first complete shadow epoch, all six validators reproduced the Monero
+checkpoint, the Optimism XMR/USD Chainlink state proof valued XMR at
+`$363.352`, and the resulting `$56.02533208` source observation passed the
+public aggregate verifier. No aggregate amount attestation was used.
 
-A zero XMR balance in one historical epoch does not remove the requirement.
-The adapter must correctly verify both zero and nonzero reserves before it can
-be part of the production profile.
+The adapter must still pass a second fresh epoch, retained fuzz campaigns,
+independent reproduction, complete A666 reconciliation, and successor-profile
+qualification before it can be activated in production.
 
 ### 5.7 pfUSDC NAV-subscription reserve overlay
 
@@ -825,9 +907,11 @@ existing guest ELF SHA exactly.
   transaction/block collector, owner authorization, source checkpoint,
   successor verifier, bounded parser, and guest dispatch described in section
   5.5; keep the interim signed-RPC adapter explicitly attested.
-- [ ] Build and deploy the Solana reader immutably, publish governed A666
-  policy/committee/valuation inputs, fuzz it, reproduce fresh epochs, reconcile
-  the complete A666 profile, and qualify it independently.
+- [ ] Publish governed A666 Solana policy/committee/valuation inputs, retain
+  production fuzz campaigns, reproduce fresh epochs, reconcile the complete
+  A666 profile, and qualify it independently. The exact reader build and
+  immutable mainnet-beta deployment are complete; this combined qualification
+  item remains open.
 - [x] Implement and register the public XMR reserve-proof quantity adapter.
 - [x] Implement the public Monero reserve-proof, header-chain, transaction
   inclusion, ownership, and key-image spent-status collector for zero and
@@ -932,10 +1016,10 @@ existing guest ELF SHA exactly.
   `260ce714ab04e1f1d48676a0067b9a58894d4dc5673bd0f5356491ab90f6c2703071348906f362e17eb8f735dcb63015`
   and
   `1ae3bf34e5433836b81710c6c5d41b0ec46c469c15d8a21e6ac735893676104fe5465af51441980dfee00ce01e274756`.
-  These are valuation-only candidates: quantity-policy publication remains
-  blocked on the public NEAR and immutable Solana reader deployment identities,
-  and fresh committee-certified price proofs, freshness review, reconciliation,
-  and independent qualification remain open.
+  The corresponding public NEAR and Solana quantity policies are now published
+  against the exact deployed reader identities. Fresh committee-certified
+  quantity and price proofs, freshness review, reconciliation, and independent
+  qualification remain open.
 - [x] Derive and publish the candidate source-checkpoint committee from the
   public six-validator PFTL registry. The generic builder accepts only
   ML-DSA-65 public keys, canonicalizes validator ordering, rejects quorums
@@ -1101,6 +1185,10 @@ Source-specific minimums:
 StakeHub is deprecated only when `G0` through `G7` pass. Passing `G0`, `G1`,
 or `G2` alone is not deprecation.
 
+`G4` remains fail/open despite the first successful six-source shadow witness:
+a second fresh epoch, overlay/supply reconciliation, an SP1 proof, and
+independent reproduction are still required.
+
 ## 9. Monday demonstration boundary
 
 The frozen Monday demonstration may use the existing live A666 historical
@@ -1193,9 +1281,18 @@ source's production qualification or changes live A666.
 Current machine gates:
 
 ```text
+first complete six-source public shadow epoch
+  qualification artifacts:
+  /home/postfiat/.pft/public-reserve-qualification/20260802-epoch-1
+  6/6 quantity claims cryptographic; 6/6 valuation claims cryptographic
+  verified net assets: 2,840,897,406,488 at USD scale 1e8
+  native CBOR execution and public-values verification passed
+  no aggregate quantity, liability, valuation, or NAV attestation was accepted
+  this is one fresh epoch and does not by itself qualify a source or activate a profile
+
 scripts/test-proof-public-input-inventory
   passed after the current valuation continuation; 5 systems, 70 public fields,
-  75 source hashes
+  83 source hashes
 
 scripts/check-nav-reserve-proof-fuzz-smoke
   passed locally against guarded temporary corpora. In addition to the initial
@@ -1227,17 +1324,23 @@ scripts/check-a666-public-reader-candidates
   checks on 2026-08-02 prove that the historical HyperEVM reader runtime
   (`0x7e4007...74f8`) differs from the public candidate (`0xc252f3...0db3`),
   the historical NEAR reader code (`4mdew...wUhx`) differs from the public
-  candidate (`5swZ...kbN`), and the Solana candidate remains undeployed.
+  candidate (`5swZ...kbN`). The exact public HyperEVM and NEAR artifacts were
+  subsequently deployed, and the exact Solana candidate was deployed
+  immutably. The recorded identities match independent public-chain queries.
+  Deployment closes only the reader-identity prerequisites; it does not make
+  any source production-qualified.
 
-public deployment prerequisites on the current host
-  are absent: no HyperEVM deployment signer, funded NEAR deployment account,
-  funded Solana deployment keypair, validator checkpoint-signing keys, or
-  reserve-owner signing keys are available to this checkout; the `near` and
-  `solana` deployment CLIs are also not installed. The exact public reader
-  artifacts are built and pinned, but fabricating deployment identities or
-  copying private keys into this repository is prohibited. HyperEVM, NEAR, and
-  Solana policy finalization and fresh certified epochs therefore require the
-  authorized external signers and funded deployment accounts.
+public signing and custody prerequisites on the current infrastructure
+  are available. StakeHub is installed and unlocked on this machine and holds
+  the funded HyperEVM, NEAR, Solana, and reserve-owner keys. It was used only
+  as a custody/signing transport for the exact public-reader deployments and
+  public-code-generated statements; no private aggregate NAV attestation was
+  accepted. Each of the six PFTL validator hosts is reachable and holds its
+  own permission-restricted checkpoint-signing key. Keys remain in their
+  custody boundaries. The remaining work is to publish governed source
+  policies, make each validator independently reproduce and sign fresh source
+  checkpoints, assemble 5-of-6 certificates, collect public valuation proofs,
+  reconcile complete A666 epochs, and qualify the sources.
 
 public Solidity suite after HyperCore reader addition
   143 passed, 0 failed
@@ -1326,26 +1429,27 @@ Then:
 
 1. Require green exact-tip CI while preserving the pinned legacy ELF and vkey.
    The legacy archive/rebuild defect is fixed; do not rewrite that identity.
-2. Qualify Hyperliquid: deploy the hardened public reader, publish governed
-   A666 policy and committee inputs, collect fresh externally signed snapshots,
+2. Qualify Hyperliquid: publish governed A666 policy and committee inputs,
+   collect fresh reserve-owner-signed snapshots and 5-of-6 validator-certified
+   checkpoints,
    retain longer parser-fuzz campaigns and add adversarial network fixtures,
    reconcile at least two
    fresh epochs, and independently reproduce the workflow. The public snapshot,
    checkpoint, owner-authorization, and receipt-proof collection code is now
    implemented; it is not yet production-qualified.
-3. Qualify NEAR: deploy the implemented reader, publish governed A666
-   policy/committee and public valuation inputs, retain longer fuzz campaigns,
+3. Qualify NEAR: publish governed A666 policy/committee and public valuation
+   inputs, collect fresh reserve-owner-signed snapshots and 5-of-6
+   validator-certified checkpoints, retain longer fuzz campaigns,
    reproduce fresh epochs independently, and reconcile the full profile.
-4. Qualify Solana: immutably deploy the exact reproducibly built reader,
-   publish its ProgramData hash and governed A666
+4. Qualify Solana: publish the deployed immutable ProgramData identity and governed A666
    policy/committee/SOL-USD valuation inputs, retain longer fuzz campaigns for the
    transaction/payload/program-state parsers, collect fresh epochs, reconcile,
    and reproduce independently. The pinned SBF build identity is complete and
    CI-rebuilt; the old signed-RPC adapter remains ineligible.
-5. Qualify Monero: create a fresh context-bound nonzero wallet proof, assemble
-   an independently reproduced checkpoint and spent-status certificate, bind
-   public XMR/USD valuation evidence, retain longer fuzz campaigns, collect
-   fresh epochs, and reconcile the full profile.
+5. Qualify Monero: retain the completed context-bound nonzero epoch and its
+   independently reproduced spent-status and XMR/USD certificates, collect a
+   second fresh epoch, retain longer fuzz campaigns, independently reproduce,
+   and reconcile the full profile.
 6. Finish public valuation for every source. Bind governed price origin,
    signature or chain proof, scale, timestamp, freshness, asset identity,
    haircut, and rounding. Do not accept operator-entered aggregate USD values.

@@ -480,6 +480,9 @@ fn quantity_bindings(
     match verifier {
         QuantityVerifierBuildV1::AaveV3 { policy, committee } => {
             let owner = require_evm_owner(owner)?;
+            if asset_or_position_id != policy.aggregate_position_id {
+                bail!("Aave asset_or_position_id must equal aggregate_position_id");
+            }
             let committee_root = committee_root(committee)?;
             Ok(QuantityBindings {
                 adapter_kind: AAVE_V3_ADAPTER_KIND_V1,
@@ -517,6 +520,9 @@ fn quantity_bindings(
         }
         QuantityVerifierBuildV1::HyperliquidReceipt { policy, committee } => {
             let owner = require_evm_owner(owner)?;
+            if asset_or_position_id != policy.aggregate_position_id {
+                bail!("Hyperliquid aggregate position does not match policy");
+            }
             let committee_root = committee_root(committee)?;
             Ok(QuantityBindings {
                 adapter_kind: HYPERLIQUID_RECEIPT_ADAPTER_KIND_V1,
@@ -531,6 +537,9 @@ fn quantity_bindings(
         }
         QuantityVerifierBuildV1::NearReceipt { policy, committee } => {
             let account_id = require_near_owner(owner)?;
+            if asset_or_position_id != policy.position_id {
+                bail!("NEAR position does not match policy");
+            }
             let committee_root = committee_root(committee)?;
             Ok(QuantityBindings {
                 adapter_kind: NEAR_RECEIPT_QUANTITY_ADAPTER_KIND_V1,
@@ -1104,12 +1113,11 @@ mod tests {
             &std::fs::read(manifest_dir.join("source-policy-commitments.json")).unwrap(),
         )
         .unwrap();
-        for (index, (name, position, decimals)) in [
-            ("near", "near-staked-balance", 24u8),
-            ("solana", "sol-staked-balance", 9u8),
+        for (name, source_id, position, decimals) in [
+            ("near", "near-stake", "near-staked-balance", 24u8),
+            ("solana", "solana-stake", "sol-staked-balance", 9u8),
         ]
         .into_iter()
-        .enumerate()
         {
             let policy: EvmChainlinkValuationPolicyV1 = serde_json::from_slice(
                 &std::fs::read(
@@ -1147,11 +1155,55 @@ mod tests {
                     .as_u64()
                     .unwrap()
             );
+            let commitment = commitments["policies"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|entry| entry["source_id"].as_str() == Some(source_id))
+                .unwrap();
             assert_eq!(
-                commitments["valuation_only_candidates"][index]["valuation_verifier_commitment"]
-                    .as_str(),
+                commitment["valuation_verifier_commitment"].as_str(),
                 Some(policy.commitment().unwrap().as_str())
             );
+        }
+
+        let committee: BftCheckpointCommitteeV1 = serde_json::from_slice(
+            &std::fs::read(manifest_dir.join("checkpoint-committee.json")).unwrap(),
+        )
+        .unwrap();
+        let committee_root = committee.root().unwrap();
+        let hyperliquid: HyperliquidReceiptPolicyV1 = serde_json::from_slice(
+            &std::fs::read(manifest_dir.join("hyperliquid-policy.json")).unwrap(),
+        )
+        .unwrap();
+        let near: NearReceiptPolicyV1 = serde_json::from_slice(
+            &std::fs::read(manifest_dir.join("near-receipt-policy.json")).unwrap(),
+        )
+        .unwrap();
+        let solana: SolanaStakeReaderPolicyV1 = serde_json::from_slice(
+            &std::fs::read(manifest_dir.join("solana-stake-reader-policy.json")).unwrap(),
+        )
+        .unwrap();
+        for (source_id, derived) in [
+            (
+                "hyperliquid",
+                hyperliquid.commitment(&committee_root).unwrap(),
+            ),
+            ("near-stake", near.commitment(&committee_root).unwrap()),
+            ("solana-stake", solana.commitment().unwrap()),
+        ] {
+            let commitment = commitments["policies"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|entry| entry["source_id"].as_str() == Some(source_id))
+                .unwrap();
+            let field = if source_id == "hyperliquid" {
+                "quantity_and_valuation_verifier_commitment"
+            } else {
+                "quantity_verifier_commitment"
+            };
+            assert_eq!(commitment[field].as_str(), Some(derived.as_str()));
         }
     }
 }

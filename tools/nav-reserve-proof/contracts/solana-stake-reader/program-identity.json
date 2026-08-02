@@ -9,5 +9,14 @@
   "executable_program_hash": "1e0290cc9faa3b440b41e15e15f33ef34afcef4cc0cf65a719ab64fab4abad62",
   "raw_elf_sha256": "af70e82df3f1d519da5c5c7ddb62ab594d7babdd95dbc67c1692c2d6cea96716",
   "raw_elf_bytes": 33120,
-  "deployment_status": "not_deployed"
+  "deployment_status": "deployed_immutable_not_qualified",
+  "cluster": "mainnet-beta",
+  "program_id": "Gp2oTn6VjFF22n98H6YSH4uVvQxWFHNCL7pp1tcAPF36",
+  "programdata_address": "9xVv6Q8Z1AJsK4aWKydhYyEGeA7Ai8k6t3gpreR7QBh8",
+  "deployment_slot": 436801488,
+  "deploy_transaction": "4dzK5hPL4uWLZJwr59qGhAF9yUyDXPb63MHZjcQvCXpmwT6hMjZm28AxaMGLeLEWSLRrM2nPiCDy8TNCdqX2hpBM",
+  "make_immutable_transaction": "4h8yhSx6bmEhS7SciPfXyQDp9QwnK3VSRybfj2DngpTfqNjHeTM7iBBCShoFr8463T64KxoLCUuXUnUPYVXnWwbb",
+  "program_account_data_sha256": "468bb5e5f2380c138d95a5f52afbd7a959f3dce80f5aa43dd5b77b3ca4817053",
+  "programdata_account_data_sha256": "455070640f5e75ec9148cefab2e62317666aab7784364ffadda64beb30fe9d6e",
+  "upgrade_authority": null
 }

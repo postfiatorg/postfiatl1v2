@@ -1,0 +1,67 @@
+{
+  "source_domain": "solana:mainnet",
+  "position_set_id": "sol-staked-balance",
+  "stake_program": "Stake11111111111111111111111111111111111111",
+  "reader_program": "Gp2oTn6VjFF22n98H6YSH4uVvQxWFHNCL7pp1tcAPF36",
+  "reader_program_data": "9xVv6Q8Z1AJsK4aWKydhYyEGeA7Ai8k6t3gpreR7QBh8",
+  "reader_program_data_hash": [
+    69, 80, 112, 100, 15, 94, 117, 236,
+    145, 72, 206, 250, 178, 230, 35, 23,
+    102, 106, 171, 119, 132, 54, 79, 250,
+    221, 166, 75, 235, 48, 254, 157, 110
+  ],
+  "wallet": "FtZHrCLEhDnBpM2qPJ2LTkN3TNxxaoYatPcx7vS4j6Ay",
+  "wallet_pubkey": [
+    221, 56, 191, 203, 160, 69, 230, 168,
+    21, 83, 252, 28, 68, 55, 252, 78,
+    122, 175, 118, 59, 228, 242, 209, 27,
+    210, 86, 36, 190, 49, 242, 65, 150
+  ],
+  "stake_authority": [
+    221, 56, 191, 203, 160, 69, 230, 168,
+    21, 83, 252, 28, 68, 55, 252, 78,
+    122, 175, 118, 59, 228, 242, 209, 27,
+    210, 86, 36, 190, 49, 242, 65, 150
+  ],
+  "withdraw_authority": [
+    221, 56, 191, 203, 160, 69, 230, 168,
+    21, 83, 252, 28, 68, 55, 252, 78,
+    122, 175, 118, 59, 228, 242, 209, 27,
+    210, 86, 36, 190, 49, 242, 65, 150
+  ],
+  "positions": [
+    {
+      "index": 0,
+      "address": "529J5vVngyrmPTmdBcb5Z2pmnZK1V9qYxH59r16F1nm9",
+      "vote_account": [
+        77, 230, 44, 89, 26, 49, 73, 25,
+        10, 230, 251, 175, 12, 178, 130, 100,
+        36, 99, 146, 109, 136, 255, 192, 231,
+        19, 9, 102, 226, 72, 184, 21, 36
+      ]
+    },
+    {
+      "index": 1,
+      "address": "6zGsJ8BAv7q7YTXkRwAr79pKGBCKZU7uovjA6ywJTfmV",
+      "vote_account": [
+        148, 210, 8, 135, 246, 167, 79, 139,
+        132, 169, 35, 143, 192, 217, 91, 12,
+        204, 208, 176, 204, 141, 76, 151, 232,
+        28, 155, 214, 53, 81, 102, 49, 210
+      ]
+    },
+    {
+      "index": 2,
+      "address": "GRPCXXWGvr5Gd9yH7WHxifgn9NjFVLAwbtTvSqjCvkVs",
+      "vote_account": [
+        5, 193, 149, 172, 253, 132, 231, 73,
+        128, 246, 36, 103, 158, 214, 80, 40,
+        184, 175, 148, 59, 33, 27, 39, 143,
+        116, 55, 217, 254, 101, 184, 142, 83
+      ]
+    }
+  ],
+  "checkpoint_committee_root": "99b0a3b8af49f3c91537d24a698e47f5761eec65890d00cdc4070ec99b18b333dfe514199c258cda5b81bec33821e245",
+  "minimum_finalized_depth": 32,
+  "maximum_finalized_slot_lag": 512
+}

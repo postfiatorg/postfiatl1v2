@@ -1,6 +1,6 @@
 {
   "schema": "postfiat.a666.public_reader_deployment_candidates.v1",
-  "status": "deployment_required",
+  "status": "deployed_not_qualified",
   "hyperliquid": {
     "source": "crates/ethereum-contracts/src/HyperCoreReserveReader.sol",
     "solc_version": "0.8.24",
@@ -8,7 +8,13 @@
     "optimizer_runs": 200,
     "candidate_runtime_bytes": 5729,
     "candidate_runtime_keccak256": "c252f32acd9fdcfe2b4f9b1d70c3de17acf83649a6313fc3ab9155bca1010db3",
-    "deployment_status": "not_deployed",
+    "deployment_status": "deployed_not_qualified",
+    "chain_id": 999,
+    "reader_address": "0xddb4ed1edf1f0d81f7531cddb27810080601a2cb",
+    "deployment_transaction": "0xcad045dbe7edcdbccbcdebae357525fd0bb5fe86e53f3b5a72417a92c5e37237",
+    "deployment_block": 42122304,
+    "deployed_runtime_bytes": 5729,
+    "deployed_runtime_keccak256": "c252f32acd9fdcfe2b4f9b1d70c3de17acf83649a6313fc3ab9155bca1010db3",
     "historical_reader_address": "206125c5e083563d3d5be83b2d02b74acaa6268a",
     "historical_runtime_bytes": 9006,
     "historical_runtime_keccak256": "7e4007afb1245f6196c9c9b0ab593a08c18622f9dde700f0c3910454dcbb74f8",
@@ -19,7 +25,12 @@
     "candidate_wasm_bytes": 147398,
     "candidate_wasm_sha256": "013fec10bba9cd623af8800c465f702f50e5950cc13443799c7a8661940dd01d",
     "candidate_near_code_hash": "5swZhNNqpD6HsqFXhNjRUiSYoXtnkWPipiW8hRbrkbN",
-    "deployment_status": "not_deployed",
+    "deployment_status": "deployed_not_qualified",
+    "reader_account": "eed15bedebb4ac46d1528187a8c2f00aa59b441398d3e346c44eb2dcb2fc1d9a",
+    "deployed_near_code_hash": "5swZhNNqpD6HsqFXhNjRUiSYoXtnkWPipiW8hRbrkbN",
+    "first_snapshot_transaction": "BVEXnwEuYmZKrc36VJnnjPHFAev8QvuDuS5994mXpEmJ",
+    "first_snapshot_receipt": "8sVGQN1xw9FUvTBDxgT84eDQxb5WrqVApfiouBpGC7iG",
+    "first_snapshot_block_height": 209629087,
     "historical_reader_account": "eed15bedebb4ac46d1528187a8c2f00aa59b441398d3e346c44eb2dcb2fc1d9a",
     "historical_near_code_hash": "4mdewfmqBVSbXzgbKfThp6vnXJA6KxhMrcLSj6ZMwUhx",
     "historical_reader_is_candidate": false
@@ -29,6 +40,12 @@
     "candidate_executable_program_hash": "1e0290cc9faa3b440b41e15e15f33ef34afcef4cc0cf65a719ab64fab4abad62",
     "candidate_raw_elf_sha256": "af70e82df3f1d519da5c5c7ddb62ab594d7babdd95dbc67c1692c2d6cea96716",
     "candidate_raw_elf_bytes": 33120,
-    "deployment_status": "not_deployed"
+    "deployment_status": "deployed_immutable_not_qualified",
+    "program_id": "Gp2oTn6VjFF22n98H6YSH4uVvQxWFHNCL7pp1tcAPF36",
+    "programdata_address": "9xVv6Q8Z1AJsK4aWKydhYyEGeA7Ai8k6t3gpreR7QBh8",
+    "deploy_transaction": "4dzK5hPL4uWLZJwr59qGhAF9yUyDXPb63MHZjcQvCXpmwT6hMjZm28AxaMGLeLEWSLRrM2nPiCDy8TNCdqX2hpBM",
+    "make_immutable_transaction": "4h8yhSx6bmEhS7SciPfXyQDp9QwnK3VSRybfj2DngpTfqNjHeTM7iBBCShoFr8463T64KxoLCUuXUnUPYVXnWwbb",
+    "deployment_slot": 436801488,
+    "upgrade_authority": null
   }
 }

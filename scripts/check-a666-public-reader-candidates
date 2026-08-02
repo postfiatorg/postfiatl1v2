@@ -6,10 +6,19 @@ identity="$repo_root/tools/nav-reserve-proof/manifests/a666/reader-deployment-ca
 
 jq -e '
   .schema == "postfiat.a666.public_reader_deployment_candidates.v1" and
-  .status == "deployment_required" and
-  .hyperliquid.deployment_status == "not_deployed" and
-  .near.deployment_status == "not_deployed" and
-  .solana.deployment_status == "not_deployed" and
+  .status == "deployed_not_qualified" and
+  .hyperliquid.deployment_status == "deployed_not_qualified" and
+  .hyperliquid.chain_id == 999 and
+  .hyperliquid.reader_address == "0xddb4ed1edf1f0d81f7531cddb27810080601a2cb" and
+  .hyperliquid.deployed_runtime_bytes == .hyperliquid.candidate_runtime_bytes and
+  .hyperliquid.deployed_runtime_keccak256 == .hyperliquid.candidate_runtime_keccak256 and
+  .near.deployment_status == "deployed_not_qualified" and
+  .near.reader_account == "eed15bedebb4ac46d1528187a8c2f00aa59b441398d3e346c44eb2dcb2fc1d9a" and
+  .near.deployed_near_code_hash == .near.candidate_near_code_hash and
+  .solana.deployment_status == "deployed_immutable_not_qualified" and
+  .solana.program_id == "Gp2oTn6VjFF22n98H6YSH4uVvQxWFHNCL7pp1tcAPF36" and
+  .solana.programdata_address == "9xVv6Q8Z1AJsK4aWKydhYyEGeA7Ai8k6t3gpreR7QBh8" and
+  .solana.upgrade_authority == null and
   (.hyperliquid.historical_reader_is_candidate | not) and
   (.near.historical_reader_is_candidate | not)
 ' "$identity" >/dev/null
@@ -59,5 +68,12 @@ test "$(jq -r .raw_elf_sha256 "$solana_identity")" = \
   "$(jq -r .solana.candidate_raw_elf_sha256 "$identity")"
 test "$(jq -r .raw_elf_bytes "$solana_identity")" = \
   "$(jq -r .solana.candidate_raw_elf_bytes "$identity")"
+test "$(jq -r .deployment_status "$solana_identity")" = \
+  "$(jq -r .solana.deployment_status "$identity")"
+test "$(jq -r .program_id "$solana_identity")" = \
+  "$(jq -r .solana.program_id "$identity")"
+test "$(jq -r .programdata_address "$solana_identity")" = \
+  "$(jq -r .solana.programdata_address "$identity")"
+test "$(jq -r .upgrade_authority "$solana_identity")" = "null"
 
-printf 'A666 public reader candidates match pinned public builds; all three still require new deployments.\n'
+printf 'A666 public readers match pinned public builds and recorded deployments; production qualification remains open.\n'

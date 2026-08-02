@@ -64,6 +64,11 @@ pub enum HyperliquidCommand {
         policy: PathBuf,
         #[arg(long)]
         source_height: u64,
+        /// Common source head pinned by the checkpoint coordinator. Every
+        /// validator independently requires its live head to be at least this
+        /// value before signing.
+        #[arg(long)]
+        observed_source_head: u64,
         #[arg(long)]
         minimum_depth: u32,
         #[arg(long)]
@@ -141,6 +146,7 @@ pub fn run(command: HyperliquidCommand) -> Result<()> {
             pftl_genesis_hash,
             policy,
             source_height,
+            observed_source_head,
             minimum_depth,
             pftl_observation_height,
             committee,
@@ -151,6 +157,7 @@ pub fn run(command: HyperliquidCommand) -> Result<()> {
             pftl_genesis_hash,
             policy,
             source_height,
+            observed_source_head,
             minimum_depth,
             pftl_observation_height,
             committee,
@@ -272,6 +279,7 @@ struct CheckpointCandidateArgs {
     pftl_genesis_hash: String,
     policy: PathBuf,
     source_height: u64,
+    observed_source_head: u64,
     minimum_depth: u32,
     pftl_observation_height: u64,
     committee: PathBuf,
@@ -283,7 +291,10 @@ struct CheckpointCandidateArgs {
 fn checkpoint_candidate(args: CheckpointCandidateArgs) -> Result<()> {
     validate_lower_hex("pftl_genesis_hash", &args.pftl_genesis_hash, 48)?;
     anyhow::ensure!(
-        args.source_height > 0 && args.minimum_depth > 0 && args.pftl_observation_height > 0,
+        args.source_height > 0
+            && args.observed_source_head > 0
+            && args.minimum_depth > 0
+            && args.pftl_observation_height > 0,
         "checkpoint heights and minimum depth must be nonzero"
     );
     let policy: HyperliquidReceiptPolicyV1 = read_json(&args.policy)?;
@@ -298,14 +309,18 @@ fn checkpoint_candidate(args: CheckpointCandidateArgs) -> Result<()> {
     let client = rpc_client()?;
     let rpc_url = validate_rpc_url(&args.rpc_url)?;
     validate_chain_id(&client, &rpc_url, &policy)?;
-    let observed_source_head = rpc_head(&client, &rpc_url)?;
+    let live_source_head = rpc_head(&client, &rpc_url)?;
     let required_head = args
         .source_height
         .checked_add(u64::from(args.minimum_depth))
         .context("HyperEVM checkpoint depth overflows")?;
     anyhow::ensure!(
-        observed_source_head >= required_head,
-        "HyperEVM source block has not reached the required depth"
+        args.observed_source_head >= required_head,
+        "pinned HyperEVM observation head does not establish the required depth"
+    );
+    anyhow::ensure!(
+        live_source_head >= args.observed_source_head,
+        "live HyperEVM head is behind the pinned observation head"
     );
     let block_tag = format!("0x{:x}", args.source_height);
     let block: Value = rpc_call(
@@ -332,7 +347,7 @@ fn checkpoint_candidate(args: CheckpointCandidateArgs) -> Result<()> {
             policy.reader_contract,
             policy.reader_code_hash,
         ),
-        observed_source_head,
+        observed_source_head: args.observed_source_head,
         minimum_depth: args.minimum_depth,
         pftl_observation_height: args.pftl_observation_height,
         committee_epoch: committee.epoch,
@@ -352,6 +367,7 @@ fn checkpoint_candidate(args: CheckpointCandidateArgs) -> Result<()> {
             "reader_code_hash": policy.reader_code_hash,
             "source_state_commitment": checkpoint.source_state_commitment,
             "observed_source_head": checkpoint.observed_source_head,
+            "live_source_head": live_source_head,
             "minimum_depth": checkpoint.minimum_depth,
             "next_required_check": "each validator independently checks the header, reader code, and depth before signing",
         }))?
@@ -631,7 +647,7 @@ fn validate_manifest_entry(
     );
     anyhow::ensure!(
         entry.source_domain == policy.source_domain
-            && entry.asset_or_position_id == format!("hyperliquid:account:{owner:#x}")
+            && entry.asset_or_position_id == policy.aggregate_position_id
             && entry.reserve_owner_commitment == hyperliquid_owner_commitment(owner)
             && entry.quantity_verifier_commitment == policy_commitment
             && entry.valuation_verifier_commitment == policy_commitment,
@@ -1372,6 +1388,7 @@ mod tests {
     fn policy() -> HyperliquidReceiptPolicyV1 {
         HyperliquidReceiptPolicyV1 {
             source_domain: "eip155:999".to_string(),
+            aggregate_position_id: "hyperliquid-test-position".to_string(),
             hyperevm_chain_id: 999,
             reader_contract: Address::repeat_byte(0x11),
             reader_code_hash: B256::repeat_byte(0x22),

@@ -1,0 +1,6 @@
+{
+  "schema": "postfiat.reserve_quantity_policy_commitment_report.v1",
+  "adapter_kind": "solana-stake-reader-bft-checkpoint-v1",
+  "source_domain": "solana:mainnet",
+  "verifier_commitment": "fd34a6632af9ccafae078647749a593bffd54ac710be4f3de11643a04a4932c72d9616efe39bec3e16e7cc0820f2c42a"
+}

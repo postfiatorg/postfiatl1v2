@@ -35,6 +35,10 @@ scripts/check-solana-stake-reader-identity --build
 
 The independently repeated executable program hash is
 `1e0290cc9faa3b440b41e15e15f33ef34afcef4cc0cf65a719ab64fab4abad62`.
-The program has not been deployed. A deployment is not qualified until the
-on-chain program is made immutable and its exact ProgramData account and hash
-are published in the governed policy.
+The exact build was deployed immutably to Solana mainnet-beta on 2026-08-02 as
+program `Gp2oTn6VjFF22n98H6YSH4uVvQxWFHNCL7pp1tcAPF36`, with ProgramData
+account `9xVv6Q8Z1AJsK4aWKydhYyEGeA7Ai8k6t3gpreR7QBh8`. The on-chain program bytes
+match the pinned raw ELF SHA-256 and the upgrade authority is absent. This
+closes deployment only; the reader remains unqualified until its governed
+A666 policy, fresh certified epochs, reconciliation, fuzzing, and independent
+reproduction gates pass.

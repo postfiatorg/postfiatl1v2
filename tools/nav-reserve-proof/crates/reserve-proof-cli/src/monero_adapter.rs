@@ -73,6 +73,11 @@ pub enum MoneroCommand {
         committee: PathBuf,
         #[arg(long)]
         pftl_observation_height: u64,
+        /// Common daemon head pinned by the checkpoint coordinator. Every
+        /// validator independently requires its live head to be at least this
+        /// value before signing.
+        #[arg(long)]
+        observed_source_head: u64,
         #[arg(long)]
         minimum_depth: u32,
         #[arg(long)]
@@ -83,6 +88,26 @@ pub enum MoneroCommand {
         checkpoint_output: PathBuf,
         #[command(flatten)]
         signing: CheckpointSigningArgs,
+    },
+    /// Attach the certified current key-image-status checkpoint and emit a
+    /// quantity-verified draft for a separate cryptographic valuation adapter.
+    /// The draft cannot pass valuation checks until that adapter replaces its
+    /// deliberately invalid placeholder.
+    CollectQuantity {
+        #[arg(long)]
+        manifest: PathBuf,
+        #[arg(long)]
+        context: PathBuf,
+        #[arg(long)]
+        source_id: String,
+        #[arg(long)]
+        prepared: PathBuf,
+        #[arg(long)]
+        checkpoint_certificate: PathBuf,
+        #[arg(long)]
+        disclosure_commitment: String,
+        #[arg(long)]
+        output: PathBuf,
     },
     /// Attach the independently assembled checkpoint certificate, verify the
     /// complete quantity and valuation evidence, and write the observation.
@@ -135,6 +160,7 @@ pub fn run(command: MoneroCommand) -> Result<()> {
             reserve_proof,
             committee,
             pftl_observation_height,
+            observed_source_head,
             minimum_depth,
             daemon_url,
             prepared_output,
@@ -148,11 +174,29 @@ pub fn run(command: MoneroCommand) -> Result<()> {
             reserve_proof,
             committee,
             pftl_observation_height,
+            observed_source_head,
             minimum_depth,
             daemon_url,
             prepared_output,
             checkpoint_output,
             signing,
+        }),
+        MoneroCommand::CollectQuantity {
+            manifest,
+            context,
+            source_id,
+            prepared,
+            checkpoint_certificate,
+            disclosure_commitment,
+            output,
+        } => collect_quantity(CollectQuantityArgs {
+            manifest,
+            context,
+            source_id,
+            prepared,
+            checkpoint_certificate,
+            disclosure_commitment,
+            output,
         }),
         MoneroCommand::Collect {
             manifest,
@@ -225,6 +269,7 @@ struct PrepareArgs {
     reserve_proof: PathBuf,
     committee: PathBuf,
     pftl_observation_height: u64,
+    observed_source_head: u64,
     minimum_depth: u32,
     daemon_url: String,
     prepared_output: PathBuf,
@@ -247,7 +292,10 @@ fn prepare(args: PrepareArgs) -> Result<()> {
         !args.prepared_output.exists() && !args.checkpoint_output.exists(),
         "refusing to overwrite Monero prepared or checkpoint output"
     );
-    anyhow::ensure!(args.minimum_depth > 0, "minimum depth must be nonzero");
+    anyhow::ensure!(
+        args.observed_source_head > 0 && args.minimum_depth > 0,
+        "observation head and minimum depth must be nonzero"
+    );
     let (_, context, entry) = load_source(&args.manifest, &args.context, &args.source_id)?;
     let policy: MoneroReservePolicyV1 = read_json(&args.policy)?;
     validate_manifest_entry(&entry, &policy)?;
@@ -285,9 +333,13 @@ fn prepare(args: PrepareArgs) -> Result<()> {
         "Monero address keys do not match policy"
     );
     let rpc = MoneroRpc::new(&args.daemon_url)?;
-    let observed_head = rpc.last_block_header()?;
-    let source_height = observed_head
-        .height
+    let live_observed_head = rpc.last_block_header()?;
+    anyhow::ensure!(
+        live_observed_head.height >= args.observed_source_head,
+        "live Monero head is behind the pinned observation head"
+    );
+    let source_height = args
+        .observed_source_head
         .checked_sub(u64::from(args.minimum_depth))
         .context("Monero head is below the required confirmation depth")?;
     let source_block = rpc.fetch_block(source_height)?;
@@ -415,7 +467,7 @@ fn prepare(args: PrepareArgs) -> Result<()> {
             .context("Monero source timestamp overflow")?,
         source_block_hash: source_block.hash,
         source_state_commitment,
-        observed_source_head: observed_head.height,
+        observed_source_head: args.observed_source_head,
         minimum_depth: args.minimum_depth,
         pftl_observation_height: args.pftl_observation_height,
         committee_epoch: committee.epoch,
@@ -449,6 +501,7 @@ fn prepare(args: PrepareArgs) -> Result<()> {
             "source_height": checkpoint.source_height,
             "source_hash": checkpoint.source_block_hash,
             "observed_source_head": checkpoint.observed_source_head,
+            "live_source_head": live_observed_head.height,
             "minimum_depth": checkpoint.minimum_depth,
             "next_required_check": "each checkpoint validator independently reproduces the source block, output anchors, and key-image statuses before signing",
         }))?
@@ -467,6 +520,87 @@ struct CollectArgs {
     total_liabilities: u64,
     disclosure_commitment: String,
     output: PathBuf,
+}
+
+struct CollectQuantityArgs {
+    manifest: PathBuf,
+    context: PathBuf,
+    source_id: String,
+    prepared: PathBuf,
+    checkpoint_certificate: PathBuf,
+    disclosure_commitment: String,
+    output: PathBuf,
+}
+
+fn collect_quantity(args: CollectQuantityArgs) -> Result<()> {
+    validate_lower_hex("disclosure_commitment", &args.disclosure_commitment, 48)?;
+    let (_, context, entry) = load_source(&args.manifest, &args.context, &args.source_id)?;
+    let prepared: PreparedMoneroReserveV1 = read_json(&args.prepared)?;
+    anyhow::ensure!(
+        prepared.schema == "postfiat.reserve_monero_prepared.v1",
+        "unsupported Monero prepared artifact schema"
+    );
+    validate_manifest_entry(&entry, &prepared.policy)?;
+    let certificate: BftSourceCheckpointCertificateV1 = read_json(&args.checkpoint_certificate)?;
+    anyhow::ensure!(
+        certificate.checkpoint == prepared.checkpoint,
+        "Monero certificate does not sign the prepared checkpoint"
+    );
+    let proof = MoneroReserveProofV1 {
+        policy: prepared.policy,
+        checkpoint_certificate: certificate,
+        reserve: prepared.reserve,
+        key_image_statuses: prepared.key_image_statuses,
+    };
+    let evidence_commitment = proof
+        .evidence_commitment()
+        .map_err(|error| anyhow!("Monero evidence commitment failed: {error}"))?;
+    let observed_at = proof
+        .checkpoint_certificate
+        .checkpoint
+        .pftl_observation_height;
+    validate_observation_height(&context, observed_at)?;
+    let verified = verify_monero_reserve_proof_v1(
+        &proof,
+        &verification_context(&context, &entry, observed_at, &evidence_commitment),
+    )
+    .map_err(|error| anyhow!("Monero quantity proof failed: {error}"))?;
+    let quantity_evidence = SourceEvidenceV1::MoneroReserve {
+        evidence_commitment: evidence_commitment.clone(),
+        proof: Box::new(proof),
+    };
+    let observation = SourceObservationV1 {
+        source_id: entry.source_id.clone(),
+        observed_at_block: observed_at,
+        gross_assets: 0,
+        total_liabilities: 0,
+        quantity_evidence: quantity_evidence.clone(),
+        valuation_evidence: quantity_evidence,
+        disclosure_commitment: args.disclosure_commitment,
+    };
+    verify_observation_evidence(
+        &context,
+        &entry,
+        &observation,
+        EvidenceDimensionV1::Quantity,
+    )
+    .map_err(anyhow::Error::msg)?;
+    write_new(&args.output, &serde_json::to_vec_pretty(&observation)?)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&json!({
+            "schema": "postfiat.reserve_monero_quantity_draft.v1",
+            "output": args.output,
+            "source_id": observation.source_id,
+            "pftl_observation_height": observation.observed_at_block,
+            "xmr_atomic": verified.xmr_atomic.to_string(),
+            "quantity_verified": true,
+            "valuation_verified": false,
+            "next_required_check": "replace the valuation placeholder with a registered cryptographic valuation proof",
+            "evidence_commitment": evidence_commitment,
+        }))?
+    );
+    Ok(())
 }
 
 fn collect(args: CollectArgs) -> Result<()> {
@@ -634,6 +768,9 @@ struct ReserveProofJson {
     #[serde(default)]
     #[serde(rename = "proven_xmr")]
     _proven_xmr: Option<String>,
+    #[serde(default)]
+    #[serde(rename = "restore_height")]
+    _restore_height: Option<u64>,
 }
 
 struct ParsedReserveProofV2 {

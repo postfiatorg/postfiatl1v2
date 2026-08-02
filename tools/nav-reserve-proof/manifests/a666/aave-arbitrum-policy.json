@@ -1,5 +1,6 @@
 {
   "source_domain": "eip155:42161",
+  "aggregate_position_id": "aave-v3:aggregate-collateral-and-debt",
   "ethereum_chain_id": 42161,
   "pool_address": "0x794a61358d6845594f94dc1db02a252b5b4814ad",
   "pool_code_hash": "0xf168c2e9e4d04292c7d5d526a9a917175a44369ab63a2f9997537acf0ffaaf2e",

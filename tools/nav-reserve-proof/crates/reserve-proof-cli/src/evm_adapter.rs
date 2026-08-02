@@ -16,8 +16,8 @@ use reserve_proof_types::{
     aave_v3::{
         aave_reserve_storage_slot, aave_v3_owner_authorization_statement_for_policy_v1,
         aave_v3_owner_commitment, chainlink_latest_round, chainlink_transmission_slot,
-        current_phase_aggregator, fixed_storage_slot, mapping_slot_address,
-        verify_aave_v3_proof_v1, AaveOraclePriceProofV1, AaveOracleSourcePolicyV1,
+        current_phase_aggregator, derive_aave_v3_proof_v1, fixed_storage_slot,
+        mapping_slot_address, AaveOraclePriceProofV1, AaveOracleSourcePolicyV1,
         AaveOracleSourceProofV1, AaveV3PolicyV1, AaveV3PositionPolicyV1, AaveV3PositionProofV1,
         AaveV3ProofV1, AaveV3ReserveProofV1, AaveV3VerifyContextV1, ChainlinkFeedProofV1,
         AAVE_EVM_CHECKPOINT_KIND_V1, AAVE_V3_ADAPTER_KIND_V1,
@@ -160,6 +160,8 @@ pub enum AaveV3Command {
         policy: PathBuf,
         #[arg(long)]
         source_height: u64,
+        #[arg(long)]
+        observed_source_head: u64,
         #[arg(long)]
         minimum_depth: u32,
         #[arg(long)]
@@ -313,6 +315,8 @@ pub enum EvmSpotCommand {
         #[arg(long)]
         source_height: u64,
         #[arg(long)]
+        observed_source_head: u64,
+        #[arg(long)]
         minimum_depth: u32,
         #[arg(long)]
         pftl_observation_height: u64,
@@ -340,6 +344,30 @@ pub enum EvmSpotCommand {
         owner: String,
         #[arg(long, required = true, num_args = 1..)]
         checkpoint_certificate: Vec<PathBuf>,
+        #[arg(long)]
+        output: PathBuf,
+    },
+    /// Collect and verify the complete multichain quantity proof, emitting an
+    /// explicitly incomplete draft for a separate valuation adapter.
+    CollectQuantity {
+        #[arg(long)]
+        manifest: PathBuf,
+        #[arg(long)]
+        context: PathBuf,
+        #[arg(long)]
+        source_id: String,
+        #[arg(long)]
+        policy: PathBuf,
+        #[arg(long)]
+        owner: String,
+        #[arg(long)]
+        ownership_signature: String,
+        #[arg(long, required = true, num_args = 1..)]
+        checkpoint_certificate: Vec<PathBuf>,
+        #[arg(long)]
+        rpc_map: PathBuf,
+        #[arg(long)]
+        disclosure_commitment: String,
         #[arg(long)]
         output: PathBuf,
     },
@@ -387,6 +415,8 @@ pub enum EvmChainlinkValuationCommand {
         #[arg(long)]
         source_height: u64,
         #[arg(long)]
+        observed_source_head: u64,
+        #[arg(long)]
         minimum_depth: u32,
         #[arg(long)]
         pftl_observation_height: u64,
@@ -415,6 +445,11 @@ pub enum EvmChainlinkValuationCommand {
         checkpoint_certificate: PathBuf,
         #[arg(long)]
         observation: PathBuf,
+        /// Candidate valuation-unit amount. It is never trusted: the
+        /// Chainlink proof verifier recomputes it exactly and rejects a
+        /// mismatch before output is written.
+        #[arg(long)]
+        gross_assets: u64,
         #[arg(long)]
         rpc_url: String,
         #[arg(long)]
@@ -429,6 +464,7 @@ pub fn run(command: AdapterCommand) -> Result<()> {
                 pftl_genesis_hash,
                 policy,
                 source_height,
+                observed_source_head,
                 minimum_depth,
                 pftl_observation_height,
                 committee,
@@ -439,6 +475,7 @@ pub fn run(command: AdapterCommand) -> Result<()> {
                 pftl_genesis_hash,
                 policy,
                 source_height,
+                observed_source_head,
                 minimum_depth,
                 pftl_observation_height,
                 committee,
@@ -552,6 +589,7 @@ pub fn run(command: AdapterCommand) -> Result<()> {
                 policy,
                 source_domain,
                 source_height,
+                observed_source_head,
                 minimum_depth,
                 pftl_observation_height,
                 committee,
@@ -563,6 +601,7 @@ pub fn run(command: AdapterCommand) -> Result<()> {
                 policy,
                 source_domain,
                 source_height,
+                observed_source_head,
                 minimum_depth,
                 pftl_observation_height,
                 committee,
@@ -585,6 +624,32 @@ pub fn run(command: AdapterCommand) -> Result<()> {
                 policy,
                 owner,
                 checkpoint_certificates: checkpoint_certificate,
+                output,
+            }),
+            EvmSpotCommand::CollectQuantity {
+                manifest,
+                context,
+                source_id,
+                policy,
+                owner,
+                ownership_signature,
+                checkpoint_certificate,
+                rpc_map,
+                disclosure_commitment,
+                output,
+            } => evm_spot_collect(EvmSpotCollectArgs {
+                manifest,
+                context,
+                source_id,
+                policy,
+                owner,
+                ownership_signature,
+                checkpoint_certificates: checkpoint_certificate,
+                rpc_map,
+                valuation_evidence: None,
+                gross_assets: 0,
+                total_liabilities: 0,
+                disclosure_commitment,
                 output,
             }),
             EvmSpotCommand::Collect {
@@ -610,7 +675,7 @@ pub fn run(command: AdapterCommand) -> Result<()> {
                 ownership_signature,
                 checkpoint_certificates: checkpoint_certificate,
                 rpc_map,
-                valuation_evidence,
+                valuation_evidence: Some(valuation_evidence),
                 gross_assets,
                 total_liabilities,
                 disclosure_commitment,
@@ -622,6 +687,7 @@ pub fn run(command: AdapterCommand) -> Result<()> {
                 pftl_genesis_hash,
                 policy,
                 source_height,
+                observed_source_head,
                 minimum_depth,
                 pftl_observation_height,
                 committee,
@@ -633,6 +699,7 @@ pub fn run(command: AdapterCommand) -> Result<()> {
                     pftl_genesis_hash,
                     policy,
                     source_height,
+                    observed_source_head,
                     minimum_depth,
                     pftl_observation_height,
                     committee,
@@ -648,6 +715,7 @@ pub fn run(command: AdapterCommand) -> Result<()> {
                 policy,
                 checkpoint_certificate,
                 observation,
+                gross_assets,
                 rpc_url,
                 output,
             } => evm_chainlink_valuation_collect(EvmChainlinkValuationCollectArgs {
@@ -657,6 +725,7 @@ pub fn run(command: AdapterCommand) -> Result<()> {
                 policy,
                 checkpoint_certificate,
                 observation,
+                gross_assets,
                 rpc_url,
                 output,
             }),
@@ -848,6 +917,7 @@ struct AaveV3CheckpointCandidateArgs {
     pftl_genesis_hash: String,
     policy: PathBuf,
     source_height: u64,
+    observed_source_head: u64,
     minimum_depth: u32,
     pftl_observation_height: u64,
     committee: PathBuf,
@@ -863,6 +933,7 @@ struct EvmChainlinkValuationCollectArgs {
     policy: PathBuf,
     checkpoint_certificate: PathBuf,
     observation: PathBuf,
+    gross_assets: u64,
     rpc_url: String,
     output: PathBuf,
 }
@@ -871,6 +942,7 @@ struct EvmChainlinkValuationCheckpointCandidateArgs {
     pftl_genesis_hash: String,
     policy: PathBuf,
     source_height: u64,
+    observed_source_head: u64,
     minimum_depth: u32,
     pftl_observation_height: u64,
     committee: PathBuf,
@@ -884,7 +956,10 @@ fn evm_chainlink_valuation_checkpoint_candidate(
 ) -> Result<()> {
     validate_hex("pftl_genesis_hash", &args.pftl_genesis_hash, 48)?;
     anyhow::ensure!(
-        args.source_height > 0 && args.minimum_depth > 0 && args.pftl_observation_height > 0,
+        args.source_height > 0
+            && args.observed_source_head > 0
+            && args.minimum_depth > 0
+            && args.pftl_observation_height > 0,
         "checkpoint heights and minimum depth must be nonzero"
     );
     let policy: EvmChainlinkValuationPolicyV1 = read_json(&args.policy)?;
@@ -909,14 +984,18 @@ fn evm_chainlink_valuation_checkpoint_candidate(
     );
     let observed_head_raw: String =
         rpc_call(&client, &rpc_url, "eth_blockNumber", serde_json::json!([]))?;
-    let observed_source_head = parse_u64_quantity("latest block", &observed_head_raw)?;
+    let live_source_head = parse_u64_quantity("latest block", &observed_head_raw)?;
     let required_head = args
         .source_height
         .checked_add(u64::from(args.minimum_depth))
         .context("valuation checkpoint confirmation depth overflows")?;
     anyhow::ensure!(
-        observed_source_head >= required_head,
-        "valuation source block has not reached the required confirmation depth"
+        args.observed_source_head >= required_head,
+        "pinned valuation observation head does not establish the required confirmation depth"
+    );
+    anyhow::ensure!(
+        live_source_head >= args.observed_source_head,
+        "live valuation source head is behind the pinned observation head"
     );
     let block: RpcBlock = rpc_call(
         &client,
@@ -939,7 +1018,7 @@ fn evm_chainlink_valuation_checkpoint_candidate(
         source_timestamp_ms,
         source_block_hash: parse_b256("block.hash", &block.hash)?,
         source_state_commitment: parse_b256("block.stateRoot", &block.state_root)?,
-        observed_source_head,
+        observed_source_head: args.observed_source_head,
         minimum_depth: args.minimum_depth,
         pftl_observation_height: args.pftl_observation_height,
         committee_epoch: committee.epoch,
@@ -959,6 +1038,7 @@ fn evm_chainlink_valuation_checkpoint_candidate(
             "source_block_hash": checkpoint.source_block_hash,
             "source_state_commitment": checkpoint.source_state_commitment,
             "observed_source_head": checkpoint.observed_source_head,
+            "live_source_head": live_source_head,
             "minimum_depth": checkpoint.minimum_depth,
             "committee_epoch": checkpoint.committee_epoch,
             "committee_root": checkpoint.committee_root,
@@ -1026,6 +1106,11 @@ fn evm_chainlink_valuation_collect(args: EvmChainlinkValuationCollectArgs) -> Re
             && observation.observed_at_block == pftl_observation_height,
         "observation does not match the certified source and PFTL height"
     );
+    anyhow::ensure!(
+        observation.total_liabilities == 0,
+        "separate Chainlink valuation does not accept source liabilities"
+    );
+    observation.gross_assets = args.gross_assets;
     let quantity_evidence_commitment = observation.quantity_evidence.commitment().to_string();
     let proof = EvmChainlinkValuationProofV1 {
         policy,
@@ -1197,7 +1282,10 @@ struct AaveV3CollectArgs {
 fn aave_v3_checkpoint_candidate(args: AaveV3CheckpointCandidateArgs) -> Result<()> {
     validate_hex("pftl_genesis_hash", &args.pftl_genesis_hash, 48)?;
     anyhow::ensure!(
-        args.source_height > 0 && args.minimum_depth > 0 && args.pftl_observation_height > 0,
+        args.source_height > 0
+            && args.observed_source_head > 0
+            && args.minimum_depth > 0
+            && args.pftl_observation_height > 0,
         "checkpoint heights and minimum depth must be nonzero"
     );
     let policy: AaveV3PolicyV1 = read_json(&args.policy)?;
@@ -1221,14 +1309,18 @@ fn aave_v3_checkpoint_candidate(args: AaveV3CheckpointCandidateArgs) -> Result<(
     );
     let observed_head_raw: String =
         rpc_call(&client, &rpc_url, "eth_blockNumber", serde_json::json!([]))?;
-    let observed_source_head = parse_u64_quantity("latest block", &observed_head_raw)?;
+    let live_source_head = parse_u64_quantity("latest block", &observed_head_raw)?;
     let required_head = args
         .source_height
         .checked_add(u64::from(args.minimum_depth))
         .context("Aave checkpoint confirmation depth overflows")?;
     anyhow::ensure!(
-        observed_source_head >= required_head,
-        "Aave source block has not reached the required confirmation depth"
+        args.observed_source_head >= required_head,
+        "pinned Aave observation head does not establish the required confirmation depth"
+    );
+    anyhow::ensure!(
+        live_source_head >= args.observed_source_head,
+        "live Aave source head is behind the pinned observation head"
     );
     let block_tag = format!("0x{:x}", args.source_height);
     let block: RpcBlock = rpc_call(
@@ -1252,7 +1344,7 @@ fn aave_v3_checkpoint_candidate(args: AaveV3CheckpointCandidateArgs) -> Result<(
         source_timestamp_ms,
         source_block_hash: parse_b256("block.hash", &block.hash)?,
         source_state_commitment: parse_b256("block.stateRoot", &block.state_root)?,
-        observed_source_head,
+        observed_source_head: args.observed_source_head,
         minimum_depth: args.minimum_depth,
         pftl_observation_height: args.pftl_observation_height,
         committee_epoch: committee.epoch,
@@ -1272,6 +1364,7 @@ fn aave_v3_checkpoint_candidate(args: AaveV3CheckpointCandidateArgs) -> Result<(
             "source_block_hash": checkpoint.source_block_hash,
             "source_state_commitment": checkpoint.source_state_commitment,
             "observed_source_head": checkpoint.observed_source_head,
+            "live_source_head": live_source_head,
             "minimum_depth": checkpoint.minimum_depth,
             "committee_epoch": checkpoint.committee_epoch,
             "committee_root": checkpoint.committee_root,
@@ -1391,8 +1484,17 @@ fn aave_v3_collect(args: AaveV3CollectArgs) -> Result<()> {
         expected_total_liabilities: args.total_liabilities,
         expected_evidence_commitment: &evidence_commitment,
     };
-    let verified = verify_aave_v3_proof_v1(&proof, &verify_context)
+    let verified = derive_aave_v3_proof_v1(&proof, &verify_context)
         .map_err(|error| anyhow::anyhow!("Aave V3 proof failed: {error:?}"))?;
+    anyhow::ensure!(
+        verified.collateral_usd_e8 == args.gross_assets
+            && verified.liability_usd_e8 == args.total_liabilities,
+        "Aave aggregate mismatch: proof derived collateral_usd_e8={} liability_usd_e8={}, supplied gross_assets={} total_liabilities={}",
+        verified.collateral_usd_e8,
+        verified.liability_usd_e8,
+        args.gross_assets,
+        args.total_liabilities,
+    );
     let evidence = SourceEvidenceV1::AaveV3 {
         evidence_commitment: evidence_commitment.clone(),
         proof: Box::new(proof),
@@ -1481,7 +1583,7 @@ fn validate_aave_manifest_entry(
     );
     anyhow::ensure!(
         entry.source_domain == policy.source_domain
-            && entry.asset_or_position_id == format!("aave-v3:account:{owner:#x}")
+            && entry.asset_or_position_id == policy.aggregate_position_id
             && entry.reserve_owner_commitment == aave_v3_owner_commitment(owner)
             && entry.quantity_verifier_commitment == policy_commitment
             && entry.valuation_verifier_commitment == policy_commitment,
@@ -1710,7 +1812,7 @@ fn rpc_account_with_storage(
     );
     let mut storage = BTreeMap::new();
     for item in &rpc_proof.storage_proof {
-        let key = parse_b256("storageProof.key", &item.key)?;
+        let key = parse_storage_key("storageProof.key", &item.key)?;
         anyhow::ensure!(
             expected.contains(&key) && !storage.contains_key(&key),
             "eth_getProof returned an unexpected or duplicate storage key"
@@ -1762,6 +1864,7 @@ struct EvmSpotCheckpointCandidateArgs {
     policy: PathBuf,
     source_domain: String,
     source_height: u64,
+    observed_source_head: u64,
     minimum_depth: u32,
     pftl_observation_height: u64,
     committee: PathBuf,
@@ -1779,7 +1882,7 @@ struct EvmSpotCollectArgs {
     ownership_signature: String,
     checkpoint_certificates: Vec<PathBuf>,
     rpc_map: PathBuf,
-    valuation_evidence: PathBuf,
+    valuation_evidence: Option<PathBuf>,
     gross_assets: u64,
     total_liabilities: u64,
     disclosure_commitment: String,
@@ -1796,7 +1899,10 @@ struct EvmSpotRpcMapV1 {
 fn evm_spot_checkpoint_candidate(args: EvmSpotCheckpointCandidateArgs) -> Result<()> {
     validate_hex("pftl_genesis_hash", &args.pftl_genesis_hash, 48)?;
     anyhow::ensure!(
-        args.source_height > 0 && args.minimum_depth > 0 && args.pftl_observation_height > 0,
+        args.source_height > 0
+            && args.observed_source_head > 0
+            && args.minimum_depth > 0
+            && args.pftl_observation_height > 0,
         "checkpoint heights and minimum depth must be nonzero"
     );
     let policy: EvmSpotPolicyV1 = read_json(&args.policy)?;
@@ -1826,14 +1932,18 @@ fn evm_spot_checkpoint_candidate(args: EvmSpotCheckpointCandidateArgs) -> Result
     );
     let observed_head_raw: String =
         rpc_call(&client, &rpc_url, "eth_blockNumber", serde_json::json!([]))?;
-    let observed_source_head = parse_u64_quantity("latest block", &observed_head_raw)?;
+    let live_source_head = parse_u64_quantity("latest block", &observed_head_raw)?;
     let required_head = args
         .source_height
         .checked_add(u64::from(args.minimum_depth))
         .context("checkpoint confirmation depth overflows")?;
     anyhow::ensure!(
-        observed_source_head >= required_head,
-        "EVM source block has not reached the required confirmation depth"
+        args.observed_source_head >= required_head,
+        "pinned EVM observation head does not establish the required confirmation depth"
+    );
+    anyhow::ensure!(
+        live_source_head >= args.observed_source_head,
+        "live EVM source head is behind the pinned observation head"
     );
     let block_tag = format!("0x{:x}", args.source_height);
     let block: RpcBlock = rpc_call(
@@ -1857,7 +1967,7 @@ fn evm_spot_checkpoint_candidate(args: EvmSpotCheckpointCandidateArgs) -> Result
         source_timestamp_ms,
         source_block_hash: parse_b256("block.hash", &block.hash)?,
         source_state_commitment: parse_b256("block.stateRoot", &block.state_root)?,
-        observed_source_head,
+        observed_source_head: args.observed_source_head,
         minimum_depth: args.minimum_depth,
         pftl_observation_height: args.pftl_observation_height,
         committee_epoch: committee.epoch,
@@ -1877,6 +1987,7 @@ fn evm_spot_checkpoint_candidate(args: EvmSpotCheckpointCandidateArgs) -> Result
             "source_block_hash": checkpoint.source_block_hash,
             "source_state_commitment": checkpoint.source_state_commitment,
             "observed_source_head": checkpoint.observed_source_head,
+            "live_source_head": live_source_head,
             "minimum_depth": checkpoint.minimum_depth,
             "committee_epoch": checkpoint.committee_epoch,
             "committee_root": checkpoint.committee_root,
@@ -1966,11 +2077,17 @@ fn evm_spot_collect(args: EvmSpotCollectArgs) -> Result<()> {
         "EVM spot RPC map must contain exactly the governed source domains"
     );
     let ownership_signature = decode_hex("ownership_signature", &args.ownership_signature, 65)?;
-    let valuation_evidence: SourceEvidenceV1 = read_json(&args.valuation_evidence)?;
-    anyhow::ensure!(
-        valuation_evidence.class() == entry.valuation_evidence_class,
-        "valuation evidence trust class does not match manifest"
-    );
+    let valuation_evidence = args
+        .valuation_evidence
+        .as_ref()
+        .map(|path| read_json::<SourceEvidenceV1>(path))
+        .transpose()?;
+    if let Some(evidence) = &valuation_evidence {
+        anyhow::ensure!(
+            evidence.class() == entry.valuation_evidence_class,
+            "valuation evidence trust class does not match manifest"
+        );
+    }
 
     let mut chains = Vec::with_capacity(policy.chains.len());
     for (chain_policy, certificate) in policy.chains.iter().zip(certificates) {
@@ -2011,16 +2128,18 @@ fn evm_spot_collect(args: EvmSpotCollectArgs) -> Result<()> {
     };
     let verified = verify_evm_spot_quantity_proof_v1(&proof, &verify_context)
         .map_err(|error| anyhow::anyhow!("EVM spot quantity proof failed: {error:?}"))?;
+    let quantity_evidence = SourceEvidenceV1::EvmSpotQuantity {
+        evidence_commitment: evidence_commitment.clone(),
+        proof: Box::new(proof),
+    };
+    let valuation_verified = valuation_evidence.is_some();
     let observation = SourceObservationV1 {
         source_id: entry.source_id.clone(),
         observed_at_block: observed_at_pftl_height,
         gross_assets: args.gross_assets,
         total_liabilities: args.total_liabilities,
-        quantity_evidence: SourceEvidenceV1::EvmSpotQuantity {
-            evidence_commitment: evidence_commitment.clone(),
-            proof: Box::new(proof),
-        },
-        valuation_evidence,
+        quantity_evidence: quantity_evidence.clone(),
+        valuation_evidence: valuation_evidence.unwrap_or(quantity_evidence),
         disclosure_commitment: args.disclosure_commitment,
     };
     verify_observation_evidence(
@@ -2030,11 +2149,20 @@ fn evm_spot_collect(args: EvmSpotCollectArgs) -> Result<()> {
         EvidenceDimensionV1::Quantity,
     )
     .map_err(anyhow::Error::msg)?;
+    if valuation_verified {
+        verify_observation_evidence(
+            &context,
+            &entry,
+            &observation,
+            EvidenceDimensionV1::Valuation,
+        )
+        .map_err(anyhow::Error::msg)?;
+    }
     write_new(&args.output, &serde_json::to_vec_pretty(&observation)?)?;
     println!(
         "{}",
         serde_json::to_string_pretty(&serde_json::json!({
-            "schema": "postfiat.reserve_evm_spot_collection.v1",
+            "schema": if valuation_verified { "postfiat.reserve_evm_spot_collection.v1" } else { "postfiat.reserve_evm_spot_quantity_draft.v1" },
             "output": args.output,
             "source_id": observation.source_id,
             "pftl_observation_height": observed_at_pftl_height,
@@ -2045,7 +2173,8 @@ fn evm_spot_collect(args: EvmSpotCollectArgs) -> Result<()> {
             "quantity_evidence_commitment": evidence_commitment,
             "quantity_trust": "cryptographic_bft_checkpoint_mpt",
             "valuation_trust": format!("{:?}", entry.valuation_evidence_class).to_lowercase(),
-            "next_required_check": "attach complete valuation evidence, then run observe for the full manifest",
+            "valuation_verified": valuation_verified,
+            "next_required_check": if valuation_verified { "run observe for the full manifest" } else { "replace the valuation placeholder with a registered cryptographic valuation proof" },
         }))?
     );
     Ok(())
@@ -2226,7 +2355,7 @@ fn collect_evm_spot_chain(
         );
         let storage = &rpc_proof.storage_proof[0];
         anyhow::ensure!(
-            parse_b256("storageProof.key", &storage.key)? == storage_key,
+            parse_storage_key("storageProof.key", &storage.key)? == storage_key,
             "token storage proof key does not match the governed balance slot"
         );
         let balance = EvmStorageProofV1 {
@@ -2352,7 +2481,7 @@ fn collect(args: CollectArgs) -> Result<()> {
             proof: account_proof,
         },
         balance: EvmStorageProofV1 {
-            key: parse_b256("storageProof.key", &rpc_storage.key)?,
+            key: parse_storage_key("storageProof.key", &rpc_storage.key)?,
             value: parse_u256("storageProof.value", &rpc_storage.value)?,
             proof: storage_proof,
         },
@@ -2546,7 +2675,12 @@ struct RpcError {
 }
 
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+// EVM block responses legitimately grow chain-specific fields (for example
+// Arbitrum's send-count/root fields and post-London baseFeePerGas). Preserve
+// those fields in `_extra` while keeping every consensus-relevant field
+// explicit below. `deny_unknown_fields` is incompatible with this deliberate
+// flattened extension map and caused live Arbitrum blocks to be rejected.
+#[serde(rename_all = "camelCase")]
 struct RpcBlock {
     number: String,
     hash: String,
@@ -2588,6 +2722,13 @@ fn parse_u256(label: &str, value: &str) -> Result<U256> {
     let digits = value.strip_prefix("0x").unwrap_or(value);
     anyhow::ensure!(!digits.is_empty(), "{label} is empty");
     U256::from_str_radix(digits, 16).with_context(|| format!("{label} is not a hex quantity"))
+}
+
+// EIP-1186 providers differ on whether `storageProof.key` is returned as
+// 32-byte DATA or as a minimally encoded JSON-RPC QUANTITY. Normalize both
+// representations through U256 before comparing the governed storage slot.
+fn parse_storage_key(label: &str, value: &str) -> Result<B256> {
+    Ok(B256::from(parse_u256(label, value)?.to_be_bytes::<32>()))
 }
 
 pub(crate) fn parse_u64_quantity(label: &str, value: &str) -> Result<u64> {
@@ -2689,6 +2830,31 @@ mod tests {
     use super::*;
 
     #[test]
+    fn rpc_block_accepts_modern_and_chain_specific_extension_fields() {
+        let block: RpcBlock = serde_json::from_str(
+            r#"{
+                "number":"0x2a",
+                "hash":"0x0000000000000000000000000000000000000000000000000000000000000001",
+                "stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000002",
+                "timestamp":"0x3",
+                "baseFeePerGas":"0x5f5e100",
+                "sendCount":"0x4"
+            }"#,
+        )
+        .expect("valid extensible EVM block");
+
+        assert_eq!(block.number, "0x2a");
+        assert_eq!(
+            block._extra.get("baseFeePerGas"),
+            Some(&serde_json::json!("0x5f5e100"))
+        );
+        assert_eq!(
+            block._extra.get("sendCount"),
+            Some(&serde_json::json!("0x4"))
+        );
+    }
+
+    #[test]
     fn rpc_url_policy_is_fail_closed() {
         assert!(validate_rpc_url("https://rpc.example").is_ok());
         assert!(validate_rpc_url("http://127.0.0.1:8545").is_ok());
@@ -2705,5 +2871,20 @@ mod tests {
         assert!(decode_hex("signature", "0x11", 65).is_err());
         let oversized = format!("0x{}", "11".repeat(MAX_EVM_PROOF_TOTAL_BYTES + 1));
         assert!(decode_proof_nodes("proof", &[oversized]).is_err());
+    }
+
+    #[test]
+    fn storage_key_parser_accepts_data_and_quantity_encodings() {
+        let expected = B256::from(U256::from(11).to_be_bytes::<32>());
+        assert_eq!(parse_storage_key("key", "0xb").unwrap(), expected);
+        assert_eq!(
+            parse_storage_key(
+                "key",
+                "0x000000000000000000000000000000000000000000000000000000000000000b"
+            )
+            .unwrap(),
+            expected
+        );
+        assert!(parse_storage_key("key", &format!("0x1{}", "0".repeat(64))).is_err());
     }
 }

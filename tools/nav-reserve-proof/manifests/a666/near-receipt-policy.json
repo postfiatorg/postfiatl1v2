@@ -1,0 +1,17 @@
+{
+  "source_domain": "near:mainnet",
+  "position_id": "near-staked-balance",
+  "reader_account_id": "eed15bedebb4ac46d1528187a8c2f00aa59b441398d3e346c44eb2dcb2fc1d9a",
+  "reader_code_hash": "5swZhNNqpD6HsqFXhNjRUiSYoXtnkWPipiW8hRbrkbN",
+  "pool_id": "astro-stakers.poolv1.near",
+  "pool_code_hash": "J1arLz48fgXcGyCPVckFwLnewNH6j1uw79thsvwqGYTY",
+  "snapshot_standard": "postfiat-nav",
+  "snapshot_version": "1.0.0",
+  "snapshot_event": "NearStakeSnapshot",
+  "owner_public_key": [
+    238, 209, 91, 237, 235, 180, 172, 70,
+    209, 82, 129, 135, 168, 194, 240, 10,
+    165, 155, 68, 19, 152, 211, 227, 70,
+    196, 78, 178, 220, 178, 252, 29, 154
+  ]
+}

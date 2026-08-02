@@ -1,0 +1,18 @@
+{
+  "source_domain": "eip155:999",
+  "aggregate_position_id": "aggregate-spot-and-cash",
+  "hyperevm_chain_id": 999,
+  "reader_contract": "0xddb4ed1edf1f0d81f7531cddb27810080601a2cb",
+  "reader_code_hash": "0xc252f32acd9fdcfe2b4f9b1d70c3de17acf83649a6313fc3ab9155bca1010db3",
+  "required_perps": [1, 5, 74, 159, 224],
+  "allowed_spot_tokens": [
+    {
+      "token": 150,
+      "wei_decimals": 8
+    },
+    {
+      "token": 404,
+      "wei_decimals": 8
+    }
+  ]
+}

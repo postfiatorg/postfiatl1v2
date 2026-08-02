@@ -4,7 +4,7 @@
   "address_spend_public_key": "0xe2ad6066c818eb90a567de2b240ccf6368d412fc913cd39499f3e1bd4cb75c82",
   "address_view_public_key": "0x74c78fca081ef29034c8f3542f7fa455923317a3278e7acba770ac387bdae642",
   "checkpoint_committee_root": "99b0a3b8af49f3c91537d24a698e47f5761eec65890d00cdc4070ec99b18b333dfe514199c258cda5b81bec33821e245",
-  "allow_pinned_output_blocks": false,
+  "allow_pinned_output_blocks": true,
   "max_outputs": 64,
   "max_header_links_per_output": 4096
 }

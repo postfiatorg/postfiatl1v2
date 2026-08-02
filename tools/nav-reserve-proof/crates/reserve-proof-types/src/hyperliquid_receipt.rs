@@ -41,6 +41,7 @@ pub struct HyperliquidSpotTokenPolicyV1 {
 #[serde(deny_unknown_fields)]
 pub struct HyperliquidReceiptPolicyV1 {
     pub source_domain: String,
+    pub aggregate_position_id: String,
     pub hyperevm_chain_id: u64,
     pub reader_contract: Address,
     pub reader_code_hash: B256,
@@ -154,6 +155,17 @@ impl HyperliquidReceiptPolicyV1 {
                     || byte.is_ascii_digit()
                     || (index > 0 && matches!(byte, b'.' | b'_' | b':' | b'-'))
             })
+            || self.aggregate_position_id.is_empty()
+            || self.aggregate_position_id.len() > 256
+            || !self
+                .aggregate_position_id
+                .bytes()
+                .enumerate()
+                .all(|(index, byte)| {
+                    byte.is_ascii_lowercase()
+                        || byte.is_ascii_digit()
+                        || (index > 0 && matches!(byte, b'.' | b'_' | b':' | b'-'))
+                })
             || self.allowed_spot_tokens.is_empty()
             || self.allowed_spot_tokens.len() > MAX_HYPERLIQUID_ALLOWED_SPOT_TOKENS
             || self.required_perps.len() > MAX_HYPERLIQUID_PERP_ROWS
@@ -185,6 +197,7 @@ impl HyperliquidReceiptPolicyV1 {
         validate_lower_hex(committee_root, 48)?;
         let mut bytes = Vec::new();
         append_bytes(&mut bytes, self.source_domain.as_bytes())?;
+        append_bytes(&mut bytes, self.aggregate_position_id.as_bytes())?;
         bytes.extend_from_slice(&self.hyperevm_chain_id.to_be_bytes());
         bytes.extend_from_slice(self.reader_contract.as_slice());
         bytes.extend_from_slice(self.reader_code_hash.as_slice());
@@ -418,11 +431,7 @@ pub fn verify_hyperliquid_receipt_proof_v1(
     if proof.policy.source_domain != canonical_domain {
         return Err(HlReceiptLegError::PolicyMismatch);
     }
-    let canonical_position = format!(
-        "hyperliquid:account:0x{}",
-        hex::encode(proof.owner.as_slice())
-    );
-    if context.asset_or_position_id != canonical_position
+    if context.asset_or_position_id != proof.policy.aggregate_position_id
         || hyperliquid_owner_commitment(proof.owner) != context.reserve_owner_commitment
     {
         return Err(HlReceiptLegError::PolicyMismatch);
@@ -1446,6 +1455,7 @@ mod tests {
 
         let policy = HyperliquidReceiptPolicyV1 {
             source_domain: "eip155:999".to_string(),
+            aggregate_position_id: "hyperliquid-test-position".to_string(),
             hyperevm_chain_id: 999,
             reader_contract: reader,
             reader_code_hash,
@@ -1456,7 +1466,7 @@ mod tests {
             }],
         };
         let verifier_commitment = policy.commitment(&committee_root).unwrap();
-        let position = format!("hyperliquid:account:0x{}", hex::encode(owner.as_slice()));
+        let position = policy.aggregate_position_id.clone();
         let position_static: &'static str = Box::leak(position.into_boxed_str());
         let verifier_static: &'static str = Box::leak(verifier_commitment.into_boxed_str());
         let owner_commitment_static: &'static str =
@@ -1547,6 +1557,7 @@ mod tests {
         assert_eq!(payload.account, witness.owner);
         let policy = HyperliquidReceiptPolicyV1 {
             source_domain: "eip155:999".to_string(),
+            aggregate_position_id: "hyperliquid-test-position".to_string(),
             hyperevm_chain_id: 999,
             reader_contract: witness.reader_contract,
             // The historical witness predates policy-pinned reader code. This
@@ -1676,6 +1687,7 @@ mod tests {
     fn rejects_duplicate_rows_negative_equity_bad_holds_and_overflow() {
         let policy = HyperliquidReceiptPolicyV1 {
             source_domain: "eip155:999".to_string(),
+            aggregate_position_id: "hyperliquid-test-position".to_string(),
             hyperevm_chain_id: 999,
             reader_contract: Address::repeat_byte(1),
             reader_code_hash: B256::repeat_byte(3),

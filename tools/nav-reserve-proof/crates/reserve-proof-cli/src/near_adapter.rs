@@ -56,6 +56,11 @@ pub enum NearCommand {
         policy: PathBuf,
         #[arg(long)]
         source_height: u64,
+        /// Common finalized head pinned by the checkpoint coordinator. Every
+        /// validator independently requires its live finalized head to be at
+        /// least this value before signing.
+        #[arg(long)]
+        observed_source_head: u64,
         #[arg(long)]
         minimum_depth: u32,
         #[arg(long)]
@@ -95,6 +100,25 @@ pub enum NearCommand {
         #[arg(long)]
         owner_statement_output: PathBuf,
     },
+    /// Attach the owner signature and emit a quantity-verified draft for a
+    /// separate cryptographic valuation adapter. The draft is intentionally
+    /// not a complete source observation and cannot pass valuation checks.
+    CollectQuantity {
+        #[arg(long)]
+        manifest: PathBuf,
+        #[arg(long)]
+        context: PathBuf,
+        #[arg(long)]
+        source_id: String,
+        #[arg(long)]
+        prepared_proof: PathBuf,
+        #[arg(long)]
+        ownership_signature: String,
+        #[arg(long)]
+        disclosure_commitment: String,
+        #[arg(long)]
+        output: PathBuf,
+    },
     /// Attach the external owner signature, verify the complete quantity
     /// proof and separate valuation evidence, then write the observation.
     Collect {
@@ -133,6 +157,7 @@ pub fn run(command: NearCommand) -> Result<()> {
             pftl_genesis_hash,
             policy,
             source_height,
+            observed_source_head,
             minimum_depth,
             pftl_observation_height,
             committee,
@@ -143,6 +168,7 @@ pub fn run(command: NearCommand) -> Result<()> {
             pftl_genesis_hash,
             policy,
             source_height,
+            observed_source_head,
             minimum_depth,
             pftl_observation_height,
             committee,
@@ -174,6 +200,23 @@ pub fn run(command: NearCommand) -> Result<()> {
             rpc_url,
             proof_output,
             owner_statement_output,
+        }),
+        NearCommand::CollectQuantity {
+            manifest,
+            context,
+            source_id,
+            prepared_proof,
+            ownership_signature,
+            disclosure_commitment,
+            output,
+        } => collect_quantity(CollectQuantityArgs {
+            manifest,
+            context,
+            source_id,
+            prepared_proof,
+            ownership_signature,
+            disclosure_commitment,
+            output,
         }),
         NearCommand::Collect {
             manifest,
@@ -271,6 +314,7 @@ struct CheckpointCandidateArgs {
     pftl_genesis_hash: String,
     policy: PathBuf,
     source_height: u64,
+    observed_source_head: u64,
     minimum_depth: u32,
     pftl_observation_height: u64,
     committee: PathBuf,
@@ -282,7 +326,10 @@ struct CheckpointCandidateArgs {
 fn checkpoint_candidate(args: CheckpointCandidateArgs) -> Result<()> {
     validate_lower_hex("pftl_genesis_hash", &args.pftl_genesis_hash, 48)?;
     anyhow::ensure!(
-        args.source_height > 0 && args.minimum_depth > 0 && args.pftl_observation_height > 0,
+        args.source_height > 0
+            && args.observed_source_head > 0
+            && args.minimum_depth > 0
+            && args.pftl_observation_height > 0,
         "checkpoint heights and depth must be nonzero"
     );
     let policy: NearReceiptPolicyV1 = read_json(&args.policy)?;
@@ -302,8 +349,12 @@ fn checkpoint_candidate(args: CheckpointCandidateArgs) -> Result<()> {
         .checked_add(u64::from(args.minimum_depth))
         .context("NEAR checkpoint depth overflows")?;
     anyhow::ensure!(
-        final_head.head_height >= required_head,
-        "NEAR source head has not reached the required depth"
+        args.observed_source_head >= required_head,
+        "pinned NEAR observation head does not establish the required depth"
+    );
+    anyhow::ensure!(
+        final_head.head_height >= args.observed_source_head,
+        "live finalized NEAR head is behind the pinned observation head"
     );
     let source_head = fetch_block(
         &client,
@@ -330,7 +381,7 @@ fn checkpoint_candidate(args: CheckpointCandidateArgs) -> Result<()> {
         source_state_commitment: policy
             .source_state_commitment(&head_root)
             .map_err(|error| anyhow!("NEAR source commitment failed: {error:?}"))?,
-        observed_source_head: final_head.head_height,
+        observed_source_head: args.observed_source_head,
         minimum_depth: args.minimum_depth,
         pftl_observation_height: args.pftl_observation_height,
         committee_epoch: committee.epoch,
@@ -350,6 +401,7 @@ fn checkpoint_candidate(args: CheckpointCandidateArgs) -> Result<()> {
             "reader_code_hash": policy.reader_code_hash,
             "pool_code_hash": policy.pool_code_hash,
             "observed_source_head": checkpoint.observed_source_head,
+            "live_finalized_head": final_head.head_height,
             "minimum_depth": checkpoint.minimum_depth,
             "next_required_check": "each validator independently checks this exact head, both code hashes, and depth before signing",
         }))?
@@ -496,6 +548,79 @@ struct CollectArgs {
     output: PathBuf,
 }
 
+struct CollectQuantityArgs {
+    manifest: PathBuf,
+    context: PathBuf,
+    source_id: String,
+    prepared_proof: PathBuf,
+    ownership_signature: String,
+    disclosure_commitment: String,
+    output: PathBuf,
+}
+
+fn collect_quantity(args: CollectQuantityArgs) -> Result<()> {
+    validate_lower_hex("disclosure_commitment", &args.disclosure_commitment, 48)?;
+    let (_, context, entry) = load_source(&args.manifest, &args.context, &args.source_id)?;
+    let mut proof: NearReceiptQuantityProofV1 = read_json(&args.prepared_proof)?;
+    validate_manifest_entry(
+        &entry,
+        &proof.policy,
+        &proof.checkpoint_certificate,
+        &proof.account_id,
+        &context.pftl_genesis_hash,
+    )?;
+    proof.ownership_signature = decode_hex("ownership_signature", &args.ownership_signature, 64)?;
+    let evidence_commitment = near_receipt_evidence_commitment_v1(&proof)
+        .map_err(|error| anyhow!("NEAR evidence commitment failed: {error:?}"))?;
+    let observed_at = proof
+        .checkpoint_certificate
+        .checkpoint
+        .pftl_observation_height;
+    anyhow::ensure!(
+        observed_at >= context.observation_not_before
+            && observed_at <= context.observation_not_after,
+        "NEAR checkpoint PFTL height is outside the observation interval"
+    );
+    let quantity_evidence = SourceEvidenceV1::NearReceiptQuantity {
+        evidence_commitment: evidence_commitment.clone(),
+        proof: Box::new(proof),
+    };
+    // A quantity draft uses its quantity evidence as a deliberately invalid
+    // valuation placeholder. The Chainlink collector replaces it and verifies
+    // both dimensions before emitting a complete observation.
+    let observation = SourceObservationV1 {
+        source_id: entry.source_id.clone(),
+        observed_at_block: observed_at,
+        gross_assets: 0,
+        total_liabilities: 0,
+        quantity_evidence: quantity_evidence.clone(),
+        valuation_evidence: quantity_evidence,
+        disclosure_commitment: args.disclosure_commitment,
+    };
+    verify_observation_evidence(
+        &context,
+        &entry,
+        &observation,
+        EvidenceDimensionV1::Quantity,
+    )
+    .map_err(anyhow::Error::msg)?;
+    write_new(&args.output, &serde_json::to_vec_pretty(&observation)?)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "schema": "postfiat.reserve_near_quantity_draft.v1",
+            "output": args.output,
+            "source_id": observation.source_id,
+            "pftl_observation_height": observation.observed_at_block,
+            "quantity_verified": true,
+            "valuation_verified": false,
+            "next_required_check": "replace the valuation placeholder with a registered cryptographic valuation proof",
+            "evidence_commitment": evidence_commitment,
+        }))?
+    );
+    Ok(())
+}
+
 fn collect(args: CollectArgs) -> Result<()> {
     anyhow::ensure!(
         args.total_liabilities <= args.gross_assets,
@@ -609,7 +734,7 @@ fn validate_manifest_entry(
     );
     anyhow::ensure!(
         entry.source_domain == policy.source_domain
-            && entry.asset_or_position_id == format!("near:stake:{}", policy.pool_id)
+            && entry.asset_or_position_id == policy.position_id
             && entry.reserve_owner_commitment == owner_commitment
             && entry.quantity_verifier_commitment == policy_commitment,
         "NEAR manifest identity, owner, or policy commitment mismatch"

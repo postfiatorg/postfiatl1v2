@@ -2,5 +2,5 @@
   "schema": "postfiat.reserve_quantity_policy_commitment_report.v1",
   "adapter_kind": "monero-reserve-proof-v1",
   "source_domain": "monero:mainnet",
-  "verifier_commitment": "cb82196be2ff0dbfa3c6926bc92329e763dbaf00c4ec60c562ffab06ef7cae103c3f1dc21fc275f2434999fde1eee004"
+  "verifier_commitment": "03a4611a401edb8de6b45ec52e57c1a9d7593053e3dbd148428eb381da593e1d0247420bb8878f1e2b3adb8bce3ec76b"
 }

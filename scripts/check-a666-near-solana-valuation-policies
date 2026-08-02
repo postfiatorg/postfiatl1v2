@@ -17,4 +17,21 @@ for source in near solana; do
     "$tmp_dir/$source.json"
 done
 
-echo "A666 NEAR/USD and SOL/USD valuation policy commitments verified"
+for spec in \
+  "hyperliquid_receipt hyperliquid-policy hyperliquid-policy-commitment" \
+  "near_receipt near-receipt-policy near-receipt-policy-commitment" \
+  "solana_stake_reader solana-stake-reader-policy solana-stake-reader-policy-commitment"
+do
+  set -- $spec
+  cargo +1.95.0 run --quiet \
+    --manifest-path "$repo_root/tools/nav-reserve-proof/Cargo.toml" \
+    -p postfiat-reserve-proof -- \
+    manifest quantity-policy-commitment \
+    --kind "$1" \
+    --policy "$manifest_dir/$2.json" \
+    --committee "$manifest_dir/checkpoint-committee.json" \
+    --output "$tmp_dir/$3.json" >/dev/null
+  cmp "$manifest_dir/$3.json" "$tmp_dir/$3.json"
+done
+
+echo "A666 Hyperliquid, NEAR, and Solana quantity and valuation policy commitments verified"

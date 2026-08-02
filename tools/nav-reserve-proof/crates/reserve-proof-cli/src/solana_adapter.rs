@@ -71,6 +71,11 @@ pub enum SolanaCommand {
         salt: String,
         #[arg(long)]
         pftl_observation_height: u64,
+        /// Common finalized slot pinned by the checkpoint coordinator. Every
+        /// validator independently requires its live finalized slot to be at
+        /// least this value before signing.
+        #[arg(long)]
+        observed_source_head: u64,
         #[arg(long)]
         minimum_depth: u32,
         #[arg(long)]
@@ -99,6 +104,25 @@ pub enum SolanaCommand {
         proof_output: PathBuf,
         #[arg(long)]
         owner_statement_output: PathBuf,
+    },
+    /// Attach the owner signature and emit a quantity-verified draft for a
+    /// separate cryptographic valuation adapter. The draft cannot pass final
+    /// valuation checks until that adapter replaces its placeholder.
+    CollectQuantity {
+        #[arg(long)]
+        manifest: PathBuf,
+        #[arg(long)]
+        context: PathBuf,
+        #[arg(long)]
+        source_id: String,
+        #[arg(long)]
+        prepared_proof: PathBuf,
+        #[arg(long)]
+        ownership_signature: String,
+        #[arg(long)]
+        disclosure_commitment: String,
+        #[arg(long)]
+        output: PathBuf,
     },
     /// Attach the external owner signature, verify complete quantity and
     /// valuation evidence, and write the source observation.
@@ -144,6 +168,7 @@ pub fn run(command: SolanaCommand) -> Result<()> {
             transaction_signature,
             salt,
             pftl_observation_height,
+            observed_source_head,
             minimum_depth,
             rpc_url,
             prepared_output,
@@ -158,6 +183,7 @@ pub fn run(command: SolanaCommand) -> Result<()> {
             transaction_signature,
             salt,
             pftl_observation_height,
+            observed_source_head,
             minimum_depth,
             rpc_url,
             prepared_output,
@@ -180,6 +206,23 @@ pub fn run(command: SolanaCommand) -> Result<()> {
             checkpoint_certificate,
             proof_output,
             owner_statement_output,
+        }),
+        SolanaCommand::CollectQuantity {
+            manifest,
+            context,
+            source_id,
+            prepared_proof,
+            ownership_signature,
+            disclosure_commitment,
+            output,
+        } => collect_quantity(CollectQuantityArgs {
+            manifest,
+            context,
+            source_id,
+            prepared_proof,
+            ownership_signature,
+            disclosure_commitment,
+            output,
         }),
         SolanaCommand::Collect {
             manifest,
@@ -310,6 +353,7 @@ struct PrepareArgs {
     transaction_signature: String,
     salt: String,
     pftl_observation_height: u64,
+    observed_source_head: u64,
     minimum_depth: u32,
     rpc_url: String,
     prepared_output: PathBuf,
@@ -329,7 +373,10 @@ fn prepare(args: PrepareArgs) -> Result<()> {
         !args.prepared_output.exists() && !args.checkpoint_output.exists(),
         "refusing to overwrite Solana prepared or checkpoint output"
     );
-    anyhow::ensure!(args.minimum_depth > 0, "minimum depth must be nonzero");
+    anyhow::ensure!(
+        args.observed_source_head > 0 && args.minimum_depth > 0,
+        "observation head and minimum depth must be nonzero"
+    );
     let (_, context, entry) = load_source(&args.manifest, &args.context, &args.source_id)?;
     validate_observation_height(&context, args.pftl_observation_height)?;
     let policy: SolanaStakeReaderPolicyV1 = read_json(&args.policy)?;
@@ -388,21 +435,26 @@ fn prepare(args: PrepareArgs) -> Result<()> {
         "Solana transaction is absent from finalized block"
     );
     let source_hash = decode_base58_32("finalized blockhash", &block.blockhash)?;
-    let observed_head: u64 = rpc_call(
+    let live_observed_head: u64 = rpc_call(
         &client,
         &rpc_url,
         "getSlot",
         json!([{"commitment":"finalized"}]),
     )?;
     anyhow::ensure!(
-        observed_head
+        args.observed_source_head
             >= transaction
                 .slot
                 .saturating_add(u64::from(args.minimum_depth)),
-        "Solana transaction has not reached the governed finalized depth"
+        "pinned Solana observation head does not establish the governed finalized depth"
     );
     anyhow::ensure!(
-        observed_head.saturating_sub(transaction.slot) <= policy.maximum_finalized_slot_lag,
+        live_observed_head >= args.observed_source_head,
+        "live finalized Solana slot is behind the pinned observation head"
+    );
+    anyhow::ensure!(
+        args.observed_source_head.saturating_sub(transaction.slot)
+            <= policy.maximum_finalized_slot_lag,
         "Solana reader transaction is stale under the governed policy"
     );
     verify_immutable_program(&client, &rpc_url, &policy)?;
@@ -439,7 +491,7 @@ fn prepare(args: PrepareArgs) -> Result<()> {
         .context("Solana block timestamp overflow")?,
         source_block_hash: B256::from(source_hash),
         source_state_commitment: B256::repeat_byte(1),
-        observed_source_head: observed_head,
+        observed_source_head: args.observed_source_head,
         minimum_depth: args.minimum_depth,
         pftl_observation_height: args.pftl_observation_height,
         committee_epoch: committee.epoch,
@@ -501,7 +553,8 @@ fn prepare(args: PrepareArgs) -> Result<()> {
             "slot":parsed.slot,
             "epoch":parsed.epoch,
             "positions":prepared.proof.positions.len(),
-            "observed_source_head":observed_head,
+            "observed_source_head":args.observed_source_head,
+            "live_finalized_head":live_observed_head,
             "next_required_check":"each checkpoint validator independently verifies the finalized block, successful reader transaction, immutable program-data hash, and canonical reader output before signing",
         }))?
     );
@@ -582,6 +635,68 @@ struct CollectArgs {
     total_liabilities: u64,
     disclosure_commitment: String,
     output: PathBuf,
+}
+
+struct CollectQuantityArgs {
+    manifest: PathBuf,
+    context: PathBuf,
+    source_id: String,
+    prepared_proof: PathBuf,
+    ownership_signature: String,
+    disclosure_commitment: String,
+    output: PathBuf,
+}
+
+fn collect_quantity(args: CollectQuantityArgs) -> Result<()> {
+    validate_lower_hex("disclosure_commitment", &args.disclosure_commitment, 48)?;
+    let (_, context, entry) = load_source(&args.manifest, &args.context, &args.source_id)?;
+    let mut proof: SolanaStakeReaderProofV1 = read_json(&args.prepared_proof)?;
+    validate_manifest_entry(&entry, &proof.policy)?;
+    proof.ownership_signature =
+        decode_base58_64("ownership signature", &args.ownership_signature)?.to_vec();
+    let evidence_commitment = proof
+        .evidence_commitment()
+        .map_err(|error| anyhow!("Solana evidence commitment failed: {error:?}"))?;
+    let observed_at = proof
+        .checkpoint_certificate
+        .checkpoint
+        .pftl_observation_height;
+    validate_observation_height(&context, observed_at)?;
+    let quantity_evidence = SourceEvidenceV1::SolanaStakeReader {
+        evidence_commitment: evidence_commitment.clone(),
+        proof: Box::new(proof),
+    };
+    let observation = SourceObservationV1 {
+        source_id: entry.source_id.clone(),
+        observed_at_block: observed_at,
+        gross_assets: 0,
+        total_liabilities: 0,
+        quantity_evidence: quantity_evidence.clone(),
+        valuation_evidence: quantity_evidence,
+        disclosure_commitment: args.disclosure_commitment,
+    };
+    verify_observation_evidence(
+        &context,
+        &entry,
+        &observation,
+        EvidenceDimensionV1::Quantity,
+    )
+    .map_err(anyhow::Error::msg)?;
+    write_new(&args.output, &serde_json::to_vec_pretty(&observation)?)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&json!({
+            "schema":"postfiat.reserve_solana_quantity_draft.v1",
+            "output":args.output,
+            "source_id":observation.source_id,
+            "pftl_observation_height":observation.observed_at_block,
+            "quantity_verified":true,
+            "valuation_verified":false,
+            "next_required_check":"replace the valuation placeholder with a registered cryptographic valuation proof",
+            "evidence_commitment":evidence_commitment,
+        }))?
+    );
+    Ok(())
 }
 
 fn collect(args: CollectArgs) -> Result<()> {
