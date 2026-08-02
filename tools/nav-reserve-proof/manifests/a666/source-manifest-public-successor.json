@@ -1,0 +1,113 @@
+{
+  "schema": "postfiat.reserve_source_manifest.v1",
+  "sources": [
+    {
+      "source_id": "aave-arbitrum",
+      "adapter_kind": "aave-v3-evm-state-proof-v1",
+      "source_domain": "eip155:42161",
+      "asset_or_position_id": "aave-v3:aggregate-collateral-and-debt",
+      "reserve_owner_commitment": "c6b03826e2d4369f388c724b9fd8e9cf909eb76dab7a5747c497497327972392d8295555a32f7059794514cb3e97e6d3",
+      "quantity_verifier_commitment": "5d5f28f1ffd4b0d8804848873f0caabdb0ada8c57b8485a3048cd70fc7754eafed6b58c06b8356cde1d09f532a147007",
+      "valuation_verifier_commitment": "5d5f28f1ffd4b0d8804848873f0caabdb0ada8c57b8485a3048cd70fc7754eafed6b58c06b8356cde1d09f532a147007",
+      "quantity_evidence_class": "cryptographic",
+      "valuation_evidence_class": "cryptographic",
+      "freshness_policy": {
+        "max_age_blocks": 20,
+        "max_observation_span_blocks": 8
+      },
+      "haircut_policy_hash": "5d5f28f1ffd4b0d8804848873f0caabdb0ada8c57b8485a3048cd70fc7754eafed6b58c06b8356cde1d09f532a147007",
+      "liability_treatment": "asset",
+      "adapter_schema_version": 1
+    },
+    {
+      "source_id": "ethereum-spot",
+      "adapter_kind": "evm-spot-set-bft-checkpoint-mpt-v1",
+      "source_domain": "evm-multichain:a666-v1",
+      "asset_or_position_id": "multi-chain-spot-aggregate",
+      "reserve_owner_commitment": "56f5032dd9febfdf77a63c42a3816192bf3fc7ebbc6669c973c36cc10cc56c1e91cac7d0f008dcf2193fb6c056e6f17d",
+      "quantity_verifier_commitment": "4e7bee12bfa7cefa615210d08d74f773eaf58e8c492837222a6e36ddbe23d21f96fe1f7634d441db401c102be00b6d54",
+      "valuation_verifier_commitment": "39f33f6763ff108f7f6ab88e50325a3438125ef2ebaa88fc23d2059c43b61103335269d1dca231117d6a5b187084ade6",
+      "quantity_evidence_class": "cryptographic",
+      "valuation_evidence_class": "cryptographic",
+      "freshness_policy": {
+        "max_age_blocks": 20,
+        "max_observation_span_blocks": 8
+      },
+      "haircut_policy_hash": "39f33f6763ff108f7f6ab88e50325a3438125ef2ebaa88fc23d2059c43b61103335269d1dca231117d6a5b187084ade6",
+      "liability_treatment": "asset",
+      "adapter_schema_version": 1
+    },
+    {
+      "source_id": "hyperliquid",
+      "adapter_kind": "hyperliquid-hyperevm-receipt-v1",
+      "source_domain": "eip155:999",
+      "asset_or_position_id": "aggregate-spot-and-cash",
+      "reserve_owner_commitment": "232bc64c791c3e1f5780ca43224005548af2cfbb71ee7beb8e91e64de55e8a7bc3e4dd2a74a54b6f7574bb2a310c130e",
+      "quantity_verifier_commitment": "17fdb99bec941ef12877189124333d35e966661d0d5edc97b69f8693ee90169493c65ee8c84020e1121a9f1033aafd1b",
+      "valuation_verifier_commitment": "17fdb99bec941ef12877189124333d35e966661d0d5edc97b69f8693ee90169493c65ee8c84020e1121a9f1033aafd1b",
+      "quantity_evidence_class": "cryptographic",
+      "valuation_evidence_class": "cryptographic",
+      "freshness_policy": {
+        "max_age_blocks": 20,
+        "max_observation_span_blocks": 8
+      },
+      "haircut_policy_hash": "17fdb99bec941ef12877189124333d35e966661d0d5edc97b69f8693ee90169493c65ee8c84020e1121a9f1033aafd1b",
+      "liability_treatment": "asset",
+      "adapter_schema_version": 1
+    },
+    {
+      "source_id": "near-stake",
+      "adapter_kind": "near-stake-receipt-bft-checkpoint-v1",
+      "source_domain": "near:mainnet",
+      "asset_or_position_id": "near-staked-balance",
+      "reserve_owner_commitment": "e146ecb6edab9291260bc69e407707bcf6274ae3c45cabf4fe8d6815dcacc021bb6de27af30b17460f47ab8f814f62eb",
+      "quantity_verifier_commitment": "75b18cc9af90f1a7eb9efa86419d844b28018f4b4fac6bd7a1045864b312ed4db29104399bdb3edcbfa53712a69d7c67",
+      "valuation_verifier_commitment": "260ce714ab04e1f1d48676a0067b9a58894d4dc5673bd0f5356491ab90f6c2703071348906f362e17eb8f735dcb63015",
+      "quantity_evidence_class": "cryptographic",
+      "valuation_evidence_class": "cryptographic",
+      "freshness_policy": {
+        "max_age_blocks": 20,
+        "max_observation_span_blocks": 8
+      },
+      "haircut_policy_hash": "260ce714ab04e1f1d48676a0067b9a58894d4dc5673bd0f5356491ab90f6c2703071348906f362e17eb8f735dcb63015",
+      "liability_treatment": "asset",
+      "adapter_schema_version": 1
+    },
+    {
+      "source_id": "solana-stake",
+      "adapter_kind": "solana-stake-reader-bft-checkpoint-v1",
+      "source_domain": "solana:mainnet",
+      "asset_or_position_id": "sol-staked-balance",
+      "reserve_owner_commitment": "2e1dd2ac65d0fa58af3e4eb633f9bf0feee529ff6f80bec3f19e367fa686539fe8c647149f114c66fd00e95fdeb97f68",
+      "quantity_verifier_commitment": "fd34a6632af9ccafae078647749a593bffd54ac710be4f3de11643a04a4932c72d9616efe39bec3e16e7cc0820f2c42a",
+      "valuation_verifier_commitment": "1ae3bf34e5433836b81710c6c5d41b0ec46c469c15d8a21e6ac735893676104fe5465af51441980dfee00ce01e274756",
+      "quantity_evidence_class": "cryptographic",
+      "valuation_evidence_class": "cryptographic",
+      "freshness_policy": {
+        "max_age_blocks": 20,
+        "max_observation_span_blocks": 8
+      },
+      "haircut_policy_hash": "1ae3bf34e5433836b81710c6c5d41b0ec46c469c15d8a21e6ac735893676104fe5465af51441980dfee00ce01e274756",
+      "liability_treatment": "asset",
+      "adapter_schema_version": 1
+    },
+    {
+      "source_id": "xmr-reserve",
+      "adapter_kind": "monero-reserve-proof-v1",
+      "source_domain": "monero:mainnet",
+      "asset_or_position_id": "monero-reserve-balance",
+      "reserve_owner_commitment": "82c15339e269b21fc9d58733e2ef9c542be274d76468f09e61ef88209c9897047326db2017310fec97e1cc46f97c33c1",
+      "quantity_verifier_commitment": "03a4611a401edb8de6b45ec52e57c1a9d7593053e3dbd148428eb381da593e1d0247420bb8878f1e2b3adb8bce3ec76b",
+      "valuation_verifier_commitment": "7451679e24a92e5839545f42b51619acaac98ecb304e1d5826eb90db1de0e5e1aea4490974550bae5880a1fd945e34c6",
+      "quantity_evidence_class": "cryptographic",
+      "valuation_evidence_class": "cryptographic",
+      "freshness_policy": {
+        "max_age_blocks": 20,
+        "max_observation_span_blocks": 8
+      },
+      "haircut_policy_hash": "7451679e24a92e5839545f42b51619acaac98ecb304e1d5826eb90db1de0e5e1aea4490974550bae5880a1fd945e34c6",
+      "liability_treatment": "asset",
+      "adapter_schema_version": 1
+    }
+  ]
+}

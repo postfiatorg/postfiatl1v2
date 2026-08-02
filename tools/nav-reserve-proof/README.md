@@ -67,9 +67,14 @@ must never define a registered production identity.
 The committed `program-identity.json` pins the immutable legacy reference's
 source commit, ELF SHA-256, and SP1 program vkey. CI rebuilds that exact public
 source commit, not the evolving successor checkout. Any guest rebuild used for
-the legacy registration must match both values. The complete public A666
-adapter guest will receive a new identity and proof profile only after all
-source collectors and qualification gates pass; the legacy identity is never
+the legacy registration must match both values. The distinct
+`a666-successor-program-identity.json` pins the completed public-adapter guest,
+and `manifests/a666/source-manifest-public-successor.json` plus
+`manifests/a666/profile-registration-public-successor.json` publish the exact
+manifest and profile it commits to. CI validates those bindings and rebuilds
+the successor ELF/vkey from its pinned source commit. Publication and
+reproducibility do not activate the profile; live registration remains behind
+the qualification and controlled-migration gates. The legacy identity is never
 rewritten in place.
 
 ## Build and test

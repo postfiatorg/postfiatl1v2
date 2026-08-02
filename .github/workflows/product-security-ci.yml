@@ -207,6 +207,67 @@ jobs:
           jq -e --arg sha "$expected_sha" --arg vkey "$expected_vkey" \
             '.elf_sha256 == $sha and .program_vkey == $vkey' \
             /tmp/postfiat-reserve-program-info.json
+      - name: Verify and rebuild the immutable A666 public successor identity
+        working-directory: tools/nav-reserve-proof/programs/reserve-proof-guest
+        run: |
+          export PATH="$HOME/.sp1/bin:$PATH"
+          identity="$GITHUB_WORKSPACE/tools/nav-reserve-proof/a666-successor-program-identity.json"
+          manifest="$GITHUB_WORKSPACE/tools/nav-reserve-proof/manifests/a666/source-manifest-public-successor.json"
+          registration="$GITHUB_WORKSPACE/tools/nav-reserve-proof/manifests/a666/profile-registration-public-successor.json"
+          host_manifest="$GITHUB_WORKSPACE/tools/nav-reserve-proof/Cargo.toml"
+          expected_sha="$(jq -r .elf_sha256 "$identity")"
+          expected_vkey="$(jq -r .program_vkey "$identity")"
+          expected_source="$(jq -r .source_commit "$identity")"
+          expected_manifest="$(jq -r .source_manifest_hash "$identity")"
+          expected_policy="$(jq -r .valuation_policy_hash "$identity")"
+          expected_profile="$(jq -r .profile_id "$identity")"
+
+          cargo run --locked --release \
+            --manifest-path "$host_manifest" \
+            -p postfiat-reserve-proof --features sp1 -- \
+            manifest validate "$manifest" \
+            > /tmp/a666-public-manifest-validation.json
+          jq -e --arg manifest "$expected_manifest" \
+            '.valid == true and .source_count == 6 and .source_manifest_hash == $manifest' \
+            /tmp/a666-public-manifest-validation.json
+          jq -e --arg manifest "$expected_manifest" --arg policy "$expected_policy" \
+            '.source_manifest_hash == $manifest and .valuation_policy_hash == $policy and .allow_controlled_sources == false' \
+            "$registration"
+          cargo run --locked --release \
+            --manifest-path "$host_manifest" \
+            -p postfiat-reserve-proof --features sp1 -- \
+            profile derive --registration "$registration" \
+            --output /tmp/a666-public-derived-profile.json
+          jq -e --arg profile "$expected_profile" --arg vkey "$expected_vkey" \
+            '.profile.profile_id == $profile and .profile.sp1_program_vkey == $vkey' \
+            /tmp/a666-public-derived-profile.json
+
+          test "$(git cat-file -t "$expected_source")" = commit
+          successor_workspace="$(mktemp -d)"
+          git -C "$GITHUB_WORKSPACE" archive "$expected_source" | \
+            tar -x -C "$successor_workspace"
+          rebuild_dir="$(mktemp -d)"
+          cd "$successor_workspace/tools/nav-reserve-proof/programs/reserve-proof-guest"
+          cargo prove build --docker --tag v6.3.1 --locked \
+            --features a666-public-adapters-v2 \
+            --workspace-directory "$successor_workspace" \
+            --output-directory "$rebuild_dir"
+          rebuilt_elf="$rebuild_dir/postfiat-reserve-proof-guest"
+          test -s "$rebuilt_elf"
+          actual_sha="$(sha256sum "$rebuilt_elf" | cut -d' ' -f1)"
+          if [[ "$actual_sha" != "$expected_sha" ]]; then
+            printf 'A666 successor ELF SHA mismatch: expected %s, got %s\n' \
+              "$expected_sha" "$actual_sha" >&2
+            exit 1
+          fi
+          cargo run --locked --release \
+            --manifest-path "$host_manifest" \
+            -p postfiat-reserve-proof --features sp1 -- \
+            program-info --elf "$rebuilt_elf" \
+            > /tmp/a666-public-successor-program-info.json
+          jq -e --arg sha "$expected_sha" --arg vkey "$expected_vkey" \
+            '.elf_sha256 == $sha and .program_vkey == $vkey' \
+            /tmp/a666-public-successor-program-info.json
 
   evm-contracts:
     runs-on: ubuntu-latest

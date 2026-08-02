@@ -8,6 +8,9 @@
   ],
   "elf_sha256": "2b41e4e8095b1dacdc519b2f0a2b4831ebc57cc8003a4d3686f6d9e4687e81df",
   "program_vkey": "0x00f3857f96ef97e00bd15b4030acd8d6b0a72740b28c6160d154bc2c9bb141bf",
+  "source_manifest_hash": "8abe3e59198b72945d4778a7fa91e5af157a6c65032d8940cca486850ffe59fcb567268ca5942669ff6977ef32dd3a41",
+  "valuation_policy_hash": "350eaee0a1ca12ba51637781ba52661b8685f868657a7c5e7d07c31b2899869c",
+  "profile_id": "f8784629ff7338002d836c1988b8e2c0f19caf448429e0eb7fdc39fa2b08f7d9a44171fc1e7239bc25e06ad833c14e91",
   "reproduction_count": 2,
   "reproduction_result": "byte_identical"
 }
