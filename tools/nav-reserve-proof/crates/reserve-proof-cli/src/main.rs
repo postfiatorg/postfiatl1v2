@@ -10,7 +10,8 @@ use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use postfiat_nav_reserve_protocol::nav_reserve_subscription_composite_source_root_v1;
 use postfiat_reserve_proof::{
-    run_adapter, run_source_checkpoint, AdapterCommand, SourceCheckpointCommand,
+    run_adapter, run_manifest_builder, run_source_checkpoint, AdapterCommand,
+    SourceCheckpointCommand,
 };
 use postfiat_types::{
     AssetTransactionOperation, NavProfileRegisterOperation, NavProofProfile,
@@ -119,7 +120,18 @@ enum Command {
 
 #[derive(Debug, Subcommand)]
 enum ManifestCommand {
-    Validate { manifest: PathBuf },
+    Validate {
+        manifest: PathBuf,
+    },
+    /// Build a canonical manifest from typed public policies, committees, and
+    /// reserve owners. Verifier and haircut commitments are derived, not
+    /// accepted as operator-entered hashes.
+    Build {
+        #[arg(long)]
+        input: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -222,6 +234,9 @@ fn main() -> Result<()> {
         Command::Manifest {
             command: ManifestCommand::Validate { manifest },
         } => manifest_validate(manifest),
+        Command::Manifest {
+            command: ManifestCommand::Build { input, output },
+        } => run_manifest_builder(input, output),
         Command::Profile {
             command:
                 ProfileCommand::Derive {

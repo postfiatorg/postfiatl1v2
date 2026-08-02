@@ -37,6 +37,7 @@ near_corpus="$fuzz_root/near"
 solana_corpus="$fuzz_root/solana"
 monero_corpus="$fuzz_root/monero"
 checkpoint_corpus="$fuzz_root/checkpoint"
+manifest_build_corpus="$fuzz_root/manifest-build"
 mkdir -p \
   "$witness_corpus" \
   "$witness_cbor_corpus" \
@@ -46,7 +47,8 @@ mkdir -p \
   "$near_corpus" \
   "$solana_corpus" \
   "$monero_corpus" \
-  "$checkpoint_corpus"
+  "$checkpoint_corpus" \
+  "$manifest_build_corpus"
 cp "$proof_root/fixtures/controlled-two-source/witness.json" \
   "$witness_corpus/controlled-two-source.json"
 cargo run --locked --quiet \
@@ -71,14 +73,14 @@ cp "$evidence_root/hl-receipt-witness.json" \
   "$hyperliquid_corpus/historical-receipt-proof.json"
 cp "$evidence_root/near-receipt-witness.json" \
   "$near_corpus/historical-light-proof.json"
-cp "$evidence_root/solana-witness.json" \
-  "$solana_corpus/historical-attested-proof.json"
 printf '\x01' > "$solana_corpus/legacy-transaction-prefix.bin"
 printf '\x00\x01\x00' > "$monero_corpus/zero-output-reserve-proof.bin"
 dd if=/dev/zero bs=96 count=1 status=none \
   >> "$monero_corpus/zero-output-reserve-proof.bin"
 cp "$proof_root/fuzz/seeds/source-checkpoint-invalid.json" \
   "$checkpoint_corpus/certificate.json"
+cp "$proof_root/fuzz/seeds/manifest-build-invalid.json" \
+  "$manifest_build_corpus/manifest-build.json"
 jq -c '.committee, .checkpoint, {validator_id:"fuzz-validator",signature:[]}' \
   "$proof_root/fuzz/seeds/source-checkpoint-invalid.json" |
 while IFS= read -r checkpoint_input; do
@@ -110,3 +112,4 @@ run_target near_external_input "$near_corpus" 2097152
 run_target solana_external_input "$solana_corpus" 2097152
 run_target monero_external_input "$monero_corpus" 131072
 run_target source_checkpoint_external_input "$checkpoint_corpus" 8388608
+run_target manifest_build_json "$manifest_build_corpus" 8388608

@@ -7,6 +7,7 @@
 
 mod evm_adapter;
 mod hyperliquid_adapter;
+mod manifest_builder;
 mod monero_adapter;
 mod near_adapter;
 mod solana_adapter;
@@ -15,6 +16,7 @@ mod source_checkpoint;
 pub(crate) use evm_adapter::{read_json, write_new};
 
 pub use evm_adapter::{run as run_adapter, AdapterCommand};
+pub use manifest_builder::run as run_manifest_builder;
 pub use source_checkpoint::{run as run_source_checkpoint, SourceCheckpointCommand};
 
 /// Direct entry points for coverage-guided testing of attacker-controlled
@@ -54,5 +56,11 @@ pub mod external_input_fuzz {
     /// vote, and certificate decoding and validation.
     pub fn source_checkpoint(data: &[u8]) {
         crate::source_checkpoint::fuzz_external_input(data);
+    }
+
+    /// Exercise typed manifest-policy, committee, reserve-owner, valuation,
+    /// and commitment derivation input.
+    pub fn manifest_build(data: &[u8]) {
+        crate::manifest_builder::fuzz_external_input(data);
     }
 }

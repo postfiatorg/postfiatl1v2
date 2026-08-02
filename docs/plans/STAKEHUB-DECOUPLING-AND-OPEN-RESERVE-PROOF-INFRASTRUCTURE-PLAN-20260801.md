@@ -817,6 +817,13 @@ existing guest ELF SHA exactly.
 
 - [ ] Create a public A666 source manifest selecting the real adapter for each
   quantity and valuation dimension.
+- [x] Implement the generic typed manifest builder. It derives reserve-owner,
+  quantity-verifier, valuation-verifier, and haircut commitments from the
+  actual public policies and complete committees; it rejects arbitrary pasted
+  hashes, missing committees, unsupported integrated valuation, valuation
+  context drift, and any price-row/quantity-position or decimal mismatch.
+  The actual governed A666 input bundle remains open until the public reader
+  deployments and real policy values are complete.
 - [ ] Preserve or strengthen historical cryptographic trust classifications.
 - [ ] Eliminate operator-signed aggregate quantity, liability, and NAV inputs;
   permit signed external data only under the exact restrictions in section 2.
@@ -1029,6 +1036,10 @@ e9c2e5d Implement public Monero reserve collection
 89a4b76 Implement public Solana reserve reader
 ce9c6e0 Make Solana reader SBF build reproducible
 3183350 Pin Solana reader artifact identity
+aef4ce8 Prove reserve valuations from public chain state
+dfce1ff Enforce one canonical StakeHub deprecation plan
+4024dea Fuzz public reserve proof inputs
+b4447c8 Fuzz every public reserve proof parser
 ```
 
 This work implements the pfUSDC overlay, provider-neutral source checkpoint
@@ -1046,13 +1057,16 @@ Current machine gates:
 ```text
 scripts/test-proof-public-input-inventory
   passed after the current valuation continuation; 5 systems, 70 public fields,
-  43 source hashes
+  46 source hashes
 
 scripts/check-nav-reserve-proof-fuzz-smoke
   passed locally against guarded temporary corpora. In addition to the initial
   retained witness/evidence campaigns, a clean 2026-08-02 run exercised all
-  nine current boundaries for 4,010,896 executions with no crash, timeout, or
-  OOM. Exact-tip CI must reproduce the pinned smoke campaigns. Longer retained
+  nine then-current boundaries for 4,010,896 executions with no crash,
+  timeout, or OOM. The typed manifest builder added a tenth bounded input
+  target; its first complete local smoke run brought that ten-target run to
+  3,265,852 executions with no crash, timeout, or OOM. Exact-tip CI must
+  reproduce the pinned smoke campaigns. Longer retained
   per-source campaigns and regression-corpus review remain open and are part of
   production qualification.
 
@@ -1069,14 +1083,15 @@ proof-kit verifier/CLI suites and strict clippy after each adapter change
   passed locally; rerun after every continuation change
 ```
 
-The legacy archive/rebuild CI defect is fixed. Run `30732561619` for
-`89a4b76` is fully green, including the immutable legacy guest rebuild. The
-newer run `30732980432` for `3183350` has passed every completed job, including
-the deterministic Solana reader build, and is still running the immutable
-legacy guest rebuild as of this update. The commit containing this valuation
-continuation requires its own exact-tip run. A green older run is not
-permission to mark a newer unverified tip green or to overwrite the immutable
-legacy ELF or vkey.
+The legacy archive/rebuild CI defect is fixed. Exact-tip runs `30732980432`,
+`30733515641`, and `30733599841` are fully green through `dfce1ff`, including
+the deterministic Solana reader and immutable legacy guest rebuilds. Run
+`30749886246` correctly rejected `b4447c8`: its fuzz runner referenced one
+local untracked Solana seed that did not exist in a clean checkout. The seed
+did not exercise the new reader parser and the dependency is removed in the
+current continuation; a new exact-tip run must pass before this continuation
+is remotely qualified. A green older run is not permission to mark a newer
+unverified tip green or to overwrite the immutable legacy ELF or vkey.
 
 ```text
 https://github.com/postfiatorg/postfiatl1v2/actions/runs/30732561619

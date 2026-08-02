@@ -92,6 +92,26 @@ recorded in a distinct identity artifact and governed as a new proof profile.
 
 ## Reference workflow
 
+Production manifests are built from typed public policies, complete checkpoint
+committees, and explicit reserve owners. The builder derives the owner,
+quantity-verifier, valuation-verifier, and haircut commitments itself; those
+hashes are never accepted as operator-entered manifest fields:
+
+    cargo run --locked -p postfiat-reserve-proof -- \
+      manifest build \
+      --input manifests/a666/manifest-build.json \
+      --output target/a666/manifest.json
+
+The `postfiat.reserve_manifest_build.v1` input carries one global valuation
+policy hash, valuation unit, and scale. Each source selects a typed Aave, EVM
+spot, Hyperliquid receipt, NEAR receipt, Solana reader, or Monero quantity
+policy plus its complete public checkpoint committee. Aave and Hyperliquid may
+select `same_as_quantity` only because those quantity proofs also derive their
+valuation. Every other source must supply an EVM Chainlink state-proof policy.
+The builder rejects missing or substituted committees, mismatched owners,
+position sets, valuation contexts, quantity decimals, price rows, and
+haircuts. It emits only cryptographic quantity and valuation classifications.
+
     cd tools/nav-reserve-proof
 
     cargo run --locked -p postfiat-reserve-proof -- \

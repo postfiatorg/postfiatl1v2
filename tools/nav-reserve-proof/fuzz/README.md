@@ -5,8 +5,10 @@ formats as attacker-controlled input. `witness_json` sends every successfully
 decoded witness through the same deterministic `execute_reserve_proof` entry
 point used by the SP1 guest, so all registered Aave, EVM spot, Hyperliquid,
 NEAR, Solana, Monero, and Chainlink valuation dispatch paths are in scope.
-`witness_cbor` exercises the exact SP1 guest input decoder, and
-`source_evidence_json` isolates the tagged evidence decoder. Six additional
+`witness_cbor` exercises the exact SP1 guest input decoder,
+`source_evidence_json` isolates the tagged evidence decoder, and
+`manifest_build_json` exercises typed policy, committee, reserve-owner,
+valuation-row, and derived-commitment assembly. Six additional
 targets directly exercise the EVM, Hyperliquid, NEAR, Solana, Monero, and
 source-checkpoint parsing surfaces through the production library, without
 network access or state mutation.
