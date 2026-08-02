@@ -1,7 +1,8 @@
+use postfiat_nav_reserve_protocol::nav_reserve_subscription_composite_source_root_v1;
 use postfiat_types::{
     AGGREGATE_PUBLIC_VALUES_V2_SCHEMA_VERSION, DEFAULT_MAX_NAV_SP1_PROOF_BYTES,
     DEFAULT_MAX_NAV_SP1_PUBLIC_VALUES_BYTES, NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1,
-    NavReservePublicValuesV1, nav_reserve_subscription_composite_source_root_v1,
+    NavReservePublicValuesV1,
 };
 #[cfg(test)]
 use postfiat_types::NAV_SP1_POLICY_HASH_HEX_LEN;

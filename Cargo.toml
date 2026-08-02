@@ -10,6 +10,7 @@ members = [
     "crates/fuzz_harness",
     "crates/mempool_dag",
     "crates/network",
+    "crates/nav_reserve_protocol",
     "crates/node",
     "crates/ordering_fast",
     "crates/privacy",

@@ -4414,6 +4414,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "postfiat-nav-reserve-protocol"
+version = "0.1.0"
+dependencies = [
+ "postfiat-types",
+ "sha3 0.11.0",
+]
+
+[[package]]
 name = "postfiat-reserve-proof"
 version = "0.1.0"
 dependencies = [
@@ -4422,6 +4430,7 @@ dependencies = [
  "bincode",
  "clap",
  "hex",
+ "postfiat-nav-reserve-protocol",
  "postfiat-types",
  "reqwest",
  "reserve-proof-types",

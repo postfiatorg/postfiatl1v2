@@ -6,9 +6,11 @@
     "crates/privacy_orchard/src/asset_orchard.rs": "9b63632e1d4c5cb4bd7d061103552db5b8380f8404659c73f8e48f14b28ba739",
     "crates/privacy_orchard/src/asset_orchard_circuit.rs": "77ab533ed63a10a2a4a2902de11f3a94d5f2d1045afb6839d4c7f59407e9d310",
     "crates/privacy_orchard/src/verify.rs": "0b48191344297c4c1a7720b3cc54844d919205f58013bd6f4e8af3d60b72e66a",
-    "crates/execution/src/nav_sp1_verifier.rs": "1668b4f94c4589087f9e5194dd515754b89f9ab5df8f542e8b0e1e7c66297659",
+    "crates/execution/src/nav_sp1_verifier.rs": "04ba754797c122c326e71fe2ed99452f559f387367b4128c0979eb6574d4ff54",
+    "crates/nav_reserve_protocol/src/lib.rs": "8de1f518993479564da9bd6c400826490cd4875abf8fd18ecc0008216b8ce228",
     "crates/proofs/src/lib.rs": "6ad08dd265fc25958daf6e0ae3d55bbecaa13cdebdcafc9739c2d682d0eb4527",
     "crates/types/src/nav_reserve_public_values.rs": "ffe01da1eefffa33d1f283ba0248e5e7f572e0537b88a794435aa43e2a3c5cf6",
+    "tools/nav-reserve-proof/crates/reserve-proof-cli/src/main.rs": "51a1814847ed3452463672171bbb0c9fbe97546e60020f629189348681e9dfc5",
     "tools/nav-reserve-proof/crates/reserve-proof-types/src/lib.rs": "dcdb6e229ad8b0cd9d3b5cae45e963f63e98136d403e6aecfb03b124f4b94d33",
     "tools/nav-reserve-proof/programs/reserve-proof-guest/src/main.rs": "1f3caf2e7b1adb64afc14c5f5e81a4690d25a232d116ad95b3e0126420b8c655"
   },

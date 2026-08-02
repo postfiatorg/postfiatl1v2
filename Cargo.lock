@@ -1673,6 +1673,7 @@ version = "0.1.0"
 dependencies = [
  "postfiat-bridge",
  "postfiat-crypto-provider",
+ "postfiat-nav-reserve-protocol",
  "postfiat-types",
  "serde_json",
  "sp1-verifier",
@@ -1721,6 +1722,14 @@ dependencies = [
  "postfiat-types",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "postfiat-nav-reserve-protocol"
+version = "0.1.0"
+dependencies = [
+ "postfiat-types",
+ "sha3 0.11.0",
 ]
 
 [[package]]

@@ -1,0 +1,15 @@
+[package]
+name = "postfiat-nav-reserve-protocol"
+version = "0.1.0"
+description = "Canonical host-side constructions for PostFiat NAV reserve packets"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+postfiat-types = { path = "../types" }
+sha3 = { workspace = true }

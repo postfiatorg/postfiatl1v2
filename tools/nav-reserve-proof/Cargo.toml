@@ -23,6 +23,7 @@ ed25519-dalek = { version = "2.1", features = ["serde"] }
 hex = "0.4"
 k256 = "0.13"
 postfiat-types = { path = "../../crates/types" }
+postfiat-nav-reserve-protocol = { path = "../../crates/nav_reserve_protocol" }
 postfiat-crypto-provider = { path = "../../crates/crypto_provider" }
 reserve-proof-types = { path = "crates/reserve-proof-types" }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }

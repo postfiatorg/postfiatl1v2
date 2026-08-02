@@ -1,0 +1,49 @@
+{
+  "schema": "postfiat-a666-public-adapter-readiness-v1",
+  "nav_asset": "A666",
+  "stakehub_deprecated": false,
+  "required_adapters": [
+    {
+      "id": "aave-arbitrum",
+      "status": "missing",
+      "production_qualified": false,
+      "public_implementation": null,
+      "note": "Public code does not yet verify the complete Aave collateral, debt, reserve, ownership, and valuation state used by A666."
+    },
+    {
+      "id": "evm-spot",
+      "status": "partial",
+      "production_qualified": false,
+      "public_implementation": "tools/nav-reserve-proof/crates/reserve-proof-types/src/evm_checkpoint.rs",
+      "note": "A generic checkpoint/MPT ERC-20 balance adapter exists, but the complete A666 EVM spot source set, ownership bindings, liabilities, and valuation policy are not yet qualified."
+    },
+    {
+      "id": "hyperliquid",
+      "status": "missing",
+      "production_qualified": false,
+      "public_implementation": null,
+      "note": "Public code does not yet verify Hyperliquid reader receipts, account commitments, positions, holds, withdrawable value, liabilities, and valuation."
+    },
+    {
+      "id": "staked-near",
+      "status": "missing",
+      "production_qualified": false,
+      "public_implementation": null,
+      "note": "Public code does not yet verify NEAR account, staking-pool, outcome, block, ownership, freshness, and valuation evidence."
+    },
+    {
+      "id": "staked-solana",
+      "status": "missing",
+      "production_qualified": false,
+      "public_implementation": null,
+      "note": "Public code does not yet verify the governed Solana stake-account set, ownership, activation state, duplication constraints, freshness, and valuation."
+    },
+    {
+      "id": "xmr-reserve",
+      "status": "missing",
+      "production_qualified": false,
+      "public_implementation": null,
+      "note": "Public code does not yet verify Monero reserve proofs, ownership challenges, replay/freshness, zero and nonzero balances, and separate XMR/USD valuation evidence."
+    }
+  ]
+}

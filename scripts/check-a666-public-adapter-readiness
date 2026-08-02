@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+"""Reject inaccurate StakeHub-deprecation claims for A666."""
+
+from __future__ import annotations
+
+import json
+import pathlib
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+READINESS = ROOT / "tools/nav-reserve-proof/a666-adapter-readiness.json"
+PLAN = ROOT / (
+    "docs/plans/"
+    "STAKEHUB-DECOUPLING-AND-OPEN-RESERVE-PROOF-INFRASTRUCTURE-PLAN-20260801.md"
+)
+REQUIRED = {
+    "aave-arbitrum",
+    "evm-spot",
+    "hyperliquid",
+    "staked-near",
+    "staked-solana",
+    "xmr-reserve",
+}
+
+
+def fail(message: str) -> None:
+    raise SystemExit(f"a666 public-adapter readiness: {message}")
+
+
+def main() -> None:
+    document = json.loads(READINESS.read_text(encoding="utf-8"))
+    if document.get("schema") != "postfiat-a666-public-adapter-readiness-v1":
+        fail("schema mismatch")
+    if document.get("nav_asset") != "A666":
+        fail("NAV asset must be A666")
+
+    entries = document.get("required_adapters")
+    if not isinstance(entries, list):
+        fail("required_adapters must be a list")
+    by_id = {entry.get("id"): entry for entry in entries}
+    if set(by_id) != REQUIRED or len(entries) != len(REQUIRED):
+        fail("required adapter set must be exact and duplicate-free")
+
+    allowed_statuses = {"missing", "partial", "implemented", "qualified"}
+    for adapter_id, entry in by_id.items():
+        status = entry.get("status")
+        qualified = entry.get("production_qualified")
+        implementation = entry.get("public_implementation")
+        if status not in allowed_statuses:
+            fail(f"{adapter_id}: invalid status")
+        if not isinstance(qualified, bool):
+            fail(f"{adapter_id}: production_qualified must be boolean")
+        if qualified != (status == "qualified"):
+            fail(f"{adapter_id}: qualified status/boolean mismatch")
+        if status in {"implemented", "qualified"}:
+            if not isinstance(implementation, str) or not implementation:
+                fail(f"{adapter_id}: public implementation is required")
+            path = ROOT / implementation
+            if not path.is_file():
+                fail(f"{adapter_id}: public implementation does not exist")
+        if status == "missing" and implementation is not None:
+            fail(f"{adapter_id}: missing adapter cannot name an implementation")
+        if not isinstance(entry.get("note"), str) or not entry["note"].strip():
+            fail(f"{adapter_id}: an accurate note is required")
+
+    all_qualified = all(entry["production_qualified"] for entry in entries)
+    deprecated = document.get("stakehub_deprecated")
+    if not isinstance(deprecated, bool):
+        fail("stakehub_deprecated must be boolean")
+    if deprecated != all_qualified:
+        fail("StakeHub may be marked deprecated iff all six adapters are qualified")
+
+    plan = PLAN.read_text(encoding="utf-8")
+    if deprecated:
+        if "| `G3` Public A666 adapters" not in plan or "| PASS |" not in plan:
+            fail("canonical plan does not record a passing G3")
+    else:
+        required_markers = (
+            "**Status:** **INCOMPLETE — StakeHub is not deprecated",
+            "| `G3` Public A666 adapters",
+            "| **FAIL/OPEN** |",
+            "StakeHub is not deprecated.",
+        )
+        for marker in required_markers:
+            if marker not in plan:
+                fail(f"canonical plan is missing incomplete-state marker: {marker}")
+
+    print(
+        "a666_public_adapter_readiness=ok "
+        f"qualified={sum(entry['production_qualified'] for entry in entries)}/"
+        f"{len(entries)} stakehub_deprecated={str(deprecated).lower()}"
+    )
+
+
+if __name__ == "__main__":
+    main()

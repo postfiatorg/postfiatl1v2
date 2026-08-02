@@ -8,10 +8,11 @@ use std::{
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
+use postfiat_nav_reserve_protocol::nav_reserve_subscription_composite_source_root_v1;
 use postfiat_types::{
-    nav_reserve_subscription_composite_source_root_v1, AssetTransactionOperation,
-    NavProfileRegisterOperation, NavProofProfile, NavReservePublicValuesV1,
-    NavReserveSubmitOperation, SignedAssetTransaction, DEFAULT_MAX_NAV_SP1_PROOF_BYTES,
+    AssetTransactionOperation, NavProfileRegisterOperation, NavProofProfile,
+    NavReservePublicValuesV1, NavReserveSubmitOperation, SignedAssetTransaction,
+    DEFAULT_MAX_NAV_SP1_PROOF_BYTES,
 };
 use reserve_proof_types::{
     execute_reserve_proof, opaque_commitment, ReserveProofContextV1, ReserveProofWitnessV1,
