@@ -5675,6 +5675,143 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
     );
     assert!(receipt.accepted, "{receipt:?}");
 
+    let mut private_issue_ledger = ledger.clone();
+    let private_issue = AssetOrchardPrivatePrimaryIssueActionPayload {
+        version: 1,
+        schema: "postfiat-asset-orchard-private-primary-issue-action-v1".to_string(),
+        pool_id: "asset-orchard-v1".to_string(),
+        route_id: v2_route_id.clone(),
+        subscriber: subscriber.clone(),
+        ethereum_recipient: "0x5555555555555555555555555555555555555555".to_string(),
+        reservation_id: "c5".repeat(48),
+        subscription_nonce: "c6".repeat(32),
+        route_epoch: 2,
+        policy_epoch: 2,
+        policy_hash: primary_policy.policy_hash.clone(),
+        pricing_nav_epoch: 7,
+        pricing_reserve_packet_hash: pricing_reserve_packet_hash.clone(),
+        mint_amount_atoms: 10,
+        settlement_value_atoms: 71,
+        expires_at_height: 30,
+        output_commitment: String::new(),
+        encrypted_output: String::new(),
+        output_validity_action_json: String::new(),
+        proof_system_id: String::new(),
+        circuit_id: String::new(),
+        pool_domain: String::new(),
+        anchor: String::new(),
+        nullifier: String::new(),
+        randomized_verification_key: String::new(),
+        settlement_asset_tag_lo: 0,
+        settlement_asset_tag_hi: 0,
+        native_nav_asset_tag_lo: 0,
+        native_nav_asset_tag_hi: 0,
+        primary_binding_hash: String::new(),
+        proof: String::new(),
+        spend_authorization_signature: String::new(),
+    };
+    let mut wrong_settlement_ledger = private_issue_ledger.clone();
+    let mut wrong_settlement = private_issue.clone();
+    wrong_settlement.settlement_value_atoms -= 1;
+    let wrong_settlement_before = pftl_uniswap_route_state_hash(
+        wrong_settlement_ledger
+            .pftl_uniswap_routes
+            .iter()
+            .find(|route| route.route_id == v2_route_id)
+            .expect("wrong-settlement route"),
+    );
+    let wrong_settlement_error =
+        super::apply_asset_orchard_private_primary_issue_route_transition(
+            &mut wrong_settlement_ledger,
+            &wrong_settlement,
+            26,
+        )
+        .expect_err("noncanonical private issue settlement must reject");
+    assert_eq!(
+        wrong_settlement_error.0,
+        "pftl_uniswap_subscription_slippage"
+    );
+    assert_eq!(
+        pftl_uniswap_route_state_hash(
+            wrong_settlement_ledger
+                .pftl_uniswap_routes
+                .iter()
+                .find(|route| route.route_id == v2_route_id)
+                .expect("wrong-settlement route after rejection"),
+        ),
+        wrong_settlement_before
+    );
+    super::apply_asset_orchard_private_primary_issue_route_transition(
+        &mut private_issue_ledger,
+        &private_issue,
+        26,
+    )
+    .expect("private issue route transition");
+    let private_issue_route = private_issue_ledger
+        .pftl_uniswap_routes
+        .iter()
+        .find(|route| route.route_id == v2_route_id)
+        .expect("private issue route");
+    let private_issue_v2 = private_issue_route.v2.as_ref().expect("private issue v2");
+    assert_eq!(private_issue_route.authorized_valid_supply_atoms, 50);
+    assert_eq!(private_issue_route.pftl_spendable_supply_atoms, 50);
+    assert_eq!(private_issue_route.settlement_reserve_atoms, 350);
+    assert_eq!(private_issue_v2.issue_capacity_used_atoms, 50);
+    assert_eq!(private_issue_v2.non_nav_spread_atoms, 3);
+    assert_eq!(
+        private_issue_route
+            .native_spendable_balances_atoms
+            .get(&subscriber),
+        Some(&50)
+    );
+    assert_eq!(
+        private_issue_v2
+            .terminal_reservations
+            .get(&private_issue.reservation_id)
+            .map(String::as_str),
+        Some(PFTL_UNISWAP_ORDER_STATUS_CONSUMED)
+    );
+    assert_eq!(
+        private_issue_v2
+            .export_entitlements
+            .get(&private_issue.reservation_id)
+            .map(|entitlement| entitlement.remaining_amount_atoms),
+        Some(10)
+    );
+    assert_eq!(
+        private_issue_ledger
+            .nav_asset(&native_nav_asset_id)
+            .expect("private issue NAV asset")
+            .circulating_supply,
+        150
+    );
+    assert_eq!(
+        private_issue_ledger
+            .pftl_uniswap_receipts
+            .last()
+            .expect("private issue receipt")
+            .transition,
+        "private_primary_subscription"
+    );
+    let state_after_private_issue = pftl_uniswap_route_state_hash(private_issue_route);
+    let replay = super::apply_asset_orchard_private_primary_issue_route_transition(
+        &mut private_issue_ledger,
+        &private_issue,
+        26,
+    )
+    .expect_err("private issue nonce replay must reject");
+    assert_eq!(replay.0, "pftl_uniswap_private_primary_policy_mismatch");
+    assert_eq!(
+        pftl_uniswap_route_state_hash(
+            private_issue_ledger
+                .pftl_uniswap_routes
+                .iter()
+                .find(|route| route.route_id == v2_route_id)
+                .expect("private issue route after replay"),
+        ),
+        state_after_private_issue
+    );
+
     let mut private_redeem_ledger = ledger.clone();
     let private_redeem = AssetOrchardPrivatePrimaryRedeemActionPayload {
         version: 1,
