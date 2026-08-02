@@ -1,5 +1,7 @@
 //! Provider-neutral, deterministic NAV reserve-proof manifest and guest logic.
 
+#[cfg(feature = "a666-public-adapters-v2")]
+use alloy_primitives::U256;
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use postfiat_types::{
     NavReservePublicValuesV1, NavReserveTrustCountsV1, NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1,
@@ -11,6 +13,8 @@ use sha3::{Digest, Sha3_384};
 pub mod aave_v3;
 #[cfg(feature = "a666-public-adapters-v2")]
 pub mod bft_checkpoint;
+#[cfg(feature = "a666-public-adapters-v2")]
+pub mod evm_chainlink_valuation;
 pub mod evm_checkpoint;
 #[cfg(feature = "a666-public-adapters-v2")]
 pub mod evm_spot;
@@ -26,6 +30,11 @@ pub mod solana_stake;
 #[cfg(feature = "a666-public-adapters-v2")]
 use aave_v3::{
     verify_aave_v3_proof_v1, AaveV3ProofV1, AaveV3VerifyContextV1, AAVE_V3_ADAPTER_KIND_V1,
+};
+#[cfg(feature = "a666-public-adapters-v2")]
+use evm_chainlink_valuation::{
+    verify_evm_chainlink_valuation_v1, EvmChainlinkValuationProofV1,
+    EvmChainlinkValuationVerifyContextV1, ValuationQuantityRowV1,
 };
 use evm_checkpoint::{EvmErc20BalanceProofV1, EVM_ERC20_ADAPTER_KIND_V1};
 #[cfg(feature = "a666-public-adapters-v2")]
@@ -234,6 +243,13 @@ pub enum SourceEvidenceV1 {
         evidence_commitment: String,
         proof: Box<MoneroReserveProofV1>,
     },
+    /// USD valuation recomputed from a registered quantity proof and
+    /// Chainlink account/storage proofs beneath a governed EVM checkpoint.
+    #[cfg(feature = "a666-public-adapters-v2")]
+    EvmChainlinkValuation {
+        evidence_commitment: String,
+        proof: Box<EvmChainlinkValuationProofV1>,
+    },
     AdapterProof {
         evidence_commitment: String,
         proof: Vec<u8>,
@@ -254,13 +270,15 @@ impl SourceEvidenceV1 {
             | Self::AaveV3 { .. }
             | Self::EvmSpotQuantity { .. }
             | Self::SolanaStakeReader { .. }
-            | Self::MoneroReserve { .. } => TrustClassV1::Cryptographic,
+            | Self::MoneroReserve { .. }
+            | Self::EvmChainlinkValuation { .. } => TrustClassV1::Cryptographic,
             #[cfg(feature = "a666-public-adapters-v2")]
             Self::SolanaStakeAttested { .. } => TrustClassV1::Attested,
         }
     }
 
-    fn commitment(&self) -> &str {
+    /// Return the canonical evidence commitment carried by this variant.
+    pub fn commitment(&self) -> &str {
         match self {
             Self::Controlled {
                 evidence_commitment,
@@ -303,6 +321,10 @@ impl SourceEvidenceV1 {
                 ..
             }
             | Self::MoneroReserve {
+                evidence_commitment,
+                ..
+            }
+            | Self::EvmChainlinkValuation {
                 evidence_commitment,
                 ..
             } => evidence_commitment,
@@ -1007,6 +1029,42 @@ fn verify_evidence(
                 )
             })
         }
+        #[cfg(feature = "a666-public-adapters-v2")]
+        SourceEvidenceV1::EvmChainlinkValuation {
+            evidence_commitment,
+            proof,
+        } => {
+            if dimension != "valuation" {
+                return Err(format!(
+                    "source {} Chainlink valuation proof is only valid for valuation evidence",
+                    entry.source_id
+                ));
+            }
+            let quantities = verified_valuation_quantities(context, entry, observation)?;
+            verify_evm_chainlink_valuation_v1(
+                proof,
+                &quantities,
+                &EvmChainlinkValuationVerifyContextV1 {
+                    pftl_genesis_hash: &context.pftl_genesis_hash,
+                    valuation_policy_hash: &context.valuation_policy_hash,
+                    valuation_unit_id: &context.valuation_unit_id,
+                    valuation_scale: context.valuation_scale,
+                    observed_at_pftl_height: observation.observed_at_block,
+                    valuation_verifier_commitment: &entry.valuation_verifier_commitment,
+                    quantity_evidence_commitment: observation.quantity_evidence.commitment(),
+                    expected_gross_assets: observation.gross_assets,
+                    expected_total_liabilities: observation.total_liabilities,
+                    expected_evidence_commitment: evidence_commitment,
+                },
+            )
+            .map(|_| ())
+            .map_err(|error| {
+                format!(
+                    "source {} Chainlink valuation verification failed: {error:?}",
+                    entry.source_id
+                )
+            })
+        }
         SourceEvidenceV1::AdapterProof { proof, .. } => {
             if proof.len() > MAX_EVIDENCE_BYTES {
                 return Err("adapter proof exceeds bounded maximum".to_string());
@@ -1017,6 +1075,147 @@ fn verify_evidence(
             ))
         }
     }
+}
+
+#[cfg(feature = "a666-public-adapters-v2")]
+fn verified_valuation_quantities(
+    context: &ReserveProofContextV1,
+    entry: &SourceManifestEntryV1,
+    observation: &SourceObservationV1,
+) -> Result<Vec<ValuationQuantityRowV1>, String> {
+    let evidence_commitment = observation.quantity_evidence.commitment();
+    let mut rows = match &observation.quantity_evidence {
+        SourceEvidenceV1::EvmErc20BftCheckpointMpt { .. } => {
+            return Err(format!(
+                "source {} legacy EVM ERC-20 proof does not policy-bind decimals and is ineligible for cryptographic valuation",
+                entry.source_id
+            ));
+        }
+        SourceEvidenceV1::EvmSpotQuantity { proof, .. } => {
+            let verified = verify_evm_spot_quantity_proof_v1(
+                proof,
+                &EvmSpotVerifyContextV1 {
+                    pftl_genesis_hash: &context.pftl_genesis_hash,
+                    nav_asset_id: &context.nav_asset_id,
+                    proof_profile_id: &context.proof_profile_id,
+                    valuation_policy_hash: &context.valuation_policy_hash,
+                    source_manifest_hash: &context.source_manifest_hash,
+                    source_id: &entry.source_id,
+                    source_domain: &entry.source_domain,
+                    asset_or_position_id: &entry.asset_or_position_id,
+                    reserve_owner_commitment: &entry.reserve_owner_commitment,
+                    quantity_verifier_commitment: &entry.quantity_verifier_commitment,
+                    observed_at_pftl_height: observation.observed_at_block,
+                    expected_evidence_commitment: evidence_commitment,
+                },
+            )
+            .map_err(|error| format!("EVM spot quantity re-verification failed: {error:?}"))?;
+            verified
+                .rows
+                .into_iter()
+                .map(|row| ValuationQuantityRowV1 {
+                    position_id: row.position_id,
+                    raw_quantity: row.raw_quantity,
+                    decimals: row.decimals,
+                })
+                .collect()
+        }
+        SourceEvidenceV1::NearReceiptQuantity { proof, .. } => {
+            let verified = verify_near_receipt_quantity_proof_v1(
+                proof,
+                &NearReceiptVerifyContextV1 {
+                    pftl_genesis_hash: &context.pftl_genesis_hash,
+                    nav_asset_id: &context.nav_asset_id,
+                    proof_profile_id: &context.proof_profile_id,
+                    valuation_policy_hash: &context.valuation_policy_hash,
+                    source_manifest_hash: &context.source_manifest_hash,
+                    source_id: &entry.source_id,
+                    source_domain: &entry.source_domain,
+                    asset_or_position_id: &entry.asset_or_position_id,
+                    reserve_owner_commitment: &entry.reserve_owner_commitment,
+                    quantity_verifier_commitment: &entry.quantity_verifier_commitment,
+                    observed_at_pftl_height: observation.observed_at_block,
+                    expected_evidence_commitment: evidence_commitment,
+                },
+            )
+            .map_err(|error| format!("NEAR quantity re-verification failed: {error:?}"))?;
+            vec![ValuationQuantityRowV1 {
+                position_id: entry.asset_or_position_id.clone(),
+                raw_quantity: U256::from(verified.total_yocto),
+                decimals: 24,
+            }]
+        }
+        SourceEvidenceV1::SolanaStakeReader { proof, .. } => {
+            let verified = verify_solana_stake_reader_proof_v1(
+                proof,
+                &SolanaStakeVerifyContextV1 {
+                    pftl_genesis_hash: &context.pftl_genesis_hash,
+                    nav_asset_id: &context.nav_asset_id,
+                    proof_profile_id: &context.proof_profile_id,
+                    valuation_policy_hash: &context.valuation_policy_hash,
+                    source_manifest_hash: &context.source_manifest_hash,
+                    source_id: &entry.source_id,
+                    source_domain: &entry.source_domain,
+                    asset_or_position_id: &entry.asset_or_position_id,
+                    reserve_owner_commitment: &entry.reserve_owner_commitment,
+                    quantity_verifier_commitment: &entry.quantity_verifier_commitment,
+                    observed_at_pftl_height: observation.observed_at_block,
+                    expected_evidence_commitment: evidence_commitment,
+                },
+            )
+            .map_err(|error| format!("Solana quantity re-verification failed: {error:?}"))?;
+            vec![ValuationQuantityRowV1 {
+                position_id: entry.asset_or_position_id.clone(),
+                raw_quantity: U256::from(verified.total_lamports),
+                decimals: 9,
+            }]
+        }
+        SourceEvidenceV1::MoneroReserve { proof, .. } => {
+            let verified = verify_monero_reserve_proof_v1(
+                proof,
+                &MoneroReserveVerifyContextV1 {
+                    pftl_genesis_hash: &context.pftl_genesis_hash,
+                    nav_asset_id: &context.nav_asset_id,
+                    proof_profile_id: &context.proof_profile_id,
+                    valuation_policy_hash: &context.valuation_policy_hash,
+                    source_manifest_hash: &context.source_manifest_hash,
+                    source_id: &entry.source_id,
+                    source_domain: &entry.source_domain,
+                    asset_or_position_id: &entry.asset_or_position_id,
+                    reserve_owner_commitment: &entry.reserve_owner_commitment,
+                    quantity_verifier_commitment: &entry.quantity_verifier_commitment,
+                    observation_epoch: context.observation_epoch,
+                    observation_not_before: context.observation_not_before,
+                    observation_not_after: context.observation_not_after,
+                    observed_at_pftl_height: observation.observed_at_block,
+                    expected_evidence_commitment: evidence_commitment,
+                },
+            )
+            .map_err(|error| format!("Monero quantity re-verification failed: {error:?}"))?;
+            vec![ValuationQuantityRowV1 {
+                position_id: entry.asset_or_position_id.clone(),
+                raw_quantity: U256::from(verified.xmr_atomic),
+                decimals: 12,
+            }]
+        }
+        _ => {
+            return Err(format!(
+                "source {} quantity adapter is not eligible for cryptographic Chainlink valuation",
+                entry.source_id
+            ))
+        }
+    };
+    rows.sort_by(|left, right| left.position_id.cmp(&right.position_id));
+    if rows
+        .windows(2)
+        .any(|pair| pair[0].position_id == pair[1].position_id)
+    {
+        return Err(format!(
+            "source {} valuation quantity positions are not unique",
+            entry.source_id
+        ));
+    }
+    Ok(rows)
 }
 
 /// Return the exact statement signed by an Ed25519 attestor or protocol

@@ -735,16 +735,55 @@ fn verify_chainlink_price(
     state_root: B256,
     block_timestamp: u64,
 ) -> Result<u128, AaveV3Error> {
-    if feed.decimals != 8 {
-        return Err(AaveV3Error::OracleProof);
-    }
-    if feed.proxy_account.code_hash != position.chainlink_proxy_code_hash
-        || feed.aggregator_account.code_hash != position.chainlink_aggregator_code_hash
+    verify_chainlink_feed_proof_v1(
+        feed,
+        state_root,
+        block_timestamp,
+        feed.proxy_account.address,
+        position.chainlink_proxy_code_hash,
+        position.chainlink_aggregator_code_hash,
+        policy.chainlink_proxy_phase_slot_index,
+        policy.chainlink_hot_vars_slot_index,
+        policy.chainlink_transmissions_slot_index,
+        policy.max_oracle_age_seconds,
+        8,
+    )
+}
+
+/// Verify a Chainlink OCR feed directly from EVM account and storage proofs
+/// beneath an already authenticated state root.
+///
+/// This is shared by the Aave adapter and the provider-neutral valuation
+/// adapter. The caller pins the exact proxy and bytecode identities plus all
+/// storage-layout slots; no `eth_call` response is trusted as price evidence.
+#[allow(clippy::too_many_arguments)]
+pub fn verify_chainlink_feed_proof_v1(
+    feed: &ChainlinkFeedProofV1,
+    state_root: B256,
+    block_timestamp: u64,
+    proxy_address: Address,
+    proxy_code_hash: B256,
+    aggregator_code_hash: B256,
+    proxy_phase_slot_index: u64,
+    hot_vars_slot_index: u64,
+    transmissions_slot_index: u64,
+    max_oracle_age_seconds: u64,
+    expected_decimals: u8,
+) -> Result<u128, AaveV3Error> {
+    if expected_decimals > 38
+        || feed.decimals != expected_decimals
+        || max_oracle_age_seconds == 0
+        || proxy_phase_slot_index == 0
+        || hot_vars_slot_index == 0
+        || transmissions_slot_index == 0
+        || feed.proxy_account.address != proxy_address
+        || feed.proxy_account.code_hash != proxy_code_hash
+        || feed.aggregator_account.code_hash != aggregator_code_hash
     {
         return Err(AaveV3Error::OracleProof);
     }
     verify_account_proof(state_root, &feed.proxy_account)?;
-    if feed.current_phase.key != fixed_storage_slot(policy.chainlink_proxy_phase_slot_index) {
+    if feed.current_phase.key != fixed_storage_slot(proxy_phase_slot_index) {
         return Err(AaveV3Error::OracleProof);
     }
     verify_storage_proof(feed.proxy_account.storage_root, &feed.current_phase)?;
@@ -753,13 +792,12 @@ fn verify_chainlink_price(
         return Err(AaveV3Error::OracleProof);
     }
     verify_account_proof(state_root, &feed.aggregator_account)?;
-    if feed.hot_vars.key != fixed_storage_slot(policy.chainlink_hot_vars_slot_index) {
+    if feed.hot_vars.key != fixed_storage_slot(hot_vars_slot_index) {
         return Err(AaveV3Error::OracleProof);
     }
     verify_storage_proof(feed.aggregator_account.storage_root, &feed.hot_vars)?;
     let latest_round = chainlink_latest_round(feed.hot_vars.value)?;
-    if feed.transmission.key
-        != chainlink_transmission_slot(latest_round, policy.chainlink_transmissions_slot_index)
+    if feed.transmission.key != chainlink_transmission_slot(latest_round, transmissions_slot_index)
     {
         return Err(AaveV3Error::OracleProof);
     }
@@ -771,7 +809,7 @@ fn verify_chainlink_price(
         || block_timestamp
             .checked_sub(transmission_timestamp)
             .ok_or(AaveV3Error::BadTimestamp)?
-            > policy.max_oracle_age_seconds
+            > max_oracle_age_seconds
     {
         return Err(AaveV3Error::OracleStale);
     }

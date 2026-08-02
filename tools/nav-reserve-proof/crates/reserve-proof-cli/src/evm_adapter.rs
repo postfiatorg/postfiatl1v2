@@ -26,6 +26,9 @@ use reserve_proof_types::{
         BftCheckpointCommitteeV1, BftSourceCheckpointCertificateV1, BftSourceCheckpointV1,
     },
     ed25519_evidence_signing_statement, ed25519_verifier_commitment,
+    evm_chainlink_valuation::{
+        EvmChainlinkValuationPolicyV1, EvmChainlinkValuationProofV1, EVM_STATE_CHECKPOINT_KIND_V1,
+    },
     evm_checkpoint::{
         erc20_balance_slot, evm_owner_authorization_statement, evm_owner_commitment,
         EvmAccountProofV1, EvmErc20BalanceProofV1, EvmStateCheckpointCertificateV1,
@@ -70,6 +73,12 @@ pub enum AdapterCommand {
     EvmSpot {
         #[command(subcommand)]
         command: EvmSpotCommand,
+    },
+    /// Collect Chainlink account/storage proofs and cryptographically derive
+    /// USD value from an already verified source quantity.
+    EvmChainlinkValuation {
+        #[command(subcommand)]
+        command: EvmChainlinkValuationCommand,
     },
     /// Build and verify public HyperCore reader receipt proofs under a
     /// governed HyperEVM header checkpoint.
@@ -361,6 +370,51 @@ pub enum EvmSpotCommand {
     },
 }
 
+#[derive(Debug, Subcommand)]
+pub enum EvmChainlinkValuationCommand {
+    /// Query the governed EVM RPC and emit the deterministic price-state
+    /// checkpoint each validator independently reproduces before signing.
+    CheckpointCandidate {
+        #[arg(long)]
+        pftl_genesis_hash: String,
+        #[arg(long)]
+        policy: PathBuf,
+        #[arg(long)]
+        source_height: u64,
+        #[arg(long)]
+        minimum_depth: u32,
+        #[arg(long)]
+        pftl_observation_height: u64,
+        #[arg(long)]
+        committee: PathBuf,
+        #[arg(long)]
+        rpc_url: String,
+        #[arg(long)]
+        output: PathBuf,
+    },
+    /// Collect every policy-pinned feed at the certified EVM block, attach it
+    /// to an observation containing a real quantity proof, and verify the
+    /// complete quantity-to-value derivation before writing output.
+    Collect {
+        #[arg(long)]
+        manifest: PathBuf,
+        #[arg(long)]
+        context: PathBuf,
+        #[arg(long)]
+        source_id: String,
+        #[arg(long)]
+        policy: PathBuf,
+        #[arg(long)]
+        checkpoint_certificate: PathBuf,
+        #[arg(long)]
+        observation: PathBuf,
+        #[arg(long)]
+        rpc_url: String,
+        #[arg(long)]
+        output: PathBuf,
+    },
+}
+
 pub fn run(command: AdapterCommand) -> Result<()> {
     match command {
         AdapterCommand::AaveV3 { command } => match command {
@@ -549,6 +603,48 @@ pub fn run(command: AdapterCommand) -> Result<()> {
                 gross_assets,
                 total_liabilities,
                 disclosure_commitment,
+                output,
+            }),
+        },
+        AdapterCommand::EvmChainlinkValuation { command } => match command {
+            EvmChainlinkValuationCommand::CheckpointCandidate {
+                pftl_genesis_hash,
+                policy,
+                source_height,
+                minimum_depth,
+                pftl_observation_height,
+                committee,
+                rpc_url,
+                output,
+            } => evm_chainlink_valuation_checkpoint_candidate(
+                EvmChainlinkValuationCheckpointCandidateArgs {
+                    pftl_genesis_hash,
+                    policy,
+                    source_height,
+                    minimum_depth,
+                    pftl_observation_height,
+                    committee,
+                    rpc_url,
+                    output,
+                },
+            ),
+            EvmChainlinkValuationCommand::Collect {
+                manifest,
+                context,
+                source_id,
+                policy,
+                checkpoint_certificate,
+                observation,
+                rpc_url,
+                output,
+            } => evm_chainlink_valuation_collect(EvmChainlinkValuationCollectArgs {
+                manifest,
+                context,
+                source_id,
+                policy,
+                checkpoint_certificate,
+                observation,
+                rpc_url,
                 output,
             }),
         },
@@ -744,6 +840,317 @@ struct AaveV3CheckpointCandidateArgs {
     committee: PathBuf,
     rpc_url: String,
     output: PathBuf,
+}
+
+struct EvmChainlinkValuationCollectArgs {
+    manifest: PathBuf,
+    context: PathBuf,
+    source_id: String,
+    policy: PathBuf,
+    checkpoint_certificate: PathBuf,
+    observation: PathBuf,
+    rpc_url: String,
+    output: PathBuf,
+}
+
+struct EvmChainlinkValuationCheckpointCandidateArgs {
+    pftl_genesis_hash: String,
+    policy: PathBuf,
+    source_height: u64,
+    minimum_depth: u32,
+    pftl_observation_height: u64,
+    committee: PathBuf,
+    rpc_url: String,
+    output: PathBuf,
+}
+
+fn evm_chainlink_valuation_checkpoint_candidate(
+    args: EvmChainlinkValuationCheckpointCandidateArgs,
+) -> Result<()> {
+    validate_hex("pftl_genesis_hash", &args.pftl_genesis_hash, 48)?;
+    anyhow::ensure!(
+        args.source_height > 0 && args.minimum_depth > 0 && args.pftl_observation_height > 0,
+        "checkpoint heights and minimum depth must be nonzero"
+    );
+    let policy: EvmChainlinkValuationPolicyV1 = read_json(&args.policy)?;
+    policy
+        .validate()
+        .map_err(|error| anyhow::anyhow!("Chainlink valuation policy is invalid: {error:?}"))?;
+    let committee: BftCheckpointCommitteeV1 = read_json(&args.committee)?;
+    let committee_root = committee.root().map_err(anyhow::Error::msg)?;
+    anyhow::ensure!(
+        committee_root == policy.committee_root,
+        "Chainlink valuation policy does not pin this checkpoint committee"
+    );
+    let rpc_url = validate_rpc_url(&args.rpc_url)?;
+    let client = Client::builder()
+        .timeout(RPC_TIMEOUT)
+        .redirect(Policy::none())
+        .build()?;
+    let chain_id: String = rpc_call(&client, &rpc_url, "eth_chainId", serde_json::json!([]))?;
+    anyhow::ensure!(
+        parse_u64_quantity("eth_chainId", &chain_id)? == policy.chain_id,
+        "valuation RPC chain ID does not match policy"
+    );
+    let observed_head_raw: String =
+        rpc_call(&client, &rpc_url, "eth_blockNumber", serde_json::json!([]))?;
+    let observed_source_head = parse_u64_quantity("latest block", &observed_head_raw)?;
+    let required_head = args
+        .source_height
+        .checked_add(u64::from(args.minimum_depth))
+        .context("valuation checkpoint confirmation depth overflows")?;
+    anyhow::ensure!(
+        observed_source_head >= required_head,
+        "valuation source block has not reached the required confirmation depth"
+    );
+    let block: RpcBlock = rpc_call(
+        &client,
+        &rpc_url,
+        "eth_getBlockByNumber",
+        serde_json::json!([format!("0x{:x}", args.source_height), false]),
+    )?;
+    anyhow::ensure!(
+        parse_u64_quantity("block.number", &block.number)? == args.source_height,
+        "valuation RPC substituted a different source block"
+    );
+    let source_timestamp_ms = parse_u64_quantity("block.timestamp", &block.timestamp)?
+        .checked_mul(1_000)
+        .context("valuation block timestamp milliseconds overflow")?;
+    let checkpoint = BftSourceCheckpointV1 {
+        pftl_genesis_hash: args.pftl_genesis_hash,
+        checkpoint_kind: EVM_STATE_CHECKPOINT_KIND_V1.to_string(),
+        source_domain: policy.source_domain,
+        source_height: args.source_height,
+        source_timestamp_ms,
+        source_block_hash: parse_b256("block.hash", &block.hash)?,
+        source_state_commitment: parse_b256("block.stateRoot", &block.state_root)?,
+        observed_source_head,
+        minimum_depth: args.minimum_depth,
+        pftl_observation_height: args.pftl_observation_height,
+        committee_epoch: committee.epoch,
+        committee_root,
+    };
+    checkpoint.canonical_bytes().map_err(anyhow::Error::msg)?;
+    write_new(&args.output, &serde_json::to_vec_pretty(&checkpoint)?)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "schema": "postfiat.reserve_evm_chainlink_valuation_checkpoint_candidate.v1",
+            "output": args.output,
+            "source_domain": checkpoint.source_domain,
+            "source_height": checkpoint.source_height,
+            "source_timestamp_ms": checkpoint.source_timestamp_ms,
+            "source_block_hash": checkpoint.source_block_hash,
+            "source_state_commitment": checkpoint.source_state_commitment,
+            "observed_source_head": checkpoint.observed_source_head,
+            "minimum_depth": checkpoint.minimum_depth,
+            "committee_epoch": checkpoint.committee_epoch,
+            "committee_root": checkpoint.committee_root,
+            "next_required_check": "each validator independently reproduces this candidate before signing its vote statement",
+        }))?
+    );
+    Ok(())
+}
+
+fn evm_chainlink_valuation_collect(args: EvmChainlinkValuationCollectArgs) -> Result<()> {
+    let (_, context, entry) = load_source(&args.manifest, &args.context, &args.source_id)?;
+    let policy: EvmChainlinkValuationPolicyV1 = read_json(&args.policy)?;
+    policy
+        .validate()
+        .map_err(|error| anyhow::anyhow!("Chainlink valuation policy is invalid: {error:?}"))?;
+    anyhow::ensure!(
+        entry.valuation_evidence_class == TrustClassV1::Cryptographic
+            && entry.valuation_verifier_commitment
+                == policy.commitment().map_err(|error| anyhow::anyhow!(
+                    "Chainlink valuation policy commitment failed: {error:?}"
+                ))?
+            && policy.valuation_policy_hash == context.valuation_policy_hash
+            && policy.valuation_unit_id == context.valuation_unit_id
+            && policy.valuation_scale == context.valuation_scale,
+        "manifest/context does not select the exact cryptographic Chainlink valuation policy"
+    );
+    let certificate: BftSourceCheckpointCertificateV1 = read_json(&args.checkpoint_certificate)?;
+    certificate
+        .verify()
+        .map_err(|error| anyhow::anyhow!("Chainlink checkpoint is invalid: {error}"))?;
+    let checkpoint = &certificate.checkpoint;
+    anyhow::ensure!(
+        checkpoint.pftl_genesis_hash == context.pftl_genesis_hash
+            && checkpoint.checkpoint_kind == EVM_STATE_CHECKPOINT_KIND_V1
+            && checkpoint.source_domain == policy.source_domain
+            && checkpoint.committee_root == policy.committee_root
+            && checkpoint.pftl_observation_height >= context.observation_not_before
+            && checkpoint.pftl_observation_height <= context.observation_not_after,
+        "Chainlink checkpoint does not match the governed context and policy"
+    );
+    let rpc_url = validate_rpc_url(&args.rpc_url)?;
+    let client = Client::builder()
+        .timeout(RPC_TIMEOUT)
+        .redirect(Policy::none())
+        .build()?;
+    validate_certified_valuation_rpc(&client, &rpc_url, &policy, checkpoint)?;
+    let source_height = checkpoint.source_height;
+    let pftl_observation_height = checkpoint.pftl_observation_height;
+    let block_tag = format!("0x{:x}", checkpoint.source_height);
+    let mut feeds = Vec::with_capacity(policy.rows.len());
+    for row in &policy.rows {
+        feeds.push(collect_chainlink_feed(
+            &client,
+            &rpc_url,
+            &policy,
+            row.proxy_address,
+            row.price_decimals,
+            &block_tag,
+        )?);
+    }
+    let feed_count = feeds.len();
+    let mut observation: SourceObservationV1 = read_json(&args.observation)?;
+    anyhow::ensure!(
+        observation.source_id == entry.source_id
+            && observation.observed_at_block == pftl_observation_height,
+        "observation does not match the certified source and PFTL height"
+    );
+    let quantity_evidence_commitment = observation.quantity_evidence.commitment().to_string();
+    let proof = EvmChainlinkValuationProofV1 {
+        policy,
+        checkpoint_certificate: certificate,
+        quantity_evidence_commitment,
+        feeds,
+    };
+    let evidence_commitment = proof.evidence_commitment().map_err(|error| {
+        anyhow::anyhow!("Chainlink valuation evidence commitment failed: {error:?}")
+    })?;
+    observation.valuation_evidence = SourceEvidenceV1::EvmChainlinkValuation {
+        evidence_commitment,
+        proof: Box::new(proof),
+    };
+    verify_observation_evidence(
+        &context,
+        &entry,
+        &observation,
+        EvidenceDimensionV1::Quantity,
+    )
+    .map_err(anyhow::Error::msg)?;
+    verify_observation_evidence(
+        &context,
+        &entry,
+        &observation,
+        EvidenceDimensionV1::Valuation,
+    )
+    .map_err(anyhow::Error::msg)?;
+    write_new(&args.output, &serde_json::to_vec_pretty(&observation)?)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "schema": "postfiat.reserve_evm_chainlink_valuation_collection.v1",
+            "source_id": entry.source_id,
+            "source_height": source_height,
+            "feeds": feed_count,
+            "gross_assets": observation.gross_assets,
+            "total_liabilities": observation.total_liabilities,
+            "quantity_verified": true,
+            "valuation_verified": true,
+            "output": args.output,
+        }))?
+    );
+    Ok(())
+}
+
+fn collect_chainlink_feed(
+    client: &Client,
+    rpc_url: &Url,
+    policy: &EvmChainlinkValuationPolicyV1,
+    proxy_address: Address,
+    decimals: u8,
+    block_tag: &str,
+) -> Result<ChainlinkFeedProofV1> {
+    let phase_key = fixed_storage_slot(policy.proxy_phase_slot_index);
+    let (proxy_account, mut proxy_storage) =
+        rpc_account_with_storage(client, rpc_url, proxy_address, &[phase_key], block_tag)?;
+    let current_phase = take_storage(
+        &mut proxy_storage,
+        phase_key,
+        "Chainlink valuation current phase",
+    )?;
+    let aggregator = current_phase_aggregator(current_phase.value)
+        .map_err(|error| anyhow::anyhow!("Chainlink phase decoding failed: {error:?}"))?;
+    let hot_key = fixed_storage_slot(policy.hot_vars_slot_index);
+    let (_, mut first_hot_storage) =
+        rpc_account_with_storage(client, rpc_url, aggregator, &[hot_key], block_tag)?;
+    let first_hot = take_storage(
+        &mut first_hot_storage,
+        hot_key,
+        "Chainlink valuation hot variables",
+    )?;
+    let latest_round = chainlink_latest_round(first_hot.value)
+        .map_err(|error| anyhow::anyhow!("Chainlink latest round decoding failed: {error:?}"))?;
+    let transmission_key =
+        chainlink_transmission_slot(latest_round, policy.transmissions_slot_index);
+    let (aggregator_account, mut aggregator_storage) = rpc_account_with_storage(
+        client,
+        rpc_url,
+        aggregator,
+        &[hot_key, transmission_key],
+        block_tag,
+    )?;
+    let hot_vars = take_storage(
+        &mut aggregator_storage,
+        hot_key,
+        "Chainlink valuation hot variables",
+    )?;
+    anyhow::ensure!(
+        hot_vars.value == first_hot.value,
+        "Chainlink hot variables changed within a pinned-block collection"
+    );
+    let transmission = take_storage(
+        &mut aggregator_storage,
+        transmission_key,
+        "Chainlink valuation transmission",
+    )?;
+    Ok(ChainlinkFeedProofV1 {
+        proxy_account,
+        current_phase,
+        aggregator_account,
+        hot_vars,
+        transmission,
+        decimals,
+    })
+}
+
+fn validate_certified_valuation_rpc(
+    client: &Client,
+    rpc_url: &Url,
+    policy: &EvmChainlinkValuationPolicyV1,
+    checkpoint: &BftSourceCheckpointV1,
+) -> Result<()> {
+    let chain_id: String = rpc_call(client, rpc_url, "eth_chainId", serde_json::json!([]))?;
+    anyhow::ensure!(
+        parse_u64_quantity("eth_chainId", &chain_id)? == policy.chain_id,
+        "valuation RPC chain ID does not match policy"
+    );
+    let block: RpcBlock = rpc_call(
+        client,
+        rpc_url,
+        "eth_getBlockByNumber",
+        serde_json::json!([format!("0x{:x}", checkpoint.source_height), false]),
+    )?;
+    let timestamp_ms = parse_u64_quantity("block.timestamp", &block.timestamp)?
+        .checked_mul(1_000)
+        .context("valuation block timestamp milliseconds overflow")?;
+    anyhow::ensure!(
+        parse_u64_quantity("block.number", &block.number)? == checkpoint.source_height
+            && parse_b256("block.hash", &block.hash)? == checkpoint.source_block_hash
+            && parse_b256("block.stateRoot", &block.state_root)?
+                == checkpoint.source_state_commitment
+            && timestamp_ms == checkpoint.source_timestamp_ms,
+        "valuation RPC block does not match the certified checkpoint"
+    );
+    let head: String = rpc_call(client, rpc_url, "eth_blockNumber", serde_json::json!([]))?;
+    anyhow::ensure!(
+        parse_u64_quantity("eth_blockNumber", &head)? >= checkpoint.observed_source_head,
+        "valuation RPC head is behind the certified observation head"
+    );
+    Ok(())
 }
 
 struct AaveV3OwnerAuthorizationArgs {

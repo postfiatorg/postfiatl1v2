@@ -351,8 +351,47 @@ schema and must contain precisely the policy's source domains:
 
 No checkpoint, owner, or validator private key enters any proof-kit command.
 RPC credentials may be supplied operationally, but all artifact construction
-and validation semantics are public here. EVM-spot valuation remains a
-separately disclosed evidence dimension.
+and validation semantics are public here.
+
+For EVM spot, staked NEAR, staked Solana, and Monero, the separate valuation
+dimension can use `evm-chainlink-valuation`. Its policy pins the Ethereum
+checkpoint committee, global valuation-policy hash, valuation unit and scale,
+exact position IDs and decimals, per-position haircuts, exact Chainlink
+proxies and code hashes, aggregator code hashes, storage layout, and maximum
+price age. First construct the deterministic checkpoint candidate at a fixed
+confirmed block; independently reproduce, vote, and assemble it with the
+generic `source-checkpoint` commands described above:
+
+    postfiat-reserve-proof adapter evm-chainlink-valuation checkpoint-candidate \
+      --pftl-genesis-hash "$PFTL_GENESIS_HASH" \
+      --policy solana-usd-valuation-policy.json \
+      --source-height 24000000 \
+      --minimum-depth 64 \
+      --pftl-observation-height 900 \
+      --committee ethereum-price-committee.json \
+      --rpc-url https://ethereum.example \
+      --output ethereum-price-checkpoint-candidate.json
+
+Starting from an observation containing a real registered quantity proof, the
+collector then queries only the certified Ethereum block and obtains
+account/storage proofs for every feed:
+
+    postfiat-reserve-proof adapter evm-chainlink-valuation collect \
+      --manifest manifest.json \
+      --context context.json \
+      --source-id staked-solana \
+      --policy solana-usd-valuation-policy.json \
+      --checkpoint-certificate ethereum-price-checkpoint.json \
+      --observation solana-quantity-observation.json \
+      --rpc-url https://ethereum.example \
+      --output solana-valued-observation.json
+
+The verifier reruns the quantity adapter, proves current Chainlink feed state
+under the certified EVM state root, rejects stale/non-positive/substituted
+prices, and recomputes each value with checked integer arithmetic and
+conservative floor rounding. The observation's aggregate USD value must equal
+that result exactly. Neither an operator signature nor an RPC-returned price
+or aggregate amount is accepted as valuation evidence.
 
 The Aave V3 adapter exposes the same three public steps under `adapter
 aave-v3`: `checkpoint-candidate`, `owner-authorization`, and `collect`. Its

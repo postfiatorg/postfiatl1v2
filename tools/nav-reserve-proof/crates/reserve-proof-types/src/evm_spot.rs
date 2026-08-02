@@ -990,6 +990,135 @@ mod tests {
     }
 
     #[test]
+    fn guest_derives_spot_value_from_quantity_and_chainlink_state_proofs() {
+        use crate::evm_chainlink_valuation::{
+            tests::fixture as valuation_fixture, EvmChainlinkValuationRowPolicyV1,
+        };
+        use crate::{
+            execute_reserve_proof, FreshnessPolicyV1, LiabilityTreatmentV1, ReserveProofContextV1,
+            ReserveProofWitnessV1, SourceEvidenceV1, SourceManifestEntryV1, SourceManifestV1,
+            SourceObservationV1, TrustClassV1, MANIFEST_SCHEMA_V1, WITNESS_SCHEMA_V1,
+        };
+
+        let (mut quantity_proof, owner_key) = fixture();
+        let (mut valuation_proof, _, _) = valuation_fixture();
+        let feed = valuation_proof.feeds[0].clone();
+        let feed_policy = valuation_proof.policy.rows[0].clone();
+        valuation_proof.policy.valuation_policy_hash = "44".repeat(32);
+        valuation_proof.policy.valuation_unit_id = "88".repeat(48);
+        valuation_proof.policy.rows = vec![
+            EvmChainlinkValuationRowPolicyV1 {
+                position_id: "ethereum-native-eth".to_string(),
+                quantity_decimals: 18,
+                ..feed_policy.clone()
+            },
+            EvmChainlinkValuationRowPolicyV1 {
+                position_id: "ethereum-usdc".to_string(),
+                quantity_decimals: 6,
+                ..feed_policy
+            },
+        ];
+        valuation_proof.feeds = vec![feed.clone(), feed];
+        let manifest = SourceManifestV1 {
+            schema: MANIFEST_SCHEMA_V1.to_string(),
+            sources: vec![SourceManifestEntryV1 {
+                source_id: "evm-spot-primary".to_string(),
+                adapter_kind: EVM_SPOT_ADAPTER_KIND_V1.to_string(),
+                source_domain: quantity_proof.policy.aggregate_source_domain.clone(),
+                asset_or_position_id: quantity_proof.policy.aggregate_position_id.clone(),
+                reserve_owner_commitment: evm_spot_owner_commitment(quantity_proof.owner),
+                quantity_verifier_commitment: quantity_proof.policy.commitment().unwrap(),
+                valuation_verifier_commitment: valuation_proof.policy.commitment().unwrap(),
+                quantity_evidence_class: TrustClassV1::Cryptographic,
+                valuation_evidence_class: TrustClassV1::Cryptographic,
+                freshness_policy: FreshnessPolicyV1 {
+                    max_age_blocks: 10,
+                    max_observation_span_blocks: 10,
+                },
+                haircut_policy_hash: "77".repeat(48),
+                liability_treatment: LiabilityTreatmentV1::Asset,
+                adapter_schema_version: 1,
+            }],
+        };
+        let reserve_context = ReserveProofContextV1 {
+            pftl_genesis_hash: "11".repeat(48),
+            nav_asset_id: "22".repeat(48),
+            proof_profile_id: "33".repeat(48),
+            valuation_policy_hash: "44".repeat(32),
+            source_manifest_hash: manifest.hash().unwrap(),
+            valuation_unit_id: "88".repeat(48),
+            valuation_scale: 100_000_000,
+            observation_epoch: 1,
+            observation_not_before: 500,
+            observation_not_after: 500,
+        };
+        let verify_context = EvmSpotVerifyContextV1 {
+            pftl_genesis_hash: &reserve_context.pftl_genesis_hash,
+            nav_asset_id: &reserve_context.nav_asset_id,
+            proof_profile_id: &reserve_context.proof_profile_id,
+            valuation_policy_hash: &reserve_context.valuation_policy_hash,
+            source_manifest_hash: &reserve_context.source_manifest_hash,
+            source_id: &manifest.sources[0].source_id,
+            source_domain: &manifest.sources[0].source_domain,
+            asset_or_position_id: &manifest.sources[0].asset_or_position_id,
+            reserve_owner_commitment: &manifest.sources[0].reserve_owner_commitment,
+            quantity_verifier_commitment: &manifest.sources[0].quantity_verifier_commitment,
+            observed_at_pftl_height: 500,
+            expected_evidence_commitment: "00",
+        };
+        let checkpoints = quantity_proof
+            .chains
+            .iter()
+            .map(|chain| &chain.checkpoint_certificate)
+            .collect::<Vec<_>>();
+        let statement = evm_spot_owner_authorization_statement_v1(
+            &quantity_proof.policy,
+            quantity_proof.owner,
+            &checkpoints,
+            &verify_context,
+        )
+        .unwrap();
+        let digest = eip191_hash_message(&statement);
+        let (signature, recovery_id) = owner_key
+            .sign_prehash_recoverable(digest.as_slice())
+            .unwrap();
+        quantity_proof.ownership_signature = Signature::from((signature, recovery_id))
+            .as_bytes()
+            .to_vec();
+        let quantity_commitment = quantity_proof.evidence_commitment().unwrap();
+        valuation_proof.quantity_evidence_commitment = quantity_commitment.clone();
+        let valuation_commitment = valuation_proof.evidence_commitment().unwrap();
+        let witness = ReserveProofWitnessV1 {
+            schema: WITNESS_SCHEMA_V1.to_string(),
+            context: reserve_context,
+            manifest,
+            observations: vec![SourceObservationV1 {
+                source_id: "evm-spot-primary".to_string(),
+                observed_at_block: 500,
+                gross_assets: 1_111_104_000,
+                total_liabilities: 0,
+                quantity_evidence: SourceEvidenceV1::EvmSpotQuantity {
+                    evidence_commitment: quantity_commitment,
+                    proof: Box::new(quantity_proof),
+                },
+                valuation_evidence: SourceEvidenceV1::EvmChainlinkValuation {
+                    evidence_commitment: valuation_commitment,
+                    proof: Box::new(valuation_proof),
+                },
+                disclosure_commitment: "aa".repeat(48),
+            }],
+        };
+        let public = execute_reserve_proof(&witness).unwrap();
+        assert_eq!(public.gross_assets, 1_111_104_000);
+        assert_eq!(public.quantity_trust_counts.cryptographic, 1);
+        assert_eq!(public.valuation_trust_counts.cryptographic, 1);
+
+        let mut substituted = witness;
+        substituted.observations[0].gross_assets += 1;
+        assert!(execute_reserve_proof(&substituted).is_err());
+    }
+
+    #[test]
     fn rejects_omission_duplicate_owner_state_and_timestamp_substitution() {
         let (mut proof, key) = fixture();
         authorize(&mut proof, &key);
