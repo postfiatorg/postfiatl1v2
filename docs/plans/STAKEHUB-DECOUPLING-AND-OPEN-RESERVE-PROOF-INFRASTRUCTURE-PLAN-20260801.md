@@ -450,11 +450,12 @@ manifest/profile/ELF bindings and regenerates both published qualification
 epochs.
 
 The fresh multi-epoch source collection requirement is therefore satisfied at
-the artifact level. Production qualification remains open until the retained
-fuzz campaign, Groth16 proof verification, exact six-validator migration
-rehearsal, NAV/supply/overlay reconciliation, and controlled lifecycle gates
-record passing evidence. No live profile, route, reserve packet, balance, or
-validator state was changed by this qualification work.
+the artifact level. The retained ten-target fuzz campaign has also completed
+successfully. Production qualification remains open until Groth16 proof
+verification, exact six-validator migration rehearsal, NAV/supply/overlay
+reconciliation, and controlled lifecycle gates record passing evidence. No
+live profile, route, reserve packet, balance, or validator state was changed
+by this qualification work.
 
 ## 4. Required public code boundary
 
@@ -1098,11 +1099,14 @@ existing guest ELF SHA exactly.
   not merely the aggregate NAV.
 - [ ] Explain and govern every conservative difference.
 - [ ] Reject any unexplained trust downgrade.
-- [ ] Run at least two fresh A666 shadow epochs from newly collected source
+- [x] Run at least two fresh A666 shadow epochs from newly collected source
   artifacts without StakeHub.
 - [ ] Verify gross assets, liabilities, net assets, trust buckets, supply,
   pfUSDC overlay, and NAV per unit.
 - [ ] Produce and independently verify CPU Groth16 proofs.
+- [x] Implement a versioned fail-closed packet-preparation path that derives
+  exact floor NAV, supply, overlay roots, valuation roots, and packet identity
+  from canonical proof and finalized PFTL inputs.
 - [ ] Construct overlay-aware reserve packets with the public CLI.
 - [ ] Prove wrong source, owner, profile, vkey, policy, manifest, epoch,
   interval, valuation, overlay, and proof substitutions fail.
@@ -1235,9 +1239,10 @@ Source-specific minimums:
 StakeHub is deprecated only when `G0` through `G7` pass. Passing `G0`, `G1`,
 or `G2` alone is not deprecation.
 
-`G4` remains fail/open despite the first successful six-source shadow witness:
-a second fresh epoch, overlay/supply reconciliation, an SP1 proof, and
-independent reproduction are still required.
+`G4` remains fail/open despite two reproducible fresh six-source shadow
+epochs: finalized overlay/supply reconciliation, independently verified
+Groth16 proofs, exact packet construction, and controlled migration evidence
+are still required.
 
 ## 9. Monday demonstration boundary
 
@@ -1256,14 +1261,13 @@ Attempting a live proof-profile migration before `G3`–`G5` pass is prohibited.
 
 ## 10. Exact continuation state
 
-Repository and branch at this update:
+Repository and pushed implementation tip at this update:
 
 ```text
-/home/postfiat/repos/a666-eth-fast-lane-combined-20260724
-feature/pnok-private-fix
-pushed implementation baseline covered by this documentation update:
-4580120 Update public reserve proof completion state
-origin/feature/pnok-private-fix contained that baseline before this document-only update
+repository: /home/postfiat/repos/a666-eth-fast-lane-combined-20260724
+branch: feature/pnok-private-fix
+tip: 0c942aef3d7b067c649b054395c00721dda09346
+remote: origin/feature/pnok-private-fix
 ```
 
 Frozen demonstration checkout — do not modify:
@@ -1272,261 +1276,224 @@ Frozen demonstration checkout — do not modify:
 /home/postfiat/tmp/a666-pfusdc-monday-demo-2246d257
 ```
 
-The public implementation completed and pushed so far is:
+The latest pushed qualification and migration commits are:
 
 ```text
-af9ae4e Harden public reserve overlay protocol boundary
-14f3697 Make public reserve verification plan canonical
-c763e6a Keep adapter readiness outside shipped proof kit
-36e0a5f Add complete public EVM spot quantity verifier
-03dde8c Add public Solana stake attestation verifier
-dc501db Add public Monero reserve verifier
-303d071 Keep migration fixture outside public proof kit
-36fbb18 Add public source checkpoint assembly
-6ac6897 Add public EVM spot collection workflow
-2e56111 Add public Aave collection workflow
-3d3915b Publish HyperCore reserve reader
-48af691 Clarify public NAV reserve proof completion plan
-92e9c61 Fix legacy guest source archive in CI
-397ab2b Implement public Hyperliquid reserve collection
-2f87084 Implement public NEAR reserve collection
-e9c2e5d Implement public Monero reserve collection
-89a4b76 Implement public Solana reserve reader
-ce9c6e0 Make Solana reader SBF build reproducible
-3183350 Pin Solana reader artifact identity
-aef4ce8 Prove reserve valuations from public chain state
-dfce1ff Enforce one canonical StakeHub deprecation plan
-4024dea Fuzz public reserve proof inputs
-b4447c8 Fuzz every public reserve proof parser
-f2aaa29 Derive governed reserve manifests from public policies
-55e6bb5 Pin public A666 reader and committee inputs
-687962f Sign public reserve checkpoints safely
-6f75e64 Make NEAR reader build path-independent
-a3649db Derive A666 valuation policy from public inputs
-5c2d773 Normalize NEAR reader rust source paths
-500f7b6 Publish A666 Aave and EVM spot policies
-bbc72fb Bind A666 EVM spot valuation to Chainlink proofs
-78b52bd Publish public A666 Monero reserve policies
-a7b81ce Publish A666 NEAR and Solana valuation policies
-ff62947 Remove internal provenance paths from proof kit
-4580120 Update public reserve proof completion state
+c53e872 Refresh reserve proof source inventory
+d5e4476 Rehearse exact A666 public proof migration
+4a450e2 Publish fresh A666 public qualification epochs
+0c942ae Derive A666 public NAV packets fail closed
 ```
 
-Exact implementation-tip product-security run `30753373194` passed on
-`45801200cb0f63b6752373b5db397c10ac87b4a3`. Every configured job completed
-successfully. The optional official Ethereum mainnet-fork job accurately
-recorded that `ETHEREUM_MAINNET_RPC_URL` was not configured and therefore did
-not run the real-value fork assertion; it is not counted as source
-qualification.
+The worktree has no tracked modification at this checkpoint. It still contains
+large pre-existing untracked deployment, evidence, and scratch trees. Never
+use `git add .`, bulk clean, reset, or delete those paths. Stage only named,
+reviewed files.
 
-This work implements the pfUSDC overlay, provider-neutral source checkpoint
-assembly, all six initial verifier modules, complete public Aave and EVM-spot
-collection workflows, public HyperCore and NEAR reader contracts, the public
-Monero collector, and the public Solana reader/collector with a pinned
-reproducible SBF identity. This continuation also implements the public
-Chainlink account/storage-proof valuation successor described in section 3.4.
-Its implementation tip has green exact-tip CI. None of this completes a
-source's production qualification or changes live A666.
+### 10.1 Exact public successor and fresh epochs
 
-Current machine gates:
+The public successor qualification bundle is committed at:
 
 ```text
-first complete six-source public shadow epoch
-  qualification artifacts:
-  /home/postfiat/.pft/public-reserve-qualification/20260802-epoch-1
-  6/6 quantity claims cryptographic; 6/6 valuation claims cryptographic
-  verified net assets: 2,840,897,406,488 at USD scale 1e8
-  native CBOR execution and public-values verification passed
-  no aggregate quantity, liability, valuation, or NAV attestation was accepted
-  this is one fresh epoch and does not by itself qualify a source or activate a profile
-
-scripts/test-proof-public-input-inventory
-  passed after the current valuation continuation; 5 systems, 70 public fields,
-  83 source hashes
-
-scripts/check-nav-reserve-proof-fuzz-smoke
-  passed locally against guarded temporary corpora. In addition to the initial
-  retained witness/evidence campaigns, a clean 2026-08-02 run exercised all
-  nine then-current boundaries for 4,010,896 executions with no crash,
-  timeout, or OOM. The typed manifest builder added a tenth bounded input
-  target; its first complete local smoke run brought that ten-target run to
-  3,265,852 executions with no crash, timeout, or OOM. Exact-tip CI must
-  reproduce the pinned smoke campaigns. Longer retained
-  per-source campaigns and regression-corpus review remain open and are part of
-  production qualification.
-
-scripts/check-a666-public-adapter-readiness
-  passed; qualified=0/6, stakehub_deprecated=false
-
-scripts/check-provider-neutral-wallet-boundary
-  passed
-
-scripts/check-a666-public-reader-candidates
-  passed locally; the hardened HyperEVM runtime, public NEAR Wasm, and
-  reproducible Solana SBF identities match their pinned candidate artifacts.
-  The NEAR release build pins Rust 1.95.0 and remaps checkout, toolchain/cache,
-  and optional local `rust-src` paths to the compiler's canonical source
-  prefix. Independent archive checkouts and the clean GitHub runner reproduced
-  the same 147398-byte artifact, SHA-256
-  `013fec10bba9cd623af8800c465f702f50e5950cc13443799c7a8661940dd01d`,
-  and NEAR code hash `5swZhNNqpD6HsqFXhNjRUiSYoXtnkWPipiW8hRbrkbN`.
-  This is a build-identity gate, not a deployment qualification. Public chain
-  checks on 2026-08-02 prove that the historical HyperEVM reader runtime
-  (`0x7e4007...74f8`) differs from the public candidate (`0xc252f3...0db3`),
-  the historical NEAR reader code (`4mdew...wUhx`) differs from the public
-  candidate (`5swZ...kbN`). The exact public HyperEVM and NEAR artifacts were
-  subsequently deployed, and the exact Solana candidate was deployed
-  immutably. The recorded identities match independent public-chain queries.
-  Deployment closes only the reader-identity prerequisites; it does not make
-  any source production-qualified.
-
-public signing and custody prerequisites on the current infrastructure
-  are available. StakeHub is installed and unlocked on this machine and holds
-  the funded HyperEVM, NEAR, Solana, and reserve-owner keys. It was used only
-  as a custody/signing transport for the exact public-reader deployments and
-  public-code-generated statements; no private aggregate NAV attestation was
-  accepted. Each of the six PFTL validator hosts is reachable and holds its
-  own permission-restricted checkpoint-signing key. Keys remain in their
-  custody boundaries. The remaining work is to publish governed source
-  policies, make each validator independently reproduce and sign fresh source
-  checkpoints, assemble 5-of-6 certificates, collect public valuation proofs,
-  reconcile complete A666 epochs, and qualify the sources.
-
-public Solidity suite after HyperCore reader addition
-  143 passed, 0 failed
-
-proof-kit verifier/CLI suites and strict clippy after each adapter change
-  passed locally; rerun after every continuation change
+tools/nav-reserve-proof/qualifications/a666-public-successor-20260802/
 ```
 
-The legacy archive/rebuild CI defect is fixed. Exact-tip runs `30732980432`,
-`30733515641`, and `30733599841` are fully green through `dfce1ff`, including
-the deterministic Solana reader and immutable legacy guest rebuilds. Run
-`30749886246` correctly rejected `b4447c8`: its fuzz runner referenced one
-local untracked Solana seed that did not exist in a clean checkout. The seed
-did not exercise the new reader parser and that dependency is removed.
-Exact-tip run `30750345429` then reached the SP1 installation step but GitHub
-rate-limited the installer's unauthenticated release lookup with HTTP 403;
-none of the proof-kit tests ran. The workflow now supplies the scoped
-read-only workflow token to the pinned SP1 installer and must pass on a new
-exact-tip run before this continuation is remotely qualified. A green older
-run is not permission to mark a newer unverified tip green or to overwrite the
-immutable legacy ELF or vkey.
+It contains the complete bounded inputs for fresh epochs 7 and 8. A clean
+public checkout rebuilt the successor ELF, reproduced both witnesses and both
+584-byte public-values blobs byte-for-byte, and executed both witnesses under
+the exact successor program. The immutable identity is:
 
 ```text
-https://github.com/postfiatorg/postfiatl1v2/actions/runs/30732561619
-https://github.com/postfiatorg/postfiatl1v2/actions/runs/30732980432
+A666 asset:
+521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c
+
+successor profile:
+f8784629ff7338002d836c1988b8e2c0f19caf448429e0eb7fdc39fa2b08f7d9a44171fc1e7239bc25e06ad833c14e91
+
+source manifest:
+8abe3e59198b72945d4778a7fa91e5af157a6c65032d8940cca486850ffe59fcb567268ca5942669ff6977ef32dd3a41
+
+valuation policy:
+350eaee0a1ca12ba51637781ba52661b8685f868657a7c5e7d07c31b2899869c
+
+source commit:
+5b8f0317375af6fb46d586d9d9152b511457b802
+
+ELF SHA-256:
+2b41e4e8095b1dacdc519b2f0a2b4831ebc57cc8003a4d3686f6d9e4687e81df
+
+SP1 vkey:
+0x00f3857f96ef97e00bd15b4030acd8d6b0a72740b28c6160d154bc2c9bb141bf
 ```
 
-Do not close Phase 1 until exact-tip CI is green. The worktree contains many
-unrelated untracked deployment and evidence paths. Never use `git add .`, bulk
-clean, or delete untracked evidence. Stage only explicitly reviewed files.
+Epoch 7 proves net assets of `2,835,791,218,669` USD-e8 atoms. Epoch 8
+proves `2,839,694,289,118`. Each proves all six quantity and all six
+valuation claims as cryptographic, with zero attested and zero controlled
+value.
 
-The current program identity is an immutable legacy reference reproduced from
-public source commit `bfe0ded03033085ab1db9df274f93cc41d0d2690`:
+### 10.2 Completed retained fuzz qualification
+
+The supervised ten-target parser and construction fuzz campaign completed
+successfully on 2026-08-02:
 
 ```text
-ELF SHA-256: 0f8476431677bfe0a8f9f19db7439abce1a879ba5736cfa3225ae7de4e5b0e52
-program vkey:
-0x000c7271e0711abce0c61d293222fd4a144599a779db8cadadc4df35e31a4100
+service: pft-a666-public-adapter-fuzz-300s
+targets: 10
+duration per target: 301 seconds
+total executions: 326,405,841
+slowest unit: 0 seconds for every target
+peak target RSS: 80 MiB
+service peak memory: 249.7 MiB
+crashes: 0
+timeouts: 0
+OOMs: 0
+result: success
 ```
 
-Do not mutate that identity to absorb successor adapter work. After every
-source collector, verifier, valuation path, and policy is qualified, build a
-distinct reproducible successor guest and register its distinct identity.
+The targets cover witness/evidence input, EVM, Hyperliquid, NEAR, Solana,
+Monero, source-checkpoint, manifest, and related bounded construction
+boundaries. This closes the retained long-fuzz prerequisite for these exact
+inputs. It does not by itself qualify source freshness, live deployment
+identity, reconciliation, proof generation, or migration.
 
-Two genuine historical observation epochs are available for later
-source-by-source reconciliation:
+### 10.3 Overlay-aware packet and exact-NAV hardening
+
+Commit `0c942ae` removes manual NAV and packet-identifier entry from the
+successor migration path:
+
+- `packet prepare` derives a version-2 packet template from canonical proof
+  public values, actual issued supply, asset precision, and the finalized
+  pfUSDC overlay;
+- the CLI derives the exact conservative floor NAV and a domain-separated
+  packet hash over the complete statement;
+- `packet build` recomputes and rejects changes to the NAV, packet hash,
+  source root, valuation root, supply, precision, or overlay;
+- `scripts/a666-build-live-nav-mark-ops.py` now consumes finalized PFTL
+  status, route, settlement-vault, and A666 supply snapshots and builds the
+  packet plus submit/finalize operations in one fail-closed flow; and
+- consensus requires nonzero-supply `sp1-nav-reserve-v1` packets to use the
+  exact conservative floor NAV. Historical verifier kinds and historical
+  packets are unchanged.
+
+The CLI unit suite, strict clippy, wrapper regressions, provider-neutral
+boundary gate, and the complete transparent route lifecycle regression pass.
+The exact live-state overlay-aware packet is still pending the completed
+Groth16 proof and fresh pre-migration fleet snapshots.
+
+### 10.4 Long proof and controlled migration status
+
+The epoch-7 CPU Groth16 proof remains active under the supervised service:
 
 ```text
-docs/evidence/a666-variable-size-nav-roundtrip-20260728/stakehub-nav-mark/stable-policy-preview/aggregate-witness-report.json
-docs/evidence/a666-variable-size-nav-roundtrip-20260728/stakehub-nav-mark/nav-epoch-2/live-nav-mark-manifest.json
-
-docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/aggregate-witness-report.json
-docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/nav-epoch-3/live-nav-mark-manifest.json
+service: pft-a666-public-reserve-proof-epoch7-bounded
+started: 2026-08-02 20:27:28 UTC
+peak memory observed: 60,091,985,920 bytes
+current state at this update: active/running
+output directory:
+/home/postfiat/.pft/public-reserve-qualification/20260802-epoch-2/proof
 ```
 
-Historical totals:
+Do not terminate or duplicate this job. When it completes, independently
+verify its proof and public values, record their hashes, run the exact
+six-validator A666 successor migration/restart/snapshot test, and then start
+the epoch-8 Groth16 proof sequentially. The two proof jobs must not run
+concurrently because each can peak near 60 GB.
 
-| Epoch | External proof net assets | pfUSDC overlay | Total net assets | Supply | NAV/unit |
-|---|---:|---:|---:|---:|---:|
-| 2026-07-28 / epoch 2 | 2,825,975,143,580 | 20,400,000,000 | 2,846,375,143,580 | 31,590,197,455 | 90,103,113 |
-| 2026-07-30 / epoch 3 | 2,826,373,076,806 | 11,299,585,500 | 2,837,672,662,306 | 31,489,197,455 | 90,115,750 |
+The ignored exact migration test is committed at
+`crates/node/tests/atomic_swap_local_six.rs`. It binds the exact A666 asset,
+genesis, successor profile, proof paths, six independent validators, finality,
+restart, snapshot/import, and replay. It has compiled in release mode but has
+not yet run because the epoch-7 proof is not complete.
 
-Historical epoch 4 reused the epoch-3 external proof with a changed pfUSDC
-overlay. It is not a third independent source-observation epoch.
+The broader provider-neutral controlled route test passes transparent
+subscribe, export, return/refund, replay, malformed input, restart-state, and
+conservation behavior. That is compositional evidence only. `G5` remains
+open until the exact A666 environment also completes transparent and private
+issue/redeem, export/return, outage, pause, rollback, and conservation checks.
 
-Existing attestor, issuer, and reserve-operator keys remain outside the public
-repository. No attestor key may be used to sign the six aggregate source
-amounts as a shortcut around public validation. Never copy private-key
-contents or passphrases into the repository, logs, evidence, or temporary
-paths.
+### 10.5 CI and live-state truth
+
+Exact-tip product-security CI for `0c942ae` must complete green before any
+release or live migration. Run `30770170862` covers prior tip `4a450e2`;
+all completed jobs were green at the last check, while the open proof-kit job
+was still running. An older green run is not evidence for the new tip. The
+official Ethereum fork job may accurately record that no mainnet RPC secret is
+configured; that skipped real-value assertion is not source qualification.
+
+No live mutation was made during this continuation. The existing A666 asset,
+legacy profile lineage, reserve packets, route, balances, and validator state
+remain unchanged. Immediately before any governed migration, reread the
+profile, route, supply, reserve, pfUSDC overlay, height, state root, and
+mempool independently from all six validators. The proof observation window
+ends at PFTL height 784; freshness and current-height checks must pass at
+submission time.
+
+The readiness gate remains deliberately truthful:
+
+```text
+G0 PASS
+G1 PASS
+G2 PASS
+G3 OPEN
+G4 OPEN
+G5 OPEN
+G6 OPEN
+G7 OPEN
+stakehub_deprecated=false
+```
+
+The fresh artifacts and long fuzz campaign materially advance `G3` and
+`G4`, but do not authorize changing the machine-readable status from
+`qualified=0/6` until source-by-source deployment, freshness,
+reconciliation, proof, and independent reproduction evidence is reviewed.
 
 ## 11. Current continuation actions
 
-Start read-only:
+Execute in this order:
 
-```bash
-cd /home/postfiat/repos/a666-eth-fast-lane-combined-20260724
-git status --short --branch
-git rev-parse HEAD
-git diff --check
-git diff -- \
-  docs/plans/STAKEHUB-DECOUPLING-AND-OPEN-RESERVE-PROOF-INFRASTRUCTURE-PLAN-20260801.md
-```
+1. Preserve and monitor
+   `pft-a666-public-reserve-proof-epoch7-bounded`; do not start another
+   high-memory proof concurrently.
+2. Require exact-tip CI for `0c942ae` to finish green. Fix any failure,
+   commit, push, and require the replacement exact-tip run to pass.
+3. When epoch 7 completes, independently run `packet verify`, compare the
+   public values byte-for-byte with the committed epoch-7 pins, hash every
+   proof artifact, and retain the supervised service result.
+4. Use the verified epoch-7 proof to run
+   `a666_public_successor_proof_migrates_and_survives_six_validator_restart`
+   in release mode with the existing local issuer/reserve key files supplied
+   only through environment paths. Never print or copy key contents.
+5. Generate an A666-shaped overlay-aware v2 packet from controlled finalized
+   route/vault/supply snapshots with
+   `scripts/a666-build-live-nav-mark-ops.py`. Exercise wrong overlay, wrong
+   supply, wrong profile, wrong NAV, wrong packet hash, stale proof, replay,
+   restart, and snapshot rejection.
+6. Start the epoch-8 bounded CPU Groth16 proof only after the epoch-7 service
+   and exact migration test release their memory. Independently verify and
+   reproduce it in the same way.
+7. Finish the source-by-source qualification table. For each of Aave, EVM
+   spot, Hyperliquid, NEAR, Solana, and XMR, record the exact public reader or
+   proof identity, governed policy/committee/owner inputs, fresh checkpoint,
+   valuation proof, liability result, fuzz evidence, two-epoch
+   reconciliation, and independent reproduction. Do not replace a missing
+   cryptographic check with aggregate attestation.
+8. Run the exact controlled A666 lifecycle: transparent issue/redeem,
+   private-middle issue/redeem, Ethereum export/return, partial outage,
+   replay, pause, rollback, restart, and full reserve/supply/balance
+   conservation.
+9. Only after `G0` through `G5` are genuinely green, reread every live
+   validator, stage exact preconditions and rollback, roll the required
+   release to all six validators, pause the route, register/rebind the
+   successor profile, submit/finalize the overlay-aware packet, advance the
+   route policy, verify fleet convergence, run a minimal lifecycle, and
+   unpause.
+10. Reproduce the final live state from a clean public checkout. Only then
+    mark `G6`, `G7`, all six adapters, and
+    `stakehub_deprecated=true`.
 
-Then:
-
-1. Require green exact-tip CI while preserving the pinned legacy ELF and vkey.
-   The legacy archive/rebuild defect is fixed; do not rewrite that identity.
-2. Qualify Hyperliquid: publish governed A666 policy and committee inputs,
-   collect fresh reserve-owner-signed snapshots and 5-of-6 validator-certified
-   checkpoints,
-   retain longer parser-fuzz campaigns and add adversarial network fixtures,
-   reconcile at least two
-   fresh epochs, and independently reproduce the workflow. The public snapshot,
-   checkpoint, owner-authorization, and receipt-proof collection code is now
-   implemented; it is not yet production-qualified.
-3. Qualify NEAR: publish governed A666 policy/committee and public valuation
-   inputs, collect fresh reserve-owner-signed snapshots and 5-of-6
-   validator-certified checkpoints, retain longer fuzz campaigns,
-   reproduce fresh epochs independently, and reconcile the full profile.
-4. Qualify Solana: publish the deployed immutable ProgramData identity and governed A666
-   policy/committee/SOL-USD valuation inputs, retain longer fuzz campaigns for the
-   transaction/payload/program-state parsers, collect fresh epochs, reconcile,
-   and reproduce independently. The pinned SBF build identity is complete and
-   CI-rebuilt; the old signed-RPC adapter remains ineligible.
-5. Qualify Monero: retain the completed context-bound nonzero epoch and its
-   independently reproduced spent-status and XMR/USD certificates, collect a
-   second fresh epoch, retain longer fuzz campaigns, independently reproduce,
-   and reconcile the full profile.
-6. Finish public valuation for every source. Bind governed price origin,
-   signature or chain proof, scale, timestamp, freshness, asset identity,
-   haircut, and rounding. Do not accept operator-entered aggregate USD values.
-7. Adversarially harden the existing Aave and complete-EVM-spot collectors and
-   every new collector. Add bounded parsers, property tests, fuzz targets,
-   malformed-proof tests, omission tests, and deterministic replay vectors.
-8. Create the public A666 source manifest and per-source quantity/valuation
-   policies, owners, committees, source domains, freshness rules, haircuts,
-   bounds, and pfUSDC overlay binding. No item may refer to a private path,
-   provider-specific domain, compiled operator identity, or StakeHub API.
-9. Reproduce both historical epochs source by source, then collect at least two
-   fresh epochs entirely through the public pipeline. Reconcile every asset,
-   liability, trust classification, price, overlay value, total, supply, and
-   NAV; explain every difference.
-10. Build one distinct successor guest only after the preceding inputs are
-    stable. Reproduce its ELF and vkey from clean independent checkouts and
-    publish the immutable profile ID, manifest, policies, and test vectors.
-11. Run the controlled six-validator migration, full transparent/private
-    issue/redeem and Ethereum export/return lifecycle, restart/outage/replay/
-    rollback tests, and conservation checks.
-12. Only after `G0` through `G5` are green, govern the existing A666 asset to
-    the public successor, verify the live lifecycle, complete clean-checkout
-    reproduction, and set `stakehub_deprecated=true`.
-
-Throughout all steps, keep the live A666 route and frozen Monday checkout
-untouched until the controlled migration gate authorizes the exact governed
-change.
+Throughout these steps, preserve the legacy profile and packets as immutable
+history. Keep the frozen Monday checkout and all unrelated untracked
+deployment/evidence paths untouched.
 
 ## 12. Definition of done
 
