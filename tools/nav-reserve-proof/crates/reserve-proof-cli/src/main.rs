@@ -1362,6 +1362,38 @@ mod tests {
         wrong_nav.nav_per_unit -= 1;
         assert!(build_packet_operation(wrong_nav, &values, vec![1], bytes.clone()).is_err());
 
+        let mut wrong_supply = template.clone();
+        wrong_supply.circulating_supply += 1;
+        assert!(build_packet_operation(wrong_supply, &values, vec![1], bytes.clone()).is_err());
+
+        let mut wrong_precision = template.clone();
+        wrong_precision.asset_precision = Some(7);
+        assert!(build_packet_operation(wrong_precision, &values, vec![1], bytes.clone()).is_err());
+
+        let mut wrong_overlay_root = template.clone();
+        wrong_overlay_root.subscription_overlay_source_root = Some("0c".repeat(48));
+        assert!(
+            build_packet_operation(wrong_overlay_root, &values, vec![1], bytes.clone()).is_err()
+        );
+
+        let mut wrong_overlay_value = template.clone();
+        wrong_overlay_value.subscription_overlay_value += 1;
+        assert!(
+            build_packet_operation(wrong_overlay_value, &values, vec![1], bytes.clone()).is_err()
+        );
+
+        let mut wrong_source_root = template.clone();
+        wrong_source_root.source_root = "ff".repeat(48);
+        assert!(
+            build_packet_operation(wrong_source_root, &values, vec![1], bytes.clone()).is_err()
+        );
+
+        let mut wrong_attestor_root = template.clone();
+        wrong_attestor_root.attestor_root = "ee".repeat(48);
+        assert!(
+            build_packet_operation(wrong_attestor_root, &values, vec![1], bytes.clone()).is_err()
+        );
+
         let mut wrong_hash = template;
         wrong_hash.reserve_packet_hash = "ff".repeat(48);
         assert!(build_packet_operation(wrong_hash, &values, vec![1], bytes).is_err());

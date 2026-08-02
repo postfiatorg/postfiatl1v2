@@ -20,7 +20,7 @@
     "scripts/check-nav-reserve-proof-fuzz-smoke": "d9bae0c68f8448eba9c99092546a7780026b277901980bec56730b5d66418d79",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/lib.rs": "88d6f3b58d6df771486e084d846e050ee1bb49125d9051afb4601f8aaba059fe",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/checkpoint_signing.rs": "59a8174b9299cdb1d74344a87dcc00d27902c3ee7a058c5b45f733ab00607770",
-    "tools/nav-reserve-proof/crates/reserve-proof-cli/src/main.rs": "a7b0f554e09e34b8101f775194290f6484651bc696ea3867f91a05ee32a2c51a",
+    "tools/nav-reserve-proof/crates/reserve-proof-cli/src/main.rs": "b4a425d3bb43ce109f3b3aaef4b6422aeed01ebf9a37bef5c5e4588a542781ec",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/manifest_builder.rs": "71a54fef752f7361ed3752edfeb8c8654daebd2c51a0e4d9966a696d36dd3f3c",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/evm_adapter.rs": "ed9bfa3a5ea18a2ef8f4da99f77b0d06fad845171c1f197bd741a9d73c3d5f07",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/hyperliquid_adapter.rs": "3834b8bbaeb59f8416653451562adda7526e3aafacac1d98f405444c5c95cdd8",
