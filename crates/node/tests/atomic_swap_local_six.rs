@@ -6,19 +6,32 @@ use std::process::{Child, Command, Output, Stdio};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use postfiat_crypto_provider::{bytes_to_hex, hex_to_bytes, ml_dsa_65_sign, ML_DSA_65_ALGORITHM};
+use postfiat_crypto_provider::{
+    bytes_to_hex, hex_to_bytes, ml_dsa_65_sign, ml_dsa_65_sign_with_context_seed,
+    ML_DSA_65_ALGORITHM,
+};
 use postfiat_execution::genesis_hash;
 use postfiat_network::{local_topology, NetworkDomain};
 use postfiat_node::{
-    apply_batch, assemble_consensus_v2_commit, asset_fee_quote,
-    certify_and_persist_consensus_v2_votes, certify_batch_round,
+    apply_batch, apply_governance_batch, apply_shielded_batch, assemble_consensus_v2_commit,
+    assemble_signed_fastswap_governance_bootstrap, assemble_signed_governance_amendment,
+    asset_fee_quote, certify_and_persist_consensus_v2_votes, certify_batch_round,
+    create_asset_orchard_ingress, create_asset_orchard_ingress_batch,
+    create_asset_orchard_private_primary_issue, create_asset_orchard_private_primary_issue_batch,
+    create_asset_orchard_private_primary_redeem, create_asset_orchard_private_primary_redeem_batch,
     create_consensus_v2_precommit_vote, create_consensus_v2_prepare_vote,
-    create_consensus_v2_proposal_for_block, create_mempool_batch, create_transfer_batch,
-    export_snapshot, faucet_key, import_snapshot, init,
+    create_consensus_v2_proposal_for_block, create_fastswap_governance_bootstrap,
+    create_mempool_batch, create_transfer_batch, export_snapshot, faucet_key, import_snapshot,
+    init, sign_governance_amendment_authorization, simulate_shielded_batch,
     submit_signed_asset_transaction_json_to_mempool, verify_blocks, ApplyBatchOptions,
-    AssetFeeQuoteOptions, BatchCertificateRoundOptions, BatchTransferOptions, BlockCertificateFile,
-    BlockProposalFile, DevKeyFile, InitOptions, MempoolBatchOptions, NodeOptions,
-    SignedAssetTransactionJsonSubmitOptions, SnapshotExportOptions, SnapshotImportOptions,
+    AssetFeeQuoteOptions, AssetOrchardIngressBatchOptions, AssetOrchardIngressCreateOptions,
+    AssetOrchardPrivatePrimaryIssueBatchOptions, AssetOrchardPrivatePrimaryIssueCreateOptions,
+    AssetOrchardPrivatePrimaryRedeemBatchOptions, AssetOrchardPrivatePrimaryRedeemCreateOptions,
+    BatchCertificateRoundOptions, BatchTransferOptions, BlockCertificateFile, BlockProposalFile,
+    DevKeyFile, FastSwapGovernanceBootstrapOptions, GovernanceAmendmentAssembleOptions,
+    GovernanceAuthorizationSignOptions, InitOptions, MempoolBatchOptions, NodeOptions,
+    ShieldedBatchSimulateOptions, SignedAssetTransactionJsonSubmitOptions,
+    SignedFastSwapGovernanceBootstrapOptions, SnapshotExportOptions, SnapshotImportOptions,
 };
 use postfiat_rpc_sdk::{
     asset_fee_quote_request, atomic_swap_fee_quote_request, decode_asset_fee_quote_summary,
@@ -33,16 +46,29 @@ use postfiat_rpc_sdk::{
 };
 use postfiat_types::{
     issued_asset_id, market_ops_asset_id, market_ops_evidence_root, market_ops_reserve_packet_hash,
-    market_ops_supply_packet_hash, AssetCreateOperation, AssetTransactionOperation, Genesis,
-    IssuedPaymentOperation, LedgerState, MarketOpsAlignmentParams, MarketOpsEnvelope,
-    MarketOpsFinalizeOperation, MarketOpsMintLimits, MarketOpsPolicyInputs,
-    MarketOpsPolicyRegisterOperation, MarketOpsPolicyRegistration, MarketOpsReserveDeployLimits,
-    MarketOpsVenueObservation, MempoolState, NavAssetRegisterOperation, NavEpochFinalizeOperation,
-    NavProfileRegisterOperation, NavProofProfile, NavReservePublicValuesV1,
-    NavReserveSubmitOperation, SignedAssetTransaction, SignedTransfer, UnsignedAssetTransaction,
-    UnsignedTransfer, ADDRESS_NAMESPACE, NAV_PROFILE_VERIFIER_PLACEHOLDER,
-    NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1, NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1,
-    NAV_RESERVE_PUBLIC_VALUES_V1_BYTES, TRANSFER_TRANSACTION_KIND,
+    market_ops_supply_packet_hash, pftl_uniswap_return_burn_id_from_fields, AssetCreateOperation,
+    AssetTransactionOperation, EthereumCheckpointCertificateV1, EthereumCheckpointVoteV1,
+    EthereumExternalEventProofV1, EthereumFinalizedCheckpointV1, EthereumReceiptProofV1,
+    EthereumRouteVerificationPolicyV1, FastSwapChainDomainV1, FastSwapCommitteeDomainV1,
+    FastSwapCommitteeRootV1, FastSwapCommitteeV1, FastSwapGovernanceBootstrapPayloadV1,
+    FastSwapOpaqueHashV1, FastSwapValidatorV1, Genesis, IssuedPaymentOperation, LedgerState,
+    MarketOpsAlignmentParams, MarketOpsEnvelope, MarketOpsFinalizeOperation, MarketOpsMintLimits,
+    MarketOpsPolicyInputs, MarketOpsPolicyRegisterOperation, MarketOpsPolicyRegistration,
+    MarketOpsReserveDeployLimits, MarketOpsVenueObservation, MempoolState,
+    NavAssetRegisterOperation, NavEpochFinalizeOperation, NavProfileRegisterOperation,
+    NavProofProfile, NavReservePublicValuesV1, NavReserveSubmitOperation,
+    PftlUniswapDestinationConsumeOperation, PftlUniswapExportDebitOperation,
+    PftlUniswapMintPacketV2, PftlUniswapOrderReleaseOperation, PftlUniswapOrderReserveOperation,
+    PftlUniswapPrimaryMarketPolicyV2, PftlUniswapPrimaryRedeemOperation,
+    PftlUniswapPrimarySubscribeV2Operation, PftlUniswapReturnImportOperation,
+    PftlUniswapRouteEpochAdvanceOperation, PftlUniswapRouteInitV2Operation,
+    PftlUniswapRoutePauseOperation, SignedAssetTransaction, SignedTransfer,
+    UnsignedAssetTransaction, UnsignedTransfer, ADDRESS_NAMESPACE, ETHEREUM_CHECKPOINT_SCHEMA_V1,
+    ETHEREUM_CHECKPOINT_VOTE_CONTEXT_V1, FASTSWAP_SCHEMA_VERSION_V1,
+    NAV_PROFILE_VERIFIER_PLACEHOLDER, NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1,
+    NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1, NAV_RESERVE_PUBLIC_VALUES_V1_BYTES,
+    PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V2, PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT,
+    PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY, TRANSFER_TRANSACTION_KIND,
 };
 use serde_json::{json, Value};
 
@@ -482,6 +508,489 @@ fn advance_certified_chain_to_height(data_dirs: &[PathBuf], target_height: u64) 
     }
 }
 
+fn finalize_offline_batch_all_validators(
+    data_dirs: &[PathBuf],
+    batch_file: &Path,
+    batch_kind: &str,
+    label: &str,
+) -> (u64, String, String) {
+    assert_eq!(data_dirs.len(), VALIDATORS, "offline validator count");
+    let data_dir = &data_dirs[0];
+    for (index, validator_dir) in data_dirs.iter().enumerate() {
+        split_validator_key(data_dir, &format!("validator-{index}"));
+        if index != 0 {
+            split_validator_key(validator_dir, &format!("validator-{index}"));
+        }
+    }
+    let current = command_json(&[
+        "status",
+        "--data-dir",
+        data_dir.to_str().expect("offline data dir UTF-8"),
+    ])["block_height"]
+        .as_u64()
+        .expect("offline start height");
+    let height = current + 1;
+    let proposal_file = data_dir.join(format!("{label}.proposal.json"));
+    let certificate_file = data_dir.join(format!("{label}.certificate.json"));
+    certify_batch_round(BatchCertificateRoundOptions {
+        data_dir: data_dir.clone(),
+        batch_kind: Some(batch_kind.to_string()),
+        batch_file: batch_file.to_path_buf(),
+        validator_key_dir: data_dir.clone(),
+        vote_dir: data_dir.join(format!("{label}.votes")),
+        proposal_file: proposal_file.clone(),
+        certificate_file: certificate_file.clone(),
+        block_height: Some(height),
+        view: None,
+        timeout_certificate_file: None,
+        skip_block_log_verify: false,
+    })
+    .unwrap_or_else(|error| panic!("certify {label} at {height}: {error}"));
+    let block_proposal: BlockProposalFile = serde_json::from_slice(
+        &fs::read(&proposal_file).unwrap_or_else(|error| panic!("read {label} proposal: {error}")),
+    )
+    .unwrap_or_else(|error| panic!("parse {label} proposal: {error}"));
+    let proposer_key = data_dir.join(format!("{}.validator_keys.json", block_proposal.proposer));
+    let consensus_proposal =
+        create_consensus_v2_proposal_for_block(data_dir, &block_proposal, None, &proposer_key)
+            .unwrap_or_else(|error| panic!("create {label} consensus-v2 proposal: {error}"));
+    let prepare_votes = thread::scope(|scope| {
+        let handles = data_dirs
+            .iter()
+            .enumerate()
+            .map(|(index, validator_dir)| {
+                let proposal = &consensus_proposal;
+                scope.spawn(move || {
+                    create_consensus_v2_prepare_vote(
+                        validator_dir,
+                        proposal,
+                        None,
+                        &validator_dir.join(format!("validator-{index}.validator_keys.json")),
+                        &format!("validator-{index}"),
+                    )
+                    .unwrap_or_else(|error| panic!("create {label} prepare vote {index}: {error}"))
+                })
+            })
+            .collect::<Vec<_>>();
+        handles
+            .into_iter()
+            .map(|handle| handle.join().expect("join offline prepare vote"))
+            .collect::<Vec<_>>()
+    });
+    let prepare_qc = certify_and_persist_consensus_v2_votes(
+        data_dir,
+        consensus_proposal.round,
+        postfiat_types::ConsensusV2Phase::Prepare,
+        Some(consensus_proposal.block.clone()),
+        prepare_votes,
+    )
+    .unwrap_or_else(|error| panic!("certify {label} prepare QC: {error}"));
+    let precommit_votes = thread::scope(|scope| {
+        let handles = data_dirs
+            .iter()
+            .enumerate()
+            .map(|(index, validator_dir)| {
+                let qc = &prepare_qc;
+                scope.spawn(move || {
+                    create_consensus_v2_precommit_vote(
+                        validator_dir,
+                        qc,
+                        &validator_dir.join(format!("validator-{index}.validator_keys.json")),
+                        &format!("validator-{index}"),
+                    )
+                    .unwrap_or_else(|error| {
+                        panic!("create {label} precommit vote {index}: {error}")
+                    })
+                })
+            })
+            .collect::<Vec<_>>();
+        handles
+            .into_iter()
+            .map(|handle| handle.join().expect("join offline precommit vote"))
+            .collect::<Vec<_>>()
+    });
+    let precommit_qc = certify_and_persist_consensus_v2_votes(
+        data_dir,
+        consensus_proposal.round,
+        postfiat_types::ConsensusV2Phase::Precommit,
+        Some(consensus_proposal.block.clone()),
+        precommit_votes,
+    )
+    .unwrap_or_else(|error| panic!("certify {label} precommit QC: {error}"));
+    let commit = assemble_consensus_v2_commit(
+        data_dir,
+        &block_proposal,
+        consensus_proposal,
+        None,
+        prepare_qc,
+        precommit_qc,
+    )
+    .unwrap_or_else(|error| panic!("assemble {label} consensus-v2 commit: {error}"));
+    let mut certificate: BlockCertificateFile = serde_json::from_slice(
+        &fs::read(&certificate_file)
+            .unwrap_or_else(|error| panic!("read {label} certificate: {error}")),
+    )
+    .unwrap_or_else(|error| panic!("parse {label} certificate: {error}"));
+    certificate.consensus_v2_commit = Some(commit);
+    fs::write(
+        &certificate_file,
+        format!(
+            "{}\n",
+            serde_json::to_string_pretty(&certificate)
+                .unwrap_or_else(|error| panic!("serialize {label} certificate: {error}"))
+        ),
+    )
+    .unwrap_or_else(|error| panic!("write {label} certificate: {error}"));
+
+    let mut expected = None;
+    for (index, validator_dir) in data_dirs.iter().enumerate() {
+        let options = ApplyBatchOptions {
+            data_dir: validator_dir.clone(),
+            batch_file: batch_file.to_path_buf(),
+            certificate_file: Some(certificate_file.clone()),
+        };
+        let receipts = match batch_kind {
+            "governance" => apply_governance_batch(options),
+            "shielded" => apply_shielded_batch(options),
+            _ => apply_batch(options),
+        }
+        .unwrap_or_else(|error| panic!("apply {label} on validator {index}: {error}"));
+        assert!(
+            !receipts.is_empty() && receipts.iter().all(|receipt| receipt.accepted),
+            "{label} rejected on validator {index}: {receipts:?}"
+        );
+        let value = command_json(&[
+            "status",
+            "--data-dir",
+            validator_dir
+                .to_str()
+                .expect("offline validator path UTF-8"),
+        ]);
+        let observed = (
+            value["block_height"].as_u64().expect("offline height"),
+            value["block_tip_hash"]
+                .as_str()
+                .expect("offline tip")
+                .to_string(),
+            value["state_root"]
+                .as_str()
+                .expect("offline root")
+                .to_string(),
+        );
+        if let Some(expected) = &expected {
+            assert_eq!(&observed, expected, "{label} validator {index} divergence");
+        } else {
+            expected = Some(observed);
+        }
+    }
+    expected.expect("offline finalized state")
+}
+
+fn stop_services(harness: &mut Harness) {
+    for child in &mut harness.children {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    harness.children.clear();
+}
+
+fn start_services(harness: &mut Harness, topology_path: &Path, rpc_ports: &[u16]) -> Vec<PathBuf> {
+    let ready = spawn_services(harness, topology_path, rpc_ports);
+    for path in &ready {
+        wait_for_file(path, Duration::from_secs(90));
+    }
+    ready
+}
+
+fn bootstrap_fastswap_committee(harness: &Harness, data_dirs: &[PathBuf]) -> FastSwapCommitteeV1 {
+    let data_dir = &data_dirs[0];
+    let genesis: Genesis = serde_json::from_slice(
+        &fs::read(data_dir.join("genesis.json")).expect("read committee genesis"),
+    )
+    .expect("parse committee genesis");
+    let validator_keys: Value = serde_json::from_slice(
+        &fs::read(data_dir.join("validator_keys.json")).expect("read committee validator keys"),
+    )
+    .expect("parse committee validator keys");
+    let mut committee = FastSwapCommitteeV1 {
+        domain: FastSwapCommitteeDomainV1 {
+            chain: FastSwapChainDomainV1 {
+                chain_id: genesis.chain_id.clone(),
+                genesis_hash: FastSwapOpaqueHashV1(
+                    hex_to_bytes(&genesis_hash(&genesis))
+                        .expect("committee genesis hash hex")
+                        .try_into()
+                        .expect("committee genesis hash width"),
+                ),
+                protocol_version: genesis.protocol_version,
+            },
+            fastswap_schema_version: FASTSWAP_SCHEMA_VERSION_V1,
+            committee_epoch: 1,
+            committee_root: FastSwapCommitteeRootV1::ZERO,
+            validator_count: VALIDATORS as u16,
+            quorum: 5,
+        },
+        validators: validator_keys["validators"]
+            .as_array()
+            .expect("committee validator key array")
+            .iter()
+            .map(|record| FastSwapValidatorV1 {
+                validator_id: record["node_id"]
+                    .as_str()
+                    .expect("committee validator id")
+                    .to_string(),
+                public_key: hex_to_bytes(
+                    record["public_key_hex"]
+                        .as_str()
+                        .expect("committee public key"),
+                )
+                .expect("decode committee public key"),
+            })
+            .collect(),
+    };
+    committee
+        .validators
+        .sort_by(|left, right| left.validator_id.cmp(&right.validator_id));
+    committee.domain.committee_root = committee.computed_root().expect("committee root");
+
+    let current = command_json(&[
+        "status",
+        "--data-dir",
+        data_dir.to_str().expect("committee data dir UTF-8"),
+    ])["block_height"]
+        .as_u64()
+        .expect("committee bootstrap height");
+    let payload = FastSwapGovernanceBootstrapPayloadV1 {
+        committee: committee.clone(),
+        asset_rules: Vec::new(),
+        policies: Vec::new(),
+        activation_height: current + 2,
+    };
+    let payload_file = harness.root.join("a666-fastswap-bootstrap-payload.json");
+    let amendment_file = harness.root.join("a666-fastswap-bootstrap-amendment.json");
+    let signed_amendment_file = harness
+        .root
+        .join("a666-fastswap-bootstrap-amendment.signed.json");
+    let unsigned_batch_file = harness
+        .root
+        .join("a666-fastswap-bootstrap-batch.unsigned.json");
+    let batch_file = harness.root.join("a666-fastswap-bootstrap-batch.json");
+    fs::write(
+        &payload_file,
+        format!(
+            "{}\n",
+            serde_json::to_string_pretty(&payload).expect("serialize committee payload")
+        ),
+    )
+    .expect("write committee payload");
+    let validators = (0..VALIDATORS)
+        .map(|index| format!("validator-{index}"))
+        .collect::<Vec<_>>();
+    create_fastswap_governance_bootstrap(FastSwapGovernanceBootstrapOptions {
+        data_dir: data_dir.clone(),
+        validators: validators.clone(),
+        support: validators.clone(),
+        activation_height: 0,
+        veto_until_height: 0,
+        paused: false,
+        payload_file: payload_file.clone(),
+        amendment_file: amendment_file.clone(),
+        batch_file: unsigned_batch_file,
+    })
+    .expect("create committee governance bootstrap");
+    let authorization_files = validators
+        .iter()
+        .map(|validator| {
+            let key_file = split_validator_key(data_dir, validator);
+            let authorization_file = harness
+                .root
+                .join(format!("{validator}.fastswap-bootstrap-authorization.json"));
+            sign_governance_amendment_authorization(GovernanceAuthorizationSignOptions {
+                data_dir: data_dir.clone(),
+                amendment_file: amendment_file.clone(),
+                validator: validator.clone(),
+                validator_key_file: key_file,
+                proposal_slot: current + 1,
+                expires_at_height: current + 100,
+                authorization_file: authorization_file.clone(),
+            })
+            .expect("sign committee governance authorization");
+            authorization_file
+        })
+        .collect::<Vec<_>>();
+    assemble_signed_governance_amendment(GovernanceAmendmentAssembleOptions {
+        data_dir: data_dir.clone(),
+        amendment_file,
+        authorization_files,
+        proposal_slot: current + 1,
+        output_file: signed_amendment_file.clone(),
+    })
+    .expect("assemble committee governance amendment");
+    assemble_signed_fastswap_governance_bootstrap(SignedFastSwapGovernanceBootstrapOptions {
+        data_dir: data_dir.clone(),
+        payload_file,
+        signed_amendment_file,
+        proposal_slot: current + 1,
+        batch_file: batch_file.clone(),
+    })
+    .expect("assemble committee governance bootstrap");
+    finalize_offline_batch_all_validators(
+        data_dirs,
+        &batch_file,
+        "governance",
+        "a666-fastswap-bootstrap",
+    );
+    committee
+}
+
+fn ethereum_rlp_bytes(bytes: &[u8]) -> Vec<u8> {
+    if bytes.len() == 1 && bytes[0] <= 0x7f {
+        return bytes.to_vec();
+    }
+    if bytes.len() < 56 {
+        let mut encoded = vec![0x80 + bytes.len() as u8];
+        encoded.extend_from_slice(bytes);
+        return encoded;
+    }
+    let length_bytes = bytes.len().to_be_bytes();
+    let first = length_bytes
+        .iter()
+        .position(|byte| *byte != 0)
+        .unwrap_or(length_bytes.len() - 1);
+    let length = &length_bytes[first..];
+    let mut encoded = vec![0xb7 + length.len() as u8];
+    encoded.extend_from_slice(length);
+    encoded.extend_from_slice(bytes);
+    encoded
+}
+
+fn ethereum_rlp_list(items: &[Vec<u8>]) -> Vec<u8> {
+    let payload = items.concat();
+    if payload.len() < 56 {
+        let mut encoded = vec![0xc0 + payload.len() as u8];
+        encoded.extend_from_slice(&payload);
+        return encoded;
+    }
+    let length_bytes = payload.len().to_be_bytes();
+    let first = length_bytes
+        .iter()
+        .position(|byte| *byte != 0)
+        .unwrap_or(length_bytes.len() - 1);
+    let length = &length_bytes[first..];
+    let mut encoded = vec![0xf7 + length.len() as u8];
+    encoded.extend_from_slice(length);
+    encoded.extend_from_slice(&payload);
+    encoded
+}
+
+fn ethereum_abi_u64(value: u64) -> [u8; 32] {
+    let mut word = [0_u8; 32];
+    word[24..].copy_from_slice(&value.to_be_bytes());
+    word
+}
+
+fn ethereum_abi_address(value: [u8; 20]) -> [u8; 32] {
+    let mut word = [0_u8; 32];
+    word[12..].copy_from_slice(&value);
+    word
+}
+
+fn ethereum_abi_dynamic(value: &[u8]) -> Vec<u8> {
+    let mut encoded =
+        ethereum_abi_u64(u64::try_from(value.len()).expect("ABI value length fits u64")).to_vec();
+    encoded.extend_from_slice(value);
+    encoded.resize(encoded.len().div_ceil(32) * 32, 0);
+    encoded
+}
+
+fn ethereum_receipt_proof(
+    emitter: [u8; 20],
+    topics: &[[u8; 32]],
+    data: &[u8],
+) -> ([u8; 32], EthereumReceiptProofV1) {
+    let topics = topics
+        .iter()
+        .map(|topic| ethereum_rlp_bytes(topic))
+        .collect::<Vec<_>>();
+    let log = ethereum_rlp_list(&[
+        ethereum_rlp_bytes(&emitter),
+        ethereum_rlp_list(&topics),
+        ethereum_rlp_bytes(data),
+    ]);
+    let receipt = ethereum_rlp_list(&[
+        ethereum_rlp_bytes(&[1]),
+        ethereum_rlp_bytes(&[1]),
+        ethereum_rlp_bytes(&[0; 256]),
+        ethereum_rlp_list(&[log]),
+    ]);
+    let leaf = ethereum_rlp_list(&[
+        ethereum_rlp_bytes(&[0x20, 0x80]),
+        ethereum_rlp_bytes(&receipt),
+    ]);
+    (
+        postfiat_bridge::ethereum_keccak256(&leaf),
+        EthereumReceiptProofV1 {
+            transaction_index: 0,
+            receipt_rlp: receipt,
+            proof_nodes_rlp: vec![leaf],
+        },
+    )
+}
+
+fn ethereum_checkpoint_certificate(
+    committee: &FastSwapCommitteeV1,
+    data_dir: &Path,
+    checkpoint: EthereumFinalizedCheckpointV1,
+) -> EthereumCheckpointCertificateV1 {
+    let validator_keys: Value = serde_json::from_slice(
+        &fs::read(data_dir.join("validator_keys.json")).expect("read checkpoint validator keys"),
+    )
+    .expect("parse checkpoint validator keys");
+    let votes = committee
+        .validators
+        .iter()
+        .take(usize::from(committee.domain.quorum))
+        .enumerate()
+        .map(|(index, validator)| {
+            let record = validator_keys["validators"]
+                .as_array()
+                .expect("checkpoint validator key array")
+                .iter()
+                .find(|record| record["node_id"] == validator.validator_id)
+                .expect("checkpoint signing validator");
+            let mut vote = EthereumCheckpointVoteV1 {
+                validator_id: validator.validator_id.clone(),
+                signature: vec![1],
+            };
+            vote.signature = ml_dsa_65_sign_with_context_seed(
+                &hex_to_bytes(
+                    record["private_key_hex"]
+                        .as_str()
+                        .expect("checkpoint private key"),
+                )
+                .expect("decode checkpoint private key"),
+                &vote
+                    .signing_bytes(&checkpoint)
+                    .expect("checkpoint vote bytes"),
+                ETHEREUM_CHECKPOINT_VOTE_CONTEXT_V1,
+                &[0xb0 + index as u8; 32],
+            )
+            .expect("sign checkpoint vote");
+            vote
+        })
+        .collect();
+    EthereumCheckpointCertificateV1 { checkpoint, votes }
+}
+
+fn checked_mul_div_ceil(value: u64, multiplier: u64, denominator: u64) -> u64 {
+    let numerator = u128::from(value) * u128::from(multiplier);
+    numerator.div_ceil(u128::from(denominator)) as u64
+}
+
+fn checked_mul_div_floor(value: u64, multiplier: u64, denominator: u64) -> u64 {
+    (u128::from(value) * u128::from(multiplier) / u128::from(denominator)) as u64
+}
+
 #[test]
 #[ignore = "qualification helper for reserve proofs observed above genesis height"]
 fn certified_chain_padding_reaches_requested_height() {
@@ -516,6 +1025,47 @@ fn certified_chain_padding_reaches_requested_height() {
         .expect("replay proof-height padded chain");
         assert_eq!(verified.block_count, target_height as usize);
         roots.push(verified.state_root);
+    }
+    assert!(roots.iter().all(|root| root == &roots[0]));
+}
+
+#[test]
+#[ignore = "qualification helper for governed six-validator FastSwap bootstrap"]
+fn governed_fastswap_committee_bootstrap_converges_across_six_validators() {
+    let harness = Harness::new();
+    let seed_dir = harness.root.join("fastswap-bootstrap-seed");
+    init(InitOptions {
+        data_dir: seed_dir.clone(),
+        chain_id: "postfiat-wan-devnet-2".to_string(),
+        node_id: "validator-0".to_string(),
+        validator_count: VALIDATORS as u32,
+    })
+    .expect("initialize FastSwap bootstrap seed");
+    activate_consensus_v2_in_fresh_genesis(&seed_dir);
+    let data_dirs = (0..VALIDATORS)
+        .map(|index| {
+            let data_dir = harness.node(index);
+            copy_dir(&seed_dir, &data_dir);
+            rewrite_node_identity(&data_dir, &format!("validator-{index}"));
+            data_dir
+        })
+        .collect::<Vec<_>>();
+    advance_certified_chain_to_height(&data_dirs, 2);
+    let committee = bootstrap_fastswap_committee(&harness, &data_dirs);
+    let mut roots = Vec::new();
+    for (index, data_dir) in data_dirs.iter().enumerate() {
+        let verified = verify_blocks(NodeOptions {
+            data_dir: data_dir.clone(),
+        })
+        .expect("replay governed FastSwap bootstrap");
+        roots.push(verified.state_root);
+        let ledger: LedgerState = serde_json::from_slice(
+            &fs::read(data_dir.join("ledger.json")).expect("read FastSwap bootstrap ledger"),
+        )
+        .expect("parse FastSwap bootstrap ledger");
+        assert_eq!(ledger.fastswap_committees, vec![committee.clone()]);
+        assert_eq!(ledger.fastswap_activation_height, Some(4));
+        assert_eq!(verified.block_count, 3, "validator {index}");
     }
     assert!(roots.iter().all(|root| root == &roots[0]));
 }
@@ -1703,8 +2253,15 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
 
     let issuer = read_dev_key_from_env("POSTFIAT_A666_ISSUER_KEY_FILE");
     let reserve_operator = read_dev_key_from_env("POSTFIAT_A666_RESERVE_KEY_FILE");
+    let pfusdc_issuer = read_dev_key_from_env("POSTFIAT_PFUSDC_ISSUER_KEY_FILE");
+    let holder = read_dev_key_from_env("POSTFIAT_A666_HOLDER_KEY_FILE");
+    let holder_key_file = required_env_path("POSTFIAT_A666_HOLDER_KEY_FILE");
     assert_eq!(issuer.address, A666_ISSUER);
     assert_eq!(reserve_operator.address, A666_RESERVE_OPERATOR);
+    assert_eq!(
+        pfusdc_issuer.address,
+        "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8"
+    );
     let proof = read_raw_or_hex_from_env("POSTFIAT_A666_PROOF_CALLDATA_FILE");
     let public_values_bytes = read_raw_or_hex_from_env("POSTFIAT_A666_PUBLIC_VALUES_FILE");
     assert!(!proof.is_empty() && proof.len() <= 4_096);
@@ -1776,7 +2333,7 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         .iter()
         .map(|peer| peer.rpc_port)
         .collect::<Vec<_>>();
-    let ready = spawn_services(&mut harness, &topology_path, &rpc_ports);
+    let mut ready = spawn_services(&mut harness, &topology_path, &rpc_ports);
     for path in &ready {
         wait_for_file(path, Duration::from_secs(90));
     }
@@ -1875,7 +2432,7 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
             asset_id: A666_ASSET_ID.to_string(),
             reserve_operator: A666_RESERVE_OPERATOR.to_string(),
             proof_profile: legacy_profile_id,
-            valuation_unit: "USD_1E8".to_string(),
+            valuation_unit: "USDC".to_string(),
             redemption_account: A666_ISSUER.to_string(),
         }),
         "bind-a666-legacy-profile",
@@ -1935,7 +2492,7 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         }),
         "submit-a666-public-reserve-proof",
     );
-    let finalized = submit_dev_key_asset_finality(
+    let mut finalized = submit_dev_key_asset_finality(
         &harness,
         &rpc_ports,
         &issuer,
@@ -1989,19 +2546,769 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         assert_eq!(packet.controlled_value, 0, "validator {index}");
     }
 
-    for child in &mut harness.children {
-        let _ = child.kill();
-        let _ = child.wait();
-    }
-    harness.children.clear();
+    stop_services(&mut harness);
     for path in &ready {
         let _ = fs::remove_file(path);
     }
-    let restarted_ready = spawn_services(&mut harness, &topology_path, &rpc_ports);
-    for path in &restarted_ready {
-        wait_for_file(path, Duration::from_secs(90));
-    }
+    let committee = bootstrap_fastswap_committee(&harness, &data_dirs);
+    ready = start_services(&mut harness, &topology_path, &rpc_ports);
+    finalized = status_tuple(rpc_ports[0], "a666-after-fastswap-bootstrap");
     wait_exact_six(&rpc_ports, &finalized);
+
+    const PFUSDC_ASSET_ID: &str = "02c46a36cd922fba2477d94475e80b97afc020340e195acdbb5d98fdd17741764406218a9e42ffbcfe7a403cc7005d7b";
+    const ROUTE_ID: &str = "pftl-a666-ethereum-wA666-usdc-v1";
+    const HANDOFF_CONTROLLER: &str = "0x1111111111111111111111111111111111111111";
+    const SETTLEMENT_ADAPTER: &str = "0x2222222222222222222222222222222222222222";
+    const WRAPPED_A666: &str = "0x3333333333333333333333333333333333333333";
+    const HOLDER_ETHEREUM: &str = "0x4444444444444444444444444444444444444444";
+    const PFUSDC_SUPPLY: u64 = 20_000_000;
+
+    assert_eq!(
+        issued_asset_id(A666_CHAIN_ID, &pfusdc_issuer.address, "PFUSDC", 1)
+            .expect("derive exact pfUSDC ID"),
+        PFUSDC_ASSET_ID
+    );
+    submit_faucet_transfer_finality(
+        &harness,
+        &rpc_ports,
+        &faucet,
+        &pfusdc_issuer.address,
+        1_000_000,
+        "fund-exact-pfusdc-issuer",
+    );
+    submit_faucet_transfer_finality(
+        &harness,
+        &rpc_ports,
+        &faucet,
+        &holder.address,
+        10_000_000,
+        "fund-a666-lifecycle-holder",
+    );
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &pfusdc_issuer,
+        AssetTransactionOperation::AssetCreate(AssetCreateOperation {
+            issuer: pfusdc_issuer.address.clone(),
+            code: "PFUSDC".to_string(),
+            version: 1,
+            precision: 6,
+            display_name: "Ethereum-vault-backed pfUSDC".to_string(),
+            max_supply: Some(1_000_000_000_000_000),
+            requires_authorization: false,
+            freeze_enabled: true,
+            clawback_enabled: false,
+        }),
+        "create-exact-pfusdc",
+    );
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &pfusdc_issuer,
+        AssetTransactionOperation::IssuedPayment(IssuedPaymentOperation {
+            from: pfusdc_issuer.address.clone(),
+            to: holder.address.clone(),
+            issuer: pfusdc_issuer.address.clone(),
+            asset_id: PFUSDC_ASSET_ID.to_string(),
+            amount: PFUSDC_SUPPLY,
+        }),
+        "fund-holder-with-exact-pfusdc",
+    );
+    let pfusdc_profile_operation = NavProfileRegisterOperation {
+        registrant: pfusdc_issuer.address.clone(),
+        verifier_kind: NAV_PROFILE_VERIFIER_PLACEHOLDER.to_string(),
+        source_class: "pfusdc-public-vault-accounting-rehearsal".to_string(),
+        max_snapshot_age_blocks: 0,
+        challenge_window_blocks: 0,
+        max_epoch_gap_blocks: 0,
+        settle_deadline_blocks: 0,
+        min_challenge_bond: 0,
+        min_attestations: 0,
+        tolerance_bp: 0,
+        bridge_observer_min_confirmations: 0,
+        valuation_policy_hash: String::new(),
+        vault_bridge_route_policy_hash: String::new(),
+        sp1_program_vkey: String::new(),
+        sp1_proof_encoding: String::new(),
+        max_proof_bytes: 0,
+        max_public_values_bytes: 0,
+        public_values_schema: String::new(),
+        source_manifest_hash: String::new(),
+        valuation_unit_id: String::new(),
+        max_observation_span_blocks: 0,
+        allow_controlled_sources: false,
+    };
+    let pfusdc_profile = pfusdc_profile_operation
+        .to_profile()
+        .expect("derive pfUSDC rehearsal profile")
+        .profile_id;
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &pfusdc_issuer,
+        AssetTransactionOperation::NavProfileRegister(pfusdc_profile_operation),
+        "register-pfusdc-accounting-profile",
+    );
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &pfusdc_issuer,
+        AssetTransactionOperation::NavAssetRegister(NavAssetRegisterOperation {
+            issuer: pfusdc_issuer.address.clone(),
+            asset_id: PFUSDC_ASSET_ID.to_string(),
+            reserve_operator: pfusdc_issuer.address.clone(),
+            proof_profile: pfusdc_profile.clone(),
+            valuation_unit: "USD_1E8".to_string(),
+            redemption_account: pfusdc_issuer.address.clone(),
+        }),
+        "register-pfusdc-accounting-nav",
+    );
+    let pfusdc_packet_hash = "f6".repeat(48);
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &pfusdc_issuer,
+        AssetTransactionOperation::NavReserveSubmit(NavReserveSubmitOperation {
+            issuer: pfusdc_issuer.address.clone(),
+            submitter: pfusdc_issuer.address.clone(),
+            asset_id: PFUSDC_ASSET_ID.to_string(),
+            epoch: 1,
+            nav_per_unit: 100_000_000,
+            circulating_supply: PFUSDC_SUPPLY,
+            verified_net_assets: 2_000_000_000,
+            proof_profile: pfusdc_profile,
+            source_root: "f7".repeat(48),
+            attestor_root: "f8".repeat(48),
+            reserve_packet_hash: pfusdc_packet_hash.clone(),
+            reserve_accounts: Vec::new(),
+            sp1_proof_bytes: Vec::new(),
+            sp1_public_values: Vec::new(),
+        }),
+        "submit-pfusdc-accounting-packet",
+    );
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &pfusdc_issuer,
+        AssetTransactionOperation::NavEpochFinalize(NavEpochFinalizeOperation {
+            issuer: pfusdc_issuer.address.clone(),
+            asset_id: PFUSDC_ASSET_ID.to_string(),
+            epoch: 1,
+            reserve_packet_hash: pfusdc_packet_hash,
+        }),
+        "finalize-pfusdc-accounting-packet",
+    );
+
+    let route_init_height = status_tuple(rpc_ports[0], "a666-route-init-parent").0 + 1;
+    let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        policy_hash: String::new(),
+        policy_epoch: 1,
+        issue_multiplier_bps: 10_050,
+        redeem_multiplier_bps: 9_995,
+        issue_capacity_atoms: 100_000_000,
+        redeem_capacity_atoms: 100_000_000,
+        max_order_atoms: 10_000_000,
+        min_order_atoms: 1,
+        valid_from_height: route_init_height,
+        expires_at_height: route_init_height + 5_000,
+        max_nav_age_blocks: 5_000,
+        pricing_nav_epoch: public_values.observation_epoch,
+        pricing_reserve_packet_hash: reserve_packet_hash.clone(),
+    };
+    policy.policy_hash = policy.computed_hash();
+    let verification_policy = EthereumRouteVerificationPolicyV1 {
+        authority_epoch: committee.domain.committee_epoch,
+        committee_root: committee.domain.committee_root,
+        minimum_confirmations: 12,
+        handoff_controller_code_hash: [0x71; 32],
+        wrapped_navcoin_code_hash: [0x72; 32],
+    };
+    let route_config_digest = "a1".repeat(48);
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &reserve_operator,
+        AssetTransactionOperation::PftlUniswapRouteInitV2(PftlUniswapRouteInitV2Operation {
+            operator: A666_RESERVE_OPERATOR.to_string(),
+            route_id: ROUTE_ID.to_string(),
+            route_config_digest: route_config_digest.clone(),
+            native_nav_asset_id: A666_ASSET_ID.to_string(),
+            settlement_asset_id: PFUSDC_ASSET_ID.to_string(),
+            opening_inventory_atoms: A666_CIRCULATING_SUPPLY,
+            opening_inventory_holder: A666_RESERVE_OPERATOR.to_string(),
+            handoff_controller: HANDOFF_CONTROLLER.to_string(),
+            settlement_adapter: SETTLEMENT_ADAPTER.to_string(),
+            wrapped_navcoin_token: WRAPPED_A666.to_string(),
+            ethereum_chain_id: 1,
+            route_supply_cap_atoms: 1_000_000_000_000_000,
+            packet_notional_cap_atoms: 10_000_000,
+            latest_finalized_nav_epoch: public_values.observation_epoch,
+            return_finality_blocks: 12,
+            route_epoch: 1,
+            outbound_verification_class: PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY.to_string(),
+            return_verification_class: PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT.to_string(),
+            live_value_enabled: false,
+            ethereum_verification_policy: verification_policy.clone(),
+            primary_market_policy: policy.clone(),
+        }),
+        "initialize-public-successor-a666-route",
+    );
+    policy.policy_epoch = 2;
+    policy.valid_from_height = status_tuple(rpc_ports[0], "a666-route-activate-parent").0 + 1;
+    policy.policy_hash = policy.computed_hash();
+    finalized = submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &reserve_operator,
+        AssetTransactionOperation::PftlUniswapRouteEpochAdvance(
+            PftlUniswapRouteEpochAdvanceOperation {
+                operator: A666_RESERVE_OPERATOR.to_string(),
+                route_id: ROUTE_ID.to_string(),
+                prior_route_epoch: 1,
+                next_route_epoch: 2,
+                next_route_config_digest: "a2".repeat(48),
+                live_value_enabled: true,
+                next_primary_market_policy: policy.clone(),
+            },
+        ),
+        "activate-public-successor-a666-route",
+    );
+
+    let transparent_mint_atoms = 2_000_000;
+    let transparent_base_atoms =
+        checked_mul_div_ceil(transparent_mint_atoms, nav_per_unit, 100_000_000);
+    let transparent_settlement_atoms = checked_mul_div_ceil(
+        transparent_base_atoms,
+        u64::from(policy.issue_multiplier_bps),
+        10_000,
+    );
+    let transparent_reservation_id = "b1".repeat(48);
+    let transparent_expiry = finalized.0 + 200;
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &holder,
+        AssetTransactionOperation::PftlUniswapOrderReserve(PftlUniswapOrderReserveOperation {
+            subscriber: holder.address.clone(),
+            route_id: ROUTE_ID.to_string(),
+            reservation_id: transparent_reservation_id.clone(),
+            ethereum_recipient: HOLDER_ETHEREUM.to_string(),
+            route_epoch: 2,
+            policy_epoch: policy.policy_epoch,
+            policy_hash: policy.policy_hash.clone(),
+            mint_amount_atoms: transparent_mint_atoms,
+            max_settlement_value_atoms: transparent_settlement_atoms,
+            expires_at_height: transparent_expiry,
+        }),
+        "reserve-transparent-a666-issue",
+    );
+    let _transparent_issue_finalized = submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &holder,
+        AssetTransactionOperation::PftlUniswapPrimarySubscribeV2(
+            PftlUniswapPrimarySubscribeV2Operation {
+                subscriber: holder.address.clone(),
+                route_id: ROUTE_ID.to_string(),
+                reservation_id: transparent_reservation_id.clone(),
+                subscription_nonce: "b2".repeat(32),
+                settlement_asset_id: PFUSDC_ASSET_ID.to_string(),
+                settlement_value_atoms: transparent_settlement_atoms,
+                pricing_nav_epoch: public_values.observation_epoch,
+                pricing_reserve_packet_hash: reserve_packet_hash.clone(),
+            },
+        ),
+        "execute-transparent-a666-issue",
+    );
+
+    let private_mint_atoms = 1_000_000;
+    let private_base_atoms = checked_mul_div_ceil(private_mint_atoms, nav_per_unit, 100_000_000);
+    let private_settlement_atoms = checked_mul_div_ceil(
+        private_base_atoms,
+        u64::from(policy.issue_multiplier_bps),
+        10_000,
+    );
+    let private_redeem_atoms = checked_mul_div_floor(
+        private_base_atoms,
+        u64::from(policy.redeem_multiplier_bps),
+        10_000,
+    );
+    let private_ingress_file = harness.root.join("a666-private-pfusdc-ingress.json");
+    let private_pfusdc_note = harness.root.join("a666-private-pfusdc-note.json");
+    create_asset_orchard_ingress(AssetOrchardIngressCreateOptions {
+        data_dir: harness.node(0),
+        key_file: holder_key_file.clone(),
+        asset_id: PFUSDC_ASSET_ID.to_string(),
+        amount: private_settlement_atoms,
+        fee: 0,
+        note_seed_hex: bytes_to_hex(&[0x41; 32]),
+        encrypted_output_hex: None,
+        ingress_file: private_ingress_file.clone(),
+        note_file: private_pfusdc_note.clone(),
+        overwrite: false,
+    })
+    .expect("create private pfUSDC ingress");
+    let private_ingress_batch = harness.root.join("a666-private-pfusdc-ingress.batch.json");
+    create_asset_orchard_ingress_batch(AssetOrchardIngressBatchOptions {
+        data_dir: harness.node(0),
+        ingress_file: private_ingress_file,
+        batch_file: private_ingress_batch.clone(),
+    })
+    .expect("build private pfUSDC ingress batch");
+    stop_services(&mut harness);
+    for path in &ready {
+        let _ = fs::remove_file(path);
+    }
+    finalized = finalize_offline_batch_all_validators(
+        &data_dirs,
+        &private_ingress_batch,
+        "shielded",
+        "a666-private-pfusdc-ingress",
+    );
+    ready = start_services(&mut harness, &topology_path, &rpc_ports);
+    wait_exact_six(&rpc_ports, &finalized);
+
+    let export_packet_hash = "b7".repeat(48);
+    let export_nonce = "b8".repeat(32);
+    let active_route_config_digest = "a2".repeat(48);
+    let export_digest = PftlUniswapMintPacketV2 {
+        route_config_digest: active_route_config_digest.clone(),
+        source_packet_hash: export_packet_hash.clone(),
+        reservation_id: transparent_reservation_id.clone(),
+        source_receipt_hash: "b9".repeat(48),
+        source_receipt_root: "ba".repeat(48),
+        settlement_asset_id: PFUSDC_ASSET_ID.to_string(),
+        native_nav_asset_id: A666_ASSET_ID.to_string(),
+        pricing_reserve_packet_hash: reserve_packet_hash.clone(),
+        policy_hash_commitment: postfiat_types::pftl_uniswap_keccak_commitment48(
+            "policy",
+            &policy.policy_hash,
+        )
+        .expect("A666 policy commitment"),
+        route_epoch: 2,
+        pricing_nav_epoch: public_values.observation_epoch,
+        deadline_seconds: 1_800,
+        nonce: export_nonce.clone(),
+        destination_chain_id: 1,
+        destination_controller: HANDOFF_CONTROLLER.to_string(),
+        wrapped_token: WRAPPED_A666.to_string(),
+        ethereum_recipient: HOLDER_ETHEREUM.to_string(),
+        mint_amount_atoms: transparent_mint_atoms,
+        settlement_value_atoms: transparent_settlement_atoms,
+    }
+    .evm_digest()
+    .expect("A666 export digest");
+    let _export_finalized = submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &holder,
+        AssetTransactionOperation::PftlUniswapExportDebit(PftlUniswapExportDebitOperation {
+            owner: holder.address.clone(),
+            route_id: ROUTE_ID.to_string(),
+            packet_hash: export_packet_hash.clone(),
+            export_nonce,
+            ethereum_recipient: HOLDER_ETHEREUM.to_string(),
+            amount_atoms: transparent_mint_atoms,
+            reservation_id: Some(transparent_reservation_id),
+            settlement_value_atoms: Some(transparent_settlement_atoms),
+            destination_deadline_seconds: 1_800,
+            refund_delay_blocks: 3,
+            ethereum_packet_digest: Some(export_digest.clone()),
+            ethereum_packet_schema_version: Some(PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V2),
+        }),
+        "export-transparent-a666-to-ethereum",
+    );
+
+    let controller = [0x11; 20];
+    let wrapped = [0x33; 20];
+    let holder_ethereum = [0x44; 20];
+    let mut recipient_topic = [0_u8; 32];
+    recipient_topic[12..].copy_from_slice(&holder_ethereum);
+    let consumed_signature = postfiat_bridge::ethereum_keccak256(
+        b"PacketConsumed(bytes32,bytes32,address,bytes32,bytes32,bytes32,uint256,uint256)",
+    );
+    let packet_digest_bytes: [u8; 32] = hex_to_bytes(&export_digest)
+        .expect("export digest hex")
+        .try_into()
+        .expect("export digest width");
+    let source_packet_commitment = postfiat_bridge::ethereum_keccak256(
+        &hex_to_bytes(&export_packet_hash).expect("export packet hash"),
+    );
+    let route_config_commitment = postfiat_bridge::ethereum_keccak256(
+        &hex_to_bytes(&active_route_config_digest).expect("active route config"),
+    );
+    let trust_class_commitment =
+        postfiat_bridge::ethereum_keccak256(PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT.as_bytes());
+    let mut consumed_data = route_config_commitment.to_vec();
+    consumed_data.extend_from_slice(&[0x31; 32]);
+    consumed_data.extend_from_slice(&trust_class_commitment);
+    consumed_data.extend_from_slice(&ethereum_abi_u64(transparent_mint_atoms));
+    consumed_data.extend_from_slice(&ethereum_abi_u64(transparent_settlement_atoms));
+    let (consume_receipts_root, consume_receipt_proof) = ethereum_receipt_proof(
+        controller,
+        &[
+            consumed_signature,
+            packet_digest_bytes,
+            source_packet_commitment,
+            recipient_topic,
+        ],
+        &consumed_data,
+    );
+    let consume_height = 10_000;
+    let consume_finalized_height = consume_height + 12;
+    let consume_checkpoint = EthereumFinalizedCheckpointV1 {
+        schema_version: ETHEREUM_CHECKPOINT_SCHEMA_V1,
+        pftl_domain: committee.domain.chain.clone(),
+        route_id: ROUTE_ID.to_string(),
+        route_config_digest: FastSwapOpaqueHashV1(
+            hex_to_bytes(&active_route_config_digest)
+                .expect("route config hex")
+                .try_into()
+                .expect("route config width"),
+        ),
+        ethereum_chain_id: 1,
+        block_number: consume_height,
+        block_hash: [0x51; 32],
+        receipts_root: consume_receipts_root,
+        observed_head_number: consume_finalized_height,
+        minimum_confirmations: 12,
+        authority_epoch: committee.domain.committee_epoch,
+        committee_root: committee.domain.committee_root,
+        handoff_controller: controller,
+        wrapped_navcoin_token: wrapped,
+        handoff_controller_code_hash: verification_policy.handoff_controller_code_hash,
+        wrapped_navcoin_code_hash: verification_policy.wrapped_navcoin_code_hash,
+    };
+    let _consume_finalized = submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &reserve_operator,
+        AssetTransactionOperation::PftlUniswapDestinationConsume(
+            PftlUniswapDestinationConsumeOperation {
+                operator: A666_RESERVE_OPERATOR.to_string(),
+                route_id: ROUTE_ID.to_string(),
+                packet_hash: export_packet_hash,
+                ethereum_consume_tx_hash: "bb".repeat(32),
+                consumed_height: consume_height,
+                finalized_height: consume_finalized_height,
+                external_event_proof: Some(EthereumExternalEventProofV1 {
+                    checkpoint_certificate: ethereum_checkpoint_certificate(
+                        &committee,
+                        &harness.node(0),
+                        consume_checkpoint.clone(),
+                    ),
+                    receipt_proof: consume_receipt_proof,
+                    log_index: 0,
+                }),
+            },
+        ),
+        "consume-a666-export-on-ethereum",
+    );
+
+    let return_sender = holder_ethereum;
+    let return_sender_text = HOLDER_ETHEREUM.to_string();
+    let return_nonce = [0xbc; 32];
+    let return_nonce_text = bytes_to_hex(&return_nonce);
+    let return_burn_height = 10_100;
+    let return_finalized_height = return_burn_height + 12;
+    let return_burn_id = pftl_uniswap_return_burn_id_from_fields(
+        1,
+        HANDOFF_CONTROLLER,
+        WRAPPED_A666,
+        A666_ASSET_ID,
+        &return_sender_text,
+        &holder.address,
+        transparent_mint_atoms,
+        &return_nonce_text,
+        return_burn_height,
+    )
+    .expect("canonical A666 return burn id");
+    let return_burn_id_bytes: [u8; 32] = hex_to_bytes(&return_burn_id)
+        .expect("return burn id hex")
+        .try_into()
+        .expect("return burn id width");
+    let recipient_tail = ethereum_abi_dynamic(holder.address.as_bytes());
+    let native_asset_tail =
+        ethereum_abi_dynamic(&hex_to_bytes(A666_ASSET_ID).expect("A666 asset id for return event"));
+    let mut return_data = ethereum_abi_u64(7 * 32).to_vec();
+    return_data.extend_from_slice(&ethereum_abi_u64(
+        u64::try_from(7 * 32 + recipient_tail.len()).expect("return asset ABI offset"),
+    ));
+    return_data.extend_from_slice(&ethereum_abi_u64(transparent_mint_atoms));
+    return_data.extend_from_slice(&ethereum_abi_u64(1));
+    return_data.extend_from_slice(&ethereum_abi_address(controller));
+    return_data.extend_from_slice(&ethereum_abi_address(wrapped));
+    return_data.extend_from_slice(&ethereum_abi_u64(return_burn_height));
+    return_data.extend_from_slice(&recipient_tail);
+    return_data.extend_from_slice(&native_asset_tail);
+    let return_signature = postfiat_bridge::ethereum_keccak256(
+        b"ReturnBurned(bytes32,address,bytes32,string,bytes,uint256,uint256,address,address,uint256)",
+    );
+    let (return_receipts_root, return_receipt_proof) = ethereum_receipt_proof(
+        controller,
+        &[
+            return_signature,
+            return_burn_id_bytes,
+            ethereum_abi_address(return_sender),
+            return_nonce,
+        ],
+        &return_data,
+    );
+    let mut return_checkpoint = consume_checkpoint;
+    return_checkpoint.block_number = return_burn_height;
+    return_checkpoint.block_hash = [0x63; 32];
+    return_checkpoint.receipts_root = return_receipts_root;
+    return_checkpoint.observed_head_number = return_finalized_height;
+    finalized = submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &reserve_operator,
+        AssetTransactionOperation::PftlUniswapReturnImport(PftlUniswapReturnImportOperation {
+            operator: A666_RESERVE_OPERATOR.to_string(),
+            route_id: ROUTE_ID.to_string(),
+            burn_event_hash: return_burn_id,
+            ethereum_chain_id: 1,
+            bridge_controller: HANDOFF_CONTROLLER.to_string(),
+            wrapped_navcoin_token: WRAPPED_A666.to_string(),
+            native_nav_asset_id: A666_ASSET_ID.to_string(),
+            ethereum_sender: return_sender_text,
+            pftl_recipient: holder.address.clone(),
+            amount_atoms: transparent_mint_atoms,
+            return_nonce: return_nonce_text,
+            burn_height: return_burn_height,
+            finalized_height: return_finalized_height,
+            external_event_proof: Some(EthereumExternalEventProofV1 {
+                checkpoint_certificate: ethereum_checkpoint_certificate(
+                    &committee,
+                    &harness.node(0),
+                    return_checkpoint,
+                ),
+                receipt_proof: return_receipt_proof,
+                log_index: 0,
+            }),
+        }),
+        "return-wrapped-a666-to-pftl",
+    );
+
+    let transparent_redeem_atoms = 500_000;
+    let transparent_redeem_base =
+        checked_mul_div_ceil(transparent_redeem_atoms, nav_per_unit, 100_000_000);
+    let transparent_redeem_output = checked_mul_div_floor(
+        transparent_redeem_base,
+        u64::from(policy.redeem_multiplier_bps),
+        10_000,
+    );
+    finalized = submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &holder,
+        AssetTransactionOperation::PftlUniswapPrimaryRedeem(PftlUniswapPrimaryRedeemOperation {
+            owner: holder.address.clone(),
+            settlement_recipient: holder.address.clone(),
+            route_id: ROUTE_ID.to_string(),
+            redemption_nonce: "bd".repeat(32),
+            nav_amount_atoms: transparent_redeem_atoms,
+            min_settlement_value_atoms: transparent_redeem_output,
+            route_epoch: 2,
+            policy_epoch: policy.policy_epoch,
+            policy_hash: policy.policy_hash.clone(),
+            pricing_nav_epoch: public_values.observation_epoch,
+            pricing_reserve_packet_hash: reserve_packet_hash.clone(),
+            expires_at_height: finalized.0 + 100,
+        }),
+        "redeem-transparent-a666",
+    );
+    let private_issue_action = harness.root.join("a666-private-primary-issue.json");
+    let private_a666_note = harness.root.join("a666-private-a666-note.json");
+    let private_reservation_id = "b3".repeat(48);
+    create_asset_orchard_private_primary_issue(AssetOrchardPrivatePrimaryIssueCreateOptions {
+        data_dir: harness.node(0),
+        note_file: private_pfusdc_note,
+        output_note_seed_hex: bytes_to_hex(&[0x42; 32]),
+        output_note_file: private_a666_note.clone(),
+        route_id: ROUTE_ID.to_string(),
+        subscriber: holder.address.clone(),
+        ethereum_recipient: HOLDER_ETHEREUM.to_string(),
+        reservation_id: private_reservation_id.clone(),
+        subscription_nonce: "b4".repeat(32),
+        mint_amount_atoms: private_mint_atoms,
+        settlement_value_atoms: private_settlement_atoms,
+        expires_at_height: finalized.0 + 100,
+        pending_output_commitments: Vec::new(),
+        action_file: private_issue_action.clone(),
+        overwrite: false,
+    })
+    .expect("create private A666 primary issue");
+    let private_issue_batch = harness.root.join("a666-private-primary-issue.batch.json");
+    create_asset_orchard_private_primary_issue_batch(AssetOrchardPrivatePrimaryIssueBatchOptions {
+        data_dir: harness.node(0),
+        action_file: private_issue_action,
+        batch_file: private_issue_batch.clone(),
+    })
+    .expect("build private A666 primary issue batch");
+    stop_services(&mut harness);
+    for path in &ready {
+        let _ = fs::remove_file(path);
+    }
+    finalized = finalize_offline_batch_all_validators(
+        &data_dirs,
+        &private_issue_batch,
+        "shielded",
+        "a666-private-primary-issue",
+    );
+    ready = start_services(&mut harness, &topology_path, &rpc_ports);
+    wait_exact_six(&rpc_ports, &finalized);
+
+    let private_redeem_action = harness.root.join("a666-private-primary-redeem.json");
+    let private_redeem_note = harness.root.join("a666-private-redeem-pfusdc-note.json");
+    create_asset_orchard_private_primary_redeem(AssetOrchardPrivatePrimaryRedeemCreateOptions {
+        data_dir: harness.node(0),
+        note_file: private_a666_note,
+        output_note_seed_hex: bytes_to_hex(&[0x43; 32]),
+        output_note_file: private_redeem_note,
+        route_id: ROUTE_ID.to_string(),
+        owner: holder.address.clone(),
+        settlement_recipient: holder.address.clone(),
+        redemption_id: "b5".repeat(48),
+        redemption_nonce: "b6".repeat(32),
+        nav_amount_atoms: private_mint_atoms,
+        settlement_output_atoms: private_redeem_atoms,
+        expires_at_height: finalized.0 + 100,
+        pending_output_commitments: Vec::new(),
+        action_file: private_redeem_action.clone(),
+        overwrite: false,
+    })
+    .expect("create private A666 primary redeem");
+    let private_redeem_batch = harness.root.join("a666-private-primary-redeem.batch.json");
+    create_asset_orchard_private_primary_redeem_batch(
+        AssetOrchardPrivatePrimaryRedeemBatchOptions {
+            data_dir: harness.node(0),
+            action_file: private_redeem_action,
+            batch_file: private_redeem_batch.clone(),
+        },
+    )
+    .expect("build private A666 primary redeem batch");
+    stop_services(&mut harness);
+    for path in &ready {
+        let _ = fs::remove_file(path);
+    }
+    finalized = finalize_offline_batch_all_validators(
+        &data_dirs,
+        &private_redeem_batch,
+        "shielded",
+        "a666-private-primary-redeem",
+    );
+    let replay_error = simulate_shielded_batch(ShieldedBatchSimulateOptions {
+        data_dir: harness.node(0),
+        batch_file: private_redeem_batch,
+    })
+    .expect_err("finalized private redemption batch replay must reject");
+    assert!(
+        replay_error.to_string().contains("already applied"),
+        "unexpected private redemption replay error: {replay_error}"
+    );
+    let _private_redeem_ready = start_services(&mut harness, &topology_path, &rpc_ports);
+    wait_exact_six(&rpc_ports, &finalized);
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &holder,
+        AssetTransactionOperation::PftlUniswapOrderRelease(PftlUniswapOrderReleaseOperation {
+            releaser: holder.address.clone(),
+            route_id: ROUTE_ID.to_string(),
+            reservation_id: private_reservation_id,
+        }),
+        "release-private-a666-export-entitlement",
+    );
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &reserve_operator,
+        AssetTransactionOperation::PftlUniswapRoutePause(PftlUniswapRoutePauseOperation {
+            operator: A666_RESERVE_OPERATOR.to_string(),
+            route_id: ROUTE_ID.to_string(),
+            paused: true,
+        }),
+        "pause-public-successor-a666-route",
+    );
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &reserve_operator,
+        AssetTransactionOperation::PftlUniswapRoutePause(PftlUniswapRoutePauseOperation {
+            operator: A666_RESERVE_OPERATOR.to_string(),
+            route_id: ROUTE_ID.to_string(),
+            paused: false,
+        }),
+        "resume-public-successor-a666-route",
+    );
+    policy.policy_epoch = 3;
+    policy.valid_from_height = status_tuple(rpc_ports[0], "a666-rollback-parent").0 + 1;
+    policy.policy_hash = policy.computed_hash();
+    finalized = submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &reserve_operator,
+        AssetTransactionOperation::PftlUniswapRouteEpochAdvance(
+            PftlUniswapRouteEpochAdvanceOperation {
+                operator: A666_RESERVE_OPERATOR.to_string(),
+                route_id: ROUTE_ID.to_string(),
+                prior_route_epoch: 2,
+                next_route_epoch: 3,
+                next_route_config_digest: "a3".repeat(48),
+                live_value_enabled: false,
+                next_primary_market_policy: policy,
+            },
+        ),
+        "rollback-public-successor-a666-route",
+    );
+    wait_exact_six(&rpc_ports, &finalized);
+    let expected_a666_supply = A666_CIRCULATING_SUPPLY
+        .checked_add(transparent_mint_atoms)
+        .and_then(|supply| supply.checked_sub(transparent_redeem_atoms))
+        .expect("expected A666 lifecycle supply");
+    let expected_settlement_reserve = transparent_base_atoms
+        .checked_sub(transparent_redeem_base)
+        .expect("expected A666 settlement reserve");
+    for index in 0..VALIDATORS {
+        let ledger: LedgerState = serde_json::from_slice(
+            &fs::read(harness.node(index).join("ledger.json"))
+                .expect("read finalized A666 lifecycle ledger"),
+        )
+        .expect("parse finalized A666 lifecycle ledger");
+        assert_eq!(
+            postfiat_execution::issued_asset_supply(&ledger, A666_ASSET_ID)
+                .expect("final A666 issued supply"),
+            expected_a666_supply,
+            "validator {index} A666 supply conservation"
+        );
+        assert_eq!(
+            postfiat_execution::issued_asset_supply(&ledger, PFUSDC_ASSET_ID)
+                .expect("final pfUSDC issued supply"),
+            PFUSDC_SUPPLY,
+            "validator {index} pfUSDC supply conservation"
+        );
+        let nav = ledger
+            .nav_asset(A666_ASSET_ID)
+            .expect("final A666 NAV state");
+        assert_eq!(nav.circulating_supply, expected_a666_supply);
+        assert_eq!(nav.proof_profile, A666_SUCCESSOR_PROFILE);
+        let route = ledger
+            .pftl_uniswap_route(ROUTE_ID)
+            .expect("final A666 route state");
+        let v2 = route.v2.as_ref().expect("final A666 v2 route");
+        assert_eq!(v2.route_epoch, 3);
+        assert_eq!(v2.primary_market_policy.policy_epoch, 3);
+        assert!(!route.live_value_enabled, "validator {index}");
+        assert!(!route.paused, "validator {index}");
+        assert_eq!(route.authorized_valid_supply_atoms, expected_a666_supply);
+        assert_eq!(route.pftl_spendable_supply_atoms, expected_a666_supply);
+        assert_eq!(route.ethereum_spendable_supply_atoms, 0);
+        assert_eq!(route.outstanding_bridge_claims_atoms, 0);
+        assert_eq!(route.settlement_reserve_atoms, expected_settlement_reserve);
+        assert!(v2.active_reservations.is_empty(), "validator {index}");
+        assert!(v2.export_entitlements.is_empty(), "validator {index}");
+    }
     for (index, port) in rpc_ports.iter().enumerate() {
         let verified = rpc_call(
             *port,
