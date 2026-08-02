@@ -1,0 +1,10 @@
+{
+  "schema": "postfiat.reserve_evm_chainlink_policy_commitment_report.v1",
+  "verifier_commitment": "260ce714ab04e1f1d48676a0067b9a58894d4dc5673bd0f5356491ab90f6c2703071348906f362e17eb8f735dcb63015",
+  "source_domain": "eip155:42161",
+  "chain_id": 42161,
+  "valuation_policy_hash": "350eaee0a1ca12ba51637781ba52661b8685f868657a7c5e7d07c31b2899869c",
+  "valuation_unit_id": "c67872c31caa85cbe6dd287a1e060f0f5cfc0e9f3c5bd85a7569897fd0cefb031583b7afc001e7d1afa492e9abf77d60",
+  "valuation_scale": 100000000,
+  "row_count": 1
+}

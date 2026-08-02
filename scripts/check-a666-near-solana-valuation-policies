@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+manifest_dir="$repo_root/tools/nav-reserve-proof/manifests/a666"
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+
+for source in near solana; do
+  cargo +1.95.0 run --quiet \
+    --manifest-path "$repo_root/tools/nav-reserve-proof/Cargo.toml" \
+    -p postfiat-reserve-proof -- \
+    manifest evm-chainlink-policy-commitment \
+    --policy "$manifest_dir/$source-chainlink-valuation-policy.json" \
+    --output "$tmp_dir/$source.json" >/dev/null
+  cmp "$manifest_dir/$source-chainlink-valuation-policy-commitment.json" \
+    "$tmp_dir/$source.json"
+done
+
+echo "A666 NEAR/USD and SOL/USD valuation policy commitments verified"

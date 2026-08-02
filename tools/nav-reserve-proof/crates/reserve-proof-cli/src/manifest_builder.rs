@@ -1092,4 +1092,67 @@ mod tests {
             Some(valuation.commitment().unwrap().as_str())
         );
     }
+
+    #[test]
+    fn tracked_a666_near_and_solana_valuation_policies_bind_public_provenance() {
+        let manifest_dir =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../manifests/a666");
+        let provenance: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(manifest_dir.join("near-solana-valuation-provenance.json")).unwrap(),
+        )
+        .unwrap();
+        let commitments: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(manifest_dir.join("source-policy-commitments.json")).unwrap(),
+        )
+        .unwrap();
+        for (index, (name, position, decimals)) in [
+            ("near", "near-staked-balance", 24u8),
+            ("solana", "sol-staked-balance", 9u8),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let policy: EvmChainlinkValuationPolicyV1 = serde_json::from_slice(
+                &std::fs::read(
+                    manifest_dir.join(format!("{name}-chainlink-valuation-policy.json")),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(policy.rows.len(), 1);
+            assert_eq!(policy.rows[0].position_id, position);
+            assert_eq!(policy.rows[0].quantity_decimals, decimals);
+            assert_eq!(
+                policy.rows[0].proxy_address,
+                serde_json::from_value::<Address>(provenance[name]["proxy"].clone()).unwrap()
+            );
+            assert_eq!(
+                policy.rows[0].proxy_code_hash,
+                serde_json::from_value::<B256>(provenance["shared_proxy_code_hash"].clone())
+                    .unwrap()
+            );
+            assert_eq!(
+                policy.rows[0].aggregator_code_hash,
+                serde_json::from_value::<B256>(provenance["shared_aggregator_code_hash"].clone())
+                    .unwrap()
+            );
+            assert_eq!(
+                policy.hot_vars_slot_index,
+                provenance["aggregator_hot_vars_slot_index"]
+                    .as_u64()
+                    .unwrap()
+            );
+            assert_eq!(
+                policy.transmissions_slot_index,
+                provenance["aggregator_transmissions_slot_index"]
+                    .as_u64()
+                    .unwrap()
+            );
+            assert_eq!(
+                commitments["valuation_only_candidates"][index]["valuation_verifier_commitment"]
+                    .as_str(),
+                Some(policy.commitment().unwrap().as_str())
+            );
+        }
+    }
 }

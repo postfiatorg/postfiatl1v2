@@ -29,5 +29,23 @@
       "policy_provenance": "tools/nav-reserve-proof/manifests/a666/monero-policy-provenance.json",
       "status": "candidate_quantity_and_valuation_not_qualified"
     }
+  ],
+  "valuation_only_candidates": [
+    {
+      "source_id": "near-stake",
+      "valuation_policy": "tools/nav-reserve-proof/manifests/a666/near-chainlink-valuation-policy.json",
+      "valuation_verifier_commitment": "260ce714ab04e1f1d48676a0067b9a58894d4dc5673bd0f5356491ab90f6c2703071348906f362e17eb8f735dcb63015",
+      "policy_provenance": "tools/nav-reserve-proof/manifests/a666/near-solana-valuation-provenance.json",
+      "quantity_policy_status": "blocked_pending_public_reader_deployment",
+      "status": "candidate_valuation_only_not_qualified"
+    },
+    {
+      "source_id": "solana-stake",
+      "valuation_policy": "tools/nav-reserve-proof/manifests/a666/solana-chainlink-valuation-policy.json",
+      "valuation_verifier_commitment": "1ae3bf34e5433836b81710c6c5d41b0ec46c469c15d8a21e6ac735893676104fe5465af51441980dfee00ce01e274756",
+      "policy_provenance": "tools/nav-reserve-proof/manifests/a666/near-solana-valuation-provenance.json",
+      "quantity_policy_status": "blocked_pending_immutable_public_reader_deployment",
+      "status": "candidate_valuation_only_not_qualified"
+    }
   ]
 }

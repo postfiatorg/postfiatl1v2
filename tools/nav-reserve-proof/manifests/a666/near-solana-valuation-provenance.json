@@ -1,0 +1,31 @@
+{
+  "schema": "postfiat.reserve_a666_near_solana_valuation_provenance.v1",
+  "feed_registry_source": "https://github.com/smartcontractkit/foundry-chainlink-toolkit/blob/d610ec9ef54c325de7de1a5622c19933b2ae26cf/src/registries/json/DataFeeds.json",
+  "near": {
+    "pair": "NEAR / USD",
+    "chain_id": 42161,
+    "proxy": "0xbf5c3fb2633e924598a46b9d07a174a9dbcf57c0",
+    "observed_block_number": 490359553,
+    "observed_block_hash": "0xae16d4ef3b6ab01cd9899894b91c94e4c0d2f3b6d4a362b113892fc050afc81b",
+    "observed_state_root": "0xe3502bb54b3c418986c4bacc06011ca82490d6230bef7d98e5f75d345a32cb9f",
+    "current_aggregator": "0x1e47ad4d2748680e6e74fce145761ed174ee4665",
+    "observed_aggregator_round": 9079
+  },
+  "solana": {
+    "pair": "SOL / USD",
+    "chain_id": 1,
+    "proxy": "0x4ffc43a60e009b551865a93d232e33fce9f01507",
+    "observed_block_number": 25667877,
+    "observed_block_hash": "0x9ec3fe9d65abcd124eb4a391f9491cf242a3ddde5a78f4109f53c23358fb7d0e",
+    "observed_state_root": "0xad19a719aeb6519c05921c85ce503df6cecfb1d0e74fdd6659f702a51252e19d",
+    "current_aggregator": "0xa88757c4d7f75c672a07ae1cf8011c4552a275f0",
+    "observed_aggregator_round": 3151
+  },
+  "shared_proxy_code_hash": "0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2",
+  "shared_aggregator_code_hash": "0x16f41184f797cb8f8918680df0ebf2a97cc3192aa6b104615f61096fc674f2aa",
+  "proxy_phase_slot_index": 2,
+  "aggregator_hot_vars_slot_index": 11,
+  "aggregator_transmissions_slot_index": 12,
+  "price_decimals": 8,
+  "status": "candidate_not_qualified"
+}

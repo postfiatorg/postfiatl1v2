@@ -592,11 +592,17 @@ before writing an observation. The proof kit never receives a NEAR private
 key. Code identity and the finalized head are explicitly BFT-checkpointed;
 the RPC response is not mislabeled as trustless NEAR consensus finality.
 
-The reader is not deployed under a governed successor account yet. Governed
-policy/committee inputs, public NEAR/USD valuation evidence, parser fuzzing,
-fresh multi-epoch collection, full A666 reconciliation, and independent
-production qualification remain open. Therefore this implementation does not
-yet make the staked-NEAR source production-qualified.
+The reader is not deployed under a governed successor account yet. A typed
+candidate Arbitrum NEAR/USD Chainlink valuation policy now pins the official
+registry feed, live aggregator, exact code hashes and OCR2 storage slots,
+committee, valuation context, decimals, and haircut. Its verifier commitment is
+`260ce714ab04e1f1d48676a0067b9a58894d4dc5673bd0f5356491ab90f6c2703071348906f362e17eb8f735dcb63015`.
+The quantity policy cannot be finalized until the public reader deployment
+identity exists. Reader deployment, governed quantity inputs, a fresh
+committee-certified NEAR/USD proof, freshness-bound review, fresh multi-epoch
+collection, full A666 reconciliation, and independent production qualification
+remain open. Therefore this implementation does not yet make the staked-NEAR
+source production-qualified.
 
 The current A666 shadow marks staked-NEAR quantity as attested. That is not
 equivalent to the historical receipt/light-client validation.
@@ -657,10 +663,16 @@ direct Solana consensus verification.
 This code is still partial. A `solana-verify` 0.5.1 build under the exact
 published Docker image digest was repeated and produced the same executable
 program hash, raw ELF hash, and byte length. That identity is machine checked
-by `scripts/check-solana-stake-reader-identity`. No immutable public deployment
-has been recorded, no governed A666 reader/policy/committee/SOL-USD valuation
-bundle exists, and parser fuzzing, fresh multi-epoch collection, full A666
-reconciliation, and independent production reproduction remain open.
+by `scripts/check-solana-stake-reader-identity`. A typed candidate Ethereum
+SOL/USD Chainlink valuation policy now pins the official registry feed, live
+aggregator, exact code hashes and OCR2 storage slots, committee, valuation
+context, decimals, and haircut. Its verifier commitment is
+`1ae3bf34e5433836b81710c6c5d41b0ec46c469c15d8a21e6ac735893676104fe5465af51441980dfee00ce01e274756`.
+No immutable public reader deployment has been recorded, so the governed
+quantity policy cannot yet be finalized. Deployment, governed quantity inputs,
+a fresh committee-certified SOL/USD proof, freshness-bound review, fresh
+multi-epoch collection, full A666 reconciliation, and independent production
+reproduction remain open.
 Therefore staked Solana remains `0/1` qualified and does not make `G3` pass.
 
 ### 5.6 Monero reserves
@@ -890,6 +902,20 @@ existing guest ELF SHA exactly.
   candidate pending fresh committee certificates, the context-bound nonzero
   wallet proof, collected price proof, freshness review, reconciliation, and
   independent reproduction.
+- [x] Publish typed NEAR/USD and SOL/USD Chainlink valuation candidates. The
+  NEAR policy uses the active Arbitrum feed because the registry-listed
+  Ethereum NEAR/USD proxy is decommissioned; the Solana policy uses the active
+  Ethereum SOL/USD feed. Both pin the official registry commit, observed
+  block/state root, live aggregator, exact code hashes, OCR2 storage slots,
+  candidate committee, successor valuation context, decimals, and haircut.
+  Their verifier commitments are
+  `260ce714ab04e1f1d48676a0067b9a58894d4dc5673bd0f5356491ab90f6c2703071348906f362e17eb8f735dcb63015`
+  and
+  `1ae3bf34e5433836b81710c6c5d41b0ec46c469c15d8a21e6ac735893676104fe5465af51441980dfee00ce01e274756`.
+  These are valuation-only candidates: quantity-policy publication remains
+  blocked on the public NEAR and immutable Solana reader deployment identities,
+  and fresh committee-certified price proofs, freshness review, reconciliation,
+  and independent qualification remain open.
 - [x] Derive and publish the candidate source-checkpoint committee from the
   public six-validator PFTL registry. The generic builder accepts only
   ML-DSA-65 public keys, canonicalizes validator ordering, rejects quorums
