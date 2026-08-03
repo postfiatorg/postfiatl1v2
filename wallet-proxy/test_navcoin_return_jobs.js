@@ -15,6 +15,7 @@ const CONTROLLER = `0x${'bb'.repeat(20)}`;
 const TOKEN = `0x${'cc'.repeat(20)}`;
 const ASSET = 'dd'.repeat(48);
 const TX = `0x${'11'.repeat(32)}`;
+const LEGACY_A666_ROUTE_ID = 'pftl-a666-ethereum-wA666-usdc-v1';
 
 const config = {
     schema: 'postfiat-navcoin-return-relay-config-v1', enabled: true,
@@ -91,6 +92,47 @@ function request(amount = '5000000') {
     assert.strictEqual((await disabled.navcoinReturnRelayReadiness(ROUTE_ID)).ready, false);
     await assert.rejects(disabled.submitNavcoinReturnRelayJob(request()),
         error => error.code === 'navcoin_return_relay_not_configured');
+
+    const legacyRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pft-a666-return-recovery-'));
+    const legacyTx = `0x${'66'.repeat(32)}`;
+    const legacyJobId = canonicalJobId(LEGACY_A666_ROUTE_ID, legacyTx);
+    const legacyJobRoot = path.join(legacyRoot, 'jobs', legacyJobId.slice(2));
+    fs.mkdirSync(legacyJobRoot, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(path.join(legacyJobRoot, 'job.json'), JSON.stringify({
+        schema: 'postfiat-a666-return-relay-job-v1',
+        job_id: legacyJobId,
+        status: 'queued',
+        request: {
+            route_id: LEGACY_A666_ROUTE_ID,
+            route_config_digest: ROUTE_DIGEST,
+            transaction_hash: legacyTx,
+        },
+    }));
+    fs.writeFileSync(path.join(legacyJobRoot, 'worker-state.json'), JSON.stringify({
+        schema: 'postfiat-a666-return-relay-state-v1',
+        job_id: legacyJobId,
+        status: 'accepted',
+        transaction_hash: legacyTx,
+        route_id: LEGACY_A666_ROUTE_ID,
+        updated_at_unix: Math.floor(Date.now() / 1000),
+        retryable: false,
+        return_burn_id: '77'.repeat(32),
+    }));
+    const legacy = create({}, {
+        ...options,
+        root: legacyRoot,
+        config: { ...config, route_id: LEGACY_A666_ROUTE_ID },
+    });
+    try {
+        assert.strictEqual(
+            legacy.navcoinReturnRelayJobStatus(LEGACY_A666_ROUTE_ID, legacyJobId).status,
+            'accepted',
+            'the generic wallet must recover durable jobs written by the deployed A666 schema',
+        );
+    } finally {
+        legacy.closeNavcoinReturnRelayJobs();
+        fs.rmSync(legacyRoot, { recursive: true, force: true });
+    }
 
     const multiRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pft-navcoin-return-routes-'));
     const secondDigest = 'ee'.repeat(48);

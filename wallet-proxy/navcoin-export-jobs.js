@@ -9,6 +9,9 @@ const { promisify } = require('node:util');
 
 const JOB_SCHEMA = 'postfiat-navcoin-export-relay-job-v1';
 const STATE_SCHEMA = 'postfiat-navcoin-export-relay-state-v1';
+const LEGACY_A666_JOB_SCHEMA = 'postfiat-a666-export-relay-job-v1';
+const LEGACY_A666_STATE_SCHEMA = 'postfiat-a666-export-relay-state-v1';
+const LEGACY_A666_ROUTE_ID = 'pftl-a666-ethereum-wA666-usdc-v1';
 const CONFIG_SCHEMA = 'postfiat-navcoin-export-relay-config-v1';
 const ROUTE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const HASH48_RE = /^[0-9a-f]{96}$/;
@@ -229,7 +232,10 @@ function createRoute(runtime = {}, options = {}) {
     const stateFileFor = (jobId) => path.join(directoryFor(jobId), 'worker-state.json');
 
     function validateState(job, state) {
-        const common = state?.schema === STATE_SCHEMA && STAGES.has(state.status)
+        const supportedSchema = state?.schema === STATE_SCHEMA
+            || (state?.schema === LEGACY_A666_STATE_SCHEMA
+                && config.route_id === LEGACY_A666_ROUTE_ID);
+        const common = supportedSchema && STAGES.has(state.status)
             && state.job_id === job.job_id && state.packet_hash === job.request.packet_hash
             && state.route_id === config.route_id
             && Number.isSafeInteger(Number(state.updated_at_unix));
@@ -250,7 +256,10 @@ function createRoute(runtime = {}, options = {}) {
         const file = jobFileFor(jobId);
         if (!fs.existsSync(file)) return null;
         const job = JSON.parse(fs.readFileSync(file, 'utf8'));
-        if (job?.schema !== JOB_SCHEMA || job.job_id !== jobId
+        const supportedSchema = job?.schema === JOB_SCHEMA
+            || (job?.schema === LEGACY_A666_JOB_SCHEMA
+                && config.route_id === LEGACY_A666_ROUTE_ID);
+        if (!supportedSchema || job.job_id !== jobId
             || job.request?.route_id !== config.route_id
             || job.request?.route_config_digest !== config.route_config_digest) {
             throw new Error('invalid NAVCoin export job');
