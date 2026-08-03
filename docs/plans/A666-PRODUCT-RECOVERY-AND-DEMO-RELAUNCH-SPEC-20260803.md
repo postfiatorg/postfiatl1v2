@@ -36,8 +36,12 @@ The only end-to-end check was a roughly one-hour six-validator rehearsal, so
 each lifecycle defect (fixture config, route caps, offline-validator dialing,
 catch-up, epoch ordering, rejection semantics) surfaced one at a time at the
 end of a long run. Six retries burned the schedule, the rehearsal never
-passed, and the live migration was therefore never authorized. The demo date
-arrived with no qualified release, and the demo was missed.
+passed, and the live migration was therefore never authorized. A demo was
+planned ahead of an investor meeting with an explicit, communicated deadline;
+the product was not ready, so no demo took place. The team responsible was
+terminated on 2026-08-03. This document's incident language ("the demo was
+missed") means exactly that: a planned demo did not happen because the
+product had not passed its acceptance contract.
 
 **Where that leaves us.** Live A666 still runs on the historical
 StakeHub-lineage proof profile. The public successor is proven but not live.
@@ -484,6 +488,20 @@ There is no degraded-success mode. A no-go is reported as a no-go, not repaired
 live in front of users.
 
 ## 11. Roles and accountability
+
+**Status as of 2026-08-03:** every previously assigned role is vacant; the
+team responsible for the missed delivery was terminated. The company
+principal is the sole interim decision authority. Consequences of the
+vacancy, binding until roles are reassigned:
+
+- no live mutation of any kind (R8+ remains frozen regardless of gate state);
+- the abort authority must be independent of whoever makes the final code or
+  configuration change, so recovery execution cannot self-authorize a live
+  migration under any circumstances;
+- rotation of live operator and signer key material is an open decision for
+  the principal: people with historical access to deployed key paths have
+  left, and the constrained-signer daemon still runs under the prior team's
+  configuration.
 
 Names must be assigned in the execution manifest before R3.
 
