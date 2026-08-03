@@ -16,7 +16,10 @@ ASSET_ID = (
     "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b6"
     "2d20e18555642bec32174498cbee5e2c"
 )
-SETTLEMENT_ASSET_ID = "02" * 48
+SETTLEMENT_ASSET_ID = (
+    "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c2"
+    "33f6830bd5221fe2717fb6a1a7005d7b"
+)
 PROFILE_ID = "f8" * 48
 
 
@@ -25,7 +28,12 @@ def write_json(path: Path, value: object) -> None:
 
 
 class LiveNavMarkBuilderTests(unittest.TestCase):
-    def run_builder(self, *, nav_profile: str = PROFILE_ID) -> tuple[subprocess.CompletedProcess[str], Path]:
+    def run_builder(
+        self,
+        *,
+        nav_profile: str = PROFILE_ID,
+        route_overrides: dict[str, object] | None = None,
+    ) -> tuple[subprocess.CompletedProcess[str], Path]:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
@@ -85,18 +93,18 @@ else:
         )}
         paths["public-values"].write_bytes(b"public-values")
         paths["proof-calldata"].write_bytes(b"proof")
-        write_json(
-            paths["route"],
-            {
-                "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
-                "route_config_digest": "11" * 48,
-                "native_nav_asset_id": ASSET_ID,
-                "settlement_asset_id": SETTLEMENT_ASSET_ID,
-                "settlement_reserve_atoms": 10,
-                "live_value_enabled": True,
-                "paused": True,
-            },
-        )
+        route = {
+            "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+            "route_config_digest": "11" * 48,
+            "native_nav_asset_id": ASSET_ID,
+            "settlement_asset_id": SETTLEMENT_ASSET_ID,
+            "settlement_reserve_atoms": 10,
+            "live_value_enabled": True,
+            "paused": True,
+            "invariant_holds": True,
+        }
+        route.update(route_overrides or {})
+        write_json(paths["route"], route)
         write_json(
             paths["vault"],
             {
@@ -189,6 +197,40 @@ else:
         result, _ = self.run_builder(nav_profile="aa" * 48)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("NAV status and active profile disagree", result.stderr)
+
+    def test_rejects_unpaused_route(self) -> None:
+        result, _ = self.run_builder(route_overrides={"paused": False})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("route must be paused", result.stderr)
+
+    def test_rejects_wrong_settlement_asset(self) -> None:
+        result, _ = self.run_builder(
+            route_overrides={"settlement_asset_id": "02" * 48}
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not the governed pfUSDC asset", result.stderr)
+
+    def test_rejects_wrong_route(self) -> None:
+        result, _ = self.run_builder(route_overrides={"route_id": "other-route"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("governed A666 route", result.stderr)
+
+    def test_rejects_malformed_route_config_digest(self) -> None:
+        result, _ = self.run_builder(route_overrides={"route_config_digest": "11"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("route config digest is malformed", result.stderr)
+
+    def test_rejects_broken_supply_invariant(self) -> None:
+        result, _ = self.run_builder(route_overrides={"invariant_holds": False})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("supply invariant does not hold", result.stderr)
+
+    def test_rejects_live_value_disabled(self) -> None:
+        result, _ = self.run_builder(
+            route_overrides={"live_value_enabled": False}
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("live-value mode is not enabled", result.stderr)
 
 
 if __name__ == "__main__":

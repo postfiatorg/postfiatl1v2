@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 import socket
 import sys
@@ -179,6 +180,46 @@ def test_config_rejects_group_readable_policy_file(tmp_path: Path) -> None:
         assert error.code == "signer_insecure_file"
     else:
         raise AssertionError("group-readable signer config was accepted")
+
+
+def test_create_keystore_writes_owner_only_encrypted_key(tmp_path: Path) -> None:
+    password = tmp_path / "password"
+    password.write_text("correct horse battery staple\n")
+    password.chmod(0o600)
+    keystore = tmp_path / "private" / "relay.keystore.json"
+
+    created = postfiat_signer.create_keystore(keystore, password)
+
+    assert created["ok"] is True
+    assert created["address"].startswith("0x")
+    assert len(created["address"]) == 42
+    assert keystore.stat().st_mode & 0o777 == 0o600
+    encrypted = json.loads(keystore.read_text())
+    private_key = Account.decrypt(encrypted, "correct horse battery staple")
+    assert Account.from_key(private_key).address.lower() == created["address"]
+
+
+def test_create_keystore_refuses_existing_target_and_insecure_password(tmp_path: Path) -> None:
+    password = tmp_path / "password"
+    password.write_text("correct horse battery staple\n")
+    password.chmod(0o640)
+    keystore = tmp_path / "relay.keystore.json"
+    try:
+        postfiat_signer.create_keystore(keystore, password)
+    except postfiat_signer.SignerFailure as error:
+        assert error.code == "signer_insecure_file"
+    else:
+        raise AssertionError("group-readable keystore password was accepted")
+
+    password.chmod(0o600)
+    keystore.write_text("do not replace\n")
+    keystore.chmod(0o600)
+    try:
+        postfiat_signer.create_keystore(keystore, password)
+    except postfiat_signer.SignerFailure as error:
+        assert error.code == "signer_keystore_exists"
+    else:
+        raise AssertionError("existing keystore target was replaced")
 
 
 def test_socket_preparation_refuses_regular_file_and_live_socket(tmp_path: Path) -> None:

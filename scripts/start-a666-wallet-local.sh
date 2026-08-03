@@ -57,4 +57,7 @@ exec env \
   NAVCOIN_RETURN_RELAY_RETRY_MAX_MS=300000 \
   PNOK_FIX_WALLET_CONFIG_FILE="$pnok_fix_config" \
   PNOK_FIX_WALLET_JOB_ROOT="$pnok_fix_job_root" \
+  PFTL_PRIVATE_SWAP_URL=http://127.0.0.1:39798 \
+  PFTL_PRIVATE_SWAP_CONTROLLED_WALLET_ID=pfab9b9228942e5c529633a13aa271d5297bec6353 \
+  PFTL_PRIVATE_SWAP_ROUTE_ID=pftl-a666-ethereum-wA666-usdc-v1 \
   node "$repo/wallet-proxy/server.js"

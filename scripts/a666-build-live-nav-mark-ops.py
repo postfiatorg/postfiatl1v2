@@ -17,6 +17,11 @@ ASSET_ID = (
     "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b6"
     "2d20e18555642bec32174498cbee5e2c"
 )
+ROUTE_ID = "pftl-a666-ethereum-wA666-usdc-v1"
+SETTLEMENT_ASSET_ID = (
+    "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c2"
+    "33f6830bd5221fe2717fb6a1a7005d7b"
+)
 ISSUER = "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b"
 RESERVE_OPERATOR = "pfd0c86d9084915e1fefd22eab891806397d5a5937"
 VERIFIER_KIND = "sp1-nav-reserve-v1"
@@ -299,6 +304,18 @@ def derive_packet_operation(
     nav = load_json(args.nav_status)
     if route.get("native_nav_asset_id") != ASSET_ID:
         raise RuntimeError("route status does not describe A666")
+    if route.get("route_id") != ROUTE_ID:
+        raise RuntimeError("route status does not describe the governed A666 route")
+    if route.get("settlement_asset_id") != SETTLEMENT_ASSET_ID:
+        raise RuntimeError("A666 route settlement asset is not the governed pfUSDC asset")
+    if not re.fullmatch(r"[0-9a-f]{96}", str(route.get("route_config_digest", ""))):
+        raise RuntimeError("A666 route config digest is malformed")
+    if route.get("invariant_holds") is not True:
+        raise RuntimeError("A666 route supply invariant does not hold")
+    if route.get("live_value_enabled") is not True:
+        raise RuntimeError("A666 route live-value mode is not enabled")
+    if route.get("paused") is not True:
+        raise RuntimeError("A666 route must be paused before building NAV mutations")
     if nav.get("asset_id") != ASSET_ID:
         raise RuntimeError("NAV status does not describe A666")
     if nav.get("proof_profile") != profile.get("profile_id"):

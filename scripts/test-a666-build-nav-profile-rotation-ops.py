@@ -131,7 +131,7 @@ class ProfileRotationBuilderTests(unittest.TestCase):
             derived_profile(), expected_profile_id="00" * 48
         )
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("independently pinned ID", result.stderr)
+        self.assertIn("fixed public successor ID", result.stderr)
 
     def test_malformed_expected_profile_id_is_rejected(self) -> None:
         result, _ = self.run_builder(derived_profile(), expected_profile_id="not-a-profile")

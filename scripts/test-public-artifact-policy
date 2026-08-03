@@ -59,8 +59,8 @@ EXPECTED = {
     "wallet-extension/icons/icon128.png": "4e05b9a7cc8d83b110b6d0ce7dc98702a705f8c8427d98e8a6284cc6cbfd0c39",
     "wallet-extension/icons/icon16.png": "3caf5822b89ea2d234e250e4445dc63b854be6ed4b20681e27ed84196d847e8b",
     "wallet-extension/icons/icon48.png": "b2a4f3d0e8204e866c5e05d157ae734b3e84467087620b5920e1ffe32ea886a2",
-    "wallet-extension/wasm/postfiat_wallet_wasm_bg.wasm": "6ca01a992e6b415dc371c1ce1df8603661bd7069a21da6a34b922c81cf6ac472",
-    "wallet-web/src/wasm/postfiat_wallet_wasm_bg.wasm": "6ca01a992e6b415dc371c1ce1df8603661bd7069a21da6a34b922c81cf6ac472",
+    "wallet-extension/wasm/postfiat_wallet_wasm_bg.wasm": "affd340817788d45a313e60ec512493c6c56c3acbf81a4d4159636279ea0c882",
+    "wallet-web/src/wasm/postfiat_wallet_wasm_bg.wasm": "affd340817788d45a313e60ec512493c6c56c3acbf81a4d4159636279ea0c882",
 }
 
 
@@ -113,6 +113,15 @@ def main() -> int:
     assert wasm_paths[0].read_bytes() == wasm_paths[1].read_bytes(), (
         "web and extension wallet WASM artifacts differ"
     )
+    for relative in (
+        "wallet-web/src/wasm/postfiat_wallet_wasm.js",
+        "wallet-web/src/wasm/postfiat_wallet_wasm.d.ts",
+        "wallet-extension/wasm/postfiat_wallet_wasm.js",
+        "wallet-extension/wasm/postfiat_wallet_wasm.d.ts",
+    ):
+        assert "wallet_sign_pftl_swap_intent" in (ROOT / relative).read_text(
+            encoding="utf-8"
+        ), f"generated wallet binding lacks browser-local private-primary signing: {relative}"
     print(
         "public_artifact_policy=ok "
         f"classified={len(media)} max_bytes={max((ROOT / item).stat().st_size for item in media)}"

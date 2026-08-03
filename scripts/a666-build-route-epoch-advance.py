@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,10 @@ ROUTE_ID = "pftl-a666-ethereum-wA666-usdc-v1"
 ASSET_ID = (
     "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b6"
     "2d20e18555642bec32174498cbee5e2c"
+)
+SETTLEMENT_ASSET_ID = (
+    "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c2"
+    "33f6830bd5221fe2717fb6a1a7005d7b"
 )
 NAV_MARK_SCHEMA = "postfiat.a666.provider_neutral_nav_mark.v1"
 SUCCESSOR_PROFILE_ID = (
@@ -90,6 +95,12 @@ def main() -> None:
         raise RuntimeError("route status is not the governed A666 route")
     if route.get("native_nav_asset_id") != ASSET_ID:
         raise RuntimeError("route status native asset is not A666")
+    if route.get("settlement_asset_id") != SETTLEMENT_ASSET_ID:
+        raise RuntimeError("A666 route settlement asset is not the governed pfUSDC asset")
+    if not re.fullmatch(r"[0-9a-f]{96}", str(route.get("route_config_digest", ""))):
+        raise RuntimeError("A666 route config digest is malformed")
+    if route.get("invariant_holds") is not True:
+        raise RuntimeError("A666 route supply invariant does not hold")
     if route.get("paused") is not True:
         raise RuntimeError("A666 route must be paused before its pricing epoch advances")
     if not route["live_value_enabled"]:
@@ -172,6 +183,9 @@ def main() -> None:
         "next_route_epoch": body["next_route_epoch"],
         "next_policy": next_policy,
         "nav_per_unit": nav_per_unit,
+        "settlement_asset_id": route["settlement_asset_id"],
+        "route_config_digest": route["route_config_digest"],
+        "invariant_holds": route["invariant_holds"],
         "route_status_sha256": hashlib.sha256(args.route_status.read_bytes()).hexdigest(),
         "nav_manifest_sha256": hashlib.sha256(args.nav_manifest.read_bytes()).hexdigest(),
     }

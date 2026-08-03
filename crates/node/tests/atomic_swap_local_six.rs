@@ -7,12 +7,12 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use postfiat_crypto_provider::{
-    bytes_to_hex, hex_to_bytes, ml_dsa_65_sign, ml_dsa_65_sign_with_context_seed,
-    ML_DSA_65_ALGORITHM,
+    address_from_public_key, bytes_to_hex, hex_to_bytes, ml_dsa_65_keygen, ml_dsa_65_sign,
+    ml_dsa_65_sign_with_context_seed, ML_DSA_65_ALGORITHM,
 };
 use postfiat_execution::{
-    genesis_hash, validate_nav_reserve_collateralization_with_unit_scale,
-    validate_nav_reserve_public_values_context, NavReserveVerifyContext, NavSp1VerifyError,
+    asset_transaction_tx_id, genesis_hash, validate_nav_reserve_public_values_context,
+    NavReserveVerifyContext, NavSp1VerifyError,
 };
 use postfiat_network::{local_topology, NetworkDomain};
 use postfiat_node::{
@@ -23,10 +23,9 @@ use postfiat_node::{
     create_asset_orchard_private_primary_issue, create_asset_orchard_private_primary_issue_batch,
     create_asset_orchard_private_primary_redeem, create_asset_orchard_private_primary_redeem_batch,
     create_consensus_v2_precommit_vote, create_consensus_v2_prepare_vote,
-    create_consensus_v2_proposal_for_block, create_dev_key_file,
-    create_fastswap_governance_bootstrap, create_mempool_batch, create_transfer_batch,
-    export_signed_snapshot_from_finalized_checkpoint, export_snapshot,
-    export_snapshot_publisher_public_key, faucet_key,
+    create_consensus_v2_proposal_for_block, create_fastswap_governance_bootstrap,
+    create_mempool_batch, create_transfer_batch, export_signed_snapshot_from_finalized_checkpoint,
+    export_snapshot, export_snapshot_publisher_public_key, faucet_key,
     import_signed_snapshot_from_finalized_checkpoint, import_snapshot, init,
     sign_governance_amendment_authorization, simulate_shielded_batch,
     submit_signed_asset_transaction_json_to_mempool, verify_blocks, ApplyBatchOptions,
@@ -55,26 +54,26 @@ use postfiat_rpc_sdk::{
 use postfiat_types::{
     issued_asset_id, market_ops_asset_id, market_ops_evidence_root, market_ops_reserve_packet_hash,
     market_ops_supply_packet_hash, pftl_uniswap_return_burn_id_from_fields,
-    vault_bridge_deposit_evidence_root, vault_bridge_deposit_id,
-    vault_bridge_deposit_observation_root, vault_bridge_pftl_recipient_hash,
-    vault_bridge_source_root_for_asset, AssetCreateOperation, AssetTransactionOperation,
-    EthereumCheckpointCertificateV1, EthereumCheckpointVoteV1, EthereumExternalEventProofV1,
-    EthereumFinalizedCheckpointV1, EthereumReceiptProofV1, EthereumRouteVerificationPolicyV1,
-    FastSwapChainDomainV1, FastSwapCommitteeDomainV1, FastSwapCommitteeRootV1, FastSwapCommitteeV1,
-    FastSwapGovernanceBootstrapPayloadV1, FastSwapOpaqueHashV1, FastSwapValidatorV1, Genesis,
-    IssuedPaymentOperation, LedgerState, MarketOpsAlignmentParams, MarketOpsEnvelope,
-    MarketOpsFinalizeOperation, MarketOpsMintLimits, MarketOpsPolicyInputs,
-    MarketOpsPolicyRegisterOperation, MarketOpsPolicyRegistration, MarketOpsReserveDeployLimits,
-    MarketOpsVenueObservation, MempoolState, NavAssetRegisterOperation,
-    NavAttestorRegisterOperation, NavEpochFinalizeOperation, NavProfileRegisterOperation,
-    NavProofProfile, NavReservePublicValuesV1, NavReserveSubmitOperation,
-    PftlUniswapDestinationConsumeOperation, PftlUniswapExportDebitOperation,
-    PftlUniswapMintPacketV2, PftlUniswapOrderReleaseOperation, PftlUniswapOrderReserveOperation,
-    PftlUniswapPrimaryMarketPolicyV2, PftlUniswapPrimaryRedeemOperation,
-    PftlUniswapPrimarySubscribeV2Operation, PftlUniswapReturnImportOperation,
-    PftlUniswapRouteEpochAdvanceOperation, PftlUniswapRouteInitV2Operation,
-    PftlUniswapRoutePauseOperation, SignedAssetTransaction, SignedTransfer,
-    UnsignedAssetTransaction, UnsignedTransfer, VaultBridgeDepositAttestOperation,
+    validate_nav_reserve_collateralization_with_unit_scale, vault_bridge_deposit_evidence_root,
+    vault_bridge_deposit_id, vault_bridge_deposit_observation_root,
+    vault_bridge_pftl_recipient_hash, vault_bridge_source_root_for_asset, AssetCreateOperation,
+    AssetTransactionOperation, EthereumCheckpointCertificateV1, EthereumCheckpointVoteV1,
+    EthereumExternalEventProofV1, EthereumFinalizedCheckpointV1, EthereumReceiptProofV1,
+    EthereumRouteVerificationPolicyV1, FastSwapChainDomainV1, FastSwapCommitteeDomainV1,
+    FastSwapCommitteeRootV1, FastSwapCommitteeV1, FastSwapGovernanceBootstrapPayloadV1,
+    FastSwapOpaqueHashV1, FastSwapValidatorV1, Genesis, IssuedPaymentOperation, LedgerState,
+    MarketOpsAlignmentParams, MarketOpsEnvelope, MarketOpsFinalizeOperation, MarketOpsMintLimits,
+    MarketOpsPolicyInputs, MarketOpsPolicyRegisterOperation, MarketOpsPolicyRegistration,
+    MarketOpsReserveDeployLimits, MarketOpsVenueObservation, MempoolState,
+    NavAssetRegisterOperation, NavAttestorRegisterOperation, NavEpochFinalizeOperation,
+    NavProfileRegisterOperation, NavProofProfile, NavReserveAttestOperation,
+    NavReservePublicValuesV1, NavReserveSubmitOperation, PftlUniswapDestinationConsumeOperation,
+    PftlUniswapExportDebitOperation, PftlUniswapMintPacketV2, PftlUniswapOrderReleaseOperation,
+    PftlUniswapOrderReserveOperation, PftlUniswapPrimaryMarketPolicyV2,
+    PftlUniswapPrimaryRedeemOperation, PftlUniswapPrimarySubscribeV2Operation,
+    PftlUniswapReturnImportOperation, PftlUniswapRouteEpochAdvanceOperation,
+    PftlUniswapRouteInitV2Operation, PftlUniswapRoutePauseOperation, SignedAssetTransaction,
+    SignedTransfer, UnsignedAssetTransaction, UnsignedTransfer, VaultBridgeDepositAttestOperation,
     VaultBridgeDepositClaimOperation, VaultBridgeDepositEvidence,
     VaultBridgeDepositFinalizeOperation, VaultBridgeDepositObservation,
     VaultBridgeDepositProposeOperation, ADDRESS_NAMESPACE, ETHEREUM_CHECKPOINT_SCHEMA_V1,
@@ -83,7 +82,7 @@ use postfiat_types::{
     NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1, NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1,
     NAV_RESERVE_PUBLIC_VALUES_V1_BYTES, PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V2,
     PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT, PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY,
-    TRANSFER_TRANSACTION_KIND,
+    TRANSFER_TRANSACTION_KIND, VAULT_BRIDGE_UNIT,
 };
 use serde_json::{json, Value};
 
@@ -1119,6 +1118,33 @@ fn read_dev_key_from_env(name: &str) -> DevKeyFile {
     .unwrap_or_else(|error| panic!("parse {name} at {}: {error}", path.display()))
 }
 
+fn create_test_dev_key_file() -> DevKeyFile {
+    let key_pair = ml_dsa_65_keygen().expect("create test ML-DSA-65 key pair");
+    DevKeyFile {
+        algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        address: address_from_public_key(&key_pair.public_key),
+        public_key_hex: bytes_to_hex(&key_pair.public_key),
+        private_key_hex: bytes_to_hex(&key_pair.private_key),
+    }
+}
+
+fn write_private_dev_key_file(path: &Path, key_file: &DevKeyFile) {
+    fs::write(
+        path,
+        format!(
+            "{}\n",
+            serde_json::to_string_pretty(key_file).expect("serialize test development key")
+        ),
+    )
+    .expect("write test development key");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+            .expect("set test development key permissions");
+    }
+}
+
 fn read_raw_or_hex_from_env(name: &str) -> Vec<u8> {
     let path = required_env_path(name);
     let bytes = fs::read(&path)
@@ -1767,6 +1793,7 @@ fn spawn_services(harness: &mut Harness, topology: &Path, ports: &[u16]) -> Vec<
                 "2",
                 "--finality-retry-backoff-ms",
                 "25",
+                "--finality-quorum-early-full-propagation",
                 "--keep-alive",
             ])
             .stdout(Stdio::from(rpc_log))
@@ -1917,6 +1944,158 @@ fn submit_dev_key_asset_finality(
     label: &str,
 ) -> (u64, String, String) {
     submit_dev_key_asset_finality_observed(harness, ports, ports, signer, operation, label)
+}
+
+fn reject_dev_key_asset_finality(
+    harness: &Harness,
+    ports: &[u16],
+    signer: &DevKeyFile,
+    operation: AssetTransactionOperation,
+    label: &str,
+    expected_code: &str,
+    expected_message: &str,
+) -> (u64, String, String) {
+    assert_eq!(
+        signer.algorithm_id, ML_DSA_65_ALGORITHM,
+        "dev-key rejected asset signer algorithm"
+    );
+    let parent = status_tuple(ports[0], &format!("{label}-parent"));
+    let next_height = parent.0 + 1;
+    let proposer_json = command_json(&[
+        "block-proposer",
+        "--data-dir",
+        harness.node(0).to_str().expect("node path UTF-8"),
+        "--height",
+        &next_height.to_string(),
+        "--view",
+        "0",
+    ]);
+    let proposer_index = proposer_json["proposer"]
+        .as_str()
+        .expect("rejected asset-finality proposer")
+        .strip_prefix("validator-")
+        .expect("validator proposer prefix")
+        .parse::<usize>()
+        .expect("validator proposer index");
+    let proposer_port = ports[proposer_index];
+    let quote_response = rpc_call(
+        proposer_port,
+        &asset_fee_quote_request(
+            format!("{label}-quote"),
+            signer.address.clone(),
+            serde_json::to_string(&operation).expect("serialize rejected asset operation"),
+            None,
+        ),
+    );
+    let quote =
+        decode_asset_fee_quote_summary(&quote_response).expect("decode rejected asset quote");
+    let unsigned = UnsignedAssetTransaction {
+        chain_id: quote.chain_id,
+        genesis_hash: quote.genesis_hash,
+        protocol_version: quote.protocol_version,
+        address_namespace: ADDRESS_NAMESPACE.to_string(),
+        transaction_kind: quote.transaction_kind,
+        signature_algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        source: quote.source,
+        fee: quote.minimum_fee,
+        sequence: quote.sequence,
+        operation,
+    };
+    let private_key = hex_to_bytes(&signer.private_key_hex).expect("decode rejected asset signer");
+    let signature = ml_dsa_65_sign(&private_key, &unsigned.signing_bytes())
+        .expect("sign rejected asset transaction");
+    let signed = SignedAssetTransaction {
+        unsigned,
+        algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        public_key_hex: signer.public_key_hex.clone(),
+        signature_hex: bytes_to_hex(&signature),
+    };
+    let tx_id = asset_transaction_tx_id(&signed);
+    let response = rpc_call_raw(
+        proposer_port,
+        &RpcRequest::new(
+            format!("{label}-finality"),
+            "mempool_submit_signed_asset_transaction_finality",
+            json!({
+                "signed_asset_transaction_json": serde_json::to_string(&signed)
+                    .expect("serialize rejected asset-finality transaction")
+            }),
+        ),
+    );
+    assert!(!response.ok, "{label} unexpectedly accepted: {response:?}");
+    assert_eq!(
+        response.error.as_ref().map(|error| error.code.as_str()),
+        Some("rpc_finality_submit_failed"),
+        "{label} rejection code: {response:?}"
+    );
+    let rejection_message = &response
+        .error
+        .as_ref()
+        .expect("rejected asset finality error")
+        .message;
+    assert!(
+        rejection_message.contains(expected_code),
+        "{label} missing inner rejection code `{expected_code}`: {rejection_message}"
+    );
+    assert!(
+        rejection_message.contains(expected_message),
+        "{label} missing inner rejection message `{expected_message}`: {rejection_message}"
+    );
+
+    let rejected = status_tuple(proposer_port, &format!("{label}-rejected"));
+    assert_eq!(
+        rejected.2, parent.2,
+        "{label} rejected operation changed the state root"
+    );
+    wait_exact_six(ports, &rejected);
+    if rejected.0 == parent.0 {
+        assert_eq!(rejected, parent, "{label} admission rejection changed tip");
+        for (index, port) in ports.iter().enumerate() {
+            let receipts = rpc_call(
+                *port,
+                &receipts_request(format!("{label}-receipt-{index}"), Some(&tx_id), Some(1)),
+            );
+            assert_eq!(
+                receipts.result,
+                Some(json!([])),
+                "{label} validator {index} retained a receipt for an admission-rejected transaction"
+            );
+        }
+        return rejected;
+    }
+    assert_eq!(
+        rejected.0, next_height,
+        "{label} finalized rejection height"
+    );
+    for (index, port) in ports.iter().enumerate() {
+        let receipts = rpc_call(
+            *port,
+            &receipts_request(format!("{label}-receipt-{index}"), Some(&tx_id), Some(1)),
+        );
+        let receipts = receipts
+            .result
+            .and_then(|value| value.as_array().cloned())
+            .expect("rejected asset receipts array");
+        assert_eq!(receipts.len(), 1, "{label} validator {index} receipt count");
+        let receipt = &receipts[0];
+        assert_eq!(
+            receipt["tx_id"], tx_id,
+            "{label} validator {index} receipt tx id"
+        );
+        assert_eq!(
+            receipt["accepted"], false,
+            "{label} validator {index} receipt acceptance"
+        );
+        assert_eq!(
+            receipt["code"], expected_code,
+            "{label} validator {index} rejection code"
+        );
+        assert_eq!(
+            receipt["message"], expected_message,
+            "{label} validator {index} rejection message"
+        );
+    }
+    rejected
 }
 
 fn submit_dev_key_asset_finality_observed(
@@ -2437,6 +2616,18 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
     const A666_CIRCULATING_SUPPLY: u64 = 31_597_197_455;
     const A666_VALUATION_UNIT: &str = "USD_1E8";
     const PFUSDC_VALUATION_UNIT: &str = "USDC";
+    const A666_ROUTE_SUPPLY_CAP_ATOMS: u64 = 2_000_000_000_000;
+    const A666_PACKET_NOTIONAL_CAP_ATOMS: u64 = 250_000_000_000;
+    const A666_POLICY_CAPACITY_ATOMS: u64 = 2_000_000_000_000;
+    const A666_POLICY_MAX_ORDER_ATOMS: u64 = 1_000_000_000_000;
+    const A666_POLICY_MIN_ORDER_ATOMS: u64 = 1_000_000;
+
+    const {
+        assert!(A666_POLICY_CAPACITY_ATOMS <= A666_ROUTE_SUPPLY_CAP_ATOMS);
+        assert!(A666_PACKET_NOTIONAL_CAP_ATOMS <= A666_POLICY_MAX_ORDER_ATOMS);
+        assert!(A666_POLICY_MAX_ORDER_ATOMS <= A666_POLICY_CAPACITY_ATOMS);
+        assert!(A666_POLICY_MIN_ORDER_ATOMS <= A666_POLICY_MAX_ORDER_ATOMS);
+    }
 
     let issuer = read_dev_key_from_env("POSTFIAT_A666_ISSUER_KEY_FILE");
     let reserve_operator = read_dev_key_from_env("POSTFIAT_A666_RESERVE_KEY_FILE");
@@ -2844,6 +3035,7 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
     };
     pfusdc_bridge_evidence.deposit_id =
         vault_bridge_deposit_id(&pfusdc_bridge_evidence).expect("pfUSDC controlled deposit ID");
+    let pfusdc_vault_id = pfusdc_bridge_evidence.vault_id();
     let pfusdc_bridge_source_domain = pfusdc_bridge_evidence.source_domain();
     let pfusdc_bridge_evidence_root = vault_bridge_deposit_evidence_root(&pfusdc_bridge_evidence)
         .expect("pfUSDC controlled evidence root");
@@ -2992,18 +3184,32 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
             submitter: pfusdc_issuer.address.clone(),
             asset_id: PFUSDC_ASSET_ID.to_string(),
             epoch: 1,
-            nav_per_unit: 100_000_000,
+            nav_per_unit: VAULT_BRIDGE_UNIT,
             circulating_supply: PFUSDC_SUPPLY,
-            verified_net_assets: 2_000_000_000,
+            verified_net_assets: PFUSDC_SUPPLY,
             proof_profile: pfusdc_profile,
-            source_root: pfusdc_source_root,
+            source_root: pfusdc_source_root.clone(),
             attestor_root: "f8".repeat(48),
             reserve_packet_hash: pfusdc_packet_hash.clone(),
-            reserve_accounts: Vec::new(),
+            reserve_accounts: vec![pfusdc_vault_id],
             sp1_proof_bytes: Vec::new(),
             sp1_public_values: Vec::new(),
         }),
         "submit-pfusdc-accounting-packet",
+    );
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &holder,
+        AssetTransactionOperation::NavReserveAttest(NavReserveAttestOperation {
+            attestor: holder.address.clone(),
+            asset_id: PFUSDC_ASSET_ID.to_string(),
+            epoch: 1,
+            reserve_packet_hash: pfusdc_packet_hash.clone(),
+            pass: true,
+            observation_root: pfusdc_source_root,
+        }),
+        "attest-pfusdc-accounting-packet",
     );
     submit_dev_key_asset_finality(
         &harness,
@@ -3024,10 +3230,10 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         policy_epoch: 1,
         issue_multiplier_bps: 10_050,
         redeem_multiplier_bps: 9_995,
-        issue_capacity_atoms: 100_000_000,
-        redeem_capacity_atoms: 100_000_000,
-        max_order_atoms: 10_000_000,
-        min_order_atoms: 1,
+        issue_capacity_atoms: A666_POLICY_CAPACITY_ATOMS,
+        redeem_capacity_atoms: A666_POLICY_CAPACITY_ATOMS,
+        max_order_atoms: A666_POLICY_MAX_ORDER_ATOMS,
+        min_order_atoms: A666_POLICY_MIN_ORDER_ATOMS,
         valid_from_height: route_init_height,
         expires_at_height: route_init_height + 5_000,
         max_nav_age_blocks: 5_000,
@@ -3035,6 +3241,9 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         pricing_reserve_packet_hash: reserve_packet_hash.clone(),
     };
     policy.policy_hash = policy.computed_hash();
+    policy
+        .validate()
+        .expect("validate exact production A666 primary-market policy");
     let verification_policy = EthereumRouteVerificationPolicyV1 {
         authority_epoch: committee.domain.committee_epoch,
         committee_root: committee.domain.committee_root,
@@ -3053,33 +3262,37 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         .expect("deployed wrapped A666 code hash length"),
     };
     let route_config_digest = "a1".repeat(48);
+    let route_init_operation = PftlUniswapRouteInitV2Operation {
+        operator: A666_RESERVE_OPERATOR.to_string(),
+        route_id: ROUTE_ID.to_string(),
+        route_config_digest: route_config_digest.clone(),
+        native_nav_asset_id: A666_ASSET_ID.to_string(),
+        settlement_asset_id: PFUSDC_ASSET_ID.to_string(),
+        opening_inventory_atoms: A666_CIRCULATING_SUPPLY,
+        opening_inventory_holder: A666_RESERVE_OPERATOR.to_string(),
+        handoff_controller: HANDOFF_CONTROLLER.to_string(),
+        settlement_adapter: SETTLEMENT_ADAPTER.to_string(),
+        wrapped_navcoin_token: WRAPPED_A666.to_string(),
+        ethereum_chain_id: 1,
+        route_supply_cap_atoms: A666_ROUTE_SUPPLY_CAP_ATOMS,
+        packet_notional_cap_atoms: A666_PACKET_NOTIONAL_CAP_ATOMS,
+        latest_finalized_nav_epoch: public_values.observation_epoch,
+        return_finality_blocks: 12,
+        route_epoch: 1,
+        outbound_verification_class: PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY.to_string(),
+        return_verification_class: PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT.to_string(),
+        live_value_enabled: false,
+        ethereum_verification_policy: verification_policy.clone(),
+        primary_market_policy: policy.clone(),
+    };
+    route_init_operation
+        .validate()
+        .expect("validate exact production A666 route bounds before controlled submission");
     submit_dev_key_asset_finality(
         &harness,
         &rpc_ports,
         &reserve_operator,
-        AssetTransactionOperation::PftlUniswapRouteInitV2(PftlUniswapRouteInitV2Operation {
-            operator: A666_RESERVE_OPERATOR.to_string(),
-            route_id: ROUTE_ID.to_string(),
-            route_config_digest: route_config_digest.clone(),
-            native_nav_asset_id: A666_ASSET_ID.to_string(),
-            settlement_asset_id: PFUSDC_ASSET_ID.to_string(),
-            opening_inventory_atoms: A666_CIRCULATING_SUPPLY,
-            opening_inventory_holder: A666_RESERVE_OPERATOR.to_string(),
-            handoff_controller: HANDOFF_CONTROLLER.to_string(),
-            settlement_adapter: SETTLEMENT_ADAPTER.to_string(),
-            wrapped_navcoin_token: WRAPPED_A666.to_string(),
-            ethereum_chain_id: 1,
-            route_supply_cap_atoms: 2_000_000_000_000,
-            packet_notional_cap_atoms: 250_000_000_000,
-            latest_finalized_nav_epoch: public_values.observation_epoch,
-            return_finality_blocks: 12,
-            route_epoch: 1,
-            outbound_verification_class: PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY.to_string(),
-            return_verification_class: PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT.to_string(),
-            live_value_enabled: false,
-            ethereum_verification_policy: verification_policy.clone(),
-            primary_market_policy: policy.clone(),
-        }),
+        AssetTransactionOperation::PftlUniswapRouteInitV2(route_init_operation),
         "initialize-public-successor-a666-route",
     );
     policy.policy_epoch = 2;
@@ -3171,6 +3384,40 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         let _ = fs::remove_file(path);
     }
     ready = start_services(&mut harness, &topology_path, &rpc_ports);
+    if status_tuple(
+        rpc_ports[offline_validator],
+        "a666-partial-outage-restarted-laggard",
+    ) != finalized
+    {
+        command_output(&[
+            "rpc-catch-up-certified-delta",
+            "--data-dir",
+            harness
+                .node(offline_validator)
+                .to_str()
+                .expect("partial-outage laggard path UTF-8"),
+            "--source-host",
+            "127.0.0.1",
+            "--source-rpc-port",
+            &online_ports[0].to_string(),
+            "--expected-height",
+            &finalized.0.to_string(),
+            "--expected-block-hash",
+            &finalized.1,
+            "--expected-state-root",
+            &finalized.2,
+            "--work-dir",
+            harness
+                .root
+                .join(format!(
+                    "validator-{offline_validator}.a666-partial-outage-certified-delta"
+                ))
+                .to_str()
+                .expect("partial-outage catch-up work dir UTF-8"),
+            "--timeout-ms",
+            "90000",
+        ]);
+    }
     wait_exact_six(&rpc_ports, &finalized);
     let _transparent_issue_finalized = submit_dev_key_asset_finality(
         &harness,
@@ -3266,28 +3513,12 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         }),
         "finalize-overlay-aware-a666-public-reserve-proof",
     );
+    let route_epoch_2_policy = policy.clone();
     policy.policy_epoch = 3;
     policy.valid_from_height = finalized.0 + 1;
     policy.pricing_nav_epoch = next_public_values.observation_epoch;
     policy.pricing_reserve_packet_hash = overlay_packet_hash.clone();
     policy.policy_hash = policy.computed_hash();
-    let _overlay_route_finalized = submit_dev_key_asset_finality(
-        &harness,
-        &rpc_ports,
-        &reserve_operator,
-        AssetTransactionOperation::PftlUniswapRouteEpochAdvance(
-            PftlUniswapRouteEpochAdvanceOperation {
-                operator: A666_RESERVE_OPERATOR.to_string(),
-                route_id: ROUTE_ID.to_string(),
-                prior_route_epoch: 2,
-                next_route_epoch: 3,
-                next_route_config_digest: "a3".repeat(48),
-                live_value_enabled: true,
-                next_primary_market_policy: policy.clone(),
-            },
-        ),
-        "bind-route-to-overlay-aware-a666-public-reserve-proof",
-    );
 
     let private_mint_atoms = 1_000_000;
     let private_base_atoms = postfiat_execution::required_vault_bridge_settlement_atoms(
@@ -3346,7 +3577,21 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
 
     let export_packet_hash = "b7".repeat(48);
     let export_nonce = "b8".repeat(32);
-    let active_route_config_digest = "a3".repeat(48);
+    let active_route_config_digest = "a2".repeat(48);
+    let transparent_export_base_atoms = postfiat_execution::required_vault_bridge_settlement_atoms(
+        transparent_mint_atoms,
+        6,
+        overlay_nav_per_unit,
+        A666_VALUATION_UNIT,
+        PFUSDC_VALUATION_UNIT,
+        6,
+    )
+    .expect("derive transparent A666 export settlement from current overlay NAV");
+    let transparent_export_settlement_atoms = checked_mul_div_ceil(
+        transparent_export_base_atoms,
+        u64::from(route_epoch_2_policy.issue_multiplier_bps),
+        10_000,
+    );
     let export_digest = PftlUniswapMintPacketV2 {
         route_config_digest: active_route_config_digest.clone(),
         source_packet_hash: export_packet_hash.clone(),
@@ -3355,14 +3600,14 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         source_receipt_root: "ba".repeat(48),
         settlement_asset_id: PFUSDC_ASSET_ID.to_string(),
         native_nav_asset_id: A666_ASSET_ID.to_string(),
-        pricing_reserve_packet_hash: overlay_packet_hash.clone(),
+        pricing_reserve_packet_hash: reserve_packet_hash.clone(),
         policy_hash_commitment: postfiat_types::pftl_uniswap_keccak_commitment48(
             "policy",
-            &policy.policy_hash,
+            &route_epoch_2_policy.policy_hash,
         )
         .expect("A666 policy commitment"),
-        route_epoch: 3,
-        pricing_nav_epoch: next_public_values.observation_epoch,
+        route_epoch: 2,
+        pricing_nav_epoch: public_values.observation_epoch,
         deadline_seconds: 1_800,
         nonce: export_nonce.clone(),
         destination_chain_id: 1,
@@ -3370,7 +3615,7 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         wrapped_token: WRAPPED_A666.to_string(),
         ethereum_recipient: HOLDER_ETHEREUM.to_string(),
         mint_amount_atoms: transparent_mint_atoms,
-        settlement_value_atoms: transparent_settlement_atoms,
+        settlement_value_atoms: transparent_export_settlement_atoms,
     }
     .evm_digest()
     .expect("A666 export digest");
@@ -3386,7 +3631,7 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
             ethereum_recipient: HOLDER_ETHEREUM.to_string(),
             amount_atoms: transparent_mint_atoms,
             reservation_id: Some(transparent_reservation_id),
-            settlement_value_atoms: Some(transparent_settlement_atoms),
+            settlement_value_atoms: Some(transparent_export_settlement_atoms),
             destination_deadline_seconds: 1_800,
             refund_delay_blocks: 3,
             ethereum_packet_digest: Some(export_digest.clone()),
@@ -3428,7 +3673,7 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
     consumed_data.extend_from_slice(&[0x31; 32]);
     consumed_data.extend_from_slice(&trust_class_commitment);
     consumed_data.extend_from_slice(&ethereum_abi_u64(transparent_mint_atoms));
-    consumed_data.extend_from_slice(&ethereum_abi_u64(transparent_settlement_atoms));
+    consumed_data.extend_from_slice(&ethereum_abi_u64(transparent_export_settlement_atoms));
     let (consume_receipts_root, consume_receipt_proof) = ethereum_receipt_proof(
         controller,
         &[
@@ -3544,10 +3789,7 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
     return_checkpoint.block_hash = [0x63; 32];
     return_checkpoint.receipts_root = return_receipts_root;
     return_checkpoint.observed_head_number = return_finalized_height;
-    finalized = submit_dev_key_asset_finality(
-        &harness,
-        &rpc_ports,
-        &reserve_operator,
+    let return_import_operation =
         AssetTransactionOperation::PftlUniswapReturnImport(PftlUniswapReturnImportOperation {
             operator: A666_RESERVE_OPERATOR.to_string(),
             route_id: ROUTE_ID.to_string(),
@@ -3571,8 +3813,39 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
                 receipt_proof: return_receipt_proof,
                 log_index: 0,
             }),
-        }),
+        });
+    let _return_finalized = submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &reserve_operator,
+        return_import_operation.clone(),
         "return-wrapped-a666-to-pftl",
+    );
+    let _return_replay_rejected = reject_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &reserve_operator,
+        return_import_operation,
+        "reject-replayed-a666-ethereum-return",
+        "duplicate_pftl_uniswap_return_import",
+        "return burn event hash already exists",
+    );
+    finalized = submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &reserve_operator,
+        AssetTransactionOperation::PftlUniswapRouteEpochAdvance(
+            PftlUniswapRouteEpochAdvanceOperation {
+                operator: A666_RESERVE_OPERATOR.to_string(),
+                route_id: ROUTE_ID.to_string(),
+                prior_route_epoch: 2,
+                next_route_epoch: 3,
+                next_route_config_digest: "a3".repeat(48),
+                live_value_enabled: true,
+                next_primary_market_policy: policy.clone(),
+            },
+        ),
+        "bind-route-to-overlay-aware-a666-public-reserve-proof",
     );
 
     let transparent_redeem_atoms = 500_000;
@@ -3590,10 +3863,7 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         u64::from(policy.redeem_multiplier_bps),
         10_000,
     );
-    finalized = submit_dev_key_asset_finality(
-        &harness,
-        &rpc_ports,
-        &holder,
+    let transparent_redeem_operation =
         AssetTransactionOperation::PftlUniswapPrimaryRedeem(PftlUniswapPrimaryRedeemOperation {
             owner: holder.address.clone(),
             settlement_recipient: holder.address.clone(),
@@ -3607,8 +3877,22 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
             pricing_nav_epoch: next_public_values.observation_epoch,
             pricing_reserve_packet_hash: overlay_packet_hash.clone(),
             expires_at_height: finalized.0 + 100,
-        }),
+        });
+    let _transparent_redeem_finalized = submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &holder,
+        transparent_redeem_operation.clone(),
         "redeem-transparent-a666",
+    );
+    finalized = reject_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &holder,
+        transparent_redeem_operation,
+        "reject-duplicate-transparent-a666-redemption",
+        "pftl_uniswap_redemption_policy_mismatch",
+        "redemption expiry, policy binding, amount, or nonce is invalid",
     );
     let private_issue_action = harness.root.join("a666-private-primary-issue.json");
     let private_a666_note = harness.root.join("a666-private-a666-note.json");
@@ -3821,9 +4105,8 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
     let snapshot_dir = harness.root.join("a666-public-successor.signed-snapshot");
     let restored_dir = harness.root.join("a666-public-successor-signed-restored");
     let publisher_key_file = harness.root.join("a666-snapshot-publisher.private.json");
-    let publisher_key = create_dev_key_file().expect("create A666 snapshot publisher key");
-    postfiat_node::write_key_file(&publisher_key_file, &publisher_key)
-        .expect("write A666 snapshot publisher key");
+    let publisher_key = create_test_dev_key_file();
+    write_private_dev_key_file(&publisher_key_file, &publisher_key);
     let trusted_publisher_key_file = harness.root.join("a666-snapshot-publisher.public.json");
     let trusted_publisher =
         export_snapshot_publisher_public_key(SnapshotPublisherKeyExportOptions {
@@ -3870,6 +4153,93 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
             .source_manifest_hash,
         public_values.source_manifest_hash
     );
+
+    let report = json!({
+        "schema": "postfiat-a666-public-successor-controlled-lifecycle-v1",
+        "accepted": true,
+        "recorded_at_unix": SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("controlled report clock before epoch")
+            .as_secs(),
+        "validator_count": VALIDATORS,
+        "chain_id": A666_CHAIN_ID,
+        "asset_id": A666_ASSET_ID,
+        "successor_profile_id": A666_SUCCESSOR_PROFILE,
+        "route_id": ROUTE_ID,
+        "proof_epochs": [public_values.observation_epoch, next_public_values.observation_epoch],
+        "proof_net_assets": [public_values.verified_net_assets, next_public_values.verified_net_assets],
+        "trust": {
+            "quantity_cryptographic_per_epoch": 6,
+            "valuation_cryptographic_per_epoch": 6,
+            "attested_value_per_epoch": 0,
+            "controlled_value_per_epoch": 0
+        },
+        "lifecycle": {
+            "pfusdc_vault_propose_attest_finalize_claim": true,
+            "existing_asset_rebound_in_place": true,
+            "transparent_issue_atoms": transparent_mint_atoms,
+            "transparent_redeem_atoms": transparent_redeem_atoms,
+            "private_issue_atoms": private_mint_atoms,
+            "private_redeem_atoms": private_mint_atoms,
+            "ethereum_export_return_atoms": transparent_mint_atoms,
+            "partial_validator_outage_recovered": true,
+            "all_six_restarted": true
+        },
+        "negative_checks": {
+            "context_mutations_fail_closed": true,
+            "private_redemption_replay_rejected": true,
+            "ethereum_return_replay_rejected": true,
+            "duplicate_operation_rejected": true
+        },
+        "conservation": {
+            "a666_supply_atoms": expected_a666_supply,
+            "pfusdc_supply_atoms": PFUSDC_SUPPLY,
+            "settlement_reserve_atoms": expected_settlement_reserve,
+            "ethereum_spendable_supply_atoms": 0,
+            "outstanding_bridge_claims_atoms": 0,
+            "active_reservations": 0,
+            "export_entitlements": 0
+        },
+        "rollback": {
+            "route_epoch": 4,
+            "policy_epoch": 4,
+            "live_value_enabled": false,
+            "paused": false
+        },
+        "final_state": {
+            "height": finalized.0,
+            "tip": finalized.1,
+            "state_root": finalized.2,
+            "all_six_equal": true,
+            "verify_state_all_six": true
+        },
+        "signed_snapshot": {
+            "exported_from_finalized_checkpoint": true,
+            "private_publisher_key_excluded": true,
+            "validator_keys_excluded": true,
+            "restored": true,
+            "restored_height": restored.block_height,
+            "restored_tip": restored.block_tip_hash,
+            "restored_state_root": restored.state_root,
+            "block_history_replayed": true
+        }
+    });
+    let report_json = serde_json::to_string(&report).expect("serialize controlled report");
+    println!("A666_CONTROLLED_LIFECYCLE_REPORT={report_json}");
+    if let Some(report_file) = std::env::var_os("POSTFIAT_A666_CONTROLLED_REPORT_FILE") {
+        let report_file = PathBuf::from(report_file);
+        if let Some(parent) = report_file.parent() {
+            fs::create_dir_all(parent).expect("create controlled report directory");
+        }
+        fs::write(
+            report_file,
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&report).expect("pretty controlled report")
+            ),
+        )
+        .expect("write controlled lifecycle report");
+    }
 }
 
 #[test]

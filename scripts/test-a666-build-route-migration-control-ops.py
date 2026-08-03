@@ -18,12 +18,19 @@ ASSET_ID = (
     "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b6"
     "2d20e18555642bec32174498cbee5e2c"
 )
+SETTLEMENT_ASSET_ID = (
+    "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c2"
+    "33f6830bd5221fe2717fb6a1a7005d7b"
+)
 
 
 def route(*, paused: bool = False) -> dict[str, object]:
     return {
         "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
         "native_nav_asset_id": ASSET_ID,
+        "settlement_asset_id": SETTLEMENT_ASSET_ID,
+        "route_config_digest": "11" * 48,
+        "invariant_holds": True,
         "live_value_enabled": True,
         "paused": paused,
         "active_reservation_count": 0,
@@ -102,6 +109,27 @@ class MigrationControlTests(unittest.TestCase):
         result, _ = self.run_builder(status)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("native asset is not A666", result.stderr)
+
+    def test_wrong_settlement_asset_is_rejected(self) -> None:
+        status = route()
+        status["settlement_asset_id"] = "00" * 48
+        result, _ = self.run_builder(status)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not the governed pfUSDC asset", result.stderr)
+
+    def test_broken_supply_invariant_is_rejected(self) -> None:
+        status = route()
+        status["invariant_holds"] = False
+        result, _ = self.run_builder(status)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("supply invariant does not hold", result.stderr)
+
+    def test_malformed_route_config_digest_is_rejected(self) -> None:
+        status = route()
+        status["route_config_digest"] = "11"
+        result, _ = self.run_builder(status)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("route config digest is malformed", result.stderr)
 
     def test_stream_input_hash_binds_the_validated_bytes(self) -> None:
         temporary = tempfile.TemporaryDirectory()

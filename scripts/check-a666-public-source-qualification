@@ -1,0 +1,322 @@
+#!/usr/bin/env python3
+"""Verify the published A666 source and aggregate-proof qualification evidence."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+from typing import Any
+
+
+ROOT = Path(__file__).resolve().parents[1]
+EVIDENCE = ROOT / (
+    "docs/evidence/a666-public-reserve-product-20260803/qualification"
+)
+QUALIFICATION = ROOT / (
+    "tools/nav-reserve-proof/qualifications/a666-public-successor-20260802"
+)
+SOURCE_RECORD = EVIDENCE / "source-qualification-draft.json"
+AGGREGATE_RECORD = EVIDENCE / "aggregate-proof-comparison.json"
+EXPECTED_RESULTS = QUALIFICATION / "expected-results.json"
+MANIFEST = QUALIFICATION / "manifest.json"
+
+
+def fail(message: str) -> None:
+    raise SystemExit(f"a666 public source qualification: {message}")
+
+
+def load(path: Path) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        fail(f"cannot read {path.relative_to(ROOT)}: {error}")
+    if not isinstance(value, dict):
+        fail(f"{path.relative_to(ROOT)} must contain a JSON object")
+    return value
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def exact_map(entries: object, key: str, expected: set[str], label: str) -> dict[str, Any]:
+    if not isinstance(entries, list) or not all(isinstance(item, dict) for item in entries):
+        fail(f"{label} must be an object list")
+    by_id = {item.get(key): item for item in entries}
+    if set(by_id) != expected or len(entries) != len(expected):
+        fail(f"{label} must contain the exact duplicate-free set {sorted(expected)}")
+    return by_id
+
+
+def require_equal(actual: object, expected: object, label: str) -> None:
+    if actual != expected:
+        fail(f"{label} mismatch")
+
+
+def main() -> None:
+    source_record = load(SOURCE_RECORD)
+    aggregate = load(AGGREGATE_RECORD)
+    expected_results = load(EXPECTED_RESULTS)
+    manifest = load(MANIFEST)
+
+    require_equal(
+        source_record.get("schema"),
+        "postfiat-a666-public-reserve-source-qualification-v1",
+        "source evidence schema",
+    )
+    require_equal(
+        aggregate.get("schema"),
+        "postfiat-a666-public-reserve-aggregate-proof-comparison-v1",
+        "aggregate evidence schema",
+    )
+    require_equal(aggregate.get("status"), "accepted", "aggregate status")
+
+    identity_fields = {
+        "asset_id": "nav_asset_id",
+        "profile_id": "proof_profile_id",
+        "source_manifest_hash": "source_manifest_hash",
+        "valuation_policy_hash": "valuation_policy_hash",
+    }
+    for evidence_key, expected_key in identity_fields.items():
+        require_equal(
+            source_record.get(evidence_key),
+            expected_results.get(expected_key),
+            evidence_key,
+        )
+
+    manifest_sources = manifest.get("sources")
+    if not isinstance(manifest_sources, list):
+        fail("source manifest must contain a source list")
+    source_ids = {item.get("source_id") for item in manifest_sources if isinstance(item, dict)}
+    if len(source_ids) != 6 or None in source_ids:
+        fail("source manifest must contain exactly six unique source IDs")
+    manifest_by_id = exact_map(manifest_sources, "source_id", source_ids, "source manifest")
+    evidence_by_id = exact_map(
+        source_record.get("sources"), "source_id", source_ids, "source evidence"
+    )
+
+    bound_fields = (
+        "source_domain",
+        "adapter_kind",
+        "asset_or_position_id",
+        "reserve_owner_commitment",
+        "quantity_evidence_class",
+        "valuation_evidence_class",
+        "freshness_policy",
+        "haircut_policy_hash",
+    )
+    for source_id in sorted(source_ids):
+        governed = manifest_by_id[source_id]
+        evidence = evidence_by_id[source_id]
+        for field in bound_fields:
+            require_equal(evidence.get(field), governed.get(field), f"{source_id}.{field}")
+        require_equal(
+            evidence.get("quantity_verifier_commitment")
+            or evidence.get("quantity_and_valuation_verifier_commitment"),
+            governed.get("quantity_verifier_commitment"),
+            f"{source_id}.quantity_verifier_commitment",
+        )
+        require_equal(
+            evidence.get("valuation_verifier_commitment")
+            or evidence.get("quantity_and_valuation_verifier_commitment"),
+            governed.get("valuation_verifier_commitment"),
+            f"{source_id}.valuation_verifier_commitment",
+        )
+        if not evidence.get("liability_model"):
+            fail(f"{source_id} has no liability model")
+        if not evidence.get("adversarial_evidence"):
+            fail(f"{source_id} has no adversarial-test evidence")
+
+        epochs = exact_map(evidence.get("epochs"), "epoch", {7, 8}, f"{source_id} epochs")
+        for epoch in (7, 8):
+            input_path = QUALIFICATION / f"epoch-{epoch}/inputs/{source_id}.json"
+            input_value = load(input_path)
+            epoch_evidence = epochs[epoch]
+            require_equal(input_value.get("source_id"), source_id, f"epoch {epoch} source ID")
+            require_equal(
+                sha256(input_path), epoch_evidence.get("input_sha256"),
+                f"epoch {epoch} {source_id} input SHA-256",
+            )
+            require_equal(
+                input_value.get("gross_assets"), epoch_evidence.get("gross_assets_usd_e8"),
+                f"epoch {epoch} {source_id} gross assets",
+            )
+            require_equal(
+                input_value.get("total_liabilities"),
+                epoch_evidence.get("liabilities_usd_e8"),
+                f"epoch {epoch} {source_id} liabilities",
+            )
+            quantity_proof = input_value.get("quantity_evidence", {}).get("proof", {})
+            if not isinstance(quantity_proof, dict):
+                fail(f"epoch {epoch} {source_id} quantity proof is missing")
+            if isinstance(quantity_proof.get("chains"), list):
+                certificates = [
+                    chain.get("checkpoint_certificate")
+                    for chain in quantity_proof["chains"]
+                    if isinstance(chain, dict)
+                ]
+            else:
+                certificates = [quantity_proof.get("checkpoint_certificate")]
+            checkpoints: list[dict[str, Any]] = []
+            for certificate in certificates:
+                if not isinstance(certificate, dict):
+                    fail(f"epoch {epoch} {source_id} checkpoint certificate is missing")
+                checkpoint = certificate.get("checkpoint")
+                committee = certificate.get("committee")
+                votes = certificate.get("votes")
+                if (
+                    not isinstance(checkpoint, dict)
+                    or not isinstance(committee, dict)
+                    or not isinstance(votes, list)
+                ):
+                    fail(f"epoch {epoch} {source_id} checkpoint certificate is malformed")
+                require_equal(
+                    len(committee.get("validators", [])),
+                    source_record.get("checkpoint_committee", {}).get("validator_count"),
+                    f"epoch {epoch} {source_id} checkpoint validator count",
+                )
+                require_equal(
+                    committee.get("quorum"),
+                    source_record.get("checkpoint_committee", {}).get("quorum"),
+                    f"epoch {epoch} {source_id} checkpoint quorum",
+                )
+                require_equal(
+                    checkpoint.get("committee_root"),
+                    source_record.get("checkpoint_committee", {}).get("root"),
+                    f"epoch {epoch} {source_id} checkpoint committee",
+                )
+                require_equal(
+                    len(votes),
+                    source_record.get("checkpoint_committee", {}).get(
+                        "observed_signature_count_per_certificate"
+                    ),
+                    f"epoch {epoch} {source_id} checkpoint signature count",
+                )
+                require_equal(
+                    checkpoint.get("pftl_observation_height"),
+                    input_value.get("observed_at_block"),
+                    f"epoch {epoch} {source_id} PFTL observation height",
+                )
+                checkpoints.append(checkpoint)
+            if "quantity_source_heights" in epoch_evidence:
+                require_equal(
+                    {
+                        checkpoint.get("source_domain"): checkpoint.get("source_height")
+                        for checkpoint in checkpoints
+                    },
+                    epoch_evidence["quantity_source_heights"],
+                    f"epoch {epoch} {source_id} source heights",
+                )
+            else:
+                if len(checkpoints) != 1:
+                    fail(f"epoch {epoch} {source_id} must have one quantity checkpoint")
+                checkpoint = checkpoints[0]
+                require_equal(
+                    checkpoint.get("source_height"), epoch_evidence.get("source_height"),
+                    f"epoch {epoch} {source_id} source height",
+                )
+                require_equal(
+                    checkpoint.get("observed_source_head"),
+                    epoch_evidence.get("observed_source_head"),
+                    f"epoch {epoch} {source_id} observed source head",
+                )
+                require_equal(
+                    checkpoint.get("minimum_depth"), epoch_evidence.get("minimum_depth"),
+                    f"epoch {epoch} {source_id} minimum depth",
+                )
+            quantity_commitment = input_value.get("quantity_evidence", {}).get(
+                "evidence_commitment"
+            )
+            valuation_commitment = input_value.get("valuation_evidence", {}).get(
+                "evidence_commitment"
+            )
+            recorded_quantity = epoch_evidence.get("quantity_evidence_commitment") or (
+                epoch_evidence.get("evidence_commitment")
+            )
+            require_equal(
+                quantity_commitment, recorded_quantity,
+                f"epoch {epoch} {source_id} quantity commitment",
+            )
+            if "valuation_evidence_commitment" in epoch_evidence:
+                require_equal(
+                    valuation_commitment,
+                    epoch_evidence["valuation_evidence_commitment"],
+                    f"epoch {epoch} {source_id} valuation commitment",
+                )
+            elif source_id in {"aave-arbitrum", "hyperliquid"}:
+                require_equal(
+                    valuation_commitment, recorded_quantity,
+                    f"epoch {epoch} {source_id} combined valuation commitment",
+                )
+
+    expected_epochs = exact_map(
+        expected_results.get("epochs"), "observation_epoch", {7, 8}, "expected epochs"
+    )
+    aggregate_epochs = exact_map(aggregate.get("epochs"), "epoch", {7, 8}, "aggregate epochs")
+    aggregate_expectations = source_record.get("aggregate_expectations")
+    if not isinstance(aggregate_expectations, dict):
+        fail("aggregate expectations are missing")
+    for epoch in (7, 8):
+        expected_epoch = expected_epochs[epoch]
+        aggregate_epoch = aggregate_epochs[epoch]
+        require_equal(
+            aggregate_epoch.get("public_values_sha256"),
+            expected_epoch.get("public_values_sha256"),
+            f"epoch {epoch} aggregate public values",
+        )
+        require_equal(
+            aggregate_expectations.get(f"epoch_{epoch}_public_values_sha256"),
+            expected_epoch.get("public_values_sha256"),
+            f"epoch {epoch} source-record public values",
+        )
+        require_equal(
+            aggregate_epoch.get("verified_net_assets"),
+            expected_epoch.get("verified_net_assets"),
+            f"epoch {epoch} aggregate net assets",
+        )
+        verification_path = EVIDENCE / f"epoch-{epoch}/verification.json"
+        verification = load(verification_path)
+        require_equal(verification.get("status"), "independently_verified", f"epoch {epoch} status")
+        require_equal(verification.get("verification", {}).get("valid"), True, f"epoch {epoch} proof")
+        artifacts = verification.get("artifacts")
+        if not isinstance(artifacts, list) or len(artifacts) != 5:
+            fail(f"epoch {epoch} must inventory five proof artifacts")
+        for artifact in artifacts:
+            if not isinstance(artifact, dict) or not isinstance(artifact.get("path"), str):
+                fail(f"epoch {epoch} has an invalid artifact inventory row")
+            artifact_path = EVIDENCE / f"epoch-{epoch}" / artifact["path"]
+            require_equal(artifact_path.stat().st_size, artifact.get("size_bytes"), f"{artifact_path.name} size")
+            require_equal(sha256(artifact_path), artifact.get("sha256"), f"{artifact_path.name} SHA-256")
+
+    acceptance = aggregate.get("acceptance")
+    if not isinstance(acceptance, dict) or not all(
+        acceptance.get(field) is True
+        for field in (
+            "distinct_epochs",
+            "distinct_witnesses",
+            "distinct_proofs",
+            "distinct_public_values",
+            "independent_verification_passed",
+            "g4_complete",
+        )
+    ):
+        fail("aggregate acceptance is incomplete")
+    require_equal(acceptance.get("source_count_per_epoch"), 6, "aggregate source count")
+    require_equal(acceptance.get("quantity_cryptographic_per_epoch"), 6, "quantity trust count")
+    require_equal(acceptance.get("valuation_cryptographic_per_epoch"), 6, "valuation trust count")
+    require_equal(acceptance.get("attested_value_per_epoch"), 0, "attested value")
+    require_equal(acceptance.get("controlled_value_per_epoch"), 0, "controlled value")
+
+    print(
+        "a666_public_source_qualification=ok "
+        "sources=6 epochs=2 inputs=12 proofs=2 attested=0 controlled=0"
+    )
+
+
+if __name__ == "__main__":
+    main()

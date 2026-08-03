@@ -74,6 +74,48 @@ def atomic_write_json(path: Path, value: Any) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def create_keystore(keystore_path: Path, passphrase_file: Path) -> dict[str, Any]:
+    """Create one encrypted relay key without exposing its private material."""
+
+    password_path = secure_regular_file(passphrase_file, "passphrase file", 16 * 1024)
+    passphrase = password_path.read_text().rstrip("\r\n")
+    if len(passphrase) < 12 or len(passphrase) > 4096:
+        raise SignerFailure(
+            "signer_passphrase_invalid",
+            "keystore passphrase must contain between 12 and 4096 characters",
+        )
+    absolute = keystore_path.expanduser().resolve()
+    if absolute.exists() or absolute.is_symlink():
+        raise SignerFailure(
+            "signer_keystore_exists",
+            "refusing to replace an existing keystore path",
+        )
+    absolute.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    parent_info = absolute.parent.stat()
+    if (
+        not stat.S_ISDIR(parent_info.st_mode)
+        or parent_info.st_uid != os.getuid()
+        or parent_info.st_mode & 0o077
+    ):
+        raise SignerFailure(
+            "signer_insecure_keystore_directory",
+            "keystore directory must be owner-only",
+        )
+    account = Account.create()
+    encrypted = Account.encrypt(account.key, passphrase)
+    address = account.address.lower()
+    del account
+    del passphrase
+    atomic_write_json(absolute, encrypted)
+    return {
+        "ok": True,
+        "schema": RESPONSE_SCHEMA,
+        "op": "create-keystore",
+        "address": address,
+        "keystore_path": str(absolute),
+    }
+
+
 def secure_regular_file(path: Path, label: str, maximum_bytes: int) -> Path:
     absolute = path.expanduser().resolve()
     info = absolute.lstat()
@@ -543,6 +585,9 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command", required=True)
     daemon = subparsers.add_parser("daemon")
     daemon.add_argument("--config", type=Path, required=True)
+    create = subparsers.add_parser("create-keystore")
+    create.add_argument("--keystore", type=Path, required=True)
+    create.add_argument("--passphrase-file", type=Path, required=True)
     for command in ("status", "lock", "unlock"):
         client = subparsers.add_parser(command)
         client.add_argument("--socket", type=Path, required=True)
@@ -551,6 +596,15 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "daemon":
         serve(args.config)
+        return
+    if args.command == "create-keystore":
+        print(
+            json.dumps(
+                create_keystore(args.keystore, args.passphrase_file),
+                indent=2,
+                sort_keys=True,
+            )
+        )
         return
     request: dict[str, Any] = {"op": args.command}
     if args.command == "unlock":

@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,10 @@ ASSET_ID = (
 )
 RESERVE_OPERATOR = "pfd0c86d9084915e1fefd22eab891806397d5a5937"
 ROUTE_ID = "pftl-a666-ethereum-wA666-usdc-v1"
+SETTLEMENT_ASSET_ID = (
+    "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c2"
+    "33f6830bd5221fe2717fb6a1a7005d7b"
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -66,6 +71,12 @@ def validate_route(route: dict[str, Any]) -> None:
         raise RuntimeError("route status is not the governed A666 route")
     if route.get("native_nav_asset_id") != ASSET_ID:
         raise RuntimeError("route status native asset is not A666")
+    if route.get("settlement_asset_id") != SETTLEMENT_ASSET_ID:
+        raise RuntimeError("A666 route settlement asset is not the governed pfUSDC asset")
+    if not re.fullmatch(r"[0-9a-f]{96}", str(route.get("route_config_digest", ""))):
+        raise RuntimeError("A666 route config digest is malformed")
+    if route.get("invariant_holds") is not True:
+        raise RuntimeError("A666 route supply invariant does not hold")
     if route.get("live_value_enabled") is not True:
         raise RuntimeError("A666 route must have live value enabled before migration")
     if not isinstance(route.get("paused"), bool):
@@ -136,6 +147,9 @@ def main() -> None:
             "route_epoch": route["route_epoch"],
             "policy_epoch": route["policy_epoch"],
             "pricing_nav_epoch": route["pricing_nav_epoch"],
+            "settlement_asset_id": route["settlement_asset_id"],
+            "route_config_digest": route["route_config_digest"],
+            "invariant_holds": route["invariant_holds"],
             "active_reservation_count": route["active_reservation_count"],
             "export_entitlement_count": route["export_entitlement_count"],
         },

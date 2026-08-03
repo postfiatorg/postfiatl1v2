@@ -138,7 +138,8 @@ for EPOCH in 7 8; do
 done
 ```
 
-CPU Groth16 proof reports and calldata are added only after independent host
-verification and the exact six-validator migration rehearsal succeed. Live
-profile registration and A666 rebinding remain prohibited until the controlled
-migration gates in the canonical deprecation plan pass.
+CPU Groth16 proof reports and calldata may be published after independent host
+verification. Their publication does not authorize activation. Live profile
+registration and A666 rebinding remain prohibited until the exact
+six-validator migration and release-recovery gates in the canonical
+deprecation plan pass.

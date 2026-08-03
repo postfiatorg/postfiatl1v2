@@ -110,6 +110,50 @@ class ProofHeightPaddingTests(unittest.TestCase):
         self.assertEqual(padding.build_round_plan(784, 784, 10, "a", "b"), [])
         self.assertEqual(padding.build_round_plan(785, 784, 10, "a", "b"), [])
 
+    def test_funding_quote_covers_every_outgoing_round_conservatively(self) -> None:
+        padding = load_padding_module()
+        report = padding.validate_funding_quote(
+            {
+                "from": "pf-a",
+                "to": "pf-b",
+                "amount": 10,
+                "transaction_kind": "transparent_transfer",
+                "recipient_exists": True,
+                "sender_meets_reserve_after_transfer": True,
+                "sender_balance": 1_000,
+                "minimum_fee": 22,
+                "account_reserve": 10,
+            },
+            source="pf-a",
+            recipient="pf-b",
+            amount=10,
+            outgoing_rounds=4,
+        )
+        self.assertEqual(report["required_atoms_without_incoming_transfers"], 128)
+        self.assertEqual(report["minimum_starting_balance_atoms"], 138)
+        self.assertTrue(report["funded"])
+
+    def test_funding_quote_rejects_account_that_would_fail_mid_padding(self) -> None:
+        padding = load_padding_module()
+        with self.assertRaisesRegex(RuntimeError, "cannot fund all 4 rounds"):
+            padding.validate_funding_quote(
+                {
+                    "from": "pf-a",
+                    "to": "pf-b",
+                    "amount": 10,
+                    "transaction_kind": "transparent_transfer",
+                    "recipient_exists": True,
+                    "sender_meets_reserve_after_transfer": True,
+                    "sender_balance": 137,
+                    "minimum_fee": 22,
+                    "account_reserve": 10,
+                },
+                source="pf-a",
+                recipient="pf-b",
+                amount=10,
+                outgoing_rounds=4,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -21,12 +21,6 @@ from typing import Any
 
 
 EXPECTED_VALIDATORS = 6
-DEFAULT_REMOTE_BINARY = (
-    "/opt/postfiat/releases/pnok-private-fix-2246d25/postfiat-node"
-)
-DEFAULT_REMOTE_TOPOLOGY = (
-    "/etc/postfiat/releases/pnok-private-fix-2246d25/topology.json"
-)
 
 
 def load_rpc_helpers(script_dir: Path) -> Any:
@@ -91,6 +85,51 @@ def build_round_plan(
     return plan
 
 
+def validate_funding_quote(
+    quote: dict[str, Any],
+    *,
+    source: str,
+    recipient: str,
+    amount: int,
+    outgoing_rounds: int,
+) -> dict[str, Any]:
+    expected = {
+        "from": source,
+        "to": recipient,
+        "amount": amount,
+        "transaction_kind": "transparent_transfer",
+    }
+    if any(quote.get(field) != value for field, value in expected.items()):
+        raise RuntimeError("padding transfer quote does not match the requested transfer")
+    if quote.get("recipient_exists") is not True:
+        raise RuntimeError("padding transfer recipient account does not exist")
+    if quote.get("sender_meets_reserve_after_transfer") is not True:
+        raise RuntimeError("padding transfer sender does not meet account reserve")
+    values: dict[str, int] = {}
+    for field in ("sender_balance", "minimum_fee", "account_reserve"):
+        value = quote.get(field)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise RuntimeError(f"padding transfer quote has invalid {field}")
+        values[field] = value
+    required_atoms = outgoing_rounds * (amount + values["minimum_fee"])
+    minimum_starting_balance = required_atoms + values["account_reserve"]
+    if values["sender_balance"] < minimum_starting_balance:
+        raise RuntimeError(
+            f"padding account {source} cannot fund all {outgoing_rounds} rounds"
+        )
+    return {
+        "source": source,
+        "recipient": recipient,
+        "outgoing_rounds": outgoing_rounds,
+        "sender_balance_atoms": values["sender_balance"],
+        "minimum_fee_atoms_per_round": values["minimum_fee"],
+        "account_reserve_atoms": values["account_reserve"],
+        "required_atoms_without_incoming_transfers": required_atoms,
+        "minimum_starting_balance_atoms": minimum_starting_balance,
+        "funded": True,
+    }
+
+
 def parse_args() -> argparse.Namespace:
     script_dir = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser()
@@ -117,8 +156,16 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=script_dir / "a666-remote-sync-round.py",
     )
-    parser.add_argument("--remote-binary", default=DEFAULT_REMOTE_BINARY)
-    parser.add_argument("--remote-topology", default=DEFAULT_REMOTE_TOPOLOGY)
+    parser.add_argument(
+        "--remote-binary",
+        required=True,
+        help="exact signed release binary path installed on every validator",
+    )
+    parser.add_argument(
+        "--remote-topology",
+        required=True,
+        help="exact signed release topology path installed on every validator",
+    )
     parser.add_argument(
         "--ports",
         default="39650,39651,39652,39653,39654,39655",
@@ -185,6 +232,31 @@ def main() -> None:
         address_a,
         address_b,
     )
+    funding_preflight = []
+    for source, recipient in ((address_a, address_b), (address_b, address_a)):
+        outgoing_rounds = sum(item["source"] == source for item in plan_rounds)
+        if outgoing_rounds == 0:
+            continue
+        quote_request = rpc.request(
+            f"proof-height-padding-funding-{source}",
+            "transfer_fee_quote",
+            {"from": source, "to": recipient, "amount": args.amount},
+        )
+        quote_response = rpc.rpc_call(ports[0], quote_request, args.timeout_seconds)
+        if quote_response.get("ok") is not True:
+            raise RuntimeError(
+                f"padding funding quote failed for {source}: "
+                f"{quote_response.get('error')}"
+            )
+        funding_preflight.append(
+            validate_funding_quote(
+                quote_response["result"],
+                source=source,
+                recipient=recipient,
+                amount=args.amount,
+                outgoing_rounds=outgoing_rounds,
+            )
+        )
     plan = {
         "schema": "postfiat-a666-proof-height-padding-plan-v1",
         "execute": args.execute,
@@ -195,6 +267,7 @@ def main() -> None:
         "start_tip_hash": pre[0]["block_tip_hash"],
         "start_state_root": pre[0]["state_root"],
         "mempool_pending": 0,
+        "funding_preflight": funding_preflight,
         "rounds": plan_rounds,
     }
     write_json(args.artifact_dir / "plan.json", plan, 0o644)

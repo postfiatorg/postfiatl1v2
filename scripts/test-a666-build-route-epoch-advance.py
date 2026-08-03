@@ -16,6 +16,10 @@ ASSET_ID = (
     "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b6"
     "2d20e18555642bec32174498cbee5e2c"
 )
+SETTLEMENT_ASSET_ID = (
+    "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c2"
+    "33f6830bd5221fe2717fb6a1a7005d7b"
+)
 PROFILE_ID = (
     "f8784629ff7338002d836c1988b8e2c0f19caf448429e0eb7fdc39fa2b08f7d9a"
     "44171fc1e7239bc25e06ad833c14e91"
@@ -51,6 +55,8 @@ def route(*, paused: bool, live_value_enabled: bool = True) -> dict[str, object]
     return {
         "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
         "native_nav_asset_id": ASSET_ID,
+        "settlement_asset_id": SETTLEMENT_ASSET_ID,
+        "invariant_holds": True,
         "paused": paused,
         "live_value_enabled": live_value_enabled,
         "active_reservation_count": 0,
@@ -144,6 +150,27 @@ class RouteEpochAdvanceTests(unittest.TestCase):
         result = self.run_builder(status)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("native asset is not A666", result.stderr)
+
+    def test_wrong_settlement_asset_is_rejected(self) -> None:
+        status = route(paused=True)
+        status["settlement_asset_id"] = "00" * 48
+        result = self.run_builder(status)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not the governed pfUSDC asset", result.stderr)
+
+    def test_broken_supply_invariant_is_rejected(self) -> None:
+        status = route(paused=True)
+        status["invariant_holds"] = False
+        result = self.run_builder(status)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("supply invariant does not hold", result.stderr)
+
+    def test_malformed_route_config_digest_is_rejected(self) -> None:
+        status = route(paused=True)
+        status["route_config_digest"] = "11"
+        result = self.run_builder(status)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("route config digest is malformed", result.stderr)
 
     def test_wrong_nav_asset_is_rejected(self) -> None:
         temporary = tempfile.TemporaryDirectory()

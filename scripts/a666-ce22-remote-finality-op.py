@@ -18,12 +18,7 @@ from typing import Any
 
 
 EXPECTED_VALIDATORS = 6
-REMOTE_BINARY = (
-    "/opt/postfiat/releases/open-source-consensus-viewlock-b04c595e/postfiat-node"
-)
-REMOTE_TOPOLOGY = (
-    "/etc/postfiat/releases/open-source-consensus-viewlock-b04c595e/topology.json"
-)
+RELEASE_ID_PATTERN = r"[a-z0-9][a-z0-9.-]{0,127}"
 
 
 def load_rpc_helpers(script_dir: Path) -> Any:
@@ -56,6 +51,24 @@ def load_proposer_hosts(path: Path) -> dict[str, str]:
     return value
 
 
+def validated_release_id(remote_binary: str, remote_topology: str) -> str:
+    binary_match = re.fullmatch(
+        rf"/opt/postfiat/releases/({RELEASE_ID_PATTERN})/postfiat-node",
+        remote_binary,
+    )
+    topology_match = re.fullmatch(
+        rf"/etc/postfiat/releases/({RELEASE_ID_PATTERN})/topology\.json",
+        remote_topology,
+    )
+    if binary_match is None or topology_match is None:
+        raise RuntimeError(
+            "remote binary and topology must be absolute signed-release paths"
+        )
+    if binary_match.group(1) != topology_match.group(1):
+        raise RuntimeError("remote binary and topology name different release IDs")
+    return binary_match.group(1)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     input_group = parser.add_mutually_exclusive_group(required=True)
@@ -72,8 +85,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--node-bin", type=Path, required=True)
     parser.add_argument("--remote-runner", type=Path, required=True)
     parser.add_argument("--proposer-hosts-file", type=Path, required=True)
-    parser.add_argument("--remote-binary", default=REMOTE_BINARY)
-    parser.add_argument("--remote-topology", default=REMOTE_TOPOLOGY)
+    parser.add_argument("--remote-binary", required=True)
+    parser.add_argument("--remote-topology", required=True)
     parser.add_argument(
         "--ports",
         default="28650,28651,28652,28653,28654,28655",
@@ -87,6 +100,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    release_id = validated_release_id(args.remote_binary, args.remote_topology)
     proposer_hosts = load_proposer_hosts(args.proposer_hosts_file)
     rpc = load_rpc_helpers(Path(__file__).resolve().parent)
     ports = [int(value) for value in args.ports.split(",")]
@@ -149,6 +163,9 @@ def main() -> None:
     preflight = {
         "schema": "postfiat-a666-ce22-remote-finality-preflight-v1",
         "label": label,
+        "release_id": release_id,
+        "remote_binary": args.remote_binary,
+        "remote_topology": args.remote_topology,
         "validator_count": len(pre),
         "height": parent["block_height"],
         "block_tip_hash": parent["block_tip_hash"],
@@ -349,6 +366,9 @@ def main() -> None:
         summary = {
             "schema": "postfiat-a666-ce22-remote-finality-operation-v1",
             "execution_mode": "prewarmed_resident_worker",
+            "release_id": release_id,
+            "remote_binary": args.remote_binary,
+            "remote_topology": args.remote_topology,
             "label": label,
             "source": source,
             "transaction_kind": (
@@ -496,6 +516,9 @@ def main() -> None:
 
     summary = {
         "schema": "postfiat-a666-ce22-remote-finality-operation-v1",
+        "release_id": release_id,
+        "remote_binary": args.remote_binary,
+        "remote_topology": args.remote_topology,
         "label": label,
         "source": source,
         "transaction_kind": (

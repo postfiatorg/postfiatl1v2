@@ -14,22 +14,35 @@ completed key and silently permits it to sign again.
 The service never accepts an RPC URL or policy override from a request. A
 remote caller therefore cannot redirect signing or substitute a deployment.
 
-Create an isolated environment and an owner-only runtime policy:
+Create an isolated user environment and an owner-only runtime policy:
 
 ```bash
-python3 -m venv /opt/postfiat-signer/venv
-/opt/postfiat-signer/venv/bin/pip install -r tools/postfiat-signer/requirements.lock
+python3 -m venv /home/postfiat/.local/share/postfiat-constrained-signer/venv
+/home/postfiat/.local/share/postfiat-constrained-signer/venv/bin/pip install \
+  -r tools/postfiat-signer/requirements.lock
+install -d -m 0700 /home/postfiat/.config/postfiat-constrained-signer
 install -m 0600 deployments/a666-export-relay-mainnet-20260731/signer-policy.example.json \
-  /etc/postfiat/a666-signer.json
-/opt/postfiat-signer/venv/bin/python tools/postfiat-signer/postfiat_signer.py \
-  daemon --config /etc/postfiat/a666-signer.json
+  /home/postfiat/.config/postfiat-constrained-signer/a666-signer.json
 ```
 
-Unlock interactively without placing the passphrase in process arguments:
+Create a dedicated encrypted relay key from an owner-only passphrase file. The
+command prints only the public address and refuses to replace an existing key:
 
 ```bash
-/opt/postfiat-signer/venv/bin/python tools/postfiat-signer/postfiat_signer.py \
-  unlock --socket /run/postfiat/a666-signer.sock
+/home/postfiat/.local/share/postfiat-constrained-signer/venv/bin/python \
+  tools/postfiat-signer/postfiat_signer.py \
+  create-keystore \
+  --keystore /home/postfiat/.local/state/postfiat-constrained-signer/a666-operator.keystore.json \
+  --passphrase-file /home/postfiat/.local/state/postfiat-constrained-signer/a666-keystore.passphrase
+```
+
+Unlock without placing the passphrase in process arguments:
+
+```bash
+/home/postfiat/.local/share/postfiat-constrained-signer/venv/bin/python \
+  tools/postfiat-signer/postfiat_signer.py unlock \
+  --socket /run/user/1000/postfiat-constrained-signer/a666-signer.sock \
+  --passphrase-file /home/postfiat/.local/state/postfiat-constrained-signer/a666-keystore.passphrase
 ```
 
 The example policy's `keystore_path` is a placeholder for a Web3 Secret

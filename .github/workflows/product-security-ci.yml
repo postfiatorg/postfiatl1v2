@@ -44,6 +44,7 @@ jobs:
           scripts/test-crypto-callsite-policy
           scripts/test-proof-public-input-inventory
           scripts/check-a666-public-adapter-readiness
+          scripts/check-a666-public-source-qualification
       - name: Verify repository redaction fixtures
         run: |
           node scripts/test-navswap-redaction-check.mjs
@@ -91,6 +92,7 @@ jobs:
         run: |
           python -m pytest python/tests
           python scripts/test-a666-remote-sync-round.py
+          python scripts/test-a666-ce22-remote-finality-op.py
 
   wallet-and-proxy:
     runs-on: ubuntu-latest
@@ -116,8 +118,15 @@ jobs:
           npm audit --audit-level=moderate
           npm test
           npm run build
+          npx --no-install playwright install --with-deps chromium
+          npm run test:custody-browser
+          npm run test:public-browser
       - name: Verify provider-neutral wallet and proxy boundary
-        run: scripts/check-provider-neutral-wallet-boundary
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+          scripts/check-provider-neutral-wallet-boundary
+          scripts/test-a666-wallet-tunnels.sh
 
   open-reserve-proof-kit:
     runs-on: ubuntu-latest
@@ -279,6 +288,11 @@ jobs:
           expected_results="$qualification/expected-results.json"
           for epoch in 7 8; do
             epoch_run="$(mktemp -d)"
+            evidence="$GITHUB_WORKSPACE/docs/evidence/a666-public-reserve-product-20260803/qualification/epoch-$epoch"
+            cargo run --locked --release \
+              --manifest-path "$host_manifest" \
+              -p postfiat-reserve-proof --features sp1 -- \
+              verify --proof "$evidence/proof.bin" --elf "$rebuilt_elf"
             cargo run --locked --release \
               --manifest-path "$host_manifest" \
               -p postfiat-reserve-proof --features sp1 -- \

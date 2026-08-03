@@ -22,6 +22,10 @@ PROFILE_SCHEMA = "postfiat.reserve_derived_profile.v1"
 VERIFIER_KIND = "sp1-nav-reserve-v1"
 PUBLIC_VALUES_SCHEMA = "postfiat.nav_reserve_public_values.v1"
 PROFILE_ID_DOMAIN = "postfiat.nav_proof_profile_id.v2"
+SUCCESSOR_PROFILE_ID = (
+    "f8784629ff7338002d836c1988b8e2c0f19caf448429e0eb7fdc39fa2b08f7d9a"
+    "44171fc1e7239bc25e06ad833c14e91"
+)
 
 
 PROFILE_FIELDS: tuple[tuple[str, object], ...] = (
@@ -154,6 +158,8 @@ def main() -> None:
         raise RuntimeError("issuer key file is unavailable")
     if not re.fullmatch(r"[0-9a-f]{96}", args.expected_profile_id):
         raise RuntimeError("expected profile ID is malformed")
+    if args.expected_profile_id != SUCCESSOR_PROFILE_ID:
+        raise RuntimeError("expected profile ID differs from the fixed public successor ID")
     derived, derived_profile_sha256 = load_json(args.derived_profile)
     operation, profile_id = validate_profile(derived, args.expected_profile_id)
     profile_body = {"operation": "nav_profile_register", **operation}
