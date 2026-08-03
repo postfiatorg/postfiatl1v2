@@ -7,7 +7,7 @@
   "wrapped_token": "0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5",
   "native_nav_asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
   "driver_bin": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/wallet-proxy/navcoin-return-relay-driver.js",
-  "driver_sha256": "8c95a6ad116434c693d45ece7048ad889d3adcf81027e27cb744b9db96e85828",
+  "driver_sha256": "07a1109bdbf799ed7f836dc054a567b44d6b7a2c7848939a04507c3edd4b635b",
   "driver_args": ["run-job", "--config", "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/a666-export-relay-mainnet-20260731/return-driver-config.json", "--job-file", "{job_file}"],
   "readiness_args": ["readiness", "--config", "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/a666-export-relay-mainnet-20260731/return-driver-config.json"],
   "cwd": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724",

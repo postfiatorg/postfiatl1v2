@@ -1,9 +1,9 @@
 {
   "schema": "postfiat.constrained_signer.config.v1",
   "backend": "local_keystore",
-  "keystore_path": "/var/lib/postfiat-signer/a666-operator.keystore.json",
-  "state_path": "/var/lib/postfiat-signer/a666-idempotency.json",
-  "socket_path": "/run/postfiat/a666-signer.sock",
+  "keystore_path": "/home/postfiat/.local/state/postfiat-constrained-signer/a666-operator.keystore.json",
+  "state_path": "/home/postfiat/.local/state/postfiat-constrained-signer/a666-idempotency.json",
+  "socket_path": "/run/user/1000/postfiat-constrained-signer/a666-signer.sock",
   "chains": {
     "1": {
       "rpc_url": "https://ethereum-rpc.publicnode.com",

@@ -5,7 +5,7 @@
   "route_config_digest": "12ed00ca87e29554ce4b978da1710fffc0830767e84e62f08df257f727db953efdd89bcf6ea99f5634d6e5ea8aca2933",
   "wrapped_token": "0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5",
   "driver_bin": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/wallet-proxy/navcoin-export-relay-driver.js",
-  "driver_sha256": "1a8911bfade4a7402254d78d2cfb65f7609447fcc50b905ffec45ef1eb1c588f",
+  "driver_sha256": "626b031435a4aba4f487023fa208231278e53ee34a29c1bd9506f055260c4ccc",
   "driver_args": ["run-job", "--config", "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/a666-export-relay-mainnet-20260731/driver-config.json", "--job-file", "{job_file}"],
   "inspect_args": ["inspect", "--config", "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/a666-export-relay-mainnet-20260731/driver-config.json", "--packet-hash", "{packet_hash}", "--packet-digest", "{packet_digest}", "--ethereum-recipient", "{ethereum_recipient}", "--amount-atoms", "{amount_atoms}"],
   "readiness_args": ["readiness", "--config", "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/a666-export-relay-mainnet-20260731/driver-config.json"],

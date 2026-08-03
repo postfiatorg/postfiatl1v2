@@ -12,7 +12,7 @@
   "source_packet_marker": "a666/export-packet-before-proof.json",
   "repo": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724",
   "proof_script": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-mainnet-prove-wallet-export.sh",
-  "proof_script_sha256": "8d5d86190f345447e654168e39b1f2f2e5e7aa1572a3daf2df773c8432e7802a",
+  "proof_script_sha256": "beb59c698a9b8b0f9d9ea8527748657383b05ef627d95d7a1bfe273a37ccebc3",
   "accept_script": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-mainnet-accept-and-mint.py",
   "accept_script_sha256": "2aacaf6d2606c9997b6c88b5e3d1028e710ca63dec1e483eed9be7030f62622d",
   "checkpoint_script": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-mainnet-advance-pftl-checkpoint.py",
@@ -20,6 +20,7 @@
   "destination_script": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-mainnet-record-destination-consume.sh",
   "destination_script_sha256": "c9889751b26cdf57b7bfacd91d6776017d6c715c63b190a92f1f387c7015d427",
   "node_binary": "/opt/postfiat/releases/resident-local-commit-777faa0/postfiat-node",
+  "node_binary_sha256": "0d47fc2ce57b8f5cdbcda2db1a406eb90d9d7b2c1bebe974a347de2d8d104291",
   "cast_binary": "/home/postfiat/.foundry/bin/cast",
   "ethereum_rpc": "https://ethereum-rpc.publicnode.com",
   "validator2_host": "66.42.48.39",
@@ -29,7 +30,8 @@
   "a100_prover_sha256": "6fb18b08338f1eff651cf11e26e180d8f0964cb761d7339a2316b1984180307e",
   "a100_elf": "/workspace/a666-acceptance/witness/deployed-program-004e44.elf",
   "a100_elf_sha256": "495e46273337ce4ff035177825a605cc389ad82c05ead11d4874e349ba22cc3a",
-  "signer_socket": "/run/postfiat/a666-signer.sock",
-  "signer_policy_hash": "9b4b300c2859901f25f58a79546461280c316f8a7015f50f46fd28a30fb3afe4",
-  "signer_address": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0"
+  "signer_socket": "/run/user/1000/postfiat-constrained-signer/a666-signer.sock",
+  "signer_policy_hash": "f1565acdedf89eee0ff745502ebe10c1e99eccc0dd3b0e7120c77c37006f0a5b",
+  "signer_address": "0xe01eaf76f155b2759402b39fe126b5a81655f424",
+  "signer_minimum_balance_wei": "10000000000000000"
 }

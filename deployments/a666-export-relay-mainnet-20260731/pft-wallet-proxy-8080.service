@@ -1,7 +1,7 @@
 [Unit]
 Description=PFT A666 wallet proxy and proof-backed Ethereum pfUSDC bridge
-After=network-online.target
-Wants=network-online.target
+After=network-online.target pft-a666-wallet-tunnels.service
+Wants=network-online.target pft-a666-wallet-tunnels.service
 
 [Service]
 Type=simple

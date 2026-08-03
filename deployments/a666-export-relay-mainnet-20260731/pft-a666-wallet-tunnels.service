@@ -1,0 +1,16 @@
+[Unit]
+Description=PFT A666 restart-managed wallet RPC and private-swap tunnels
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/postfiat/repos/a666-eth-fast-lane-combined-20260724
+EnvironmentFile=/home/postfiat/.config/postfiat/a666-wallet-tunnels.env
+ExecStart=/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/start-a666-wallet-tunnels.sh
+Restart=always
+RestartSec=3s
+KillMode=control-group
+
+[Install]
+WantedBy=default.target

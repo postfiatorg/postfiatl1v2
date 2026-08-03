@@ -16,6 +16,7 @@
   "return_import_script_sha256": "b162c7d61714116a7ae9649877d5e57a4a588220f6ca6d4e2cd0e24b174d2b3c",
   "python": "/usr/bin/python3",
   "node_binary": "/opt/postfiat/releases/a666-variable-nav-9ffdfb6/postfiat-node",
+  "node_binary_sha256": "fb3cb3d21ff677269baada047445a6372a2caf415c2710a5c987872f85ecb94b",
   "cast_binary": "/home/postfiat/.foundry/bin/cast",
   "ethereum_rpc": "https://ethereum-rpc.publicnode.com",
   "validator2_host": "66.42.48.39",

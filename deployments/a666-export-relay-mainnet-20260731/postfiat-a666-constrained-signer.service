@@ -6,16 +6,26 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/home/postfiat/repos/a666-eth-fast-lane-combined-20260724
-ExecStart=/opt/postfiat-signer/venv/bin/python tools/postfiat-signer/postfiat_signer.py daemon --config /etc/postfiat/a666-signer.json
+ExecStart=/home/postfiat/.local/share/postfiat-constrained-signer/venv/bin/python tools/postfiat-signer/postfiat_signer.py daemon --config /home/postfiat/.config/postfiat-constrained-signer/a666-signer.json
 Restart=always
 RestartSec=3s
 MemoryMax=2G
 UMask=0077
+RuntimeDirectory=postfiat-constrained-signer
+RuntimeDirectoryMode=0700
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/run/postfiat /var/lib/postfiat-signer
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RemoveIPC=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+ReadWritePaths=/home/postfiat/.local/state/postfiat-constrained-signer
 
 [Install]
 WantedBy=default.target

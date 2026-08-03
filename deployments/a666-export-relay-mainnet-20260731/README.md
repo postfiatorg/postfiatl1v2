@@ -36,7 +36,15 @@ curl -ksS https://127.0.0.1:5173/api/navcoin/pftl-a666-ethereum-wA666-usdc-v1/ex
 
 `ready:true` requires the live PFTL invariant, correct Ethereum chain/contracts/vkey, unpaused minting, pinned remote prover binary and ELF, and an unlocked PostFiat constrained signer whose committed policy permits the verifier and controller for this exact route digest.
 
-Install `postfiat-a666-constrained-signer.service` from this directory with the owner-only policy described in `tools/postfiat-signer/README.md`. The signer intentionally fails closed after a restart. An operator must unlock its encrypted keystore; the relay never stores the passphrase or private key. Readiness blocks all PFTL value movement before a user begins if the signer is locked, on the wrong chain, or running a policy whose hash, address, route, contract, or selector differs from the deployment pins.
+Install `postfiat-a666-constrained-signer.service` from this directory as a
+user service with the owner-only policy described in
+`tools/postfiat-signer/README.md`. Its socket lives in the private user runtime
+directory and the export driver passes that exact path to every proof harness.
+The signer intentionally fails closed after a restart. An operator must unlock
+its encrypted keystore; the relay never stores the passphrase or private key.
+Readiness blocks all PFTL value movement before a user begins if the signer is
+locked, unfunded, on the wrong chain, or running a policy whose hash, address,
+route, contract, or selector differs from the deployment pins.
 
 ## Recovery
 
