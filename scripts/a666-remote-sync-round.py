@@ -23,6 +23,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--topology", type=Path, required=True)
     parser.add_argument("--key-file", type=Path, required=True)
     parser.add_argument("--signed-file", type=Path, required=True)
+    parser.add_argument(
+        "--transaction-kind",
+        choices=("asset", "transfer"),
+        default="asset",
+    )
     parser.add_argument("--artifact-dir", type=Path, required=True)
     parser.add_argument("--height", type=int, required=True)
     parser.add_argument("--view", type=int, default=0)
@@ -36,6 +41,16 @@ def main() -> None:
     args = parse_args()
     signed = json.loads(args.signed_file.read_text())
     signed_json = json.dumps(signed, separators=(",", ":"))
+    signed_flag = (
+        "--signed-transfer-file"
+        if args.transaction_kind == "transfer"
+        else "--signed-asset-transaction-json"
+    )
+    signed_value = (
+        str(args.signed_file)
+        if args.transaction_kind == "transfer"
+        else signed_json
+    )
     command = [
         str(args.node_bin),
         "transport-peer-certified-mempool-round",
@@ -48,8 +63,8 @@ def main() -> None:
         str(args.key_file),
         "--proposal-key-file",
         str(args.key_file),
-        "--signed-asset-transaction-json",
-        signed_json,
+        signed_flag,
+        signed_value,
         "--artifact-dir",
         str(args.artifact_dir),
         "--height",

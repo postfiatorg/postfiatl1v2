@@ -58,7 +58,16 @@ def load_proposer_hosts(path: Path) -> dict[str, str]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ops-file", type=Path, required=True)
+    input_group = parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument("--ops-file", type=Path)
+    input_group.add_argument(
+        "--transfer-spec-file",
+        type=Path,
+        help=(
+            "JSON object with label, from, to, amount, and key_file for one "
+            "native PFT transfer"
+        ),
+    )
     parser.add_argument("--artifact-dir", type=Path, required=True)
     parser.add_argument("--node-bin", type=Path, required=True)
     parser.add_argument("--remote-runner", type=Path, required=True)
@@ -87,17 +96,47 @@ def main() -> None:
         raise RuntimeError(f"artifact directory already exists: {args.artifact_dir}")
     args.artifact_dir.mkdir(parents=True, mode=0o700)
 
-    payload = json.loads(args.ops_file.read_text())
-    operations = payload.get("operations")
-    if not isinstance(operations, list) or len(operations) != 1:
-        raise RuntimeError("ops file must contain exactly one operation")
-    item = operations[0]
-    label = item["label"]
+    transaction_kind = "asset"
+    transfer_spec: dict[str, Any] | None = None
+    if args.ops_file is not None:
+        payload = json.loads(args.ops_file.read_text())
+        operations = payload.get("operations")
+        if not isinstance(operations, list) or len(operations) != 1:
+            raise RuntimeError("ops file must contain exactly one operation")
+        item = operations[0]
+        label = item["label"]
+        source = item["source"]
+        key_file = Path(item["key_file"])
+        operation = item["operation"]
+    else:
+        transaction_kind = "transfer"
+        transfer_spec = json.loads(args.transfer_spec_file.read_text())
+        if not isinstance(transfer_spec, dict) or set(transfer_spec) != {
+            "label",
+            "from",
+            "to",
+            "amount",
+            "key_file",
+        }:
+            raise RuntimeError(
+                "transfer spec must contain exactly label, from, to, amount, and key_file"
+            )
+        label = transfer_spec["label"]
+        source = transfer_spec["from"]
+        key_file = Path(transfer_spec["key_file"])
+        operation = None
+        if (
+            not isinstance(transfer_spec["to"], str)
+            or not transfer_spec["to"]
+            or not isinstance(transfer_spec["amount"], int)
+            or isinstance(transfer_spec["amount"], bool)
+            or transfer_spec["amount"] <= 0
+        ):
+            raise RuntimeError("transfer spec has an invalid recipient or amount")
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", label):
         raise RuntimeError("operation label is not a safe remote path component")
-    source = item["source"]
-    key_file = Path(item["key_file"])
-    operation = item["operation"]
+    if not isinstance(source, str) or not source:
+        raise RuntimeError("operation source must be a non-empty string")
     if not key_file.is_file():
         raise RuntimeError(f"declared signing key does not exist: {key_file}")
 
@@ -127,25 +166,37 @@ def main() -> None:
     }
     rpc.write_json(args.artifact_dir / "preflight-fleet.json", preflight, 0o644)
 
-    quote_request = rpc.request(
-        f"{label}-quote",
-        "asset_fee_quote",
-        {
+    if transaction_kind == "transfer":
+        assert transfer_spec is not None
+        quote_method = "transfer_fee_quote"
+        quote_params = {
+            "from": source,
+            "to": transfer_spec["to"],
+            "amount": transfer_spec["amount"],
+        }
+    else:
+        quote_method = "asset_fee_quote"
+        quote_params = {
             "source": source,
             "operation_json": json.dumps(operation, separators=(",", ":")),
-        },
-    )
+        }
+    quote_request = rpc.request(f"{label}-quote", quote_method, quote_params)
     quote_response = rpc.rpc_call(ports[0], quote_request, args.timeout_seconds)
     rpc.write_json(args.artifact_dir / "quote.request.json", quote_request, 0o644)
     rpc.write_json(args.artifact_dir / "quote.response.json", quote_response, 0o644)
     if quote_response.get("ok") is not True:
-        raise RuntimeError(f"asset fee quote failed: {quote_response.get('error')}")
+        raise RuntimeError(f"fee quote failed: {quote_response.get('error')}")
     quote_file = args.artifact_dir / "quote.result.json"
     rpc.write_json(quote_file, quote_response["result"], 0o644)
+    sign_command = (
+        "wallet-sign-transfer"
+        if transaction_kind == "transfer"
+        else "wallet-sign-asset-transaction"
+    )
     signed_raw = run(
         [
             str(args.node_bin),
-            "wallet-sign-asset-transaction",
+            sign_command,
             "--key-file",
             str(key_file),
             "--quote-file",
@@ -191,6 +242,10 @@ def main() -> None:
     remote_runner = "/usr/local/sbin/a666-remote-sync-round.py"
 
     if args.resident_manifest is not None:
+        if transaction_kind != "asset":
+            raise RuntimeError(
+                "resident-manifest execution is not implemented for native transfers"
+            )
         resident_manifest = json.loads(args.resident_manifest.read_text())
         if resident_manifest.get("schema") != "postfiat.a666.resident_round_manifest.v1":
             raise RuntimeError("resident round manifest schema mismatch")
@@ -296,7 +351,11 @@ def main() -> None:
             "execution_mode": "prewarmed_resident_worker",
             "label": label,
             "source": source,
-            "transaction_kind": signed["unsigned"]["transaction_kind"],
+            "transaction_kind": (
+                signed["unsigned"]["transaction_kind"]
+                if transaction_kind == "asset"
+                else "transfer"
+            ),
             "tx_id": None,
             "accepted": resident_summary["accepted"],
             "confirmed": resident_summary["confirmed"],
@@ -360,6 +419,8 @@ def main() -> None:
         key_path,
         "--signed-file",
         remote_signed,
+        "--transaction-kind",
+        transaction_kind,
         "--artifact-dir",
         remote_artifacts,
         "--height",
@@ -437,7 +498,11 @@ def main() -> None:
         "schema": "postfiat-a666-ce22-remote-finality-operation-v1",
         "label": label,
         "source": source,
-        "transaction_kind": signed["unsigned"]["transaction_kind"],
+        "transaction_kind": (
+            signed["unsigned"]["transaction_kind"]
+            if transaction_kind == "asset"
+            else "transfer"
+        ),
         "tx_id": full_report["submitted_tx_id"],
         "accepted": True,
         "confirmed": True,

@@ -88,7 +88,9 @@ jobs:
       - name: Python SDK and operations regressions
         env:
           PYTHONPATH: python
-        run: python -m pytest python/tests
+        run: |
+          python -m pytest python/tests
+          python scripts/test-a666-remote-sync-round.py
 
   wallet-and-proxy:
     runs-on: ubuntu-latest
