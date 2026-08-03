@@ -1235,7 +1235,7 @@ Repository and pushed implementation tip at this update:
 ```text
 repository: /home/postfiat/repos/a666-eth-fast-lane-combined-20260724
 branch: feature/pnok-private-fix
-implementation tip: fc8fd9c9d4c637c8b2a3ef65365e6c1729a47849
+implementation tip: 5240007916154fcfdbe10e7360c977cd82d06bac
 note: canonical-plan status commits follow this implementation tip
 remote: origin/feature/pnok-private-fix
 ```
@@ -1259,9 +1259,11 @@ f335d94 Exercise A666 migration against deployed route identity
 f451132 Add fail-closed A666 proof height advancement
 dac5c97 Bind A666 lifecycle receipts to deployed addresses
 fc8fd9c Rehearse A666 overlay-aware reserve migration
+5240007 Preserve A666 private archive replay
 ```
 
-The worktree has no tracked modification at this checkpoint. It still contains
+The worktree has no tracked modification after the implementation commit at
+this checkpoint. It still contains
 large pre-existing untracked deployment, evidence, and scratch trees. Never
 use `git add .`, bulk clean, reset, or delete those paths. Stage only named,
 reviewed files.
@@ -1410,11 +1412,13 @@ independently verified proofs.
 
 ### 10.5 CI and live-state truth
 
-Product-security CI run `30775838743` covers implementation tip `fc8fd9c` and
-was in progress at this update. A current branch-tip run, including subsequent
-canonical-plan status commits, must also complete green before any release or
-live migration. Older runs cancelled after replacement tips were pushed are
-not evidence for the current tip. The
+Product-security CI run `30776245625` completed green for predecessor tip
+`616b2e0`. Exact implementation-tip run `30778161599` was queued for
+`5240007` at this update. It must complete green before any release or live
+migration. A subsequent canonical-plan-only status commit does not replace
+the required implementation-tip evidence, but its own branch-tip workflow
+must also remain green. Older runs cancelled after replacement tips were
+pushed are not evidence for the current tip. The
 official Ethereum fork job may accurately record that no mainnet RPC secret is
 configured; that skipped real-value assertion is not source qualification.
 
@@ -1445,6 +1449,45 @@ The fresh artifacts and long fuzz campaign materially advance `G3` and
 `qualified=0/6` until source-by-source deployment, freshness,
 reconciliation, proof, and independent reproduction evidence is reviewed.
 
+### 10.6 Current candidate archive replay qualification
+
+Before staging a validator release, the optimized candidate was replayed
+offline against a copied, signed height-776 validator snapshot. No live
+validator file or process was changed. The first candidate exposed two exact
+historical compatibility defects:
+
+- generic NAVCoin receipt wording had changed the persisted A666 receipt
+  message at height 378; and
+- 31 accepted private-primary issue/redeem batches at heights 483 through 527
+  were absent from the archive execution allowlist introduced after those
+  blocks finalized.
+
+Commit `5240007` preserves the original receipt wording only for the deployed
+`pftl-a666-ethereum-wA666-usdc-v1` route and keeps provider-neutral wording for
+new routes. It also adds only the certificate-bound `(height, batch ID,
+direction)` tuples for the missing historical actions. The allowlist does not
+accept a receipt or bypass execution: replay still verifies the complete
+proof, route policy, capacity, supply, nullifier, batch, state-root, and
+persisted-receipt transition. Wrong height, batch ID, chain, or direction
+still rejects.
+
+The rebuilt optimized candidate then replayed the complete copied archive:
+
+```text
+verified: true
+block_count: 776
+tip_hash: 3be5a881e124e71c6b2704fffbeb95b874205b8bd85d26ad29b60307596727f967aebc2bfd496e7d87b0835bdb6766c9
+state_root: 10dfb17b640a69749ca4b00d66b9e0141fa33644df6bcd8f7008f85f4501a42424681edaf25a3fd0111cc55492b256f9
+```
+
+The focused allowlist and receipt-message regressions pass, as do formatting,
+the proof public-input inventory, crypto callsite policy, and public-adapter
+readiness gates. A full 254-test node library run reached the final unrelated
+legacy swap-proof test with every completed test passing; that single
+CPU-intensive test was stopped to avoid delaying the active aggregate reserve
+proof. It is not counted as a full-suite pass. The exact 776-block archive
+replay is the release-compatibility evidence for this change.
+
 ## 11. Current continuation actions
 
 Execute in this order:
@@ -1452,9 +1495,9 @@ Execute in this order:
 1. Preserve and monitor
    `pft-a666-public-reserve-proof-epoch7-retry1-bounded`; do not start another
    high-memory proof concurrently.
-2. Require implementation CI run `30775838743` for `fc8fd9c` and a current
-   branch-tip run to finish green. Fix any failure, commit, push, and require
-   the replacement exact-tip run to pass.
+2. Require exact implementation CI run `30778161599` for `5240007` and the
+   current branch-tip run to finish green. Fix any failure, commit, push, and
+   require the replacement exact-tip run to pass.
 3. When epoch 7 completes, independently run `packet verify`, compare the
    public values byte-for-byte with the committed epoch-7 pins, hash every
    proof artifact, and retain the supervised service result.
