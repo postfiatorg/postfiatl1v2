@@ -2596,12 +2596,12 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
     finalized = status_tuple(rpc_ports[0], "a666-after-fastswap-bootstrap");
     wait_exact_six(&rpc_ports, &finalized);
 
-    const PFUSDC_ASSET_ID: &str = "02c46a36cd922fba2477d94475e80b97afc020340e195acdbb5d98fdd17741764406218a9e42ffbcfe7a403cc7005d7b";
+    const PFUSDC_ASSET_ID: &str = "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b";
     const ROUTE_ID: &str = "pftl-a666-ethereum-wA666-usdc-v1";
-    const HANDOFF_CONTROLLER: &str = "0x1111111111111111111111111111111111111111";
-    const SETTLEMENT_ADAPTER: &str = "0x2222222222222222222222222222222222222222";
-    const WRAPPED_A666: &str = "0x3333333333333333333333333333333333333333";
-    const HOLDER_ETHEREUM: &str = "0x4444444444444444444444444444444444444444";
+    const HANDOFF_CONTROLLER: &str = "0x9a0262c0572fb4db08765408eb225e207f40c3d9";
+    const SETTLEMENT_ADAPTER: &str = "0x9a0262c0572fb4db08765408eb225e207f40c3d9";
+    const WRAPPED_A666: &str = "0xee4c92edb03efdd9b519339edc19ad70c69a9be5";
+    const HOLDER_ETHEREUM: &str = "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0";
     const PFUSDC_SUPPLY: u64 = 20_000_000;
 
     assert_eq!(
@@ -2634,7 +2634,7 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
             code: "PFUSDC".to_string(),
             version: 1,
             precision: 6,
-            display_name: "Ethereum-vault-backed pfUSDC".to_string(),
+            display_name: "proof-native pfUSDC".to_string(),
             max_supply: Some(1_000_000_000_000_000),
             requires_authorization: false,
             freeze_enabled: true,
@@ -2761,8 +2761,18 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         authority_epoch: committee.domain.committee_epoch,
         committee_root: committee.domain.committee_root,
         minimum_confirmations: 12,
-        handoff_controller_code_hash: [0x71; 32],
-        wrapped_navcoin_code_hash: [0x72; 32],
+        handoff_controller_code_hash: hex_to_bytes(
+            "4c62b7d8b3a7928fd9667445f8fd68b3336ba0ec9a8f3e59b463b684fe6ceaaf",
+        )
+        .expect("decode deployed handoff controller code hash")
+        .try_into()
+        .expect("deployed handoff controller code hash length"),
+        wrapped_navcoin_code_hash: hex_to_bytes(
+            "671ee905050e2965995a8c6db8b05e4c2f30bd690eeff55093c03f9722be66b0",
+        )
+        .expect("decode deployed wrapped A666 code hash")
+        .try_into()
+        .expect("deployed wrapped A666 code hash length"),
     };
     let route_config_digest = "a1".repeat(48);
     submit_dev_key_asset_finality(
@@ -2781,8 +2791,8 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
             settlement_adapter: SETTLEMENT_ADAPTER.to_string(),
             wrapped_navcoin_token: WRAPPED_A666.to_string(),
             ethereum_chain_id: 1,
-            route_supply_cap_atoms: 1_000_000_000_000_000,
-            packet_notional_cap_atoms: 10_000_000,
+            route_supply_cap_atoms: 2_000_000_000_000,
+            packet_notional_cap_atoms: 250_000_000_000,
             latest_finalized_nav_epoch: public_values.observation_epoch,
             return_finality_blocks: 12,
             route_epoch: 1,
