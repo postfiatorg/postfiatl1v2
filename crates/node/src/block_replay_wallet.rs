@@ -580,6 +580,9 @@ const WAN_DEVNET2_ARCHIVED_REJECTED_PRIVATE_PRIMARY_ISSUE:
 // still performs the complete proof, policy, capacity, supply, nullifier, and
 // state-root validation; these tuples only authorize entering that normal
 // deterministic transition for the historical batch at its committed height.
+// Retained as the immutable historical compatibility record; consumed by the
+// AR-10 allowlist-exactness regression in test builds only.
+#[allow(dead_code)]
 const WAN_DEVNET2_ARCHIVED_PRIVATE_PRIMARY_ISSUES: &[(u64, &str)] = &[
     (
         378,
@@ -667,6 +670,7 @@ const WAN_DEVNET2_ARCHIVED_PRIVATE_PRIMARY_ISSUES: &[(u64, &str)] = &[
     ),
 ];
 
+#[allow(dead_code)]
 const WAN_DEVNET2_ARCHIVED_PRIVATE_PRIMARY_REDEEMS: &[(u64, &str)] = &[
     (
         407,
@@ -823,6 +827,7 @@ fn archived_wan_devnet2_rejected_private_primary_issue_allowed(
         && block.header.batch_id == batch_id
 }
 
+#[allow(dead_code)]
 pub(super) fn archived_wan_devnet2_private_primary_execution_allowed(
     genesis: &Genesis,
     height: u64,

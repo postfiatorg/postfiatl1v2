@@ -4565,9 +4565,18 @@ fn a666_successor_lifecycle_from_network(
             expected_a666_supply,
             "validator {index} A666 supply conservation"
         );
+        // pfUSDC legitimately ends the lifecycle split across transparent
+        // trustlines, route settlement custody (reserve plus non-NAV
+        // spread), and the AssetOrchard shielded pool, so conservation is
+        // asserted over global custody (AR-11).
+        let shielded_state: postfiat_types::ShieldedState = serde_json::from_slice(
+            &fs::read(harness.node(index).join("shielded.json"))
+                .expect("read finalized A666 lifecycle shielded state"),
+        )
+        .expect("parse finalized A666 lifecycle shielded state");
         assert_eq!(
-            postfiat_execution::issued_asset_supply(&ledger, PFUSDC_ASSET_ID)
-                .expect("final pfUSDC issued supply"),
+            postfiat_node::global_issued_asset_supply(&ledger, &shielded_state, PFUSDC_ASSET_ID)
+                .expect("final pfUSDC global issued supply"),
             PFUSDC_SUPPLY,
             "validator {index} pfUSDC supply conservation"
         );

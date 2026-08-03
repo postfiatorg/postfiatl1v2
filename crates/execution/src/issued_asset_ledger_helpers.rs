@@ -690,7 +690,25 @@ pub fn issued_asset_supply(
                 0
             };
             let settlement_reserve = if route.settlement_asset_id == asset_id {
-                route.settlement_reserve_atoms
+                // Accumulated non-NAV spread is live settlement-asset custody
+                // alongside the subscription-funded reserve (AR-11).
+                let spread = route
+                    .v2
+                    .as_ref()
+                    .map(|v2| v2.non_nav_spread_atoms)
+                    .unwrap_or(0);
+                route
+                    .settlement_reserve_atoms
+                    .checked_add(spread)
+                    .ok_or_else(|| {
+                        (
+                            "issued_supply_overflow",
+                            format!(
+                                "issued asset settlement custody overflowed for route `{}`",
+                                route.route_id
+                            ),
+                        )
+                    })?
             } else {
                 0
             };

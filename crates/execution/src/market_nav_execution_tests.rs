@@ -6325,6 +6325,88 @@ fn pftl_uniswap_v2_state_binds_directional_trust_capacity_and_non_nav_spread() {
         .contains("TRUSTLESS_FINALITY"));
 }
 
+/// AR-11: accumulated non-NAV spread is real settlement-asset custody and
+/// must be counted by the issued-asset supply inventory. Before the fix the
+/// route custody accumulator counted the settlement reserve but silently
+/// dropped `non_nav_spread_atoms`, so every subscription leaked its spread
+/// out of supply conservation (accelerated lifecycle run 3, 2026-08-03,
+/// 14_369 atoms unaccounted).
+#[test]
+fn ar11_issued_asset_supply_counts_non_nav_spread_custody() {
+    let settlement_asset_id = "95".repeat(48);
+    let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        policy_hash: String::new(),
+        policy_epoch: 1,
+        issue_multiplier_bps: PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS,
+        redeem_multiplier_bps: PFTL_UNISWAP_A666_REDEEM_MULTIPLIER_BPS,
+        issue_capacity_atoms: 2_000_000_000_000,
+        redeem_capacity_atoms: 2_000_000_000_000,
+        max_order_atoms: 1_000_000_000_000,
+        min_order_atoms: 1_000_000,
+        valid_from_height: 10,
+        expires_at_height: 1_000,
+        max_nav_age_blocks: 100,
+        pricing_nav_epoch: 7,
+        pricing_reserve_packet_hash: "92".repeat(48),
+    };
+    policy.policy_hash = policy.computed_hash();
+    let route = PftlUniswapConsensusRouteState {
+        route_id: "ar11-spread-custody".to_string(),
+        route_family: PFTL_UNISWAP_ROUTE_FAMILY_PRIMARY_MINT.to_string(),
+        route_config_digest: "93".repeat(48),
+        route_trust_class: PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT.to_string(),
+        native_nav_asset_id: "94".repeat(48),
+        settlement_asset_id: settlement_asset_id.clone(),
+        handoff_controller: "0x1111111111111111111111111111111111111111".to_string(),
+        settlement_adapter: "0x2222222222222222222222222222222222222222".to_string(),
+        wrapped_navcoin_token: "0x3333333333333333333333333333333333333333".to_string(),
+        ethereum_chain_id: 1,
+        route_supply_cap_atoms: 2_000_000_000_000,
+        packet_notional_cap_atoms: 250_000_000_000,
+        latest_finalized_nav_epoch: 7,
+        return_finality_blocks: 12,
+        live_value_enabled: true,
+        ethereum_verification_policy: None,
+        authorized_valid_supply_atoms: 0,
+        pftl_spendable_supply_atoms: 0,
+        native_spendable_balances_atoms: std::collections::BTreeMap::new(),
+        ethereum_spendable_supply_atoms: 0,
+        other_registered_venue_supply_atoms: 0,
+        outstanding_bridge_claims_atoms: 0,
+        pending_return_import_claims_atoms: 0,
+        settlement_reserve_atoms: 896_246,
+        primary_subscription_nonces: std::collections::BTreeMap::new(),
+        export_packets: std::collections::BTreeMap::new(),
+        export_nonces: std::collections::BTreeMap::new(),
+        return_imports: std::collections::BTreeMap::new(),
+        paused: false,
+        v2: Some(PftlUniswapRouteV2State {
+            route_schema_version: PFTL_UNISWAP_ROUTE_SCHEMA_V2,
+            route_epoch: 1,
+            outbound_verification_class: PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY.to_string(),
+            return_verification_class: PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT.to_string(),
+            primary_market_policy: policy,
+            issue_capacity_used_atoms: 0,
+            redeem_capacity_used_atoms: 0,
+            non_nav_spread_atoms: 14_369,
+            active_reservations: std::collections::BTreeMap::new(),
+            export_entitlements: std::collections::BTreeMap::new(),
+            terminal_reservations: std::collections::BTreeMap::new(),
+            redemption_nonces: std::collections::BTreeMap::new(),
+        }),
+    };
+    let mut ledger = LedgerState::new(Vec::new());
+    ledger.pftl_uniswap_routes.push(route);
+    let supply = super::issued_asset_supply(&ledger, &settlement_asset_id)
+        .expect("issued supply with spread custody");
+    assert_eq!(
+        supply,
+        896_246 + 14_369,
+        "settlement reserve and accumulated non-NAV spread are both live \
+         settlement-asset custody"
+    );
+}
+
 /// AR-09: redemption submit against the production-shaped route policy
 /// admits a valid expiry/binding/amount/nonce tuple and rejects each invalid
 /// variant with `pftl_uniswap_redemption_policy_mismatch`, leaving state
