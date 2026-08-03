@@ -19,6 +19,37 @@ pub const LIFECYCLE_CHECKPOINT_SIGNATURE_CONTEXT: &[u8] =
     b"postfiat.a666.lifecycle-checkpoint.signature.v1";
 pub const LIFECYCLE_CHECKPOINT_IMPORT_REPORT_SCHEMA: &str =
     "postfiat.a666.lifecycle-checkpoint.import-report.v1";
+pub const LIFECYCLE_CHECKPOINT_BASIS_FULL_HISTORY: &str = "full-history";
+pub const LIFECYCLE_CHECKPOINT_BASIS_FINALIZED_CHECKPOINT: &str = "finalized-checkpoint";
+
+/// Snapshot verification basis for the per-validator snapshots inside a
+/// lifecycle checkpoint. Real six-validator chains must use the finalized
+/// checkpoint basis: full-history QC snapshots grow with chain length and
+/// are rejected by the bounded local JSON reader on import.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LifecycleCheckpointSnapshotBasis {
+    FullHistory,
+    FinalizedCheckpoint,
+}
+
+impl LifecycleCheckpointSnapshotBasis {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::FullHistory => LIFECYCLE_CHECKPOINT_BASIS_FULL_HISTORY,
+            Self::FinalizedCheckpoint => LIFECYCLE_CHECKPOINT_BASIS_FINALIZED_CHECKPOINT,
+        }
+    }
+
+    fn parse(value: &str) -> io::Result<Self> {
+        match value {
+            LIFECYCLE_CHECKPOINT_BASIS_FULL_HISTORY => Ok(Self::FullHistory),
+            LIFECYCLE_CHECKPOINT_BASIS_FINALIZED_CHECKPOINT => Ok(Self::FinalizedCheckpoint),
+            other => Err(checkpoint_error(format!(
+                "unsupported lifecycle checkpoint snapshot basis `{other}`"
+            ))),
+        }
+    }
+}
 
 /// Content identities the checkpointed lifecycle must run against.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -55,6 +86,7 @@ pub struct LifecycleCheckpointManifest {
     pub block_height: u64,
     pub block_tip_hash: String,
     pub state_root: String,
+    pub snapshot_basis: String,
     pub validators: Vec<LifecycleCheckpointValidatorEntry>,
     pub identity_pins: LifecycleCheckpointIdentityPins,
     pub source_git_revision: String,
@@ -76,6 +108,7 @@ pub struct LifecycleCheckpointCreateOptions {
     pub identity_pins: LifecycleCheckpointIdentityPins,
     pub source_dirty: bool,
     pub creation_command: String,
+    pub snapshot_basis: LifecycleCheckpointSnapshotBasis,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -257,11 +290,19 @@ pub fn create_lifecycle_checkpoint(
     for (data_dir, report) in options.data_dirs.iter().zip(&statuses) {
         require_plain_component(&report.node_id)?;
         let snapshot_dir = options.checkpoint_dir.join(&report.node_id);
-        export_signed_snapshot(SignedSnapshotExportOptions {
+        let export_options = SignedSnapshotExportOptions {
             data_dir: data_dir.clone(),
             snapshot_dir: snapshot_dir.clone(),
             publisher_key_file: options.publisher_key_file.clone(),
-        })?;
+        };
+        match options.snapshot_basis {
+            LifecycleCheckpointSnapshotBasis::FullHistory => {
+                export_signed_snapshot(export_options)?;
+            }
+            LifecycleCheckpointSnapshotBasis::FinalizedCheckpoint => {
+                export_signed_snapshot_from_finalized_checkpoint(export_options)?;
+            }
+        }
         let signed_manifest_sha256 = crate::batch_snapshot::sha256_file_hex(
             &snapshot_dir.join(crate::lifecycle_queries::SIGNED_SNAPSHOT_MANIFEST_FILE),
             "signed snapshot manifest",
@@ -281,6 +322,7 @@ pub fn create_lifecycle_checkpoint(
         block_height: head.block_height,
         block_tip_hash: head.block_tip_hash.clone(),
         state_root: head.state_root.clone(),
+        snapshot_basis: options.snapshot_basis.as_str().to_string(),
         validators,
         identity_pins: options.identity_pins,
         source_git_revision: head.build_git_revision.clone(),
@@ -370,6 +412,7 @@ fn import_lifecycle_checkpoint_inner(context: &mut ImportContext<'_>) -> io::Res
         "trusted snapshot publisher key",
     )?;
     verify_lifecycle_checkpoint_manifest(&manifest, &trusted)?;
+    let snapshot_basis = LifecycleCheckpointSnapshotBasis::parse(&manifest.snapshot_basis)?;
     context.check("schema", LIFECYCLE_CHECKPOINT_SCHEMA, &manifest.schema)?;
     context.check(
         "private_material_absent",
@@ -444,12 +487,20 @@ fn import_lifecycle_checkpoint_inner(context: &mut ImportContext<'_>) -> io::Res
         )?;
 
         let data_dir = context.options.target_root.join(&validator.node_id);
-        let restored = import_signed_snapshot(SignedSnapshotImportOptions {
+        let import_options = SignedSnapshotImportOptions {
             data_dir: data_dir.clone(),
             snapshot_dir,
             trusted_publisher_key_file: context.options.trusted_publisher_key_file.clone(),
             node_id: Some(validator.node_id.clone()),
-        })?;
+        };
+        let restored = match snapshot_basis {
+            LifecycleCheckpointSnapshotBasis::FullHistory => {
+                import_signed_snapshot(import_options)?
+            }
+            LifecycleCheckpointSnapshotBasis::FinalizedCheckpoint => {
+                import_signed_snapshot_from_finalized_checkpoint(import_options)?
+            }
+        };
         context.check(
             &format!("{}.restored_height", validator.node_id),
             manifest.block_height,

@@ -90,6 +90,7 @@ impl CheckpointFixture {
             identity_pins: checkpoint_identity_pins(),
             source_dirty: false,
             creation_command: format!("test fixture {label}"),
+            snapshot_basis: LifecycleCheckpointSnapshotBasis::FullHistory,
         })
         .expect("create lifecycle checkpoint");
         Self {
@@ -312,6 +313,7 @@ fn lifecycle_checkpoint_creation_rejects_divergent_validators() {
         identity_pins: checkpoint_identity_pins(),
         source_dirty: false,
         creation_command: "divergence test".to_string(),
+        snapshot_basis: LifecycleCheckpointSnapshotBasis::FullHistory,
     })
     .expect_err("divergent validators must not checkpoint");
     assert!(error.to_string().contains("not converged"), "{error}");

@@ -36,8 +36,9 @@ use postfiat_node::{
     BatchCertificateRoundOptions, BatchTransferOptions, BlockCertificateFile, BlockProposalFile,
     DevKeyFile, FastSwapGovernanceBootstrapOptions, GovernanceAmendmentAssembleOptions,
     GovernanceAuthorizationSignOptions, InitOptions, LifecycleCheckpointCreateOptions,
-    LifecycleCheckpointIdentityPins, LifecycleCheckpointImportOptions, MempoolBatchOptions,
-    NodeOptions, ShieldedBatchSimulateOptions, SignedAssetTransactionJsonSubmitOptions,
+    LifecycleCheckpointIdentityPins, LifecycleCheckpointImportOptions,
+    LifecycleCheckpointSnapshotBasis, MempoolBatchOptions, NodeOptions,
+    ShieldedBatchSimulateOptions, SignedAssetTransactionJsonSubmitOptions,
     SignedFastSwapGovernanceBootstrapOptions, SignedSnapshotExportOptions,
     SignedSnapshotImportOptions, SnapshotExportOptions, SnapshotImportOptions,
     SnapshotPublisherKeyExportOptions,
@@ -2863,8 +2864,57 @@ fn a666_extract_pre_migration_checkpoint() {
             "cargo test --locked --release -p postfiat-node --test atomic_swap_local_six \
              a666_extract_pre_migration_checkpoint -- --ignored --exact --nocapture"
                 .to_string(),
+        snapshot_basis: LifecycleCheckpointSnapshotBasis::FinalizedCheckpoint,
     })
     .expect("create signed A666 pre-migration checkpoint");
+    println!(
+        "A666_PRE_MIGRATION_CHECKPOINT={{\"dir\":\"{}\",\"height\":{},\"state_root\":\"{}\",\"validators\":{}}}",
+        checkpoint_dir.display(),
+        manifest.block_height,
+        manifest.state_root,
+        manifest.validators.len(),
+    );
+}
+
+/// Repacks an existing set of pre-migration validator data dirs (for
+/// example reconstructed from a previous checkpoint's state files) into a
+/// fresh signed checkpoint using the finalized-checkpoint snapshot basis.
+/// Source root must contain `validator-0..5` data dirs; the publisher key
+/// comes from `POSTFIAT_A666_CHECKPOINT_PUBLISHER_KEY_FILE`.
+#[test]
+#[ignore = "repack A666 pre-migration validator dirs into a signed checkpoint"]
+fn a666_repack_pre_migration_checkpoint() {
+    let source_root = required_env_path("POSTFIAT_A666_CHECKPOINT_SOURCE_ROOT");
+    let checkpoint_dir = required_env_path("POSTFIAT_A666_CHECKPOINT_DIR");
+    let publisher_key_file = required_env_path("POSTFIAT_A666_CHECKPOINT_PUBLISHER_KEY_FILE");
+    assert!(
+        !checkpoint_dir.exists(),
+        "refusing to overwrite existing checkpoint at {}",
+        checkpoint_dir.display()
+    );
+    let inputs = a666_lifecycle_inputs_from_env();
+    let data_dirs = (0..VALIDATORS)
+        .map(|index| source_root.join(format!("validator-{index}")))
+        .collect::<Vec<_>>();
+    let trusted_key_file = a666_checkpoint_trusted_key_file(&checkpoint_dir);
+    export_snapshot_publisher_public_key(SnapshotPublisherKeyExportOptions {
+        publisher_key_file: publisher_key_file.clone(),
+        public_key_file: trusted_key_file.clone(),
+    })
+    .expect("export trusted checkpoint publisher key");
+    let manifest = create_lifecycle_checkpoint(LifecycleCheckpointCreateOptions {
+        data_dirs,
+        checkpoint_dir: checkpoint_dir.clone(),
+        publisher_key_file,
+        identity_pins: a666_checkpoint_identity_pins(&inputs),
+        source_dirty: true,
+        creation_command:
+            "cargo test --locked --release -p postfiat-node --test atomic_swap_local_six \
+             a666_repack_pre_migration_checkpoint -- --ignored --exact --nocapture"
+                .to_string(),
+        snapshot_basis: LifecycleCheckpointSnapshotBasis::FinalizedCheckpoint,
+    })
+    .expect("repack signed A666 pre-migration checkpoint");
     println!(
         "A666_PRE_MIGRATION_CHECKPOINT={{\"dir\":\"{}\",\"height\":{},\"state_root\":\"{}\",\"validators\":{}}}",
         checkpoint_dir.display(),
