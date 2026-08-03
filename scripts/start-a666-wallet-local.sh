@@ -35,8 +35,8 @@ exec env \
   LISTEN_PORT=8080 \
   ALLOWED_ORIGINS=http://127.0.0.1:8080,http://localhost:8080,https://127.0.0.1:5173,https://localhost:5173 \
   RPC_HOST=127.0.0.1 \
-  RPC_PORT=38650 \
-  RPC_FLEET=validator-0=127.0.0.1:38650,validator-1=127.0.0.1:38651,validator-2=127.0.0.1:38652,validator-3=127.0.0.1:38653,validator-4=127.0.0.1:38654,validator-5=127.0.0.1:38655 \
+  RPC_PORT=39650 \
+  RPC_FLEET=validator-0=127.0.0.1:39650,validator-1=127.0.0.1:39651,validator-2=127.0.0.1:39652,validator-3=127.0.0.1:39653,validator-4=127.0.0.1:39654,validator-5=127.0.0.1:39655 \
   PFUSDC_ASSET_ID=02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b \
   WALLET_STATIC_DIR="$repo/wallet-web/dist" \
   WALLET_PROXY_API_TOKENS_FILE="$token_file" \

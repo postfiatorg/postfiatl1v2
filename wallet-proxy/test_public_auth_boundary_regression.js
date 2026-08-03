@@ -198,6 +198,19 @@ async function main() {
   assert.match(publicCompose, /RPC_HOST:.*:\?set an explicit validator/);
   assert.match(publicCompose, /WALLET_PROXY_API_TOKEN:.*:\?set a random token/);
 
+  const a666Startup = fs.readFileSync(
+    path.resolve(__dirname, '..', 'scripts', 'start-a666-wallet-local.sh'),
+    'utf8',
+  );
+  assert.match(a666Startup, /RPC_PORT=39650/);
+  for (let index = 0; index < 6; index += 1) {
+    assert.match(
+      a666Startup,
+      new RegExp(`validator-${index}=127\\.0\\.0\\.1:3965${index}`),
+    );
+  }
+  assert(!/127\.0\.0\.1:3865[0-5]/.test(a666Startup));
+
   const unsafeStartup = spawnSync(process.execPath, ['-e', "require('./wallet-proxy/server')"], {
     cwd: require('path').resolve(__dirname, '..'),
     encoding: 'utf8',
