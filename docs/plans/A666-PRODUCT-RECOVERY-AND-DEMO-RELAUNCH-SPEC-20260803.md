@@ -90,13 +90,16 @@ The following statements are the recovery baseline as of this document:
 - StakeHub remains active and has not been deprecated;
 - the browser-wallet journey has not passed against the successor release;
 - clean public reproduction has not passed;
-- controlled qualification retry 6 is running as transient unit
-  `pft-a666-public-proof-qualification-retry6.service` (started
-  2026-08-03T18:14:35Z); unlike the disabled historical runner it sets
-  `POSTFIAT_A666_CONTROLLED_REPORT_FILE` and consumes the archived proofs
-  without chaining proving; it must terminate untouched, after which its
-  report and journal output are frozen and hashed; the controlled gate
-  remains open, not passed;
+- controlled qualification retry 6 terminated 2026-08-03T19:27:42Z after 71
+  minutes, failing with mempool admission rejection
+  `pftl_uniswap_redemption_policy_mismatch` — a seventh defect class not among
+  the six in section 3; the pre-O1 binary wrote no report (confirming the
+  success-only emission defect); the harness state (1.7G) and journal are
+  frozen at `~/.pft/public-reserve-qualification/20260803-controlled-retry6-frozen`
+  and recorded in
+  `docs/evidence/a666-public-reserve-product-20260803/qualification/retry-6-outcome.json`;
+  the controlled gate remains open, not passed, and no further cold run may
+  start before AR-09 reproduces this defect at a fast layer;
 - prior retries left no frozen artifacts (empty retry working directory,
   failed transient units only), the historical runner
   `continue-a666-public-proof-qualification.sh` chained throttled sequential
@@ -152,7 +155,10 @@ The controlled retries exposed at least these defect classes:
 5. route-epoch advancement was attempted while an export entitlement was
    active;
 6. a duplicate-operation test confused admission rejection with a finalized
-   rejection block.
+   rejection block;
+7. (retry 6, 2026-08-03) a redemption submit was rejected at admission with
+   `pftl_uniswap_redemption_policy_mismatch` — redemption expiry, policy
+   binding, amount, or nonce invalid — 71 minutes into the run.
 
 These defects matter, but the systemic causes are more important:
 
@@ -252,6 +258,7 @@ The initial mandatory regression set is:
 | AR-06 | duplicate submission accepts either typed admission rejection with no new block or typed finalized rejection with unchanged state root, never ambiguous success |
 | AR-07 | replay, stale proof, wrong profile, wrong overlay, wrong supply, wrong NAV, and wrong packet all fail closed |
 | AR-08 | snapshot import verifies publisher signature, content hash, chain ID, height, tip, and state root before startup |
+| AR-09 | redemption submit against the production-shaped route policy admits a valid expiry/binding/amount/nonce tuple and rejects each invalid variant with `pftl_uniswap_redemption_policy_mismatch` (reproduces the retry-6 failure) |
 
 Each regression records a deterministic seed or canonical input vector. A
 failed seed becomes permanent corpus data.
@@ -431,7 +438,7 @@ binary, proof input, configuration, or fixture changes.
 |---|---|---|
 | R0 Truth freeze | capture live state, services, repository, proofs, and secrets-exclusion inventory | signed baseline manifest |
 | R1 Fast loop | signed checkpoint importer and lifecycle test exist and fail closed | import vectors plus one complete report |
-| R2 Regression closure | AR-01 through AR-08 pass and each observed retry defect has a permanent test | regression manifest |
+| R2 Regression closure | AR-01 through AR-09 pass and each observed retry defect has a permanent test | regression manifest |
 | R3 Repeatability | checkpoint lifecycle passes three consecutive clean runs on the exact commit | three reports with distinct run IDs and identical terminal invariants |
 | R4 Browser readiness | exact browser journey passes twice, including reload/recovery, with StakeHub absent | two browser reports, receipts, and redacted captures |
 | R5 Cold qualification | genesis-to-tip six-validator test passes once with outage, catch-up, restart, replay, and rollback | authoritative controlled report |
@@ -632,7 +639,7 @@ The next work is strictly ordered:
 3. implement and validate the checkpoint importer with positive and adversarial
    vectors;
 4. split the lifecycle from the cold history-generation path;
-5. implement AR-01 through AR-08 and map each prior retry failure to a test;
+5. implement AR-01 through AR-09 and map each prior retry failure to a test;
 6. run the checkpoint lifecycle until it passes three consecutive clean runs;
 7. complete the browser flow twice with StakeHub absent;
 8. run one full cold six-validator qualification on the unchanged commit;
@@ -655,7 +662,7 @@ evidence exists.
 |---|---|---|---|---|
 | O1 | Evidence-integrity closure | Record retry-6 termination-without-report; disable `continue-a666-public-proof-qualification.sh`; make the cold test in `crates/node/tests/atomic_swap_local_six.rs` emit a section-13 report on both success and failure paths with computed `ok`, run ID, revision, and binary hash; require `POSTFIAT_A666_CONTROLLED_REPORT_FILE` in every runner | R0/R2 | failure record plus a report-on-failure unit test |
 | O2 | Signed checkpoint and importer | Extract pre-successor state (h776-equivalent controlled state) into a content-addressed, signed checkpoint per section 6.2; implement the importer with positive and adversarial vectors (bad signature, hash mismatch, symlink escape, schema drift, extra files) | R1 | import vectors plus one import report |
-| O3 | Fast regressions AR-01..AR-08 | Implement each as a standalone deterministic test under 2 minutes; extract AR-02 from the cold-test `const` asserts; map all six retry defect classes (section 3) to permanent tests with recorded seeds | R2 | regression manifest with defect-to-test traceability |
+| O3 | Fast regressions AR-01..AR-09 | Implement each (now AR-01..AR-09 after the retry-6 defect) as a standalone deterministic test under 2 minutes; extract AR-02 from the cold-test `const` asserts; map all six retry defect classes (section 3) to permanent tests with recorded seeds | R2 | regression manifest with defect-to-test traceability |
 | O4 | Checkpoint lifecycle loop | Implement `a666_public_successor_lifecycle_from_signed_checkpoint` executing section 6.2 steps 1-16, consuming archived proofs by hash (section 12.0), emitting a single report even on failure; run until three consecutive clean passes | R3 | three reports, distinct run IDs, identical terminal invariants |
 | O5 | Browser readiness | Add reload/reconnect/recovery e2e coverage (journey step 9) to `wallet-web`; run the full section-8 journey twice against the candidate with StakeHub absent | R4 | two browser reports plus receipts |
 | O6 | Evidence hygiene | Make the guest-ELF pin in `identity-and-public-value-pins.json` repository-relative or archived-by-hash; explain or fix `source_commit` vs `candidate_revision`; reconcile and document `A666_CIRCULATING_SUPPLY` (31_597_197_455) vs live `outstanding_supply_atoms` (99_000_000) | R6/R7/R9 | corrected pins file plus reconciliation note |

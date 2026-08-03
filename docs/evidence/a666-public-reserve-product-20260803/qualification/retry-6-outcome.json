@@ -1,0 +1,38 @@
+{
+  "schema": "postfiat-a666-controlled-retry-outcome-v1",
+  "recorded_at_utc": "2026-08-03T19:35:00Z",
+  "subject": "controlled qualification retry 6",
+  "ok": false,
+  "run": {
+    "unit": "pft-a666-public-proof-qualification-retry6.service",
+    "started_utc": "2026-08-03T18:14:35Z",
+    "terminated_utc": "2026-08-03T19:27:42Z",
+    "exec_main_status": 101,
+    "test_wall_seconds": 4278,
+    "cpu_time": "2h 6min 59s",
+    "memory_peak": "6.9G",
+    "test_binary": "target/release/deps/atomic_swap_local_six-7e388d62a223c179",
+    "source_content_equals_commit": "94f5b3e (content identical to dirty tree at 85cf5237 later committed in recovery triage)"
+  },
+  "first_failure": {
+    "location": "crates/node/tests/atomic_swap_local_six.rs:337 (RPC submit helper)",
+    "rpc_error_code": "rpc_finality_submit_failed",
+    "admission_rejection": "pftl_uniswap_redemption_policy_mismatch",
+    "message": "redemption expiry, policy binding, amount, or nonce is invalid",
+    "classification": "deterministic state transition / route redemption policy binding",
+    "note": "new defect class beyond the six recorded in spec section 3; requires a targeted regression (AR-09) before any further cold run"
+  },
+  "report_written": false,
+  "report_absence_cause": "binary compiled at 18:14:35Z predates commit 885d954 (report-on-failure); success-only report emission confirmed as the O1 defect",
+  "frozen_artifacts": {
+    "location": "~/.pft/public-reserve-qualification/20260803-controlled-retry6-frozen",
+    "harness_dir": "harness/ (1.7G six-validator state, moved from /tmp before expiry)",
+    "journal_log": "retry6-journal-frozen.log",
+    "journal_log_sha256": "49fd22dbd2d792f2b56216d27509e460e09067841022b90581eaa8bc3e0839df"
+  },
+  "next_actions": [
+    "reproduce pftl_uniswap_redemption_policy_mismatch at the fastest layer and add AR-09 before applying any fix",
+    "no further cold run until AR-09 exists and the checkpoint lifecycle layer is implemented (spec 15.1 O2-O4)",
+    "future controlled runs use the O1 wrapper so a failure of this kind produces a machine-readable report"
+  ]
+}
