@@ -11,10 +11,26 @@ from pathlib import Path
 from typing import Any
 
 ISSUER = "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b"
-ISSUER_KEY = (
-    "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/faucet-key.json"
-)
 ROUTE_ID = "pftl-a666-ethereum-wA666-usdc-v1"
+ASSET_ID = (
+    "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b6"
+    "2d20e18555642bec32174498cbee5e2c"
+)
+NAV_MARK_SCHEMA = "postfiat.a666.provider_neutral_nav_mark.v1"
+SUCCESSOR_PROFILE_ID = (
+    "f8784629ff7338002d836c1988b8e2c0f19caf448429e0eb7fdc39fa2b08f7d9a"
+    "44171fc1e7239bc25e06ad833c14e91"
+)
+SOURCE_MANIFEST_HASH = (
+    "8abe3e59198b72945d4778a7fa91e5af157a6c65032d8940cca486850ffe59fcb"
+    "567268ca5942669ff6977ef32dd3a41"
+)
+VALUATION_POLICY_HASH = (
+    "350eaee0a1ca12ba51637781ba52661b8685f868657a7c5e7d07c31b2899869c"
+)
+SP1_PROGRAM_VKEY = (
+    "0x00f3857f96ef97e00bd15b4030acd8d6b0a72740b28c6160d154bc2c9bb141bf"
+)
 POLICY_HASH_DOMAIN = "postfiat.pftl_uniswap.primary_market_policy.v2"
 ISSUE_CAPACITY_ATOMS = 2_000_000_000_000
 REDEEM_CAPACITY_ATOMS = 2_000_000_000_000
@@ -24,6 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--route-status", type=Path, required=True)
     parser.add_argument("--nav-manifest", type=Path, required=True)
+    parser.add_argument("--issuer-key-file", type=Path, required=True)
     parser.add_argument("--valid-from-height", type=int, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     return parser.parse_args()
@@ -62,6 +79,8 @@ def main() -> None:
     args = parse_args()
     if args.output_dir.exists():
         raise RuntimeError(f"refusing to overwrite {args.output_dir}")
+    if not args.issuer_key_file.is_file():
+        raise RuntimeError("issuer key file is unavailable")
     if args.valid_from_height <= 0:
         raise RuntimeError("--valid-from-height must be positive")
 
@@ -69,6 +88,10 @@ def main() -> None:
     nav = json.loads(args.nav_manifest.read_text())
     if route["route_id"] != ROUTE_ID:
         raise RuntimeError("route status is not the governed A666 route")
+    if route.get("native_nav_asset_id") != ASSET_ID:
+        raise RuntimeError("route status native asset is not A666")
+    if route.get("paused") is not True:
+        raise RuntimeError("A666 route must be paused before its pricing epoch advances")
     if not route["live_value_enabled"]:
         raise RuntimeError("A666 route must have live value enabled")
     if route["active_reservation_count"] or route["export_entitlement_count"]:
@@ -77,6 +100,28 @@ def main() -> None:
         raise RuntimeError("NAV manifest prior epoch does not match route pricing state")
     if nav["epoch"] <= route["pricing_nav_epoch"]:
         raise RuntimeError("NAV manifest does not advance the route pricing epoch")
+    if nav.get("asset_id") != ASSET_ID:
+        raise RuntimeError("NAV manifest does not describe A666")
+    if nav.get("schema") != NAV_MARK_SCHEMA:
+        raise RuntimeError("NAV manifest is not a provider-neutral A666 mark")
+    if nav.get("profile_id") != SUCCESSOR_PROFILE_ID:
+        raise RuntimeError("NAV manifest is not bound to the pinned successor profile")
+    if nav.get("source_manifest_hash") != SOURCE_MANIFEST_HASH:
+        raise RuntimeError("NAV manifest source identity is not the pinned successor")
+    if nav.get("valuation_policy_hash") != VALUATION_POLICY_HASH:
+        raise RuntimeError("NAV manifest valuation policy is not the pinned successor")
+    if nav.get("program_vkey") != SP1_PROGRAM_VKEY:
+        raise RuntimeError("NAV manifest program vkey is not the pinned successor")
+    nav_per_unit = nav.get("nav_per_unit")
+    if not isinstance(nav_per_unit, int) or nav_per_unit <= 0:
+        raise RuntimeError("NAV manifest nav_per_unit must be a positive integer")
+    reserve_packet_hash = nav.get("reserve_packet_hash")
+    if (
+        not isinstance(reserve_packet_hash, str)
+        or len(reserve_packet_hash) != 96
+        or any(character not in "0123456789abcdef" for character in reserve_packet_hash)
+    ):
+        raise RuntimeError("NAV manifest reserve packet hash is malformed")
 
     next_policy: dict[str, Any] = {
         "policy_hash": "",
@@ -91,7 +136,7 @@ def main() -> None:
         "expires_at_height": route["policy_expires_at_height"],
         "max_nav_age_blocks": route["max_nav_age_blocks"],
         "pricing_nav_epoch": nav["epoch"],
-        "pricing_reserve_packet_hash": nav["reserve_packet_hash"],
+        "pricing_reserve_packet_hash": reserve_packet_hash,
     }
     if next_policy["expires_at_height"] <= args.valid_from_height:
         raise RuntimeError("existing policy expiry is too near for the next route epoch")
@@ -113,7 +158,7 @@ def main() -> None:
             {
                 "label": f"a666-production-route-activate-v{body['next_route_epoch']}",
                 "source": ISSUER,
-                "key_file": ISSUER_KEY,
+                "key_file": str(args.issuer_key_file.resolve()),
                 "operation": body,
             }
         ],
@@ -126,7 +171,9 @@ def main() -> None:
         "prior_route_epoch": body["prior_route_epoch"],
         "next_route_epoch": body["next_route_epoch"],
         "next_policy": next_policy,
-        "nav_per_unit_usd_1e8": nav["nav_per_unit_usd_1e8"],
+        "nav_per_unit": nav_per_unit,
+        "route_status_sha256": hashlib.sha256(args.route_status.read_bytes()).hexdigest(),
+        "nav_manifest_sha256": hashlib.sha256(args.nav_manifest.read_bytes()).hexdigest(),
     }
     write_json(args.output_dir / "route-epoch-advance-manifest.json", manifest)
     print(json.dumps(manifest, indent=2, sort_keys=True))

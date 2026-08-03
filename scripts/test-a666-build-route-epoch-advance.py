@@ -12,11 +12,45 @@ import unittest
 
 
 PROGRAM = Path(__file__).with_name("a666-build-route-epoch-advance.py")
+ASSET_ID = (
+    "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b6"
+    "2d20e18555642bec32174498cbee5e2c"
+)
+PROFILE_ID = (
+    "f8784629ff7338002d836c1988b8e2c0f19caf448429e0eb7fdc39fa2b08f7d9a"
+    "44171fc1e7239bc25e06ad833c14e91"
+)
+SOURCE_MANIFEST_HASH = (
+    "8abe3e59198b72945d4778a7fa91e5af157a6c65032d8940cca486850ffe59fcb"
+    "567268ca5942669ff6977ef32dd3a41"
+)
+VALUATION_POLICY_HASH = (
+    "350eaee0a1ca12ba51637781ba52661b8685f868657a7c5e7d07c31b2899869c"
+)
+SP1_PROGRAM_VKEY = (
+    "0x00f3857f96ef97e00bd15b4030acd8d6b0a72740b28c6160d154bc2c9bb141bf"
+)
+
+
+def nav_mark(*, asset_id: str = ASSET_ID, profile_id: str = PROFILE_ID) -> dict[str, object]:
+    return {
+        "schema": "postfiat.a666.provider_neutral_nav_mark.v1",
+        "asset_id": asset_id,
+        "prior_epoch": 6,
+        "epoch": 7,
+        "profile_id": profile_id,
+        "source_manifest_hash": SOURCE_MANIFEST_HASH,
+        "valuation_policy_hash": VALUATION_POLICY_HASH,
+        "program_vkey": SP1_PROGRAM_VKEY,
+        "reserve_packet_hash": "22" * 48,
+        "nav_per_unit": 100_000_000,
+    }
 
 
 def route(*, paused: bool, live_value_enabled: bool = True) -> dict[str, object]:
     return {
         "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+        "native_nav_asset_id": ASSET_ID,
         "paused": paused,
         "live_value_enabled": live_value_enabled,
         "active_reservation_count": 0,
@@ -48,16 +82,12 @@ class RouteEpochAdvanceTests(unittest.TestCase):
         route_path = root / "route.json"
         nav_path = root / "nav.json"
         route_path.write_text(json.dumps(route_status))
-        nav_path.write_text(
-            json.dumps(
-                {
-                    "prior_epoch": nav_prior_epoch,
-                    "epoch": nav_epoch,
-                    "reserve_packet_hash": "22" * 48,
-                    "nav_per_unit_usd_1e8": 100_000_000,
-                }
-            )
-        )
+        nav = nav_mark()
+        nav["prior_epoch"] = nav_prior_epoch
+        nav["epoch"] = nav_epoch
+        nav_path.write_text(json.dumps(nav))
+        issuer_key = root / "issuer-key.json"
+        issuer_key.write_text("fixture")
         return subprocess.run(
             [
                 sys.executable,
@@ -66,6 +96,8 @@ class RouteEpochAdvanceTests(unittest.TestCase):
                 str(route_path),
                 "--nav-manifest",
                 str(nav_path),
+                "--issuer-key-file",
+                str(issuer_key),
                 "--valid-from-height",
                 "800",
                 "--output-dir",
@@ -80,9 +112,10 @@ class RouteEpochAdvanceTests(unittest.TestCase):
         result = self.run_builder(route(paused=True))
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_unpaused_live_route_remains_supported(self) -> None:
+    def test_unpaused_live_route_is_rejected(self) -> None:
         result = self.run_builder(route(paused=False))
-        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("must be paused", result.stderr)
 
     def test_route_without_live_value_cannot_advance(self) -> None:
         result = self.run_builder(route(paused=True, live_value_enabled=False))
@@ -104,6 +137,77 @@ class RouteEpochAdvanceTests(unittest.TestCase):
         result = self.run_builder(route(paused=True), nav_prior_epoch=5)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("prior epoch does not match", result.stderr)
+
+    def test_wrong_native_asset_is_rejected(self) -> None:
+        status = route(paused=True)
+        status["native_nav_asset_id"] = "00" * 48
+        result = self.run_builder(status)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("native asset is not A666", result.stderr)
+
+    def test_wrong_nav_asset_is_rejected(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        route_path = root / "route.json"
+        nav_path = root / "nav.json"
+        key_path = root / "issuer-key.json"
+        route_path.write_text(json.dumps(route(paused=True)))
+        nav_path.write_text(json.dumps(nav_mark(asset_id="00" * 48)))
+        key_path.write_text("fixture")
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(PROGRAM),
+                "--route-status",
+                str(route_path),
+                "--nav-manifest",
+                str(nav_path),
+                "--issuer-key-file",
+                str(key_path),
+                "--valid-from-height",
+                "800",
+                "--output-dir",
+                str(root / "output"),
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("does not describe A666", result.stderr)
+
+    def test_wrong_successor_profile_is_rejected(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        route_path = root / "route.json"
+        nav_path = root / "nav.json"
+        key_path = root / "issuer-key.json"
+        route_path.write_text(json.dumps(route(paused=True)))
+        nav_path.write_text(json.dumps(nav_mark(profile_id="00" * 48)))
+        key_path.write_text("fixture")
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(PROGRAM),
+                "--route-status",
+                str(route_path),
+                "--nav-manifest",
+                str(nav_path),
+                "--issuer-key-file",
+                str(key_path),
+                "--valid-from-height",
+                "800",
+                "--output-dir",
+                str(root / "output"),
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("pinned successor profile", result.stderr)
 
 
 if __name__ == "__main__":

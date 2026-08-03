@@ -418,6 +418,50 @@ reconciliation, and controlled lifecycle gates record passing evidence. No
 live profile, route, reserve packet, balance, or validator state was changed
 by this qualification work.
 
+### 3.7 Historical archive assessment and non-upgrade rule
+
+The retained live ledger preserves the original A666 reserve-packet lineage:
+
+| Epoch | Historical verified net assets (USD e8 atoms) | Record retained |
+|---:|---:|---|
+| 1 | 3,138,619,745,591 | Legacy-profile finalized packet |
+| 2 | 2,846,375,143,580 | `2,825,975,143,580` base proof plus `20,400,000,000` finalized pfUSDC overlay |
+| 3 | 2,837,672,662,306 | `2,826,373,076,806` base proof plus `11,299,585,500` finalized pfUSDC overlay |
+| 4 | 2,846,684,237,306 | Legacy-profile finalized packet |
+| 5 | 2,850,787,131,092 | Current legacy-profile finalized packet |
+
+The exact epoch-2 and epoch-3 operator bundles and their live packet hashes
+remain preserved under the historical evidence tree. The public retired
+shadow at `tools/nav-reserve-proof/qualifications/a666-shadow-20260730/`
+reconciles the epoch-3 amounts, but accurately classifies all six sources as
+attested. It is historical comparison evidence only.
+
+An audit of those bundles found that they do not retain the successor proof
+material needed to reconstruct two old epochs at the new cryptographic trust
+level. In particular, the old bundles lack the later source-checkpoint BFT
+certificates and the complete Chainlink account/storage proofs. The old
+Solana and Monero paths were explicitly attested, and the retained EVM and
+NEAR valuation records do not contain the successor valuation proofs. Those
+facts cannot be repaired retroactively by changing a label or signing the old
+aggregate again.
+
+The governed rule is therefore:
+
+- preserve and reconcile every retained historical amount and packet as
+  immutable history;
+- never promote an old attested claim to cryptographic without its original
+  source proof;
+- use the two fresh, independently reproducible cryptographic epochs 7 and 8
+  for successor qualification; and
+- treat any historical-to-fresh value difference as time-separated portfolio
+  movement, not as adapter equivalence evidence, unless the exact same source
+  state is available on both sides.
+
+This archive limitation is not waived and does not make the successor weaker.
+It replaces an impossible request to manufacture missing old proof material
+with an auditable historical boundary plus two genuine fresh cryptographic
+epochs.
+
 ## 4. Required public code boundary
 
 All code required to interpret and verify NAVCoin reserve claims must live in:
@@ -1062,8 +1106,12 @@ existing guest ELF SHA exactly.
 
 ### Phase 4 — source-by-source qualification
 
-- [ ] Reconstruct at least two historical A666 epochs with the public adapters
-  where source artifacts remain available.
+- [x] Audit the retained historical A666 epochs and reconstruct exact public
+  results only where the original source artifacts permit it. Epoch 3 has an
+  exact amount-level public retired-shadow reconstruction; epochs 2 and 3
+  retain amount and packet reconciliation. Section 3.7 records why two
+  successor-cryptographic historical reconstructions cannot honestly be
+  produced from evidence that was never retained.
 - [x] Compare each public adapter output against the historical source result,
   not merely the aggregate NAV.
 - [ ] Explain and govern every conservative difference.
