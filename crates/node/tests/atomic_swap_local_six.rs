@@ -24,8 +24,9 @@ use postfiat_node::{
     create_asset_orchard_private_primary_redeem, create_asset_orchard_private_primary_redeem_batch,
     create_consensus_v2_precommit_vote, create_consensus_v2_prepare_vote,
     create_consensus_v2_proposal_for_block, create_fastswap_governance_bootstrap,
-    create_mempool_batch, create_transfer_batch, export_signed_snapshot_from_finalized_checkpoint,
-    export_snapshot, export_snapshot_publisher_public_key, faucet_key,
+    create_lifecycle_checkpoint, create_mempool_batch, create_transfer_batch,
+    export_signed_snapshot_from_finalized_checkpoint, export_snapshot,
+    export_snapshot_publisher_public_key, faucet_key, import_lifecycle_checkpoint,
     import_signed_snapshot_from_finalized_checkpoint, import_snapshot, init,
     sign_governance_amendment_authorization, simulate_shielded_batch,
     submit_signed_asset_transaction_json_to_mempool, verify_blocks, ApplyBatchOptions,
@@ -34,8 +35,9 @@ use postfiat_node::{
     AssetOrchardPrivatePrimaryRedeemBatchOptions, AssetOrchardPrivatePrimaryRedeemCreateOptions,
     BatchCertificateRoundOptions, BatchTransferOptions, BlockCertificateFile, BlockProposalFile,
     DevKeyFile, FastSwapGovernanceBootstrapOptions, GovernanceAmendmentAssembleOptions,
-    GovernanceAuthorizationSignOptions, InitOptions, MempoolBatchOptions, NodeOptions,
-    ShieldedBatchSimulateOptions, SignedAssetTransactionJsonSubmitOptions,
+    GovernanceAuthorizationSignOptions, InitOptions, LifecycleCheckpointCreateOptions,
+    LifecycleCheckpointIdentityPins, LifecycleCheckpointImportOptions, MempoolBatchOptions,
+    NodeOptions, ShieldedBatchSimulateOptions, SignedAssetTransactionJsonSubmitOptions,
     SignedFastSwapGovernanceBootstrapOptions, SignedSnapshotExportOptions,
     SignedSnapshotImportOptions, SnapshotExportOptions, SnapshotImportOptions,
     SnapshotPublisherKeyExportOptions,
@@ -2770,28 +2772,280 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
     );
 }
 
-fn a666_public_successor_lifecycle_body() -> Value {
-    const A666_CHAIN_ID: &str = "postfiat-wan-devnet-2";
-    const A666_ASSET_ID: &str = "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c";
-    const A666_ISSUER: &str = "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b";
-    const A666_RESERVE_OPERATOR: &str = "pfd0c86d9084915e1fefd22eab891806397d5a5937";
-    const A666_SUCCESSOR_PROFILE: &str = "f8784629ff7338002d836c1988b8e2c0f19caf448429e0eb7fdc39fa2b08f7d9a44171fc1e7239bc25e06ad833c14e91";
-    const A666_CIRCULATING_SUPPLY: u64 = 31_597_197_455;
-    const A666_VALUATION_UNIT: &str = "USD_1E8";
-    const PFUSDC_VALUATION_UNIT: &str = "USDC";
-    const A666_ROUTE_SUPPLY_CAP_ATOMS: u64 = 2_000_000_000_000;
-    const A666_PACKET_NOTIONAL_CAP_ATOMS: u64 = 250_000_000_000;
-    const A666_POLICY_CAPACITY_ATOMS: u64 = 2_000_000_000_000;
-    const A666_POLICY_MAX_ORDER_ATOMS: u64 = 1_000_000_000_000;
-    const A666_POLICY_MIN_ORDER_ATOMS: u64 = 1_000_000;
+fn a666_checkpoint_private_dir(checkpoint_dir: &Path) -> PathBuf {
+    let mut name = checkpoint_dir
+        .file_name()
+        .expect("checkpoint dir name")
+        .to_os_string();
+    name.push("-private");
+    checkpoint_dir.with_file_name(name)
+}
 
-    const {
-        assert!(A666_POLICY_CAPACITY_ATOMS <= A666_ROUTE_SUPPLY_CAP_ATOMS);
-        assert!(A666_PACKET_NOTIONAL_CAP_ATOMS <= A666_POLICY_MAX_ORDER_ATOMS);
-        assert!(A666_POLICY_MAX_ORDER_ATOMS <= A666_POLICY_CAPACITY_ATOMS);
-        assert!(A666_POLICY_MIN_ORDER_ATOMS <= A666_POLICY_MAX_ORDER_ATOMS);
+fn a666_checkpoint_trusted_key_file(checkpoint_dir: &Path) -> PathBuf {
+    let mut name = checkpoint_dir
+        .file_name()
+        .expect("checkpoint dir name")
+        .to_os_string();
+    name.push("-trusted-publisher.json");
+    checkpoint_dir.with_file_name(name)
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    format!("{:x}", hasher.finalize())
+}
+
+fn a666_checkpoint_identity_pins(inputs: &A666LifecycleInputs) -> LifecycleCheckpointIdentityPins {
+    let optional_pin = |name: &str| {
+        std::env::var(name).unwrap_or_else(|_| "unpinned-controlled-rehearsal".to_string())
+    };
+    LifecycleCheckpointIdentityPins {
+        asset_id: A666_ASSET_ID.to_string(),
+        successor_profile_id: A666_SUCCESSOR_PROFILE.to_string(),
+        source_manifest_hash: inputs.public_values.source_manifest_hash.clone(),
+        valuation_policy_hash: inputs.public_values.valuation_policy_hash.clone(),
+        guest_elf_sha256: optional_pin("POSTFIAT_A666_GUEST_ELF_SHA256"),
+        sp1_verification_key: optional_pin("POSTFIAT_A666_SP1_VKEY"),
+        epoch7_proof_sha256: sha256_hex(&inputs.proof),
+        epoch7_public_values_sha256: sha256_hex(&inputs.public_values_bytes),
+        epoch8_proof_sha256: sha256_hex(&inputs.next_proof),
+        epoch8_public_values_sha256: sha256_hex(&inputs.next_public_values_bytes),
+    }
+}
+
+/// Extracts the signed pre-migration checkpoint that accelerates the
+/// lifecycle loop (recovery spec section 6.2). Rehearsal validator signing
+/// keys and the checkpoint publisher key are written to a clearly separated
+/// `<checkpoint>-private` sidecar that is never part of the signed bundle.
+#[test]
+#[ignore = "extract the signed A666 pre-migration lifecycle checkpoint"]
+fn a666_extract_pre_migration_checkpoint() {
+    let checkpoint_dir = required_env_path("POSTFIAT_A666_CHECKPOINT_DIR");
+    assert!(
+        !checkpoint_dir.exists(),
+        "refusing to overwrite existing checkpoint at {}",
+        checkpoint_dir.display()
+    );
+    let inputs = a666_lifecycle_inputs_from_env();
+    let mut network = a666_generate_pre_migration_network(&inputs);
+    stop_services(&mut network.harness);
+    for path in &network.ready {
+        let _ = fs::remove_file(path);
     }
 
+    let private_dir = a666_checkpoint_private_dir(&checkpoint_dir);
+    fs::create_dir_all(&private_dir).expect("create checkpoint private sidecar");
+    let publisher_key_file = private_dir.join("checkpoint-publisher.private.json");
+    write_private_dev_key_file(&publisher_key_file, &create_test_dev_key_file());
+    let trusted_key_file = a666_checkpoint_trusted_key_file(&checkpoint_dir);
+    export_snapshot_publisher_public_key(SnapshotPublisherKeyExportOptions {
+        publisher_key_file: publisher_key_file.clone(),
+        public_key_file: trusted_key_file.clone(),
+    })
+    .expect("export trusted checkpoint publisher key");
+    for (index, data_dir) in network.data_dirs.iter().enumerate() {
+        fs::copy(
+            data_dir.join("validator_keys.json"),
+            private_dir.join(format!("validator-{index}.validator_keys.json")),
+        )
+        .expect("copy rehearsal validator keys to private sidecar");
+    }
+
+    let manifest = create_lifecycle_checkpoint(LifecycleCheckpointCreateOptions {
+        data_dirs: network.data_dirs.clone(),
+        checkpoint_dir: checkpoint_dir.clone(),
+        publisher_key_file,
+        identity_pins: a666_checkpoint_identity_pins(&inputs),
+        source_dirty: true,
+        creation_command:
+            "cargo test --locked --release -p postfiat-node --test atomic_swap_local_six \
+             a666_extract_pre_migration_checkpoint -- --ignored --exact --nocapture"
+                .to_string(),
+    })
+    .expect("create signed A666 pre-migration checkpoint");
+    println!(
+        "A666_PRE_MIGRATION_CHECKPOINT={{\"dir\":\"{}\",\"height\":{},\"state_root\":\"{}\",\"validators\":{}}}",
+        checkpoint_dir.display(),
+        manifest.block_height,
+        manifest.state_root,
+        manifest.validators.len(),
+    );
+}
+
+/// The accelerated lifecycle: verify and import the signed pre-migration
+/// checkpoint, restore the rehearsal network, and run the exact successor
+/// migration and product lifecycle (recovery spec section 6.2 steps 1-16).
+#[test]
+#[ignore = "accelerated A666 successor lifecycle from the signed checkpoint"]
+fn a666_public_successor_lifecycle_from_signed_checkpoint() {
+    run_with_controlled_report(
+        "a666_public_successor_lifecycle_from_signed_checkpoint",
+        a666_lifecycle_from_signed_checkpoint_body,
+    );
+}
+
+fn a666_lifecycle_from_signed_checkpoint_body() -> Value {
+    let inputs = a666_lifecycle_inputs_from_env();
+    let checkpoint_dir = required_env_path("POSTFIAT_A666_CHECKPOINT_DIR");
+    let trusted_key_file = std::env::var_os("POSTFIAT_A666_CHECKPOINT_TRUSTED_KEY_FILE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| a666_checkpoint_trusted_key_file(&checkpoint_dir));
+
+    let mut harness = Harness::new();
+    let import_report_file = harness.root.join("lifecycle-checkpoint-import-report.json");
+    let import_report = import_lifecycle_checkpoint(LifecycleCheckpointImportOptions {
+        checkpoint_dir: checkpoint_dir.clone(),
+        trusted_publisher_key_file: trusted_key_file,
+        target_root: harness.root.clone(),
+        report_file: import_report_file,
+    })
+    .expect("import signed A666 pre-migration checkpoint");
+    assert!(import_report.ok, "checkpoint import must pass");
+    assert_eq!(import_report.validators.len(), VALIDATORS);
+
+    let private_dir = a666_checkpoint_private_dir(&checkpoint_dir);
+    let data_dirs = (0..VALIDATORS)
+        .map(|index| {
+            let data_dir = harness.node(index);
+            fs::copy(
+                private_dir.join(format!("validator-{index}.validator_keys.json")),
+                data_dir.join("validator_keys.json"),
+            )
+            .expect("restore rehearsal validator signing keys");
+            data_dir
+        })
+        .collect::<Vec<_>>();
+
+    let (topology_path, rpc_ports, ready) = a666_spawn_rehearsal_network(&mut harness, &data_dirs);
+    let boundary = status_tuple(rpc_ports[0], "a666-checkpoint-restored-boundary");
+    assert_eq!(
+        boundary.0, import_report.validators[0].block_height,
+        "restored network must resume at the checkpoint height"
+    );
+    assert_eq!(
+        boundary.2, import_report.validators[0].state_root,
+        "restored network must resume at the checkpoint state root"
+    );
+    wait_exact_six(&rpc_ports, &boundary);
+
+    let mut report = a666_successor_lifecycle_from_network(
+        A666RehearsalNetwork {
+            harness,
+            data_dirs,
+            topology_path,
+            rpc_ports,
+            ready,
+        },
+        inputs,
+    );
+    report["checkpoint_import"] = json!({
+        "checkpoint_dir": checkpoint_dir.display().to_string(),
+        "manifest_sha256": import_report.checkpoint_manifest_sha256,
+        "restored_height": boundary.0,
+        "restored_state_root": boundary.2,
+    });
+    report
+}
+
+const A666_CHAIN_ID: &str = "postfiat-wan-devnet-2";
+const A666_ASSET_ID: &str = "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c";
+const A666_ISSUER: &str = "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b";
+const A666_RESERVE_OPERATOR: &str = "pfd0c86d9084915e1fefd22eab891806397d5a5937";
+const A666_SUCCESSOR_PROFILE: &str = "f8784629ff7338002d836c1988b8e2c0f19caf448429e0eb7fdc39fa2b08f7d9a44171fc1e7239bc25e06ad833c14e91";
+const A666_CIRCULATING_SUPPLY: u64 = 31_597_197_455;
+const A666_VALUATION_UNIT: &str = "USD_1E8";
+const PFUSDC_VALUATION_UNIT: &str = "USDC";
+const A666_ROUTE_SUPPLY_CAP_ATOMS: u64 = 2_000_000_000_000;
+const A666_PACKET_NOTIONAL_CAP_ATOMS: u64 = 250_000_000_000;
+const A666_POLICY_CAPACITY_ATOMS: u64 = 2_000_000_000_000;
+const A666_POLICY_MAX_ORDER_ATOMS: u64 = 1_000_000_000_000;
+const A666_POLICY_MIN_ORDER_ATOMS: u64 = 1_000_000;
+
+const _: () = {
+    assert!(A666_POLICY_CAPACITY_ATOMS <= A666_ROUTE_SUPPLY_CAP_ATOMS);
+    assert!(A666_PACKET_NOTIONAL_CAP_ATOMS <= A666_POLICY_MAX_ORDER_ATOMS);
+    assert!(A666_POLICY_MAX_ORDER_ATOMS <= A666_POLICY_CAPACITY_ATOMS);
+    assert!(A666_POLICY_MIN_ORDER_ATOMS <= A666_POLICY_MAX_ORDER_ATOMS);
+};
+
+/// Deterministic external inputs for the A666 successor lifecycle: dev keys
+/// and the archived aggregate proofs, all provided by environment variables.
+struct A666LifecycleInputs {
+    issuer: DevKeyFile,
+    reserve_operator: DevKeyFile,
+    pfusdc_issuer: DevKeyFile,
+    holder: DevKeyFile,
+    holder_key_file: PathBuf,
+    proof: Vec<u8>,
+    public_values_bytes: Vec<u8>,
+    next_proof: Vec<u8>,
+    next_public_values_bytes: Vec<u8>,
+    public_values: NavReservePublicValuesV1,
+    next_public_values: NavReservePublicValuesV1,
+}
+
+/// The running six-validator rehearsal network shared by the cold and
+/// checkpoint-accelerated lifecycle paths.
+struct A666RehearsalNetwork {
+    harness: Harness,
+    data_dirs: Vec<PathBuf>,
+    topology_path: PathBuf,
+    rpc_ports: Vec<u16>,
+    ready: Vec<PathBuf>,
+}
+
+/// Builds a fresh local topology for existing validator data dirs and spawns
+/// all services.
+fn a666_spawn_rehearsal_network(
+    harness: &mut Harness,
+    data_dirs: &[PathBuf],
+) -> (PathBuf, Vec<u16>, Vec<PathBuf>) {
+    let genesis: Genesis = serde_json::from_slice(
+        &fs::read(data_dirs[0].join("genesis.json")).expect("read exact A666 genesis"),
+    )
+    .expect("parse exact A666 genesis");
+    let base_port = free_base_port();
+    let topology_path = harness.root.join("a666-public-successor-topology.json");
+    let topology = local_topology(
+        NetworkDomain {
+            chain_id: genesis.chain_id.clone(),
+            genesis_hash: genesis_hash(&genesis),
+            protocol_version: genesis.protocol_version,
+        },
+        VALIDATORS as u32,
+        base_port,
+    )
+    .expect("build exact A666 migration topology");
+    fs::write(
+        &topology_path,
+        format!(
+            "{}\n",
+            serde_json::to_string_pretty(&topology)
+                .expect("serialize exact A666 migration topology")
+        ),
+    )
+    .expect("write exact A666 migration topology");
+    let rpc_ports = topology
+        .peers
+        .iter()
+        .map(|peer| peer.rpc_port)
+        .collect::<Vec<_>>();
+    let ready = spawn_services(harness, &topology_path, &rpc_ports);
+    for path in &ready {
+        wait_for_file(path, Duration::from_secs(90));
+    }
+    (topology_path, rpc_ports, ready)
+}
+
+fn a666_public_successor_lifecycle_body() -> Value {
+    let inputs = a666_lifecycle_inputs_from_env();
+    let network = a666_generate_pre_migration_network(&inputs);
+    a666_successor_lifecycle_from_network(network, inputs)
+}
+
+fn a666_lifecycle_inputs_from_env() -> A666LifecycleInputs {
     let issuer = read_dev_key_from_env("POSTFIAT_A666_ISSUER_KEY_FILE");
     let reserve_operator = read_dev_key_from_env("POSTFIAT_A666_RESERVE_KEY_FILE");
     let pfusdc_issuer = read_dev_key_from_env("POSTFIAT_PFUSDC_ISSUER_KEY_FILE");
@@ -2835,6 +3089,31 @@ fn a666_public_successor_lifecycle_body() -> Value {
     assert_eq!(next_public_values.valuation_trust_counts.cryptographic, 6);
     assert_eq!(next_public_values.attested_value, 0);
     assert_eq!(next_public_values.controlled_value, 0);
+    A666LifecycleInputs {
+        issuer,
+        reserve_operator,
+        pfusdc_issuer,
+        holder,
+        holder_key_file,
+        proof,
+        public_values_bytes,
+        next_proof,
+        next_public_values_bytes,
+        public_values,
+        next_public_values,
+    }
+}
+
+/// Generates the six-validator chain history up to the converged state
+/// immediately before the public-successor migration. This is the slow,
+/// cold path; the signed lifecycle checkpoint captures its output so the
+/// lifecycle itself can start in seconds.
+fn a666_generate_pre_migration_network(inputs: &A666LifecycleInputs) -> A666RehearsalNetwork {
+    let issuer = inputs.issuer.clone();
+    let pfusdc_issuer = inputs.pfusdc_issuer.clone();
+    let holder = inputs.holder.clone();
+    let public_values = inputs.public_values.clone();
+    let next_public_values = inputs.next_public_values.clone();
 
     let mut harness = Harness::new();
     let seed_dir = harness.root.join("a666-public-successor-seed");
@@ -2873,36 +3152,7 @@ fn a666_public_successor_lifecycle_body() -> Value {
             .max(next_public_values.observation_not_after),
     );
 
-    let base_port = free_base_port();
-    let topology_path = harness.root.join("a666-public-successor-topology.json");
-    let topology = local_topology(
-        NetworkDomain {
-            chain_id: qualified_genesis.chain_id.clone(),
-            genesis_hash: genesis_hash(&qualified_genesis),
-            protocol_version: qualified_genesis.protocol_version,
-        },
-        VALIDATORS as u32,
-        base_port,
-    )
-    .expect("build exact A666 migration topology");
-    fs::write(
-        &topology_path,
-        format!(
-            "{}\n",
-            serde_json::to_string_pretty(&topology)
-                .expect("serialize exact A666 migration topology")
-        ),
-    )
-    .expect("write exact A666 migration topology");
-    let rpc_ports = topology
-        .peers
-        .iter()
-        .map(|peer| peer.rpc_port)
-        .collect::<Vec<_>>();
-    let mut ready = spawn_services(&mut harness, &topology_path, &rpc_ports);
-    for path in &ready {
-        wait_for_file(path, Duration::from_secs(90));
-    }
+    let (topology_path, rpc_ports, ready) = a666_spawn_rehearsal_network(&mut harness, &data_dirs);
 
     submit_faucet_transfer_finality(
         &harness,
@@ -3003,6 +3253,62 @@ fn a666_public_successor_lifecycle_body() -> Value {
         }),
         "bind-a666-legacy-profile",
     );
+    // Fund the lifecycle participants while the faucet key is still
+    // available; checkpoint-restored runs deliberately have no faucet.
+    submit_faucet_transfer_finality(
+        &harness,
+        &rpc_ports,
+        &faucet,
+        &pfusdc_issuer.address,
+        1_000_000,
+        "fund-exact-pfusdc-issuer",
+    );
+    submit_faucet_transfer_finality(
+        &harness,
+        &rpc_ports,
+        &faucet,
+        &holder.address,
+        10_000_000,
+        "fund-a666-lifecycle-holder",
+    );
+    let pre_migration = status_tuple(rpc_ports[0], "a666-pre-migration-boundary");
+    wait_exact_six(&rpc_ports, &pre_migration);
+    A666RehearsalNetwork {
+        harness,
+        data_dirs,
+        topology_path,
+        rpc_ports,
+        ready,
+    }
+}
+
+/// Runs the successor migration and complete product lifecycle from an
+/// already-converged pre-migration network. Both the cold path and the
+/// signed-checkpoint path enter here.
+fn a666_successor_lifecycle_from_network(
+    network: A666RehearsalNetwork,
+    inputs: A666LifecycleInputs,
+) -> Value {
+    let A666RehearsalNetwork {
+        mut harness,
+        data_dirs,
+        topology_path,
+        rpc_ports,
+        mut ready,
+    } = network;
+    let A666LifecycleInputs {
+        issuer,
+        reserve_operator,
+        pfusdc_issuer,
+        holder,
+        holder_key_file,
+        proof,
+        public_values_bytes,
+        next_proof,
+        next_public_values_bytes,
+        public_values,
+        next_public_values,
+    } = inputs;
     let successor_operation = a666_public_successor_profile_operation(A666_ISSUER);
     let successor_profile = successor_operation
         .to_profile()
@@ -3140,22 +3446,6 @@ fn a666_public_successor_lifecycle_body() -> Value {
         issued_asset_id(A666_CHAIN_ID, &pfusdc_issuer.address, "PFUSDC", 1)
             .expect("derive exact pfUSDC ID"),
         PFUSDC_ASSET_ID
-    );
-    submit_faucet_transfer_finality(
-        &harness,
-        &rpc_ports,
-        &faucet,
-        &pfusdc_issuer.address,
-        1_000_000,
-        "fund-exact-pfusdc-issuer",
-    );
-    submit_faucet_transfer_finality(
-        &harness,
-        &rpc_ports,
-        &faucet,
-        &holder.address,
-        10_000_000,
-        "fund-a666-lifecycle-holder",
     );
     submit_dev_key_asset_finality(
         &harness,
