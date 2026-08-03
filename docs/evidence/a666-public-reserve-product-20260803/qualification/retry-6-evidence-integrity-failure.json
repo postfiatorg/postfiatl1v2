@@ -1,0 +1,58 @@
+{
+  "schema": "postfiat-a666-evidence-integrity-observation-v1",
+  "recorded_at_utc": "2026-08-03T19:02:00Z",
+  "recorded_by_role": "incident recovery execution",
+  "spec": "docs/plans/A666-PRODUCT-RECOVERY-AND-DEMO-RELAUNCH-SPEC-20260803.md",
+  "spec_sections": ["2", "4.3", "12.0", "15 step 1"],
+  "subject": "controlled qualification retry 6",
+  "classification": "evidence-integrity observation with corrected timeline",
+  "ok": false,
+  "timeline": [
+    {
+      "at_utc": "approx 2026-08-03T12:30:00Z",
+      "observed": "no controlled-qualification test process running; retry working directory 20260803-controlled-retry2 empty; no controlled report anywhere; residual failed prover units pft-a666-public-reserve-proof-epoch7-bounded.service and pft-a666-public-reserve-proof-epoch7.service"
+    },
+    {
+      "at_utc": "2026-08-03T18:14:35Z",
+      "observed": "transient user unit pft-a666-public-proof-qualification-retry6.service started: cargo test --locked --release -p postfiat-node --test atomic_swap_local_six a666_public_successor_proof_migrates_and_survives_six_validator_restart -- --ignored --exact --nocapture"
+    },
+    {
+      "at_utc": "2026-08-03T18:16:23Z",
+      "observed": "compile finished in 1m48s from the worktree whose tracked content equals commit 94f5b3e; test binary target/release/deps/atomic_swap_local_six-7e388d62a223c179 running"
+    },
+    {
+      "at_utc": "2026-08-03T19:02:00Z",
+      "observed": "run in progress; disposition per spec section 15 step 1 is to let it terminate without changing inputs, then freeze and hash its artifacts and report"
+    }
+  ],
+  "retry6_configuration_assessment": {
+    "report_file_env_set": true,
+    "report_path": "~/.pft/public-reserve-qualification/20260803-controlled-retry6-report.json",
+    "consumes_archived_proofs_by_path": true,
+    "proving_chained_in_front": false,
+    "compliant_with_spec_12_0": true
+  },
+  "standing_defects": [
+    {
+      "check": "historical runner sets POSTFIAT_A666_CONTROLLED_REPORT_FILE",
+      "observed": "continue-a666-public-proof-qualification.sh never set the variable and chained sequential throttled SP1 CPU proving in front of the lifecycle test; disabled as continue-a666-public-proof-qualification.sh.disabled-20260803",
+      "outcome": "fail"
+    },
+    {
+      "check": "cold test emits report on failure",
+      "observed": "at revision 85cf5237 the controlled report is emitted only after all assertions pass; a failing run leaves no report file (objective O1)",
+      "outcome": "fail"
+    },
+    {
+      "check": "prior retries preserved artifacts",
+      "observed": "20260803-controlled-retry2 directory empty; retries 2 through 5 left only failed transient units with no frozen artifacts",
+      "outcome": "fail"
+    }
+  ],
+  "corrective_actions": [
+    "let retry 6 terminate untouched, then freeze and hash its report and journal output",
+    "historical proving-chained runner disabled and made non-executable",
+    "residual failed epoch-7 prover units reset after recording",
+    "report-on-failure implemented under objective O1 (spec 15.1)"
+  ]
+}

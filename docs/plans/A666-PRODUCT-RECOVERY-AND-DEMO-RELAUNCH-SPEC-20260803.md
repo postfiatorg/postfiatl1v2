@@ -90,17 +90,21 @@ The following statements are the recovery baseline as of this document:
 - StakeHub remains active and has not been deprecated;
 - the browser-wallet journey has not passed against the successor release;
 - clean public reproduction has not passed;
-- controlled qualification retry 6 has terminated: no test process remains,
-  its working directory
-  (`~/.pft/public-reserve-qualification/20260803-controlled-retry2`) is empty,
-  and no authoritative controlled-qualification report exists anywhere;
-  this is a recorded evidence-integrity failure under section 15 step 1, and
-  the controlled gate remains open, not passed;
-- the retry runner never set `POSTFIAT_A666_CONTROLLED_REPORT_FILE`, so even a
-  passing run would have printed its report to stdout only; the cold test also
+- controlled qualification retry 6 is running as transient unit
+  `pft-a666-public-proof-qualification-retry6.service` (started
+  2026-08-03T18:14:35Z); unlike the disabled historical runner it sets
+  `POSTFIAT_A666_CONTROLLED_REPORT_FILE` and consumes the archived proofs
+  without chaining proving; it must terminate untouched, after which its
+  report and journal output are frozen and hashed; the controlled gate
+  remains open, not passed;
+- prior retries left no frozen artifacts (empty retry working directory,
+  failed transient units only), the historical runner
+  `continue-a666-public-proof-qualification.sh` chained throttled sequential
+  proving and never set the report variable (now disabled), and the cold test
   emits its report only after all assertions pass, so a failing run produces
-  no report at all — both defects violate section 13 and must be fixed before
-  any further controlled run;
+  no report at all — recorded in
+  `docs/evidence/a666-public-reserve-product-20260803/qualification/retry-6-evidence-integrity-failure.json`
+  and fixed under objective O1;
 - the candidate source and evidence are in a dirty, partly staged worktree and
   are not a clean public release.
 
@@ -620,10 +624,10 @@ repair a potentially corrupted database in place.
 
 The next work is strictly ordered:
 
-1. retry 6 has already terminated without a report; its evidence-integrity
-   failure is recorded in section 2; freeze and hash whatever artifacts
-   remain, and disable the retry runner so no further run chains proving in
-   front of qualification (section 12.0);
+1. let the running retry 6 terminate without changing its inputs, then freeze
+   and hash its report and journal output; the historical proving-chained
+   runner is already disabled and the evidence-integrity observation is
+   recorded in section 2 (section 12.0 binds all future runs);
 2. extract the pre-successor state into a signed, content-addressed checkpoint;
 3. implement and validate the checkpoint importer with positive and adversarial
    vectors;
