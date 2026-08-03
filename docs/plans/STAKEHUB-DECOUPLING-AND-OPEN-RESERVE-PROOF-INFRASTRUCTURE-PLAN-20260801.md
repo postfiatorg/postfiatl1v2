@@ -1235,7 +1235,7 @@ Repository and pushed implementation tip at this update:
 ```text
 repository: /home/postfiat/repos/a666-eth-fast-lane-combined-20260724
 branch: feature/pnok-private-fix
-tip: 843554ba23bf8dc11c4d42e7547c6241d4e6da89
+tip: fc8fd9c9d4c637c8b2a3ef65365e6c1729a47849
 remote: origin/feature/pnok-private-fix
 ```
 
@@ -1254,6 +1254,10 @@ d5e4476 Rehearse exact A666 public proof migration
 0c942ae Derive A666 public NAV packets fail closed
 92f17ff Test A666 successor against live supply shape
 843554b Exercise reserve packet tamper boundaries
+f335d94 Exercise A666 migration against deployed route identity
+f451132 Add fail-closed A666 proof height advancement
+dac5c97 Bind A666 lifecycle receipts to deployed addresses
+fc8fd9c Rehearse A666 overlay-aware reserve migration
 ```
 
 The worktree has no tracked modification at this checkpoint. It still contains
@@ -1360,45 +1364,55 @@ artifact and cannot be submitted.
 
 ### 10.4 Long proof and controlled migration status
 
-The epoch-7 CPU Groth16 proof remains active under the supervised service:
+The first epoch-7 CPU Groth16 attempt completed its four-hour proof workload
+but failed while wrapping the final proof because the user service did not
+have the effective Docker group. The proof wrapper now performs that
+preflight before starting expensive work. The bounded retry is active:
 
 ```text
-service: pft-a666-public-reserve-proof-epoch7-bounded
-started: 2026-08-02 20:27:28 UTC
-peak memory observed: 60,091,985,920 bytes
+service: pft-a666-public-reserve-proof-epoch7-retry1-bounded
+started: 2026-08-03 00:31:13 UTC
 current state at this update: active/running
 output directory:
-/home/postfiat/.pft/public-reserve-qualification/20260802-epoch-2/proof
+/home/postfiat/.pft/public-reserve-qualification/20260802-epoch-2/proof-retry1
 ```
 
-Do not terminate or duplicate this job. When it completes, independently
-verify its proof and public values, record their hashes, run the exact
-six-validator A666 successor migration/restart/snapshot test, and then start
-the epoch-8 Groth16 proof sequentially. The two proof jobs must not run
-concurrently because each can peak near 60 GB.
+Do not terminate or duplicate this job. The active continuation supervisor is
+`pft-a666-public-proof-qualification-continuation.service`. It waits for and
+independently verifies epoch 7, starts epoch 8 sequentially through the
+effective Docker group, verifies epoch 8, and only then runs the exact
+two-epoch six-validator rehearsal. The two proof jobs must not run
+concurrently because the first attempt peaked near 60 GB.
 
 The ignored exact migration test is committed at
 `crates/node/tests/atomic_swap_local_six.rs`. It binds the exact A666 asset,
 genesis, successor profile, proof paths, six independent validators, finality,
-restart, snapshot/import, and replay. It has compiled in release mode but has
-not yet run because the epoch-7 proof is not complete. Commit `92f17ff`
-removed its zero-supply bootstrap shortcut: the rehearsal now recreates the
-known `31,597,197,455`-atom A666 supply and requires the proof-derived
-pre-overlay NAV floor `0.89748188`.
+restart, snapshot/import, and replay. It has compiled but has not yet run
+because both aggregate proofs are required. Commit `fc8fd9c` removes its
+directly issued pfUSDC fixture: the controlled test now drives the vault
+deposit propose/attest/finalize/claim state machine, performs an A666 issue,
+derives the resulting nonzero reserve overlay with the validator's own
+consensus function, finalizes the second cryptographic A666 proof with the
+composite root and total assets, rebinds the route, and completes the
+lifecycle against that packet. The controlled pfUSDC observer is only an
+isolated state-machine driver; it does not qualify pfUSDC and does not replace
+the live Tier-4 Ethereum receipt proof. Both A666 proofs still require six
+cryptographic quantity and valuation sources with zero attested and zero
+controlled value.
 
-The broader provider-neutral controlled route test passes transparent
-subscribe, export, return/refund, replay, malformed input, restart-state, and
-conservation behavior. That is compositional evidence only. `G5` remains
-open until the exact A666 environment also completes transparent and private
-issue/redeem, export/return, outage, pause, rollback, and conservation checks.
+The upgraded exact rehearsal is wired for transparent and private
+issue/redeem, export/return, outage, replay, pause, rollback, identical state
+roots, snapshot restore, and reserve/supply/balance conservation. Compilation
+and all 176 execution tests pass. That is still preparatory evidence only.
+`G5` remains open until the exact ignored rehearsal actually passes with both
+independently verified proofs.
 
 ### 10.5 CI and live-state truth
 
-Exact-tip product-security CI for `843554b` must complete green before any
-release or live migration. Run `30771049323` covers that exact tip. Run
-`30770789317` covers prior tip `fa017e1`; its public-tree inventory correction
-passed, while its open proof-kit job was still running at the last check. An
-older green run is not evidence for the current tip. The
+Exact-tip product-security CI for `fc8fd9c` must complete green before any
+release or live migration. Run `30775838743` covers that exact tip and was in
+progress at this update. Older runs were cancelled after their replacement
+tips were pushed and are not evidence for the current tip. The
 official Ethereum fork job may accurately record that no mainnet RPC secret is
 configured; that skipped real-value assertion is not source qualification.
 
@@ -1434,25 +1448,24 @@ reconciliation, proof, and independent reproduction evidence is reviewed.
 Execute in this order:
 
 1. Preserve and monitor
-   `pft-a666-public-reserve-proof-epoch7-bounded`; do not start another
+   `pft-a666-public-reserve-proof-epoch7-retry1-bounded`; do not start another
    high-memory proof concurrently.
-2. Require exact-tip CI for `843554b` to finish green. Fix any failure,
+2. Require exact-tip CI run `30775838743` for `fc8fd9c` to finish green. Fix any failure,
    commit, push, and require the replacement exact-tip run to pass.
 3. When epoch 7 completes, independently run `packet verify`, compare the
    public values byte-for-byte with the committed epoch-7 pins, hash every
    proof artifact, and retain the supervised service result.
-4. Use the verified epoch-7 proof to run
+4. Let the continuation supervisor start the epoch-8 bounded CPU Groth16 proof
+   only after epoch 7 releases its memory. Independently verify it, compare its
+   public values with the committed pins, and retain artifact hashes.
+5. Use both verified proofs to run
    `a666_public_successor_proof_migrates_and_survives_six_validator_restart`
    in release mode with the existing local issuer/reserve key files supplied
    only through environment paths. Never print or copy key contents.
-5. Generate an A666-shaped overlay-aware v2 packet from controlled finalized
-   route/vault/supply snapshots with
-   `scripts/a666-build-live-nav-mark-ops.py`. Exercise wrong overlay, wrong
-   supply, wrong profile, wrong NAV, wrong packet hash, stale proof, replay,
-   restart, and snapshot rejection.
-6. Start the epoch-8 bounded CPU Groth16 proof only after the epoch-7 service
-   and exact migration test release their memory. Independently verify and
-   reproduce it in the same way.
+6. Retain the controlled finalized route/vault/supply snapshots and generated
+   overlay-aware packet. Exercise wrong overlay, wrong supply, wrong profile,
+   wrong NAV, wrong packet hash, stale proof, replay, restart, and snapshot
+   rejection without editing validator state.
 7. Finish the source-by-source qualification table. For each of Aave, EVM
    spot, Hyperliquid, NEAR, Solana, and XMR, record the exact public reader or
    proof identity, governed policy/committee/owner inputs, fresh checkpoint,
