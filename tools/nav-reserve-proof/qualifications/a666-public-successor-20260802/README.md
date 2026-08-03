@@ -63,7 +63,18 @@ All amounts below are USD e8 atoms.
 
 ## Reproduce the observations and witness
 
-Build the public host CLI first. Then, from the repository root:
+Install `protoc` (the Debian/Ubuntu package is `protobuf-compiler`) and build
+the public host CLI with SP1 support. The default feature set can reproduce
+observations and witnesses, but it intentionally cannot execute or verify an
+SP1 proof:
+
+```bash
+cd tools/nav-reserve-proof
+cargo build --locked --release -p postfiat-reserve-proof --features sp1
+cd ../..
+```
+
+Then, from the repository root:
 
 ```bash
 KIT=tools/nav-reserve-proof
