@@ -4011,7 +4011,11 @@ fn a666_public_successor_lifecycle_body() -> Value {
         "bind-route-to-overlay-aware-a666-public-reserve-proof",
     );
 
-    let transparent_redeem_atoms = 500_000;
+    // Must satisfy the production-shaped policy minimum order
+    // (A666_POLICY_MIN_ORDER_ATOMS = 1_000_000); retry 6 failed here with
+    // 500_000 atoms. Guarded by AR-09 in
+    // crates/execution/src/market_nav_execution_tests.rs.
+    let transparent_redeem_atoms = 1_000_000;
     let transparent_redeem_base = postfiat_execution::required_vault_bridge_settlement_atoms(
         transparent_redeem_atoms,
         6,

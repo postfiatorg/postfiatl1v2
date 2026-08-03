@@ -6324,3 +6324,495 @@ fn pftl_uniswap_v2_state_binds_directional_trust_capacity_and_non_nav_spread() {
         .expect_err("outbound direction may not degrade")
         .contains("TRUSTLESS_FINALITY"));
 }
+
+/// AR-09: redemption submit against the production-shaped route policy
+/// admits a valid expiry/binding/amount/nonce tuple and rejects each invalid
+/// variant with `pftl_uniswap_redemption_policy_mismatch`, leaving state
+/// untouched. Reproduces the controlled-qualification retry-6 failure of
+/// 2026-08-03, where a 500_000-atom redemption was submitted against the
+/// production minimum order of 1_000_000 atoms.
+#[test]
+fn pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09() {
+    let mut genesis = Genesis::new_with_validator_count("postfiat-wan-devnet-2", 6);
+    genesis.consensus_v2_activation_height = Some(1);
+    // The qualified reserve-proof fixture binds the deterministic qNAV asset
+    // identity, so the issuer must use the same deterministic derivation as
+    // the provider-neutral qualification fixture.
+    let issuer_derivation_payload = serde_json::to_vec(&(
+        "postfiat.wallet.seed.v1",
+        "ML-DSA-65",
+        genesis.chain_id.as_str(),
+        0_u32,
+        "transparent-spend",
+        "66".repeat(32),
+    ))
+    .expect("serialize deterministic AR-09 issuer derivation");
+    let issuer_digest = postfiat_crypto_provider::hash_bytes(
+        "postfiat.wallet.seed.v1",
+        &issuer_derivation_payload,
+    );
+    let mut issuer_seed = [0_u8; 32];
+    issuer_seed.copy_from_slice(&issuer_digest[..32]);
+    let issuer_key = ml_dsa_65_keygen_from_seed(&issuer_seed);
+    let operator_key = ml_dsa_65_keygen().expect("operator keygen");
+    let subscriber_key = ml_dsa_65_keygen().expect("subscriber keygen");
+    let issuer = address_from_public_key(&issuer_key.public_key);
+    let operator = address_from_public_key(&operator_key.public_key);
+    let subscriber = address_from_public_key(&subscriber_key.public_key);
+    let mut ledger = LedgerState::new(vec![
+        Account::new(
+            issuer.clone(),
+            100_000,
+            Some(bytes_to_hex(&issuer_key.public_key)),
+        ),
+        Account::new(
+            operator.clone(),
+            100_000,
+            Some(bytes_to_hex(&operator_key.public_key)),
+        ),
+        Account::new(
+            subscriber.clone(),
+            100_000,
+            Some(bytes_to_hex(&subscriber_key.public_key)),
+        ),
+    ]);
+
+    let submit = |ledger: &mut LedgerState,
+                      key: &postfiat_crypto_provider::MlDsa65KeyPair,
+                      address: &str,
+                      kind: &str,
+                      operation: AssetTransactionOperation,
+                      height: u64|
+     -> Receipt {
+        let transaction = signed_asset_transaction_with_minimum_fee(
+            &genesis,
+            ledger,
+            key,
+            kind,
+            ledger.account(address).expect("signer account").sequence + 1,
+            operation,
+        );
+        execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+            &genesis,
+            ledger,
+            &transaction,
+            height,
+        )
+    };
+
+    let receipt = submit(
+        &mut ledger,
+        &issuer_key,
+        &issuer,
+        ASSET_CREATE_TRANSACTION_KIND,
+        AssetTransactionOperation::AssetCreate(AssetCreateOperation {
+            issuer: issuer.clone(),
+            code: "PUSDC".to_string(),
+            version: 1,
+            precision: 6,
+            display_name: "PFTL USDC".to_string(),
+            max_supply: Some(100_000_000),
+            requires_authorization: false,
+            freeze_enabled: true,
+            clawback_enabled: false,
+        }),
+        1,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let settlement_asset_id = ledger.asset_definitions[0].asset_id.clone();
+    let receipt = submit(
+        &mut ledger,
+        &issuer_key,
+        &issuer,
+        ASSET_CREATE_TRANSACTION_KIND,
+        AssetTransactionOperation::AssetCreate(AssetCreateOperation {
+            issuer: issuer.clone(),
+            code: "qNAV".to_string(),
+            version: 1,
+            precision: 6,
+            display_name: "AR-09 qualification NAVCoin".to_string(),
+            max_supply: None,
+            requires_authorization: false,
+            freeze_enabled: true,
+            clawback_enabled: false,
+        }),
+        2,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let native_nav_asset_id = ledger.asset_definitions[1].asset_id.clone();
+
+    let receipt = submit(
+        &mut ledger,
+        &issuer_key,
+        &issuer,
+        NAV_ASSET_REGISTER_TRANSACTION_KIND,
+        AssetTransactionOperation::NavAssetRegister(NavAssetRegisterOperation {
+            issuer: issuer.clone(),
+            asset_id: settlement_asset_id.clone(),
+            reserve_operator: issuer.clone(),
+            proof_profile: "pftl-uniswap-settlement-test".to_string(),
+            valuation_unit: "USDC".to_string(),
+            redemption_account: issuer.clone(),
+        }),
+        3,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let receipt = submit(
+        &mut ledger,
+        &issuer_key,
+        &issuer,
+        NAV_PROFILE_REGISTER_TRANSACTION_KIND,
+        AssetTransactionOperation::NavProfileRegister(NavProfileRegisterOperation {
+            registrant: issuer.clone(),
+            verifier_kind: postfiat_types::NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1.to_string(),
+            source_class: "manifest-driven".to_string(),
+            max_snapshot_age_blocks: 10_000,
+            challenge_window_blocks: 1,
+            max_epoch_gap_blocks: 100,
+            settle_deadline_blocks: 0,
+            min_challenge_bond: 0,
+            min_attestations: 0,
+            tolerance_bp: 0,
+            bridge_observer_min_confirmations: 0,
+            valuation_policy_hash: "04".repeat(32),
+            vault_bridge_route_policy_hash: String::new(),
+            sp1_program_vkey:
+                "0x000c7271e0711abce0c61d293222fd4a144599a779db8cadadc4df35e31a4100"
+                    .to_string(),
+            sp1_proof_encoding: "groth16".to_string(),
+            max_proof_bytes: 4_096,
+            max_public_values_bytes: postfiat_types::NAV_RESERVE_PUBLIC_VALUES_V1_BYTES as u64,
+            public_values_schema:
+                postfiat_types::NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1.to_string(),
+            source_manifest_hash: "9da4e2ba55939f138475026946d2728d9b40d3f4c7762289a70aae94584eac924b9a788c6df25c9276cc83f1616ef0e5".to_string(),
+            valuation_unit_id: "05".repeat(48),
+            max_observation_span_blocks: 8,
+            allow_controlled_sources: true,
+        }),
+        4,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let reserve_profile_id = ledger
+        .nav_proof_profiles
+        .first()
+        .expect("AR-09 reserve profile")
+        .profile_id
+        .clone();
+    let receipt = submit(
+        &mut ledger,
+        &issuer_key,
+        &issuer,
+        NAV_ASSET_REGISTER_TRANSACTION_KIND,
+        AssetTransactionOperation::NavAssetRegister(NavAssetRegisterOperation {
+            issuer: issuer.clone(),
+            asset_id: native_nav_asset_id.clone(),
+            reserve_operator: operator.clone(),
+            proof_profile: reserve_profile_id.clone(),
+            valuation_unit: "USDC".to_string(),
+            redemption_account: issuer.clone(),
+        }),
+        5,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let receipt = submit(
+        &mut ledger,
+        &issuer_key,
+        &issuer,
+        ISSUED_PAYMENT_TRANSACTION_KIND,
+        AssetTransactionOperation::IssuedPayment(IssuedPaymentOperation {
+            from: issuer.clone(),
+            to: subscriber.clone(),
+            issuer: issuer.clone(),
+            asset_id: settlement_asset_id.clone(),
+            amount: 20_000_000,
+        }),
+        5,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+
+    let pricing_reserve_packet_hash = "55".repeat(48);
+    let reserve_proof = hex_to_bytes(
+        include_str!("../testdata/nav-reserve-v1-qualified-proof-calldata.hex").trim(),
+    )
+    .expect("decode AR-09 qualification proof");
+    let reserve_public_values = hex_to_bytes(
+        include_str!("../testdata/nav-reserve-v1-qualified-public-values.hex").trim(),
+    )
+    .expect("decode AR-09 qualification public values");
+    let receipt = submit(
+        &mut ledger,
+        &operator_key,
+        &operator,
+        NAV_RESERVE_SUBMIT_TRANSACTION_KIND,
+        AssetTransactionOperation::NavReserveSubmit(NavReserveSubmitOperation {
+            issuer: issuer.clone(),
+            submitter: operator.clone(),
+            asset_id: native_nav_asset_id.clone(),
+            epoch: 7,
+            nav_per_unit: 7_000_000,
+            circulating_supply: 0,
+            verified_net_assets: 1_100,
+            proof_profile: reserve_profile_id,
+            source_root: "f4bdaca02e5445e7d2c666ca692d45d63fe1c423f6b03067e9eee19f5f9334fe60920b8528feff2656d5dbe7d28d415f".to_string(),
+            attestor_root: "cb34590e25db391724491b01795dee8bdbbadba3bba36fb5fc4f96bce1a87fa311426e0b76ce5ff4d775b091d94147df".to_string(),
+            reserve_packet_hash: pricing_reserve_packet_hash.clone(),
+            reserve_accounts: Vec::new(),
+            sp1_proof_bytes: reserve_proof,
+            sp1_public_values: reserve_public_values,
+        }),
+        5,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let receipt = submit(
+        &mut ledger,
+        &issuer_key,
+        &issuer,
+        NAV_EPOCH_FINALIZE_TRANSACTION_KIND,
+        AssetTransactionOperation::NavEpochFinalize(NavEpochFinalizeOperation {
+            issuer: issuer.clone(),
+            asset_id: native_nav_asset_id.clone(),
+            epoch: 7,
+            reserve_packet_hash: pricing_reserve_packet_hash.clone(),
+        }),
+        6,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+
+    let authority_keys = (0_u8..4)
+        .map(|index| ml_dsa_65_keygen_from_seed(&[0xa1 + index; 32]))
+        .collect::<Vec<_>>();
+    let mut authority = FastSwapCommitteeV1 {
+        domain: FastSwapCommitteeDomainV1 {
+            chain: FastSwapChainDomainV1 {
+                chain_id: genesis.chain_id.clone(),
+                genesis_hash: FastSwapOpaqueHashV1(
+                    hex_to_bytes(&genesis_hash(&genesis))
+                        .expect("genesis hex")
+                        .try_into()
+                        .expect("48-byte genesis hash"),
+                ),
+                protocol_version: genesis.protocol_version,
+            },
+            fastswap_schema_version: postfiat_types::FASTSWAP_SCHEMA_VERSION_V1,
+            committee_epoch: 9,
+            committee_root: FastSwapCommitteeRootV1::ZERO,
+            validator_count: 4,
+            quorum: 3,
+        },
+        validators: authority_keys
+            .iter()
+            .enumerate()
+            .map(|(index, key)| FastSwapValidatorV1 {
+                validator_id: format!("ethereum-authority-{index}"),
+                public_key: key.public_key.clone(),
+            })
+            .collect(),
+    };
+    authority.domain.committee_root = authority.computed_root().expect("committee root");
+    ledger.fastswap_committees.push(authority.clone());
+    let ethereum_policy = EthereumRouteVerificationPolicyV1 {
+        authority_epoch: authority.domain.committee_epoch,
+        committee_root: authority.domain.committee_root,
+        minimum_confirmations: 12,
+        handoff_controller_code_hash: [0x71; 32],
+        wrapped_navcoin_code_hash: [0x72; 32],
+    };
+
+    // Production-shaped primary market policy: the exact cap, order-bound,
+    // and multiplier shape used by the live A666 route.
+    let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        policy_hash: String::new(),
+        policy_epoch: 1,
+        issue_multiplier_bps: PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS,
+        redeem_multiplier_bps: PFTL_UNISWAP_A666_REDEEM_MULTIPLIER_BPS,
+        issue_capacity_atoms: 2_000_000_000_000,
+        redeem_capacity_atoms: 2_000_000_000_000,
+        max_order_atoms: 1_000_000_000_000,
+        min_order_atoms: 1_000_000,
+        valid_from_height: 24,
+        expires_at_height: 5_000,
+        max_nav_age_blocks: 100,
+        pricing_nav_epoch: 7,
+        pricing_reserve_packet_hash: pricing_reserve_packet_hash.clone(),
+    };
+    policy.policy_hash = policy.computed_hash();
+    let route_id = "ar09-production-shaped-redeem".to_string();
+    let receipt = submit(
+        &mut ledger,
+        &operator_key,
+        &operator,
+        PFTL_UNISWAP_ROUTE_INIT_V2_TRANSACTION_KIND,
+        AssetTransactionOperation::PftlUniswapRouteInitV2(PftlUniswapRouteInitV2Operation {
+            operator: operator.clone(),
+            route_id: route_id.clone(),
+            route_config_digest: "c1".repeat(48),
+            native_nav_asset_id: native_nav_asset_id.clone(),
+            settlement_asset_id: settlement_asset_id.clone(),
+            opening_inventory_atoms: 0,
+            opening_inventory_holder: String::new(),
+            handoff_controller: "0x1111111111111111111111111111111111111111".to_string(),
+            settlement_adapter: "0x2222222222222222222222222222222222222222".to_string(),
+            wrapped_navcoin_token: "0x3333333333333333333333333333333333333333".to_string(),
+            ethereum_chain_id: 1,
+            route_supply_cap_atoms: 2_000_000_000_000,
+            packet_notional_cap_atoms: 250_000_000_000,
+            latest_finalized_nav_epoch: 7,
+            return_finality_blocks: 12,
+            route_epoch: 1,
+            outbound_verification_class: PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY.to_string(),
+            return_verification_class: PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT.to_string(),
+            live_value_enabled: false,
+            ethereum_verification_policy: ethereum_policy,
+            primary_market_policy: policy.clone(),
+        }),
+        24,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    // Production routes must initialize with live value disabled; enable it
+    // for the market phase the same way the existing v2 fixture does.
+    ledger
+        .pftl_uniswap_routes
+        .iter_mut()
+        .find(|route| route.route_id == route_id)
+        .expect("AR-09 route")
+        .live_value_enabled = true;
+
+    // Fund the route reserve and the holder's NAV balance through a real
+    // subscription: 2_000_000 atoms at 7 settlement atoms per NAV atom.
+    let reservation_id = "c2".repeat(48);
+    let receipt = submit(
+        &mut ledger,
+        &subscriber_key,
+        &subscriber,
+        PFTL_UNISWAP_ORDER_RESERVE_TRANSACTION_KIND,
+        AssetTransactionOperation::PftlUniswapOrderReserve(PftlUniswapOrderReserveOperation {
+            subscriber: subscriber.clone(),
+            route_id: route_id.clone(),
+            reservation_id: reservation_id.clone(),
+            ethereum_recipient: "0x4444444444444444444444444444444444444444".to_string(),
+            route_epoch: 1,
+            policy_epoch: 1,
+            policy_hash: policy.policy_hash.clone(),
+            mint_amount_atoms: 2_000_000,
+            max_settlement_value_atoms: 14_070_000,
+            expires_at_height: 30,
+        }),
+        24,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let receipt = submit(
+        &mut ledger,
+        &subscriber_key,
+        &subscriber,
+        PFTL_UNISWAP_PRIMARY_SUBSCRIBE_V2_TRANSACTION_KIND,
+        AssetTransactionOperation::PftlUniswapPrimarySubscribeV2(
+            PftlUniswapPrimarySubscribeV2Operation {
+                subscriber: subscriber.clone(),
+                route_id: route_id.clone(),
+                reservation_id,
+                subscription_nonce: "c3".repeat(32),
+                settlement_asset_id: settlement_asset_id.clone(),
+                settlement_value_atoms: 14_070_000,
+                pricing_nav_epoch: 7,
+                pricing_reserve_packet_hash: pricing_reserve_packet_hash.clone(),
+            },
+        ),
+        25,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+
+    let valid_redeem = |nonce: String| PftlUniswapPrimaryRedeemOperation {
+        owner: subscriber.clone(),
+        settlement_recipient: subscriber.clone(),
+        route_id: route_id.clone(),
+        redemption_nonce: nonce,
+        nav_amount_atoms: 1_000_000,
+        min_settlement_value_atoms: 6_996_500,
+        route_epoch: 1,
+        policy_epoch: 1,
+        policy_hash: policy.policy_hash.clone(),
+        pricing_nav_epoch: 7,
+        pricing_reserve_packet_hash: pricing_reserve_packet_hash.clone(),
+        expires_at_height: 100,
+    };
+
+    let expect_policy_mismatch = |ledger: &mut LedgerState,
+                                      label: &str,
+                                      operation: PftlUniswapPrimaryRedeemOperation| {
+        let before = ledger.clone();
+        let transaction = signed_asset_transaction_with_minimum_fee(
+            &genesis,
+            ledger,
+            &subscriber_key,
+            PFTL_UNISWAP_PRIMARY_REDEEM_TRANSACTION_KIND,
+            ledger.account(&subscriber).expect("subscriber").sequence + 1,
+            AssetTransactionOperation::PftlUniswapPrimaryRedeem(operation),
+        );
+        let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+            &genesis,
+            ledger,
+            &transaction,
+            26,
+        );
+        assert!(!receipt.accepted, "{label}: {receipt:?}");
+        assert_eq!(
+            receipt.code, "pftl_uniswap_redemption_policy_mismatch",
+            "{label}: {receipt:?}"
+        );
+        assert_eq!(*ledger, before, "{label}: rejection must not mutate state");
+    };
+
+    // Retry-6 reproduction: 500_000 atoms is below the production minimum
+    // order of 1_000_000 atoms and must fail closed.
+    let mut sub_minimum = valid_redeem("d1".repeat(32));
+    sub_minimum.nav_amount_atoms = 500_000;
+    sub_minimum.min_settlement_value_atoms = 3_498_250;
+    expect_policy_mismatch(&mut ledger, "retry-6 sub-minimum order", sub_minimum);
+
+    let mut above_maximum = valid_redeem("d2".repeat(32));
+    above_maximum.nav_amount_atoms = 1_000_000_000_001;
+    expect_policy_mismatch(&mut ledger, "above maximum order", above_maximum);
+
+    let mut wrong_route_epoch = valid_redeem("d3".repeat(32));
+    wrong_route_epoch.route_epoch = 2;
+    expect_policy_mismatch(&mut ledger, "wrong route epoch", wrong_route_epoch);
+
+    let mut wrong_policy_epoch = valid_redeem("d4".repeat(32));
+    wrong_policy_epoch.policy_epoch = 2;
+    expect_policy_mismatch(&mut ledger, "wrong policy epoch", wrong_policy_epoch);
+
+    let mut wrong_policy_hash = valid_redeem("d5".repeat(32));
+    wrong_policy_hash.policy_hash = "d6".repeat(48);
+    expect_policy_mismatch(&mut ledger, "wrong policy hash", wrong_policy_hash);
+
+    let mut expired = valid_redeem("d7".repeat(32));
+    expired.expires_at_height = 25;
+    expect_policy_mismatch(&mut ledger, "expired redemption", expired);
+
+    // The exact valid tuple is admitted.
+    let accepted_nonce = "d8".repeat(32);
+    let transaction = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &subscriber_key,
+        PFTL_UNISWAP_PRIMARY_REDEEM_TRANSACTION_KIND,
+        ledger.account(&subscriber).expect("subscriber").sequence + 1,
+        AssetTransactionOperation::PftlUniswapPrimaryRedeem(valid_redeem(accepted_nonce.clone())),
+    );
+    let receipt = execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &genesis,
+        &mut ledger,
+        &transaction,
+        26,
+    );
+    assert!(receipt.accepted, "valid production-shaped redeem: {receipt:?}");
+    {
+        let route = ledger.pftl_uniswap_route(&route_id).expect("AR-09 route");
+        let v2 = route.v2.as_ref().expect("v2 state");
+        assert_eq!(v2.redeem_capacity_used_atoms, 1_000_000);
+        assert!(v2.redemption_nonces.contains_key(&accepted_nonce));
+    }
+
+    // Nonce replay of the accepted redemption must fail closed.
+    expect_policy_mismatch(&mut ledger, "nonce replay", valid_redeem(accepted_nonce));
+}
