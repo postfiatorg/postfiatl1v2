@@ -1875,6 +1875,28 @@ fn apply_asset_orchard_private_primary_redeem_action_to_state(
     )
 }
 
+const LEGACY_A666_PRIMARY_ROUTE_ID: &str = "pftl-a666-ethereum-wA666-usdc-v1";
+
+fn private_primary_receipt_message(route_id: &str, is_redeem: bool) -> &'static str {
+    // Receipt messages are persisted and exact archive replay compares them.
+    // Preserve the original A666 wording for the deployed route while keeping
+    // provider-neutral wording for every subsequently registered NAVCoin.
+    match (route_id == LEGACY_A666_PRIMARY_ROUTE_ID, is_redeem) {
+        (true, true) => {
+            "private A666 was atomically retired by the governed primary route and encrypted pfUSDC was issued"
+        }
+        (true, false) => {
+            "private pfUSDC was atomically consumed by the governed primary route and encrypted A666 was issued"
+        }
+        (false, true) => {
+            "private NAVCoin was atomically retired by the governed primary route and an encrypted settlement asset was issued"
+        }
+        (false, false) => {
+            "private settlement asset was atomically consumed by the governed primary route and an encrypted NAVCoin was issued"
+        }
+    }
+}
+
 fn apply_asset_orchard_private_primary_action_to_state(
     genesis: &Genesis,
     ledger: &mut LedgerState,
@@ -2061,11 +2083,7 @@ fn apply_asset_orchard_private_primary_action_to_state(
             "accepted",
             is_redeem,
         )?,
-        if is_redeem {
-            "private NAVCoin was atomically retired by the governed primary route and an encrypted settlement asset was issued"
-        } else {
-            "private settlement asset was atomically consumed by the governed primary route and an encrypted NAVCoin was issued"
-        },
+        private_primary_receipt_message(&payload.route_id, is_redeem),
     ))
 }
 

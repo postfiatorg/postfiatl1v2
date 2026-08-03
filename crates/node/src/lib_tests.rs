@@ -15,4 +15,26 @@ mod tests {
     use consensus_history::{dummy_block_record, write_split_validator_key_files};
     include!("tests/governance_history_manifest_tests.rs");
     include!("tests/pftl_uniswap_bridge_rpc_tests.rs");
+
+    #[test]
+    fn private_primary_receipt_messages_preserve_a666_archive_replay() {
+        assert_eq!(
+            super::private_primary_receipt_message(
+                "pftl-a666-ethereum-wA666-usdc-v1",
+                false,
+            ),
+            "private pfUSDC was atomically consumed by the governed primary route and encrypted A666 was issued"
+        );
+        assert_eq!(
+            super::private_primary_receipt_message(
+                "pftl-a666-ethereum-wA666-usdc-v1",
+                true,
+            ),
+            "private A666 was atomically retired by the governed primary route and encrypted pfUSDC was issued"
+        );
+        assert_eq!(
+            super::private_primary_receipt_message("pftl-navcoin-generic-v1", false),
+            "private settlement asset was atomically consumed by the governed primary route and an encrypted NAVCoin was issued"
+        );
+    }
 }

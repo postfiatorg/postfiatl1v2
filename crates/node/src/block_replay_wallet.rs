@@ -601,6 +601,70 @@ const WAN_DEVNET2_ARCHIVED_PRIVATE_PRIMARY_ISSUES: &[(u64, &str)] = &[
         472,
         "f557663997c1cdb5ab903810ef5b27f52455c6b6c6fa923765a5bcff24b6d66dfff9e8bec67732690c8ba3832d0ad366",
     ),
+    (
+        483,
+        "ae642f1cce0e11116a6ae5965ec7704846f55ae40113a2650fada8604aee5ccec2c28f2b4bb067db7c803441eadae2de",
+    ),
+    (
+        486,
+        "9be5bca8a97e09bae57be6a7ed4381226db0589f368070a2a6c2956b23783c12ddf5e563c962ee9ab24573e24577325f",
+    ),
+    (
+        488,
+        "e9cfba8b55fc9d4bbb66a891cff186756465ea1ca65d27acc04f02af0c50a0032bfa78bcfe91553e0a27f290a1475e70",
+    ),
+    (
+        490,
+        "c598fc7f44c437caa638d42d99c566cdb40c72bf427605630a70acbe95ccbc7b82c71cda0797bd58514859e6cfbbf626",
+    ),
+    (
+        493,
+        "ae53f0eaaad64acb425c6bc945a09afd8ed791e283e8b325f9dcc126ad3a3e0426408d221faa8204b8cfd900c5f0ade1",
+    ),
+    (
+        496,
+        "f1446783adf423ca466f03746b09d3456ae5233917276edc36e0002eee62a55442eddb4c8ba4e49f14dd01e0be03d925",
+    ),
+    (
+        499,
+        "739e6adcb524c6abdb652c139899a12bcc689dbcce00f08d25f55ed16b756f07789f850333da3831c828f722ada2dcf0",
+    ),
+    (
+        502,
+        "0bbe6a447ffd986b3174ba8260ea11a3b118b10333d63e97425195413040f900d7e0d3f351358942709dd662caa46a53",
+    ),
+    (
+        505,
+        "5d181935a18ffd33908fdaf245bfd7730a16fdaa5f167dff63aa31098ecd20911b7e917168ac9c96699e8e89113f88b1",
+    ),
+    (
+        508,
+        "7f90d008d8700073f79a784432be31d02a209be24e511243fef12f96820138a7ac219b72d303d3b6b4574ed210511399",
+    ),
+    (
+        511,
+        "d4012506757cb1978d19c6492c8622f5ffeaa6e006ac5f2ca90439cc086f139552f48c6d66045f1fa4fb8253115eefef",
+    ),
+    (
+        514,
+        "1bf9ffd48e17ee18a269462990aea0722293649abfa25e0e35dcb19daccd0d5568959739e3455fdd16bfe949cb784fae",
+    ),
+    (
+        517,
+        "f03014f9da7780ccccaec4bc8541f7a34e3ac5ebc6ea7322e28c6fe87052a228f4f4f8f03dc10f7eb28f8bab71abec1d",
+    ),
+    (
+        520,
+        "1d06382cdd1fc4514c7ffd4e2c7d88b9d6a026e1adb78bdd1157d3e2cce1f8f4e4a4b7aec55042f49040e552b67e8976",
+    ),
+    (
+        523,
+        "4dd0748bd6db07fd8b06957d2062596618017bd236c5fb3898c2049395b95526e0e5e8f6a4ee24a327116ce0cf0189c0",
+    ),
+    (
+        526,
+        "abe740c7e040fa4c33254487e44adb6649b68db5a979f7187538880fa4fc891e0224c3bd6f5c46fa7117b4bfbcd1d109",
+    ),
 ];
 
 const WAN_DEVNET2_ARCHIVED_PRIVATE_PRIMARY_REDEEMS: &[(u64, &str)] = &[
@@ -623,6 +687,66 @@ const WAN_DEVNET2_ARCHIVED_PRIVATE_PRIMARY_REDEEMS: &[(u64, &str)] = &[
     (
         478,
         "409c9c7cc8b2298ef1525d68bb9e496582702316a0b90f23c410866526302dd6c6e57dd598cee535c957dcbccec0db4e",
+    ),
+    (
+        484,
+        "331f9f040ec952e2dc46efff80015c2caeb001abb6b48dd1f11e35f8d802be8fc7ecbc2f8bf8672639697af7197dcb04",
+    ),
+    (
+        489,
+        "9ad722f2f2bbc055c35305870fce6e553b59a40701fe08b6c6408af233b59eaf164fac841cb7b5659521408e9c3e784b",
+    ),
+    (
+        491,
+        "60faaf3fa75bf60f32615d02fdddbd0c3ff25f04a8e286293f4a6504f565365113e8fe3f8c149a9b026e3c81eacc2b7a",
+    ),
+    (
+        494,
+        "2c6fbc8365b21660b796cb407a5de6c6456109a8c0ecf35c685d08b713e315383b2879a2a4512e9022bbe70b83aa9281",
+    ),
+    (
+        497,
+        "dd7332908f701fa2b5b27724f7ed5c8dfe703d7277499907b2c0532b85e49f579700898ed58261ce7923b27595339e1f",
+    ),
+    (
+        500,
+        "73f50a92fa6970cba5dd56773cc02fe8888da3d7e57566599345fae3048caa12958fb528cde886da608ae4f3e0aa8784",
+    ),
+    (
+        503,
+        "0ae00ef985ad94515a3017b3259216508cfdbd88e7dfc0bb98bcb02e339a93ed14890b06ea03a1f557502f69fa8a6742",
+    ),
+    (
+        506,
+        "d627bf0b6d8f1cb00eff41e5489e5e2b36528511b210ae0d0f6104868d8594626f85562820424fa2b9e9baf5290ba0d8",
+    ),
+    (
+        509,
+        "4e91d597b8969823d8e0d7a43a1dd685d6afdfc87d25c29349bbc6f8a85dd20900ed8a44ccea113215c86ad0f38ee451",
+    ),
+    (
+        512,
+        "1c7c432c4ef9ecb5e20b90bc4643853df45413eb8708683cc9d7399623c189cef9f535256dd8f5662483df9bcef48419",
+    ),
+    (
+        515,
+        "617d843167773d2dc84d2d274e2d22d5ad31baf8bc8016bd66e4ed1f2aa4866c0fef5de662d23bdd19121f9eb6d2e1a0",
+    ),
+    (
+        518,
+        "2215412f8ae898c62aa5a15e053fe1c9b886384222e44d20f3fe0cb221b86e0d5a69b755b2fc409f8824ba8f6c04b6ab",
+    ),
+    (
+        521,
+        "b314569ba4a277bf8039ae7a4101a17ec4e341f18d471d5c3dcb0a01a0780feed44f56f88b006effc68509d67f4c97b4",
+    ),
+    (
+        524,
+        "d2fafa9fd50928b01199daef1f556dc321acde47732cb77fb100d954d6f1a06e733ae342aa6bd1646a75f1ace185570b",
+    ),
+    (
+        527,
+        "37989cf924c9feff9eb669f78ad5cbcdb86b4861bd6c2ef80cb02c181717f07359b24e034cff5aa208aad2e20db1c8fd",
     ),
 ];
 

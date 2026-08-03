@@ -479,6 +479,37 @@ fn wan_devnet2_accepted_private_primary_replay_is_exactly_allowlisted() {
         issue_batch,
         false,
     ));
+
+    let atomic_issue_height = 483;
+    let atomic_issue_batch =
+        "ae642f1cce0e11116a6ae5965ec7704846f55ae40113a2650fada8604aee5ccec2c28f2b4bb067db7c803441eadae2de";
+    let final_redeem_height = 527;
+    let final_redeem_batch =
+        "37989cf924c9feff9eb669f78ad5cbcdb86b4861bd6c2ef80cb02c181717f07359b24e034cff5aa208aad2e20db1c8fd";
+    assert!(archived_wan_devnet2_private_primary_execution_allowed(
+        &genesis,
+        atomic_issue_height,
+        atomic_issue_batch,
+        false,
+    ));
+    assert!(archived_wan_devnet2_private_primary_execution_allowed(
+        &genesis,
+        final_redeem_height,
+        final_redeem_batch,
+        true,
+    ));
+    assert!(!archived_wan_devnet2_private_primary_execution_allowed(
+        &genesis,
+        atomic_issue_height,
+        atomic_issue_batch,
+        true,
+    ));
+    assert!(!archived_wan_devnet2_private_primary_execution_allowed(
+        &genesis,
+        final_redeem_height,
+        final_redeem_batch,
+        false,
+    ));
 }
 
 #[test]
