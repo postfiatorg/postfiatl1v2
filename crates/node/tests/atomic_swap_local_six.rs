@@ -10,7 +10,10 @@ use postfiat_crypto_provider::{
     bytes_to_hex, hex_to_bytes, ml_dsa_65_sign, ml_dsa_65_sign_with_context_seed,
     ML_DSA_65_ALGORITHM,
 };
-use postfiat_execution::genesis_hash;
+use postfiat_execution::{
+    genesis_hash, validate_nav_reserve_collateralization_with_unit_scale,
+    validate_nav_reserve_public_values_context, NavReserveVerifyContext, NavSp1VerifyError,
+};
 use postfiat_network::{local_topology, NetworkDomain};
 use postfiat_node::{
     apply_batch, apply_governance_batch, apply_shielded_batch, assemble_consensus_v2_commit,
@@ -20,9 +23,12 @@ use postfiat_node::{
     create_asset_orchard_private_primary_issue, create_asset_orchard_private_primary_issue_batch,
     create_asset_orchard_private_primary_redeem, create_asset_orchard_private_primary_redeem_batch,
     create_consensus_v2_precommit_vote, create_consensus_v2_prepare_vote,
-    create_consensus_v2_proposal_for_block, create_fastswap_governance_bootstrap,
-    create_mempool_batch, create_transfer_batch, export_snapshot, faucet_key, import_snapshot,
-    init, sign_governance_amendment_authorization, simulate_shielded_batch,
+    create_consensus_v2_proposal_for_block, create_dev_key_file,
+    create_fastswap_governance_bootstrap, create_mempool_batch, create_transfer_batch,
+    export_signed_snapshot_from_finalized_checkpoint, export_snapshot,
+    export_snapshot_publisher_public_key, faucet_key,
+    import_signed_snapshot_from_finalized_checkpoint, import_snapshot, init,
+    sign_governance_amendment_authorization, simulate_shielded_batch,
     submit_signed_asset_transaction_json_to_mempool, verify_blocks, ApplyBatchOptions,
     AssetFeeQuoteOptions, AssetOrchardIngressBatchOptions, AssetOrchardIngressCreateOptions,
     AssetOrchardPrivatePrimaryIssueBatchOptions, AssetOrchardPrivatePrimaryIssueCreateOptions,
@@ -31,7 +37,9 @@ use postfiat_node::{
     DevKeyFile, FastSwapGovernanceBootstrapOptions, GovernanceAmendmentAssembleOptions,
     GovernanceAuthorizationSignOptions, InitOptions, MempoolBatchOptions, NodeOptions,
     ShieldedBatchSimulateOptions, SignedAssetTransactionJsonSubmitOptions,
-    SignedFastSwapGovernanceBootstrapOptions, SnapshotExportOptions, SnapshotImportOptions,
+    SignedFastSwapGovernanceBootstrapOptions, SignedSnapshotExportOptions,
+    SignedSnapshotImportOptions, SnapshotExportOptions, SnapshotImportOptions,
+    SnapshotPublisherKeyExportOptions,
 };
 use postfiat_rpc_sdk::{
     asset_fee_quote_request, atomic_swap_fee_quote_request, decode_asset_fee_quote_summary,
@@ -1461,6 +1469,137 @@ fn a666_public_successor_profile_operation(
     }
 }
 
+fn assert_a666_public_values_context_fails_closed(
+    profile: &NavProofProfile,
+    values: &NavReservePublicValuesV1,
+    circulating_supply: u64,
+) {
+    let context = NavReserveVerifyContext {
+        pftl_genesis_hash: &values.pftl_genesis_hash,
+        nav_asset_id: &values.nav_asset_id,
+        proof_profile_id: &values.proof_profile_id,
+        valuation_policy_hash: &values.valuation_policy_hash,
+        source_manifest_hash: &values.source_manifest_hash,
+        valuation_unit_id: &values.valuation_unit_id,
+        observation_epoch: values.observation_epoch,
+        current_height: values.observation_not_after,
+        expected_proof_net_assets: values.verified_net_assets,
+        packet_source_root: &values.source_observation_root,
+        packet_attestor_root: &values.valuation_trust_root,
+        subscription_overlay_source_root: None,
+        subscription_overlay_value: 0,
+    };
+    assert_eq!(
+        validate_nav_reserve_public_values_context(profile, values, &context),
+        Ok(())
+    );
+
+    let wrong = "00".repeat(48);
+    let mut mutated = context.clone();
+    mutated.pftl_genesis_hash = &wrong;
+    assert_eq!(
+        validate_nav_reserve_public_values_context(profile, values, &mutated),
+        Err(NavSp1VerifyError::GenesisMismatch)
+    );
+    mutated = context.clone();
+    mutated.nav_asset_id = &wrong;
+    assert_eq!(
+        validate_nav_reserve_public_values_context(profile, values, &mutated),
+        Err(NavSp1VerifyError::AssetMismatch)
+    );
+    mutated = context.clone();
+    mutated.proof_profile_id = &wrong;
+    assert_eq!(
+        validate_nav_reserve_public_values_context(profile, values, &mutated),
+        Err(NavSp1VerifyError::ProfileMismatch)
+    );
+    mutated = context.clone();
+    mutated.valuation_policy_hash = &wrong;
+    assert_eq!(
+        validate_nav_reserve_public_values_context(profile, values, &mutated),
+        Err(NavSp1VerifyError::PolicyHashMismatch)
+    );
+    mutated = context.clone();
+    mutated.source_manifest_hash = &wrong;
+    assert_eq!(
+        validate_nav_reserve_public_values_context(profile, values, &mutated),
+        Err(NavSp1VerifyError::ManifestMismatch)
+    );
+    mutated = context.clone();
+    mutated.valuation_unit_id = &wrong;
+    assert_eq!(
+        validate_nav_reserve_public_values_context(profile, values, &mutated),
+        Err(NavSp1VerifyError::ValuationUnitMismatch)
+    );
+    mutated = context.clone();
+    mutated.observation_epoch = values.observation_epoch + 1;
+    assert_eq!(
+        validate_nav_reserve_public_values_context(profile, values, &mutated),
+        Err(NavSp1VerifyError::EpochMismatch)
+    );
+    mutated = context.clone();
+    mutated.current_height = values.observation_not_after - 1;
+    assert_eq!(
+        validate_nav_reserve_public_values_context(profile, values, &mutated),
+        Err(NavSp1VerifyError::ObservationInFuture)
+    );
+    mutated = context.clone();
+    mutated.current_height = values.observation_not_after + profile.max_snapshot_age_blocks + 1;
+    assert_eq!(
+        validate_nav_reserve_public_values_context(profile, values, &mutated),
+        Err(NavSp1VerifyError::ObservationStale)
+    );
+    mutated = context.clone();
+    mutated.expected_proof_net_assets = values.verified_net_assets + 1;
+    assert_eq!(
+        validate_nav_reserve_public_values_context(profile, values, &mutated),
+        Err(NavSp1VerifyError::PublicValuesMismatch)
+    );
+    mutated = context.clone();
+    mutated.packet_source_root = &wrong;
+    assert_eq!(
+        validate_nav_reserve_public_values_context(profile, values, &mutated),
+        Err(NavSp1VerifyError::SourceRootMismatch)
+    );
+    mutated = context.clone();
+    mutated.packet_attestor_root = &wrong;
+    assert_eq!(
+        validate_nav_reserve_public_values_context(profile, values, &mutated),
+        Err(NavSp1VerifyError::AttestorRootMismatch)
+    );
+    mutated = context.clone();
+    mutated.subscription_overlay_source_root = Some(&wrong);
+    mutated.subscription_overlay_value = 1;
+    assert_eq!(
+        validate_nav_reserve_public_values_context(profile, values, &mutated),
+        Err(NavSp1VerifyError::SourceRootMismatch)
+    );
+
+    let nav_per_unit = (u128::from(values.verified_net_assets) * 1_000_000_u128
+        / u128::from(circulating_supply)) as u64;
+    assert!(validate_nav_reserve_collateralization_with_unit_scale(
+        values.verified_net_assets,
+        circulating_supply,
+        nav_per_unit,
+        1_000_000,
+    )
+    .is_ok());
+    assert!(validate_nav_reserve_collateralization_with_unit_scale(
+        values.verified_net_assets,
+        circulating_supply.saturating_mul(2),
+        nav_per_unit,
+        1_000_000,
+    )
+    .is_err());
+    assert!(validate_nav_reserve_collateralization_with_unit_scale(
+        values.verified_net_assets,
+        circulating_supply,
+        nav_per_unit.saturating_mul(2),
+        1_000_000,
+    )
+    .is_err());
+}
+
 #[allow(clippy::too_many_arguments)]
 fn finalize_nav_epoch(
     data_dir: &Path,
@@ -2511,12 +2650,19 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         "bind-a666-legacy-profile",
     );
     let successor_operation = a666_public_successor_profile_operation(A666_ISSUER);
-    assert_eq!(
-        successor_operation
-            .to_profile()
-            .expect("derive exact A666 successor profile")
-            .profile_id,
-        A666_SUCCESSOR_PROFILE
+    let successor_profile = successor_operation
+        .to_profile()
+        .expect("derive exact A666 successor profile");
+    assert_eq!(successor_profile.profile_id, A666_SUCCESSOR_PROFILE);
+    assert_a666_public_values_context_fails_closed(
+        &successor_profile,
+        &public_values,
+        A666_CIRCULATING_SUPPLY,
+    );
+    assert_a666_public_values_context_fails_closed(
+        &successor_profile,
+        &next_public_values,
+        A666_CIRCULATING_SUPPLY,
     );
     submit_dev_key_asset_finality(
         &harness,
@@ -3672,20 +3818,40 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         let _ = child.wait();
     }
     harness.children.clear();
-    let snapshot_dir = harness.root.join("a666-public-successor.snapshot");
-    let restored_dir = harness.root.join("a666-public-successor-restored");
-    let snapshot = export_snapshot(SnapshotExportOptions {
+    let snapshot_dir = harness.root.join("a666-public-successor.signed-snapshot");
+    let restored_dir = harness.root.join("a666-public-successor-signed-restored");
+    let publisher_key_file = harness.root.join("a666-snapshot-publisher.private.json");
+    let publisher_key = create_dev_key_file().expect("create A666 snapshot publisher key");
+    postfiat_node::write_key_file(&publisher_key_file, &publisher_key)
+        .expect("write A666 snapshot publisher key");
+    let trusted_publisher_key_file = harness.root.join("a666-snapshot-publisher.public.json");
+    let trusted_publisher =
+        export_snapshot_publisher_public_key(SnapshotPublisherKeyExportOptions {
+            publisher_key_file: publisher_key_file.clone(),
+            public_key_file: trusted_publisher_key_file.clone(),
+        })
+        .expect("export A666 trusted snapshot publisher key");
+    let snapshot = export_signed_snapshot_from_finalized_checkpoint(SignedSnapshotExportOptions {
         data_dir: harness.node(0),
         snapshot_dir: snapshot_dir.clone(),
+        publisher_key_file,
     })
-    .expect("export finalized A666 successor snapshot");
-    assert_eq!(snapshot.block_height, finalized.0);
-    let restored = import_snapshot(SnapshotImportOptions {
+    .expect("export signed finalized A666 successor snapshot");
+    assert_eq!(snapshot.publisher, trusted_publisher.publisher);
+    assert_eq!(snapshot.manifest.block_height, finalized.0);
+    assert_eq!(snapshot.manifest.block_tip_hash, finalized.1);
+    assert_eq!(snapshot.manifest.state_root, finalized.2);
+    assert!(!snapshot_dir
+        .join("a666-snapshot-publisher.private.json")
+        .exists());
+    assert!(!snapshot_dir.join("validator_keys.json").exists());
+    let restored = import_signed_snapshot_from_finalized_checkpoint(SignedSnapshotImportOptions {
         data_dir: restored_dir.clone(),
         snapshot_dir,
+        trusted_publisher_key_file,
         node_id: Some("a666-public-successor-restored".to_string()),
     })
-    .expect("restore finalized A666 successor snapshot");
+    .expect("restore signed finalized A666 successor snapshot");
     assert_eq!(restored.block_height, finalized.0);
     assert_eq!(restored.block_tip_hash, finalized.1);
     assert_eq!(restored.state_root, finalized.2);
