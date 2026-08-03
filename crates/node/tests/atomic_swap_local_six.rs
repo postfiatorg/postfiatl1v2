@@ -3019,9 +3019,18 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         "export-transparent-a666-to-ethereum",
     );
 
-    let controller = [0x11; 20];
-    let wrapped = [0x33; 20];
-    let holder_ethereum = [0x44; 20];
+    let controller: [u8; 20] = hex_to_bytes(&HANDOFF_CONTROLLER[2..])
+        .expect("deployed handoff controller address hex")
+        .try_into()
+        .expect("deployed handoff controller address width");
+    let wrapped: [u8; 20] = hex_to_bytes(&WRAPPED_A666[2..])
+        .expect("deployed wrapped A666 address hex")
+        .try_into()
+        .expect("deployed wrapped A666 address width");
+    let holder_ethereum: [u8; 20] = hex_to_bytes(&HOLDER_ETHEREUM[2..])
+        .expect("deployed holder address hex")
+        .try_into()
+        .expect("deployed holder address width");
     let mut recipient_topic = [0_u8; 32];
     recipient_topic[12..].copy_from_slice(&holder_ethereum);
     let consumed_signature = postfiat_bridge::ethereum_keccak256(
