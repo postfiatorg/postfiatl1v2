@@ -3087,24 +3087,11 @@ pub(super) fn execute_asset_orchard_private_primary_issue_action(
     payload: &AssetOrchardPrivatePrimaryIssueActionPayload,
     archive_replay: bool,
 ) -> Receipt {
-    if archive_replay
-        && !archived_wan_devnet2_private_primary_execution_allowed(
-            genesis,
-            block_height,
-            batch_id,
-            false,
-        )
-    {
-        return Receipt::rejected(
-            shielded_action_rejection_id(
-                batch_id,
-                index,
-                "asset_orchard_private_primary_issue_archive_unsupported",
-            ),
-            "asset_orchard_private_primary_issue_archive_unsupported",
-            "private-primary issue has no historical replay form",
-        );
-    }
+    // Private-primary issuance is a deterministic function of finalized
+    // state and the canonical payload, so archive replay takes the exact
+    // live execution path. The historical wan-devnet-2 allowlist remains
+    // only as a receipt-id drift allowance for pre-gate blocks (AR-10).
+    let _ = archive_replay;
     if let Err(error) = validate_asset_orchard_private_primary_issue_payload(payload) {
         return Receipt::rejected(
             shielded_action_rejection_id(
@@ -3146,24 +3133,10 @@ pub(super) fn execute_asset_orchard_private_primary_redeem_action(
     payload: &AssetOrchardPrivatePrimaryRedeemActionPayload,
     archive_replay: bool,
 ) -> Receipt {
-    if archive_replay
-        && !archived_wan_devnet2_private_primary_execution_allowed(
-            genesis,
-            block_height,
-            batch_id,
-            true,
-        )
-    {
-        return Receipt::rejected(
-            shielded_action_rejection_id(
-                batch_id,
-                index,
-                "asset_orchard_private_primary_redeem_archive_unsupported",
-            ),
-            "asset_orchard_private_primary_redeem_archive_unsupported",
-            "private-primary redemption has no historical replay form",
-        );
-    }
+    // Private-primary redemption is a deterministic function of finalized
+    // state and the canonical payload, so archive replay takes the exact
+    // live execution path (AR-10).
+    let _ = archive_replay;
     if let Err(error) = validate_asset_orchard_private_primary_redeem_payload(payload) {
         return Receipt::rejected(
             shielded_action_rejection_id(
