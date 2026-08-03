@@ -141,9 +141,9 @@ pub fn required_vault_bridge_settlement_atoms(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct NavSubscriptionReserveOverlay {
-    value_nav_units: u64,
-    source_root: String,
+pub struct NavSubscriptionReserveOverlay {
+    pub value_nav_units: u64,
+    pub source_root: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -423,6 +423,22 @@ fn nav_subscription_reserve_overlay(
             preimage.as_bytes(),
         ),
     }))
+}
+
+/// Derive the finalized vault/primary-market reserve overlay committed by a
+/// NAV asset's next reserve packet.
+///
+/// Packet builders and controlled migration rehearsals use this public wrapper
+/// so their root/value calculation cannot drift from validator execution.
+pub fn nav_subscription_reserve_overlay_for_asset(
+    ledger: &LedgerState,
+    asset_id: &str,
+) -> Result<Option<NavSubscriptionReserveOverlay>, String> {
+    let nav_asset = ledger
+        .nav_asset(asset_id)
+        .ok_or_else(|| "missing NAV asset for subscription reserve overlay".to_string())?;
+    nav_subscription_reserve_overlay(ledger, nav_asset)
+        .map_err(|(code, detail)| format!("{code}: {detail}"))
 }
 
 fn apply_nav_redeem_vault_bridge_settlement(

@@ -46,16 +46,19 @@ use postfiat_rpc_sdk::{
 };
 use postfiat_types::{
     issued_asset_id, market_ops_asset_id, market_ops_evidence_root, market_ops_reserve_packet_hash,
-    market_ops_supply_packet_hash, pftl_uniswap_return_burn_id_from_fields, AssetCreateOperation,
-    AssetTransactionOperation, EthereumCheckpointCertificateV1, EthereumCheckpointVoteV1,
-    EthereumExternalEventProofV1, EthereumFinalizedCheckpointV1, EthereumReceiptProofV1,
-    EthereumRouteVerificationPolicyV1, FastSwapChainDomainV1, FastSwapCommitteeDomainV1,
-    FastSwapCommitteeRootV1, FastSwapCommitteeV1, FastSwapGovernanceBootstrapPayloadV1,
-    FastSwapOpaqueHashV1, FastSwapValidatorV1, Genesis, IssuedPaymentOperation, LedgerState,
-    MarketOpsAlignmentParams, MarketOpsEnvelope, MarketOpsFinalizeOperation, MarketOpsMintLimits,
-    MarketOpsPolicyInputs, MarketOpsPolicyRegisterOperation, MarketOpsPolicyRegistration,
-    MarketOpsReserveDeployLimits, MarketOpsVenueObservation, MempoolState,
-    NavAssetRegisterOperation, NavEpochFinalizeOperation, NavProfileRegisterOperation,
+    market_ops_supply_packet_hash, pftl_uniswap_return_burn_id_from_fields,
+    vault_bridge_deposit_evidence_root, vault_bridge_deposit_id,
+    vault_bridge_deposit_observation_root, vault_bridge_pftl_recipient_hash,
+    vault_bridge_source_root_for_asset, AssetCreateOperation, AssetTransactionOperation,
+    EthereumCheckpointCertificateV1, EthereumCheckpointVoteV1, EthereumExternalEventProofV1,
+    EthereumFinalizedCheckpointV1, EthereumReceiptProofV1, EthereumRouteVerificationPolicyV1,
+    FastSwapChainDomainV1, FastSwapCommitteeDomainV1, FastSwapCommitteeRootV1, FastSwapCommitteeV1,
+    FastSwapGovernanceBootstrapPayloadV1, FastSwapOpaqueHashV1, FastSwapValidatorV1, Genesis,
+    IssuedPaymentOperation, LedgerState, MarketOpsAlignmentParams, MarketOpsEnvelope,
+    MarketOpsFinalizeOperation, MarketOpsMintLimits, MarketOpsPolicyInputs,
+    MarketOpsPolicyRegisterOperation, MarketOpsPolicyRegistration, MarketOpsReserveDeployLimits,
+    MarketOpsVenueObservation, MempoolState, NavAssetRegisterOperation,
+    NavAttestorRegisterOperation, NavEpochFinalizeOperation, NavProfileRegisterOperation,
     NavProofProfile, NavReservePublicValuesV1, NavReserveSubmitOperation,
     PftlUniswapDestinationConsumeOperation, PftlUniswapExportDebitOperation,
     PftlUniswapMintPacketV2, PftlUniswapOrderReleaseOperation, PftlUniswapOrderReserveOperation,
@@ -63,12 +66,16 @@ use postfiat_types::{
     PftlUniswapPrimarySubscribeV2Operation, PftlUniswapReturnImportOperation,
     PftlUniswapRouteEpochAdvanceOperation, PftlUniswapRouteInitV2Operation,
     PftlUniswapRoutePauseOperation, SignedAssetTransaction, SignedTransfer,
-    UnsignedAssetTransaction, UnsignedTransfer, ADDRESS_NAMESPACE, ETHEREUM_CHECKPOINT_SCHEMA_V1,
+    UnsignedAssetTransaction, UnsignedTransfer, VaultBridgeDepositAttestOperation,
+    VaultBridgeDepositClaimOperation, VaultBridgeDepositEvidence,
+    VaultBridgeDepositFinalizeOperation, VaultBridgeDepositObservation,
+    VaultBridgeDepositProposeOperation, ADDRESS_NAMESPACE, ETHEREUM_CHECKPOINT_SCHEMA_V1,
     ETHEREUM_CHECKPOINT_VOTE_CONTEXT_V1, FASTSWAP_SCHEMA_VERSION_V1,
-    NAV_PROFILE_VERIFIER_PLACEHOLDER, NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1,
-    NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1, NAV_RESERVE_PUBLIC_VALUES_V1_BYTES,
-    PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V2, PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT,
-    PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY, TRANSFER_TRANSACTION_KIND,
+    NAV_PROFILE_VERIFIER_MULTI_FETCH, NAV_PROFILE_VERIFIER_PLACEHOLDER,
+    NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1, NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1,
+    NAV_RESERVE_PUBLIC_VALUES_V1_BYTES, PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V2,
+    PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT, PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY,
+    TRANSFER_TRANSACTION_KIND,
 };
 use serde_json::{json, Value};
 
@@ -2305,9 +2312,15 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
     );
     let proof = read_raw_or_hex_from_env("POSTFIAT_A666_PROOF_CALLDATA_FILE");
     let public_values_bytes = read_raw_or_hex_from_env("POSTFIAT_A666_PUBLIC_VALUES_FILE");
+    let next_proof = read_raw_or_hex_from_env("POSTFIAT_A666_NEXT_PROOF_CALLDATA_FILE");
+    let next_public_values_bytes =
+        read_raw_or_hex_from_env("POSTFIAT_A666_NEXT_PUBLIC_VALUES_FILE");
     assert!(!proof.is_empty() && proof.len() <= 4_096);
+    assert!(!next_proof.is_empty() && next_proof.len() <= 4_096);
     let public_values = NavReservePublicValuesV1::decode(&public_values_bytes)
         .expect("decode exact A666 public values");
+    let next_public_values = NavReservePublicValuesV1::decode(&next_public_values_bytes)
+        .expect("decode next exact A666 public values");
     assert_eq!(public_values.pftl_genesis_hash, "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9");
     assert_eq!(public_values.nav_asset_id, A666_ASSET_ID);
     assert_eq!(public_values.proof_profile_id, A666_SUCCESSOR_PROFILE);
@@ -2315,6 +2328,20 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
     assert_eq!(public_values.valuation_trust_counts.cryptographic, 6);
     assert_eq!(public_values.attested_value, 0);
     assert_eq!(public_values.controlled_value, 0);
+    assert_eq!(
+        next_public_values.observation_epoch,
+        public_values.observation_epoch + 1
+    );
+    assert_eq!(
+        next_public_values.pftl_genesis_hash,
+        public_values.pftl_genesis_hash
+    );
+    assert_eq!(next_public_values.nav_asset_id, A666_ASSET_ID);
+    assert_eq!(next_public_values.proof_profile_id, A666_SUCCESSOR_PROFILE);
+    assert_eq!(next_public_values.quantity_trust_counts.cryptographic, 6);
+    assert_eq!(next_public_values.valuation_trust_counts.cryptographic, 6);
+    assert_eq!(next_public_values.attested_value, 0);
+    assert_eq!(next_public_values.controlled_value, 0);
 
     let mut harness = Harness::new();
     let seed_dir = harness.root.join("a666-public-successor-seed");
@@ -2346,7 +2373,12 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
             data_dir
         })
         .collect::<Vec<_>>();
-    advance_certified_chain_to_height(&data_dirs, public_values.observation_not_after);
+    advance_certified_chain_to_height(
+        &data_dirs,
+        public_values
+            .observation_not_after
+            .max(next_public_values.observation_not_after),
+    );
 
     let base_port = free_base_port();
     let topology_path = harness.root.join("a666-public-successor-topology.json");
@@ -2642,32 +2674,46 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         }),
         "create-exact-pfusdc",
     );
-    submit_dev_key_asset_finality(
-        &harness,
-        &rpc_ports,
-        &pfusdc_issuer,
-        AssetTransactionOperation::IssuedPayment(IssuedPaymentOperation {
-            from: pfusdc_issuer.address.clone(),
-            to: holder.address.clone(),
-            issuer: pfusdc_issuer.address.clone(),
-            asset_id: PFUSDC_ASSET_ID.to_string(),
-            amount: PFUSDC_SUPPLY,
-        }),
-        "fund-holder-with-exact-pfusdc",
-    );
+    let pfusdc_bridge_policy_hash = "42".repeat(48);
+    // This controlled observer exists only to drive the pfUSDC vault state
+    // machine in an isolated migration rehearsal. It does not qualify a
+    // pfUSDC source and does not replace the live Tier-4 Ethereum receipt
+    // proof path. The A666 epochs below remain the exact six-source Groth16
+    // proofs with zero attested or controlled reserve value.
+    let mut pfusdc_bridge_evidence = VaultBridgeDepositEvidence {
+        source_chain_id: 1,
+        vault_address: "0x1111111111111111111111111111111111111111".to_string(),
+        token_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48".to_string(),
+        depositor: HOLDER_ETHEREUM.to_string(),
+        pftl_recipient_hash: vault_bridge_pftl_recipient_hash(&holder.address)
+            .expect("pfUSDC controlled recipient hash"),
+        pftl_recipient: holder.address.clone(),
+        amount_atoms: PFUSDC_SUPPLY,
+        nonce: "41".repeat(32),
+        route_binding: "42".repeat(32),
+        deposit_id: String::new(),
+        block_hash: "43".repeat(32),
+        tx_hash: "44".repeat(32),
+        log_index: 0,
+    };
+    pfusdc_bridge_evidence.deposit_id =
+        vault_bridge_deposit_id(&pfusdc_bridge_evidence).expect("pfUSDC controlled deposit ID");
+    let pfusdc_bridge_source_domain = pfusdc_bridge_evidence.source_domain();
+    let pfusdc_bridge_evidence_root = vault_bridge_deposit_evidence_root(&pfusdc_bridge_evidence)
+        .expect("pfUSDC controlled evidence root");
     let pfusdc_profile_operation = NavProfileRegisterOperation {
         registrant: pfusdc_issuer.address.clone(),
-        verifier_kind: NAV_PROFILE_VERIFIER_PLACEHOLDER.to_string(),
-        source_class: "pfusdc-public-vault-accounting-rehearsal".to_string(),
-        max_snapshot_age_blocks: 0,
-        challenge_window_blocks: 0,
-        max_epoch_gap_blocks: 0,
+        verifier_kind: NAV_PROFILE_VERIFIER_MULTI_FETCH.to_string(),
+        source_class: format!("vault_bridge:{pfusdc_bridge_source_domain}"),
+        max_snapshot_age_blocks: 100,
+        challenge_window_blocks: 1,
+        max_epoch_gap_blocks: 100,
         settle_deadline_blocks: 0,
         min_challenge_bond: 0,
-        min_attestations: 0,
+        min_attestations: 1,
         tolerance_bp: 0,
-        bridge_observer_min_confirmations: 0,
-        valuation_policy_hash: String::new(),
+        bridge_observer_min_confirmations: 12,
+        valuation_policy_hash: pfusdc_bridge_policy_hash.clone(),
         vault_bridge_route_policy_hash: String::new(),
         sp1_program_vkey: String::new(),
         sp1_proof_encoding: String::new(),
@@ -2704,6 +2750,92 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         }),
         "register-pfusdc-accounting-nav",
     );
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &holder,
+        AssetTransactionOperation::NavAttestorRegister(NavAttestorRegisterOperation {
+            attestor: holder.address.clone(),
+            domain: "controlled-pfusdc-overlay.local".to_string(),
+            bond: 0,
+        }),
+        "register-controlled-pfusdc-observer",
+    );
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &holder,
+        AssetTransactionOperation::VaultBridgeDepositPropose(VaultBridgeDepositProposeOperation {
+            proposer: holder.address.clone(),
+            asset_id: PFUSDC_ASSET_ID.to_string(),
+            evidence_root: pfusdc_bridge_evidence_root.clone(),
+            evidence: pfusdc_bridge_evidence.clone(),
+            policy_hash: pfusdc_bridge_policy_hash.clone(),
+            source_proof_kind: String::new(),
+            source_proof_hash: String::new(),
+            source_public_values_hash: String::new(),
+            source_proof_bytes: Vec::new(),
+            source_public_values: Vec::new(),
+            expires_at_height: finalized.0 + 1_000,
+        }),
+        "propose-controlled-pfusdc-vault-deposit",
+    );
+    let pfusdc_bridge_observation =
+        VaultBridgeDepositObservation::success_for_evidence(&pfusdc_bridge_evidence, 12);
+    let pfusdc_bridge_observation_root =
+        vault_bridge_deposit_observation_root(&pfusdc_bridge_observation)
+            .expect("pfUSDC controlled observation root");
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &holder,
+        AssetTransactionOperation::VaultBridgeDepositAttest(VaultBridgeDepositAttestOperation {
+            attestor: holder.address.clone(),
+            asset_id: PFUSDC_ASSET_ID.to_string(),
+            evidence_root: pfusdc_bridge_evidence_root.clone(),
+            pass: true,
+            observation_root: pfusdc_bridge_observation_root,
+            observation: Some(pfusdc_bridge_observation),
+        }),
+        "attest-controlled-pfusdc-vault-deposit",
+    );
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &holder,
+        AssetTransactionOperation::VaultBridgeDepositFinalize(
+            VaultBridgeDepositFinalizeOperation {
+                finalizer: holder.address.clone(),
+                asset_id: PFUSDC_ASSET_ID.to_string(),
+                evidence_root: pfusdc_bridge_evidence_root.clone(),
+            },
+        ),
+        "finalize-controlled-pfusdc-vault-deposit",
+    );
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &holder,
+        AssetTransactionOperation::VaultBridgeDepositClaim(VaultBridgeDepositClaimOperation {
+            claimer: holder.address.clone(),
+            asset_id: PFUSDC_ASSET_ID.to_string(),
+            evidence_root: pfusdc_bridge_evidence_root,
+            policy_hash: pfusdc_bridge_policy_hash,
+            recipient: holder.address.clone(),
+            amount_atoms: PFUSDC_SUPPLY,
+        }),
+        "claim-controlled-pfusdc-vault-deposit",
+    );
+    let pfusdc_backed_ledger: LedgerState = serde_json::from_slice(
+        &fs::read(harness.node(0).join("ledger.json"))
+            .expect("read controlled pfUSDC-backed ledger"),
+    )
+    .expect("parse controlled pfUSDC-backed ledger");
+    let pfusdc_source_root = vault_bridge_source_root_for_asset(
+        &pfusdc_backed_ledger.vault_bridge_bucket_states,
+        PFUSDC_ASSET_ID,
+    )
+    .expect("derive controlled pfUSDC vault source root");
     let pfusdc_packet_hash = "f6".repeat(48);
     submit_dev_key_asset_finality(
         &harness,
@@ -2718,7 +2850,7 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
             circulating_supply: PFUSDC_SUPPLY,
             verified_net_assets: 2_000_000_000,
             proof_profile: pfusdc_profile,
-            source_root: "f7".repeat(48),
+            source_root: pfusdc_source_root,
             attestor_root: "f8".repeat(48),
             reserve_packet_hash: pfusdc_packet_hash.clone(),
             reserve_accounts: Vec::new(),
@@ -2913,11 +3045,109 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         "execute-transparent-a666-issue",
     );
 
+    let overlay_ledger: LedgerState = serde_json::from_slice(
+        &fs::read(harness.node(0).join("ledger.json"))
+            .expect("read controlled A666 overlay ledger"),
+    )
+    .expect("parse controlled A666 overlay ledger");
+    let overlay = postfiat_execution::nav_subscription_reserve_overlay_for_asset(
+        &overlay_ledger,
+        A666_ASSET_ID,
+    )
+    .expect("derive controlled A666 reserve overlay")
+    .expect("nonzero controlled A666 reserve overlay");
+    assert_eq!(
+        overlay_ledger
+            .pftl_uniswap_route(ROUTE_ID)
+            .expect("controlled A666 route after issue")
+            .settlement_reserve_atoms,
+        transparent_base_atoms
+    );
+    assert_eq!(
+        overlay.value_nav_units,
+        transparent_base_atoms * 100,
+        "pfUSDC micro-units must convert exactly into A666 USD_1E8 units"
+    );
+    let overlay_verified_net_assets = next_public_values
+        .verified_net_assets
+        .checked_add(overlay.value_nav_units)
+        .expect("controlled A666 overlay net assets");
+    let overlay_circulating_supply = A666_CIRCULATING_SUPPLY
+        .checked_add(transparent_mint_atoms)
+        .expect("controlled A666 overlay supply");
+    let overlay_nav_per_unit = (u128::from(overlay_verified_net_assets) * 1_000_000_u128
+        / u128::from(overlay_circulating_supply)) as u64;
+    let overlay_source_root =
+        postfiat_execution::nav_reserve_subscription_composite_source_root_v1(
+            &next_public_values,
+            &overlay.source_root,
+            overlay.value_nav_units,
+        )
+        .expect("derive controlled A666 composite source root")
+        .0;
+    let overlay_packet_hash = "a7".repeat(48);
+    submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &reserve_operator,
+        AssetTransactionOperation::NavReserveSubmit(NavReserveSubmitOperation {
+            issuer: A666_ISSUER.to_string(),
+            submitter: A666_RESERVE_OPERATOR.to_string(),
+            asset_id: A666_ASSET_ID.to_string(),
+            epoch: next_public_values.observation_epoch,
+            nav_per_unit: overlay_nav_per_unit,
+            circulating_supply: overlay_circulating_supply,
+            verified_net_assets: overlay_verified_net_assets,
+            proof_profile: A666_SUCCESSOR_PROFILE.to_string(),
+            source_root: overlay_source_root,
+            attestor_root: next_public_values.valuation_trust_root.clone(),
+            reserve_packet_hash: overlay_packet_hash.clone(),
+            reserve_accounts: Vec::new(),
+            sp1_proof_bytes: next_proof,
+            sp1_public_values: next_public_values_bytes,
+        }),
+        "submit-overlay-aware-a666-public-reserve-proof",
+    );
+    finalized = submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &issuer,
+        AssetTransactionOperation::NavEpochFinalize(NavEpochFinalizeOperation {
+            issuer: A666_ISSUER.to_string(),
+            asset_id: A666_ASSET_ID.to_string(),
+            epoch: next_public_values.observation_epoch,
+            reserve_packet_hash: overlay_packet_hash.clone(),
+        }),
+        "finalize-overlay-aware-a666-public-reserve-proof",
+    );
+    policy.policy_epoch = 3;
+    policy.valid_from_height = finalized.0 + 1;
+    policy.pricing_nav_epoch = next_public_values.observation_epoch;
+    policy.pricing_reserve_packet_hash = overlay_packet_hash.clone();
+    policy.policy_hash = policy.computed_hash();
+    let _overlay_route_finalized = submit_dev_key_asset_finality(
+        &harness,
+        &rpc_ports,
+        &reserve_operator,
+        AssetTransactionOperation::PftlUniswapRouteEpochAdvance(
+            PftlUniswapRouteEpochAdvanceOperation {
+                operator: A666_RESERVE_OPERATOR.to_string(),
+                route_id: ROUTE_ID.to_string(),
+                prior_route_epoch: 2,
+                next_route_epoch: 3,
+                next_route_config_digest: "a3".repeat(48),
+                live_value_enabled: true,
+                next_primary_market_policy: policy.clone(),
+            },
+        ),
+        "bind-route-to-overlay-aware-a666-public-reserve-proof",
+    );
+
     let private_mint_atoms = 1_000_000;
     let private_base_atoms = postfiat_execution::required_vault_bridge_settlement_atoms(
         private_mint_atoms,
         6,
-        nav_per_unit,
+        overlay_nav_per_unit,
         A666_VALUATION_UNIT,
         PFUSDC_VALUATION_UNIT,
         6,
@@ -2970,7 +3200,7 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
 
     let export_packet_hash = "b7".repeat(48);
     let export_nonce = "b8".repeat(32);
-    let active_route_config_digest = "a2".repeat(48);
+    let active_route_config_digest = "a3".repeat(48);
     let export_digest = PftlUniswapMintPacketV2 {
         route_config_digest: active_route_config_digest.clone(),
         source_packet_hash: export_packet_hash.clone(),
@@ -2979,14 +3209,14 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         source_receipt_root: "ba".repeat(48),
         settlement_asset_id: PFUSDC_ASSET_ID.to_string(),
         native_nav_asset_id: A666_ASSET_ID.to_string(),
-        pricing_reserve_packet_hash: reserve_packet_hash.clone(),
+        pricing_reserve_packet_hash: overlay_packet_hash.clone(),
         policy_hash_commitment: postfiat_types::pftl_uniswap_keccak_commitment48(
             "policy",
             &policy.policy_hash,
         )
         .expect("A666 policy commitment"),
-        route_epoch: 2,
-        pricing_nav_epoch: public_values.observation_epoch,
+        route_epoch: 3,
+        pricing_nav_epoch: next_public_values.observation_epoch,
         deadline_seconds: 1_800,
         nonce: export_nonce.clone(),
         destination_chain_id: 1,
@@ -3203,7 +3433,7 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
     let transparent_redeem_base = postfiat_execution::required_vault_bridge_settlement_atoms(
         transparent_redeem_atoms,
         6,
-        nav_per_unit,
+        overlay_nav_per_unit,
         A666_VALUATION_UNIT,
         PFUSDC_VALUATION_UNIT,
         6,
@@ -3225,11 +3455,11 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
             redemption_nonce: "bd".repeat(32),
             nav_amount_atoms: transparent_redeem_atoms,
             min_settlement_value_atoms: transparent_redeem_output,
-            route_epoch: 2,
+            route_epoch: 3,
             policy_epoch: policy.policy_epoch,
             policy_hash: policy.policy_hash.clone(),
-            pricing_nav_epoch: public_values.observation_epoch,
-            pricing_reserve_packet_hash: reserve_packet_hash.clone(),
+            pricing_nav_epoch: next_public_values.observation_epoch,
+            pricing_reserve_packet_hash: overlay_packet_hash.clone(),
             expires_at_height: finalized.0 + 100,
         }),
         "redeem-transparent-a666",
@@ -3358,7 +3588,7 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
         }),
         "resume-public-successor-a666-route",
     );
-    policy.policy_epoch = 3;
+    policy.policy_epoch = 4;
     policy.valid_from_height = status_tuple(rpc_ports[0], "a666-rollback-parent").0 + 1;
     policy.policy_hash = policy.computed_hash();
     finalized = submit_dev_key_asset_finality(
@@ -3369,9 +3599,9 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
             PftlUniswapRouteEpochAdvanceOperation {
                 operator: A666_RESERVE_OPERATOR.to_string(),
                 route_id: ROUTE_ID.to_string(),
-                prior_route_epoch: 2,
-                next_route_epoch: 3,
-                next_route_config_digest: "a3".repeat(48),
+                prior_route_epoch: 3,
+                next_route_epoch: 4,
+                next_route_config_digest: "a4".repeat(48),
                 live_value_enabled: false,
                 next_primary_market_policy: policy,
             },
@@ -3413,8 +3643,8 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
             .pftl_uniswap_route(ROUTE_ID)
             .expect("final A666 route state");
         let v2 = route.v2.as_ref().expect("final A666 v2 route");
-        assert_eq!(v2.route_epoch, 3);
-        assert_eq!(v2.primary_market_policy.policy_epoch, 3);
+        assert_eq!(v2.route_epoch, 4);
+        assert_eq!(v2.primary_market_policy.policy_epoch, 4);
         assert!(!route.live_value_enabled, "validator {index}");
         assert!(!route.paused, "validator {index}");
         assert_eq!(route.authorized_valid_supply_atoms, expected_a666_supply);
