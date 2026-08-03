@@ -1235,7 +1235,8 @@ Repository and pushed implementation tip at this update:
 ```text
 repository: /home/postfiat/repos/a666-eth-fast-lane-combined-20260724
 branch: feature/pnok-private-fix
-tip: fc8fd9c9d4c637c8b2a3ef65365e6c1729a47849
+implementation tip: fc8fd9c9d4c637c8b2a3ef65365e6c1729a47849
+note: canonical-plan status commits follow this implementation tip
 remote: origin/feature/pnok-private-fix
 ```
 
@@ -1409,10 +1410,11 @@ independently verified proofs.
 
 ### 10.5 CI and live-state truth
 
-Exact-tip product-security CI for `fc8fd9c` must complete green before any
-release or live migration. Run `30775838743` covers that exact tip and was in
-progress at this update. Older runs were cancelled after their replacement
-tips were pushed and are not evidence for the current tip. The
+Product-security CI run `30775838743` covers implementation tip `fc8fd9c` and
+was in progress at this update. A current branch-tip run, including subsequent
+canonical-plan status commits, must also complete green before any release or
+live migration. Older runs cancelled after replacement tips were pushed are
+not evidence for the current tip. The
 official Ethereum fork job may accurately record that no mainnet RPC secret is
 configured; that skipped real-value assertion is not source qualification.
 
@@ -1450,8 +1452,9 @@ Execute in this order:
 1. Preserve and monitor
    `pft-a666-public-reserve-proof-epoch7-retry1-bounded`; do not start another
    high-memory proof concurrently.
-2. Require exact-tip CI run `30775838743` for `fc8fd9c` to finish green. Fix any failure,
-   commit, push, and require the replacement exact-tip run to pass.
+2. Require implementation CI run `30775838743` for `fc8fd9c` and a current
+   branch-tip run to finish green. Fix any failure, commit, push, and require
+   the replacement exact-tip run to pass.
 3. When epoch 7 completes, independently run `packet verify`, compare the
    public values byte-for-byte with the committed epoch-7 pins, hash every
    proof artifact, and retain the supervised service result.
