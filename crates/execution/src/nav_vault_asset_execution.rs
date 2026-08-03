@@ -441,6 +441,20 @@ pub fn nav_subscription_reserve_overlay_for_asset(
         .map_err(|(code, detail)| format!("{code}: {detail}"))
 }
 
+/// Combine a verified reserve proof with the exact finalized subscription
+/// overlay using the same domain and encoding as validator verification.
+pub fn derive_nav_reserve_subscription_composite_source_root_v1(
+    values: &NavReservePublicValuesV1,
+    overlay_source_root: &str,
+    overlay_value: u64,
+) -> Result<(String, u64), String> {
+    nav_reserve_subscription_composite_source_root_v1(
+        values,
+        overlay_source_root,
+        overlay_value,
+    )
+}
+
 fn apply_nav_redeem_vault_bridge_settlement(
     genesis: &Genesis,
     ledger: &mut LedgerState,

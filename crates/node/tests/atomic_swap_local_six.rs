@@ -3078,7 +3078,7 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
     let overlay_nav_per_unit = (u128::from(overlay_verified_net_assets) * 1_000_000_u128
         / u128::from(overlay_circulating_supply)) as u64;
     let overlay_source_root =
-        postfiat_execution::nav_reserve_subscription_composite_source_root_v1(
+        postfiat_execution::derive_nav_reserve_subscription_composite_source_root_v1(
             &next_public_values,
             &overlay.source_root,
             overlay.value_nav_units,
