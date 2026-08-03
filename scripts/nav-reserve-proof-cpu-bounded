@@ -7,6 +7,8 @@ import argparse
 import json
 import os
 from pathlib import Path
+import subprocess
+from typing import Callable
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -67,6 +69,33 @@ def existing_file(parser: argparse.ArgumentParser, value: str, label: str) -> Pa
     return path
 
 
+def require_docker_access(
+    runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+) -> None:
+    """Fail before expensive SP1 work if the final gnark wrapper is unavailable."""
+    execute = subprocess.run if runner is None else runner
+    try:
+        result = execute(
+            ["docker", "info"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=20,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise RuntimeError(f"Docker access preflight failed: {error}") from error
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip().splitlines()
+        suffix = f": {detail[-1]}" if detail else ""
+        raise RuntimeError(
+            "Docker access preflight failed before SP1 proving"
+            f"{suffix}. The final Groth16 wrapper requires Docker; ensure this "
+            "launcher process can access /var/run/docker.sock. A user-systemd "
+            "manager with stale supplementary groups must be restarted or the "
+            "launcher must be invoked through `sg docker -c`."
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
@@ -115,6 +144,10 @@ def main() -> None:
         )
         return
 
+    try:
+        require_docker_access()
+    except RuntimeError as error:
+        parser.error(str(error))
     os.execvpe(command[0], command, environment)
 
 

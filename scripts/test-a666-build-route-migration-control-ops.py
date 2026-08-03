@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -100,6 +102,43 @@ class MigrationControlTests(unittest.TestCase):
         result, _ = self.run_builder(status)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("native asset is not A666", result.stderr)
+
+    def test_stream_input_hash_binds_the_validated_bytes(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        key_path = root / "reserve-key.json"
+        key_path.write_text("{}\n", encoding="utf-8")
+        output = root / "output"
+        raw = json.dumps(route(), sort_keys=True).encode()
+        read_fd, write_fd = os.pipe()
+        try:
+            os.write(write_fd, raw)
+            os.close(write_fd)
+            write_fd = -1
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(PROGRAM),
+                    "--route-status",
+                    f"/dev/fd/{read_fd}",
+                    "--reserve-key-file",
+                    str(key_path),
+                    "--output-dir",
+                    str(output),
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+                pass_fds=(read_fd,),
+            )
+        finally:
+            os.close(read_fd)
+            if write_fd >= 0:
+                os.close(write_fd)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        manifest = json.loads((output / "migration-control-manifest.json").read_text())
+        self.assertEqual(manifest["route_status_sha256"], hashlib.sha256(raw).hexdigest())
 
 
 if __name__ == "__main__":

@@ -27,11 +27,12 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_json(path: Path) -> dict[str, Any]:
-    value = json.loads(path.read_text(encoding="utf-8"))
+def load_json(path: Path) -> tuple[dict[str, Any], str]:
+    raw = path.read_bytes()
+    value = json.loads(raw)
     if not isinstance(value, dict):
         raise RuntimeError(f"{path} must contain a JSON object")
-    return value
+    return value, hashlib.sha256(raw).hexdigest()
 
 
 def write_json(path: Path, value: object) -> None:
@@ -84,7 +85,7 @@ def main() -> None:
         raise RuntimeError(f"refusing to overwrite {args.output_dir}")
     if not args.reserve_key_file.is_file():
         raise RuntimeError("reserve-operator key file is unavailable")
-    route = load_json(args.route_status)
+    route, route_status_sha256 = load_json(args.route_status)
     validate_route(route)
 
     args.output_dir.mkdir(parents=True, mode=0o700)
@@ -128,7 +129,7 @@ def main() -> None:
         "route_id": ROUTE_ID,
         "native_nav_asset_id": ASSET_ID,
         "operator": RESERVE_OPERATOR,
-        "route_status_sha256": hashlib.sha256(args.route_status.read_bytes()).hexdigest(),
+        "route_status_sha256": route_status_sha256,
         "preconditions": {
             "paused": route["paused"],
             "live_value_enabled": route["live_value_enabled"],

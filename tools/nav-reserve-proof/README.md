@@ -648,9 +648,16 @@ scripts/nav-reserve-proof-cpu-bounded \
 `--dry-run` prints the exact environment and command. The launcher deliberately
 overrides inherited SP1 worker settings with the reviewed bounded profile. It
 changes throughput and memory use only; the CLI still locally verifies the
-same Groth16 proof before writing it. For a proof that must survive terminal or
-agent restarts, run this command under an ordinary supervised service and
-retain the service result plus output hashes in the qualification evidence.
+same Groth16 proof before writing it. Before starting the expensive SP1
+pipeline, the launcher also requires
+`docker info` to succeed because SP1's final Groth16 gnark wrapper runs in the
+pinned Docker image. This catches stale supplementary groups in long-running
+user-systemd managers before hours of CPU work are spent. Restart that manager
+or invoke the launcher through `sg docker -c` when the account belongs to the
+Docker group but the service context cannot access `/var/run/docker.sock`.
+For a proof that must survive terminal or agent restarts, run this command
+under an ordinary supervised service and retain the service result plus output
+hashes in the qualification evidence.
 
 `packet prepare` derives a version-2 packet template from canonical public
 values instead of accepting an operator-entered NAV or packet identifier. It
