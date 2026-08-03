@@ -1,0 +1,34 @@
+{
+  "schema": "postfiat-a666-public-reserve-private-swap-runtime-v1",
+  "observed_at_utc": "2026-08-03T04:02:24Z",
+  "validator_id": "validator-2",
+  "resident_service": "postfiat-pftl-swapd.service",
+  "resident_service_state": "inactive/dead",
+  "resident_service_restart_count": 0,
+  "resident_service_endpoint": "127.0.0.1:8798",
+  "resident_service_http_ready": false,
+  "resident_service_binary_release": "pftl-finality-view0-8c73735",
+  "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+  "controlled_wallet_id": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "supported_protocol_operations": [
+    "private-primary A666 issue",
+    "private-primary A666 redeem",
+    "optional transparent egress",
+    "durable signed-intent replay and recovery"
+  ],
+  "browser_state": {
+    "transparent_primary_market_actionable": true,
+    "private_a666_card_present": true,
+    "private_a666_card_actionable": false,
+    "private_a666_copy": "Operational test scripts are not presented as a user wallet feature.",
+    "complete_private_browser_lifecycle": false
+  },
+  "classification": "wallet integration and resident-service readiness gap",
+  "required_repair": [
+    "expose only the bounded signed-intent pftl-swapd API through the authenticated wallet boundary",
+    "sign private-primary intents with the browser wallet key",
+    "persist and recover the idempotency lineage without exposing note material",
+    "run browser-driven private issue and redeem against the migrated route"
+  ],
+  "live_mutation_performed": false
+}

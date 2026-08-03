@@ -1,0 +1,46 @@
+{
+  "schema": "postfiat-a666-public-reserve-recovery-snapshot-baseline-v1",
+  "observed_at_utc": "2026-08-03T03:36:46Z",
+  "source_root": "/home/postfiat/.pft/public-reserve-qualification/20260803-release-e949f48",
+  "release_id": "a666-public-reserve-e949f48",
+  "acceptance_use": "baseline and rollback reference only; the execution spec requires a new release ID and a fresh signed checkpoint immediately before rollout",
+  "signed_snapshot": {
+    "manifest_path": "pre-rollout-backup/backup-signed/snapshot.signed-manifest.json",
+    "manifest_sha256": "c43c9e8712041f3d9f6d544a3b3fd788abbbcb8fdcd0fd7314c86f2df7141f48",
+    "unsigned_manifest_sha256": "903c66f36273262917bf205be63943544035b72796fee143758fab17019b6d1f",
+    "schema": "postfiat.signed_snapshot_manifest.v1",
+    "snapshot_version": 6,
+    "publisher": "pf84731cd2e792d9aeed585ba3590b310e40b04a50",
+    "algorithm_id": "ML-DSA-65",
+    "source_build_git_revision": "e949f487",
+    "source_build_profile": "release",
+    "signer_material_included": false,
+    "mempool_policy": "preserve-verified-empty-or-pending",
+    "node_id": "validator-1",
+    "block_height": 776,
+    "block_tip_hash": "3be5a881e124e71c6b2704fffbeb95b874205b8bd85d26ad29b60307596727f967aebc2bfd496e7d87b0835bdb6766c9",
+    "state_root": "10dfb17b640a69749ca4b00d66b9e0141fa33644df6bcd8f7008f85f4501a42424681edaf25a3fd0111cc55492b256f9",
+    "last_certificate_id": "3c9f9e5fab1dda4a2979c94d06150e72139f2dfe2e32d622db58cee40d414996d1c6ed528f0042dde3c0ec72168307da",
+    "file_count": 19
+  },
+  "trusted_publisher_key": {
+    "path": "snapshot-key/snapshot-publisher.public.json",
+    "sha256": "d522f6206558d5adfd764258a4d7809e7109c5dc51481faa6b1aa303e0194057",
+    "private_material_recorded": false
+  },
+  "independent_import": {
+    "target_path": "pre-rollout-backup/backup-verified-import",
+    "present": true,
+    "finalized_checkpoint_verification_path": "pre-rollout-backup/finalized-checkpoint-verification.json",
+    "finalized_checkpoint_verification_sha256": "ee0d0ef883717901364421d8c36e377cb1ee56ac5abf51698703e0b4ba8007d2",
+    "verified": true,
+    "verification_basis": "consensus-v2-finalized-checkpoint",
+    "validator_count": 6,
+    "quorum": 5,
+    "checkpoint_height": 776
+  },
+  "verifier_binary": {
+    "path": "validator-stage/rootfs/opt/postfiat/releases/a666-public-reserve-e949f48/postfiat-node",
+    "sha256": "f4cd7b7c6e219059f0526daec205088ea533c642b303cf468c559093431a2eaf"
+  }
+}

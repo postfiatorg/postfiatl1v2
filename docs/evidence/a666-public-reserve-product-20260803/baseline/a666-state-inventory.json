@@ -1,0 +1,99 @@
+{
+  "schema": "postfiat-a666-public-reserve-baseline-state-v1",
+  "observed_at_utc": "2026-08-03T03:36:46Z",
+  "read_only": true,
+  "asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+  "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+  "rpc_ports": [39650, 39651, 39652, 39653, 39654, 39655],
+  "fleet_parent": {
+    "height": 776,
+    "tip_hash": "3be5a881e124e71c6b2704fffbeb95b874205b8bd85d26ad29b60307596727f967aebc2bfd496e7d87b0835bdb6766c9",
+    "state_root": "10dfb17b640a69749ca4b00d66b9e0141fa33644df6bcd8f7008f85f4501a42424681edaf25a3fd0111cc55492b256f9",
+    "mempool_pending": 0,
+    "six_unique_validators": true,
+    "evidence": "baseline/fleet-status.json"
+  },
+  "queries": {
+    "asset_info": {
+      "six_of_six_identical": true,
+      "canonical_result_sha256": "7db94a0506f97bf7ae49f798ff8e58d5bb4c572a95e3441450ddf6a0f2489b13",
+      "found": true,
+      "code": "A666",
+      "display_name": "Post Fiat NAVCoin a666",
+      "precision": 6,
+      "asset_version": 2,
+      "issuer": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+      "outstanding_supply_atoms": 99000000,
+      "holder_count": 1,
+      "trustline_count": 2
+    },
+    "nav_reserve_proof_status": {
+      "six_of_six_identical": true,
+      "ok": false,
+      "canonical_error_sha256": "590343ae18ae0f8b5049e2077666cc4fc9b6f720c1d71768eaaeb4ef7bd8862a",
+      "error_code": "rpc_method_not_allowed",
+      "error_message": "rpc method `nav_reserve_proof_status` is not enabled on the read-only remote server",
+      "acceptance_interpretation": "pre-migration deployed binary lacks the public remote exposure already present in the candidate source; rollout must repair this"
+    },
+    "market_ops_status": {
+      "six_of_six_identical": true,
+      "ok": false,
+      "canonical_error_sha256": "9b4f517bd28cdc1589dd9304bad510cecb1a604e7cb35f675c1cae15aaff671d",
+      "error_code": "rpc_error",
+      "error_message": "missing finalized market ops envelope for the existing A666 asset",
+      "acceptance_interpretation": "expected pre-migration state; successor market envelope is not yet governed live"
+    },
+    "vault_bridge_status": {
+      "six_of_six_identical": true,
+      "canonical_result_sha256": "9ac748c70cdf70146dd2c6dc2e0540e26ed5be902d4cda46d7f124e701326e89",
+      "finalized_epoch": 5,
+      "finalized_reserve_packet_hash": "78c9fce35e0dc1ad9a7bd5b25b34e432c606fc38889e1543d5242cff12fe637bb0a508aff3655d2e2e27ac872f88f289",
+      "legacy_proof_profile": "a94a392926967722b2cceb88b19c4108726381f5b184007185a27e91f3e27c63dcc713a28f6cc4cf765826564e2b5f52",
+      "legacy_nav_usd_e8": 90234207,
+      "issued_supply_atoms": 31597197455,
+      "circulating_supply_atoms": 31597197455,
+      "counted_value_atoms": 0
+    },
+    "vault_bridge_route": {
+      "six_of_six_identical": true,
+      "ok": false,
+      "canonical_error_sha256": "67e0e873e98de0f5e534a5be17d2b3aab003078f8071448b559e9e62820df025",
+      "error_code": "rpc_error",
+      "error_message": "vault bridge route has no active governed profile",
+      "acceptance_interpretation": "expected pre-migration state; public successor governance has not yet executed"
+    },
+    "navcoin_bridge_routes": {
+      "six_of_six_identical": true,
+      "canonical_result_sha256": "dec402e0bdee25c8ca2162552715c5acd01ce9babc0b814811d3e98e53c04193",
+      "route_count": 2,
+      "a666_route_live": true,
+      "a666_route_paused": false,
+      "a666_route_epoch": 6,
+      "a666_latest_finalized_nav_epoch": 5,
+      "a666_route_trust_class": "BFT_CHECKPOINT",
+      "a666_native_asset_id_continuous": true,
+      "a666_wrapped_token": "0xee4c92edb03efdd9b519339edc19ad70c69a9be5",
+      "a666_outstanding_bridge_claims_atoms": 31489197455,
+      "a666_authorized_valid_supply_atoms": 31597197455
+    },
+    "navcoin_bridge_supply_status": {
+      "six_of_six_identical": true,
+      "canonical_result_sha256": "6c40392f0215ae28317625f8973f3c0d945b901069e935617faddfe65fae0be7",
+      "invariant_holds": true,
+      "route_epoch": 6,
+      "pricing_nav_epoch": 5,
+      "policy_epoch": 6,
+      "live_supply_sum_atoms": 31597197455,
+      "authorized_valid_supply_atoms": 31597197455,
+      "wrapped_exposure_atoms": 31498197455,
+      "ethereum_spendable_supply_atoms": 9000000,
+      "pftl_spendable_supply_atoms": 99000000,
+      "native_spendable_balance_sum_atoms": 99000000,
+      "outstanding_bridge_claims_atoms": 31489197455,
+      "pending_return_import_claims_atoms": 0,
+      "active_reservation_atoms": 0,
+      "export_entitlement_atoms": 0
+    }
+  },
+  "mutation_performed": false
+}

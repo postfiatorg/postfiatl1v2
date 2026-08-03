@@ -1,0 +1,21 @@
+{
+  "schema": "postfiat-a666-public-reserve-repository-state-v1",
+  "observed_at_utc": "2026-08-03T03:54:50Z",
+  "repository": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724",
+  "branch": "feature/pnok-private-fix",
+  "head_revision": "85cf5237257b7010f9ddb5b2cf0ba25d30496f6e",
+  "origin_revision": "85cf5237257b7010f9ddb5b2cf0ba25d30496f6e",
+  "head_matches_origin": true,
+  "tracked_changes": 0,
+  "staged_changes": 0,
+  "unstaged_changes": 0,
+  "untracked_paths": 9082,
+  "untracked_top_level_counts": {
+    "crates": 1,
+    "deployments": 6084,
+    "docs": 2997
+  },
+  "untracked_content_disposition": "pre-existing user deployment/evidence trees plus this execution evidence; preserved and excluded from candidate commits",
+  "bulk_cleanup_prohibited": true,
+  "named_staging_only": true
+}
