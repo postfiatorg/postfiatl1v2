@@ -2605,9 +2605,172 @@ fn provider_neutral_qnav_proof_finalizes_and_survives_six_validator_restart() {
     );
 }
 
+/// Extracts a printable message from a caught panic payload.
+fn controlled_panic_message(payload: &(dyn std::any::Any + Send)) -> String {
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        (*message).to_string()
+    } else if let Some(message) = payload.downcast_ref::<String>() {
+        message.clone()
+    } else {
+        "non-string panic payload".to_string()
+    }
+}
+
+/// Best-effort source revision and dirty status for the controlled report.
+fn controlled_source_revision() -> (String, bool) {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let revision = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(manifest_dir)
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+    let dirty = Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(manifest_dir)
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| !output.stdout.is_empty())
+        .unwrap_or(true);
+    (revision, dirty)
+}
+
+/// Best-effort SHA-256 of the running test binary.
+fn controlled_binary_sha256() -> String {
+    use sha2::{Digest, Sha256};
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| fs::read(exe).ok())
+        .map(|bytes| {
+            let mut hasher = Sha256::new();
+            hasher.update(&bytes);
+            format!("{:x}", hasher.finalize())
+        })
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+/// Runs a controlled lifecycle body and writes a single machine-readable
+/// report to `report_path` on both success and failure. The report `ok`
+/// field is computed from the outcome, never asserted by the body.
+fn run_with_controlled_report_at(
+    report_path: &Path,
+    test_name: &str,
+    body: impl FnOnce() -> Value,
+) {
+    let started_unix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("controlled report clock before epoch")
+        .as_secs();
+    let run_id = format!("{test_name}-{started_unix}-{}", std::process::id());
+    let (source_revision, source_dirty) = controlled_source_revision();
+    let binary_sha256 = controlled_binary_sha256();
+
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(body));
+
+    let finished_unix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("controlled report clock before epoch")
+        .as_secs();
+    let ok = outcome.is_ok();
+    let mut report = match &outcome {
+        Ok(body_report) => body_report.clone(),
+        Err(payload) => json!({
+            "schema": "postfiat-a666-public-successor-controlled-lifecycle-v1",
+            "first_failure": controlled_panic_message(payload.as_ref()),
+            "downstream_checks_skipped": true,
+        }),
+    };
+    report["ok"] = json!(ok);
+    report["run"] = json!({
+        "run_id": run_id,
+        "test": test_name,
+        "started_unix": started_unix,
+        "finished_unix": finished_unix,
+        "source_revision": source_revision,
+        "source_dirty": source_dirty,
+        "binary_sha256": binary_sha256,
+    });
+
+    if let Some(parent) = report_path.parent() {
+        fs::create_dir_all(parent).expect("create controlled report directory");
+    }
+    fs::write(
+        report_path,
+        format!(
+            "{}\n",
+            serde_json::to_string_pretty(&report).expect("pretty controlled report")
+        ),
+    )
+    .expect("write controlled lifecycle report");
+    println!(
+        "A666_CONTROLLED_LIFECYCLE_REPORT={}",
+        serde_json::to_string(&report).expect("serialize controlled report")
+    );
+
+    if let Err(payload) = outcome {
+        std::panic::resume_unwind(payload);
+    }
+}
+
+/// Resolves the mandatory controlled report path before any work starts.
+/// A controlled run without a report destination is an evidence-integrity
+/// defect, so the absence of the variable fails the run immediately.
+fn run_with_controlled_report(test_name: &str, body: impl FnOnce() -> Value) {
+    let report_path = std::env::var_os("POSTFIAT_A666_CONTROLLED_REPORT_FILE").expect(
+        "POSTFIAT_A666_CONTROLLED_REPORT_FILE must be set; a controlled run \
+         without a report path is an evidence-integrity defect",
+    );
+    run_with_controlled_report_at(&PathBuf::from(report_path), test_name, body);
+}
+
+#[test]
+fn controlled_report_is_written_even_on_failure() {
+    let report_path = std::env::temp_dir().join(format!(
+        "a666-controlled-report-failure-{}-{}.json",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock before epoch")
+            .as_nanos()
+    ));
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        run_with_controlled_report_at(&report_path, "controlled_report_failure_probe", || {
+            panic!("injected controlled lifecycle failure");
+        });
+    }));
+    assert!(outcome.is_err(), "wrapped failure must still fail the test");
+    let report: Value = serde_json::from_slice(
+        &fs::read(&report_path).expect("controlled report must exist after failure"),
+    )
+    .expect("controlled failure report must be valid JSON");
+    assert_eq!(report["ok"], json!(false));
+    assert_eq!(
+        report["first_failure"],
+        json!("injected controlled lifecycle failure")
+    );
+    assert_eq!(report["downstream_checks_skipped"], json!(true));
+    assert_eq!(
+        report["run"]["test"],
+        json!("controlled_report_failure_probe")
+    );
+    assert!(report["run"]["run_id"].is_string());
+    assert!(report["run"]["binary_sha256"].is_string());
+    fs::remove_file(&report_path).expect("remove probe report");
+}
+
 #[test]
 #[ignore = "exact A666 public-successor six-validator migration rehearsal"]
 fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
+    run_with_controlled_report(
+        "a666_public_successor_proof_migrates_and_survives_six_validator_restart",
+        a666_public_successor_lifecycle_body,
+    );
+}
+
+fn a666_public_successor_lifecycle_body() -> Value {
     const A666_CHAIN_ID: &str = "postfiat-wan-devnet-2";
     const A666_ASSET_ID: &str = "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c";
     const A666_ISSUER: &str = "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b";
@@ -4224,22 +4387,7 @@ fn a666_public_successor_proof_migrates_and_survives_six_validator_restart() {
             "block_history_replayed": true
         }
     });
-    let report_json = serde_json::to_string(&report).expect("serialize controlled report");
-    println!("A666_CONTROLLED_LIFECYCLE_REPORT={report_json}");
-    if let Some(report_file) = std::env::var_os("POSTFIAT_A666_CONTROLLED_REPORT_FILE") {
-        let report_file = PathBuf::from(report_file);
-        if let Some(parent) = report_file.parent() {
-            fs::create_dir_all(parent).expect("create controlled report directory");
-        }
-        fs::write(
-            report_file,
-            format!(
-                "{}\n",
-                serde_json::to_string_pretty(&report).expect("pretty controlled report")
-            ),
-        )
-        .expect("write controlled lifecycle report");
-    }
+    report
 }
 
 #[test]
