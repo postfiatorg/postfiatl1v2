@@ -12,6 +12,7 @@ const execFileAsync = promisify(execFile);
 const CONFIG_SCHEMA = 'postfiat-navcoin-export-relay-driver-config-v1';
 const JOB_SCHEMA = 'postfiat-navcoin-export-relay-job-v1';
 const STATE_SCHEMA = 'postfiat-navcoin-export-relay-state-v1';
+const RELEASE_BINARY_RE = /^\/opt\/postfiat\/releases\/([a-z0-9][a-z0-9.-]{0,127})\/postfiat-node$/;
 const ROUTE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const HASH48_RE = /^[0-9a-f]{96}$/;
 const HASH32_RE = /^[0-9a-f]{64}$/;
@@ -67,12 +68,20 @@ function loadConfig(file) {
     }
     config.repo = path.resolve(config.repo);
     config.node_binary = String(config.node_binary);
+    const release = RELEASE_BINARY_RE.exec(config.node_binary);
+    if (!release || !/^[0-9a-f]{64}$/.test(String(config.node_binary_sha256 || ''))) {
+        throw new Error('NAVCoin export driver node binary is not an exact signed release');
+    }
+    config.release_id = release[1];
     config.ethereum_rpc = String(config.ethereum_rpc);
     config.signer_socket = path.resolve(String(config.signer_socket || ''));
+    const signerMinimumBalance = String(config.signer_minimum_balance_wei || '');
     if (!/^[0-9a-f]{64}$/.test(String(config.signer_policy_hash || ''))
-        || !EVM_RE.test(String(config.signer_address || '').toLowerCase())) {
+        || !EVM_RE.test(String(config.signer_address || '').toLowerCase())
+        || !/^[1-9][0-9]*$/.test(signerMinimumBalance)) {
         throw new Error('NAVCoin export driver signer identity is malformed');
     }
+    config.signer_minimum_balance_wei = BigInt(signerMinimumBalance);
     config.route_config_digest = config.route_config_digest.toLowerCase();
     config.controller = config.controller.toLowerCase();
     config.wrapped_token = config.wrapped_token.toLowerCase();
@@ -259,8 +268,10 @@ async function inspect(config, request) {
 
 async function readiness(config) {
     const supplyCommand = `${config.node_binary} navcoin-bridge-supply-status --data-dir ${config.validator_data_dir} --route-id ${config.route_id}`;
-    const [supplyRaw, remotePins, chainRaw, vkeyRaw, pausedRaw, symbolRaw, signer] = await Promise.all([
+    const [supplyRaw, nodePin, remotePins, chainRaw, vkeyRaw, pausedRaw, symbolRaw,
+        signerBalanceRaw, signer] = await Promise.all([
         ssh(config, config.validator2_host, supplyCommand),
+        ssh(config, config.validator2_host, `sha256sum ${config.node_binary}`),
         ssh(config, config.a100_host,
             `sha256sum ${config.a100_prover} ${config.a100_elf}`,
             config.a100_port),
@@ -268,17 +279,20 @@ async function readiness(config) {
         cast(config, ['call', config.verifier, 'programVKey()(bytes32)']),
         cast(config, ['call', config.controller, 'mintPaused()(bool)']),
         cast(config, ['call', config.wrapped_token, 'symbol()(string)']),
+        cast(config, ['balance', config.signer_address]),
         signerStatus(config),
     ]);
     const supply = JSON.parse(supplyRaw.stdout);
     const pins = new Map(String(remotePins.stdout).trim().split('\n').map((line) => {
         const [digest, file] = line.trim().split(/\s+/, 2); return [file, digest];
     }));
+    const nodeDigest = String(nodePin.stdout).trim().split(/\s+/, 1)[0];
     const gates = {
         route_identity: supply.route_id === config.route_id
             && supply.route_config_digest === config.route_config_digest,
         pftl_invariant: supply.invariant_holds === true,
         pftl_live: supply.paused === false && supply.live_value_enabled === true,
+        pftl_node_binary: nodeDigest === config.node_binary_sha256,
         ethereum_chain: String(chainRaw.stdout).trim() === '1',
         verifier_vkey: String(vkeyRaw.stdout).trim().toLowerCase() === config.program_vkey,
         mint_unpaused: String(pausedRaw.stdout).trim() === 'false',
@@ -291,6 +305,8 @@ async function readiness(config) {
             && String(signer.address || '').toLowerCase() === String(config.signer_address).toLowerCase()
             && Array.isArray(signer.chains) && signer.chains.includes(1)
             && Array.isArray(signer.routes) && signer.routes.includes(config.route_id)),
+        signer_funded: BigInt(String(signerBalanceRaw.stdout).trim())
+            >= config.signer_minimum_balance_wei,
     };
     const ready = Object.values(gates).every(Boolean);
     if (!ready) {
@@ -303,8 +319,12 @@ async function readiness(config) {
         wrapped_token: config.wrapped_token, controller: config.controller,
         verifier: config.verifier, program_vkey: config.program_vkey,
         native_asset_code: config.native_asset_code,
+        release_id: config.release_id,
+        node_binary_sha256: config.node_binary_sha256,
         wrapped_token_symbol: config.wrapped_token_symbol, pftl_invariant_holds: true,
         prover_authenticated: true, prover_healthy: true, signer_unlocked: true,
+        signer_balance_wei: String(signerBalanceRaw.stdout).trim(),
+        signer_minimum_balance_wei: config.signer_minimum_balance_wei.toString(),
         max_concurrent_jobs: 1,
     };
 }
@@ -326,7 +346,11 @@ async function spawnProof(config, job, phaseDir) {
         '--expected-recipient', request.ethereum_recipient,
         '--expected-amount-atoms', request.amount_atoms];
     await new Promise((resolve, reject) => {
-        const child = spawn('bash', args, { cwd: config.repo, stdio: 'inherit', env: process.env });
+        const child = spawn('bash', args, {
+            cwd: config.repo,
+            stdio: 'inherit',
+            env: { ...process.env, POSTFIAT_SIGNER_SOCKET: config.signer_socket },
+        });
         child.once('error', reject);
         child.once('exit', (code, signal) => code === 0 ? resolve() : reject(Object.assign(
             new Error(`proof harness exited ${code ?? signal}`), { code: 'navcoin_export_proof_failed' },

@@ -75,9 +75,11 @@ import { RpcClient } from '/src/lib/rpc-client.js';
 import { SwapServer } from '/src/lib/swap-server.js';
 import { relayVaultDeposit } from '/src/lib/bridge-relay.js';
 import { approveEthereumUsdc, depositToEthereumBridge } from '/src/lib/evm.js';
+import { submitPftlPrivateIntent } from '/src/lib/pftl-private-primary.js';
 import { clearSensitiveMemory, setDecryptedState } from '/src/lib/vault.js';
 
 window.runCustodyCapture = async ({ seed, backupJson, privateNote }) => {
+  window.custodyCaptureStage = 'validate-fixture';
   if (!privateNote || Object.keys(privateNote).length !== 11) {
     throw new Error('complete private-note fixture is required');
   }
@@ -99,6 +101,7 @@ window.runCustodyCapture = async ({ seed, backupJson, privateNote }) => {
   setDecryptedState(seed, backupJson);
   localStorage.setItem('wallet-address', 'pf-browser-capture');
 
+  window.custodyCaptureStage = 'websocket-money-operations';
   const rpc = new RpcClient('ws://' + location.host + '/rpc', 'session-only-token');
   await rpc.submitSignedTransferFinality(signed);
   await rpc.submitSignedPaymentV2Finality(signed);
@@ -112,6 +115,7 @@ window.runCustodyCapture = async ({ seed, backupJson, privateNote }) => {
   await rpc.ownedUnwrapApply(cert);
   rpc.close();
 
+  window.custodyCaptureStage = 'swap-http-operations';
   const server = new SwapServer(location.origin, 'session-only-token');
   await server.fundNavswapPfusdc({ wallet_address: 'pf-browser-capture', amount_atoms: '1' });
   await server.runNavswap({ route: 'transparent_navswap', signed_transaction_json: signed });
@@ -120,7 +124,35 @@ window.runCustodyCapture = async ({ seed, backupJson, privateNote }) => {
   await server.submitShieldedNavswapIngress({ route: 'shielded_navswap', ingress_action_json: signed });
   await server.submitShieldedNavswapSwap({ route: 'shielded_navswap', swap_action_json: signed });
   await server.submitShieldedNavswapEgress({ route: 'shielded_navswap', egress_json: signed, disclosure_ack: true });
+  window.custodyCaptureStage = 'private-primary-http-operation';
+  await submitPftlPrivateIntent({
+    schema: 'postfiat.pftl_swap.signed_intent.v1',
+    intent: {
+      schema: 'postfiat.pftl_swap.intent.v1',
+      chain_id: 'postfiat-wan-devnet-2',
+      genesis_hash: '88'.repeat(48),
+      protocol_version: 1,
+      principal: 'pf' + '11'.repeat(20),
+      controlled_wallet_id: 'pf' + '11'.repeat(20),
+      route_id: 'pftl-navcoin-private-primary-v1',
+      direction: 'issue',
+      output_mode: 'private',
+      input_reference: 'transparent-pfusdc',
+      input_amount_atoms: 1005000,
+      minimum_output_amount_atoms: 1000000,
+      maximum_fee_atoms: 100,
+      quote_id: '99'.repeat(48),
+      pricing_nav_epoch: 8,
+      policy_hash: 'aa'.repeat(48),
+      expiry_height: 900,
+      idempotency_key: 'browser-custody-private-issue',
+    },
+    algorithm_id: 'ML-DSA-65',
+    public_key_hex: publicKey,
+    signature_hex: publicSignature,
+  }, { proxyAuthToken: 'session-only-token' });
 
+  window.custodyCaptureStage = 'bridge-relay-http-operation';
   await relayVaultDeposit({
     depositTxHash: '0x' + '33'.repeat(32),
     pftlRecipient: 'pf-browser-capture',
@@ -129,6 +161,7 @@ window.runCustodyCapture = async ({ seed, backupJson, privateNote }) => {
     routeEpoch: 1,
     routeBinding: '55'.repeat(32),
   });
+  window.custodyCaptureStage = 'ethereum-money-operations';
   await approveEthereumUsdc('0x2222222222222222222222222222222222222222', 1n);
   await depositToEthereumBridge(
     '0x3333333333333333333333333333333333333333',
@@ -138,6 +171,7 @@ window.runCustodyCapture = async ({ seed, backupJson, privateNote }) => {
     '0x' + '77'.repeat(32),
   );
 
+  window.custodyCaptureStage = 'storage-boundary';
   const storage = {
     local: Object.fromEntries(Object.keys(localStorage).map(key => [key, localStorage.getItem(key)])),
     session: Object.fromEntries(Object.keys(sessionStorage).map(key => [key, sessionStorage.getItem(key)])),
@@ -174,7 +208,13 @@ async function startCaptureServer(capture) {
     const body = await readRequestBody(request);
     capture.http.push({ method: request.method, path: url.pathname, body });
     response.writeHead(200, { 'content-type': 'application/json' });
-    response.end(JSON.stringify({ ok: true, result: { accepted: true }, receipt: { accepted: true, code: 'accepted' } }));
+    if (request.method === 'POST' && url.pathname === '/api/bridge/jobs') {
+      response.end(JSON.stringify({ ok: true, job_id: '0x' + '12'.repeat(32), status: 'queued' }));
+    } else if (request.method === 'GET' && url.pathname.startsWith('/api/bridge/jobs/')) {
+      response.end(JSON.stringify({ ok: true, status: 'accepted', receipt_code: 'ACCEPTED' }));
+    } else {
+      response.end(JSON.stringify({ ok: true, result: { accepted: true }, receipt: { accepted: true, code: 'accepted' } }));
+    }
   });
 
   server.on('upgrade', (request, socket) => {
@@ -237,14 +277,57 @@ async function scanTreeForValues(root, values) {
 
 async function scanChromiumProcessArguments(profileDir, values) {
   const procEntries = await readdir('/proc').catch(() => []);
-  const chromiumCmdlines = [];
+  const chromiumProcesses = [];
   for (const entry of procEntries) {
     if (!/^\d+$/.test(entry)) continue;
     const cmdline = await readFile(`/proc/${entry}/cmdline`, 'utf8').catch(() => '');
-    if (cmdline.includes(profileDir)) chromiumCmdlines.push(cmdline);
+    if (cmdline.includes(profileDir)) chromiumProcesses.push({ pid: Number(entry), cmdline });
   }
-  const secretHits = chromiumCmdlines.filter(cmdline => values.some(value => cmdline.includes(value)));
-  return { processCount: chromiumCmdlines.length, secretHits };
+  const secretHits = chromiumProcesses
+    .map(process => process.cmdline)
+    .filter(cmdline => values.some(value => cmdline.includes(value)));
+  return { processCount: chromiumProcesses.length, secretHits };
+}
+
+function bounded(promise, milliseconds, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} exceeded ${milliseconds}ms`)), milliseconds);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+async function chromiumProfileProcessIds(profileDir) {
+  const entries = await readdir('/proc').catch(() => []);
+  const pids = [];
+  for (const entry of entries) {
+    if (!/^\d+$/.test(entry)) continue;
+    const cmdline = await readFile(`/proc/${entry}/cmdline`, 'utf8').catch(() => '');
+    if (cmdline.includes(profileDir)) pids.push(Number(entry));
+  }
+  return pids;
+}
+
+async function signalExactChromiumProfile(profileDir, signal) {
+  for (const pid of await chromiumProfileProcessIds(profileDir)) {
+    const cmdline = await readFile(`/proc/${pid}/cmdline`, 'utf8').catch(() => '');
+    if (!cmdline.includes(profileDir)) continue;
+    try { process.kill(pid, signal); } catch (error) {
+      if (error.code !== 'ESRCH') throw error;
+    }
+  }
+}
+
+async function closePersistentContext(context, profileDir) {
+  const closed = context.close().then(() => true, () => false);
+  const graceful = await Promise.race([
+    closed,
+    new Promise(resolve => setTimeout(() => resolve(false), 5_000)),
+  ]);
+  if (graceful) return;
+  await signalExactChromiumProfile(profileDir, 'SIGTERM');
+  await new Promise(resolve => setTimeout(resolve, 500));
+  await signalExactChromiumProfile(profileDir, 'SIGKILL');
 }
 
 test('Chromium captures every wallet money boundary without custody material', { timeout: 60_000 }, async () => {
@@ -273,16 +356,33 @@ test('Chromium captures every wallet money boundary without custody material', {
   let acceptance = null;
   try {
     const page = await context.newPage();
+    page.setDefaultTimeout(10_000);
+    page.setDefaultNavigationTimeout(10_000);
     page.on('console', message => consoleLines.push(message.text()));
     await page.goto(`http://127.0.0.1:${address.port}/`);
     await page.waitForFunction(() => typeof window.runCustodyCapture === 'function');
-    const browserResult = await page.evaluate(
-      input => window.runCustodyCapture(input),
-      { seed, backupJson, privateNote },
-    );
+    let browserResult;
+    try {
+      browserResult = await bounded(
+        page.evaluate(
+          input => window.runCustodyCapture(input),
+          { seed, backupJson, privateNote },
+        ),
+        30_000,
+        'browser custody capture',
+      );
+    } catch (error) {
+      const stage = await bounded(
+        page.evaluate(() => window.custodyCaptureStage || 'unknown'),
+        1_000,
+        'browser custody stage read',
+      ).catch(() => 'unavailable');
+      error.message += ` at ${stage} (${capture.websocket.length} websocket, ${capture.http.length} HTTP operations)`;
+      throw error;
+    }
 
     assert.equal(capture.websocket.length, 10, 'complete WebSocket money-operation catalog');
-    assert.equal(capture.http.length, 8, 'complete current HTTP money-operation catalog');
+    assert.equal(capture.http.length, 10, 'complete current HTTP money-operation catalog');
     assert.equal(browserResult.ethereumRequests.filter(item => item.method === 'eth_sendTransaction').length, 2);
 
     const outbound = JSON.stringify({ capture, ethereum: browserResult.ethereumRequests });
@@ -330,9 +430,11 @@ test('Chromium captures every wallet money boundary without custody material', {
       proxy_ingress_secret_hits: 0,
     };
   } finally {
-    await context.close();
     server.destroyUpgradeSockets();
-    await new Promise(resolveClose => server.close(resolveClose));
+    await closePersistentContext(context, profileDir);
+    server.closeAllConnections?.();
+    await bounded(new Promise(resolveClose => server.close(resolveClose)), 5_000, 'capture server close')
+      .catch(() => {});
   }
 
   const profileHits = await scanTreeForValues(profileDir, sensitiveValues);

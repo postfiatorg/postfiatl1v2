@@ -153,6 +153,15 @@ export function wallet_sign_owned_unwrap_v3(backup_json: string, order_json: str
 export function wallet_sign_payment_v2(backup_json: string, fields_json: string): any;
 
 /**
+ * Sign one bounded resident private-primary issue or redeem intent locally.
+ *
+ * The browser submits only the public intent, ML-DSA public key, and
+ * domain-separated signature. The wallet backup and derived private key stay
+ * inside WASM memory.
+ */
+export function wallet_sign_pftl_swap_intent(backup_json: string, intent_json: string): any;
+
+/**
  * Sign a transfer using a fee quote from the RPC server.
  *
  * backup_json: WalletBackupFile as JSON string
@@ -198,6 +207,7 @@ export interface InitOutput {
     readonly wallet_sign_owned_unwrap: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly wallet_sign_owned_unwrap_v3: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly wallet_sign_payment_v2: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly wallet_sign_pftl_swap_intent: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly wallet_sign_transfer: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly wallet_sign_transfer_fields: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly wallet_verify_fastpay_apply_ack: (a: number, b: number, c: number, d: number) => [number, number, number];

@@ -12,6 +12,7 @@ const CONFIG_SCHEMA = 'postfiat-navcoin-return-relay-driver-config-v1';
 const JOB_SCHEMA = 'postfiat-navcoin-return-relay-job-v1';
 const STATE_SCHEMA = 'postfiat-navcoin-return-relay-state-v1';
 const ROUTE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const RELEASE_BINARY_RE = /^\/opt\/postfiat\/releases\/([a-z0-9][a-z0-9.-]{0,127})\/postfiat-node$/;
 
 function option(argv, name) {
     const index = argv.indexOf(name);
@@ -60,6 +61,11 @@ function loadConfig(file) {
     config.repo = path.resolve(config.repo);
     config.python = String(config.python);
     config.node_binary = String(config.node_binary);
+    const release = RELEASE_BINARY_RE.exec(config.node_binary);
+    if (!release || !/^[0-9a-f]{64}$/.test(String(config.node_binary_sha256 || ''))) {
+        throw new Error('NAVCoin return driver node binary is not an exact signed release');
+    }
+    config.release_id = release[1];
     config.ethereum_rpc = String(config.ethereum_rpc);
     config.route_config_digest = config.route_config_digest.toLowerCase();
     config.controller = config.controller.toLowerCase();
@@ -153,17 +159,20 @@ async function importedReturn(config, burnId) {
 }
 
 async function readiness(config) {
-    const [supply, chainRaw, tokenRaw, assetRaw] = await Promise.all([
+    const [supply, nodePin, chainRaw, tokenRaw, assetRaw] = await Promise.all([
         supplyStatus(config),
+        ssh(config, `sha256sum ${config.node_binary}`),
         cast(config, ['chain-id']),
         cast(config, ['call', config.controller, 'wrappedToken()(address)']),
         cast(config, ['call', config.controller, 'nativeNavAssetId()(bytes)']),
     ]);
+    const nodeDigest = String(nodePin.stdout).trim().split(/\s+/, 1)[0];
     const gates = {
         route_identity: supply.route_id === config.route_id
             && supply.route_config_digest === config.route_config_digest,
         pftl_invariant: supply.invariant_holds === true,
         pftl_live: supply.paused === false && supply.live_value_enabled === true,
+        pftl_node_binary: nodeDigest === config.node_binary_sha256,
         return_class: supply.return_verification_class === 'BFT_CHECKPOINT',
         ethereum_chain: String(chainRaw.stdout).trim() === '1',
         controller_token: String(tokenRaw.stdout).trim().toLowerCase() === config.wrapped_token,
@@ -179,6 +188,8 @@ async function readiness(config) {
         controller: config.controller, wrapped_token: config.wrapped_token,
         native_nav_asset_id: config.native_nav_asset_id,
         native_asset_code: config.native_asset_code,
+        release_id: config.release_id,
+        node_binary_sha256: config.node_binary_sha256,
         wrapped_token_symbol: config.wrapped_token_symbol,
         pftl_invariant_holds: true, max_concurrent_jobs: 1,
     };

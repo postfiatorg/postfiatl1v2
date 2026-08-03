@@ -1,4 +1,5 @@
 use super::*;
+use zeroize::Zeroizing;
 
 pub fn wallet_backup_from_master_seed(
     chain_id: impl Into<String>,
@@ -1000,8 +1001,9 @@ fn validate_wallet_backup_file(backup: &WalletBackupFile) -> Result<(), WalletSd
             backup.key_role
         )));
     }
-    let normalized_seed = normalized_wallet_master_seed_hex(&backup.master_seed_hex)?;
-    if backup.master_seed_hex != normalized_seed {
+    let normalized_seed =
+        Zeroizing::new(normalized_wallet_master_seed_hex(&backup.master_seed_hex)?);
+    if backup.master_seed_hex.as_str() != normalized_seed.as_str() {
         return Err(WalletSdkError::new(
             "wallet backup master seed must be lowercase canonical hex",
         ));
@@ -1021,36 +1023,46 @@ pub fn derive_wallet_key_pair(
     Ok(ml_dsa_65_keygen_from_seed(&seed))
 }
 
-fn derive_wallet_seed(backup: &WalletBackupFile) -> Result<[u8; 32], WalletSdkError> {
+fn derive_wallet_seed(backup: &WalletBackupFile) -> Result<Zeroizing<[u8; 32]>, WalletSdkError> {
     validate_wallet_backup_file(backup)?;
     let master_seed = Zeroizing::new(wallet_master_seed_bytes(&backup.master_seed_hex)?);
-    let derivation_payload = serde_json::to_vec(&(
+    let master_seed_hex = Zeroizing::new(crypto_bytes_to_hex(&master_seed[..]));
+    let derivation_payload = Zeroizing::new(
+        serde_json::to_vec(&(
+            WALLET_DERIVATION_DOMAIN,
+            backup.algorithm_id.as_str(),
+            backup.chain_id.as_str(),
+            backup.account_index,
+            backup.key_role.as_str(),
+            master_seed_hex.as_str(),
+        ))
+        .map_err(|error| WalletSdkError::new(error.to_string()))?,
+    );
+    let digest = Zeroizing::new(crypto_hash_bytes(
         WALLET_DERIVATION_DOMAIN,
-        backup.algorithm_id.as_str(),
-        backup.chain_id.as_str(),
-        backup.account_index,
-        backup.key_role.as_str(),
-        crypto_bytes_to_hex(&master_seed[..]),
-    ))
-    .map_err(|error| WalletSdkError::new(error.to_string()))?;
-    let digest = crypto_hash_bytes(WALLET_DERIVATION_DOMAIN, &derivation_payload);
-    let mut seed = [0u8; 32];
+        &derivation_payload,
+    ));
+    let mut seed = Zeroizing::new([0u8; 32]);
     seed.copy_from_slice(&digest[..32]);
     Ok(seed)
 }
 
 fn normalized_wallet_master_seed_hex(seed_hex: &str) -> Result<String, WalletSdkError> {
-    Ok(crypto_bytes_to_hex(&wallet_master_seed_bytes(seed_hex)?))
+    let seed = Zeroizing::new(wallet_master_seed_bytes(seed_hex)?);
+    Ok(crypto_bytes_to_hex(&seed[..]))
 }
 
 fn wallet_master_seed_bytes(seed_hex: &str) -> Result<[u8; 32], WalletSdkError> {
-    let bytes = crypto_hex_to_bytes(seed_hex).map_err(|error| {
+    let bytes = Zeroizing::new(crypto_hex_to_bytes(seed_hex).map_err(|error| {
         WalletSdkError::new(format!("wallet master seed hex is invalid: {error}"))
-    })?;
-    bytes.try_into().map_err(|bytes: Vec<u8>| {
-        WalletSdkError::new(format!(
+    })?);
+    if bytes.len() != 32 {
+        return Err(WalletSdkError::new(format!(
             "wallet master seed hex must decode to 32 bytes, got {}",
             bytes.len()
-        ))
-    })
+        )));
+    }
+    let mut seed = [0u8; 32];
+    seed.copy_from_slice(&bytes);
+    Ok(seed)
 }

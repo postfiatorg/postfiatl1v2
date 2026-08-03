@@ -13,6 +13,7 @@ import {
 
 import { formatNavcoinNav, formatNavcoinUnits } from '../lib/navcoin-primary-route.js';
 import { truncateMiddle } from '../lib/utils.js';
+import PftlPrivatePrimary from './PftlPrivatePrimary.jsx';
 
 function responseResult(response, label) {
   if (!response?.ok || !response.result) {
@@ -33,22 +34,6 @@ function routeIsCurrent(route, nav, market) {
     && nav?.asset_id === market.navAssetId
     && nav?.finalized_epoch === route?.pricing_nav_epoch
     && nav?.finalized_reserve_packet_hash === route?.pricing_reserve_packet_hash
-  );
-}
-
-function privateNavcoinIsReady(capabilities, market) {
-  if (!market) return false;
-  const route = capabilities?.routes?.shielded_navswap;
-  const assets = Array.isArray(route?.asset_registry) ? route.asset_registry : [];
-  return Boolean(
-    route?.enabled === true
-    && route?.can_run === true
-    && route?.can_ingress === true
-    && route?.can_egress === true
-    && assets.some(asset => (
-      String(asset?.asset_id || '').toLowerCase() === market.navAssetId
-      && asset?.supported === true
-    )),
   );
 }
 
@@ -74,7 +59,15 @@ function ProcessStep({ number, title, detail, state, action, onClick, Icon }) {
   );
 }
 
-export default function Swap({ rpc, swapServer, onNavigate, market = null }) {
+export default function Swap({
+  rpc,
+  swapServer,
+  onNavigate,
+  market = null,
+  address = '',
+  backupJson = '',
+  proxyAuthToken = '',
+}) {
   const [snapshot, setSnapshot] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -110,8 +103,6 @@ export default function Swap({ rpc, swapServer, onNavigate, market = null }) {
   const route = snapshot?.route;
   const nav = snapshot?.nav;
   const currentRoute = routeIsCurrent(route, nav, market);
-  const privateReady = privateNavcoinIsReady(snapshot?.capabilities, market);
-
   if (!market) {
     return <div className="pf-page"><div className="pf-error">No governed NAVCoin market is registered on this network.</div></div>;
   }
@@ -153,7 +144,7 @@ export default function Swap({ rpc, swapServer, onNavigate, market = null }) {
               number="1"
               title={`Fund ${market.settlementSymbol}`}
               detail="Deposit canonical Ethereum mainnet USDC into the active governed vault, then proof-relay it into this PFTL wallet."
-              state="ready"
+              state="info"
               action="Open Ethereum bridge-in"
               onClick={() => onNavigate?.('bridge')}
               Icon={Landmark}
@@ -171,7 +162,7 @@ export default function Swap({ rpc, swapServer, onNavigate, market = null }) {
               number="3"
               title="Move assets on PFTL"
               detail={`Send ${market.settlementSymbol} or native ${market.symbol} to another PFTL account with locally signed, certified asset finality.`}
-              state="ready"
+              state="info"
               action="Send issued asset"
               onClick={() => onNavigate?.('send', { sendSource: 'asset' })}
               Icon={Send}
@@ -179,11 +170,10 @@ export default function Swap({ rpc, swapServer, onNavigate, market = null }) {
             <ProcessStep
               number="4"
               title={`Private ${market.symbol} execution`}
-              detail={privateReady
-                ? `The resident Asset-Orchard service advertises ${market.symbol} ingress, private execution, and egress for this wallet.`
-                : `The live browser service does not currently advertise an enabled ${market.symbol} private route. Operational test scripts are not presented as a user wallet feature.`}
-              state={privateReady ? 'ready' : 'blocked'}
-              action={privateReady ? 'Private route available' : ''}
+              detail="Issue or redeem through the controlled resident private-primary prover with a browser-local ML-DSA signature and durable recovery."
+              state="info"
+              action={`Open Private ${market.symbol}`}
+              onClick={() => document.getElementById('private-navcoin-primary')?.scrollIntoView({ behavior: 'smooth' })}
               Icon={Lock}
             />
             <ProcessStep
@@ -205,6 +195,16 @@ export default function Swap({ rpc, swapServer, onNavigate, market = null }) {
               Icon={Landmark}
             />
           </div>
+
+          <PftlPrivatePrimary
+            walletAddress={address}
+            backupJson={backupJson}
+            proxyAuthToken={proxyAuthToken}
+            symbol={market.symbol}
+            decimals={market.decimals}
+            routeId={route?.route_id || ''}
+            onComplete={refresh}
+          />
         </main>
 
         <aside className="pfs-side">

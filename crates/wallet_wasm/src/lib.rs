@@ -4,7 +4,7 @@
 
 use wasm_bindgen::prelude::*;
 
-use postfiat_crypto_provider::{bytes_to_hex, ml_dsa_65_sign_with_context};
+use postfiat_crypto_provider::{bytes_to_hex, ml_dsa_65_sign_with_context, ML_DSA_65_ALGORITHM};
 use postfiat_rpc_sdk::{
     derive_wallet_key_pair, validate_owned_certificate_domain_for_wallet,
     wallet_backup_from_master_seed, wallet_fastpay_transfer_certificate_digest_v3,
@@ -26,7 +26,102 @@ use postfiat_types::{
     OwnedTransferCertificateV3, OwnedTransferOrder, OwnedTransferOrderV3, OwnedUnwrapCertificateV3,
     OwnedUnwrapOrder, OwnedUnwrapOrderV3, PftlUniswapMintPacketV2,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use zeroize::{Zeroize, Zeroizing};
+
+const PFTL_SWAP_INTENT_SCHEMA_V1: &str = "postfiat.pftl_swap.intent.v1";
+const PFTL_SWAP_SIGNED_INTENT_SCHEMA_V1: &str = "postfiat.pftl_swap.signed_intent.v1";
+const PFTL_SWAP_INTENT_SIGNATURE_CONTEXT_V1: &[u8] = b"postfiat.pftl_swap.intent.v1";
+
+#[derive(Debug, Deserialize, Serialize)]
+struct BrowserPftlSwapIntentV1 {
+    schema: String,
+    chain_id: String,
+    genesis_hash: String,
+    protocol_version: u32,
+    principal: String,
+    controlled_wallet_id: String,
+    route_id: String,
+    direction: String,
+    output_mode: String,
+    input_reference: String,
+    input_amount_atoms: u64,
+    minimum_output_amount_atoms: u64,
+    maximum_fee_atoms: u64,
+    quote_id: String,
+    pricing_nav_epoch: u64,
+    policy_hash: String,
+    expiry_height: u64,
+    idempotency_key: String,
+}
+
+struct BrowserWalletBackup(WalletBackupFile);
+
+impl Drop for BrowserWalletBackup {
+    fn drop(&mut self) {
+        self.0.master_seed_hex.zeroize();
+    }
+}
+
+fn browser_pftl_swap_bounded_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+}
+
+fn browser_pftl_swap_bounded_reference(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 256
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':'))
+}
+
+fn browser_pftl_swap_idempotency_key(value: &str) -> bool {
+    browser_pftl_swap_bounded_id(value)
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+}
+
+fn browser_pftl_swap_lower_hex(value: &str, len: usize) -> bool {
+    value.len() == len
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+impl BrowserPftlSwapIntentV1 {
+    fn validate(&self, backup: &WalletBackupFile, wallet_address: &str) -> Result<(), String> {
+        let valid = self.schema == PFTL_SWAP_INTENT_SCHEMA_V1
+            && self.chain_id == backup.chain_id
+            && browser_pftl_swap_bounded_id(&self.chain_id)
+            && browser_pftl_swap_lower_hex(&self.genesis_hash, 96)
+            && self.protocol_version > 0
+            && self.principal == wallet_address
+            && self.controlled_wallet_id == wallet_address
+            && browser_pftl_swap_bounded_id(&self.route_id)
+            && matches!(self.direction.as_str(), "issue" | "redeem")
+            && matches!(self.output_mode.as_str(), "private" | "transparent")
+            && browser_pftl_swap_bounded_reference(&self.input_reference)
+            && self.input_amount_atoms > 0
+            && self.minimum_output_amount_atoms > 0
+            && self.maximum_fee_atoms > 0
+            && browser_pftl_swap_lower_hex(&self.quote_id, 96)
+            && browser_pftl_swap_lower_hex(&self.policy_hash, 96)
+            && self.expiry_height > 0
+            && browser_pftl_swap_idempotency_key(&self.idempotency_key);
+        if !valid {
+            return Err(
+                "PFTL private-primary intent failed the browser custody-boundary checks"
+                    .to_string(),
+            );
+        }
+        Ok(())
+    }
+}
 
 fn to_json_js_value<T: Serialize>(value: &T) -> Result<JsValue, JsValue> {
     let json =
@@ -111,6 +206,47 @@ pub fn wallet_address_from_seed(
     let identity =
         wallet_identity_from_backup(&backup).map_err(|e| JsValue::from_str(&e.to_string()))?;
     Ok(identity.address)
+}
+
+/// Sign one bounded resident private-primary issue or redeem intent locally.
+///
+/// The browser submits only the public intent, ML-DSA public key, and
+/// domain-separated signature. The wallet backup and derived private key stay
+/// inside WASM memory.
+#[wasm_bindgen]
+pub fn wallet_sign_pftl_swap_intent(
+    backup_json: String,
+    intent_json: &str,
+) -> Result<JsValue, JsValue> {
+    let backup_json = Zeroizing::new(backup_json);
+    let backup = BrowserWalletBackup(
+        serde_json::from_str(&backup_json)
+            .map_err(|error| JsValue::from_str(&format!("backup parse: {error}")))?,
+    );
+    let intent: BrowserPftlSwapIntentV1 = serde_json::from_str(intent_json)
+        .map_err(|error| JsValue::from_str(&format!("PFTL swap intent parse: {error}")))?;
+    let identity = wallet_identity_from_backup(&backup.0)
+        .map_err(|error| JsValue::from_str(&error.to_string()))?;
+    intent
+        .validate(&backup.0, &identity.address)
+        .map_err(|error| JsValue::from_str(&error))?;
+    let key_pair =
+        derive_wallet_key_pair(&backup.0).map_err(|error| JsValue::from_str(&error.to_string()))?;
+    let signing_bytes = serde_json::to_vec(&intent)
+        .map_err(|error| JsValue::from_str(&format!("PFTL swap intent serialize: {error}")))?;
+    let signature = ml_dsa_65_sign_with_context(
+        &key_pair.private_key,
+        &signing_bytes,
+        PFTL_SWAP_INTENT_SIGNATURE_CONTEXT_V1,
+    )
+    .map_err(|error| JsValue::from_str(&error.to_string()))?;
+    to_json_js_value(&serde_json::json!({
+        "schema": PFTL_SWAP_SIGNED_INTENT_SCHEMA_V1,
+        "intent": intent,
+        "algorithm_id": ML_DSA_65_ALGORITHM,
+        "public_key_hex": identity.public_key_hex,
+        "signature_hex": bytes_to_hex(&signature),
+    }))
 }
 
 /// Sign a transfer using a fee quote from the RPC server.
@@ -567,7 +703,106 @@ fn append_owned_certificate_domain(out: &mut Vec<u8>, domain: &OwnedCertificateD
 #[cfg(test)]
 mod tests {
     use super::*;
+    use postfiat_crypto_provider::ml_dsa_65_verify_with_context;
     use postfiat_types::{OwnedObjectRef, OwnedOutputSpec};
+
+    #[test]
+    fn browser_private_primary_intent_uses_node_canonical_field_order() {
+        let backup = wallet_backup_from_master_seed("postfiat-wallet-wasm", "11".repeat(32), 0)
+            .expect("wallet backup");
+        let identity = wallet_identity_from_backup(&backup).expect("wallet identity");
+        let intent = BrowserPftlSwapIntentV1 {
+            schema: PFTL_SWAP_INTENT_SCHEMA_V1.to_string(),
+            chain_id: backup.chain_id.clone(),
+            genesis_hash: "22".repeat(48),
+            protocol_version: 1,
+            principal: identity.address.clone(),
+            controlled_wallet_id: identity.address.clone(),
+            route_id: "pftl-a666-ethereum-wA666-usdc-v1".to_string(),
+            direction: "issue".to_string(),
+            output_mode: "private".to_string(),
+            input_reference: "transparent-pfusdc".to_string(),
+            input_amount_atoms: 1_005_000,
+            minimum_output_amount_atoms: 1_000_000,
+            maximum_fee_atoms: 100,
+            quote_id: "33".repeat(48),
+            pricing_nav_epoch: 8,
+            policy_hash: "44".repeat(48),
+            expiry_height: 790,
+            idempotency_key: "browser-private-issue-01".to_string(),
+        };
+        intent
+            .validate(&backup, &identity.address)
+            .expect("bounded intent");
+        let serialized = serde_json::to_string(&intent).expect("serialize intent");
+        assert!(
+            serialized.starts_with("{\"schema\":\"postfiat.pftl_swap.intent.v1\",\"chain_id\":")
+        );
+        assert!(serialized
+            .ends_with("\"expiry_height\":790,\"idempotency_key\":\"browser-private-issue-01\"}"));
+        let ordered_fields = [
+            "schema",
+            "chain_id",
+            "genesis_hash",
+            "protocol_version",
+            "principal",
+            "controlled_wallet_id",
+            "route_id",
+            "direction",
+            "output_mode",
+            "input_reference",
+            "input_amount_atoms",
+            "minimum_output_amount_atoms",
+            "maximum_fee_atoms",
+            "quote_id",
+            "pricing_nav_epoch",
+            "policy_hash",
+            "expiry_height",
+            "idempotency_key",
+        ];
+        let mut cursor = 0;
+        for field in ordered_fields {
+            let marker = format!("\"{field}\":");
+            let offset = serialized[cursor..]
+                .find(&marker)
+                .unwrap_or_else(|| panic!("canonical intent field {field} missing"));
+            cursor += offset + marker.len();
+        }
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&serialized)
+                .expect("intent JSON")
+                .as_object()
+                .expect("intent object")
+                .len(),
+            ordered_fields.len()
+        );
+        let key_pair = derive_wallet_key_pair(&backup).expect("derive browser wallet key");
+        let signature = ml_dsa_65_sign_with_context(
+            &key_pair.private_key,
+            serialized.as_bytes(),
+            PFTL_SWAP_INTENT_SIGNATURE_CONTEXT_V1,
+        )
+        .expect("sign canonical browser intent");
+        assert!(ml_dsa_65_verify_with_context(
+            &key_pair.public_key,
+            serialized.as_bytes(),
+            &signature,
+            PFTL_SWAP_INTENT_SIGNATURE_CONTEXT_V1,
+        ));
+        assert!(!ml_dsa_65_verify_with_context(
+            &key_pair.public_key,
+            b"{}",
+            &signature,
+            PFTL_SWAP_INTENT_SIGNATURE_CONTEXT_V1,
+        ));
+
+        let mut invalid = intent;
+        invalid.idempotency_key = "browser.private.issue.01".to_string();
+        assert!(invalid.validate(&backup, &identity.address).is_err());
+        invalid.idempotency_key = "browser-private-issue-01".to_string();
+        invalid.input_reference = "private/reference".to_string();
+        assert!(invalid.validate(&backup, &identity.address).is_err());
+    }
 
     #[test]
     fn owned_transfer_signing_bytes_use_fixed_width_lengths() {

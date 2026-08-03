@@ -283,6 +283,8 @@ function httpRequestRequiresAuth(method, pathname) {
     // wallet session even though it is read-only; individual job lookups stay
     // capability-addressed by their unguessable job IDs.
     if (method === 'GET' && pathname === '/api/bridge/jobs') return true;
+    if (method === 'GET' && (pathname === '/api/pftl-private-swap/readiness'
+        || pathname.startsWith('/api/pftl-private-swap/jobs/'))) return true;
     // POST is fail-closed: new endpoints require authentication until they are
     // deliberately classified as side-effect-free and added to this list.
     return method === 'POST' && !PUBLIC_READ_ONLY_POST_PATHS.has(pathname);
@@ -1189,6 +1191,7 @@ Object.assign(walletProxyRuntime, require('./trustless-bridge-jobs').create(wall
 Object.assign(walletProxyRuntime, require('./navcoin-export-jobs').create(walletProxyRuntime));
 Object.assign(walletProxyRuntime, require('./navcoin-return-jobs').create(walletProxyRuntime));
 Object.assign(walletProxyRuntime, require('./pnok-fix-jobs').create(walletProxyRuntime));
+Object.assign(walletProxyRuntime, require('./pftl-private-swap').create(walletProxyRuntime));
 Object.assign(walletProxyRuntime, require('./navswap-persistence-http').create(walletProxyRuntime));
 const { annotateNavswapIdempotency,
 buildNavswapRunResponse,

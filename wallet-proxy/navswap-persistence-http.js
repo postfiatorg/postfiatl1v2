@@ -145,6 +145,11 @@ wss } = runtime;
     const submitPnokFixWalletJob = (...args) => runtime.submitPnokFixWalletJob(...args);
     const submitPnokFixRestoreJob = (...args) => runtime.submitPnokFixRestoreJob(...args);
     const pnokFixWalletJobStatus = (...args) => runtime.pnokFixWalletJobStatus(...args);
+    const pftlPrivateSwapConfig = (...args) => runtime.pftlPrivateSwapConfig(...args);
+    const pftlPrivateSwapReadiness = (...args) => runtime.pftlPrivateSwapReadiness(...args);
+    const pftlPrivateSwapQuote = (...args) => runtime.pftlPrivateSwapQuote(...args);
+    const pftlPrivateSwapSubmit = (...args) => runtime.pftlPrivateSwapSubmit(...args);
+    const pftlPrivateSwapStatus = (...args) => runtime.pftlPrivateSwapStatus(...args);
     const addProxyRouteEvent = (...args) => runtime.addProxyRouteEvent(...args);
     const assertNoShieldedPrivateMaterial = (...args) => runtime.assertNoShieldedPrivateMaterial(...args);
     const assertVaultBridgeEvidenceMatches = (...args) => runtime.assertVaultBridgeEvidenceMatches(...args);
@@ -1631,6 +1636,47 @@ wss } = runtime;
                 return true;
             }
 
+            if (req.method === 'GET' && url.pathname === '/api/pftl-private-swap/readiness') {
+                const config = pftlPrivateSwapConfig();
+                const result = await pftlPrivateSwapReadiness();
+                const identityMatches = result?.route_id === config.route_id
+                    && result?.controlled_wallet_id === config.controlled_wallet_id;
+                const ready = config.configured === true && result?.ready === true && identityMatches;
+                sendJson(req, res, ready ? 200 : 503, {
+                    ok: ready,
+                    schema: 'postfiat.wallet.pftl_private_swap_readiness.v1',
+                    ...config,
+                    ...(!identityMatches && result?.ready === true ? {
+                        code: 'pftl_private_swap_route_identity_mismatch',
+                        message: 'resident private-primary identity does not match the configured governed route',
+                    } : {}),
+                    upstream: result,
+                });
+                return true;
+            }
+
+            if (req.method === 'POST' && url.pathname === '/api/pftl-private-swap/quotes') {
+                const body = await readJsonBody(req, 16 * 1024);
+                const result = await pftlPrivateSwapQuote(body);
+                sendJson(req, res, result?.quote ? 200 : (result?.http_status || 503), result);
+                return true;
+            }
+
+            if (req.method === 'POST' && url.pathname === '/api/pftl-private-swap/jobs') {
+                const body = await readJsonBody(req, 256 * 1024);
+                const result = await pftlPrivateSwapSubmit(body);
+                sendJson(req, res, result?.http_status || (result?.ok === true ? 202 : 503), result);
+                return true;
+            }
+
+            if (req.method === 'GET' && url.pathname.startsWith('/api/pftl-private-swap/jobs/')) {
+                const idempotencyKey = decodeURIComponent(
+                    url.pathname.slice('/api/pftl-private-swap/jobs/'.length));
+                const result = await pftlPrivateSwapStatus(idempotencyKey);
+                sendJson(req, res, result?.http_status || (result?.ok === true ? 200 : 503), result);
+                return true;
+            }
+
             if (req.method === 'POST' && url.pathname === '/api/pnok-fix/jobs') {
                 const body = await readJsonBody(req, 16 * 1024);
                 const result = await submitPnokFixWalletJob(body);
@@ -1834,6 +1880,11 @@ wss } = runtime;
                 pnok_fix_inventory_unavailable: 409,
                 pnok_fix_job_binding_conflict: 409,
                 pnok_fix_wallet_unavailable: 503,
+                pftl_private_swap_invalid_request: 400,
+                pftl_private_swap_invalid_signed_intent: 400,
+                pftl_private_swap_private_material_rejected: 400,
+                pftl_private_swap_invalid_idempotency_key: 400,
+                pftl_private_swap_route_identity_mismatch: 502,
             };
             sendJson(req, res, errorStatuses[error.code] || 400, {
                 ok: false,

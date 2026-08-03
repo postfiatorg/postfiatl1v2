@@ -628,6 +628,101 @@
     }
 
     #[test]
+    fn public_reserve_product_asset_fee_quotes_accept_current_protocol_operations() {
+        let current_kinds = [
+            MARKET_OPS_POLICY_REGISTER_TRANSACTION_KIND,
+            MARKET_OPS_FINALIZE_TRANSACTION_KIND,
+            FX_FIX_REGISTER_TRANSACTION_KIND_V1,
+            FX_FIX_PAUSE_TRANSACTION_KIND_V1,
+            FX_FIX_RESERVATION_CREATE_TRANSACTION_KIND_V1,
+            FX_FIX_RESERVATION_RELEASE_TRANSACTION_KIND_V1,
+            VAULT_BRIDGE_DEPOSIT_PROPOSE_TRANSACTION_KIND,
+            VAULT_BRIDGE_DEPOSIT_CHALLENGE_TRANSACTION_KIND,
+            VAULT_BRIDGE_DEPOSIT_ATTEST_TRANSACTION_KIND,
+            VAULT_BRIDGE_DEPOSIT_FINALIZE_TRANSACTION_KIND,
+            VAULT_BRIDGE_DEPOSIT_CLAIM_TRANSACTION_KIND,
+            VAULT_BRIDGE_FAST_INGRESS_LIFECYCLE_TRANSACTION_KIND,
+            VAULT_BRIDGE_RECEIPT_SUBMIT_TRANSACTION_KIND,
+            VAULT_BRIDGE_RECEIPT_COUNT_TRANSACTION_KIND,
+            VAULT_BRIDGE_MINT_FROM_RECEIPTS_TRANSACTION_KIND,
+            VAULT_BRIDGE_BURN_TO_REDEEM_TRANSACTION_KIND,
+            VAULT_BRIDGE_REDEEM_SETTLE_TRANSACTION_KIND,
+            VAULT_BRIDGE_BUCKET_IMPAIR_TRANSACTION_KIND,
+            VAULT_BRIDGE_NAV_SUBSCRIPTION_ALLOCATE_TRANSACTION_KIND,
+            PFTL_UNISWAP_ROUTE_INIT_V2_TRANSACTION_KIND,
+            PFTL_UNISWAP_ORDER_RESERVE_TRANSACTION_KIND,
+            PFTL_UNISWAP_ORDER_RELEASE_TRANSACTION_KIND,
+            PFTL_UNISWAP_PRIMARY_SUBSCRIBE_V2_TRANSACTION_KIND,
+            PFTL_UNISWAP_REDEMPTION_FUND_TRANSACTION_KIND,
+            PFTL_UNISWAP_PRIMARY_REDEEM_TRANSACTION_KIND,
+            PFTL_UNISWAP_ROUTE_EPOCH_ADVANCE_TRANSACTION_KIND,
+            PFTL_UNISWAP_ROUTE_PAUSE_TRANSACTION_KIND,
+        ];
+        for kind in current_kinds {
+            assert!(
+                is_supported_asset_transaction_kind(kind),
+                "asset fee quote inventory omitted {kind}"
+            );
+        }
+
+        let hex96 = "ab".repeat(48);
+        for (id, transaction_kind, operation) in [
+            (
+                "vault-finalize-quote",
+                VAULT_BRIDGE_DEPOSIT_FINALIZE_TRANSACTION_KIND,
+                json!({
+                    "operation": VAULT_BRIDGE_DEPOSIT_FINALIZE_TRANSACTION_KIND,
+                    "finalizer": "pf1-finalizer",
+                    "asset_id": hex96,
+                    "evidence_root": "cd".repeat(48)
+                }),
+            ),
+            (
+                "route-pause-quote",
+                PFTL_UNISWAP_ROUTE_PAUSE_TRANSACTION_KIND,
+                json!({
+                    "operation": PFTL_UNISWAP_ROUTE_PAUSE_TRANSACTION_KIND,
+                    "operator": "pf1-operator",
+                    "route_id": "a666-mainnet-v2",
+                    "paused": true
+                }),
+            ),
+        ] {
+            let response = success_response(
+                id,
+                &json!({
+                    "schema": ASSET_FEE_QUOTE_SCHEMA,
+                    "transaction_kind": transaction_kind,
+                    "chain_id": "postfiat-local",
+                    "genesis_hash": "ef".repeat(48),
+                    "protocol_version": 1,
+                    "source": "pf1-operator",
+                    "sequence": 8,
+                    "sequence_source": "ledger_mempool",
+                    "sender_balance": 100,
+                    "sender_sequence": 7,
+                    "mempool_pending_for_sender": 0,
+                    "base_asset_fee": 22,
+                    "state_expansion_fee": 0,
+                    "minimum_fee": 22,
+                    "account_reserve": 10,
+                    "transfer_fee_byte_quantum": 512,
+                    "transfer_fee_per_quantum": 1,
+                    "asset_weight_bytes": 11000,
+                    "sender_balance_after_fee": 78,
+                    "sender_meets_reserve_after_fee": true,
+                    "operation": operation
+                }),
+                vec![],
+            )
+            .expect("public reserve product asset fee quote response");
+            let summary = decode_asset_fee_quote_summary(&response)
+                .expect("decode public reserve product asset fee quote");
+            assert_eq!(summary.transaction_kind, transaction_kind);
+        }
+    }
+
+    #[test]
     fn wallet_flow_summary_helpers_decode_validated_responses() {
         let hex96 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         let other_hex96 = "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111";

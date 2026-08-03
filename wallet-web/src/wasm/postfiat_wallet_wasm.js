@@ -510,6 +510,28 @@ export function wallet_sign_payment_v2(backup_json, fields_json) {
 }
 
 /**
+ * Sign one bounded resident private-primary issue or redeem intent locally.
+ *
+ * The browser submits only the public intent, ML-DSA public key, and
+ * domain-separated signature. The wallet backup and derived private key stay
+ * inside WASM memory.
+ * @param {string} backup_json
+ * @param {string} intent_json
+ * @returns {any}
+ */
+export function wallet_sign_pftl_swap_intent(backup_json, intent_json) {
+    const ptr0 = passStringToWasm0(backup_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(intent_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.wallet_sign_pftl_swap_intent(ptr0, len0, ptr1, len1);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * Sign a transfer using a fee quote from the RPC server.
  *
  * backup_json: WalletBackupFile as JSON string

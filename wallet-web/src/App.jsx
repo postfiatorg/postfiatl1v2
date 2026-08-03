@@ -658,6 +658,7 @@ export default function App() {
               txBuilder={txBuilder}
               backupJson={backupJson}
               address={walletAddress}
+              proxyAuthToken={proxyAuthToken}
               swapServer={swapServer}
               onToast={showToast}
               onNavigate={go}
