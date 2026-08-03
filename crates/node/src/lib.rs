@@ -307,6 +307,8 @@ use mempool_proposals::{
 #[cfg(test)]
 use mempool_proposals::{enforce_mempool_admission_limits, verify_mempool_state};
 mod batch_snapshot;
+mod lifecycle_checkpoint;
+pub use lifecycle_checkpoint::*;
 mod market_bridge;
 mod pfusdc_tier4;
 mod vault_bridge_conservation;

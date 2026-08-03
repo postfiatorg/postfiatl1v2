@@ -10,6 +10,7 @@ mod tests {
     mod fastpay_payment_safety;
     mod orchard_transfer_escrow;
     mod replicated_state_activation;
+    mod lifecycle_checkpoint_tests;
     mod snapshot_deployment;
     mod vault_bridge_governed_route;
     use consensus_history::{dummy_block_record, write_split_validator_key_files};
