@@ -1,0 +1,32 @@
+{
+  "schema": "postfiat-a666-controlled-retry-outcome-v1",
+  "recorded_at_utc": "2026-08-03T21:55:00Z",
+  "subject": "accelerated lifecycle from signed checkpoint, run 2",
+  "ok": false,
+  "run": {
+    "unit": "pft-a666-checkpoint-lifecycle-run2.service",
+    "test": "a666_public_successor_lifecycle_from_signed_checkpoint",
+    "wall_seconds": 840,
+    "budget_seconds": 900,
+    "checkpoint": "~/.pft/public-reserve-qualification/20260803-pre-migration-checkpoint (height 792, finalized-checkpoint basis)",
+    "report_file": "~/.pft/public-reserve-qualification/20260803-checkpoint-lifecycle-run2-report.json"
+  },
+  "progress_before_failure": "checkpoint import and signature verification, six-validator restore and convergence at height 792, successor migration, epoch-7 proof finalize, fastswap committee bootstrap, transparent issue, partial-outage order reserve, transparent redeem (AR-09 fix verified live), private issue all passed",
+  "first_failure": {
+    "step": "certify a666-private-primary-redeem at 822",
+    "message": "block 821 replay receipt ids mismatch: replayed [d5e02a...] vs expected [024d5f...]",
+    "classification": "deterministic state transition or checkpoint-restore fidelity; defect class 8, to be reproduced at a faster layer before any fix",
+    "note": "never reached in cold retries; retry 6 died earlier at the transparent redeem (defect 7)"
+  },
+  "acceleration_validation": {
+    "prior_cycle_time": "71 minutes (cold retry 6)",
+    "this_cycle_time": "14 minutes",
+    "history_generation_amortized": "69-minute extraction paid once; repack from preserved state takes 12 seconds",
+    "run1_note": "run 1 failed closed in 4 seconds on the full-history QC snapshot size bound; fixed by pinning the finalized-checkpoint basis into the signed manifest"
+  },
+  "next_actions": [
+    "set POSTFIAT_KEEP_ATOMIC_SWAP_LOCAL_SIX=1 on the next run to preserve the failing harness for forensics",
+    "root-cause the block-821 replay receipt mismatch; determine whether it is a product defect or checkpoint-restore fidelity gap",
+    "add the resulting AR-10 regression before applying any fix (spec section 12)"
+  ]
+}
