@@ -225,6 +225,47 @@
     "run_id": false,
     "note": "Individual partial runners capture subsets; no single runner captures this contract for one ordered production journey."
   },
+  "proof_artifact_consumption_contract": {
+    "basis": [
+      {
+        "document": "docs/plans/A666-PRODUCT-RECOVERY-AND-DEMO-RELAUNCH-SPEC-20260803.md",
+        "section": "12.0",
+        "rule": "proof generation is an out-of-band artifact-production job; proof availability is checked by content hash and never awaited as an inline proving service"
+      },
+      {
+        "document": "docs/plans/A666-PATH-TO-ACTUALLY-GOOD-20260804.md",
+        "section": "5.2",
+        "rule": "epoch proofs are produced on a fixed schedule by a dedicated proving job and archived by hash"
+      }
+    ],
+    "mode": "asynchronous_content_addressed_artifact_consumption",
+    "applies_to_journey_steps": [7, 8],
+    "inline_proving_forbidden": true,
+    "runner_may_invoke_prover": false,
+    "proof_availability_precondition_by_hash": true,
+    "durable_relay_job_required": true,
+    "poll_budget_ms": 43200000,
+    "poll_interval_ms": 5000,
+    "budget_scope": "The 12-hour proof/relay wait is an explicit external-artifact budget and is excluded from the under-10-minute active browser lifecycle budget in recovery spec section 12.",
+    "required_pending_observables": [
+      "durable job id",
+      "proof request identity",
+      "expected witness hash",
+      "expected guest ELF hash",
+      "expected program vkey",
+      "last observed job state"
+    ],
+    "required_completion_checks": [
+      "proof artifact content hash matches the durable job",
+      "public-values hash and byte length match the request",
+      "program vkey and Groth16 selector match the pinned verifier",
+      "receipt, packet, route, recipient, amount, and checkpoint bindings match",
+      "real verifier acceptance and downstream relay receipt are observed"
+    ],
+    "timeout_action": "STOP-no-retry; preserve the durable job, proof request, browser state, proxy state, and rehearsal environment; record the first failing check before any new run",
+    "restart_contract": "proxy restart and browser reload resume polling the same durable job id and never launch or duplicate proof generation",
+    "status": "binding design; implementation readiness remains false"
+  },
   "business_operation_boundary": {
     "steps_5_through_8_browser_triggered_against_held_state": false,
     "precompleted_rust_lifecycle_results_used_as_browser_operations": false,
