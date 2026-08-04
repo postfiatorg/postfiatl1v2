@@ -1,0 +1,13 @@
+{
+  "schema": "postfiat.a666.r4.return-artifact-slot.v1",
+  "status": "failed",
+  "failure_code": "construction_return_import_harness_missing_loopback_parameterization",
+  "failure_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/return-stage-terminal.json",
+  "distinct_from_export_slot": true,
+  "transactions": 0,
+  "proofs_generated": 0,
+  "business_mutations": 0,
+  "live_chain": false,
+  "custody_material_present": false,
+  "stakehub_interaction": false
+}

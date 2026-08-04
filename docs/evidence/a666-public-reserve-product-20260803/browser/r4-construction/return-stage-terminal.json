@@ -1,0 +1,24 @@
+{
+  "schema": "postfiat.a666.r4.return-artifact-stage-terminal.v1",
+  "outcome": "technical_wall",
+  "first_failing_check": "construction_return_import_harness_missing_loopback_parameterization",
+  "source_script": "scripts/a666-mainnet-return-import.sh",
+  "required_production_steps": [
+    "browser/proxy return job and ReturnBurned event",
+    "ethereum-receipt-proof-build",
+    "BFT checkpoint certificate",
+    "certified pftl_uniswap_return_import"
+  ],
+  "blocking_production_assumptions": [
+    "external Ethereum RPC default",
+    "remote validator SSH topology",
+    "operator key-file submission"
+  ],
+  "attempted_command": "scripts/a666-r4-return-artifact-stage",
+  "transactions": 0,
+  "proofs_generated": 0,
+  "business_operations": 0,
+  "live_chain": false,
+  "stakehub": false,
+  "credentials_accessed": false
+}
