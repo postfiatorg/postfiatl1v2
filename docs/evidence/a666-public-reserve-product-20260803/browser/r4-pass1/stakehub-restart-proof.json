@@ -1,0 +1,60 @@
+{
+  "schema": "postfiat.a666.r4.stakehub-restart-proof.v1",
+  "reason": "sequential-unit-start-repair",
+  "expected_active_unit_count": 5,
+  "observed_active_unit_count": 1,
+  "counts_match": false,
+  "first_failure": "stakehub-pfusdc-tier4-wallet-agent-20260718.service start exited 5 and remained inactive",
+  "units": [
+    {
+      "unit": "stakehub-pfusdc-tier4-wallet-agent-20260718.service",
+      "start_exit": 5,
+      "active_after_start_poll": false,
+      "active": false
+    },
+    {
+      "unit": "stakehub-private-swap-asset-orchard-candidate.service",
+      "start_exit": 5,
+      "active_after_start_poll": false,
+      "active": false
+    },
+    {
+      "unit": "stakehub-private-swap-asset-orchard.service",
+      "start_exit": 0,
+      "active_after_start_poll": true,
+      "active": false
+    },
+    {
+      "unit": "stakehub-private-swap-dashboard-bfinal.service",
+      "start_exit": 5,
+      "active_after_start_poll": false,
+      "active": false
+    },
+    {
+      "unit": "stakehub-private-swap-dashboard.service",
+      "start_exit": null,
+      "start_disposition": "already_active",
+      "active_after_start_poll": true,
+      "active": true
+    }
+  ],
+  "failed_units": [
+    {
+      "unit": "stakehub-pfusdc-tier4-wallet-agent-20260718.service",
+      "start_exit": 5
+    },
+    {
+      "unit": "stakehub-private-swap-asset-orchard-candidate.service",
+      "start_exit": 5
+    },
+    {
+      "unit": "stakehub-private-swap-dashboard-bfinal.service",
+      "start_exit": 5
+    },
+    {
+      "unit": "stakehub-private-swap-asset-orchard.service",
+      "start_exit": 0,
+      "failure": "became inactive after the successful start returned"
+    }
+  ]
+}
