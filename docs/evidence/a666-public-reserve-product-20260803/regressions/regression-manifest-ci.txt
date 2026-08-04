@@ -1,0 +1,39 @@
+A666 recovery regression manifest CI validation
+Validated candidate revision: 7a5413961539646cdfb997303d1493218d6e916f
+Command: scripts/check-a666-recovery-regression-manifest --run
+Exit code: 0
+Wall-clock elapsed: 144417ms
+Matched standalone tests: 26
+Passed standalone tests: 26
+Failed standalone tests: 0
+Observed summed per-command wall-clock: 144338ms
+
+PASS AR-01/tests::ar01_pfusdc_reserve_account_identity_and_balance_matches_production_fixture matched=1 passed=1 elapsed_ms=891
+PASS AR-02/tests::ar02_production_route_config_cap_order_inequalities_hold_at_runtime matched=1 passed=1 elapsed_ms=152
+PASS AR-03/tests::a666_recovery_regression_tests::ar03_quorum_first_commit_with_offline_validator_converges_after_recovery matched=1 passed=1 elapsed_ms=12214
+PASS AR-04/tests::a666_recovery_regression_tests::ar04_authenticated_catchup_requires_pinned_height_tip_and_state_root matched=1 passed=1 elapsed_ms=7976
+PASS AR-05/tests::ar05_active_export_entitlement_blocks_route_epoch_advance_until_closed matched=1 passed=1 elapsed_ms=672
+PASS AR-06/tests::ar06_duplicate_submission_returns_typed_admission_or_finalized_rejection matched=1 passed=1 elapsed_ms=424
+PASS AR-07/tests::ar07_replay_fails_closed matched=1 passed=1 elapsed_ms=6862
+PASS AR-07/tests::ar07_stale_proof_fails_closed matched=1 passed=1 elapsed_ms=6864
+PASS AR-07/tests::ar07_wrong_profile_fails_closed matched=1 passed=1 elapsed_ms=484
+PASS AR-07/tests::ar07_wrong_overlay_fails_closed matched=1 passed=1 elapsed_ms=496
+PASS AR-07/tests::ar07_wrong_supply_fails_closed matched=1 passed=1 elapsed_ms=464
+PASS AR-07/tests::ar07_wrong_nav_fails_closed matched=1 passed=1 elapsed_ms=6905
+PASS AR-07/tests::ar07_wrong_packet_fails_closed matched=1 passed=1 elapsed_ms=6825
+PASS AR-08/tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_roundtrip_restores_all_validators_and_reports matched=1 passed=1 elapsed_ms=8283
+PASS AR-08/tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_import_rejects_tampered_manifest_with_failure_report matched=1 passed=1 elapsed_ms=7920
+PASS AR-08/tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_import_rejects_schema_drift_and_unknown_fields matched=1 passed=1 elapsed_ms=8111
+PASS AR-08/tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_import_rejects_extra_entries_and_symlinks matched=1 passed=1 elapsed_ms=8057
+PASS AR-08/tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_import_rejects_tampered_validator_snapshot matched=1 passed=1 elapsed_ms=7946
+PASS AR-08/tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_import_rejects_wrong_trusted_publisher matched=1 passed=1 elapsed_ms=8116
+PASS AR-08/tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_creation_rejects_divergent_validators matched=1 passed=1 elapsed_ms=7655
+PASS AR-08/tests::snapshot_deployment::signed_snapshot_roundtrip_rejects_tampering_and_preserves_signer_isolation matched=1 passed=1 elapsed_ms=7712
+PASS AR-09/tests::pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09 matched=1 passed=1 elapsed_ms=7533
+PASS AR-10/tests::private_primary_replay_gate_tests::ar10_private_primary_issue_replay_matches_live_execution_path matched=1 passed=1 elapsed_ms=7279
+PASS AR-10/tests::private_primary_replay_gate_tests::ar10_private_primary_redeem_replay_matches_live_execution_path matched=1 passed=1 elapsed_ms=7223
+PASS AR-10/tests::private_primary_replay_gate_tests::ar10_historical_private_primary_allowlist_stays_exact matched=1 passed=1 elapsed_ms=7125
+PASS AR-11/tests::ar11_issued_asset_supply_counts_non_nav_spread_custody matched=1 passed=1 elapsed_ms=149
+
+Terminal:
+A666 recovery manifest PASS: defects=9 regressions=11 standalone_tests=26 run=true
