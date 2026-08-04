@@ -1,0 +1,53 @@
+{
+ "schema": "postfiat.a666.r4.receipt-prover-docker-refire-probe.v1",
+ "run_id": "a666-r4-receipt-prover-docker-refire-20260804-v2",
+ "purpose": "pre-verify, before any multi-hour proving burn, that a systemd user unit with the proof unit's environment can reach Docker for the final Groth16 wrap",
+ "probe1": {
+  "unit": "a666-r4-docker-probe-a666-r4-receipt-prover-docker-refire-20260804-v2.service",
+  "runtime_max_sec": 10,
+  "wrapper": "none (plain env, mirroring the v1 packet construction)",
+  "exit_code": 1,
+  "verdict": "RED",
+  "journal_source": "journalctl --user -u a666-r4-docker-probe-a666-r4-receipt-prover-docker-refire-20260804-v2.service",
+  "key_journal_lines": [
+   "uid=1000(postfiat) gid=1000(postfiat) groups=1000(postfiat),27(sudo),100(users)",
+   "DOCKER_HOST=<unset-default-socket>",
+   "permission denied while trying to connect to the docker API at unix:///var/run/docker.sock",
+   "Main process exited, code=exited, status=1/FAILURE"
+  ],
+  "root_cause": "systemd user transient units do not carry the supplementary docker group (988); the docker client gets EACCES on /var/run/docker.sock. This is the exact mechanism of the v1 run's final-wrap failure (docker.rs:29).",
+  "capture_logs_mode_600": {
+   "stdout": "/home/postfiat/.pft/a666-r4-docker-refire-probe-stdout.log",
+   "stderr": "/home/postfiat/.pft/a666-r4-docker-refire-probe-stderr.log"
+  }
+ },
+ "probe2": {
+  "unit": "a666-r4-docker-probe2-a666-r4-receipt-prover-docker-refire-20260804-v2.service",
+  "runtime_max_sec": 10,
+  "wrapper": "sg docker -c (restores supplementary docker group inside the unit)",
+  "environment": "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin, SP1_GNARK_IMAGE=ghcr.io/succinctlabs/sp1-gnark:v6.1.0; DOCKER_HOST unset so the default socket /var/run/docker.sock is used; identical env construction to the proof unit command in scripts/a666-r4-receipt-prover-docker-refire",
+  "exit_code": 0,
+  "verdict": "GREEN",
+  "journal_source": "journalctl --user -u a666-r4-docker-probe2-a666-r4-receipt-prover-docker-refire-20260804-v2.service",
+  "key_journal_lines": [
+   "user 'postfiat' ... switched to group 'docker'",
+   "uid=1000(postfiat) gid=988(docker) groups=988(docker),27(sudo),100(users),1000(postfiat)",
+   "DOCKER_HOST=<unset-default-socket>",
+   "server=29.1.3 driver=overlayfs",
+   "image_id=sha256:e1a1cd62838b561ca301f9b2c26475c4a92bfe0e2c916e9bba213062e1548c4d"
+  ],
+  "server_reachable": true,
+  "pinned_image_visible_inside_unit": true,
+  "capture_logs_mode_600": {
+   "stdout": "/home/postfiat/.pft/a666-r4-docker-refire-probe2-stdout.log",
+   "stderr": "/home/postfiat/.pft/a666-r4-docker-refire-probe2-stderr.log"
+  }
+ },
+ "fix_adopted": "proof unit command wrapped in sg docker -c in scripts/a666-r4-receipt-prover-docker-refire (fire path and rendered command)",
+ "credential_values_captured": 0,
+ "docker_modifications": "none",
+ "fire_authorized_by_this_evidence": false,
+ "stakehub_interaction": false,
+ "business_mutation": 0,
+ "recorded_utc": "2026-08-04T08:21:00Z"
+}

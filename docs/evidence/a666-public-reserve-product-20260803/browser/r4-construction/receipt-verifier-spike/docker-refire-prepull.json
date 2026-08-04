@@ -1,0 +1,32 @@
+{
+ "schema": "postfiat.a666.r4.receipt-prover-docker-refire-prepull.v1",
+ "run_id": "a666-r4-receipt-prover-docker-refire-20260804-v2",
+ "purpose": "pre-pull the exact pinned gnark wrapper image outside the proving unit so the final Groth16 wrap never pulls mid-run",
+ "image": "ghcr.io/succinctlabs/sp1-gnark:v6.1.0",
+ "image_ref_source": {
+  "default_ref_line": "sp1-recursion-gnark-ffi-6.3.1/src/ffi/docker.rs:36 (format ghcr.io/succinctlabs/sp1-gnark:{SP1_CIRCUIT_VERSION})",
+  "version_source": "sp1-recursion-gnark-ffi-6.3.1/src/lib.rs:19 include of assets/SP1_CIRCUIT_VERSION = v6.1.0",
+  "docker_rs_sha256": "aba74ffde4fba1046ac7966fbf522372f6cb960b166b8b752909724756d30d32",
+  "sp1_gnark_image_env_at_pull": "unset; default ref used"
+ },
+ "pull": {
+  "command": "docker pull ghcr.io/succinctlabs/sp1-gnark:v6.1.0",
+  "executed_from": "interactive login shell (docker group present), outside any systemd unit",
+  "exit_code": 0,
+  "status_line": "Status: Image is up to date for ghcr.io/succinctlabs/sp1-gnark:v6.1.0",
+  "digest_line": "Digest: sha256:e1a1cd62838b561ca301f9b2c26475c4a92bfe0e2c916e9bba213062e1548c4d"
+ },
+ "inspect": {
+  "command": "docker inspect ghcr.io/succinctlabs/sp1-gnark:v6.1.0 --format id={{.Id}} repo_digest={{index .RepoDigests 0}} size={{.Size}} created={{.Created}} arch={{.Architecture}}",
+  "image_id": "sha256:e1a1cd62838b561ca301f9b2c26475c4a92bfe0e2c916e9bba213062e1548c4d",
+  "repo_digest": "ghcr.io/succinctlabs/sp1-gnark@sha256:e1a1cd62838b561ca301f9b2c26475c4a92bfe0e2c916e9bba213062e1548c4d",
+  "size_bytes": 39957988,
+  "created": "2026-04-11T01:51:57.932826656Z",
+  "architecture": "amd64"
+ },
+ "credential_values_captured": 0,
+ "docker_modifications": "none beyond the image pull itself",
+ "stakehub_interaction": false,
+ "business_mutation": 0,
+ "recorded_utc": "2026-08-04T08:15:00Z"
+}

@@ -1,0 +1,47 @@
+{
+ "schema": "postfiat.a666.r4.receipt-prover-docker-refire-prepared.v1",
+ "run_id": "a666-r4-receipt-prover-docker-refire-20260804-v2",
+ "prior_packet_commit": "2d0e9d0",
+ "prior_terminal_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/receipt-verifier-spike/memory-bounded-terminal.json",
+ "prior_terminal_root_cause": "final Groth16 wrap panic at sp1-recursion-gnark-ffi-6.3.1/src/ffi/docker.rs:29 'Failed to run docker info' inside the prior unit environment; classified as packet unit environment/PATH/DOCKER reachability defect, not proof-capacity failure",
+ "pins": {
+  "witness": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-acceptance-20260728/phase-9-private-redeem-hands-off-verify/export-proof/receipt-witness.json",
+  "witness_sha256": "995c25f6dbbaf92252473a513f2e6ea78175cce0fff1f971225d1bc3817f14d7",
+  "prover_binary": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/tools/pftl-uniswap-prover/target/release/pftl-uniswap-prover",
+  "prover_binary_sha256": "66271a1e3444e90e450d102366a049ee13ea93f1cc227bab622a812b2bc05291",
+  "protoc_executable": "/tmp/postfiat-protoc-3.21.12/root/usr/bin/protoc",
+  "protoc_library_path": "/tmp/postfiat-protoc-3.21.12/root/usr/lib/x86_64-linux-gnu",
+  "sp1_sdk": "6.3.1 (=6.3.1 pin, tools/pftl-uniswap-prover/Cargo.toml:21)",
+  "gnark_image": "ghcr.io/succinctlabs/sp1-gnark:v6.1.0",
+  "gnark_image_source": "/home/postfiat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sp1-recursion-gnark-ffi-6.3.1/src/ffi/docker.rs:36 (default ref) + lib.rs:19 + assets/SP1_CIRCUIT_VERSION=v6.1.0",
+  "gnark_image_source_docker_rs_sha256": "aba74ffde4fba1046ac7966fbf522372f6cb960b166b8b752909724756d30d32",
+  "sp1_gnark_image_env_pin": "SP1_GNARK_IMAGE=ghcr.io/succinctlabs/sp1-gnark:v6.1.0"
+ },
+ "unit_environment": {
+  "path": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+  "docker_host_mode": "unset_default_socket_/var/run/docker.sock",
+  "group_wrapper": "sg docker -c: systemd user transient units lack supplementary group docker(988) (first probe journal: groups=1000(postfiat),27(sudo),100(users), EACCES on /var/run/docker.sock); sg restores docker group inside the unit, verified green by re-probe",
+  "env_scrubbing": "none; full caller-inherited systemd-run propagation plus explicit env list; no env -i"
+ },
+ "tuned_environment_identical_to_prior_packet": true,
+ "exclusivity_contract": {
+  "staging_coexistence": "fleet/proxy/deps/pftl/anvil may keep running; this packet never pauses or stops them",
+  "heavy_suite_fail_closed": true,
+  "heavy_patterns": "cargo (test|build|check|clippy|bench)|(^|/)rustc |npm (test|build|run build)|forge (build|test)|node .*(--test|jest|mocha|vitest)",
+  "whitelist_exception": "cargo test --locked --release -p postfiat-node --test atomic_swap_local_six a666_public_successor_lifecycle_from_signed_checkpoint -- --ignored --exact --nocapture",
+  "whitelist_scope": "exact command/filter plus descendant processes only (Snaga authorized staging lifecycle, e.g. cargo PID 1839082, test child 1848893); all other heavy matches refuse fire; gate records whitelisted PIDs at fire time",
+  "broad_kill": false
+ },
+ "rendered_fire_command": "OUT_DIR=\"$(mktemp -d /tmp/a666-r4-receipt-prover-docker-refire-XXXXXXXX)\" && chmod 700 \"$OUT_DIR\" && cd \"/home/postfiat/repos/a666-eth-fast-lane-combined-20260724\" && systemd-run --user --collect --same-dir --unit=\"a666-r4-receipt-prover-docker-refire-20260804-v2\" -- sg docker -c 'exec /usr/bin/env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin SP1_GNARK_IMAGE=ghcr.io/succinctlabs/sp1-gnark:v6.1.0 SP1_PROVER=cpu SHARD_BATCH_SIZE=1 RAYON_NUM_THREADS=4 MALLOC_ARENA_MAX=1 PROTOC=/tmp/postfiat-protoc-3.21.12/root/usr/bin/protoc LD_LIBRARY_PATH=/tmp/postfiat-protoc-3.21.12/root/usr/lib/x86_64-linux-gnu SP1_WORKER_NUM_SPLICING_WORKERS=1 SP1_WORKER_SPLICING_BUFFER_SIZE=1 SP1_WORKER_NUMBER_OF_SEND_SPLICE_WORKERS_PER_SPLICE=1 SP1_WORKER_SEND_SPLICE_INPUT_BUFFER_SIZE_PER_SPLICE=1 SP1_WORKER_GLOBAL_MEMORY_BUFFER_SIZE=1 SP1_WORKER_NUM_CORE_WORKERS=1 SP1_WORKER_CORE_BUFFER_SIZE=1 SP1_WORKER_NUM_SETUP_WORKERS=1 SP1_WORKER_SETUP_BUFFER_SIZE=1 SP1_WORKER_NORMALIZE_PROGRAM_CACHE_SIZE=1 SP1_WORKER_NUM_PREPARE_REDUCE_WORKERS=1 SP1_WORKER_PREPARE_REDUCE_BUFFER_SIZE=1 SP1_WORKER_NUM_RECURSION_EXECUTOR_WORKERS=1 SP1_WORKER_RECURSION_EXECUTOR_BUFFER_SIZE=1 SP1_WORKER_NUM_RECURSION_PROVER_WORKERS=1 SP1_WORKER_RECURSION_PROVER_BUFFER_SIZE=1 SP1_WORKER_NUM_DEFERRED_WORKERS=1 SP1_WORKER_DEFERRED_BUFFER_SIZE=1 SP1_WORKER_NUMBER_OF_GAS_EXECUTORS=1 SP1_WORKER_GAS_EXECUTOR_BUFFER_SIZE=1 /usr/bin/time -f wall_seconds=%e \"/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/tools/pftl-uniswap-prover/target/release/pftl-uniswap-prover\" receipt --witness \"/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-acceptance-20260728/phase-9-private-redeem-hands-off-verify/export-proof/receipt-witness.json\" --output-dir \"$OUT_DIR/proof\" --prove --require-prover cpu --skip-redundant-execute >>\"$OUT_DIR/stdout.log\" 2>>\"$OUT_DIR/stderr.log\"'",
+ "approval_marker": {
+  "path": "/home/postfiat/.pft/a666-r4-receipt-prover-docker-refire-approval",
+  "exists": false,
+  "created_by_prepare": false,
+  "required_content": "a666-r4-receipt-prover-docker-refire-20260804-v2"
+ },
+ "authorization_status": "pending_marker_write_then_single_fire",
+ "prepared": true,
+ "fired": false,
+ "stakehub_interaction": false,
+ "business_mutation": 0
+}

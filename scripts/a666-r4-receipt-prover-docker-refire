@@ -1,0 +1,228 @@
+#!/usr/bin/env bash
+# Docker-capable memory-bounded receipt prover refire packet (v2).
+#
+# Same witness/prover pins and same memory tuning as accepted packet 2d0e9d0,
+# plus a complete unit PATH and explicit gnark image pin so the final Groth16
+# wrap can reach Docker. Staging services (fleet/proxy/deps/pftl/Anvil) may
+# coexist; this packet never stops them. It fails closed before fire when any
+# heavy suite or build is running. Action `fire` refuses unless the explicit
+# Nazgul approval marker exists and its single line equals this run ID. This
+# script never touches StakeHub and never submits a business operation.
+set -euo pipefail
+
+ACTION="${1:-prepare}"
+RUN_ID="a666-r4-receipt-prover-docker-refire-20260804-v2"
+APPROVAL_MARKER="/home/postfiat/.pft/a666-r4-receipt-prover-docker-refire-approval"
+MAIN_WORKTREE="$(git rev-parse --show-toplevel)"
+EVIDENCE_DIR="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/receipt-verifier-spike"
+EVIDENCE_FILE="$EVIDENCE_DIR/docker-refire-prepared.json"
+
+PRIOR_PACKET_COMMIT="2d0e9d0"
+TERMINAL_EVIDENCE="docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/receipt-verifier-spike/memory-bounded-terminal.json"
+WITNESS="$MAIN_WORKTREE/docs/evidence/a666-acceptance-20260728/phase-9-private-redeem-hands-off-verify/export-proof/receipt-witness.json"
+WITNESS_SHA256="995c25f6dbbaf92252473a513f2e6ea78175cce0fff1f971225d1bc3817f14d7"
+PROVER="$MAIN_WORKTREE/tools/pftl-uniswap-prover/target/release/pftl-uniswap-prover"
+PROVER_SHA256="66271a1e3444e90e450d102366a049ee13ea93f1cc227bab622a812b2bc05291"
+PROTOC_BIN="/tmp/postfiat-protoc-3.21.12/root/usr/bin/protoc"
+PROTOC_LIBDIR="/tmp/postfiat-protoc-3.21.12/root/usr/lib/x86_64-linux-gnu"
+
+# Exact gnark wrapper image: sp1-recursion-gnark-ffi-6.3.1/src/ffi/docker.rs:36
+# defaults to ghcr.io/succinctlabs/sp1-gnark:{SP1_CIRCUIT_VERSION} where
+# SP1_CIRCUIT_VERSION (lib.rs:19, assets/SP1_CIRCUIT_VERSION) is v6.1.0.
+# Pinned explicitly via SP1_GNARK_IMAGE for determinism.
+GNARK_IMAGE="ghcr.io/succinctlabs/sp1-gnark:v6.1.0"
+DOCKER_RS_SOURCE="/home/postfiat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sp1-recursion-gnark-ffi-6.3.1/src/ffi/docker.rs"
+DOCKER_RS_SHA256="aba74ffde4fba1046ac7966fbf522372f6cb960b166b8b752909724756d30d32"
+
+# Complete unit PATH: includes /usr/bin (docker client lives at /usr/bin/docker).
+UNIT_PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+DOCKER_ENV=(
+  "PATH=$UNIT_PATH"
+  "SP1_GNARK_IMAGE=$GNARK_IMAGE"
+)
+# Propagate DOCKER_HOST when set in the caller; when unset, record that the
+# unit relies on the default unix socket /var/run/docker.sock.
+if [[ -n "${DOCKER_HOST:-}" ]]; then
+  DOCKER_ENV+=("DOCKER_HOST=$DOCKER_HOST")
+  DOCKER_HOST_MODE="propagated_from_caller"
+else
+  DOCKER_HOST_MODE="unset_default_socket_/var/run/docker.sock"
+fi
+
+TUNED_ENV=(
+  "SP1_PROVER=cpu"
+  "SHARD_BATCH_SIZE=1"
+  "RAYON_NUM_THREADS=4"
+  "MALLOC_ARENA_MAX=1"
+  "PROTOC=$PROTOC_BIN"
+  "LD_LIBRARY_PATH=$PROTOC_LIBDIR"
+  "SP1_WORKER_NUM_SPLICING_WORKERS=1"
+  "SP1_WORKER_SPLICING_BUFFER_SIZE=1"
+  "SP1_WORKER_NUMBER_OF_SEND_SPLICE_WORKERS_PER_SPLICE=1"
+  "SP1_WORKER_SEND_SPLICE_INPUT_BUFFER_SIZE_PER_SPLICE=1"
+  "SP1_WORKER_GLOBAL_MEMORY_BUFFER_SIZE=1"
+  "SP1_WORKER_NUM_CORE_WORKERS=1"
+  "SP1_WORKER_CORE_BUFFER_SIZE=1"
+  "SP1_WORKER_NUM_SETUP_WORKERS=1"
+  "SP1_WORKER_SETUP_BUFFER_SIZE=1"
+  "SP1_WORKER_NORMALIZE_PROGRAM_CACHE_SIZE=1"
+  "SP1_WORKER_NUM_PREPARE_REDUCE_WORKERS=1"
+  "SP1_WORKER_PREPARE_REDUCE_BUFFER_SIZE=1"
+  "SP1_WORKER_NUM_RECURSION_EXECUTOR_WORKERS=1"
+  "SP1_WORKER_RECURSION_EXECUTOR_BUFFER_SIZE=1"
+  "SP1_WORKER_NUM_RECURSION_PROVER_WORKERS=1"
+  "SP1_WORKER_RECURSION_PROVER_BUFFER_SIZE=1"
+  "SP1_WORKER_NUM_DEFERRED_WORKERS=1"
+  "SP1_WORKER_DEFERRED_BUFFER_SIZE=1"
+  "SP1_WORKER_NUMBER_OF_GAS_EXECUTORS=1"
+  "SP1_WORKER_GAS_EXECUTOR_BUFFER_SIZE=1"
+)
+
+HEAVY_PATTERNS='cargo (test|build|check|clippy|bench)|(^|/)rustc |npm (test|build|run build)|forge (build|test)|node .*(--test|jest|mocha|vitest)'
+
+# Single explicitly authorized exception (Nazgul/Troll dispatch 2026-08-04):
+# Snaga's staging lifecycle rebuild of the fleet root. Whitelist ONLY this
+# exact command/filter (and its descendant processes, e.g. rustc children and
+# the test binary); every other heavy match refuses the fire.
+LIFECYCLE_WHITELIST='cargo test --locked --release -p postfiat-node --test atomic_swap_local_six a666_public_successor_lifecycle_from_signed_checkpoint -- --ignored --exact --nocapture'
+
+# Fail closed when any heavy suite/build process is running. Records matched
+# PIDs and the whitelisted lifecycle PID; never kills anything.
+check_heavy_suites() {
+  python3 - "$HEAVY_PATTERNS" "$LIFECYCLE_WHITELIST" <<'PY'
+import glob, re, sys
+heavy_re = re.compile(sys.argv[1])
+whitelist = sys.argv[2]
+cmdline, ppid = {}, {}
+for d in glob.glob("/proc/[0-9]*"):
+    pid = int(d.rsplit("/", 1)[1])
+    try:
+        cmdline[pid] = open(d + "/cmdline", "rb").read().replace(b"\0", b" ").decode(errors="replace").strip()
+        ppid[pid] = int(open(d + "/stat").read().rsplit(")", 1)[1].split()[1])
+    except Exception:
+        pass
+hits = {p: c for p, c in cmdline.items()
+        if c and heavy_re.search(c) and "a666-r4-receipt-prover-docker-refire" not in c}
+wl_roots = sorted(p for p, c in cmdline.items() if whitelist in c)
+exempt = set(wl_roots)
+changed = True
+while changed:
+    changed = False
+    for p, pp in ppid.items():
+        if pp in exempt and p not in exempt:
+            exempt.add(p)
+            changed = True
+survivors = {p: c for p, c in hits.items() if p not in exempt}
+for p in wl_roots:
+    print(f"a666_r4_receipt_prover_docker_refire=whitelisted_lifecycle_pid={p}", file=sys.stderr)
+if survivors:
+    print("a666_r4_receipt_prover_docker_refire=refused reason=heavy_suite_or_build_running", file=sys.stderr)
+    for p, c in sorted(survivors.items()):
+        print(f"{p} {c}", file=sys.stderr)
+    sys.exit(1)
+sys.exit(0)
+PY
+}
+
+render_fire_command() {
+  cat <<CMD
+OUT_DIR="\$(mktemp -d /tmp/a666-r4-receipt-prover-docker-refire-XXXXXXXX)" && chmod 700 "\$OUT_DIR" && cd "$MAIN_WORKTREE" && systemd-run --user --collect --same-dir --unit="$RUN_ID" -- sg docker -c 'exec /usr/bin/env ${DOCKER_ENV[*]} ${TUNED_ENV[*]} /usr/bin/time -f wall_seconds=%e "$PROVER" receipt --witness "$WITNESS" --output-dir "\$OUT_DIR/proof" --prove --require-prover cpu --skip-redundant-execute >>"\$OUT_DIR/stdout.log" 2>>"\$OUT_DIR/stderr.log"'
+CMD
+}
+
+case "$ACTION" in
+  prepare) ;;
+  fire) ;;
+  *) echo "unknown action: $ACTION" >&2; exit 2 ;;
+esac
+
+if [[ "$ACTION" == "fire" ]]; then
+  # Gate first: no process or service action may precede this check.
+  if [[ ! -f "$APPROVAL_MARKER" ]] || [[ "$(head -n 1 "$APPROVAL_MARKER")" != "$RUN_ID" ]]; then
+    echo "a666_r4_receipt_prover_docker_refire=refused reason=approval_marker_absent_or_run_id_mismatch run_id=$RUN_ID" >&2
+    exit 3
+  fi
+  check_heavy_suites || exit 5
+  OUT_DIR="$(mktemp -d /tmp/a666-r4-receipt-prover-docker-refire-XXXXXXXX)"
+  chmod 700 "$OUT_DIR"
+  cd "$MAIN_WORKTREE"
+  # sg docker wrapper: systemd user transient units do not carry the
+  # supplementary docker group (988), so the gnark wrap's docker client gets
+  # EACCES on /var/run/docker.sock without it. Verified by probe evidence.
+  systemd-run --user --collect --same-dir --unit="$RUN_ID" -- \
+    sg docker -c "exec /usr/bin/env ${DOCKER_ENV[*]} ${TUNED_ENV[*]} /usr/bin/time -f wall_seconds=%e '$PROVER' receipt --witness '$WITNESS' --output-dir '$OUT_DIR/proof' --prove --require-prover cpu --skip-redundant-execute >>'$OUT_DIR/stdout.log' 2>>'$OUT_DIR/stderr.log'"
+  echo "a666_r4_receipt_prover_docker_refire=submitted unit=$RUN_ID out_dir=$OUT_DIR"
+  exit 0
+fi
+
+# prepare: validate every pin, render the exact command, emit evidence.
+observed_witness_sha256="$(sha256sum "$WITNESS" | awk '{print $1}')"
+[[ "$observed_witness_sha256" == "$WITNESS_SHA256" ]]
+observed_prover_sha256="$(sha256sum "$PROVER" | awk '{print $1}')"
+[[ "$observed_prover_sha256" == "$PROVER_SHA256" ]]
+observed_docker_rs_sha256="$(sha256sum "$DOCKER_RS_SOURCE" | awk '{print $1}')"
+[[ "$observed_docker_rs_sha256" == "$DOCKER_RS_SHA256" ]]
+[[ -x "$PROTOC_BIN" ]]
+[[ -d "$PROTOC_LIBDIR" ]]
+[[ -x /usr/bin/docker ]]
+[[ ! -e "$APPROVAL_MARKER" ]]
+mkdir -p "$EVIDENCE_DIR"
+rendered_command="$(render_fire_command)"
+
+python3 - "$EVIDENCE_FILE" <<PY
+import json, sys
+artifact = {
+    "schema": "postfiat.a666.r4.receipt-prover-docker-refire-prepared.v1",
+    "run_id": "$RUN_ID",
+    "prior_packet_commit": "$PRIOR_PACKET_COMMIT",
+    "prior_terminal_evidence": "$TERMINAL_EVIDENCE",
+    "prior_terminal_root_cause": "final Groth16 wrap panic at sp1-recursion-gnark-ffi-6.3.1/src/ffi/docker.rs:29 'Failed to run docker info' inside the prior unit environment; classified as packet unit environment/PATH/DOCKER reachability defect, not proof-capacity failure",
+    "pins": {
+        "witness": "$WITNESS",
+        "witness_sha256": "$observed_witness_sha256",
+        "prover_binary": "$PROVER",
+        "prover_binary_sha256": "$observed_prover_sha256",
+        "protoc_executable": "$PROTOC_BIN",
+        "protoc_library_path": "$PROTOC_LIBDIR",
+        "sp1_sdk": "6.3.1 (=6.3.1 pin, tools/pftl-uniswap-prover/Cargo.toml:21)",
+        "gnark_image": "$GNARK_IMAGE",
+        "gnark_image_source": "$DOCKER_RS_SOURCE:36 (default ref) + lib.rs:19 + assets/SP1_CIRCUIT_VERSION=v6.1.0",
+        "gnark_image_source_docker_rs_sha256": "$observed_docker_rs_sha256",
+        "sp1_gnark_image_env_pin": "SP1_GNARK_IMAGE=$GNARK_IMAGE",
+    },
+    "unit_environment": {
+        "path": "$UNIT_PATH",
+        "docker_host_mode": "$DOCKER_HOST_MODE",
+        "group_wrapper": "sg docker -c: systemd user transient units lack supplementary group docker(988) (first probe journal: groups=1000(postfiat),27(sudo),100(users), EACCES on /var/run/docker.sock); sg restores docker group inside the unit, verified green by re-probe",
+        "env_scrubbing": "none; full caller-inherited systemd-run propagation plus explicit env list; no env -i",
+    },
+    "tuned_environment_identical_to_prior_packet": True,
+    "exclusivity_contract": {
+        "staging_coexistence": "fleet/proxy/deps/pftl/anvil may keep running; this packet never pauses or stops them",
+        "heavy_suite_fail_closed": True,
+        "heavy_patterns": "$HEAVY_PATTERNS",
+        "whitelist_exception": "$LIFECYCLE_WHITELIST",
+        "whitelist_scope": "exact command/filter plus descendant processes only (Snaga authorized staging lifecycle, e.g. cargo PID 1839082, test child 1848893); all other heavy matches refuse fire; gate records whitelisted PIDs at fire time",
+        "broad_kill": False,
+    },
+    "rendered_fire_command": """$rendered_command""",
+    "approval_marker": {
+        "path": "$APPROVAL_MARKER",
+        "exists": False,
+        "created_by_prepare": False,
+        "required_content": "$RUN_ID",
+    },
+    "authorization_status": "pending_marker_write_then_single_fire",
+    "prepared": True,
+    "fired": False,
+    "stakehub_interaction": False,
+    "business_mutation": 0,
+}
+with open(sys.argv[1], "w", encoding="utf-8") as handle:
+    json.dump(artifact, handle, indent=1)
+    handle.write("\n")
+PY
+
+printf 'a666_r4_receipt_prover_docker_refire=prepared run_id=%s\n' "$RUN_ID"
+printf 'rendered_fire_command:\n%s\n' "$rendered_command"
