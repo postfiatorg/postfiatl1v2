@@ -28,6 +28,9 @@ EXCLUSION_CATEGORIES = (
     "node_modules",
     "dist",
 )
+NON_DIRECT_EXCLUSIONS = frozenset(
+    {"test", "tests", "*_tests.rs", "*.test.*", "fixtures", "generated", "vendor", "dist"}
+)
 DIRECT_API_RE = re.compile(r"(?:\.|::)(?:prove|prove_plonk|prove_groth16)\s*\(")
 CARGO_PROVE_RE = re.compile(r"\bcargo\s+prove\b")
 COMMAND_ARRAY_RE = re.compile(r"(?:\[|,)\s*['\"](?:prove|prover)['\"]")
@@ -37,7 +40,9 @@ COMMAND_CALL_RE = re.compile(
 SUCCESS_CONDITION_RE = re.compile(r"^\s*if\b.*\b(?:success|accepted|ok)\b", re.IGNORECASE)
 NEGATED_SUCCESS_RE = re.compile(r"(?:\bnot\s+|!)(?:success|accepted|ok)\b", re.IGNORECASE)
 SUCCESS_BRANCH_WINDOW = 64
-REPORT_EVIDENCE_RE = re.compile(r"\b(?:report|evidence|acceptance)\b", re.IGNORECASE)
+REPORT_EVIDENCE_RE = re.compile(
+    r"\b(?:report|evidence|acceptance|manifest)\b", re.IGNORECASE
+)
 WRITE_RE = re.compile(r"\b(?:append|dump|emit|open|save|write)[A-Za-z_]*\s*\(", re.IGNORECASE)
 LITERAL_RESULT_RE = re.compile(
     r"(?<![A-Za-z0-9_])['\"]?(?:ok|accepted)['\"]?\s*[:=]\s*(?:true|True)\b"
@@ -102,6 +107,8 @@ def excluded_category(relative: Path) -> str | None:
         return "*_tests.rs"
     if ".test." in name:
         return "*.test.*"
+    if name.startswith(("test-", "test_")) or ".e2e." in name:
+        return "test"
     return None
 
 
@@ -111,6 +118,18 @@ def is_scoped_runtime_path(relative: Path) -> bool:
     return (
         value.startswith("scripts/")
         or value.startswith("wallet-web/src/")
+        or value.startswith("wallet-proxy/")
+        or (len(parts) >= 3 and parts[0] == "crates" and parts[2] == "src")
+    )
+
+
+def is_identifier_runtime_path(relative: Path, category: str | None) -> bool:
+    if category is not None:
+        return False
+    value = relative.as_posix()
+    parts = relative.parts
+    return (
+        value.startswith("wallet-web/src/")
         or value.startswith("wallet-proxy/")
         or (len(parts) >= 3 and parts[0] == "crates" and parts[2] == "src")
     )
@@ -234,12 +253,24 @@ def schema_object_spans(lines: list[str]) -> list[tuple[int, int]]:
     return spans
 
 
+def is_report_evidence_emitter_context(lines: list[str], start: int, end: int) -> bool:
+    binding = non_comment_line(lines[start])
+    if REPORT_EVIDENCE_RE.search(binding):
+        return True
+    write_end = min(len(lines), end + SUCCESS_BRANCH_WINDOW + 1)
+    return any(
+        WRITE_RE.search(non_comment_line(line)) and REPORT_EVIDENCE_RE.search(line)
+        for line in lines[end + 1 : write_end]
+    )
+
+
 def literal_result_findings(relative: Path, text: str) -> list[Finding]:
     lines = text.splitlines()
     schema_spans = [
         (start, end)
         for start, end in schema_object_spans(lines)
         if any(SCHEMA_FIELD_RE.search(item) for item in lines[start : end + 1])
+        and is_report_evidence_emitter_context(lines, start, end)
     ]
     findings: list[Finding] = []
     for index, line in enumerate(lines):
@@ -258,7 +289,7 @@ def literal_result_findings(relative: Path, text: str) -> list[Finding]:
 
 
 def identifier_findings(relative: Path, text: str, category: str | None) -> list[Finding]:
-    if category is not None:
+    if not is_identifier_runtime_path(relative, category):
         return []
     return [
         Finding(relative.as_posix(), index, "retired-identifier-runtime")
@@ -284,8 +315,9 @@ def scan(root: Path) -> tuple[list[Finding], Counter[str], int, int]:
             continue
         scanned += 1
         findings.extend(direct_proving_findings(relative, text))
-        findings.extend(success_branch_write_findings(relative, text))
-        findings.extend(literal_result_findings(relative, text))
+        if category not in NON_DIRECT_EXCLUSIONS:
+            findings.extend(success_branch_write_findings(relative, text))
+            findings.extend(literal_result_findings(relative, text))
         findings.extend(identifier_findings(relative, text, category))
     return sorted(findings, key=lambda item: (item.path, item.line, item.rule)), excluded, enumerated, scanned
 

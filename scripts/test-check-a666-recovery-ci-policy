@@ -34,6 +34,18 @@ def clean_fixture(root: Path) -> None:
         "state = derive_result()\nreport = {'schema': 'v1', 'ok': state}\nif accepted:\n    warm_cache()\nwrite_report(report)\n",
     )
     write_fixture(root, "crates/demo/src/lib.rs", "pub fn verify() {}\n")
+    write_fixture(
+        root,
+        "wallet-proxy/rpc.js",
+        "const rpc = { schema: 'rpc-v1', ok: true };\nreturn rpc;\n",
+    )
+    write_fixture(
+        root,
+        "wallet-web/src/lib/status.e2e.js",
+        "const acceptance = { schema: 'v1', accepted: true };\nwriteFile('ACCEPTANCE', acceptance);\n",
+    )
+    retired = "Stake" + "Hub"
+    write_fixture(root, "scripts/check-absence.py", f"term = '{retired}'\n")
 
 
 def require_clean() -> None:

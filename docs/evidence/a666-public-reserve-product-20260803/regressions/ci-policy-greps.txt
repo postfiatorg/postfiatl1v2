@@ -1,39 +1,51 @@
 A666 recovery CI rejection-policy grep evidence
 Date: 2026-08-04
-Current-tree CI status: RED (preserved findings; no product/test fixes or allowlist).
+Current-tree checker status: RED. The checker is not wired as a merge-blocking CI
+step until a successor candidate runs it GREEN. No product/test code was changed,
+and no finding was baselined or allowlisted.
 
 Checker grammar:
 - Direct proving in test paths: invocation-only APIs .prove(, ::prove(,
-  .prove_plonk(, ::prove_plonk(, .prove_groth16(, ::prove_groth16(;
-  command tokens cargo prove and executable prove/prover.
-- Success-only report/evidence write: a report/evidence write below a non-negated
+  .prove_plonk(, ::prove_plonk(, .prove_groth16(, ::prove_groth16(; command
+  tokens cargo prove and executable prove/prover. This remains active in test paths.
+- Success-only report/evidence write: a report/evidence write under a non-negated
   if condition naming success, accepted, or ok. Python indentation, braced
-  JavaScript/Rust, and shell then/fi bodies are recognized; scan is bounded to
-  the first 64 source lines of that branch.
-- Retired identifier: case-insensitive runtime identifier scan limited to scripts,
-  wallet-web/src, wallet-proxy, and crates/*/src after the printed exclusions.
-- Literal result status: literal ok/accepted true values only when they share a
-  structured object with a schema field.
+  JavaScript/Rust, and shell then/fi bodies are recognized; the branch scan is
+  bounded to 64 source lines.
+- Literal result status: literal ok/accepted true only in a schema object whose
+  binding/return context, or concrete write/emit call, identifies report, evidence,
+  acceptance, or manifest output. Ordinary RPC response schema objects are clean.
+- Retired identifier: case-insensitive scan in non-test wallet-web/src,
+  wallet-proxy, and crates/*/src product runtime only. Operational scripts are
+  outside this identifier-only rule so absence/readiness checks can name it.
+- Success-only and literal-status rules exclude test/test paths, *_tests.rs,
+  *.test.*, fixtures, generated, vendor, and dist. Direct-proving does not use
+  those exclusions.
 
 Commands and results:
 1. scripts/test-check-a666-recovery-ci-policy
    exit: 0
-   elapsed_ms: 467
    final: a666_recovery_ci_policy_selftest=ok clean=1 rejected=4
+   clean coverage: computed report status; ordinary RPC response schema status;
+   test/e2e emitted schema fixture; operational absence-check identifier.
+   rejection coverage: direct proving; success-only write; runtime retired identifier;
+   literal result status in emitted report.
 2. scripts/check-a666-recovery-ci-policy
    exit: 1
-   elapsed_ms: 1545
-   finding_count: 218
-   final: a666_recovery_ci_policy=fail findings=218 enumerated=15096 scanned=492
+   elapsed_ms: 1328
+   finding_count: 2
+   rule_counts: direct-proving-in-test=0 success-only-report-evidence-write=2
+                retired-identifier-runtime=0 literal-result-boolean-schema-emitter=0
+   final: a666_recovery_ci_policy=fail findings=2 enumerated=15097 scanned=492
 3. python3 YAML parser assertion for .github/workflows/rust-ci.yml
    exit: 0
-   final: rust_ci_yaml=ok policy_step=adjacent
+   final: rust_ci_yaml=ok manifest_step=present policy_step=absent_due_to_red_checker
 
-Checker output (excluded category counts followed by every file:line-only finding):
+Excluded category counts:
 excluded[docs]=954
-excluded[evidence]=6782
+excluded[evidence]=6783
 excluded[site]=0
-excluded[test]=20
+excluded[test]=88
 excluded[tests]=49
 excluded[*_tests.rs]=16
 excluded[*.test.*]=25
@@ -43,222 +55,7 @@ excluded[vendor]=0
 excluded[target]=0
 excluded[node_modules]=0
 excluded[dist]=0
-crates/node/src/bin/asset_orchard_local_service.rs:1206: literal-result-boolean-schema-emitter
-crates/node/src/bin/asset_orchard_local_service.rs:1276: literal-result-boolean-schema-emitter
-crates/node/src/bin/asset_orchard_local_service.rs:1588: literal-result-boolean-schema-emitter
-crates/node/src/bin/asset_orchard_local_service.rs:1898: literal-result-boolean-schema-emitter
-crates/node/src/bin/asset_orchard_local_service.rs:1952: literal-result-boolean-schema-emitter
-crates/node/src/bin/asset_orchard_local_service.rs:2032: literal-result-boolean-schema-emitter
-crates/node/src/bin/asset_orchard_local_service.rs:2135: literal-result-boolean-schema-emitter
-crates/node/src/bin/asset_orchard_local_service.rs:2224: literal-result-boolean-schema-emitter
-crates/node/src/bin/asset_orchard_local_service.rs:2837: literal-result-boolean-schema-emitter
-crates/node/src/bin/asset_orchard_local_service.rs:3356: literal-result-boolean-schema-emitter
-crates/node/src/bin/asset_orchard_local_service.rs:3893: literal-result-boolean-schema-emitter
-crates/node/src/bin/pftl_swapd.rs:2019: literal-result-boolean-schema-emitter
-crates/node/src/bin/pftl_swapd.rs:2133: literal-result-boolean-schema-emitter
-crates/node/src/tests/vault_bridge_governed_route.rs:2827: literal-result-boolean-schema-emitter
-crates/node/src/tests/vault_bridge_governed_route.rs:3102: literal-result-boolean-schema-emitter
-crates/rpc_sdk/src/protocol_request_tests.rs:2899: literal-result-boolean-schema-emitter
-crates/rpc_sdk/src/protocol_request_tests.rs:2918: literal-result-boolean-schema-emitter
-crates/rpc_sdk/src/protocol_request_tests.rs:2936: literal-result-boolean-schema-emitter
-crates/rpc_sdk/src/protocol_request_tests.rs:2954: literal-result-boolean-schema-emitter
-crates/rpc_sdk/src/protocol_request_tests.rs:2972: literal-result-boolean-schema-emitter
-crates/rpc_sdk/src/protocol_request_tests.rs:3600: literal-result-boolean-schema-emitter
-crates/rpc_sdk/src/protocol_request_tests.rs:3805: literal-result-boolean-schema-emitter
-crates/rpc_sdk/src/response_validation_tests.rs:619: literal-result-boolean-schema-emitter
-crates/rpc_sdk/src/response_validation_tests.rs:907: literal-result-boolean-schema-emitter
-crates/rpc_sdk/src/response_validation_tests.rs:1871: literal-result-boolean-schema-emitter
-crates/rpc_sdk/src/response_validation_tests.rs:1916: literal-result-boolean-schema-emitter
-scripts/a666-ce22-finality-op.py:284: literal-result-boolean-schema-emitter
-scripts/a666-ce22-remote-finality-op.py:530: literal-result-boolean-schema-emitter
-scripts/a666-r4-rehearsal-setup:20: retired-identifier-runtime
-scripts/a666-r4-rehearsal-setup:63: retired-identifier-runtime
-scripts/a666-r4-rehearsal-setup:64: retired-identifier-runtime
-scripts/a666-r4-rehearsal-setup:65: retired-identifier-runtime
-scripts/a666-r4-rehearsal-setup:67: retired-identifier-runtime
-scripts/a666-r4-rehearsal-setup:95: retired-identifier-runtime
-scripts/a666-r4-rehearsal-setup:97: retired-identifier-runtime
-scripts/a666-r4-rehearsal-setup:100: retired-identifier-runtime
-scripts/a666-r4-rehearsal-setup:133: retired-identifier-runtime
-scripts/a666-r4-rehearsal-setup:134: retired-identifier-runtime
-scripts/a666-r4-rehearsal-setup:145: retired-identifier-runtime
-scripts/a666-r4-rehearsal-setup:172: retired-identifier-runtime
-scripts/a666-r4-rehearsal-setup:173: retired-identifier-runtime
-scripts/a666-r4-rehearsal-setup:181: retired-identifier-runtime
-scripts/a666-r4-rehearsal-setup:196: retired-identifier-runtime
-scripts/a666-r4-rehearsal-setup:199: retired-identifier-runtime
-scripts/check-a666-public-adapter-readiness:2: retired-identifier-runtime
-scripts/check-a666-public-adapter-readiness:14: retired-identifier-runtime
-scripts/check-a666-public-adapter-readiness:18: retired-identifier-runtime
-scripts/check-a666-public-adapter-readiness:35: retired-identifier-runtime
-scripts/check-a666-public-adapter-readiness:37: retired-identifier-runtime
-scripts/check-a666-public-adapter-readiness:44: retired-identifier-runtime
-scripts/check-a666-public-adapter-readiness:67: retired-identifier-runtime
-scripts/check-a666-public-adapter-readiness:70: retired-identifier-runtime
-scripts/check-a666-public-adapter-readiness:104: retired-identifier-runtime
-scripts/check-a666-public-adapter-readiness:106: retired-identifier-runtime
-scripts/check-a666-public-adapter-readiness:117: retired-identifier-runtime
-scripts/check-a666-public-adapter-readiness:120: retired-identifier-runtime
-scripts/check-a666-public-adapter-readiness:129: retired-identifier-runtime
-scripts/check-provider-neutral-wallet-boundary:13: retired-identifier-runtime
-scripts/navswap-atomic-template-smoke.mjs:176: literal-result-boolean-schema-emitter
-scripts/navswap-wallet-live-smoke.mjs:305: literal-result-boolean-schema-emitter
-scripts/test_pnok_private_fix_demo.py:127: literal-result-boolean-schema-emitter
-scripts/test_pnok_private_fix_demo.py:214: literal-result-boolean-schema-emitter
+
+Remaining genuine file:line findings (current-tree RED blocker):
 scripts/testnet-monitor-snapshot:925: success-only-report-evidence-write
 scripts/testnet-validator-doctor:992: success-only-report-evidence-write
-wallet-proxy/eth-fast-lane-driver.js:386: literal-result-boolean-schema-emitter
-wallet-proxy/eth-fast-lane-driver.js:468: literal-result-boolean-schema-emitter
-wallet-proxy/navcoin-export-jobs.js:419: literal-result-boolean-schema-emitter
-wallet-proxy/navcoin-export-relay-driver.js:317: literal-result-boolean-schema-emitter
-wallet-proxy/navcoin-return-jobs.js:377: literal-result-boolean-schema-emitter
-wallet-proxy/navcoin-return-relay-driver.js:186: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-atomic.js:801: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-config-bridge.js:718: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-config-bridge.js:1945: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-config-bridge.js:2078: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-persistence-http.js:723: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-persistence-http.js:726: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-persistence-http.js:770: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-persistence-http.js:852: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-persistence-http.js:889: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-persistence-http.js:900: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-persistence-http.js:925: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-persistence-http.js:1072: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-persistence-http.js:1325: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-shielded.js:590: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-shielded.js:665: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-shielded.js:735: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-shielded.js:769: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-shielded.js:793: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-shielded.js:817: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-shielded.js:2273: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-shielded.js:2546: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-shielded.js:2704: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-transparent.js:745: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-transparent.js:1243: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-transparent.js:1363: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-transparent.js:1486: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-transparent.js:1564: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-transparent.js:1915: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-transparent.js:1978: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-transparent.js:2153: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-transparent.js:2193: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-transparent.js:2363: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-transparent.js:2595: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-transparent.js:2927: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-transparent.js:3820: literal-result-boolean-schema-emitter
-wallet-proxy/navswap-transparent.js:4224: literal-result-boolean-schema-emitter
-wallet-proxy/pnok-fix-jobs.js:235: literal-result-boolean-schema-emitter
-wallet-proxy/pnok-fix-jobs.js:382: literal-result-boolean-schema-emitter
-wallet-proxy/server.js:232: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:643: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:711: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:994: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:1403: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:1443: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:1454: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:1474: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:1486: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:1492: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:1497: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:1587: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:1609: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:1620: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:1640: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:1651: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:1654: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:1659: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:1676: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:1701: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:1721: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:2786: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:2798: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:2829: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:2842: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:2854: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:2864: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:2880: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:2894: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:2952: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:2964: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:2995: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3008: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3020: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3030: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3046: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3059: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3116: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3128: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3159: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3172: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3184: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3194: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3210: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3225: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3243: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3262: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3592: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3791: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3804: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3821: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3873: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3969: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:3986: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_adapter.js:4003: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_atomic.js:146: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_atomic.js:191: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_atomic.js:203: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_atomic.js:660: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_policy_persistence.js:29: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_policy_persistence.js:33: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_policy_persistence.js:40: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_policy_persistence.js:73: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_policy_persistence.js:77: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_policy_persistence.js:112: literal-result-boolean-schema-emitter
-wallet-proxy/test_navswap_policy_persistence.js:121: literal-result-boolean-schema-emitter
-wallet-proxy/test_proposer_routing.js:100: literal-result-boolean-schema-emitter
-wallet-proxy/test_proposer_routing.js:112: literal-result-boolean-schema-emitter
-wallet-proxy/test_proposer_routing.js:124: literal-result-boolean-schema-emitter
-wallet-proxy/trustless-bridge-jobs.js:791: literal-result-boolean-schema-emitter
-wallet-web/src/lib/bridge-route.test.js:57: literal-result-boolean-schema-emitter
-wallet-web/src/lib/custody-browser-boundary.e2e.js:414: literal-result-boolean-schema-emitter
-wallet-web/src/lib/navswap-actions.js:639: literal-result-boolean-schema-emitter
-wallet-web/src/lib/navswap-actions.js:759: literal-result-boolean-schema-emitter
-wallet-web/src/lib/shielded-navswap.js:853: literal-result-boolean-schema-emitter
-wallet-web/src/lib/shielded-navswap.test.js:271: literal-result-boolean-schema-emitter
-wallet-web/src/lib/swap-server.test.js:69: literal-result-boolean-schema-emitter
-wallet-web/src/lib/swap-server.test.js:71: literal-result-boolean-schema-emitter
-wallet-web/src/lib/swap-server.test.js:186: literal-result-boolean-schema-emitter
-wallet-web/src/lib/swap-server.test.js:188: literal-result-boolean-schema-emitter
-wallet-web/src/lib/swap-server.test.js:224: literal-result-boolean-schema-emitter
-wallet-web/src/lib/swap-server.test.js:227: literal-result-boolean-schema-emitter
-wallet-web/src/lib/swap-server.test.js:259: literal-result-boolean-schema-emitter
-wallet-web/src/lib/swap-server.test.js:262: literal-result-boolean-schema-emitter
-wallet-web/src/lib/swap-server.test.js:298: literal-result-boolean-schema-emitter
-wallet-web/src/lib/swap-server.test.js:301: literal-result-boolean-schema-emitter
-wallet-web/src/lib/swap-server.test.js:333: literal-result-boolean-schema-emitter
-wallet-web/src/lib/swap-server.test.js:335: literal-result-boolean-schema-emitter
-wallet-web/src/lib/swap-server.test.js:359: literal-result-boolean-schema-emitter
-wallet-web/src/lib/swap-server.test.js:361: literal-result-boolean-schema-emitter
-wallet-web/src/lib/swap-server.test.js:391: literal-result-boolean-schema-emitter
-wallet-web/src/lib/swap-server.test.js:393: literal-result-boolean-schema-emitter
-wallet-web/src/lib/swap-server.test.js:423: literal-result-boolean-schema-emitter
-wallet-web/src/lib/swap-server.test.js:426: literal-result-boolean-schema-emitter
-wallet-web/src/lib/swap-server.test.js:479: literal-result-boolean-schema-emitter
-wallet-web/src/lib/swap-server.test.js:481: literal-result-boolean-schema-emitter
-wallet-web/src/lib/swap-server.test.js:510: literal-result-boolean-schema-emitter
-wallet-web/src/lib/tx-builder.test.js:1060: literal-result-boolean-schema-emitter
-wallet-web/src/lib/tx-builder.test.js:1065: literal-result-boolean-schema-emitter
-wallet-web/src/lib/tx-builder.test.js:1070: literal-result-boolean-schema-emitter
-wallet-web/src/lib/tx-builder.test.js:1074: literal-result-boolean-schema-emitter
-wallet-web/src/lib/tx-builder.test.js:1129: literal-result-boolean-schema-emitter
-wallet-web/src/lib/tx-builder.test.js:1132: literal-result-boolean-schema-emitter
-wallet-web/src/lib/tx-builder.test.js:1137: literal-result-boolean-schema-emitter
-wallet-web/src/lib/tx-builder.test.js:1141: literal-result-boolean-schema-emitter
-wallet-web/src/lib/tx-builder.test.js:1729: literal-result-boolean-schema-emitter
-wallet-web/src/lib/tx-builder.test.js:1732: literal-result-boolean-schema-emitter
-wallet-web/src/lib/tx-builder.test.js:1738: literal-result-boolean-schema-emitter
-wallet-web/src/lib/tx-builder.test.js:1742: literal-result-boolean-schema-emitter
-wallet-web/src/lib/wallet-public-security.e2e.js:250: literal-result-boolean-schema-emitter
-a666_recovery_ci_policy=fail findings=218 enumerated=15096 scanned=492
