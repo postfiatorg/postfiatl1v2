@@ -2323,8 +2323,8 @@
     {
       "id": "file:package.json",
       "access_kind": "file_read",
-      "accessor": "sha256File(join(WALLET_ROOT, 'package.json'))",
-      "source": "wallet-web/package.json",
+      "accessor": "execFileSync('git', ['show', revision + ':wallet-web/package.json'])",
+      "source": "pinned candidate git object wallet-web/package.json (never mutable worktree bytes)",
       "required": "always",
       "validation_predicate": "sha256 equals setup manifest wallet.package_json_sha256 when pinned",
       "consuming_steps": [

@@ -134,9 +134,10 @@ def emit():
     if component_graph:
         for path in re.findall(r"join\(WALLET_ROOT, '([^']+)'\)", component_graph.group(1)):
             add(f"file:{path}", "file_read", f"readFile(join(WALLET_ROOT, '{path}'))", path)
-    if "join(WALLET_ROOT, 'package.json')" in text:
-        add("file:package.json", "file_read", "sha256File(join(WALLET_ROOT, 'package.json'))",
-            "wallet-web/package.json")
+    if ":wallet-web/package.json" in text:
+        add("file:package.json", "file_read",
+            "execFileSync('git', ['show', revision + ':wallet-web/package.json'])",
+            "pinned candidate git object wallet-web/package.json")
     if "proxyPidPath" in text:
         add("file:proxy_pid_or_ready", "file_read", "readFile(proxyPidPath) (.pid | numeric)",
             "POSTFIAT_R4_PROXY_PID_FILE")

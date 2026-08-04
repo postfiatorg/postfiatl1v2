@@ -1,0 +1,53 @@
+{
+  "schema": "postfiat.a666.r4.mode-symmetric-validation-structural-fix.v1",
+  "generated_utc": "2026-08-04",
+  "closes": [
+    "d9871ce",
+    "66a7171"
+  ],
+  "defects": [
+    {
+      "commit": "d9871ce",
+      "class": "mutable harness state read for candidate identity",
+      "detail": "official v3 step 1 hashed WALLET_ROOT/package.json (fe6209c5219a583e0f55f8ca0c93244e14ae569288ee46af910bbaa97e1989b3) instead of the pinned candidate object 39f7fae:wallet-web/package.json (6bd5869e589b9bec47e6e8cc6efe243e09f09ad78cc81d06e8751cd4a6d0f0fb); consumed invocation 1, 0 business mutations"
+    },
+    {
+      "commit": "66a7171",
+      "class": "validation logic absent from construction mode",
+      "detail": "step-1 wallet version/hash validation existed only on the official path; construction preflight never evaluated it"
+    }
+  ],
+  "fix": {
+    "registry": "VALIDATION_PREDICATE_REGISTRY: 18 pure named predicates (8 shape-tier, 10 document-tier), single source of truth; runValidationRegistry executes it once on normalized inputs before the runner mode branch in BOTH construction preflight and official mode; officialLaunchContract is a shape-tier adapter over the same registry",
+    "build_identity": "pinnedCandidatePackage(REPO_ROOT, revision) reads argument-safe execFileSync('git', ['show', revision + ':wallet-web/package.json']) bytes; hash and version come only from those pinned bytes; no runner implementation path hashes mutable WALLET_ROOT/package.json (structural guard enforces)",
+    "mode_parity": "construction and official synthetic traces are deep-equal: identical 18-predicate id set, order, and results",
+    "official_readiness_fixture": "dedicated no-mutation test binds the exact v3 official inputs by content hash (fire-control e4b3297356e0ec802e72a79dc533b42cee2994191a2d8b9d0f93135a04aed04e ready_to_fire=true, setup a73b957e9f9f22e2f5c3915a3a3f702c589c733056facb93b7192f794ec50c49, deployment 24811b46b8dffbd9fbf0edaf2b0ce9b9545f7ad656d600abc259311274c09168); non-vacuity proven: both wallet package-pin predicates refuse flipped pins with 0 invocations",
+    "legacy_construction_fixture": "r4-construction setup manifest (sha 9cc348bca41e55fe7ed5dcc287a98e8b40b99f101b6895f8cfe606b6ff7d49b0, hash-bound in 5+ committed evidence files) carries no wallet pins; pin predicates are vacuous-tolerant there; pin PRESENCE is enforced in both modes via the registry fire_control_ready_to_fire predicate (aggregate is pin-strict per a71a397)"
+  },
+  "predicate_count": 18,
+  "trace_parity": "18/18 identical id set, order, results across construction and official",
+  "commands": [
+    {
+      "cmd": "node --check wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+      "exit": 0
+    },
+    {
+      "cmd": "scripts/a666-r4-official-input-contract-extract check",
+      "exit": 0,
+      "stdout": "{\"ok\": true, \"accessor_count\": 120, \"mismatch_count\": 0}"
+    },
+    {
+      "cmd": "node --test --test-name-pattern \"v3 build identity|mode parity|structural guard|negatives|official-readiness|official launch contract|input contract|fire-control input gate|RED-FIRST|two-mode\" src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+      "exit": 0,
+      "summary": "tests 12, pass 11, fail 0, todo 0, skipped 1 (env-gated journey test)"
+    },
+    {
+      "cmd": "npm run test:r4-construction (documented preflight env block)",
+      "exit": 0,
+      "summary": "tests 12, pass 12, fail 0, todo 0"
+    }
+  ],
+  "credentials_included": false,
+  "official_journey_invocations": 0,
+  "business_mutations": 0
+}

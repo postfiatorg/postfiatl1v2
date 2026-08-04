@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
@@ -29,6 +30,7 @@ const POLL_INTERVAL_MS = 5_000;
 const MAX_ASYNC_WAIT_MS = 12 * 60 * 60 * 1_000;
 const FORBIDDEN_FIELD = /seed|mnemonic|private[_-]?key|owner[_-]?key|spend[_-]?auth/i;
 const WALLET_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const REPO_ROOT = resolve(WALLET_ROOT, '..');
 const PRODUCTION_COMPONENT_GRAPH = Object.freeze([
   join(WALLET_ROOT, 'src/App.jsx'),
   join(WALLET_ROOT, 'src/components/Swap.jsx'),
@@ -205,12 +207,111 @@ function loopbackHref(value) {
   }
 }
 
+function pinnedCandidatePackage(repoRoot, revision) {
+  // Build identity is the pinned candidate git object, never mutable
+  // worktree bytes. Argument-safe execFileSync: no shell, no string
+  // interpolation into a command line.
+  const bytes = execFileSync('git', ['show', `${revision}:wallet-web/package.json`], { cwd: repoRoot });
+  const parsed = JSON.parse(bytes.toString('utf8'));
+  return {
+    revision,
+    version: String(parsed.version || ''),
+    sha256: createHash('sha256').update(bytes).digest('hex'),
+  };
+}
+
+function hashPinMatches(pin, actual) {
+  const normalizedPin = String(pin || '').trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(normalizedPin)) return false;
+  return actual === undefined || actual === null || String(actual).trim().toLowerCase() === normalizedPin;
+}
+
+// Mode-symmetric validation predicate registry. Every validation predicate
+// reachable by official mode lives here and ONLY here; construction
+// preflight and official execution run the identical registry on the same
+// normalized inputs before any mode branch. Mode differences begin only at
+// mutation execution/receipt capture. Tiers: "shape" predicates evaluate
+// scalar input shape (also used by the officialLaunchContract adapter);
+// "document" predicates evaluate parsed manifest/pinned-object documents.
+const VALIDATION_PREDICATE_REGISTRY = Object.freeze([
+  { id: 'fire_control_ready_to_fire', tier: 'shape',
+    run: i => (i.fireControl ? i.fireControl.ready_to_fire : i.fireControlReadyToFire) === true },
+  { id: 'fire_control_hash_pinned', tier: 'shape',
+    run: i => hashPinMatches(i.fireControlSha256Pin, i.fireControlSha256Actual) },
+  { id: 'setup_hash_pinned', tier: 'shape',
+    run: i => hashPinMatches(i.setupSha256Pin, i.setupSha256Actual) },
+  { id: 'deployment_hash_pinned', tier: 'shape',
+    run: i => hashPinMatches(i.deploymentSha256Pin, i.deploymentSha256Actual) },
+  { id: 'wallet_origin_loopback', tier: 'shape',
+    run: i => loopbackHref(i.walletOrigin) },
+  { id: 'proxy_origin_loopback', tier: 'shape',
+    run: i => loopbackHref(i.proxyOrigin) },
+  { id: 'async_budget_bounded', tier: 'shape',
+    run: i => i.asyncBudgetMs === null
+      || (Number.isSafeInteger(i.asyncBudgetMs) && i.asyncBudgetMs > 0 && i.asyncBudgetMs <= MAX_ASYNC_WAIT_MS) },
+  { id: 'distinct_artifact_slots', tier: 'shape',
+    run: i => Boolean(i.exportSlotPath) && Boolean(i.returnSlotPath) && i.exportSlotPath !== i.returnSlotPath },
+  { id: 'candidate_revision_fire_control', tier: 'document',
+    run: i => manifestCandidateRevision(i.fireControl) === CANDIDATE_REVISION },
+  { id: 'candidate_revision_setup', tier: 'document',
+    run: i => manifestCandidateRevision(i.setup) === CANDIDATE_REVISION },
+  { id: 'candidate_revision_deployment', tier: 'document',
+    run: i => manifestCandidateRevision(i.deployment) === CANDIDATE_REVISION },
+  { id: 'setup_manifest_loopback', tier: 'document',
+    run: i => loopbackManifestObservation('setup manifest', i.setup).valid },
+  { id: 'deployment_manifest_loopback', tier: 'document',
+    run: i => loopbackManifestObservation('deployment manifest', i.deployment).valid },
+  { id: 'pinned_candidate_package_object_well_formed', tier: 'document',
+    run: i => /^\d+\.\d+\.\d+$/.test(String(i.pinnedPackage?.version || ''))
+      && /^[0-9a-f]{64}$/.test(String(i.pinnedPackage?.sha256 || '')) },
+  // Wallet identity pins, when carried by the setup manifest, must match the
+  // pinned candidate git object exactly. Pin PRESENCE is enforced in both
+  // modes by fire_control_ready_to_fire (the fire-control aggregate refuses
+  // GREEN without wallet identity pins; see a71a397). Mutable worktree bytes
+  // are never consulted for candidate identity.
+  { id: 'wallet_package_version_consistent_with_pinned_object', tier: 'document',
+    run: i => {
+      const pin = String(i.setup?.wallet?.package_version ?? i.setup?.wallet_package_version ?? '');
+      return pin === '' ? true : pin === i.pinnedPackage.version;
+    } },
+  { id: 'wallet_package_json_sha256_consistent_with_pinned_object', tier: 'document',
+    run: i => {
+      const pin = String(i.setup?.wallet?.package_json_sha256 ?? i.setup?.wallet_package_json_sha256 ?? '')
+        .trim().toLowerCase();
+      return pin === '' ? true : pin === i.pinnedPackage.sha256;
+    } },
+  { id: 'report_path_available', tier: 'document',
+    run: i => i.reportPathAvailable === true },
+  { id: 'production_import_graph', tier: 'document',
+    run: i => Object.values(i.productionGraph).every(Boolean) },
+]);
+
+function runValidationRegistry(normalizedInputs) {
+  // Pure and deterministic: evaluates the shared registry on normalized
+  // inputs, launches nothing, invokes nothing, mutates nothing.
+  const trace = VALIDATION_PREDICATE_REGISTRY.map(predicate => {
+    let ok = false;
+    try { ok = Boolean(predicate.run(normalizedInputs)); } catch { ok = false; }
+    return { id: predicate.id, ok };
+  });
+  const failed = trace.filter(entry => !entry.ok).map(entry => entry.id);
+  return {
+    ok: failed.length === 0,
+    trace,
+    failed,
+    predicate_count: trace.length,
+    official_journey_invocations: 0,
+    business_mutations: 0,
+  };
+}
+
 function officialLaunchContract(inputs) {
   // Computed complete-input contract for official mode. Pure and
   // deterministic: it inspects only the supplied input map, launches no
   // browser, and issues no business mutation. Every official input must be
   // present and well-shaped; nothing is inferred and no preflight-only
-  // default is reused.
+  // default is reused. Shape checks delegate to the shared validation
+  // predicate registry so no predicate lives outside it.
   const requiredInputs = [
     'fireControlPath', 'fireControlSha256',
     'setupPath', 'setupSha256',
@@ -222,20 +323,21 @@ function officialLaunchContract(inputs) {
   ];
   const missingInputs = requiredInputs
     .filter(name => inputs[name] === undefined || inputs[name] === null || inputs[name] === '');
-  const checks = {
-    fire_control_ready_to_fire: inputs.fireControlReadyToFire === true,
-    fire_control_hash_pinned: /^[0-9a-f]{64}$/.test(String(inputs.fireControlSha256 || '')),
-    setup_hash_pinned: /^[0-9a-f]{64}$/.test(String(inputs.setupSha256 || '')),
-    deployment_hash_pinned: /^[0-9a-f]{64}$/.test(String(inputs.deploymentSha256 || '')),
-    wallet_origin_loopback: loopbackHref(inputs.walletOrigin),
-    proxy_origin_loopback: loopbackHref(inputs.proxyOrigin),
-    async_budget_bounded: Number.isSafeInteger(inputs.asyncMaxWaitMs)
-      && inputs.asyncMaxWaitMs > 0 && inputs.asyncMaxWaitMs <= MAX_ASYNC_WAIT_MS,
-    distinct_artifact_slots: Boolean(inputs.exportSlotPath)
-      && Boolean(inputs.returnSlotPath)
-      && inputs.exportSlotPath !== inputs.returnSlotPath,
+  const shapeNormalized = {
+    fireControlReadyToFire: inputs.fireControlReadyToFire,
+    fireControlSha256Pin: inputs.fireControlSha256,
+    setupSha256Pin: inputs.setupSha256,
+    deploymentSha256Pin: inputs.deploymentSha256,
+    walletOrigin: inputs.walletOrigin,
+    proxyOrigin: inputs.proxyOrigin,
+    asyncBudgetMs: inputs.asyncMaxWaitMs,
+    exportSlotPath: inputs.exportSlotPath,
+    returnSlotPath: inputs.returnSlotPath,
   };
-  const failedChecks = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
+  const failedChecks = VALIDATION_PREDICATE_REGISTRY
+    .filter(predicate => predicate.tier === 'shape')
+    .filter(predicate => !predicate.run(shapeNormalized))
+    .map(predicate => predicate.id);
   return {
     ready_to_launch: missingInputs.length === 0 && failedChecks.length === 0,
     missing_inputs: missingInputs,
@@ -344,11 +446,10 @@ async function runConstructionPreflight({
   walletOrigin, proxyOrigin, fireControl, setup, deployment, productionGraph,
   fireControlPath, setupPath, deploymentPath,
   exportSlotPath, returnSlotPath, asyncProofSlotPath, proxyRestartPath, proxyPidPath, reportPath,
+  manifestHashes: sharedManifestHashes, validationTrace,
 }) {
-  const [fireControlHash, setupHash, deploymentHash, exportSlot, returnSlot, asyncProofSlot] = await Promise.all([
-    manifestHashObservation(fireControlPath, 'POSTFIAT_R4_FIRE_CONTROL_MANIFEST_SHA256'),
-    manifestHashObservation(setupPath, 'POSTFIAT_R4_SETUP_MANIFEST_SHA256'),
-    manifestHashObservation(deploymentPath, 'POSTFIAT_R4_DEPLOYMENT_MANIFEST_SHA256'),
+  const [fireControlHash, setupHash, deploymentHash] = sharedManifestHashes;
+  const [exportSlot, returnSlot, asyncProofSlot] = await Promise.all([
     readableJsonObservation(exportSlotPath, 'export artifact slot'),
     readableJsonObservation(returnSlotPath, 'return artifact slot'),
     readableJsonObservation(asyncProofSlotPath, 'async proof slot'),
@@ -549,6 +650,7 @@ async function runConstructionPreflight({
     },
     live_chain_observations: liveChainObservations,
     computed_checks: computedChecks,
+    validation_trace: validationTrace,
     step_readiness: readiness,
     blockers: [...new Set(blockers)],
     first_blocker: blockers[0] ?? null,
@@ -708,49 +810,49 @@ test('A666 R4 offline Ethereum rehearsal drives the production rendered wallet j
     readJson(deploymentPath, 'deployment manifest'),
     verifyProductionGraph(),
   ]);
-  assert.equal(manifestCandidateRevision(setup), CANDIDATE_REVISION);
-  assert.equal(manifestCandidateRevision(deployment), CANDIDATE_REVISION);
-  assert.equal(manifestCandidateRevision(fireControl), CANDIDATE_REVISION);
+  // Mode-symmetric validation: the identical predicate registry runs on the
+  // same normalized inputs before any mode branch. Build identity comes from
+  // the pinned candidate git object, never from mutable worktree bytes.
+  const pinnedPackage = pinnedCandidatePackage(REPO_ROOT, CANDIDATE_REVISION);
+  const [fireControlHash, setupHash, deploymentHash] = await Promise.all([
+    manifestHashObservation(fireControlPath, 'POSTFIAT_R4_FIRE_CONTROL_MANIFEST_SHA256'),
+    manifestHashObservation(setupPath, 'POSTFIAT_R4_SETUP_MANIFEST_SHA256'),
+    manifestHashObservation(deploymentPath, 'POSTFIAT_R4_DEPLOYMENT_MANIFEST_SHA256'),
+  ]);
+  const normalizedInputs = {
+    fireControl,
+    setup,
+    deployment,
+    productionGraph,
+    pinnedPackage,
+    fireControlSha256Pin: String(process.env.POSTFIAT_R4_FIRE_CONTROL_MANIFEST_SHA256 || '').trim(),
+    fireControlSha256Actual: fireControlHash.actual_sha256,
+    setupSha256Pin: String(process.env.POSTFIAT_R4_SETUP_MANIFEST_SHA256 || '').trim(),
+    setupSha256Actual: setupHash.actual_sha256,
+    deploymentSha256Pin: String(process.env.POSTFIAT_R4_DEPLOYMENT_MANIFEST_SHA256 || '').trim(),
+    deploymentSha256Actual: deploymentHash.actual_sha256,
+    walletOrigin: origin.href,
+    proxyOrigin: proxyOrigin.href,
+    asyncBudgetMs,
+    exportSlotPath,
+    returnSlotPath,
+    reportPathAvailable: await stat(reportPath).then(() => false).catch(() => true),
+  };
+  const validation = runValidationRegistry(normalizedInputs);
+  assert.ok(validation.ok,
+    `validation registry refused before ${preflightOnly ? 'construction preflight' : 'official launch'}: ${validation.failed.join(', ')}`);
   if (preflightOnly) {
     const asyncProofSlotPath = requiredPath('POSTFIAT_R4_ASYNC_PROOF_SLOT');
     await runConstructionPreflight({
       walletOrigin: origin, proxyOrigin, fireControl, setup, deployment, productionGraph,
       fireControlPath, setupPath, deploymentPath,
       exportSlotPath, returnSlotPath, asyncProofSlotPath, proxyRestartPath, proxyPidPath, reportPath,
+      manifestHashes: [fireControlHash, setupHash, deploymentHash],
+      validationTrace: validation.trace,
     });
     return;
   }
   assert.equal(runContract.mode, 'official');
-  const launchContract = officialLaunchContract({
-    fireControlPath,
-    fireControlSha256: String(process.env.POSTFIAT_R4_FIRE_CONTROL_MANIFEST_SHA256 || '').trim(),
-    setupPath,
-    setupSha256: String(process.env.POSTFIAT_R4_SETUP_MANIFEST_SHA256 || '').trim(),
-    deploymentPath,
-    deploymentSha256: String(process.env.POSTFIAT_R4_DEPLOYMENT_MANIFEST_SHA256 || '').trim(),
-    walletOrigin: origin.href,
-    proxyOrigin: proxyOrigin.href,
-    asyncMaxWaitMs: asyncBudgetMs,
-    exportSlotPath,
-    returnSlotPath,
-    proxyRestartPath,
-    proxyPidPath,
-    reportPath,
-    fireControlReadyToFire: fireControl.ready_to_fire,
-  });
-  assert.ok(launchContract.ready_to_launch,
-    `official launch contract refused before browser launch: ${JSON.stringify(launchContract)}`);
-  const reportAlreadyExists = await stat(reportPath).then(() => true).catch(() => false);
-  assert.equal(reportAlreadyExists, false, 'official report path must be unique');
-  assertLoopbackManifest('setup manifest', setup);
-  assertLoopbackManifest('deployment manifest', deployment);
-  assert.equal(fireControl.ready_to_fire, true, 'fire-control must be computed GREEN before execution');
-  const executionManifestHashes = await Promise.all([
-    manifestHashObservation(fireControlPath, 'POSTFIAT_R4_FIRE_CONTROL_MANIFEST_SHA256'),
-    manifestHashObservation(setupPath, 'POSTFIAT_R4_SETUP_MANIFEST_SHA256'),
-    manifestHashObservation(deploymentPath, 'POSTFIAT_R4_DEPLOYMENT_MANIFEST_SHA256'),
-  ]);
-  assert.ok(executionManifestHashes.every(item => item.matches), 'full execution requires pinned manifest hashes');
 
   const passphrase = randomBytes(24).toString('hex');
   let seed = '';
@@ -771,12 +873,15 @@ test('A666 R4 offline Ethereum rehearsal drives the production rendered wallet j
     const expectedPackageJsonSha256 = String(
       setup.wallet?.package_json_sha256 ?? setup.wallet_package_json_sha256 ?? '',
     ).trim().toLowerCase();
-    let packageJsonSha256 = null;
-    if (expectedPackageJsonSha256) {
-      packageJsonSha256 = await sha256File(join(WALLET_ROOT, 'package.json'));
-      assert.equal(packageJsonSha256, expectedPackageJsonSha256,
-        'setup manifest wallet package.json sha256 does not match the served wallet build');
-    }
+    assert.match(expectedPackageJsonSha256, /^[0-9a-f]{64}$/,
+      'setup manifest must pin the wallet package.json sha256');
+    // Build identity is the pinned candidate git object; mutable worktree
+    // package bytes are never hashed for candidate identity (66a7171/d9871ce).
+    const packageJsonSha256 = pinnedPackage.sha256;
+    assert.equal(packageJsonSha256, expectedPackageJsonSha256,
+      'setup manifest wallet package.json sha256 does not match the pinned candidate package object');
+    assert.equal(expectedVersion, pinnedPackage.version,
+      'setup manifest wallet package version does not match the pinned candidate package object');
     const versionNode = page.locator('.pf-sidebar').getByText(`v${expectedVersion}`, { exact: true });
     await versionNode.waitFor({ state: 'visible' });
     const visibleVersion = String(await versionNode.textContent() || '').trim();
@@ -786,13 +891,14 @@ test('A666 R4 offline Ethereum rehearsal drives the production rendered wallet j
       visible_version: visibleVersion,
       expected_version: expectedVersion,
       package_json_sha256: packageJsonSha256,
-      expected_package_json_sha256: expectedPackageJsonSha256 || null,
+      expected_package_json_sha256: expectedPackageJsonSha256,
+      package_identity_source: `git show ${CANDIDATE_REVISION}:wallet-web/package.json`,
       candidate_revision: CANDIDATE_REVISION,
       production_import_graph: productionGraph,
     }, {
       served: response?.status() === 200,
       version_visible: visibleVersion.length > 0 && visibleVersion.includes(expectedVersion),
-      package_json_sha256_match: !expectedPackageJsonSha256 || packageJsonSha256 === expectedPackageJsonSha256,
+      package_json_sha256_match: packageJsonSha256 === expectedPackageJsonSha256,
       candidate_bound: manifestCandidateRevision(setup) === CANDIDATE_REVISION,
       production_graph: Object.values(productionGraph).every(Boolean),
     }));
@@ -1116,36 +1222,216 @@ test('A666 R4 fire-control input gate rejects missing wallet identity pins befor
   assert.ok(hashGate.missing_inputs.includes('wallet.package_json_sha256'));
 });
 
-test('TODO RED-FIRST: v3 build identity must hash pinned candidate package object, not current worktree bytes', {
-  todo: 'official v3 step 1 hashes WALLET_ROOT/package.json instead of candidate:wallet-web/package.json',
-}, async () => {
-  const { execFileSync } = await import('node:child_process');
-  const repoRoot = resolve(WALLET_ROOT, '..');
-  const setupPath = join(repoRoot, 'docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/setup-endpoints-manifest.json');
+test('A666 R4 v3 build identity hashes the pinned candidate package object, never worktree bytes (closes 66a7171/d9871ce)', async () => {
+  const setupPath = join(REPO_ROOT, 'docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/setup-endpoints-manifest.json');
   const setup = JSON.parse(await readFile(setupPath, 'utf8'));
   const candidateRevision = manifestCandidateRevision(setup);
-  const expectedPackageJsonSha256 = String(setup.wallet?.package_json_sha256 ?? '').trim().toLowerCase();
-
   assert.equal(candidateRevision, CANDIDATE_REVISION, 'setup must remain pinned to the v3 candidate revision');
-  assert.match(expectedPackageJsonSha256, /^[0-9a-f]{64}$/, 'setup must pin a package.json hash');
-  const pinnedCandidatePackage = execFileSync(
-    'git',
-    ['show', `${candidateRevision}:wallet-web/package.json`],
-    { cwd: repoRoot },
-  );
-  const pinnedCandidatePackageSha256 = createHash('sha256').update(pinnedCandidatePackage).digest('hex');
-  assert.equal(pinnedCandidatePackageSha256, expectedPackageJsonSha256,
-    'required behavior: setup hash must match the pinned candidate package object');
+
+  const pinned = pinnedCandidatePackage(REPO_ROOT, candidateRevision);
+  assert.equal(pinned.sha256, String(setup.wallet.package_json_sha256).trim().toLowerCase(),
+    'setup hash pin must equal the pinned candidate package object hash');
+  assert.equal(pinned.version, String(setup.wallet.package_version),
+    'setup version pin must equal the pinned candidate package object version');
 
   const worktreePackageSha256 = await sha256File(join(WALLET_ROOT, 'package.json'));
-  assert.notEqual(worktreePackageSha256, expectedPackageJsonSha256,
-    'RED fixture requires intentionally different current worktree package bytes');
+  assert.notEqual(worktreePackageSha256, pinned.sha256,
+    'the mutable worktree package bytes diverge from the pinned candidate object; hashing them is the v3 defect');
   const runnerSource = await readFile(fileURLToPath(import.meta.url), 'utf8');
-  assert.match(runnerSource,
-    /packageJsonSha256 = await sha256File\(join\(WALLET_ROOT, 'package\.json'\)\);/,
-    'current step-1 implementation must be the captured worktree-hash behavior');
-  assert.equal(worktreePackageSha256, expectedPackageJsonSha256,
-    'required behavior: build identity must hash candidate:wallet-web/package.json, not WALLET_ROOT/package.json');
+  const implementation = runnerSource.slice(0, runnerSource.indexOf('function syntheticOfficialInputs()'));
+  assert.equal(/sha256File\(join\(WALLET_ROOT, 'package\.json'\)\)/.test(implementation), false,
+    'no runner implementation path may hash mutable WALLET_ROOT/package.json for candidate identity');
+});
+
+function syntheticValidationFixture() {
+  // Committed synthetic loopback fixture data for the pure validation suite;
+  // no external env block is required.
+  return {
+    fireControl: { candidate_revision: CANDIDATE_REVISION, ready_to_fire: true },
+    setup: {
+      candidate_revision: CANDIDATE_REVISION,
+      wallet: {
+        origin_url: 'http://127.0.0.1:8080',
+        package_version: '0.1.2',
+        package_json_sha256: 'd'.repeat(64),
+      },
+    },
+    deployment: { candidate_revision: CANDIDATE_REVISION, rpc_url: 'http://127.0.0.1:31001' },
+    productionGraph: { import_graph_ok: true },
+    pinnedPackage: { revision: CANDIDATE_REVISION, version: '0.1.2', sha256: 'd'.repeat(64) },
+    fireControlSha256Pin: 'a'.repeat(64),
+    setupSha256Pin: 'b'.repeat(64),
+    deploymentSha256Pin: 'c'.repeat(64),
+    walletOrigin: 'http://127.0.0.1:8080/',
+    proxyOrigin: 'http://127.0.0.1:31021/',
+    exportSlotPath: '/synthetic/export-artifact-slot.json',
+    returnSlotPath: '/synthetic/return-artifact-slot.json',
+    reportPathAvailable: true,
+  };
+}
+
+function normalizeValidationInputs(mode, fixture) {
+  assert.ok(['construction', 'official'].includes(mode), `unknown mode ${mode}`);
+  return {
+    fireControl: fixture.fireControl,
+    setup: fixture.setup,
+    deployment: fixture.deployment,
+    productionGraph: fixture.productionGraph,
+    pinnedPackage: fixture.pinnedPackage,
+    fireControlSha256Pin: fixture.fireControlSha256Pin,
+    fireControlSha256Actual: fixture.fireControlSha256Pin,
+    setupSha256Pin: fixture.setupSha256Pin,
+    setupSha256Actual: fixture.setupSha256Pin,
+    deploymentSha256Pin: fixture.deploymentSha256Pin,
+    deploymentSha256Actual: fixture.deploymentSha256Pin,
+    walletOrigin: fixture.walletOrigin,
+    proxyOrigin: fixture.proxyOrigin,
+    asyncBudgetMs: mode === 'official' ? 3_600_000 : null,
+    exportSlotPath: fixture.exportSlotPath,
+    returnSlotPath: fixture.returnSlotPath,
+    reportPathAvailable: fixture.reportPathAvailable,
+  };
+}
+
+test('A666 R4 mode parity: construction and official execute the identical 18-predicate registry with identical traces', () => {
+  const fixture = syntheticValidationFixture();
+  const construction = runValidationRegistry(normalizeValidationInputs('construction', fixture));
+  const official = runValidationRegistry(normalizeValidationInputs('official', fixture));
+  assert.equal(construction.ok, true, `construction refused: ${construction.failed.join(', ')}`);
+  assert.equal(official.ok, true, `official refused: ${official.failed.join(', ')}`);
+  assert.equal(VALIDATION_PREDICATE_REGISTRY.length, 18);
+  assert.equal(construction.trace.length, 18);
+  assert.equal(official.trace.length, 18);
+  assert.deepEqual(official.trace, construction.trace,
+    'construction and official validation traces must have identical predicate id set, order, and results');
+  assert.equal(construction.official_journey_invocations, 0);
+  assert.equal(official.business_mutations, 0);
+});
+
+test('A666 R4 structural guard: official mode introduces no validation outside the shared registry', async () => {
+  const source = await readFile(fileURLToPath(import.meta.url), 'utf8');
+  const registryBlock = source.match(/const VALIDATION_PREDICATE_REGISTRY = Object\.freeze\(\[([\s\S]*?)\]\);/);
+  assert.ok(registryBlock, 'validation predicate registry must exist');
+  const ids = [...registryBlock[1].matchAll(/id: '([a-z0-9_]+)'/g)].map(match => match[1]);
+  assert.equal(ids.length, 18);
+  assert.equal(new Set(ids).size, ids.length, 'duplicate predicate ids');
+
+  const needle = 'runValidationRegistry' + '(normalizedInputs)';
+  const registryRun = source.indexOf(`const validation = ${needle};`);
+  assert.ok(registryRun > -1, 'the runner must execute the shared registry');
+  const modeBranch = source.indexOf('if (preflightOnly) {', registryRun);
+  assert.ok(modeBranch > registryRun,
+    'the shared registry must execute before the runner mode branch');
+  assert.equal(source.split(`const validation = ${needle};`).length - 1, 1,
+    'the runner must execute the registry exactly once');
+
+  const officialStart = source.indexOf("assert.equal(runContract.mode, 'official');");
+  const browserLaunch = source.indexOf('chromium.launchPersistentContext');
+  assert.ok(officialStart > -1 && browserLaunch > officialStart);
+  const officialPreLaunch = source.slice(source.indexOf(';', officialStart) + 1, browserLaunch);
+  assert.deepEqual(officialPreLaunch.match(/assert\./g) ?? [], [],
+    'official pre-launch validation outside the registry is forbidden');
+
+  const implementation = source.slice(0, source.indexOf('function syntheticOfficialInputs()'));
+  assert.equal(/sha256File\(join\(WALLET_ROOT, 'package\.json'\)\)/.test(implementation), false,
+    'mutable worktree package hashing is forbidden in the runner implementation');
+  const fixture = syntheticValidationFixture();
+  const traceIds = runValidationRegistry(normalizeValidationInputs('construction', fixture)).trace
+    .map(entry => entry.id);
+  assert.deepEqual(traceIds, ids, 'construction trace must cover every registry predicate in registry order');
+});
+
+test('A666 R4 build identity negatives refuse before invocation: nonexistent revision/object, wrong hash/version, worktree divergence', async () => {
+  assert.throws(() => pinnedCandidatePackage(REPO_ROOT, '0'.repeat(40)),
+    /Command failed|spawnSync|exit/i, 'nonexistent revision must refuse');
+  assert.throws(() => execFileSync('git', ['show', `${CANDIDATE_REVISION}:wallet-web/does-not-exist.json`], { cwd: REPO_ROOT }),
+    /Command failed|exit/i, 'nonexistent git object must refuse');
+
+  const fixture = syntheticValidationFixture();
+  const wrongHash = structuredClone(fixture);
+  wrongHash.setup.wallet.package_json_sha256 = '0'.repeat(64);
+  const hashResult = runValidationRegistry(normalizeValidationInputs('official', wrongHash));
+  assert.equal(hashResult.ok, false);
+  assert.ok(hashResult.failed.includes('wallet_package_json_sha256_consistent_with_pinned_object'));
+  assert.equal(hashResult.official_journey_invocations, 0);
+  assert.equal(hashResult.business_mutations, 0);
+
+  const wrongVersion = structuredClone(fixture);
+  wrongVersion.setup.wallet.package_version = '9.9.9';
+  const versionResult = runValidationRegistry(normalizeValidationInputs('official', wrongVersion));
+  assert.equal(versionResult.ok, false);
+  assert.ok(versionResult.failed.includes('wallet_package_version_consistent_with_pinned_object'));
+  assert.equal(versionResult.official_journey_invocations, 0);
+
+  // Mutable checkout divergence: the setup pin equals the (fake) current
+  // worktree hash but the pinned candidate object carries different bytes.
+  const diverged = structuredClone(fixture);
+  diverged.pinnedPackage = { ...fixture.pinnedPackage, sha256: 'e'.repeat(64) };
+  const divergedResult = runValidationRegistry(normalizeValidationInputs('official', diverged));
+  assert.equal(divergedResult.ok, false);
+  assert.ok(divergedResult.failed.includes('wallet_package_json_sha256_consistent_with_pinned_object'));
+  assert.equal(divergedResult.official_journey_invocations, 0);
+});
+
+test('A666 R4 construction official-readiness fixture proves the exact v3 official inputs before fire (no mutation)', async () => {
+  // The exact pass-1 v3 official inputs, by content hash from the v3
+  // failure record (d9871ce): fire-control e4b32973..., setup a73b957e...,
+  // deployment 24811b46....
+  const evRoot = join(REPO_ROOT, 'docs/evidence/a666-public-reserve-product-20260803/browser');
+  const [fireControl, setup, deployment] = await Promise.all([
+    readJson(join(evRoot, 'r4-pass1/journey-fire-control-preflight.json'), 'fire-control manifest'),
+    readJson(join(evRoot, 'r4-pass1/setup-endpoints-manifest.json'), 'setup manifest'),
+    readJson(join(evRoot, 'r4-construction/ethereum-contract-stage.json'), 'deployment manifest'),
+  ]);
+  assert.equal(await sha256File(join(evRoot, 'r4-pass1/journey-fire-control-preflight.json')),
+    'e4b3297356e0ec802e72a79dc533b42cee2994191a2d8b9d0f93135a04aed04e', 'fire-control input drifted from v3');
+  assert.equal(await sha256File(join(evRoot, 'r4-pass1/setup-endpoints-manifest.json')),
+    'a73b957e9f9f22e2f5c3915a3a3f702c589c733056facb93b7192f794ec50c49', 'setup input drifted from v3');
+  assert.equal(await sha256File(join(evRoot, 'r4-construction/ethereum-contract-stage.json')),
+    '24811b46b8dffbd9fbf0edaf2b0ce9b9545f7ad656d600abc259311274c09168', 'deployment input drifted from v3');
+  assert.equal(fireControl.ready_to_fire, true, 'readiness fixture requires computed GREEN fire control');
+
+  const readinessFixture = {
+    fireControl,
+    setup,
+    deployment,
+    productionGraph: { import_graph_ok: true },
+    pinnedPackage: pinnedCandidatePackage(REPO_ROOT, CANDIDATE_REVISION),
+    fireControlSha256Pin: 'e4b3297356e0ec802e72a79dc533b42cee2994191a2d8b9d0f93135a04aed04e',
+    setupSha256Pin: 'a73b957e9f9f22e2f5c3915a3a3f702c589c733056facb93b7192f794ec50c49',
+    deploymentSha256Pin: '24811b46b8dffbd9fbf0edaf2b0ce9b9545f7ad656d600abc259311274c09168',
+    walletOrigin: 'http://127.0.0.1:8080/',
+    proxyOrigin: 'http://127.0.0.1:31021/',
+    exportSlotPath: join(evRoot, 'r4-construction/export-artifact-slot.json'),
+    returnSlotPath: join(evRoot, 'r4-construction/return-artifact-slot.json'),
+    reportPathAvailable: true,
+  };
+  const construction = runValidationRegistry(normalizeValidationInputs('construction', readinessFixture));
+  const official = runValidationRegistry(normalizeValidationInputs('official', readinessFixture));
+  assert.equal(construction.ok, true, `readiness fixture refused in construction: ${construction.failed.join(', ')}`);
+  assert.equal(official.ok, true, `readiness fixture refused in official: ${official.failed.join(', ')}`);
+  assert.deepEqual(official.trace, construction.trace,
+    'readiness traces must be identical across modes');
+  assert.equal(construction.official_journey_invocations, 0);
+  assert.equal(construction.business_mutations, 0);
+
+  // Non-vacuity: the exact v3 step-1 inputs carry real wallet identity pins
+  // and the package-pin predicates bind them against the pinned git object.
+  assert.match(String(setup.wallet.package_version), /^\d+\.\d+\.\d+$/, 'readiness fixture must carry the version pin');
+  assert.match(String(setup.wallet.package_json_sha256), /^[0-9a-f]{64}$/, 'readiness fixture must carry the hash pin');
+  for (const id of ['wallet_package_version_consistent_with_pinned_object',
+    'wallet_package_json_sha256_consistent_with_pinned_object']) {
+    const entry = official.trace.find(item => item.id === id);
+    assert.equal(entry.ok, true, `${id} must be green on the exact v3 inputs`);
+    const flipped = structuredClone(readinessFixture);
+    flipped.setup = structuredClone(setup);
+    if (id.startsWith('wallet_package_version')) flipped.setup.wallet.package_version = '9.9.9';
+    else flipped.setup.wallet.package_json_sha256 = '0'.repeat(64);
+    const flippedResult = runValidationRegistry(normalizeValidationInputs('official', flipped));
+    assert.equal(flippedResult.ok, false, `${id} must refuse a flipped pin (non-vacuous)`);
+    assert.ok(flippedResult.failed.includes(id), `${id} must be the refusing predicate`);
+    assert.equal(flippedResult.official_journey_invocations, 0);
+  }
 });
 
 test('A666 R4 120-entry official input contract rejects every incomplete enforcement shape', async () => {
