@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+CANDIDATE_REVISION="39f7fae3191aa34c376ae1657650a9ec2444f421"
+CANDIDATE_WORKTREE="/tmp/a666-r4-successor-39f7fae"
+MAIN_WORKTREE="/home/postfiat/repos/a666-eth-fast-lane-combined-20260724"
+PRESERVED_ROOT="/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959"
+CONTROLLED_REPORT="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/controlled-lifecycle-report.json"
+CONTROLLED_REPORT_SHA256="f26f1cf65862362ac956c6dc6f1d961f52ff32a79838eb860849067f98f92075"
+PROVENANCE="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/candidate-proxy-provenance.json"
+NODE_BINARY="/tmp/a666-r4-candidate-target/release/postfiat-node"
+NODE_BINARY_SHA256="9339d1352969cbc449f4245e18c2f1b3763d5b896334335b5bfd894beff12c57"
+TOPOLOGY="$PRESERVED_ROOT/a666-public-successor-topology.json"
+EVIDENCE_DIR="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet"
+MANIFEST="$EVIDENCE_DIR/construction-fleet.json"
+PIDS_FILE="$EVIDENCE_DIR/construction-pids.json"
+ENDPOINTS_FILE="$EVIDENCE_DIR/construction-rpc-endpoints.json"
+CONTROL_REQUEST="$EVIDENCE_DIR/construction-teardown.request"
+LOG_DIR="/tmp/a666-r4-construction-fleet-logs"
+SUPERVISOR_PID_FILE="/tmp/a666-r4-construction-fleet-stage.pid"
+ACTION="${1:-stage}"
+children=()
+
+mkdir -p "$EVIDENCE_DIR" "$LOG_DIR"
+
+kill_children() {
+  local pid
+  for pid in "${children[@]}"; do kill -TERM "$pid" 2>/dev/null || true; done
+  for _ in {1..30}; do
+    local live=0
+    for pid in "${children[@]}"; do kill -0 "$pid" 2>/dev/null && live=$((live+1)) || true; done
+    [[ "$live" -eq 0 ]] && break
+    sleep 1
+  done
+  for pid in "${children[@]}"; do
+    kill -KILL "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+  done
+  children=()
+}
+
+on_exit() {
+  trap - EXIT ERR TERM INT
+  kill_children
+}
+trap on_exit EXIT ERR TERM INT
+
+validate_inputs() {
+  [[ "$(git -C "$CANDIDATE_WORKTREE" rev-parse HEAD)" == "$CANDIDATE_REVISION" ]]
+  [[ -z "$(git -C "$CANDIDATE_WORKTREE" status --porcelain --untracked-files=no)" ]]
+  [[ "$(sha256sum "$CONTROLLED_REPORT" | awk '{print $1}')" == "$CONTROLLED_REPORT_SHA256" ]]
+  jq -e --arg revision "$CANDIDATE_REVISION" '
+    .ok == true and .validator_count == 6
+    and .run.source_revision == $revision and .run.source_dirty == false
+    and .checkpoint_import.restored_height == 792
+    and .final_state.height == 826
+    and .final_state.all_six_equal == true
+    and .final_state.verify_state_all_six == true
+  ' "$CONTROLLED_REPORT" >/dev/null
+  jq -e --arg revision "$CANDIDATE_REVISION" --arg path "$NODE_BINARY" --arg hash "$NODE_BINARY_SHA256" '
+    .candidate.revision_exact == true and .candidate.revision_observed == $revision
+    and .node_binary.path == $path and .node_binary.sha256 == $hash
+    and .node_binary.present == true
+  ' "$PROVENANCE" >/dev/null
+  [[ -x "$NODE_BINARY" ]]
+  [[ "$(sha256sum "$NODE_BINARY" | awk '{print $1}')" == "$NODE_BINARY_SHA256" ]]
+  [[ -d "$PRESERVED_ROOT" && -s "$TOPOLOGY" ]]
+  jq -e '(.peers | length) == 6 and all(.peers[]; (.rpc_port|type)=="number")' "$TOPOLOGY" >/dev/null
+  for index in {0..5}; do
+    [[ -d "$PRESERVED_ROOT/validator-$index" ]]
+    [[ -s "$PRESERVED_ROOT/validator-$index/validator-$index.validator_keys.json" ]]
+  done
+}
+
+validate_inputs
+if [[ "$ACTION" == self-check ]]; then
+  exit 0
+fi
+[[ "$ACTION" == stage ]]
+[[ ! -e "$CONTROL_REQUEST" ]]
+printf '%s\n' "$$" > "$SUPERVISOR_PID_FILE"
+mapfile -t rpc_ports < <(jq -r '.peers | sort_by(.node_id)[] | .rpc_port' "$TOPOLOGY")
+[[ "${#rpc_ports[@]}" -eq 6 ]]
+
+for index in {0..5}; do
+  validator="validator-$index"
+  data_dir="$PRESERVED_ROOT/$validator"
+  key_file="$data_dir/$validator.validator_keys.json"
+  transport_ready="$PRESERVED_ROOT/$validator.transport.ready.json"
+  rpc_ready="$PRESERVED_ROOT/$validator.rpc.ready.json"
+  rpc_port="${rpc_ports[$index]}"
+  rm -f -- "$transport_ready" "$rpc_ready"
+  mkdir -p "$PRESERVED_ROOT/$validator.votes" "$PRESERVED_ROOT/$validator.rpc-spool" "$PRESERVED_ROOT/$validator.finality"
+
+  env \
+    POSTFIAT_TRANSPORT_VALIDATOR_READY_FILE="$transport_ready" \
+    POSTFIAT_PREWARM_SHIELDED_VERIFIER=1 \
+    POSTFIAT_PREWARM_ASSET_ORCHARD_SWAP_VERIFIER=1 \
+    POSTFIAT_PREWARM_ASSET_ORCHARD_PRIVATE_EGRESS_VERIFIER=1 \
+    "$NODE_BINARY" transport-validator-serve \
+      --unsafe-devnet-file-signer --unsafe-devnet-json-storage \
+      --data-dir "$data_dir" --topology "$TOPOLOGY" --key-file "$key_file" \
+      --vote-dir "$PRESERVED_ROOT/$validator.votes" --max-connections 100 --timeout-ms 90000 \
+      >"$LOG_DIR/$validator.transport.stdout.json" 2>"$LOG_DIR/$validator.transport.stderr.log" < /dev/null &
+  transport_pid="$!"
+  children+=("$transport_pid")
+
+  env \
+    POSTFIAT_PREWARM_SHIELDED_VERIFIER=1 \
+    POSTFIAT_PREWARM_ASSET_ORCHARD_SWAP_VERIFIER=1 \
+    POSTFIAT_PREWARM_ASSET_ORCHARD_PRIVATE_EGRESS_VERIFIER=1 \
+    "$NODE_BINARY" rpc-serve --unsafe-devnet-json-storage \
+      --data-dir "$data_dir" --spool-dir "$PRESERVED_ROOT/$validator.rpc-spool" \
+      --ready-file "$rpc_ready" --port "$rpc_port" --max-requests 10000 \
+      --timeout-ms 90000 --child-timeout-ms 90000 --allow-mempool-submit \
+      --allow-mempool-submit-finality --finality-topology "$TOPOLOGY" \
+      --finality-key-file "$key_file" --finality-artifact-root "$PRESERVED_ROOT/$validator.finality" \
+      --finality-timeout-ms 90000 --finality-send-retries 2 --finality-retry-backoff-ms 25 \
+      --finality-quorum-early-full-propagation --keep-alive \
+      >"$LOG_DIR/$validator.rpc.stdout.json" 2>"$LOG_DIR/$validator.rpc.stderr.log" < /dev/null &
+  rpc_pid="$!"
+  children+=("$rpc_pid")
+done
+
+processes='[]'
+for index in {0..5}; do
+  offset=$((index * 2))
+  transport_pid="${children[$offset]}"
+  rpc_pid="${children[$((offset + 1))]}"
+  processes="$(jq -c \
+    --argjson index "$index" \
+    --argjson transport_pid "$transport_pid" \
+    --argjson rpc_pid "$rpc_pid" \
+    --argjson rpc_port "${rpc_ports[$index]}" \
+    --arg transport_ready "$PRESERVED_ROOT/validator-$index.transport.ready.json" \
+    --arg rpc_ready "$PRESERVED_ROOT/validator-$index.rpc.ready.json" \
+    '. + [
+      {validator_index:$index,kind:"transport",pid:$transport_pid,rpc_port:null,ready_file:$transport_ready},
+      {validator_index:$index,kind:"rpc",pid:$rpc_pid,rpc_port:$rpc_port,ready_file:$rpc_ready}
+    ]' <<<"$processes")"
+done
+jq -n --arg schema "postfiat.a666.r4.construction-pids.v1" --arg root "$PRESERVED_ROOT" --argjson processes "$processes" \
+  '{schema:$schema,preserved_root:$root,processes:$processes}' > "$PIDS_FILE"
+
+ready_count=0
+live_count=0
+deadline=$((SECONDS + 90))
+while ((SECONDS < deadline)); do
+  ready_count=0
+  live_count=0
+  while IFS=$'\t' read -r pid ready; do
+    [[ -s "$ready" ]] && ready_count=$((ready_count + 1))
+    kill -0 "$pid" 2>/dev/null && live_count=$((live_count + 1)) || true
+  done < <(jq -r '.processes[] | [.pid,.ready_file] | @tsv' "$PIDS_FILE")
+  [[ "$ready_count" -eq 12 && "$live_count" -eq 12 ]] && break
+  sleep 1
+done
+[[ "$ready_count" -eq 12 && "$live_count" -eq 12 ]]
+
+python3 - "$CONTROLLED_REPORT" "$ENDPOINTS_FILE" "${rpc_ports[@]}" <<'PY'
+import json, socket, sys
+report=json.load(open(sys.argv[1], encoding='utf-8'))
+expected=report['final_state']
+rows=[]
+for index, port_text in enumerate(sys.argv[3:]):
+    port=int(port_text)
+    request={"version":"postfiat-local-rpc-v1","id":f"r4-construction-{index}","method":"status","params":{}}
+    with socket.create_connection(('127.0.0.1',port),timeout=10) as connection:
+        connection.sendall((json.dumps(request,separators=(',',':'))+'\n').encode())
+        response=json.loads(connection.makefile('rb').readline())
+    value=response.get('result',{})
+    observed=(value.get('block_height'),value.get('block_tip_hash'),value.get('state_root'))
+    pinned=(expected['height'],expected['tip'],expected['state_root'])
+    if response.get('ok') is not True or observed != pinned:
+        raise SystemExit(f'validator {index} construction status mismatch')
+    rows.append({"validator_index":index,"host":"127.0.0.1","rpc_port":port,"block_height":observed[0],"block_tip_hash":observed[1],"state_root":observed[2],"equal_to_controlled_report":True})
+with open(sys.argv[2],'w',encoding='utf-8') as stream:
+    json.dump({"schema":"postfiat.a666.r4.construction-rpc-endpoints.v1","endpoints":rows,"all_six_equal":True},stream,indent=2)
+    stream.write('\n')
+PY
+
+binary_hash="$(sha256sum "$NODE_BINARY" | awk '{print $1}')"
+report_hash="$(sha256sum "$CONTROLLED_REPORT" | awk '{print $1}')"
+jq -n \
+  --arg schema "postfiat.a666.r4.construction-fleet.v1" \
+  --arg prior_pid_cause "failed service restoration returned nonzero; setup ERR cleanup then intentionally terminated and waited for all 12 rehearsal children; the services did not crash and were not runtime-killed" \
+  --arg revision "$CANDIDATE_REVISION" \
+  --arg binary "$NODE_BINARY" \
+  --arg binary_hash "$binary_hash" \
+  --arg report "$CONTROLLED_REPORT" \
+  --arg report_hash "$report_hash" \
+  --arg root "$PRESERVED_ROOT" \
+  --arg pids "$PIDS_FILE" \
+  --arg endpoints "$ENDPOINTS_FILE" \
+  --arg request "$CONTROL_REQUEST" \
+  --argjson live_count "$live_count" \
+  --argjson ready_count "$ready_count" \
+  --slurpfile rpc "$ENDPOINTS_FILE" '
+  {
+    schema:$schema,
+    prior_pid_cause:$prior_pid_cause,
+    candidate:{revision:$revision,binary_path:$binary,binary_sha256:$binary_hash},
+    controlled_report:{path:$report,sha256:$report_hash,final_height:826},
+    preserved_root:$root,
+    pid_manifest:$pids,
+    rpc_endpoints:$endpoints,
+    teardown_request:$request,
+    checks:{input_hashes:true,processes_live:($live_count==12),ready_files:($ready_count==12),six_way_equal:($rpc[0].all_six_equal==true),stakehub_interaction:false,business_operations_submitted:0},
+    construction_ready:($live_count==12 and $ready_count==12 and $rpc[0].all_six_equal==true),
+    ready_for_one_shot_pass_1:false
+  }' > "$MANIFEST"
+jq -e '.construction_ready == true and .ready_for_one_shot_pass_1 == false' "$MANIFEST" >/dev/null
+
+while true; do
+  live_count=0
+  for pid in "${children[@]}"; do kill -0 "$pid" 2>/dev/null && live_count=$((live_count + 1)) || true; done
+  [[ "$live_count" -eq 12 ]]
+  if [[ -f "$CONTROL_REQUEST" ]]; then
+    request="$(head -n 1 "$CONTROL_REQUEST")"
+    [[ "$request" == teardown ]]
+    rm -f -- "$CONTROL_REQUEST"
+    exit 0
+  fi
+  sleep 5
+done
