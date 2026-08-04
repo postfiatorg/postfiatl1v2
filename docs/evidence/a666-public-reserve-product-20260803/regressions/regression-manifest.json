@@ -27,6 +27,27 @@
       "corrective_commit": "4d92a935b8105e2d66c5c989233bff23899772fc",
       "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar02-tests.txt",
       "enforcement_status": "ci_enforced"
+    },
+    {
+      "id": "HARNESS-02",
+      "name": "overbroad_filesystem_search_in_credential_bearing_areas_leaks_values_into_transcripts",
+      "recurrence_count": 2,
+      "incidents": [
+        "TRANSCRIPT-CREDENTIAL-INCIDENT-01",
+        "TRANSCRIPT-CREDENTIAL-INCIDENT-02"
+      ],
+      "binding_corrections": {
+        "trolls_execute_filesystem_searches": 0,
+        "all_diagnostics_assigned_to_orcs": true,
+        "every_brief_specifies_a_scoped_named_directory_command": true,
+        "outside_repo_search_excludes": [
+          "--glob '!*key*'",
+          "--glob '!*.pem'"
+        ],
+        "credential_class_value_in_output_invalidates_increment_immediately": true
+      },
+      "evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/transcript-credential-leak-incidents.json",
+      "enforcement_status": "binding_process_correction"
     }
   ],
   "budget_outliers": [
