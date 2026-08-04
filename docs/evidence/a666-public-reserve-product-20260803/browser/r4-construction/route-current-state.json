@@ -1,0 +1,76 @@
+{
+  "schema": "postfiat.a666.r4.route-current-state.v1",
+  "accepted": true,
+  "observed_utc": "2026-08-04T20:19:19Z",
+  "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+  "bindings": {
+    "accepted_fleet_artifact": {
+      "path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-fleet.json",
+      "commit": "ee23d58822e89df5a24a10ecea42ed0bd985653a",
+      "git_blob": "286655938d7c3020d634cce4192ce9f8816145fa"
+    },
+    "controlled_report_sha256": "c2fb973f284d92cf3b866c4abe86aca237f8e4bd753cbf03075ab71702810cf2",
+    "path_b_witness_stage_commit": "115ebc53b609cfc7e6b71b3ad3646cc2705461e1",
+    "path_b_witness_stage_git_blob": "46918126bb7d1e2804d7e39fba285207f8574581"
+  },
+  "query": {
+    "protocol": "postfiat-local-rpc-v1",
+    "methods": [
+      "status",
+      "navcoin_bridge_supply_status"
+    ],
+    "route_id": "pftl-a666-r4-offline-rehearsal-v1",
+    "read_only": true,
+    "endpoints": [
+      "127.0.0.1:31001",
+      "127.0.0.1:31003",
+      "127.0.0.1:31005",
+      "127.0.0.1:31007",
+      "127.0.0.1:31009",
+      "127.0.0.1:31011"
+    ],
+    "response_count": 6
+  },
+  "six_rpc_tuple": {
+    "equal": true,
+    "height": 831,
+    "block_tip_hash": "ed8dacf6722a082ba753a04ce86c125ed7331f45057a258d1087509e966df45177eb6711fdd801a7125573866b3d56b2",
+    "state_root": "3840a383378c8f287677d12efb940af7d8a1e656a37651cf52e6360dd8ab305e8736c1e7252513e09293c517727c8ee1"
+  },
+  "six_rpc_route": {
+    "equal": true,
+    "route_id": "pftl-a666-r4-offline-rehearsal-v1",
+    "route_epoch": 2,
+    "policy_epoch": 2,
+    "live_value_enabled": true,
+    "paused": false,
+    "invariant_holds": true,
+    "route_config_digest": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+    "policy_hash": "5dcc28ea82872d05716dbb94af480f6dd1355dde8a931633a01dfdec309c4bbd5e5ee16e104afba75913eb0100123044"
+  },
+  "observations": [
+    {"endpoint": "127.0.0.1:31001", "tuple_matches": true, "route_matches": true},
+    {"endpoint": "127.0.0.1:31003", "tuple_matches": true, "route_matches": true},
+    {"endpoint": "127.0.0.1:31005", "tuple_matches": true, "route_matches": true},
+    {"endpoint": "127.0.0.1:31007", "tuple_matches": true, "route_matches": true},
+    {"endpoint": "127.0.0.1:31009", "tuple_matches": true, "route_matches": true},
+    {"endpoint": "127.0.0.1:31011", "tuple_matches": true, "route_matches": true}
+  ],
+  "checks": {
+    "candidate_revision_exact": true,
+    "candidate_tracked_dirty_count_zero": true,
+    "six_responses": true,
+    "six_tuple_equal": true,
+    "six_route_equal": true,
+    "tuple_exact": true,
+    "route_exact": true,
+    "loopback_only": true,
+    "read_only": true
+  },
+  "activation_submitted": false,
+  "business_operations": 0,
+  "loopback_only": true,
+  "stakehub_interaction": false,
+  "live_chain": false,
+  "first_blocker": null
+}
