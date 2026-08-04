@@ -1,0 +1,78 @@
+{
+  "schema": "postfiat.a666.r4.fresh-fleet-staging.v1",
+  "state": "ready",
+  "retryable_staging": true,
+  "official_journey_fired": false,
+  "candidate": {
+    "revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+    "node_binary": "/tmp/a666-r4-candidate-target/release/postfiat-node",
+    "node_binary_sha256": "9339d1352969cbc449f4245e18c2f1b3763d5b896334335b5bfd894beff12c57",
+    "exact": true
+  },
+  "lifecycle": {
+    "test": "a666_public_successor_lifecycle_from_signed_checkpoint",
+    "matched_count": 1,
+    "passed_count": 1,
+    "failed_count": 0,
+    "exit_code": 0,
+    "wall_runtime_ms": 1110613,
+    "test_runtime_seconds": 999.49,
+    "report_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/controlled-lifecycle-report-20260804.json",
+    "report_sha256": "c2fb973f284d92cf3b866c4abe86aca237f8e4bd753cbf03075ab71702810cf2",
+    "transcript_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/checkpoint-lifecycle-transcript-20260804.txt",
+    "transcript_sha256": "64db35424b84b5da191087a5e1232b38ec40b9265dbdd3da8386b8d9eefe9c0a",
+    "command": "cargo test --locked --release -p postfiat-node --test atomic_swap_local_six a666_public_successor_lifecycle_from_signed_checkpoint -- --ignored --exact --nocapture"
+  },
+  "checkpoint": {
+    "directory": "/home/postfiat/.pft/public-reserve-qualification/20260803-pre-migration-checkpoint",
+    "manifest_sha256": "2e87fbda39b60b78e6003adf53624066974a9dea6b5a8bf0f1a851a935b1cd0b",
+    "restored_height": 792
+  },
+  "post_rollback": {
+    "preserved_root": "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349",
+    "height": 826,
+    "tip": "63f81fb5f56acc0b9eddd0eaf068f65feaf1d28169035c9de096e4b7cd6888836aa85fedeaa25d1dd42d07a46e8a9369",
+    "state_root": "ec2abe157aeb153efd9ca3d9642307edf63eac975d2103921d92e33b6c64f3f44acf9c33b84948de6eb54305ba44e363",
+    "route_epoch": 4,
+    "policy_epoch": 4,
+    "live_value_enabled": false,
+    "paused": false,
+    "six_way_equal": true
+  },
+  "fleet": {
+    "supervisor_pid": 1933188,
+    "children_live": 12,
+    "ready_files": 12,
+    "validator_count": 6,
+    "loopback_only": true,
+    "six_way_equal": true,
+    "height": 826,
+    "process_pids": [
+      1933223,
+      1933224,
+      1933227,
+      1933228,
+      1933231,
+      1933232,
+      1933235,
+      1933236,
+      1933239,
+      1933240,
+      1933243,
+      1933244
+    ]
+  },
+  "checks": {
+    "lifecycle_one_of_one_green": true,
+    "checkpoint_hash_pinned": true,
+    "candidate_revision_exact": true,
+    "post_rollback_route_inactive_epoch_4": true,
+    "fleet_12_live": true,
+    "fleet_six_way_equal_height_826": true,
+    "credential_values_absent": true,
+    "stakehub_untouched": true,
+    "business_operations_outside_controlled_lifecycle": 0
+  },
+  "stakehub_interaction": false,
+  "ready": true
+}

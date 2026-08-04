@@ -1,65 +1,28 @@
 {
   "schema": "postfiat.a666.r4.construction-fleet.v1",
-  "construction_ready": false,
-  "ready_for_one_shot_pass_1": false,
-  "ready_for_d_runner": false,
-  "first_blocker": "preserved_root_not_post_rollback_height_827",
-  "attempt": {
-    "command": "scripts/a666-r4-construction-fleet-stage stage",
-    "started_at_utc": "2026-08-04T08:09:18Z",
-    "ended_at_utc": "2026-08-04T08:09:20Z",
-    "runtime_ms": 1076,
-    "exit_code": 1,
-    "final_line": "validator 0 construction status mismatch"
-  },
+  "prior_pid_cause": "failed service restoration returned nonzero; setup ERR cleanup then intentionally terminated and waited for all 12 rehearsal children; the services did not crash and were not runtime-killed",
   "candidate": {
     "revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
     "binary_path": "/tmp/a666-r4-candidate-target/release/postfiat-node",
-    "binary_sha256": "9339d1352969cbc449f4245e18c2f1b3763d5b896334335b5bfd894beff12c57",
-    "hash_verified": true
+    "binary_sha256": "9339d1352969cbc449f4245e18c2f1b3763d5b896334335b5bfd894beff12c57"
   },
   "controlled_report": {
-    "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/controlled-lifecycle-report.json",
-    "sha256": "f26f1cf65862362ac956c6dc6f1d961f52ff32a79838eb860849067f98f92075",
-    "required_post_rollback_height": 826
+    "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/controlled-lifecycle-report-20260804.json",
+    "sha256": "c2fb973f284d92cf3b866c4abe86aca237f8e4bd753cbf03075ab71702810cf2",
+    "final_height": 826
   },
-  "preserved_root": {
-    "path": "/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959",
-    "observed_persisted_height": 827,
-    "observed_route_epoch": 5,
-    "observed_policy_epoch": 5,
-    "observed_route_live": true,
-    "source_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/route-activation.json",
-    "matches_required_post_rollback_state": false
-  },
-  "processes": {
-    "supervisor_pid": 1817385,
-    "children_launched": 12,
-    "ready_files_observed": 12,
-    "children_live_after_failure_cleanup": 0,
-    "all_attempt_children_stopped": true,
-    "pid_manifest": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-pids.json"
-  },
-  "disk": {
-    "free_gb": 185,
-    "minimum_required_gb": 50,
-    "sufficient": true
-  },
-  "downstream": {
-    "route_activation": "skipped_existing_route_already_live_resubmission_forbidden",
-    "candidate_proxy": "skipped_upstream_fleet_red",
-    "private_dependencies": "skipped_upstream_fleet_red",
-    "pftl_swapd": "skipped_upstream_fleet_red"
-  },
+  "preserved_root": "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349",
+  "pid_manifest": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-pids.json",
+  "rpc_endpoints": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-rpc-endpoints.json",
+  "teardown_request": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-teardown.request",
   "checks": {
-    "candidate_revision_exact": true,
-    "candidate_binary_hash": true,
-    "controlled_checkpoint_identity": true,
-    "loopback_only": true,
-    "post_rollback_state_required": false,
-    "six_way_controlled_tuple": false,
-    "business_operations_submitted": 0,
-    "stakehub_interaction": false
+    "input_hashes": true,
+    "processes_live": true,
+    "ready_files": true,
+    "six_way_equal": true,
+    "stakehub_interaction": false,
+    "business_operations_submitted": 0
   },
-  "required_next_action": "provide an authorized clean post-rollback height-826 preserved root; never resubmit activation against the current height-827 live route"
+  "construction_ready": true,
+  "ready_for_one_shot_pass_1": false
 }
