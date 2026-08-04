@@ -204,6 +204,9 @@
         "run_id": null
       }
     },
+    "pftl_validation": {
+      "ok": true
+    },
     "d_runner": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/journey-runner-dry-run.json",
       "exists": false,
@@ -399,7 +402,7 @@
     },
     {
       "id": "pftl_private_swap_ready",
-      "ok": false,
+      "ok": true,
       "input": "pftl"
     },
     {
@@ -440,7 +443,6 @@
   ],
   "check_count": 18,
   "blocker_names": [
-    "pftl_private_swap_ready",
     "d_runner_steps_1_6_9_10_dry_run",
     "stakehub_official_absent",
     "no_live_chain_dependency"
