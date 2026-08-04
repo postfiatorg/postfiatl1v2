@@ -214,6 +214,16 @@ Each step requires prior-step evidence plus principal confirmation:
 
 ## R10 — StakeHub deprecation **(gate: FROZEN)**
 
+> **Standing Sauron constraint:** R10 means decoupling StakeHub as proof/runtime
+> authority for the layer1v2 public stack only. StakeHub remains in use and must
+> never be deleted, decommissioned, uninstalled, or have funds, balances, keys,
+> software, services, or data touched or emptied. R4 may temporarily stop its
+> user units using the mode-600 restart inventory, but teardown must restart the
+> inventoried units and prove the restarted unit count matches the inventory.
+> Any StakeHub action beyond unit start/stop requires Sauron's explicit sign-off.
+> CI identifier rejection is scoped to L1v2 runtime paths, never external
+> StakeHub tooling on the host.
+
 - [ ] StakeHub proof/runtime authority removed from the public stack
 - [ ] Continued operation proven without it
 - [ ] `stakehub_deprecated=true` published, computed from checks

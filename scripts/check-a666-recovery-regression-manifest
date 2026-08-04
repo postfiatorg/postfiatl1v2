@@ -71,6 +71,24 @@ def validate_manifest(repo: Path, manifest: dict[str, Any]) -> list[dict[str, An
     require(policy.get("zero_match_with_exit_zero_is_failure") is True,
             "zero-match exit-zero policy must fail closed")
 
+    stakehub_scope = manifest.get("stakehub_scope_constraint")
+    require(isinstance(stakehub_scope, dict),
+            "stakehub_scope_constraint must be an object")
+    for field in (
+        "authority_deprecation_only",
+        "delete_decommission_uninstall_prohibited",
+        "funds_balances_keys_data_untouched",
+        "r4_temporary_unit_stop_allowed",
+        "r4_teardown_restart_required",
+        "r4_restart_unit_count_must_match_inventory",
+        "actions_beyond_unit_start_stop_require_sauron",
+    ):
+        require(stakehub_scope.get(field) is True,
+                f"stakehub scope constraint {field} must be true")
+    require(stakehub_scope.get("ci_identifier_scope")
+            == "layer1v2 public runtime paths only; external StakeHub tooling is excluded",
+            "StakeHub identifier CI scope must remain limited to L1v2 runtime")
+
     successor = manifest.get("successor_candidate_qualification")
     require(isinstance(successor, dict),
             "successor_candidate_qualification must be an object")

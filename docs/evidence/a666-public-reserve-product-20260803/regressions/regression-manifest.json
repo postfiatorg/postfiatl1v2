@@ -520,6 +520,16 @@
       "evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/step10-public-receipt-green.txt"
     }
   ],
+  "stakehub_scope_constraint": {
+    "authority_deprecation_only": true,
+    "delete_decommission_uninstall_prohibited": true,
+    "funds_balances_keys_data_untouched": true,
+    "r4_temporary_unit_stop_allowed": true,
+    "r4_teardown_restart_required": true,
+    "r4_restart_unit_count_must_match_inventory": true,
+    "ci_identifier_scope": "layer1v2 public runtime paths only; external StakeHub tooling is excluded",
+    "actions_beyond_unit_start_stop_require_sauron": true
+  },
   "successor_candidate_qualification": {
     "status": "passed",
     "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
