@@ -23,5 +23,9 @@
   "config_actions": 0,
   "software_actions": 0,
   "credentials_included": false,
-  "teardown_contract": "after the official run passes, fails, or freezes, action restart must restore exactly the inventory active set (stakehub-private-swap-dashboard.service only) and prove active count==1 with name equality; the only exception is an explicit active-investigation freeze"
+  "teardown_contract": "after the official run passes, fails, or freezes, action restart must restore exactly the inventory active set (stakehub-private-swap-dashboard.service only) and prove active count==1 with name equality; the only exception is an explicit active-investigation freeze",
+  "pre_fire_aggregate_commit": "be1bfcd",
+  "official_run_id": "a666-r4-official-journey-pass1-20260804-v2",
+  "official_run_note": "pass #1 re-fire after fast-loop classification contract fix (8e6206a) and return slot closeout (f54645e)",
+  "sauron_constraint": "temporary stop only; never delete, decommission, or modify config/data/funds/keys/software; mandatory restart after pass outcome from inventory 2e8afd9"
 }
