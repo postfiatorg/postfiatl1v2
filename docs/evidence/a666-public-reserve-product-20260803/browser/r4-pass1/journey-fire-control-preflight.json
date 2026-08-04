@@ -161,7 +161,7 @@
       }
     },
     "current_route_validation": {
-      "ok": true,
+      "ok": false,
       "queried_endpoint_count": 6,
       "base_evidence_valid": true
     },
@@ -190,7 +190,7 @@
       }
     },
     "dependencies_validation": {
-      "ok": true
+      "ok": false
     },
     "pftl": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/private-swap-stage.json",
@@ -205,7 +205,7 @@
       }
     },
     "pftl_validation": {
-      "ok": true
+      "ok": false
     },
     "d_runner": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/journey-runner-dry-run.json",
@@ -280,7 +280,7 @@
       }
     },
     "stakehub_absence_validation": {
-      "ok": true
+      "ok": false
     },
     "pre_prove_binding": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/pre-prove-binding-check.json",
@@ -321,7 +321,9 @@
     },
     "stakehub_official_scan": {
       "command_succeeded": true,
-      "active_units": []
+      "active_units": [
+        "stakehub-private-swap-dashboard.service"
+      ]
     }
   },
   "proof_artifact_consumption_contract": {
@@ -406,7 +408,7 @@
     },
     {
       "id": "fresh_route_live",
-      "ok": true,
+      "ok": false,
       "input": "fresh_route"
     },
     {
@@ -416,12 +418,12 @@
     },
     {
       "id": "private_dependencies_ready",
-      "ok": true,
+      "ok": false,
       "input": "dependencies"
     },
     {
       "id": "pftl_private_swap_ready",
-      "ok": true,
+      "ok": false,
       "input": "pftl"
     },
     {
@@ -441,7 +443,7 @@
     },
     {
       "id": "stakehub_official_absent",
-      "ok": true,
+      "ok": false,
       "input": "stakehub_official_scan"
     },
     {
@@ -461,8 +463,13 @@
     }
   ],
   "check_count": 18,
-  "blocker_names": [],
-  "ready_to_fire": true,
+  "blocker_names": [
+    "fresh_route_live",
+    "private_dependencies_ready",
+    "pftl_private_swap_ready",
+    "stakehub_official_absent"
+  ],
+  "ready_to_fire": false,
   "ready_to_fire_computation": "all checks[].ok values must be true",
   "mutations_executed": false
 }
