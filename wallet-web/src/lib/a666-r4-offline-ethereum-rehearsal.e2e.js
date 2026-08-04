@@ -768,6 +768,15 @@ test('A666 R4 offline Ethereum rehearsal drives the production rendered wallet j
 
     const expectedVersion = String(setup.wallet?.package_version ?? setup.wallet_package_version ?? '');
     assert.match(expectedVersion, /^\d+\.\d+\.\d+$/, 'setup manifest must pin the wallet package version');
+    const expectedPackageJsonSha256 = String(
+      setup.wallet?.package_json_sha256 ?? setup.wallet_package_json_sha256 ?? '',
+    ).trim().toLowerCase();
+    let packageJsonSha256 = null;
+    if (expectedPackageJsonSha256) {
+      packageJsonSha256 = await sha256File(join(WALLET_ROOT, 'package.json'));
+      assert.equal(packageJsonSha256, expectedPackageJsonSha256,
+        'setup manifest wallet package.json sha256 does not match the served wallet build');
+    }
     const versionNode = page.locator('.pf-sidebar').getByText(`v${expectedVersion}`, { exact: true });
     await versionNode.waitFor({ state: 'visible' });
     const visibleVersion = String(await versionNode.textContent() || '').trim();
@@ -776,12 +785,15 @@ test('A666 R4 offline Ethereum rehearsal drives the production rendered wallet j
       response_status: response?.status(),
       visible_version: visibleVersion,
       expected_version: expectedVersion,
+      package_json_sha256: packageJsonSha256,
+      expected_package_json_sha256: expectedPackageJsonSha256 || null,
       candidate_revision: CANDIDATE_REVISION,
       production_import_graph: productionGraph,
     }, {
       served: response?.status() === 200,
       version_visible: visibleVersion.length > 0 && visibleVersion.includes(expectedVersion),
-      candidate_bound: (setup.candidate?.revision ?? setup.candidate_revision) === CANDIDATE_REVISION,
+      package_json_sha256_match: !expectedPackageJsonSha256 || packageJsonSha256 === expectedPackageJsonSha256,
+      candidate_bound: manifestCandidateRevision(setup) === CANDIDATE_REVISION,
       production_graph: Object.values(productionGraph).every(Boolean),
     }));
 
@@ -1002,6 +1014,20 @@ test('A666 R4 official launch contract refuses with one required input missing (
 test('A666 R4 official launch contract accepts a complete synthetic input map (ready_to_launch, no Chromium)', () => {
   const contract = officialLaunchContract(syntheticOfficialInputs());
   assert.deepEqual(contract, { ready_to_launch: true, missing_inputs: [], failed_checks: [] });
+});
+
+test('A666 R4 official input contract matches the runner accessor surface exactly (strict 1:1)', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const repoRoot = resolve(WALLET_ROOT, '..');
+  const output = execFileSync(
+    join(repoRoot, 'scripts/a666-r4-official-input-contract-extract'),
+    ['check'],
+    { cwd: repoRoot, encoding: 'utf8' },
+  );
+  const result = JSON.parse(output);
+  assert.equal(result.ok, true, `input contract drift: ${output}`);
+  assert.equal(result.mismatch_count, 0);
+  assert.ok(result.accessor_count > 0);
 });
 
 function setupProvenanceGate(setup) {

@@ -1,0 +1,51 @@
+{
+  "artifact": "a666-r4-official-input-contract-extraction",
+  "generated_utc": "2026-08-04",
+  "extractor": "scripts/a666-r4-official-input-contract-extract",
+  "runner": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+  "contract_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-input-contract.json",
+  "contract_sha256": "ff4ea13e8c1f3a11bf70af8b19ecf8a3af0ac044869f3dbfef0b7e64ab59dfc9",
+  "accessor_total": 120,
+  "counts_by_access_kind": {
+    "endpoint_read": 2,
+    "env": 17,
+    "file_read": 12,
+    "manifest_field": 23,
+    "runtime_observe": 4,
+    "runtime_slot_read": 17,
+    "slot_field": 39,
+    "slot_state": 6
+  },
+  "consuming_step_coverage": {
+    "1": 33,
+    "10": 30,
+    "2": 23,
+    "3": 24,
+    "4": 24,
+    "5": 25,
+    "6": 26,
+    "7": 52,
+    "8": 49,
+    "9": 27,
+    "pre-launch": 9,
+    "preflight": 94
+  },
+  "commands": [
+    {
+      "cmd": "scripts/a666-r4-official-input-contract-extract check",
+      "exit": 0,
+      "stdout": "{\"ok\": true, \"accessor_count\": 120, \"mismatch_count\": 0}"
+    },
+    {
+      "cmd": "node --check wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+      "exit": 0
+    },
+    {
+      "cmd": "npm run test:r4-construction (POSTFIAT_R4_PREFLIGHT_ONLY=1, standard manifest/slot env block)",
+      "exit": 0,
+      "summary": "tests 6, pass 5, todo 1 (RED-first aggregator vector, expected), fail 0"
+    }
+  ],
+  "completeness_test": "runner test 'A666 R4 official input contract matches the runner accessor surface exactly (strict 1:1)' executes extractor check mode and asserts ok:true / mismatch_count:0",
+  "notes": "Extraction is read-only and static. currently_enforced_in_fire_control=false for the 4 wallet package version/hash entries (aggregator gate hole, RED vector 884e6ed)."
+}

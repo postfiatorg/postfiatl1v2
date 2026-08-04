@@ -1,0 +1,241 @@
+#!/usr/bin/env python3
+"""Static extractor for the A666 R4 official runner input contract.
+
+Modes:
+  emit   print the extracted accessor records (JSON list)
+  check  compare the extracted accessor id set 1:1 against the committed
+         contract JSON and validate entry quality; exit 0 on exact match
+
+Read-only: never mutates the runner, the contract, or any evidence.
+"""
+import json
+import re
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+RUNNER = REPO / "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js"
+CONTRACT = REPO / "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-input-contract.json"
+
+ROOTS = ("fireControl", "setup", "deployment", "exportSlot", "returnSlot",
+         "asyncProofSlot", "exportArtifact", "returnArtifact", "publicReceipt")
+
+SLOT_ACCEPTED_FIELDS = ["status", "artifact_sha256", "receipt_identity",
+                        "observed_chain_state.finalized"]
+POLL_SLOT_FIELDS = ["status", "artifact_sha256", "receipt_identity", "artifact_path",
+                    "observed_chain_state.height", "observed_chain_state.tip",
+                    "observed_chain_state.state_root", "observed_chain_state.finalized"]
+CANDIDATE_REVISION_PATHS = ["candidate.revision", "candidate_revision",
+                            "aggregation.current_binding.candidate_revision",
+                            "bindings.candidate_revision"]
+
+
+def emit():
+    text = RUNNER.read_text()
+    accessors = {}
+
+    def add(accessor_id, kind, accessor, source, soft=False):
+        if accessor_id in accessors:
+            if soft:
+                return
+            raise SystemExit(f"duplicate accessor id emitted: {accessor_id}")
+        accessors[accessor_id] = {"id": accessor_id, "access_kind": kind,
+                                  "accessor": accessor, "source": source}
+
+    # --- environment variables -------------------------------------------------
+    for name in sorted(set(re.findall(r"POSTFIAT_R4_[A-Z0-9_]+", text))):
+        call = f"process.env.{name}"
+        if re.search(rf"requiredPath\('{name}'\)", text):
+            call = f"requiredPath('{name}')"
+        elif re.search(rf"requiredLoopbackOrigin\('{name}'", text):
+            call = f"requiredLoopbackOrigin('{name}')"
+        elif re.search(rf"manifestHashObservation\([^\n]*'{name}'\)", text):
+            call = f"manifestHashObservation('{name}')"
+        elif name == "POSTFIAT_R4_ASYNC_MAX_WAIT_MS":
+            call = f"requiredAsyncBudget('{name}')"
+        add(f"env:{name}", "env", call, name)
+
+    # --- manifest candidate revision (applied to all three manifests) ----------
+    if "function manifestCandidateRevision" in text:
+        for manifest in ("fire_control", "setup", "deployment"):
+            for path in CANDIDATE_REVISION_PATHS:
+                add(f"manifest:{manifest}.{path}", "manifest_field",
+                    f"manifestCandidateRevision({manifest}).{path}", f"{manifest} manifest")
+
+    # --- string literals carry no input reads; blank them before chain scans ----
+    code = re.sub(r"'[^'\n]*'", "''", text)
+
+    # --- direct root-object chains ---------------------------------------------
+    chain_re = re.compile(
+        r"\b(" + "|".join(ROOTS) + r")((?:\?\.|\.)[A-Za-z_$][\w$]*(?:\(\))?)"
+        r"((?:\?\.|\.)[A-Za-z_$][\w$]*(?:\(\))*)*"
+    )
+    alias = {
+        "asyncProofSlot": "async_slot", "exportSlot": "export_slot",
+        "returnSlot": "return_slot", "exportArtifact": "export_runtime",
+        "returnArtifact": "return_runtime", "publicReceipt": "receipt_runtime",
+        "fireControl": "fire_control", "setup": "setup", "deployment": "deployment",
+    }
+    seen_chains = set()
+    for match in chain_re.finditer(code):
+        root, first, rest = match.group(1), match.group(2), match.group(3) or ""
+        chain = (first + rest).replace("?.", ".").replace("()", "")
+        chain = chain.lstrip(".")
+        seen_chains.add((root, chain))
+    for root, chain in sorted(seen_chains):
+        base = alias[root]
+        if chain in ("", "readable", "path"):
+            kind = "slot_state" if chain else "artifact_document"
+            add(f"{kind}:{base}" + (f".{chain}" if chain else ""), kind,
+                f"{root}.{chain}" if chain else root, f"{base} artifact")
+            continue
+        value_chain = chain.removeprefix("value.")
+        accessor_id = (f"manifest:{base}.{value_chain}" if root in ("fireControl", "setup", "deployment")
+                       else f"slot:{base}.{value_chain}")
+        if accessor_id in accessors:
+            continue  # same logical accessor already emitted by a helper rule
+        add(accessor_id,
+            "manifest_field" if root in ("fireControl", "setup", "deployment") else "slot_field",
+            f"{root}.{chain}", f"{base} artifact")
+
+    # --- generic helpers applied to both slots ----------------------------------
+    if "const slotAccepted = slot =>" in text:
+        for slot in ("export_slot", "return_slot"):
+            for field in SLOT_ACCEPTED_FIELDS:
+                add(f"slot:{slot}.{field}", "slot_field", f"slotAccepted({slot}).{field}",
+                    f"{slot} artifact", soft=True)
+    if "async function pollContentAddressedSlot" in text:
+        for slot in ("export_runtime", "return_runtime"):
+            for field in POLL_SLOT_FIELDS:
+                add(f"runtime:{slot}.{field}", "runtime_slot_read",
+                    f"pollContentAddressedSlot({slot}).{field}", f"{slot} artifact", soft=True)
+    if "returnArtifact.conservation?.equal" in text:
+        add("runtime:return_runtime.conservation.equal", "runtime_slot_read",
+            "returnArtifact.conservation?.equal", "return slot artifact")
+
+    # --- loopback endpoint scans of whole manifests ------------------------------
+    for label, root in (("setup", "setup"), ("deployment", "deployment")):
+        if f"assertLoopbackManifest('{label} manifest', {root})" in text or \
+           f"loopbackManifestObservation('{label} manifest', {root})" in text:
+            add(f"manifest:{label}.endpoints", "manifest_field",
+                f"endpointStrings({root})", f"{label} manifest")
+
+    # --- fire-control aggregate fields -------------------------------------------
+    if "fireControl.blocker_names" in text:
+        add("manifest:fire_control.blocker_names", "manifest_field",
+            "fireControl.blocker_names", "fire-control manifest", soft=True)
+    if "fireControl.checks" in text:
+        add("manifest:fire_control.checks[no_live_chain_dependency].ok", "manifest_field",
+            "fireControl.checks.find(id == 'no_live_chain_dependency')?.ok",
+            "fire-control manifest", soft=True)
+
+    # --- file reads/writes ---------------------------------------------------------
+    component_graph = re.search(r"PRODUCTION_COMPONENT_GRAPH = Object\.freeze\(\[(.*?)\]\)", text, re.S)
+    if component_graph:
+        for path in re.findall(r"join\(WALLET_ROOT, '([^']+)'\)", component_graph.group(1)):
+            add(f"file:{path}", "file_read", f"readFile(join(WALLET_ROOT, '{path}'))", path)
+    if "join(WALLET_ROOT, 'package.json')" in text:
+        add("file:package.json", "file_read", "sha256File(join(WALLET_ROOT, 'package.json'))",
+            "wallet-web/package.json")
+    if "proxyPidPath" in text:
+        add("file:proxy_pid_or_ready", "file_read", "readFile(proxyPidPath) (.pid | numeric)",
+            "POSTFIAT_R4_PROXY_PID_FILE")
+    if "proxyRestartPath" in text:
+        add("file:proxy_restart_request", "file_read",
+            "stat(dirname(proxyRestartPath)) / writeFile(proxyRestartPath, 'restart\\n')",
+            "POSTFIAT_R4_PROXY_RESTART_REQUEST")
+    if "reportPath" in text:
+        add("file:journey_report", "file_read", "writeFile(reportPath, flag 'wx')",
+            "POSTFIAT_R4_JOURNEY_REPORT")
+    if "exportSlot.value?.artifact_path" in text:
+        add("file:export_slot_artifact", "file_read",
+            "sha256File(resolve(exportSlot.value.artifact_path))", "export slot artifact_path")
+    if "exportArtifact.artifact_path" in text:
+        add("file:export_runtime_artifact", "file_read",
+            "sha256File(resolve(exportArtifact.artifact_path))", "export slot artifact_path")
+    if "returnArtifact.artifact_path" in text:
+        add("file:return_runtime_artifact", "file_read",
+            "sha256File(resolve(returnArtifact.artifact_path))", "return slot artifact_path")
+
+    # --- HTTP endpoint reads ---------------------------------------------------------
+    if "await fetch(walletOrigin" in text:
+        add("endpoint:wallet_origin", "endpoint_read", "fetch(walletOrigin)",
+            "POSTFIAT_R4_WALLET_ORIGIN")
+    if "await fetch(new URL('/healthz', proxyOrigin)" in text:
+        add("endpoint:proxy_healthz", "endpoint_read", "fetch(new URL('/healthz', proxyOrigin))",
+            "POSTFIAT_R4_PROXY_ORIGIN")
+
+    # --- runtime journey observations consumed by steps 3-10 --------------------------
+    if "waitForReserveProofFrame(rpcFrames)" in text:
+        add("runtime:reserve_proof_frame.packets", "runtime_observe",
+            "waitForReserveProofFrame(rpcFrames).result.packets", "wallet proxy websocket")
+    if "marketBalances(market)" in text:
+        add("runtime:market_balances", "runtime_observe",
+            "market.locator('.navcoin-primary-balance')", "rendered wallet DOM")
+    if "privateRoundTrip.value?.records" in text:
+        add("runtime:private_primary_records", "runtime_observe",
+            "localStorage['postfiat.navcoin_private_primary.*'].records",
+            "browser localStorage")
+    if "download.suggestedFilename()" in text:
+        add("runtime:downloaded_public_receipt", "runtime_observe",
+            "download.path() -> JSON.parse(receiptText)", "browser download")
+
+    # --- completeness guard: every root-object chain must be emitted -------------------
+    emitted_accessors = {record["accessor"] for record in accessors.values()}
+    uncovered = []
+    for root, chain in sorted(seen_chains):
+        raw = f"{root}.{chain}" if chain else root
+        if raw in emitted_accessors:
+            continue
+        normalized = raw.replace("()", "")
+        if any(normalized == a.replace("()", "") for a in emitted_accessors):
+            continue
+        uncovered.append(raw)
+    return list(accessors.values()), uncovered
+
+
+def main():
+    mode = sys.argv[1] if len(sys.argv) > 1 else "check"
+    records, uncovered = emit()
+    if mode == "emit":
+        print(json.dumps(records, indent=2))
+        return 0
+    if mode != "check":
+        raise SystemExit(f"usage: {sys.argv[0]} {{emit|check}}")
+    contract = json.loads(CONTRACT.read_text())
+    entries = contract["accessors"]
+    contract_ids = [entry["id"] for entry in entries]
+    emitted_ids = [record["id"] for record in records]
+    problems = []
+    if len(contract_ids) != len(set(contract_ids)):
+        seen, dupes = set(), set()
+        for item in contract_ids:
+            (dupes.add(item) if item in seen else seen.add(item))
+        problems.append(f"duplicate contract entries: {sorted(dupes)}")
+    stale = sorted(set(contract_ids) - set(emitted_ids))
+    unlisted = sorted(set(emitted_ids) - set(contract_ids))
+    if stale:
+        problems.append(f"stale contract entries (no runner read): {stale}")
+    if unlisted:
+        problems.append(f"unlisted runner reads (no contract entry): {unlisted}")
+    if uncovered:
+        problems.append(f"uncovered root-object chains: {uncovered}")
+    for entry in entries:
+        if entry.get("required") == "always" or str(entry.get("required", "")).startswith("official"):
+            if not entry.get("validation_predicate"):
+                problems.append(f"required input without validation predicate: {entry['id']}")
+            if not entry.get("fire_control_target"):
+                problems.append(f"required input without fire-control predicate target: {entry['id']}")
+        if entry.get("sensitivity_class") not in ("public", "path_reference", "secret_never"):
+            problems.append(f"unknown sensitivity class: {entry['id']}")
+    if problems:
+        print(json.dumps({"ok": False, "problems": problems,
+                          "emitted": len(emitted_ids), "contract": len(contract_ids)}, indent=2))
+        return 1
+    print(json.dumps({"ok": True, "accessor_count": len(emitted_ids),
+                      "mismatch_count": 0}, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
