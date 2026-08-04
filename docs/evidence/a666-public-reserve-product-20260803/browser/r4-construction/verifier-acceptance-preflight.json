@@ -1,0 +1,53 @@
+{
+ "schema": "postfiat.a666.r4.verifier-acceptance-preflight.v1",
+ "run_context": {
+  "proof_run_id": "a666-r4-receipt-prover-docker-refire-20260804-v2",
+  "proof_terminal_commit": "b067d8c",
+  "contract_stage_commit": "38ba6dd",
+  "candidate": "39f7fae"
+ },
+ "verdict": "RED",
+ "transaction_allowed": false,
+ "verify_and_accept_called": false,
+ "verify_and_accept_tx_hash": null,
+ "mismatch": {
+  "field": "programVKey",
+  "proof_report_program_vkey": "0x003af40eafdbc1873f7e5b8f02da0ccd668f65930797c8e20c4f19234a5ef02f",
+  "proof_report_source": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/receipt-verifier-spike/docker-refire-proof-report.json (commit b067d8c)",
+  "onchain_program_vkey": "0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9",
+  "onchain_read_command": "cast call 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0 'programVKey()(bytes32)' --rpc-url http://127.0.0.1:8547",
+  "equality": false,
+  "consequence": "PFTLReceiptFinalityVerifierV1.verifyAndAccept would call sp1Verifier.verifyProof(0x004e44ac..., publicValues, proofBytes) against a proof produced for vkey 0x003af40e...; the SP1 verifier would reject. Submitting is forbidden."
+ },
+ "contract_source_citations": {
+  "file": "crates/ethereum-contracts/src/PFTLReceiptFinalityVerifierV1.sol",
+  "immutable_declaration_line_111": "bytes32 public immutable programVKey;",
+  "constructor_assignment_line_152": "programVKey = config.programVKey;",
+  "verify_proof_call_line_198": "sp1Verifier.verifyProof(programVKey, publicValues, proofBytes);",
+  "verify_proof_call_line_237": "sp1Verifier.verifyProof(programVKey, publicValues, proofBytes);"
+ },
+ "chain_state_revalidated": {
+  "anvil_pid": 1841731,
+  "anvil_alive": true,
+  "endpoint": "http://127.0.0.1:8547",
+  "chain_id": 1,
+  "genesis_hash": "0x0187cae28841e75a231bbbf8658650f7c5d7a7ad3c4a270907380d59c696c9fe",
+  "block_number": 6,
+  "deployer": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+  "deployer_nonce": 6,
+  "unchanged_since_stage_commit_38ba6dd": true,
+  "contracts": {
+   "sp1_verifier": {"address": "0x5fbdb2315678afecb367f032d93f642f64180aa3", "code_nonempty": true, "version": "v6.1.0", "verifier_hash": "0x4388a21c687fdd5f218d7e3d13190cac4c5355818d3605fd5fb811df468ee696"},
+   "wrapped_venue_navcoin": {"address": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512", "code_nonempty": true, "controller": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9", "controller_locked": true},
+   "pftl_receipt_finality_verifier_v1": {"address": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0", "code_nonempty": true, "controller": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9", "wrapped_token": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"},
+   "pftl_uniswap_primary_market_v2": {"address": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9", "code_nonempty": true, "receipt_verifier": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0", "wrapped_token": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"}
+  }
+ },
+ "classification": "harness_deployment_config_mismatch",
+ "classification_detail": "the staged receipt verifier was constructed with the epoch-7 qualification vkey while the archived real proof was produced for the current program vkey; the real proof is valid and archived (b067d8c), product code is unchanged, no redeploy or transaction occurred",
+ "required_corrective": "fresh Anvil redeploy of the full real stack with PFTLReceiptFinalityVerifierV1 constructed using the proof-report program_vkey 0x003af40eafdbc1873f7e5b8f02da0ccd668f65930797c8e20c4f19234a5ef02f, then a single verifyAndAccept transaction",
+ "actions_this_turn": "read-only cast call / cast block / cast nonce; no transaction, no process or service action",
+ "stakehub_interaction": false,
+ "business_mutation": 0,
+ "recorded_utc": "2026-08-04T13:25:00Z"
+}

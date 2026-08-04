@@ -87,8 +87,16 @@
   },
   "verifier_acceptance": {
     "ready": false,
-    "first_blocker": "real_receipt_proof_artifact_pending_docker_capable_refire",
-    "verify_and_accept_called": false
+    "first_blocker": "program_vkey_mismatch_requires_fresh_stack_redeploy",
+    "verify_and_accept_called": false,
+    "preflight": {
+      "evidence": "verifier-acceptance-preflight.json",
+      "verdict": "RED",
+      "transaction_allowed": false,
+      "mismatch": "on-chain programVKey 0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9 != proof-report program_vkey 0x003af40eafdbc1873f7e5b8f02da0ccd668f65930797c8e20c4f19234a5ef02f",
+      "prior_blocker_closed": "real_receipt_proof_artifact_pending_docker_capable_refire (proof archived, commit b067d8c)",
+      "required_corrective": "fresh Anvil redeploy of full real stack with proof-report program_vkey, then single verifyAndAccept"
+    }
   },
   "business_value": 0,
   "credentials_redacted": true
