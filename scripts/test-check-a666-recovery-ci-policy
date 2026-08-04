@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+"""Exercise every A666 recovery CI policy rejection class in miniature trees."""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+CHECKER = Path(__file__).resolve().with_name("check-a666-recovery-ci-policy")
+
+
+def write_fixture(root: Path, relative: str, content: str) -> None:
+    path = root / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+def invoke(root: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(CHECKER), "--root", str(root)],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+
+
+def clean_fixture(root: Path) -> None:
+    write_fixture(
+        root,
+        "scripts/clean.py",
+        "state = derive_result()\nreport = {'schema': 'v1', 'ok': state}\nif accepted:\n    warm_cache()\nwrite_report(report)\n",
+    )
+    write_fixture(root, "crates/demo/src/lib.rs", "pub fn verify() {}\n")
+
+
+def require_clean() -> None:
+    with tempfile.TemporaryDirectory(prefix="a666-ci-policy-clean-") as directory:
+        root = Path(directory)
+        clean_fixture(root)
+        result = invoke(root)
+        assert result.returncode == 0, result.stdout
+        assert "a666_recovery_ci_policy=ok" in result.stdout, result.stdout
+
+
+def require_failure(relative: str, content: str, rule: str, line: int) -> None:
+    with tempfile.TemporaryDirectory(prefix="a666-ci-policy-fail-") as directory:
+        root = Path(directory)
+        clean_fixture(root)
+        write_fixture(root, relative, content)
+        result = invoke(root)
+        expected = f"{relative}:{line}: {rule}"
+        assert result.returncode != 0, result.stdout
+        assert expected in result.stdout, result.stdout
+
+
+def main() -> int:
+    require_clean()
+
+    api = "pro" + "ve"
+    require_failure(
+        "crates/demo/src/tests/direct.rs",
+        f"fn direct(client: Client) {{ client.{api}(); }}\n",
+        "direct-proving-in-test",
+        1,
+    )
+
+    status = "accept" + "ed"
+    writer = "write_" + "report"
+    require_failure(
+        "scripts/branch.py",
+        f"if {status}:\n    {writer}(report)\n",
+        "success-only-report-evidence-write",
+        2,
+    )
+
+    retired = "Stake" + "Hub"
+    require_failure(
+        "wallet-proxy/runtime.py",
+        f"retired_identifier = '{retired}'\n",
+        "retired-identifier-runtime",
+        1,
+    )
+
+    key = "o" + "k"
+    literal = "Tr" + "ue"
+    require_failure(
+        "scripts/emitter.py",
+        f"report = {{'schema': 'v1', {key!r}: {literal}}}\nwrite_report(report)\n",
+        "literal-result-boolean-schema-emitter",
+        1,
+    )
+
+    print("a666_recovery_ci_policy_selftest=ok clean=1 rejected=4")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

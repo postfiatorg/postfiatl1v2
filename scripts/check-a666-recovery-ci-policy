@@ -1,0 +1,319 @@
+#!/usr/bin/env python3
+"""Reject recovery CI policy regressions without reading credential files."""
+
+from __future__ import annotations
+
+import argparse
+import re
+import subprocess
+import sys
+from collections import Counter
+from dataclasses import dataclass
+from pathlib import Path
+
+SOURCE_SUFFIXES = {".js", ".mjs", ".py", ".rs", ".sh", ".ts", ".tsx"}
+SENSITIVE_SUFFIXES = {".crt", ".der", ".env", ".key", ".p12", ".pfx", ".pem"}
+EXCLUSION_CATEGORIES = (
+    "docs",
+    "evidence",
+    "site",
+    "test",
+    "tests",
+    "*_tests.rs",
+    "*.test.*",
+    "fixtures",
+    "generated",
+    "vendor",
+    "target",
+    "node_modules",
+    "dist",
+)
+DIRECT_API_RE = re.compile(r"(?:\.|::)(?:prove|prove_plonk|prove_groth16)\s*\(")
+CARGO_PROVE_RE = re.compile(r"\bcargo\s+prove\b")
+COMMAND_ARRAY_RE = re.compile(r"(?:\[|,)\s*['\"](?:prove|prover)['\"]")
+COMMAND_CALL_RE = re.compile(
+    r"\b(?:exec|execute|run|spawn)\s*\(\s*['\"](?:prove|prover)\b"
+)
+SUCCESS_CONDITION_RE = re.compile(r"^\s*if\b.*\b(?:success|accepted|ok)\b", re.IGNORECASE)
+NEGATED_SUCCESS_RE = re.compile(r"(?:\bnot\s+|!)(?:success|accepted|ok)\b", re.IGNORECASE)
+SUCCESS_BRANCH_WINDOW = 64
+REPORT_EVIDENCE_RE = re.compile(r"\b(?:report|evidence|acceptance)\b", re.IGNORECASE)
+WRITE_RE = re.compile(r"\b(?:append|dump|emit|open|save|write)[A-Za-z_]*\s*\(", re.IGNORECASE)
+LITERAL_RESULT_RE = re.compile(
+    r"(?<![A-Za-z0-9_])['\"]?(?:ok|accepted)['\"]?\s*[:=]\s*(?:true|True)\b"
+)
+SCHEMA_FIELD_RE = re.compile(r"['\"]?schema['\"]?\s*[:=]", re.IGNORECASE)
+OBJECT_START_RE = re.compile(
+    r"(?:=\s*|return\s+|json!\s*\(|JSON\.stringify\s*\(|\(\s*)\{"
+)
+RETIRED_IDENTIFIER_RE = re.compile("stake" + "hub", re.IGNORECASE)
+
+
+@dataclass(frozen=True)
+class Finding:
+    path: str
+    line: int
+    rule: str
+
+
+def enumerate_files(root: Path) -> list[Path]:
+    result = subprocess.run(
+        ["rg", "--files", "-0"],
+        cwd=root,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        raise RuntimeError("rg --files failed")
+    return sorted(
+        Path(item.decode("utf-8"))
+        for item in result.stdout.split(b"\0")
+        if item
+    )
+
+
+def excluded_category(relative: Path) -> str | None:
+    parts = tuple(part.lower() for part in relative.parts)
+    name = relative.name.lower()
+    if len(parts) >= 2 and parts[0] == "docs" and parts[1] == "evidence":
+        return "evidence"
+    if parts and parts[0] == "docs":
+        return "docs"
+    if "site" in parts:
+        return "site"
+    if "fixtures" in parts:
+        return "fixtures"
+    if "generated" in parts:
+        return "generated"
+    if "vendor" in parts:
+        return "vendor"
+    if "target" in parts:
+        return "target"
+    if "node_modules" in parts:
+        return "node_modules"
+    if "dist" in parts:
+        return "dist"
+    if "tests" in parts:
+        return "tests"
+    if "test" in parts:
+        return "test"
+    if name.endswith("_tests.rs"):
+        return "*_tests.rs"
+    if ".test." in name:
+        return "*.test.*"
+    return None
+
+
+def is_scoped_runtime_path(relative: Path) -> bool:
+    value = relative.as_posix()
+    parts = relative.parts
+    return (
+        value.startswith("scripts/")
+        or value.startswith("wallet-web/src/")
+        or value.startswith("wallet-proxy/")
+        or (len(parts) >= 3 and parts[0] == "crates" and parts[2] == "src")
+    )
+
+
+def is_test_path(relative: Path) -> bool:
+    name = relative.name.lower()
+    parts = tuple(part.lower() for part in relative.parts)
+    return (
+        "test" in parts
+        or "tests" in parts
+        or name.startswith(("test-", "test_"))
+        or name.endswith("_tests.rs")
+        or ".test." in name
+        or ".e2e." in name
+    )
+
+
+def is_source_candidate(relative: Path) -> bool:
+    name = relative.name.lower()
+    if any(name.endswith(suffix) for suffix in SENSITIVE_SUFFIXES):
+        return False
+    return relative.suffix.lower() in SOURCE_SUFFIXES or (
+        relative.parts and relative.parts[0] == "scripts" and not relative.suffix
+    )
+
+
+def source_text(root: Path, relative: Path) -> str | None:
+    data = (root / relative).read_bytes()
+    if b"\0" in data:
+        return None
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+
+
+def non_comment_line(line: str) -> str:
+    return line.split("#", 1)[0].split("//", 1)[0]
+
+
+def is_shell_like(relative: Path) -> bool:
+    return relative.suffix == ".sh" or not relative.suffix
+
+
+def direct_proving_findings(relative: Path, text: str) -> list[Finding]:
+    if not is_test_path(relative):
+        return []
+    findings: list[Finding] = []
+    for index, raw_line in enumerate(text.splitlines(), start=1):
+        line = non_comment_line(raw_line)
+        if (
+            DIRECT_API_RE.search(line)
+            or CARGO_PROVE_RE.search(line)
+            or COMMAND_ARRAY_RE.search(line)
+            or COMMAND_CALL_RE.search(line)
+            or (
+                is_shell_like(relative)
+                and re.search(r"(?:^|[;|&]\s*)(?:prove|prover)(?=\s|$)", line)
+            )
+        ):
+            findings.append(Finding(relative.as_posix(), index, "direct-proving-in-test"))
+    return findings
+
+
+def branch_end(lines: list[str], start: int) -> int:
+    condition = lines[start]
+    if "{" in condition:
+        depth = condition.count("{") - condition.count("}")
+        for index in range(start + 1, len(lines)):
+            depth += lines[index].count("{") - lines[index].count("}")
+            if depth <= 0:
+                return index
+        return len(lines)
+    if re.search(r"\bthen\b", condition):
+        for index in range(start + 1, len(lines)):
+            if lines[index].strip() == "fi":
+                return index
+        return len(lines)
+    indentation = len(condition) - len(condition.lstrip())
+    for index in range(start + 1, len(lines)):
+        candidate = lines[index]
+        if candidate.strip() and len(candidate) - len(candidate.lstrip()) <= indentation:
+            return index
+    return len(lines)
+
+
+def is_report_evidence_write(line: str) -> bool:
+    return bool(WRITE_RE.search(line) and REPORT_EVIDENCE_RE.search(line))
+
+
+def success_branch_write_findings(relative: Path, text: str) -> list[Finding]:
+    lines = text.splitlines()
+    findings: list[Finding] = []
+    for start, condition in enumerate(lines):
+        if not SUCCESS_CONDITION_RE.search(condition) or NEGATED_SUCCESS_RE.search(condition):
+            continue
+        end = min(branch_end(lines, start), start + SUCCESS_BRANCH_WINDOW + 1)
+        for index in range(start + 1, end):
+            if is_report_evidence_write(non_comment_line(lines[index])):
+                findings.append(
+                    Finding(relative.as_posix(), index + 1, "success-only-report-evidence-write")
+                )
+    return findings
+
+
+def schema_object_spans(lines: list[str]) -> list[tuple[int, int]]:
+    spans: list[tuple[int, int]] = []
+    for start, line in enumerate(lines):
+        match = OBJECT_START_RE.search(non_comment_line(line))
+        if match is None:
+            continue
+        brace = line.find("{", match.start())
+        depth = 0
+        for end in range(start, len(lines)):
+            fragment = lines[end][brace:] if end == start else lines[end]
+            depth += fragment.count("{") - fragment.count("}")
+            if depth == 0:
+                spans.append((start, end))
+                break
+    return spans
+
+
+def literal_result_findings(relative: Path, text: str) -> list[Finding]:
+    lines = text.splitlines()
+    schema_spans = [
+        (start, end)
+        for start, end in schema_object_spans(lines)
+        if any(SCHEMA_FIELD_RE.search(item) for item in lines[start : end + 1])
+    ]
+    findings: list[Finding] = []
+    for index, line in enumerate(lines):
+        if not LITERAL_RESULT_RE.search(non_comment_line(line)):
+            continue
+        if not any(start <= index <= end for start, end in schema_spans):
+            continue
+        findings.append(
+            Finding(
+                relative.as_posix(),
+                index + 1,
+                "literal-result-boolean-schema-emitter",
+            )
+        )
+    return findings
+
+
+def identifier_findings(relative: Path, text: str, category: str | None) -> list[Finding]:
+    if category is not None:
+        return []
+    return [
+        Finding(relative.as_posix(), index, "retired-identifier-runtime")
+        for index, line in enumerate(text.splitlines(), start=1)
+        if RETIRED_IDENTIFIER_RE.search(non_comment_line(line))
+    ]
+
+
+def scan(root: Path) -> tuple[list[Finding], Counter[str], int, int]:
+    findings: list[Finding] = []
+    excluded = Counter({category: 0 for category in EXCLUSION_CATEGORIES})
+    enumerated = 0
+    scanned = 0
+    for relative in enumerate_files(root):
+        enumerated += 1
+        category = excluded_category(relative)
+        if category is not None:
+            excluded[category] += 1
+        if not is_scoped_runtime_path(relative) or not is_source_candidate(relative):
+            continue
+        text = source_text(root, relative)
+        if text is None:
+            continue
+        scanned += 1
+        findings.extend(direct_proving_findings(relative, text))
+        findings.extend(success_branch_write_findings(relative, text))
+        findings.extend(literal_result_findings(relative, text))
+        findings.extend(identifier_findings(relative, text, category))
+    return sorted(findings, key=lambda item: (item.path, item.line, item.rule)), excluded, enumerated, scanned
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
+    args = parser.parse_args()
+    root = args.root.resolve()
+    try:
+        findings, excluded, enumerated, scanned = scan(root)
+    except (OSError, RuntimeError) as error:
+        print(f"a666_recovery_ci_policy=fail error={error}", file=sys.stderr)
+        return 1
+
+    for category in EXCLUSION_CATEGORIES:
+        print(f"excluded[{category}]={excluded[category]}")
+    for finding in findings:
+        print(f"{finding.path}:{finding.line}: {finding.rule}")
+    if findings:
+        print(
+            f"a666_recovery_ci_policy=fail findings={len(findings)} "
+            f"enumerated={enumerated} scanned={scanned}"
+        )
+        return 1
+    print(f"a666_recovery_ci_policy=ok enumerated={enumerated} scanned={scanned}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
