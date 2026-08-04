@@ -1,12 +1,82 @@
 {
   "schema": "postfiat.a666.r4.path-b-witness-stage.v1",
   "accepted": false,
-  "first_failure": "mint_packet_digest_roundtrip",
+  "resumed": true,
+  "first_failure": "submit_reserve",
   "exit_code": 1,
-  "runtime_root": "/tmp/a666-r4-path-b-witness-20260804T155357Z-3870582",
-  "runtime_preserved": true,
-  "runtime_ms": 21967,
   "live_chain": false,
   "stakehub": false,
-  "mutations": 0
+  "loopback_only": true,
+  "mutations": 0,
+  "mutations_total": 2,
+  "prior_red": {
+    "schema": "postfiat.a666.r4.path-b-witness-stage.v1",
+    "accepted": false,
+    "first_failure": "mint_packet_digest_roundtrip",
+    "exit_code": 1,
+    "runtime_root": "/tmp/a666-r4-path-b-witness-20260804T155357Z-3870582",
+    "runtime_preserved": true,
+    "runtime_ms": 21967,
+    "live_chain": false,
+    "stakehub": false,
+    "mutations": 0
+  },
+  "superseded_mislabeled_red": "intermediate resume RED evidence carried stale first_failure=mint_packet_digest_roundtrip because submit_op ran inside $() command substitution and the parent ERR trap overwrote the child label; fixed by writing tx_id to a file and calling submit_op directly; regression covered by --self-test trap_label check",
+  "failure": {
+    "stage": "submit_reserve",
+    "runner_exit": 1,
+    "summary_gate_reached": false,
+    "submission_reached_round": false,
+    "rejected_at": "mempool_admission",
+    "error": "certified asset ops submit `r4-path-b-reserve` failed: mempool admission rejected `pftl_uniswap_reservation_bounds`: reservation amount or expiry is outside active policy bounds",
+    "rule": "crates/execution/src/nav_vault_asset_execution.rs:4084-4092: expires_at_height must be > block_height, <= policy.expires_at_height, and expires_at_height - block_height <= 2048",
+    "root_cause": "ops builder pinned expires_at_height=5809; at block_height 828 the delta is 4981 > 2048; mint amount 1000000 was within [1000000, 1000000000000]",
+    "command_log": "/tmp/a666-r4-path-b-witness-20260804T155357Z-3870582/reserve.command.log",
+    "artifact_dir": "/tmp/a666-r4-path-b-witness-20260804T155357Z-3870582/artifacts-reserve"
+  },
+  "landing_status": {
+    "reserve_landed": false,
+    "fleet_six_equal": true,
+    "fleet_height": 828,
+    "fleet_tip_prefix": "56da2815fd1002b6",
+    "route_active_reservation_count": 0,
+    "route_export_entitlement_count": 0,
+    "route_epoch": 2,
+    "route_live_value_enabled": true
+  },
+  "operations": [
+    {
+      "label": "route_init_v2",
+      "height": 827,
+      "tx_id": "fbbbae27048a7c93dc9e43e7673491b2d7a3bcee65e8f3d52c48f28ca01993a484b404555ce6ee546a99d40875cacc44",
+      "receipt_code": "accepted",
+      "run": "original"
+    },
+    {
+      "label": "route_epoch_advance",
+      "height": 828,
+      "tx_id": "3977c253c42217c45bac24a03650e21249f139fe2a8d6944981e5cdf32d4e90966754a4edf6eae7e14ab555ca8f7248b",
+      "receipt_code": "accepted",
+      "live_value_enabled": true,
+      "run": "original"
+    },
+    {
+      "label": "order_reserve",
+      "height": null,
+      "tx_id": null,
+      "receipt_code": "rejected_at_mempool_admission",
+      "run": "resume",
+      "landed": false
+    }
+  ],
+  "downstream_skipped": [
+    "primary_subscribe_v2",
+    "export_debit",
+    "witness_generation",
+    "witness_native_verify"
+  ],
+  "runtime_root": "/tmp/a666-r4-path-b-witness-20260804T155357Z-3870582",
+  "runtime_preserved": true,
+  "witness_generated": false,
+  "retry_authorized": false
 }
