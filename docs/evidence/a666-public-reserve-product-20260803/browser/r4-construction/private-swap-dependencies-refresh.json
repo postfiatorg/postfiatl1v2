@@ -1,86 +1,80 @@
 {
-  "schema": "postfiat.a666.r4.private-swap-dependencies-refresh.v1",
-  "state": "ready",
-  "fired": true,
-  "route_activation_commit": "254042faa6d3c43c9919685413f5335911fabafa",
-  "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
-  "construction_fleet": {
-    "supervisor_pid": 667809,
-    "children_live": 12,
-    "validator_count": 6,
-    "height": 827,
-    "six_way_equal": true,
-    "loopback_only": true
+  "schema": "postfiat.a666.r4.private-swap-dependencies-refresh.v2",
+  "state": "red",
+  "ready": false,
+  "first_blocker": "systemd_stage_working_directory_not_git_repo",
+  "failure": {
+    "phase": "preflight_fleet_commit_ancestry",
+    "exit_code": 128,
+    "typed_message": "fatal: not a git repository (or any of the parent directories): .git",
+    "distinct_failure": true,
+    "retry_performed": false,
+    "mechanical_correction_committed_for_next_attempt": "git -C MAIN_WORKTREE merge-base"
+  },
+  "launch": {
+    "fired": true,
+    "systemd_unit": "a666-r4-private-swap-dependencies-pathb-v1.service",
+    "invocation_id": "0d38b9ac771d41da8f511f56098eeb46",
+    "runtime_ms": 16.596,
+    "supervisor_pid": null,
+    "asset_service_pid": null,
+    "round_driver_pid": null,
+    "unit_retained": false
+  },
+  "candidate": {
+    "revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+    "node_binary_sha256": "9339d1352969cbc449f4245e18c2f1b3763d5b896334335b5bfd894beff12c57",
+    "asset_binary_sha256": "4ec8ff06f39808e6234e0a4275686db6176a87ffceeeb83ede6353a82294b7fc"
+  },
+  "bindings": {
+    "preserved_root": "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349",
+    "fleet": {
+      "commit": "ee23d58822e89df5a24a10ecea42ed0bd985653a",
+      "path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-fleet.json",
+      "sha256": "3be9d4169f9a761b7aa83a457d237896a7155e22ab143fdad9dcbbbf275772bb"
+    },
+    "route_current_state": {
+      "path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/route-current-state.json",
+      "sha256": "5aa6a03c56f3ff245e128d5222eb48bea3898a35e742db8c0bcb208e2f61d036"
+    }
+  },
+  "expected_fleet_tuple": {
+    "height": 831,
+    "tip": "ed8dacf6722a082ba753a04ce86c125ed7331f45057a258d1087509e966df45177eb6711fdd801a7125573866b3d56b2",
+    "state_root": "3840a383378c8f287677d12efb940af7d8a1e656a37651cf52e6360dd8ab305e8736c1e7252513e09293c517727c8ee1"
   },
   "route": {
-    "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
-    "route_epoch": 5,
-    "policy_epoch": 5,
+    "route_id": "pftl-a666-r4-offline-rehearsal-v1",
+    "route_epoch": 2,
+    "policy_epoch": 2,
     "live_value_enabled": true,
     "paused": false,
     "invariant_holds": true,
+    "route_config_digest": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+    "policy_hash": "5dcc28ea82872d05716dbb94af480f6dd1355dde8a931633a01dfdec309c4bbd5e5ee16e104afba75913eb0100123044",
     "observed_equal_count": 6
   },
-  "corrections": {
-    "expected_fleet_tuple": "derived from six live equal RPC responses",
-    "expected_round_driver_start_and_next": "current height plus one",
+  "expected_service_contract": {
+    "asset_endpoint": "127.0.0.1:8799",
+    "round_driver_local_height": 831,
+    "round_driver_start_height": 832,
+    "round_driver_next_height": 832,
+    "processed_round_count": 0,
+    "authenticated_peer_count": 5,
     "batch_outbox": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/batch-outbox",
-    "processed_batches": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/processed-batches",
-    "round_driver_ready_file": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/certified-round-driver-ready.json"
-  },
-  "old_controller": {
-    "supervisor_pid": 730455,
-    "asset_service_pid": 730500,
-    "round_driver_pid": 730501,
-    "teardown_control": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/teardown.request",
-    "teardown_requested": true,
-    "all_stopped": true
-  },
-  "replacement": {
-    "launched": true,
-    "runtime_root": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T043154Z-869163",
-    "runtime_ms": 324470,
-    "supervisor_pid": 869163,
-    "asset_service": {
-      "pid": 869239,
-      "endpoint": "127.0.0.1:8799",
-      "ready": true,
-      "prewarm_ready": true,
-      "private_egress_ready": true,
-      "vault_path": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T043154Z-869163/asset-vault"
-    },
-    "certified_round_driver": {
-      "pid": 869240,
-      "local_height": 827,
-      "start_height": 828,
-      "next_height": 828,
-      "processed_round_count": 0,
-      "authenticated_peer_count": 5,
-      "authenticated_quorum": true,
-      "persistent_vote_streams": true,
-      "remote_proposal_routing": true,
-      "local_apply_before_certified_send": true,
-      "ready_file": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/certified-round-driver-ready.json"
-    },
-    "batch_outbox": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/batch-outbox",
-    "processed_batches": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/processed-batches",
-    "ready": true
+    "processed_batches": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/processed-batches"
   },
   "checks": {
+    "candidate_binding": true,
+    "current_root_binding": true,
     "construction_fleet_12_live_six_equal": true,
-    "route_live_epoch_5_on_six": true,
-    "replacement_supervisor_live": true,
-    "asset_service_live": true,
-    "asset_prewarm_terminal_ready": true,
-    "round_driver_live": true,
-    "round_driver_height_827_next_828": true,
-    "five_authenticated_peers_and_quorum": true,
-    "exact_pftl_swap_batch_paths": true,
-    "empty_batch_and_processed_dirs": true,
-    "business_operations_zero": true,
-    "stakehub_interaction_zero": true
+    "route_live_epoch_2_on_six": true,
+    "systemd_launch_accepted": true,
+    "supervisor_live": false,
+    "asset_prewarm_terminal_ready": false,
+    "round_driver_height_831_next_832": false
   },
   "business_operations": 0,
   "stakehub_interaction": false,
-  "ready": true
+  "live_chain": false
 }
