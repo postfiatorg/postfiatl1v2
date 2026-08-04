@@ -17,12 +17,13 @@ DATA_DIR="$PRESERVED_ROOT/validator-2"
 KEY_FILE="$DATA_DIR/validator-2.validator_keys.json"
 TOPOLOGY="$PRESERVED_ROOT/a666-public-successor-topology.json"
 ASSET_VAULT="$RUNTIME_ROOT/asset-vault"
-BATCH_DIR="$RUNTIME_ROOT/batch-outbox"
-PROCESSED_DIR="$RUNTIME_ROOT/processed-batches"
+PFTL_SWAP_RUNTIME="/tmp/a666-r4-private-swap-runtime-39f7fae/private"
+BATCH_DIR="$PFTL_SWAP_RUNTIME/batch-outbox"
+PROCESSED_DIR="$PFTL_SWAP_RUNTIME/processed-batches"
 ARTIFACT_DIR="$RUNTIME_ROOT/round-artifacts"
 READY_DIR="$RUNTIME_ROOT/ready"
 ASSET_READY="$READY_DIR/asset-orchard-prewarm.json"
-ROUND_READY="$READY_DIR/certified-round-driver.json"
+ROUND_READY="$PFTL_SWAP_RUNTIME/certified-round-driver-ready.json"
 CONTROL_FILE="$RUNTIME_ROOT/teardown.request"
 PID_STATE="$RUNTIME_ROOT/pids.json"
 LOG_DIR="$RUNTIME_ROOT/logs"
@@ -30,6 +31,9 @@ EVIDENCE="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/brow
 ACTION="${1:-stage}"
 PRODUCT_PROFILE_SHA256="ab04db6d0d610f6b354d0860c00fa745c93ed4faf173c1829edfb0cbd699e552"
 children=()
+expected_height=0
+expected_tip=""
+expected_root=""
 
 kill_children() {
   local pid
@@ -49,6 +53,7 @@ kill_children() {
 trap 'trap - EXIT ERR TERM INT; kill_children' EXIT ERR TERM INT
 
 validate_fleet() {
+  git merge-base --is-ancestor 254042f HEAD
   git merge-base --is-ancestor "$FLEET_COMMIT" HEAD
   [[ "$(git -C "$CANDIDATE_WORKTREE" rev-parse HEAD)" == "$CANDIDATE_REVISION" ]]
   [[ -z "$(git -C "$CANDIDATE_WORKTREE" status --porcelain --untracked-files=no)" ]]
@@ -57,19 +62,34 @@ validate_fleet() {
   jq -e '.construction_ready == true and .ready_for_one_shot_pass_1 == false and .checks.stakehub_interaction == false' "$FLEET_DIR/construction-fleet.json" >/dev/null
   [[ "$(jq '.processes|length' "$FLEET_DIR/construction-pids.json")" -eq 12 ]]
   while read -r pid; do kill -0 "$pid"; done < <(jq -r '.processes[].pid' "$FLEET_DIR/construction-pids.json")
-  python3 - "$FLEET_DIR/construction-rpc-endpoints.json" <<'PY'
+  live_tuple="$(python3 - "$FLEET_DIR/construction-rpc-endpoints.json" <<'PY'
 import json,socket,sys
 rows=json.load(open(sys.argv[1],encoding='utf-8'))['endpoints']
 if len(rows)!=6: raise SystemExit(1)
+observed=[]
 for row in rows:
     request={"version":"postfiat-local-rpc-v1","id":f"r4-deps-{row['validator_index']}","method":"status","params":{}}
     with socket.create_connection((row['host'],row['rpc_port']),timeout=3) as connection:
         connection.sendall((json.dumps(request,separators=(',',':'))+'\n').encode())
         response=json.loads(connection.makefile('rb').readline())
     value=response.get('result',{})
-    if response.get('ok') is not True or value.get('block_height')!=826 or value.get('block_tip_hash')!=row['block_tip_hash'] or value.get('state_root')!=row['state_root']:
-        raise SystemExit(1)
+    if response.get('ok') is not True: raise SystemExit(1)
+    observed.append((value.get('block_height'),value.get('block_tip_hash'),value.get('state_root')))
+if len(set(observed))!=1: raise SystemExit(1)
+routes=[]
+for row in rows:
+    request={"version":"postfiat-local-rpc-v1","id":f"r4-deps-route-{row['validator_index']}","method":"navcoin_bridge_supply_status","params":{"route_id":"pftl-a666-ethereum-wA666-usdc-v1"}}
+    with socket.create_connection((row['host'],row['rpc_port']),timeout=3) as connection:
+        connection.sendall((json.dumps(request,separators=(',',':'))+'\n').encode())
+        response=json.loads(connection.makefile('rb').readline())
+    value=response.get('result',{})
+    routes.append((value.get('route_epoch'),value.get('policy_epoch'),value.get('live_value_enabled'),value.get('paused'),value.get('invariant_holds')))
+if len(set(routes))!=1 or routes[0]!=(5,5,True,False,True): raise SystemExit(1)
+print(*observed[0],sep='\t')
 PY
+  )"
+  IFS=$'\t' read -r expected_height expected_tip expected_root <<<"$live_tuple"
+  [[ "$expected_height" =~ ^[0-9]+$ && -n "$expected_tip" && -n "$expected_root" ]]
 }
 
 validate_fleet
@@ -82,7 +102,11 @@ else
 fi
 [[ ! -e "$RUNTIME_ROOT" ]]
 mkdir -m 700 "$RUNTIME_ROOT"
-mkdir -m 700 "$ASSET_VAULT" "$BATCH_DIR" "$PROCESSED_DIR" "$ARTIFACT_DIR" "$READY_DIR" "$LOG_DIR"
+mkdir -m 700 "$ASSET_VAULT" "$ARTIFACT_DIR" "$READY_DIR" "$LOG_DIR"
+mkdir -p "$BATCH_DIR" "$PROCESSED_DIR"
+chmod 700 "$PFTL_SWAP_RUNTIME" "$BATCH_DIR" "$PROCESSED_DIR"
+[[ -z "$(find "$BATCH_DIR" -mindepth 1 -print -quit)" ]]
+[[ -z "$(find "$PROCESSED_DIR" -mindepth 1 -print -quit)" ]]
 started_ms="$(date +%s%3N)"
 build_action="reused"
 build_exit=0
@@ -162,10 +186,10 @@ with socket.create_connection(('127.0.0.1',8799),timeout=2): pass
 PY
     then asset_ok=true; fi
   fi
-  if [[ -s "$ROUND_READY" ]] && jq -e '
+  if [[ -s "$ROUND_READY" ]] && jq -e --argjson height "$expected_height" '
     .schema == "postfiat-transport-peer-certified-batch-loop-ready-v2"
-    and .local_state.block_height == 826
-    and (.start_height + .processed_round_count) == 827
+    and .local_state.block_height == $height
+    and (.start_height + .processed_round_count) == ($height + 1)
     and .authenticated_peer_count == 5
     and .required_remote_peer_count == 5
     and .authenticated_quorum == true
@@ -217,14 +241,16 @@ jq -n \
   --argjson round_height "$round_height" \
   --argjson round_next_height "$round_next_height" \
   --argjson round_peers "$round_peers" \
-  --argjson runtime_ms "$((ended_ms-started_ms))" '
+  --argjson runtime_ms "$((ended_ms-started_ms))" \
+  --argjson expected_height "$expected_height" --arg expected_tip "$expected_tip" --arg expected_root "$expected_root" '
   {
     schema:$schema,
     candidate:{revision:$revision,node_binary_path:$node_binary,node_binary_sha256:$node_sha256},
     asset_service:{binary_path:$asset_binary,binary_sha256:$asset_sha256,build_action:$build_action,build_exit:$build_exit,build_runtime_ms:$build_runtime_ms,pid:$asset_pid,endpoint:"127.0.0.1:8799",ready_file:$asset_ready,ready_schema:$asset_schema,circuits:$asset_circuits,ready:true},
     certified_round_driver:{pid:$round_pid,ready_file:$round_ready,heartbeat_unix_ms:$round_heartbeat,local_height:$round_height,next_height:$round_next_height,authenticated_peer_count:$round_peers,authenticated_quorum:true,persistent_vote_streams:true,remote_proposal_routing:true,local_apply_before_certified_send:true,processed_round_count:0,ready:true},
     paths:{runtime_root:$runtime_root,asset_vault:$asset_vault,batch_outbox:$batch_dir,processed_batches:$processed_dir,round_artifacts:$artifact_dir,pid_state:$pid_state,teardown_control:$control_file},
-    checks:{construction_fleet_12_live_six_equal:true,asset_tcp_reachable:true,asset_prewarm_ready:true,round_report_fresh:true,round_height_826_next_827:true,five_authenticated_peers:true,empty_batch_dirs:true,business_operations:0,stakehub_interaction:false},
+    expected_fleet_tuple:{height:$expected_height,tip:$expected_tip,state_root:$expected_root},
+    checks:{construction_fleet_12_live_six_equal:true,asset_tcp_reachable:true,asset_prewarm_ready:true,round_report_fresh:true,round_height_current_next_incremented:true,five_authenticated_peers:true,exact_pftl_swap_batch_paths:true,empty_batch_dirs:true,business_operations:0,stakehub_interaction:false},
     runtime_ms:$runtime_ms,
     ready:true
   }' > "$EVIDENCE"

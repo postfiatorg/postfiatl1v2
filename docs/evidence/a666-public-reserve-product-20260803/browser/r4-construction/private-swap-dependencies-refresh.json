@@ -1,0 +1,47 @@
+{
+  "schema": "postfiat.a666.r4.private-swap-dependencies-refresh.v1",
+  "state": "prepared",
+  "fired": false,
+  "route_activation_commit": "254042faa6d3c43c9919685413f5335911fabafa",
+  "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+  "construction_fleet": {
+    "supervisor_pid": 667809,
+    "children_live": 12,
+    "validator_count": 6,
+    "height": 827,
+    "six_way_equal": true,
+    "loopback_only": true
+  },
+  "route": {
+    "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+    "route_epoch": 5,
+    "policy_epoch": 5,
+    "live_value_enabled": true,
+    "paused": false,
+    "invariant_holds": true,
+    "observed_equal_count": 6
+  },
+  "corrections": {
+    "expected_fleet_tuple": "derive from six live equal RPC responses",
+    "expected_round_driver_start_and_next": "current height plus one",
+    "batch_outbox": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/batch-outbox",
+    "processed_batches": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/processed-batches",
+    "round_driver_ready_file": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/certified-round-driver-ready.json"
+  },
+  "old_controller": {
+    "supervisor_pid": 730455,
+    "asset_service_pid": 730500,
+    "round_driver_pid": 730501,
+    "teardown_control": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/teardown.request",
+    "teardown_requested": false
+  },
+  "replacement": {
+    "launched": false,
+    "session": null,
+    "supervisor_pid": null,
+    "runtime_root": null,
+    "ready": false
+  },
+  "business_operations": 0,
+  "stakehub_interaction": false
+}
