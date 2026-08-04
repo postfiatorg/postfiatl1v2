@@ -86,6 +86,34 @@ async function readJson(path, label) {
   return parsed;
 }
 
+function manifestCandidateRevision(manifest) {
+  return manifest.candidate?.revision
+    ?? manifest.candidate_revision
+    ?? manifest.aggregation?.current_binding?.candidate_revision
+    ?? manifest.bindings?.candidate_revision
+    ?? null;
+}
+
+async function manifestHashObservation(path, environmentName) {
+  const expected = String(process.env[environmentName] || '').trim().toLowerCase();
+  const actual = await sha256File(path);
+  return {
+    path,
+    expected_sha256: expected || null,
+    actual_sha256: actual,
+    matches: /^[0-9a-f]{64}$/.test(expected) && expected === actual,
+  };
+}
+
+async function readableJsonObservation(path, label) {
+  try {
+    const value = await readJson(path, label);
+    return { path, readable: true, value };
+  } catch (error) {
+    return { path, readable: false, error: error.code || error.message };
+  }
+}
+
 function endpointStrings(value, path = 'manifest', output = []) {
   if (Array.isArray(value)) {
     value.forEach((item, index) => endpointStrings(item, `${path}[${index}]`, output));
@@ -117,6 +145,15 @@ function assertLoopbackManifest(label, manifest) {
     assert.ok(['127.0.0.1', 'localhost', '::1'].includes(parsed.hostname), `${endpoint.path} is not loopback`);
     assert.equal(parsed.username, '', `${endpoint.path} contains credentials`);
     assert.equal(parsed.password, '', `${endpoint.path} contains credentials`);
+  }
+}
+
+function loopbackManifestObservation(label, manifest) {
+  try {
+    assertLoopbackManifest(label, manifest);
+    return { label, valid: true, error: null };
+  } catch (error) {
+    return { label, valid: false, error: error.message };
   }
 }
 
@@ -196,10 +233,109 @@ async function verifyProductionGraph() {
     primary_uses_export_relay: market.includes("from '../lib/navcoin-export-relay.js'"),
     primary_uses_return_relay: market.includes("from '../lib/navcoin-return-relay.js'"),
     private_uses_production_library: privatePrimary.includes("from '../lib/pftl-private-primary.js'"),
+    private_renders_public_receipt_control: privatePrimary.includes('Download public receipt'),
   };
   assert.ok(Object.values(checks).every(Boolean), 'production rendered component import graph changed');
   assert.ok(Object.values(PRODUCTION_MODULES).every(value => typeof value === 'function'));
   return checks;
+}
+
+async function runConstructionPreflight({
+  origin, fireControl, setup, deployment, productionGraph,
+  fireControlPath, setupPath, deploymentPath,
+  exportSlotPath, returnSlotPath, proxyRestartPath, proxyPidPath, reportPath,
+}) {
+  const [fireControlHash, setupHash, deploymentHash, exportSlot, returnSlot] = await Promise.all([
+    manifestHashObservation(fireControlPath, 'POSTFIAT_R4_FIRE_CONTROL_MANIFEST_SHA256'),
+    manifestHashObservation(setupPath, 'POSTFIAT_R4_SETUP_MANIFEST_SHA256'),
+    manifestHashObservation(deploymentPath, 'POSTFIAT_R4_DEPLOYMENT_MANIFEST_SHA256'),
+    readableJsonObservation(exportSlotPath, 'export artifact slot'),
+    readableJsonObservation(returnSlotPath, 'return artifact slot'),
+  ]);
+  let proxyStatus = null;
+  let proxyReachable = false;
+  try {
+    const response = await fetch(new URL('/healthz', origin), { cache: 'no-store' });
+    proxyStatus = response.status;
+    proxyReachable = response.ok;
+  } catch (error) {
+    proxyStatus = error.code || error.message;
+  }
+  const proxyPid = Number((await readFile(proxyPidPath, 'utf8').catch(() => '')).trim());
+  const proxyPidReadable = Number.isSafeInteger(proxyPid) && proxyPid > 0;
+  const restartDirectoryReadable = await stat(dirname(proxyRestartPath))
+    .then(value => value.isDirectory())
+    .catch(() => false);
+  const manifestHashes = [fireControlHash, setupHash, deploymentHash];
+  const loopbackManifests = [
+    loopbackManifestObservation('setup manifest', setup),
+    loopbackManifestObservation('deployment manifest', deployment),
+  ];
+  const candidatesMatch = [fireControl, setup, deployment]
+    .every(manifest => manifestCandidateRevision(manifest) === CANDIDATE_REVISION);
+  const importGraphReady = Object.values(productionGraph).every(Boolean);
+  const slotAccepted = slot => slot.readable
+    && slot.value?.status === 'accepted'
+    && /^[0-9a-f]{64}$/.test(String(slot.value?.artifact_sha256 || ''))
+    && Boolean(slot.value?.receipt_identity)
+    && slot.value?.observed_chain_state?.finalized === true;
+  const sharedReadiness = proxyReachable && candidatesMatch && importGraphReady
+    && manifestHashes.every(item => item.matches)
+    && loopbackManifests.every(item => item.valid);
+  const readiness = [
+    { step: 1, label: JOURNEY_LABELS[0], ready: sharedReadiness },
+    { step: 2, label: JOURNEY_LABELS[1], ready: sharedReadiness },
+    { step: 3, label: JOURNEY_LABELS[2], ready: sharedReadiness },
+    { step: 4, label: JOURNEY_LABELS[3], ready: sharedReadiness },
+    { step: 5, label: JOURNEY_LABELS[4], ready: sharedReadiness },
+    { step: 6, label: JOURNEY_LABELS[5], ready: sharedReadiness },
+    { step: 7, label: JOURNEY_LABELS[6], ready: sharedReadiness && slotAccepted(exportSlot) },
+    { step: 8, label: JOURNEY_LABELS[7], ready: sharedReadiness && slotAccepted(returnSlot) },
+    { step: 9, label: JOURNEY_LABELS[8], ready: sharedReadiness && proxyPidReadable && restartDirectoryReadable },
+    { step: 10, label: JOURNEY_LABELS[9], ready: sharedReadiness && productionGraph.private_renders_public_receipt_control },
+  ].map(item => ({ ...item, executed: false }));
+  const mutationRequests = [];
+  const blockers = [
+    ...(!proxyReachable ? ['candidate_proxy_unreachable'] : []),
+    ...(!candidatesMatch ? ['candidate_revision_mismatch'] : []),
+    ...(!importGraphReady ? ['production_import_graph_mismatch'] : []),
+    ...manifestHashes.filter(item => !item.matches).map(item => `manifest_hash_unverified:${item.path}`),
+    ...loopbackManifests.filter(item => !item.valid).map(item => `loopback_manifest_invalid:${item.label}`),
+    ...(!exportSlot.readable ? ['export_artifact_slot_unreadable'] : []),
+    ...(!returnSlot.readable ? ['return_artifact_slot_unreadable'] : []),
+    ...(exportSlot.readable && !slotAccepted(exportSlot) ? ['export_artifact_slot_pending'] : []),
+    ...(returnSlot.readable && !slotAccepted(returnSlot) ? ['return_artifact_slot_pending'] : []),
+    ...(!proxyPidReadable ? ['proxy_pid_unreadable'] : []),
+    ...(!restartDirectoryReadable ? ['proxy_restart_control_unreadable'] : []),
+    ...(fireControl.ready_to_fire === true ? [] : (fireControl.blocker_names ?? ['fire_control_red'])),
+  ];
+  const report = {
+    schema: 'postfiat.a666.r4.offline-ethereum-browser-preflight.v1',
+    mode: 'preflight_only',
+    candidate_revision: CANDIDATE_REVISION,
+    official_pass: readiness.every(item => item.executed && item.ready),
+    business_mutations: mutationRequests.length,
+    wallet_business_steps_executed: readiness.filter(item => item.executed).length,
+    ready_to_fire: readiness.every(item => item.ready) && fireControl.ready_to_fire === true,
+    fire_control_ready_observed: fireControl.ready_to_fire === true,
+    origin: { value: origin.href, loopback: ['127.0.0.1', 'localhost', '::1'].includes(origin.hostname) },
+    proxy: { reachable: proxyReachable, status: proxyStatus, pid_readable: proxyPidReadable },
+    manifest_hashes: manifestHashes,
+    loopback_manifests: loopbackManifests,
+    production_import_graph: productionGraph,
+    artifact_slots: {
+      export: { path: exportSlot.path, readable: exportSlot.readable, accepted: slotAccepted(exportSlot) },
+      return: { path: returnSlot.path, readable: returnSlot.readable, accepted: slotAccepted(returnSlot) },
+    },
+    step_readiness: readiness,
+    blockers: [...new Set(blockers)],
+    first_blocker: blockers[0] ?? null,
+  };
+  scanForbiddenFields(report);
+  await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
+  assert.equal(report.official_pass, false, 'preflight-only cannot report an official pass');
+  assert.equal(report.business_mutations, 0, 'preflight-only cannot issue business mutations');
+  return report;
 }
 
 async function createBrowserControlledWallet(page, passphrase) {
@@ -325,7 +461,8 @@ test('A666 R4 offline Ethereum rehearsal drives the production rendered wallet j
   timeout: MAX_ASYNC_WAIT_MS + 10 * 60 * 1_000,
 }, async () => {
   const origin = requiredLoopbackOrigin();
-  const asyncBudgetMs = requiredAsyncBudget();
+  const preflightOnly = process.env.POSTFIAT_R4_PREFLIGHT_ONLY === '1';
+  const asyncBudgetMs = preflightOnly ? null : requiredAsyncBudget();
   const fireControlPath = requiredPath('POSTFIAT_R4_FIRE_CONTROL_MANIFEST');
   const setupPath = requiredPath('POSTFIAT_R4_SETUP_MANIFEST');
   const deploymentPath = requiredPath('POSTFIAT_R4_DEPLOYMENT_MANIFEST');
@@ -343,12 +480,26 @@ test('A666 R4 offline Ethereum rehearsal drives the production rendered wallet j
     readJson(deploymentPath, 'deployment manifest'),
     verifyProductionGraph(),
   ]);
-  assert.equal(setup.candidate?.revision ?? setup.candidate_revision, CANDIDATE_REVISION);
-  assert.equal(deployment.candidate_revision ?? deployment.candidate?.revision, CANDIDATE_REVISION);
-  assert.equal(fireControl.candidate_revision ?? fireControl.bindings?.candidate_revision, CANDIDATE_REVISION);
+  assert.equal(manifestCandidateRevision(setup), CANDIDATE_REVISION);
+  assert.equal(manifestCandidateRevision(deployment), CANDIDATE_REVISION);
+  assert.equal(manifestCandidateRevision(fireControl), CANDIDATE_REVISION);
+  if (preflightOnly) {
+    await runConstructionPreflight({
+      origin, fireControl, setup, deployment, productionGraph,
+      fireControlPath, setupPath, deploymentPath,
+      exportSlotPath, returnSlotPath, proxyRestartPath, proxyPidPath, reportPath,
+    });
+    return;
+  }
   assertLoopbackManifest('setup manifest', setup);
   assertLoopbackManifest('deployment manifest', deployment);
   assert.equal(fireControl.ready_to_fire, true, 'fire-control must be computed GREEN before execution');
+  const executionManifestHashes = await Promise.all([
+    manifestHashObservation(fireControlPath, 'POSTFIAT_R4_FIRE_CONTROL_MANIFEST_SHA256'),
+    manifestHashObservation(setupPath, 'POSTFIAT_R4_SETUP_MANIFEST_SHA256'),
+    manifestHashObservation(deploymentPath, 'POSTFIAT_R4_DEPLOYMENT_MANIFEST_SHA256'),
+  ]);
+  assert.ok(executionManifestHashes.every(item => item.matches), 'full execution requires pinned manifest hashes');
 
   const passphrase = randomBytes(24).toString('hex');
   let seed = '';

@@ -18,9 +18,34 @@
       "wallet-web/src/lib/navcoin-export-relay.js",
       "wallet-web/src/lib/navcoin-return-relay.js"
     ],
-    "package_wiring_changed": false,
+    "package_wiring_changed": true,
     "product_source_changed": false,
     "journey_executed": false
+  },
+  "preflight": {
+    "command": "npm run test:r4-construction",
+    "environment_mode": "POSTFIAT_R4_PREFLIGHT_ONLY=1",
+    "exit_code": 0,
+    "runtime_ms": 846,
+    "matched_tests": 1,
+    "passed_tests": 1,
+    "failed_tests": 0,
+    "official_pass": false,
+    "business_mutations": 0,
+    "wallet_business_steps_executed": 0,
+    "ready_to_fire": false,
+    "first_blocker": "candidate_proxy_unreachable",
+    "report_path": "/tmp/a666-r4-journey-preflight-3693186.json",
+    "artifact_slots": {
+      "export": {
+        "readable": false,
+        "accepted": false
+      },
+      "return": {
+        "readable": false,
+        "accepted": false
+      }
+    }
   },
   "journey_steps": [
     {
@@ -132,5 +157,5 @@
     7,
     8
   ],
-  "first_blocker": "steps_7_8_content_addressed_proof_relay_slots_pending"
+  "first_blocker": "candidate_proxy_unreachable"
 }
