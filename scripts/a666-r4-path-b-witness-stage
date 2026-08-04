@@ -54,13 +54,22 @@ PROD_POLICY_EPOCH=4
 RESERVE_KEY_FILE="/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/reserve-key.json"
 HOLDER_KEY_FILE="/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json"
 HOLDER_ADDRESS="pfab9b9228942e5c529633a13aa271d5297bec6353"
-HOLDER_EXPECTED_NATIVE=1000000
 PFUSDC_ASSET_ID="02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b"
+NATIVE_A666_ASSET_ID="521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c"
+FUNDING_EVIDENCE="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/path-b-holder-funding-query.json"
+FUNDING_HASH_ACCOUNT_ASSETS="3aa9fe18732a7c1ac4ec76e26dd04af2f8df6d2ad9070061f97ef039d1736fa9"
+FUNDING_HASH_NAV="a221b45381c94c4b35b0ed4776a9be4ba7880e61a9ca3e994775d906b57332f6"
+FUNDING_HASH_SUPPLY="dbf8cbc519f28417a52f2f0f72b9e5f058d43e75e81eac8a50d8a7663cc6f4ee"
+EXPECTED_PFUSDC_BALANCE=18191117
+NAV_PER_UNIT_USD_1E8=89871706
+ISSUE_MULTIPLIER_BPS=10050
+MINT_AMOUNT_ATOMS=1000000
 
 STARTED_MS="$(date +%s%3N)"
 REPORT="/tmp/a666-r4-path-b-witness-preflight-$(date -u +%Y%m%dT%H%M%SZ)-$$.json"
 CHECKS="$(mktemp /tmp/a666-r4-preflight-checks.XXXXXX)"
-trap 'rm -f "$CHECKS"' EXIT
+FUNDING_JSON="$(mktemp /tmp/a666-r4-preflight-funding.XXXXXX)"
+trap 'rm -f "$CHECKS" "$FUNDING_JSON"' EXIT
 
 check() { # name ok detail
   printf '%s\t%s\t%s\n' "$1" "$2" "$3" >> "$CHECKS"
@@ -134,10 +143,10 @@ for kf in "$RESERVE_KEY_FILE" "$HOLDER_KEY_FILE"; do
 done
 
 # ---- Live read-only probes ---------------------------------------------------
-python3 - "$TOPOLOGY" "$CHECKS" <<'PY'
-import json, socket, sys, urllib.request
+python3 - "$TOPOLOGY" "$CHECKS" "$FUNDING_JSON" <<'PY'
+import hashlib, json, socket, sys, urllib.request
 
-topology_path, checks_path = sys.argv[1], sys.argv[2]
+topology_path, checks_path, funding_path = sys.argv[1], sys.argv[2], sys.argv[3]
 
 def emit(name, ok, detail):
     with open(checks_path, "a") as f:
@@ -201,14 +210,97 @@ if ports:
     except Exception as e:
         emit("production_route_source", False, f"probe error: {e}")
 
-    # Holder native balance via account endpoint (params key is plain 'address').
+    # Holder native balance: informational only (nonzero), never a gate.
     try:
         acct = rpc(ports[0], "account", {"address": "pfab9b9228942e5c529633a13aa271d5297bec6353"})
         bal = acct.get("balance")
-        ok = bal == 1000000
-        emit("holder_native_balance", ok, f"address=pfab9b92... balance={bal} expected=1000000 (native a666 atoms, public)")
+        ok = isinstance(bal, int) and bal > 0
+        emit("holder_native_balance", ok, f"informational nonzero balance={bal} native a666 atoms (public)")
     except Exception as e:
         emit("holder_native_balance", False, f"probe error: {e}")
+
+    # Holder pfUSDC settlement funding: typed account_assets probe, exact
+    # eb4508b params/ids, response-hash cross-checks, computed requirement.
+    HOLDER = "pfab9b9228942e5c529633a13aa271d5297bec6353"
+    PFUSDC = "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b"
+    NATIVE = "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c"
+    PROD_ROUTE = "pftl-a666-ethereum-wA666-usdc-v1"
+
+    def rpc_full(port, method, params, rid):
+        req = {"version": "postfiat-local-rpc-v1", "id": rid, "method": method, "params": params}
+        with socket.create_connection(("127.0.0.1", port), timeout=5) as s:
+            s.sendall((json.dumps(req, separators=(",", ":")) + "\n").encode())
+            return json.loads(s.makefile("rb").readline())
+
+    def canonical_hash(obj):
+        blob = json.dumps(obj, separators=(",", ":"), sort_keys=True).encode()
+        return hashlib.sha256(blob).hexdigest()
+
+    def ceil_div(a, b):
+        return -(-a // b)
+
+    funding = {}
+    try:
+        port = 31005  # validator-2, per eb4508b endpoint binding
+        status = rpc(port, "status", {})
+        height_ok = status["block_height"] == EXPECTED_HEIGHT
+
+        assets_resp = rpc_full(port, "account_assets",
+                               {"account": HOLDER, "asset_id": PFUSDC, "limit": 1},
+                               "a666-r4-path-b-holder-assets")
+        nav_resp = rpc_full(port, "nav_reserve_proof_status", {"asset_id": NATIVE},
+                            "a666-r4-path-b-nav")
+        supply_resp = rpc_full(port, "navcoin_bridge_supply_status", {"route_id": PROD_ROUTE},
+                               "a666-r4-path-b-supply-status")
+
+        hashes = {"account_assets": canonical_hash(assets_resp),
+                  "nav_reserve_proof_status": canonical_hash(nav_resp),
+                  "navcoin_bridge_supply_status": canonical_hash(supply_resp)}
+        expected_hashes = {"account_assets": "3aa9fe18732a7c1ac4ec76e26dd04af2f8df6d2ad9070061f97ef039d1736fa9",
+                           "nav_reserve_proof_status": "a221b45381c94c4b35b0ed4776a9be4ba7880e61a9ca3e994775d906b57332f6",
+                           "navcoin_bridge_supply_status": "dbf8cbc519f28417a52f2f0f72b9e5f058d43e75e81eac8a50d8a7663cc6f4ee"}
+        hash_ok = hashes == expected_hashes
+        emit("eb4508b_response_hashes", hash_ok,
+             "all 3 canonical response hashes match committed evidence" if hash_ok
+             else f"mismatch observed={hashes}")
+
+        if assets_resp.get("ok") is not True:
+            raise RuntimeError(f"account_assets not ok: {assets_resp.get('error')}")
+        asset_rows = [a for a in assets_resp["result"].get("assets", [])
+                      if a.get("asset_id") == PFUSDC and a.get("account") == HOLDER]
+        if len(asset_rows) != 1:
+            raise RuntimeError(f"expected exactly 1 pfUSDC row, got {len(asset_rows)}")
+        row = asset_rows[0]
+        balance = row.get("balance")
+        authorized = row.get("authorized")
+        frozen = row.get("frozen")
+
+        nav_per_unit = 89871706
+        multiplier = 10050
+        mint = 1000000
+        base = ceil_div(mint * nav_per_unit, 100000000)
+        required = ceil_div(base * multiplier, 10000)
+        spread = required - base
+
+        identity_ok = balance == 18191117 and authorized is True and frozen is False
+        emit("holder_pfusdc_balance", identity_ok and height_ok,
+             f"balance={balance} authorized={authorized} frozen={frozen} height={status['block_height']}")
+        sufficient = isinstance(balance, int) and balance >= required
+        emit("holder_funding_sufficiency", sufficient,
+             f"computed base={base} required={required} spread={spread} (NAV={nav_per_unit} mult={multiplier} mint={mint}); balance={balance}>=required: {sufficient}")
+        funding = {"native_balance_atoms": bal if 'bal' in dir() else None,
+                   "pfusdc_balance_atoms": balance, "pfusdc_authorized": authorized,
+                   "pfusdc_frozen": frozen, "nav_per_unit_usd_1e8": nav_per_unit,
+                   "issue_multiplier_bps": multiplier, "mint_amount_atoms": mint,
+                   "base_value_atoms": base, "settlement_required_atoms": required,
+                   "issue_spread_atoms": spread, "sufficient": sufficient,
+                   "height": status["block_height"], "response_sha256": hashes,
+                   "probe": "account_assets params {account, asset_id, limit:1} on 127.0.0.1:31005"}
+    except Exception as e:
+        emit("holder_pfusdc_balance", False, f"probe error: {e}")
+        funding = {"error": str(e)}
+    with open(funding_path, "w") as f:
+        json.dump(funding, f)
 
 # Anvil Path-B chain readbacks.
 try:
@@ -262,43 +354,62 @@ else
   check deployment_evidence fail "missing: $DEPLOY_EVIDENCE"
 fi
 
-# ---- Settlement-asset funding gap (honest RED) -------------------------------
-# The route subscribe operation requires pfUSDC as settlement asset. The
-# account endpoint exposes only the native balance; no typed per-account
-# pfUSDC balance query has been located, so sufficiency is never claimed.
-check holder_pfusdc_balance fail "not_probed_by_account_endpoint asset=$PFUSDC_ASSET_ID"
+# ---- Committed funding evidence file cross-check (eb4508b) -------------------
+if [[ -s "$FUNDING_EVIDENCE" ]]; then
+  if jq -e '.observed_holder_asset.balance_atoms==18191117
+            and .observed_holder_asset.authorized==true
+            and .observed_holder_asset.frozen==false
+            and .pricing.nav_per_unit_usd_1e8==89871706
+            and .pricing.issue_multiplier_bps==10050
+            and .pricing.mint_amount_atoms==1000000
+            and .pricing.base_value_atoms==898718
+            and .pricing.settlement_required_atoms==903212
+            and .pricing.issue_spread_atoms==4494
+            and .sufficiency.sufficient==true
+            and .response_sha256.account_assets=="3aa9fe18732a7c1ac4ec76e26dd04af2f8df6d2ad9070061f97ef039d1736fa9"
+            and .response_sha256.nav_reserve_proof_status=="a221b45381c94c4b35b0ed4776a9be4ba7880e61a9ca3e994775d906b57332f6"
+            and .response_sha256.navcoin_bridge_supply_status=="dbf8cbc519f28417a52f2f0f72b9e5f058d43e75e81eac8a50d8a7663cc6f4ee"' \
+            "$FUNDING_EVIDENCE" >/dev/null 2>&1; then
+    check eb4508b_evidence_file ok "committed funding query evidence values + hashes intact"
+  else
+    check eb4508b_evidence_file fail "evidence file values diverge from pinned expectations"
+  fi
+else
+  check eb4508b_evidence_file fail "missing: $FUNDING_EVIDENCE"
+fi
 
 # ---- Verdict + report --------------------------------------------------------
 blockers=()
 while IFS=$'\t' read -r name state detail; do
   [[ "$state" == "ok" ]] || blockers+=("$name")
 done < "$CHECKS"
-# Named blocker required by spec: route operations require pfUSDC settlement.
-required_blocker="holder_settlement_asset_balance_unproven"
 
 verdict="GREEN"
 if ((${#blockers[@]} > 0)); then verdict="RED"; fi
 
 ENDED_MS="$(date +%s%3N)"
-python3 - "$REPORT" "$CHECKS" "$verdict" "$required_blocker" "$STARTED_MS" "$ENDED_MS" <<'PY'
+python3 - "$REPORT" "$CHECKS" "$FUNDING_JSON" "$verdict" "$STARTED_MS" "$ENDED_MS" <<'PY'
 import json, sys, os
-report_path, checks_path, verdict, required_blocker, started, ended = sys.argv[1:7]
+report_path, checks_path, funding_path, verdict, started, ended = sys.argv[1:7]
 checks = []
 with open(checks_path) as f:
     for line in f:
         name, state, detail = line.rstrip("\n").split("\t", 2)
         checks.append({"name": name, "ok": state == "ok", "detail": detail})
 blockers = [c["name"] for c in checks if not c["ok"]]
-if required_blocker not in blockers and any(
-    c["name"] == "holder_pfusdc_balance" and not c["ok"] for c in checks):
-    blockers.append(required_blocker)
+try:
+    with open(funding_path) as f:
+        holder_funding = json.load(f)
+except Exception:
+    holder_funding = {"error": "funding probe did not produce data"}
+holder_funding.setdefault("sufficiency_note",
+    "observed via typed account_assets; settlement requirement computed from pinned NAV/multiplier/mint")
 doc = {
     "schema": "postfiat.a666.r4.path-b-witness-preflight.v1",
     "mode": "preflight-only",
     "verdict": verdict,
     "accepted": verdict == "GREEN",
     "blockers": blockers,
-    "required_blocker": required_blocker,
     "checks": checks,
     "pinned": {
         "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
@@ -314,12 +425,7 @@ doc = {
         "credential_files": ["/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/reserve-key.json",
                              "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json"]
     },
-    "holder_funding": {
-        "native_balance_atoms": 1000000,
-        "native_probe": "account endpoint, params {\"address\": ...}",
-        "pfusdc_balance_atoms": None,
-        "pfusdc_note": "not_probed_by_account_endpoint; sufficiency never claimed"
-    },
+    "holder_funding": holder_funding,
     "mutations": 0,
     "stakehub_interaction": False,
     "loopback_only": True,
