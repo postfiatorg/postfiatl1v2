@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+# a666-r4-stakehub-official-window — authorized StakeHub absence window control
+# for the A666 R4 official browser run.
+#
+# Actions:
+#   status   read-only: print the inventoried units and the current active StakeHub set
+#   stop     revalidate inventory, stop exactly the one inventoried restart target,
+#            prove zero active StakeHub user units, write the absence evidence JSON
+#   restart  restore exactly the inventory active set and prove count/name equality
+#
+# Mandatory teardown contract: after the official run passes, fails, or freezes,
+# action "restart" MUST restore exactly the inventory active set (the dashboard
+# only) and prove active-count/name equality. The only exception is an explicit
+# active-investigation freeze recorded by the operator.
+#
+# Hard limits: only systemctl --user start/stop of the single inventoried unit.
+# No logs, argv, environment, funds, balances, keys, data, config, or software
+# reads. No other StakeHub unit is ever touched.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+INVENTORY="$REPO_ROOT/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/stakehub-restart-proof.json"
+ABSENCE="$REPO_ROOT/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/stakehub-official-absence.json"
+UNIT="stakehub-private-swap-dashboard.service"
+STOP_WAIT_SECONDS=20
+START_WAIT_SECONDS=30
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+
+active_stakehub_units() {
+  systemctl --user list-units --type=service --state=active 'stakehub*' --no-legend --plain \
+    | awk '{print $1}' | sort
+}
+
+validate_inventory() {
+  [[ -f "$INVENTORY" ]] || die "inventory missing: $INVENTORY"
+  local mode
+  mode="$(stat -c '%a' "$INVENTORY")"
+  [[ "$mode" == "600" ]] || die "inventory mode must be 600, observed $mode"
+  jq -e '
+    .schema == "postfiat.a666.r4.stakehub-restart-inventory.v1"
+    and .inventory_only == true
+    and .credentials_included == false
+    and (.observed_units | type == "array")
+    and ([.observed_units[] | select(.restart_target == true)] | length == 1)
+    and (.observed_units[] | select(.restart_target == true) | .name)
+        == "stakehub-private-swap-dashboard.service"
+    and .active_unit_count == 1
+    and .active_unit_names == ["stakehub-private-swap-dashboard.service"]
+  ' "$INVENTORY" > /dev/null || die "inventory schema/restart-target validation failed"
+}
+
+inventory_hash() { sha256sum "$INVENTORY" | awk '{print $1}'; }
+
+require_exact_active_set() {
+  local expected="$1" observed
+  observed="$(active_stakehub_units)"
+  [[ "$observed" == "$expected" ]] \
+    || die "active StakeHub set drift: expected [$expected], observed [$observed]"
+}
+
+action_status() {
+  validate_inventory
+  echo "inventory: $INVENTORY"
+  echo "inventory_sha256: $(inventory_hash)"
+  echo "active_stakehub_units:"
+  active_stakehub_units | sed 's/^/  /' || true
+  echo "inventory_units:"
+  jq -r '.observed_units[] | "  \(.name) \(.active_state)/\(.sub_state) restart_target=\(.restart_target)"' "$INVENTORY"
+}
+
+action_stop() {
+  validate_inventory
+  local before before_count
+  before="$(active_stakehub_units)"
+  before_count="$(grep -c . <<<"$before" || true)"
+  require_exact_active_set "$UNIT"
+
+  set +e
+  systemctl --user stop "$UNIT"
+  local stop_exit=$?
+  set -e
+  [[ $stop_exit -eq 0 ]] || die "systemctl --user stop $UNIT exit=$stop_exit"
+
+  local waited=0 state
+  while (( waited < STOP_WAIT_SECONDS )); do
+    state="$(systemctl --user is-active "$UNIT" 2>/dev/null || true)"
+    [[ "$state" == "active" ]] || break
+    sleep 1; waited=$((waited + 1))
+  done
+  state="$(systemctl --user is-active "$UNIT" 2>/dev/null || true)"
+  [[ "$state" != "active" ]] || die "$UNIT still active after ${STOP_WAIT_SECONDS}s"
+
+  local after after_count
+  after="$(active_stakehub_units)"
+  after_count="$(grep -c . <<<"$after" || true)"
+  [[ "$after_count" == "0" ]] || die "active StakeHub set not empty after stop: [$after]"
+
+  umask 077
+  jq -n \
+    --arg inventory_path "$INVENTORY" \
+    --arg inventory_sha256 "$(inventory_hash)" \
+    --arg before_name "$before" \
+    --argjson before_count "$before_count" \
+    --argjson stop_exit "$stop_exit" \
+    '{
+      schema: "postfiat.a666.r4.stakehub-official-absence.v1",
+      inventory_path: $inventory_path,
+      inventory_sha256: $inventory_sha256,
+      before_active_count: $before_count,
+      before_active_names: [$before_name],
+      stop_action: "systemctl --user stop stakehub-private-swap-dashboard.service",
+      stop_exit_code: $stop_exit,
+      after_active_count: 0,
+      after_active_names: [],
+      official_absence_proof: true,
+      restart_required: true,
+      restart_verified_after_run: false,
+      mutations: ["systemctl --user stop stakehub-private-swap-dashboard.service"],
+      mutation_count: 1,
+      funds_actions: 0,
+      data_actions: 0,
+      keys_actions: 0,
+      config_actions: 0,
+      software_actions: 0,
+      credentials_included: false,
+      teardown_contract: "after the official run passes, fails, or freezes, action restart must restore exactly the inventory active set (stakehub-private-swap-dashboard.service only) and prove active count==1 with name equality; the only exception is an explicit active-investigation freeze"
+    }' > "$ABSENCE.tmp"
+  chmod 600 "$ABSENCE.tmp"
+  mv "$ABSENCE.tmp" "$ABSENCE"
+  echo "absence_evidence: $ABSENCE (mode $(stat -c '%a' "$ABSENCE"))"
+  echo "official_absence_proof=true after_active_count=0 stop_exit=$stop_exit"
+}
+
+action_restart() {
+  validate_inventory
+  set +e
+  systemctl --user start "$UNIT"
+  local start_exit=$?
+  set -e
+  [[ $start_exit -eq 0 ]] || die "systemctl --user start $UNIT exit=$start_exit"
+
+  local waited=0 state
+  while (( waited < START_WAIT_SECONDS )); do
+    state="$(systemctl --user is-active "$UNIT" 2>/dev/null || true)"
+    [[ "$state" == "active" ]] && break
+    sleep 1; waited=$((waited + 1))
+  done
+  [[ "${state:-}" == "active" ]] || die "$UNIT not active after ${START_WAIT_SECONDS}s (state=${state:-unknown})"
+
+  require_exact_active_set "$UNIT"
+  echo "restart_proof=true active_count=1 active_name=$UNIT start_exit=$start_exit"
+}
+
+case "${1:-}" in
+  status)  action_status ;;
+  stop)    action_stop ;;
+  restart) action_restart ;;
+  *) die "usage: $0 {status|stop|restart}" ;;
+esac

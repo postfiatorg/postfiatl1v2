@@ -1,0 +1,27 @@
+{
+  "schema": "postfiat.a666.r4.stakehub-official-absence.v1",
+  "inventory_path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/stakehub-restart-proof.json",
+  "inventory_sha256": "658e735d825f6109b0f325d5dd450256060c3e7e2d47c2eb8edae68900feb882",
+  "before_active_count": 1,
+  "before_active_names": [
+    "stakehub-private-swap-dashboard.service"
+  ],
+  "stop_action": "systemctl --user stop stakehub-private-swap-dashboard.service",
+  "stop_exit_code": 0,
+  "after_active_count": 0,
+  "after_active_names": [],
+  "official_absence_proof": true,
+  "restart_required": true,
+  "restart_verified_after_run": false,
+  "mutations": [
+    "systemctl --user stop stakehub-private-swap-dashboard.service"
+  ],
+  "mutation_count": 1,
+  "funds_actions": 0,
+  "data_actions": 0,
+  "keys_actions": 0,
+  "config_actions": 0,
+  "software_actions": 0,
+  "credentials_included": false,
+  "teardown_contract": "after the official run passes, fails, or freezes, action restart must restore exactly the inventory active set (stakehub-private-swap-dashboard.service only) and prove active count==1 with name equality; the only exception is an explicit active-investigation freeze"
+}
