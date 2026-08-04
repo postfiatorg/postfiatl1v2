@@ -1,18 +1,36 @@
 {
   "schema": "postfiat.a666.r4.return-artifact-slot.v1",
-  "status": "failed",
-  "accepted": false,
-  "failure_code": "return_import_pending_destination_consume_green",
-  "failure_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/return-stage-terminal.json",
-  "destination_consume": {
-    "certified_count": 1,
-    "outstanding_bridge_claims_atoms": 0,
-    "ethereum_spendable_supply_atoms": 1000000
+  "status": "accepted",
+  "accepted": true,
+  "run_id": "a666-r4-return-import-existing-certificate-20260804-v1",
+  "artifact_path": "/tmp/a666-r4-return-import-20260804T215527Z-1331654/artifacts-return-import/summary.json",
+  "artifact_sha256": "61bf4cbcbc291f2b148e4a228d60304899af8bd81327415c62a21c3c6da34357",
+  "receipt_identity": "44d6d3b51177d8610cfcb893c71d1021f21dcdef516ad26b8ea886aab540cf26867afa4ff953076490506642f6b55cb3",
+  "burn_event_hash": "428dc481c9e538a0c9612b82d23928d120214984c58bf21899eeebeb69ac1e9a",
+  "burn_transaction": "0xf624efd3c8b9acc7bac184e5ff4067f8163872f1b07eca97a9442c0185d3709a",
+  "observed_chain_state": {
+    "height": 833,
+    "tip": "569d64e178273b0bff2c935afaef9fea7ba94d04c2af3b7f0611ec9743a6197e8864364ba435aa5ee21b8c61d3fc12aa",
+    "state_root": "e06949b6066150d2b7703bffec3f0e091cc617922452e19a0933df0c728e23060b91dfbfa1d521634f5809ecc2315d89",
+    "finalized": true
   },
-  "certified_import_count": 0,
+  "conservation": {
+    "equal": true,
+    "outstanding_bridge_claims_atoms_after": 0,
+    "ethereum_spendable_delta": -1000000,
+    "pftl_spendable_delta": 1000000,
+    "pending_return_import_claims_atoms": 0,
+    "invariant_holds": true
+  },
+  "certified_import_count": 1,
+  "certified_destination_consume_count": 1,
   "official_invocation_count": 0,
+  "confirmation_note": "live operation inherits a natural approximately 12-block confirmation wait; no block-mining action is used live",
+  "lineage": "vote schema .validator_id repair -> destination-consume blocker -> certified destination consume green (9f7bf82) -> this certified return import",
   "distinct_from_export_slot": true,
   "live_chain": false,
   "custody_material_present": false,
-  "stakehub_interaction": false
+  "stakehub_interaction": false,
+  "business_mutations": 0,
+  "ok": true
 }

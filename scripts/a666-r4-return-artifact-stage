@@ -141,6 +141,9 @@ if supply["ethereum_spendable_supply_atoms"] < 1000000:
         f"outstanding_bridge_claims_atoms={supply['outstanding_bridge_claims_atoms']} "
         "return import would reject with insufficient_pftl_uniswap_ethereum_supply"
     )
+assert supply["outstanding_bridge_claims_atoms"] == 0, supply
+assert supply["ethereum_spendable_supply_atoms"] == 1000000, supply
+assert supply["pftl_spendable_supply_atoms"] == 0, supply
 assert supply["invariant_holds"] is True, supply
 with open(f"{runtime}/before.json", "w") as f:
     json.dump({"height": status["block_height"], "tip": status["block_tip_hash"],
@@ -284,10 +287,21 @@ PY
           count: 1, tx_id: $tx, before_height: $before_h, end_height: $final_h,
           receipt_accepted_six_of_six: true,
           finalized: {height: $final_h, tip: $tip, state_root: $root, six_way_equal: true},
-          conservation: {ethereum_spendable_delta: -1000000, pftl_spendable_delta: 1000000,
+          conservation: {outstanding_bridge_claims_atoms_after: 0,
+            ethereum_spendable_delta: -1000000, pftl_spendable_delta: 1000000,
+            returned_pftl_supply_increase_atoms: 1000000,
             pending_return_import_claims_atoms: 0, invariant_holds: true}},
-        transactions: {certified_import_count: 1, official_invocation_count: 0,
-          upstream_local_anvil_count_unreplayed: 3},
+        destination_consume_lineage: {
+          commit: "9f7bf82", certified_count: 1,
+          tx_id: "6226cdf03099d67878a836f04c6936c06ae4474484cb97b8c89127e2ce86122f2113d033a93acc66c0cfaefb8cc6fc5f",
+          note: "certified destination consume at height 832 moved the accepted claim into Ethereum-spendable supply before this import"},
+        schema_depth_consume_lineage: [
+          "v4: checkpoint vote schema assertion repaired to production .validator_id",
+          "v5: destination_consume_not_staged blocker identified by computed preflight",
+          "v6: certified destination consume green at height 832, zero blocks mined",
+          "v5-green: single certified return import closes the distinct return slot"],
+        transactions: {certified_import_count: 1, certified_destination_consume_count: 1,
+          official_invocation_count: 0, upstream_local_anvil_count_unreplayed: 3},
         environment: {loopback_only: true, live_chain: false, stakehub: false,
           credentials_accessed: false, business_value: 0}
       }' > "$terminal"
@@ -296,17 +310,21 @@ PY
       --argjson h "$EXPECTED_HEIGHT" --arg tip "$FINAL_TIP" --arg root "$FINAL_ROOT" \
       '{
         schema: "postfiat.a666.r4.return-artifact-slot.v1",
-        status: "accepted", accepted: true,
+        status: "accepted", ok: true, accepted: true,
         run_id: "a666-r4-return-import-existing-certificate-20260804-v1",
         artifact_path: $summary, artifact_sha256: $summary_sha,
         receipt_identity: $tx,
         burn_event_hash: "428dc481c9e538a0c9612b82d23928d120214984c58bf21899eeebeb69ac1e9a",
         burn_transaction: "0xf624efd3c8b9acc7bac184e5ff4067f8163872f1b07eca97a9442c0185d3709a",
         observed_chain_state: {height: $h, tip: $tip, state_root: $root, finalized: true},
-        conservation: {equal: true, ethereum_spendable_delta: -1000000,
+        conservation: {equal: true, outstanding_bridge_claims_atoms_after: 0,
+          ethereum_spendable_delta: -1000000,
           pftl_spendable_delta: 1000000, pending_return_import_claims_atoms: 0,
           invariant_holds: true},
-        certified_import_count: 1, official_invocation_count: 0,
+        certified_import_count: 1, certified_destination_consume_count: 1,
+        official_invocation_count: 0,
+        confirmation_note: "live operation inherits a natural approximately 12-block confirmation wait; no block-mining action is used live",
+        lineage: "vote schema .validator_id repair -> destination-consume blocker -> certified destination consume green (9f7bf82) -> this certified return import",
         distinct_from_export_slot: true,
         live_chain: false, custody_material_present: false, stakehub_interaction: false,
         business_mutations: 0
