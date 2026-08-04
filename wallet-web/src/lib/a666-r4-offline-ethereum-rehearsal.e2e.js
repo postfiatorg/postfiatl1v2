@@ -1003,3 +1003,47 @@ test('A666 R4 official launch contract accepts a complete synthetic input map (r
   const contract = officialLaunchContract(syntheticOfficialInputs());
   assert.deepEqual(contract, { ready_to_launch: true, missing_inputs: [], failed_checks: [] });
 });
+
+function setupProvenanceGate(setup) {
+  // Required fire-control behavior for candidate_revision_and_provenance:
+  // the candidate-bound setup manifest must also pin the wallet package
+  // version the official journey asserts at step 1. Pure and deterministic;
+  // invokes nothing.
+  const missingInputs = [];
+  if (manifestCandidateRevision(setup) !== CANDIDATE_REVISION) missingInputs.push('candidate_revision');
+  const version = String(setup?.wallet?.package_version ?? setup?.wallet_package_version ?? '');
+  if (!/^\d+\.\d+\.\d+$/.test(version)) missingInputs.push('wallet.package_version');
+  const ok = missingInputs.length === 0;
+  return {
+    candidate_revision_and_provenance: ok,
+    ready_to_fire: ok,
+    missing_inputs: missingInputs,
+    official_journey_invocations: 0,
+  };
+}
+
+test('A666 R4 RED-FIRST gate refuses a setup manifest missing wallet package version (official v2 step 1, c7602be)', {
+  todo: 'RED-first reproduction: the current aggregator accepts the committed failed-run setup manifest without wallet package version (candidate_revision_and_provenance=true false-green). Convert to a strict assertion with the green gate fix.',
+}, async () => {
+  const { execFileSync } = await import('node:child_process');
+  const repoRoot = resolve(WALLET_ROOT, '..');
+  const setupPath = join(repoRoot, 'docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/setup-endpoints-manifest.json');
+  // Fixture: the actual committed setup-manifest shape from the failed
+  // official v2 run, with any wallet package version omitted.
+  const fixture = JSON.parse(await readFile(setupPath, 'utf8'));
+  if (fixture.wallet) delete fixture.wallet.package_version;
+  delete fixture.wallet_package_version;
+
+  const required = setupProvenanceGate(fixture);
+  assert.equal(required.candidate_revision_and_provenance, false, 'required gate must refuse the incomplete setup manifest');
+  assert.equal(required.ready_to_fire, false);
+  assert.equal(required.official_journey_invocations, 0);
+  assert.ok(required.missing_inputs.includes('wallet.package_version'));
+
+  const aggregate = JSON.parse(execFileSync(
+    join(repoRoot, 'scripts/a666-r4-journey-fire-control-aggregate'), [], { encoding: 'utf8' },
+  ));
+  const current = aggregate.checks.find(check => check.id === 'candidate_revision_and_provenance');
+  assert.equal(current.ok, false,
+    'FALSE-GREEN: current aggregator reports candidate_revision_and_provenance=true for a setup manifest that omits wallet package version; official v2 failed at step 1 (c7602be) after consuming invocation 1 with 0 business mutations');
+});
