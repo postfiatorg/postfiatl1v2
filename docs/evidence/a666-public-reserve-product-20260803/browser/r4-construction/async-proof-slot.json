@@ -1,47 +1,16 @@
 {
   "schema": "postfiat.a666.r4.async-proof-slot.v1",
-  "status": "watching",
+  "status": "accepted",
   "run_id": "a666-r4-receipt-prover-pathb-20260804-v3",
-  "watcher": {
-    "unit": "a666-r4-path-b-proof-slot-watch-20260804-v1.service",
-    "pid": 134452,
-    "live": true,
-    "poll_interval_ms": 5000,
-    "maximum_wait_ms": 43200000
-  },
-  "inputs": {
-    "fired_evidence_directory": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/receipt-verifier-spike",
-    "out_dir_source": "exact_run_fired_evidence_only",
-    "witness_stage": {
-      "path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/path-b-witness-stage.json",
-      "file_sha256": "e9fc6c12ddd2df59d8139101fae9da9672cb3bdd879aff546f8a221234737c5b",
-      "committed_witness_sha256": "8c2c7ee6d3209bfb21e5d442de7e80cb2ab4affabe06a0008527717eaae13ef4"
-    },
-    "pre_prove_binding_check": {
-      "path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/pre-prove-binding-check.json",
-      "file_sha256_at_launch": "02131d034f51129e59703c6ae25404a072a72284f826ed4dbf3a23be41adab06",
-      "required_green": true
-    }
-  },
-  "required_terminal_artifacts": [
-    "proof.bin",
-    "proof-calldata.bin",
-    "public-values.bin",
-    "proof-report.json"
-  ],
-  "self_test": {
-    "wrong_witness_hash_rejected": true,
-    "wrong_vkey_rejected": true,
-    "missing_proof_rejected": true
-  },
-  "export_slot_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/export-artifact-slot.json",
+  "watcher_unit": "a666-r4-receipt-prover-pathb-20260804-v3",
+  "export_slot_path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/export-artifact-slot.json",
+  "fired_evidence_path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/receipt-verifier-spike/pathb-v3-fired.json",
+  "poll_interval_ms": 5000,
+  "maximum_wait_ms": 43200000,
   "inline_proving_forbidden": true,
   "prover_invocations": 0,
   "official_pass": false,
   "business_mutations": 0,
-  "custody_material_present": false,
-  "live_chain": false,
-  "stakehub_interaction": false,
-  "export_slot_accepted": false,
-  "first_blocker": "path_b_v3_proof_artifacts_pending"
+  "export_slot_accepted": true,
+  "first_blocker": null
 }

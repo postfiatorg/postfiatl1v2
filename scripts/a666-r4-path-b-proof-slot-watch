@@ -37,20 +37,26 @@ sources_green() {
   ' "$PREPROVE" >/dev/null 2>&1
 }
 
-find_fired() {
-  python3 - "$FIRED_DIR" "$RUN_ID" <<'PY'
+select_fired() {
+  python3 - "$1" "$2" <<'PY'
 import glob,json,os,sys
 directory,run_id=sys.argv[1:]; matches=[]
 for path in glob.glob(os.path.join(directory,"*fired*.json")):
  try: value=json.load(open(path,encoding="utf-8"))
  except (OSError,ValueError): continue
- if value.get("run_id")!=run_id or value.get("fired") is not True or value.get("fire_exit_code")!=0: continue
- out=value.get("out_dir"); out=out.get("path") if isinstance(out,dict) else out
- unit=value.get("systemd_unit",{}).get("unit") or f"{run_id}.service"
- if isinstance(out,str) and out: matches.append((path,out,unit))
+ if value.get("schema")!="postfiat.a666.r4.receipt-prover-pathb-v3-fired.v1": continue
+ if value.get("run_id")!=run_id or value.get("fired") is not True: continue
+ if value.get("probe_exit_code")!=0 or value.get("detached") is not True: continue
+ out=value.get("out_dir"); unit=value.get("unit")
+ if isinstance(out,str) and out and isinstance(unit,str) and unit:
+  matches.append((path,out,unit))
 if len(matches)!=1: raise SystemExit(1)
 print("\t".join(matches[0]))
 PY
+}
+
+find_fired() {
+  select_fired "$FIRED_DIR" "$RUN_ID"
 }
 
 unit_success() {
@@ -74,7 +80,7 @@ artifacts_green() {
 }
 
 self_test() {
-  local root
+  local root shape variant
   root="$(mktemp -d /tmp/a666-r4-proof-slot-selftest-XXXXXXXX)"; chmod 700 "$root"
   printf '{"artifacts":{"witness_sha256":"wrong"}}\n' >"$root/witness.json"
   ! jq -e --arg expected "$WITNESS_SHA" '.artifacts.witness_sha256==$expected' "$root/witness.json" >/dev/null
@@ -82,8 +88,23 @@ self_test() {
   printf '{"program_vkey":"wrong"}\n' >"$root/wrong-vkey/proof-report.json"
   ! jq -e --arg expected "$VKEY" '.program_vkey==$expected' "$root/wrong-vkey/proof-report.json" >/dev/null
   [[ ! -s "$root/missing-proof/proof.bin" ]]
+
+  shape="$(jq -nc --arg run "$RUN_ID" '{schema:"postfiat.a666.r4.receipt-prover-pathb-v3-fired.v1",run_id:$run,fired:true,probe_exit_code:0,detached:true,out_dir:"/tmp/proof-out",unit:"proof-unit"}')"
+  for variant in accepted wrong-run probe-failed non-detached missing-out; do
+    mkdir "$root/$variant"
+  done
+  printf '%s\n' "$shape" >"$root/accepted/pathb-v3-fired.json"
+  jq '.run_id="wrong"' <<<"$shape" >"$root/wrong-run/pathb-v3-fired.json"
+  jq '.probe_exit_code=1' <<<"$shape" >"$root/probe-failed/pathb-v3-fired.json"
+  jq '.detached=false' <<<"$shape" >"$root/non-detached/pathb-v3-fired.json"
+  jq 'del(.out_dir)' <<<"$shape" >"$root/missing-out/pathb-v3-fired.json"
+  select_fired "$root/accepted" "$RUN_ID" >/dev/null
+  ! select_fired "$root/wrong-run" "$RUN_ID" >/dev/null 2>&1
+  ! select_fired "$root/probe-failed" "$RUN_ID" >/dev/null 2>&1
+  ! select_fired "$root/non-detached" "$RUN_ID" >/dev/null 2>&1
+  ! select_fired "$root/missing-out" "$RUN_ID" >/dev/null 2>&1
   rm -rf "$root"
-  echo 'a666_r4_path_b_proof_slot_self_test=ok wrong_witness_rejected=true wrong_vkey_rejected=true missing_proof_rejected=true'
+  echo 'a666_r4_path_b_proof_slot_self_test=ok producer_schema_accepted=true wrong_run_rejected=true probe_failure_rejected=true non_detached_rejected=true missing_out_dir_rejected=true wrong_witness_rejected=true wrong_vkey_rejected=true missing_proof_rejected=true'
 }
 
 publish() {
