@@ -52,20 +52,87 @@ TUNED_ENV=(
 )
 
 FLEET_CONTROL_REQUEST="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-teardown.request"
-DEPS_CONTROL_REQUEST="/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/teardown.request"
-PAUSE_COMMANDS=(
-  "scripts/a666-r4-candidate-proxy-stage --teardown"
-  "printf 'teardown\\n' > $FLEET_CONTROL_REQUEST"
-  "printf 'teardown\\n' > $DEPS_CONTROL_REQUEST"
-  "scripts/a666-r4-private-swap-stage teardown"
-)
-RESTART_COMMANDS=(
-  "scripts/a666-r4-construction-fleet-stage stage"
-  "scripts/a666-r4-private-swap-dependencies-stage stage"
-  "scripts/a666-r4-private-swap-stage stage"
-  "scripts/a666-r4-candidate-proxy-stage"
-)
-PAUSED_PORTS=(31001 31003 31005 31007 31009 31011 31021 8798)
+DEPS_EVIDENCE="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/private-swap-dependencies.json"
+ANVIL_EVIDENCE="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/ethereum-contract-stage.json"
+DEPS_RUNTIME_GLOB="/tmp/a666-r4-private-swap-dependencies-39f7fae/run-*"
+DEPS_ASSET_PORT=8799
+ANVIL_PORT=8547
+
+# Resolve the CURRENT dependency teardown control from committed construction
+# evidence first, then from validated runtime manifests; a candidate is valid
+# only when its recorded asset-service and round-driver PIDs are live and the
+# asset service answers on its loopback port. Never falls back to a stale path.
+resolve_deps_control() {
+  python3 - "$DEPS_EVIDENCE" "$DEPS_RUNTIME_GLOB" "$DEPS_ASSET_PORT" <<'PY'
+import glob, json, os, socket, sys
+evidence, pattern, port = sys.argv[1], sys.argv[2], int(sys.argv[3])
+candidates = []
+try:
+    data = json.load(open(evidence))
+    control = data.get("paths", {}).get("teardown_control")
+    if control:
+        candidates.append(control)
+except Exception:
+    pass
+for root in sorted(glob.glob(pattern), reverse=True):
+    candidates.append(os.path.join(root, "teardown.request"))
+
+def alive(pid):
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except Exception:
+        return False
+
+for control in candidates:
+    root = os.path.dirname(control)
+    pids_file = os.path.join(root, "pids.json")
+    if not os.path.isfile(pids_file):
+        continue
+    try:
+        pids = json.load(open(pids_file))
+    except Exception:
+        continue
+    if not (alive(pids.get("asset_service_pid", -1)) and alive(pids.get("round_driver_pid", -1))):
+        continue
+    try:
+        socket.create_connection(("127.0.0.1", port), timeout=3).close()
+    except Exception:
+        continue
+    print(control)
+    sys.exit(0)
+sys.exit(1)
+PY
+}
+
+# Resolve the exact Anvil process recorded by the B evidence; the pause stops
+# only this PID after verifying the live process identity (executable and
+# loopback port) against the record. No pattern kills.
+resolve_anvil_target() {
+  python3 - "$ANVIL_EVIDENCE" "$ANVIL_PORT" <<'PY'
+import json, sys
+evidence, port = sys.argv[1], sys.argv[2]
+record = json.load(open(evidence))["anvil"]
+pid = int(record["pid"])
+if record.get("executable") != "anvil" or record.get("loopback") is not True:
+    sys.exit(1)
+if f":{port}" not in record.get("endpoint", ""):
+    sys.exit(1)
+try:
+    cmdline = open(f"/proc/{pid}/cmdline", "rb").read().decode().split("\0")
+except Exception:
+    sys.exit(1)
+if not any(part.endswith("anvil") for part in cmdline):
+    sys.exit(1)
+if "--port" not in cmdline or port not in cmdline:
+    sys.exit(1)
+if "127.0.0.1" not in cmdline:
+    sys.exit(1)
+print(pid)
+PY
+}
+
+PAUSED_PORTS=(31001 31003 31005 31007 31009 31011 31021 8798 8799 8547)
 
 render_fire_command() {
   cat <<CMD
@@ -85,9 +152,19 @@ if [[ "$ACTION" == "fire" ]]; then
     echo "a666_r4_receipt_prover_fire=refused reason=approval_marker_absent_or_run_id_mismatch run_id=$RUN_ID" >&2
     exit 3
   fi
-  for pause in "${PAUSE_COMMANDS[@]}"; do
-    (cd "$MAIN_WORKTREE" && eval "$pause")
-  done
+  deps_control="$(resolve_deps_control)" || {
+    echo "a666_r4_receipt_prover_fire=refused reason=no_validated_current_dependency_runtime" >&2
+    exit 5
+  }
+  anvil_pid="$(resolve_anvil_target)" || {
+    echo "a666_r4_receipt_prover_fire=refused reason=anvil_evidence_process_mismatch" >&2
+    exit 6
+  }
+  (cd "$MAIN_WORKTREE" && scripts/a666-r4-candidate-proxy-stage --teardown)
+  printf 'teardown\n' > "$FLEET_CONTROL_REQUEST"
+  printf 'teardown\n' > "$deps_control"
+  (cd "$MAIN_WORKTREE" && scripts/a666-r4-private-swap-stage teardown)
+  kill -TERM "$anvil_pid"
   for port in "${PAUSED_PORTS[@]}"; do
     deadline=$((SECONDS + 90))
     while timeout 3 bash -c "echo > /dev/tcp/127.0.0.1/$port" 2>/dev/null; do
@@ -111,7 +188,10 @@ with open(sys.argv[1], "w", encoding="utf-8") as handle:
             "scripts/a666-r4-private-swap-dependencies-stage stage",
             "scripts/a666-r4-private-swap-stage stage",
             "scripts/a666-r4-candidate-proxy-stage",
+            "/home/postfiat/.foundry/bin/anvil --host 127.0.0.1 --port 8547 --chain-id 1",
+            "scripts/a666-r4-ethereum-contract-stage",
         ],
+        "automatic_restart": False,
     }, handle, indent=1)
     handle.write("\n")
 PY
@@ -153,7 +233,7 @@ artifact = {
         "protoc_executable": "$PROTOC_BIN",
         "protoc_library_path": "$PROTOC_LIBDIR",
         "sp1_sdk": "6.3.1 (=6.3.1 pin, tools/pftl-uniswap-prover/Cargo.toml:21)",
-        "groth16_selector_context": "SP1 6.x Groth16 mode via client.prove(...).groth16() (tools/pftl-uniswap-prover/src/main.rs:284); v6.1 verifier selector context as declared in the dispatch, not independently verifiable in-repo",
+        "groth16_selector_context": "SP1 6.x Groth16 mode via client.prove(...).groth16() (tools/pftl-uniswap-prover/src/main.rs:284); v6.1 verifier circuit tree /home/postfiat/.sp1/circuits/groth16/v6.1.0/ (SP1VerifierGroth16.sol, per r4-construction/ethereum-contract-stage.json)",
     },
     "tuned_environment": [
         "SP1_PROVER=cpu", "SHARD_BATCH_SIZE=1", "RAYON_NUM_THREADS=4", "MALLOC_ARENA_MAX=1",
@@ -180,16 +260,20 @@ artifact = {
     "pause_sequence_before_proving": [
         "scripts/a666-r4-candidate-proxy-stage --teardown",
         "write 'teardown' to fleet construction-teardown.request",
-        "write 'teardown' to private-swap-dependencies teardown.request",
+        "resolve current dependency teardown control via resolve_deps_control (committed private-swap-dependencies.json paths.teardown_control first, then validated /tmp runtime manifests; a candidate is valid only with live asset-service and round-driver PIDs and a live loopback 127.0.0.1:8799 answer; never falls back to a stale path) and write 'teardown' to it",
         "scripts/a666-r4-private-swap-stage teardown",
-        "assert ports 31001-31011, 31021, 8798 absent before proving",
+        "stop only the exact Anvil PID recorded in ethereum-contract-stage.json after verifying live process identity (anvil executable, --port 8547, 127.0.0.1) via /proc cmdline; no pattern kills",
+        "assert ports 31001-31011, 31021, 8798, 8799, 8547 absent before proving",
     ],
     "restart_inventory_after_terminal_proof": [
         "scripts/a666-r4-construction-fleet-stage stage",
         "scripts/a666-r4-private-swap-dependencies-stage stage",
         "scripts/a666-r4-private-swap-stage stage",
         "scripts/a666-r4-candidate-proxy-stage",
+        "/home/postfiat/.foundry/bin/anvil --host 127.0.0.1 --port 8547 --chain-id 1",
+        "scripts/a666-r4-ethereum-contract-stage",
     ],
+    "automatic_restart": False,
     "host_decision_inputs": {
         "ram_gb": 122,
         "cores": 32,
@@ -203,6 +287,8 @@ artifact = {
         "no_memory_max": True,
         "success_claimed": False,
     },
+    "authorization_status": "pending_nazgul_sequencing",
+    "correction": "pause contract resolves the current dependency teardown control dynamically and stops only the evidence-verified Anvil PID; the hard-coded obsolete dependency runtime path was removed",
     "prepared": True,
     "fired": False,
     "fire_authorized": False,

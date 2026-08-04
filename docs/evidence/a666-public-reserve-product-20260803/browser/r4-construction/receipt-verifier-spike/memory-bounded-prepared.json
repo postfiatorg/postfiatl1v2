@@ -16,7 +16,7 @@
   "protoc_executable": "/tmp/postfiat-protoc-3.21.12/root/usr/bin/protoc",
   "protoc_library_path": "/tmp/postfiat-protoc-3.21.12/root/usr/lib/x86_64-linux-gnu",
   "sp1_sdk": "6.3.1 (=6.3.1 pin, tools/pftl-uniswap-prover/Cargo.toml:21)",
-  "groth16_selector_context": "SP1 6.x Groth16 mode via client.prove(...).groth16() (tools/pftl-uniswap-prover/src/main.rs:284); v6.1 verifier selector context as declared in the dispatch, not independently verifiable in-repo"
+  "groth16_selector_context": "SP1 6.x Groth16 mode via client.prove(...).groth16() (tools/pftl-uniswap-prover/src/main.rs:284); v6.1 verifier circuit tree /home/postfiat/.sp1/circuits/groth16/v6.1.0/ (SP1VerifierGroth16.sol, per r4-construction/ethereum-contract-stage.json)"
  },
  "tuned_environment": [
   "SP1_PROVER=cpu",
@@ -56,16 +56,20 @@
  "pause_sequence_before_proving": [
   "scripts/a666-r4-candidate-proxy-stage --teardown",
   "write 'teardown' to fleet construction-teardown.request",
-  "write 'teardown' to private-swap-dependencies teardown.request",
+  "resolve current dependency teardown control via resolve_deps_control (committed private-swap-dependencies.json paths.teardown_control first, then validated /tmp runtime manifests; a candidate is valid only with live asset-service and round-driver PIDs and a live loopback 127.0.0.1:8799 answer; never falls back to a stale path) and write 'teardown' to it",
   "scripts/a666-r4-private-swap-stage teardown",
-  "assert ports 31001-31011, 31021, 8798 absent before proving"
+  "stop only the exact Anvil PID recorded in ethereum-contract-stage.json after verifying live process identity (anvil executable, --port 8547, 127.0.0.1) via /proc cmdline; no pattern kills",
+  "assert ports 31001-31011, 31021, 8798, 8799, 8547 absent before proving"
  ],
  "restart_inventory_after_terminal_proof": [
   "scripts/a666-r4-construction-fleet-stage stage",
   "scripts/a666-r4-private-swap-dependencies-stage stage",
   "scripts/a666-r4-private-swap-stage stage",
-  "scripts/a666-r4-candidate-proxy-stage"
+  "scripts/a666-r4-candidate-proxy-stage",
+  "/home/postfiat/.foundry/bin/anvil --host 127.0.0.1 --port 8547 --chain-id 1",
+  "scripts/a666-r4-ethereum-contract-stage"
  ],
+ "automatic_restart": false,
  "host_decision_inputs": {
   "ram_gb": 122,
   "cores": 32,
@@ -79,6 +83,8 @@
   "no_memory_max": true,
   "success_claimed": false
  },
+ "authorization_status": "pending_nazgul_sequencing",
+ "correction": "pause contract resolves the current dependency teardown control dynamically and stops only the evidence-verified Anvil PID; the hard-coded obsolete dependency runtime path was removed",
  "prepared": true,
  "fired": false,
  "fire_authorized": false,
