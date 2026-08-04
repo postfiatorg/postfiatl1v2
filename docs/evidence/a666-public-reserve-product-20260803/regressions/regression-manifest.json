@@ -1,0 +1,246 @@
+{
+  "schema": "postfiat.a666.recovery.regression_manifest.v1",
+  "status": "partial",
+  "generated_at_utc": "2026-08-04T01:06:15Z",
+  "evidence_root": "docs/evidence/a666-public-reserve-product-20260803",
+  "contracts": [
+    "docs/plans/A666-PRODUCT-RECOVERY-AND-DEMO-RELAUNCH-SPEC-20260803.md#61-layer-a-targeted-regressions",
+    "docs/plans/A666-PATH-TO-ACTUALLY-GOOD-20260804.md#31-r2-regression-closure-ar-0108",
+    "docs/plans/A666-RECOVERY-EXECUTION-TRACKER-20260804.md#r2--regression-closure-gate-open"
+  ],
+  "invocation_policy": {
+    "maximum_runtime_milliseconds": 120000,
+    "minimum_matched_test_count": 1,
+    "zero_match_with_exit_zero_is_failure": true,
+    "corrective_rule": "Every standalone test invocation must assert matched_test_count >= 1 before its exit code can be accepted."
+  },
+  "harness_defect_classes": [
+    {
+      "id": "HARNESS-01",
+      "name": "false-green-zero-match-filter",
+      "incident": "The first AR-02 invocation exited 0 after matching zero tests because its module path was wrong.",
+      "observed_command": "cargo test -p postfiat-execution unit_tests::ar02_production_route_config_cap_order_inequalities_hold_at_runtime -- --exact --nocapture",
+      "observed_exit_code": 0,
+      "observed_matched_test_count": 0,
+      "corrective_command": "cargo test -p postfiat-execution tests::ar02_production_route_config_cap_order_inequalities_hold_at_runtime -- --exact --nocapture",
+      "corrective_matched_test_count": 1,
+      "corrective_commit": "4d92a935b8105e2d66c5c989233bff23899772fc",
+      "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar02-tests.txt",
+      "enforcement_status": "recorded_not_yet_ci_enforced"
+    }
+  ],
+  "observed_defect_classes": [
+    {
+      "id": "DEFECT-01",
+      "description": "pfUSDC fixture used absent or incorrect reserve-account configuration",
+      "regression_ids": [
+        "AR-01"
+      ],
+      "regression_status": "passed"
+    },
+    {
+      "id": "DEFECT-02",
+      "description": "route caps and order bounds differed from production constraints",
+      "regression_ids": [
+        "AR-02"
+      ],
+      "regression_status": "passed"
+    },
+    {
+      "id": "DEFECT-03",
+      "description": "outage test continued dialing a deliberately offline validator",
+      "regression_ids": [
+        "AR-03"
+      ],
+      "regression_status": "pending"
+    },
+    {
+      "id": "DEFECT-04",
+      "description": "restarted validator lacked authenticated historical catch-up",
+      "regression_ids": [
+        "AR-04"
+      ],
+      "regression_status": "pending"
+    },
+    {
+      "id": "DEFECT-05",
+      "description": "route-epoch advancement was attempted while an export entitlement was active",
+      "regression_ids": [
+        "AR-05"
+      ],
+      "regression_status": "pending"
+    },
+    {
+      "id": "DEFECT-06",
+      "description": "duplicate-operation test confused admission rejection with a finalized rejection block",
+      "regression_ids": [
+        "AR-06"
+      ],
+      "regression_status": "pending"
+    },
+    {
+      "id": "DEFECT-07",
+      "description": "production-shaped redemption was rejected at admission by invalid expiry, policy binding, amount, or nonce",
+      "regression_ids": [
+        "AR-09"
+      ],
+      "regression_status": "passed"
+    },
+    {
+      "id": "DEFECT-08",
+      "description": "private-primary archive replay rejected a historically accepted action",
+      "regression_ids": [
+        "AR-10"
+      ],
+      "regression_status": "passed"
+    },
+    {
+      "id": "DEFECT-09",
+      "description": "non-NAV spread custody was omitted from global issued-supply inventory",
+      "regression_ids": [
+        "AR-11"
+      ],
+      "regression_status": "passed"
+    }
+  ],
+  "regressions": [
+    {
+      "id": "AR-01",
+      "contract": "pfUSDC reserve-account identity and balance source match the production-shaped fixture",
+      "status": "passed",
+      "source_file": "crates/execution/src/market_nav_execution_tests.rs",
+      "canonical_input": "Seeded issuer and observer keys drive a real vault deposit through propose, attest, finalize, claim, reserve submit, attest, and NAV epoch finalize; a wrong backing source root is the permanent adversarial mutation.",
+      "first_passing_commit": "c207ee93bfcf6a68ed40eb3d195e8cff37c635e7",
+      "tests": [
+        {
+          "name": "tests::ar01_pfusdc_reserve_account_identity_and_balance_matches_production_fixture",
+          "runtime_milliseconds": 838,
+          "matched_test_count": 1,
+          "command": "cargo test -p postfiat-execution tests::ar01_pfusdc_reserve_account_identity_and_balance_matches_production_fixture -- --exact --nocapture"
+        }
+      ],
+      "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar01-test.txt"
+    },
+    {
+      "id": "AR-02",
+      "contract": "route supply cap, packet notional cap, policy capacity, minimum order, and maximum order satisfy production inequalities",
+      "status": "passed",
+      "source_file": "crates/execution/src/core_asset_execution_tests.rs",
+      "canonical_input": "Checked-in production route configuration and activation policy JSON are decoded at runtime and passed through typed policy validation before every required inequality is asserted.",
+      "first_passing_commit": "4d92a935b8105e2d66c5c989233bff23899772fc",
+      "tests": [
+        {
+          "name": "tests::ar02_production_route_config_cap_order_inequalities_hold_at_runtime",
+          "runtime_milliseconds": 194,
+          "matched_test_count": 1,
+          "command": "cargo test -p postfiat-execution tests::ar02_production_route_config_cap_order_inequalities_hold_at_runtime -- --exact --nocapture"
+        }
+      ],
+      "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar02-tests.txt"
+    },
+    {
+      "id": "AR-08",
+      "contract": "snapshot import verifies publisher signature, content hash, chain ID, height, tip, and state root before startup",
+      "status": "passed",
+      "source_files": [
+        "crates/node/src/tests/lifecycle_checkpoint_tests.rs",
+        "crates/node/src/tests/snapshot_deployment.rs"
+      ],
+      "canonical_input": "Signed three-validator lifecycle checkpoint and signed-snapshot vectors cover exact restoration plus signature, manifest, file-set, validator-content, publisher, and divergent-terminal-tuple mutations.",
+      "first_passing_commit": "2099ceace661c947e935c4c72952fba5cf26f040",
+      "tests": [
+        {
+          "name": "tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_roundtrip_restores_all_validators_and_reports",
+          "first_passing_commit": "2099ceace661c947e935c4c72952fba5cf26f040",
+          "runtime_milliseconds": 8163,
+          "matched_test_count": 1,
+          "command": "cargo test -p postfiat-node --lib tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_roundtrip_restores_all_validators_and_reports -- --exact --nocapture"
+        },
+        {
+          "name": "tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_import_rejects_tampered_manifest_with_failure_report",
+          "first_passing_commit": "2099ceace661c947e935c4c72952fba5cf26f040",
+          "runtime_milliseconds": 7973,
+          "matched_test_count": 1,
+          "command": "cargo test -p postfiat-node --lib tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_import_rejects_tampered_manifest_with_failure_report -- --exact --nocapture"
+        },
+        {
+          "name": "tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_import_rejects_schema_drift_and_unknown_fields",
+          "first_passing_commit": "2099ceace661c947e935c4c72952fba5cf26f040",
+          "runtime_milliseconds": 8107,
+          "matched_test_count": 1,
+          "command": "cargo test -p postfiat-node --lib tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_import_rejects_schema_drift_and_unknown_fields -- --exact --nocapture"
+        },
+        {
+          "name": "tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_import_rejects_extra_entries_and_symlinks",
+          "first_passing_commit": "2099ceace661c947e935c4c72952fba5cf26f040",
+          "runtime_milliseconds": 7975,
+          "matched_test_count": 1,
+          "command": "cargo test -p postfiat-node --lib tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_import_rejects_extra_entries_and_symlinks -- --exact --nocapture"
+        },
+        {
+          "name": "tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_import_rejects_tampered_validator_snapshot",
+          "first_passing_commit": "2099ceace661c947e935c4c72952fba5cf26f040",
+          "runtime_milliseconds": 8253,
+          "matched_test_count": 1,
+          "command": "cargo test -p postfiat-node --lib tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_import_rejects_tampered_validator_snapshot -- --exact --nocapture"
+        },
+        {
+          "name": "tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_import_rejects_wrong_trusted_publisher",
+          "first_passing_commit": "2099ceace661c947e935c4c72952fba5cf26f040",
+          "runtime_milliseconds": 8026,
+          "matched_test_count": 1,
+          "command": "cargo test -p postfiat-node --lib tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_import_rejects_wrong_trusted_publisher -- --exact --nocapture"
+        },
+        {
+          "name": "tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_creation_rejects_divergent_validators",
+          "first_passing_commit": "2099ceace661c947e935c4c72952fba5cf26f040",
+          "runtime_milliseconds": 7592,
+          "matched_test_count": 1,
+          "command": "cargo test -p postfiat-node --lib tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_creation_rejects_divergent_validators -- --exact --nocapture"
+        },
+        {
+          "name": "tests::snapshot_deployment::signed_snapshot_roundtrip_rejects_tampering_and_preserves_signer_isolation",
+          "first_passing_commit": "11839c14f28420c236b528b2aa540f9378c31fa7",
+          "runtime_milliseconds": 7750,
+          "matched_test_count": 1,
+          "command": "cargo test -p postfiat-node --lib tests::snapshot_deployment::signed_snapshot_roundtrip_rejects_tampering_and_preserves_signer_isolation -- --exact --nocapture"
+        }
+      ],
+      "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar08-tests.txt"
+    }
+  ],
+  "remaining_manifest_rows": [
+    {
+      "id": "AR-03",
+      "status": "implementation_red"
+    },
+    {
+      "id": "AR-04",
+      "status": "implementation_pending"
+    },
+    {
+      "id": "AR-05",
+      "status": "implementation_in_progress"
+    },
+    {
+      "id": "AR-06",
+      "status": "implementation_pending"
+    },
+    {
+      "id": "AR-07",
+      "status": "implementation_pending"
+    },
+    {
+      "id": "AR-09",
+      "status": "passed_row_pending"
+    },
+    {
+      "id": "AR-10",
+      "status": "passed_row_pending"
+    },
+    {
+      "id": "AR-11",
+      "status": "passed_row_pending"
+    }
+  ]
+}
