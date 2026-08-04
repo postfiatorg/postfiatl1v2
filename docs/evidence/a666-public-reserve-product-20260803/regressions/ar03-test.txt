@@ -92,3 +92,24 @@ Hygiene
   cargo fmt --all -- --check: exit 0
   git diff --check -- <owned paths>: exit 0
 No secrets, key material, or live-chain data recorded.
+
+Full touched-crate suite (2026-08-04)
+--------------------------------------
+Command:
+  cargo test -p postfiat-node --lib
+Exit code: 0
+Final:
+  test result: ok. 264 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 2499.29s
+Suite wall-clock: 2499.29s
+
+Named fast-loop budget outlier
+------------------------------
+Test:
+  tests::wan_devnet_invalid_asset_orchard_swap_proof_is_rejected_and_valid_swap_still_applies
+Source:
+  crates/node/src/tests/asset_orchard_issued_tests.rs
+Observed wall-clock: 2499.29s. This was the sole final-running test and invokes
+proof creation inside a node lib test. Recovery spec section 12.0 excludes
+proving from the qualification loop; path document section 5.4 treats the
+degraded fast-loop budget as a defect.
+Disposition: candidate for proving feature-gate, out of scope this campaign.

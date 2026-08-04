@@ -40,7 +40,7 @@ box in the section passes that recovery-spec gate.
 - [x] Real pre-migration checkpoint extracted (height 792, signed, private
   sidecar separated); repack path proven at 12s
 
-## R2 — Regression closure **(gate: OPEN)**
+## R2 — Regression closure **(gate: PASSED, 12/12)**
 
 Observed-defect regressions (defect -> test, fix committed):
 
@@ -76,10 +76,13 @@ Mandatory set still to extract as standalone <2-minute tests:
   `docs/evidence/a666-public-reserve-product-20260803/regressions/ar02-tests.txt`;
   manifest: `docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest.json`
   (`4d92a935`, 1 matched, 194ms).
-- [ ] AR-03 quorum-first commit with intentionally offline validator;
-  convergence after recovery. Standalone evidence:
-  `docs/evidence/a666-public-reserve-product-20260803/regressions/ar03-test.txt`
-  (`0e532e23`, 1 matched, 4.35s); full `postfiat-node --lib` suite pending.
+- [x] AR-03 quorum-first commit with an intentionally offline ACTIVE
+  validator; convergence after authenticated recovery. Evidence:
+  `docs/evidence/a666-public-reserve-product-20260803/regressions/ar03-test.txt`;
+  manifest:
+  `docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest.json`
+  (`0e532e23`, 1 matched, 4.35s; full node-lib suite 264 passed,
+  2 ignored, 0 failed in 2499.29s).
 - [x] AR-04 authenticated catch-up accepts only pinned height/tip/root,
   rejects every mismatch. Three independent mutations reject with typed
   `prepared commit identity mismatch`, preserve status/ledger/block log,
@@ -112,9 +115,15 @@ Mandatory set still to extract as standalone <2-minute tests:
   `docs/evidence/a666-public-reserve-product-20260803/regressions/ar08-tests.txt`;
   manifest: `docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest.json`
   (8 vectors, 7.592-8.253s each).
-- [ ] Regression manifest JSON: defect->test traceability, runtimes, first
-  passing commit; CI wiring pending. Current manifest:
-  `docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest.json`
+- [x] Regression manifest JSON: all nine defect classes and AR-01..11
+  map to exact test names, runtimes, first-passing commits, and evidence.
+  CI executes the validator and every manifest test on each PR via
+  `scripts/check-a666-recovery-regression-manifest --run` in
+  `.github/workflows/rust-ci.yml` (`6884268`, `d677e14`, `13ae124`).
+  Manifest:
+  `docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest.json`;
+  validator evidence:
+  `docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest-ci.txt`.
 
 ## R3 — Repeatability **(gate: PASSED)**
 

@@ -1,7 +1,7 @@
 {
   "schema": "postfiat.a666.recovery.regression_manifest.v1",
-  "status": "partial",
-  "generated_at_utc": "2026-08-04T01:40:00Z",
+  "status": "complete",
+  "generated_at_utc": "2026-08-04T01:57:30Z",
   "evidence_root": "docs/evidence/a666-public-reserve-product-20260803",
   "contracts": [
     "docs/plans/A666-PRODUCT-RECOVERY-AND-DEMO-RELAUNCH-SPEC-20260803.md#61-layer-a-targeted-regressions",
@@ -26,7 +26,19 @@
       "corrective_matched_test_count": 1,
       "corrective_commit": "4d92a935b8105e2d66c5c989233bff23899772fc",
       "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar02-tests.txt",
-      "enforcement_status": "recorded_not_yet_ci_enforced"
+      "enforcement_status": "ci_enforced"
+    }
+  ],
+  "budget_outliers": [
+    {
+      "id": "FAST-LOOP-01",
+      "test_name": "tests::wan_devnet_invalid_asset_orchard_swap_proof_is_rejected_and_valid_swap_still_applies",
+      "source_file": "crates/node/src/tests/asset_orchard_issued_tests.rs",
+      "classification": "proving_inside_lib_test",
+      "observed_wall_clock_milliseconds": 2499290,
+      "measurement_basis": "The test was the sole final-running test in the full postfiat-node lib suite; the suite terminal runtime was 2499.29s.",
+      "policy_violation": "Recovery spec section 12.0 excludes proving from the qualification loop; path document section 5.4 treats degraded fast-loop runtime as a defect.",
+      "disposition": "candidate for proving feature-gate, out of scope this campaign"
     }
   ],
   "observed_defect_classes": [
@@ -52,7 +64,7 @@
       "regression_ids": [
         "AR-03"
       ],
-      "regression_status": "pending_suite"
+      "regression_status": "passed"
     },
     {
       "id": "DEFECT-04",
@@ -60,7 +72,7 @@
       "regression_ids": [
         "AR-04"
       ],
-      "regression_status": "pending"
+      "regression_status": "passed"
     },
     {
       "id": "DEFECT-05",
@@ -141,7 +153,7 @@
     {
       "id": "AR-03",
       "contract": "a registered ACTIVE validator may be offline while quorum commits without it, then recover through authenticated catch-up and converge",
-      "status": "pending_suite",
+      "status": "passed",
       "source_file": "crates/node/src/tests/a666_recovery_regression_tests.rs",
       "canonical_input": "Four registered ACTIVE validators use the production quorum of three. Validator-3 supplies no first-block vote, then stages the canonical archived payload and reconstructed external certificate through the production authenticated apply path, votes on block two, and converges to the same height, tip, and state root.",
       "first_passing_commit": "0e532e23b954503250dd309844e788f2c982ab37",
@@ -155,9 +167,12 @@
         }
       ],
       "suite_verification": {
-        "status": "pending",
+        "status": "passed",
         "command": "cargo test -p postfiat-node --lib",
-        "acceptance": "A terminal test result summary with nonzero passed count is required."
+        "passed_test_count": 264,
+        "ignored_test_count": 2,
+        "runtime_milliseconds": 2499290,
+        "terminal_summary": "test result: ok. 264 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 2499.29s"
       },
       "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar03-test.txt"
     },
@@ -183,6 +198,14 @@
           "command": "cargo test -p postfiat-node --lib tests::a666_recovery_regression_tests::ar04_authenticated_catchup_requires_pinned_height_tip_and_state_root -- --exact --nocapture"
         }
       ],
+      "suite_verification": {
+        "status": "passed",
+        "command": "cargo test -p postfiat-node --lib",
+        "passed_test_count": 264,
+        "ignored_test_count": 2,
+        "runtime_milliseconds": 2499290,
+        "terminal_summary": "test result: ok. 264 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 2499.29s"
+      },
       "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar04-test.txt"
     },
     {
@@ -434,14 +457,5 @@
       "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar09-ar11-tests.txt"
     }
   ],
-  "remaining_acceptance_work": [
-    {
-      "id": "AR-03",
-      "status": "full_suite_pending"
-    },
-    {
-      "id": "CI",
-      "status": "manifest_validation_wiring_pending"
-    }
-  ]
+  "remaining_acceptance_work": []
 }
