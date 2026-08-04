@@ -35,7 +35,11 @@ while [[ $# -gt 0 ]]; do
 done
 
 repo_root="$(git rev-parse --show-toplevel)"
-ENDPOINTS_FILE="$repo_root/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/rpc-endpoints.json"
+ACCEPTED_PRESERVED_ROOT="/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349"
+FLEET_DIR="$repo_root/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet"
+FLEET_MANIFEST="$FLEET_DIR/construction-fleet.json"
+FLEET_PIDS="$FLEET_DIR/construction-pids.json"
+ENDPOINTS_FILE="${POSTFIAT_R4_RPC_ENDPOINTS_FILE:-$FLEET_DIR/construction-rpc-endpoints.json}"
 WALLET_DIST_EVIDENCE="$repo_root/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/wallet-dist-sha256.json"
 EVIDENCE_FILE="$repo_root/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/candidate-proxy-provenance.json"
 mkdir -p "$(dirname "$EVIDENCE_FILE")"
@@ -148,8 +152,23 @@ token_file_scoped=false
 [[ "$token_file_mode" == "600" && "$TOKEN_FILE" != "$repo_root"* ]] && token_file_scoped=true
 $token_file_scoped || fail "proxy_token_file_not_scoped_600"
 
-# 5. Six loopback RPC endpoints: committed equality plus live read-only
-# status probes requiring identical height/tip/root tuples.
+# 5. Accepted fresh-root fleet and six loopback RPC endpoints: committed
+# equality plus live read-only status probes requiring identical tuples.
+fleet_contract=false
+if jq -e --arg root "$ACCEPTED_PRESERVED_ROOT" '
+  .construction_ready == true and .preserved_root == $root
+  and .checks.processes_live == true and .checks.six_way_equal == true
+  and .checks.stakehub_interaction == false
+  and .checks.business_operations_submitted == 0
+' "$FLEET_MANIFEST" >/dev/null 2>&1; then
+  fleet_live_count=0
+  while read -r fleet_pid; do
+    kill -0 "$fleet_pid" 2>/dev/null && fleet_live_count=$((fleet_live_count + 1)) || true
+  done < <(jq -r '.processes[].pid' "$FLEET_PIDS")
+  [[ "$fleet_live_count" -eq 12 ]] && fleet_contract=true
+fi
+$fleet_contract || fail "accepted_fresh_fleet_not_live"
+
 endpoint_report="$(python3 - "$ENDPOINTS_FILE" "$WAIT_RPC_SECONDS" <<'PY'
 import json, socket, sys, time
 endpoints = json.load(open(sys.argv[1]))["endpoints"]
@@ -213,21 +232,15 @@ PY
 endpoints_green="$(python3 -c "import json;r=json.loads('$endpoint_report');print('true' if all([r['loopback'],r['committed_all_equal'],r['live'],r['live_all_equal'],r['matches_committed_tuples']]) else 'false')")"
 $endpoints_green || fail "rehearsal_rpc_endpoints_not_live_equal_loopback"
 
-# 6. No live-chain route and no StakeHub dependency. Dependency-freedom is a
-# property of the staged proxy configuration: the launch environment and
-# command must reference no StakeHub unit, path, or port. Host-wide unit
-# presence is recorded as informational context only (fire-control owns
-# StakeHub steady state and its restart inventory).
+# 6. No live-chain route and no StakeHub interaction or dependency. This
+# check examines only the explicit proxy dependency paths; it never queries,
+# starts, stops, or inventories StakeHub services or processes.
 no_live_chain_route="$(python3 -c "import json;print('true' if json.loads('$endpoint_report')['loopback'] else 'false')")"
-stakehub_active_units=""
-if command -v systemctl >/dev/null 2>&1; then
-  stakehub_active_units="$(systemctl --user list-units --all --no-legend 'stakehub-*' 2>/dev/null | awk '$3 == "active" {print $1}' | paste -sd, -)"
-fi
 stakehub_free=true
-if env | rg -qi 'stakehub'; then
-  stakehub_free=false
-fi
-$stakehub_free || fail "stakehub_dependency_in_proxy_environment"
+for dependency_path in "$ENDPOINTS_FILE" "$WALLET_DIST_EVIDENCE" "$TOKEN_FILE" "$CANDIDATE_WORKTREE/wallet-proxy"; do
+  if [[ "${dependency_path,,}" == *stakehub* ]]; then stakehub_free=false; fi
+done
+$stakehub_free || fail "stakehub_dependency_in_proxy_configuration"
 
 # 7. Proxy hold launch, only when every precondition is green.
 proxy_launched=false
@@ -235,7 +248,7 @@ proxy_pid=""
 proxy_healthz=false
 preconditions_green=false
 if $revision_exact && $node_binary_present && $proxy_deps_present \
-  && $wallet_dist_exact && $token_file_scoped && $endpoints_green \
+  && $wallet_dist_exact && $token_file_scoped && $fleet_contract && $endpoints_green \
   && $no_live_chain_route && $stakehub_free; then
   preconditions_green=true
 fi
@@ -300,8 +313,24 @@ PY
   fi
 fi
 
+proxy_process_identity=false
+if [[ -n "$proxy_pid" ]] && kill -0 "$proxy_pid" 2>/dev/null; then
+  if python3 - "$proxy_pid" "$CANDIDATE_WORKTREE" <<'PY'
+import os, sys
+pid, candidate = sys.argv[1:]
+exe = os.path.realpath(f"/proc/{pid}/exe")
+cwd = os.path.realpath(f"/proc/{pid}/cwd")
+with open(f"/proc/{pid}/cmdline", "rb") as stream:
+    argv = stream.read().split(b"\0")
+ok = exe.endswith("/node") and cwd == candidate and any(value.endswith(b"wallet-proxy/server.js") for value in argv)
+raise SystemExit(0 if ok else 1)
+PY
+  then proxy_process_identity=true; fi
+fi
+$proxy_process_identity || fail "proxy_process_identity_mismatch"
+
 ready=false
-if $preconditions_green && $proxy_launched && $proxy_healthz; then
+if $preconditions_green && $proxy_launched && $proxy_healthz && $proxy_process_identity; then
   ready=true
 fi
 
@@ -341,15 +370,23 @@ artifact = {
         "outside_git": True,
         "value_recorded": False,
     },
-    "rpc_endpoints": json.loads('''$endpoint_report''') | {"source_file": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/rpc-endpoints.json"},
+    "fresh_fleet": {
+        "preserved_root": "$ACCEPTED_PRESERVED_ROOT",
+        "manifest": "$FLEET_MANIFEST",
+        "pid_manifest": "$FLEET_PIDS",
+        "children_live": int("$fleet_live_count"),
+        "accepted": B("$fleet_contract"),
+    },
+    "rpc_endpoints": json.loads('''$endpoint_report''') | {"source_file": "$ENDPOINTS_FILE"},
     "no_live_chain_route": B("$no_live_chain_route"),
     "stakehub_dependency_free": B("$stakehub_free"),
-    "stakehub_active_units_informational": "$stakehub_active_units",
+    "stakehub_interaction": False,
     "proxy_hold": {
         "launched": B("$proxy_launched"),
         "pid": int("$proxy_pid") if "$proxy_pid" else None,
         "listen": "$PROXY_LISTEN_HOST:$PROXY_LISTEN_PORT",
         "healthz_reachable": B("$proxy_healthz"),
+        "process_identity_exact": B("$proxy_process_identity"),
         "ready_file": "$PROXY_READY_FILE",
         "log_file": "$PROXY_LOG",
         "business_operations_submitted": 0,

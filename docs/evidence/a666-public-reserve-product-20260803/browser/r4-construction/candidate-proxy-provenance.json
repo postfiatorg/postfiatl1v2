@@ -33,6 +33,13 @@
   "outside_git": true,
   "value_recorded": false
  },
+ "fresh_fleet": {
+  "preserved_root": "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349",
+  "manifest": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-fleet.json",
+  "pid_manifest": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-pids.json",
+  "children_live": 12,
+  "accepted": true
+ },
  "rpc_endpoints": {
   "count": 6,
   "loopback": true,
@@ -41,19 +48,36 @@
   "live_all_equal": true,
   "matches_committed_tuples": true,
   "height": 826,
-  "source_file": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/rpc-endpoints.json"
+  "source_file": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-rpc-endpoints.json"
  },
  "no_live_chain_route": true,
  "stakehub_dependency_free": true,
- "stakehub_active_units_informational": "stakehub-private-swap-dashboard.service",
+ "stakehub_interaction": false,
  "proxy_hold": {
   "launched": true,
-  "pid": 687155,
+  "pid": 3766731,
   "listen": "127.0.0.1:31021",
   "healthz_reachable": true,
+  "process_identity_exact": true,
   "ready_file": "/home/postfiat/.pft/a666-r4-candidate-proxy/proxy.ready.json",
   "log_file": "/home/postfiat/.pft/a666-r4-candidate-proxy/proxy.stdout.log",
   "business_operations_submitted": 0
+ },
+ "d_preflight_observation": {
+  "command": "npm run test:r4-construction",
+  "matched_tests": 1,
+  "passed_tests": 1,
+  "failed_tests": 0,
+  "exit_code": 0,
+  "report_path": "/tmp/a666-r4-journey-preflight-proxy-refresh-3768628.json",
+  "proxy_origin": "http://127.0.0.1:31021/",
+  "proxy_reachable": true,
+  "proxy_status": 200,
+  "candidate_proxy_unreachable_removed": true,
+  "official_pass": false,
+  "business_mutations": 0,
+  "ready_to_fire": false,
+  "first_blocker": "loopback_manifest_invalid:setup manifest"
  },
  "ready": true,
  "first_blocker": null
