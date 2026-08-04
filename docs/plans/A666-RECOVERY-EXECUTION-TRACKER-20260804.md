@@ -137,13 +137,18 @@ Mandatory set still to extract as standalone <2-minute tests:
 
 - [x] Reload/reconnect/recovery e2e coverage for journey step 9 in
   `wallet-web`: production `PftlPrivatePrimary` recovery path survives
-  actual proxy SIGTERM/restart and durable Chromium reload. Evidence:
+  actual proxy SIGTERM/restart and durable Chromium reload, including the
+  permanent redacted-receipt download and recovery-record custody assertions.
+  Evidence:
   `docs/evidence/a666-public-reserve-product-20260803/browser/journey-step-9-e2e.txt`
-  (`5e81a910`, `test:public-browser` 2/2, 8.236s).
+  and
+  `docs/evidence/a666-public-reserve-product-20260803/browser/successor-candidate-requalification.txt`
+  (successor candidate `39f7fae`, exact step 9 1/1, 8.098s).
 - [x] `npm test`, `test:custody-browser`, `test:public-browser`, `build`
-  green on the candidate. Evidence:
-  `docs/evidence/a666-public-reserve-product-20260803/browser/wallet-web-four-command-matrix.txt`
-  (`68b9aeb`; 233/233, 1/1, 2/2, build 1,805 modules).
+  green on the successor candidate. Evidence:
+  `docs/evidence/a666-public-reserve-product-20260803/browser/successor-candidate-requalification.txt`
+  (`39f7fae`; 233/233, 1/1, 2/2, build 1,805 modules; 26/26 Rust
+  manifest-validator tests in 203.988s).
 - [ ] Full §8 browser journey pass #1 against checkpoint-restored rehearsal
   environment, StakeHub absent, receipts captured
 - [ ] Full §8 browser journey pass #2 (same candidate, fresh run)

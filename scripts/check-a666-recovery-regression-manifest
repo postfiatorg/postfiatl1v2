@@ -71,6 +71,27 @@ def validate_manifest(repo: Path, manifest: dict[str, Any]) -> list[dict[str, An
     require(policy.get("zero_match_with_exit_zero_is_failure") is True,
             "zero-match exit-zero policy must fail closed")
 
+    successor = manifest.get("successor_candidate_qualification")
+    require(isinstance(successor, dict),
+            "successor_candidate_qualification must be an object")
+    require(successor.get("status") == "passed",
+            "successor candidate qualification must be passed")
+    require(COMMIT_RE.fullmatch(str(successor.get("candidate_revision", ""))) is not None,
+            "successor candidate revision must be a 40-character lowercase SHA")
+    successor_evidence = successor.get("evidence")
+    require(isinstance(successor_evidence, str) and (repo / successor_evidence).is_file(),
+            "successor candidate qualification evidence must exist")
+    require(successor.get("rust_standalone_tests") == 26,
+            "successor candidate must rerun exactly 26 Rust tests")
+    require(successor.get("wallet_unit_tests") == 233,
+            "successor candidate wallet unit count must be 233")
+    require(successor.get("custody_browser_tests") == 1,
+            "successor candidate custody browser count must be 1")
+    require(successor.get("public_browser_tests") == 2,
+            "successor candidate public browser count must be 2")
+    require(successor.get("exact_step_9_tests") == 1,
+            "successor candidate exact step-9 count must be 1")
+
     defects = manifest.get("observed_defect_classes")
     require(isinstance(defects, list) and len(defects) == 11,
             "exactly eleven observed defect classes are required")

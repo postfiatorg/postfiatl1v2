@@ -520,5 +520,16 @@
       "evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/step10-public-receipt-green.txt"
     }
   ],
+  "successor_candidate_qualification": {
+    "status": "passed",
+    "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+    "evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/successor-candidate-requalification.txt",
+    "rust_standalone_tests": 26,
+    "rust_validator_runtime_milliseconds": 203988,
+    "wallet_unit_tests": 233,
+    "custody_browser_tests": 1,
+    "public_browser_tests": 2,
+    "exact_step_9_tests": 1
+  },
   "remaining_acceptance_work": []
 }
