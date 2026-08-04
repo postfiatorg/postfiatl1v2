@@ -80,8 +80,14 @@ Mandatory set still to extract as standalone <2-minute tests:
   convergence after recovery. Standalone evidence:
   `docs/evidence/a666-public-reserve-product-20260803/regressions/ar03-test.txt`
   (`0e532e23`, 1 matched, 4.35s); full `postfiat-node --lib` suite pending.
-- [ ] AR-04 authenticated catch-up accepts only pinned height/tip/root,
-  rejects every mismatch.
+- [x] AR-04 authenticated catch-up accepts only pinned height/tip/root,
+  rejects every mismatch. Three independent mutations reject with typed
+  `prepared commit identity mismatch`, preserve status/ledger/block log,
+  then the exact pin accepts and converges. Evidence:
+  `docs/evidence/a666-public-reserve-product-20260803/regressions/ar04-test.txt`;
+  manifest:
+  `docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest.json`
+  (`bb85aa4`, 1 matched, 8.311s; independent rerun 8.743s).
 - [x] AR-05 active export entitlement blocks route-epoch advancement.
   Evidence: `docs/evidence/a666-public-reserve-product-20260803/regressions/ar05-test.txt`;
   manifest: `docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest.json`

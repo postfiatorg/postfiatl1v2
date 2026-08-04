@@ -162,6 +162,30 @@
       "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar03-test.txt"
     },
     {
+      "id": "AR-04",
+      "contract": "authenticated catch-up accepts only the pinned height, tip, and state root and rejects every independently mutated identity without destination mutation",
+      "status": "passed",
+      "source_file": "crates/node/src/tests/a666_recovery_regression_tests.rs",
+      "canonical_input": "A certified one-block source stages the production archived batch and reconstructed certificate. Independent genesis destinations reject wrong height, wrong tip, and wrong state root with prepared commit identity mismatch while preserving status, ledger, and block log, then the exact pin accepts and verifies.",
+      "first_passing_commit": "bb85aa41a51de910fe4a0e1a9d9750ccc57cb92e",
+      "tests": [
+        {
+          "name": "tests::a666_recovery_regression_tests::ar04_authenticated_catchup_requires_pinned_height_tip_and_state_root",
+          "runtime_milliseconds": 8311,
+          "independent_runtime_milliseconds": 8743,
+          "matched_test_count": 1,
+          "typed_rejection": "prepared commit identity mismatch",
+          "rejection_axes": [
+            "height",
+            "tip",
+            "state_root"
+          ],
+          "command": "cargo test -p postfiat-node --lib tests::a666_recovery_regression_tests::ar04_authenticated_catchup_requires_pinned_height_tip_and_state_root -- --exact --nocapture"
+        }
+      ],
+      "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar04-test.txt"
+    },
+    {
       "id": "AR-05",
       "contract": "an active export entitlement prevents route-epoch advancement until destination consumption and return complete",
       "status": "passed",
@@ -414,10 +438,6 @@
     {
       "id": "AR-03",
       "status": "full_suite_pending"
-    },
-    {
-      "id": "AR-04",
-      "status": "implementation_pending"
     },
     {
       "id": "CI",
