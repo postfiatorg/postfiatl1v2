@@ -1,7 +1,7 @@
 {
   "schema": "postfiat.a666.recovery.regression_manifest.v1",
   "status": "partial",
-  "generated_at_utc": "2026-08-04T01:06:15Z",
+  "generated_at_utc": "2026-08-04T01:31:00Z",
   "evidence_root": "docs/evidence/a666-public-reserve-product-20260803",
   "contracts": [
     "docs/plans/A666-PRODUCT-RECOVERY-AND-DEMO-RELAUNCH-SPEC-20260803.md#61-layer-a-targeted-regressions",
@@ -52,7 +52,7 @@
       "regression_ids": [
         "AR-03"
       ],
-      "regression_status": "pending"
+      "regression_status": "pending_suite"
     },
     {
       "id": "DEFECT-04",
@@ -68,7 +68,7 @@
       "regression_ids": [
         "AR-05"
       ],
-      "regression_status": "pending"
+      "regression_status": "passed"
     },
     {
       "id": "DEFECT-06",
@@ -76,7 +76,7 @@
       "regression_ids": [
         "AR-06"
       ],
-      "regression_status": "pending"
+      "regression_status": "passed"
     },
     {
       "id": "DEFECT-07",
@@ -139,6 +139,29 @@
       "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar02-tests.txt"
     },
     {
+      "id": "AR-03",
+      "contract": "a registered ACTIVE validator may be offline while quorum commits without it, then recover through authenticated catch-up and converge",
+      "status": "pending_suite",
+      "source_file": "crates/node/src/tests/a666_recovery_regression_tests.rs",
+      "canonical_input": "Four registered ACTIVE validators use the production quorum of three. Validator-3 supplies no first-block vote, then stages the canonical archived payload and reconstructed external certificate through the production authenticated apply path, votes on block two, and converges to the same height, tip, and state root.",
+      "first_passing_commit": "0e532e23b954503250dd309844e788f2c982ab37",
+      "tests": [
+        {
+          "name": "tests::a666_recovery_regression_tests::ar03_quorum_first_commit_with_offline_validator_converges_after_recovery",
+          "runtime_milliseconds": 4350,
+          "wall_clock_milliseconds": 11439,
+          "matched_test_count": 1,
+          "command": "cargo test -p postfiat-node --lib tests::a666_recovery_regression_tests::ar03_quorum_first_commit_with_offline_validator_converges_after_recovery -- --exact --nocapture"
+        }
+      ],
+      "suite_verification": {
+        "status": "pending",
+        "command": "cargo test -p postfiat-node --lib",
+        "acceptance": "A terminal test result summary with nonzero passed count is required."
+      },
+      "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar03-test.txt"
+    },
+    {
       "id": "AR-05",
       "contract": "an active export entitlement prevents route-epoch advancement until destination consumption and return complete",
       "status": "passed",
@@ -154,6 +177,104 @@
         }
       ],
       "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar05-test.txt"
+    },
+    {
+      "id": "AR-06",
+      "contract": "duplicate submission returns a typed admission rejection or a distinct typed finalized-packet rejection, never ambiguous success",
+      "status": "passed",
+      "source_file": "crates/execution/src/market_nav_execution_tests.rs",
+      "canonical_input": "A production-shaped reserve packet is finalized once. An identical signed replay rejects at admission with bad_sequence; a fresh valid sequence carrying the same already-finalized reserve packet reaches execution and rejects with duplicate_nav_reserve_packet. Both paths preserve the entire ledger byte-for-byte.",
+      "first_passing_commit": "3d051a5a57c968fccbd17586c4a3cd87ad52a4f0",
+      "tests": [
+        {
+          "name": "tests::ar06_duplicate_submission_returns_typed_admission_or_finalized_rejection",
+          "runtime_milliseconds": 3231,
+          "matched_test_count": 1,
+          "typed_rejections": [
+            "bad_sequence",
+            "duplicate_nav_reserve_packet"
+          ],
+          "command": "cargo test -p postfiat-execution tests::ar06_duplicate_submission_returns_typed_admission_or_finalized_rejection -- --exact --nocapture"
+        }
+      ],
+      "suite_verification": {
+        "status": "passed",
+        "command": "cargo test -p postfiat-execution",
+        "matched_test_count": 185,
+        "runtime_milliseconds": 27140,
+        "terminal_summary": "test result: ok. 185 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 27.14s"
+      },
+      "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar06-test.txt"
+    },
+    {
+      "id": "AR-07",
+      "contract": "reserve-finalization rejects replay, stale proof, wrong profile, wrong overlay, wrong supply, wrong NAV, and wrong packet independently without state mutation",
+      "status": "passed",
+      "source_file": "crates/execution/src/market_nav_execution_tests.rs",
+      "canonical_input": "The AR-07 production-shaped reserve fixture applies each independent mutation through the real execution path, asserts its exact typed rejection, and compares the full ledger before and after rejection.",
+      "first_passing_commit": "b51c6efc7f237e38ef7a736548468955e13f03e0",
+      "tests": [
+        {
+          "name": "tests::ar07_replay_fails_closed",
+          "runtime_milliseconds": 17324,
+          "matched_test_count": 1,
+          "typed_rejection": "duplicate_nav_reserve_packet",
+          "command": "cargo test -p postfiat-execution tests::ar07_replay_fails_closed -- --exact --nocapture"
+        },
+        {
+          "name": "tests::ar07_stale_proof_fails_closed",
+          "runtime_milliseconds": 7102,
+          "matched_test_count": 1,
+          "typed_rejection": "nav_reserve_observation_stale",
+          "command": "cargo test -p postfiat-execution tests::ar07_stale_proof_fails_closed -- --exact --nocapture"
+        },
+        {
+          "name": "tests::ar07_wrong_profile_fails_closed",
+          "runtime_milliseconds": 2006,
+          "matched_test_count": 1,
+          "typed_rejection": "proof_profile_mismatch",
+          "command": "cargo test -p postfiat-execution tests::ar07_wrong_profile_fails_closed -- --exact --nocapture"
+        },
+        {
+          "name": "tests::ar07_wrong_overlay_fails_closed",
+          "runtime_milliseconds": 3077,
+          "matched_test_count": 1,
+          "typed_rejection": "nav_subscription_overlay_exceeds_assets",
+          "command": "cargo test -p postfiat-execution tests::ar07_wrong_overlay_fails_closed -- --exact --nocapture"
+        },
+        {
+          "name": "tests::ar07_wrong_supply_fails_closed",
+          "runtime_milliseconds": 523,
+          "matched_test_count": 1,
+          "typed_rejection": "nav_reserve_undercollateralized",
+          "command": "cargo test -p postfiat-execution tests::ar07_wrong_supply_fails_closed -- --exact --nocapture"
+        },
+        {
+          "name": "tests::ar07_wrong_nav_fails_closed",
+          "runtime_milliseconds": 6944,
+          "matched_test_count": 1,
+          "typed_rejection": "nav_reserve_nav_floor_mismatch",
+          "command": "cargo test -p postfiat-execution tests::ar07_wrong_nav_fails_closed -- --exact --nocapture"
+        },
+        {
+          "name": "tests::ar07_wrong_packet_fails_closed",
+          "runtime_milliseconds": 6856,
+          "matched_test_count": 1,
+          "typed_rejection": "nav_reserve_source_root_mismatch",
+          "command": "cargo test -p postfiat-execution tests::ar07_wrong_packet_fails_closed -- --exact --nocapture"
+        }
+      ],
+      "suite_verification": {
+        "status": "passed",
+        "command": "cargo test -p postfiat-execution",
+        "matched_test_count": 189,
+        "runtime_milliseconds": 28070,
+        "terminal_summary": "test result: ok. 189 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 28.07s"
+      },
+      "evidence": [
+        "docs/evidence/a666-public-reserve-product-20260803/regressions/ar07a-test.txt",
+        "docs/evidence/a666-public-reserve-product-20260803/regressions/ar07b-test.txt"
+      ]
     },
     {
       "id": "AR-08",
@@ -226,21 +347,13 @@
       "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar08-tests.txt"
     }
   ],
-  "remaining_manifest_rows": [
+  "remaining_acceptance_work": [
     {
       "id": "AR-03",
-      "status": "implementation_red"
+      "status": "full_suite_pending"
     },
     {
       "id": "AR-04",
-      "status": "implementation_pending"
-    },
-    {
-      "id": "AR-06",
-      "status": "implementation_pending"
-    },
-    {
-      "id": "AR-07",
       "status": "implementation_pending"
     },
     {
@@ -254,6 +367,10 @@
     {
       "id": "AR-11",
       "status": "passed_row_pending"
+    },
+    {
+      "id": "CI",
+      "status": "manifest_validation_wiring_pending"
     }
   ]
 }

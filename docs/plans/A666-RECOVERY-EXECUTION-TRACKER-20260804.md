@@ -56,22 +56,48 @@ Observed-defect regressions (defect -> test, fix committed):
 
 Mandatory set still to extract as standalone <2-minute tests:
 
-- [ ] AR-01 pfUSDC reserve-account identity/balance fixture contract
-- [ ] AR-02 production cap/order inequalities as runtime test against live
-  route config (compile-time asserts exist)
+- [x] AR-01 pfUSDC reserve-account identity/balance fixture contract.
+  Evidence: `docs/evidence/a666-public-reserve-product-20260803/regressions/ar01-test.txt`;
+  manifest: `docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest.json`
+  (`c207ee93`, 1 matched, 838ms).
+- [x] AR-02 production cap/order inequalities as runtime test against live
+  route config. Evidence:
+  `docs/evidence/a666-public-reserve-product-20260803/regressions/ar02-tests.txt`;
+  manifest: `docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest.json`
+  (`4d92a935`, 1 matched, 194ms).
 - [ ] AR-03 quorum-first commit with intentionally offline validator;
-  convergence after recovery
+  convergence after recovery. Standalone evidence:
+  `docs/evidence/a666-public-reserve-product-20260803/regressions/ar03-test.txt`
+  (`0e532e23`, 1 matched, 4.35s); full `postfiat-node --lib` suite pending.
 - [ ] AR-04 authenticated catch-up accepts only pinned height/tip/root,
-  rejects every mismatch
-- [ ] AR-05 active export entitlement blocks route-epoch advancement
-- [ ] AR-06 duplicate submission: typed admission vs typed finalized
-  rejection, never ambiguous success
-- [ ] AR-07 fail-closed rejections: replay, stale proof, wrong profile,
-  wrong overlay, wrong supply, wrong NAV, wrong packet (one test per axis)
-- [ ] AR-08 snapshot-import verification mapped to existing
-  signed-snapshot/checkpoint vectors in the manifest (no new code expected)
+  rejects every mismatch.
+- [x] AR-05 active export entitlement blocks route-epoch advancement.
+  Evidence: `docs/evidence/a666-public-reserve-product-20260803/regressions/ar05-test.txt`;
+  manifest: `docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest.json`
+  (`f4d4115e`, 1 matched, 796ms).
+- [x] AR-06 duplicate submission proves typed admission `bad_sequence`
+  and typed finalized `duplicate_nav_reserve_packet` rejection, never
+  ambiguous success. Evidence:
+  `docs/evidence/a666-public-reserve-product-20260803/regressions/ar06-test.txt`;
+  manifest: `docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest.json`
+  (`3d051a5a`, 1 matched, 3.231s; full execution suite 185/185 in 27.14s).
+- [x] AR-07 fail-closed rejections: replay, stale proof, wrong profile,
+  wrong overlay, wrong supply, wrong NAV, wrong packet (one test per axis).
+  Seven standalone tests assert typed rejection plus full-ledger equality;
+  evidence:
+  `docs/evidence/a666-public-reserve-product-20260803/regressions/ar07a-test.txt`
+  and `docs/evidence/a666-public-reserve-product-20260803/regressions/ar07b-test.txt`;
+  manifest:
+  `docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest.json`
+  (`b51c6efc`, `95bc3c4`; full execution suite 189/189 in 28.07s).
+- [x] AR-08 snapshot-import verification mapped to existing
+  signed-snapshot/checkpoint vectors in the manifest. Evidence:
+  `docs/evidence/a666-public-reserve-product-20260803/regressions/ar08-tests.txt`;
+  manifest: `docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest.json`
+  (8 vectors, 7.592-8.253s each).
 - [ ] Regression manifest JSON: defect->test traceability, runtimes, first
-  passing commit; wired into CI
+  passing commit; CI wiring pending. Current manifest:
+  `docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest.json`
 
 ## R3 — Repeatability **(gate: PASSED)**
 
@@ -83,8 +109,11 @@ Mandatory set still to extract as standalone <2-minute tests:
 
 ## R4 — Browser readiness **(gate: OPEN)**
 
-- [ ] Reload/reconnect/recovery e2e coverage for journey step 9 in
-  `wallet-web` (currently zero coverage)
+- [x] Reload/reconnect/recovery e2e coverage for journey step 9 in
+  `wallet-web`: production `PftlPrivatePrimary` recovery path survives
+  actual proxy SIGTERM/restart and durable Chromium reload. Evidence:
+  `docs/evidence/a666-public-reserve-product-20260803/browser/journey-step-9-e2e.txt`
+  (`5e81a910`, `test:public-browser` 2/2, 8.236s).
 - [ ] `npm test`, `test:custody-browser`, `test:public-browser`, `build`
   green on the candidate
 - [ ] Full §8 browser journey pass #1 against checkpoint-restored rehearsal
