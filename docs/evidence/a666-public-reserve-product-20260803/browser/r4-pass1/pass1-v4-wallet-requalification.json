@@ -1,0 +1,74 @@
+{
+  "schema": "postfiat.a666.r4.pass1-v4-wallet-requalification.v1",
+  "qualification_harness_head": "275584f3544c217fa786acbe815a3bc1f92a71d5",
+  "mode_symmetric_structural_fix": "9c85173",
+  "product_candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+  "v4_watcher_commit": "151649d1ed156949d35debec35ed22d303238cab",
+  "disk_free_gb_before": 183,
+  "wallet_package": {
+    "version": "0.1.2",
+    "package_json_sha256": "6bd5869e589b9bec47e6e8cc6efe243e09f09ad78cc81d06e8751cd4a6d0f0fb"
+  },
+  "construction": {
+    "command": "npm run test:r4-construction",
+    "full_preflight_environment": {
+      "classification": "construction",
+      "wallet_origin": "http://127.0.0.1:8080",
+      "proxy_origin": "http://127.0.0.1:31021",
+      "fire_control_sha256": "e4b3297356e0ec802e72a79dc533b42cee2994191a2d8b9d0f93135a04aed04e",
+      "setup_sha256": "a73b957e9f9f22e2f5c3915a3a3f702c589c733056facb93b7192f794ec50c49",
+      "deployment_sha256": "24811b46b8dffbd9fbf0edaf2b0ce9b9545f7ad656d600abc259311274c09168",
+      "restart_request": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260804-v4-b56c7be8eb2c20c3.request"
+    },
+    "exit_code": 0,
+    "runtime_ms": 844,
+    "matched_tests": 12,
+    "passed_tests": 12,
+    "failed_tests": 0,
+    "todo_tests": 0,
+    "mode_parity_predicates": 18,
+    "construction_official_trace_parity": true,
+    "official_readiness_fixture_green": true,
+    "official_input_contract_vectors": 120,
+    "official_input_contract_passed": 120,
+    "report_path": "/tmp/a666-r4-v4-requalification-preflight.json",
+    "report_ready_to_fire": true,
+    "report_blockers": [],
+    "business_mutations": 0,
+    "wallet_business_steps_executed": 0
+  },
+  "matrix": [
+    {"command": "npm test", "exit_code": 0, "runtime_ms": 30372, "matched_tests": 233, "passed_tests": 233, "failed_tests": 0, "todo_tests": 0},
+    {"command": "npm run build", "exit_code": 0, "runtime_ms": 781, "modules_transformed": 1805, "build_runtime_ms": 371},
+    {"command": "npm run test:custody-browser", "exit_code": 0, "runtime_ms": 6347, "matched_tests": 1, "passed_tests": 1, "failed_tests": 0, "todo_tests": 0},
+    {"command": "npm run test:public-browser", "exit_code": 0, "runtime_ms": 8142, "matched_tests": 2, "passed_tests": 2, "failed_tests": 0, "todo_tests": 0}
+  ],
+  "coverage": {
+    "step_9_proxy_restart_and_browser_reload_subtest_passed": true,
+    "permanent_public_receipt_download_assertions_covered": true,
+    "production_receipt_control_in_import_graph": true,
+    "custody_browser_boundary_passed": true,
+    "credential_and_custody_scans_green": true
+  },
+  "checks": {
+    "disk_preflight": true,
+    "construction_12_of_12": true,
+    "mode_parity_18_of_18": true,
+    "official_readiness_fixture": true,
+    "official_input_contract_120_of_120": true,
+    "npm_test_233_of_233": true,
+    "build_green": true,
+    "custody_browser_1_of_1": true,
+    "public_browser_2_of_2": true,
+    "step_9_receipt_custody_coverage": true,
+    "product_candidate_pinned": true,
+    "v4_watcher_pinned": true,
+    "no_official_browser_invocation": true,
+    "business_mutations_zero": true
+  },
+  "qualification_green": true,
+  "official_fire_ready": true,
+  "service_actions": 0,
+  "official_invocations": 0,
+  "credentials_included": false
+}
