@@ -1,0 +1,10 @@
+{
+ "schema": "postfiat.a666.r4.receipt-prover-pathb-v3-probe.v1",
+ "run_id": "a666-r4-receipt-prover-pathb-20260804-v3",
+ "probe_unit": "a666-r4-receipt-prover-pathb-20260804-v3-probe",
+ "probe_exit_code": 0,
+ "probe_green": true,
+ "docker_server_version_line": "Server Version: 29.1.3",
+ "log_path": "/tmp/a666-r4-pathb-v3-probe.5Z7IsG.log",
+ "stakehub_interaction": false
+}

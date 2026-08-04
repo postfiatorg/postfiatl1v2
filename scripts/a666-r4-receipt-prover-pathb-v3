@@ -1,0 +1,255 @@
+#!/usr/bin/env bash
+# Path-B receipt prover v3 packet: prepare / probe / fire a single detached
+# Docker-capable Groth16 proof run for the accepted Path-B witness (commit
+# 115ebc5 witness, d8b03aa pre-prove GREEN). Memory tuning identical to the
+# proven packet 2d0e9d0 lineage; gnark image pinned v6.1.0; docker via
+# sg-docker inside the transient unit. Fails closed before fire unless the
+# approval marker exists with this exact run ID and the pre-prove binding
+# check is 35/35 with zero mismatches. Never touches StakeHub, never calls
+# any contract, never exposes credential values.
+set -euo pipefail
+
+ACTION="${1:-prepare}"
+RUN_ID="a666-r4-receipt-prover-pathb-20260804-v3"
+APPROVAL_MARKER="/home/postfiat/.pft/a666-r4-receipt-prover-pathb-approval"
+MAIN_WORKTREE="$(git rev-parse --show-toplevel)"
+EVIDENCE_DIR="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/receipt-verifier-spike"
+PREPARED_FILE="$EVIDENCE_DIR/pathb-v3-prepared.json"
+PROBE_FILE="$EVIDENCE_DIR/pathb-v3-probe.json"
+FIRED_FILE="$EVIDENCE_DIR/pathb-v3-fired.json"
+PREPROVE="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/pre-prove-binding-check.json"
+
+WITNESS="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/path-b-receipt-witness.json"
+WITNESS_SHA256="8c2c7ee6d3209bfb21e5d442de7e80cb2ab4affabe06a0008527717eaae13ef4"
+PROGRAM_VKEY="0x003af40eafdbc1873f7e5b8f02da0ccd668f65930797c8e20c4f19234a5ef02f"
+CANDIDATE_REVISION="39f7fae3191aa34c376ae1657650a9ec2444f421"
+PROVER="$MAIN_WORKTREE/tools/pftl-uniswap-prover/target/release/pftl-uniswap-prover"
+PROVER_SHA256="66271a1e3444e90e450d102366a049ee13ea93f1cc227bab622a812b2bc05291"
+PROTOC_BIN="/tmp/postfiat-protoc-3.21.12/root/usr/bin/protoc"
+PROTOC_LIBDIR="/tmp/postfiat-protoc-3.21.12/root/usr/lib/x86_64-linux-gnu"
+GNARK_IMAGE="ghcr.io/succinctlabs/sp1-gnark:v6.1.0"
+DOCKER_RS_SOURCE="/home/postfiat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sp1-recursion-gnark-ffi-6.3.1/src/ffi/docker.rs"
+DOCKER_RS_SHA256="aba74ffde4fba1046ac7966fbf522372f6cb960b166b8b752909724756d30d32"
+UNIT_PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+DOCKER_ENV=(
+  "PATH=$UNIT_PATH"
+  "SP1_GNARK_IMAGE=$GNARK_IMAGE"
+)
+if [[ -n "${DOCKER_HOST:-}" ]]; then
+  DOCKER_ENV+=("DOCKER_HOST=$DOCKER_HOST")
+  DOCKER_HOST_MODE="propagated_from_caller"
+else
+  DOCKER_HOST_MODE="unset_default_socket_/var/run/docker.sock"
+fi
+
+TUNED_ENV=(
+  "SP1_PROVER=cpu"
+  "SHARD_BATCH_SIZE=1"
+  "RAYON_NUM_THREADS=4"
+  "MALLOC_ARENA_MAX=1"
+  "PROTOC=$PROTOC_BIN"
+  "LD_LIBRARY_PATH=$PROTOC_LIBDIR"
+  "SP1_WORKER_NUM_SPLICING_WORKERS=1"
+  "SP1_WORKER_SPLICING_BUFFER_SIZE=1"
+  "SP1_WORKER_NUMBER_OF_SEND_SPLICE_WORKERS_PER_SPLICE=1"
+  "SP1_WORKER_SEND_SPLICE_INPUT_BUFFER_SIZE_PER_SPLICE=1"
+  "SP1_WORKER_GLOBAL_MEMORY_BUFFER_SIZE=1"
+  "SP1_WORKER_NUM_CORE_WORKERS=1"
+  "SP1_WORKER_CORE_BUFFER_SIZE=1"
+  "SP1_WORKER_NUM_SETUP_WORKERS=1"
+  "SP1_WORKER_SETUP_BUFFER_SIZE=1"
+  "SP1_WORKER_NORMALIZE_PROGRAM_CACHE_SIZE=1"
+  "SP1_WORKER_NUM_PREPARE_REDUCE_WORKERS=1"
+  "SP1_WORKER_PREPARE_REDUCE_BUFFER_SIZE=1"
+  "SP1_WORKER_NUM_RECURSION_EXECUTOR_WORKERS=1"
+  "SP1_WORKER_RECURSION_EXECUTOR_BUFFER_SIZE=1"
+  "SP1_WORKER_NUM_RECURSION_PROVER_WORKERS=1"
+  "SP1_WORKER_RECURSION_PROVER_BUFFER_SIZE=1"
+  "SP1_WORKER_NUM_DEFERRED_WORKERS=1"
+  "SP1_WORKER_DEFERRED_BUFFER_SIZE=1"
+  "SP1_WORKER_NUMBER_OF_GAS_EXECUTORS=1"
+  "SP1_WORKER_GAS_EXECUTOR_BUFFER_SIZE=1"
+)
+
+HEAVY_PATTERNS='cargo (test|build|check|clippy|bench)|(^|/)rustc |npm (test|build|run build)|forge (build|test)|node .*(--test|jest|mocha|vitest)'
+LIFECYCLE_WHITELIST='cargo test --locked --release -p postfiat-node --test atomic_swap_local_six a666_public_successor_lifecycle_from_signed_checkpoint -- --ignored --exact --nocapture'
+
+check_heavy_suites() {
+  python3 - "$HEAVY_PATTERNS" "$LIFECYCLE_WHITELIST" <<'PY'
+import glob, re, sys
+heavy_re = re.compile(sys.argv[1])
+whitelist = sys.argv[2]
+cmdline, ppid = {}, {}
+for d in glob.glob("/proc/[0-9]*"):
+    pid = int(d.rsplit("/", 1)[1])
+    try:
+        cmdline[pid] = open(d + "/cmdline", "rb").read().replace(b"\0", b" ").decode(errors="replace").strip()
+        ppid[pid] = int(open(d + "/stat").read().rsplit(")", 1)[1].split()[1])
+    except Exception:
+        pass
+hits = {p: c for p, c in cmdline.items()
+        if c and heavy_re.search(c) and "a666-r4-receipt-prover-pathb" not in c}
+wl_roots = sorted(p for p, c in cmdline.items() if whitelist in c)
+exempt = set(wl_roots)
+changed = True
+while changed:
+    changed = False
+    for p, pp in ppid.items():
+        if pp in exempt and p not in exempt:
+            exempt.add(p)
+            changed = True
+survivors = {p: c for p, c in hits.items() if p not in exempt}
+for p in wl_roots:
+    print(f"a666_r4_receipt_prover_pathb=whitelisted_lifecycle_pid={p}", file=sys.stderr)
+if survivors:
+    print("a666_r4_receipt_prover_pathb=refused reason=heavy_suite_or_build_running", file=sys.stderr)
+    for p, c in sorted(survivors.items()):
+        print(f"{p} {c}", file=sys.stderr)
+    sys.exit(1)
+sys.exit(0)
+PY
+}
+
+check_preconditions() {
+  [[ -x "$PROVER" && "$(sha256sum "$PROVER" | awk '{print $1}')" == "$PROVER_SHA256" ]]
+  [[ -f "$WITNESS" && "$(sha256sum "$WITNESS" | awk '{print $1}')" == "$WITNESS_SHA256" ]]
+  [[ "$(sha256sum "$DOCKER_RS_SOURCE" | awk '{print $1}')" == "$DOCKER_RS_SHA256" ]]
+  [[ -x "$PROTOC_BIN" && -d "$PROTOC_LIBDIR" && -x /usr/bin/docker ]]
+  jq -e '(.fields | length) == 35 and .exact_mismatch_count == 0 and .all_match == true
+         and .candidate_revision == "39f7fae3191aa34c376ae1657650a9ec2444f421"
+         and .witness_sha256 == "8c2c7ee6d3209bfb21e5d442de7e80cb2ab4affabe06a0008527717eaae13ef4"' \
+         "$PREPROVE" >/dev/null
+}
+
+mkdir -p "$EVIDENCE_DIR"
+
+case "$ACTION" in
+
+  prepare)
+    check_preconditions
+    [[ ! -e "$APPROVAL_MARKER" ]]
+    python3 - "$PREPARED_FILE" <<PY
+import json, sys
+artifact = {
+    "schema": "postfiat.a666.r4.receipt-prover-pathb-v3-prepared.v1",
+    "run_id": "$RUN_ID",
+    "base_packet": "scripts/a666-r4-receipt-prover-docker-refire (accepted lineage 2d0e9d0)",
+    "witness_commit": "115ebc5",
+    "preprove_commit": "d8b03aa",
+    "pins": {
+        "witness": "$WITNESS",
+        "witness_sha256": "$WITNESS_SHA256",
+        "program_vkey": "$PROGRAM_VKEY",
+        "candidate_revision": "$CANDIDATE_REVISION",
+        "prover_binary": "$PROVER",
+        "prover_binary_sha256": "$PROVER_SHA256",
+        "gnark_image": "$GNARK_IMAGE",
+        "gnark_image_source_docker_rs_sha256": "$DOCKER_RS_SHA256",
+    },
+    "unit_environment": {"path": "$UNIT_PATH", "docker_host_mode": "$DOCKER_HOST_MODE",
+        "group_wrapper": "sg docker -c (transient user units lack supplementary docker group 988)"},
+    "tuned_environment_identical_to_prior_packet": True,
+    "preprove_precondition": {"fields": 35, "exact_mismatch_count": 0, "all_match": True},
+    "approval_marker": {"path": "$APPROVAL_MARKER", "exists": False, "required_content": "$RUN_ID"},
+    "authorization": "standing authorization per Angmar dispatch (pre-prove GREEN then fire immediately, no check-in)",
+    "prepared": True, "fired": False,
+    "stakehub_interaction": False, "business_mutation": 0, "verifyAndAccept_invocations": 0,
+}
+with open(sys.argv[1], "w", encoding="utf-8") as handle:
+    json.dump(artifact, handle, indent=1)
+    handle.write("\n")
+PY
+    printf 'a666_r4_receipt_prover_pathb=prepared run_id=%s\n' "$RUN_ID"
+    ;;
+
+  probe)
+    check_preconditions
+    probe_log="$(mktemp /tmp/a666-r4-pathb-v3-probe.XXXXXX.log)"
+    set +e
+    systemd-run --user --collect --wait --pipe --unit="$RUN_ID-probe" -- \
+      sg docker -c "exec /usr/bin/env ${DOCKER_ENV[*]} docker info" >"$probe_log" 2>&1
+    probe_rc=$?
+    set -e
+    server_version="$(grep -m1 'Server Version' "$probe_log" | sed 's/^ *//' || true)"
+    python3 - "$PROBE_FILE" "$probe_rc" "$probe_log" "$server_version" <<'PY'
+import json, sys
+path, rc, log, version = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4]
+artifact = {
+    "schema": "postfiat.a666.r4.receipt-prover-pathb-v3-probe.v1",
+    "run_id": "a666-r4-receipt-prover-pathb-20260804-v3",
+    "probe_unit": "a666-r4-receipt-prover-pathb-20260804-v3-probe",
+    "probe_exit_code": rc,
+    "probe_green": rc == 0,
+    "docker_server_version_line": version,
+    "log_path": log,
+    "stakehub_interaction": False,
+}
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(artifact, handle, indent=1)
+    handle.write("\n")
+PY
+    if [[ "$probe_rc" -ne 0 ]]; then
+      echo "a666_r4_receipt_prover_pathb=probe_red exit=$probe_rc log=$probe_log" >&2
+      exit "$probe_rc"
+    fi
+    echo "a666_r4_receipt_prover_pathb=probe_green exit=0 $server_version"
+    ;;
+
+  fire)
+    if [[ ! -f "$APPROVAL_MARKER" ]] || [[ "$(head -n 1 "$APPROVAL_MARKER")" != "$RUN_ID" ]]; then
+      echo "a666_r4_receipt_prover_pathb=refused reason=approval_marker_absent_or_run_id_mismatch run_id=$RUN_ID" >&2
+      exit 3
+    fi
+    check_preconditions
+    check_heavy_suites || exit 5
+    OUT_DIR="$(mktemp -d /tmp/a666-r4-receipt-prover-pathb-v3-XXXXXXXX)"
+    chmod 700 "$OUT_DIR"
+    cd "$MAIN_WORKTREE"
+    systemd-run --user --collect --same-dir --unit="$RUN_ID" -- \
+      sg docker -c "exec /usr/bin/env ${DOCKER_ENV[*]} ${TUNED_ENV[*]} /usr/bin/time -f wall_seconds=%e '$PROVER' receipt --witness '$WITNESS' --output-dir '$OUT_DIR/proof' --prove --require-prover cpu --skip-redundant-execute >>'$OUT_DIR/stdout.log' 2>>'$OUT_DIR/stderr.log'"
+    sleep 3
+    unit_state="$(systemctl --user show "$RUN_ID" -p ActiveState -p SubState -p MainPID 2>/dev/null || true)"
+    active="$(sed -n 's/^ActiveState=//p' <<<"$unit_state")"
+    main_pid="$(sed -n 's/^MainPID=//p' <<<"$unit_state")"
+    [[ "$active" == "active" && "$main_pid" =~ ^[0-9]+$ && "$main_pid" -gt 0 ]]
+    [[ "$(stat -c %a "$OUT_DIR")" == "700" ]]
+    python3 - "$FIRED_FILE" "$OUT_DIR" "$main_pid" "$unit_state" <<PY
+import json, sys
+path, out_dir, main_pid, unit_state = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
+state = dict(line.split("=", 1) for line in unit_state.strip().splitlines() if "=" in line)
+artifact = {
+    "schema": "postfiat.a666.r4.receipt-prover-pathb-v3-fired.v1",
+    "run_id": "$RUN_ID",
+    "approval_marker_path": "$APPROVAL_MARKER",
+    "authorization": "standing authorization per Angmar dispatch (pre-prove GREEN d8b03aa then fire immediately, no check-in); marker records the ~200ms committee-root fast-loop catch vs avoided 2.6h (9360s) burn",
+    "probe_exit_code": 0,
+    "unit": "$RUN_ID",
+    "unit_state": state,
+    "main_pid": main_pid,
+    "out_dir": out_dir,
+    "out_dir_mode": "700",
+    "stdout_log": out_dir + "/stdout.log",
+    "stderr_log": out_dir + "/stderr.log",
+    "proof_dir": out_dir + "/proof",
+    "witness_sha256": "$WITNESS_SHA256",
+    "program_vkey": "$PROGRAM_VKEY",
+    "candidate_revision": "$CANDIDATE_REVISION",
+    "gnark_image": "$GNARK_IMAGE",
+    "fired": True,
+    "detached": True,
+    "wait_for_completion": False,
+    "verifyAndAccept_invocations": 0,
+    "stakehub_interaction": False,
+    "business_mutation": 0,
+    "credentials_included": False,
+}
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(artifact, handle, indent=1)
+    handle.write("\n")
+PY
+    echo "a666_r4_receipt_prover_pathb=fired unit=$RUN_ID main_pid=$main_pid out_dir=$OUT_DIR"
+    ;;
+
+  *) echo "unknown action: $ACTION" >&2; exit 2 ;;
+esac
