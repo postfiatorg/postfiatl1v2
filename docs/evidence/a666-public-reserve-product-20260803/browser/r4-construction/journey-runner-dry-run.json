@@ -1,0 +1,159 @@
+{
+  "schema": "postfiat.a666.r4.journey-runner-dry-run.v1",
+  "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+  "runner_path": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+  "dry_run": true,
+  "official_pass": false,
+  "business_operations": 0,
+  "business_mutations": 0,
+  "wallet_business_steps_executed": 0,
+  "custody_material": false,
+  "stakehub": false,
+  "live_chain": false,
+  "execution": {
+    "command": "POSTFIAT_R4_PREFLIGHT_ONLY=1 npm run test:r4-construction",
+    "syntax_command": "node --check wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+    "syntax_exit_code": 0,
+    "exit_code": 0,
+    "matched_tests": 1,
+    "passed_tests": 1,
+    "failed_tests": 0,
+    "duration_ms": 572.850193,
+    "run_classification": "construction"
+  },
+  "preflight_report": {
+    "path": "/tmp/a666-r4-d-preflight-LttxGK0X.json",
+    "sha256": "d7175635447ad52156a880eb198b45c030ca21ca1882e7e9db11dc406b425ca9",
+    "schema": "postfiat.a666.r4.offline-ethereum-browser-preflight.v1",
+    "mode": "preflight_only",
+    "official_pass": false,
+    "business_mutations": 0,
+    "wallet_business_steps_executed": 0,
+    "ready_to_fire": false,
+    "first_blocker": "return_artifact_slot_unreadable"
+  },
+  "computed_checks": {
+    "steps_1_6_9_10_dry_run": true,
+    "async_proof_slot_steps_7_8": true,
+    "loopback_only": true,
+    "no_live_chain": true,
+    "zero_business_mutations": true
+  },
+  "step_readiness": [
+    { "step": 1, "label": "build identity", "ready": true, "executed": false },
+    { "step": 2, "label": "browser-controlled connect/create", "ready": true, "executed": false },
+    { "step": 3, "label": "six sources/proofs/NAV", "ready": true, "executed": false },
+    { "step": 4, "label": "A666+pfUSDC balances", "ready": true, "executed": false },
+    { "step": 5, "label": "transparent issue/redeem", "ready": true, "executed": false },
+    { "step": 6, "label": "private issue/redeem", "ready": true, "executed": false },
+    { "step": 7, "label": "export", "ready": true, "executed": false },
+    { "step": 8, "label": "return", "ready": false, "executed": false },
+    { "step": 9, "label": "restart+reload recovery", "ready": true, "executed": false },
+    { "step": 10, "label": "public receipt download", "ready": true, "executed": false }
+  ],
+  "manifest_hashes": {
+    "fire_control": {
+      "path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/journey-fire-control-preflight.json",
+      "schema": "postfiat.a666.r4.journey-fire-control-preflight.v3",
+      "sha256": "fbd9a1f46e0d1e778984c064182f7f39be7a73ab98c45c72d080653d0621db32",
+      "pinned_match": true,
+      "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+      "ready_to_fire": false,
+      "blocker_names": [
+        "d_runner_steps_1_6_9_10_dry_run",
+        "stakehub_official_absent",
+        "no_live_chain_dependency"
+      ]
+    },
+    "setup": {
+      "path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/setup-endpoints-manifest.json",
+      "schema": "postfiat.a666.r4.construction-setup-endpoints.v1",
+      "sha256": "9cc348bca41e55fe7ed5dcc287a98e8b40b99f101b6895f8cfe606b6ff7d49b0",
+      "pinned_match": true,
+      "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421"
+    },
+    "deployment": {
+      "path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/ethereum-contract-stage.json",
+      "sha256": "24811b46b8dffbd9fbf0edaf2b0ce9b9545f7ad656d600abc259311274c09168",
+      "pinned_match": true,
+      "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421"
+    }
+  },
+  "observed_loopback_endpoints": {
+    "wallet_origin": "http://127.0.0.1:8080/",
+    "proxy_origin": "http://127.0.0.1:31021/",
+    "proxy_healthz_status": 200,
+    "wallet_served_status": 200,
+    "proxy_pid_source": "proxy_ready_json",
+    "proxy_ready_json": "/home/postfiat/.pft/a666-r4-candidate-proxy/proxy.ready.json",
+    "setup_manifest_endpoints": [
+      "tcp://127.0.0.1:31001",
+      "tcp://127.0.0.1:31003",
+      "tcp://127.0.0.1:31005",
+      "tcp://127.0.0.1:31007",
+      "tcp://127.0.0.1:31009",
+      "tcp://127.0.0.1:31011",
+      "http://127.0.0.1:8080",
+      "http://127.0.0.1:31021",
+      "http://127.0.0.1:31021/healthz",
+      "http://127.0.0.1:8547"
+    ],
+    "deployment_manifest_endpoints": [
+      "http://127.0.0.1:8547"
+    ]
+  },
+  "async_proof_slot": {
+    "path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/async-proof-slot.json",
+    "schema": "postfiat.a666.r4.async-proof-slot.v1",
+    "status": "accepted",
+    "run_id": "a666-r4-receipt-prover-pathb-20260804-v3",
+    "expected_run_id": "a666-r4-receipt-prover-pathb-20260804-v3",
+    "export_slot_accepted": true,
+    "first_blocker": null,
+    "inline_proving_forbidden": true,
+    "prover_invocations": 0,
+    "business_mutations": 0,
+    "accepted": true
+  },
+  "export_artifact_slot": {
+    "path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/export-artifact-slot.json",
+    "schema": "postfiat.a666.r4.export-artifact-slot.v1",
+    "status": "accepted",
+    "artifact_path": "/tmp/a666-r4-receipt-prover-pathb-v3-Cmm861lA/proof/proof.bin",
+    "artifact_sha256": "c5a5b8199cfac4fa16271ff334fc43e57bd3ed78c51da75d5a8f40353f9b5200",
+    "artifact_hash_verified": true,
+    "proof_calldata_sha256": "ce5f1868447c004d358b25a8e5b08da66f320c4157ee5e2e53d65be7ba2e20d3",
+    "public_values_sha256": "da53b72bf6f27a93a5cb9a0de2d607755c1d3e885353d7223a3a3c0ed9e5cb43",
+    "program_vkey": "0x003af40eafdbc1873f7e5b8f02da0ccd668f65930797c8e20c4f19234a5ef02f",
+    "observed_chain_state": {
+      "height": 831,
+      "tip": "ed8dacf6722a082ba753a04ce86c125ed7331f45057a258d1087509e966df45177eb6711fdd801a7125573866b3d56b2",
+      "state_root": "3840a383378c8f287677d12efb940af7d8a1e656a37651cf52e6360dd8ab305e8736c1e7252513e09293c517727c8ee1",
+      "finalized": true
+    },
+    "live_chain": false,
+    "stakehub_interaction": false,
+    "custody_material_present": false
+  },
+  "return_artifact_slot": {
+    "path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/return-artifact-slot.json",
+    "status": "pending",
+    "note": "named construction artifact not yet accepted; official steps 7/8 still require distinct accepted export and return slots and are unchanged"
+  },
+  "live_chain_observations": {
+    "fire_control_no_live_chain_dependency": false,
+    "export_slot_live_chain": false,
+    "export_slot_stakehub_interaction": false,
+    "fallback_configurations_observed": 0
+  },
+  "evidence_defects": [
+    "no proxy restart-request control file exists in the named ready JSON or scripts/a666-r4-candidate-proxy-stage; restart semantics are stage-script restage (kill and respawn under RUN_DIR /home/postfiat/.pft/a666-r4-candidate-proxy); the preflight validates restart-control directory readability only and no restart was requested",
+    "fire-control check no_live_chain_dependency remains false in the v3 aggregate input set; this runner's own no_live_chain computed check is derived only from observed loopback endpoints and artifact live-chain flags and does not consume that aggregate verdict"
+  ],
+  "blockers": [
+    "return_artifact_slot_unreadable",
+    "d_runner_steps_1_6_9_10_dry_run",
+    "stakehub_official_absent",
+    "no_live_chain_dependency"
+  ]
+}

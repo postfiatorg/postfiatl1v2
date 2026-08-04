@@ -22,6 +22,9 @@ import {
 } from './pftl-private-primary.js';
 
 const CANDIDATE_REVISION = '39f7fae3191aa34c376ae1657650a9ec2444f421';
+const ASYNC_PROOF_SLOT_SCHEMA = 'postfiat.a666.r4.async-proof-slot.v1';
+const ASYNC_PROOF_RUN_ID = 'a666-r4-receipt-prover-pathb-20260804-v3';
+const DRY_RUN_STEPS = Object.freeze([1, 2, 3, 4, 5, 6, 9, 10]);
 const POLL_INTERVAL_MS = 5_000;
 const MAX_ASYNC_WAIT_MS = 12 * 60 * 60 * 1_000;
 const FORBIDDEN_FIELD = /seed|mnemonic|private[_-]?key|owner[_-]?key|spend[_-]?auth/i;
@@ -157,6 +160,42 @@ function loopbackManifestObservation(label, manifest) {
   }
 }
 
+function loopbackEndpointsObservation(label, value) {
+  try {
+    const endpoints = endpointStrings(value);
+    for (const endpoint of endpoints) {
+      if (endpoint.value === '127.0.0.1' || endpoint.value === 'localhost' || endpoint.value === '::1') continue;
+      let parsed;
+      try {
+        parsed = new URL(endpoint.value);
+      } catch {
+        if (/^127\.0\.0\.1:\d+$/.test(endpoint.value)) continue;
+        throw new Error(`${endpoint.path} is not an explicit loopback endpoint`);
+      }
+      assert.ok(['127.0.0.1', 'localhost', '::1'].includes(parsed.hostname), `${endpoint.path} is not loopback`);
+      assert.equal(parsed.username, '', `${endpoint.path} contains credentials`);
+      assert.equal(parsed.password, '', `${endpoint.path} contains credentials`);
+    }
+    return { label, valid: true, endpoint_count: endpoints.length, error: null };
+  } catch (error) {
+    return { label, valid: false, error: error.message };
+  }
+}
+
+function fallbackFields(label, value, path = label, output = []) {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => fallbackFields(label, item, `${path}[${index}]`, output));
+    return output;
+  }
+  if (!value || typeof value !== 'object') return output;
+  for (const [key, item] of Object.entries(value)) {
+    const nextPath = `${path}.${key}`;
+    if (/fallback/i.test(key)) output.push({ path: nextPath, value: Boolean(item) });
+    fallbackFields(label, item, nextPath, output);
+  }
+  return output;
+}
+
 function observedStep(step, observations, predicates) {
   assert.equal(JOURNEY_LABELS[step - 1], observations.label, `step ${step} label drift`);
   const checks = Object.fromEntries(Object.entries(predicates).map(([name, predicate]) => [name, Boolean(predicate)]));
@@ -243,14 +282,15 @@ async function verifyProductionGraph() {
 async function runConstructionPreflight({
   walletOrigin, proxyOrigin, fireControl, setup, deployment, productionGraph,
   fireControlPath, setupPath, deploymentPath,
-  exportSlotPath, returnSlotPath, proxyRestartPath, proxyPidPath, reportPath,
+  exportSlotPath, returnSlotPath, asyncProofSlotPath, proxyRestartPath, proxyPidPath, reportPath,
 }) {
-  const [fireControlHash, setupHash, deploymentHash, exportSlot, returnSlot] = await Promise.all([
+  const [fireControlHash, setupHash, deploymentHash, exportSlot, returnSlot, asyncProofSlot] = await Promise.all([
     manifestHashObservation(fireControlPath, 'POSTFIAT_R4_FIRE_CONTROL_MANIFEST_SHA256'),
     manifestHashObservation(setupPath, 'POSTFIAT_R4_SETUP_MANIFEST_SHA256'),
     manifestHashObservation(deploymentPath, 'POSTFIAT_R4_DEPLOYMENT_MANIFEST_SHA256'),
     readableJsonObservation(exportSlotPath, 'export artifact slot'),
     readableJsonObservation(returnSlotPath, 'return artifact slot'),
+    readableJsonObservation(asyncProofSlotPath, 'async proof slot'),
   ]);
   let walletStatus = null;
   let walletServed = false;
@@ -270,7 +310,20 @@ async function runConstructionPreflight({
   } catch (error) {
     proxyStatus = error.code || error.message;
   }
-  const proxyPid = Number((await readFile(proxyPidPath, 'utf8').catch(() => '')).trim());
+  const proxyPidRaw = (await readFile(proxyPidPath, 'utf8').catch(() => '')).trim();
+  let proxyPid = Number(proxyPidRaw);
+  let proxyPidSource = 'numeric_file';
+  if (!(Number.isSafeInteger(proxyPid) && proxyPid > 0)) {
+    proxyPidSource = 'unreadable';
+    try {
+      const readyDocument = JSON.parse(proxyPidRaw);
+      const readyPid = Number(readyDocument?.pid);
+      if (Number.isSafeInteger(readyPid) && readyPid > 0) {
+        proxyPid = readyPid;
+        proxyPidSource = 'proxy_ready_json';
+      }
+    } catch { /* not a proxy-ready JSON document */ }
+  }
   const proxyPidReadable = Number.isSafeInteger(proxyPid) && proxyPid > 0;
   const restartDirectoryReadable = await stat(dirname(proxyRestartPath))
     .then(value => value.isDirectory())
@@ -288,6 +341,26 @@ async function runConstructionPreflight({
     && /^[0-9a-f]{64}$/.test(String(slot.value?.artifact_sha256 || ''))
     && Boolean(slot.value?.receipt_identity)
     && slot.value?.observed_chain_state?.finalized === true;
+  const asyncProofChecks = {
+    readable: asyncProofSlot.readable,
+    schema: asyncProofSlot.value?.schema === ASYNC_PROOF_SLOT_SCHEMA,
+    status_accepted: asyncProofSlot.value?.status === 'accepted',
+    run_id: asyncProofSlot.value?.run_id === ASYNC_PROOF_RUN_ID,
+    export_slot_accepted: asyncProofSlot.value?.export_slot_accepted === true,
+    first_blocker_null: asyncProofSlot.value?.first_blocker === null,
+    inline_proving_forbidden: asyncProofSlot.value?.inline_proving_forbidden === true,
+    prover_invocations_zero: asyncProofSlot.value?.prover_invocations === 0,
+    business_mutations_zero: asyncProofSlot.value?.business_mutations === 0,
+  };
+  const asyncProofSlotAccepted = Object.values(asyncProofChecks).every(Boolean);
+  const exportArtifactHashValid = slotAccepted(exportSlot) && Boolean(exportSlot.value?.artifact_path)
+    && await sha256File(resolve(String(exportSlot.value.artifact_path)))
+      .then(hash => hash === exportSlot.value.artifact_sha256)
+      .catch(() => false);
+  const slotEndpointManifests = [
+    loopbackEndpointsObservation('async proof slot', asyncProofSlot.value),
+    loopbackEndpointsObservation('export artifact slot', exportSlot.value),
+  ];
   const hashesReady = manifestHashes.every(item => item.matches);
   const loopbackReady = loopbackManifests.every(item => item.valid);
   const buildReady = walletServed
@@ -310,6 +383,41 @@ async function runConstructionPreflight({
     { step: 10, label: JOURNEY_LABELS[9], ready: walletServed && importGraphReady && productionGraph.private_renders_public_receipt_control },
   ].map(item => ({ ...item, executed: false }));
   const mutationRequests = [];
+  const loopbackOnly = loopbackManifests.every(item => item.valid)
+    && slotEndpointManifests.every(item => item.valid)
+    && ['127.0.0.1', 'localhost', '::1'].includes(walletOrigin.hostname)
+    && ['127.0.0.1', 'localhost', '::1'].includes(proxyOrigin.hostname);
+  const fallbackConfigurations = [
+    ...fallbackFields('fire_control', fireControl),
+    ...fallbackFields('setup_manifest', setup),
+    ...fallbackFields('deployment_manifest', deployment),
+    ...fallbackFields('async_proof_slot', asyncProofSlot.value),
+    ...fallbackFields('export_artifact_slot', exportSlot.value),
+  ];
+  const liveChainObservations = {
+    fire_control_no_live_chain_dependency: Array.isArray(fireControl.checks)
+      ? fireControl.checks.find(check => check?.id === 'no_live_chain_dependency')?.ok ?? null
+      : null,
+    async_proof_slot_live_chain: asyncProofSlot.value?.live_chain ?? null,
+    export_slot_live_chain: exportSlot.value?.live_chain ?? null,
+    export_slot_stakehub_interaction: exportSlot.value?.stakehub_interaction ?? null,
+    fallback_configurations: fallbackConfigurations,
+  };
+  const computedChecks = {
+    steps_1_6_9_10_dry_run: DRY_RUN_STEPS
+      .every(step => readiness.find(item => item.step === step)?.ready === true),
+    async_proof_slot_steps_7_8: asyncProofSlotAccepted && exportArtifactHashValid,
+    loopback_only: loopbackOnly,
+    no_live_chain: loopbackOnly
+      && liveChainObservations.async_proof_slot_live_chain !== true
+      && liveChainObservations.export_slot_live_chain === false
+      && liveChainObservations.export_slot_stakehub_interaction !== true
+      && fallbackConfigurations.every(field => !field.value),
+    zero_business_mutations: mutationRequests.length === 0
+      && readiness.every(item => item.executed === false)
+      && asyncProofSlot.value?.business_mutations === 0
+      && exportSlot.value?.business_mutations === 0,
+  };
   const blockers = [
     ...(!walletServed ? ['candidate_wallet_origin_unreachable'] : []),
     ...(!proxyReachable ? ['candidate_proxy_unreachable'] : []),
@@ -321,6 +429,18 @@ async function runConstructionPreflight({
     ...(!returnSlot.readable ? ['return_artifact_slot_unreadable'] : []),
     ...(exportSlot.readable && !slotAccepted(exportSlot) ? ['export_artifact_slot_pending'] : []),
     ...(returnSlot.readable && !slotAccepted(returnSlot) ? ['return_artifact_slot_pending'] : []),
+    ...(slotAccepted(exportSlot) && !exportArtifactHashValid ? ['export_artifact_hash_mismatch'] : []),
+    ...(!asyncProofChecks.readable ? ['async_proof_slot_unreadable'] : []),
+    ...(asyncProofChecks.readable && !asyncProofChecks.schema ? ['async_proof_slot_schema_mismatch'] : []),
+    ...(asyncProofChecks.readable && !asyncProofChecks.status_accepted ? ['async_proof_slot_pending'] : []),
+    ...(asyncProofChecks.readable && !asyncProofChecks.run_id ? ['async_proof_slot_run_id_mismatch'] : []),
+    ...(asyncProofChecks.readable && !asyncProofChecks.export_slot_accepted ? ['async_proof_slot_export_not_accepted'] : []),
+    ...(asyncProofChecks.readable && !asyncProofChecks.first_blocker_null ? ['async_proof_slot_first_blocker_present'] : []),
+    ...(asyncProofChecks.readable && !asyncProofChecks.inline_proving_forbidden ? ['async_proof_slot_inline_proving_not_forbidden'] : []),
+    ...(asyncProofChecks.readable && !asyncProofChecks.prover_invocations_zero ? ['async_proof_slot_prover_invocations_nonzero'] : []),
+    ...(asyncProofChecks.readable && !asyncProofChecks.business_mutations_zero ? ['async_proof_slot_business_mutations_nonzero'] : []),
+    ...slotEndpointManifests.filter(item => !item.valid).map(item => `loopback_slot_invalid:${item.label}`),
+    ...(fallbackConfigurations.some(field => Boolean(field.value)) ? ['live_chain_fallback_configured'] : []),
     ...(!proxyPidReadable ? ['proxy_pid_unreadable'] : []),
     ...(!restartDirectoryReadable ? ['proxy_restart_control_unreadable'] : []),
     ...(fireControl.ready_to_fire === true ? [] : (fireControl.blocker_names ?? ['fire_control_red'])),
@@ -346,14 +466,28 @@ async function runConstructionPreflight({
       reachable: proxyReachable,
       status: proxyStatus,
       pid_readable: proxyPidReadable,
+      pid_source: proxyPidSource,
     },
     manifest_hashes: manifestHashes,
     loopback_manifests: loopbackManifests,
     production_import_graph: productionGraph,
     artifact_slots: {
-      export: { path: exportSlot.path, readable: exportSlot.readable, accepted: slotAccepted(exportSlot) },
+      export: {
+        path: exportSlot.path,
+        readable: exportSlot.readable,
+        accepted: slotAccepted(exportSlot),
+        artifact_hash_verified: exportArtifactHashValid,
+      },
       return: { path: returnSlot.path, readable: returnSlot.readable, accepted: slotAccepted(returnSlot) },
     },
+    async_proof_slot: {
+      path: asyncProofSlot.path,
+      expected_run_id: ASYNC_PROOF_RUN_ID,
+      checks: asyncProofChecks,
+      accepted: asyncProofSlotAccepted,
+    },
+    live_chain_observations: liveChainObservations,
+    computed_checks: computedChecks,
     step_readiness: readiness,
     blockers: [...new Set(blockers)],
     first_blocker: blockers[0] ?? null,
@@ -362,6 +496,7 @@ async function runConstructionPreflight({
   await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
   assert.equal(report.official_pass, false, 'preflight-only cannot report an official pass');
   assert.equal(report.business_mutations, 0, 'preflight-only cannot issue business mutations');
+  assert.ok(readiness.every(item => item.executed === false), 'preflight-only cannot execute wallet business steps');
   return report;
 }
 
@@ -512,10 +647,11 @@ test('A666 R4 offline Ethereum rehearsal drives the production rendered wallet j
   assert.equal(manifestCandidateRevision(deployment), CANDIDATE_REVISION);
   assert.equal(manifestCandidateRevision(fireControl), CANDIDATE_REVISION);
   if (preflightOnly) {
+    const asyncProofSlotPath = requiredPath('POSTFIAT_R4_ASYNC_PROOF_SLOT');
     await runConstructionPreflight({
       walletOrigin: origin, proxyOrigin, fireControl, setup, deployment, productionGraph,
       fireControlPath, setupPath, deploymentPath,
-      exportSlotPath, returnSlotPath, proxyRestartPath, proxyPidPath, reportPath,
+      exportSlotPath, returnSlotPath, asyncProofSlotPath, proxyRestartPath, proxyPidPath, reportPath,
     });
     return;
   }
