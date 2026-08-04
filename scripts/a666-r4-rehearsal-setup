@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CANDIDATE_REVISION="a3c3de894573f24318c4b00608af44e7ffa345f2"
+CANDIDATE_WORKTREE="/tmp/a666-r4-candidate-a3c3de8"
+CHECKPOINT_DIR="/home/postfiat/.pft/public-reserve-qualification/20260803-pre-migration-checkpoint"
+CHECKPOINT_MANIFEST="$CHECKPOINT_DIR/lifecycle-checkpoint.signed-manifest.json"
+CHECKPOINT_SHA256="2e87fbda39b60b78e6003adf53624066974a9dea6b5a8bf0f1a851a935b1cd0b"
+TRUSTED_PUBLISHER="${CHECKPOINT_DIR}-trusted-publisher.json"
+KEY_ROOT="/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private"
+EVIDENCE_REL="docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1"
+
+repo_root="$(git rev-parse --show-toplevel)"
+evidence_dir="$repo_root/$EVIDENCE_REL"
+mkdir -p "$evidence_dir"
+run_id="r4-setup-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+started_ms="$(date +%s%3N)"
+transcript="$evidence_dir/setup-transcript.txt"
+manifest="$evidence_dir/environment-manifest.json"
+inventory_private="/home/postfiat/.pft/${run_id}-stakehub-restart-inventory.txt"
+
+exec > >(tee "$transcript") 2>&1
+printf 'run_id=%s\n' "$run_id"
+printf 'candidate_revision=%s\n' "$CANDIDATE_REVISION"
+printf 'disk_available_kib=%s\n' "$(df --output=avail /tmp | tail -1 | tr -d ' ')"
+
+if [[ -e "$CANDIDATE_WORKTREE/.git" ]]; then
+  observed_revision="$(git -C "$CANDIDATE_WORKTREE" rev-parse HEAD)"
+else
+  git -C "$repo_root" worktree add --detach "$CANDIDATE_WORKTREE" "$CANDIDATE_REVISION"
+  observed_revision="$(git -C "$CANDIDATE_WORKTREE" rev-parse HEAD)"
+fi
+[[ "$observed_revision" == "$CANDIDATE_REVISION" ]]
+tracked_dirty_count="$(git -C "$CANDIDATE_WORKTREE" status --porcelain --untracked-files=no | wc -l)"
+[[ "$tracked_dirty_count" -eq 0 ]]
+printf 'worktree_revision_match=true\ntracked_dirty_count=%s\n' "$tracked_dirty_count"
+
+observed_checkpoint_sha256="$(sha256sum "$CHECKPOINT_MANIFEST" | awk '{print $1}')"
+checkpoint_hash_match=false
+[[ "$observed_checkpoint_sha256" == "$CHECKPOINT_SHA256" ]] && checkpoint_hash_match=true
+trusted_publisher_present=false
+[[ -f "$TRUSTED_PUBLISHER" ]] && trusted_publisher_present=true
+printf 'checkpoint_hash_match=%s\ntrusted_publisher_present=%s\n' "$checkpoint_hash_match" "$trusted_publisher_present"
+
+proof_paths=(
+  "$CANDIDATE_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/qualification/epoch-7/proof-calldata.bin"
+  "$CANDIDATE_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/qualification/epoch-7/public-values.bin"
+  "$CANDIDATE_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/qualification/epoch-8/proof-calldata.bin"
+  "$CANDIDATE_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/qualification/epoch-8/public-values.bin"
+)
+key_paths=(
+  "$KEY_ROOT/faucet-key.json"
+  "$KEY_ROOT/reserve-key.json"
+  "$KEY_ROOT/pfusdc-issuer-key.json"
+  "$KEY_ROOT/holder-key.json"
+)
+proof_files_present=true
+for path in "${proof_paths[@]}"; do [[ -f "$path" ]] || proof_files_present=false; done
+key_files_present=true
+for path in "${key_paths[@]}"; do [[ -f "$path" ]] || key_files_present=false; done
+printf 'proof_files_present=%s\nkey_files_present=%s\n' "$proof_files_present" "$key_files_present"
+
+mapfile -t active_units < <(systemctl --user list-units --all --no-legend 'stakehub-*' 2>/dev/null | awk '$3 == "active" {print $1}' | sort -u)
+stakehub_unit_count="${#active_units[@]}"
+stakehub_process_count="$(python3 - <<'PY'
+import os
+patterns = ('/home/postfiat/repos/StakeHub', 'faucet-stakehub-root', '/.stakehub/')
+count = 0
+for name in os.listdir('/proc'):
+    if not name.isdigit():
+        continue
+    root = f'/proc/{name}'
+    try:
+        if os.stat(root).st_uid != os.getuid():
+            continue
+        fields = []
+        for link in ('exe', 'cwd'):
+            try:
+                fields.append(os.readlink(f'{root}/{link}'))
+            except OSError:
+                pass
+        try:
+            fields.append(open(f'{root}/cmdline', 'rb').read().replace(b'\0', b' ').decode('utf-8', 'replace'))
+        except OSError:
+            pass
+        if any(pattern in field for field in fields for pattern in patterns):
+            count += 1
+    except (FileNotFoundError, PermissionError, ProcessLookupError):
+        pass
+print(count)
+PY
+)"
+{
+  printf 'run_id=%s\n' "$run_id"
+  printf 'units_to_restore=%s\n' "$stakehub_unit_count"
+  printf '%s\n' "${active_units[@]}"
+  printf 'matching_process_count_before=%s\n' "$stakehub_process_count"
+} > "$inventory_private"
+chmod 600 "$inventory_private"
+printf 'stakehub_active_unit_count=%s\nstakehub_matching_process_count=%s\n' "$stakehub_unit_count" "$stakehub_process_count"
+
+wallet_version="$(jq -r .version "$CANDIDATE_WORKTREE/wallet-web/package.json")"
+visible_version_identity=false
+rg -q "VITE_APP_VERSION" "$CANDIDATE_WORKTREE/wallet-web/src/App.jsx" && visible_version_identity=true
+public_receipt_download=false
+if rg -qi 'download.{0,80}(public.)?receipt|(public.)?receipt.{0,80}download' "$CANDIDATE_WORKTREE/wallet-web/src"; then
+  public_receipt_download=true
+fi
+first_setup_blocker=""
+[[ "$public_receipt_download" == true ]] || first_setup_blocker="browser_step_10_missing_downloadable_public_receipt_control"
+printf 'visible_version_identity=%s\npublic_receipt_download=%s\nfirst_setup_blocker=%s\n' \
+  "$visible_version_identity" "$public_receipt_download" "$first_setup_blocker"
+
+selector_inventory="$(jq -n \
+  --arg version "$wallet_version" \
+  '[
+    {step:1, contract:"visible build/version identity", ui:".pf-sidebar version label", endpoint:null, mapped:true},
+    {step:2, contract:"browser-controlled wallet create/connect", ui:"Create Wallet / Unlock controls", endpoint:"IndexedDB postfiat-wallet", mapped:true},
+    {step:3, contract:"reserve sources, proof identities, verified NAV", ui:"NavList and NavDetail reserve evidence", endpoint:"navcoin_bridge_routes + vault_bridge_status", mapped:true},
+    {step:4, contract:"A666 and pfUSDC balances", ui:"NavList held balances", endpoint:"account_assets", mapped:true},
+    {step:5, contract:"transparent issue and redeem", ui:"#navcoin-market-select + Mint/Redeem controls", endpoint:"RPC asset finality", mapped:true},
+    {step:6, contract:"private issue and redeem", ui:"#private-navcoin-primary", endpoint:"/api/pftl-private-swap/jobs", mapped:true},
+    {step:7, contract:"Ethereum export and both-chain finality", ui:"Deliver to MetaMask + progress", endpoint:"/api/navcoin-export-relay", mapped:true},
+    {step:8, contract:"return and exact conservation", ui:"From MetaMask + progress", endpoint:"/api/navcoin-return-relay", mapped:true},
+    {step:9, contract:"reload/reconnect recovery", ui:"#private-navcoin-primary committed state + .pf-sidebar .pf-ledger", endpoint:"local recovery storage + resident status", mapped:true},
+    {step:10, contract:"downloadable public receipts without secrets", ui:null, endpoint:null, mapped:false, blocker:"candidate has wallet-backup download only"}
+  ]')"
+selector_inventory_ok="$(jq 'all(.[]; .mapped == true)' <<<"$selector_inventory")"
+
+lifecycle_ok=false
+validator_count=0
+terminal_all_six_equal=false
+stakehub_absent=false
+[[ "$stakehub_unit_count" -eq 0 && "$stakehub_process_count" -eq 0 ]] && stakehub_absent=true
+wallet_dist_built=false
+ready_for_one_shot_pass_1=false
+if [[ "$checkpoint_hash_match" == true
+  && "$trusted_publisher_present" == true
+  && "$proof_files_present" == true
+  && "$key_files_present" == true
+  && "$selector_inventory_ok" == true
+  && "$lifecycle_ok" == true
+  && "$validator_count" -eq 6
+  && "$terminal_all_six_equal" == true
+  && "$stakehub_absent" == true
+  && "$wallet_dist_built" == true ]]; then
+  ready_for_one_shot_pass_1=true
+fi
+ended_ms="$(date +%s%3N)"
+elapsed_ms="$((ended_ms-started_ms))"
+
+jq -n \
+  --arg schema "postfiat.a666.r4.rehearsal-environment.v1" \
+  --arg run_id "$run_id" \
+  --arg candidate_revision "$observed_revision" \
+  --arg candidate_worktree "$CANDIDATE_WORKTREE" \
+  --arg checkpoint_dir "$CHECKPOINT_DIR" \
+  --arg checkpoint_manifest_sha256 "$observed_checkpoint_sha256" \
+  --arg expected_checkpoint_manifest_sha256 "$CHECKPOINT_SHA256" \
+  --arg trusted_publisher_file "$TRUSTED_PUBLISHER" \
+  --arg wallet_version "$wallet_version" \
+  --arg lifecycle_report_path "$EVIDENCE_REL/controlled-lifecycle-report.json" \
+  --arg teardown_manifest_path "$EVIDENCE_REL/teardown-pids.json" \
+  --arg restart_inventory_path "$inventory_private" \
+  --arg first_setup_blocker "$first_setup_blocker" \
+  --argjson elapsed_ms "$elapsed_ms" \
+  --argjson tracked_dirty_count "$tracked_dirty_count" \
+  --argjson checkpoint_hash_match "$checkpoint_hash_match" \
+  --argjson trusted_publisher_present "$trusted_publisher_present" \
+  --argjson proof_files_present "$proof_files_present" \
+  --argjson key_files_present "$key_files_present" \
+  --argjson stakehub_active_unit_count "$stakehub_unit_count" \
+  --argjson stakehub_matching_process_count "$stakehub_process_count" \
+  --argjson visible_version_identity "$visible_version_identity" \
+  --argjson public_receipt_download "$public_receipt_download" \
+  --argjson selector_inventory "$selector_inventory" \
+  --argjson selector_inventory_ok "$selector_inventory_ok" \
+  --argjson lifecycle_ok "$lifecycle_ok" \
+  --argjson validator_count "$validator_count" \
+  --argjson terminal_all_six_equal "$terminal_all_six_equal" \
+  --argjson stakehub_absent "$stakehub_absent" \
+  --argjson wallet_dist_built "$wallet_dist_built" \
+  --argjson ready_for_one_shot_pass_1 "$ready_for_one_shot_pass_1" \
+  '{
+    schema:$schema,
+    setup_run_id:$run_id,
+    elapsed_ms:$elapsed_ms,
+    candidate:{revision:$candidate_revision,worktree:$candidate_worktree,tracked_dirty_count:$tracked_dirty_count,exact_revision:($tracked_dirty_count == 0)},
+    checkpoint:{directory:$checkpoint_dir,manifest_sha256:$checkpoint_manifest_sha256,expected_manifest_sha256:$expected_checkpoint_manifest_sha256,hash_match:$checkpoint_hash_match,trusted_publisher_file:$trusted_publisher_file,trusted_publisher_present:$trusted_publisher_present,proof_files_present:$proof_files_present,key_files_present_by_path_only:$key_files_present,import_executed:false,import_ok:false},
+    selector_action_inventory:$selector_inventory,
+    selector_inventory_ok:$selector_inventory_ok,
+    visible_version_identity:{ok:$visible_version_identity,version:$wallet_version},
+    downloadable_public_receipt_control:{ok:$public_receipt_download},
+    lifecycle:{executed:false,ok:$lifecycle_ok,report_path:$lifecycle_report_path,report_sha256:null},
+    rehearsal_network:{started:false,loopback_only:true,validator_count:$validator_count,endpoints:[],terminal_all_six_equal:$terminal_all_six_equal,teardown_manifest_path:$teardown_manifest_path},
+    stakehub:{absence_enforced:false,active_unit_count:$stakehub_active_unit_count,matching_process_count:$stakehub_matching_process_count,proof_method:"systemd user-unit name prefix plus same-user proc exe/cwd/cmdline class count; no argv emitted",absent:$stakehub_absent,restart_inventory_path:$restart_inventory_path},
+    wallet_dist:{built:$wallet_dist_built,version:$wallet_version,asset_sha256:[]},
+    first_setup_blocker:$first_setup_blocker,
+    downstream_skipped:["StakeHub stop","signed checkpoint lifecycle","six-service restart","wallet dist build","browser journey pass 1"],
+    ready_for_one_shot_pass_1:$ready_for_one_shot_pass_1
+  }' > "$manifest"
+
+jq -e '.ready_for_one_shot_pass_1 == false and .first_setup_blocker != ""' "$manifest" >/dev/null
+printf 'ready_for_one_shot_pass_1=false\nelapsed_ms=%s\nmanifest=%s\n' "$elapsed_ms" "$manifest"
+exit 1

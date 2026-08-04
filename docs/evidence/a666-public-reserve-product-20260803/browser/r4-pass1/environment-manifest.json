@@ -1,0 +1,140 @@
+{
+  "schema": "postfiat.a666.r4.rehearsal-environment.v1",
+  "setup_run_id": "r4-setup-20260804T021439Z-206042",
+  "elapsed_ms": 138,
+  "candidate": {
+    "revision": "a3c3de894573f24318c4b00608af44e7ffa345f2",
+    "worktree": "/tmp/a666-r4-candidate-a3c3de8",
+    "tracked_dirty_count": 0,
+    "exact_revision": true
+  },
+  "checkpoint": {
+    "directory": "/home/postfiat/.pft/public-reserve-qualification/20260803-pre-migration-checkpoint",
+    "manifest_sha256": "2e87fbda39b60b78e6003adf53624066974a9dea6b5a8bf0f1a851a935b1cd0b",
+    "expected_manifest_sha256": "2e87fbda39b60b78e6003adf53624066974a9dea6b5a8bf0f1a851a935b1cd0b",
+    "hash_match": true,
+    "trusted_publisher_file": "/home/postfiat/.pft/public-reserve-qualification/20260803-pre-migration-checkpoint-trusted-publisher.json",
+    "trusted_publisher_present": true,
+    "proof_files_present": true,
+    "key_files_present_by_path_only": true,
+    "import_executed": false,
+    "import_ok": false
+  },
+  "selector_action_inventory": [
+    {
+      "step": 1,
+      "contract": "visible build/version identity",
+      "ui": ".pf-sidebar version label",
+      "endpoint": null,
+      "mapped": true
+    },
+    {
+      "step": 2,
+      "contract": "browser-controlled wallet create/connect",
+      "ui": "Create Wallet / Unlock controls",
+      "endpoint": "IndexedDB postfiat-wallet",
+      "mapped": true
+    },
+    {
+      "step": 3,
+      "contract": "reserve sources, proof identities, verified NAV",
+      "ui": "NavList and NavDetail reserve evidence",
+      "endpoint": "navcoin_bridge_routes + vault_bridge_status",
+      "mapped": true
+    },
+    {
+      "step": 4,
+      "contract": "A666 and pfUSDC balances",
+      "ui": "NavList held balances",
+      "endpoint": "account_assets",
+      "mapped": true
+    },
+    {
+      "step": 5,
+      "contract": "transparent issue and redeem",
+      "ui": "#navcoin-market-select + Mint/Redeem controls",
+      "endpoint": "RPC asset finality",
+      "mapped": true
+    },
+    {
+      "step": 6,
+      "contract": "private issue and redeem",
+      "ui": "#private-navcoin-primary",
+      "endpoint": "/api/pftl-private-swap/jobs",
+      "mapped": true
+    },
+    {
+      "step": 7,
+      "contract": "Ethereum export and both-chain finality",
+      "ui": "Deliver to MetaMask + progress",
+      "endpoint": "/api/navcoin-export-relay",
+      "mapped": true
+    },
+    {
+      "step": 8,
+      "contract": "return and exact conservation",
+      "ui": "From MetaMask + progress",
+      "endpoint": "/api/navcoin-return-relay",
+      "mapped": true
+    },
+    {
+      "step": 9,
+      "contract": "reload/reconnect recovery",
+      "ui": "#private-navcoin-primary committed state + .pf-sidebar .pf-ledger",
+      "endpoint": "local recovery storage + resident status",
+      "mapped": true
+    },
+    {
+      "step": 10,
+      "contract": "downloadable public receipts without secrets",
+      "ui": null,
+      "endpoint": null,
+      "mapped": false,
+      "blocker": "candidate has wallet-backup download only"
+    }
+  ],
+  "selector_inventory_ok": false,
+  "visible_version_identity": {
+    "ok": true,
+    "version": "0.1.2"
+  },
+  "downloadable_public_receipt_control": {
+    "ok": false
+  },
+  "lifecycle": {
+    "executed": false,
+    "ok": false,
+    "report_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/controlled-lifecycle-report.json",
+    "report_sha256": null
+  },
+  "rehearsal_network": {
+    "started": false,
+    "loopback_only": true,
+    "validator_count": 0,
+    "endpoints": [],
+    "terminal_all_six_equal": false,
+    "teardown_manifest_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/teardown-pids.json"
+  },
+  "stakehub": {
+    "absence_enforced": false,
+    "active_unit_count": 5,
+    "matching_process_count": 9,
+    "proof_method": "systemd user-unit name prefix plus same-user proc exe/cwd/cmdline class count; no argv emitted",
+    "absent": false,
+    "restart_inventory_path": "/home/postfiat/.pft/r4-setup-20260804T021439Z-206042-stakehub-restart-inventory.txt"
+  },
+  "wallet_dist": {
+    "built": false,
+    "version": "0.1.2",
+    "asset_sha256": []
+  },
+  "first_setup_blocker": "browser_step_10_missing_downloadable_public_receipt_control",
+  "downstream_skipped": [
+    "StakeHub stop",
+    "signed checkpoint lifecycle",
+    "six-service restart",
+    "wallet dist build",
+    "browser journey pass 1"
+  ],
+  "ready_for_one_shot_pass_1": false
+}
