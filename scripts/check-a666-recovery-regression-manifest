@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -146,9 +147,12 @@ def run_tests(repo: Path, tests: list[dict[str, Any]], maximum_ms: int) -> None:
         command = shlex.split(test["command"])
         started = time.monotonic()
         try:
+            environment = os.environ.copy()
+            environment["CARGO_TERM_COLOR"] = "never"
             result = subprocess.run(
                 command,
                 cwd=repo,
+                env=environment,
                 text=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
