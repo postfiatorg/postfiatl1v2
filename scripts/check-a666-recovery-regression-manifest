@@ -52,6 +52,9 @@ def evidence_paths(entry: dict[str, Any]) -> list[str]:
 
 def validate_manifest(repo: Path, manifest: dict[str, Any]) -> list[dict[str, Any]]:
     require(manifest.get("schema") == SCHEMA, f"schema must be {SCHEMA}")
+    require(manifest.get("status") == "complete", "manifest status must be complete")
+    require(manifest.get("remaining_acceptance_work") == [],
+            "remaining_acceptance_work must be empty")
 
     policy = manifest.get("invocation_policy")
     require(isinstance(policy, dict), "invocation_policy must be an object")
