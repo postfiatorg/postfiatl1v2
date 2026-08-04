@@ -2,15 +2,15 @@
   "schema": "postfiat.a666.r4.candidate-proxy-restart-watcher.v1",
   "ready": true,
   "unit": {
-    "name": "a666-r4-candidate-proxy-restart-watch-v1.service",
-    "pid": 1141288,
+    "name": "a666-r4-candidate-proxy-restart-watch-v2.service",
+    "pid": 1455930,
     "active": true,
     "running": true
   },
   "request_contract": {
-    "run_id": "a666-r4-official-journey-pass1-20260804-v1",
-    "nonce": "6c7eca67c0ab3a8f",
-    "path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260804-v1-6c7eca67c0ab3a8f.request",
+    "run_id": "a666-r4-official-journey-pass1-20260804-v2",
+    "nonce": "abf2328224729155",
+    "path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260804-v2-abf2328224729155.request",
     "payload_bytes_description": "restart followed by newline",
     "payload_matches_runner": true,
     "required_mode": "600",
@@ -19,9 +19,9 @@
     "single_use": true
   },
   "control": {
-    "path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260804-v1-6c7eca67c0ab3a8f.control.json",
+    "path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260804-v2-abf2328224729155.control.json",
     "mode": "600",
-    "response_path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260804-v1-6c7eca67c0ab3a8f.response.json",
+    "response_path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260804-v2-abf2328224729155.response.json",
     "response_currently_absent": true,
     "pid_file": "/home/postfiat/.pft/a666-r4-candidate-proxy/proxy.pid",
     "pid_file_mode": "600",
@@ -49,7 +49,12 @@
     "source_and_candidate_hashes_revalidated": true
   },
   "self_test": {
+    "vector_count": 8,
     "valid_fake_restart": true,
+    "exact_v2_contract_accepted_dry_run": true,
+    "v1_request_rejected_without_mutation": true,
+    "missing_run_id_rejected": true,
+    "unknown_run_id_rejected": true,
     "wrong_candidate_rejected": true,
     "stale_rejected": true,
     "duplicate_rejected": true

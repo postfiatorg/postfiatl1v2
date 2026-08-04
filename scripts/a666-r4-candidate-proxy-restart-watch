@@ -7,7 +7,8 @@ CANDIDATE_REVISION="39f7fae3191aa34c376ae1657650a9ec2444f421"
 PROXY_TREE_HASH="5919ae695d910cfbe3b41c9783ef79354784b4ee"
 SERVER_SHA256="6aebb3576bde511ce99f8b69a36fe502d3ddffad23275c5761f380fd3675bf41"
 LOCK_SHA256="6ed3d70403dabf69a3b4dde632c6a2926bcb554e4b774d8c1336689fc1e48c3a"
-RUN_ID="${POSTFIAT_R4_PROXY_RESTART_RUN_ID:-a666-r4-official-journey-pass1-20260804-v1}"
+AUTHORIZED_RUN_ID="a666-r4-official-journey-pass1-20260804-v2"
+RUN_ID="${POSTFIAT_R4_PROXY_RESTART_RUN_ID:-$AUTHORIZED_RUN_ID}"
 NONCE="${POSTFIAT_R4_PROXY_RESTART_NONCE:-}"
 READY="$RUN_DIR/proxy.ready.json"
 PID_FILE="$RUN_DIR/proxy.pid"
@@ -29,7 +30,12 @@ atomic_write() {
   mv -f "$temporary" "$destination"
 }
 
+authorized_run_id() {
+  [[ "$1" == "$AUTHORIZED_RUN_ID" ]]
+}
+
 set_paths() {
+  authorized_run_id "$RUN_ID"
   [[ "$RUN_ID" =~ ^[a-z0-9][a-z0-9-]{15,95}$ ]]
   [[ "$NONCE" =~ ^[0-9a-f]{16}$ ]]
   REQUEST="$RUN_DIR/restart-$RUN_ID-$NONCE.request"
@@ -133,9 +139,13 @@ PY
 }
 
 self_test() {
-  local root run nonce request response start old new
+  local root run nonce request response start old new v1_request
   root="$(mktemp -d /tmp/a666-r4-proxy-restart-selftest-XXXXXXXX)"; chmod 700 "$root"
-  run=a666-r4-official-journey-pass1-selftest; nonce=0123456789abcdef; start="$(date +%s)"
+  run="$AUTHORIZED_RUN_ID"; nonce=0123456789abcdef; start="$(date +%s)"
+  authorized_run_id "$run"
+  ! authorized_run_id "a666-r4-official-journey-pass1-20260804-v1"
+  ! authorized_run_id ""
+  ! authorized_run_id "a666-r4-official-journey-pass1-unknown"
   request="$root/restart-$run-$nonce.request"; response="$root/response.json"
   sleep 60 & old="$!"
   printf 'restart\n' >"$request"; chmod 600 "$request"
@@ -145,14 +155,16 @@ self_test() {
   printf '{}\n' >"$response"; chmod 600 "$response"
   ! validate_request_shape "$request" "$run" "$nonce" "$start" "$response" 2>/dev/null
   rm -f "$response"
-  ! validate_request_shape "$request" wrong-run "$nonce" "$start" "$response" 2>/dev/null
+  v1_request="$root/restart-a666-r4-official-journey-pass1-20260804-v1-$nonce.request"
+  printf 'restart\n' >"$v1_request"; chmod 600 "$v1_request"
+  ! validate_request_shape "$v1_request" "$run" "$nonce" "$start" "$response" 2>/dev/null
   touch -d '10 minutes ago' "$request"
   ! validate_request_shape "$request" "$run" "$nonce" "$start" "$response" 2>/dev/null
   printf '{"candidate_revision":"wrong"}\n' >"$root/wrong-candidate.json"
   ! jq -e --arg expected "$CANDIDATE_REVISION" '.candidate_revision==$expected' "$root/wrong-candidate.json" >/dev/null
   kill -TERM "$new"; wait "$new" 2>/dev/null || true
   rm -rf "$root"
-  echo 'proxy_restart_watcher_self_test=ok valid_fake_restart=true wrong_candidate_rejected=true stale_rejected=true duplicate_rejected=true'
+  echo 'proxy_restart_watcher_self_test=ok vectors=8 valid_fake_restart=true exact_v2_contract_accepted=true v1_rejected_no_mutation=true missing_run_id_rejected=true unknown_run_id_rejected=true wrong_candidate_rejected=true stale_rejected=true duplicate_rejected=true'
 }
 
 watch() {
