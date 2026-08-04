@@ -7686,3 +7686,253 @@ fn ar06_duplicate_submission_returns_typed_admission_or_finalized_rejection() {
         "duplicate must not drift supply"
     );
 }
+
+struct Ar07ReserveFixture {
+    genesis: Genesis,
+    ledger: LedgerState,
+    operator_key: postfiat_crypto_provider::MlDsa65KeyPair,
+    operator: String,
+    operation: NavReserveSubmitOperation,
+}
+
+fn ar07_reserve_fixture() -> Ar07ReserveFixture {
+    let mut genesis = Genesis::new_with_validator_count("postfiat-wan-devnet-2", 6);
+    genesis.consensus_v2_activation_height = Some(1);
+    let issuer_derivation_payload = serde_json::to_vec(&(
+        "postfiat.wallet.seed.v1",
+        "ML-DSA-65",
+        genesis.chain_id.as_str(),
+        0_u32,
+        "transparent-spend",
+        "66".repeat(32),
+    ))
+    .expect("serialize deterministic AR-07 issuer derivation");
+    let issuer_digest = postfiat_crypto_provider::hash_bytes(
+        "postfiat.wallet.seed.v1",
+        &issuer_derivation_payload,
+    );
+    let mut issuer_seed = [0_u8; 32];
+    issuer_seed.copy_from_slice(&issuer_digest[..32]);
+    let issuer_key = ml_dsa_65_keygen_from_seed(&issuer_seed);
+    let operator_key = ml_dsa_65_keygen_from_seed(&[0x71; 32]);
+    let issuer = address_from_public_key(&issuer_key.public_key);
+    let operator = address_from_public_key(&operator_key.public_key);
+    let mut ledger = LedgerState::new(vec![
+        Account::new(
+            issuer.clone(),
+            100_000,
+            Some(bytes_to_hex(&issuer_key.public_key)),
+        ),
+        Account::new(
+            operator.clone(),
+            100_000,
+            Some(bytes_to_hex(&operator_key.public_key)),
+        ),
+    ]);
+    let execute = |ledger: &mut LedgerState,
+                   key: &postfiat_crypto_provider::MlDsa65KeyPair,
+                   signer: &str,
+                   kind: &str,
+                   operation: AssetTransactionOperation,
+                   height: u64| {
+        let transaction = signed_asset_transaction_with_minimum_fee(
+            &genesis,
+            ledger,
+            key,
+            kind,
+            ledger.account(signer).expect("AR-07 signer").sequence + 1,
+            operation,
+        );
+        execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+            &genesis,
+            ledger,
+            &transaction,
+            height,
+        )
+    };
+    let receipt = execute(
+        &mut ledger,
+        &issuer_key,
+        &issuer,
+        ASSET_CREATE_TRANSACTION_KIND,
+        AssetTransactionOperation::AssetCreate(AssetCreateOperation {
+            issuer: issuer.clone(),
+            code: "PUSDC".to_string(),
+            version: 1,
+            precision: 6,
+            display_name: "PFTL USDC".to_string(),
+            max_supply: Some(1_000_000),
+            requires_authorization: false,
+            freeze_enabled: true,
+            clawback_enabled: false,
+        }),
+        1,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let receipt = execute(
+        &mut ledger,
+        &issuer_key,
+        &issuer,
+        ASSET_CREATE_TRANSACTION_KIND,
+        AssetTransactionOperation::AssetCreate(AssetCreateOperation {
+            issuer: issuer.clone(),
+            code: "qNAV".to_string(),
+            version: 1,
+            precision: 6,
+            display_name: "Provider-neutral qualification NAVCoin".to_string(),
+            max_supply: None,
+            requires_authorization: false,
+            freeze_enabled: true,
+            clawback_enabled: false,
+        }),
+        2,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let asset_id = ledger.asset_definitions[1].asset_id.clone();
+    let receipt = execute(
+        &mut ledger,
+        &issuer_key,
+        &issuer,
+        NAV_PROFILE_REGISTER_TRANSACTION_KIND,
+        AssetTransactionOperation::NavProfileRegister(NavProfileRegisterOperation {
+            registrant: issuer.clone(),
+            verifier_kind: postfiat_types::NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1.to_string(),
+            source_class: "manifest-driven".to_string(),
+            max_snapshot_age_blocks: 10_000,
+            challenge_window_blocks: 1,
+            max_epoch_gap_blocks: 100,
+            settle_deadline_blocks: 0,
+            min_challenge_bond: 0,
+            min_attestations: 0,
+            tolerance_bp: 0,
+            bridge_observer_min_confirmations: 0,
+            valuation_policy_hash: "04".repeat(32),
+            vault_bridge_route_policy_hash: String::new(),
+            sp1_program_vkey:
+                "0x000c7271e0711abce0c61d293222fd4a144599a779db8cadadc4df35e31a4100"
+                    .to_string(),
+            sp1_proof_encoding: "groth16".to_string(),
+            max_proof_bytes: 4_096,
+            max_public_values_bytes: postfiat_types::NAV_RESERVE_PUBLIC_VALUES_V1_BYTES as u64,
+            public_values_schema:
+                postfiat_types::NAV_RESERVE_PUBLIC_VALUES_SCHEMA_V1.to_string(),
+            source_manifest_hash: "9da4e2ba55939f138475026946d2728d9b40d3f4c7762289a70aae94584eac924b9a788c6df25c9276cc83f1616ef0e5".to_string(),
+            valuation_unit_id: "05".repeat(48),
+            max_observation_span_blocks: 8,
+            allow_controlled_sources: true,
+        }),
+        3,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let profile_id = ledger.nav_proof_profiles[0].profile_id.clone();
+    let receipt = execute(
+        &mut ledger,
+        &issuer_key,
+        &issuer,
+        NAV_ASSET_REGISTER_TRANSACTION_KIND,
+        AssetTransactionOperation::NavAssetRegister(NavAssetRegisterOperation {
+            issuer: issuer.clone(),
+            asset_id: asset_id.clone(),
+            reserve_operator: operator.clone(),
+            proof_profile: profile_id.clone(),
+            valuation_unit: "USDC".to_string(),
+            redemption_account: issuer.clone(),
+        }),
+        4,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let proof = hex_to_bytes(
+        include_str!("../testdata/nav-reserve-v1-qualified-proof-calldata.hex").trim(),
+    )
+    .expect("decode AR-07 proof");
+    let public_values = hex_to_bytes(
+        include_str!("../testdata/nav-reserve-v1-qualified-public-values.hex").trim(),
+    )
+    .expect("decode AR-07 public values");
+    let operation = NavReserveSubmitOperation {
+        issuer,
+        submitter: operator.clone(),
+        asset_id,
+        epoch: 7,
+        nav_per_unit: 7_000_000,
+        circulating_supply: 0,
+        verified_net_assets: 1_100,
+        proof_profile: profile_id,
+        source_root: "f4bdaca02e5445e7d2c666ca692d45d63fe1c423f6b03067e9eee19f5f9334fe60920b8528feff2656d5dbe7d28d415f".to_string(),
+        attestor_root: "cb34590e25db391724491b01795dee8bdbbadba3bba36fb5fc4f96bce1a87fa311426e0b76ce5ff4d775b091d94147df".to_string(),
+        reserve_packet_hash: "75".repeat(48),
+        reserve_accounts: Vec::new(),
+        sp1_proof_bytes: proof,
+        sp1_public_values: public_values,
+    };
+    Ar07ReserveFixture {
+        genesis,
+        ledger,
+        operator_key,
+        operator,
+        operation,
+    }
+}
+
+fn ar07_execute_reserve(
+    fixture: &mut Ar07ReserveFixture,
+    operation: NavReserveSubmitOperation,
+    height: u64,
+) -> Receipt {
+    let transaction = signed_asset_transaction_with_minimum_fee(
+        &fixture.genesis,
+        &fixture.ledger,
+        &fixture.operator_key,
+        NAV_RESERVE_SUBMIT_TRANSACTION_KIND,
+        fixture
+            .ledger
+            .account(&fixture.operator)
+            .expect("AR-07 operator")
+            .sequence
+            + 1,
+        AssetTransactionOperation::NavReserveSubmit(operation),
+    );
+    execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+        &fixture.genesis,
+        &mut fixture.ledger,
+        &transaction,
+        height,
+    )
+}
+
+#[test]
+fn ar07_replay_fails_closed() {
+    let mut fixture = ar07_reserve_fixture();
+    let operation = fixture.operation.clone();
+    let accepted = ar07_execute_reserve(&mut fixture, operation.clone(), 5);
+    assert!(accepted.accepted, "{accepted:?}");
+    let after_accepted = fixture.ledger.clone();
+    let replay = ar07_execute_reserve(&mut fixture, operation, 5);
+    assert!(!replay.accepted, "reserve packet replay must fail closed");
+    assert_eq!(replay.code, "duplicate_nav_reserve_packet");
+    assert_eq!(fixture.ledger, after_accepted);
+    assert_eq!(fixture.ledger.nav_reserve_packets.len(), 1);
+}
+
+#[test]
+fn ar07_stale_proof_fails_closed() {
+    let mut fixture = ar07_reserve_fixture();
+    let before = fixture.ledger.clone();
+    let operation = fixture.operation.clone();
+    let rejected = ar07_execute_reserve(&mut fixture, operation, 10_005);
+    assert!(!rejected.accepted, "stale reserve proof must fail closed");
+    assert_eq!(rejected.code, "nav_reserve_observation_stale");
+    assert_eq!(fixture.ledger, before);
+}
+
+#[test]
+fn ar07_wrong_profile_fails_closed() {
+    let mut fixture = ar07_reserve_fixture();
+    let mut operation = fixture.operation.clone();
+    operation.proof_profile = "00".repeat(48);
+    let before = fixture.ledger.clone();
+    let rejected = ar07_execute_reserve(&mut fixture, operation, 5);
+    assert!(!rejected.accepted, "wrong reserve profile must fail closed");
+    assert_eq!(rejected.code, "proof_profile_mismatch");
+    assert_eq!(fixture.ledger, before);
+}
