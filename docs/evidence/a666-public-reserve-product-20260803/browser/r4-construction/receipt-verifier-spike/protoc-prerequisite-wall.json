@@ -1,0 +1,30 @@
+{
+  "schema": "postfiat.a666.r4.receipt-verifier-spike.v1",
+  "outcome": "technical_wall",
+  "accepted": false,
+  "first_failing_check": "resident protoc executable cannot load libprotoc.so.32",
+  "attempt_history": [
+    {
+      "unit": "a666-r4-receipt-prover-spike-20260804T040008Z.service",
+      "active_state": "inactive",
+      "sub_state": "dead",
+      "result": "success",
+      "cargo_exit": 101,
+      "wall_seconds": 39.23,
+      "first_failing_check": "sp1-prover-types build requires protoc"
+    },
+    {
+      "protoc_path": "/tmp/postfiat-protoc-3.21.12/root/usr/bin/protoc",
+      "protoc_sha256": "fc386306299ba6a2f3668a0bb85cb059f389d52842f72dc618626a96c60506c7",
+      "protoc_version_exit": 127,
+      "protoc_version_terminal": "error while loading shared libraries: libprotoc.so.32: cannot open shared object file",
+      "relaunch_attempted": false
+    }
+  ],
+  "services_started": 0,
+  "anvil_started": false,
+  "deployments": 0,
+  "transactions_sent": 0,
+  "business_value": 0,
+  "credential_scan": "no credentials or secret environment supplied"
+}
