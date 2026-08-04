@@ -1,0 +1,68 @@
+{
+ "schema": "postfiat.a666.r4.receipt-prover-docker-refire-fired.v1",
+ "run_id": "a666-r4-receipt-prover-docker-refire-20260804-v2",
+ "authorization_source": "Nazgul morning dispatch via troll_burzum/orc_ghash (2026-08-04): 'FIRE-ONLY DOCKER REFIRE — AUTHORIZED, COMMIT FIRED STATE, STOP', explicitly authorizing run_id a666-r4-receipt-prover-docker-refire-20260804-v2 against accepted preflight commit 994e2d5",
+ "preflight_commit": "994e2d5",
+ "approval_marker": {
+  "path": "/home/postfiat/.pft/a666-r4-receipt-prover-docker-refire-approval",
+  "mode": "600",
+  "content_match": true,
+  "content_lines": 1,
+  "written_atomically": true
+ },
+ "fire_invocations": 1,
+ "fire_exit_code": 0,
+ "fire_final_stdout_line": "a666_r4_receipt_prover_docker_refire=submitted unit=a666-r4-receipt-prover-docker-refire-20260804-v2 out_dir=/tmp/a666-r4-receipt-prover-docker-refire-BTcozwnI",
+ "fire_capture_logs_mode_600": {
+  "stdout": "/home/postfiat/.pft/a666-r4-docker-refire-fire-stdout.log",
+  "stderr": "/home/postfiat/.pft/a666-r4-docker-refire-fire-stderr.log"
+ },
+ "heavy_gate_at_fire": {
+  "whitelisted_lifecycle_pids": [1839078, 1839082, 1899286],
+  "whitelist_scope": "exact command 'cargo test --locked --release -p postfiat-node --test atomic_swap_local_six a666_public_successor_lifecycle_from_signed_checkpoint -- --ignored --exact --nocapture' plus descendants only",
+  "other_heavy_matches": 0,
+  "no_pause_no_stop": true
+ },
+ "systemd_unit": {
+  "unit": "a666-r4-receipt-prover-docker-refire-20260804-v2.service",
+  "invocation_id": "83019c7b93004866bd47c9f25f8a65ea",
+  "main_pid": 1899290,
+  "main_pid_cmdline": "/usr/bin/sg docker -c exec /usr/bin/env PATH=... SP1_GNARK_IMAGE=ghcr.io/succinctlabs/sp1-gnark:v6.1.0 <tuned env> /usr/bin/time ... pftl-uniswap-prover receipt ...",
+  "time_wrapper_pid": 1899292,
+  "prover_pid": 1899293,
+  "prover_native_runner_child": 1904202,
+  "active_state": "active",
+  "sub_state": "running",
+  "exec_main_start_utc": "2026-08-04T08:25:51Z",
+  "cpu_activity_observation": "prover 1899293 accumulated 5949 utime+stime ticks over a bounded 15s observation (~397% CPU; ps 355% CPU, RSS ~17.5GB); process tree sg(1899290) -> time(1899292) -> pftl-uniswap-prover(1899293) with sp1-native-runner child 1904202"
+ },
+ "docker_reachability": {
+  "group_wrapper": "sg docker -c (unit gains supplementary group docker 988; probe2 GREEN in docker-refire-probe.json)",
+  "image_pin": "SP1_GNARK_IMAGE=ghcr.io/succinctlabs/sp1-gnark:v6.1.0",
+  "image_id": "sha256:e1a1cd62838b561ca301f9b2c26475c4a92bfe0e2c916e9bba213062e1548c4d",
+  "prepulled": true,
+  "docker_host_mode": "unset_default_socket_/var/run/docker.sock"
+ },
+ "out_dir": {
+  "path": "/tmp/a666-r4-receipt-prover-docker-refire-BTcozwnI",
+  "mode": "700",
+  "stdout_log": "/tmp/a666-r4-receipt-prover-docker-refire-BTcozwnI/stdout.log",
+  "stderr_log": "/tmp/a666-r4-receipt-prover-docker-refire-BTcozwnI/stderr.log",
+  "proof_dir": "/tmp/a666-r4-receipt-prover-docker-refire-BTcozwnI/proof"
+ },
+ "preflight": {
+  "disk_free_gb_at_fire": 183,
+  "owned_files_clean_at_994e2d5": true,
+  "probe2_evidence": "GREEN (docker-refire-probe.json)"
+ },
+ "staging_coexistence": "fleet/proxy/deps/pftl/anvil and the authorized lifecycle rebuild continue undisturbed; no pause or stop performed",
+ "fired": true,
+ "terminal": false,
+ "proof_success": false,
+ "proof_status": "pending",
+ "stakehub_interaction": false,
+ "stakehub_pid_542498_alive_post_fire": true,
+ "business_mutation": 0,
+ "no_retry": true,
+ "recorded_utc": "2026-08-04T08:27:00Z"
+}
