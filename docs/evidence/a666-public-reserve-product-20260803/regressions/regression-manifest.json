@@ -1,7 +1,7 @@
 {
   "schema": "postfiat.a666.recovery.regression_manifest.v1",
   "status": "complete",
-  "generated_at_utc": "2026-08-04T22:59:58Z",
+  "generated_at_utc": "2026-08-04T23:40:47Z",
   "evidence_root": "docs/evidence/a666-public-reserve-product-20260803",
   "contracts": [
     "docs/plans/A666-PRODUCT-RECOVERY-AND-DEMO-RELAUNCH-SPEC-20260803.md#61-layer-a-targeted-regressions",
@@ -128,6 +128,73 @@
         }
       ],
       "corrective_rule": "Every official runner accessor is statically extracted. Fire control requires 120 of 120 enforced entries with invalid_count 0 and unmapped_count 0 before readiness can be true.",
+      "enforcement_status": "ci_enforced"
+    },
+    {
+      "id": "HARNESS-04",
+      "name": "build_identity_validation_source_confusion",
+      "classification": "mode_asymmetric_candidate_identity_validation",
+      "official_v3_failure": {
+        "commit": "d9871ce0a1e87a6ef1bd7f5892f86a3c4137cdd7",
+        "run_id": "a666-r4-official-journey-pass1-20260804-v3",
+        "official_invocation_count": 1,
+        "failed_step": 1,
+        "root_cause": "Official v3 build identity compared the setup pin to mutable WALLET_ROOT/package.json bytes instead of the manifest-pinned candidate git object; the validation was absent from construction mode.",
+        "root_cause_files": [
+          "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:777",
+          "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:683-698"
+        ],
+        "failure_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/official-journey-pass1-v3-failure.json"
+      },
+      "red_first": {
+        "commit": "66a7171585acb565d236219f044a35821b8757e3",
+        "contract": "The setup-pinned candidate git object must match its package hash while intentionally divergent mutable worktree bytes fail the required build-identity assertion before browser or service invocation.",
+        "evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/v3-pinned-candidate-package-hash-red.json"
+      },
+      "first_passing_commit": "9c851735889433b6f493463b0738b1cdaaf6a60e",
+      "structural_rule": "All official validation predicates live in one pure registry executed identically on normalized inputs before the mode branch. Construction and official traces must be identical. Candidate package bytes come only from argument-safe git show pinned-revision:wallet-web/package.json, never mutable worktree bytes.",
+      "regressions": [
+        {
+          "id": "strict_red_flip_pinned_candidate_package_identity",
+          "first_passing_commit": "9c851735889433b6f493463b0738b1cdaaf6a60e",
+          "test": "A666 R4 v3 build identity hashes the pinned candidate package object, never worktree bytes (closes 66a7171/d9871ce)",
+          "command": "node --test --test-name-pattern \"v3 build identity|mode parity|structural guard|negatives|official-readiness|official launch contract|input contract|fire-control input gate|RED-FIRST|two-mode\" src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js"
+        },
+        {
+          "id": "mode_symmetric_18_predicate_trace_parity",
+          "first_passing_commit": "9c851735889433b6f493463b0738b1cdaaf6a60e",
+          "test": "A666 R4 mode parity: construction and official execute the identical 18-predicate registry with identical traces",
+          "predicate_count": 18,
+          "required_trace_relation": "same id set, order, and results"
+        },
+        {
+          "id": "official_only_validation_structural_guard",
+          "first_passing_commit": "9c851735889433b6f493463b0738b1cdaaf6a60e",
+          "test": "A666 R4 structural guard: official mode introduces no validation outside the shared registry",
+          "rule": "shared registry executes exactly once before the mode branch; official pre-launch contains no additional assertions"
+        },
+        {
+          "id": "exact_v3_official_readiness_non_vacuity",
+          "first_passing_commit": "9c851735889433b6f493463b0738b1cdaaf6a60e",
+          "test": "A666 R4 construction official-readiness fixture proves the exact v3 official inputs before fire (no mutation)",
+          "rule": "both wallet package-pin predicates are green for exact V3 inputs and independently refuse flipped version or hash pins with zero official invocations"
+        },
+        {
+          "id": "official_input_contract_120_accessor_extractor",
+          "first_passing_commit": "e39ef9ef50092192b1c77d071662f4354c7f6a9f",
+          "rekeyed_by_commit": "9c851735889433b6f493463b0738b1cdaaf6a60e",
+          "command": "scripts/a666-r4-official-input-contract-extract check",
+          "accessor_count": 120,
+          "mismatch_count": 0,
+          "rule": "file:package.json resolves to the pinned git-object accessor"
+        }
+      ],
+      "structural_fix_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/mode-symmetric-validation-structural-fix.json",
+      "restart_evidence": {
+        "commit": "d78676ff200a9b73936b0d2209c95107bb820483",
+        "path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/stakehub-official-restart-proof-v4.json",
+        "contract": "The consumed v3 failed step-1 official window was closed by exact dashboard restart inventory equality; no funds, data, keys, config, or software actions occurred."
+      },
       "enforcement_status": "ci_enforced"
     }
   ],

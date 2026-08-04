@@ -1,5 +1,5 @@
 A666 recovery regression manifest traceability validation
-Validated source revision: a71a397f54eca84914588e89f0057eef0a9bbd3a
+Validated source revision: 151649d1ed156949d35debec35ed22d303238cab
 
 Command: scripts/check-a666-recovery-regression-manifest
 Exit code: 0
@@ -7,36 +7,48 @@ Wall-clock elapsed: 70ms
 Execution scope: schema validation only; the 26 standalone Rust tests were not run.
 Terminal: A666 recovery manifest PASS: defects=11 regressions=11 browser_regressions=2 standalone_tests=26 run=false
 
+Command: scripts/a666-r4-official-input-contract-extract check
+Exit code: 0
+Wall-clock elapsed: 56ms
+Execution scope: static extraction only; no browser, service, or official journey invocation.
+Terminal: {"ok": true, "accessor_count": 120, "mismatch_count": 0}.
+
 Manifest totals
 - Observed product/browser defect classes: 11
-- Harness defect classes: 3
-- Total named defect classes: 14
+- Harness defect classes: 4
+- Total named defect classes: 15
 - Rust standalone regression tests: 26
 - Browser regression rows: 2
 - Total manifest regression-test records: 28
 - Status: complete
 
-New harness defect class
-- HARNESS-03: fire_control_false_green_on_incomplete_official_runner_input_contract
-- Root cause: scripts/a666-r4-journey-fire-control-aggregate did not validate the full official-runner external input surface consumed by wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js.
-- V1 prelaunch classification refusal: official-journey-pass1-failure.json; runner was not invoked, runtime 0ms, source wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:638.
-- V2 consumed step-1 failure: commit c7602be76c65882527cd2d45ea4ba1db72c2e68f; official-journey-pass1-v2-failure.json; runtime 1376ms; source wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:770.
-- Mandatory post-V2 restart evidence: stakehub-official-restart-proof-v3.json.
+Retained harness class
+- HARNESS-03: fire_control_false_green_on_incomplete_official_runner_input_contract remains linked to V1/V2 failures and 120/120 fire-control enforcement.
 
-Corrective regressions
-1. strict missing wallet package version/hash vector
-   First passing enforcement commit: a71a397f54eca84914588e89f0057eef0a9bbd3a.
-   Setup identity prerequisite commit: d812fe5d9767e99001729d806583541183a45af8.
-   Command: npm run test:r4-construction (POSTFIAT_R4_PREFLIGHT_ONLY=1 with the committed manifest and slot environment block).
-   Recorded runtime: 786ms. Terminal: tests 7, pass 7, todo 0, fail 0.
-2. strict 1:1 official-runner accessor completeness
-   First passing commit: e39ef9ef50092192b1c77d071662f4354c7f6a9f.
-   Command: scripts/a666-r4-official-input-contract-extract check.
-   Current revalidation runtime: 67ms. Terminal: {"ok": true, "accessor_count": 120, "mismatch_count": 0}.
-3. 120/120 fire-control enforcement
-   First passing commit: a71a397f54eca84914588e89f0057eef0a9bbd3a.
-   Command: scripts/a666-r4-journey-fire-control-aggregate.
-   Recorded runtime: 1663ms. Result: enforced=120, invalid=0, unmapped=0.
+New harness class
+- HARNESS-04: build_identity_validation_source_confusion.
+- Official V3 failure: d9871ce0a1e87a6ef1bd7f5892f86a3c4137cdd7; invocation 1 failed at step 1 because mutable WALLET_ROOT/package.json bytes were used instead of the setup-pinned candidate git object.
+- RED-first evidence: 66a7171585acb565d236219f044a35821b8757e3, v3-pinned-candidate-package-hash-red.json.
+- First structural passing commit: 9c851735889433b6f493463b0738b1cdaaf6a60e.
+- Restart evidence: d78676ff200a9b73936b0d2209c95107bb820483, stakehub-official-restart-proof-v4.json; exact dashboard inventory restart closed the consumed V3 failure window.
 
-Corrective rule
-Every official-runner accessor is statically extracted. Fire control requires 120/120 enforced, invalid/unmapped 0 before readiness can be true. The V1/V2 failure evidence and V2 restart proof remain linked from HARNESS-03 in regression-manifest.json.
+Structural corrective rule
+All official validation predicates live in one pure registry and execute identically on normalized inputs before the mode branch. Construction and official traces must be identical. Candidate package identity comes only from argument-safe git show pinned-revision:wallet-web/package.json, never mutable worktree bytes.
+
+Mapped regressions from 9c85173
+1. Strict RED-flip: A666 R4 v3 build identity hashes the pinned candidate package object, never worktree bytes (closes 66a7171/d9871ce).
+2. 18-predicate parity: construction and official execute the identical registry with identical id set, order, and results.
+3. Official-only guard: the registry executes exactly once before the mode branch; official pre-launch adds no validations.
+4. Exact V3 readiness non-vacuity: real V3 package version/hash pins pass and independently flipped pins refuse with zero official invocations.
+5. 120-accessor extractor: scripts/a666-r4-official-input-contract-extract check; e39ef9e introduced completeness and 9c85173 re-keyed file:package.json to the pinned git-object accessor.
+
+Recorded structural-fix commands and results
+- node --check wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js: exit 0.
+- scripts/a666-r4-official-input-contract-extract check: exit 0; accessor_count 120; mismatch_count 0.
+- node --test --test-name-pattern "v3 build identity|mode parity|structural guard|negatives|official-readiness|official launch contract|input contract|fire-control input gate|RED-FIRST|two-mode" src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js: tests 12, pass 11, fail 0, todo 0, skipped 1 (environment-gated journey test).
+- npm run test:r4-construction under the documented preflight environment: tests 12, pass 12, fail 0, todo 0.
+- Per-command wall-clock values were not recorded in the committed structural-fix evidence; no runtime is invented here.
+
+Final validation
+- Manifest schema validator: exit 0, 70ms.
+- Accessor extractor: exit 0, 56ms, 120 accessors, 0 mismatches.
