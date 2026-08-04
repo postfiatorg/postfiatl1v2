@@ -1,0 +1,28 @@
+{
+  "schema": "postfiat.a666.r4.construction-fleet.v1",
+  "prior_pid_cause": "failed service restoration returned nonzero; setup ERR cleanup then intentionally terminated and waited for all 12 rehearsal children; the services did not crash and were not runtime-killed",
+  "candidate": {
+    "revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+    "binary_path": "/tmp/a666-r4-candidate-target/release/postfiat-node",
+    "binary_sha256": "9339d1352969cbc449f4245e18c2f1b3763d5b896334335b5bfd894beff12c57"
+  },
+  "controlled_report": {
+    "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/controlled-lifecycle-report.json",
+    "sha256": "f26f1cf65862362ac956c6dc6f1d961f52ff32a79838eb860849067f98f92075",
+    "final_height": 826
+  },
+  "preserved_root": "/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959",
+  "pid_manifest": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-pids.json",
+  "rpc_endpoints": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-rpc-endpoints.json",
+  "teardown_request": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-teardown.request",
+  "checks": {
+    "input_hashes": true,
+    "processes_live": true,
+    "ready_files": true,
+    "six_way_equal": true,
+    "stakehub_interaction": false,
+    "business_operations_submitted": 0
+  },
+  "construction_ready": true,
+  "ready_for_one_shot_pass_1": false
+}

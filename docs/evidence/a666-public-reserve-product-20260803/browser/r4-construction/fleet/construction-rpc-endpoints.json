@@ -1,0 +1,60 @@
+{
+  "schema": "postfiat.a666.r4.construction-rpc-endpoints.v1",
+  "endpoints": [
+    {
+      "validator_index": 0,
+      "host": "127.0.0.1",
+      "rpc_port": 31001,
+      "block_height": 826,
+      "block_tip_hash": "1dec5de364c2338db5493c102cd0695d2885b4c2ff7a22edae7fd360f6497f757d0a72b7fb1a2289c590f38757798c02",
+      "state_root": "9eba6d3c7643e161b2fcf640c3569b4a735a23b1c6eaaedeca0b69e51cafbf5b03a1a1d328a2a133db1d32b8685f1a2c",
+      "equal_to_controlled_report": true
+    },
+    {
+      "validator_index": 1,
+      "host": "127.0.0.1",
+      "rpc_port": 31003,
+      "block_height": 826,
+      "block_tip_hash": "1dec5de364c2338db5493c102cd0695d2885b4c2ff7a22edae7fd360f6497f757d0a72b7fb1a2289c590f38757798c02",
+      "state_root": "9eba6d3c7643e161b2fcf640c3569b4a735a23b1c6eaaedeca0b69e51cafbf5b03a1a1d328a2a133db1d32b8685f1a2c",
+      "equal_to_controlled_report": true
+    },
+    {
+      "validator_index": 2,
+      "host": "127.0.0.1",
+      "rpc_port": 31005,
+      "block_height": 826,
+      "block_tip_hash": "1dec5de364c2338db5493c102cd0695d2885b4c2ff7a22edae7fd360f6497f757d0a72b7fb1a2289c590f38757798c02",
+      "state_root": "9eba6d3c7643e161b2fcf640c3569b4a735a23b1c6eaaedeca0b69e51cafbf5b03a1a1d328a2a133db1d32b8685f1a2c",
+      "equal_to_controlled_report": true
+    },
+    {
+      "validator_index": 3,
+      "host": "127.0.0.1",
+      "rpc_port": 31007,
+      "block_height": 826,
+      "block_tip_hash": "1dec5de364c2338db5493c102cd0695d2885b4c2ff7a22edae7fd360f6497f757d0a72b7fb1a2289c590f38757798c02",
+      "state_root": "9eba6d3c7643e161b2fcf640c3569b4a735a23b1c6eaaedeca0b69e51cafbf5b03a1a1d328a2a133db1d32b8685f1a2c",
+      "equal_to_controlled_report": true
+    },
+    {
+      "validator_index": 4,
+      "host": "127.0.0.1",
+      "rpc_port": 31009,
+      "block_height": 826,
+      "block_tip_hash": "1dec5de364c2338db5493c102cd0695d2885b4c2ff7a22edae7fd360f6497f757d0a72b7fb1a2289c590f38757798c02",
+      "state_root": "9eba6d3c7643e161b2fcf640c3569b4a735a23b1c6eaaedeca0b69e51cafbf5b03a1a1d328a2a133db1d32b8685f1a2c",
+      "equal_to_controlled_report": true
+    },
+    {
+      "validator_index": 5,
+      "host": "127.0.0.1",
+      "rpc_port": 31011,
+      "block_height": 826,
+      "block_tip_hash": "1dec5de364c2338db5493c102cd0695d2885b4c2ff7a22edae7fd360f6497f757d0a72b7fb1a2289c590f38757798c02",
+      "state_root": "9eba6d3c7643e161b2fcf640c3569b4a735a23b1c6eaaedeca0b69e51cafbf5b03a1a1d328a2a133db1d32b8685f1a2c",
+      "equal_to_controlled_report": true
+    }
+  ],
+  "all_six_equal": true
+}
