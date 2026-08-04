@@ -1,0 +1,336 @@
+#!/usr/bin/env bash
+# A666 R4 Path-B witness stage — preflight-only mode.
+# Read-only by construction: this script never builds, signs, submits, or
+# mutates anything. It verifies the live fleet, the Path-B Anvil deployment,
+# production-route source values, credential file locations (never contents),
+# and holder funding probes, then writes a mode-600 JSON report under /tmp.
+set -uo pipefail
+
+usage() { echo "usage: $0 --preflight-only" >&2; exit 2; }
+[[ $# -eq 1 && "$1" == "--preflight-only" ]] || usage
+
+# ---- Pinned constants -------------------------------------------------------
+CANDIDATE_REVISION="39f7fae3191aa34c376ae1657650a9ec2444f421"
+CANDIDATE_WORKTREE="/tmp/a666-r4-successor-39f7fae"
+NODE_BINARY="/tmp/a666-r4-candidate-target/release/postfiat-node"
+NODE_SHA256="9339d1352969cbc449f4245e18c2f1b3763d5b896334335b5bfd894beff12c57"
+PROVER_BINARY="tools/pftl-uniswap-prover/target/release/pftl-uniswap-prover"
+PROVER_SHA256="66271a1e3444e90e450d102366a049ee13ea93f1cc227bab622a812b2bc05291"
+MAIN_WORKTREE="/home/postfiat/repos/a666-eth-fast-lane-combined-20260724"
+
+FLEET_ROOT="/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349"
+TOPOLOGY="$FLEET_ROOT/a666-public-successor-topology.json"
+SUPERVISOR_PID="1933188"
+PIDS_FILE_PRIMARY="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-pids.json"
+PIDS_FILE_FALLBACK="$FLEET_ROOT/construction-pids.json"
+EXPECTED_HEIGHT=826
+EXPECTED_TIP="63f81fb5f56acc0b9eddd0eaf068f65feaf1d28169035c9de096e4b7cd6888836aa85fedeaa25d1dd42d07a46e8a9369"
+
+ANVIL_PID="3333263"
+ANVIL_UNIT="a666-r4-anvil-pathb-20260804.service"
+ANVIL_PORT=8547
+ANVIL_CHAIN_ID=1
+ANVIL_BLOCK=6
+ANVIL_DEPLOYER="0xf39fd6e51aad88f6F4ce6aB8827279cffFb92266"
+ANVIL_DEPLOYER_NONCE=6
+ANVIL_GENESIS="0xb51e4078114f68697339168553cbf20c84d3671db800939d6950debbafc8659d"
+
+DEPLOY_EVIDENCE="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/path-b-contract-stage.json"
+ADDR_SP1="0x5FbDB2315678afecb367f032d93F642f64180aa3"
+ADDR_WRAPPED="0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
+ADDR_RECEIPT_VERIFIER="0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
+ADDR_CONTROLLER="0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
+IMM_VKEY="0x003af40eafdbc1873f7e5b8f02da0ccd668f65930797c8e20c4f19234a5ef02f"
+IMM_ROUTE_COMMITMENT="0xaf73e4fee3e9630d74a550a8677b2c2233f459c5b7b7a9633b1e49828554d70e"
+IMM_CHECKPOINT_COMMITMENT="0x6fcf3e6ca571433715febb339dc4785cb6f4211e3a67a1a18371c567bf594462"
+IMM_FINALIZED_HEIGHT=826
+
+ROUTE_ID="pftl-a666-r4-offline-rehearsal-v1"
+PROD_ROUTE_ID="pftl-a666-ethereum-wA666-usdc-v1"
+PROD_PRICING_NAV_EPOCH=8
+PROD_ISSUE_MULTIPLIER_BPS=10050
+PROD_POLICY_EPOCH=4
+
+RESERVE_KEY_FILE="/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/reserve-key.json"
+HOLDER_KEY_FILE="/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json"
+HOLDER_ADDRESS="pfab9b9228942e5c529633a13aa271d5297bec6353"
+HOLDER_EXPECTED_NATIVE=1000000
+PFUSDC_ASSET_ID="02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b"
+
+STARTED_MS="$(date +%s%3N)"
+REPORT="/tmp/a666-r4-path-b-witness-preflight-$(date -u +%Y%m%dT%H%M%SZ)-$$.json"
+CHECKS="$(mktemp /tmp/a666-r4-preflight-checks.XXXXXX)"
+trap 'rm -f "$CHECKS"' EXIT
+
+check() { # name ok detail
+  printf '%s\t%s\t%s\n' "$1" "$2" "$3" >> "$CHECKS"
+}
+
+# ---- Static checks ----------------------------------------------------------
+rev="$(git -C "$CANDIDATE_WORKTREE" rev-parse HEAD 2>/dev/null)"
+if [[ "$rev" == "$CANDIDATE_REVISION" ]]; then
+  check candidate_revision ok "$rev"
+else
+  check candidate_revision fail "expected=$CANDIDATE_REVISION actual=${rev:-unavailable}"
+fi
+
+if [[ -x "$NODE_BINARY" ]]; then
+  sha="$(sha256sum "$NODE_BINARY" | awk '{print $1}')"
+  [[ "$sha" == "$NODE_SHA256" ]] && check node_binary ok "sha256=$sha" || check node_binary fail "sha256=$sha expected=$NODE_SHA256"
+else
+  check node_binary fail "missing or not executable: $NODE_BINARY"
+fi
+
+if [[ -x "$PROVER_BINARY" ]]; then
+  sha="$(sha256sum "$PROVER_BINARY" | awk '{print $1}')"
+  [[ "$sha" == "$PROVER_SHA256" ]] && check prover_binary ok "sha256=$sha" || check prover_binary fail "sha256=$sha expected=$PROVER_SHA256"
+else
+  check prover_binary fail "missing or not executable: $PROVER_BINARY"
+fi
+
+if jq -e '(.peers|length)==6 and all(.peers[]; .host=="127.0.0.1" and (.rpc_port|type)=="number")' "$TOPOLOGY" >/dev/null 2>&1; then
+  check topology_loopback ok "6 peers all 127.0.0.1"
+else
+  check topology_loopback fail "topology missing, malformed, or non-loopback: $TOPOLOGY"
+fi
+
+if kill -0 "$SUPERVISOR_PID" 2>/dev/null; then
+  check supervisor_pid ok "pid=$SUPERVISOR_PID alive"
+else
+  check supervisor_pid fail "pid=$SUPERVISOR_PID not alive"
+fi
+
+PIDS_FILE=""
+[[ -s "$PIDS_FILE_PRIMARY" ]] && PIDS_FILE="$PIDS_FILE_PRIMARY"
+[[ -z "$PIDS_FILE" && -s "$PIDS_FILE_FALLBACK" ]] && PIDS_FILE="$PIDS_FILE_FALLBACK"
+if [[ -n "$PIDS_FILE" ]]; then
+  total=0; dead=0
+  while read -r pid; do
+    [[ "$pid" =~ ^[0-9]+$ ]] || continue
+    total=$((total+1))
+    kill -0 "$pid" 2>/dev/null || dead=$((dead+1))
+  done < <(jq -r '.processes[].pid // empty' "$PIDS_FILE" 2>/dev/null)
+  if [[ "$total" -gt 0 && "$dead" -eq 0 ]]; then
+    check fleet_pids ok "file=$PIDS_FILE alive=$total"
+  else
+    check fleet_pids fail "file=$PIDS_FILE total=$total dead=$dead"
+  fi
+else
+  check fleet_pids fail "construction-pids.json not found at primary or fallback path"
+fi
+
+for kf in "$RESERVE_KEY_FILE" "$HOLDER_KEY_FILE"; do
+  name="$(basename "$kf" .json)"
+  if [[ -s "$kf" ]]; then
+    mode="$(stat -c %a "$kf")"
+    if [[ $(( 8#$mode & 8#077 )) -eq 0 ]]; then
+      check "credential_path_$name" ok "present mode=$mode (contents never read)"
+    else
+      check "credential_path_$name" fail "mode=$mode is group/other accessible"
+    fi
+  else
+    check "credential_path_$name" fail "missing or empty: $kf"
+  fi
+done
+
+# ---- Live read-only probes ---------------------------------------------------
+python3 - "$TOPOLOGY" "$CHECKS" <<'PY'
+import json, socket, sys, urllib.request
+
+topology_path, checks_path = sys.argv[1], sys.argv[2]
+
+def emit(name, ok, detail):
+    with open(checks_path, "a") as f:
+        f.write(f"{name}\t{'ok' if ok else 'fail'}\t{detail}\n")
+
+def rpc(port, method, params):
+    req = {"version": "postfiat-local-rpc-v1", "id": f"preflight-{port}-{method}", "method": method, "params": params}
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as s:
+        s.sendall((json.dumps(req, separators=(",", ":")) + "\n").encode())
+        value = json.loads(s.makefile("rb").readline())
+    if value.get("ok") is not True:
+        raise RuntimeError(f"{method} not ok on {port}: {value.get('error')}")
+    return value["result"]
+
+def eth(method, params):
+    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode()
+    req = urllib.request.Request("http://127.0.0.1:8547", data=body, headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=5) as resp:
+        value = json.loads(resp.read())
+    if "error" in value:
+        raise RuntimeError(f"eth {method}: {value['error']}")
+    return value["result"]
+
+try:
+    peers = sorted(json.load(open(topology_path))["peers"], key=lambda p: p["node_id"])
+    ports = [p["rpc_port"] for p in peers]
+except Exception as e:
+    ports = []
+    emit("six_way_status", False, f"topology unreadable: {e}")
+
+EXPECTED_HEIGHT = 826
+EXPECTED_TIP = "63f81fb5f56acc0b9eddd0eaf068f65feaf1d28169035c9de096e4b7cd6888836aa85fedeaa25d1dd42d07a46e8a9369"
+
+if ports:
+    try:
+        statuses = [rpc(p, "status", {}) for p in ports]
+        tuples = {(s["block_height"], s["block_tip_hash"], s["state_root"]) for s in statuses}
+        heights = [s["block_height"] for s in statuses]
+        if len(tuples) != 1:
+            emit("six_way_status", False, f"status tuples diverge: {len(tuples)} distinct")
+        elif heights[0] != EXPECTED_HEIGHT:
+            emit("six_way_status", False, f"height_drift expected={EXPECTED_HEIGHT} actual={heights[0]}")
+        elif statuses[0]["block_tip_hash"] != EXPECTED_TIP:
+            emit("six_way_status", False, f"tip_drift expected={EXPECTED_TIP} actual={statuses[0]['block_tip_hash']}")
+        else:
+            emit("six_way_status", True, f"height={EXPECTED_HEIGHT} tip={EXPECTED_TIP[:16]}... equal across {len(ports)} nodes")
+    except Exception as e:
+        emit("six_way_status", False, f"probe error: {e}")
+
+# Production route source values (read-only reuse for path-B policy fields).
+if ports:
+    try:
+        sup = rpc(ports[0], "navcoin_bridge_supply_status", {"route_id": "pftl-a666-ethereum-wA666-usdc-v1"})
+        ok = (sup.get("pricing_nav_epoch") == 8 and sup.get("issue_multiplier_bps") == 10050
+              and sup.get("policy_epoch") == 4 and sup.get("live_value_enabled") is False
+              and sup.get("invariant_holds") is True)
+        detail = (f"pricing_nav_epoch={sup.get('pricing_nav_epoch')} issue_multiplier_bps={sup.get('issue_multiplier_bps')} "
+                  f"policy_epoch={sup.get('policy_epoch')} live_value_enabled={sup.get('live_value_enabled')} "
+                  f"invariant_holds={sup.get('invariant_holds')} packet_hash={str(sup.get('pricing_reserve_packet_hash'))[:16]}...")
+        emit("production_route_source", ok, detail)
+    except Exception as e:
+        emit("production_route_source", False, f"probe error: {e}")
+
+    # Holder native balance via account endpoint (params key is plain 'address').
+    try:
+        acct = rpc(ports[0], "account", {"address": "pfab9b9228942e5c529633a13aa271d5297bec6353"})
+        bal = acct.get("balance")
+        ok = bal == 1000000
+        emit("holder_native_balance", ok, f"address=pfab9b92... balance={bal} expected=1000000 (native a666 atoms, public)")
+    except Exception as e:
+        emit("holder_native_balance", False, f"probe error: {e}")
+
+# Anvil Path-B chain readbacks.
+try:
+    chain_id = int(eth("eth_chainId", []), 16)
+    block = int(eth("eth_blockNumber", []), 16)
+    nonce = int(eth("eth_getTransactionCount", ["0xf39fd6e51aad88f6F4ce6aB8827279cffFb92266", "latest"]), 16)
+    genesis = eth("eth_getBlockByNumber", ["0x0", False])["hash"]
+    ok = chain_id == 1 and block == 6 and nonce == 6 and genesis.lower() == "0xb51e4078114f68697339168553cbf20c84d3671db800939d6950debbafc8659d"
+    emit("anvil_state", ok, f"chain={chain_id} block={block} deployer_nonce={nonce} genesis={genesis[:18]}...")
+except Exception as e:
+    emit("anvil_state", False, f"probe error: {e}")
+
+for label, addr in [("sp1_verifier", "0x5FbDB2315678afecb367f032d93F642f64180aa3"),
+                    ("wrapped_navcoin", "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"),
+                    ("receipt_verifier", "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"),
+                    ("handoff_controller", "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")]:
+    try:
+        code = eth("eth_getCode", [addr, "latest"])
+        ok = isinstance(code, str) and len(code) > 2
+        emit(f"anvil_code_{label}", ok, f"{addr} code_bytes={(len(code)-2)//2 if ok else 0}")
+    except Exception as e:
+        emit(f"anvil_code_{label}", False, f"probe error: {e}")
+PY
+
+if kill -0 "$ANVIL_PID" 2>/dev/null && grep -qi anvil "/proc/$ANVIL_PID/cmdline" 2>/dev/null; then
+  check anvil_pid ok "pid=$ANVIL_PID alive (anvil)"
+else
+  check anvil_pid fail "pid=$ANVIL_PID not alive or not anvil"
+fi
+
+unit_state="$(systemctl --user is-active "$ANVIL_UNIT" 2>/dev/null)"
+if [[ "$unit_state" == "active" ]]; then
+  check anvil_unit ok "$ANVIL_UNIT active"
+else
+  check anvil_unit fail "$ANVIL_UNIT state=${unit_state:-unknown}"
+fi
+
+# ---- Deployment evidence readback -------------------------------------------
+if [[ -s "$DEPLOY_EVIDENCE" ]]; then
+  missing=""
+  for needle in "$ADDR_SP1" "$ADDR_WRAPPED" "$ADDR_RECEIPT_VERIFIER" "$ADDR_CONTROLLER" \
+                "$IMM_VKEY" "$IMM_ROUTE_COMMITMENT" "$IMM_CHECKPOINT_COMMITMENT"; do
+    grep -qi "${needle#0x}" "$DEPLOY_EVIDENCE" || missing="$missing $needle"
+  done
+  if [[ -z "$missing" ]] && grep -q "\"initialFinalizedHeight\"*:* *$IMM_FINALIZED_HEIGHT\|$IMM_FINALIZED_HEIGHT" "$DEPLOY_EVIDENCE"; then
+    check deployment_evidence ok "a01596a stage file present, all 4 addresses + 3 immutables + height $IMM_FINALIZED_HEIGHT found"
+  else
+    check deployment_evidence fail "missing needles:$missing"
+  fi
+else
+  check deployment_evidence fail "missing: $DEPLOY_EVIDENCE"
+fi
+
+# ---- Settlement-asset funding gap (honest RED) -------------------------------
+# The route subscribe operation requires pfUSDC as settlement asset. The
+# account endpoint exposes only the native balance; no typed per-account
+# pfUSDC balance query has been located, so sufficiency is never claimed.
+check holder_pfusdc_balance fail "not_probed_by_account_endpoint asset=$PFUSDC_ASSET_ID"
+
+# ---- Verdict + report --------------------------------------------------------
+blockers=()
+while IFS=$'\t' read -r name state detail; do
+  [[ "$state" == "ok" ]] || blockers+=("$name")
+done < "$CHECKS"
+# Named blocker required by spec: route operations require pfUSDC settlement.
+required_blocker="holder_settlement_asset_balance_unproven"
+
+verdict="GREEN"
+if ((${#blockers[@]} > 0)); then verdict="RED"; fi
+
+ENDED_MS="$(date +%s%3N)"
+python3 - "$REPORT" "$CHECKS" "$verdict" "$required_blocker" "$STARTED_MS" "$ENDED_MS" <<'PY'
+import json, sys, os
+report_path, checks_path, verdict, required_blocker, started, ended = sys.argv[1:7]
+checks = []
+with open(checks_path) as f:
+    for line in f:
+        name, state, detail = line.rstrip("\n").split("\t", 2)
+        checks.append({"name": name, "ok": state == "ok", "detail": detail})
+blockers = [c["name"] for c in checks if not c["ok"]]
+if required_blocker not in blockers and any(
+    c["name"] == "holder_pfusdc_balance" and not c["ok"] for c in checks):
+    blockers.append(required_blocker)
+doc = {
+    "schema": "postfiat.a666.r4.path-b-witness-preflight.v1",
+    "mode": "preflight-only",
+    "verdict": verdict,
+    "accepted": verdict == "GREEN",
+    "blockers": blockers,
+    "required_blocker": required_blocker,
+    "checks": checks,
+    "pinned": {
+        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "fleet_root": "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349",
+        "supervisor_pid": 1933188,
+        "expected_height": 826,
+        "expected_tip": "63f81fb5f56acc0b9eddd0eaf068f65feaf1d28169035c9de096e4b7cd6888836aa85fedeaa25d1dd42d07a46e8a9369",
+        "route_id": "pftl-a666-r4-offline-rehearsal-v1",
+        "production_route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+        "anvil": {"pid": 3333263, "unit": "a666-r4-anvil-pathb-20260804.service",
+                  "port": 8547, "chain_id": 1, "block": 6},
+        "deployment_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/path-b-contract-stage.json",
+        "credential_files": ["/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/reserve-key.json",
+                             "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json"]
+    },
+    "holder_funding": {
+        "native_balance_atoms": 1000000,
+        "native_probe": "account endpoint, params {\"address\": ...}",
+        "pfusdc_balance_atoms": None,
+        "pfusdc_note": "not_probed_by_account_endpoint; sufficiency never claimed"
+    },
+    "mutations": 0,
+    "stakehub_interaction": False,
+    "loopback_only": True,
+    "runtime_ms": int(ended) - int(started)
+}
+with open(report_path, "w") as f:
+    json.dump(doc, f, indent=2)
+    f.write("\n")
+os.chmod(report_path, 0o600)
+PY
+
+blocker_csv="$(IFS=,; echo "${blockers[*]:-none}")"
+echo "PREFLIGHT $verdict blockers=$blocker_csv report=$REPORT"
+[[ "$verdict" == "GREEN" ]]
