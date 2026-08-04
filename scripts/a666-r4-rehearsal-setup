@@ -19,7 +19,9 @@ report="$EVIDENCE_DIR/controlled-lifecycle-report.json"
 transcript="$EVIDENCE_DIR/checkpoint-lifecycle-transcript.txt"
 manifest="$EVIDENCE_DIR/environment-manifest.json"
 teardown="$EVIDENCE_DIR/teardown-pids.json"
-restart_inventory="$HOME/.pft/${run_id}-stakehub-restart-inventory.txt"
+restart_inventory="${POSTFIAT_R4_STAKEHUB_RESTART_INVENTORY:-$HOME/.pft/${run_id}-stakehub-restart-inventory.txt}"
+reuse_restart_inventory=false
+[[ -n "${POSTFIAT_R4_STAKEHUB_RESTART_INVENTORY:-}" ]] && reuse_restart_inventory=true
 started_ms="$(date +%s%3N)"
 first_failure="preflight"
 preserved_root=""
@@ -124,25 +126,38 @@ first_failure="required_key_or_proof_file_path"
 for path in "${key_paths[@]}" "${proof_paths[@]}"; do [[ -f "$path" ]]; done
 
 first_failure="stakehub_inventory"
-mapfile -t active_units < <(systemctl --user list-units --all --no-legend 'stakehub-*' 2>/dev/null | awk '$3 == "active" {print $1}' | sort -u)
-mapfile -t inventoried_pids < <(same_user_matching_pids)
-{
-  printf 'schema=postfiat.a666.r4.stakehub-restart-inventory.v1\n'
-  printf 'run_id=%s\n' "$run_id"
-  printf 'active_unit_count=%s\n' "${#active_units[@]}"
-  printf 'matching_process_count=%s\n' "${#inventoried_pids[@]}"
-  printf 'units:\n'
-  printf '%s\n' "${active_units[@]}"
-  printf 'process_ids:\n'
-  printf '%s\n' "${inventoried_pids[@]}"
-} > "$restart_inventory"
-chmod 600 "$restart_inventory"
-initial_unit_count="${#active_units[@]}"
-initial_process_count="${#inventoried_pids[@]}"
+if [[ "$reuse_restart_inventory" == true ]]; then
+  [[ -f "$restart_inventory" ]]
+  [[ "$(stat -c '%a' "$restart_inventory")" == "600" ]]
+  initial_unit_count="$(sed -n 's/^active_unit_count=//p' "$restart_inventory")"
+  initial_process_count="$(sed -n 's/^matching_process_count=//p' "$restart_inventory")"
+  [[ "$initial_unit_count" =~ ^[0-9]+$ && "$initial_process_count" =~ ^[0-9]+$ ]]
+  mapfile -t active_units < <(awk '/^units:$/{capture=1;next}/^process_ids:$/{capture=0} capture && NF {print}' "$restart_inventory")
+  [[ "${#active_units[@]}" -eq "$initial_unit_count" ]]
+  inventoried_pids=()
+else
+  mapfile -t active_units < <(systemctl --user list-units --all --no-legend 'stakehub-*' 2>/dev/null | awk '$3 == "active" {print $1}' | sort -u)
+  mapfile -t inventoried_pids < <(same_user_matching_pids)
+  {
+    printf 'schema=postfiat.a666.r4.stakehub-restart-inventory.v1\n'
+    printf 'run_id=%s\n' "$run_id"
+    printf 'active_unit_count=%s\n' "${#active_units[@]}"
+    printf 'matching_process_count=%s\n' "${#inventoried_pids[@]}"
+    printf 'units:\n'
+    printf '%s\n' "${active_units[@]}"
+    printf 'process_ids:\n'
+    printf '%s\n' "${inventoried_pids[@]}"
+  } > "$restart_inventory"
+  chmod 600 "$restart_inventory"
+  initial_unit_count="${#active_units[@]}"
+  initial_process_count="${#inventoried_pids[@]}"
 
-first_failure="stakehub_stop"
-if ((initial_unit_count)); then systemctl --user stop "${active_units[@]}"; fi
-for pid in "${inventoried_pids[@]}"; do kill -TERM "$pid" 2>/dev/null || true; done
+  first_failure="stakehub_stop"
+  if ((initial_unit_count)); then systemctl --user stop "${active_units[@]}"; fi
+  for pid in "${inventoried_pids[@]}"; do kill -TERM "$pid" 2>/dev/null || true; done
+fi
+
+first_failure="stakehub_absence"
 for _ in {1..30}; do
   remaining_units="$(systemctl --user list-units --all --no-legend 'stakehub-*' 2>/dev/null | awk '$3 == "active" {count++} END {print count+0}')"
   mapfile -t remaining_pids < <(same_user_matching_pids)
