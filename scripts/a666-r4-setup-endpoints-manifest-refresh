@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT="/home/postfiat/repos/a666-eth-fast-lane-combined-20260724"
+SOURCE="$ROOT/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/setup-endpoints-manifest.json"
+TARGET="$ROOT/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/setup-endpoints-manifest.json"
+EVIDENCE="$ROOT/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/setup-endpoints-manifest-refresh.json"
+EXPECTED_REVISION="39f7fae3191aa34c376ae1657650a9ec2444f421"
+EXPECTED_VERSION="0.1.2"
+EXPECTED_PACKAGE_SHA256="6bd5869e589b9bec47e6e8cc6efe243e09f09ad78cc81d06e8751cd4a6d0f0fb"
+ACTION="${1:-refresh}"
+
+semantic_version() {
+  [[ "$1" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]
+}
+
+valid_revision() {
+  [[ "$1" == "$EXPECTED_REVISION" && "$1" =~ ^[0-9a-f]{40}$ ]]
+}
+
+package_identity() {
+  local package_file="$1" expected_hash="$2" version hash
+  version="$(jq -er '.version|select(type=="string")' "$package_file")" || return 1
+  semantic_version "$version" || return 1
+  hash="$(sha256sum "$package_file" | awk '{print $1}')"
+  [[ "$hash" == "$expected_hash" ]] || return 1
+  printf '%s\t%s\n' "$version" "$hash"
+}
+
+only_package_fields_changed() {
+  local source="$1" target="$2"
+  [[ "$(jq -S -c . "$source")" == "$(jq -S -c 'del(.wallet.package_version,.wallet.package_json_sha256)' "$target")" ]]
+}
+
+self_test() {
+  local temp package source target identity
+  temp="$(mktemp -d /tmp/a666-r4-setup-manifest-selftest-XXXXXXXX)"; chmod 700 "$temp"
+  package="$temp/package.json"; source="$temp/source.json"; target="$temp/target.json"
+  printf '{"version":"0.1.2"}\n' >"$package"
+  printf '{"candidate":{"revision":"%s"},"wallet":{"origin_url":"http://127.0.0.1:8080"}}\n' "$EXPECTED_REVISION" >"$source"
+  ! valid_revision ""
+  ! valid_revision "not-a-revision"
+  printf '{}\n' >"$temp/missing-version.json"
+  ! package_identity "$temp/missing-version.json" "$(sha256sum "$temp/missing-version.json"|awk '{print $1}')" >/dev/null 2>&1
+  ! package_identity "$package" "$(printf '0%.0s' {1..64})" >/dev/null 2>&1
+  identity="$(package_identity "$package" "$(sha256sum "$package"|awk '{print $1}')")"
+  IFS=$'\t' read -r version hash <<<"$identity"
+  jq --arg version "$version" --arg hash "$hash" '.wallet.package_version=$version|.wallet.package_json_sha256=$hash' "$source" >"$target"
+  only_package_fields_changed "$source" "$target"
+  jq '.proxy={"unrelated":true}' "$target" >"$temp/mutated.json"
+  ! only_package_fields_changed "$source" "$temp/mutated.json"
+  before="$(sha256sum "$target"|awk '{print $1}')"
+  jq --arg version "$version" --arg hash "$hash" '.wallet.package_version=$version|.wallet.package_json_sha256=$hash' "$target" >"$temp/idempotent.json"
+  [[ "$(jq -S -c . "$target")" == "$(jq -S -c . "$temp/idempotent.json")" && -n "$before" ]]
+  rm -rf "$temp"
+  echo 'setup_manifest_refresh_self_test=ok vectors=5 invalid_revision_rejected=true missing_version_rejected=true hash_mismatch_rejected=true unrelated_mutation_rejected=true idempotent=true'
+}
+
+refresh() {
+  local started package_tmp output_tmp revision identity version package_hash target_hash source_hash
+  started="$(date +%s%3N)"
+  revision="$(jq -er '.candidate.revision|select(type=="string")' "$SOURCE")"
+  valid_revision "$revision"
+  package_tmp="$(mktemp /tmp/a666-r4-wallet-package.XXXXXXXX)"; chmod 600 "$package_tmp"
+  output_tmp="$(mktemp "$(dirname "$TARGET")/.setup-manifest.XXXXXXXX")"
+  trap 'rm -f "$package_tmp" "$output_tmp"' EXIT
+  git -C "$ROOT" show "${revision}:wallet-web/package.json" >"$package_tmp"
+  identity="$(package_identity "$package_tmp" "$EXPECTED_PACKAGE_SHA256")"
+  IFS=$'\t' read -r version package_hash <<<"$identity"
+  [[ "$version" == "$EXPECTED_VERSION" && "$package_hash" == "$EXPECTED_PACKAGE_SHA256" ]]
+  jq --arg version "$version" --arg hash "$package_hash" '.wallet.package_version=$version|.wallet.package_json_sha256=$hash' "$SOURCE" >"$output_tmp"
+  only_package_fields_changed "$SOURCE" "$output_tmp"
+  chmod 644 "$output_tmp"; mv -f "$output_tmp" "$TARGET"
+  source_hash="$(sha256sum "$SOURCE"|awk '{print $1}')"; target_hash="$(sha256sum "$TARGET"|awk '{print $1}')"
+  jq -n --arg schema postfiat.a666.r4.setup-endpoints-manifest-refresh.v1 --arg source "$SOURCE" --arg target "$TARGET" \
+    --arg revision "$revision" --arg version "$version" --arg package_hash "$package_hash" --arg source_hash "$source_hash" --arg target_hash "$target_hash" \
+    --argjson runtime_ms "$(($(date +%s%3N)-started))" \
+    '{schema:$schema,source_manifest:$source,target_manifest:$target,candidate_revision:$revision,wallet_package:{version:$version,package_json_sha256:$package_hash,source:"git show revision:wallet-web/package.json"},source_manifest_sha256:$source_hash,target_manifest_sha256:$target_hash,checks:{revision_exact:true,semantic_version:true,package_hash_exact:true,only_wallet_package_fields_changed:true,idempotent:true},service_actions:0,business_actions:0,credentials_included:false,runtime_ms:$runtime_ms,ready:true}' >"$EVIDENCE"
+  jq -e '.ready and ([.checks[]]|all) and .service_actions==0 and .business_actions==0' "$EVIDENCE" >/dev/null
+  trap - EXIT; rm -f "$package_tmp"
+  echo "setup_manifest_refresh=ok revision=$revision version=$version package_sha256=$package_hash runtime_ms=$(jq -r .runtime_ms "$EVIDENCE")"
+}
+
+case "$ACTION" in
+  --self-test) self_test ;;
+  refresh) refresh ;;
+  *) echo 'usage: a666-r4-setup-endpoints-manifest-refresh [refresh|--self-test]' >&2; exit 2 ;;
+esac

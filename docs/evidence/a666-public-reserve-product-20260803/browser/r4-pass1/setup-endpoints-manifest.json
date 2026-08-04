@@ -1,0 +1,125 @@
+{
+  "schema": "postfiat.a666.r4.construction-setup-endpoints.v1",
+  "candidate": {
+    "revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+    "worktree": "/tmp/a666-r4-successor-39f7fae",
+    "revision_exact": true,
+    "tracked_clean": true
+  },
+  "fleet": {
+    "preserved_root": "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349",
+    "controlled_report_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/controlled-lifecycle-report-20260804.json",
+    "controlled_report_sha256": "c2fb973f284d92cf3b866c4abe86aca237f8e4bd753cbf03075ab71702810cf2",
+    "supervisor_pid": 1933188,
+    "height": 826,
+    "tip": "63f81fb5f56acc0b9eddd0eaf068f65feaf1d28169035c9de096e4b7cd6888836aa85fedeaa25d1dd42d07a46e8a9369",
+    "state_root": "ec2abe157aeb153efd9ca3d9642307edf63eac975d2103921d92e33b6c64f3f44acf9c33b84948de6eb54305ba44e363",
+    "endpoints": [
+      {
+        "validator_index": 0,
+        "url": "tcp://127.0.0.1:31001",
+        "reachable": true,
+        "tuple_matches": true
+      },
+      {
+        "validator_index": 1,
+        "url": "tcp://127.0.0.1:31003",
+        "reachable": true,
+        "tuple_matches": true
+      },
+      {
+        "validator_index": 2,
+        "url": "tcp://127.0.0.1:31005",
+        "reachable": true,
+        "tuple_matches": true
+      },
+      {
+        "validator_index": 3,
+        "url": "tcp://127.0.0.1:31007",
+        "reachable": true,
+        "tuple_matches": true
+      },
+      {
+        "validator_index": 4,
+        "url": "tcp://127.0.0.1:31009",
+        "reachable": true,
+        "tuple_matches": true
+      },
+      {
+        "validator_index": 5,
+        "url": "tcp://127.0.0.1:31011",
+        "reachable": true,
+        "tuple_matches": true
+      }
+    ]
+  },
+  "wallet": {
+    "origin_url": "http://127.0.0.1:8080",
+    "http_status": 200,
+    "reachable": true,
+    "loopback": true,
+    "package_version": "0.1.2",
+    "package_json_sha256": "6bd5869e589b9bec47e6e8cc6efe243e09f09ad78cc81d06e8751cd4a6d0f0fb"
+  },
+  "proxy": {
+    "origin_url": "http://127.0.0.1:31021",
+    "health_url": "http://127.0.0.1:31021/healthz",
+    "http_status": 200,
+    "reachable": true,
+    "loopback": true,
+    "pid": 3766731,
+    "process_identity_exact": true,
+    "source_tree_hash": "5919ae695d910cfbe3b41c9783ef79354784b4ee",
+    "server_js_sha256": "6aebb3576bde511ce99f8b69a36fe502d3ddffad23275c5761f380fd3675bf41",
+    "business_operations_submitted": 0
+  },
+  "anvil": {
+    "endpoint_url": "http://127.0.0.1:8547",
+    "pid": 3333263,
+    "process_identity_exact": true,
+    "reachable": true,
+    "loopback": true,
+    "chain_id_readback": 1,
+    "genesis_hash_readback": "0xb51e4078114f68697339168553cbf20c84d3671db800939d6950debbafc8659d"
+  },
+  "path_b_deployment": {
+    "evidence_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/ethereum-contract-stage.json",
+    "evidence_sha256": "24811b46b8dffbd9fbf0edaf2b0ce9b9545f7ad656d600abc259311274c09168",
+    "deployment_green": true,
+    "mocks": 0
+  },
+  "stakehub": {
+    "observation_method": "read-only systemd user-unit state",
+    "active_unit_count": 1,
+    "active_units": [
+      "stakehub-private-swap-dashboard.service"
+    ],
+    "start_stop_actions": 0,
+    "fund_key_data_software_actions": 0
+  },
+  "checks": {
+    "candidate_revision_exact": true,
+    "candidate_tracked_clean": true,
+    "fleet_root_and_report_bound": true,
+    "six_rpc_urls_loopback": true,
+    "six_rpc_reachable": true,
+    "six_rpc_tuples_match": true,
+    "wallet_origin_loopback_reachable": true,
+    "proxy_origin_loopback_reachable": true,
+    "proxy_process_and_source_exact": true,
+    "anvil_origin_loopback_reachable": true,
+    "anvil_process_identity_exact": true,
+    "anvil_chain_id_and_genesis_match": true,
+    "path_b_deployment_hash_bound": true,
+    "stakehub_observation_read_only": true,
+    "business_mutations_zero": true
+  },
+  "aggregation": {
+    "formula": "ready equals every boolean value in checks",
+    "check_count": 15,
+    "passing_check_count": 15
+  },
+  "official_pass": false,
+  "business_mutations": 0,
+  "ready": true
+}

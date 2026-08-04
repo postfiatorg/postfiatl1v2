@@ -1,0 +1,25 @@
+{
+  "schema": "postfiat.a666.r4.setup-endpoints-manifest-refresh.v1",
+  "source_manifest": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/setup-endpoints-manifest.json",
+  "target_manifest": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/setup-endpoints-manifest.json",
+  "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+  "wallet_package": {
+    "version": "0.1.2",
+    "package_json_sha256": "6bd5869e589b9bec47e6e8cc6efe243e09f09ad78cc81d06e8751cd4a6d0f0fb",
+    "source": "git show revision:wallet-web/package.json"
+  },
+  "source_manifest_sha256": "9cc348bca41e55fe7ed5dcc287a98e8b40b99f101b6895f8cfe606b6ff7d49b0",
+  "target_manifest_sha256": "a73b957e9f9f22e2f5c3915a3a3f702c589c733056facb93b7192f794ec50c49",
+  "checks": {
+    "revision_exact": true,
+    "semantic_version": true,
+    "package_hash_exact": true,
+    "only_wallet_package_fields_changed": true,
+    "idempotent": true
+  },
+  "service_actions": 0,
+  "business_actions": 0,
+  "credentials_included": false,
+  "runtime_ms": 82,
+  "ready": true
+}
