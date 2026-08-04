@@ -7212,3 +7212,356 @@ fn ar01_pfusdc_reserve_account_identity_and_balance_matches_production_fixture()
     assert_eq!(finalized.finalized_reserve_packet_hash, reserve_packet_hash);
     assert_eq!(finalized.circulating_supply, deposit_amount);
 }
+
+#[test]
+fn ar05_active_export_entitlement_blocks_route_epoch_advance_until_closed() {
+    let genesis = Genesis::new("postfiat-local");
+    let operator_key = ml_dsa_65_keygen_from_seed(&[0x51; 32]);
+    let holder_key = ml_dsa_65_keygen_from_seed(&[0x52; 32]);
+    let operator = address_from_public_key(&operator_key.public_key);
+    let holder = address_from_public_key(&holder_key.public_key);
+    let mut ledger = LedgerState::new(vec![
+        Account::new(
+            operator.clone(),
+            100_000,
+            Some(bytes_to_hex(&operator_key.public_key)),
+        ),
+        Account::new(
+            holder.clone(),
+            100_000,
+            Some(bytes_to_hex(&holder_key.public_key)),
+        ),
+    ]);
+    let execute = |ledger: &mut LedgerState,
+                   key: &postfiat_crypto_provider::MlDsa65KeyPair,
+                   signer: &str,
+                   kind: &str,
+                   operation: AssetTransactionOperation,
+                   height: u64| {
+        let transaction = signed_asset_transaction_with_minimum_fee(
+            &genesis,
+            ledger,
+            key,
+            kind,
+            ledger.account(signer).expect("AR-05 signer").sequence + 1,
+            operation,
+        );
+        execute_asset_transaction_with_unverified_pftl_uniswap_fixture(
+            &genesis,
+            ledger,
+            &transaction,
+            height,
+        )
+    };
+
+    let receipt = execute(
+        &mut ledger,
+        &operator_key,
+        &operator,
+        ASSET_CREATE_TRANSACTION_KIND,
+        AssetTransactionOperation::AssetCreate(AssetCreateOperation {
+            issuer: operator.clone(),
+            code: "A605".to_string(),
+            version: 1,
+            precision: 6,
+            display_name: "AR-05 production-shaped NAVCoin".to_string(),
+            max_supply: None,
+            requires_authorization: false,
+            freeze_enabled: true,
+            clawback_enabled: false,
+        }),
+        1,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let native_asset_id = ledger.asset_definitions[0].asset_id.clone();
+    let receipt = execute(
+        &mut ledger,
+        &operator_key,
+        &operator,
+        ASSET_CREATE_TRANSACTION_KIND,
+        AssetTransactionOperation::AssetCreate(AssetCreateOperation {
+            issuer: operator.clone(),
+            code: "USDC5".to_string(),
+            version: 1,
+            precision: 6,
+            display_name: "AR-05 settlement asset".to_string(),
+            max_supply: Some(1_000_000),
+            requires_authorization: false,
+            freeze_enabled: true,
+            clawback_enabled: false,
+        }),
+        2,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let settlement_asset_id = ledger.asset_definitions[1].asset_id.clone();
+    let receipt = execute(
+        &mut ledger,
+        &operator_key,
+        &operator,
+        NAV_ASSET_REGISTER_TRANSACTION_KIND,
+        AssetTransactionOperation::NavAssetRegister(NavAssetRegisterOperation {
+            issuer: operator.clone(),
+            asset_id: native_asset_id.clone(),
+            reserve_operator: operator.clone(),
+            proof_profile: "ar05-ledger-transparent".to_string(),
+            valuation_unit: "USDC".to_string(),
+            redemption_account: operator.clone(),
+        }),
+        2,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let holder_trust = execute(
+        &mut ledger,
+        &holder_key,
+        &holder,
+        TRUST_SET_TRANSACTION_KIND,
+        AssetTransactionOperation::TrustSet(TrustSetOperation {
+            account: holder.clone(),
+            issuer: operator.clone(),
+            asset_id: native_asset_id.clone(),
+            limit: 1_000_000,
+            authorized: false,
+            frozen: false,
+            reserve_paid: TRUSTLINE_STATE_EXPANSION_FEE,
+        }),
+        3,
+    );
+    assert!(holder_trust.accepted, "{holder_trust:?}");
+
+    let reserve_packet_hash = "55".repeat(48);
+    {
+        let nav = ledger
+            .nav_asset_mut(&native_asset_id)
+            .expect("AR-05 NAV state");
+        nav.finalized_epoch = 7;
+        nav.nav_per_unit = 7_000_000;
+        nav.finalized_reserve_packet_hash = reserve_packet_hash.clone();
+        nav.finalized_at_height = 4;
+    }
+
+    let route_id = "ar05-production-shaped-route".to_string();
+    let reservation_id = "a5".repeat(48);
+    let packet_hash = "b5".repeat(48);
+    let ethereum_recipient = "0x4444444444444444444444444444444444444444".to_string();
+    let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        policy_hash: String::new(),
+        policy_epoch: 1,
+        issue_multiplier_bps: PFTL_UNISWAP_A666_ISSUE_MULTIPLIER_BPS,
+        redeem_multiplier_bps: PFTL_UNISWAP_A666_REDEEM_MULTIPLIER_BPS,
+        issue_capacity_atoms: 2_000_000_000_000,
+        redeem_capacity_atoms: 2_000_000_000_000,
+        max_order_atoms: 1_000_000_000_000,
+        min_order_atoms: 1_000_000,
+        valid_from_height: 4,
+        expires_at_height: 1_000,
+        max_nav_age_blocks: 100,
+        pricing_nav_epoch: 7,
+        pricing_reserve_packet_hash: reserve_packet_hash.clone(),
+    };
+    policy.policy_hash = policy.computed_hash();
+    let entitlement = PftlUniswapExportEntitlementV2 {
+        reservation_id: reservation_id.clone(),
+        subscriber: holder.clone(),
+        ethereum_recipient: ethereum_recipient.clone(),
+        route_epoch: 1,
+        policy_epoch: 1,
+        policy_hash: policy.policy_hash.clone(),
+        remaining_amount_atoms: 40,
+        expires_at_height: 100,
+    };
+    let export_packet = PftlUniswapConsensusExportPacket {
+        packet_hash: packet_hash.clone(),
+        nonce: "b6".repeat(32),
+        source_wallet: holder.clone(),
+        ethereum_recipient: ethereum_recipient.clone(),
+        amount_atoms: 40,
+        settlement_value_atoms: Some(282),
+        source_height: 5,
+        destination_deadline_seconds: 1_800,
+        refund_not_before_height: 8,
+        status: PFTL_UNISWAP_EXPORT_STATUS_SOURCE_DEBITED.to_string(),
+        ethereum_packet_digest: Some("b7".repeat(32)),
+        ethereum_packet_schema_version: Some(PFTL_UNISWAP_EXTERNAL_PACKET_SCHEMA_V2),
+        route_epoch: Some(1),
+        policy_hash: Some(policy.policy_hash.clone()),
+        reservation_id: Some(reservation_id.clone()),
+    };
+    let route = PftlUniswapConsensusRouteState {
+        route_id: route_id.clone(),
+        route_family: PFTL_UNISWAP_ROUTE_FAMILY_PRIMARY_MINT.to_string(),
+        route_config_digest: "a1".repeat(48),
+        route_trust_class: PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT.to_string(),
+        native_nav_asset_id: native_asset_id.clone(),
+        settlement_asset_id: settlement_asset_id.clone(),
+        handoff_controller: "0x1111111111111111111111111111111111111111".to_string(),
+        settlement_adapter: "0x2222222222222222222222222222222222222222".to_string(),
+        wrapped_navcoin_token: "0x3333333333333333333333333333333333333333".to_string(),
+        ethereum_chain_id: 1,
+        route_supply_cap_atoms: 2_000_000_000_000,
+        packet_notional_cap_atoms: 250_000_000_000,
+        latest_finalized_nav_epoch: 7,
+        return_finality_blocks: 12,
+        live_value_enabled: true,
+        ethereum_verification_policy: None,
+        authorized_valid_supply_atoms: 40,
+        pftl_spendable_supply_atoms: 0,
+        native_spendable_balances_atoms: std::collections::BTreeMap::new(),
+        ethereum_spendable_supply_atoms: 0,
+        other_registered_venue_supply_atoms: 0,
+        outstanding_bridge_claims_atoms: 40,
+        pending_return_import_claims_atoms: 0,
+        settlement_reserve_atoms: 0,
+        primary_subscription_nonces: std::collections::BTreeMap::new(),
+        export_packets: std::collections::BTreeMap::from([(packet_hash.clone(), export_packet)]),
+        export_nonces: std::collections::BTreeMap::from([(
+            "b6".repeat(32),
+            packet_hash.clone(),
+        )]),
+        return_imports: std::collections::BTreeMap::new(),
+        paused: false,
+        v2: Some(PftlUniswapRouteV2State {
+            route_schema_version: PFTL_UNISWAP_ROUTE_SCHEMA_V2,
+            route_epoch: 1,
+            outbound_verification_class: PFTL_UNISWAP_TRUST_CLASS_TRUSTLESS_FINALITY.to_string(),
+            return_verification_class: PFTL_UNISWAP_TRUST_CLASS_BFT_CHECKPOINT.to_string(),
+            primary_market_policy: policy.clone(),
+            issue_capacity_used_atoms: 40,
+            redeem_capacity_used_atoms: 0,
+            non_nav_spread_atoms: 0,
+            active_reservations: std::collections::BTreeMap::new(),
+            export_entitlements: std::collections::BTreeMap::from([(
+                reservation_id.clone(),
+                entitlement,
+            )]),
+            terminal_reservations: std::collections::BTreeMap::new(),
+            redemption_nonces: std::collections::BTreeMap::new(),
+        }),
+    };
+    route.validate().expect("valid AR-05 route fixture");
+    ledger.pftl_uniswap_routes.push(route);
+
+    let mut next_policy = policy.clone();
+    next_policy.policy_epoch = 2;
+    next_policy.policy_hash = next_policy.computed_hash();
+    let epoch_advance = PftlUniswapRouteEpochAdvanceOperation {
+        operator: operator.clone(),
+        route_id: route_id.clone(),
+        prior_route_epoch: 1,
+        next_route_epoch: 2,
+        next_route_config_digest: "a2".repeat(48),
+        live_value_enabled: true,
+        next_primary_market_policy: next_policy,
+    };
+    let before_blocked = ledger.clone();
+    let receipt = execute(
+        &mut ledger,
+        &operator_key,
+        &operator,
+        PFTL_UNISWAP_ROUTE_EPOCH_ADVANCE_TRANSACTION_KIND,
+        AssetTransactionOperation::PftlUniswapRouteEpochAdvance(epoch_advance.clone()),
+        6,
+    );
+    assert!(!receipt.accepted, "active entitlement must block epoch advance");
+    assert_eq!(receipt.code, "pftl_uniswap_route_epoch_advance_blocked");
+    assert_eq!(ledger, before_blocked);
+
+    let receipt = execute(
+        &mut ledger,
+        &operator_key,
+        &operator,
+        PFTL_UNISWAP_DESTINATION_CONSUME_TRANSACTION_KIND,
+        AssetTransactionOperation::PftlUniswapDestinationConsume(
+            PftlUniswapDestinationConsumeOperation {
+                operator: operator.clone(),
+                route_id: route_id.clone(),
+                packet_hash: packet_hash.clone(),
+                ethereum_consume_tx_hash: "99".repeat(32),
+                consumed_height: 10,
+                finalized_height: 22,
+                external_event_proof: None,
+            },
+        ),
+        7,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let ethereum_sender = "0x5555555555555555555555555555555555555555";
+    let return_nonce = "ab".repeat(32);
+    let burn_event_hash = pftl_uniswap_return_burn_id_from_fields(
+        1,
+        "0x1111111111111111111111111111111111111111",
+        "0x3333333333333333333333333333333333333333",
+        &native_asset_id,
+        ethereum_sender,
+        &holder,
+        40,
+        &return_nonce,
+        20,
+    )
+    .expect("AR-05 return burn ID");
+    let receipt = execute(
+        &mut ledger,
+        &operator_key,
+        &operator,
+        PFTL_UNISWAP_RETURN_IMPORT_TRANSACTION_KIND,
+        AssetTransactionOperation::PftlUniswapReturnImport(PftlUniswapReturnImportOperation {
+            operator: operator.clone(),
+            route_id: route_id.clone(),
+            burn_event_hash,
+            ethereum_chain_id: 1,
+            bridge_controller: "0x1111111111111111111111111111111111111111".to_string(),
+            wrapped_navcoin_token: "0x3333333333333333333333333333333333333333".to_string(),
+            native_nav_asset_id: native_asset_id,
+            ethereum_sender: ethereum_sender.to_string(),
+            pftl_recipient: holder.clone(),
+            amount_atoms: 40,
+            return_nonce,
+            burn_height: 20,
+            finalized_height: 32,
+            external_event_proof: None,
+        }),
+        8,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let receipt = execute(
+        &mut ledger,
+        &holder_key,
+        &holder,
+        PFTL_UNISWAP_ORDER_RELEASE_TRANSACTION_KIND,
+        AssetTransactionOperation::PftlUniswapOrderRelease(PftlUniswapOrderReleaseOperation {
+            releaser: holder.clone(),
+            route_id: route_id.clone(),
+            reservation_id: reservation_id.clone(),
+        }),
+        9,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    assert!(ledger
+        .pftl_uniswap_route(&route_id)
+        .expect("AR-05 route after completion")
+        .v2
+        .as_ref()
+        .expect("AR-05 v2 state")
+        .export_entitlements
+        .get(&reservation_id)
+        .is_none());
+
+    let receipt = execute(
+        &mut ledger,
+        &operator_key,
+        &operator,
+        PFTL_UNISWAP_ROUTE_EPOCH_ADVANCE_TRANSACTION_KIND,
+        AssetTransactionOperation::PftlUniswapRouteEpochAdvance(epoch_advance),
+        10,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    assert_eq!(
+        ledger
+            .pftl_uniswap_route(&route_id)
+            .expect("AR-05 advanced route")
+            .v2
+            .as_ref()
+            .expect("AR-05 advanced v2")
+            .route_epoch,
+        2
+    );
+}
