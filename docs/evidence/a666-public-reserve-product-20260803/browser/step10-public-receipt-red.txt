@@ -1,0 +1,30 @@
+Step 10 downloadable public-receipt browser regression
+
+Default command from wallet-web/:
+npm run test:public-browser
+exit_code: 0
+elapsed_ms: 8286
+matched_tests: 2
+terminal_lines:
+# tests 2
+# pass 2
+# fail 0
+# duration_ms 8078.699793
+
+Environment-gated RED command from wallet-web/:
+POSTFIAT_REQUIRE_PUBLIC_RECEIPT_DOWNLOAD=1 node --test src/lib/journey-step-9-recovery.e2e.js
+exit_code: 1
+elapsed_ms: 23048
+matched_tests: 1
+terminal_lines:
+1..1
+# tests 1
+# pass 0
+# fail 1
+# duration_ms 22996.111267
+first_failure: locator.waitFor timed out waiting for visible getByRole('button', { name: 'Download public receipt', exact: true })
+failure_location: wallet-web/src/lib/journey-step-9-recovery.e2e.js:631
+production_recovery_reached_finalized_state_before_failure: true
+expected_fail_until_product_fix: true
+
+The gated assertion requires a real Playwright download and validates the parsed public JSON schema, completed idempotency identity, finalized receipt/certificate identity, observed final balance tuple, forbidden field names, and absence of generated custody material. The default public-browser command remains green; POSTFIAT_REQUIRE_PUBLIC_RECEIPT_DOWNLOAD=1 is the temporary explicit expected-fail mechanism.

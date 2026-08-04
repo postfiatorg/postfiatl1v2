@@ -623,6 +623,62 @@ test('journey step 9 resumes the production private-primary recovery component a
       'visible sidebar reconnects at chain height 901',
     );
 
+    if (process.env.POSTFIAT_REQUIRE_PUBLIC_RECEIPT_DOWNLOAD === '1') {
+      const downloadControl = page.getByRole('button', {
+        name: 'Download public receipt',
+        exact: true,
+      });
+      await downloadControl.waitFor({ state: 'visible' });
+      const downloadEvent = page.waitForEvent('download');
+      await downloadControl.click();
+      const download = await downloadEvent;
+      const publicReceiptPath = join(tempRoot, 'downloaded-public-receipt.json');
+      await download.saveAs(publicReceiptPath);
+      const publicReceiptBytes = await readFile(publicReceiptPath);
+      const publicReceiptText = publicReceiptBytes.toString('utf8');
+      const publicReceipt = JSON.parse(publicReceiptText);
+      assert.match(
+        String(publicReceipt?.schema || ''),
+        /^postfiat[.-].*public[-_.]receipt.*v[0-9]+$/i,
+        'download uses a versioned public-receipt schema',
+      );
+      const operationIdentity = publicReceipt?.idempotency_key
+        ?? publicReceipt?.operation?.idempotency_key;
+      assert.equal(operationIdentity, pendingId, 'download binds the completed operation identity');
+      const operationStatus = publicReceipt?.status ?? publicReceipt?.operation?.status;
+      assert.equal(operationStatus, 'COMMITTED', 'download identifies a completed operation');
+      const receiptIdentity = publicReceipt?.receipt_identity
+        ?? publicReceipt?.certificate_ref
+        ?? publicReceipt?.receipt?.receipt_identity
+        ?? publicReceipt?.receipt?.certificate_ref;
+      assert.equal(
+        receiptIdentity,
+        persistedRecord?.response?.swap?.certificate_ref,
+        'download binds the observed finalized receipt/certificate identity',
+      );
+      const downloadedBalanceTuple = publicReceipt?.final_balance_tuple
+        ?? publicReceipt?.operation?.final_balance_tuple;
+      assert.deepEqual(
+        downloadedBalanceTuple,
+        recoveredJob.final_balance_tuple,
+        'download binds the observed final balance tuple',
+      );
+      const forbiddenField = /seed|private[_-]?key|owner[_-]?key|secret|mnemonic|backup|passphrase/i;
+      const visitPublicReceipt = (value, path = 'receipt') => {
+        if (Array.isArray(value)) {
+          value.forEach((item, index) => visitPublicReceipt(item, `${path}[${index}]`));
+          return;
+        }
+        if (!value || typeof value !== 'object') return;
+        for (const [key, item] of Object.entries(value)) {
+          assert.equal(forbiddenField.test(key), false, `forbidden public-receipt field: ${path}.${key}`);
+          visitPublicReceipt(item, `${path}.${key}`);
+        }
+      };
+      visitPublicReceipt(publicReceipt);
+      assertNoSensitiveMaterial('downloaded public receipt', publicReceiptText, [seed, passphrase]);
+    }
+
     const browserStorage = await page.evaluate(() => JSON.stringify({
       local: Object.fromEntries(Object.keys(localStorage).map(key => [key, localStorage.getItem(key)])),
       session: Object.fromEntries(Object.keys(sessionStorage).map(key => [key, sessionStorage.getItem(key)])),
