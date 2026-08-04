@@ -117,10 +117,13 @@
   },
   "verifier_acceptance": {
     "ready": false,
-    "status": "pending_single_verify_transaction",
-    "transaction_allowed": true,
+    "status": "RED_single_invocation_reverted_no_retry",
+    "transaction_allowed": false,
     "vkey_equality": true,
-    "verify_and_accept_called": false,
+    "verify_and_accept_called": true,
+    "verify_and_accept_tx_hash": null,
+    "invocation_count": 1,
+    "failure": "gas-estimation revert WrongBinding(\"receipt\") at PFTLReceiptFinalityVerifierV1.sol:300; never broadcast; chain state unchanged; evidence verifier-acceptance.json",
     "prior_blockers_closed": [
       "real_receipt_proof_artifact_pending_docker_capable_refire",
       "program_vkey_mismatch_requires_fresh_stack_redeploy"

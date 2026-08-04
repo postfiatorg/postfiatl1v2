@@ -7,11 +7,11 @@
   "corrective_stage": "fresh Anvil full real-stack redeploy pinning the archived candidate proof vkey",
   "candidate": "39f7fae"
  },
- "verdict": "GREEN",
- "transaction_allowed": true,
- "verify_and_accept_called": false,
+ "verdict": "RED",
+ "transaction_allowed": false,
+ "verify_and_accept_called": true,
  "verify_and_accept_tx_hash": null,
- "verify_and_accept_status": "pending_single_verify_transaction",
+ "verify_and_accept_status": "single_invocation_reverted_at_gas_estimation_WrongBinding_receipt_no_retry_see_verifier-acceptance.json",
  "equality_check": {
   "field": "programVKey",
   "proof_report_program_vkey": "0x003af40eafdbc1873f7e5b8f02da0ccd668f65930797c8e20c4f19234a5ef02f",
