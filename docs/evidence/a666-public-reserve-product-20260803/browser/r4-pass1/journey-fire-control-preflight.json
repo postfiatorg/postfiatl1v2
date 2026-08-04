@@ -149,16 +149,21 @@
       "ok": true
     },
     "fresh_route": {
-      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/route-activation.json",
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/route-current-state.json",
       "exists": true,
       "valid_json": true,
       "observed_status": true,
-      "observed_reason": "round_driver_external_height_catchup_does_not_advance_next_height",
+      "observed_reason": null,
       "bindings": {
         "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
         "rehearsal_root": null,
         "run_id": null
       }
+    },
+    "current_route_validation": {
+      "ok": true,
+      "queried_endpoint_count": 6,
+      "base_evidence_valid": true
     },
     "candidate_proxy": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/candidate-proxy-provenance.json",
@@ -176,10 +181,10 @@
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/private-swap-dependencies-refresh.json",
       "exists": true,
       "valid_json": true,
-      "observed_status": true,
-      "observed_reason": null,
+      "observed_status": null,
+      "observed_reason": "systemd_stage_working_directory_not_git_repo",
       "bindings": {
-        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "candidate_revision": null,
         "rehearsal_root": null,
         "run_id": null
       }
@@ -246,6 +251,9 @@
         "rehearsal_root": null,
         "run_id": null
       }
+    },
+    "stakehub_inventory_validation": {
+      "ok": true
     },
     "pre_prove_binding": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/pre-prove-binding-check.json",
@@ -373,7 +381,7 @@
     },
     {
       "id": "fresh_route_live",
-      "ok": false,
+      "ok": true,
       "input": "fresh_route"
     },
     {
@@ -403,7 +411,7 @@
     },
     {
       "id": "stakehub_restart_inventory_present",
-      "ok": false,
+      "ok": true,
       "input": "stakehub_restart_inventory"
     },
     {
@@ -429,11 +437,9 @@
   ],
   "check_count": 18,
   "blocker_names": [
-    "fresh_route_live",
     "private_dependencies_ready",
     "pftl_private_swap_ready",
     "d_runner_steps_1_6_9_10_dry_run",
-    "stakehub_restart_inventory_present",
     "stakehub_official_absent",
     "no_live_chain_dependency"
   ],

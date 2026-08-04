@@ -14,7 +14,7 @@ b_acceptance="$construction/pathb-v3-verifier-acceptance.json"
 b_stage="$construction/ethereum-contract-stage.json"
 accepted_fleet="$construction/fleet/construction-fleet.json"
 checkpoint_staging="$construction/fleet/checkpoint-lifecycle-staging-20260804.json"
-route_stage="$construction/route-activation.json"
+route_stage="$construction/route-current-state.json"
 candidate_proxy="$construction/candidate-proxy-provenance.json"
 dependencies="$construction/private-swap-dependencies-refresh.json"
 pftl_stage="$construction/private-swap-stage.json"
@@ -204,6 +204,43 @@ candidate_proxy_validation_for_file() {
             and $doc.no_live_chain_route == true and $doc.stakehub_dependency_free == true and $doc.stakehub_interaction == false
           )
         }'
+}
+
+current_route_validation() {
+    python3 - "$route_stage" <<'PY'
+import json,socket,sys
+p=json.load(open(sys.argv[1],encoding='utf-8'))
+expected_tip='ed8dacf6722a082ba753a04ce86c125ed7331f45057a258d1087509e966df45177eb6711fdd801a7125573866b3d56b2'
+expected_root='3840a383378c8f287677d12efb940af7d8a1e656a37651cf52e6360dd8ab305e8736c1e7252513e09293c517727c8ee1'
+route=p.get('six_rpc_route',{}); tup=p.get('six_rpc_tuple',{}); endpoints=p.get('query',{}).get('endpoints',[])
+base=(p.get('schema')=='postfiat.a666.r4.route-current-state.v1' and p.get('accepted') is True and p.get('candidate_revision')=='39f7fae3191aa34c376ae1657650a9ec2444f421' and p.get('bindings',{}).get('controlled_report_sha256')=='c2fb973f284d92cf3b866c4abe86aca237f8e4bd753cbf03075ab71702810cf2' and len(endpoints)==6 and len(set(endpoints))==6 and all(x.startswith('127.0.0.1:') for x in endpoints) and tup=={'equal':True,'height':831,'block_tip_hash':expected_tip,'state_root':expected_root} and route.get('route_id')=='pftl-a666-r4-offline-rehearsal-v1' and route.get('route_epoch')==2 and route.get('policy_epoch')==2 and route.get('live_value_enabled') is True and route.get('paused') is False and route.get('invariant_holds') is True and route.get('route_config_digest')=='b2'*48 and route.get('policy_hash')=='5dcc28ea82872d05716dbb94af480f6dd1355dde8a931633a01dfdec309c4bbd5e5ee16e104afba75913eb0100123044' and p.get('activation_submitted') is False and p.get('business_operations')==0 and p.get('stakehub_interaction') is False and p.get('live_chain') is False)
+if not base:
+ print(json.dumps({'ok':False,'queried_endpoint_count':0,'base_evidence_valid':False})); raise SystemExit(0)
+rows=[]
+try:
+ for endpoint in endpoints:
+  host,port=endpoint.rsplit(':',1); vals=[]
+  for method,params in [('status',{}),('navcoin_bridge_supply_status',{'route_id':route.get('route_id')})]:
+   with socket.create_connection((host,int(port)),timeout=3) as s:
+    q={'version':'postfiat-local-rpc-v1','id':'a666-r4-fire-control-route-current','method':method,'params':params}; s.sendall((json.dumps(q,separators=(',',':'))+'\n').encode()); v=json.loads(s.makefile('rb').readline())
+   if not v.get('ok'): raise RuntimeError(method)
+   vals.append(v['result'])
+  status,supply=vals; rows.append(status.get('block_height')==831 and status.get('block_tip_hash')==expected_tip and status.get('state_root')==expected_root and supply.get('route_id')==route.get('route_id') and supply.get('route_epoch')==2 and supply.get('policy_epoch')==2 and supply.get('live_value_enabled') is True and supply.get('paused') is False and supply.get('invariant_holds') is True and supply.get('route_config_digest')==route.get('route_config_digest') and supply.get('policy_hash')==route.get('policy_hash'))
+except Exception: rows=[]
+print(json.dumps({'ok':base and len(rows)==6 and all(rows),'queried_endpoint_count':len(rows),'base_evidence_valid':base}))
+PY
+}
+
+stakehub_inventory_validation() {
+    local active="$1"
+    jq -cn --argjson active "$active" --argjson doc "$(cat "$stakehub_inventory")" '
+      {ok:(
+        $doc.schema == "postfiat.a666.r4.stakehub-restart-inventory.v1" and $doc.inventory_only == true and $doc.mutations_executed == 0
+        and $doc.dashboard_currently_active == true and $doc.official_absence_proof == false and $doc.restart_verified_after_run == false
+        and $doc.active_unit_count == 1 and $doc.active_unit_names == ["stakehub-private-swap-dashboard.service"] and $active == $doc.active_unit_names
+        and ([$doc.observed_units[] | select(.restart_target == true)] | length == 1) and ([$doc.observed_units[] | select(.restart_target == true)][0].name == "stakehub-private-swap-dashboard.service")
+        and ([$doc.observed_units[] | select(.active_state == "active") | .name] == $doc.active_unit_names)
+      )}'
 }
 
 v3_refire_validation() {
@@ -408,7 +445,8 @@ run_preprove_self_test() {
     run_fleet_binding_self_test
     run_proxy_binding_self_test
     run_v3_binding_self_test
-    printf '%s\n' "fire_control_self_test=PASS pre_prove_green=true prior_value_mismatch=false field_value_mismatch=false controlled_report_sha_mismatch=false prior_block_tip_mismatch=false wrong_candidate=false non_loopback_endpoint=false wrong_proof_hash=false wrong_acceptance_invocations=false failed_tx_status=false pending_async_slot=false fixture_root=$test_root"
+    run_route_stakehub_self_test
+    printf '%s\n' "fire_control_self_test=PASS pre_prove_green=true prior_value_mismatch=false field_value_mismatch=false controlled_report_sha_mismatch=false prior_block_tip_mismatch=false wrong_candidate=false non_loopback_endpoint=false wrong_proof_hash=false wrong_acceptance_invocations=false failed_tx_status=false pending_async_slot=false wrong_route_tuple=false wrong_route_epoch=false non_loopback_route=false wrong_restart_target=false wrong_restart_mode=false active_set_mismatch=false fixture_root=$test_root"
 }
 
 run_fleet_binding_self_test() {
@@ -473,6 +511,19 @@ run_v3_binding_self_test() {
     b_acceptance="$root/acceptance.json"; jq '.status = "pending"' "$root/async.json" >"$root/pending.json"; async_proof_slot="$root/pending.json"
     if v3_async_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
     refire_prepared="$old_prepared"; refire_probe="$old_probe"; refire_fired="$old_fired"; refire_terminal="$old_terminal"; b_acceptance="$old_acceptance"; async_proof_slot="$old_async"; export_artifact_slot="$old_export"
+}
+
+run_route_stakehub_self_test() {
+    local root old_route="$route_stage" old_inventory="$stakehub_inventory" active='["stakehub-private-swap-dashboard.service"]'
+    root=$(mktemp -d /tmp/a666-r4-route-stakehub-self-test.XXXXXX); chmod 700 "$root"; cp "$route_stage" "$root/route.json"; cp "$stakehub_inventory" "$root/stakehub.json"
+    route_stage="$root/route.json"; stakehub_inventory="$root/stakehub.json"; current_route_validation | jq -e '.ok == true' >/dev/null; stakehub_inventory_validation "$active" | jq -e '.ok == true' >/dev/null
+    jq '.six_rpc_tuple.height=830' "$root/route.json" >"$root/wrong-tuple.json"; route_stage="$root/wrong-tuple.json"; if current_route_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
+    jq '.six_rpc_route.route_epoch=3' "$root/route.json" >"$root/wrong-epoch.json"; route_stage="$root/wrong-epoch.json"; if current_route_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
+    jq '.query.endpoints[0]="192.0.2.1:31001"' "$root/route.json" >"$root/non-loopback.json"; route_stage="$root/non-loopback.json"; if current_route_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
+    route_stage="$root/route.json"; jq '(.observed_units[]|select(.restart_target==true)|.name)="wrong.service"' "$root/stakehub.json" >"$root/wrong-target.json"; stakehub_inventory="$root/wrong-target.json"; if stakehub_inventory_validation "$active" | jq -e '.ok == true' >/dev/null; then return 1; fi
+    jq '.inventory_only=false' "$root/stakehub.json" >"$root/wrong-mode.json"; stakehub_inventory="$root/wrong-mode.json"; if stakehub_inventory_validation "$active" | jq -e '.ok == true' >/dev/null; then return 1; fi
+    stakehub_inventory="$root/stakehub.json"; if stakehub_inventory_validation '[]' | jq -e '.ok == true' >/dev/null; then return 1; fi
+    route_stage="$old_route"; stakehub_inventory="$old_inventory"
 }
 
 if [[ $# -gt 0 ]]; then
@@ -549,7 +600,8 @@ if jq -e '.ok == true' <<<"$fleet_validation" >/dev/null; then
     fresh_fleet_ok=true
 fi
 candidate_proxy_validation=$(candidate_proxy_validation_for_file "$candidate_proxy" "$fleet_validation")
-if bound_and "$route_stage" '.accepted == true and .activation_checks.route_live == true and .activation_checks.six_way_convergence == true'; then
+current_route=$(current_route_validation)
+if jq -e '.ok == true' <<<"$current_route" >/dev/null; then
     fresh_route_ok=true
 fi
 if jq -e '.ok == true' <<<"$candidate_proxy_validation" >/dev/null; then
@@ -584,7 +636,8 @@ if stakehub_units=$(systemctl --user list-units --type=service --all --no-legend
     stakehub_scan_ok=true
     stakehub_active_units=$(printf '%s\n' "$stakehub_units" | awk '$3 == "active" {print $1}' | jq -Rsc 'split("\n") | map(select(length > 0))')
 fi
-if bound_and "$stakehub_inventory" '(.units | type == "array" and length > 0)'; then
+stakehub_inventory_validation=$(stakehub_inventory_validation "$stakehub_active_units")
+if jq -e '.ok == true' <<<"$stakehub_inventory_validation" >/dev/null; then
     stakehub_inventory_ok=true
 fi
 if [[ "$stakehub_scan_ok" == true && "$stakehub_inventory_ok" == true ]] && [[ "$(jq 'length' <<<"$stakehub_active_units")" == 0 ]]; then
@@ -656,6 +709,7 @@ jq -n \
     --argjson fleet_validation "$fleet_validation" \
     --argjson b_path_b_validation "$b_path_b_validation" \
     --argjson candidate_proxy_validation "$candidate_proxy_validation" \
+    --argjson current_route "$current_route" \
     --argjson route_input "$(input_summary "$route_stage")" \
     --argjson proxy_input "$(input_summary "$candidate_proxy")" \
     --argjson dependencies_input "$(input_summary "$dependencies")" \
@@ -665,6 +719,7 @@ jq -n \
     --argjson export_slot_input "$(input_summary "$export_artifact_slot")" \
     --argjson v3_async "$v3_async" \
     --argjson stakehub_input "$(input_summary "$stakehub_inventory")" \
+    --argjson stakehub_inventory_validation "$stakehub_inventory_validation" \
     --argjson preprove_input "$(input_summary "$preprove_binding")" \
     --argjson preprove_validation "$preprove_validation" \
     --argjson stakehub_scan_ok "$stakehub_scan_ok" \
@@ -701,6 +756,7 @@ jq -n \
             checkpoint_lifecycle_staging: $checkpoint_staging_input,
             fleet_validation: $fleet_validation,
             fresh_route: $route_input,
+            current_route_validation: $current_route,
             candidate_proxy: $proxy_input,
             dependencies: $dependencies_input,
             pftl: $pftl_input,
@@ -709,6 +765,7 @@ jq -n \
             export_artifact_slot: $export_slot_input,
             v3_async_validation: $v3_async,
             stakehub_restart_inventory: $stakehub_input,
+            stakehub_inventory_validation: $stakehub_inventory_validation,
             pre_prove_binding: $preprove_input,
             pre_prove_validation: $preprove_validation,
             stakehub_official_scan: {
