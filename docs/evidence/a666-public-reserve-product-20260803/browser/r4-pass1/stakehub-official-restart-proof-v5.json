@@ -1,0 +1,41 @@
+{
+  "schema": "postfiat.a666.r4.stakehub-official-restart-proof.v1",
+  "run_outcome": "official_run_failed_step_1",
+  "run_outcome_detail": "official one-shot was consumed exactly once and failed at step 1; failure commit 0e2cce3; mandatory restart contract applies after failure",
+  "failure_commit": "0e2cce3",
+  "official_run_id": "a666-r4-official-journey-pass1-20260804-v4",
+  "official_invocations": 1,
+  "official_pass_fired": true,
+  "official_pass": false,
+  "failed_step": 1,
+  "window_attempt": 4,
+  "environment_preserved": true,
+  "inventory_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/stakehub-restart-proof.json",
+  "inventory_sha256": "658e735d825f6109b0f325d5dd450256060c3e7e2d47c2eb8edae68900feb882",
+  "inventory_commit": "2e8afd9",
+  "inventory_history_preserved": true,
+  "absence_evidence_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/stakehub-official-absence.json",
+  "absence_commit": "9d1181c",
+  "restart_action": "scripts/a666-r4-stakehub-official-window restart",
+  "restart_command": "systemctl --user start stakehub-private-swap-dashboard.service",
+  "restart_exit_code": 0,
+  "post_restart_active_count": 1,
+  "post_restart_active_names": [
+    "stakehub-private-swap-dashboard.service"
+  ],
+  "active_set_matches_inventory": true,
+  "restart_verified_after_run": true,
+  "mandatory_teardown_contract_closed": true,
+  "mutations": [
+    "systemctl --user start stakehub-private-swap-dashboard.service"
+  ],
+  "mutation_count": 1,
+  "other_stakehub_units_touched": 0,
+  "funds_actions": 0,
+  "data_actions": 0,
+  "keys_actions": 0,
+  "config_actions": 0,
+  "software_actions": 0,
+  "credentials_included": false,
+  "source": "scripts/a666-r4-stakehub-official-window restart; read-only systemctl --user list-units/is-active; no logs, argv, environment, funds, balances, keys, data, config, or software reads"
+}
