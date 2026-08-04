@@ -97,6 +97,33 @@ sys.exit(0 if ok else 1)
 PY
 }
 
+# Shared reservation-expiry builder: dynamic parent_height+1024 bounded by
+# the active policy expiry; validated delta in 1..2048 (the exact chain rule
+# at crates/execution/src/nav_vault_asset_execution.rs:4084-4092). With a
+# candidate argument, validates the candidate instead.
+reservation_expiry_check() { # parent_height policy_expiry [candidate] -> prints validated expiry
+  local parent="$1" policy="$2" value="${3:-}"
+  if [[ -z "$value" ]]; then
+    value=$((parent + 1024))
+    (( value > policy )) && value="$policy"
+  fi
+  local delta=$((value - parent))
+  if (( delta < 1 || delta > 2048 || value > policy )); then
+    return 1
+  fi
+  printf '%s' "$value"
+}
+
+current_height() { # validator-2 loopback status height
+  python3 - <<'PY'
+import json, socket
+req = {"version": "postfiat-local-rpc-v1", "id": "height", "method": "status", "params": {}}
+with socket.create_connection(("127.0.0.1", 31005), timeout=3) as s:
+    s.sendall((json.dumps(req) + "\n").encode())
+    print(json.loads(s.makefile("rb").readline())["result"]["block_height"])
+PY
+}
+
 submit_op() { # label ops_file expected_height -> prints tx_id
   local label="$1" ops_file="$2" expected="$3" tx_id
   local adir="$RUNTIME_ROOT/artifacts-$label"
@@ -107,6 +134,7 @@ submit_op() { # label ops_file expected_height -> prints tx_id
     --key-file "$V2_KEY_FILE" --proposal-key-file "$V2_KEY_FILE" \
     --ops-file "$ops_file" --artifact-dir "$adir" \
     --max-transactions 1 --timeout-ms 90000 --send-retries 2 --retry-backoff-ms 50 \
+    --overwrite \
     --local-apply-before-certified-send >"$RUNTIME_ROOT/$label.command.log" 2>&1
   jq -e --argjson h "$expected" \
     '.round_ok==true and .end_height==$h and (.operations[0].tx_id|type)=="string" and (.operations[0].tx_id|length)>0' \
@@ -201,7 +229,18 @@ if [[ "$MODE" == "self-test" ]]; then
     echo "SELF-TEST RED: evidence lost submit_reserve label: $(cat "$sim_dir/evidence.json" 2>/dev/null)" >&2
     exit 1
   fi
-  echo "SELF-TEST GREEN valid64_accepted=true invalid96_rejected=true trap_label_preserved=submit_reserve"
+  # Reservation-expiry regression via the exact shared builder: at parent
+  # height 828 the dynamic value is 1852 (828+1024, within policy expiry
+  # 5809); the prior hardcoded 5809 must reject (delta 4981 > 2048).
+  if [[ "$(reservation_expiry_check 828 5809)" != "1852" ]]; then
+    echo "SELF-TEST RED: dynamic expiry at parent 828 != 1852" >&2
+    exit 1
+  fi
+  if reservation_expiry_check 828 5809 5809 >/dev/null; then
+    echo "SELF-TEST RED: stale expiry 5809 accepted at parent 828" >&2
+    exit 1
+  fi
+  echo "SELF-TEST GREEN valid64_accepted=true invalid96_rejected=true trap_label_preserved=submit_reserve expiry_dynamic_828=1852 expiry_stale_5809_rejected=true"
   exit 0
 fi
 
@@ -330,11 +369,12 @@ tx_advance="$(cat "$RUNTIME_ROOT/epoch-advance.tx_id")"
 # 4. Read the freshly advanced route, build reserve/subscribe/export + mint
 #    packet, assert digest round-trip.
 first_failure="ops_construction_export"
-python3 - "$RUNTIME_ROOT" "$TOPOLOGY" "$HOLDER_KEY_FILE" <<'PY'
+RESERVATION_EXPIRY="$(reservation_expiry_check "$(current_height)" 5809)"
+python3 - "$RUNTIME_ROOT" "$TOPOLOGY" "$HOLDER_KEY_FILE" "$RESERVATION_EXPIRY" <<'PY'
 import json, secrets, socket, sys, time, os
 from web3 import Web3
 
-runtime, topology_path, holder_key = sys.argv[1], sys.argv[2], sys.argv[3]
+runtime, topology_path, holder_key, reservation_expiry = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
 HOLDER = "pfab9b9228942e5c529633a13aa271d5297bec6353"
 EVM_RECIPIENT = "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
 ROUTE = "pftl-a666-r4-offline-rehearsal-v1"
@@ -374,7 +414,7 @@ reserve_op = {"operation": "pftl_uniswap_order_reserve", "subscriber": HOLDER, "
               "reservation_id": ids["reservation_id"], "ethereum_recipient": EVM_RECIPIENT,
               "route_epoch": 2, "policy_epoch": 2, "policy_hash": policy_hash,
               "mint_amount_atoms": MINT, "max_settlement_value_atoms": SETTLEMENT,
-              "expires_at_height": 5809}
+              "expires_at_height": reservation_expiry}
 subscribe_op = {"operation": "pftl_uniswap_primary_subscribe_v2", "subscriber": HOLDER, "route_id": ROUTE,
                 "reservation_id": ids["reservation_id"], "subscription_nonce": ids["subscription_nonce"],
                 "settlement_asset_id": PFUSDC, "settlement_value_atoms": SETTLEMENT,
@@ -469,8 +509,8 @@ cp "$RUNTIME_ROOT/witness.json" "$WITNESS_EVIDENCE"
 
 first_failure="witness_native_verify"
 mkdir -p "$RUNTIME_ROOT/prover-out"
-"$PROVER_BINARY" receipt --witness "$RUNTIME_ROOT/witness.json" \
-  --output-dir "$RUNTIME_ROOT/prover-out" --require-prover cpu --skip-redundant-execute \
+SP1_PROVER=cpu "$PROVER_BINARY" receipt --witness "$RUNTIME_ROOT/witness.json" \
+  --output-dir "$RUNTIME_ROOT/prover-out" --require-prover cpu \
   > "$RUNTIME_ROOT/prover.log" 2>&1
 [[ -f "$RUNTIME_ROOT/prover-out/public-values.bin" ]]
 [[ "$(stat -c %s "$RUNTIME_ROOT/prover-out/public-values.bin")" == "1120" ]]
@@ -656,10 +696,11 @@ PY
 
 # 7. Rebuild reserve/subscribe/export ops from preserved IDs (never regenerated).
 first_failure="resume_ops_rebuild"
-python3 - "$RUNTIME_ROOT" "$TOPOLOGY" "$HOLDER_KEY_FILE" <<'PY'
+RESERVATION_EXPIRY="$(reservation_expiry_check "$(current_height)" 5809)"
+python3 - "$RUNTIME_ROOT" "$TOPOLOGY" "$HOLDER_KEY_FILE" "$RESERVATION_EXPIRY" <<'PY'
 import json, socket, sys, os
 from web3 import Web3
-runtime, topology_path, holder_key = sys.argv[1], sys.argv[2], sys.argv[3]
+runtime, topology_path, holder_key, reservation_expiry = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
 HOLDER = "pfab9b9228942e5c529633a13aa271d5297bec6353"
 EVM_RECIPIENT = "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
 ROUTE = "pftl-a666-r4-offline-rehearsal-v1"
@@ -680,7 +721,7 @@ reserve_op = {"operation": "pftl_uniswap_order_reserve", "subscriber": HOLDER, "
               "reservation_id": ids["reservation_id"], "ethereum_recipient": EVM_RECIPIENT,
               "route_epoch": 2, "policy_epoch": 2, "policy_hash": policy_hash,
               "mint_amount_atoms": 1000000, "max_settlement_value_atoms": 903212,
-              "expires_at_height": 5809}
+              "expires_at_height": reservation_expiry}
 subscribe_op = {"operation": "pftl_uniswap_primary_subscribe_v2", "subscriber": HOLDER, "route_id": ROUTE,
                 "reservation_id": ids["reservation_id"], "subscription_nonce": ids["subscription_nonce"],
                 "settlement_asset_id": PFUSDC, "settlement_value_atoms": 903212,
@@ -740,8 +781,8 @@ cp "$RUNTIME_ROOT/witness.json" "$WITNESS_EVIDENCE"
 
 first_failure="witness_native_verify"
 mkdir -p "$RUNTIME_ROOT/prover-out"
-"$PROVER_BINARY" receipt --witness "$RUNTIME_ROOT/witness.json" \
-  --output-dir "$RUNTIME_ROOT/prover-out" --require-prover cpu --skip-redundant-execute \
+SP1_PROVER=cpu "$PROVER_BINARY" receipt --witness "$RUNTIME_ROOT/witness.json" \
+  --output-dir "$RUNTIME_ROOT/prover-out" --require-prover cpu \
   > "$RUNTIME_ROOT/prover.log" 2>&1
 [[ -f "$RUNTIME_ROOT/prover-out/public-values.bin" ]]
 [[ "$(stat -c %s "$RUNTIME_ROOT/prover-out/public-values.bin")" == "1120" ]]
