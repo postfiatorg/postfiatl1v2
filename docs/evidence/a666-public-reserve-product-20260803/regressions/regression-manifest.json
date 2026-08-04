@@ -39,6 +39,28 @@
       "measurement_basis": "The test was the sole final-running test in the full postfiat-node lib suite; the suite terminal runtime was 2499.29s.",
       "policy_violation": "Recovery spec section 12.0 excludes proving from the qualification loop; path document section 5.4 treats degraded fast-loop runtime as a defect.",
       "disposition": "candidate for proving feature-gate, out of scope this campaign"
+    },
+    {
+      "id": "FAST-LOOP-02",
+      "test_name": "local_cpu_groth16_prover_oom_killed_at_103_1_gb_peak",
+      "source_file": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/receipt-verifier-spike/memory-bounded-terminal.json",
+      "classification": "superseded_capacity_claim",
+      "status": "SUPERSEDED",
+      "original_claim": "Commit df5192e terminal wall recorded the local CPU Groth16 prover as OOM-killed at a 103.1GB peak, implying the receipt proof exceeds host memory capacity.",
+      "superseded_by": "run_id a666-r4-receipt-prover-memory-bounded-20260804-overnight-v1 (fired under Nazgul authorization, packet commit 2d0e9d0)",
+      "superseding_measurements": {
+        "exit_code": 1,
+        "wall_seconds": 9281.24,
+        "cpu_time": "10h 21min 8.976s",
+        "memory_peak": "35.4G",
+        "memory_swap_peak": "0B",
+        "oom_killed": false,
+        "stages_completed": "STARK core proving and STARK recursion completed under tuned single-worker memory bounds"
+      },
+      "measurement_basis": "systemd journal Consumed/MemoryPeak lines and /usr/bin/time wall_seconds for the memory-bounded unit; full excerpt in receipt-verifier-spike/memory-bounded-terminal-journal.txt",
+      "new_blocker": "final Groth16 wrap fails on packet unit environment/PATH/DOCKER reachability: sp1-recursion-gnark-ffi-6.3.1/src/ffi/docker.rs:29 'Failed to run `docker info`' while the login shell has docker 29.1.3 daemon access; classified as environment defect, not proof-capacity failure",
+      "evidence_history": "original OOM wall evidence (commit df5192e, spike terminal records) is retained unchanged; this entry only marks the capacity interpretation superseded",
+      "disposition": "capacity claim closed; final-wrap docker environment reachability is the open blocker for a refire decision"
     }
   ],
   "observed_defect_classes": [
