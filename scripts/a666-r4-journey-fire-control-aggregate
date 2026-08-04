@@ -293,9 +293,9 @@ pftl_runtime_validation() {
 }
 
 d_runner_validation() {
-    local report=/tmp/a666-r4-d-preflight-LttxGK0X.json
-    [[ -r "$report" && "$(sha256sum "$report" | awk '{print $1}')" == "d7175635447ad52156a880eb198b45c030ca21ca1882e7e9db11dc406b425ca9" ]] || { jq -cn '{ok:false}'; return; }
-    jq -cn --argjson d "$(cat "$d_runner")" --argjson r "$(cat "$report")" '
+    local runner="${1:-$d_runner}" report="${2:-/tmp/a666-r4-d-preflight-LttxGK0X.json}" expected_sha="${3:-d7175635447ad52156a880eb198b45c030ca21ca1882e7e9db11dc406b425ca9}"
+    [[ -r "$report" && "$(sha256sum "$report" | awk '{print $1}')" == "$expected_sha" ]] || { jq -cn '{ok:false}'; return; }
+    jq -cn --argjson d "$(cat "$runner")" --argjson r "$(cat "$report")" '
       {ok:(
         $d.schema == "postfiat.a666.r4.journey-runner-dry-run.v1" and $d.candidate_revision == "39f7fae3191aa34c376ae1657650a9ec2444f421" and $d.dry_run == true and $d.official_pass == false
         and $d.execution.matched_tests == 1 and $d.execution.exit_code == 0 and $d.execution.passed_tests == 1 and $d.execution.failed_tests == 0
@@ -524,7 +524,8 @@ run_preprove_self_test() {
     run_route_stakehub_self_test
     run_dependencies_self_test
     run_pftl_self_test
-    printf '%s\n' "fire_control_self_test=PASS wrong_route=false dead_daemon=false non_loopback_endpoint=false nonzero_operation_count=false fixture_root=$test_root"
+    run_d_no_live_self_test
+    printf '%s\n' "fire_control_self_test=PASS d_observed_step_false=true d_nonzero_executed_or_business=true d_wrong_report_hash=true d_non_loopback_endpoint=true consumed_live_chain=true fixture_root=$test_root"
 }
 
 run_fleet_binding_self_test() {
@@ -624,6 +625,18 @@ run_pftl_self_test() {
     jq '.endpoint.pid=0' "$root/pftl.json" >"$root/dead.json"; if pftl_ok_fixture "$root/dead.json"; then return 1; fi
     jq '.endpoint.url="http://0.0.0.0:8798"' "$root/pftl.json" >"$root/nonloopback.json"; if pftl_ok_fixture "$root/nonloopback.json"; then return 1; fi
     jq '.submitted_private_operations=1' "$root/pftl.json" >"$root/operations.json"; if pftl_ok_fixture "$root/operations.json"; then return 1; fi
+}
+
+run_d_no_live_self_test() {
+    local root report_sha old_d="$d_runner" old_export="$export_artifact_slot"
+    root=$(mktemp -d /tmp/a666-r4-d-no-live-self-test.XXXXXX); chmod 700 "$root"; cp "$d_runner" "$root/d.json"; cp /tmp/a666-r4-d-preflight-LttxGK0X.json "$root/report.json"; cp "$export_artifact_slot" "$root/export.json"; report_sha=$(sha256sum "$root/report.json" | awk '{print $1}')
+    d_runner_validation "$root/d.json" "$root/report.json" "$report_sha" | jq -e '.ok == true' >/dev/null; no_live_validation | jq -e '.ok == true' >/dev/null
+    jq '(.step_readiness[]|select(.step==1)|.ready)=false' "$root/d.json" >"$root/step.json"; if d_runner_validation "$root/step.json" "$root/report.json" "$report_sha" | jq -e '.ok == true' >/dev/null; then return 1; fi
+    jq '.business_mutations=1 | .wallet_business_steps_executed=1' "$root/d.json" >"$root/business.json"; if d_runner_validation "$root/business.json" "$root/report.json" "$report_sha" | jq -e '.ok == true' >/dev/null; then return 1; fi
+    if d_runner_validation "$root/d.json" "$root/report.json" "0000000000000000000000000000000000000000000000000000000000000000" | jq -e '.ok == true' >/dev/null; then return 1; fi
+    jq '(.observed_loopback_endpoints.setup_manifest_endpoints[0])="tcp://192.0.2.1:31001"' "$root/d.json" >"$root/nonloopback.json"; d_runner="$root/nonloopback.json"; if no_live_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
+    d_runner="$old_d"; jq '.live_chain=true' "$root/export.json" >"$root/live.json"; export_artifact_slot="$root/live.json"; if no_live_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
+    d_runner="$old_d"; export_artifact_slot="$old_export"
 }
 
 if [[ $# -gt 0 ]]; then
