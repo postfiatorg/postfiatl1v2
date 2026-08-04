@@ -1,0 +1,269 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+repo=$(cd "$(dirname "$0")/.." && pwd)
+evidence_root="$repo/docs/evidence/a666-public-reserve-product-20260803/browser"
+construction="$evidence_root/r4-construction"
+pass1="$evidence_root/r4-pass1"
+preflight="$pass1/journey-fire-control-preflight.json"
+refire_prepared="$construction/receipt-verifier-spike/docker-refire-prepared.json"
+refire_probe="$construction/receipt-verifier-spike/docker-refire-probe.json"
+refire_fired="$construction/receipt-verifier-spike/docker-refire-fired.json"
+b_stage="$construction/ethereum-contract-stage.json"
+historical_fleet="$construction/fleet/construction-fleet.json"
+fresh_fleet="$construction/fleet/fresh-restore.json"
+route_stage="$construction/route-activation.json"
+candidate_proxy="$construction/candidate-proxy-provenance.json"
+dependencies="$construction/private-swap-dependencies-refresh.json"
+pftl_stage="$construction/private-swap-stage.json"
+d_runner="$construction/journey-runner-dry-run.json"
+async_proof_slot="$construction/async-proof-slot.json"
+stakehub_inventory="$pass1/stakehub-restart-proof.json"
+
+input_summary() {
+    local path="$1"
+    if [[ ! -e "$path" ]]; then
+        jq -cn --arg path "$path" '{path: $path, exists: false, valid_json: false, observed_status: "absent", observed_reason: "evidence_absent", bindings: {candidate_revision: null, rehearsal_root: null, run_id: null}}'
+        return
+    fi
+    if ! jq -e . "$path" >/dev/null 2>&1; then
+        jq -cn --arg path "$path" '{path: $path, exists: true, valid_json: false, observed_status: "invalid_json", observed_reason: "evidence_invalid_json", bindings: {candidate_revision: null, rehearsal_root: null, run_id: null}}'
+        return
+    fi
+    jq -c --arg path "$path" '{
+        path: $path,
+        exists: true,
+        valid_json: true,
+        observed_status: (.assessment // .outcome // .status // .ready // .accepted // .construction_ready // .probe2.verdict // null),
+        observed_reason: (.first_failing_check // .first_blocker // .required_next_action // .post_activation_dependency.wall // .probe1.root_cause // null),
+        bindings: {
+            candidate_revision: (.bindings.candidate_revision // .binding.candidate_revision // .candidate.revision_observed // .candidate_revision // null),
+            rehearsal_root: (.bindings.rehearsal_root // .binding.rehearsal_root // .rehearsal_root // .preserved_root.path // null),
+            run_id: (.bindings.run_id // .binding.run_id // .run_id // .setup_run_id // null)
+        }
+    }' "$path"
+}
+
+json_true() {
+    local path="$1"
+    local filter="$2"
+    [[ -r "$path" ]] && jq -e "$filter" "$path" >/dev/null 2>&1
+}
+
+bound_and() {
+    local path="$1"
+    local filter="$2"
+    [[ -n "$candidate_revision" && -n "$fresh_root" && -n "$fresh_run" ]] || return 1
+    [[ -r "$path" ]] || return 1
+    jq -e --arg candidate "$candidate_revision" --arg root "$fresh_root" --arg run "$fresh_run" '
+        (.bindings // .binding // null) as $binding
+        | ($binding | type == "object")
+        and ($binding.candidate_revision == $candidate)
+        and ($binding.rehearsal_root == $root)
+        and ($binding.run_id == $run)
+    ' "$path" >/dev/null 2>&1 || return 1
+    jq -e "$filter" "$path" >/dev/null 2>&1
+}
+
+bool=false
+refire_prepared_ok=false
+refire_probe_ok=false
+refire_fired_ok=false
+refire_unit_or_terminal_ok=false
+b_contract_stage_ok=false
+b_verifier_acceptance_ok=false
+fresh_fleet_ok=false
+fresh_route_ok=false
+candidate_proxy_ok=false
+dependencies_ok=false
+pftl_ok=false
+d_runner_dry_ok=false
+async_proof_slot_ok=false
+stakehub_inventory_ok=false
+stakehub_official_absent_ok=false
+candidate_provenance_ok=false
+no_live_chain_ok=false
+
+candidate_revision=""
+if [[ -r "$candidate_proxy" ]]; then
+    candidate_revision=$(jq -r '.candidate.revision_observed // .candidate_revision // empty' "$candidate_proxy")
+fi
+if [[ -z "$candidate_revision" && -r "$preflight" ]]; then
+    candidate_revision=$(jq -r '.candidate_revision // empty' "$preflight")
+fi
+fresh_root=""
+fresh_run=""
+if [[ -r "$fresh_fleet" ]] && jq -e . "$fresh_fleet" >/dev/null 2>&1; then
+    fresh_root=$(jq -r '.bindings.rehearsal_root // .binding.rehearsal_root // .rehearsal_root // .preserved_root.path // empty' "$fresh_fleet")
+    fresh_run=$(jq -r '.bindings.run_id // .binding.run_id // .run_id // .setup_run_id // empty' "$fresh_fleet")
+fi
+
+if json_true "$refire_prepared" '.prepared == true and (.run_id | type == "string" and length > 0)'; then
+    refire_prepared_ok=true
+fi
+prepared_run=""
+if [[ "$refire_prepared_ok" == true ]]; then
+    prepared_run=$(jq -r '.run_id' "$refire_prepared")
+fi
+if [[ "$refire_prepared_ok" == true && -n "$prepared_run" ]] && [[ -r "$refire_probe" ]] && jq -e --arg run "$prepared_run" '.run_id == $run and (.passed == true or .probe.passed == true or (.probe2.exit_code == 0 and .probe2.verdict == "GREEN" and .probe2.server_reachable == true and .probe2.pinned_image_visible_inside_unit == true))' "$refire_probe" >/dev/null 2>&1; then
+    refire_probe_ok=true
+fi
+if [[ "$refire_prepared_ok" == true && -n "$prepared_run" ]] && [[ -r "$refire_fired" ]] && jq -e --arg run "$prepared_run" '.fired == true and .run_id == $run' "$refire_fired" >/dev/null 2>&1; then
+    refire_fired_ok=true
+fi
+if [[ "$refire_fired_ok" == true ]] && json_true "$refire_fired" '(.unit.active_state == "active") or (.unit.state == "active") or (.terminal.accepted == true and .terminal.outcome == "accepted")'; then
+    refire_unit_or_terminal_ok=true
+fi
+
+if bound_and "$b_stage" '.deployment.green == true and (.deployment.contracts.sp1_verifier.address | type == "string") and (.deployment.contracts.wrapped_venue_navcoin.address | type == "string") and (.deployment.contracts.pftl_receipt_finality_verifier_v1.address | type == "string") and (.deployment.contracts.pftl_uniswap_primary_market_v2.address | type == "string")'; then
+    b_contract_stage_ok=true
+fi
+if bound_and "$b_stage" '.verifier_acceptance.ready == true and (.verifier_acceptance.accepted == true or .verifier_acceptance.outcome == "accepted")'; then
+    b_verifier_acceptance_ok=true
+fi
+
+if json_true "$fresh_fleet" '.construction_ready == true and (.checks.fleet_12_live_six_equal == true or .checks.construction_fleet_12_live_six_equal == true) and (.bindings.candidate_revision | type == "string" and length > 0) and (.bindings.rehearsal_root | type == "string" and length > 0) and (.bindings.run_id | type == "string" and length > 0)'; then
+    fresh_fleet_ok=true
+fi
+if bound_and "$route_stage" '.accepted == true and .activation_checks.route_live == true and .activation_checks.six_way_convergence == true'; then
+    fresh_route_ok=true
+fi
+if bound_and "$candidate_proxy" '.ready == true and .candidate.revision_exact == true and .candidate.tracked_dirty_count == 0 and .proxy_hold.healthz_reachable == true'; then
+    candidate_proxy_ok=true
+fi
+if bound_and "$dependencies" '.ready == true and .checks.construction_fleet_12_live_six_equal == true and .checks.route_live_epoch_5_on_six == true'; then
+    dependencies_ok=true
+fi
+if bound_and "$pftl_stage" '.ready == true and .checks.daemon_readiness == true and .checks.rehearsal_rpc_fleet_live == true'; then
+    pftl_ok=true
+fi
+if bound_and "$d_runner" '.dry_run == true and .checks.steps_1_6_9_10_dry_run == true'; then
+    d_runner_dry_ok=true
+fi
+if bound_and "$async_proof_slot" '.checks.steps_7_8_async_proof_slot == true and .contract.mode == "asynchronous_content_addressed_artifact_consumption" and .contract.inline_proving_forbidden == true'; then
+    async_proof_slot_ok=true
+fi
+
+proof_contract='null'
+if proof_contract_candidate=$(git show ad30bcb:docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/journey-fire-control-preflight.json 2>/dev/null | jq -ce '.proof_artifact_consumption_contract' 2>/dev/null); then
+    proof_contract="$proof_contract_candidate"
+fi
+
+stakehub_scan_ok=false
+stakehub_active_units='[]'
+if stakehub_units=$(systemctl --user list-units --type=service --all --no-legend 'stakehub*' 2>/dev/null); then
+    stakehub_scan_ok=true
+    stakehub_active_units=$(printf '%s\n' "$stakehub_units" | awk '$3 == "active" {print $1}' | jq -Rsc 'split("\n") | map(select(length > 0))')
+fi
+if bound_and "$stakehub_inventory" '(.units | type == "array" and length > 0)'; then
+    stakehub_inventory_ok=true
+fi
+if [[ "$stakehub_scan_ok" == true && "$stakehub_inventory_ok" == true ]] && [[ "$(jq 'length' <<<"$stakehub_active_units")" == 0 ]]; then
+    stakehub_official_absent_ok=true
+fi
+if bound_and "$candidate_proxy" '.candidate.revision_exact == true and .candidate.tracked_dirty_count == 0'; then
+    candidate_provenance_ok=true
+fi
+if bound_and "$d_runner" '.checks.no_live_chain == true and .checks.loopback_only == true'; then
+    no_live_chain_ok=true
+fi
+
+jq -n \
+    --arg candidate_revision "$candidate_revision" \
+    --arg fresh_root "$fresh_root" \
+    --arg fresh_run "$fresh_run" \
+    --argjson proof_contract "$proof_contract" \
+    --argjson refire_prepared_input "$(input_summary "$refire_prepared")" \
+    --argjson refire_probe_input "$(input_summary "$refire_probe")" \
+    --argjson refire_fired_input "$(input_summary "$refire_fired")" \
+    --argjson b_stage_input "$(input_summary "$b_stage")" \
+    --argjson historical_fleet_input "$(input_summary "$historical_fleet")" \
+    --argjson fresh_fleet_input "$(input_summary "$fresh_fleet")" \
+    --argjson route_input "$(input_summary "$route_stage")" \
+    --argjson proxy_input "$(input_summary "$candidate_proxy")" \
+    --argjson dependencies_input "$(input_summary "$dependencies")" \
+    --argjson pftl_input "$(input_summary "$pftl_stage")" \
+    --argjson d_runner_input "$(input_summary "$d_runner")" \
+    --argjson async_slot_input "$(input_summary "$async_proof_slot")" \
+    --argjson stakehub_input "$(input_summary "$stakehub_inventory")" \
+    --argjson stakehub_scan_ok "$stakehub_scan_ok" \
+    --argjson stakehub_active_units "$stakehub_active_units" \
+    --argjson refire_prepared_ok "$refire_prepared_ok" \
+    --argjson refire_probe_ok "$refire_probe_ok" \
+    --argjson refire_fired_ok "$refire_fired_ok" \
+    --argjson refire_unit_or_terminal_ok "$refire_unit_or_terminal_ok" \
+    --argjson b_contract_stage_ok "$b_contract_stage_ok" \
+    --argjson b_verifier_acceptance_ok "$b_verifier_acceptance_ok" \
+    --argjson fresh_fleet_ok "$fresh_fleet_ok" \
+    --argjson fresh_route_ok "$fresh_route_ok" \
+    --argjson candidate_proxy_ok "$candidate_proxy_ok" \
+    --argjson dependencies_ok "$dependencies_ok" \
+    --argjson pftl_ok "$pftl_ok" \
+    --argjson d_runner_dry_ok "$d_runner_dry_ok" \
+    --argjson async_proof_slot_ok "$async_proof_slot_ok" \
+    --argjson stakehub_inventory_ok "$stakehub_inventory_ok" \
+    --argjson stakehub_official_absent_ok "$stakehub_official_absent_ok" \
+    --argjson candidate_provenance_ok "$candidate_provenance_ok" \
+    --argjson no_live_chain_ok "$no_live_chain_ok" \
+    '{
+        schema: "postfiat.a666.r4.journey-fire-control-preflight.v2",
+        aggregation: {
+            mode: "fail_closed_current_evidence",
+            binding_contract: {
+                required_fields: ["bindings.candidate_revision", "bindings.rehearsal_root", "bindings.run_id"],
+                historical_evidence_rejected_without_matching_binding: true
+            },
+            current_binding: {
+                candidate_revision: (if $candidate_revision == "" then null else $candidate_revision end),
+                rehearsal_root: (if $fresh_root == "" then null else $fresh_root end),
+                run_id: (if $fresh_run == "" then null else $fresh_run end)
+            }
+        },
+        inputs: {
+            refire_prepared: $refire_prepared_input,
+            refire_probe: $refire_probe_input,
+            refire_fired: $refire_fired_input,
+            b_contract_stage: $b_stage_input,
+            historical_fleet_rejected: $historical_fleet_input,
+            fresh_fleet: $fresh_fleet_input,
+            fresh_route: $route_input,
+            candidate_proxy: $proxy_input,
+            dependencies: $dependencies_input,
+            pftl: $pftl_input,
+            d_runner: $d_runner_input,
+            async_proof_slot: $async_slot_input,
+            stakehub_restart_inventory: $stakehub_input,
+            stakehub_official_scan: {
+                command_succeeded: $stakehub_scan_ok,
+                active_units: $stakehub_active_units
+            }
+        },
+        proof_artifact_consumption_contract: $proof_contract,
+        checks: {
+            docker_refire_prepared: $refire_prepared_ok,
+            docker_refire_probe: $refire_probe_ok,
+            docker_refire_fired: $refire_fired_ok,
+            docker_refire_unit_live_or_terminal_proof_success: $refire_unit_or_terminal_ok,
+            b_full_real_contract_stage_green: $b_contract_stage_ok,
+            b_real_verifier_acceptance: $b_verifier_acceptance_ok,
+            fresh_fleet_12_of_12_six_equal: $fresh_fleet_ok,
+            fresh_route_live: $fresh_route_ok,
+            candidate_proxy_ready: $candidate_proxy_ok,
+            private_dependencies_ready: $dependencies_ok,
+            pftl_private_swap_ready: $pftl_ok,
+            d_runner_steps_1_6_9_10_dry_run: $d_runner_dry_ok,
+            async_proof_slot_steps_7_8: $async_proof_slot_ok,
+            stakehub_restart_inventory_present: $stakehub_inventory_ok,
+            stakehub_official_absent: $stakehub_official_absent_ok,
+            candidate_revision_and_provenance: $candidate_provenance_ok,
+            no_live_chain_dependency: $no_live_chain_ok
+        }
+    }
+    | .checks as $checks
+    | . + {
+        check_count: ($checks | length),
+        blocker_names: [$checks | to_entries[] | select(.value | not) | .key],
+        ready_to_fire: ([$checks[]] | all),
+        ready_to_fire_computation: "all values in checks must be true",
+        mutations_executed: false
+    }'
