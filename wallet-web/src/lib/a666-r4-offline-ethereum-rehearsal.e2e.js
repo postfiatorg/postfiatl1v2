@@ -61,15 +61,15 @@ function requiredPath(name) {
   return resolve(value);
 }
 
-function requiredLoopbackOrigin() {
-  const raw = String(process.env.POSTFIAT_R4_WALLET_ORIGIN || '').trim();
-  if (!raw) throw new Error('POSTFIAT_R4_WALLET_ORIGIN is required');
+function requiredLoopbackOrigin(environmentName, label) {
+  const raw = String(process.env[environmentName] || '').trim();
+  if (!raw) throw new Error(`${environmentName} is required`);
   const origin = new URL(raw);
-  assert.equal(origin.protocol, 'http:', 'rehearsal wallet must use HTTP on loopback');
-  assert.ok(['127.0.0.1', 'localhost', '::1'].includes(origin.hostname), 'wallet origin must be loopback');
-  assert.ok(origin.port, 'wallet origin must include an explicit port');
-  assert.equal(origin.username, '', 'wallet origin must not contain credentials');
-  assert.equal(origin.password, '', 'wallet origin must not contain credentials');
+  assert.equal(origin.protocol, 'http:', `${label} must use HTTP on loopback`);
+  assert.ok(['127.0.0.1', 'localhost', '::1'].includes(origin.hostname), `${label} must be loopback`);
+  assert.ok(origin.port, `${label} must include an explicit port`);
+  assert.equal(origin.username, '', `${label} must not contain credentials`);
+  assert.equal(origin.password, '', `${label} must not contain credentials`);
   return origin;
 }
 
@@ -241,7 +241,7 @@ async function verifyProductionGraph() {
 }
 
 async function runConstructionPreflight({
-  origin, fireControl, setup, deployment, productionGraph,
+  walletOrigin, proxyOrigin, fireControl, setup, deployment, productionGraph,
   fireControlPath, setupPath, deploymentPath,
   exportSlotPath, returnSlotPath, proxyRestartPath, proxyPidPath, reportPath,
 }) {
@@ -252,10 +252,19 @@ async function runConstructionPreflight({
     readableJsonObservation(exportSlotPath, 'export artifact slot'),
     readableJsonObservation(returnSlotPath, 'return artifact slot'),
   ]);
+  let walletStatus = null;
+  let walletServed = false;
+  try {
+    const response = await fetch(walletOrigin, { cache: 'no-store' });
+    walletStatus = response.status;
+    walletServed = response.ok;
+  } catch (error) {
+    walletStatus = error.code || error.message;
+  }
   let proxyStatus = null;
   let proxyReachable = false;
   try {
-    const response = await fetch(new URL('/healthz', origin), { cache: 'no-store' });
+    const response = await fetch(new URL('/healthz', proxyOrigin), { cache: 'no-store' });
     proxyStatus = response.status;
     proxyReachable = response.ok;
   } catch (error) {
@@ -279,23 +288,30 @@ async function runConstructionPreflight({
     && /^[0-9a-f]{64}$/.test(String(slot.value?.artifact_sha256 || ''))
     && Boolean(slot.value?.receipt_identity)
     && slot.value?.observed_chain_state?.finalized === true;
-  const sharedReadiness = proxyReachable && candidatesMatch && importGraphReady
-    && manifestHashes.every(item => item.matches)
-    && loopbackManifests.every(item => item.valid);
+  const hashesReady = manifestHashes.every(item => item.matches);
+  const loopbackReady = loopbackManifests.every(item => item.valid);
+  const buildReady = walletServed
+    && manifestCandidateRevision(setup) === CANDIDATE_REVISION
+    && setupHash.matches
+    && importGraphReady;
+  const renderedWalletReady = walletServed && importGraphReady;
+  const displayReady = walletServed && candidatesMatch && hashesReady && loopbackReady && importGraphReady;
+  const mutationReady = displayReady && proxyReachable;
   const readiness = [
-    { step: 1, label: JOURNEY_LABELS[0], ready: sharedReadiness },
-    { step: 2, label: JOURNEY_LABELS[1], ready: sharedReadiness },
-    { step: 3, label: JOURNEY_LABELS[2], ready: sharedReadiness },
-    { step: 4, label: JOURNEY_LABELS[3], ready: sharedReadiness },
-    { step: 5, label: JOURNEY_LABELS[4], ready: sharedReadiness },
-    { step: 6, label: JOURNEY_LABELS[5], ready: sharedReadiness },
-    { step: 7, label: JOURNEY_LABELS[6], ready: sharedReadiness && slotAccepted(exportSlot) },
-    { step: 8, label: JOURNEY_LABELS[7], ready: sharedReadiness && slotAccepted(returnSlot) },
-    { step: 9, label: JOURNEY_LABELS[8], ready: sharedReadiness && proxyPidReadable && restartDirectoryReadable },
-    { step: 10, label: JOURNEY_LABELS[9], ready: sharedReadiness && productionGraph.private_renders_public_receipt_control },
+    { step: 1, label: JOURNEY_LABELS[0], ready: buildReady },
+    { step: 2, label: JOURNEY_LABELS[1], ready: renderedWalletReady },
+    { step: 3, label: JOURNEY_LABELS[2], ready: displayReady },
+    { step: 4, label: JOURNEY_LABELS[3], ready: displayReady },
+    { step: 5, label: JOURNEY_LABELS[4], ready: mutationReady },
+    { step: 6, label: JOURNEY_LABELS[5], ready: mutationReady },
+    { step: 7, label: JOURNEY_LABELS[6], ready: mutationReady && slotAccepted(exportSlot) },
+    { step: 8, label: JOURNEY_LABELS[7], ready: mutationReady && slotAccepted(returnSlot) },
+    { step: 9, label: JOURNEY_LABELS[8], ready: walletServed && proxyReachable && proxyPidReadable && restartDirectoryReadable },
+    { step: 10, label: JOURNEY_LABELS[9], ready: walletServed && importGraphReady && productionGraph.private_renders_public_receipt_control },
   ].map(item => ({ ...item, executed: false }));
   const mutationRequests = [];
   const blockers = [
+    ...(!walletServed ? ['candidate_wallet_origin_unreachable'] : []),
     ...(!proxyReachable ? ['candidate_proxy_unreachable'] : []),
     ...(!candidatesMatch ? ['candidate_revision_mismatch'] : []),
     ...(!importGraphReady ? ['production_import_graph_mismatch'] : []),
@@ -318,8 +334,19 @@ async function runConstructionPreflight({
     wallet_business_steps_executed: readiness.filter(item => item.executed).length,
     ready_to_fire: readiness.every(item => item.ready) && fireControl.ready_to_fire === true,
     fire_control_ready_observed: fireControl.ready_to_fire === true,
-    origin: { value: origin.href, loopback: ['127.0.0.1', 'localhost', '::1'].includes(origin.hostname) },
-    proxy: { reachable: proxyReachable, status: proxyStatus, pid_readable: proxyPidReadable },
+    wallet_origin: {
+      value: walletOrigin.href,
+      loopback: ['127.0.0.1', 'localhost', '::1'].includes(walletOrigin.hostname),
+      served: walletServed,
+      status: walletStatus,
+    },
+    proxy: {
+      origin: proxyOrigin.href,
+      loopback: ['127.0.0.1', 'localhost', '::1'].includes(proxyOrigin.hostname),
+      reachable: proxyReachable,
+      status: proxyStatus,
+      pid_readable: proxyPidReadable,
+    },
     manifest_hashes: manifestHashes,
     loopback_manifests: loopbackManifests,
     production_import_graph: productionGraph,
@@ -460,7 +487,8 @@ async function requestProxyRestart(requestPath, pidPath) {
 test('A666 R4 offline Ethereum rehearsal drives the production rendered wallet journey', {
   timeout: MAX_ASYNC_WAIT_MS + 10 * 60 * 1_000,
 }, async () => {
-  const origin = requiredLoopbackOrigin();
+  const origin = requiredLoopbackOrigin('POSTFIAT_R4_WALLET_ORIGIN', 'rehearsal wallet origin');
+  const proxyOrigin = requiredLoopbackOrigin('POSTFIAT_R4_PROXY_ORIGIN', 'candidate proxy origin');
   const preflightOnly = process.env.POSTFIAT_R4_PREFLIGHT_ONLY === '1';
   const asyncBudgetMs = preflightOnly ? null : requiredAsyncBudget();
   const fireControlPath = requiredPath('POSTFIAT_R4_FIRE_CONTROL_MANIFEST');
@@ -485,7 +513,7 @@ test('A666 R4 offline Ethereum rehearsal drives the production rendered wallet j
   assert.equal(manifestCandidateRevision(fireControl), CANDIDATE_REVISION);
   if (preflightOnly) {
     await runConstructionPreflight({
-      origin, fireControl, setup, deployment, productionGraph,
+      walletOrigin: origin, proxyOrigin, fireControl, setup, deployment, productionGraph,
       fireControlPath, setupPath, deploymentPath,
       exportSlotPath, returnSlotPath, proxyRestartPath, proxyPidPath, reportPath,
     });

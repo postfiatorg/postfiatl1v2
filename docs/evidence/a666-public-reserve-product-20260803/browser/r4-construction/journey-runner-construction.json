@@ -26,7 +26,7 @@
     "command": "npm run test:r4-construction",
     "environment_mode": "POSTFIAT_R4_PREFLIGHT_ONLY=1",
     "exit_code": 0,
-    "runtime_ms": 846,
+    "runtime_ms": 810,
     "matched_tests": 1,
     "passed_tests": 1,
     "failed_tests": 0,
@@ -35,7 +35,31 @@
     "wallet_business_steps_executed": 0,
     "ready_to_fire": false,
     "first_blocker": "candidate_proxy_unreachable",
-    "report_path": "/tmp/a666-r4-journey-preflight-3693186.json",
+    "report_path": "/tmp/a666-r4-journey-preflight-d2-corrective-3712035.json",
+    "wallet_origin": {
+      "value": "http://127.0.0.1:8080/",
+      "served": true,
+      "status": 200,
+      "loopback": true
+    },
+    "proxy_origin": {
+      "value": "http://127.0.0.1:31021/",
+      "reachable": false,
+      "status": "fetch failed",
+      "loopback": true
+    },
+    "step_readiness": [
+      { "step": 1, "ready": true },
+      { "step": 2, "ready": true },
+      { "step": 3, "ready": false },
+      { "step": 4, "ready": false },
+      { "step": 5, "ready": false },
+      { "step": 6, "ready": false },
+      { "step": 7, "ready": false },
+      { "step": 8, "ready": false },
+      { "step": 9, "ready": false },
+      { "step": 10, "ready": true }
+    ],
     "artifact_slots": {
       "export": {
         "readable": false,
