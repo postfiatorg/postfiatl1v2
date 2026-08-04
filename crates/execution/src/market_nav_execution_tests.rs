@@ -7618,28 +7618,29 @@ fn ar06_duplicate_submission_returns_typed_admission_or_finalized_rejection() {
     assert!(receipt.accepted, "{receipt:?}");
 
     let packet_hash = "d6".repeat(48);
+    let reserve_operation = NavReserveSubmitOperation {
+        issuer: issuer.clone(),
+        submitter: issuer.clone(),
+        asset_id: asset_id.clone(),
+        epoch: 1,
+        nav_per_unit: 1_000_000,
+        circulating_supply: 0,
+        verified_net_assets: 1_000_000,
+        proof_profile: "ar06-replay-profile".to_string(),
+        source_root: "d7".repeat(48),
+        attestor_root: "d8".repeat(48),
+        reserve_packet_hash: packet_hash.clone(),
+        reserve_accounts: Vec::new(),
+        sp1_proof_bytes: Vec::new(),
+        sp1_public_values: Vec::new(),
+    };
     let reserve_submit = signed_asset_transaction_with_minimum_fee(
         &genesis,
         &ledger,
         &issuer_key,
         NAV_RESERVE_SUBMIT_TRANSACTION_KIND,
         3,
-        AssetTransactionOperation::NavReserveSubmit(NavReserveSubmitOperation {
-            issuer: issuer.clone(),
-            submitter: issuer.clone(),
-            asset_id: asset_id.clone(),
-            epoch: 1,
-            nav_per_unit: 1_000_000,
-            circulating_supply: 0,
-            verified_net_assets: 1_000_000,
-            proof_profile: "ar06-replay-profile".to_string(),
-            source_root: "d7".repeat(48),
-            attestor_root: "d8".repeat(48),
-            reserve_packet_hash: packet_hash.clone(),
-            reserve_accounts: Vec::new(),
-            sp1_proof_bytes: Vec::new(),
-            sp1_public_values: Vec::new(),
-        }),
+        AssetTransactionOperation::NavReserveSubmit(reserve_operation.clone()),
     );
     let accepted = execute_asset_transaction(&genesis, &mut ledger, &reserve_submit, 3);
     assert!(accepted.accepted, "original submission: {accepted:?}");
@@ -7683,7 +7684,54 @@ fn ar06_duplicate_submission_returns_typed_admission_or_finalized_rejection() {
     assert_eq!(
         issued_asset_supply(&ledger, &asset_id).expect("AR-06 supply after replay"),
         supply_after_original,
-        "duplicate must not drift supply"
+        "admission duplicate must not drift supply"
+    );
+
+    let finalized_duplicate = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &issuer_key,
+        NAV_RESERVE_SUBMIT_TRANSACTION_KIND,
+        signer_sequence_after_original + 1,
+        AssetTransactionOperation::NavReserveSubmit(reserve_operation),
+    );
+    let before_finalized_duplicate = ledger.clone();
+    let finalized_rejection =
+        execute_asset_transaction(&genesis, &mut ledger, &finalized_duplicate, 4);
+    assert!(
+        !finalized_rejection.accepted,
+        "valid-sequence finalized duplicate must never report success"
+    );
+    assert_eq!(
+        finalized_rejection.code, "duplicate_nav_reserve_packet",
+        "finalized duplicate must return its typed execution rejection"
+    );
+    assert_eq!(
+        ledger, before_finalized_duplicate,
+        "finalized rejection must preserve the full state-root-equivalent ledger"
+    );
+    assert_eq!(
+        ledger
+            .account(&issuer)
+            .expect("AR-06 issuer after finalized rejection")
+            .sequence,
+        signer_sequence_after_original,
+        "finalized rejection must not advance sequence in execution state"
+    );
+    assert_eq!(
+        ledger
+            .nav_reserve_packets
+            .iter()
+            .filter(|packet| packet.reserve_packet_hash == packet_hash)
+            .count(),
+        1,
+        "finalized duplicate must retain exactly one original packet effect"
+    );
+    assert_eq!(
+        issued_asset_supply(&ledger, &asset_id)
+            .expect("AR-06 supply after finalized rejection"),
+        supply_after_original,
+        "finalized duplicate must not drift supply"
     );
 }
 
