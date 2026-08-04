@@ -20,7 +20,7 @@
   },
   "inputs": {
     "refire_prepared": {
-      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/receipt-verifier-spike/docker-refire-prepared.json",
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/receipt-verifier-spike/pathb-v3-prepared.json",
       "exists": true,
       "valid_json": true,
       "observed_status": null,
@@ -28,23 +28,11 @@
       "bindings": {
         "candidate_revision": null,
         "rehearsal_root": null,
-        "run_id": "a666-r4-receipt-prover-docker-refire-20260804-v2"
+        "run_id": "a666-r4-receipt-prover-pathb-20260804-v3"
       }
     },
     "refire_probe": {
-      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/receipt-verifier-spike/docker-refire-probe.json",
-      "exists": true,
-      "valid_json": true,
-      "observed_status": "GREEN",
-      "observed_reason": "systemd user transient units do not carry the supplementary docker group (988); the docker client gets EACCES on /var/run/docker.sock. This is the exact mechanism of the v1 run's final-wrap failure (docker.rs:29).",
-      "bindings": {
-        "candidate_revision": null,
-        "rehearsal_root": null,
-        "run_id": "a666-r4-receipt-prover-docker-refire-20260804-v2"
-      }
-    },
-    "refire_fired": {
-      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/receipt-verifier-spike/docker-refire-fired.json",
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/receipt-verifier-spike/pathb-v3-probe.json",
       "exists": true,
       "valid_json": true,
       "observed_status": null,
@@ -52,8 +40,35 @@
       "bindings": {
         "candidate_revision": null,
         "rehearsal_root": null,
-        "run_id": "a666-r4-receipt-prover-docker-refire-20260804-v2"
+        "run_id": "a666-r4-receipt-prover-pathb-20260804-v3"
       }
+    },
+    "refire_fired": {
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/receipt-verifier-spike/pathb-v3-fired.json",
+      "exists": true,
+      "valid_json": true,
+      "observed_status": null,
+      "observed_reason": null,
+      "bindings": {
+        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "rehearsal_root": null,
+        "run_id": "a666-r4-receipt-prover-pathb-20260804-v3"
+      }
+    },
+    "refire_terminal_archive": {
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/receipt-verifier-spike/pathb-v3-terminal-archive.json",
+      "exists": true,
+      "valid_json": true,
+      "observed_status": null,
+      "observed_reason": null,
+      "bindings": {
+        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "rehearsal_root": null,
+        "run_id": "a666-r4-receipt-prover-pathb-20260804-v3"
+      }
+    },
+    "v3_refire_validation": {
+      "ok": true
     },
     "b_contract_stage": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/ethereum-contract-stage.json",
@@ -66,6 +81,21 @@
         "rehearsal_root": "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349",
         "run_id": null
       }
+    },
+    "pathb_v3_verifier_acceptance": {
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/pathb-v3-verifier-acceptance.json",
+      "exists": true,
+      "valid_json": true,
+      "observed_status": null,
+      "observed_reason": null,
+      "bindings": {
+        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "rehearsal_root": null,
+        "run_id": "a666-r4-receipt-prover-pathb-20260804-v3"
+      }
+    },
+    "v3_acceptance_validation": {
+      "ok": true
     },
     "b_path_b_validation": {
       "expected": {
@@ -182,13 +212,28 @@
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/async-proof-slot.json",
       "exists": true,
       "valid_json": true,
-      "observed_status": "watching",
-      "observed_reason": "path_b_v3_proof_artifacts_pending",
+      "observed_status": "accepted",
+      "observed_reason": null,
       "bindings": {
         "candidate_revision": null,
         "rehearsal_root": null,
         "run_id": "a666-r4-receipt-prover-pathb-20260804-v3"
       }
+    },
+    "export_artifact_slot": {
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/export-artifact-slot.json",
+      "exists": true,
+      "valid_json": true,
+      "observed_status": "accepted",
+      "observed_reason": null,
+      "bindings": {
+        "candidate_revision": null,
+        "rehearsal_root": null,
+        "run_id": "a666-r4-receipt-prover-pathb-20260804-v3"
+      }
+    },
+    "v3_async_validation": {
+      "ok": true
     },
     "stakehub_restart_inventory": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/stakehub-restart-proof.json",
@@ -294,22 +339,22 @@
     {
       "id": "docker_refire_prepared",
       "ok": true,
-      "input": "refire_prepared"
+      "input": "pathb_v3_prepared"
     },
     {
       "id": "docker_refire_probe",
       "ok": true,
-      "input": "refire_probe"
+      "input": "pathb_v3_probe"
     },
     {
       "id": "docker_refire_fired",
       "ok": true,
-      "input": "refire_fired"
+      "input": "pathb_v3_fired"
     },
     {
       "id": "docker_refire_unit_live_or_terminal_proof_success",
-      "ok": false,
-      "input": "refire_fired"
+      "ok": true,
+      "input": "pathb_v3_terminal_archive"
     },
     {
       "id": "b_full_real_contract_stage_green",
@@ -318,8 +363,8 @@
     },
     {
       "id": "b_real_verifier_acceptance",
-      "ok": false,
-      "input": "b_contract_stage"
+      "ok": true,
+      "input": "pathb_v3_verifier_acceptance"
     },
     {
       "id": "fresh_fleet_12_of_12_six_equal",
@@ -353,8 +398,8 @@
     },
     {
       "id": "async_proof_slot_steps_7_8",
-      "ok": false,
-      "input": "async_proof_slot"
+      "ok": true,
+      "input": "v3_async_and_export_artifact_slots"
     },
     {
       "id": "stakehub_restart_inventory_present",
@@ -384,13 +429,10 @@
   ],
   "check_count": 18,
   "blocker_names": [
-    "docker_refire_unit_live_or_terminal_proof_success",
-    "b_real_verifier_acceptance",
     "fresh_route_live",
     "private_dependencies_ready",
     "pftl_private_swap_ready",
     "d_runner_steps_1_6_9_10_dry_run",
-    "async_proof_slot_steps_7_8",
     "stakehub_restart_inventory_present",
     "stakehub_official_absent",
     "no_live_chain_dependency"

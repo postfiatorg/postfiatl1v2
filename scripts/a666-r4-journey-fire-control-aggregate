@@ -6,9 +6,11 @@ evidence_root="$repo/docs/evidence/a666-public-reserve-product-20260803/browser"
 construction="$evidence_root/r4-construction"
 pass1="$evidence_root/r4-pass1"
 preflight="$pass1/journey-fire-control-preflight.json"
-refire_prepared="$construction/receipt-verifier-spike/docker-refire-prepared.json"
-refire_probe="$construction/receipt-verifier-spike/docker-refire-probe.json"
-refire_fired="$construction/receipt-verifier-spike/docker-refire-fired.json"
+refire_prepared="$construction/receipt-verifier-spike/pathb-v3-prepared.json"
+refire_probe="$construction/receipt-verifier-spike/pathb-v3-probe.json"
+refire_fired="$construction/receipt-verifier-spike/pathb-v3-fired.json"
+refire_terminal="$construction/receipt-verifier-spike/pathb-v3-terminal-archive.json"
+b_acceptance="$construction/pathb-v3-verifier-acceptance.json"
 b_stage="$construction/ethereum-contract-stage.json"
 accepted_fleet="$construction/fleet/construction-fleet.json"
 checkpoint_staging="$construction/fleet/checkpoint-lifecycle-staging-20260804.json"
@@ -18,6 +20,7 @@ dependencies="$construction/private-swap-dependencies-refresh.json"
 pftl_stage="$construction/private-swap-stage.json"
 d_runner="$construction/journey-runner-dry-run.json"
 async_proof_slot="$construction/async-proof-slot.json"
+export_artifact_slot="$construction/export-artifact-slot.json"
 stakehub_inventory="$pass1/stakehub-restart-proof.json"
 preprove_binding="$construction/pre-prove-binding-check.json"
 path_b_schema="postfiat.a666.r4.path-b-pre-prove-binding-check.v1"
@@ -203,6 +206,53 @@ candidate_proxy_validation_for_file() {
         }'
 }
 
+v3_refire_validation() {
+    jq -cn --arg run "a666-r4-receipt-prover-pathb-20260804-v3" \
+      --argjson p "$(cat "$refire_prepared")" --argjson q "$(cat "$refire_probe")" --argjson f "$(cat "$refire_fired")" --argjson t "$(cat "$refire_terminal")" --argjson a "$(cat "$b_acceptance")" '
+      {ok:(
+        $p.schema == "postfiat.a666.r4.receipt-prover-pathb-v3-prepared.v1" and $p.prepared == true and $p.run_id == $run
+        and $q.schema == "postfiat.a666.r4.receipt-prover-pathb-v3-probe.v1" and $q.run_id == $run and $q.probe_exit_code == 0 and $q.probe_green == true
+        and $f.schema == "postfiat.a666.r4.receipt-prover-pathb-v3-fired.v1" and $f.run_id == $run and $f.fired == true
+        and $t.schema == "postfiat.a666.r4.receipt-prover-pathb-v3-terminal.v1" and $t.run_id == $run and $t.unit_result == "success" and $t.exec_main_status == 0
+        and ([$t.artifacts.proof_bin,$t.artifacts.proof_calldata_bin,$t.artifacts.proof_report_json,$t.artifacts.public_values_bin] | all(.[]; (.sha256|type=="string" and test("^[0-9a-f]{64}$")) and (.bytes|type=="number" and .>0)))
+        and $t.artifacts.proof_calldata_bin.bytes == 356 and $t.artifacts.public_values_bin.bytes == 1120
+        and $t.pin_checks.program_vkey_equals_pin == true and $t.pin_checks.public_values_sha256_equals_pin == true
+        and $p.pins.program_vkey == $f.program_vkey and $f.program_vkey == $t.pin_checks.program_vkey
+        and $t.artifacts.proof_bin.sha256 == $a.pins.proof_bin_sha256 and $t.artifacts.proof_calldata_bin.sha256 == $a.pins.proof_calldata_sha256 and $t.artifacts.public_values_bin.sha256 == $a.pins.public_values_sha256
+        and $p.pins.witness_sha256 == $f.witness_sha256 and $p.verifyAndAccept_invocations == 0 and $f.verifyAndAccept_invocations == 0 and $t.verifyAndAccept_invocations == 0
+      )}'
+}
+
+v3_acceptance_validation() {
+    jq -cn --arg run "a666-r4-receipt-prover-pathb-20260804-v3" \
+      --argjson a "$(cat "$b_acceptance")" --argjson t "$(cat "$refire_terminal")" '
+      {ok:(
+        $a.schema == "postfiat.a666.r4.path-b-verifier-acceptance.v1" and $a.candidate_revision == "39f7fae3191aa34c376ae1657650a9ec2444f421"
+        and ($a.deployment_commit|test("^[0-9a-f]{40}$")) and ($a.proof_archive_commit|test("^[0-9a-f]{7,40}$")) and $a.run_id == $run
+        and $a.program_vkey == $t.pin_checks.program_vkey and $a.pins.public_values_sha256 == $t.artifacts.public_values_bin.sha256 and $a.pins.proof_calldata_sha256 == $t.artifacts.proof_calldata_bin.sha256 and $a.pins.proof_bin_sha256 == $t.artifacts.proof_bin.sha256
+        and $a.transaction.status == "0x1" and $a.transaction.block == 7 and $a.transaction.nonce_delta == "6->7"
+        and $a.invocations.verifyAndAccept_invocations == 1 and $a.invocations.eth_call_verify_invocations == 0 and $a.invocations.estimate_invocations == 0
+        and $a.state_deltas["acceptedReceiptCommitment[expected]"].before == false and $a.state_deltas["acceptedReceiptCommitment[expected]"].after == true
+        and $a.state_deltas["consumedProofNullifier[proofNullifier]"].before == false and $a.state_deltas["consumedProofNullifier[proofNullifier]"].after == true
+        and $a.state_deltas["acceptedCheckpointCommitment[resulting]"].before == false and $a.state_deltas["acceptedCheckpointCommitment[resulting]"].after == true
+        and $a.state_deltas.latestCheckpointCommitment.before == "0x6fcf3e6ca571433715febb339dc4785cb6f4211e3a67a1a18371c567bf594462" and $a.state_deltas.latestCheckpointCommitment.after == "0xc8cb9de45435718ce08381a1792026acd12acef612c66a2aedd3e17501580a58"
+        and $a.state_deltas.latestFinalizedHeight.before == 826 and $a.state_deltas.latestFinalizedHeight.after == 831
+      )}'
+}
+
+v3_async_validation() {
+    jq -cn --arg run "a666-r4-receipt-prover-pathb-20260804-v3" \
+      --argjson s "$(cat "$async_proof_slot")" --argjson e "$(cat "$export_artifact_slot")" --argjson t "$(cat "$refire_terminal")" --argjson a "$(cat "$b_acceptance")" '
+      {ok:(
+        $s.schema == "postfiat.a666.r4.async-proof-slot.v1" and $s.status == "accepted" and $s.run_id == $run and $s.export_slot_accepted == true and $s.first_blocker == null
+        and $s.inline_proving_forbidden == true and $s.prover_invocations == 0 and $s.business_mutations == 0
+        and $e.schema == "postfiat.a666.r4.export-artifact-slot.v1" and $e.status == "accepted" and $e.accepted == true and $e.run_id == $run
+        and $e.proof_report.program_vkey == $t.pin_checks.program_vkey and $e.artifact_sha256 == $t.artifacts.proof_bin.sha256 and $e.proof_calldata.sha256 == $t.artifacts.proof_calldata_bin.sha256 and $e.public_values.sha256 == $t.artifacts.public_values_bin.sha256
+        and $e.unit_terminal.success == true and $e.custody_material_present == false and $e.live_chain == false and $e.stakehub_interaction == false and $e.business_mutations == 0
+        and $a.run_id == $run and $a.pins.proof_bin_sha256 == $e.artifact_sha256
+      )}'
+}
+
 preprove_validation_for_file() {
     local path="$1"
     if [[ ! -r "$path" ]] || ! jq -e . "$path" >/dev/null 2>&1; then
@@ -357,7 +407,8 @@ run_preprove_self_test() {
     fi
     run_fleet_binding_self_test
     run_proxy_binding_self_test
-    printf '%s\n' "fire_control_self_test=PASS pre_prove_green=true prior_value_mismatch=false field_value_mismatch=false controlled_report_sha_mismatch=false prior_block_tip_mismatch=false wrong_candidate=false non_loopback_endpoint=false fixture_root=$test_root"
+    run_v3_binding_self_test
+    printf '%s\n' "fire_control_self_test=PASS pre_prove_green=true prior_value_mismatch=false field_value_mismatch=false controlled_report_sha_mismatch=false prior_block_tip_mismatch=false wrong_candidate=false non_loopback_endpoint=false wrong_proof_hash=false wrong_acceptance_invocations=false failed_tx_status=false pending_async_slot=false fixture_root=$test_root"
 }
 
 run_fleet_binding_self_test() {
@@ -405,6 +456,23 @@ run_proxy_binding_self_test() {
         printf '%s\n' "proxy_binding_self_test=FAIL non_loopback_endpoint=true fixture_root=$test_root"
         return 1
     fi
+}
+
+run_v3_binding_self_test() {
+    local root old_prepared="$refire_prepared" old_probe="$refire_probe" old_fired="$refire_fired" old_terminal="$refire_terminal" old_acceptance="$b_acceptance" old_async="$async_proof_slot" old_export="$export_artifact_slot"
+    root=$(mktemp -d /tmp/a666-r4-v3-binding-self-test.XXXXXX); chmod 700 "$root"
+    cp "$refire_prepared" "$root/prepared.json"; cp "$refire_probe" "$root/probe.json"; cp "$refire_fired" "$root/fired.json"; cp "$refire_terminal" "$root/terminal.json"; cp "$b_acceptance" "$root/acceptance.json"; cp "$async_proof_slot" "$root/async.json"; cp "$export_artifact_slot" "$root/export.json"
+    refire_prepared="$root/prepared.json"; refire_probe="$root/probe.json"; refire_fired="$root/fired.json"; refire_terminal="$root/terminal.json"; b_acceptance="$root/acceptance.json"; async_proof_slot="$root/async.json"; export_artifact_slot="$root/export.json"
+    v3_refire_validation | jq -e '.ok == true' >/dev/null; v3_acceptance_validation | jq -e '.ok == true' >/dev/null; v3_async_validation | jq -e '.ok == true' >/dev/null
+    jq '.artifacts.proof_bin.sha256 = "0000000000000000000000000000000000000000000000000000000000000000"' "$root/terminal.json" >"$root/bad-proof.json"; refire_terminal="$root/bad-proof.json"
+    if v3_refire_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
+    refire_terminal="$root/terminal.json"; jq '.invocations.verifyAndAccept_invocations = 2' "$root/acceptance.json" >"$root/bad-count.json"; b_acceptance="$root/bad-count.json"
+    if v3_acceptance_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
+    jq '.transaction.status = "0x0"' "$root/acceptance.json" >"$root/bad-status.json"; b_acceptance="$root/bad-status.json"
+    if v3_acceptance_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
+    b_acceptance="$root/acceptance.json"; jq '.status = "pending"' "$root/async.json" >"$root/pending.json"; async_proof_slot="$root/pending.json"
+    if v3_async_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
+    refire_prepared="$old_prepared"; refire_probe="$old_probe"; refire_fired="$old_fired"; refire_terminal="$old_terminal"; b_acceptance="$old_acceptance"; async_proof_slot="$old_async"; export_artifact_slot="$old_export"
 }
 
 if [[ $# -gt 0 ]]; then
@@ -464,28 +532,17 @@ fresh_root=$(jq -r '.rehearsal_root // empty' <<<"$fleet_validation")
 fresh_run=""
 fleet_binding_identifier=$(jq -r '.binding_identifier // empty' <<<"$fleet_validation")
 
-if json_true "$refire_prepared" '.prepared == true and (.run_id | type == "string" and length > 0)'; then
-    refire_prepared_ok=true
-fi
-prepared_run=""
-if [[ "$refire_prepared_ok" == true ]]; then
-    prepared_run=$(jq -r '.run_id' "$refire_prepared")
-fi
-if [[ "$refire_prepared_ok" == true && -n "$prepared_run" ]] && [[ -r "$refire_probe" ]] && jq -e --arg run "$prepared_run" '.run_id == $run and (.passed == true or .probe.passed == true or (.probe2.exit_code == 0 and .probe2.verdict == "GREEN" and .probe2.server_reachable == true and .probe2.pinned_image_visible_inside_unit == true))' "$refire_probe" >/dev/null 2>&1; then
-    refire_probe_ok=true
-fi
-if [[ "$refire_prepared_ok" == true && -n "$prepared_run" ]] && [[ -r "$refire_fired" ]] && jq -e --arg run "$prepared_run" '.fired == true and .run_id == $run' "$refire_fired" >/dev/null 2>&1; then
-    refire_fired_ok=true
-fi
-if [[ "$refire_fired_ok" == true ]] && json_true "$refire_fired" '(.unit.active_state == "active") or (.unit.state == "active") or (.terminal.accepted == true and .terminal.outcome == "accepted")'; then
-    refire_unit_or_terminal_ok=true
+v3_refire=$(v3_refire_validation)
+if jq -e '.ok == true' <<<"$v3_refire" >/dev/null; then
+    refire_prepared_ok=true; refire_probe_ok=true; refire_fired_ok=true; refire_unit_or_terminal_ok=true
 fi
 
 b_path_b_validation=$(path_b_stage_validation "$b_stage" "$fleet_validation")
 if jq -e '.ok == true' <<<"$b_path_b_validation" >/dev/null; then
     b_contract_stage_ok=true
 fi
-if jq -e '.verifier_acceptance.ready == true and (.verifier_acceptance.accepted == true or .verifier_acceptance.outcome == "accepted")' "$b_stage" >/dev/null 2>&1; then
+v3_acceptance=$(v3_acceptance_validation)
+if jq -e '.ok == true' <<<"$v3_acceptance" >/dev/null; then
     b_verifier_acceptance_ok=true
 fi
 if jq -e '.ok == true' <<<"$fleet_validation" >/dev/null; then
@@ -507,7 +564,8 @@ fi
 if bound_and "$d_runner" '.dry_run == true and .checks.steps_1_6_9_10_dry_run == true'; then
     d_runner_dry_ok=true
 fi
-if bound_and "$async_proof_slot" '.checks.steps_7_8_async_proof_slot == true and .contract.mode == "asynchronous_content_addressed_artifact_consumption" and .contract.inline_proving_forbidden == true'; then
+v3_async=$(v3_async_validation)
+if jq -e '.ok == true' <<<"$v3_async" >/dev/null; then
     async_proof_slot_ok=true
 fi
 if preprove_ok_for_file "$preprove_binding"; then
@@ -559,19 +617,19 @@ check_records=$(jq -cn \
     --argjson no_live_chain_ok "$no_live_chain_ok" \
     --argjson preprove_bindings_ok "$preprove_bindings_ok" \
     '[
-        {id: "docker_refire_prepared", ok: $refire_prepared_ok, input: "refire_prepared"},
-        {id: "docker_refire_probe", ok: $refire_probe_ok, input: "refire_probe"},
-        {id: "docker_refire_fired", ok: $refire_fired_ok, input: "refire_fired"},
-        {id: "docker_refire_unit_live_or_terminal_proof_success", ok: $refire_unit_or_terminal_ok, input: "refire_fired"},
+        {id: "docker_refire_prepared", ok: $refire_prepared_ok, input: "pathb_v3_prepared"},
+        {id: "docker_refire_probe", ok: $refire_probe_ok, input: "pathb_v3_probe"},
+        {id: "docker_refire_fired", ok: $refire_fired_ok, input: "pathb_v3_fired"},
+        {id: "docker_refire_unit_live_or_terminal_proof_success", ok: $refire_unit_or_terminal_ok, input: "pathb_v3_terminal_archive"},
         {id: "b_full_real_contract_stage_green", ok: $b_contract_stage_ok, input: "b_contract_stage"},
-        {id: "b_real_verifier_acceptance", ok: $b_verifier_acceptance_ok, input: "b_contract_stage"},
+        {id: "b_real_verifier_acceptance", ok: $b_verifier_acceptance_ok, input: "pathb_v3_verifier_acceptance"},
         {id: "fresh_fleet_12_of_12_six_equal", ok: $fresh_fleet_ok, input: "accepted_construction_fleet"},
         {id: "fresh_route_live", ok: $fresh_route_ok, input: "fresh_route"},
         {id: "candidate_proxy_ready", ok: $candidate_proxy_ok, input: "candidate_proxy"},
         {id: "private_dependencies_ready", ok: $dependencies_ok, input: "dependencies"},
         {id: "pftl_private_swap_ready", ok: $pftl_ok, input: "pftl"},
         {id: "d_runner_steps_1_6_9_10_dry_run", ok: $d_runner_dry_ok, input: "d_runner"},
-        {id: "async_proof_slot_steps_7_8", ok: $async_proof_slot_ok, input: "async_proof_slot"},
+        {id: "async_proof_slot_steps_7_8", ok: $async_proof_slot_ok, input: "v3_async_and_export_artifact_slots"},
         {id: "stakehub_restart_inventory_present", ok: $stakehub_inventory_ok, input: "stakehub_restart_inventory"},
         {id: "stakehub_official_absent", ok: $stakehub_official_absent_ok, input: "stakehub_official_scan"},
         {id: "candidate_revision_and_provenance", ok: $candidate_provenance_ok, input: "candidate_proxy"},
@@ -588,7 +646,11 @@ jq -n \
     --argjson refire_prepared_input "$(input_summary "$refire_prepared")" \
     --argjson refire_probe_input "$(input_summary "$refire_probe")" \
     --argjson refire_fired_input "$(input_summary "$refire_fired")" \
+    --argjson refire_terminal_input "$(input_summary "$refire_terminal")" \
+    --argjson v3_refire "$v3_refire" \
     --argjson b_stage_input "$(input_summary "$b_stage")" \
+    --argjson b_acceptance_input "$(input_summary "$b_acceptance")" \
+    --argjson v3_acceptance "$v3_acceptance" \
     --argjson accepted_fleet_input "$(input_summary "$accepted_fleet")" \
     --argjson checkpoint_staging_input "$(input_summary "$checkpoint_staging")" \
     --argjson fleet_validation "$fleet_validation" \
@@ -600,6 +662,8 @@ jq -n \
     --argjson pftl_input "$(input_summary "$pftl_stage")" \
     --argjson d_runner_input "$(input_summary "$d_runner")" \
     --argjson async_slot_input "$(input_summary "$async_proof_slot")" \
+    --argjson export_slot_input "$(input_summary "$export_artifact_slot")" \
+    --argjson v3_async "$v3_async" \
     --argjson stakehub_input "$(input_summary "$stakehub_inventory")" \
     --argjson preprove_input "$(input_summary "$preprove_binding")" \
     --argjson preprove_validation "$preprove_validation" \
@@ -626,7 +690,11 @@ jq -n \
             refire_prepared: $refire_prepared_input,
             refire_probe: $refire_probe_input,
             refire_fired: $refire_fired_input,
+            refire_terminal_archive: $refire_terminal_input,
+            v3_refire_validation: $v3_refire,
             b_contract_stage: $b_stage_input,
+            pathb_v3_verifier_acceptance: $b_acceptance_input,
+            v3_acceptance_validation: $v3_acceptance,
             b_path_b_validation: $b_path_b_validation,
             candidate_proxy_validation: $candidate_proxy_validation,
             accepted_construction_fleet: $accepted_fleet_input,
@@ -638,6 +706,8 @@ jq -n \
             pftl: $pftl_input,
             d_runner: $d_runner_input,
             async_proof_slot: $async_slot_input,
+            export_artifact_slot: $export_slot_input,
+            v3_async_validation: $v3_async,
             stakehub_restart_inventory: $stakehub_input,
             pre_prove_binding: $preprove_input,
             pre_prove_validation: $preprove_validation,
