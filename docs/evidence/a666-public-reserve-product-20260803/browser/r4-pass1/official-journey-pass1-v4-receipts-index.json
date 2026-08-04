@@ -1,0 +1,11 @@
+{
+  "schema": "postfiat.a666.r4.official-journey-receipts-index.v1",
+  "run_id": "a666-r4-official-journey-pass1-20260804-v4",
+  "verdict": "no_receipts_step_1_failure",
+  "receipt_count": 0,
+  "receipt_paths": [],
+  "download_paths": [],
+  "distinct_receipts": false,
+  "business_mutations": 0,
+  "custody_material_present": false
+}

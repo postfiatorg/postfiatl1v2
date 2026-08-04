@@ -1,0 +1,65 @@
+{
+  "schema": "postfiat.a666.r4.official-journey-failure.v1",
+  "run_id": "a666-r4-official-journey-pass1-20260804-v4",
+  "run_classification": "official",
+  "verdict": "failed",
+  "official_pass": false,
+  "official_invocation_count": 1,
+  "one_shot_consumed": true,
+  "exit_code": 1,
+  "runtime_ms": 31053,
+  "matched_tests": 12,
+  "passed_tests": 10,
+  "failed_tests": 2,
+  "first_failure": {
+    "step": 1,
+    "label": "build identity",
+    "predicate": "visible production sidebar contains exact v0.1.2 package identity",
+    "error_class": "TimeoutError",
+    "source": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:886",
+    "timeout_ms": 30000,
+    "last_completed_step": 0
+  },
+  "additional_test_failure": {
+    "test": "construction official-readiness fixture proves exact v3 inputs",
+    "predicate": "hard-coded v3 fire-control hash equals finalized v4 fire-control hash",
+    "expected_v3_hash": "e4b3297356e0ec802e72a79dc533b42cee2994191a2d8b9d0f93135a04aed04e",
+    "actual_v4_hash": "3818e527b44e53f33494efe6c0fe28b65b390f53eda5c55593ba1069dda17ba2"
+  },
+  "steps": [
+    {"step": 1, "label": "build identity", "status": "failed", "ok": false},
+    {"step": 2, "label": "browser-controlled connect/create", "status": "not_executed_after_failure", "ok": false},
+    {"step": 3, "label": "six sources/proofs/NAV", "status": "not_executed_after_failure", "ok": false},
+    {"step": 4, "label": "A666+pfUSDC balances", "status": "not_executed_after_failure", "ok": false},
+    {"step": 5, "label": "transparent issue/redeem", "status": "not_executed_after_failure", "ok": false},
+    {"step": 6, "label": "private issue/redeem", "status": "not_executed_after_failure", "ok": false},
+    {"step": 7, "label": "export", "status": "not_executed_after_failure", "ok": false},
+    {"step": 8, "label": "return", "status": "not_executed_after_failure", "ok": false},
+    {"step": 9, "label": "restart+reload recovery", "status": "not_executed_after_failure", "ok": false},
+    {"step": 10, "label": "public receipt download", "status": "not_executed_after_failure", "ok": false}
+  ],
+  "input_hashes": {
+    "fire_control": "3818e527b44e53f33494efe6c0fe28b65b390f53eda5c55593ba1069dda17ba2",
+    "setup": "a73b957e9f9f22e2f5c3915a3a3f702c589c733056facb93b7192f794ec50c49",
+    "deployment": "24811b46b8dffbd9fbf0edaf2b0ce9b9545f7ad656d600abc259311274c09168"
+  },
+  "artifacts": {
+    "runner_report_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/official-journey-pass1-v4-report.json",
+    "runner_report_created": false,
+    "receipts_index": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/official-journey-pass1-v4-receipts-index.json",
+    "custody_boundary": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/official-journey-pass1-v4-custody-boundary.json",
+    "transcript_metadata": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/official-journey-pass1-v4-transcript-metadata.json"
+  },
+  "proposed_fast_loop_regressions": [
+    "served candidate wallet renders the pinned semantic package version in the production sidebar",
+    "official readiness fixture consumes the finalized fire-control hash supplied to the invocation rather than a version-specific literal"
+  ],
+  "preservation": {
+    "fleet_dependency_pftl_proxy_anvil_watcher_pids_live": "9/9",
+    "proxy_restart_request_created": false,
+    "service_cleanup_mutations": 0,
+    "business_mutations": 0,
+    "live_chain": false,
+    "stakehub_actions": 0
+  }
+}
