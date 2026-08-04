@@ -318,18 +318,47 @@
       }
     },
     "official_input_contract_enforcement": {
-      "ok": true,
-      "contract_sha256": "31d71ee2bdfe07f6d90c274111385cf7d2051f694b0b28ee08d9e5e462f8037d",
+      "ok": false,
+      "contract_sha256": "9de3b7f1904f56d5ed59760e7ad926bda40ef058d744428ed41e67d12d9d8948",
       "accessor_count": 120,
       "extractor": {
         "ok": true,
         "accessor_count": 120,
         "mismatch_count": 0
       },
-      "enforced_count": 120,
-      "invalid_count": 0,
+      "enforced_count": 92,
+      "invalid_count": 28,
       "unmapped_count": 0,
-      "invalid_accessor_ids": [],
+      "invalid_accessor_ids": [
+        "env:POSTFIAT_R4_PROXY_ORIGIN",
+        "env:POSTFIAT_R4_RUN_CLASSIFICATION",
+        "env:POSTFIAT_R4_WALLET_ORIGIN",
+        "manifest:fire_control.candidate.revision",
+        "manifest:fire_control.candidate_revision",
+        "manifest:fire_control.aggregation.current_binding.candidate_revision",
+        "manifest:fire_control.bindings.candidate_revision",
+        "manifest:setup.candidate.revision",
+        "manifest:setup.candidate_revision",
+        "manifest:setup.aggregation.current_binding.candidate_revision",
+        "manifest:setup.bindings.candidate_revision",
+        "manifest:deployment.candidate.revision",
+        "manifest:deployment.candidate_revision",
+        "manifest:deployment.aggregation.current_binding.candidate_revision",
+        "manifest:deployment.bindings.candidate_revision",
+        "manifest:fire_control.blocker_names",
+        "manifest:fire_control.checks",
+        "manifest:fire_control.checks.find",
+        "manifest:fire_control.ready_to_fire",
+        "manifest:setup.wallet.package_json_sha256",
+        "manifest:setup.wallet.package_version",
+        "manifest:setup.wallet_package_json_sha256",
+        "manifest:setup.wallet_package_version",
+        "file:package.json",
+        "file:proxy_pid_or_ready",
+        "file:proxy_restart_request",
+        "endpoint:wallet_origin",
+        "endpoint:proxy_healthz"
+      ],
       "unmapped_accessor_ids": [],
       "counts_by_access_kind": {
         "endpoint_read": 2,
@@ -579,10 +608,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             1,
@@ -665,10 +694,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             1,
@@ -743,10 +772,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             1,
@@ -769,10 +798,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             "pre-launch"
@@ -786,10 +815,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             "pre-launch"
@@ -803,10 +832,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             "pre-launch"
@@ -820,10 +849,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             "pre-launch"
@@ -837,10 +866,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             1,
@@ -863,10 +892,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             1,
@@ -889,10 +918,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             1,
@@ -915,10 +944,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             1,
@@ -941,10 +970,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             1,
@@ -967,10 +996,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             1,
@@ -993,10 +1022,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             1,
@@ -1019,10 +1048,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             1,
@@ -1458,10 +1487,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             "pre-launch"
@@ -1475,10 +1504,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             "pre-launch"
@@ -1492,10 +1521,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             "pre-launch"
@@ -1509,10 +1538,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             "pre-launch"
@@ -1743,10 +1772,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             1
@@ -1760,10 +1789,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             1
@@ -1777,10 +1806,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             1
@@ -1794,10 +1823,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             1
@@ -2339,15 +2368,15 @@
         },
         {
           "accessor_id": "file:package.json",
-          "source": "wallet-web/package.json",
+          "source": "pinned candidate git object wallet-web/package.json (never mutable worktree bytes)",
           "required_condition": "sha256 equals setup manifest wallet.package_json_sha256 when pinned",
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             1
@@ -2361,10 +2390,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             9
@@ -2378,10 +2407,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             9
@@ -2463,10 +2492,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             1,
@@ -2489,10 +2518,10 @@
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
-            "target_ok_now": true,
+            "target_ok_now": false,
             "producer_bound": true
           },
-          "validation_result": true,
+          "validation_result": false,
           "consuming_steps": [
             "preflight",
             1,
@@ -2575,12 +2604,12 @@
       ]
     },
     "official_input_target_statuses": {
-      "candidate_revision_and_provenance": true,
-      "candidate_proxy_ready": true,
+      "candidate_revision_and_provenance": false,
+      "candidate_proxy_ready": false,
       "d_runner_steps_1_6_9_10_dry_run": true,
       "async_proof_slot_steps_7_8": true,
       "no_live_chain_dependency": true,
-      "ready_to_fire_computation": true
+      "ready_to_fire_computation": false
     },
     "candidate_proxy_restart_watcher": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/candidate-proxy-restart-watcher.json",
@@ -2595,7 +2624,7 @@
       }
     },
     "restart_watcher_validation": {
-      "ok": true
+      "ok": false
     },
     "no_live_validation": {
       "ok": true
@@ -2628,7 +2657,7 @@
       }
     },
     "stakehub_absence_validation": {
-      "ok": true
+      "ok": false
     },
     "pre_prove_binding": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/pre-prove-binding-check.json",
@@ -2669,7 +2698,9 @@
     },
     "stakehub_official_scan": {
       "command_succeeded": true,
-      "active_units": []
+      "active_units": [
+        "stakehub-private-swap-dashboard.service"
+      ]
     }
   },
   "proof_artifact_consumption_contract": {
@@ -2717,7 +2748,7 @@
     "status": "binding design; implementation readiness remains false"
   },
   "official_invocation_count": 0,
-  "official_run_id": "a666-r4-official-journey-pass1-20260804-v3",
+  "official_run_id": "a666-r4-official-journey-pass1-20260804-v4",
   "checks": [
     {
       "id": "docker_refire_prepared",
@@ -2761,7 +2792,7 @@
     },
     {
       "id": "candidate_proxy_ready",
-      "ok": true,
+      "ok": false,
       "input": "candidate_proxy"
     },
     {
@@ -2791,12 +2822,12 @@
     },
     {
       "id": "stakehub_official_absent",
-      "ok": true,
+      "ok": false,
       "input": "stakehub_official_scan"
     },
     {
       "id": "candidate_revision_and_provenance",
-      "ok": true,
+      "ok": false,
       "input": "candidate_proxy"
     },
     {
@@ -2811,8 +2842,12 @@
     }
   ],
   "check_count": 18,
-  "blocker_names": [],
-  "ready_to_fire": true,
+  "blocker_names": [
+    "candidate_proxy_ready",
+    "stakehub_official_absent",
+    "candidate_revision_and_provenance"
+  ],
+  "ready_to_fire": false,
   "ready_to_fire_computation": "all checks[].ok values must be true",
   "mutations_executed": false
 }
