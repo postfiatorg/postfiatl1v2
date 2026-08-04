@@ -6898,3 +6898,317 @@ fn pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09
     // Nonce replay of the accepted redemption must fail closed.
     expect_policy_mismatch(&mut ledger, "nonce replay", valid_redeem(accepted_nonce));
 }
+
+#[test]
+fn ar01_pfusdc_reserve_account_identity_and_balance_matches_production_fixture() {
+    let genesis = Genesis::new("postfiat-local");
+    let issuer_key = ml_dsa_65_keygen_from_seed(&[0x31; 32]);
+    let observer_key = ml_dsa_65_keygen_from_seed(&[0x32; 32]);
+    let issuer = address_from_public_key(&issuer_key.public_key);
+    let observer = address_from_public_key(&observer_key.public_key);
+    let deposit_amount = 7_500_000_u64;
+    let mut evidence = vault_bridge_evidence(deposit_amount, "91");
+    evidence.pftl_recipient = observer.clone();
+    evidence.pftl_recipient_hash =
+        vault_bridge_pftl_recipient_hash(&observer).expect("pfUSDC recipient hash");
+    evidence.deposit_id = vault_bridge_deposit_id(&evidence).expect("pfUSDC deposit id");
+    let production_reserve_account = evidence.vault_id();
+    let source_domain = evidence.source_domain();
+    let policy_hash = "42".repeat(48);
+    let evidence_root =
+        vault_bridge_deposit_evidence_root(&evidence).expect("pfUSDC evidence root");
+    let mut ledger = LedgerState::new(vec![
+        Account::new(
+            issuer.clone(),
+            100_000,
+            Some(bytes_to_hex(&issuer_key.public_key)),
+        ),
+        Account::new(
+            observer.clone(),
+            100_000,
+            Some(bytes_to_hex(&observer_key.public_key)),
+        ),
+    ]);
+
+    let execute = |ledger: &mut LedgerState,
+                   key: &postfiat_crypto_provider::MlDsa65KeyPair,
+                   signer: &str,
+                   kind: &str,
+                   operation: AssetTransactionOperation,
+                   height: u64| {
+        let transaction = signed_asset_transaction_with_minimum_fee(
+            &genesis,
+            ledger,
+            key,
+            kind,
+            ledger.account(signer).expect("fixture signer").sequence + 1,
+            operation,
+        );
+        execute_asset_transaction(&genesis, ledger, &transaction, height)
+    };
+
+    let receipt = execute(
+        &mut ledger,
+        &issuer_key,
+        &issuer,
+        NAV_PROFILE_REGISTER_TRANSACTION_KIND,
+        AssetTransactionOperation::NavProfileRegister(NavProfileRegisterOperation {
+            registrant: issuer.clone(),
+            verifier_kind: NAV_PROFILE_VERIFIER_MULTI_FETCH.to_string(),
+            source_class: format!("vault_bridge:{source_domain}"),
+            max_snapshot_age_blocks: 100,
+            challenge_window_blocks: 1,
+            max_epoch_gap_blocks: 100,
+            settle_deadline_blocks: 0,
+            min_challenge_bond: 0,
+            min_attestations: 1,
+            tolerance_bp: 0,
+            bridge_observer_min_confirmations: 6,
+            valuation_policy_hash: policy_hash.clone(),
+            vault_bridge_route_policy_hash: String::new(),
+            sp1_program_vkey: String::new(),
+            sp1_proof_encoding: String::new(),
+            max_proof_bytes: 0,
+            max_public_values_bytes: 0,
+            public_values_schema: String::new(),
+            source_manifest_hash: String::new(),
+            valuation_unit_id: String::new(),
+            max_observation_span_blocks: 0,
+            allow_controlled_sources: false,
+        }),
+        1,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let profile_id = ledger.nav_proof_profiles[0].profile_id.clone();
+
+    let receipt = execute(
+        &mut ledger,
+        &issuer_key,
+        &issuer,
+        ASSET_CREATE_TRANSACTION_KIND,
+        AssetTransactionOperation::AssetCreate(AssetCreateOperation {
+            issuer: issuer.clone(),
+            code: "PFUSDC".to_string(),
+            version: 1,
+            precision: 6,
+            display_name: "proof-native pfUSDC".to_string(),
+            max_supply: Some(100_000_000),
+            requires_authorization: false,
+            freeze_enabled: true,
+            clawback_enabled: false,
+        }),
+        2,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let asset_id = ledger.asset_definitions[0].asset_id.clone();
+
+    let receipt = execute(
+        &mut ledger,
+        &issuer_key,
+        &issuer,
+        NAV_ASSET_REGISTER_TRANSACTION_KIND,
+        AssetTransactionOperation::NavAssetRegister(NavAssetRegisterOperation {
+            issuer: issuer.clone(),
+            asset_id: asset_id.clone(),
+            reserve_operator: issuer.clone(),
+            proof_profile: profile_id.clone(),
+            valuation_unit: "USDC".to_string(),
+            redemption_account: issuer.clone(),
+        }),
+        3,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+
+    let receipt = execute(
+        &mut ledger,
+        &observer_key,
+        &observer,
+        NAV_ATTESTOR_REGISTER_TRANSACTION_KIND,
+        AssetTransactionOperation::NavAttestorRegister(NavAttestorRegisterOperation {
+            attestor: observer.clone(),
+            domain: "controlled-pfusdc-overlay.local".to_string(),
+            bond: 0,
+        }),
+        4,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+
+    let receipt = execute(
+        &mut ledger,
+        &observer_key,
+        &observer,
+        VAULT_BRIDGE_DEPOSIT_PROPOSE_TRANSACTION_KIND,
+        AssetTransactionOperation::VaultBridgeDepositPropose(
+            VaultBridgeDepositProposeOperation {
+                proposer: observer.clone(),
+                asset_id: asset_id.clone(),
+                evidence_root: evidence_root.clone(),
+                evidence: evidence.clone(),
+                policy_hash: policy_hash.clone(),
+                source_proof_kind: String::new(),
+                source_proof_hash: String::new(),
+                source_public_values_hash: String::new(),
+                source_proof_bytes: Vec::new(),
+                source_public_values: Vec::new(),
+                expires_at_height: 1_000,
+            },
+        ),
+        5,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+
+    let observation = VaultBridgeDepositObservation::success_for_evidence(&evidence, 6);
+    let observation_root =
+        vault_bridge_deposit_observation_root(&observation).expect("pfUSDC observation root");
+    let receipt = execute(
+        &mut ledger,
+        &observer_key,
+        &observer,
+        VAULT_BRIDGE_DEPOSIT_ATTEST_TRANSACTION_KIND,
+        AssetTransactionOperation::VaultBridgeDepositAttest(
+            VaultBridgeDepositAttestOperation {
+                attestor: observer.clone(),
+                asset_id: asset_id.clone(),
+                evidence_root: evidence_root.clone(),
+                pass: true,
+                observation_root,
+                observation: Some(observation),
+            },
+        ),
+        6,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+
+    let receipt = execute(
+        &mut ledger,
+        &observer_key,
+        &observer,
+        VAULT_BRIDGE_DEPOSIT_FINALIZE_TRANSACTION_KIND,
+        AssetTransactionOperation::VaultBridgeDepositFinalize(
+            VaultBridgeDepositFinalizeOperation {
+                finalizer: observer.clone(),
+                asset_id: asset_id.clone(),
+                evidence_root: evidence_root.clone(),
+            },
+        ),
+        7,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+
+    let receipt = execute(
+        &mut ledger,
+        &observer_key,
+        &observer,
+        VAULT_BRIDGE_DEPOSIT_CLAIM_TRANSACTION_KIND,
+        AssetTransactionOperation::VaultBridgeDepositClaim(VaultBridgeDepositClaimOperation {
+            claimer: observer.clone(),
+            asset_id: asset_id.clone(),
+            evidence_root: evidence_root.clone(),
+            policy_hash: policy_hash.clone(),
+            recipient: observer.clone(),
+            amount_atoms: deposit_amount,
+        }),
+        8,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+
+    let backing_receipt = ledger
+        .vault_bridge_receipts
+        .iter()
+        .find(|receipt| receipt.vault_id == production_reserve_account)
+        .expect("counted receipt selected by production-derived vault ID");
+    assert_eq!(backing_receipt.asset_id, asset_id);
+    assert_eq!(backing_receipt.counted_value_atoms, deposit_amount);
+    let backing_bucket_id = backing_receipt.bucket_id.clone();
+    let bucket = ledger
+        .vault_bridge_bucket(&backing_bucket_id)
+        .expect("finalized bucket referenced by the production vault receipt");
+    assert_eq!(bucket.counted_value_atoms, deposit_amount);
+    assert_eq!(bucket.outstanding_vault_bridge_atoms, deposit_amount);
+    let bucket_counted_value = bucket.counted_value_atoms;
+    let source_root =
+        vault_bridge_source_root_for_asset(&ledger.vault_bridge_bucket_states, &asset_id)
+            .expect("pfUSDC source root from finalized bucket");
+    let reserve_packet_hash = "f6".repeat(48);
+    let reserve_operation = NavReserveSubmitOperation {
+        issuer: issuer.clone(),
+        submitter: issuer.clone(),
+        asset_id: asset_id.clone(),
+        epoch: 1,
+        nav_per_unit: VAULT_BRIDGE_UNIT,
+        circulating_supply: deposit_amount,
+        verified_net_assets: bucket_counted_value,
+        proof_profile: profile_id,
+        source_root: source_root.clone(),
+        attestor_root: "88".repeat(48),
+        reserve_packet_hash: reserve_packet_hash.clone(),
+        reserve_accounts: vec![production_reserve_account.clone()],
+        sp1_proof_bytes: Vec::new(),
+        sp1_public_values: Vec::new(),
+    };
+
+    let mut wrong_backing = reserve_operation.clone();
+    wrong_backing.source_root = "00".repeat(48);
+    let before_wrong_backing = ledger.clone();
+    let receipt = execute(
+        &mut ledger,
+        &issuer_key,
+        &issuer,
+        NAV_RESERVE_SUBMIT_TRANSACTION_KIND,
+        AssetTransactionOperation::NavReserveSubmit(wrong_backing),
+        9,
+    );
+    assert!(!receipt.accepted, "wrong backing source must fail closed");
+    assert_eq!(receipt.code, "vault_bridge_source_root_mismatch");
+    assert_eq!(ledger, before_wrong_backing);
+
+    let receipt = execute(
+        &mut ledger,
+        &issuer_key,
+        &issuer,
+        NAV_RESERVE_SUBMIT_TRANSACTION_KIND,
+        AssetTransactionOperation::NavReserveSubmit(reserve_operation),
+        9,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let packet = ledger
+        .nav_reserve_packet(&asset_id, 1, &reserve_packet_hash)
+        .expect("accepted pfUSDC reserve packet");
+    assert_eq!(packet.reserve_accounts, vec![production_reserve_account]);
+    assert_eq!(packet.verified_net_assets, bucket_counted_value);
+    assert_eq!(packet.source_root, source_root);
+
+    let receipt = execute(
+        &mut ledger,
+        &observer_key,
+        &observer,
+        NAV_RESERVE_ATTEST_TRANSACTION_KIND,
+        AssetTransactionOperation::NavReserveAttest(NavReserveAttestOperation {
+            attestor: observer.clone(),
+            asset_id: asset_id.clone(),
+            epoch: 1,
+            reserve_packet_hash: reserve_packet_hash.clone(),
+            pass: true,
+            observation_root: source_root,
+        }),
+        10,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let receipt = execute(
+        &mut ledger,
+        &issuer_key,
+        &issuer,
+        NAV_EPOCH_FINALIZE_TRANSACTION_KIND,
+        AssetTransactionOperation::NavEpochFinalize(NavEpochFinalizeOperation {
+            issuer: issuer.clone(),
+            asset_id: asset_id.clone(),
+            epoch: 1,
+            reserve_packet_hash: reserve_packet_hash.clone(),
+        }),
+        11,
+    );
+    assert!(receipt.accepted, "{receipt:?}");
+    let finalized = ledger.nav_asset(&asset_id).expect("finalized pfUSDC NAV asset");
+    assert_eq!(finalized.finalized_reserve_packet_hash, reserve_packet_hash);
+    assert_eq!(finalized.circulating_supply, deposit_amount);
+}
