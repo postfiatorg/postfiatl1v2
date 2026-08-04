@@ -1,0 +1,31 @@
+   Compiling postfiat-types v0.1.0 (/tmp/a666-r4-successor-39f7fae/crates/types)
+   Compiling fips204 v0.4.6 (/tmp/a666-r4-successor-39f7fae/third_party/fips204)
+   Compiling postfiat-node v0.1.0 (/tmp/a666-r4-successor-39f7fae/crates/node)
+   Compiling halo2_proofs v0.3.2 (/tmp/a666-r4-successor-39f7fae/third_party/halo2_proofs)
+   Compiling postfiat-crypto-provider v0.1.0 (/tmp/a666-r4-successor-39f7fae/crates/crypto_provider)
+   Compiling postfiat-proofs v0.1.0 (/tmp/a666-r4-successor-39f7fae/crates/proofs)
+   Compiling postfiat-network v0.1.0 (/tmp/a666-r4-successor-39f7fae/crates/network)
+   Compiling halo2_gadgets v0.5.0
+   Compiling orchard v0.14.0
+   Compiling postfiat-privacy-orchard v0.1.0 (/tmp/a666-r4-successor-39f7fae/crates/privacy_orchard)
+   Compiling postfiat-mempool-dag v0.1.0 (/tmp/a666-r4-successor-39f7fae/crates/mempool_dag)
+   Compiling postfiat-consensus-cobalt v0.1.0 (/tmp/a666-r4-successor-39f7fae/crates/consensus_cobalt)
+   Compiling postfiat-nav-reserve-protocol v0.1.0 (/tmp/a666-r4-successor-39f7fae/crates/nav_reserve_protocol)
+   Compiling postfiat-bridge v0.1.0 (/tmp/a666-r4-successor-39f7fae/crates/bridge)
+   Compiling postfiat-storage v0.1.0 (/tmp/a666-r4-successor-39f7fae/crates/storage)
+   Compiling postfiat-privacy v0.1.0 (/tmp/a666-r4-successor-39f7fae/crates/privacy)
+   Compiling postfiat-ordering-fast v0.1.0 (/tmp/a666-r4-successor-39f7fae/crates/ordering_fast)
+   Compiling postfiat-execution v0.1.0 (/tmp/a666-r4-successor-39f7fae/crates/execution)
+   Compiling postfiat-pfusdc-proofs v0.1.0 (/tmp/a666-r4-successor-39f7fae/crates/pfusdc_proofs)
+   Compiling postfiat-pftl-uniswap-proofs v0.1.0 (/tmp/a666-r4-successor-39f7fae/crates/pftl_uniswap_proofs)
+   Compiling postfiat-rpc-sdk v0.1.0 (/tmp/a666-r4-successor-39f7fae/crates/rpc_sdk)
+    Finished `release` profile [optimized] target(s) in 2m 09s
+     Running tests/atomic_swap_local_six.rs (/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/target/release/deps/atomic_swap_local_six-7e388d62a223c179)
+
+running 1 test
+test a666_public_successor_lifecycle_from_signed_checkpoint has been running for over 60 seconds
+preserved atomic swap harness at /tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959
+A666_CONTROLLED_LIFECYCLE_REPORT={"accepted":true,"asset_id":"521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c","chain_id":"postfiat-wan-devnet-2","checkpoint_import":{"checkpoint_dir":"/home/postfiat/.pft/public-reserve-qualification/20260803-pre-migration-checkpoint","manifest_sha256":"2e87fbda39b60b78e6003adf53624066974a9dea6b5a8bf0f1a851a935b1cd0b","restored_height":792,"restored_state_root":"92464607f838c6d904bf2773e31b0287295c518ecedc10c489d532061fd3262e679fce234079eb5a8421ec7f3bcf3850"},"conservation":{"a666_supply_atoms":31598197455,"active_reservations":0,"ethereum_spendable_supply_atoms":0,"export_entitlements":0,"outstanding_bridge_claims_atoms":0,"pfusdc_supply_atoms":20000000,"settlement_reserve_atoms":896246},"final_state":{"all_six_equal":true,"height":826,"state_root":"9eba6d3c7643e161b2fcf640c3569b4a735a23b1c6eaaedeca0b69e51cafbf5b03a1a1d328a2a133db1d32b8685f1a2c","tip":"1dec5de364c2338db5493c102cd0695d2885b4c2ff7a22edae7fd360f6497f757d0a72b7fb1a2289c590f38757798c02","verify_state_all_six":true},"lifecycle":{"all_six_restarted":true,"ethereum_export_return_atoms":2000000,"existing_asset_rebound_in_place":true,"partial_validator_outage_recovered":true,"pfusdc_vault_propose_attest_finalize_claim":true,"private_issue_atoms":1000000,"private_redeem_atoms":1000000,"transparent_issue_atoms":2000000,"transparent_redeem_atoms":1000000},"negative_checks":{"context_mutations_fail_closed":true,"duplicate_operation_rejected":true,"ethereum_return_replay_rejected":true,"private_redemption_replay_rejected":true},"ok":true,"proof_epochs":[7,8],"proof_net_assets":[2835791218669,2839694289118],"recorded_at_unix":1785813062,"rollback":{"live_value_enabled":false,"paused":false,"policy_epoch":4,"route_epoch":4},"route_id":"pftl-a666-ethereum-wA666-usdc-v1","run":{"binary_sha256":"ced504f4f7f0d800072647250d1c1070c4e5724cda80a49ad741d95af5bec7d8","finished_unix":1785813062,"run_id":"a666_public_successor_lifecycle_from_signed_checkpoint-1785812067-396025","source_dirty":false,"source_revision":"39f7fae3191aa34c376ae1657650a9ec2444f421","started_unix":1785812067,"test":"a666_public_successor_lifecycle_from_signed_checkpoint"},"schema":"postfiat-a666-public-successor-controlled-lifecycle-v1","signed_snapshot":{"block_history_replayed":true,"exported_from_finalized_checkpoint":true,"private_publisher_key_excluded":true,"restored":true,"restored_height":826,"restored_state_root":"9eba6d3c7643e161b2fcf640c3569b4a735a23b1c6eaaedeca0b69e51cafbf5b03a1a1d328a2a133db1d32b8685f1a2c","restored_tip":"1dec5de364c2338db5493c102cd0695d2885b4c2ff7a22edae7fd360f6497f757d0a72b7fb1a2289c590f38757798c02","validator_keys_excluded":true},"successor_profile_id":"f8784629ff7338002d836c1988b8e2c0f19caf448429e0eb7fdc39fa2b08f7d9a44171fc1e7239bc25e06ad833c14e91","trust":{"attested_value_per_epoch":0,"controlled_value_per_epoch":0,"quantity_cryptographic_per_epoch":6,"valuation_cryptographic_per_epoch":6},"validator_count":6}
+test a666_public_successor_lifecycle_from_signed_checkpoint ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 995.48s

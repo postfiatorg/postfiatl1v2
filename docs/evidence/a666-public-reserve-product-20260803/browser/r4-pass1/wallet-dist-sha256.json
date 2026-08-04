@@ -1,0 +1,18 @@
+[
+  {
+    "path": "assets/index-ByxtZHcl.css",
+    "sha256": "a0662f24f608d1dbb014a3a618d8b0857bd589fd87078538354574a8381e5264"
+  },
+  {
+    "path": "assets/index-Ccm6CvFJ.js",
+    "sha256": "95d18d79a063947ed125c3e4ac4287e761bfe00b30899a50118c214c28efa755"
+  },
+  {
+    "path": "assets/postfiat_wallet_wasm_bg-BCMxG3_Q.wasm",
+    "sha256": "affd340817788d45a313e60ec512493c6c56c3acbf81a4d4159636279ea0c882"
+  },
+  {
+    "path": "index.html",
+    "sha256": "b92a409341d4d783efe176b69eddfbd2343cb5be9318acf99a0baede38778f3e"
+  }
+]
