@@ -60,6 +60,41 @@ function formatAtoms(value, decimals) {
   return `${atoms / scale}.${String(atoms % scale).padStart(decimals, '0')}`;
 }
 
+function publicReceiptFor(record) {
+  const receiptIdentity = record?.response?.swap?.certificate_ref
+    || record?.response?.receipt?.receipt_identity;
+  const balanceTuple = record?.response?.final_balance_tuple;
+  if (record?.status !== 'COMMITTED' || !receiptIdentity || !Array.isArray(balanceTuple)) return null;
+  return {
+    schema: 'postfiat.wallet.public-receipt.v1',
+    status: 'COMMITTED',
+    idempotency_key: String(record.idempotency_key),
+    direction: String(record.direction),
+    output_mode: String(record.output_mode),
+    receipt_identity: String(receiptIdentity),
+    committed_height: Number(record.response?.swap?.committed_height),
+    swap_id: record.response?.swap?.swap_id ? String(record.response.swap.swap_id) : null,
+    quote_id: record.response?.swap?.quote_id ? String(record.response.swap.quote_id) : null,
+    final_balance_tuple: balanceTuple.map(item => ({
+      asset_id: String(item.asset_id),
+      amount_atoms: String(item.amount_atoms),
+    })),
+  };
+}
+
+function downloadPublicReceipt(receipt) {
+  const safeIdentity = receipt.idempotency_key.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const blob = new Blob([`${JSON.stringify(receipt, null, 2)}\n`], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `postfiat-public-receipt-${safeIdentity}.json`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 export default function PftlPrivatePrimary({
   walletAddress = '',
   backupJson = '',
@@ -121,6 +156,7 @@ export default function PftlPrivatePrimary({
     [records],
   );
   const current = records[records.length - 1] || null;
+  const currentPublicReceipt = publicReceiptFor(current);
   const controlledWalletId = readiness?.controlled_wallet_id || '';
   const controlled = Boolean(walletAddress
     && controlledWalletId
@@ -351,6 +387,16 @@ export default function PftlPrivatePrimary({
           <span>Durable intent {truncateMiddle(current.idempotency_key, 14)}</span>
           {current.response?.swap?.committed_height && <><br /><span>Committed at PFTL height {current.response.swap.committed_height}</span></>}
         </div>
+      )}
+      {currentPublicReceipt && (
+        <button
+          className="pfb-secondary"
+          type="button"
+          onClick={() => downloadPublicReceipt(currentPublicReceipt)}
+          style={{ marginTop: 12 }}
+        >
+          Download public receipt
+        </button>
       )}
 
       <button className="pf-primary" type="button" onClick={onExecute} disabled={!canExecute} style={{ marginTop: 16 }}>

@@ -275,10 +275,20 @@ function publicRecoveryRecord(record, walletAddress) {
     throw new Error('Private NAVCoin recovery is not bound to this wallet');
   }
   const suppliedResponse = record.response;
+  const receiptIdentity = suppliedResponse?.receipt?.receipt_identity;
   const response = suppliedResponse && typeof suppliedResponse === 'object' ? {
     ok: suppliedResponse.ok === true,
     replayed: suppliedResponse.replayed === true,
     swap: selectFields(suppliedResponse.swap, SWAP_FIELDS),
+    receipt: typeof receiptIdentity === 'string' && receiptIdentity
+      ? { receipt_identity: receiptIdentity }
+      : null,
+    final_balance_tuple: Array.isArray(suppliedResponse.final_balance_tuple)
+      ? suppliedResponse.final_balance_tuple.map(item => ({
+        asset_id: String(item?.asset_id ?? ''),
+        amount_atoms: String(item?.amount_atoms ?? ''),
+      }))
+      : null,
     output_note_refs: Array.isArray(suppliedResponse.output_note_refs)
       ? suppliedResponse.output_note_refs.filter(reference => /^[0-9a-f]{64}$/.test(String(reference))).slice(0, 1)
       : [],

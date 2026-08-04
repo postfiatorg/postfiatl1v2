@@ -600,7 +600,35 @@ test('journey step 9 resumes the production private-primary recovery component a
     assert.equal(
       persistedRecord?.response?.swap?.certificate_ref,
       FINAL_RECEIPT_IDENTITY,
+      'production recovery record preserves the finalized certificate identity',
+    );
+    assert.equal(
+      persistedRecord?.response?.receipt?.receipt_identity,
+      FINAL_RECEIPT_IDENTITY,
       'production recovery record preserves the finalized receipt identity',
+    );
+    assert.deepEqual(
+      persistedRecord?.response?.final_balance_tuple,
+      FINAL_BALANCE_TUPLE,
+      'production recovery record preserves the redacted final balance tuple',
+    );
+    const forbiddenRecoveryField = /seed|mnemonic|private[_-]?key|owner[_-]?key|spend[_-]?auth/i;
+    const visitRecoveryRecord = (value, path = 'recovery') => {
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => visitRecoveryRecord(item, `${path}[${index}]`));
+        return;
+      }
+      if (!value || typeof value !== 'object') return;
+      for (const [key, item] of Object.entries(value)) {
+        assert.equal(forbiddenRecoveryField.test(key), false, `forbidden recovery field: ${path}.${key}`);
+        visitRecoveryRecord(item, `${path}.${key}`);
+      }
+    };
+    visitRecoveryRecord(persistedRecord);
+    assertNoSensitiveMaterial(
+      'serialized production recovery record',
+      JSON.stringify(persistedRecord),
+      [seed, passphrase],
     );
 
     const submitCountBeforeFinalizedReload = recoveredJob.submit_count;
@@ -623,7 +651,6 @@ test('journey step 9 resumes the production private-primary recovery component a
       'visible sidebar reconnects at chain height 901',
     );
 
-    if (process.env.POSTFIAT_REQUIRE_PUBLIC_RECEIPT_DOWNLOAD === '1') {
       const downloadControl = page.getByRole('button', {
         name: 'Download public receipt',
         exact: true,
@@ -663,7 +690,7 @@ test('journey step 9 resumes the production private-primary recovery component a
         recoveredJob.final_balance_tuple,
         'download binds the observed final balance tuple',
       );
-      const forbiddenField = /seed|private[_-]?key|owner[_-]?key|secret|mnemonic|backup|passphrase/i;
+      const forbiddenField = /seed|private[_-]?key|owner[_-]?key|spend[_-]?auth|secret|mnemonic|backup|passphrase/i;
       const visitPublicReceipt = (value, path = 'receipt') => {
         if (Array.isArray(value)) {
           value.forEach((item, index) => visitPublicReceipt(item, `${path}[${index}]`));
@@ -677,7 +704,6 @@ test('journey step 9 resumes the production private-primary recovery component a
       };
       visitPublicReceipt(publicReceipt);
       assertNoSensitiveMaterial('downloaded public receipt', publicReceiptText, [seed, passphrase]);
-    }
 
     const browserStorage = await page.evaluate(() => JSON.stringify({
       local: Object.fromEntries(Object.keys(localStorage).map(key => [key, localStorage.getItem(key)])),
