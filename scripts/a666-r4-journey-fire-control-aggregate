@@ -495,14 +495,23 @@ official_runner_contract_validation() {
 
 restart_watcher_validation() {
     jq -e '
-      .schema == "postfiat.a666.r4.candidate-proxy-restart-watcher.v1"
-      and .ready == true and .unit.active == true and .unit.running == true
-      and .request_contract.run_id == "a666-r4-official-journey-pass1-20260804-v3"
-      and .request_contract.required_mode == "600" and .request_contract.currently_absent == true
-      and .control.mode == "600" and .control.pid_file_mode == "600" and .control.ready_file_mode == "600"
+      .request_contract as $request
+      | .control as $control
+      | .schema == "postfiat.a666.r4.candidate-proxy-restart-watcher.v1"
+      and .ready == true and .unit.name == "a666-r4-candidate-proxy-restart-watch-v4.service"
+      and .unit.active == true and .unit.running == true
+      and $request.run_id == "a666-r4-official-journey-pass1-20260804-v4"
+      and ($request.nonce | type == "string" and test("^[0-9a-f]{16}$"))
+      and ($request.path | type == "string" and endswith("/restart-" + $request.run_id + "-" + $request.nonce + ".request"))
+      and ($control.path | type == "string" and endswith("/restart-" + $request.run_id + "-" + $request.nonce + ".control.json"))
+      and ($control.response_path | type == "string" and endswith("/restart-" + $request.run_id + "-" + $request.nonce + ".response.json"))
+      and $request.payload_matches_runner == true and $request.required_mode == "600" and $request.currently_absent == true and $request.single_use == true
+      and $control.mode == "600" and $control.pid_file_mode == "600" and $control.ready_file_mode == "600"
       and .candidate_pins.revision == "39f7fae3191aa34c376ae1657650a9ec2444f421"
       and .candidate_pins.wallet_origin == "http://127.0.0.1:8080"
       and .candidate_pins.proxy_origin == "http://127.0.0.1:31021"
+      and .real_proxy.pid_before == .real_proxy.pid_after_construction and .real_proxy.unchanged == true
+      and .real_proxy.process_identity_exact == true and .real_proxy.health_http_status == 200
       and (.checks | all(.[]; . == true))
       and .business_operations == 0 and .official_run_invocations == 0
       and .live_chain == false and .stakehub_interaction == false and .credentials_included == false
