@@ -26,7 +26,7 @@
     "command": "npm run test:r4-construction",
     "environment_mode": "POSTFIAT_R4_PREFLIGHT_ONLY=1",
     "exit_code": 0,
-    "runtime_ms": 575,
+    "runtime_ms": 596,
     "matched_tests": 1,
     "passed_tests": 1,
     "failed_tests": 0,
@@ -34,8 +34,8 @@
     "business_mutations": 0,
     "wallet_business_steps_executed": 0,
     "ready_to_fire": false,
-    "first_blocker": "loopback_manifest_invalid:setup manifest",
-    "report_path": "/tmp/a666-r4-journey-preflight-setup-diagnosis-3823023.json",
+    "first_blocker": "export_artifact_slot_unreadable",
+    "report_path": "/tmp/a666-r4-journey-preflight-setup-endpoints-3851078.json",
     "wallet_origin": {
       "value": "http://127.0.0.1:8080/",
       "served": true,
@@ -51,10 +51,10 @@
     "step_readiness": [
       { "step": 1, "ready": true },
       { "step": 2, "ready": true },
-      { "step": 3, "ready": false },
-      { "step": 4, "ready": false },
-      { "step": 5, "ready": false },
-      { "step": 6, "ready": false },
+      { "step": 3, "ready": true },
+      { "step": 4, "ready": true },
+      { "step": 5, "ready": true },
+      { "step": 6, "ready": true },
       { "step": 7, "ready": false },
       { "step": 8, "ready": false },
       { "step": 9, "ready": true },
@@ -87,7 +87,10 @@
     "preflight_matched_tests": 1,
     "preflight_passed_tests": 1,
     "official_pass": false,
-    "business_mutations": 0
+    "business_mutations": 0,
+    "resolved": true,
+    "resolved_by_manifest_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/setup-endpoints-manifest.json",
+    "resolved_preflight_report_path": "/tmp/a666-r4-journey-preflight-setup-endpoints-3851078.json"
   },
   "journey_steps": [
     {
@@ -199,5 +202,5 @@
     7,
     8
   ],
-  "first_blocker": "loopback_manifest_invalid:setup manifest"
+  "first_blocker": "export_artifact_slot_unreadable"
 }
