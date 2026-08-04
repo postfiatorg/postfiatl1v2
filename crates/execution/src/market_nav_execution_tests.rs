@@ -7565,3 +7565,124 @@ fn ar05_active_export_entitlement_blocks_route_epoch_advance_until_closed() {
         2
     );
 }
+
+#[test]
+fn ar06_duplicate_submission_returns_typed_admission_or_finalized_rejection() {
+    let genesis = Genesis::new("postfiat-local");
+    let issuer_key = ml_dsa_65_keygen_from_seed(&[0x61; 32]);
+    let issuer = address_from_public_key(&issuer_key.public_key);
+    let mut ledger = LedgerState::new(vec![Account::new(
+        issuer.clone(),
+        100_000,
+        Some(bytes_to_hex(&issuer_key.public_key)),
+    )]);
+
+    let create = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &issuer_key,
+        ASSET_CREATE_TRANSACTION_KIND,
+        1,
+        AssetTransactionOperation::AssetCreate(AssetCreateOperation {
+            issuer: issuer.clone(),
+            code: "AR06".to_string(),
+            version: 1,
+            precision: 6,
+            display_name: "AR-06 replay-pinned NAVCoin".to_string(),
+            max_supply: Some(1_000_000),
+            requires_authorization: false,
+            freeze_enabled: true,
+            clawback_enabled: false,
+        }),
+    );
+    let receipt = execute_asset_transaction(&genesis, &mut ledger, &create, 1);
+    assert!(receipt.accepted, "{receipt:?}");
+    let asset_id = ledger.asset_definitions[0].asset_id.clone();
+
+    let register = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &issuer_key,
+        NAV_ASSET_REGISTER_TRANSACTION_KIND,
+        2,
+        AssetTransactionOperation::NavAssetRegister(NavAssetRegisterOperation {
+            issuer: issuer.clone(),
+            asset_id: asset_id.clone(),
+            reserve_operator: issuer.clone(),
+            proof_profile: "ar06-replay-profile".to_string(),
+            valuation_unit: "USDC".to_string(),
+            redemption_account: issuer.clone(),
+        }),
+    );
+    let receipt = execute_asset_transaction(&genesis, &mut ledger, &register, 2);
+    assert!(receipt.accepted, "{receipt:?}");
+
+    let packet_hash = "d6".repeat(48);
+    let reserve_submit = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &ledger,
+        &issuer_key,
+        NAV_RESERVE_SUBMIT_TRANSACTION_KIND,
+        3,
+        AssetTransactionOperation::NavReserveSubmit(NavReserveSubmitOperation {
+            issuer: issuer.clone(),
+            submitter: issuer.clone(),
+            asset_id: asset_id.clone(),
+            epoch: 1,
+            nav_per_unit: 1_000_000,
+            circulating_supply: 0,
+            verified_net_assets: 1_000_000,
+            proof_profile: "ar06-replay-profile".to_string(),
+            source_root: "d7".repeat(48),
+            attestor_root: "d8".repeat(48),
+            reserve_packet_hash: packet_hash.clone(),
+            reserve_accounts: Vec::new(),
+            sp1_proof_bytes: Vec::new(),
+            sp1_public_values: Vec::new(),
+        }),
+    );
+    let accepted = execute_asset_transaction(&genesis, &mut ledger, &reserve_submit, 3);
+    assert!(accepted.accepted, "original submission: {accepted:?}");
+    assert_eq!(
+        ledger
+            .nav_reserve_packets
+            .iter()
+            .filter(|packet| packet.reserve_packet_hash == packet_hash)
+            .count(),
+        1
+    );
+    let state_after_original = ledger.clone();
+    let signer_sequence_after_original = ledger
+        .account(&issuer)
+        .expect("AR-06 issuer after original")
+        .sequence;
+    let supply_after_original = issued_asset_supply(&ledger, &asset_id)
+        .expect("AR-06 issued supply after original");
+
+    let duplicate = execute_asset_transaction(&genesis, &mut ledger, &reserve_submit, 4);
+    assert!(!duplicate.accepted, "duplicate replay must never report success");
+    assert_eq!(duplicate.code, "bad_sequence");
+    assert_eq!(ledger, state_after_original, "typed admission rejection must not mutate state");
+    assert_eq!(
+        ledger
+            .nav_reserve_packets
+            .iter()
+            .filter(|packet| packet.reserve_packet_hash == packet_hash)
+            .count(),
+        1,
+        "duplicate must not create a second reserve effect"
+    );
+    assert_eq!(
+        ledger
+            .account(&issuer)
+            .expect("AR-06 issuer after replay")
+            .sequence,
+        signer_sequence_after_original,
+        "admission rejection must not advance replay sequence"
+    );
+    assert_eq!(
+        issued_asset_supply(&ledger, &asset_id).expect("AR-06 supply after replay"),
+        supply_after_original,
+        "duplicate must not drift supply"
+    );
+}
