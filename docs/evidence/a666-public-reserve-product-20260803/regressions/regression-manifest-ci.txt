@@ -32,7 +32,7 @@ Corrective regressions
 2. strict 1:1 official-runner accessor completeness
    First passing commit: e39ef9ef50092192b1c77d071662f4354c7f6a9f.
    Command: scripts/a666-r4-official-input-contract-extract check.
-   Recorded runtime: 63ms. Terminal: {"ok": true, "accessor_count": 120, "mismatch_count": 0}.
+   Current revalidation runtime: 67ms. Terminal: {"ok": true, "accessor_count": 120, "mismatch_count": 0}.
 3. 120/120 fire-control enforcement
    First passing commit: a71a397f54eca84914588e89f0057eef0a9bbd3a.
    Command: scripts/a666-r4-journey-fire-control-aggregate.

@@ -103,7 +103,7 @@
           "id": "strict_one_to_one_official_runner_accessor_completeness",
           "first_passing_commit": "e39ef9ef50092192b1c77d071662f4354c7f6a9f",
           "command": "scripts/a666-r4-official-input-contract-extract check",
-          "recorded_runtime_milliseconds": 63,
+          "current_revalidation_runtime_milliseconds": 67,
           "accessor_total": 120,
           "mismatch_count": 0,
           "source_files": [
