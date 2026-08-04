@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+CANDIDATE_REVISION="39f7fae3191aa34c376ae1657650a9ec2444f421"
+MAIN_WORKTREE="/home/postfiat/repos/a666-eth-fast-lane-combined-20260724"
+NODE_BINARY="/tmp/a666-r4-candidate-target/release/postfiat-node"
+NODE_SHA256="9339d1352969cbc449f4245e18c2f1b3763d5b896334335b5bfd894beff12c57"
+PRESERVED_ROOT="/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959"
+TOPOLOGY="$PRESERVED_ROOT/a666-public-successor-topology.json"
+DATA_DIR="$PRESERVED_ROOT/validator-2"
+VALIDATOR_KEY_FILE="$DATA_DIR/validator-2.validator_keys.json"
+RESERVE_KEY_FILE="/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/reserve-key.json"
+RESERVE_OPERATOR="pfd0c86d9084915e1fefd22eab891806397d5a5937"
+ROUTE_ID="pftl-a666-ethereum-wA666-usdc-v1"
+NEXT_DIGEST="$(printf 'a5%.0s' {1..48})"
+FLEET_DIR="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet"
+C2_EVIDENCE="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/private-swap-dependencies.json"
+EVIDENCE="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/route-activation.json"
+RUNTIME_ROOT="/tmp/a666-r4-route-activation-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+OPS_FILE="$RUNTIME_ROOT/route-activation.request.json"
+ARTIFACT_DIR="$RUNTIME_ROOT/certified-asset-ops"
+BEFORE_FILE="$RUNTIME_ROOT/before-public.json"
+AFTER_FILE="$RUNTIME_ROOT/after-public.json"
+COMMAND_LOG="$RUNTIME_ROOT/command.log"
+SUMMARY_FILE="$ARTIFACT_DIR/summary.json"
+first_failure="preflight"
+command_exit=null
+started_ms="$(date +%s%3N)"
+
+mkdir -m 700 "$RUNTIME_ROOT"
+mkdir -p "$(dirname "$EVIDENCE")"
+
+write_red() {
+  local rc="$1" ended_ms
+  ended_ms="$(date +%s%3N)"
+  jq -n --arg schema "postfiat.a666.r4.route-activation.v1" --arg first_failure "$first_failure" \
+    --arg runtime_root "$RUNTIME_ROOT" --argjson exit_code "$rc" --argjson command_exit "$command_exit" \
+    --argjson runtime_ms "$((ended_ms-started_ms))" \
+    '{schema:$schema,accepted:false,first_failure:$first_failure,exit_code:$exit_code,command_exit:$command_exit,runtime_root:$runtime_root,runtime_ms:$runtime_ms,stakehub_interaction:false,loopback_only:true,wallet_or_private_swap_operations:0}' > "$EVIDENCE"
+}
+on_error() { local rc="$?"; trap - ERR; write_red "$rc"; exit "$rc"; }
+trap on_error ERR
+
+first_failure="candidate_and_input_contract"
+[[ "$(git -C /tmp/a666-r4-successor-39f7fae rev-parse HEAD)" == "$CANDIDATE_REVISION" ]]
+[[ -x "$NODE_BINARY" && "$(sha256sum "$NODE_BINARY" | awk '{print $1}')" == "$NODE_SHA256" ]]
+[[ -s "$TOPOLOGY" && -d "$DATA_DIR" && -s "$VALIDATOR_KEY_FILE" && -s "$RESERVE_KEY_FILE" ]]
+jq -e '(.peers|length)==6 and all(.peers[]; .host=="127.0.0.1" and (.rpc_port|type)=="number")' "$TOPOLOGY" >/dev/null
+jq -e '.ready==true and .certified_round_driver.processed_round_count==0 and .checks.business_operations==0 and .checks.stakehub_interaction==false' "$C2_EVIDENCE" >/dev/null
+while read -r pid; do kill -0 "$pid"; done < <(jq -r '.processes[].pid' "$FLEET_DIR/construction-pids.json")
+for pid in 667809 730455 730500 730501; do kill -0 "$pid"; done
+
+first_failure="before_route_contract"
+python3 - "$TOPOLOGY" "$BEFORE_FILE" "$ROUTE_ID" <<'PY'
+import json,socket,sys
+ports=[row['rpc_port'] for row in sorted(json.load(open(sys.argv[1]))['peers'],key=lambda x:x['node_id'])]
+route_id=sys.argv[3]
+def call(port,method,params):
+ req={'version':'postfiat-local-rpc-v1','id':f'activate-before-{port}-{method}','method':method,'params':params}
+ with socket.create_connection(('127.0.0.1',port),timeout=3) as s:
+  s.sendall((json.dumps(req,separators=(',',':'))+'\n').encode()); value=json.loads(s.makefile('rb').readline())
+ if value.get('ok') is not True: raise SystemExit(f'{method} failed on {port}')
+ return value['result']
+statuses=[call(p,'status',{}) for p in ports]
+supplies=[call(p,'navcoin_bridge_supply_status',{'route_id':route_id}) for p in ports]
+mempools=[call(p,'mempool_status',{}) for p in ports]
+tuples={(v['block_height'],v['block_tip_hash'],v['state_root']) for v in statuses}
+if len(tuples)!=1 or statuses[0]['block_height']!=826: raise SystemExit('before status tuple mismatch')
+keys=('route_id','route_epoch','route_config_digest','paused','live_value_enabled','invariant_holds','active_reservation_count','export_entitlement_count','policy_epoch','policy_hash','pricing_nav_epoch','pricing_reserve_packet_hash','issue_multiplier_bps','redeem_multiplier_bps','live_supply_sum_atoms','pftl_spendable_supply_atoms','ethereum_spendable_supply_atoms','wrapped_exposure_atoms','outstanding_bridge_claims_atoms','settlement_reserve_atoms')
+public={k:supplies[0].get(k) for k in keys}
+if any({k:s.get(k) for k in keys}!=public for s in supplies): raise SystemExit('before route mismatch')
+if public['route_id']!=route_id or public['route_epoch']!=4 or public['route_config_digest']!='a4'*48 or public['paused'] is not False or public['live_value_enabled'] is not False or public['invariant_holds'] is not True or public['active_reservation_count']!=0 or public['export_entitlement_count']!=0: raise SystemExit('before route contract mismatch')
+if any(m.get('pending') not in ([],None) for m in mempools): raise SystemExit('before mempool nonempty')
+with open(sys.argv[2],'w') as f: json.dump({'height':826,'tuple_equal':True,'route':public,'mempool_pending':0},f,indent=2); f.write('\n')
+PY
+
+pricing_nav_epoch="$(jq -r '.route.pricing_nav_epoch' "$BEFORE_FILE")"
+pricing_packet="$(jq -r '.route.pricing_reserve_packet_hash' "$BEFORE_FILE")"
+issue_multiplier="$(jq -r '.route.issue_multiplier_bps' "$BEFORE_FILE")"
+redeem_multiplier="$(jq -r '.route.redeem_multiplier_bps' "$BEFORE_FILE")"
+policy_hash="$(python3 - "$pricing_nav_epoch" "$pricing_packet" "$issue_multiplier" "$redeem_multiplier" <<'PY'
+import hashlib,sys
+preimage=(f'policy_epoch=5\nissue_multiplier_bps={sys.argv[3]}\nredeem_multiplier_bps={sys.argv[4]}\nissue_capacity_atoms=2000000000000\nredeem_capacity_atoms=2000000000000\nmax_order_atoms=1000000000000\nmin_order_atoms=1000000\nvalid_from_height=827\nexpires_at_height=5809\nmax_nav_age_blocks=5000\npricing_nav_epoch={sys.argv[1]}\npricing_reserve_packet_hash={sys.argv[2]}\n').encode()
+print(hashlib.sha3_384(b'postfiat.pftl_uniswap.primary_market_policy.v2\0'+preimage).hexdigest())
+PY
+)"
+
+first_failure="request_construction"
+python3 - "$OPS_FILE" "$RESERVE_KEY_FILE" "$RESERVE_OPERATOR" "$ROUTE_ID" "$NEXT_DIGEST" "$policy_hash" "$pricing_nav_epoch" "$pricing_packet" "$issue_multiplier" "$redeem_multiplier" <<'PY'
+import json,sys
+policy={'policy_hash':sys.argv[6],'policy_epoch':5,'issue_multiplier_bps':int(sys.argv[9]),'redeem_multiplier_bps':int(sys.argv[10]),'issue_capacity_atoms':2000000000000,'redeem_capacity_atoms':2000000000000,'max_order_atoms':1000000000000,'min_order_atoms':1000000,'valid_from_height':827,'expires_at_height':5809,'max_nav_age_blocks':5000,'pricing_nav_epoch':int(sys.argv[7]),'pricing_reserve_packet_hash':sys.argv[8]}
+operation={'operation':'pftl_uniswap_route_epoch_advance','operator':sys.argv[3],'route_id':sys.argv[4],'prior_route_epoch':4,'next_route_epoch':5,'next_route_config_digest':sys.argv[5],'live_value_enabled':True,'next_primary_market_policy':policy}
+request={'schema':'postfiat-certified-asset-ops-request-v1','operations':[{'label':'r4-governed-route-reactivation','source':sys.argv[3],'key_file':sys.argv[2],'operation':operation,'dependencies':[]}]}
+with open(sys.argv[1],'w') as f: json.dump(request,f,indent=2); f.write('\n')
+PY
+chmod 600 "$OPS_FILE"
+
+first_failure="certified_asset_admission"
+command_started_ms="$(date +%s%3N)"
+set +e
+"$NODE_BINARY" pftl-submit-certified-asset-ops \
+  --data-dir "$DATA_DIR" \
+  --topology "$TOPOLOGY" \
+  --key-file "$VALIDATOR_KEY_FILE" \
+  --proposal-key-file "$VALIDATOR_KEY_FILE" \
+  --ops-file "$OPS_FILE" \
+  --artifact-dir "$ARTIFACT_DIR" \
+  --max-transactions 1 \
+  --timeout-ms 90000 \
+  --send-retries 2 \
+  --retry-backoff-ms 50 \
+  --local-apply-before-certified-send \
+  >"$COMMAND_LOG" 2>&1
+command_exit="$?"
+set -e
+command_runtime_ms="$(($(date +%s%3N)-command_started_ms))"
+if [[ "$command_exit" -ne 0 ]]; then write_red "$command_exit"; exit "$command_exit"; fi
+
+first_failure="after_six_way_convergence"
+python3 - "$TOPOLOGY" "$AFTER_FILE" "$ROUTE_ID" "$policy_hash" "$BEFORE_FILE" <<'PY'
+import json,socket,sys,time
+ports=[row['rpc_port'] for row in sorted(json.load(open(sys.argv[1]))['peers'],key=lambda x:x['node_id'])]
+route_id,policy_hash=sys.argv[3],sys.argv[4]
+def call(port,method,params):
+ req={'version':'postfiat-local-rpc-v1','id':f'activate-after-{port}-{method}','method':method,'params':params}
+ with socket.create_connection(('127.0.0.1',port),timeout=3) as s:
+  s.sendall((json.dumps(req,separators=(',',':'))+'\n').encode()); value=json.loads(s.makefile('rb').readline())
+ if value.get('ok') is not True: raise RuntimeError(f'{method} failed on {port}')
+ return value['result']
+deadline=time.time()+90
+while True:
+ try:
+  statuses=[call(p,'status',{}) for p in ports]
+  if all(s['block_height']==827 for s in statuses): break
+ except (OSError,ValueError,RuntimeError): pass
+ if time.time()>=deadline: raise SystemExit('height 827 convergence timeout')
+ time.sleep(1)
+supplies=[call(p,'navcoin_bridge_supply_status',{'route_id':route_id}) for p in ports]
+mempools=[call(p,'mempool_status',{}) for p in ports]
+tuples={(v['block_height'],v['block_tip_hash'],v['state_root']) for v in statuses}
+if len(tuples)!=1: raise SystemExit('after status tuple mismatch')
+keys=('route_id','route_epoch','route_config_digest','paused','live_value_enabled','invariant_holds','active_reservation_count','export_entitlement_count','policy_epoch','policy_hash','pricing_nav_epoch','pricing_reserve_packet_hash','issue_multiplier_bps','redeem_multiplier_bps','live_supply_sum_atoms','pftl_spendable_supply_atoms','ethereum_spendable_supply_atoms','wrapped_exposure_atoms','outstanding_bridge_claims_atoms','settlement_reserve_atoms')
+public={k:supplies[0].get(k) for k in keys}
+if any({k:s.get(k) for k in keys}!=public for s in supplies): raise SystemExit('after route mismatch')
+if public['route_epoch']!=5 or public['route_config_digest']!='a5'*48 or public['live_value_enabled'] is not True or public['paused'] is not False or public['policy_epoch']!=5 or public['policy_hash']!=policy_hash or public['invariant_holds'] is not True: raise SystemExit('after route contract mismatch')
+before=json.load(open(sys.argv[5]))['route']
+conserved=('live_supply_sum_atoms','pftl_spendable_supply_atoms','ethereum_spendable_supply_atoms','wrapped_exposure_atoms','outstanding_bridge_claims_atoms','settlement_reserve_atoms')
+if any(public[k]!=before[k] for k in conserved): raise SystemExit('conservation changed')
+if any(m.get('pending') not in ([],None) for m in mempools): raise SystemExit('after mempool nonempty')
+with open(sys.argv[2],'w') as f: json.dump({'height':827,'tuple_equal':True,'route':public,'mempool_pending':0,'conservation_unchanged':True},f,indent=2); f.write('\n')
+PY
+
+first_failure="round_driver_external_height_catchup_does_not_advance_next_height"
+round_ready="$(jq -r '.certified_round_driver.ready_file' "$C2_EVIDENCE")"
+deadline=$((SECONDS+90))
+while ((SECONDS<deadline)); do
+  if jq -e '.local_state.block_height==827 and (.start_height+.processed_round_count)==828 and .processed_round_count==0 and .authenticated_peer_count==5 and .authenticated_quorum==true' "$round_ready" >/dev/null 2>&1; then break; fi
+  sleep 1
+done
+jq -e '.local_state.block_height==827 and (.start_height+.processed_round_count)==828 and .processed_round_count==0 and .authenticated_peer_count==5 and .authenticated_quorum==true' "$round_ready" >/dev/null
+batch_dir="$(jq -r '.paths.batch_outbox' "$C2_EVIDENCE")"
+processed_dir="$(jq -r '.paths.processed_batches' "$C2_EVIDENCE")"
+[[ -z "$(find "$batch_dir" -mindepth 1 -print -quit)" && -z "$(find "$processed_dir" -mindepth 1 -print -quit)" ]]
+
+first_failure="success_evidence"
+summary_sha256="$(sha256sum "$SUMMARY_FILE" | awk '{print $1}')"
+request_sha256="$(sha256sum "$OPS_FILE" | awk '{print $1}')"
+tx_id="$(jq -r '.operations[0].tx_id' "$SUMMARY_FILE")"
+round_ok="$(jq -r '.round_ok' "$SUMMARY_FILE")"
+[[ "$round_ok" == true && "$tx_id" != null && -n "$tx_id" ]]
+ended_ms="$(date +%s%3N)"
+jq -n --arg schema "postfiat.a666.r4.route-activation.v1" --arg revision "$CANDIDATE_REVISION" \
+  --arg node_sha256 "$NODE_SHA256" --arg route_id "$ROUTE_ID" --arg policy_hash "$policy_hash" \
+  --arg request_sha256 "$request_sha256" --arg summary_sha256 "$summary_sha256" --arg tx_id "$tx_id" \
+  --arg runtime_root "$RUNTIME_ROOT" --argjson command_runtime_ms "$command_runtime_ms" \
+  --argjson runtime_ms "$((ended_ms-started_ms))" --slurpfile before "$BEFORE_FILE" --slurpfile after "$AFTER_FILE" '
+  {schema:$schema,accepted:true,candidate_revision:$revision,node_binary_sha256:$node_sha256,route_id:$route_id,policy_hash:$policy_hash,before:$before[0],after:$after[0],receipt:{accepted:true,code:"accepted",tx_id:$tx_id,round_ok:true},runtime_artifacts:{runtime_root:$runtime_root,request_sha256:$request_sha256,summary_sha256:$summary_sha256},command_runtime_ms:$command_runtime_ms,runtime_ms:$runtime_ms,round_driver:{height:827,next_height:828,processed_rounds:0},checks:{six_way_convergence:true,governed_route_active:true,conservation_unchanged:true,mempool_empty:true,swap_batch_dirs_empty:true,loopback_only:true,stakehub_interaction:false,wallet_private_swap_business_operations:0},stakehub_interaction:false,loopback_only:true,wallet_or_private_swap_operations:0}' > "$EVIDENCE"
+jq -e '.accepted==true and .after.height==827 and .after.route.route_epoch==5 and .after.route.live_value_enabled==true and .checks.stakehub_interaction==false' "$EVIDENCE" >/dev/null
+trap - ERR

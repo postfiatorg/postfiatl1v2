@@ -1,0 +1,118 @@
+{
+  "schema": "postfiat.a666.r4.route-activation.v1",
+  "accepted": true,
+  "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+  "node_binary": {
+    "path": "/tmp/a666-r4-candidate-target/release/postfiat-node",
+    "sha256": "9339d1352969cbc449f4245e18c2f1b3763d5b896334335b5bfd894beff12c57"
+  },
+  "command": {
+    "name": "pftl-submit-certified-asset-ops",
+    "exit": 0,
+    "round_ok": true,
+    "reported_runtime_ms": 11022.038423,
+    "max_transactions": 1,
+    "allow_existing_mempool": false,
+    "resume": false,
+    "overwrite": false,
+    "local_apply_before_certified_send": true
+  },
+  "receipt": {
+    "accepted": true,
+    "code": "accepted",
+    "transaction_id": "a0de40fd5f667d797ac767a8387c98ac9601c256cddf7ec164f21542b521870dfe38d1e9eb99d3297c340cec5e858d84",
+    "transaction_kind": "pftl_uniswap_route_epoch_advance",
+    "source": "pfd0c86d9084915e1fefd22eab891806397d5a5937"
+  },
+  "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+  "before": {
+    "height": 826,
+    "six_way_equal": true,
+    "mempool_pending": 0,
+    "route": {
+      "route_epoch": 4,
+      "route_config_digest": "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4",
+      "paused": false,
+      "live_value_enabled": false,
+      "invariant_holds": true,
+      "active_reservation_count": 0,
+      "export_entitlement_count": 0,
+      "policy_epoch": 4,
+      "policy_hash": "937f4096c792f96bbd42b711a2caefe503ec7c0f53a7bb2444c8189fbc55152f7f69895d19db92d8ad31b0f1e2a4d817",
+      "pricing_nav_epoch": 8,
+      "pricing_reserve_packet_hash": "a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7",
+      "issue_multiplier_bps": 10050,
+      "redeem_multiplier_bps": 9995
+    }
+  },
+  "after": {
+    "height": 827,
+    "six_way_equal": true,
+    "mempool_pending": 0,
+    "route": {
+      "route_epoch": 5,
+      "route_config_digest": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
+      "paused": false,
+      "live_value_enabled": true,
+      "invariant_holds": true,
+      "active_reservation_count": 0,
+      "export_entitlement_count": 0,
+      "policy_epoch": 5,
+      "policy_hash": "07130af483ce4e44d125fec2217b3b170c5ff3ebb092a102e1a210f484762939974469a2a94e0642ea0d83e1b537c0ff",
+      "pricing_nav_epoch": 8,
+      "pricing_reserve_packet_hash": "a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7",
+      "issue_multiplier_bps": 10050,
+      "redeem_multiplier_bps": 9995,
+      "issue_capacity_atoms": 2000000000000,
+      "redeem_capacity_atoms": 2000000000000,
+      "max_order_atoms": 1000000000000,
+      "min_order_atoms": 1000000,
+      "valid_from_height": 827,
+      "expires_at_height": 5809,
+      "max_nav_age_blocks": 5000
+    }
+  },
+  "conservation": {
+    "unchanged": true,
+    "live_supply_sum_atoms": 31598197455,
+    "pftl_spendable_supply_atoms": 31598197455,
+    "ethereum_spendable_supply_atoms": 0,
+    "wrapped_exposure_atoms": 0,
+    "outstanding_bridge_claims_atoms": 0,
+    "settlement_reserve_atoms": 896246
+  },
+  "runtime_artifacts": {
+    "runtime_root": "/tmp/a666-r4-route-activation-20260804T042127Z-819778",
+    "request_sha256": "d7c316b1743df855a4259e14fa89d1cdfad86ef1c3654923194f23d14023369e",
+    "summary_sha256": "0ec778808537d75a92497653d5edc3552dfdabc06a7d6ff72e3a9aa9de68b2a5"
+  },
+  "runtime_ms": 101473,
+  "activation_checks": {
+    "certified_path_accepted": true,
+    "one_operation": true,
+    "six_way_convergence": true,
+    "route_epoch_5": true,
+    "policy_epoch_5": true,
+    "route_live": true,
+    "route_unpaused": true,
+    "invariant_holds": true,
+    "conservation_unchanged": true,
+    "mempool_empty": true,
+    "loopback_only": true,
+    "stakehub_interaction": false,
+    "wallet_private_swap_business_operations": 0
+  },
+  "post_activation_dependency": {
+    "ready": false,
+    "wall": "round_driver_external_height_catchup_does_not_advance_next_height",
+    "local_height": 827,
+    "start_height": 827,
+    "processed_rounds": 0,
+    "computed_next_height": 827,
+    "required_next_height": 828,
+    "next_action": "restart the retryable construction round driver against height 827; never reactivate the route"
+  },
+  "stakehub_interaction": false,
+  "loopback_only": true,
+  "wallet_or_private_swap_operations": 0
+}
