@@ -1,0 +1,33 @@
+test=tests::ar02_production_route_config_cap_order_inequalities_hold_at_runtime
+command=cargo test -p postfiat-execution tests::ar02_production_route_config_cap_order_inequalities_hold_at_runtime -- --exact --nocapture
+exit_code=0
+elapsed_milliseconds=194
+matched_test_count=1
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running unittests src/lib.rs (target/debug/deps/postfiat_execution-84214c5203c90173)
+
+running 1 test
+test tests::ar02_production_route_config_cap_order_inequalities_hold_at_runtime ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 178 filtered out; finished in 0.00s
+
+
+full_suite_command=cargo test -p postfiat-execution
+full_suite_exit_code=0
+full_suite_elapsed_milliseconds=27418
+full_suite_matched_test_count=179
+test tests::nav_sp1_groth16_submit_rejects_missing_proof_and_accepts_known_good_fixture ... ok
+
+test result: ok. 179 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 27.03s
+
+   Doc-tests postfiat_execution
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+pre_correction_false_green_command=cargo test -p postfiat-execution unit_tests::ar02_production_route_config_cap_order_inequalities_hold_at_runtime -- --exact --nocapture
+pre_correction_false_green_exit_code=0
+pre_correction_false_green_matched_test_count=0
+corrective_rule=Every standalone invocation must assert matched_test_count >= 1.

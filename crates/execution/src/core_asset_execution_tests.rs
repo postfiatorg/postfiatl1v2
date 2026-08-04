@@ -3335,3 +3335,68 @@
         .expect_err("reserve above backing must fail");
         assert_eq!(error.0, "primary_market_reserve_exceeds_vault_backing");
     }
+
+    /// AR-02: the checked-in production route configuration must preserve the
+    /// runtime cap/order inequalities enforced by the route and policy types.
+    #[test]
+    fn ar02_production_route_config_cap_order_inequalities_hold_at_runtime() {
+        let route: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../deployments/a666-mainnet-20260727/09-production-route-config.json"
+        ))
+        .expect("parse checked-in production A666 route configuration");
+        let activation: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../deployments/a666-mainnet-20260727/10-production-route-activate.ops.json"
+        ))
+        .expect("parse checked-in production A666 route activation");
+
+        assert_eq!(
+            route["schema"].as_str(),
+            Some("postfiat-pftl-uniswap-route-config-v1"),
+            "AR-02 must exercise the production route configuration schema"
+        );
+        let operation = &activation["operations"][0]["operation"];
+        assert_eq!(
+            operation["route_id"], route["route_id"],
+            "activation policy must belong to the checked-in live route"
+        );
+
+        let policy: postfiat_types::PftlUniswapPrimaryMarketPolicyV2 =
+            serde_json::from_value(operation["next_primary_market_policy"].clone())
+                .expect("decode production primary-market policy");
+        policy
+            .validate()
+            .expect("production primary-market policy must pass typed validation");
+
+        let route_supply_cap = route["route_supply_cap_atoms"]
+            .as_u64()
+            .expect("production route supply cap");
+        let packet_notional_cap = route["packet_notional_cap_atoms"]
+            .as_u64()
+            .expect("production packet notional cap");
+
+        assert!(route_supply_cap > 0, "route supply cap must be nonzero");
+        assert!(
+            policy.issue_capacity_atoms <= route_supply_cap,
+            "issue capacity must fit within the route supply cap"
+        );
+        assert!(
+            policy.redeem_capacity_atoms <= route_supply_cap,
+            "redeem capacity must fit within the route supply cap"
+        );
+        assert!(
+            packet_notional_cap <= policy.max_order_atoms,
+            "packet notional cap must fit within the maximum order"
+        );
+        assert!(
+            policy.max_order_atoms <= policy.issue_capacity_atoms,
+            "maximum order must fit within issue capacity"
+        );
+        assert!(
+            policy.max_order_atoms <= policy.redeem_capacity_atoms,
+            "maximum order must fit within redeem capacity"
+        );
+        assert!(
+            policy.min_order_atoms <= policy.max_order_atoms,
+            "minimum order must not exceed maximum order"
+        );
+    }
