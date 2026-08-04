@@ -30,7 +30,7 @@
   "status": null,
   "gas_used": null,
   "error": "Failed to estimate gas: server returned an error response: error code 3: execution reverted: custom error 0x1675a80d: receipt, data: \"0x1675a80d7265636569707400000000000000000000000000000000000000000000000000\": WrongBinding(0x7265636569707400000000000000000000000000000000000000000000000000)",
-  "decoded_error": "WrongBinding(\"receipt\") — ASCII 0x72656365697074 = 'receipt'",
+  "decoded_error": "WrongBinding(\"receipt\") \u2014 ASCII 0x72656365697074 = 'receipt'",
   "revert_site": "crates/ethereum-contracts/src/PFTLReceiptFinalityVerifierV1.sol:300 (binding conjunction in _assertReceiptBindings; error declared at line 83)",
   "meaning": "one or more decoded public-values fields disagree with the deployed immutable bindings (candidate fields include route trust class, ACCEPTED_EXPORT_RECEIPT_CODE, controller, wrappedToken, destinationChainId); the proof verified against the correct vkey was never reached on-chain"
  },
@@ -52,7 +52,7 @@
   "no_eth_call_dry_run_of_verifyAndAccept": true
  },
  "no_retry": true,
- "required_next_step": "diagnose which decoded public-values binding mismatches the 6e29086 immutable config (likely harness config vs candidate public-values derivation), correct the deployment harness or witness provenance, fresh redeploy, then a new single-invocation authorization",
+ "required_next_step": "PATH B (verifier-binding-diagnosis.json): decoded mismatches routeIdCommitment/controller/wrappedToken are proof-bound to the July-28 fixture tuple and controller/wrappedToken are not CREATE-reproducible on fresh Anvil; required ordering is deploy first, witness from deployed config, prove, then verify under a new single-invocation authorization",
  "live_chain": false,
  "business_value": 0,
  "stakehub_interaction": false,
