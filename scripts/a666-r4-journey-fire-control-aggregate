@@ -22,6 +22,7 @@ d_runner="$construction/journey-runner-dry-run.json"
 async_proof_slot="$construction/async-proof-slot.json"
 export_artifact_slot="$construction/export-artifact-slot.json"
 stakehub_inventory="$pass1/stakehub-restart-proof.json"
+stakehub_absence="$pass1/stakehub-official-absence.json"
 preprove_binding="$construction/pre-prove-binding-check.json"
 path_b_schema="postfiat.a666.r4.path-b-pre-prove-binding-check.v1"
 path_b_candidate="39f7fae3191aa34c376ae1657650a9ec2444f421"
@@ -240,6 +241,19 @@ stakehub_inventory_validation() {
         and $doc.active_unit_count == 1 and $doc.active_unit_names == ["stakehub-private-swap-dashboard.service"] and $active == $doc.active_unit_names
         and ([$doc.observed_units[] | select(.restart_target == true)] | length == 1) and ([$doc.observed_units[] | select(.restart_target == true)][0].name == "stakehub-private-swap-dashboard.service")
         and ([$doc.observed_units[] | select(.active_state == "active") | .name] == $doc.active_unit_names)
+      )}'
+}
+
+stakehub_official_absence_validation() {
+    local inventory_sha mode
+    inventory_sha=$(sha256sum "$stakehub_inventory" | awk '{print $1}'); mode=$(stat -c '%a' "$stakehub_absence")
+    jq -cn --arg sha "$inventory_sha" --arg mode "$mode" --argjson active "$stakehub_active_units" --argjson doc "$(cat "$stakehub_absence")" '
+      {ok:(
+        $mode == "600" and $doc.schema == "postfiat.a666.r4.stakehub-official-absence.v1" and $doc.inventory_sha256 == $sha
+        and $doc.before_active_count == 1 and $doc.before_active_names == ["stakehub-private-swap-dashboard.service"]
+        and $doc.mutation_count == 1 and $doc.mutations == ["systemctl --user stop stakehub-private-swap-dashboard.service"] and $doc.after_active_count == 0 and $doc.after_active_names == []
+        and $doc.official_absence_proof == true and $doc.restart_required == true and $doc.restart_verified_after_run == false
+        and $doc.funds_actions == 0 and $doc.data_actions == 0 and $doc.keys_actions == 0 and $doc.config_actions == 0 and $doc.software_actions == 0 and $active == []
       )}'
 }
 
@@ -525,7 +539,8 @@ run_preprove_self_test() {
     run_dependencies_self_test
     run_pftl_self_test
     run_d_no_live_self_test
-    printf '%s\n' "fire_control_self_test=PASS d_observed_step_false=true d_nonzero_executed_or_business=true d_wrong_report_hash=true d_non_loopback_endpoint=true consumed_live_chain=true fixture_root=$test_root"
+    run_stakehub_absence_self_test
+    printf '%s\n' "fire_control_self_test=PASS stakehub_nonempty_active_set=true stakehub_absence_false=true fixture_root=$test_root"
 }
 
 run_fleet_binding_self_test() {
@@ -637,6 +652,15 @@ run_d_no_live_self_test() {
     jq '(.observed_loopback_endpoints.setup_manifest_endpoints[0])="tcp://192.0.2.1:31001"' "$root/d.json" >"$root/nonloopback.json"; d_runner="$root/nonloopback.json"; if no_live_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
     d_runner="$old_d"; jq '.live_chain=true' "$root/export.json" >"$root/live.json"; export_artifact_slot="$root/live.json"; if no_live_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
     d_runner="$old_d"; export_artifact_slot="$old_export"
+}
+
+run_stakehub_absence_self_test() {
+    local root old_absence="$stakehub_absence" old_active="${stakehub_active_units:-[]}"
+    root=$(mktemp -d /tmp/a666-r4-stakehub-absence-self-test.XXXXXX); chmod 700 "$root"; cp "$stakehub_absence" "$root/absence.json"; stakehub_absence="$root/absence.json"; stakehub_active_units='[]'
+    stakehub_official_absence_validation | jq -e '.ok == true' >/dev/null
+    stakehub_active_units='["stakehub-private-swap-dashboard.service"]'; if stakehub_official_absence_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
+    stakehub_active_units='[]'; jq '.official_absence_proof=false' "$root/absence.json" >"$root/false.json"; stakehub_absence="$root/false.json"; if stakehub_official_absence_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
+    stakehub_absence="$old_absence"; stakehub_active_units="$old_active"
 }
 
 if [[ $# -gt 0 ]]; then
@@ -752,11 +776,12 @@ if stakehub_units=$(systemctl --user list-units --type=service --all --no-legend
     stakehub_scan_ok=true
     stakehub_active_units=$(printf '%s\n' "$stakehub_units" | awk '$3 == "active" {print $1}' | jq -Rsc 'split("\n") | map(select(length > 0))')
 fi
-stakehub_inventory_validation=$(stakehub_inventory_validation "$stakehub_active_units")
+stakehub_inventory_validation=$(stakehub_inventory_validation "$(jq -c '.active_unit_names' "$stakehub_inventory")")
 if jq -e '.ok == true' <<<"$stakehub_inventory_validation" >/dev/null; then
     stakehub_inventory_ok=true
 fi
-if [[ "$stakehub_scan_ok" == true && "$stakehub_inventory_ok" == true ]] && [[ "$(jq 'length' <<<"$stakehub_active_units")" == 0 ]]; then
+stakehub_absence_validation=$(stakehub_official_absence_validation)
+if [[ "$stakehub_scan_ok" == true && "$stakehub_inventory_ok" == true ]] && jq -e '.ok == true' <<<"$stakehub_absence_validation" >/dev/null; then
     stakehub_official_absent_ok=true
 fi
 if jq -e '.ok == true' <<<"$candidate_proxy_validation" >/dev/null; then
@@ -841,6 +866,8 @@ jq -n \
     --argjson no_live_validation "$no_live_validation" \
     --argjson stakehub_input "$(input_summary "$stakehub_inventory")" \
     --argjson stakehub_inventory_validation "$stakehub_inventory_validation" \
+    --argjson stakehub_absence_input "$(input_summary "$stakehub_absence")" \
+    --argjson stakehub_absence_validation "$stakehub_absence_validation" \
     --argjson preprove_input "$(input_summary "$preprove_binding")" \
     --argjson preprove_validation "$preprove_validation" \
     --argjson stakehub_scan_ok "$stakehub_scan_ok" \
@@ -891,6 +918,8 @@ jq -n \
             no_live_validation: $no_live_validation,
             stakehub_restart_inventory: $stakehub_input,
             stakehub_inventory_validation: $stakehub_inventory_validation,
+            stakehub_official_absence: $stakehub_absence_input,
+            stakehub_absence_validation: $stakehub_absence_validation,
             pre_prove_binding: $preprove_input,
             pre_prove_validation: $preprove_validation,
             stakehub_official_scan: {
