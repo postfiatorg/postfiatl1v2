@@ -26,10 +26,26 @@ candidate_revision="39f7fae"
 proof_terminal_commit="b067d8c"
 pftl_chain_id_hash="0xe61f64cfb4299057c29b1c1dbf031c81beeb1b016878f4a087824eaa14c2cc00"
 pftl_genesis_hash_commitment="0x396aceff4e14037223cc2781a3197c8eef78f44903b4e00d2e5441abec789418"
-route_id_commitment="0xf23b7c6f67e6cd37e9fbff55e90a46580f7af095c2c22ca42cfe52d0c68efce4"
 native_asset_commitment="0x78418dd616c454703b30dd4c633d1b49c62d97acf0ec59b606840a160561d294"
 settlement_asset_commitment="0x24e5fe4c65497dff08ec93064e5eb76e23c61992e7ec2c946136334a28eab403"
-initial_checkpoint_commitment="0xebb09f3675e427c2b6f36cabc7e7dd8aa972e59058974dc53e1dfa6b1546d827"
+
+# Path-B explicit inputs: the rehearsal route ID and the live fleet's
+# height-826 block ID. Both commitments are DERIVED (keccak256) below; no
+# hash is hand-entered. The block ID was read from validator-2 through the
+# candidate node CLI (build_git_revision 39f7fae3) with all six RPCs equal at
+# height 826 (fleet supervisor 1933188 + 12 children live, route inactive).
+expected_route_id="pftl-a666-r4-offline-rehearsal-v1"
+expected_prior_block_id="63f81fb5f56acc0b9eddd0eaf068f65feaf1d28169035c9de096e4b7cd6888836aa85fedeaa25d1dd42d07a46e8a9369"
+prior_block_source="candidate node CLI status --data-dir /tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349/validator-2 --expect-height 826 (block_tip_hash, 96 hex)"
+fleet_preflight="candidate 39f7fae; fleet supervisor 1933188 + 12/12 children live; six RPCs 31001/03/05/07/09/11 equal at height 826 tip 63f81fb5...; swap route inactive (8798/8799/31021 down)"
+route_id="${A666_ROUTE_ID:?A666_ROUTE_ID required (explicit rehearsal route ID)}"
+prior_block_id="${A666_PRIOR_BLOCK_ID:?A666_PRIOR_BLOCK_ID required (explicit height-826 block ID)}"
+[[ "$route_id" == "$expected_route_id" ]]
+[[ "$prior_block_id" == "$expected_prior_block_id" ]]
+[[ "$prior_block_id" =~ ^[0-9a-f]{96}$ ]]
+initial_finalized_height=826
+route_id_commitment=$(cast keccak "0x$(printf '%s' "$route_id" | xxd -p | tr -d '[:space:]')")
+initial_checkpoint_commitment=$(cast keccak "0x$prior_block_id")
 pool_id="0x64c9ce388649100fb1370e406689c258247625608464014383a3f1df8ec8bd2d"
 native_asset_id="0x521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c"
 settlement_asset_id="0x02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b"
@@ -149,7 +165,7 @@ wrapped_token=$(create_contract wrapped "$product_runtime" "src/PFTLUniswapHando
 capture_receipt wrapped
 require_nonce 2
 wrapped_code_hash=$(code_hash "$wrapped_token")
-receipt_config="($sp1_verifier,$program_vkey,$pftl_chain_id_hash,$pftl_genesis_hash_commitment,1,$route_id_commitment,$native_asset_commitment,$settlement_asset_commitment,1,$predicted_primary,$wrapped_token,$wrapped_code_hash,356,1120,$initial_checkpoint_commitment,415)"
+receipt_config="($sp1_verifier,$program_vkey,$pftl_chain_id_hash,$pftl_genesis_hash_commitment,1,$route_id_commitment,$native_asset_commitment,$settlement_asset_commitment,1,$predicted_primary,$wrapped_token,$wrapped_code_hash,356,1120,$initial_checkpoint_commitment,$initial_finalized_height)"
 receipt_verifier=$(create_contract receipt "$product_runtime" "src/PFTLReceiptFinalityVerifierV1.sol:PFTLReceiptFinalityVerifierV1" "$receipt_config")
 capture_receipt receipt
 require_nonce 3
@@ -177,6 +193,13 @@ wrapped_controller=$(cast call "$wrapped_token" "controller()(address)" --rpc-ur
 wrapped_controller_locked=$(cast call "$wrapped_token" "controller_locked()(bool)" --rpc-url "$rpc_url")
 # The on-chain immutable vkey MUST equal the archived proof report vkey.
 [[ "$receipt_program_vkey" == "$program_vkey" ]]
+# The on-chain route/checkpoint immutables MUST equal the derived values.
+receipt_route_id_commitment=$(cast call "$receipt_verifier" "routeIdCommitment()(bytes32)" --rpc-url "$rpc_url")
+[[ "$receipt_route_id_commitment" == "$route_id_commitment" ]]
+receipt_latest_checkpoint=$(cast call "$receipt_verifier" "latestCheckpointCommitment()(bytes32)" --rpc-url "$rpc_url")
+[[ "$receipt_latest_checkpoint" == "$initial_checkpoint_commitment" ]]
+receipt_latest_height=$(cast call "$receipt_verifier" "latestFinalizedHeight()(uint64)" --rpc-url "$rpc_url")
+[[ "$receipt_latest_height" == "$initial_finalized_height" ]]
 addresses_match=$(jq -n \
     --arg predicted "$predicted_primary" --arg actual "$primary_market" \
     --arg receipt_controller "$receipt_controller" --arg receipt_wrapped_token "$receipt_wrapped_token" \
@@ -238,6 +261,13 @@ jq -n \
     --arg vendor_sha256 "$expected_vendor_sha256" --arg sp1_source_sha256 "$expected_sp1_sha256" \
     --arg receipt_source_sha256 "$receipt_source_sha256" --arg primary_source_sha256 "$primary_source_sha256" \
     --arg token_source_sha256 "$token_source_sha256" \
+    --arg route_id "$route_id" --arg route_id_commitment "$route_id_commitment" \
+    --arg prior_block_id "$prior_block_id" --arg prior_block_source "$prior_block_source" \
+    --arg fleet_preflight "$fleet_preflight" --arg initial_checkpoint_commitment "$initial_checkpoint_commitment" \
+    --arg receipt_route_id_commitment "$receipt_route_id_commitment" \
+    --arg receipt_latest_checkpoint "$receipt_latest_checkpoint" \
+    --argjson initial_finalized_height "$initial_finalized_height" \
+    --argjson receipt_latest_height "$receipt_latest_height" \
     --argjson anvil_pid "$anvil_pid" --argjson nonce_before_sp1 "$nonce_before_sp1" \
     --argjson nonce_before_product "$nonce_before_product" --argjson primary_nonce "$primary_nonce" \
     --argjson deployment_green "$deployment_green" \
@@ -249,6 +279,21 @@ jq -n \
         history_preserved: true,
         proof_terminal_commit: $proof_terminal_commit,
         candidate_revision: $candidate_revision
+      },
+      path_b: {
+        route_id: $route_id,
+        route_id_commitment: $route_id_commitment,
+        route_id_commitment_derivation: "keccak256(route-id UTF-8 bytes), derived in-script via cast keccak; never hand-entered",
+        prior_block_id: $prior_block_id,
+        prior_block_source: $prior_block_source,
+        fleet_preflight: $fleet_preflight,
+        initial_checkpoint_commitment: $initial_checkpoint_commitment,
+        initial_checkpoint_derivation: "keccak256(height-826 block-id raw bytes), derived in-script via cast keccak; never hand-entered",
+        initial_finalized_height: $initial_finalized_height,
+        height_826_checkpoint_derived: true,
+        onchain_route_id_commitment: $receipt_route_id_commitment,
+        onchain_latest_checkpoint_commitment: $receipt_latest_checkpoint,
+        onchain_latest_finalized_height: $receipt_latest_height
       },
       anvil: {
         pid: $anvil_pid, endpoint: $rpc_url, loopback: true, chain_id: 1,
