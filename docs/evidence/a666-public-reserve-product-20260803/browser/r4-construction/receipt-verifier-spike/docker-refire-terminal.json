@@ -1,0 +1,73 @@
+{
+ "schema": "postfiat.a666.r4.receipt-prover-docker-refire-terminal.v1",
+ "run_id": "a666-r4-receipt-prover-docker-refire-20260804-v2",
+ "commits": {
+  "packet_preflight": "994e2d5",
+  "fired_state": "c8483b8",
+  "candidate": "39f7fae"
+ },
+ "unit": {
+  "name": "a666-r4-receipt-prover-docker-refire-20260804-v2.service",
+  "result": "success",
+  "exec_main_status": 0,
+  "active_state": "inactive",
+  "sub_state": "dead",
+  "started_utc": "2026-08-04T08:25:51Z",
+  "terminal_utc": "2026-08-04T11:00:13Z",
+  "wall_seconds": 9261.47,
+  "wall_human": "2h34m21s",
+  "cpu_time_consumed": "10h 17min 46.919s",
+  "memory_peak": "23.4G",
+  "memory_swap_peak": "0B",
+  "oom_killed": false,
+  "journal_excerpt": "docker-refire-terminal-journal.txt"
+ },
+ "out_dir": {
+  "path": "/tmp/a666-r4-receipt-prover-docker-refire-BTcozwnI",
+  "mode": "700",
+  "proof_dir": "/tmp/a666-r4-receipt-prover-docker-refire-BTcozwnI/proof"
+ },
+ "proof_artifacts": {
+  "required_present_exactly": ["proof.bin", "proof-calldata.bin", "proof-report.json", "public-values.bin"],
+  "files": [
+   {"name": "proof.bin", "bytes": 2814, "sha256": "8d12c7d95ef9ca2f7b579691ced5616cea9aa573eba8b2113b86201726e98f41"},
+   {"name": "proof-calldata.bin", "bytes": 356, "sha256": "611a356d548de04ca26db62c052c6a1d23ec36fb96fe508927c12d5cf1394331"},
+   {"name": "proof-report.json", "bytes": 361, "sha256": "d26a826dc3022df8cc93e63b489442637a8ed7e821d1790ca669ea3b55aec982"},
+   {"name": "public-values.bin", "bytes": 1120, "sha256": "534879b34022a7abd67dca92f8fab704d9f3810c36967bdd496db9c01389147e"}
+  ],
+  "additional_files": [
+   {"name": "execute-report.json", "bytes": 382, "sha256": "a9f756d38695265a1d62a64fadbd5ad0b0d147cb3b76c8b7eeb258c8dacdc651", "note": "host-execute-skipped report written at run start; expected companion, identical schema to v1 run"}
+  ],
+  "unexpected_or_absent": "none absent; no unexpected files beyond execute-report.json"
+ },
+ "proof_report": {
+  "evidence_copy": "docker-refire-proof-report.json",
+  "copy_sha256_matches_source": true,
+  "schema": "postfiat-pftl-uniswap-proof-report-v1",
+  "proof_kind": "receipt",
+  "proof_mode": "groth16",
+  "prover_backend": "cpu",
+  "program_vkey": "0x003af40eafdbc1873f7e5b8f02da0ccd668f65930797c8e20c4f19234a5ef02f",
+  "proof_bytes": 356,
+  "public_values_bytes": 1120,
+  "execute_ms": 0,
+  "host_execute_skipped": true,
+  "setup_and_prove_ms": 9208571,
+  "selector": "Groth16 selector is derived from program_vkey by the SP1 v6.1.0 verifier at proof-check time; not a report field",
+  "binding_note": "report program_vkey 0x003af40e... differs from the vkey pinned in the deployed PFTLReceiptFinalityVerifierV1 constructor (0x004e44ac..., ethereum-contract-stage.json); recorded as observed fact for the verify-transaction turn, no reconciliation attempted here"
+ },
+ "docker": {
+  "image": "ghcr.io/succinctlabs/sp1-gnark:v6.1.0",
+  "image_id_digest": "sha256:e1a1cd62838b561ca301f9b2c26475c4a92bfe0e2c916e9bba213062e1548c4d",
+  "group_wrapper": "sg docker -c",
+  "groth16_wrap_succeeded": true
+ },
+ "proof_success": true,
+ "terminal": true,
+ "verify_and_accept_called": false,
+ "verify_and_accept_pending": true,
+ "stakehub_interaction": false,
+ "business_mutation": 0,
+ "credential_values_in_sources": 0,
+ "recorded_utc": "2026-08-04T13:15:00Z"
+}
