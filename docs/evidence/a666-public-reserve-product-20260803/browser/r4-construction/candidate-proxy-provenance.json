@@ -1,0 +1,59 @@
+{
+ "schema": "postfiat.a666.r4.candidate-proxy-provenance.v1",
+ "candidate": {
+  "revision_expected": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+  "revision_observed": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+  "worktree": "/tmp/a666-r4-successor-39f7fae",
+  "tracked_dirty_count": 0,
+  "revision_exact": true
+ },
+ "node_binary": {
+  "path": "/tmp/a666-r4-candidate-target/release/postfiat-node",
+  "target_dir": "/tmp/a666-r4-candidate-target",
+  "build_command": "CARGO_TARGET_DIR=/tmp/a666-r4-candidate-target cargo build --release -p postfiat-node --locked",
+  "build_action": "reused",
+  "build_exit": 0,
+  "present": true,
+  "sha256": "9339d1352969cbc449f4245e18c2f1b3763d5b896334335b5bfd894beff12c57",
+  "provenance_note": "the controlled lifecycle report binary_sha256 hashes the cargo integration-test binary (atomic_swap_local_six), a different artifact than this spawned postfiat-node server binary; the two hashes are never compared"
+ },
+ "wallet_proxy_source": {
+  "tree_hash_at_candidate": "5919ae695d910cfbe3b41c9783ef79354784b4ee",
+  "server_js_sha256": "6aebb3576bde511ce99f8b69a36fe502d3ddffad23275c5761f380fd3675bf41",
+  "package_lock_sha256": "6ed3d70403dabf69a3b4dde632c6a2926bcb554e4b774d8c1336689fc1e48c3a",
+  "dependencies_action": "reused",
+  "dependencies_present": true
+ },
+ "wallet_dist": {
+  "exact_vs_r4_pass1_evidence": true
+ },
+ "proxy_token": {
+  "file": "/home/postfiat/.pft/a666-r4-candidate-proxy/api-tokens.json",
+  "mode": "600",
+  "outside_git": true,
+  "value_recorded": false
+ },
+ "rpc_endpoints": {
+  "count": 6,
+  "loopback": true,
+  "committed_all_equal": true,
+  "live": false,
+  "live_all_equal": false,
+  "matches_committed_tuples": false,
+  "height": 826,
+  "source_file": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/rpc-endpoints.json"
+ },
+ "no_live_chain_route": true,
+ "stakehub_dependency_free": false,
+ "proxy_hold": {
+  "launched": false,
+  "pid": null,
+  "listen": "127.0.0.1:31021",
+  "healthz_reachable": false,
+  "ready_file": "/home/postfiat/.pft/a666-r4-candidate-proxy/proxy.ready.json",
+  "log_file": "/home/postfiat/.pft/a666-r4-candidate-proxy/proxy.stdout.log",
+  "business_operations_submitted": 0
+ },
+ "ready": false,
+ "first_blocker": "rehearsal_rpc_endpoints_not_live_equal_loopback"
+}

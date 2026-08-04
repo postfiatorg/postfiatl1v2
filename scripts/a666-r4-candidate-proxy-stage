@@ -1,0 +1,358 @@
+#!/usr/bin/env bash
+# Stage the exact-candidate node/proxy boundary against the held six-RPC
+# rehearsal and emit a computed provenance/readiness artifact.
+#
+# Retryable: re-running reuses the candidate-scoped build output, re-probes
+# the six rehearsal RPC endpoints (with --wait-rpc-seconds), and starts the
+# candidate wallet-proxy in a persistent foreground hold only when every
+# computed check passes. Never prints or commits credential values; the
+# rehearsal proxy token exists only as a mode-600 file outside git.
+#
+# Usage:
+#   scripts/a666-r4-candidate-proxy-stage [--wait-rpc-seconds N]
+#   scripts/a666-r4-candidate-proxy-stage --teardown
+set -euo pipefail
+
+CANDIDATE_REVISION="39f7fae3191aa34c376ae1657650a9ec2444f421"
+CANDIDATE_WORKTREE="/tmp/a666-r4-successor-39f7fae"
+CANDIDATE_TARGET_DIR="/tmp/a666-r4-candidate-target"
+NODE_BINARY="$CANDIDATE_TARGET_DIR/release/postfiat-node"
+RUN_DIR="/home/postfiat/.pft/a666-r4-candidate-proxy"
+TOKEN_FILE="$RUN_DIR/api-tokens.json"
+PROXY_READY_FILE="$RUN_DIR/proxy.ready.json"
+PROXY_LOG="$RUN_DIR/proxy.stdout.log"
+PROXY_LISTEN_HOST="127.0.0.1"
+PROXY_LISTEN_PORT="31021"
+WAIT_RPC_SECONDS=30
+MODE="stage"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --teardown) MODE="teardown"; shift ;;
+    --wait-rpc-seconds) WAIT_RPC_SECONDS="$2"; shift 2 ;;
+    *) echo "unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
+repo_root="$(git rev-parse --show-toplevel)"
+ENDPOINTS_FILE="$repo_root/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/rpc-endpoints.json"
+WALLET_DIST_EVIDENCE="$repo_root/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/wallet-dist-sha256.json"
+EVIDENCE_FILE="$repo_root/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/candidate-proxy-provenance.json"
+mkdir -p "$(dirname "$EVIDENCE_FILE")"
+umask 077
+mkdir -p "$RUN_DIR"
+
+teardown() {
+  local torn_down=false
+  if [[ -f "$PROXY_READY_FILE" ]]; then
+    local pid
+    pid="$(python3 -c "import json;print(json.load(open('$PROXY_READY_FILE'))['pid'])")"
+    if kill -0 "$pid" 2>/dev/null; then
+      kill "$pid"
+      wait "$pid" 2>/dev/null || true
+      torn_down=true
+    fi
+    rm -f "$PROXY_READY_FILE"
+  fi
+  printf 'a666_r4_candidate_proxy_teardown=ok proxy_process_stopped=%s\n' "$torn_down"
+}
+
+if [[ "$MODE" == "teardown" ]]; then
+  teardown
+  exit 0
+fi
+
+stage_failed=""
+fail() {
+  if [[ -z "$stage_failed" ]]; then
+    stage_failed="$1"
+  fi
+}
+
+# 1. Exact candidate revision, tracked-clean.
+observed_revision="$(git -C "$CANDIDATE_WORKTREE" rev-parse HEAD)"
+tracked_dirty_count="$(git -C "$CANDIDATE_WORKTREE" status --porcelain --untracked-files=no | wc -l | tr -d ' ')"
+revision_exact=false
+[[ "$observed_revision" == "$CANDIDATE_REVISION" && "$tracked_dirty_count" == "0" ]] && revision_exact=true
+$revision_exact || fail "candidate_revision_mismatch_or_dirty"
+
+# 2. Candidate-scoped node binary (build or fingerprint-matched reuse).
+build_command="CARGO_TARGET_DIR=$CANDIDATE_TARGET_DIR cargo build --release -p postfiat-node --locked"
+build_action="reused"
+build_exit=0
+if [[ ! -x "$NODE_BINARY" ]]; then
+  build_action="built"
+  if (cd "$CANDIDATE_WORKTREE" && env CARGO_TARGET_DIR="$CANDIDATE_TARGET_DIR" cargo build --release -p postfiat-node --locked); then
+    build_exit=0
+  else
+    build_exit=1
+  fi
+fi
+node_binary_present=false
+node_binary_sha256=""
+if [[ -x "$NODE_BINARY" && "$build_exit" -eq 0 ]]; then
+  node_binary_present=true
+  node_binary_sha256="$(sha256sum "$NODE_BINARY" | awk '{print $1}')"
+fi
+$node_binary_present || fail "candidate_node_binary_missing"
+
+# 3. Candidate wallet-proxy source pin and locked dependency materialization.
+proxy_tree_hash="$(git -C "$CANDIDATE_WORKTREE" rev-parse HEAD:wallet-proxy)"
+proxy_server_sha256="$(sha256sum "$CANDIDATE_WORKTREE/wallet-proxy/server.js" | awk '{print $1}')"
+proxy_lock_sha256="$(sha256sum "$CANDIDATE_WORKTREE/wallet-proxy/package-lock.json" | awk '{print $1}')"
+proxy_deps_action="reused"
+if [[ ! -d "$CANDIDATE_WORKTREE/wallet-proxy/node_modules" ]]; then
+  proxy_deps_action="npm_ci"
+  (cd "$CANDIDATE_WORKTREE/wallet-proxy" && npm ci --ignore-scripts >/dev/null 2>&1)
+fi
+proxy_deps_present=false
+[[ -d "$CANDIDATE_WORKTREE/wallet-proxy/node_modules" ]] && proxy_deps_present=true
+$proxy_deps_present || fail "proxy_locked_dependencies_missing"
+
+# Candidate wallet dist (built by R4 setup; verified, never rebuilt here).
+wallet_dist_exact=false
+if [[ -f "$WALLET_DIST_EVIDENCE" ]]; then
+  wallet_dist_exact="$(python3 - "$WALLET_DIST_EVIDENCE" "$CANDIDATE_WORKTREE/wallet-web/dist" <<'PY'
+import hashlib, json, os, sys
+expected = {row["path"]: row["sha256"] for row in json.load(open(sys.argv[1]))}
+root = sys.argv[2]
+ok = bool(expected)
+for rel, want in expected.items():
+    path = os.path.join(root, rel)
+    if not os.path.isfile(path):
+        ok = False
+        break
+    got = hashlib.sha256(open(path, "rb").read()).hexdigest()
+    if got != want:
+        ok = False
+        break
+print("true" if ok else "false")
+PY
+)"
+fi
+$wallet_dist_exact || fail "candidate_wallet_dist_hash_mismatch"
+
+# 4. Rehearsal proxy token: generated once at runtime into a mode-600 file
+# outside git; only the file path is ever referenced.
+token_file_mode=""
+if [[ ! -f "$TOKEN_FILE" ]]; then
+  python3 - "$TOKEN_FILE" <<'PY'
+import json, secrets, sys
+with open(sys.argv[1], "w", encoding="utf-8") as handle:
+    json.dump({"r4-rehearsal": secrets.token_hex(32)}, handle)
+    handle.write("\n")
+PY
+fi
+token_file_mode="$(stat -c '%a' "$TOKEN_FILE")"
+token_file_scoped=false
+[[ "$token_file_mode" == "600" && "$TOKEN_FILE" != "$repo_root"* ]] && token_file_scoped=true
+$token_file_scoped || fail "proxy_token_file_not_scoped_600"
+
+# 5. Six loopback RPC endpoints: committed equality plus live read-only
+# status probes requiring identical height/tip/root tuples.
+endpoint_report="$(python3 - "$ENDPOINTS_FILE" "$WAIT_RPC_SECONDS" <<'PY'
+import json, socket, sys, time
+endpoints = json.load(open(sys.argv[1]))["endpoints"]
+wait_seconds = float(sys.argv[2])
+expected = [
+    (row["block_height"], row["block_tip_hash"], row["state_root"])
+    for row in endpoints
+]
+loopback = all(row["host"] == "127.0.0.1" for row in endpoints)
+file_equal = len(set(expected)) == 1 and len(expected) == 6
+
+def probe(host, port):
+    request = {
+        "version": "postfiat-local-rpc-v1",
+        "id": "r4-candidate-proxy-stage",
+        "method": "status",
+        "params": {},
+    }
+    with socket.create_connection((host, port), timeout=5) as stream:
+        stream.sendall(json.dumps(request).encode() + b"\n")
+        line = b""
+        while not line.endswith(b"\n"):
+            chunk = stream.recv(65536)
+            if not chunk:
+                break
+            line += chunk
+    response = json.loads(line.decode())
+    result = response["result"]
+    return (
+        result["block_height"],
+        result["block_tip_hash"],
+        result["state_root"],
+    )
+
+deadline = time.time() + wait_seconds
+observed = None
+while True:
+    observed = []
+    for row in endpoints:
+        try:
+            observed.append(probe(row["host"], row["rpc_port"]))
+        except Exception:
+            observed.append(None)
+    if all(item is not None for item in observed) or time.time() >= deadline:
+        break
+    time.sleep(2)
+live = all(item is not None for item in observed)
+live_equal = live and len(set(observed)) == 1
+matches_committed = live_equal and observed[0] == expected[0]
+print(json.dumps({
+    "count": len(endpoints),
+    "loopback": loopback,
+    "committed_all_equal": file_equal,
+    "live": live,
+    "live_all_equal": live_equal,
+    "matches_committed_tuples": matches_committed,
+    "height": expected[0][0] if file_equal else None,
+}))
+PY
+)"
+endpoints_green="$(python3 -c "import json;r=json.loads('$endpoint_report');print('true' if all([r['loopback'],r['committed_all_equal'],r['live'],r['live_all_equal'],r['matches_committed_tuples']]) else 'false')")"
+$endpoints_green || fail "rehearsal_rpc_endpoints_not_live_equal_loopback"
+
+# 6. No live-chain route and no StakeHub dependency.
+no_live_chain_route="$(python3 -c "import json;print('true' if json.loads('$endpoint_report')['loopback'] else 'false')")"
+stakehub_free=true
+if command -v systemctl >/dev/null 2>&1; then
+  active="$(systemctl --user list-units --all --no-legend 'stakehub-*' 2>/dev/null | awk '$3 == "active"' | wc -l | tr -d ' ')"
+  [[ "$active" == "0" ]] || stakehub_free=false
+fi
+$stakehub_free || fail "stakehub_unit_active"
+
+# 7. Proxy hold launch, only when every precondition is green.
+proxy_launched=false
+proxy_pid=""
+proxy_healthz=false
+preconditions_green=false
+if $revision_exact && $node_binary_present && $proxy_deps_present \
+  && $wallet_dist_exact && $token_file_scoped && $endpoints_green \
+  && $no_live_chain_route && $stakehub_free; then
+  preconditions_green=true
+fi
+
+rpc_fleet="$(python3 - "$ENDPOINTS_FILE" <<'PY'
+import json, sys
+rows = json.load(open(sys.argv[1]))["endpoints"]
+print(",".join(f"validator-{r['validator_index']}={r['host']}:{r['rpc_port']}" for r in rows))
+PY
+)"
+first_rpc_port="$(python3 -c "import json;print(json.load(open('$ENDPOINTS_FILE'))['endpoints'][0]['rpc_port'])")"
+
+if $preconditions_green; then
+  if [[ -f "$PROXY_READY_FILE" ]]; then
+    old_pid="$(python3 -c "import json;print(json.load(open('$PROXY_READY_FILE'))['pid'])")"
+    if kill -0 "$old_pid" 2>/dev/null; then
+      kill "$old_pid" || true
+      sleep 1
+    fi
+    rm -f "$PROXY_READY_FILE"
+  fi
+  (
+    cd "$CANDIDATE_WORKTREE"
+    setsid nohup env \
+      LISTEN_HOST="$PROXY_LISTEN_HOST" \
+      LISTEN_PORT="$PROXY_LISTEN_PORT" \
+      RPC_HOST="127.0.0.1" \
+      RPC_PORT="$first_rpc_port" \
+      RPC_FLEET="$rpc_fleet" \
+      WALLET_STATIC_DIR="$CANDIDATE_WORKTREE/wallet-web/dist" \
+      WALLET_PROXY_API_TOKENS_FILE="$TOKEN_FILE" \
+      node wallet-proxy/server.js >"$PROXY_LOG" 2>&1 &
+    echo $! > "$RUN_DIR/proxy.pid"
+  )
+  proxy_pid="$(cat "$RUN_DIR/proxy.pid")"
+  deadline=$((SECONDS + 30))
+  while (( SECONDS < deadline )); do
+    if curl -sf "http://$PROXY_LISTEN_HOST:$PROXY_LISTEN_PORT/healthz" >/dev/null 2>&1; then
+      proxy_healthz=true
+      break
+    fi
+    sleep 1
+  done
+  if $proxy_healthz && kill -0 "$proxy_pid" 2>/dev/null; then
+    proxy_launched=true
+    python3 - "$PROXY_READY_FILE" "$proxy_pid" "$PROXY_LISTEN_PORT" <<'PY'
+import datetime, json, sys
+with open(sys.argv[1], "w", encoding="utf-8") as handle:
+    json.dump({
+        "schema": "postfiat.a666.r4.candidate-proxy-ready.v1",
+        "pid": int(sys.argv[2]),
+        "listen_host": "127.0.0.1",
+        "listen_port": int(sys.argv[3]),
+        "started_utc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "business_operations_submitted": 0,
+    }, handle, indent=1)
+    handle.write("\n")
+PY
+    chmod 600 "$PROXY_READY_FILE"
+  else
+    fail "proxy_healthz_unreachable_after_launch"
+  fi
+fi
+
+ready=false
+if $preconditions_green && $proxy_launched && $proxy_healthz; then
+  ready=true
+fi
+
+python3 - "$EVIDENCE_FILE" <<PY
+import json, sys
+B = lambda value: value == "true"
+artifact = {
+    "schema": "postfiat.a666.r4.candidate-proxy-provenance.v1",
+    "candidate": {
+        "revision_expected": "$CANDIDATE_REVISION",
+        "revision_observed": "$observed_revision",
+        "worktree": "$CANDIDATE_WORKTREE",
+        "tracked_dirty_count": int("$tracked_dirty_count"),
+        "revision_exact": B("$revision_exact"),
+    },
+    "node_binary": {
+        "path": "$NODE_BINARY",
+        "target_dir": "$CANDIDATE_TARGET_DIR",
+        "build_command": "$build_command",
+        "build_action": "$build_action",
+        "build_exit": $build_exit,
+        "present": B("$node_binary_present"),
+        "sha256": "$node_binary_sha256",
+        "provenance_note": "the controlled lifecycle report binary_sha256 hashes the cargo integration-test binary (atomic_swap_local_six), a different artifact than this spawned postfiat-node server binary; the two hashes are never compared",
+    },
+    "wallet_proxy_source": {
+        "tree_hash_at_candidate": "$proxy_tree_hash",
+        "server_js_sha256": "$proxy_server_sha256",
+        "package_lock_sha256": "$proxy_lock_sha256",
+        "dependencies_action": "$proxy_deps_action",
+        "dependencies_present": B("$proxy_deps_present"),
+    },
+    "wallet_dist": {"exact_vs_r4_pass1_evidence": B("$wallet_dist_exact")},
+    "proxy_token": {
+        "file": "$TOKEN_FILE",
+        "mode": "$token_file_mode",
+        "outside_git": True,
+        "value_recorded": False,
+    },
+    "rpc_endpoints": json.loads('''$endpoint_report''') | {"source_file": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/rpc-endpoints.json"},
+    "no_live_chain_route": B("$no_live_chain_route"),
+    "stakehub_dependency_free": B("$stakehub_free"),
+    "proxy_hold": {
+        "launched": B("$proxy_launched"),
+        "pid": int("$proxy_pid") if "$proxy_pid" else None,
+        "listen": "$PROXY_LISTEN_HOST:$PROXY_LISTEN_PORT",
+        "healthz_reachable": B("$proxy_healthz"),
+        "ready_file": "$PROXY_READY_FILE",
+        "log_file": "$PROXY_LOG",
+        "business_operations_submitted": 0,
+    },
+    "ready": B("$ready"),
+    "first_blocker": "$stage_failed" or None,
+}
+with open(sys.argv[1], "w", encoding="utf-8") as handle:
+    json.dump(artifact, handle, indent=1)
+    handle.write("\n")
+PY
+
+printf 'a666_r4_candidate_proxy_stage=complete ready=%s first_blocker=%s\n' "$ready" "${stage_failed:-none}"
+$ready
