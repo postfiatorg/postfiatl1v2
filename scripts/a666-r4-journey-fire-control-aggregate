@@ -23,6 +23,7 @@ preprove_binding="$construction/pre-prove-binding-check.json"
 path_b_schema="postfiat.a666.r4.path-b-pre-prove-binding-check.v1"
 path_b_candidate="39f7fae3191aa34c376ae1657650a9ec2444f421"
 path_b_decoder_sha256="6fb2fb9ac693e5cea787eeb4a80701de562d3b12ce47d837d121d8dc361f6d4a"
+canonical_receipt_fields='["proofProgramVersion","pftlChainIdHash","pftlGenesisHashCommitment","pftlProtocolVersion","committeeRootCommitment","committeeTransitionCommitment","finalizedBlockCommitment","finalizedStateRootCommitment","routeEpoch","policyHashCommitment","routeIdCommitment","routeTrustClass","routeConfigDigestCommitment","nativeNavAssetIdCommitment","settlementAssetIdCommitment","pricingNavEpoch","pricingReservePacketHashCommitment","sourceWalletCommitment","sourceReceiptRootCommitment","sourceReceiptHashCommitment","acceptedReceiptCode","packetDigest","destinationChainId","controller","wrappedToken","recipient","mintAmountAtoms","settlementValueAtoms","packetNonce","deadline","sourceHeight","priorCheckpointCommitment","resultingCheckpointCommitment","finalizedHeight","proofNullifier"]'
 
 binding_json() {
     local path="$1"
@@ -79,74 +80,164 @@ json_true() {
     [[ -r "$path" ]] && jq -e "$filter" "$path" >/dev/null 2>&1
 }
 
-preprove_ok_for_file() {
+repository_relative_readable_path() {
     local path="$1"
-    [[ -r "$path" ]] || return 1
-    jq -e --arg schema "$path_b_schema" --arg candidate "$path_b_candidate" --arg decoder "$path_b_decoder_sha256" '
-        .schema == $schema
-        and .candidate_revision == $candidate
-        and (.witness_sha256 | type == "string" and length > 0)
-        and (.deployment_evidence_path | type == "string" and length > 0)
-        and (.deployment_commit | type == "string" and length > 0)
-        and .decoder_sha256 == $decoder
-        and .decoded_field_count == 35
-        and .conjunction_field_count == 35
-        and .exact_mismatch_count == 0
-        and .all_match == true
-        and (.prior_checkpoint_commitment | type == "string" and length > 0)
-        and (.initial_checkpoint_commitment | type == "string" and length > 0)
-        and .prior_checkpoint_matches_initial == true
-        and .route_matches == true
-        and .controller_matches == true
-        and .wrapped_matches == true
-        and .chain_matches == true
-        and .genesis_matches == true
-        and .protocol_matches == true
-        and .program_vkey_matches == true
-        and .live_chain == false
-        and .business_value == 0
-        and .stakehub == false
-    ' "$path" >/dev/null 2>&1
+    [[ -n "$path" && "$path" != /* && "$path" != *".."* && "$path" =~ ^[A-Za-z0-9._/-]+$ && -r "$repo/$path" ]]
+}
+
+preprove_validation_for_file() {
+    local path="$1"
+    if [[ ! -r "$path" ]] || ! jq -e . "$path" >/dev/null 2>&1; then
+        jq -cn --arg path "$path" '{path: $path, valid_json: false, ok: false, computed: {field_count: null, mismatch_count: null, binding_mismatch_count: null}, deployment_evidence: {path: null, path_valid: false, sha256: null, sha256_matches_declared: false}}'
+        return
+    fi
+
+    local deployment_path
+    local deployment_sha
+    local deployment_path_valid=false
+    local deployment_sha256=""
+    local deployment_sha_matches=false
+    deployment_path=$(jq -r '.deployment_evidence_path // empty' "$path")
+    deployment_sha=$(jq -r '.deployment_evidence_sha256 // empty' "$path")
+    if repository_relative_readable_path "$deployment_path"; then
+        deployment_path_valid=true
+        deployment_sha256=$(sha256sum "$repo/$deployment_path" | awk '{print $1}')
+        if [[ "$deployment_sha" == "$deployment_sha256" ]]; then
+            deployment_sha_matches=true
+        fi
+    fi
+
+    jq -c \
+        --arg path "$path" \
+        --arg schema "$path_b_schema" \
+        --arg candidate "$path_b_candidate" \
+        --arg decoder "$path_b_decoder_sha256" \
+        --argjson canonical "$canonical_receipt_fields" \
+        --argjson deployment_path_valid "$deployment_path_valid" \
+        --arg deployment_sha256 "$deployment_sha256" \
+        --argjson deployment_sha_matches "$deployment_sha_matches" \
+        '
+        . as $raw
+        | (if ($raw | type) == "object" then $raw else {} end) as $o
+        | (if ($o.fields | type) == "array" then $o.fields else [] end) as $fields
+        | (if ($o.deployment_bindings | type) == "object" then $o.deployment_bindings else {} end) as $bindings
+        | ["route", "controller", "wrapped", "chain", "genesis", "protocol", "program_vkey", "prior_checkpoint"] as $binding_names
+        | {
+            path: $path,
+            valid_json: true,
+            deployment_evidence: {
+                path: ($o.deployment_evidence_path // null),
+                path_valid: $deployment_path_valid,
+                sha256: (if $deployment_sha256 == "" then null else $deployment_sha256 end),
+                sha256_matches_declared: $deployment_sha_matches
+            },
+            computed: {
+                field_count: ($fields | length),
+                canonical_field_names: (($fields | map(if type == "object" then .name else null end)) == $canonical),
+                field_table_complete: (all($fields[]; type == "object" and has("expected_from_witness") and has("decoded") and .expected_from_witness != null and .decoded != null)),
+                mismatch_count: ([$fields[] | select((type != "object") or (has("expected_from_witness") | not) or (has("decoded") | not) or .expected_from_witness == null or .decoded == null or .expected_from_witness != .decoded)] | length),
+                binding_mismatch_count: ([$binding_names[] as $name | ($bindings[$name] // null) as $binding | select(($binding | type) != "object" or ($binding | has("decoded") | not) or ($binding | has("deployed") | not) or $binding.decoded == null or $binding.deployed == null or $binding.decoded != $binding.deployed)] | length)
+            },
+            claimed_statuses_ignored: {
+                decoded_field_count: ($o.decoded_field_count // null),
+                conjunction_field_count: ($o.conjunction_field_count // null),
+                exact_mismatch_count: ($o.exact_mismatch_count // null),
+                all_match: ($o.all_match // null),
+                prior_checkpoint_matches_initial: ($o.prior_checkpoint_matches_initial // null)
+            },
+            ok: (
+                $o.schema == $schema
+                and $o.candidate_revision == $candidate
+                and ($o.witness_sha256 | type == "string" and test("^[0-9a-f]{64}$"))
+                and ($o.deployment_commit | type == "string" and test("^[0-9a-f]{7,40}$"))
+                and $o.decoder_sha256 == $decoder
+                and ($o.deployment_evidence_sha256 | type == "string" and test("^[0-9a-f]{64}$"))
+                and $deployment_path_valid
+                and $deployment_sha_matches
+                and ($fields | length) == 35
+                and (($fields | map(if type == "object" then .name else null end)) == $canonical)
+                and all($fields[]; type == "object" and has("expected_from_witness") and has("decoded") and .expected_from_witness != null and .decoded != null)
+                and ([$fields[] | select((type != "object") or (has("expected_from_witness") | not) or (has("decoded") | not) or .expected_from_witness == null or .decoded == null or .expected_from_witness != .decoded)] | length) == 0
+                and ([$binding_names[] as $name | ($bindings[$name] // null) as $binding | select(($binding | type) != "object" or ($binding | has("decoded") | not) or ($binding | has("deployed") | not) or $binding.decoded == null or $binding.deployed == null or $binding.decoded != $binding.deployed)] | length) == 0
+                and $o.live_chain == false
+                and $o.business_value == 0
+                and $o.stakehub == false
+            )
+        }' "$path"
+}
+
+preprove_ok_for_file() {
+    preprove_validation_for_file "$1" | jq -e '.ok == true' >/dev/null
 }
 
 run_preprove_self_test() {
     local test_root
+    local fixture_evidence
+    local fixture_sha
+    local fields
+    local bindings
     test_root=$(mktemp -d /tmp/a666-r4-preprove-binding-self-test.XXXXXX)
     chmod 700 "$test_root"
-    cat >"$test_root/green.json" <<'JSON'
-{
-  "schema": "postfiat.a666.r4.path-b-pre-prove-binding-check.v1",
-  "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
-  "witness_sha256": "self-test-witness",
-  "deployment_evidence_path": "self-test-deployment",
-  "deployment_commit": "self-test-commit",
-  "decoder_sha256": "6fb2fb9ac693e5cea787eeb4a80701de562d3b12ce47d837d121d8dc361f6d4a",
-  "decoded_field_count": 35,
-  "conjunction_field_count": 35,
-  "exact_mismatch_count": 0,
-  "all_match": true,
-  "prior_checkpoint_commitment": "self-test-prior",
-  "initial_checkpoint_commitment": "self-test-initial",
-  "prior_checkpoint_matches_initial": true,
-  "route_matches": true,
-  "controller_matches": true,
-  "wrapped_matches": true,
-  "chain_matches": true,
-  "genesis_matches": true,
-  "protocol_matches": true,
-  "program_vkey_matches": true,
-  "live_chain": false,
-  "business_value": 0,
-  "stakehub": false
-}
-JSON
-    jq '.prior_checkpoint_matches_initial = false' "$test_root/green.json" >"$test_root/prior-checkpoint-mismatch.json"
+    fixture_evidence="docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/ethereum-contract-stage.json"
+    fixture_sha=$(sha256sum "$repo/$fixture_evidence" | awk '{print $1}')
+    fields=$(jq -cn --argjson canonical "$canonical_receipt_fields" '[range(0; 35) as $index | {name: $canonical[$index], expected_from_witness: ("witness-value-" + ($index | tostring)), decoded: ("witness-value-" + ($index | tostring))}]')
+    bindings=$(jq -cn '{
+        route: {decoded: "route-value", deployed: "route-value"},
+        controller: {decoded: "controller-value", deployed: "controller-value"},
+        wrapped: {decoded: "wrapped-value", deployed: "wrapped-value"},
+        chain: {decoded: "chain-value", deployed: "chain-value"},
+        genesis: {decoded: "genesis-value", deployed: "genesis-value"},
+        protocol: {decoded: "protocol-value", deployed: "protocol-value"},
+        program_vkey: {decoded: "vkey-value", deployed: "vkey-value"},
+        prior_checkpoint: {decoded: "checkpoint-value", deployed: "checkpoint-value"}
+    }')
+    jq -n \
+        --arg schema "$path_b_schema" \
+        --arg candidate "$path_b_candidate" \
+        --arg witness "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
+        --arg deployment_path "$fixture_evidence" \
+        --arg deployment_sha "$fixture_sha" \
+        --arg decoder "$path_b_decoder_sha256" \
+        --argjson fields "$fields" \
+        --argjson bindings "$bindings" \
+        '{
+            schema: $schema,
+            candidate_revision: $candidate,
+            witness_sha256: $witness,
+            deployment_evidence_path: $deployment_path,
+            deployment_evidence_sha256: $deployment_sha,
+            deployment_commit: "abcdef1",
+            decoder_sha256: $decoder,
+            decoded_field_count: 35,
+            conjunction_field_count: 35,
+            exact_mismatch_count: 0,
+            all_match: true,
+            prior_checkpoint_matches_initial: true,
+            route_matches: true,
+            controller_matches: true,
+            wrapped_matches: true,
+            chain_matches: true,
+            genesis_matches: true,
+            protocol_matches: true,
+            program_vkey_matches: true,
+            fields: $fields,
+            deployment_bindings: $bindings,
+            live_chain: false,
+            business_value: 0,
+            stakehub: false
+        }' >"$test_root/green.json"
+    jq '.deployment_bindings.prior_checkpoint.decoded = "different-prior-value"' "$test_root/green.json" >"$test_root/prior-value-mismatch.json"
+    jq '.fields[0].decoded = "different-field-value"' "$test_root/green.json" >"$test_root/field-value-mismatch.json"
     preprove_ok_for_file "$test_root/green.json"
-    if preprove_ok_for_file "$test_root/prior-checkpoint-mismatch.json"; then
+    if preprove_ok_for_file "$test_root/prior-value-mismatch.json"; then
         printf '%s\n' "pre_prove_binding_self_test=FAIL fixture_root=$test_root"
         return 1
     fi
-    printf '%s\n' "pre_prove_binding_self_test=PASS green=true prior_checkpoint_mismatch=false fixture_root=$test_root"
+    if preprove_ok_for_file "$test_root/field-value-mismatch.json"; then
+        printf '%s\n' "pre_prove_binding_self_test=FAIL fixture_root=$test_root"
+        return 1
+    fi
+    printf '%s\n' "pre_prove_binding_self_test=PASS green=true prior_value_mismatch=false field_value_mismatch=false fixture_root=$test_root"
 }
 
 if [[ $# -gt 0 ]]; then
@@ -251,6 +342,7 @@ fi
 if preprove_ok_for_file "$preprove_binding"; then
     preprove_bindings_ok=true
 fi
+preprove_validation=$(preprove_validation_for_file "$preprove_binding")
 
 proof_contract='null'
 if proof_contract_candidate=$(git show ad30bcb:docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/journey-fire-control-preflight.json 2>/dev/null | jq -ce '.proof_artifact_consumption_contract' 2>/dev/null); then
@@ -335,6 +427,7 @@ jq -n \
     --argjson async_slot_input "$(input_summary "$async_proof_slot")" \
     --argjson stakehub_input "$(input_summary "$stakehub_inventory")" \
     --argjson preprove_input "$(input_summary "$preprove_binding")" \
+    --argjson preprove_validation "$preprove_validation" \
     --argjson stakehub_scan_ok "$stakehub_scan_ok" \
     --argjson stakehub_active_units "$stakehub_active_units" \
     --argjson check_records "$check_records" \
@@ -367,6 +460,7 @@ jq -n \
             async_proof_slot: $async_slot_input,
             stakehub_restart_inventory: $stakehub_input,
             pre_prove_binding: $preprove_input,
+            pre_prove_validation: $preprove_validation,
             stakehub_official_scan: {
                 command_succeeded: $stakehub_scan_ok,
                 active_units: $stakehub_active_units

@@ -185,6 +185,22 @@
         "run_id": null
       }
     },
+    "pre_prove_validation": {
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/pre-prove-binding-check.json",
+      "valid_json": false,
+      "ok": false,
+      "computed": {
+        "field_count": null,
+        "mismatch_count": null,
+        "binding_mismatch_count": null
+      },
+      "deployment_evidence": {
+        "path": null,
+        "path_valid": false,
+        "sha256": null,
+        "sha256_matches_declared": false
+      }
+    },
     "stakehub_official_scan": {
       "command_succeeded": true,
       "active_units": [
