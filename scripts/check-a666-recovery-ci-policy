@@ -38,7 +38,19 @@ COMMAND_CALL_RE = re.compile(
     r"\b(?:exec|execute|run|spawn)\s*\(\s*['\"](?:prove|prover)\b"
 )
 SUCCESS_CONDITION_RE = re.compile(r"^\s*if\b.*\b(?:success|accepted|ok)\b", re.IGNORECASE)
-NEGATED_SUCCESS_RE = re.compile(r"(?:\bnot\s+|!)(?:success|accepted|ok)\b", re.IGNORECASE)
+FAILURE_COMPARISON_RE = re.compile(
+    r"(?:!=\s*['\"]?(?:success|accepted|ok)['\"]?)"
+    r"|(?:['\"]?(?:success|accepted|ok)['\"]?\s*!=)"
+    r"|(?:\b(?:success|accepted|ok)\b\s*==\s*(?:false|0)\b)"
+    r"|(?:\bfalse\s*==\s*[^:]*\b(?:success|accepted|ok)\b)"
+    r"|(?:\b(?:success|accepted|ok)\b\s+is\s+(?:not\s+true|false)\b)",
+    re.IGNORECASE,
+)
+FAILURE_NEGATION_RE = re.compile(
+    r"(?:\bnot\s+[^:]*\b(?:success|accepted|ok)\b)"
+    r"|(?:![^=][^:]*\b(?:success|accepted|ok)\b)",
+    re.IGNORECASE,
+)
 SUCCESS_BRANCH_WINDOW = 64
 REPORT_EVIDENCE_RE = re.compile(
     r"\b(?:report|evidence|acceptance|manifest)\b", re.IGNORECASE
@@ -221,11 +233,22 @@ def is_report_evidence_write(line: str) -> bool:
     return bool(WRITE_RE.search(line) and REPORT_EVIDENCE_RE.search(line))
 
 
+def is_failure_condition(condition: str) -> bool:
+    # A guard that fires on failure (explicit negation or inequality against a
+    # success/ok/accepted operand) is failure-path emission, not success-only.
+    return bool(
+        FAILURE_COMPARISON_RE.search(condition) or FAILURE_NEGATION_RE.search(condition)
+    )
+
+
 def success_branch_write_findings(relative: Path, text: str) -> list[Finding]:
     lines = text.splitlines()
     findings: list[Finding] = []
     for start, condition in enumerate(lines):
-        if not SUCCESS_CONDITION_RE.search(condition) or NEGATED_SUCCESS_RE.search(condition):
+        candidate = non_comment_line(condition)
+        if not SUCCESS_CONDITION_RE.search(candidate):
+            continue
+        if is_failure_condition(candidate):
             continue
         end = min(branch_end(lines, start), start + SUCCESS_BRANCH_WINDOW + 1)
         for index in range(start + 1, end):

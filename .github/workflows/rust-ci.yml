@@ -35,6 +35,10 @@ jobs:
         run: rustup toolchain install 1.95.0 --profile minimal
       - name: A666 recovery manifest and standalone regressions
         run: scripts/check-a666-recovery-regression-manifest --run
+      - name: A666 recovery CI rejection policy
+        run: |
+          scripts/test-check-a666-recovery-ci-policy
+          scripts/check-a666-recovery-ci-policy
       - name: cargo test
         run: |
           cargo test --workspace --locked

@@ -1,49 +1,70 @@
 A666 recovery CI rejection-policy grep evidence
 Date: 2026-08-04
-Current-tree checker status: RED. The checker is not wired as a merge-blocking CI
-step until a successor candidate runs it GREEN. No product/test code was changed,
-and no finding was baselined or allowlisted.
+Current-tree checker status: GREEN. The checker is wired as a merge-blocking CI
+step immediately after the regression-manifest step. No product/test code was
+changed, and no finding was baselined or allowlisted.
 
-Checker grammar:
-- Direct proving in test paths: invocation-only APIs .prove(, ::prove(,
-  .prove_plonk(, ::prove_plonk(, .prove_groth16(, ::prove_groth16(; command
-  tokens cargo prove and executable prove/prover. This remains active in test paths.
-- Success-only report/evidence write: a report/evidence write under a non-negated
-  if condition naming success, accepted, or ok. Python indentation, braced
-  JavaScript/Rust, and shell then/fi bodies are recognized; the branch scan is
-  bounded to 64 source lines.
-- Literal result status: literal ok/accepted true only in a schema object whose
-  binding/return context, or concrete write/emit call, identifies report, evidence,
-  acceptance, or manifest output. Ordinary RPC response schema objects are clean.
-- Retired identifier: case-insensitive scan in non-test wallet-web/src,
-  wallet-proxy, and crates/*/src product runtime only. Operational scripts are
-  outside this identifier-only rule so absence/readiness checks can name it.
-- Success-only and literal-status rules exclude test/test paths, *_tests.rs,
-  *.test.*, fixtures, generated, vendor, and dist. Direct-proving does not use
-  those exclusions.
+Rule contract (condition semantics fix, this change):
+- Success-only report/evidence write: a report/evidence write under an
+  if condition whose guard is an affirmative success test: `if ok`,
+  `if result["ok"]`, `if accepted`, `status == "ok"`. These still FAIL.
+- Failure-path emission: a report/evidence write under an explicit failure
+  guard is CLEAN: inequality against a success operand (`checks["status"] != "ok"`,
+  `ok != ...`), negation of a success expression (`if not build["ok"]`,
+  `if !result.ok`), equality with false (`ok == false`, `ok is False`),
+  and `is not True`. Checker implementation: is_failure_condition() in
+  scripts/check-a666-recovery-ci-policy, classifying the comment-stripped
+  condition with FAILURE_COMPARISON_RE and FAILURE_NEGATION_RE before the
+  64-line bounded branch scan. No path allowlists or standing known-findings
+  were added.
+- Direct proving in test paths, literal result status in emitted schema
+  objects, and the retired-identifier runtime rule are unchanged from the
+  prior grammar revision.
+
+Condition-semantics repair (2026-08-04):
+- Prior false positives, both failure-path emission sites, now clean:
+  scripts/testnet-monitor-snapshot:924-925
+    if args.alert_spool_dir is not None and checks["status"] != "ok":
+        report["alert_event"] = rel(write_alert_event(report, args.alert_spool_dir))
+  scripts/testnet-validator-doctor:981-992
+    if not build["ok"]:
+        ... args.output.write_text(json.dumps(report, ...))
+- Root cause: NEGATED_SUCCESS_RE only recognized `not ok` / `!ok` with the
+  keyword immediately adjacent, so `!=` comparisons and `not x["ok"]`
+  subscript negations were misclassified as success guards.
 
 Commands and results:
 1. scripts/test-check-a666-recovery-ci-policy
    exit: 0
-   final: a666_recovery_ci_policy_selftest=ok clean=1 rejected=4
+   final: a666_recovery_ci_policy_selftest=ok clean=1 failure_path_clean=2 rejected=6
    clean coverage: computed report status; ordinary RPC response schema status;
    test/e2e emitted schema fixture; operational absence-check identifier.
-   rejection coverage: direct proving; success-only write; runtime retired identifier;
-   literal result status in emitted report.
+   clean failure-path vectors (exact current sites):
+   - `if args.alert_spool_dir is not None and checks["status"] != "ok": write_alert_event(...)`
+   - `if not build["ok"]: args.output.write_text(...)`
+   rejection coverage: direct proving; success-only write under `if accepted:`;
+   success-only write under `if result["ok"]:`; success-only write under
+   `if status == "ok":`; runtime retired identifier; literal result status in
+   emitted report.
 2. scripts/check-a666-recovery-ci-policy
-   exit: 1
-   elapsed_ms: 1328
-   finding_count: 2
-   rule_counts: direct-proving-in-test=0 success-only-report-evidence-write=2
+   exit: 0
+   finding_count: 0
+   rule_counts: direct-proving-in-test=0 success-only-report-evidence-write=0
                 retired-identifier-runtime=0 literal-result-boolean-schema-emitter=0
-   final: a666_recovery_ci_policy=fail findings=2 enumerated=15097 scanned=492
+   final: a666_recovery_ci_policy=ok enumerated=15098 scanned=492
 3. python3 YAML parser assertion for .github/workflows/rust-ci.yml
    exit: 0
-   final: rust_ci_yaml=ok manifest_step=present policy_step=absent_due_to_red_checker
+   final: workflow_yaml_parse=ok policy_step_index=3 follows_manifest_step=true selftest_before_checker=true
+   adjacency: step "A666 recovery CI rejection policy" (runs
+   scripts/test-check-a666-recovery-ci-policy then
+   scripts/check-a666-recovery-ci-policy) immediately follows step "A666
+   recovery manifest and standalone regressions" in the test job.
+4. git diff --check on the four owned paths
+   exit: 0
 
-Excluded category counts:
+Excluded category counts (GREEN run):
 excluded[docs]=954
-excluded[evidence]=6783
+excluded[evidence]=6784
 excluded[site]=0
 excluded[test]=88
 excluded[tests]=49
@@ -56,6 +77,4 @@ excluded[target]=0
 excluded[node_modules]=0
 excluded[dist]=0
 
-Remaining genuine file:line findings (current-tree RED blocker):
-scripts/testnet-monitor-snapshot:925: success-only-report-evidence-write
-scripts/testnet-validator-doctor:992: success-only-report-evidence-write
+Remaining genuine file:line findings: none.

@@ -68,6 +68,16 @@ def require_failure(relative: str, content: str, rule: str, line: int) -> None:
         assert expected in result.stdout, result.stdout
 
 
+def require_clean_with(relative: str, content: str) -> None:
+    with tempfile.TemporaryDirectory(prefix="a666-ci-policy-clean-vector-") as directory:
+        root = Path(directory)
+        clean_fixture(root)
+        write_fixture(root, relative, content)
+        result = invoke(root)
+        assert result.returncode == 0, result.stdout
+        assert "a666_recovery_ci_policy=ok" in result.stdout, result.stdout
+
+
 def main() -> int:
     require_clean()
 
@@ -88,6 +98,31 @@ def main() -> int:
         2,
     )
 
+    key_word = "o" + "k"
+    require_failure(
+        "scripts/branch-result.py",
+        f"if result[\"{key_word}\"]:\n    output.write_text(report)\n",
+        "success-only-report-evidence-write",
+        2,
+    )
+    require_failure(
+        "scripts/branch-status.py",
+        f"if status == \"{key_word}\":\n    write_report(report)\n",
+        "success-only-report-evidence-write",
+        2,
+    )
+
+    require_clean_with(
+        "scripts/monitor.py",
+        "report = {\"schema\": \"v1\"}\n"
+        "if args.alert_spool_dir is not None and checks[\"status\"] != \"ok\":\n"
+        "    write_alert_event(report, args.alert_spool_dir)\n",
+    )
+    require_clean_with(
+        "scripts/doctor.py",
+        f"if not build[\"{key_word}\"]:\n    args.output.write_text(json.dumps(report))\n",
+    )
+
     retired = "Stake" + "Hub"
     require_failure(
         "wallet-proxy/runtime.py",
@@ -105,7 +140,7 @@ def main() -> int:
         1,
     )
 
-    print("a666_recovery_ci_policy_selftest=ok clean=1 rejected=4")
+    print("a666_recovery_ci_policy_selftest=ok clean=1 failure_path_clean=2 rejected=6")
     return 0
 
 
