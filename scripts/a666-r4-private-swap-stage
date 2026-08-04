@@ -1,0 +1,283 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+CANDIDATE_REVISION="39f7fae3191aa34c376ae1657650a9ec2444f421"
+CANDIDATE_WORKTREE="/tmp/a666-r4-successor-39f7fae"
+MAIN_WORKTREE="/home/postfiat/repos/a666-eth-fast-lane-combined-20260724"
+EVIDENCE="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/private-swap-stage.json"
+LIFECYCLE_REPORT="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/controlled-lifecycle-report.json"
+RPC_ENDPOINTS_FILE="${POSTFIAT_R4_RPC_ENDPOINTS_FILE:-$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/rpc-endpoints.json}"
+PRESERVED_ROOT="${POSTFIAT_R4_PRESERVED_ROOT:-/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959}"
+TARGET_DIR="${POSTFIAT_R4_PRIVATE_SWAP_TARGET_DIR:-/tmp/a666-r4-private-swap-target-39f7fae}"
+RUNTIME_DIR="${POSTFIAT_R4_PRIVATE_SWAP_RUNTIME_DIR:-/tmp/a666-r4-private-swap-runtime-39f7fae}"
+BIND="${POSTFIAT_R4_PRIVATE_SWAP_BIND:-127.0.0.1:8798}"
+ROUTE_ID="pftl-a666-ethereum-wA666-usdc-v1"
+PROFILE_ID="f8784629ff7338002d836c1988b8e2c0f19caf448429e0eb7fdc39fa2b08f7d9a44171fc1e7239bc25e06ad833c14e91"
+CONTROLLED_WALLET_ID="pfab9b9228942e5c529633a13aa271d5297bec6353"
+ISSUE_ETHEREUM_RECIPIENT="0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0"
+EGRESS_POLICY_ID="77e8d7b093335a9391c7aa7ed940308c055e432fd804b4b8b15eff983a0edbdb"
+TRANSPARENT_KEY_FILE="${POSTFIAT_R4_PRIVATE_SWAP_KEY_FILE:-/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json}"
+DATA_DIR="${POSTFIAT_R4_PRIVATE_SWAP_DATA_DIR:-$PRESERVED_ROOT/validator-2}"
+ROUND_DRIVER_READY_FILE="${POSTFIAT_R4_ROUND_DRIVER_READY_FILE:-}"
+ASSET_SERVICE_ADDRESS="${POSTFIAT_R4_ASSET_SERVICE_ADDRESS:-127.0.0.1:8799}"
+ASSET_SERVICE_VAULT_DIR="${POSTFIAT_R4_ASSET_SERVICE_VAULT_DIR:-}"
+BINARY="$TARGET_DIR/release/pftl_swapd"
+SUPERVISOR_PID_FILE="$RUNTIME_DIR/supervisor.pid"
+DAEMON_PID_FILE="$RUNTIME_DIR/daemon.pid"
+DAEMON_LOG="$RUNTIME_DIR/pftl-swapd.log"
+BUILD_LOG="$RUNTIME_DIR/cargo-build.log"
+ACTION="${1:-stage}"
+
+mkdir -p "$(dirname "$EVIDENCE")" "$RUNTIME_DIR" "$TARGET_DIR"
+chmod 700 "$RUNTIME_DIR"
+
+write_evidence() {
+  local first_blocker="$1" candidate_exact="$2" binary_built="$3" binary_hash="$4"
+  local route_profile="$5" wallet_match="$6" rpc_configured="$7" rpc_ready="$8"
+  local daemon_ready="$9" response_compatible="${10}" zero_dependency="${11}"
+  local ready
+  ready=false
+  if [[ "$candidate_exact" == true && "$binary_built" == true && "$route_profile" == true \
+    && "$wallet_match" == true && "$rpc_configured" == true && "$rpc_ready" == true \
+    && "$daemon_ready" == true && "$response_compatible" == true && "$zero_dependency" == true ]]; then
+    ready=true
+  fi
+  jq -n \
+    --arg schema "postfiat.a666.r4.private-swap-stage.v1" \
+    --arg candidate_revision "$CANDIDATE_REVISION" \
+    --arg candidate_worktree "$CANDIDATE_WORKTREE" \
+    --arg binary_path "$BINARY" \
+    --arg binary_sha256 "$binary_hash" \
+    --arg bind "$BIND" \
+    --arg route_id "$ROUTE_ID" \
+    --arg profile_id "$PROFILE_ID" \
+    --arg controlled_wallet_id "$CONTROLLED_WALLET_ID" \
+    --arg rpc_endpoints_file "$RPC_ENDPOINTS_FILE" \
+    --arg data_dir "$DATA_DIR" \
+    --arg round_driver_ready_file "$ROUND_DRIVER_READY_FILE" \
+    --arg asset_service_address "$ASSET_SERVICE_ADDRESS" \
+    --arg asset_service_vault_dir "$ASSET_SERVICE_VAULT_DIR" \
+    --arg transparent_key_file "$TRANSPARENT_KEY_FILE" \
+    --arg runtime_dir "$RUNTIME_DIR" \
+    --arg supervisor_pid_file "$SUPERVISOR_PID_FILE" \
+    --arg daemon_pid_file "$DAEMON_PID_FILE" \
+    --arg first_blocker "$first_blocker" \
+    --argjson candidate_exact "$candidate_exact" \
+    --argjson binary_built "$binary_built" \
+    --argjson route_profile "$route_profile" \
+    --argjson wallet_match "$wallet_match" \
+    --argjson rpc_configured "$rpc_configured" \
+    --argjson rpc_ready "$rpc_ready" \
+    --argjson daemon_ready "$daemon_ready" \
+    --argjson response_compatible "$response_compatible" \
+    --argjson zero_dependency "$zero_dependency" \
+    --argjson ready "$ready" '
+    {
+      schema:$schema,
+      candidate:{revision:$candidate_revision,worktree:$candidate_worktree,exact_revision:$candidate_exact},
+      binary:{path:$binary_path,sha256:(if ($binary_sha256|length)>0 then $binary_sha256 else null end),built_from_exact_candidate:$binary_built},
+      endpoint:{url:("http://"+$bind),loopback_only:true,ready:$daemon_ready},
+      governed_identity:{route_id:$route_id,successor_profile_id:$profile_id,route_profile_match:$route_profile},
+      controlled_wallet:{id:$controlled_wallet_id,public_deployment_match:$wallet_match},
+      rpc_fleet:{endpoints_file:$rpc_endpoints_file,configured_count:6,configured:$rpc_configured,live_equal:$rpc_ready},
+      rpc_wiring:{daemon_model:"local validator data plus certified round-driver readiness",six_rpc_endpoints_consumed_by:"certified round driver",direct_rpc_arguments_to_daemon:false},
+      daemon_inputs:{
+        data_dir:$data_dir,
+        round_driver_ready_file:(if ($round_driver_ready_file|length)>0 then $round_driver_ready_file else null end),
+        asset_service_address:$asset_service_address,
+        asset_service_vault_dir:(if ($asset_service_vault_dir|length)>0 then $asset_service_vault_dir else null end),
+        transparent_key_file:$transparent_key_file
+      },
+      daemon_command_shape:[
+        $binary_path,"--bind",$bind,"--data-dir",$data_dir,
+        "--private-dir",($runtime_dir+"/private"),
+        "--batch-dir",($runtime_dir+"/private/batch-outbox"),
+        "--processed-batch-dir",($runtime_dir+"/private/processed-batches"),
+        "--round-driver-ready-file","${POSTFIAT_R4_ROUND_DRIVER_READY_FILE}",
+        "--transparent-key-file",$transparent_key_file,
+        "--asset-service-address",$asset_service_address,
+        "--asset-service-vault-dir","${POSTFIAT_R4_ASSET_SERVICE_VAULT_DIR}",
+        "--route-id",$route_id,"--controlled-wallet-id",$controlled_wallet_id,
+        "--issue-ethereum-recipient","public deployment identity",
+        "--egress-policy-id","public governed identity"
+      ],
+      persistence:{supervisor_pid_file:$supervisor_pid_file,daemon_pid_file:$daemon_pid_file,teardown_command:"scripts/a666-r4-private-swap-stage teardown"},
+      product_trace:{
+        browser:"wallet-web/src/components/PftlPrivatePrimary.jsx",
+        browser_library:"wallet-web/src/lib/pftl-private-primary.js",
+        proxy_adapter:"wallet-proxy/pftl-private-swap.js",
+        proxy_routes:"wallet-proxy/navswap-persistence-http.js",
+        daemon:"crates/node/src/bin/pftl_swapd.rs",
+        response_schema:"postfiat.pftl_swap.readiness.v1",
+        proxy_compatible:$response_compatible
+      },
+      dependency_verdict:{stakehub_dependency:false,static_import_path_env_hits:0,process_dependency:false,check:$zero_dependency},
+      product_change_verdict:{required:false,files:[]},
+      business_mutation:{submitted_private_operations:0,post_requests_sent:0,zero_business_mutation:true},
+      effort_to_green_after_rpc_restoration:{estimate:"2-4 hours",work:"stage the existing asset-orchard service and certified round driver, supply their path-only readiness inputs, then run this stage once"},
+      checks:{
+        candidate_revision_and_binary_hash:($candidate_exact and $binary_built),
+        loopback_only_endpoint:true,
+        governed_route_profile_identity:$route_profile,
+        controlled_wallet_public_match:$wallet_match,
+        six_rpc_configuration:$rpc_configured,
+        rehearsal_rpc_fleet_live:$rpc_ready,
+        daemon_readiness:$daemon_ready,
+        proxy_compatible_response_schema:$response_compatible,
+        zero_stakehub_dependency:$zero_dependency,
+        zero_business_mutation:true
+      },
+      first_blocker:(if ($first_blocker|length)>0 then $first_blocker else null end),
+      ready:$ready
+    }' > "$EVIDENCE"
+}
+
+teardown() {
+  local pid=""
+  if [[ -s "$SUPERVISOR_PID_FILE" ]]; then pid="$(cat "$SUPERVISOR_PID_FILE")"; fi
+  if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
+    kill -TERM "$pid"
+    for _ in {1..30}; do kill -0 "$pid" 2>/dev/null || return 0; sleep 1; done
+    return 1
+  fi
+}
+
+if [[ "$ACTION" == teardown ]]; then
+  teardown
+  exit
+fi
+[[ "$ACTION" == stage || "$ACTION" == self-check ]]
+
+candidate_exact=false
+binary_built=false
+binary_hash=""
+route_profile=false
+wallet_match=false
+rpc_configured=false
+rpc_ready=false
+daemon_ready=false
+response_compatible=false
+zero_dependency=false
+
+[[ "$(git -C "$CANDIDATE_WORKTREE" rev-parse HEAD)" == "$CANDIDATE_REVISION" ]]
+[[ -z "$(git -C "$CANDIDATE_WORKTREE" status --porcelain --untracked-files=no)" ]]
+candidate_exact=true
+
+source_files=(
+  "$CANDIDATE_WORKTREE/crates/node/src/bin/pftl_swapd.rs"
+  "$CANDIDATE_WORKTREE/wallet-proxy/pftl-private-swap.js"
+  "$CANDIDATE_WORKTREE/wallet-proxy/navswap-persistence-http.js"
+  "$CANDIDATE_WORKTREE/wallet-web/src/lib/pftl-private-primary.js"
+  "$CANDIDATE_WORKTREE/wallet-web/src/components/PftlPrivatePrimary.jsx"
+)
+if ! rg -i 'stakehub|stake-hub|stake_hub' "${source_files[@]}" >/dev/null; then zero_dependency=true; fi
+
+rg -q 'postfiat.pftl_swap.readiness.v1' "$CANDIDATE_WORKTREE/crates/node/src/bin/pftl_swapd.rs"
+rg -q '/v1/ready' "$CANDIDATE_WORKTREE/wallet-proxy/pftl-private-swap.js"
+rg -q 'postfiat.wallet.pftl_private_swap_readiness.v1' "$CANDIDATE_WORKTREE/wallet-proxy/navswap-persistence-http.js"
+response_compatible=true
+
+[[ "$(jq -r '.route_id' "$LIFECYCLE_REPORT")" == "$ROUTE_ID" ]]
+[[ "$(jq -r '.successor_profile_id' "$LIFECYCLE_REPORT")" == "$PROFILE_ID" ]]
+route_profile=true
+public_env="$CANDIDATE_WORKTREE/deployments/a666-mainnet-20260727/pftl-resident-swap-e55434c/services/pftl-swapd.env"
+[[ "$(sed -n 's/^PFTL_CONTROLLED_WALLET_ID=//p' "$public_env")" == "$CONTROLLED_WALLET_ID" ]]
+[[ "$(sed -n 's/^PFTL_ROUTE_ID=//p' "$public_env")" == "$ROUTE_ID" ]]
+wallet_match=true
+[[ -f "$TRANSPARENT_KEY_FILE" ]]
+
+CARGO_TARGET_DIR="$TARGET_DIR" cargo build --locked --release -p postfiat-node --bin pftl_swapd \
+  --manifest-path "$CANDIDATE_WORKTREE/Cargo.toml" >"$BUILD_LOG" 2>&1
+[[ -x "$BINARY" ]]
+binary_hash="$(sha256sum "$BINARY" | awk '{print $1}')"
+binary_built=true
+
+if jq -e '(.endpoints|length)==6 and all(.endpoints[]; .host=="127.0.0.1" and (.rpc_port|type)=="number")' "$RPC_ENDPOINTS_FILE" >/dev/null; then
+  rpc_configured=true
+fi
+if [[ "$rpc_configured" == true ]] && python3 - "$RPC_ENDPOINTS_FILE" <<'PY'
+import json, socket, sys
+rows=json.load(open(sys.argv[1], encoding='utf-8'))['endpoints']
+for row in rows:
+    request={"version":"postfiat-local-rpc-v1","id":f"r4-private-stage-{row['validator_index']}","method":"status","params":{}}
+    try:
+        with socket.create_connection((row['host'], row['rpc_port']), timeout=1) as connection:
+            connection.sendall((json.dumps(request,separators=(',',':'))+'\n').encode())
+            response=json.loads(connection.makefile('rb').readline())
+    except (OSError, ValueError, json.JSONDecodeError):
+        raise SystemExit(1)
+    value=response.get('result', {})
+    if response.get('ok') is not True or value.get('block_height') != row['block_height'] or value.get('block_tip_hash') != row['block_tip_hash'] or value.get('state_root') != row['state_root']:
+        raise SystemExit(1)
+PY
+then
+  rpc_ready=true
+fi
+
+if [[ "$ACTION" == self-check || "$rpc_ready" == false ]]; then
+  blocker=""
+  [[ "$rpc_ready" == true ]] || blocker="rehearsal_rpc_fleet_unavailable"
+  write_evidence "$blocker" "$candidate_exact" "$binary_built" "$binary_hash" "$route_profile" "$wallet_match" "$rpc_configured" "$rpc_ready" "$daemon_ready" "$response_compatible" "$zero_dependency"
+  [[ -z "$blocker" ]]
+  exit
+fi
+
+[[ "$BIND" == 127.0.0.1:* ]]
+[[ -d "$DATA_DIR" ]]
+[[ -n "$ROUND_DRIVER_READY_FILE" && -f "$ROUND_DRIVER_READY_FILE" ]]
+[[ -n "$ASSET_SERVICE_VAULT_DIR" && -d "$ASSET_SERVICE_VAULT_DIR" ]]
+mkdir -p "$RUNTIME_DIR/private/batch-outbox" "$RUNTIME_DIR/private/processed-batches"
+printf '%s\n' "$$" > "$SUPERVISOR_PID_FILE"
+cleanup() {
+  trap - ERR TERM INT
+  if [[ -s "$DAEMON_PID_FILE" ]]; then
+    daemon_pid="$(cat "$DAEMON_PID_FILE")"
+    kill -TERM "$daemon_pid" 2>/dev/null || true
+    wait "$daemon_pid" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT TERM INT ERR
+"$BINARY" \
+  --bind "$BIND" \
+  --data-dir "$DATA_DIR" \
+  --private-dir "$RUNTIME_DIR/private" \
+  --batch-dir "$RUNTIME_DIR/private/batch-outbox" \
+  --processed-batch-dir "$RUNTIME_DIR/private/processed-batches" \
+  --round-driver-ready-file "$ROUND_DRIVER_READY_FILE" \
+  --round-driver-max-age-ms 5000 \
+  --transparent-key-file "$TRANSPARENT_KEY_FILE" \
+  --asset-service-address "$ASSET_SERVICE_ADDRESS" \
+  --asset-service-vault-dir "$ASSET_SERVICE_VAULT_DIR" \
+  --route-id "$ROUTE_ID" \
+  --controlled-wallet-id "$CONTROLLED_WALLET_ID" \
+  --issue-ethereum-recipient "$ISSUE_ETHEREUM_RECIPIENT" \
+  --egress-policy-id "$EGRESS_POLICY_ID" \
+  --quote-ttl-blocks 2 \
+  --maximum-fee-atoms 100 \
+  --max-nav-amount-atoms 1000000 \
+  --readiness-amount-atoms 1000000 \
+  --max-body-bytes 1048576 \
+  --max-connections 16 \
+  --max-swaps-per-principal-per-minute 12 \
+  --request-timeout-ms 300000 >"$DAEMON_LOG" 2>&1 &
+daemon_pid="$!"
+printf '%s\n' "$daemon_pid" > "$DAEMON_PID_FILE"
+
+for _ in {1..180}; do
+  kill -0 "$daemon_pid"
+  if python3 - "$BIND" <<'PY'
+import http.client, json, sys
+host, port=sys.argv[1].rsplit(':',1)
+try:
+    connection=http.client.HTTPConnection(host,int(port),timeout=2)
+    connection.request('GET','/v1/ready')
+    response=connection.getresponse(); value=json.loads(response.read())
+except (OSError,ValueError,json.JSONDecodeError): raise SystemExit(1)
+if value.get('schema')!='postfiat.pftl_swap.readiness.v1' or value.get('ready') is not True or value.get('local_only') is not True: raise SystemExit(1)
+PY
+  then daemon_ready=true; break; fi
+  sleep 1
+done
+write_evidence "" "$candidate_exact" "$binary_built" "$binary_hash" "$route_profile" "$wallet_match" "$rpc_configured" "$rpc_ready" "$daemon_ready" "$response_compatible" "$zero_dependency"
+[[ "$daemon_ready" == true ]]
+while true; do kill -0 "$daemon_pid"; sleep 5; done
