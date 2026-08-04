@@ -22,3 +22,22 @@ Assertions covered
 - Recovered and finalized balance tuples and receipt identities equal fixed expected finalized fixtures.
 - Generated seed and owner-private-key material are scanned out of proxy ingress, proxy/browser console, local/session storage, durable stores, Chromium profile, and produced test evidence.
 - Local rehearsal only: no live chain, vault, real credentials, or keys used.
+
+Corrective locator close-out
+Command from wallet-web/:
+node --check src/lib/journey-step-9-recovery.e2e.js && npm run test:public-browser
+exit: 0
+elapsed_ms: 8236
+matched_tests: 2
+final:
+# tests 2
+# pass 2
+# fail 0
+# duration_ms 7979.735652
+Locator corrections:
+- Both committed-state waits are scoped to #private-navcoin-primary and select first().
+- Reconnect is computed from observed visible .pf-sidebar .pf-ledger text containing height 901.
+- Production recovery count is observed as original + recovery + stable committed replay (3 submissions, 1 commit).
+Production path retained:
+- Rendered Swap.jsx mounts PftlPrivatePrimary.jsx.
+- PftlPrivatePrimary.jsx drives savePftlPrivateRecoveries, loadPftlPrivateRecoveries, and completePftlPrivateIntent.

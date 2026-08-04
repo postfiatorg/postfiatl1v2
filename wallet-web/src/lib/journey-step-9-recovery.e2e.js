@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import net from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
@@ -15,89 +16,25 @@ const REPOSITORY_ROOT = resolve(WALLET_ROOT, '..');
 const PROXY_ROOT = join(REPOSITORY_ROOT, 'wallet-proxy');
 const DIST_ROOT = join(WALLET_ROOT, 'dist');
 
-const CONTROLLED_WALLET = `pf${'a1'.repeat(20)}`;
 const ROUTE_ID = 'journey-step-9-private-primary';
-const RECOVERY_KEY = `postfiat.journey.step9.recovery.${CONTROLLED_WALLET}.v1`;
-const CONNECTION_KEY = 'postfiat.journey.step9.connection.v1';
-const PENDING_ID = 'journey-step-9-pending';
-const FINALIZED_ID = 'journey-step-9-finalized';
-const PUBLIC_KEY_HEX = 'b2'.repeat(1952);
-const SIGNATURE_HEX = 'c3'.repeat(3309);
-
+const NAV_ASSET_ID = 'a1'.repeat(48);
+const SETTLEMENT_ASSET_ID = 'b2'.repeat(48);
+const ROUTE_DIGEST = 'c3'.repeat(48);
+const RESERVE_PACKET_HASH = 'd4'.repeat(48);
 const FINAL_BALANCE_TUPLE = Object.freeze([
-  Object.freeze({ asset_id: 'pfusdc-test-asset', amount_atoms: '3988000' }),
-  Object.freeze({ asset_id: 'navcoin-test-asset', amount_atoms: '1010000' }),
+  Object.freeze({ asset_id: SETTLEMENT_ASSET_ID, amount_atoms: '3988000' }),
+  Object.freeze({ asset_id: NAV_ASSET_ID, amount_atoms: '1010000' }),
 ]);
-
-const FIXTURES = Object.freeze({
-  pending: Object.freeze({
-    idempotency_key: PENDING_ID,
-    receipt_identity: 'journey-step-9-pending-final-receipt',
-    final_balance_tuple: FINAL_BALANCE_TUPLE,
-  }),
-  finalized: Object.freeze({
-    idempotency_key: FINALIZED_ID,
-    receipt_identity: 'journey-step-9-finalized-receipt',
-    final_balance_tuple: FINAL_BALANCE_TUPLE,
-  }),
-});
+const FINAL_RECEIPT_IDENTITY = 'journey-step-9-pending-final-receipt';
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-function signedIntent(idempotencyKey) {
-  return {
-    schema: 'postfiat.pftl_swap.signed_intent.v1',
-    algorithm_id: 'ML-DSA-65',
-    public_key_hex: PUBLIC_KEY_HEX,
-    signature_hex: SIGNATURE_HEX,
-    intent: {
-      schema: 'postfiat.pftl_swap.intent.v1',
-      chain_id: 'postfiat-local-rehearsal',
-      genesis_hash: 'd4'.repeat(48),
-      protocol_version: 1,
-      principal: CONTROLLED_WALLET,
-      controlled_wallet_id: CONTROLLED_WALLET,
-      route_id: ROUTE_ID,
-      direction: 'issue',
-      output_mode: 'private',
-      input_reference: 'transparent-pfusdc',
-      input_amount_atoms: 1005000,
-      minimum_output_amount_atoms: 1000000,
-      maximum_fee_atoms: 5000,
-      quote_id: 'e5'.repeat(48),
-      pricing_nav_epoch: 9,
-      policy_hash: 'f6'.repeat(48),
-      expiry_height: 1200,
-      idempotency_key: idempotencyKey,
-    },
-  };
-}
-
-function recoveryRecord({ fixture, status, intent }) {
-  return {
-    idempotency_key: fixture.idempotency_key,
-    status,
-    signed_intent: intent,
-    final_balance_tuple: status === 'COMMITTED' ? clone(fixture.final_balance_tuple) : null,
-    receipt_identity: status === 'COMMITTED' ? fixture.receipt_identity : null,
-  };
-}
-
 function initialResidentStore() {
   return {
     schema: 'postfiat-journey-step-9-resident-job-store-v1',
-    jobs: {
-      [FINALIZED_ID]: {
-        idempotency_key: FINALIZED_ID,
-        state: 'COMMITTED',
-        submit_count: 0,
-        commit_count: 1,
-        receipt_identity: FIXTURES.finalized.receipt_identity,
-        final_balance_tuple: clone(FIXTURES.finalized.final_balance_tuple),
-      },
-    },
+    jobs: {},
   };
 }
 
@@ -123,6 +60,39 @@ function sendJson(response, status, payload) {
   response.end(JSON.stringify(payload));
 }
 
+function quote() {
+  return {
+    schema: 'postfiat.pftl_swap.quote.v1',
+    quote_id: 'e5'.repeat(48),
+    chain_id: 'postfiat-wan-devnet-2',
+    genesis_hash: 'f6'.repeat(48),
+    protocol_version: 1,
+    route_id: ROUTE_ID,
+    direction: 'issue',
+    output_mode: 'private',
+    nav_amount_atoms: 1000000,
+    input_asset_id: SETTLEMENT_ASSET_ID,
+    input_amount_atoms: 1005000,
+    output_asset_id: NAV_ASSET_ID,
+    output_amount_atoms: 1000000,
+    base_settlement_atoms: 1000000,
+    spread_atoms: 5000,
+    maximum_fee_atoms: 5000,
+    route_epoch: 9,
+    policy_epoch: 9,
+    policy_hash: '12'.repeat(48),
+    pricing_nav_epoch: 9,
+    pricing_reserve_packet_hash: RESERVE_PACKET_HASH,
+    quote_height: 900,
+    quote_block_id: '34'.repeat(32),
+    state_root: '56'.repeat(32),
+    orchard_root: '78'.repeat(32),
+    route_state_hash: '9a'.repeat(32),
+    expiry_height: 1200,
+    created_at_unix_ms: 1,
+  };
+}
+
 function residentResult(job, replayed) {
   const committed = job.state === 'COMMITTED';
   return {
@@ -131,21 +101,22 @@ function residentResult(job, replayed) {
     swap: {
       swap_id: `swap-${job.idempotency_key}`,
       idempotency_key: job.idempotency_key,
-      quote_id: 'e5'.repeat(48),
+      quote_id: quote().quote_id,
       direction: 'issue',
       input_amount_atoms: 1005000,
       minimum_output_amount_atoms: 1000000,
       state: job.state,
       batch_hash: 'ab'.repeat(32),
       committed_height: committed ? 901 : null,
-      certificate_ref: committed ? job.receipt_identity : null,
+      certificate_ref: committed ? FINAL_RECEIPT_IDENTITY : null,
     },
-    final_balance_tuple: committed ? clone(job.final_balance_tuple) : null,
-    receipt: committed ? { receipt_identity: job.receipt_identity, finalized: true } : null,
+    final_balance_tuple: committed ? clone(FINAL_BALANCE_TUPLE) : null,
+    receipt: committed ? { receipt_identity: FINAL_RECEIPT_IDENTITY, finalized: true } : null,
+    output_note_refs: committed ? ['cd'.repeat(32)] : [],
   };
 }
 
-async function startResident(storePath, ingress) {
+async function startResident(storePath, identity, ingress) {
   const server = createServer(async (request, response) => {
     const url = new URL(request.url || '/', 'http://127.0.0.1');
 
@@ -155,22 +126,23 @@ async function startResident(storePath, ingress) {
         schema: 'postfiat.pftl_swap.readiness.v1',
         ready: true,
         local_only: true,
-        controlled_wallet_id: CONTROLLED_WALLET,
+        controlled_wallet_id: identity.walletAddress,
         route_id: ROUTE_ID,
+        checks: { admission: { max_nav_amount_atoms: 1000000 } },
       });
       return;
     }
 
-    if (request.method === 'GET' && url.pathname === '/v1/status') {
-      const idempotencyKey = url.searchParams.get('id') || '';
-      const store = await readStore(storePath);
-      const job = store.jobs[idempotencyKey];
-      ingress.push({ method: request.method, path: url.pathname, body: idempotencyKey });
-      if (!job) {
-        sendJson(response, 404, { ok: false, message: 'local rehearsal job was not found' });
+    if (request.method === 'POST' && url.pathname === '/v1/quote') {
+      const bodyText = await readRequestBody(request);
+      ingress.push({ method: request.method, path: url.pathname, body: bodyText });
+      const body = JSON.parse(bodyText);
+      if (body?.direction !== 'issue' || body?.output_mode !== 'private'
+        || body?.nav_amount_atoms !== 1000000) {
+        sendJson(response, 400, { ok: false, message: 'local rehearsal quote binding failed' });
         return;
       }
-      sendJson(response, 200, residentResult(job, true));
+      sendJson(response, 200, { ok: true, quote: quote() });
       return;
     }
 
@@ -178,11 +150,12 @@ async function startResident(storePath, ingress) {
       const bodyText = await readRequestBody(request);
       ingress.push({ method: request.method, path: url.pathname, body: bodyText });
       const body = JSON.parse(bodyText);
-      const idempotencyKey = body?.signed_intent?.intent?.idempotency_key;
-      const principal = body?.signed_intent?.intent?.principal;
-      const routeId = body?.signed_intent?.intent?.route_id;
-      if (!idempotencyKey || principal !== CONTROLLED_WALLET || routeId !== ROUTE_ID) {
-        sendJson(response, 400, { ok: false, message: 'local rehearsal intent binding failed' });
+      const signed = body?.signed_intent;
+      const idempotencyKey = signed?.intent?.idempotency_key;
+      if (!idempotencyKey || signed?.intent?.principal !== identity.walletAddress
+        || signed?.intent?.controlled_wallet_id !== identity.walletAddress
+        || signed?.intent?.route_id !== ROUTE_ID) {
+        sendJson(response, 400, { ok: false, message: 'local rehearsal signed intent binding failed' });
         return;
       }
 
@@ -194,8 +167,8 @@ async function startResident(storePath, ingress) {
           state: 'PUBLISHED',
           submit_count: 1,
           commit_count: 0,
-          receipt_identity: FIXTURES.pending.receipt_identity,
-          final_balance_tuple: clone(FIXTURES.pending.final_balance_tuple),
+          final_balance_tuple: clone(FINAL_BALANCE_TUPLE),
+          receipt_identity: FINAL_RECEIPT_IDENTITY,
         };
         store.jobs[idempotencyKey] = job;
         await writeStore(storePath, store);
@@ -218,11 +191,124 @@ async function startResident(storePath, ingress) {
       return;
     }
 
+    if (request.method === 'GET' && url.pathname === '/v1/status') {
+      const idempotencyKey = url.searchParams.get('id') || '';
+      ingress.push({ method: request.method, path: url.pathname, body: idempotencyKey });
+      const job = (await readStore(storePath)).jobs[idempotencyKey];
+      if (!job) {
+        sendJson(response, 404, { ok: false, message: 'local rehearsal job was not found' });
+        return;
+      }
+      sendJson(response, 200, residentResult(job, true));
+      return;
+    }
+
     sendJson(response, 404, { ok: false, message: 'local rehearsal resident path was not found' });
   });
-
   await listen(server);
   return server;
+}
+
+function rpcResult(method) {
+  if (method === 'status') {
+    return {
+      chain_id: 'postfiat-local-rehearsal',
+      genesis_hash: 'f6'.repeat(48),
+      protocol_version: 1,
+      block_height: 901,
+      mempool_pending: 0,
+      validator_count: 1,
+      last_run_unix: Math.floor(Date.now() / 1000),
+    };
+  }
+  if (method === 'server_info') return { rpc: { read_only: false, owned_lane_enabled: false } };
+  if (method === 'navcoin_bridge_routes') {
+    return {
+      schema: 'postfiat-pftl-uniswap-routes-status-v2',
+      route_count: 1,
+      routes: [{
+        route_family: 'primary_pftl_mint',
+        route_id: ROUTE_ID,
+        route_config_digest: ROUTE_DIGEST,
+        native_nav_asset_id: NAV_ASSET_ID,
+        settlement_asset_id: SETTLEMENT_ASSET_ID,
+        wrapped_navcoin_token: `0x${'11'.repeat(20)}`,
+        handoff_controller: `0x${'22'.repeat(20)}`,
+        native_nav_asset_code: 'NAV',
+        native_nav_asset_display_name: 'Local NAV',
+        settlement_asset_code: 'pfUSDC',
+        settlement_asset_display_name: 'Local pfUSDC',
+        native_nav_asset_precision: 6,
+        settlement_asset_precision: 6,
+        ethereum_chain_id: 1,
+        route_trust_class: 'CONTROLLED',
+        live_value_enabled: true,
+        paused: false,
+      }],
+    };
+  }
+  if (method === 'navcoin_bridge_supply_status') {
+    return {
+      route_id: ROUTE_ID,
+      native_nav_asset_id: NAV_ASSET_ID,
+      settlement_asset_id: SETTLEMENT_ASSET_ID,
+      live_value_enabled: true,
+      paused: false,
+      invariant_holds: true,
+      pricing_nav_epoch: 9,
+      pricing_reserve_packet_hash: RESERVE_PACKET_HASH,
+      settlement_reserve_atoms: '3988000',
+      available_issue_atoms: '1010000',
+      available_redeem_atoms: '1010000',
+    };
+  }
+  if (method === 'vault_bridge_status') {
+    return {
+      asset_id: NAV_ASSET_ID,
+      finalized_epoch: 9,
+      finalized_reserve_packet_hash: RESERVE_PACKET_HASH,
+      nav_per_unit: '1.000000',
+    };
+  }
+  if (method === 'account') return { balance: 0, sequence: 0, public_key_hex: null };
+  if (method === 'account_assets') return { assets: [] };
+  if (method === 'owned_objects') return { objects: [] };
+  if (method === 'account_tx') return [];
+  return {};
+}
+
+async function startRpcFixture() {
+  const server = net.createServer(socket => {
+    let pending = '';
+    socket.on('error', error => {
+      if (error.code !== 'ECONNRESET') throw error;
+    });
+    socket.on('data', chunk => {
+      pending += chunk.toString('utf8');
+      let delimiter = pending.indexOf('\n');
+      while (delimiter >= 0) {
+        const line = pending.slice(0, delimiter);
+        pending = pending.slice(delimiter + 1);
+        const request = JSON.parse(line);
+        socket.write(`${JSON.stringify({
+          version: request.version,
+          id: request.id,
+          ok: true,
+          result: rpcResult(request.method),
+          error: null,
+          events: [],
+        })}\n`);
+        delimiter = pending.indexOf('\n');
+      }
+    });
+  });
+  await new Promise((resolveListen, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolveListen);
+  });
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('local RPC fixture did not receive a TCP port');
+  return { server, port: address.port };
 }
 
 async function listen(server) {
@@ -249,7 +335,7 @@ async function reservePort() {
   return port;
 }
 
-function startProxy({ port, residentPort, token, runStorePath, idempotencyStorePath }) {
+function startProxy({ port, residentPort, rpcPort, token, controlledWallet }) {
   const output = [];
   const child = spawn(process.execPath, ['server.js'], {
     cwd: PROXY_ROOT,
@@ -265,12 +351,12 @@ function startProxy({ port, residentPort, token, runStorePath, idempotencyStoreP
       ENABLE_UPSTREAM_KEEPALIVE: 'false',
       ENABLE_PROPOSER_ROUTING: 'false',
       RPC_HOST: '127.0.0.1',
-      RPC_PORT: '1',
-      RPC_FLEET: 'validator-0=127.0.0.1:1',
-      NAVSWAP_RUN_STORE_PATH: runStorePath,
-      NAVSWAP_IDEMPOTENCY_STORE_PATH: idempotencyStorePath,
+      RPC_PORT: String(rpcPort),
+      RPC_FLEET: `validator-0=127.0.0.1:${rpcPort}`,
+      NAVSWAP_RUN_STORE_PATH: 'off',
+      NAVSWAP_IDEMPOTENCY_STORE_PATH: 'off',
       PFTL_PRIVATE_SWAP_URL: `http://127.0.0.1:${residentPort}`,
-      PFTL_PRIVATE_SWAP_CONTROLLED_WALLET_ID: CONTROLLED_WALLET,
+      PFTL_PRIVATE_SWAP_CONTROLLED_WALLET_ID: controlledWallet,
       PFTL_PRIVATE_SWAP_ROUTE_ID: ROUTE_ID,
       PFTL_PRIVATE_SWAP_TIMEOUT_MS: '5000',
     },
@@ -315,149 +401,71 @@ async function terminate(child) {
   }
 }
 
-async function initialPendingOperation(page, { pendingIntent, finalizedIntent, sensitive }) {
-  return page.evaluate(async ({ recoveryKey, connectionKey, pending, finalized, sensitiveValues }) => {
-    window.__journeyStep9Ephemeral = sensitiveValues;
-    const health = await fetch('/healthz', { cache: 'no-store' });
-    if (!health.ok) throw new Error('production wallet proxy health check failed before interruption');
-
-    const sessionResponse = await fetch('/api/bridge/local-session', {
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-    });
-    const session = await sessionResponse.json();
-    if (!sessionResponse.ok || session?.ok !== true || typeof session?.token !== 'string') {
-      throw new Error('production wallet did not establish its controlled local proxy session');
-    }
-
-    const response = await fetch('/api/pftl-private-swap/jobs', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.token}`,
-      },
-      body: JSON.stringify({ signed_intent: pending }),
-      cache: 'no-store',
-    });
-    const result = await response.json();
-    if (response.status !== 202 || result?.swap?.state !== 'PUBLISHED') {
-      throw new Error('pending local rehearsal operation was not durably journaled');
-    }
-
-    localStorage.setItem(recoveryKey, JSON.stringify({
-      schema: 'postfiat.journey-step-9.browser-recovery.v1',
-      records: [
-        {
-          idempotency_key: pending.intent.idempotency_key,
-          status: 'PUBLISHED',
-          signed_intent: pending,
-          final_balance_tuple: null,
-          receipt_identity: null,
-        },
-        {
-          idempotency_key: finalized.intent.idempotency_key,
-          status: 'COMMITTED',
-          signed_intent: finalized,
-          final_balance_tuple: [
-            { asset_id: 'pfusdc-test-asset', amount_atoms: '3988000' },
-            { asset_id: 'navcoin-test-asset', amount_atoms: '1010000' },
-          ],
-          receipt_identity: 'journey-step-9-finalized-receipt',
-        },
-      ],
-    }));
-    sessionStorage.setItem(connectionKey, 'connected');
-    return {
-      state: result.swap.state,
-      storage: {
-        local: Object.fromEntries(Object.keys(localStorage).map(key => [key, localStorage.getItem(key)])),
-        session: Object.fromEntries(Object.keys(sessionStorage).map(key => [key, sessionStorage.getItem(key)])),
-      },
+async function walletAddressFromIndexedDb(page) {
+  return page.evaluate(() => new Promise((resolveAddress, rejectAddress) => {
+    const request = indexedDB.open('postfiat-wallet');
+    request.onerror = () => rejectAddress(request.error || new Error('wallet IndexedDB open failed'));
+    request.onsuccess = () => {
+      const database = request.result;
+      const transaction = database.transaction('vaults', 'readonly');
+      const record = transaction.objectStore('vaults').get('default');
+      record.onerror = () => {
+        database.close();
+        rejectAddress(record.error || new Error('wallet vault record read failed'));
+      };
+      record.onsuccess = () => {
+        const address = record.result?.metadata?.address || '';
+        database.close();
+        resolveAddress(address);
+      };
     };
-  }, {
-    recoveryKey: RECOVERY_KEY,
-    connectionKey: CONNECTION_KEY,
-    pending: pendingIntent,
-    finalized: finalizedIntent,
-    sensitiveValues: sensitive,
+  }));
+}
+
+async function createWallet(page, passphrase) {
+  await page.getByRole('button', { name: 'Create Wallet', exact: true }).click();
+  await page.locator('.pf-seed-display').waitFor();
+  const seed = (await page.locator('.pf-seed-display').textContent() || '').trim();
+  assert.match(seed, /^[0-9a-f]{64}$/, 'production wallet generated a local seed');
+  await page.locator('.pf-checkbox input').check();
+  await page.locator('input[placeholder="Encryption passphrase (min 10 chars)"]').fill(passphrase);
+  await page.locator('input[placeholder="Confirm passphrase"]').fill(passphrase);
+  await page.getByRole('button', { name: 'Create Wallet', exact: true }).last().click();
+  await page.locator('.pf-shell').waitFor();
+  const address = await walletAddressFromIndexedDb(page);
+  assert.match(address, /^pf[0-9a-f]{40}$/, 'production wallet persisted its browser-controlled address');
+  return { seed, address };
+}
+
+async function unlockAndOpenPrivatePrimary(page, passphrase) {
+  await page.getByText('Wallet locked', { exact: true }).waitFor();
+  await page.locator('input[placeholder="Passphrase"]').fill(passphrase);
+  await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+  await page.locator('.pf-shell').waitFor();
+  await page.locator('.pf-sidebar .pf-nav').filter({ hasText: 'Process' }).click();
+  await page.locator('#private-navcoin-primary').waitFor();
+  await page.waitForFunction(() => {
+    const button = [...document.querySelectorAll('#private-navcoin-primary button')]
+      .find(candidate => /Sign and issue privately|Resume durable intent|Sign another issue/.test(candidate.textContent || ''));
+    return Boolean(button && !button.disabled);
   });
 }
 
-async function recoverAfterReload(page) {
-  return page.evaluate(async ({ recoveryKey, connectionKey, pendingId, finalizedId }) => {
-    if (Object.hasOwn(window, '__journeyStep9Ephemeral')) {
-      throw new Error('browser reload did not clear ephemeral operation state');
-    }
-
-    const stored = JSON.parse(localStorage.getItem(recoveryKey) || 'null');
-    const pending = stored?.records?.find(record => record.idempotency_key === pendingId);
-    const finalized = stored?.records?.find(record => record.idempotency_key === finalizedId);
-    if (!pending || pending.status !== 'PUBLISHED' || !pending.signed_intent || !finalized) {
-      throw new Error('browser durable recovery records did not survive reload');
-    }
-
-    const health = await fetch('/healthz', { cache: 'no-store' });
-    if (!health.ok) throw new Error('wallet proxy did not reconnect after restart');
-    sessionStorage.setItem(connectionKey, 'reconnected');
-
-    const sessionResponse = await fetch('/api/bridge/local-session', {
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-    });
-    const session = await sessionResponse.json();
-    if (!sessionResponse.ok || session?.ok !== true || typeof session?.token !== 'string') {
-      throw new Error('wallet reconnect did not restore its local proxy session');
-    }
-
-    const recoveredResponse = await fetch('/api/pftl-private-swap/jobs', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.token}`,
-      },
-      body: JSON.stringify({ signed_intent: pending.signed_intent }),
-      cache: 'no-store',
-    });
-    const recovered = await recoveredResponse.json();
-    if (!recoveredResponse.ok || recovered?.swap?.state !== 'COMMITTED') {
-      throw new Error('pending operation did not recover to a finalized state');
-    }
-
-    const finalizedResponse = await fetch(
-      `/api/pftl-private-swap/jobs/${encodeURIComponent(finalized.idempotency_key)}`,
-      {
-        headers: { Accept: 'application/json', Authorization: `Bearer ${session.token}` },
-        cache: 'no-store',
-      },
-    );
-    const finalizedResult = await finalizedResponse.json();
-    if (!finalizedResponse.ok || finalizedResult?.swap?.state !== 'COMMITTED') {
-      throw new Error('already-finalized operation did not load idempotently after reload');
-    }
-
-    pending.status = 'COMMITTED';
-    pending.final_balance_tuple = recovered.final_balance_tuple;
-    pending.receipt_identity = recovered.receipt?.receipt_identity || null;
-    stored.records = stored.records.map(record => record.idempotency_key === pendingId ? pending : record);
-    localStorage.setItem(recoveryKey, JSON.stringify(stored));
-
-    return {
-      connection_status: sessionStorage.getItem(connectionKey),
-      recovered,
-      finalized: finalizedResult,
-      storage: {
-        local: Object.fromEntries(Object.keys(localStorage).map(key => [key, localStorage.getItem(key)])),
-        session: Object.fromEntries(Object.keys(sessionStorage).map(key => [key, sessionStorage.getItem(key)])),
-      },
-    };
-  }, {
-    recoveryKey: RECOVERY_KEY,
-    connectionKey: CONNECTION_KEY,
-    pendingId: PENDING_ID,
-    finalizedId: FINALIZED_ID,
-  });
+async function waitForPendingJob(page, storePath, ingress) {
+  const deadline = Date.now() + 5_000;
+  let lastState = 'missing';
+  while (Date.now() < deadline) {
+    const store = await readStore(storePath);
+    const [idempotencyKey] = Object.keys(store.jobs);
+    const job = idempotencyKey ? store.jobs[idempotencyKey] : null;
+    lastState = job?.state || 'missing';
+    if (job?.state === 'PUBLISHED') return { idempotencyKey, job };
+    await new Promise(resolveWait => setTimeout(resolveWait, 25));
+  }
+  const uiErrors = await page.locator('#private-navcoin-primary .pf-error').allTextContents();
+  throw new Error(
+    `production private-primary component did not persist a pending recovery record (last state: ${lastState}; ui: ${uiErrors.join(' | ') || 'none'}; resident calls: ${ingress.map(item => `${item.method} ${item.path}`).join(', ') || 'none'})`,
+  );
 }
 
 async function scanTreeForValues(root, values) {
@@ -483,31 +491,32 @@ function assertNoSensitiveMaterial(label, content, values) {
   }
 }
 
-test('journey step 9 recovers pending and finalized production-wallet operations across proxy restart and browser reload', {
-  timeout: 90_000,
+test('journey step 9 resumes the production private-primary recovery component after proxy restart and browser reload', {
+  timeout: 120_000,
 }, async () => {
   await readFile(join(DIST_ROOT, 'index.html'), 'utf8');
 
   const tempRoot = await mkdtemp(join(tmpdir(), 'postfiat-journey-step-9-'));
   const profileDir = join(tempRoot, 'chromium-profile');
   const residentStorePath = join(tempRoot, 'resident-durable-jobs.json');
-  const proxyRunStorePath = join(tempRoot, 'proxy-navswap-runs.jsonl');
-  const proxyIdempotencyStorePath = join(tempRoot, 'proxy-navswap-idempotency.jsonl');
   const acceptancePath = join(tempRoot, 'journey-step-9-acceptance.json');
-  const ingress = [];
-    const consoleLines = [];
-  const sensitive = [randomBytes(32).toString('hex'), randomBytes(32).toString('hex')];
   const token = randomBytes(32).toString('hex');
-  const pendingIntent = signedIntent(PENDING_ID);
-  const finalizedIntent = signedIntent(FINALIZED_ID);
+  const passphrase = randomBytes(24).toString('hex');
+  const identity = { walletAddress: `pf${'00'.repeat(20)}` };
+  const ingress = [];
+  const consoleLines = [];
+  let rpcFixture;
   let resident;
   let context;
+  let bootstrapProxy;
   let firstProxy;
   let secondProxy;
+  let seed = '';
 
   try {
     await writeStore(residentStorePath, initialResidentStore());
-    resident = await startResident(residentStorePath, ingress);
+    rpcFixture = await startRpcFixture();
+    resident = await startResident(residentStorePath, identity, ingress);
     const residentAddress = resident.address();
     if (!residentAddress || typeof residentAddress === 'string') {
       throw new Error('resident rehearsal service did not receive a TCP port');
@@ -515,113 +524,156 @@ test('journey step 9 recovers pending and finalized production-wallet operations
 
     const proxyPort = await reservePort();
     const origin = `http://127.0.0.1:${proxyPort}`;
-    firstProxy = startProxy({
+    bootstrapProxy = startProxy({
       port: proxyPort,
       residentPort: residentAddress.port,
+      rpcPort: rpcFixture.port,
       token,
-      runStorePath: proxyRunStorePath,
-      idempotencyStorePath: proxyIdempotencyStorePath,
+      controlledWallet: identity.walletAddress,
     });
-    await waitForHttp(`${origin}/healthz`, firstProxy.child, firstProxy.output);
+    await waitForHttp(`${origin}/healthz`, bootstrapProxy.child, bootstrapProxy.output);
 
     context = await chromium.launchPersistentContext(profileDir, { headless: true });
     const page = await context.newPage();
     page.on('console', message => consoleLines.push(message.text()));
-    page.setDefaultTimeout(10_000);
-    page.setDefaultNavigationTimeout(10_000);
+    page.setDefaultTimeout(15_000);
+    page.setDefaultNavigationTimeout(15_000);
     const rootResponse = await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded' });
-    assert.equal(rootResponse?.status(), 200, 'production wallet build is served by the actual wallet proxy');
-    await page.waitForFunction(() => document.querySelector('#root')?.childElementCount > 0);
+    assert.equal(rootResponse?.status(), 200, 'production wallet build is served by wallet-proxy');
 
-    const pendingBeforeRestart = await initialPendingOperation(page, {
-      pendingIntent,
-      finalizedIntent,
-      sensitive,
+    const created = await createWallet(page, passphrase);
+    seed = created.seed;
+    identity.walletAddress = created.address.toLowerCase();
+
+    await terminate(bootstrapProxy.child);
+    firstProxy = startProxy({
+      port: proxyPort,
+      residentPort: residentAddress.port,
+      rpcPort: rpcFixture.port,
+      token,
+      controlledWallet: identity.walletAddress,
     });
-    assert.equal(pendingBeforeRestart.state, 'PUBLISHED');
-    assert.ok(pendingBeforeRestart.storage.local[RECOVERY_KEY], 'pending recovery record is durable browser storage');
-    assert.equal(
-      JSON.stringify(pendingBeforeRestart.storage).includes(sensitive[0]) || JSON.stringify(pendingBeforeRestart.storage).includes(sensitive[1]),
-      false,
-      'browser storage excludes generated seed and owner private key',
-    );
+    await waitForHttp(`${origin}/healthz`, firstProxy.child, firstProxy.output);
 
-    const pendingStoreBeforeRestart = await readStore(residentStorePath);
-    assert.equal(pendingStoreBeforeRestart.jobs[PENDING_ID].state, 'PUBLISHED');
-    assert.equal(pendingStoreBeforeRestart.jobs[PENDING_ID].submit_count, 1);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await unlockAndOpenPrivatePrimary(page, passphrase);
+    const privatePrimary = page.locator('#private-navcoin-primary');
+    await privatePrimary.getByRole('button', { name: /Sign and issue privately/ }).click();
+    const pending = await waitForPendingJob(page, residentStorePath, ingress);
+    const pendingId = pending.idempotencyKey;
+    assert.match(pendingId || '', /^navcoin-browser-issue-[0-9a-f]{24}$/);
+    assert.equal(pending.job.submit_count, 1);
 
     await terminate(firstProxy.child);
-    assert.notEqual(firstProxy.child.exitCode, null, 'the first actual wallet-proxy process stopped');
-    const disconnected = await page.evaluate(async () => {
-      try {
-        const response = await fetch('/healthz', { cache: 'no-store' });
-        return !response.ok;
-      } catch (error) {
-        return error instanceof Error || typeof error === 'object';
-      }
-    });
-    assert.equal(disconnected, true, 'browser observes the actual proxy interruption');
-
+    assert.notEqual(firstProxy.child.exitCode, null, 'first actual recovery proxy process stopped');
     secondProxy = startProxy({
       port: proxyPort,
       residentPort: residentAddress.port,
+      rpcPort: rpcFixture.port,
       token,
-      runStorePath: proxyRunStorePath,
-      idempotencyStorePath: proxyIdempotencyStorePath,
+      controlledWallet: identity.walletAddress,
     });
     assert.notEqual(secondProxy.child.pid, firstProxy.child.pid, 'recovery uses a replacement proxy process');
     await waitForHttp(`${origin}/healthz`, secondProxy.child, secondProxy.output);
 
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.waitForFunction(() => document.querySelector('#root')?.childElementCount > 0);
-    const recovered = await recoverAfterReload(page);
-    assert.equal(recovered.connection_status, 'reconnected', 'browser connection status returns after proxy restart');
-    assert.deepEqual(recovered.recovered.final_balance_tuple, FIXTURES.pending.final_balance_tuple);
-    assert.equal(recovered.recovered.receipt?.receipt_identity, FIXTURES.pending.receipt_identity);
-    assert.deepEqual(recovered.finalized.final_balance_tuple, FIXTURES.finalized.final_balance_tuple);
-    assert.equal(recovered.finalized.receipt?.receipt_identity, FIXTURES.finalized.receipt_identity);
+    await unlockAndOpenPrivatePrimary(page, passphrase);
+    await privatePrimary.getByText('Private primary swap committed', { exact: true }).first().waitFor();
 
     const recoveredStore = await readStore(residentStorePath);
-    assert.equal(recoveredStore.jobs[PENDING_ID].state, 'COMMITTED');
-    assert.equal(recoveredStore.jobs[PENDING_ID].submit_count, 2);
-    assert.equal(recoveredStore.jobs[PENDING_ID].commit_count, 1, 'pending recovery finalizes exactly once');
-    assert.equal(recoveredStore.jobs[FINALIZED_ID].submit_count, 0, 'finalized recovery loads without resubmission');
-    assert.equal(recoveredStore.jobs[FINALIZED_ID].commit_count, 1, 'finalized recovery does not duplicate success');
+    const recoveredJob = recoveredStore.jobs[pendingId];
+    assert.equal(recoveredJob.state, 'COMMITTED');
+    assert.equal(
+      recoveredJob.submit_count,
+      3,
+      'original + recovery + stable committed replay',
+    );
+    assert.equal(recoveredJob.commit_count, 1, 'production component resume commits once');
+    assert.deepEqual(recoveredJob.final_balance_tuple, FINAL_BALANCE_TUPLE);
+    assert.equal(recoveredJob.receipt_identity, FINAL_RECEIPT_IDENTITY);
 
-    const postReloadStorage = JSON.stringify(recovered.storage);
-    const proxyOutput = [...firstProxy.output, ...secondProxy.output].join('');
-    const ingressBody = JSON.stringify(ingress);
-    const residentStore = await readFile(residentStorePath, 'utf8');
-    assertNoSensitiveMaterial('proxy ingress', ingressBody, sensitive);
+    const recoveryKey = `postfiat.navcoin_private_primary.${identity.walletAddress}.v1`;
+    const persistedRecovery = await page.evaluate(key => localStorage.getItem(key), recoveryKey);
+    const parsedRecovery = JSON.parse(persistedRecovery || 'null');
+    const persistedRecord = parsedRecovery?.records?.find(record => record.idempotency_key === pendingId);
+    assert.equal(persistedRecord?.status, 'COMMITTED', 'production savePftlPrivateRecoveries persisted the resumed state');
+    assert.equal(
+      persistedRecord?.response?.swap?.certificate_ref,
+      FINAL_RECEIPT_IDENTITY,
+      'production recovery record preserves the finalized receipt identity',
+    );
+
+    const submitCountBeforeFinalizedReload = recoveredJob.submit_count;
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await unlockAndOpenPrivatePrimary(page, passphrase);
+    await privatePrimary.getByText('Private primary swap committed', { exact: true }).first().waitFor();
+    const finalizedStore = await readStore(residentStorePath);
+    assert.equal(
+      finalizedStore.jobs[pendingId].submit_count,
+      submitCountBeforeFinalizedReload,
+      'production loadPftlPrivateRecoveries loads finalized state without resubmission',
+    );
+    assert.equal(finalizedStore.jobs[pendingId].commit_count, 1, 'finalized reload does not duplicate success');
+    const sidebarLedger = page.locator('.pf-sidebar .pf-ledger');
+    await sidebarLedger.waitFor();
+    const sidebarLedgerText = await sidebarLedger.textContent() || '';
+    assert.equal(
+      sidebarLedgerText.includes('height 901'),
+      true,
+      'visible sidebar reconnects at chain height 901',
+    );
+
+    const browserStorage = await page.evaluate(() => JSON.stringify({
+      local: Object.fromEntries(Object.keys(localStorage).map(key => [key, localStorage.getItem(key)])),
+      session: Object.fromEntries(Object.keys(sessionStorage).map(key => [key, sessionStorage.getItem(key)])),
+    }));
+    const proxyOutput = [
+      ...bootstrapProxy.output,
+      ...firstProxy.output,
+      ...secondProxy.output,
+    ].join('');
+    const sensitive = [seed, passphrase];
+    assertNoSensitiveMaterial('proxy ingress', JSON.stringify(ingress), sensitive);
     assertNoSensitiveMaterial('proxy console', proxyOutput, sensitive);
     assertNoSensitiveMaterial('browser console', consoleLines.join('\n'), sensitive);
-    assertNoSensitiveMaterial('browser storage', postReloadStorage, sensitive);
-    assertNoSensitiveMaterial('durable job store', residentStore, sensitive);
+    assertNoSensitiveMaterial('browser storage', browserStorage, sensitive);
+    assertNoSensitiveMaterial('durable job store', await readFile(residentStorePath, 'utf8'), sensitive);
 
-    const acceptance = {
-      schema: 'postfiat-journey-step-9-wallet-recovery-e2e-v1',
-      accepted: true,
-      runtime: 'production wallet build plus wallet-proxy process and durable Chromium profile',
-      pending_survives_proxy_restart_and_reload: true,
-      proxy_restarted_same_port: true,
-      browser_reconnected: true,
-      pending_final_balance_tuple_matches_fixture: true,
-      pending_receipt_identity_matches_fixture: true,
-      finalized_loaded_without_resubmission: true,
-      finalized_final_balance_tuple_matches_fixture: true,
-      finalized_receipt_identity_matches_fixture: true,
-      generated_custody_material_observed: false,
+    const observed = {
+      production_component_recovery_path_exercised: persistedRecord?.status === 'COMMITTED',
+      proxy_sigterm_restart_same_port: firstProxy.child.exitCode !== null
+        && secondProxy.child.pid !== firstProxy.child.pid,
+      durable_chromium_reload_reconnect: sidebarLedgerText.includes('height 901'),
+      pending_recovered_once: recoveredJob.commit_count === 1 && recoveredJob.submit_count === 3,
+      finalized_loaded_idempotently: finalizedStore.jobs[pendingId].submit_count === submitCountBeforeFinalizedReload,
+      final_balance_tuple_matches_fixture: JSON.stringify(recoveredJob.final_balance_tuple) === JSON.stringify(FINAL_BALANCE_TUPLE),
+      receipt_identity_matches_fixture: persistedRecord?.response?.swap?.certificate_ref === FINAL_RECEIPT_IDENTITY,
+      custody_material_absent: true,
     };
-    await mkdir(dirname(acceptancePath), { recursive: true });
+    observed.custody_material_absent = sensitive.every(value => ![
+      JSON.stringify(ingress),
+      proxyOutput,
+      consoleLines.join('\n'),
+      browserStorage,
+      JSON.stringify(observed),
+    ].some(content => content.includes(value)));
+    const acceptance = {
+      schema: 'postfiat-journey-step-9-wallet-recovery-e2e-v2',
+      accepted: Object.values(observed).every(Boolean),
+      observed,
+    };
     await writeFile(acceptancePath, `${JSON.stringify(acceptance, null, 2)}\n`, { mode: 0o600 });
+    assert.equal(acceptance.accepted, true);
     assertNoSensitiveMaterial('produced test evidence', await readFile(acceptancePath, 'utf8'), sensitive);
   } finally {
     if (context) await context.close();
     if (secondProxy) await terminate(secondProxy.child);
     if (firstProxy) await terminate(firstProxy.child);
+    if (bootstrapProxy) await terminate(bootstrapProxy.child);
     if (resident) await closeServer(resident);
-    if (context) {
-      const profileHits = await scanTreeForValues(profileDir, sensitive);
+    if (rpcFixture) await closeServer(rpcFixture.server);
+    if (seed) {
+      const profileHits = await scanTreeForValues(profileDir, [seed, passphrase]);
       assert.deepEqual(profileHits, [], 'durable Chromium profile excludes generated custody material');
     }
     await rm(tempRoot, { recursive: true, force: true });
