@@ -209,15 +209,18 @@
     },
     "d_runner": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/journey-runner-dry-run.json",
-      "exists": false,
-      "valid_json": false,
-      "observed_status": "absent",
-      "observed_reason": "evidence_absent",
+      "exists": true,
+      "valid_json": true,
+      "observed_status": null,
+      "observed_reason": null,
       "bindings": {
-        "candidate_revision": null,
+        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
         "rehearsal_root": null,
         "run_id": null
       }
+    },
+    "d_runner_validation": {
+      "ok": true
     },
     "async_proof_slot": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/async-proof-slot.json",
@@ -244,6 +247,9 @@
       }
     },
     "v3_async_validation": {
+      "ok": true
+    },
+    "no_live_validation": {
       "ok": true
     },
     "stakehub_restart_inventory": {
@@ -407,7 +413,7 @@
     },
     {
       "id": "d_runner_steps_1_6_9_10_dry_run",
-      "ok": false,
+      "ok": true,
       "input": "d_runner"
     },
     {
@@ -432,7 +438,7 @@
     },
     {
       "id": "no_live_chain_dependency",
-      "ok": false,
+      "ok": true,
       "input": "d_runner"
     },
     {
@@ -443,9 +449,7 @@
   ],
   "check_count": 18,
   "blocker_names": [
-    "d_runner_steps_1_6_9_10_dry_run",
-    "stakehub_official_absent",
-    "no_live_chain_dependency"
+    "stakehub_official_absent"
   ],
   "ready_to_fire": false,
   "ready_to_fire_computation": "all checks[].ok values must be true",

@@ -292,6 +292,33 @@ pftl_runtime_validation() {
     jq -cn '{ok:true}'
 }
 
+d_runner_validation() {
+    local report=/tmp/a666-r4-d-preflight-LttxGK0X.json
+    [[ -r "$report" && "$(sha256sum "$report" | awk '{print $1}')" == "d7175635447ad52156a880eb198b45c030ca21ca1882e7e9db11dc406b425ca9" ]] || { jq -cn '{ok:false}'; return; }
+    jq -cn --argjson d "$(cat "$d_runner")" --argjson r "$(cat "$report")" '
+      {ok:(
+        $d.schema == "postfiat.a666.r4.journey-runner-dry-run.v1" and $d.candidate_revision == "39f7fae3191aa34c376ae1657650a9ec2444f421" and $d.dry_run == true and $d.official_pass == false
+        and $d.execution.matched_tests == 1 and $d.execution.exit_code == 0 and $d.execution.passed_tests == 1 and $d.execution.failed_tests == 0
+        and $d.business_operations == 0 and $d.business_mutations == 0 and $d.wallet_business_steps_executed == 0
+        and $d.computed_checks.steps_1_6_9_10_dry_run == true and $d.computed_checks.async_proof_slot_steps_7_8 == true and $d.computed_checks.loopback_only == true and $d.computed_checks.no_live_chain == true and $d.computed_checks.zero_business_mutations == true
+        and ([$d.step_readiness[] | select(.step != 7 and .step != 8) | (.ready == true and .executed == false)] | all)
+        and $r.schema == "postfiat.a666.r4.offline-ethereum-browser-preflight.v1" and $r.mode == "preflight_only" and $r.official_pass == false and $r.business_mutations == 0 and $r.wallet_business_steps_executed == 0
+        and ([$r.step_readiness[] | select(.step != 7 and .step != 8) | (.ready == true and .executed == false)] | all)
+        and $r.computed_checks.steps_1_6_9_10_dry_run == true and $r.computed_checks.async_proof_slot_steps_7_8 == true and $r.computed_checks.loopback_only == true and $r.computed_checks.no_live_chain == true and $r.computed_checks.zero_business_mutations == true
+        and $r.async_proof_slot.accepted == true and $r.async_proof_slot.checks.inline_proving_forbidden == true and $r.async_proof_slot.checks.prover_invocations_zero == true
+      )}'
+}
+
+no_live_validation() {
+    jq -cn --argjson d "$(cat "$d_runner")" --argjson route "$(cat "$route_stage")" --argjson deps "$(cat "$dependencies")" --argjson pftl "$(cat "$pftl_stage")" --argjson async "$(cat "$async_proof_slot")" --argjson export "$(cat "$export_artifact_slot")" --argjson proxy "$(cat "$candidate_proxy")" --argjson acceptance "$(cat "$b_acceptance")" '
+      {ok:(
+        $d.live_chain == false and $route.live_chain == false and $deps.live_chain == false and $pftl.live_chain == false and $async.business_mutations == 0 and $export.live_chain == false and $acceptance.live_chain == false and $proxy.no_live_chain_route == true
+        and $pftl.endpoint.url == "http://127.0.0.1:8798" and $deps.asset_service.endpoint == "127.0.0.1:8799" and $proxy.proxy_hold.listen == "127.0.0.1:31021"
+        and ($d.observed_loopback_endpoints.setup_manifest_endpoints | all(startswith("tcp://127.0.0.1:") or startswith("http://127.0.0.1:")))
+        and ($d.observed_loopback_endpoints.deployment_manifest_endpoints | all(startswith("http://127.0.0.1:")))
+      )}'
+}
+
 v3_refire_validation() {
     jq -cn --arg run "a666-r4-receipt-prover-pathb-20260804-v3" \
       --argjson p "$(cat "$refire_prepared")" --argjson q "$(cat "$refire_probe")" --argjson f "$(cat "$refire_fired")" --argjson t "$(cat "$refire_terminal")" --argjson a "$(cat "$b_acceptance")" '
@@ -688,7 +715,8 @@ pftl_validation=$(pftl_runtime_validation)
 if jq -e '.ok == true' <<<"$pftl_validation" >/dev/null; then
     pftl_ok=true
 fi
-if bound_and "$d_runner" '.dry_run == true and .checks.steps_1_6_9_10_dry_run == true'; then
+d_runner_validation=$(d_runner_validation)
+if jq -e '.ok == true' <<<"$d_runner_validation" >/dev/null; then
     d_runner_dry_ok=true
 fi
 v3_async=$(v3_async_validation)
@@ -721,7 +749,8 @@ fi
 if jq -e '.ok == true' <<<"$candidate_proxy_validation" >/dev/null; then
     candidate_provenance_ok=true
 fi
-if bound_and "$d_runner" '.checks.no_live_chain == true and .checks.loopback_only == true'; then
+no_live_validation=$(no_live_validation)
+if jq -e '.ok == true' <<<"$no_live_validation" >/dev/null; then
     no_live_chain_ok=true
 fi
 
@@ -792,9 +821,11 @@ jq -n \
     --argjson pftl_input "$(input_summary "$pftl_stage")" \
     --argjson pftl_validation "$pftl_validation" \
     --argjson d_runner_input "$(input_summary "$d_runner")" \
+    --argjson d_runner_validation "$d_runner_validation" \
     --argjson async_slot_input "$(input_summary "$async_proof_slot")" \
     --argjson export_slot_input "$(input_summary "$export_artifact_slot")" \
     --argjson v3_async "$v3_async" \
+    --argjson no_live_validation "$no_live_validation" \
     --argjson stakehub_input "$(input_summary "$stakehub_inventory")" \
     --argjson stakehub_inventory_validation "$stakehub_inventory_validation" \
     --argjson preprove_input "$(input_summary "$preprove_binding")" \
@@ -840,9 +871,11 @@ jq -n \
             pftl: $pftl_input,
             pftl_validation: $pftl_validation,
             d_runner: $d_runner_input,
+            d_runner_validation: $d_runner_validation,
             async_proof_slot: $async_slot_input,
             export_artifact_slot: $export_slot_input,
             v3_async_validation: $v3_async,
+            no_live_validation: $no_live_validation,
             stakehub_restart_inventory: $stakehub_input,
             stakehub_inventory_validation: $stakehub_inventory_validation,
             pre_prove_binding: $preprove_input,
