@@ -370,7 +370,7 @@ restart_watcher_validation() {
     jq -e '
       .schema == "postfiat.a666.r4.candidate-proxy-restart-watcher.v1"
       and .ready == true and .unit.active == true and .unit.running == true
-      and .request_contract.run_id == "a666-r4-official-journey-pass1-20260804-v1"
+      and .request_contract.run_id == "a666-r4-official-journey-pass1-20260804-v2"
       and .request_contract.required_mode == "600" and .request_contract.currently_absent == true
       and .control.mode == "600" and .control.pid_file_mode == "600" and .control.ready_file_mode == "600"
       and .candidate_pins.revision == "39f7fae3191aa34c376ae1657650a9ec2444f421"
@@ -829,6 +829,7 @@ fi
 preprove_validation=$(preprove_validation_for_file "$preprove_binding")
 
 official_invocation_count=$(jq -r 'if .official_journey_invocations == 0 then 0 else null end' "$official_runner_contract")
+official_run_id=$(jq -r '.request_contract.run_id // empty' "$restart_watcher")
 proof_contract='null'
 if proof_contract_candidate=$(git show ad30bcb:docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/journey-fire-control-preflight.json 2>/dev/null | jq -ce '.proof_artifact_consumption_contract' 2>/dev/null); then
     proof_contract="$proof_contract_candidate"
@@ -901,6 +902,7 @@ jq -n \
     --arg fresh_root "$fresh_root" \
     --arg fresh_run "$fresh_run" \
     --arg fleet_binding_identifier "$fleet_binding_identifier" \
+    --arg official_run_id "$official_run_id" \
     --argjson proof_contract "$proof_contract" \
     --argjson refire_prepared_input "$(input_summary "$refire_prepared")" \
     --argjson refire_probe_input "$(input_summary "$refire_probe")" \
@@ -1006,6 +1008,7 @@ jq -n \
         },
         proof_artifact_consumption_contract: $proof_contract,
         official_invocation_count: $official_invocation_count,
+        official_run_id: (if $official_run_id == "" then null else $official_run_id end),
         checks: $check_records
     }
     | .checks as $checks
