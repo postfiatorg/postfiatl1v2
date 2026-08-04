@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+repo=$(cd "$(dirname "$0")/.." && pwd)
+runtime=$(mktemp -d /tmp/a666-r4-contract-stage.XXXXXX)
+chmod 700 "$runtime"
+mkdir -p "$runtime/src/groth16"
+cp /home/postfiat/.sp1/circuits/groth16/v6.1.0/SP1VerifierGroth16.sol "$runtime/src/groth16/"
+cp /home/postfiat/.sp1/circuits/groth16/v6.1.0/Groth16Verifier.sol "$runtime/src/groth16/"
+cp "$repo/crates/ethereum-contracts/src/PFTLReceiptFinalityVerifierV1.sol" "$runtime/src/"
+cp "$repo/crates/ethereum-contracts/src/PFTLUniswapPrimaryMarketV2.sol" "$runtime/src/"
+cp "$repo/crates/ethereum-contracts/src/PFTLUniswapHandoffController.sol" "$runtime/src/"
+find /home/postfiat/.sp1/circuits -name ISP1Verifier.sol -print -quit | grep -q .
+echo "runtime=$runtime"
+echo "SP1VerifierGroth16 import requires ISP1Verifier.sol"

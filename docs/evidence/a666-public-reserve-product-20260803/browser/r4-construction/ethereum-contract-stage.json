@@ -1,0 +1,31 @@
+{
+  "schema": "postfiat.a666.r4.ethereum-contract-stage.v1",
+  "outcome": "named_technical_wall",
+  "first_failing_check": "sp1_verifier_source_import_isp1verifier_sol_absent_from_installed_v6_1_circuit_tree",
+  "anvil": {
+    "pid": 847331,
+    "executable": "anvil",
+    "loopback": true,
+    "endpoint": "http://127.0.0.1:8547",
+    "chain_id": 1,
+    "genesis_hash": "0xf120a583b00b348c8a1eaf06c0a9de26fef540fc64256118784fae19e0812334",
+    "deployer_public_address": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+  },
+  "source_files": [
+    "/home/postfiat/.sp1/circuits/groth16/v6.1.0/SP1VerifierGroth16.sol",
+    "crates/ethereum-contracts/src/PFTLReceiptFinalityVerifierV1.sol",
+    "crates/ethereum-contracts/src/PFTLUniswapPrimaryMarketV2.sol",
+    "crates/ethereum-contracts/src/PFTLUniswapHandoffController.sol"
+  ],
+  "deployment": {
+    "real_contracts_deployed": false,
+    "mocks": 0,
+    "reason": "SP1VerifierGroth16.sol imports ../ISP1Verifier.sol, but no ISP1Verifier.sol exists under /home/postfiat/.sp1/circuits"
+  },
+  "verifier_acceptance": {
+    "ready": false,
+    "first_blocker": "real_receipt_proof_artifact_unavailable_after_local_cpu_oom"
+  },
+  "business_value": 0,
+  "credentials_redacted": true
+}

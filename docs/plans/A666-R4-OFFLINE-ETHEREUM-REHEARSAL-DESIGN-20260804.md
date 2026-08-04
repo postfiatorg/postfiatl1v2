@@ -135,3 +135,9 @@ Candidate product behavior changes. After implementation: regression-manifest qu
 | Review/qualification reserve | 1 day |
 
 **Total:** 9-13 engineer-days. Critical path: real local proof -> isolated route binding -> proxy adapter -> browser E2E -> full requalification. Any need for mock acceptance, live dependency, or externally held credential is STOP RED.
+
+## 2026-08-04 contract-stage update
+
+Anvil adoption verified loopback-only chain 1 and a public deployer address. Contract staging is RED before deployment: the installed v6.1 SP1 verifier source imports ISP1Verifier.sol, but that dependency is absent from the installed circuit tree. No mock, product change, deployment, verifier acceptance, or business transaction was used. Proof acceptance remains RED at real_receipt_proof_artifact_unavailable_after_local_cpu_oom.
+
+Future adapter contract remains unchanged: wallet-proxy durable export/return jobs stay the public boundary; a new content-addressed proof-slot adapter verifies proof, public-values, program-vkey, receipt, and route bindings asynchronously, polls at 5 seconds for a maximum 12-hour R4 rehearsal budget, never invokes a prover inline, and STOP-no-retry times out. Future product files remain wallet-proxy/a666-offline-ethereum-rehearsal-driver.js, wallet-proxy/a666-offline-ethereum-receipt-adapter.js, wallet-proxy/test_a666-offline-ethereum-rehearsal-driver.js, wallet-web/src/components/NavcoinPrimaryMarket.jsx, wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js, wallet-web/src/components/NavcoinPrimaryMarket.test.jsx, and wallet-web/package.json; none changed in this stage.
