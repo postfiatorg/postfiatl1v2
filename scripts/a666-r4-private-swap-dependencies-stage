@@ -1,0 +1,243 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+CANDIDATE_REVISION="39f7fae3191aa34c376ae1657650a9ec2444f421"
+CANDIDATE_WORKTREE="/tmp/a666-r4-successor-39f7fae"
+MAIN_WORKTREE="/home/postfiat/repos/a666-eth-fast-lane-combined-20260724"
+PRESERVED_ROOT="/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959"
+FLEET_COMMIT="e803345"
+FLEET_DIR="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet"
+NODE_BINARY="/tmp/a666-r4-candidate-target/release/postfiat-node"
+NODE_SHA256="9339d1352969cbc449f4245e18c2f1b3763d5b896334335b5bfd894beff12c57"
+TARGET_DIR="/tmp/a666-r4-private-swap-target-39f7fae"
+ASSET_BINARY="$TARGET_DIR/release/asset-orchard-local-service"
+RUNTIME_BASE="/tmp/a666-r4-private-swap-dependencies-39f7fae"
+RUNTIME_ROOT="$RUNTIME_BASE/run-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+DATA_DIR="$PRESERVED_ROOT/validator-2"
+KEY_FILE="$DATA_DIR/validator-2.validator_keys.json"
+TOPOLOGY="$PRESERVED_ROOT/a666-public-successor-topology.json"
+ASSET_VAULT="$RUNTIME_ROOT/asset-vault"
+BATCH_DIR="$RUNTIME_ROOT/batch-outbox"
+PROCESSED_DIR="$RUNTIME_ROOT/processed-batches"
+ARTIFACT_DIR="$RUNTIME_ROOT/round-artifacts"
+READY_DIR="$RUNTIME_ROOT/ready"
+ASSET_READY="$READY_DIR/asset-orchard-prewarm.json"
+ROUND_READY="$READY_DIR/certified-round-driver.json"
+CONTROL_FILE="$RUNTIME_ROOT/teardown.request"
+PID_STATE="$RUNTIME_ROOT/pids.json"
+LOG_DIR="$RUNTIME_ROOT/logs"
+EVIDENCE="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/private-swap-dependencies.json"
+ACTION="${1:-stage}"
+PRODUCT_PROFILE_SHA256="ab04db6d0d610f6b354d0860c00fa745c93ed4faf173c1829edfb0cbd699e552"
+children=()
+
+kill_children() {
+  local pid
+  for pid in "${children[@]}"; do kill -TERM "$pid" 2>/dev/null || true; done
+  for _ in {1..30}; do
+    local live=0
+    for pid in "${children[@]}"; do kill -0 "$pid" 2>/dev/null && live=$((live+1)) || true; done
+    [[ "$live" -eq 0 ]] && break
+    sleep 1
+  done
+  for pid in "${children[@]}"; do
+    kill -KILL "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+  done
+  children=()
+}
+trap 'trap - EXIT ERR TERM INT; kill_children' EXIT ERR TERM INT
+
+validate_fleet() {
+  git merge-base --is-ancestor "$FLEET_COMMIT" HEAD
+  [[ "$(git -C "$CANDIDATE_WORKTREE" rev-parse HEAD)" == "$CANDIDATE_REVISION" ]]
+  [[ -z "$(git -C "$CANDIDATE_WORKTREE" status --porcelain --untracked-files=no)" ]]
+  [[ -x "$NODE_BINARY" && "$(sha256sum "$NODE_BINARY" | awk '{print $1}')" == "$NODE_SHA256" ]]
+  [[ -d "$DATA_DIR" && -s "$KEY_FILE" && -s "$TOPOLOGY" ]]
+  jq -e '.construction_ready == true and .ready_for_one_shot_pass_1 == false and .checks.stakehub_interaction == false' "$FLEET_DIR/construction-fleet.json" >/dev/null
+  [[ "$(jq '.processes|length' "$FLEET_DIR/construction-pids.json")" -eq 12 ]]
+  while read -r pid; do kill -0 "$pid"; done < <(jq -r '.processes[].pid' "$FLEET_DIR/construction-pids.json")
+  python3 - "$FLEET_DIR/construction-rpc-endpoints.json" <<'PY'
+import json,socket,sys
+rows=json.load(open(sys.argv[1],encoding='utf-8'))['endpoints']
+if len(rows)!=6: raise SystemExit(1)
+for row in rows:
+    request={"version":"postfiat-local-rpc-v1","id":f"r4-deps-{row['validator_index']}","method":"status","params":{}}
+    with socket.create_connection((row['host'],row['rpc_port']),timeout=3) as connection:
+        connection.sendall((json.dumps(request,separators=(',',':'))+'\n').encode())
+        response=json.loads(connection.makefile('rb').readline())
+    value=response.get('result',{})
+    if response.get('ok') is not True or value.get('block_height')!=826 or value.get('block_tip_hash')!=row['block_tip_hash'] or value.get('state_root')!=row['state_root']:
+        raise SystemExit(1)
+PY
+}
+
+validate_fleet
+if [[ "$ACTION" == self-check ]]; then exit 0; fi
+[[ "$ACTION" == stage ]]
+if [[ -e "$RUNTIME_BASE" ]]; then
+  [[ -d "$RUNTIME_BASE" && "$(stat -c '%a' "$RUNTIME_BASE")" == 700 ]]
+else
+  mkdir -m 700 "$RUNTIME_BASE"
+fi
+[[ ! -e "$RUNTIME_ROOT" ]]
+mkdir -m 700 "$RUNTIME_ROOT"
+mkdir -m 700 "$ASSET_VAULT" "$BATCH_DIR" "$PROCESSED_DIR" "$ARTIFACT_DIR" "$READY_DIR" "$LOG_DIR"
+started_ms="$(date +%s%3N)"
+build_action="reused"
+build_exit=0
+build_runtime_ms=0
+if [[ ! -x "$ASSET_BINARY" ]]; then
+  build_action="built"
+  build_started_ms="$(date +%s%3N)"
+  set +e
+  CARGO_TARGET_DIR="$TARGET_DIR" cargo build --locked --release -p postfiat-node \
+    --bin asset-orchard-local-service --manifest-path "$CANDIDATE_WORKTREE/Cargo.toml" \
+    >"$LOG_DIR/asset-service-build.log" 2>&1
+  build_exit="$?"
+  set -e
+  build_runtime_ms="$(($(date +%s%3N)-build_started_ms))"
+  [[ "$build_exit" -eq 0 ]]
+fi
+[[ -x "$ASSET_BINARY" ]]
+asset_sha256="$(sha256sum "$ASSET_BINARY" | awk '{print $1}')"
+
+ASSET_ORCHARD_LOCAL_SERVICE_PREWARM=1 \
+ASSET_ORCHARD_LOCAL_SERVICE_PREWARM_SWAP=0 \
+ASSET_ORCHARD_LOCAL_SERVICE_PREWARM_PRIVATE_EGRESS=1 \
+POSTFIAT_ASSET_ORCHARD_PRODUCT_PROFILE_SHA256="$PRODUCT_PROFILE_SHA256" \
+RAYON_NUM_THREADS=2 \
+"$ASSET_BINARY" \
+  --bind 127.0.0.1:8799 \
+  --data-dir "$DATA_DIR" \
+  --vault-dir "$ASSET_VAULT" \
+  --prewarm-ready-file "$ASSET_READY" \
+  >"$LOG_DIR/asset-service.stdout.log" 2>"$LOG_DIR/asset-service.stderr.log" < /dev/null &
+asset_pid="$!"
+children+=("$asset_pid")
+
+POSTFIAT_CERTIFIED_BATCH_LOOP_READY_FILE="$ROUND_READY" \
+POSTFIAT_PREWARM_SHIELDED_VERIFIER=1 \
+POSTFIAT_PREWARM_ASSET_ORCHARD_SWAP_VERIFIER=1 \
+POSTFIAT_PREWARM_ASSET_ORCHARD_PRIVATE_EGRESS_VERIFIER=1 \
+POSTFIAT_TRANSPORT_PERSISTENT_VOTE_STREAMS=1 \
+"$NODE_BINARY" transport-peer-certified-batch-loop \
+  --unsafe-devnet-json-storage \
+  --unsafe-devnet-file-signer \
+  --data-dir "$DATA_DIR" \
+  --topology "$TOPOLOGY" \
+  --batch-kind shielded \
+  --batch-dir "$BATCH_DIR" \
+  --processed-dir "$PROCESSED_DIR" \
+  --key-file "$KEY_FILE" \
+  --proposal-key-file "$KEY_FILE" \
+  --artifact-root "$ARTIFACT_DIR" \
+  --start-height auto \
+  --max-rounds 1000000 \
+  --poll-ms 25 \
+  --timeout-ms 15000 \
+  --idle-timeout-ms 0 \
+  --send-retries 2 \
+  --retry-backoff-ms 50 \
+  --local-apply-before-certified-send \
+  >"$LOG_DIR/round-driver.stdout.log" 2>"$LOG_DIR/round-driver.stderr.log" < /dev/null &
+round_pid="$!"
+children+=("$round_pid")
+
+jq -n --arg schema "postfiat.a666.r4.private-swap-dependency-pids.v1" --argjson asset_pid "$asset_pid" --argjson round_pid "$round_pid" \
+  '{schema:$schema,asset_service_pid:$asset_pid,round_driver_pid:$round_pid}' > "$PID_STATE"
+chmod 600 "$PID_STATE"
+
+ready=false
+deadline=$((SECONDS + 900))
+while ((SECONDS < deadline)); do
+  kill -0 "$asset_pid"
+  kill -0 "$round_pid"
+  asset_ok=false
+  round_ok=false
+  if [[ -s "$ASSET_READY" ]] && jq -e '.ready == true' "$ASSET_READY" >/dev/null 2>&1; then
+    if python3 - <<'PY'
+import socket
+with socket.create_connection(('127.0.0.1',8799),timeout=2): pass
+PY
+    then asset_ok=true; fi
+  fi
+  if [[ -s "$ROUND_READY" ]] && jq -e '
+    .schema == "postfiat-transport-peer-certified-batch-loop-ready-v2"
+    and .local_state.block_height == 826
+    and (.start_height + .processed_round_count) == 827
+    and .authenticated_peer_count == 5
+    and .required_remote_peer_count == 5
+    and .authenticated_quorum == true
+    and .persistent_vote_streams == true
+    and .remote_proposal_routing == true
+    and .local_apply_before_certified_send == true
+    and .processed_round_count == 0
+    and (((now * 1000) - .heartbeat_unix_ms) >= 0)
+    and (((now * 1000) - .heartbeat_unix_ms) <= 10000)
+  ' "$ROUND_READY" >/dev/null 2>&1; then round_ok=true; fi
+  if [[ "$asset_ok" == true && "$round_ok" == true ]]; then ready=true; break; fi
+  sleep 1
+done
+[[ "$ready" == true ]]
+[[ -z "$(find "$BATCH_DIR" -mindepth 1 -print -quit)" ]]
+[[ -z "$(find "$PROCESSED_DIR" -mindepth 1 -print -quit)" ]]
+ended_ms="$(date +%s%3N)"
+round_heartbeat="$(jq -r '.heartbeat_unix_ms' "$ROUND_READY")"
+round_height="$(jq -r '.local_state.block_height' "$ROUND_READY")"
+round_next_height="$(jq -r '.start_height + .processed_round_count' "$ROUND_READY")"
+round_peers="$(jq -r '.authenticated_peer_count' "$ROUND_READY")"
+asset_schema="$(jq -r '.schema' "$ASSET_READY")"
+asset_circuits="$(jq -c '.circuits // .prover_warm.circuits // {} | with_entries(.value={ready:.value.ready,status:.value.status})' "$ASSET_READY")"
+
+jq -n \
+  --arg schema "postfiat.a666.r4.private-swap-dependencies.v1" \
+  --arg revision "$CANDIDATE_REVISION" \
+  --arg node_binary "$NODE_BINARY" \
+  --arg node_sha256 "$NODE_SHA256" \
+  --arg asset_binary "$ASSET_BINARY" \
+  --arg asset_sha256 "$asset_sha256" \
+  --arg build_action "$build_action" \
+  --argjson build_exit "$build_exit" \
+  --argjson build_runtime_ms "$build_runtime_ms" \
+  --arg runtime_root "$RUNTIME_ROOT" \
+  --arg asset_vault "$ASSET_VAULT" \
+  --arg batch_dir "$BATCH_DIR" \
+  --arg processed_dir "$PROCESSED_DIR" \
+  --arg artifact_dir "$ARTIFACT_DIR" \
+  --arg asset_ready "$ASSET_READY" \
+  --arg round_ready "$ROUND_READY" \
+  --arg pid_state "$PID_STATE" \
+  --arg control_file "$CONTROL_FILE" \
+  --arg asset_schema "$asset_schema" \
+  --argjson asset_circuits "$asset_circuits" \
+  --argjson asset_pid "$asset_pid" \
+  --argjson round_pid "$round_pid" \
+  --argjson round_heartbeat "$round_heartbeat" \
+  --argjson round_height "$round_height" \
+  --argjson round_next_height "$round_next_height" \
+  --argjson round_peers "$round_peers" \
+  --argjson runtime_ms "$((ended_ms-started_ms))" '
+  {
+    schema:$schema,
+    candidate:{revision:$revision,node_binary_path:$node_binary,node_binary_sha256:$node_sha256},
+    asset_service:{binary_path:$asset_binary,binary_sha256:$asset_sha256,build_action:$build_action,build_exit:$build_exit,build_runtime_ms:$build_runtime_ms,pid:$asset_pid,endpoint:"127.0.0.1:8799",ready_file:$asset_ready,ready_schema:$asset_schema,circuits:$asset_circuits,ready:true},
+    certified_round_driver:{pid:$round_pid,ready_file:$round_ready,heartbeat_unix_ms:$round_heartbeat,local_height:$round_height,next_height:$round_next_height,authenticated_peer_count:$round_peers,authenticated_quorum:true,persistent_vote_streams:true,remote_proposal_routing:true,local_apply_before_certified_send:true,processed_round_count:0,ready:true},
+    paths:{runtime_root:$runtime_root,asset_vault:$asset_vault,batch_outbox:$batch_dir,processed_batches:$processed_dir,round_artifacts:$artifact_dir,pid_state:$pid_state,teardown_control:$control_file},
+    checks:{construction_fleet_12_live_six_equal:true,asset_tcp_reachable:true,asset_prewarm_ready:true,round_report_fresh:true,round_height_826_next_827:true,five_authenticated_peers:true,empty_batch_dirs:true,business_operations:0,stakehub_interaction:false},
+    runtime_ms:$runtime_ms,
+    ready:true
+  }' > "$EVIDENCE"
+jq -e '.ready == true and .checks.business_operations == 0 and .checks.stakehub_interaction == false' "$EVIDENCE" >/dev/null
+
+while true; do
+  kill -0 "$asset_pid"
+  kill -0 "$round_pid"
+  [[ -z "$(find "$BATCH_DIR" -mindepth 1 -print -quit)" ]]
+  [[ -z "$(find "$PROCESSED_DIR" -mindepth 1 -print -quit)" ]]
+  if [[ -f "$CONTROL_FILE" ]]; then
+    [[ "$(head -n 1 "$CONTROL_FILE")" == teardown ]]
+    exit 0
+  fi
+  sleep 5
+done

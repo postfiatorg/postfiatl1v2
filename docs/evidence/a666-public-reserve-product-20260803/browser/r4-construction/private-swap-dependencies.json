@@ -1,0 +1,70 @@
+{
+  "schema": "postfiat.a666.r4.private-swap-dependencies.v1",
+  "candidate": {
+    "revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+    "node_binary_path": "/tmp/a666-r4-candidate-target/release/postfiat-node",
+    "node_binary_sha256": "9339d1352969cbc449f4245e18c2f1b3763d5b896334335b5bfd894beff12c57"
+  },
+  "asset_service": {
+    "binary_path": "/tmp/a666-r4-private-swap-target-39f7fae/release/asset-orchard-local-service",
+    "binary_sha256": "4ec8ff06f39808e6234e0a4275686db6176a87ffceeeb83ede6353a82294b7fc",
+    "build_action": "reused",
+    "build_exit": 0,
+    "build_runtime_ms": 0,
+    "pid": 730500,
+    "endpoint": "127.0.0.1:8799",
+    "ready_file": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/ready/asset-orchard-prewarm.json",
+    "ready_schema": "postfiat-asset-orchard-local-service-prewarm-ready-v1",
+    "circuits": {
+      "ingress_notes": {
+        "ready": true,
+        "status": "not_applicable"
+      },
+      "private_egress": {
+        "ready": true,
+        "status": "ready"
+      },
+      "swap": {
+        "ready": true,
+        "status": "not_applicable"
+      }
+    },
+    "ready": true
+  },
+  "certified_round_driver": {
+    "pid": 730501,
+    "ready_file": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/ready/certified-round-driver.json",
+    "heartbeat_unix_ms": 1785816481878,
+    "local_height": 826,
+    "next_height": 827,
+    "authenticated_peer_count": 5,
+    "authenticated_quorum": true,
+    "persistent_vote_streams": true,
+    "remote_proposal_routing": true,
+    "local_apply_before_certified_send": true,
+    "processed_round_count": 0,
+    "ready": true
+  },
+  "paths": {
+    "runtime_root": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455",
+    "asset_vault": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/asset-vault",
+    "batch_outbox": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/batch-outbox",
+    "processed_batches": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/processed-batches",
+    "round_artifacts": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/round-artifacts",
+    "pid_state": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/pids.json",
+    "teardown_control": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/teardown.request"
+  },
+  "checks": {
+    "construction_fleet_12_live_six_equal": true,
+    "asset_tcp_reachable": true,
+    "asset_prewarm_ready": true,
+    "round_report_fresh": true,
+    "round_height_826_next_827": true,
+    "five_authenticated_peers": true,
+    "empty_batch_dirs": true,
+    "business_operations": 0,
+    "stakehub_interaction": false
+  },
+  "runtime_ms": 323400,
+  "ready": true
+}
