@@ -1,0 +1,69 @@
+AR-04 regression evidence: authenticated catch-up requires pinned height, tip, and state root
+=============================================================================================
+
+Test
+----
+tests::a666_recovery_regression_tests::ar04_authenticated_catchup_requires_pinned_height_tip_and_state_root
+File: crates/node/src/tests/a666_recovery_regression_tests.rs
+Module registration: crates/node/src/lib_tests.rs (`mod a666_recovery_regression_tests;`, wired with AR-03)
+
+Contract (recovery spec section 6.1, AR-04): authenticated catch-up accepts
+only the pinned expected height, tip, and state root and rejects every
+mismatch.
+
+Production surface under test: apply_batch_with_expected_commit_identity
+(crates/node/src/batch_snapshot.rs:340) with ExpectedBatchCommitIdentity
+{ block_height, block_hash, state_root, certificate_id }
+(crates/node/src/batch_snapshot.rs:251), the pinned-identity boundary used by
+the transport apply path (crates/node/src/transport_cli.rs:2239). The pin
+check runs after the external certificate is verified and the commit is
+prepared, before any state is written (crates/node/src/storage_commit.rs,
+"prepared commit identity mismatch"). Catch-up artifacts are staged exactly
+like rpc_catch_up_preflight_blocks (crates/node/src/rpc_cli.rs:4386):
+canonical archived batch payload, external certificate reconstructed from the
+archived block, canonical replay block record.
+
+Canonical input vector: chain_id "postfiat-local", one validator
+(validator-0), block-one transfer amount 43, transparent batch, view 0.
+Mutations are deterministic: wrong height = pinned height + 1; wrong tip and
+wrong state root = first hex character of the pinned digest flipped
+('0' <-> '1'), preserving length and alphabet.
+
+What the test proves
+--------------------
+Per-axis adversarial vectors, each on an independent genesis clone of the
+destination:
+1. wrong height: rejected with typed `prepared commit identity mismatch`
+   naming the mutated expected height; destination height/tip/root, ledger,
+   and block log unchanged.
+2. wrong tip (block hash): rejected with the same typed error naming the
+   mutated hash; destination state unchanged.
+3. wrong state root: rejected with the same typed error naming the mutated
+   root; destination state unchanged.
+Positive vector: the exact pinned height, tip, and state root accepts; the
+destination converges onto (height 1, pinned tip, pinned root) and
+verify_blocks passes on its certified history.
+
+Green run (2026-08-04, post AR-03 commit 0e532e2 plus this change)
+------------------------------------------------------------------
+Command:
+  cargo test -p postfiat-node --lib tests::a666_recovery_regression_tests::ar04_authenticated_catchup_requires_pinned_height_tip_and_state_root -- --exact --nocapture
+Exit code: 0
+Wall-clock elapsed: 8311 ms (incremental compile included)
+Matched count line: `running 1 test`
+Final lines:
+  test tests::a666_recovery_regression_tests::ar04_authenticated_catchup_requires_pinned_height_tip_and_state_root ... ok
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 265 filtered out; finished in 1.01s
+Test runtime: 1.01s (< 120s budget)
+
+Full touched-crate suite
+------------------------
+Command:
+  cargo test -p postfiat-node --lib
+Full suite: pending Burzum detached suite /tmp/node-lib-suite.log; no rerun by Ghash.
+
+Hygiene
+-------
+  cargo fmt --all -- --check: exit 0
+  git diff --check -- <owned paths>: exit 0
+No secrets, key material, or live-chain data recorded.

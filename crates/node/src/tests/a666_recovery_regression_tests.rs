@@ -12,6 +12,10 @@ const AR03_OFFLINE_VALIDATOR: &str = "validator-3";
 const AR03_BLOCK_ONE_AMOUNT: u64 = 41;
 const AR03_BLOCK_TWO_AMOUNT: u64 = 42;
 
+// AR-04 canonical input vector (recovery spec section 6.1, AR-04).
+const AR04_CHAIN_ID: &str = "postfiat-local";
+const AR04_BLOCK_ONE_AMOUNT: u64 = 43;
+
 fn copy_recovery_test_dir(source: &Path, destination: &Path) {
     std::fs::create_dir_all(destination).expect("create recovery validator directory");
     for entry in std::fs::read_dir(source).expect("read recovery seed directory") {
@@ -440,4 +444,187 @@ fn ar03_quorum_first_commit_with_offline_validator_converges_after_recovery() {
     }
 
     std::fs::remove_dir_all(root_dir).expect("cleanup AR-03 recovery test");
+}
+
+fn mutate_hex_digest(digest: &str) -> String {
+    let replacement = if digest.starts_with('0') { '1' } else { '0' };
+    let mut mutated = digest.to_string();
+    mutated.replace_range(..1, &replacement.to_string());
+    assert_ne!(mutated, digest);
+    assert_eq!(mutated.len(), digest.len());
+    mutated
+}
+
+#[test]
+fn ar04_authenticated_catchup_requires_pinned_height_tip_and_state_root() {
+    let root_dir = std::env::temp_dir().join(format!(
+        "postfiat-ar04-pinned-catch-up-test-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos()
+    ));
+    let source_dir = root_dir.join("validator-0");
+    let genesis_seed_dir = root_dir.join("genesis-seed");
+
+    init(InitOptions {
+        data_dir: source_dir.clone(),
+        chain_id: AR04_CHAIN_ID.to_string(),
+        node_id: "validator-0".to_string(),
+        validator_count: 1,
+    })
+    .expect("init AR-04 source");
+    copy_recovery_test_dir(&source_dir, &genesis_seed_dir);
+
+    let batch_file = source_dir.join("ar04-block-1.batch.json");
+    create_transfer_batch(BatchTransferOptions {
+        data_dir: source_dir.clone(),
+        key_file: None,
+        to: format!("pf{:0<38}", "ar04pinnedcatchupblockone"),
+        amount: AR04_BLOCK_ONE_AMOUNT,
+        batch_file: batch_file.clone(),
+    })
+    .expect("create AR-04 transfer batch");
+    apply_batch(ApplyBatchOptions {
+        data_dir: source_dir.clone(),
+        batch_file,
+        certificate_file: None,
+    })
+    .expect("commit AR-04 block one on the source");
+    let source_blocks = blocks(BlockQueryOptions {
+        data_dir: source_dir.clone(),
+        from_height: None,
+        limit: None,
+    })
+    .expect("source blocks");
+    let block_one = source_blocks
+        .iter()
+        .find(|block| block.header.height == 1)
+        .expect("committed AR-04 block one")
+        .clone();
+
+    let pin = ExpectedBatchCommitIdentity {
+        block_height: block_one.header.height,
+        block_hash: block_one.header.block_hash.clone(),
+        state_root: block_one.header.state_root.clone(),
+        certificate_id: block_one.header.certificate_id.clone(),
+    };
+
+    // Adversarial vectors: each axis mutates exactly one pinned field and is
+    // applied to an independent genesis clone of the destination.
+    let wrong_height_pin = ExpectedBatchCommitIdentity {
+        block_height: pin.block_height + 1,
+        ..pin.clone()
+    };
+    let wrong_tip_pin = ExpectedBatchCommitIdentity {
+        block_hash: mutate_hex_digest(&pin.block_hash),
+        ..pin.clone()
+    };
+    let wrong_root_pin = ExpectedBatchCommitIdentity {
+        state_root: mutate_hex_digest(&pin.state_root),
+        ..pin.clone()
+    };
+    let axes: [(&str, ExpectedBatchCommitIdentity, String); 3] = [
+        (
+            "height",
+            wrong_height_pin.clone(),
+            format!(
+                "expected height {} hash {} root {}",
+                wrong_height_pin.block_height, wrong_height_pin.block_hash, wrong_height_pin.state_root
+            ),
+        ),
+        (
+            "tip",
+            wrong_tip_pin.clone(),
+            format!("hash {}", wrong_tip_pin.block_hash),
+        ),
+        (
+            "root",
+            wrong_root_pin.clone(),
+            format!("root {}", wrong_root_pin.state_root),
+        ),
+    ];
+
+    for (axis, mutated_pin, expected_message_fragment) in &axes {
+        let destination_dir = root_dir.join(format!("reject-{axis}"));
+        copy_recovery_test_dir(&genesis_seed_dir, &destination_dir);
+        let staging_dir = root_dir.join(format!("staging-reject-{axis}"));
+        let (_block_file, staged_batch_file, staged_certificate_file) =
+            stage_certified_catch_up_artifacts(
+                &source_dir,
+                &destination_dir,
+                &staging_dir,
+                1,
+                &block_one,
+            );
+        let store = NodeStore::new(&destination_dir);
+        let tuple_before = status_tuple(&destination_dir);
+        let ledger_before = store.read_ledger().expect("ledger before rejection");
+        let blocks_before = store.read_blocks().expect("blocks before rejection");
+
+        let error = apply_batch_with_expected_commit_identity(
+            ApplyBatchOptions {
+                data_dir: destination_dir.clone(),
+                batch_file: staged_batch_file,
+                certificate_file: Some(staged_certificate_file),
+            },
+            mutated_pin,
+        )
+        .expect_err("mutated pin must be rejected");
+        let message = error.to_string();
+        assert!(
+            message.contains("prepared commit identity mismatch"),
+            "{axis} axis rejection must be the typed pin mismatch: {message}"
+        );
+        assert!(
+            message.contains(expected_message_fragment),
+            "{axis} axis rejection must name the mutated pin field: {message}"
+        );
+
+        assert_eq!(
+            status_tuple(&destination_dir),
+            tuple_before,
+            "{axis} axis rejection must leave destination height, tip, and state root unchanged"
+        );
+        assert_eq!(
+            store.read_ledger().expect("ledger after rejection"),
+            ledger_before,
+            "{axis} axis rejection must leave the ledger unchanged"
+        );
+        assert_eq!(
+            store.read_blocks().expect("blocks after rejection"),
+            blocks_before,
+            "{axis} axis rejection must leave the block log unchanged"
+        );
+    }
+
+    // Positive vector: the exact pinned height, tip, and state root accepts
+    // and the destination converges onto the certified block.
+    let destination_dir = root_dir.join("accept");
+    copy_recovery_test_dir(&genesis_seed_dir, &destination_dir);
+    let staging_dir = root_dir.join("staging-accept");
+    let (_block_file, staged_batch_file, staged_certificate_file) =
+        stage_certified_catch_up_artifacts(&source_dir, &destination_dir, &staging_dir, 1, &block_one);
+    apply_batch_with_expected_commit_identity(
+        ApplyBatchOptions {
+            data_dir: destination_dir.clone(),
+            batch_file: staged_batch_file,
+            certificate_file: Some(staged_certificate_file),
+        },
+        &pin,
+    )
+    .expect("exact pinned height, tip, and state root must be accepted");
+    assert_eq!(
+        status_tuple(&destination_dir),
+        (pin.block_height, pin.block_hash.clone(), pin.state_root.clone()),
+        "accepted catch-up must converge onto the pinned height, tip, and state root"
+    );
+    let verified = verify_blocks(NodeOptions {
+        data_dir: destination_dir.clone(),
+    })
+    .expect("verify destination certified history");
+    assert_eq!(verified.block_count, 1);
+    assert!(verified.verified);
+
+    std::fs::remove_dir_all(root_dir).expect("cleanup AR-04 pinned catch-up test");
 }
