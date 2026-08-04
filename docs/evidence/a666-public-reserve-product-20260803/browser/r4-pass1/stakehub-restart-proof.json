@@ -1,60 +1,59 @@
 {
-  "schema": "postfiat.a666.r4.stakehub-restart-proof.v1",
-  "reason": "sequential-unit-start-repair",
-  "expected_active_unit_count": 5,
-  "observed_active_unit_count": 1,
-  "counts_match": false,
-  "first_failure": "stakehub-pfusdc-tier4-wallet-agent-20260718.service start exited 5 and remained inactive",
-  "units": [
-    {
-      "unit": "stakehub-pfusdc-tier4-wallet-agent-20260718.service",
-      "start_exit": 5,
-      "active_after_start_poll": false,
-      "active": false
-    },
-    {
-      "unit": "stakehub-private-swap-asset-orchard-candidate.service",
-      "start_exit": 5,
-      "active_after_start_poll": false,
-      "active": false
-    },
-    {
-      "unit": "stakehub-private-swap-asset-orchard.service",
-      "start_exit": 0,
-      "active_after_start_poll": true,
-      "active": false
-    },
-    {
-      "unit": "stakehub-private-swap-dashboard-bfinal.service",
-      "start_exit": 5,
-      "active_after_start_poll": false,
-      "active": false
-    },
-    {
-      "unit": "stakehub-private-swap-dashboard.service",
-      "start_exit": null,
-      "start_disposition": "already_active",
-      "active_after_start_poll": true,
-      "active": true
-    }
-  ],
-  "failed_units": [
-    {
-      "unit": "stakehub-pfusdc-tier4-wallet-agent-20260718.service",
-      "start_exit": 5
-    },
-    {
-      "unit": "stakehub-private-swap-asset-orchard-candidate.service",
-      "start_exit": 5
-    },
-    {
-      "unit": "stakehub-private-swap-dashboard-bfinal.service",
-      "start_exit": 5
-    },
-    {
-      "unit": "stakehub-private-swap-asset-orchard.service",
-      "start_exit": 0,
-      "failure": "became inactive after the successful start returned"
-    }
+ "schema": "postfiat.a666.r4.stakehub-restart-inventory.v1",
+ "inventory_only": true,
+ "mutations_executed": 0,
+ "dashboard_currently_active": true,
+ "official_absence_proof": false,
+ "restart_verified_after_run": false,
+ "observed_units": [
+  {
+   "name": "stakehub-pfusdc-wallet-agent.service",
+   "load_state": "loaded",
+   "active_state": "inactive",
+   "sub_state": "dead",
+   "restart_target": false,
+   "note": "observed only"
+  },
+  {
+   "name": "stakehub-private-swap-asset-orchard.service",
+   "load_state": "loaded",
+   "active_state": "failed",
+   "sub_state": "failed",
+   "restart_target": false,
+   "note": "observed only, failed state preserved"
+  },
+  {
+   "name": "stakehub-private-swap-dashboard.service",
+   "load_state": "loaded",
+   "active_state": "active",
+   "sub_state": "running",
+   "fragment_path": "/home/postfiat/.config/systemd/user/stakehub-private-swap-dashboard.service",
+   "restart_target": true,
+   "restart_required": true
+  },
+  {
+   "name": "stakehub-private-swap-wallet-agent.service",
+   "load_state": "loaded",
+   "active_state": "inactive",
+   "sub_state": "dead",
+   "restart_target": false,
+   "note": "observed only"
+  }
+ ],
+ "active_unit_count": 1,
+ "active_unit_names": [
+  "stakehub-private-swap-dashboard.service"
+ ],
+ "held_official_run_sequence": {
+  "metadata_only": true,
+  "executed_this_turn": false,
+  "steps": [
+   "stop stakehub-private-swap-dashboard.service immediately before the official run (unit referenced by name only)",
+   "prove zero active StakeHub units via read-only list-units before the run",
+   "after the run, restart exactly the inventory active set (the dashboard only) and require active count==1 and name equality with stakehub-private-swap-dashboard.service"
   ]
+ },
+ "sauron_constraint": "StakeHub software/services/data/funds/keys remain untouched; only temporary start/stop of inventoried user units is allowed; deprecation means decoupling from L1v2 authority, never deletion.",
+ "source": "read-only systemctl --user list-units/list-unit-files/show; no argv, environment, credentials, logs, balances, data, keys, or values recorded",
+ "credentials_included": false
 }
