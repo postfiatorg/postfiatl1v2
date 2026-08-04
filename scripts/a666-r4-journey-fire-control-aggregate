@@ -21,6 +21,9 @@ pftl_stage="$construction/private-swap-stage.json"
 d_runner="$construction/journey-runner-dry-run.json"
 async_proof_slot="$construction/async-proof-slot.json"
 export_artifact_slot="$construction/export-artifact-slot.json"
+return_artifact_slot="$construction/return-artifact-slot.json"
+official_runner_contract="$construction/official-classification-fast-loop.json"
+restart_watcher="$construction/candidate-proxy-restart-watcher.json"
 stakehub_inventory="$pass1/stakehub-restart-proof.json"
 stakehub_absence="$pass1/stakehub-official-absence.json"
 preprove_binding="$construction/pre-prove-binding-check.json"
@@ -208,13 +211,17 @@ candidate_proxy_validation_for_file() {
 }
 
 current_route_validation() {
-    python3 - "$route_stage" <<'PY'
+    python3 - "$route_stage" "$return_artifact_slot" <<'PY'
 import json,socket,sys
 p=json.load(open(sys.argv[1],encoding='utf-8'))
-expected_tip='ed8dacf6722a082ba753a04ce86c125ed7331f45057a258d1087509e966df45177eb6711fdd801a7125573866b3d56b2'
-expected_root='3840a383378c8f287677d12efb940af7d8a1e656a37651cf52e6360dd8ab305e8736c1e7252513e09293c517727c8ee1'
+return_slot=json.load(open(sys.argv[2],encoding='utf-8'))
+observed=return_slot.get('observed_chain_state',{})
+expected_tuple={'equal':True,'height':observed.get('height'),'block_tip_hash':observed.get('tip'),'state_root':observed.get('state_root')}
+expected_tip=expected_tuple['block_tip_hash']
+expected_root=expected_tuple['state_root']
+return_ok=(return_slot.get('schema')=='postfiat.a666.r4.return-artifact-slot.v1' and return_slot.get('status')=='accepted' and return_slot.get('ok') is True and return_slot.get('accepted') is True and observed.get('height')==833 and observed.get('finalized') is True and return_slot.get('conservation',{}).get('equal') is True and return_slot.get('live_chain') is False and return_slot.get('stakehub_interaction') is False and return_slot.get('business_mutations')==0)
 route=p.get('six_rpc_route',{}); tup=p.get('six_rpc_tuple',{}); endpoints=p.get('query',{}).get('endpoints',[])
-base=(p.get('schema')=='postfiat.a666.r4.route-current-state.v1' and p.get('accepted') is True and p.get('candidate_revision')=='39f7fae3191aa34c376ae1657650a9ec2444f421' and p.get('bindings',{}).get('controlled_report_sha256')=='c2fb973f284d92cf3b866c4abe86aca237f8e4bd753cbf03075ab71702810cf2' and len(endpoints)==6 and len(set(endpoints))==6 and all(x.startswith('127.0.0.1:') for x in endpoints) and tup=={'equal':True,'height':831,'block_tip_hash':expected_tip,'state_root':expected_root} and route.get('route_id')=='pftl-a666-r4-offline-rehearsal-v1' and route.get('route_epoch')==2 and route.get('policy_epoch')==2 and route.get('live_value_enabled') is True and route.get('paused') is False and route.get('invariant_holds') is True and route.get('route_config_digest')=='b2'*48 and route.get('policy_hash')=='5dcc28ea82872d05716dbb94af480f6dd1355dde8a931633a01dfdec309c4bbd5e5ee16e104afba75913eb0100123044' and p.get('activation_submitted') is False and p.get('business_operations')==0 and p.get('stakehub_interaction') is False and p.get('live_chain') is False)
+base=(p.get('schema')=='postfiat.a666.r4.route-current-state.v1' and p.get('accepted') is True and p.get('candidate_revision')=='39f7fae3191aa34c376ae1657650a9ec2444f421' and p.get('bindings',{}).get('controlled_report_sha256')=='c2fb973f284d92cf3b866c4abe86aca237f8e4bd753cbf03075ab71702810cf2' and len(endpoints)==6 and len(set(endpoints))==6 and all(x.startswith('127.0.0.1:') for x in endpoints) and tup==expected_tuple and return_ok and route.get('route_id')=='pftl-a666-r4-offline-rehearsal-v1' and route.get('route_epoch')==2 and route.get('policy_epoch')==2 and route.get('live_value_enabled') is True and route.get('paused') is False and route.get('invariant_holds') is True and route.get('route_config_digest')=='b2'*48 and route.get('policy_hash')=='5dcc28ea82872d05716dbb94af480f6dd1355dde8a931633a01dfdec309c4bbd5e5ee16e104afba75913eb0100123044' and p.get('activation_submitted') is False and p.get('business_operations')==0 and p.get('stakehub_interaction') is False and p.get('live_chain') is False)
 if not base:
  print(json.dumps({'ok':False,'queried_endpoint_count':0,'base_evidence_valid':False})); raise SystemExit(0)
 rows=[]
@@ -226,7 +233,7 @@ try:
     q={'version':'postfiat-local-rpc-v1','id':'a666-r4-fire-control-route-current','method':method,'params':params}; s.sendall((json.dumps(q,separators=(',',':'))+'\n').encode()); v=json.loads(s.makefile('rb').readline())
    if not v.get('ok'): raise RuntimeError(method)
    vals.append(v['result'])
-  status,supply=vals; rows.append(status.get('block_height')==831 and status.get('block_tip_hash')==expected_tip and status.get('state_root')==expected_root and supply.get('route_id')==route.get('route_id') and supply.get('route_epoch')==2 and supply.get('policy_epoch')==2 and supply.get('live_value_enabled') is True and supply.get('paused') is False and supply.get('invariant_holds') is True and supply.get('route_config_digest')==route.get('route_config_digest') and supply.get('policy_hash')==route.get('policy_hash'))
+  status,supply=vals; rows.append(status.get('block_height')==expected_tuple['height'] and status.get('block_tip_hash')==expected_tip and status.get('state_root')==expected_root and supply.get('route_id')==route.get('route_id') and supply.get('route_epoch')==2 and supply.get('policy_epoch')==2 and supply.get('live_value_enabled') is True and supply.get('paused') is False and supply.get('invariant_holds') is True and supply.get('route_config_digest')==route.get('route_config_digest') and supply.get('policy_hash')==route.get('policy_hash'))
 except Exception: rows=[]
 print(json.dumps({'ok':base and len(rows)==6 and all(rows),'queried_endpoint_count':len(rows),'base_evidence_valid':base}))
 PY
@@ -264,14 +271,14 @@ dependencies_evidence_validation_for_file() {
     actual_sha=$(sha256sum "$path" | awk '{print $1}')
     jq -cn --arg sha "$actual_sha" --argjson d "$(cat "$path")" '
       {ok:(
-       $sha == "2c1fac08179a0df4606f3ca1cd35e3105235b77b7e5f5c710bd7faf2f3be4d95"
+       $sha == "f9414e57edd7ff28e1acc38a7e1de3146287a85ca2f59b63d9f74438946ff50e"
        and $d.schema == "postfiat.a666.r4.private-swap-dependencies-refresh.v2" and $d.candidate.revision == "39f7fae3191aa34c376ae1657650a9ec2444f421"
        and $d.bindings.preserved_root == "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349" and $d.bindings.fleet.commit == "ee23d58822e89df5a24a10ecea42ed0bd985653a"
-       and $d.expected_fleet_tuple.height == 831 and $d.expected_fleet_tuple.tip == "ed8dacf6722a082ba753a04ce86c125ed7331f45057a258d1087509e966df45177eb6711fdd801a7125573866b3d56b2" and $d.expected_fleet_tuple.state_root == "3840a383378c8f287677d12efb940af7d8a1e656a37651cf52e6360dd8ab305e8736c1e7252513e09293c517727c8ee1"
+       and $d.bindings.route_current_state.sha256 == "10886b11920e07e08a8caa9eaeebf1e9f7b400336cb14949e963953715421714" and $d.expected_fleet_tuple.height == 833 and $d.expected_fleet_tuple.tip == "569d64e178273b0bff2c935afaef9fea7ba94d04c2af3b7f0611ec9743a6197e8864364ba435aa5ee21b8c61d3fc12aa" and $d.expected_fleet_tuple.state_root == "e06949b6066150d2b7703bffec3f0e091cc617922452e19a0933df0c728e23060b91dfbfa1d521634f5809ecc2315d89"
        and $d.route.route_epoch == 2 and $d.route.policy_epoch == 2 and $d.route.live_value_enabled == true and $d.route.paused == false and $d.route.invariant_holds == true
        and $d.ready == true and $d.state == "ready" and $d.business_operations == 0 and $d.stakehub_interaction == false and $d.live_chain == false
-       and $d.supervisor.systemd_unit == "a666-r4-private-swap-dependencies-pathb-v2.service" and $d.supervisor.live == true
-       and $d.asset_service.endpoint == "127.0.0.1:8799" and $d.asset_service.ready == true and $d.certified_round_driver.local_height == 831 and $d.certified_round_driver.start_height == 832 and $d.certified_round_driver.next_height == 832 and $d.certified_round_driver.authenticated_peer_count == 5 and $d.certified_round_driver.authenticated_quorum == true and $d.certified_round_driver.processed_round_count == 0
+       and $d.supervisor.systemd_unit == "a666-r4-private-swap-dependencies-pathb-v3.service" and $d.supervisor.live == true
+       and $d.asset_service.endpoint == "127.0.0.1:8799" and $d.asset_service.ready == true and $d.certified_round_driver.local_height == 833 and $d.certified_round_driver.start_height == 834 and $d.certified_round_driver.next_height == 834 and $d.certified_round_driver.authenticated_peer_count == 5 and $d.certified_round_driver.authenticated_quorum == true and $d.certified_round_driver.processed_round_count == 0
        and $d.checks.empty_batch_and_processed_dirs == true
       )}'
 }
@@ -280,10 +287,10 @@ dependencies_runtime_validation() {
     local d="$dependencies" supervisor asset round heartbeat now
     jq -e '.ok == true' <<<"$(dependencies_evidence_validation_for_file "$d")" >/dev/null || { jq -cn '{ok:false}'; return; }
     supervisor=$(jq -r '.supervisor.pid' "$d"); asset=$(jq -r '.asset_service.pid' "$d"); round=$(jq -r '.certified_round_driver.pid' "$d")
-    systemctl --user is-active a666-r4-private-swap-dependencies-pathb-v2.service >/dev/null 2>&1 || { jq -cn '{ok:false}'; return; }
-    [[ "$(systemctl --user show a666-r4-private-swap-dependencies-pathb-v2.service -p ActiveState -p SubState --value)" == $'active\nrunning' ]] || { jq -cn '{ok:false}'; return; }
+    systemctl --user is-active a666-r4-private-swap-dependencies-pathb-v3.service >/dev/null 2>&1 || { jq -cn '{ok:false}'; return; }
+    [[ "$(systemctl --user show a666-r4-private-swap-dependencies-pathb-v3.service -p ActiveState -p SubState --value)" == $'active\nrunning' ]] || { jq -cn '{ok:false}'; return; }
     kill -0 "$supervisor" && kill -0 "$asset" && kill -0 "$round" && ss -ltn | grep -q '127.0.0.1:8799' || { jq -cn '{ok:false}'; return; }
-    jq -e '.schema == "postfiat-transport-peer-certified-batch-loop-ready-v2" and .local_state.block_height == 831 and .start_height == 832 and .local_state.block_tip_hash == "ed8dacf6722a082ba753a04ce86c125ed7331f45057a258d1087509e966df45177eb6711fdd801a7125573866b3d56b2" and .authenticated_peer_count == 5 and .authenticated_quorum == true and .processed_round_count == 0' "$(jq -r '.certified_round_driver.ready_file' "$d")" >/dev/null || { jq -cn '{ok:false}'; return; }
+    jq -e '.schema == "postfiat-transport-peer-certified-batch-loop-ready-v2" and .local_state.block_height == 833 and .start_height == 834 and .local_state.block_tip_hash == "569d64e178273b0bff2c935afaef9fea7ba94d04c2af3b7f0611ec9743a6197e8864364ba435aa5ee21b8c61d3fc12aa" and .authenticated_peer_count == 5 and .authenticated_quorum == true and .processed_round_count == 0' "$(jq -r '.certified_round_driver.ready_file' "$d")" >/dev/null || { jq -cn '{ok:false}'; return; }
     [[ -s "$(jq -r '.asset_service.ready_file' "$d")" ]] && [[ -z "$(find "$(jq -r '.paths.batch_outbox' "$d")" -mindepth 1 -print -quit)" ]] && [[ -z "$(find "$(jq -r '.paths.processed_batches' "$d")" -mindepth 1 -print -quit)" ]] || { jq -cn '{ok:false}'; return; }
     jq -cn '{ok:true}'
 }
@@ -292,17 +299,17 @@ pftl_runtime_validation() {
     local d="$pftl_stage" sha supervisor daemon readiness
     sha=$(sha256sum "$d" | awk '{print $1}')
     jq -e --arg sha "$sha" '
-      $sha == "ba5fb7abe6530ca27b239f87c5a07a2decd33935d64fba1a5e77145796d8ef2d"
+      $sha == "cc3bd4903a41b1ef243285b93f4651bc603ca20d0cd4d26d137150c8ddce282b"
       and .schema == "postfiat.a666.r4.private-swap-stage.v2" and .candidate.revision == "39f7fae3191aa34c376ae1657650a9ec2444f421"
-      and .bindings.preserved_root == "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349" and .bindings.dependency_evidence.sha256 == "2c1fac08179a0df4606f3ca1cd35e3105235b77b7e5f5c710bd7faf2f3be4d95" and .bindings.witness_stage.witness_sha256 == "8c2c7ee6d3209bfb21e5d442de7e80cb2ab4affabe06a0008527717eaae13ef4"
+      and .bindings.preserved_root == "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349" and .bindings.route_current_state.sha256 == "10886b11920e07e08a8caa9eaeebf1e9f7b400336cb14949e963953715421714" and .bindings.dependency_evidence.sha256 == "f9414e57edd7ff28e1acc38a7e1de3146287a85ca2f59b63d9f74438946ff50e" and .bindings.witness_stage.witness_sha256 == "8c2c7ee6d3209bfb21e5d442de7e80cb2ab4affabe06a0008527717eaae13ef4"
       and .governed_identity.route_id == "pftl-a666-r4-offline-rehearsal-v1" and .governed_identity.route_epoch == 2 and .governed_identity.policy_epoch == 2 and .governed_identity.live_value_enabled == true and .governed_identity.paused == false and .governed_identity.invariant_holds == true
       and .ready == true and .state == "ready" and .submitted_private_operations == 0 and .live_chain == false and .stakehub_interaction == false and .credentials_included == false
       and .endpoint.url == "http://127.0.0.1:8798" and .endpoint.loopback_only == true and .endpoint.ready == true
     ' "$d" >/dev/null || { jq -cn '{ok:false}'; return; }
     supervisor=$(jq -r '.supervisor.pid' "$d"); daemon=$(jq -r '.endpoint.pid' "$d")
-    systemctl --user is-active a666-r4-pftl-swapd-pathb-v2.service >/dev/null 2>&1 && [[ "$(systemctl --user show a666-r4-pftl-swapd-pathb-v2.service -p ActiveState -p SubState --value)" == $'active\nrunning' ]] && kill -0 "$supervisor" && kill -0 "$daemon" && ss -ltn | grep -q '127.0.0.1:8798' && ss -ltn | grep -q '127.0.0.1:8799' || { jq -cn '{ok:false}'; return; }
+    systemctl --user is-active a666-r4-pftl-swapd-pathb-v3.service >/dev/null 2>&1 && [[ "$(systemctl --user show a666-r4-pftl-swapd-pathb-v3.service -p ActiveState -p SubState --value)" == $'active\nrunning' ]] && kill -0 "$supervisor" && kill -0 "$daemon" && ss -ltn | grep -q '127.0.0.1:8798' && ss -ltn | grep -q '127.0.0.1:8799' || { jq -cn '{ok:false}'; return; }
     readiness=$(curl --fail --silent --show-error --max-time 3 http://127.0.0.1:8798/v1/ready) || { jq -cn '{ok:false}'; return; }
-    jq -e '.schema == "postfiat.pftl_swap.readiness.v1" and .ready == true and .local_only == true and .route_id == "pftl-a666-r4-offline-rehearsal-v1" and .controlled_wallet_id == "pfab9b9228942e5c529633a13aa271d5297bec6353" and .checks.asset_service.ok == true and .checks.asset_service.report.mirror.height == 831 and .checks.certified_round_driver.ok == true and .checks.certified_round_driver.local_height == 831 and .checks.certified_round_driver.next_round_height == 832 and .checks.certified_round_driver.authenticated_peer_count == 5' <<<"$readiness" >/dev/null || { jq -cn '{ok:false}'; return; }
+    jq -e '.schema == "postfiat.pftl_swap.readiness.v1" and .ready == true and .local_only == true and .route_id == "pftl-a666-r4-offline-rehearsal-v1" and .controlled_wallet_id == "pfab9b9228942e5c529633a13aa271d5297bec6353" and .checks.asset_service.ok == true and .checks.asset_service.report.mirror.height == 833 and .checks.certified_round_driver.ok == true and .checks.certified_round_driver.local_height == 833 and .checks.certified_round_driver.next_round_height == 834 and .checks.certified_round_driver.authenticated_peer_count == 5' <<<"$readiness" >/dev/null || { jq -cn '{ok:false}'; return; }
     jq -cn '{ok:true}'
 }
 
@@ -323,10 +330,63 @@ d_runner_validation() {
       )}'
 }
 
-no_live_validation() {
-    jq -cn --argjson d "$(cat "$d_runner")" --argjson route "$(cat "$route_stage")" --argjson deps "$(cat "$dependencies")" --argjson pftl "$(cat "$pftl_stage")" --argjson async "$(cat "$async_proof_slot")" --argjson export "$(cat "$export_artifact_slot")" --argjson proxy "$(cat "$candidate_proxy")" --argjson acceptance "$(cat "$b_acceptance")" '
+return_slot_validation() {
+    local path="$return_artifact_slot" artifact actual export_receipt
+    [[ -r "$path" ]] || { jq -cn '{ok:false,reason:"return_slot_unreadable"}'; return; }
+    artifact=$(jq -r '.artifact_path // empty' "$path")
+    [[ -n "$artifact" && -r "$artifact" ]] || { jq -cn '{ok:false,reason:"return_artifact_unreadable"}'; return; }
+    actual=$(sha256sum "$artifact" | awk '{print $1}')
+    export_receipt=$(jq -r '.receipt_identity // empty' "$export_artifact_slot")
+    jq -cn --arg actual "$actual" --arg export_receipt "$export_receipt" --argjson slot "$(cat "$path")" '
       {ok:(
-        $d.live_chain == false and $route.live_chain == false and $deps.live_chain == false and $pftl.live_chain == false and $async.business_mutations == 0 and $export.live_chain == false and $acceptance.live_chain == false and $proxy.no_live_chain_route == true
+        $slot.schema == "postfiat.a666.r4.return-artifact-slot.v1"
+        and $slot.status == "accepted" and $slot.ok == true and $slot.accepted == true
+        and ($slot.run_id | type == "string" and length > 0)
+        and ($slot.artifact_sha256 | type == "string" and test("^[0-9a-f]{64}$") and . == $actual)
+        and ($slot.receipt_identity | type == "string" and length > 0 and . != $export_receipt)
+        and $slot.observed_chain_state.height == 833 and $slot.observed_chain_state.finalized == true
+        and ($slot.observed_chain_state.tip | type == "string" and test("^[0-9a-f]{96}$"))
+        and ($slot.observed_chain_state.state_root | type == "string" and test("^[0-9a-f]{96}$"))
+        and $slot.conservation.equal == true and $slot.conservation.invariant_holds == true
+        and $slot.live_chain == false and $slot.stakehub_interaction == false and $slot.business_mutations == 0
+      )}'
+}
+
+official_runner_contract_validation() {
+    jq -e '
+      .schema == "postfiat.a666.r4.official-classification-fast-loop.v1"
+      and .candidate_revision == "39f7fae3191aa34c376ae1657650a9ec2444f421"
+      and .runner_path == "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js"
+      and .vectors.negative_missing_input.result == "pass"
+      and .vectors.negative_mode_mismatch.result == "pass"
+      and .vectors.positive_complete_inputs.result == "pass"
+      and .official_journey_invocations == 0 and .browser_launch_count == 0
+      and .business_operations == 0 and .business_mutations == 0
+      and .official_pass == false and .stakehub_actions == 0 and .live_chain == false
+    ' "$official_runner_contract" >/dev/null && jq -cn '{ok:true}' || jq -cn '{ok:false}'
+}
+
+restart_watcher_validation() {
+    jq -e '
+      .schema == "postfiat.a666.r4.candidate-proxy-restart-watcher.v1"
+      and .ready == true and .unit.active == true and .unit.running == true
+      and .request_contract.run_id == "a666-r4-official-journey-pass1-20260804-v1"
+      and .request_contract.required_mode == "600" and .request_contract.currently_absent == true
+      and .control.mode == "600" and .control.pid_file_mode == "600" and .control.ready_file_mode == "600"
+      and .candidate_pins.revision == "39f7fae3191aa34c376ae1657650a9ec2444f421"
+      and .candidate_pins.wallet_origin == "http://127.0.0.1:8080"
+      and .candidate_pins.proxy_origin == "http://127.0.0.1:31021"
+      and (.checks | all(.[]; . == true))
+      and .business_operations == 0 and .official_run_invocations == 0
+      and .live_chain == false and .stakehub_interaction == false and .credentials_included == false
+    ' "$restart_watcher" >/dev/null && jq -cn '{ok:true}' || jq -cn '{ok:false}'
+}
+
+no_live_validation() {
+    jq -cn --argjson d "$(cat "$d_runner")" --argjson route "$(cat "$route_stage")" --argjson deps "$(cat "$dependencies")" --argjson pftl "$(cat "$pftl_stage")" --argjson async "$(cat "$async_proof_slot")" --argjson export "$(cat "$export_artifact_slot")" --argjson return "$(cat "$return_artifact_slot")" --argjson proxy "$(cat "$candidate_proxy")" --argjson acceptance "$(cat "$b_acceptance")" --argjson official "$(cat "$official_runner_contract")" --argjson watcher "$(cat "$restart_watcher")" '
+      {ok:(
+        $d.live_chain == false and $route.live_chain == false and $deps.live_chain == false and $pftl.live_chain == false and $async.business_mutations == 0 and $export.live_chain == false and $return.live_chain == false and $acceptance.live_chain == false and $proxy.no_live_chain_route == true and $official.live_chain == false and $watcher.live_chain == false
+        and $return.business_mutations == 0 and $return.stakehub_interaction == false and $official.official_journey_invocations == 0 and $watcher.official_run_invocations == 0
         and $pftl.endpoint.url == "http://127.0.0.1:8798" and $deps.asset_service.endpoint == "127.0.0.1:8799" and $proxy.proxy_hold.listen == "127.0.0.1:31021"
         and ($d.observed_loopback_endpoints.setup_manifest_endpoints | all(startswith("tcp://127.0.0.1:") or startswith("http://127.0.0.1:")))
         and ($d.observed_loopback_endpoints.deployment_manifest_endpoints | all(startswith("http://127.0.0.1:")))
@@ -623,7 +683,7 @@ run_route_stakehub_self_test() {
 run_dependencies_self_test() {
     local root
     root=$(mktemp -d /tmp/a666-r4-dependencies-self-test.XXXXXX); chmod 700 "$root"; cp "$dependencies" "$root/deps.json"
-    deps_ok() { jq -e '.route.route_epoch == 2 and .route.policy_epoch == 2 and .supervisor.pid > 0 and .asset_service.pid > 0 and .certified_round_driver.pid > 0 and .expected_fleet_tuple.height == 831 and .asset_service.endpoint == "127.0.0.1:8799"' "$1" >/dev/null; }
+    deps_ok() { jq -e '.route.route_epoch == 2 and .route.policy_epoch == 2 and .supervisor.pid > 0 and .asset_service.pid > 0 and .certified_round_driver.pid > 0 and .expected_fleet_tuple.height == 833 and .asset_service.endpoint == "127.0.0.1:8799"' "$1" >/dev/null; }
     deps_ok "$root/deps.json"
     jq '.route.route_epoch=5' "$root/deps.json" >"$root/epoch.json"; if deps_ok "$root/epoch.json"; then return 1; fi
     jq '.supervisor.pid=0' "$root/deps.json" >"$root/dead.json"; if deps_ok "$root/dead.json"; then return 1; fi
@@ -737,11 +797,13 @@ if jq -e '.ok == true' <<<"$fleet_validation" >/dev/null; then
     fresh_fleet_ok=true
 fi
 candidate_proxy_validation=$(candidate_proxy_validation_for_file "$candidate_proxy" "$fleet_validation")
+restart_watcher_validation=$(restart_watcher_validation)
+official_runner_validation=$(official_runner_contract_validation)
 current_route=$(current_route_validation)
 if jq -e '.ok == true' <<<"$current_route" >/dev/null; then
     fresh_route_ok=true
 fi
-if jq -e '.ok == true' <<<"$candidate_proxy_validation" >/dev/null; then
+if jq -e '.ok == true' <<<"$candidate_proxy_validation" >/dev/null && jq -e '.ok == true' <<<"$restart_watcher_validation" >/dev/null; then
     candidate_proxy_ok=true
 fi
 dependencies_validation=$(dependencies_runtime_validation)
@@ -753,11 +815,12 @@ if jq -e '.ok == true' <<<"$pftl_validation" >/dev/null; then
     pftl_ok=true
 fi
 d_runner_validation=$(d_runner_validation)
-if jq -e '.ok == true' <<<"$d_runner_validation" >/dev/null; then
+if jq -e '.ok == true' <<<"$d_runner_validation" >/dev/null && jq -e '.ok == true' <<<"$official_runner_validation" >/dev/null; then
     d_runner_dry_ok=true
 fi
 v3_async=$(v3_async_validation)
-if jq -e '.ok == true' <<<"$v3_async" >/dev/null; then
+return_slot_validation=$(return_slot_validation)
+if jq -e '.ok == true' <<<"$v3_async" >/dev/null && jq -e '.ok == true' <<<"$return_slot_validation" >/dev/null; then
     async_proof_slot_ok=true
 fi
 if preprove_ok_for_file "$preprove_binding"; then
@@ -765,6 +828,7 @@ if preprove_ok_for_file "$preprove_binding"; then
 fi
 preprove_validation=$(preprove_validation_for_file "$preprove_binding")
 
+official_invocation_count=$(jq -r 'if .official_journey_invocations == 0 then 0 else null end' "$official_runner_contract")
 proof_contract='null'
 if proof_contract_candidate=$(git show ad30bcb:docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/journey-fire-control-preflight.json 2>/dev/null | jq -ce '.proof_artifact_consumption_contract' 2>/dev/null); then
     proof_contract="$proof_contract_candidate"
@@ -784,7 +848,7 @@ stakehub_absence_validation=$(stakehub_official_absence_validation)
 if [[ "$stakehub_scan_ok" == true && "$stakehub_inventory_ok" == true ]] && jq -e '.ok == true' <<<"$stakehub_absence_validation" >/dev/null; then
     stakehub_official_absent_ok=true
 fi
-if jq -e '.ok == true' <<<"$candidate_proxy_validation" >/dev/null; then
+if jq -e '.ok == true' <<<"$candidate_proxy_validation" >/dev/null && jq -e '.ok == true' <<<"$restart_watcher_validation" >/dev/null; then
     candidate_provenance_ok=true
 fi
 no_live_validation=$(no_live_validation)
@@ -824,7 +888,7 @@ check_records=$(jq -cn \
         {id: "private_dependencies_ready", ok: $dependencies_ok, input: "dependencies"},
         {id: "pftl_private_swap_ready", ok: $pftl_ok, input: "pftl"},
         {id: "d_runner_steps_1_6_9_10_dry_run", ok: $d_runner_dry_ok, input: "d_runner"},
-        {id: "async_proof_slot_steps_7_8", ok: $async_proof_slot_ok, input: "v3_async_and_export_artifact_slots"},
+        {id: "async_proof_slot_steps_7_8", ok: $async_proof_slot_ok, input: "v3_async_export_and_return_artifact_slots"},
         {id: "stakehub_restart_inventory_present", ok: $stakehub_inventory_ok, input: "stakehub_restart_inventory"},
         {id: "stakehub_official_absent", ok: $stakehub_official_absent_ok, input: "stakehub_official_scan"},
         {id: "candidate_revision_and_provenance", ok: $candidate_provenance_ok, input: "candidate_proxy"},
@@ -862,7 +926,14 @@ jq -n \
     --argjson d_runner_validation "$d_runner_validation" \
     --argjson async_slot_input "$(input_summary "$async_proof_slot")" \
     --argjson export_slot_input "$(input_summary "$export_artifact_slot")" \
+    --argjson return_slot_input "$(input_summary "$return_artifact_slot")" \
+    --argjson return_slot_validation "$return_slot_validation" \
     --argjson v3_async "$v3_async" \
+    --argjson official_runner_input "$(input_summary "$official_runner_contract")" \
+    --argjson official_runner_validation "$official_runner_validation" \
+    --argjson restart_watcher_input "$(input_summary "$restart_watcher")" \
+    --argjson restart_watcher_validation "$restart_watcher_validation" \
+    --argjson official_invocation_count "$official_invocation_count" \
     --argjson no_live_validation "$no_live_validation" \
     --argjson stakehub_input "$(input_summary "$stakehub_inventory")" \
     --argjson stakehub_inventory_validation "$stakehub_inventory_validation" \
@@ -914,7 +985,13 @@ jq -n \
             d_runner_validation: $d_runner_validation,
             async_proof_slot: $async_slot_input,
             export_artifact_slot: $export_slot_input,
+            return_artifact_slot: $return_slot_input,
+            return_slot_validation: $return_slot_validation,
             v3_async_validation: $v3_async,
+            official_runner_contract: $official_runner_input,
+            official_runner_validation: $official_runner_validation,
+            candidate_proxy_restart_watcher: $restart_watcher_input,
+            restart_watcher_validation: $restart_watcher_validation,
             no_live_validation: $no_live_validation,
             stakehub_restart_inventory: $stakehub_input,
             stakehub_inventory_validation: $stakehub_inventory_validation,
@@ -928,6 +1005,7 @@ jq -n \
             }
         },
         proof_artifact_consumption_contract: $proof_contract,
+        official_invocation_count: $official_invocation_count,
         checks: $check_records
     }
     | .checks as $checks

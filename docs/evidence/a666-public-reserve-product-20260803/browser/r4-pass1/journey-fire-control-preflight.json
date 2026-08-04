@@ -161,7 +161,7 @@
       }
     },
     "current_route_validation": {
-      "ok": false,
+      "ok": true,
       "queried_endpoint_count": 6,
       "base_evidence_valid": true
     },
@@ -190,7 +190,7 @@
       }
     },
     "dependencies_validation": {
-      "ok": false
+      "ok": true
     },
     "pftl": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/private-swap-stage.json",
@@ -205,7 +205,7 @@
       }
     },
     "pftl_validation": {
-      "ok": false
+      "ok": true
     },
     "d_runner": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/journey-runner-dry-run.json",
@@ -246,7 +246,52 @@
         "run_id": "a666-r4-receipt-prover-pathb-20260804-v3"
       }
     },
+    "return_artifact_slot": {
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/return-artifact-slot.json",
+      "exists": true,
+      "valid_json": true,
+      "observed_status": "accepted",
+      "observed_reason": null,
+      "bindings": {
+        "candidate_revision": null,
+        "rehearsal_root": null,
+        "run_id": "a666-r4-return-import-existing-certificate-20260804-v1"
+      }
+    },
+    "return_slot_validation": {
+      "ok": true
+    },
     "v3_async_validation": {
+      "ok": true
+    },
+    "official_runner_contract": {
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-classification-fast-loop.json",
+      "exists": true,
+      "valid_json": true,
+      "observed_status": null,
+      "observed_reason": null,
+      "bindings": {
+        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "rehearsal_root": null,
+        "run_id": null
+      }
+    },
+    "official_runner_validation": {
+      "ok": true
+    },
+    "candidate_proxy_restart_watcher": {
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/candidate-proxy-restart-watcher.json",
+      "exists": true,
+      "valid_json": true,
+      "observed_status": true,
+      "observed_reason": null,
+      "bindings": {
+        "candidate_revision": null,
+        "rehearsal_root": null,
+        "run_id": null
+      }
+    },
+    "restart_watcher_validation": {
       "ok": true
     },
     "no_live_validation": {
@@ -370,6 +415,7 @@
     "restart_contract": "proxy restart and browser reload resume polling the same durable job id and never launch or duplicate proof generation",
     "status": "binding design; implementation readiness remains false"
   },
+  "official_invocation_count": 0,
   "checks": [
     {
       "id": "docker_refire_prepared",
@@ -408,7 +454,7 @@
     },
     {
       "id": "fresh_route_live",
-      "ok": false,
+      "ok": true,
       "input": "fresh_route"
     },
     {
@@ -418,12 +464,12 @@
     },
     {
       "id": "private_dependencies_ready",
-      "ok": false,
+      "ok": true,
       "input": "dependencies"
     },
     {
       "id": "pftl_private_swap_ready",
-      "ok": false,
+      "ok": true,
       "input": "pftl"
     },
     {
@@ -434,7 +480,7 @@
     {
       "id": "async_proof_slot_steps_7_8",
       "ok": true,
-      "input": "v3_async_and_export_artifact_slots"
+      "input": "v3_async_export_and_return_artifact_slots"
     },
     {
       "id": "stakehub_restart_inventory_present",
@@ -464,9 +510,6 @@
   ],
   "check_count": 18,
   "blocker_names": [
-    "fresh_route_live",
-    "private_dependencies_ready",
-    "pftl_private_swap_ready",
     "stakehub_official_absent"
   ],
   "ready_to_fire": false,
