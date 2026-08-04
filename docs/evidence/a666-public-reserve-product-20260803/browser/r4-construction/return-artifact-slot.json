@@ -1,28 +1,13 @@
 {
   "schema": "postfiat.a666.r4.return-artifact-slot.v1",
   "status": "failed",
-  "ok": false,
   "accepted": false,
-  "failure_code": "checkpoint_vote_schema_assertion_field_mismatch",
+  "failure_code": "destination_consume_not_staged_ethereum_spendable_zero",
   "failure_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/return-stage-terminal.json",
   "distinct_from_export_slot": true,
-  "return_receipt_identity": "0xf624efd3c8b9acc7bac184e5ff4067f8163872f1b07eca97a9442c0185d3709a",
-  "artifact_path": "/tmp/a666-r4-return-proof.TaSXsC/receipt-proof.json",
-  "artifact_sha256": "1cd1bcfd5d181cb471e3e3431f2ff18d5a222b8a17449492746bedf72c7d2dfa",
-  "finalized_observed_chain_state": null,
-  "conservation": {
-    "equal": false,
-    "reason": "certified_import_not_invoked_after_checkpoint_vote_schema_assertion_failure"
-  },
-  "transactions": {
-    "local_anvil": 3,
-    "certified_import": 0,
-    "official_invocations": 0
-  },
-  "proofs_generated": 1,
-  "sp1_invocations": 0,
+  "certified_import_count": 0,
+  "official_invocation_count": 0,
   "live_chain": false,
   "custody_material_present": false,
-  "stakehub_interaction": false,
-  "business_value": 0
+  "stakehub_interaction": false
 }
