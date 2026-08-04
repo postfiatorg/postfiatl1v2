@@ -203,11 +203,11 @@ source_files=(
   "$CANDIDATE_WORKTREE/wallet-web/src/lib/pftl-private-primary.js"
   "$CANDIDATE_WORKTREE/wallet-web/src/components/PftlPrivatePrimary.jsx"
 )
-if ! rg -i 'stakehub|stake-hub|stake_hub' "${source_files[@]}" >/dev/null; then zero_dependency=true; fi
+if ! grep -Eiq 'stakehub|stake-hub|stake_hub' "${source_files[@]}"; then zero_dependency=true; fi
 
-rg -q 'postfiat.pftl_swap.readiness.v1' "$CANDIDATE_WORKTREE/crates/node/src/bin/pftl_swapd.rs"
-rg -q '/v1/ready' "$CANDIDATE_WORKTREE/wallet-proxy/pftl-private-swap.js"
-rg -q 'postfiat.wallet.pftl_private_swap_readiness.v1' "$CANDIDATE_WORKTREE/wallet-proxy/navswap-persistence-http.js"
+grep -q 'postfiat.pftl_swap.readiness.v1' "$CANDIDATE_WORKTREE/crates/node/src/bin/pftl_swapd.rs"
+grep -q '/v1/ready' "$CANDIDATE_WORKTREE/wallet-proxy/pftl-private-swap.js"
+grep -q 'postfiat.wallet.pftl_private_swap_readiness.v1' "$CANDIDATE_WORKTREE/wallet-proxy/navswap-persistence-http.js"
 response_compatible=true
 
 [[ "$(sha256sum "$ROUTE_STATE" | awk '{print $1}')" == "$ROUTE_STATE_SHA256" ]]
