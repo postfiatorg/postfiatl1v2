@@ -1,0 +1,253 @@
+{
+  "schema": "postfiat.a666.r4.journey-fire-control-preflight.v1",
+  "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+  "candidate_worktree": "/tmp/a666-r4-successor-39f7fae",
+  "setup_run_id": "r4-setup-20260804T031632Z-498374",
+  "assessment": "RED",
+  "first_blocker": {
+    "code": "full_browser_journey_runner_missing",
+    "detail": "No executable test or orchestration entry point in the exact candidate drives all recovery-spec section 8 steps 1-10 through production UI controls. The available public-browser entry point covers security plus step 9 only, and its step-9 resident backend is an in-process deterministic fixture rather than the held rehearsal services.",
+    "downstream_status": "skipped_without_mutation"
+  },
+  "exact_runner_command": null,
+  "runner_inventory": [
+    {
+      "entry_point": "cd /tmp/a666-r4-successor-39f7fae/wallet-web && npm run test:public-browser",
+      "classification": "minimum regression suite, not full journey",
+      "covers": ["production static-server security", "step 9 reload/recovery", "step 10 download inside the step-9 fixture"],
+      "rejected_because": "Does not drive steps 3-8 and journey-step-9-recovery.e2e.js creates its own synthetic resident HTTP server."
+    },
+    {
+      "entry_point": "cd /tmp/a666-r4-successor-39f7fae && node scripts/pftl-uniswap-wallet-e2e.mjs",
+      "classification": "partial legacy browser route runner",
+      "covers": ["wallet creation", "a partial Uniswap wallet route"],
+      "rejected_because": "Does not implement the ordered A666 section 8 lifecycle, recovery restart/reload, or public-receipt contract and includes non-browser funding orchestration."
+    },
+    {
+      "entry_point": "cd /tmp/a666-r4-successor-39f7fae && node scripts/wallet-shielded-ingress-e2e.mjs",
+      "classification": "partial browser ingress runner",
+      "covers": ["wallet creation", "one shielded ingress flow", "screenshots"],
+      "rejected_because": "Does not implement transparent and private round trips, Ethereum export/return, recovery, or receipt download."
+    },
+    {
+      "entry_point": "cd /tmp/a666-r4-successor-39f7fae && node scripts/navswap-wallet-live-smoke.mjs",
+      "classification": "CLI smoke runner",
+      "covers": ["transparent NAV swap preparation and submission"],
+      "rejected_because": "Not a browser-driven product journey and execution mode consumes a wallet-backup file."
+    }
+  ],
+  "ordered_step_inventory": [
+    {
+      "step": 1,
+      "contract": "open release wallet and show build/revision identity",
+      "production_ui": ".pf-sidebar renders v0.1.2",
+      "backend": "candidate wallet-web/dist",
+      "ui_control_present": true,
+      "executable_runner_action_present": false,
+      "acceptance_observable_complete": false,
+      "gap": "The UI exposes package version but no candidate revision identity."
+    },
+    {
+      "step": 2,
+      "contract": "connect or create browser-controlled wallet",
+      "production_ui": "getByRole('button', {name:'Create Wallet'}), .pf-seed-display, passphrase inputs",
+      "backend": "browser wallet WASM and browser storage",
+      "ui_control_present": true,
+      "executable_runner_action_present": true,
+      "acceptance_observable_complete": true,
+      "gap": null
+    },
+    {
+      "step": 3,
+      "contract": "show six source identities, freshness/finality, both aggregate proof identities, and verified A666 NAV",
+      "production_ui": ".navcoin-primary-safety, .navcoin-primary-pins, NavDetail verification rows",
+      "backend": "navcoin bridge route, reserve packet, and NAV RPC reads",
+      "ui_control_present": true,
+      "executable_runner_action_present": false,
+      "acceptance_observable_complete": false,
+      "gap": "No runner asserts the six individual source identities and both aggregate proof identities from the rendered UI."
+    },
+    {
+      "step": 4,
+      "contract": "show existing A666 and pfUSDC balances",
+      "production_ui": ".navcoin-primary-side with YOUR BALANCES",
+      "backend": "account-assets RPC",
+      "ui_control_present": true,
+      "executable_runner_action_present": false,
+      "acceptance_observable_complete": false,
+      "gap": "No full-journey runner captures the initial balance tuple."
+    },
+    {
+      "step": 5,
+      "contract": "complete transparent issue and redeem",
+      "production_ui": "#navcoin-market-select, #navcoin-amount, Mint A666 and Redeem controls",
+      "backend": "wallet-signed asset finality via wallet proxy to six RPC services",
+      "ui_control_present": true,
+      "executable_runner_action_present": false,
+      "acceptance_observable_complete": false,
+      "gap": "No browser runner drives both operations against the held rehearsal state."
+    },
+    {
+      "step": 6,
+      "contract": "complete private issue and redeem with browser signing",
+      "production_ui": "#private-navcoin-primary action/output selectors and Sign and issue/redeem privately control",
+      "backend": "/api/pftl-private-swap jobs to resident pftl_swapd",
+      "ui_control_present": true,
+      "executable_runner_action_present": false,
+      "acceptance_observable_complete": false,
+      "gap": "Only the synthetic step-9 fixture automates private issue; no held pftl_swapd endpoint is mapped and no real private redeem action is automated."
+    },
+    {
+      "step": 7,
+      "contract": "export A666 to Ethereum and show both-chain finality",
+      "production_ui": "Deliver to MetaMask, Connect MetaMask, and Mint & export controls",
+      "backend": "NAVCoin export relay plus rehearsal Ethereum RPC/contracts",
+      "ui_control_present": true,
+      "executable_runner_action_present": false,
+      "acceptance_observable_complete": false,
+      "gap": "No candidate-scoped rehearsal Ethereum RPC, contract, wallet provider, or export-relay endpoint is declared."
+    },
+    {
+      "step": 8,
+      "contract": "return to native A666 and show exact conservation",
+      "production_ui": "From MetaMask and Return & redeem controls",
+      "backend": "NAVCoin return relay plus rehearsal Ethereum RPC/contracts and PFTL RPC",
+      "ui_control_present": true,
+      "executable_runner_action_present": false,
+      "acceptance_observable_complete": false,
+      "gap": "No candidate-scoped return relay or browser automation exists for the held rehearsal state."
+    },
+    {
+      "step": 9,
+      "contract": "proxy restart, browser reload, recovery, identical final balances and receipt identities",
+      "production_ui": "#private-navcoin-primary, Private primary swap committed, .pf-sidebar .pf-ledger",
+      "backend": "wallet proxy plus durable browser storage",
+      "ui_control_present": true,
+      "executable_runner_action_present": true,
+      "acceptance_observable_complete": false,
+      "gap": "The standalone regression proves the production component with a synthetic resident fixture, not the complete held journey state."
+    },
+    {
+      "step": 10,
+      "contract": "download public receipt without secrets",
+      "production_ui": "getByRole('button', {name:'Download public receipt', exact:true})",
+      "backend": "browser-local allowlisted Blob download",
+      "ui_control_present": true,
+      "executable_runner_action_present": true,
+      "acceptance_observable_complete": false,
+      "gap": "Download validation exists only inside the synthetic step-9 regression, not after a full held-environment journey."
+    }
+  ],
+  "service_readiness": [
+    {
+      "service": "held setup controller",
+      "scope": "rehearsal",
+      "endpoint": null,
+      "observed": "PID 498374 live",
+      "ready": true
+    },
+    {
+      "service": "six PFTL transport and RPC pairs",
+      "scope": "loopback preserved rehearsal root",
+      "endpoint": "127.0.0.1 ports 31001,31003,31005,31007,31009,31011",
+      "observed": "12/12 PIDs live; all six status responses equal at height 826",
+      "ready": true
+    },
+    {
+      "service": "running postfiat-node binary identity",
+      "scope": "held rehearsal",
+      "endpoint": null,
+      "observed": "all 12 running executables hash 9339d1352969cbc449f4245e18c2f1b3763d5b896334335b5bfd894beff12c57; accepted lifecycle report binary hash is ced504f4f7f0d800072647250d1c1070c4e5724cda80a49ad741d95af5bec7d8",
+      "ready": false,
+      "reason": "Running binary identity does not match the accepted candidate lifecycle binary, so exact candidate provenance is unproved."
+    },
+    {
+      "service": "candidate wallet bundle",
+      "scope": "exact candidate filesystem",
+      "endpoint": null,
+      "observed": "candidate HEAD exact and tracked-clean; 4/4 dist asset hashes match the setup manifest",
+      "ready": true
+    },
+    {
+      "service": "wallet static server",
+      "scope": "existing host service, not candidate-scoped rehearsal",
+      "endpoint": "127.0.0.1:5180",
+      "observed": "active from the mutable main worktree",
+      "ready": false,
+      "reason": "No proof that the served bundle is the exact detached candidate artifact."
+    },
+    {
+      "service": "wallet proxy",
+      "scope": "existing host service, not candidate-scoped rehearsal",
+      "endpoint": "127.0.0.1:8080",
+      "observed": "active from the mutable main worktree",
+      "ready": false,
+      "reason": "Not configured or proven to route exclusively to the held six RPC endpoints."
+    },
+    {
+      "service": "private pftl_swapd",
+      "scope": "required rehearsal backend",
+      "endpoint": null,
+      "observed": "no candidate-scoped resident private-swap service or health contract in setup evidence",
+      "ready": false
+    },
+    {
+      "service": "Ethereum rehearsal RPC and contracts",
+      "scope": "required rehearsal backend",
+      "endpoint": null,
+      "observed": "no pinned endpoint, chain identity, contract identities, or funded browser provider in setup evidence",
+      "ready": false
+    },
+    {
+      "service": "export and return relays",
+      "scope": "required rehearsal backend",
+      "endpoint": null,
+      "observed": "no candidate-scoped relay configurations or readiness endpoints in setup evidence",
+      "ready": false
+    },
+    {
+      "service": "StakeHub",
+      "scope": "must remain absent",
+      "endpoint": null,
+      "observed": "0 active stakehub-* units and 0 matching same-user processes at setup evidence review",
+      "ready": true
+    }
+  ],
+  "capture_contract": {
+    "ten_ordered_outcomes": false,
+    "operation_and_receipt_identities": false,
+    "before_after_balances_and_conservation": false,
+    "proxy_restart_and_browser_reload": false,
+    "real_public_receipt_download": false,
+    "custody_boundary_during_same_run": false,
+    "screenshots_or_redacted_captures": false,
+    "first_failure": false,
+    "run_id": false,
+    "note": "Individual partial runners capture subsets; no single runner captures this contract for one ordered production journey."
+  },
+  "business_operation_boundary": {
+    "steps_5_through_8_browser_triggered_against_held_state": false,
+    "precompleted_rust_lifecycle_results_used_as_browser_operations": false,
+    "operator_or_cli_substitution_allowed": false,
+    "mocks_allowed": false
+  },
+  "checks": {
+    "full_journey_runner_exists": false,
+    "single_exact_command_identified": false,
+    "candidate_wallet_revision_visible": false,
+    "candidate_wallet_bundle_exact": true,
+    "candidate_node_binary_exact": false,
+    "six_rpc_endpoints_loopback_equal": true,
+    "candidate_scoped_wallet_proxy_ready": false,
+    "private_swap_service_ready": false,
+    "ethereum_rehearsal_ready": false,
+    "export_return_relays_ready": false,
+    "steps_5_through_8_browser_triggered": false,
+    "complete_capture_contract": false,
+    "stakehub_absent": true,
+    "no_live_chain_dependency": false
+  },
+  "ready_to_fire": false,
+  "ready_to_fire_computation": "all values in checks must be true",
+  "mutations_executed": false
+}
