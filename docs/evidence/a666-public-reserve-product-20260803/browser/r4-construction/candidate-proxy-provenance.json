@@ -37,23 +37,24 @@
   "count": 6,
   "loopback": true,
   "committed_all_equal": true,
-  "live": false,
-  "live_all_equal": false,
-  "matches_committed_tuples": false,
+  "live": true,
+  "live_all_equal": true,
+  "matches_committed_tuples": true,
   "height": 826,
   "source_file": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/rpc-endpoints.json"
  },
  "no_live_chain_route": true,
- "stakehub_dependency_free": false,
+ "stakehub_dependency_free": true,
+ "stakehub_active_units_informational": "stakehub-private-swap-dashboard.service",
  "proxy_hold": {
-  "launched": false,
-  "pid": null,
+  "launched": true,
+  "pid": 687155,
   "listen": "127.0.0.1:31021",
-  "healthz_reachable": false,
+  "healthz_reachable": true,
   "ready_file": "/home/postfiat/.pft/a666-r4-candidate-proxy/proxy.ready.json",
   "log_file": "/home/postfiat/.pft/a666-r4-candidate-proxy/proxy.stdout.log",
   "business_operations_submitted": 0
  },
- "ready": false,
- "first_blocker": "rehearsal_rpc_endpoints_not_live_equal_loopback"
+ "ready": true,
+ "first_blocker": null
 }

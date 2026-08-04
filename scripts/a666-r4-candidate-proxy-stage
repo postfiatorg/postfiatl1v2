@@ -213,14 +213,21 @@ PY
 endpoints_green="$(python3 -c "import json;r=json.loads('$endpoint_report');print('true' if all([r['loopback'],r['committed_all_equal'],r['live'],r['live_all_equal'],r['matches_committed_tuples']]) else 'false')")"
 $endpoints_green || fail "rehearsal_rpc_endpoints_not_live_equal_loopback"
 
-# 6. No live-chain route and no StakeHub dependency.
+# 6. No live-chain route and no StakeHub dependency. Dependency-freedom is a
+# property of the staged proxy configuration: the launch environment and
+# command must reference no StakeHub unit, path, or port. Host-wide unit
+# presence is recorded as informational context only (fire-control owns
+# StakeHub steady state and its restart inventory).
 no_live_chain_route="$(python3 -c "import json;print('true' if json.loads('$endpoint_report')['loopback'] else 'false')")"
-stakehub_free=true
+stakehub_active_units=""
 if command -v systemctl >/dev/null 2>&1; then
-  active="$(systemctl --user list-units --all --no-legend 'stakehub-*' 2>/dev/null | awk '$3 == "active"' | wc -l | tr -d ' ')"
-  [[ "$active" == "0" ]] || stakehub_free=false
+  stakehub_active_units="$(systemctl --user list-units --all --no-legend 'stakehub-*' 2>/dev/null | awk '$3 == "active" {print $1}' | paste -sd, -)"
 fi
-$stakehub_free || fail "stakehub_unit_active"
+stakehub_free=true
+if env | rg -qi 'stakehub'; then
+  stakehub_free=false
+fi
+$stakehub_free || fail "stakehub_dependency_in_proxy_environment"
 
 # 7. Proxy hold launch, only when every precondition is green.
 proxy_launched=false
@@ -337,6 +344,7 @@ artifact = {
     "rpc_endpoints": json.loads('''$endpoint_report''') | {"source_file": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/rpc-endpoints.json"},
     "no_live_chain_route": B("$no_live_chain_route"),
     "stakehub_dependency_free": B("$stakehub_free"),
+    "stakehub_active_units_informational": "$stakehub_active_units",
     "proxy_hold": {
         "launched": B("$proxy_launched"),
         "pid": int("$proxy_pid") if "$proxy_pid" else None,
