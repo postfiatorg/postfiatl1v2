@@ -1,39 +1,42 @@
-A666 recovery regression manifest CI validation
-Validated candidate revision: 7a5413961539646cdfb997303d1493218d6e916f
-Command: scripts/check-a666-recovery-regression-manifest --run
+A666 recovery regression manifest traceability validation
+Validated source revision: a71a397f54eca84914588e89f0057eef0a9bbd3a
+
+Command: scripts/check-a666-recovery-regression-manifest
 Exit code: 0
-Wall-clock elapsed: 144417ms
-Matched standalone tests: 26
-Passed standalone tests: 26
-Failed standalone tests: 0
-Observed summed per-command wall-clock: 144338ms
+Wall-clock elapsed: 70ms
+Execution scope: schema validation only; the 26 standalone Rust tests were not run.
+Terminal: A666 recovery manifest PASS: defects=11 regressions=11 browser_regressions=2 standalone_tests=26 run=false
 
-PASS AR-01/tests::ar01_pfusdc_reserve_account_identity_and_balance_matches_production_fixture matched=1 passed=1 elapsed_ms=891
-PASS AR-02/tests::ar02_production_route_config_cap_order_inequalities_hold_at_runtime matched=1 passed=1 elapsed_ms=152
-PASS AR-03/tests::a666_recovery_regression_tests::ar03_quorum_first_commit_with_offline_validator_converges_after_recovery matched=1 passed=1 elapsed_ms=12214
-PASS AR-04/tests::a666_recovery_regression_tests::ar04_authenticated_catchup_requires_pinned_height_tip_and_state_root matched=1 passed=1 elapsed_ms=7976
-PASS AR-05/tests::ar05_active_export_entitlement_blocks_route_epoch_advance_until_closed matched=1 passed=1 elapsed_ms=672
-PASS AR-06/tests::ar06_duplicate_submission_returns_typed_admission_or_finalized_rejection matched=1 passed=1 elapsed_ms=424
-PASS AR-07/tests::ar07_replay_fails_closed matched=1 passed=1 elapsed_ms=6862
-PASS AR-07/tests::ar07_stale_proof_fails_closed matched=1 passed=1 elapsed_ms=6864
-PASS AR-07/tests::ar07_wrong_profile_fails_closed matched=1 passed=1 elapsed_ms=484
-PASS AR-07/tests::ar07_wrong_overlay_fails_closed matched=1 passed=1 elapsed_ms=496
-PASS AR-07/tests::ar07_wrong_supply_fails_closed matched=1 passed=1 elapsed_ms=464
-PASS AR-07/tests::ar07_wrong_nav_fails_closed matched=1 passed=1 elapsed_ms=6905
-PASS AR-07/tests::ar07_wrong_packet_fails_closed matched=1 passed=1 elapsed_ms=6825
-PASS AR-08/tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_roundtrip_restores_all_validators_and_reports matched=1 passed=1 elapsed_ms=8283
-PASS AR-08/tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_import_rejects_tampered_manifest_with_failure_report matched=1 passed=1 elapsed_ms=7920
-PASS AR-08/tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_import_rejects_schema_drift_and_unknown_fields matched=1 passed=1 elapsed_ms=8111
-PASS AR-08/tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_import_rejects_extra_entries_and_symlinks matched=1 passed=1 elapsed_ms=8057
-PASS AR-08/tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_import_rejects_tampered_validator_snapshot matched=1 passed=1 elapsed_ms=7946
-PASS AR-08/tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_import_rejects_wrong_trusted_publisher matched=1 passed=1 elapsed_ms=8116
-PASS AR-08/tests::lifecycle_checkpoint_tests::lifecycle_checkpoint_creation_rejects_divergent_validators matched=1 passed=1 elapsed_ms=7655
-PASS AR-08/tests::snapshot_deployment::signed_snapshot_roundtrip_rejects_tampering_and_preserves_signer_isolation matched=1 passed=1 elapsed_ms=7712
-PASS AR-09/tests::pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09 matched=1 passed=1 elapsed_ms=7533
-PASS AR-10/tests::private_primary_replay_gate_tests::ar10_private_primary_issue_replay_matches_live_execution_path matched=1 passed=1 elapsed_ms=7279
-PASS AR-10/tests::private_primary_replay_gate_tests::ar10_private_primary_redeem_replay_matches_live_execution_path matched=1 passed=1 elapsed_ms=7223
-PASS AR-10/tests::private_primary_replay_gate_tests::ar10_historical_private_primary_allowlist_stays_exact matched=1 passed=1 elapsed_ms=7125
-PASS AR-11/tests::ar11_issued_asset_supply_counts_non_nav_spread_custody matched=1 passed=1 elapsed_ms=149
+Manifest totals
+- Observed product/browser defect classes: 11
+- Harness defect classes: 3
+- Total named defect classes: 14
+- Rust standalone regression tests: 26
+- Browser regression rows: 2
+- Total manifest regression-test records: 28
+- Status: complete
 
-Terminal:
-A666 recovery manifest PASS: defects=9 regressions=11 standalone_tests=26 run=true
+New harness defect class
+- HARNESS-03: fire_control_false_green_on_incomplete_official_runner_input_contract
+- Root cause: scripts/a666-r4-journey-fire-control-aggregate did not validate the full official-runner external input surface consumed by wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js.
+- V1 prelaunch classification refusal: official-journey-pass1-failure.json; runner was not invoked, runtime 0ms, source wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:638.
+- V2 consumed step-1 failure: commit c7602be76c65882527cd2d45ea4ba1db72c2e68f; official-journey-pass1-v2-failure.json; runtime 1376ms; source wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:770.
+- Mandatory post-V2 restart evidence: stakehub-official-restart-proof-v3.json.
+
+Corrective regressions
+1. strict missing wallet package version/hash vector
+   First passing enforcement commit: a71a397f54eca84914588e89f0057eef0a9bbd3a.
+   Setup identity prerequisite commit: d812fe5d9767e99001729d806583541183a45af8.
+   Command: npm run test:r4-construction (POSTFIAT_R4_PREFLIGHT_ONLY=1 with the committed manifest and slot environment block).
+   Recorded runtime: 786ms. Terminal: tests 7, pass 7, todo 0, fail 0.
+2. strict 1:1 official-runner accessor completeness
+   First passing commit: e39ef9ef50092192b1c77d071662f4354c7f6a9f.
+   Command: scripts/a666-r4-official-input-contract-extract check.
+   Recorded runtime: 63ms. Terminal: {"ok": true, "accessor_count": 120, "mismatch_count": 0}.
+3. 120/120 fire-control enforcement
+   First passing commit: a71a397f54eca84914588e89f0057eef0a9bbd3a.
+   Command: scripts/a666-r4-journey-fire-control-aggregate.
+   Recorded runtime: 1663ms. Result: enforced=120, invalid=0, unmapped=0.
+
+Corrective rule
+Every official-runner accessor is statically extracted. Fire control requires 120/120 enforced, invalid/unmapped 0 before readiness can be true. The V1/V2 failure evidence and V2 restart proof remain linked from HARNESS-03 in regression-manifest.json.

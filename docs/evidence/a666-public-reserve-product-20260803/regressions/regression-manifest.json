@@ -1,7 +1,7 @@
 {
   "schema": "postfiat.a666.recovery.regression_manifest.v1",
   "status": "complete",
-  "generated_at_utc": "2026-08-04T01:57:30Z",
+  "generated_at_utc": "2026-08-04T22:59:58Z",
   "evidence_root": "docs/evidence/a666-public-reserve-product-20260803",
   "contracts": [
     "docs/plans/A666-PRODUCT-RECOVERY-AND-DEMO-RELAUNCH-SPEC-20260803.md#61-layer-a-targeted-regressions",
@@ -48,6 +48,87 @@
       },
       "evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/transcript-credential-leak-incidents.json",
       "enforcement_status": "binding_process_correction"
+    },
+    {
+      "id": "HARNESS-03",
+      "name": "fire_control_false_green_on_incomplete_official_runner_input_contract",
+      "classification": "false_green_fire_control",
+      "root_cause": "The fire-control aggregator did not validate the official runner's full external input surface before declaring readiness.",
+      "root_cause_files": [
+        "scripts/a666-r4-journey-fire-control-aggregate",
+        "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js"
+      ],
+      "incidents": [
+        {
+          "id": "R4-OFFICIAL-V1-PRELAUNCH-CLASSIFICATION-REFUSAL",
+          "run_id": "a666-r4-official-journey-pass1-20260804-v1",
+          "outcome": "fire_refused_precondition",
+          "official_runner_invoked": false,
+          "runtime_milliseconds": 0,
+          "failure_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/official-journey-pass1-failure.json",
+          "failure_evidence_sha256": "96d5ae49b1bd15e85a7598b10c50c4898f15a6b8a9356dc33349269919c062a9",
+          "failure_anchor": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:638",
+          "restart_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/stakehub-official-restart-proof-v3.json"
+        },
+        {
+          "id": "R4-OFFICIAL-V2-CONSUMED-STEP-1-FAILURE",
+          "commit": "c7602be76c65882527cd2d45ea4ba1db72c2e68f",
+          "run_id": "a666-r4-official-journey-pass1-20260804-v2",
+          "outcome": "official_one_shot_consumed_failed_step_1",
+          "official_runner_invoked": true,
+          "runtime_milliseconds": 1376,
+          "exact_command_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/official-journey-pass1-v2-transcript-metadata.json",
+          "failure_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/official-journey-pass1-v2-failure.json",
+          "failure_evidence_sha256": "ea641223a617bf7f19ba16e11c39637787c1dc57d5dfb068c13557c4cb2e0c58",
+          "failure_anchor": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:770",
+          "restart_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/stakehub-official-restart-proof-v3.json",
+          "restart_evidence_sha256": "e89a230d18cb6f1b6e1c946df9ab1cc36d6bdad3da5858043d54ab83cc107af0"
+        }
+      ],
+      "regressions": [
+        {
+          "id": "strict_missing_wallet_package_version_and_hash_vector",
+          "first_passing_commit": "a71a397f54eca84914588e89f0057eef0a9bbd3a",
+          "prerequisite_commit": "d812fe5d9767e99001729d806583541183a45af8",
+          "command": "npm run test:r4-construction (POSTFIAT_R4_PREFLIGHT_ONLY=1 with the committed manifest and slot environment block)",
+          "recorded_runtime_milliseconds": 786,
+          "test_summary": "tests 7, pass 7, todo 0, fail 0",
+          "source_files": [
+            "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+            "scripts/a666-r4-setup-endpoints-manifest-refresh"
+          ],
+          "evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-input-contract-extraction.json"
+        },
+        {
+          "id": "strict_one_to_one_official_runner_accessor_completeness",
+          "first_passing_commit": "e39ef9ef50092192b1c77d071662f4354c7f6a9f",
+          "command": "scripts/a666-r4-official-input-contract-extract check",
+          "recorded_runtime_milliseconds": 63,
+          "accessor_total": 120,
+          "mismatch_count": 0,
+          "source_files": [
+            "scripts/a666-r4-official-input-contract-extract",
+            "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js"
+          ],
+          "evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-input-contract-extraction.json"
+        },
+        {
+          "id": "fire_control_120_of_120_official_input_enforcement",
+          "first_passing_commit": "a71a397f54eca84914588e89f0057eef0a9bbd3a",
+          "command": "scripts/a666-r4-journey-fire-control-aggregate",
+          "recorded_runtime_milliseconds": 1663,
+          "enforced_count": 120,
+          "invalid_count": 0,
+          "unmapped_count": 0,
+          "source_files": [
+            "scripts/a666-r4-journey-fire-control-aggregate",
+            "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-input-contract.json"
+          ],
+          "evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/journey-fire-control-preflight.json"
+        }
+      ],
+      "corrective_rule": "Every official runner accessor is statically extracted. Fire control requires 120 of 120 enforced entries with invalid_count 0 and unmapped_count 0 before readiness can be true.",
+      "enforcement_status": "ci_enforced"
     }
   ],
   "budget_outliers": [
