@@ -1116,6 +1116,38 @@ test('A666 R4 fire-control input gate rejects missing wallet identity pins befor
   assert.ok(hashGate.missing_inputs.includes('wallet.package_json_sha256'));
 });
 
+test('TODO RED-FIRST: v3 build identity must hash pinned candidate package object, not current worktree bytes', {
+  todo: 'official v3 step 1 hashes WALLET_ROOT/package.json instead of candidate:wallet-web/package.json',
+}, async () => {
+  const { execFileSync } = await import('node:child_process');
+  const repoRoot = resolve(WALLET_ROOT, '..');
+  const setupPath = join(repoRoot, 'docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/setup-endpoints-manifest.json');
+  const setup = JSON.parse(await readFile(setupPath, 'utf8'));
+  const candidateRevision = manifestCandidateRevision(setup);
+  const expectedPackageJsonSha256 = String(setup.wallet?.package_json_sha256 ?? '').trim().toLowerCase();
+
+  assert.equal(candidateRevision, CANDIDATE_REVISION, 'setup must remain pinned to the v3 candidate revision');
+  assert.match(expectedPackageJsonSha256, /^[0-9a-f]{64}$/, 'setup must pin a package.json hash');
+  const pinnedCandidatePackage = execFileSync(
+    'git',
+    ['show', `${candidateRevision}:wallet-web/package.json`],
+    { cwd: repoRoot },
+  );
+  const pinnedCandidatePackageSha256 = createHash('sha256').update(pinnedCandidatePackage).digest('hex');
+  assert.equal(pinnedCandidatePackageSha256, expectedPackageJsonSha256,
+    'required behavior: setup hash must match the pinned candidate package object');
+
+  const worktreePackageSha256 = await sha256File(join(WALLET_ROOT, 'package.json'));
+  assert.notEqual(worktreePackageSha256, expectedPackageJsonSha256,
+    'RED fixture requires intentionally different current worktree package bytes');
+  const runnerSource = await readFile(fileURLToPath(import.meta.url), 'utf8');
+  assert.match(runnerSource,
+    /packageJsonSha256 = await sha256File\(join\(WALLET_ROOT, 'package\.json'\)\);/,
+    'current step-1 implementation must be the captured worktree-hash behavior');
+  assert.equal(worktreePackageSha256, expectedPackageJsonSha256,
+    'required behavior: build identity must hash candidate:wallet-web/package.json, not WALLET_ROOT/package.json');
+});
+
 test('A666 R4 120-entry official input contract rejects every incomplete enforcement shape', async () => {
   const repoRoot = resolve(WALLET_ROOT, '..');
   const contractPath = join(repoRoot, 'docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-input-contract.json');

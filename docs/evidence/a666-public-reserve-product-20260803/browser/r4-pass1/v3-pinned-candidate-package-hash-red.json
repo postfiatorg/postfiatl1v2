@@ -1,0 +1,65 @@
+{
+  "schema": "postfiat.a666.r4.v3-pinned-candidate-package-hash-red.v1",
+  "status": "expected_failure_todo",
+  "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+  "official_failure": {
+    "commit": "d9871ce0a1e87a6ef1bd7f5892f86a3c4137cdd7",
+    "run_id": "a666-r4-official-journey-pass1-20260804-v3",
+    "official_invocation_count": 1,
+    "failed_step": 1,
+    "source": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:777",
+    "business_mutations": 0,
+    "receipt_count": 0,
+    "failure_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/official-journey-pass1-v3-failure.json"
+  },
+  "fixture": {
+    "setup_candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+    "setup_wallet_package_json_sha256": "6bd5869e589b9bec47e6e8cc6efe243e09f09ad78cc81d06e8751cd4a6d0f0fb",
+    "pinned_git_object": "39f7fae3191aa34c376ae1657650a9ec2444f421:wallet-web/package.json",
+    "pinned_git_object_sha256": "6bd5869e589b9bec47e6e8cc6efe243e09f09ad78cc81d06e8751cd4a6d0f0fb",
+    "current_worktree_path": "wallet-web/package.json",
+    "current_worktree_sha256": "fe6209c5219a583e0f55f8ca0c93244e14ae569288ee46af910bbaa97e1989b3",
+    "pinned_object_matches_setup": true,
+    "current_worktree_differs_from_pinned_object": true
+  },
+  "required_behavior": "Build identity must hash candidate:wallet-web/package.json from the setup-pinned candidate revision.",
+  "captured_current_behavior": {
+    "source": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:776-778",
+    "hash_target": "WALLET_ROOT/package.json",
+    "failing_assertion": "required behavior: build identity must hash candidate:wallet-web/package.json, not WALLET_ROOT/package.json"
+  },
+  "red_first_vector": {
+    "test_name": "TODO RED-FIRST: v3 build identity must hash pinned candidate package object, not current worktree bytes",
+    "source": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:1119-1148",
+    "command": "cd wallet-web && node --test --test-name-pattern='TODO RED-FIRST: v3 build identity must hash pinned candidate package object' src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+    "exit_code": 0,
+    "wall_clock_milliseconds": 561,
+    "matched_test_count": 1,
+    "passed_test_count": 0,
+    "failed_test_count": 0,
+    "todo_test_count": 1,
+    "skipped_test_count": 7,
+    "browser_invocations": 0,
+    "service_invocations": 0,
+    "expected_failure_captured": true
+  },
+  "construction_suite": {
+    "status": "deferred_to_green_structural_fix_turn",
+    "evidence_defect": {
+      "source": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-input-contract-extraction.json",
+      "observed": "names a standard manifest/slot environment block but contains no literal endpoint/path/hash assignments",
+      "rule": "no endpoint or path binding was synthesized",
+      "resolution_owner": "green structural-fix turn must provide deterministic runner fixture/defaults"
+    },
+    "bare_environment_baseline": {
+      "exit_code": 1,
+      "first_failure": "POSTFIAT_R4_WALLET_ORIGIN is required",
+      "not_a_vector_result": true
+    }
+  },
+  "business_mutations": 0,
+  "receipts_created": 0,
+  "live_chain": false,
+  "stakehub_actions": 0,
+  "credentials_recorded": false
+}
