@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+"""Validate and optionally execute the A666 recovery regression manifest."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import shlex
+import subprocess
+import sys
+import time
+from pathlib import Path
+from typing import Any
+
+SCHEMA = "postfiat.a666.recovery.regression_manifest.v1"
+REQUIRED_AR_IDS = {f"AR-{index:02d}" for index in range(1, 12)}
+COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+RUNNING_RE = re.compile(r"^running (\d+) tests?$", re.MULTILINE)
+RESULT_RE = re.compile(
+    r"^test result: ok\. (\d+) passed; (\d+) failed; .*?finished in ([0-9.]+)s$",
+    re.MULTILINE,
+)
+
+
+class ManifestError(RuntimeError):
+    pass
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise ManifestError(message)
+
+
+def load_manifest(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ManifestError(f"{path}: cannot load JSON: {error}") from error
+    require(isinstance(payload, dict), f"{path}: root must be an object")
+    return payload
+
+
+def evidence_paths(entry: dict[str, Any]) -> list[str]:
+    evidence = entry.get("evidence")
+    if isinstance(evidence, str):
+        return [evidence]
+    if isinstance(evidence, list) and all(isinstance(item, str) for item in evidence):
+        return evidence
+    raise ManifestError(f"{entry.get('id')}: evidence must be a path or path list")
+
+
+def validate_manifest(repo: Path, manifest: dict[str, Any]) -> list[dict[str, Any]]:
+    require(manifest.get("schema") == SCHEMA, f"schema must be {SCHEMA}")
+
+    policy = manifest.get("invocation_policy")
+    require(isinstance(policy, dict), "invocation_policy must be an object")
+    maximum_ms = policy.get("maximum_runtime_milliseconds")
+    require(isinstance(maximum_ms, int) and 0 < maximum_ms <= 120_000,
+            "maximum_runtime_milliseconds must be in 1..120000")
+    require(policy.get("minimum_matched_test_count") == 1,
+            "minimum_matched_test_count must equal 1")
+    require(policy.get("zero_match_with_exit_zero_is_failure") is True,
+            "zero-match exit-zero policy must fail closed")
+
+    defects = manifest.get("observed_defect_classes")
+    require(isinstance(defects, list) and len(defects) == 9,
+            "exactly nine observed defect classes are required")
+    defect_ids = [item.get("id") for item in defects if isinstance(item, dict)]
+    require(len(defect_ids) == len(set(defect_ids)) == 9,
+            "observed defect IDs must be unique")
+
+    regressions = manifest.get("regressions")
+    require(isinstance(regressions, list), "regressions must be an array")
+    rows: dict[str, dict[str, Any]] = {}
+    for row in regressions:
+        require(isinstance(row, dict), "every regression row must be an object")
+        ar_id = row.get("id")
+        require(isinstance(ar_id, str) and ar_id not in rows,
+                f"duplicate or invalid regression id: {ar_id!r}")
+        rows[ar_id] = row
+
+    missing = sorted(REQUIRED_AR_IDS - rows.keys())
+    unexpected = sorted(rows.keys() - REQUIRED_AR_IDS)
+    require(not missing, f"missing regression rows: {', '.join(missing)}")
+    require(not unexpected, f"unexpected regression rows: {', '.join(unexpected)}")
+
+    for defect in defects:
+        require(defect.get("regression_status") == "passed",
+                f"{defect.get('id')}: regression_status must be passed")
+        mapped = defect.get("regression_ids")
+        require(isinstance(mapped, list) and mapped,
+                f"{defect.get('id')}: regression_ids must be non-empty")
+        require(all(item in rows for item in mapped),
+                f"{defect.get('id')}: regression_ids reference a missing row")
+
+    tests: list[dict[str, Any]] = []
+    for ar_id in sorted(rows):
+        row = rows[ar_id]
+        require(row.get("status") == "passed", f"{ar_id}: status must be passed")
+        require(COMMIT_RE.fullmatch(str(row.get("first_passing_commit", ""))) is not None,
+                f"{ar_id}: first_passing_commit must be a 40-character lowercase SHA")
+
+        source_values: list[str] = []
+        if isinstance(row.get("source_file"), str):
+            source_values.append(row["source_file"])
+        if isinstance(row.get("source_files"), list):
+            source_values.extend(row["source_files"])
+        require(source_values, f"{ar_id}: source_file(s) are required")
+        for source in source_values:
+            require((repo / source).is_file(), f"{ar_id}: missing source file {source}")
+
+        for evidence in evidence_paths(row):
+            require((repo / evidence).is_file(), f"{ar_id}: missing evidence {evidence}")
+
+        row_tests = row.get("tests")
+        require(isinstance(row_tests, list) and row_tests,
+                f"{ar_id}: at least one standalone test is required")
+        for test in row_tests:
+            require(isinstance(test, dict), f"{ar_id}: test entry must be an object")
+            name = test.get("name")
+            command = test.get("command")
+            runtime_ms = test.get("runtime_milliseconds")
+            matched = test.get("matched_test_count")
+            require(isinstance(name, str) and name, f"{ar_id}: test name is required")
+            require(isinstance(command, str) and command.startswith("cargo test "),
+                    f"{ar_id}/{name}: command must be a cargo test invocation")
+            require(name in command, f"{ar_id}/{name}: command must name the exact test")
+            require(" -- --exact --nocapture" in command,
+                    f"{ar_id}/{name}: command must use --exact --nocapture")
+            require(isinstance(runtime_ms, int) and 0 <= runtime_ms < maximum_ms,
+                    f"{ar_id}/{name}: recorded runtime exceeds the fast-loop budget")
+            require(isinstance(matched, int) and matched >= 1,
+                    f"{ar_id}/{name}: recorded matched-test count must be positive")
+            tests.append({"ar_id": ar_id, **test})
+
+    return tests
+
+
+def run_tests(repo: Path, tests: list[dict[str, Any]], maximum_ms: int) -> None:
+    for test in tests:
+        label = f"{test['ar_id']}/{test['name']}"
+        command = shlex.split(test["command"])
+        started = time.monotonic()
+        try:
+            result = subprocess.run(
+                command,
+                cwd=repo,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=maximum_ms / 1000,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise ManifestError(f"{label}: exceeded {maximum_ms}ms") from error
+        elapsed_ms = round((time.monotonic() - started) * 1000)
+        output = result.stdout or ""
+        running_counts = [int(value) for value in RUNNING_RE.findall(output)]
+        results = [(int(passed), int(failed), float(seconds))
+                   for passed, failed, seconds in RESULT_RE.findall(output)]
+        matched = max(running_counts, default=0)
+        passed = max((item[0] for item in results if item[1] == 0), default=0)
+        if result.returncode != 0 or matched < 1 or passed < 1:
+            tail = "\n".join(output.splitlines()[-30:])
+            raise ManifestError(
+                f"{label}: exit={result.returncode} matched={matched} passed={passed}\n{tail}"
+            )
+        require(elapsed_ms < maximum_ms,
+                f"{label}: wall clock {elapsed_ms}ms exceeds {maximum_ms}ms")
+        print(f"PASS {label} matched={matched} passed={passed} elapsed_ms={elapsed_ms}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--manifest",
+        default="docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest.json",
+    )
+    parser.add_argument("--run", action="store_true", help="execute every exact test command")
+    args = parser.parse_args()
+
+    repo = Path(__file__).resolve().parent.parent
+    manifest_path = (repo / args.manifest).resolve()
+    try:
+        manifest = load_manifest(manifest_path)
+        tests = validate_manifest(repo, manifest)
+        if args.run:
+            maximum_ms = manifest["invocation_policy"]["maximum_runtime_milliseconds"]
+            run_tests(repo, tests, maximum_ms)
+    except ManifestError as error:
+        print(f"A666 recovery manifest FAIL: {error}", file=sys.stderr)
+        return 1
+
+    print(
+        f"A666 recovery manifest PASS: defects=9 regressions={len(REQUIRED_AR_IDS)} "
+        f"standalone_tests={len(tests)} run={str(args.run).lower()}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
