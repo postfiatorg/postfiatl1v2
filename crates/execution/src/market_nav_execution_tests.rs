@@ -7984,3 +7984,135 @@ fn ar07_wrong_profile_fails_closed() {
     assert_eq!(rejected.code, "proof_profile_mismatch");
     assert_eq!(fixture.ledger, before);
 }
+
+fn ar07_supply_nav_context_operation(
+    fixture: &Ar07ReserveFixture,
+) -> NavReserveSubmitOperation {
+    let mut operation = fixture.operation.clone();
+    operation.circulating_supply = 1;
+    operation.nav_per_unit = 1_100_000_000;
+    operation
+}
+
+fn ar07_add_excessive_subscription_overlay(fixture: &mut Ar07ReserveFixture) {
+    let asset_id = fixture.operation.asset_id.clone();
+    let amount_atoms = fixture.operation.verified_net_assets + 1;
+    let evidence = vault_bridge_evidence(amount_atoms, "a7");
+    let policy_hash = "a7".repeat(48);
+    let mut receipt = VaultBridgeReceipt::new(
+        &fixture.genesis.chain_id,
+        asset_id.clone(),
+        evidence.source_domain(),
+        evidence.source_asset_ref(),
+        VAULT_BRIDGE_CLAIM_TYPE_BRIDGE_DEPOSIT,
+        amount_atoms,
+        evidence.source_tx_or_attestation(),
+        evidence.finality_ref(),
+        evidence.vault_id(),
+        policy_hash.clone(),
+        5,
+        1_000_000,
+        Some(evidence),
+    )
+    .expect("AR-07B counted receipt");
+    receipt.status = VAULT_BRIDGE_RECEIPT_STATUS_COUNTED.to_string();
+    receipt.counted_value_atoms = amount_atoms;
+    receipt.allocated_value_atoms = amount_atoms;
+    receipt.finalized_at_height = 5;
+    receipt.counted_at_height = 5;
+    receipt
+        .validate_for_chain(&fixture.genesis.chain_id)
+        .expect("AR-07B valid counted receipt");
+
+    let mut bucket = VaultBridgeBucketState::new(
+        asset_id.clone(),
+        receipt.source_domain.clone(),
+        policy_hash,
+        5,
+    )
+    .expect("AR-07B active bucket");
+    bucket.gross_receipt_atoms = amount_atoms;
+    bucket.counted_value_atoms = amount_atoms;
+    bucket.nav_subscription_allocations_atoms = amount_atoms;
+    bucket.validate().expect("AR-07B valid active bucket");
+
+    let mut allocation = VaultBridgeAllocation::new(
+        &fixture.genesis.chain_id,
+        receipt.receipt_id.clone(),
+        asset_id,
+        bucket.bucket_id.clone(),
+        amount_atoms,
+        VAULT_BRIDGE_ALLOCATION_PURPOSE_NAV_SUBSCRIPTION,
+        nav_subscription_consumer_id(&fixture.operation.asset_id),
+        5,
+    )
+    .expect("AR-07B subscription allocation");
+    allocation.retired_at_height = 5;
+    allocation
+        .validate_for_chain(&fixture.genesis.chain_id)
+        .expect("AR-07B retired allocation");
+
+    fixture.ledger.vault_bridge_bucket_states.push(bucket);
+    fixture.ledger.vault_bridge_receipts.push(receipt);
+    fixture.ledger.vault_bridge_allocations.push(allocation);
+}
+
+#[test]
+fn ar07_wrong_overlay_fails_closed() {
+    let mut fixture = ar07_reserve_fixture();
+    ar07_add_excessive_subscription_overlay(&mut fixture);
+    let before = fixture.ledger.clone();
+    let operation = fixture.operation.clone();
+    let rejected = ar07_execute_reserve(&mut fixture, operation, 5);
+    assert!(
+        !rejected.accepted,
+        "reserve submission with an excessive subscription overlay must fail closed"
+    );
+    assert_eq!(rejected.code, "nav_subscription_overlay_exceeds_assets");
+    assert_eq!(fixture.ledger, before);
+}
+
+#[test]
+fn ar07_wrong_supply_fails_closed() {
+    let mut fixture = ar07_reserve_fixture();
+    let mut operation = ar07_supply_nav_context_operation(&fixture);
+    operation.circulating_supply = 2;
+    let before = fixture.ledger.clone();
+    let rejected = ar07_execute_reserve(&mut fixture, operation, 5);
+    assert!(
+        !rejected.accepted,
+        "reserve submission with an overstated circulating supply must fail closed"
+    );
+    assert_eq!(rejected.code, "nav_reserve_undercollateralized");
+    assert_eq!(fixture.ledger, before);
+}
+
+#[test]
+fn ar07_wrong_nav_fails_closed() {
+    let mut fixture = ar07_reserve_fixture();
+    let mut operation = ar07_supply_nav_context_operation(&fixture);
+    operation.nav_per_unit = 1_099_999_999;
+    let before = fixture.ledger.clone();
+    let rejected = ar07_execute_reserve(&mut fixture, operation, 5);
+    assert!(
+        !rejected.accepted,
+        "reserve submission with an incorrect NAV floor must fail closed"
+    );
+    assert_eq!(rejected.code, "nav_reserve_nav_floor_mismatch");
+    assert_eq!(fixture.ledger, before);
+}
+
+#[test]
+fn ar07_wrong_packet_fails_closed() {
+    let mut fixture = ar07_reserve_fixture();
+    let mut operation = fixture.operation.clone();
+    operation.source_root = "00".repeat(48);
+    let before = fixture.ledger.clone();
+    let rejected = ar07_execute_reserve(&mut fixture, operation, 5);
+    assert!(
+        !rejected.accepted,
+        "reserve submission with a mismatched packet source root must fail closed"
+    );
+    assert_eq!(rejected.code, "nav_reserve_source_root_mismatch");
+    assert_eq!(fixture.ledger, before);
+}
