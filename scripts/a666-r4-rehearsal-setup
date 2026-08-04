@@ -19,6 +19,10 @@ report="$EVIDENCE_DIR/controlled-lifecycle-report.json"
 transcript="$EVIDENCE_DIR/checkpoint-lifecycle-transcript.txt"
 manifest="$EVIDENCE_DIR/environment-manifest.json"
 teardown="$EVIDENCE_DIR/teardown-pids.json"
+control_request="$EVIDENCE_DIR/rehearsal-control.request"
+restart_proof="$EVIDENCE_DIR/stakehub-restart-proof.json"
+resume_preserved_root="${POSTFIAT_R4_RESUME_PRESERVED_ROOT:-}"
+lifecycle_reused_from_green_run=false
 restart_inventory="${POSTFIAT_R4_STAKEHUB_RESTART_INVENTORY:-$HOME/.pft/${run_id}-stakehub-restart-inventory.txt}"
 reuse_restart_inventory=false
 [[ -n "${POSTFIAT_R4_STAKEHUB_RESTART_INVENTORY:-}" ]] && reuse_restart_inventory=true
@@ -28,6 +32,8 @@ preserved_root=""
 active_units=()
 inventoried_pids=()
 relaunched_pids=()
+initial_unit_count=0
+initial_process_count=0
 
 same_user_matching_pids() {
   python3 - <<'PY'
@@ -59,15 +65,47 @@ PY
 }
 
 restore_stakehub() {
+  local reason="${1:-unspecified}"
+  local restored=0
   if ((${#active_units[@]})); then
     systemctl --user start "${active_units[@]}" >/dev/null 2>&1 || true
   fi
+  for _ in {1..30}; do
+    restored=0
+    for unit in "${active_units[@]}"; do
+      systemctl --user is-active --quiet "$unit" && ((restored+=1)) || true
+    done
+    [[ "$restored" -eq "$initial_unit_count" ]] && break
+    sleep 1
+  done
+  jq -n \
+    --arg schema "postfiat.a666.r4.stakehub-restart-proof.v1" \
+    --arg reason "$reason" \
+    --argjson expected "$initial_unit_count" \
+    --argjson observed "$restored" \
+    '{schema:$schema,reason:$reason,expected_active_unit_count:$expected,observed_active_unit_count:$observed,counts_match:($expected==$observed)}' > "$restart_proof"
+  [[ "$restored" -eq "$initial_unit_count" ]]
 }
 
 kill_relaunches() {
+  local pid
   for pid in "${relaunched_pids[@]}"; do
     kill -TERM "$pid" 2>/dev/null || true
   done
+  for pid in "${relaunched_pids[@]}"; do
+    wait "$pid" 2>/dev/null || true
+  done
+  relaunched_pids=()
+}
+
+all_rehearsal_pids_live() {
+  local count=0 pid
+  [[ -s "$teardown" ]] || return 1
+  while read -r pid; do
+    kill -0 "$pid" 2>/dev/null || return 1
+    ((count+=1))
+  done < <(jq -r '.processes[].pid' "$teardown")
+  [[ "$count" -eq 12 ]]
 }
 
 write_red_manifest() {
@@ -94,11 +132,20 @@ on_error() {
   local rc="$?"
   trap - ERR
   kill_relaunches
-  restore_stakehub
+  restore_stakehub "$first_failure" || true
   write_red_manifest "$rc"
   exit "$rc"
 }
+
+on_term() {
+  trap - ERR TERM INT
+  kill_relaunches
+  restore_stakehub "signal" || true
+  write_red_manifest 143
+  exit 143
+}
 trap on_error ERR
+trap on_term TERM INT
 
 first_failure="less_than_50_gb_free"
 available_kib="$(df --output=avail /tmp | tail -1 | tr -d ' ')"
@@ -167,46 +214,61 @@ done
 [[ "$remaining_units" -eq 0 ]]
 [[ "${#remaining_pids[@]}" -eq 0 ]]
 
-first_failure="checkpoint_lifecycle"
-rm -f "$report" "$transcript"
-set +e
-(
-  cd "$CANDIDATE_WORKTREE"
-  POSTFIAT_KEEP_ATOMIC_SWAP_LOCAL_SIX=1 \
-  POSTFIAT_A666_CONTROLLED_REPORT_FILE="$report" \
-  POSTFIAT_A666_CHECKPOINT_DIR="$CHECKPOINT_DIR" \
-  POSTFIAT_A666_CHECKPOINT_TRUSTED_KEY_FILE="$TRUSTED_PUBLISHER" \
-  POSTFIAT_A666_ISSUER_KEY_FILE="${key_paths[0]}" \
-  POSTFIAT_A666_RESERVE_KEY_FILE="${key_paths[1]}" \
-  POSTFIAT_PFUSDC_ISSUER_KEY_FILE="${key_paths[2]}" \
-  POSTFIAT_A666_HOLDER_KEY_FILE="${key_paths[3]}" \
-  POSTFIAT_A666_PROOF_CALLDATA_FILE="${proof_paths[0]}" \
-  POSTFIAT_A666_PUBLIC_VALUES_FILE="${proof_paths[1]}" \
-  POSTFIAT_A666_NEXT_PROOF_CALLDATA_FILE="${proof_paths[2]}" \
-  POSTFIAT_A666_NEXT_PUBLIC_VALUES_FILE="${proof_paths[3]}" \
-  CARGO_TARGET_DIR="$TARGET_DIR" \
-  cargo test --locked --release -p postfiat-node --test atomic_swap_local_six \
-    a666_public_successor_lifecycle_from_signed_checkpoint -- --ignored --exact --nocapture
-) > >(tee "$transcript") 2>&1
-lifecycle_rc="$?"
-set -e
-[[ "$lifecycle_rc" -eq 0 ]]
-[[ "$(grep -c '^running 1 test$' "$transcript")" -eq 1 ]]
+if [[ -n "$resume_preserved_root" ]]; then
+  first_failure="resume_green_lifecycle_evidence"
+  lifecycle_reused_from_green_run=true
+  preserved_root="$resume_preserved_root"
+  [[ -s "$report" ]]
+  [[ -s "$transcript" ]]
+else
+  first_failure="checkpoint_lifecycle"
+  rm -f "$report" "$transcript"
+  set +e
+  (
+    cd "$CANDIDATE_WORKTREE"
+    POSTFIAT_KEEP_ATOMIC_SWAP_LOCAL_SIX=1 \
+    POSTFIAT_A666_CONTROLLED_REPORT_FILE="$report" \
+    POSTFIAT_A666_CHECKPOINT_DIR="$CHECKPOINT_DIR" \
+    POSTFIAT_A666_CHECKPOINT_TRUSTED_KEY_FILE="$TRUSTED_PUBLISHER" \
+    POSTFIAT_A666_ISSUER_KEY_FILE="${key_paths[0]}" \
+    POSTFIAT_A666_RESERVE_KEY_FILE="${key_paths[1]}" \
+    POSTFIAT_PFUSDC_ISSUER_KEY_FILE="${key_paths[2]}" \
+    POSTFIAT_A666_HOLDER_KEY_FILE="${key_paths[3]}" \
+    POSTFIAT_A666_PROOF_CALLDATA_FILE="${proof_paths[0]}" \
+    POSTFIAT_A666_PUBLIC_VALUES_FILE="${proof_paths[1]}" \
+    POSTFIAT_A666_NEXT_PROOF_CALLDATA_FILE="${proof_paths[2]}" \
+    POSTFIAT_A666_NEXT_PUBLIC_VALUES_FILE="${proof_paths[3]}" \
+    CARGO_TARGET_DIR="$TARGET_DIR" \
+    cargo test --locked --release -p postfiat-node --test atomic_swap_local_six \
+      a666_public_successor_lifecycle_from_signed_checkpoint -- --ignored --exact --nocapture
+  ) > >(tee "$transcript") 2>&1
+  lifecycle_rc="$?"
+  set -e
+  [[ "$lifecycle_rc" -eq 0 ]]
+  [[ "$(grep -c '^running 1 test$' "$transcript")" -eq 1 ]]
+fi
 
 first_failure="controlled_report_contract"
-jq -e --arg hash "$CHECKPOINT_SHA256" '
+jq -e --arg hash "$CHECKPOINT_SHA256" --arg revision "$CANDIDATE_REVISION" '
   .ok == true and .validator_count == 6
   and .checkpoint_import.restored_height > 0
   and .checkpoint_import.manifest_sha256 == $hash
   and .final_state.all_six_equal == true
   and .final_state.verify_state_all_six == true
   and .lifecycle.all_six_restarted == true
+  and .run.source_revision == $revision
+  and .run.source_dirty == false
+  and .run.test == "a666_public_successor_lifecycle_from_signed_checkpoint"
 ' "$report" >/dev/null
+grep -Fq 'test a666_public_successor_lifecycle_from_signed_checkpoint ... ok' "$transcript"
+grep -Eq '^test result: ok\. 1 passed; 0 failed;' "$transcript"
 
 first_failure="preserved_harness_contract"
-mapfile -t preserved_roots < <(sed -n 's/^preserved atomic swap harness at //p' "$transcript" | sort -u)
-[[ "${#preserved_roots[@]}" -eq 1 ]]
-preserved_root="${preserved_roots[0]}"
+if [[ "$lifecycle_reused_from_green_run" == false ]]; then
+  mapfile -t preserved_roots < <(sed -n 's/^preserved atomic swap harness at //p' "$transcript" | sort -u)
+  [[ "${#preserved_roots[@]}" -eq 1 ]]
+  preserved_root="${preserved_roots[0]}"
+fi
 [[ -d "$preserved_root" ]]
 topology="$preserved_root/a666-public-successor-topology.json"
 [[ -f "$topology" ]]
@@ -323,6 +385,7 @@ PY
 
 first_failure="success_manifest"
 report_sha256="$(sha256sum "$report" | awk '{print $1}')"
+transcript_sha256="$(sha256sum "$transcript" | awk '{print $1}')"
 ended_ms="$(date +%s%3N)"
 python3 - "$manifest" "$report" "$endpoints_file" "$dist_hashes_file" <<PY
 import json, sys
@@ -356,6 +419,8 @@ value = {
  "candidate":{"revision":"$CANDIDATE_REVISION","worktree":"$CANDIDATE_WORKTREE","tracked_dirty_count":0},
  "checkpoint":{"directory":"$CHECKPOINT_DIR","manifest_sha256":"$CHECKPOINT_SHA256","trusted_publisher_file":"$TRUSTED_PUBLISHER","restored_height":report["checkpoint_import"]["restored_height"]},
  "controlled_report":{"path":"$report","sha256":"$report_sha256","ok":report["ok"]},
+ "lifecycle_transcript":{"path":"$transcript","sha256":"$transcript_sha256"},
+ "lifecycle_reused_from_green_run":"$lifecycle_reused_from_green_run" == "true",
  "preserved_root":"$preserved_root",
  "validator_count":6,
  "rpc_endpoints":endpoints["endpoints"],
@@ -374,4 +439,33 @@ with open(sys.argv[1], 'w', encoding='utf-8') as stream:
     stream.write('\n')
 PY
 jq -e '.ready_for_one_shot_pass_1 == true' "$manifest" >/dev/null
-trap - ERR
+
+first_failure="held_rehearsal_pid_liveness"
+while true; do
+  all_rehearsal_pids_live
+  if [[ -f "$control_request" ]]; then
+    request="$(head -n 1 "$control_request")"
+    case "$request" in
+      restart-stakehub-keep-rehearsal)
+        first_failure="stakehub_restart_keep_rehearsal"
+        restore_stakehub "restart-stakehub-keep-rehearsal"
+        rm -f "$control_request"
+        all_rehearsal_pids_live
+        first_failure="held_rehearsal_pid_liveness"
+        ;;
+      teardown)
+        trap - ERR TERM INT
+        kill_relaunches
+        first_failure="stakehub_restart_after_teardown"
+        restore_stakehub "teardown"
+        rm -f "$control_request"
+        exit 0
+        ;;
+      *)
+        first_failure="invalid_rehearsal_control_request"
+        false
+        ;;
+    esac
+  fi
+  sleep 5
+done
