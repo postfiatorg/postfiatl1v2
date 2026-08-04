@@ -172,6 +172,37 @@ path_b_stage_validation() {
         }'
 }
 
+candidate_proxy_validation_for_file() {
+    local path="$1" fleet_json="$2"
+    local root
+    root=$(jq -r '.rehearsal_root // empty' <<<"$fleet_json")
+    if [[ ! -r "$path" ]] || ! jq -e . "$path" >/dev/null 2>&1; then
+        jq -cn '{ok:false,reason:"candidate_proxy_evidence_absent_or_invalid"}'
+        return
+    fi
+    jq -cn --arg candidate "$path_b_candidate" --arg root "$root" --argjson doc "$(cat "$path")" '
+        {
+          expected:{candidate_revision:$candidate,rehearsal_root:$root,proxy_listen:"127.0.0.1:31021"},
+          ok:(
+            $doc.schema == "postfiat.a666.r4.candidate-proxy-provenance.v1"
+            and $doc.ready == true
+            and $doc.candidate.revision_expected == $candidate and $doc.candidate.revision_observed == $candidate
+            and $doc.candidate.revision_exact == true and $doc.candidate.tracked_dirty_count == 0
+            and ($doc.node_binary.sha256 | type == "string" and test("^[0-9a-f]{64}$"))
+            and ($doc.wallet_proxy_source.tree_hash_at_candidate | type == "string" and test("^[0-9a-f]{40}$"))
+            and ($doc.wallet_proxy_source.server_js_sha256 | type == "string" and test("^[0-9a-f]{64}$"))
+            and ($doc.wallet_proxy_source.package_lock_sha256 | type == "string" and test("^[0-9a-f]{64}$"))
+            and $doc.fresh_fleet.preserved_root == $root and $doc.fresh_fleet.children_live == 12 and $doc.fresh_fleet.accepted == true
+            and $doc.rpc_endpoints.count == 6 and $doc.rpc_endpoints.loopback == true and $doc.rpc_endpoints.live == true
+            and $doc.rpc_endpoints.live_all_equal == true and $doc.rpc_endpoints.matches_committed_tuples == true and $doc.rpc_endpoints.height == 826
+            and ($doc.proxy_hold.pid | type == "number" and . > 0) and $doc.proxy_hold.listen == "127.0.0.1:31021"
+            and $doc.proxy_hold.healthz_reachable == true and $doc.proxy_hold.process_identity_exact == true
+            and $doc.proxy_hold.business_operations_submitted == 0 and $doc.d_preflight_observation.business_mutations == 0
+            and $doc.no_live_chain_route == true and $doc.stakehub_dependency_free == true and $doc.stakehub_interaction == false
+          )
+        }'
+}
+
 preprove_validation_for_file() {
     local path="$1"
     if [[ ! -r "$path" ]] || ! jq -e . "$path" >/dev/null 2>&1; then
@@ -325,7 +356,8 @@ run_preprove_self_test() {
         return 1
     fi
     run_fleet_binding_self_test
-    printf '%s\n' "fire_control_self_test=PASS pre_prove_green=true prior_value_mismatch=false field_value_mismatch=false controlled_report_sha_mismatch=false prior_block_tip_mismatch=false fixture_root=$test_root"
+    run_proxy_binding_self_test
+    printf '%s\n' "fire_control_self_test=PASS pre_prove_green=true prior_value_mismatch=false field_value_mismatch=false controlled_report_sha_mismatch=false prior_block_tip_mismatch=false wrong_candidate=false non_loopback_endpoint=false fixture_root=$test_root"
 }
 
 run_fleet_binding_self_test() {
@@ -351,6 +383,26 @@ run_fleet_binding_self_test() {
     jq '.path_b.prior_block_id = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"' "$test_root/b-stage.json" >"$test_root/b-prior-tip-mismatch.json"
     if path_b_stage_validation "$test_root/b-prior-tip-mismatch.json" "$fleet_ok" | jq -e '.ok == true' >/dev/null; then
         printf '%s\n' "fleet_binding_self_test=FAIL prior_block_tip_mismatch=true fixture_root=$test_root"
+        return 1
+    fi
+}
+
+run_proxy_binding_self_test() {
+    local test_root fleet_ok
+    test_root=$(mktemp -d /tmp/a666-r4-proxy-binding-self-test.XXXXXX)
+    chmod 700 "$test_root"
+    cp "$candidate_proxy" "$test_root/proxy.json"
+    fleet_ok=$(fleet_validation_for_files "$accepted_fleet" "$checkpoint_staging" "$repo")
+    jq -e '.ok == true' <<<"$fleet_ok" >/dev/null
+    candidate_proxy_validation_for_file "$test_root/proxy.json" "$fleet_ok" | jq -e '.ok == true' >/dev/null
+    jq '.candidate.revision_observed = "0000000000000000000000000000000000000000"' "$test_root/proxy.json" >"$test_root/wrong-candidate.json"
+    if candidate_proxy_validation_for_file "$test_root/wrong-candidate.json" "$fleet_ok" | jq -e '.ok == true' >/dev/null; then
+        printf '%s\n' "proxy_binding_self_test=FAIL wrong_candidate=true fixture_root=$test_root"
+        return 1
+    fi
+    jq '.rpc_endpoints.loopback = false' "$test_root/proxy.json" >"$test_root/non-loopback.json"
+    if candidate_proxy_validation_for_file "$test_root/non-loopback.json" "$fleet_ok" | jq -e '.ok == true' >/dev/null; then
+        printf '%s\n' "proxy_binding_self_test=FAIL non_loopback_endpoint=true fixture_root=$test_root"
         return 1
     fi
 }
@@ -439,10 +491,11 @@ fi
 if jq -e '.ok == true' <<<"$fleet_validation" >/dev/null; then
     fresh_fleet_ok=true
 fi
+candidate_proxy_validation=$(candidate_proxy_validation_for_file "$candidate_proxy" "$fleet_validation")
 if bound_and "$route_stage" '.accepted == true and .activation_checks.route_live == true and .activation_checks.six_way_convergence == true'; then
     fresh_route_ok=true
 fi
-if bound_and "$candidate_proxy" '.ready == true and .candidate.revision_exact == true and .candidate.tracked_dirty_count == 0 and .proxy_hold.healthz_reachable == true'; then
+if jq -e '.ok == true' <<<"$candidate_proxy_validation" >/dev/null; then
     candidate_proxy_ok=true
 fi
 if bound_and "$dependencies" '.ready == true and .checks.construction_fleet_12_live_six_equal == true and .checks.route_live_epoch_5_on_six == true'; then
@@ -479,7 +532,7 @@ fi
 if [[ "$stakehub_scan_ok" == true && "$stakehub_inventory_ok" == true ]] && [[ "$(jq 'length' <<<"$stakehub_active_units")" == 0 ]]; then
     stakehub_official_absent_ok=true
 fi
-if bound_and "$candidate_proxy" '.candidate.revision_exact == true and .candidate.tracked_dirty_count == 0'; then
+if jq -e '.ok == true' <<<"$candidate_proxy_validation" >/dev/null; then
     candidate_provenance_ok=true
 fi
 if bound_and "$d_runner" '.checks.no_live_chain == true and .checks.loopback_only == true'; then
@@ -540,6 +593,7 @@ jq -n \
     --argjson checkpoint_staging_input "$(input_summary "$checkpoint_staging")" \
     --argjson fleet_validation "$fleet_validation" \
     --argjson b_path_b_validation "$b_path_b_validation" \
+    --argjson candidate_proxy_validation "$candidate_proxy_validation" \
     --argjson route_input "$(input_summary "$route_stage")" \
     --argjson proxy_input "$(input_summary "$candidate_proxy")" \
     --argjson dependencies_input "$(input_summary "$dependencies")" \
@@ -574,6 +628,7 @@ jq -n \
             refire_fired: $refire_fired_input,
             b_contract_stage: $b_stage_input,
             b_path_b_validation: $b_path_b_validation,
+            candidate_proxy_validation: $candidate_proxy_validation,
             accepted_construction_fleet: $accepted_fleet_input,
             checkpoint_lifecycle_staging: $checkpoint_staging_input,
             fleet_validation: $fleet_validation,

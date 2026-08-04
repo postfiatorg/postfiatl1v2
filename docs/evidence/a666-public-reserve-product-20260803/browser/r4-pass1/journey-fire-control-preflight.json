@@ -77,6 +77,14 @@
       },
       "ok": true
     },
+    "candidate_proxy_validation": {
+      "expected": {
+        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "rehearsal_root": "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349",
+        "proxy_listen": "127.0.0.1:31021"
+      },
+      "ok": true
+    },
     "accepted_construction_fleet": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-fleet.json",
       "exists": true,
@@ -316,7 +324,7 @@
     },
     {
       "id": "candidate_proxy_ready",
-      "ok": false,
+      "ok": true,
       "input": "candidate_proxy"
     },
     {
@@ -351,7 +359,7 @@
     },
     {
       "id": "candidate_revision_and_provenance",
-      "ok": false,
+      "ok": true,
       "input": "candidate_proxy"
     },
     {
@@ -370,14 +378,12 @@
     "docker_refire_unit_live_or_terminal_proof_success",
     "b_real_verifier_acceptance",
     "fresh_route_live",
-    "candidate_proxy_ready",
     "private_dependencies_ready",
     "pftl_private_swap_ready",
     "d_runner_steps_1_6_9_10_dry_run",
     "async_proof_slot_steps_7_8",
     "stakehub_restart_inventory_present",
     "stakehub_official_absent",
-    "candidate_revision_and_provenance",
     "no_live_chain_dependency",
     "pre_prove_all_35_bindings"
   ],
