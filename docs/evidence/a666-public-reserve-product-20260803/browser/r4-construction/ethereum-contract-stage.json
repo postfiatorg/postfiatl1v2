@@ -1,36 +1,65 @@
 {
-  "runtime": "/tmp/a666-r4-contract-stage.U4Xk3N",
+  "runtime": "/tmp/a666-r4-contract-stage.xAFpP1",
+  "corrective_deployment": {
+    "reason": "rehearsal stack 38ba6dd pinned stale program vkey 0x004e44ac...; this fresh stack pins the archived candidate proof vkey",
+    "supersedes_stage_commits": [
+      "38ba6dd",
+      "be67543"
+    ],
+    "history_preserved": true,
+    "proof_terminal_commit": "b067d8c",
+    "candidate_revision": "39f7fae"
+  },
   "anvil": {
-    "pid": 1841731,
+    "pid": 3196388,
     "endpoint": "http://127.0.0.1:8547",
     "loopback": true,
     "chain_id": 1,
-    "genesis_hash": "0x0187cae28841e75a231bbbf8658650f7c5d7a7ad3c4a270907380d59c696c9fe",
+    "genesis_hash": "0x6672b78d20644c5f47350e8e307f7e47c6b895d086c224bc67984e6130c13688",
     "deployer_public_address": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
-    "adopted_existing": true,
-    "history_tx_count": 1,
-    "block_number_at_adoption": 1,
-    "deployer_nonce_at_adoption": 1
+    "fresh": true,
+    "block_number_at_stage": 0,
+    "deployer_nonce_at_stage": 0
   },
   "nonce_sequence": {
-    "adoption": 1,
+    "before_sp1": 0,
     "before_product": 1,
     "primary_prediction_nonce": 3,
+    "after_sp1": 1,
     "after_wrapped": 2,
     "after_receipt": 3,
     "after_primary": 4,
     "after_controller_and_lock": 6
+  },
+  "vkey_provenance": {
+    "deployed_program_vkey": "0x003af40eafdbc1873f7e5b8f02da0ccd668f65930797c8e20c4f19234a5ef02f",
+    "proof_report_program_vkey": "0x003af40eafdbc1873f7e5b8f02da0ccd668f65930797c8e20c4f19234a5ef02f",
+    "expected": "0x003af40eafdbc1873f7e5b8f02da0ccd668f65930797c8e20c4f19234a5ef02f",
+    "equality": true,
+    "candidate_origin": {
+      "guest_elf": "programs/pftl-uniswap-receipt/elf/pftl-uniswap-receipt-program",
+      "guest_elf_sha256": "f85348688a463877f7e7f0539b7427a0af8847d3ef0eff2085db0c3746ad77a7",
+      "embedded_at": "tools/pftl-uniswap-prover/src/main.rs:12-14 (include_bytes!)",
+      "program_info_derivation": "pftl-uniswap-prover program-info on the embedded ELF yields vkey 0x003af40e... and elf_sha256 f8534868... (schema postfiat-pftl-uniswap-program-info-v1)",
+      "candidate_revision": "39f7fae"
+    },
+    "stale_origin_history": {
+      "value": "0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9",
+      "entered_harness_at": "scripts/a666-r4-ethereum-contract-stage:18 hard-coded pin (commit 38ba6dd)",
+      "documented_at": "docs/plans/A666-END-TO-END-MAINNET-PRIMARY-ISSUANCE-SPEC-20260727.md:260 (production 2026-07-27 era verifier pin)",
+      "archived_legacy_elf": "deployments/a666-mainnet-20260727/13-opening-export-proof/deployed-program-004e44.elf"
+    },
+    "r7_linkage": "open R7 reproduction blocker (docs/plans/A666-RECOVERY-EXECUTION-TRACKER-20260804.md#r7): guest-ELF pin must be repository-relative/archived-by-hash in identity-and-public-value-pins.json with source_commit vs candidate_revision reconciliation; this stage uses the candidate proof vkey honestly and does NOT reconcile or change the product pin"
   },
   "deployment": {
     "green": true,
     "mocks": 0,
     "contracts": {
       "sp1_verifier": {
-        "address": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+        "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
         "transaction": "0xa2251e0f008b4e57c6fb06ac6f6401f9c97d33cc40e02d9fdf7f707551cb884d",
         "status": "0x1",
         "runtime_code_hash": "0xbfe2a6bbccfce90cadf9e8f1e9c7c672eafb0ac2727ad597b5d798c487d71517",
-        "adopted_existing": true,
         "version": "v6.1.0",
         "version_readback": "typed_json"
       },
@@ -42,9 +71,10 @@
       },
       "pftl_receipt_finality_verifier_v1": {
         "address": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-        "transaction": "0x8f4f76bb768dd6ae7542a0ecbe3155739f20e50edf983b9d34b1009f864f74a4",
+        "transaction": "0x5b20ae83b9b0b0faff41cac100f0dded57ae92344e1369cee7ea208a1f3ac1c8",
         "status": "0x1",
-        "runtime_code_hash": "0x23ae1250bec8cf73aa163ee00b7217da90de8eed9cb22eff498e17d27a7cb063"
+        "runtime_code_hash": "0xd268cf81a2c3653a653a3b1ad255f82da094e0f1eabea026fa552f0d6d500643",
+        "program_vkey": "0x003af40eafdbc1873f7e5b8f02da0ccd668f65930797c8e20c4f19234a5ef02f"
       },
       "pftl_uniswap_primary_market_v2": {
         "address": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
@@ -74,7 +104,7 @@
     "deployment_wiring_green": true
   },
   "immutable_inputs": {
-    "receipt_program_vkey": "0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9",
+    "receipt_program_vkey": "0x003af40eafdbc1873f7e5b8f02da0ccd668f65930797c8e20c4f19234a5ef02f",
     "public_values_bytes": 1120,
     "proof_calldata_bytes": 356,
     "source_sha256": {
@@ -87,16 +117,14 @@
   },
   "verifier_acceptance": {
     "ready": false,
-    "first_blocker": "program_vkey_mismatch_requires_fresh_stack_redeploy",
+    "status": "pending_single_verify_transaction",
+    "transaction_allowed": true,
+    "vkey_equality": true,
     "verify_and_accept_called": false,
-    "preflight": {
-      "evidence": "verifier-acceptance-preflight.json",
-      "verdict": "RED",
-      "transaction_allowed": false,
-      "mismatch": "on-chain programVKey 0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9 != proof-report program_vkey 0x003af40eafdbc1873f7e5b8f02da0ccd668f65930797c8e20c4f19234a5ef02f",
-      "prior_blocker_closed": "real_receipt_proof_artifact_pending_docker_capable_refire (proof archived, commit b067d8c)",
-      "required_corrective": "fresh Anvil redeploy of full real stack with proof-report program_vkey, then single verifyAndAccept"
-    }
+    "prior_blockers_closed": [
+      "real_receipt_proof_artifact_pending_docker_capable_refire",
+      "program_vkey_mismatch_requires_fresh_stack_redeploy"
+    ]
   },
   "business_value": 0,
   "credentials_redacted": true

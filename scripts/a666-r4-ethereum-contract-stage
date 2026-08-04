@@ -1,22 +1,29 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Stages the remaining real contracts against an existing fresh loopback
-# Anvil that already carries the real SP1 verifier at the nonce-0 CREATE
-# address. The caller supplies the public PID of that Anvil; this script
-# never reads keys or startup logs.
+# Corrective stage: deploy the full real stack onto a FRESH loopback Anvil
+# whose receipt verifier pins the vkey of the archived candidate proof
+# (docker-refire terminal, commit b067d8c). The receipt program vkey is
+# DERIVED from the committed proof report and asserted against the expected
+# value; no hard-coded stale vkey path remains. The caller supplies the
+# public PID of the fresh Anvil; this script never reads keys/startup logs.
 repo=$(cd "$(dirname "$0")/.." && pwd)
 rpc_url="http://127.0.0.1:8547"
 anvil_pid="$A666_ANVIL_PID"
 vendor="$repo/scripts/a666-r4-ethereum-contract-vendor/sp1-contracts-v6.1.0/ISP1Verifier.sol"
 sp1_source="/home/postfiat/.sp1/circuits/groth16/v6.1.0/SP1VerifierGroth16.sol"
+groth16_source="/home/postfiat/.sp1/circuits/groth16/v6.1.0/Groth16Verifier.sol"
 receipt_source="$repo/crates/ethereum-contracts/src/PFTLReceiptFinalityVerifierV1.sol"
 primary_source="$repo/crates/ethereum-contracts/src/PFTLUniswapPrimaryMarketV2.sol"
 token_source="$repo/crates/ethereum-contracts/src/PFTLUniswapHandoffController.sol"
+proof_report="$repo/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/receipt-verifier-spike/docker-refire-proof-report.json"
 expected_vendor_sha256="9e918032a5aa799c1319b14b013154d6a40ca6e5f2267c9f540560abd7fd7689"
 expected_sp1_sha256="48e1db5baca3b102242ebd88280b3689a088076688146cd0d98876f5dacb76d0"
 expected_verifier_hash="0x4388a21c687fdd5f218d7e3d13190cac4c5355818d3605fd5fb811df468ee696"
-program_vkey="0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9"
+expected_sp1_version="v6.1.0"
+expected_proof_vkey="0x003af40eafdbc1873f7e5b8f02da0ccd668f65930797c8e20c4f19234a5ef02f"
+candidate_revision="39f7fae"
+proof_terminal_commit="b067d8c"
 pftl_chain_id_hash="0xe61f64cfb4299057c29b1c1dbf031c81beeb1b016878f4a087824eaa14c2cc00"
 pftl_genesis_hash_commitment="0x396aceff4e14037223cc2781a3197c8eef78f44903b4e00d2e5441abec789418"
 route_id_commitment="0xf23b7c6f67e6cd37e9fbff55e90a46580f7af095c2c22ca42cfe52d0c68efce4"
@@ -26,9 +33,13 @@ initial_checkpoint_commitment="0xebb09f3675e427c2b6f36cabc7e7dd8aa972e59058974dc
 pool_id="0x64c9ce388649100fb1370e406689c258247625608464014383a3f1df8ec8bd2d"
 native_asset_id="0x521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c"
 settlement_asset_id="0x02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b"
-expected_genesis_hash="0x0187cae28841e75a231bbbf8658650f7c5d7a7ad3c4a270907380d59c696c9fe"
-adopted_sp1_verifier="0x5fbdb2315678afecb367f032d93f642f64180aa3"
-expected_sp1_version="v6.1.0"
+
+# Derive the receipt program vkey from the committed proof report and require
+# the full expected candidate value; fail closed otherwise.
+program_vkey=$(jq -er '.program_vkey' "$proof_report")
+[[ "$program_vkey" == "$expected_proof_vkey" ]]
+report_schema=$(jq -er '.schema' "$proof_report")
+[[ "$report_schema" == "postfiat-pftl-uniswap-proof-report-v1" ]]
 
 require_nonce() {
     [[ "$(cast nonce "$deployer" --rpc-url "$rpc_url")" == "$1" ]]
@@ -78,29 +89,30 @@ code_hash() {
 [[ "$(ps -p "$anvil_pid" -o comm= | tr -d '[:space:]')" == "anvil" ]]
 ss -ltnp | grep -F "127.0.0.1:8547" | grep -F "pid=$anvil_pid,"
 [[ "$(cast chain-id --rpc-url "$rpc_url")" == "1" ]]
+[[ "$(cast block-number --rpc-url "$rpc_url")" == "0" ]]
 genesis_hash=$(cast block 0 --json --rpc-url "$rpc_url" | jq -er '.hash')
-[[ "$genesis_hash" == "$expected_genesis_hash" ]]
 deployer=$(cast rpc eth_accounts --rpc-url "$rpc_url" | jq -er '.[0]')
 [[ "$deployer" =~ ^0x[0-9a-fA-F]{40}$ ]]
-# Adoption gate: exactly one prior transaction (the real SP1 deployment) and
-# deployer nonce exactly 1; no other history is accepted.
-[[ "$(cast block-number --rpc-url "$rpc_url")" == "1" ]]
-sp1_adoption_tx=$(cast block 1 --json --rpc-url "$rpc_url" | jq -er 'if (.transactions | length) == 1 then .transactions[0] else error("block 1 tx count mismatch") end')
-adoption_receipt_tmp=$(mktemp /tmp/a666-r4-sp1-adoption-receipt.XXXXXX.json)
-chmod 600 "$adoption_receipt_tmp"
-cast receipt "$sp1_adoption_tx" --json --rpc-url "$rpc_url" >"$adoption_receipt_tmp"
-[[ "$(jq -er '.status' "$adoption_receipt_tmp")" == "0x1" ]]
-[[ "$(tr '[:upper:]' '[:lower:]' <<<"$(jq -er '.contractAddress' "$adoption_receipt_tmp")")" == "$adopted_sp1_verifier" ]]
-[[ "$(tr '[:upper:]' '[:lower:]' <<<"$(jq -er '.from' "$adoption_receipt_tmp")")" == "$(tr '[:upper:]' '[:lower:]' <<<"$deployer")" ]]
-[[ "$(cast nonce "$deployer" --rpc-url "$rpc_url")" == "1" ]]
 [[ "$(sha256sum "$vendor" | awk '{print $1}')" == "$expected_vendor_sha256" ]]
 [[ "$(sha256sum "$sp1_source" | awk '{print $1}')" == "$expected_sp1_sha256" ]]
 
 runtime=$(mktemp -d /tmp/a666-r4-contract-stage.XXXXXX)
 chmod 700 "$runtime"
+sp1_runtime="$runtime/sp1"
 product_runtime="$runtime/product"
-mkdir -p "$product_runtime/src"
-install -m 600 "$adoption_receipt_tmp" "$runtime/sp1.adoption-receipt.json"
+mkdir -p "$sp1_runtime/src/groth16" "$product_runtime/src"
+install -m 600 "$vendor" "$sp1_runtime/src/ISP1Verifier.sol"
+install -m 600 "$sp1_source" "$sp1_runtime/src/groth16/SP1VerifierGroth16.sol"
+install -m 600 "$groth16_source" "$sp1_runtime/src/groth16/Groth16Verifier.sol"
+cat >"$sp1_runtime/foundry.toml" <<'TOML'
+[profile.default]
+src = "src"
+out = "out"
+cache_path = "cache"
+solc_version = "0.8.20"
+optimizer = true
+optimizer_runs = 200
+TOML
 install -m 600 "$receipt_source" "$product_runtime/src/PFTLReceiptFinalityVerifierV1.sol"
 install -m 600 "$primary_source" "$product_runtime/src/PFTLUniswapPrimaryMarketV2.sol"
 install -m 600 "$token_source" "$product_runtime/src/PFTLUniswapHandoffController.sol"
@@ -114,11 +126,15 @@ optimizer = true
 optimizer_runs = 200
 TOML
 
+forge build --root "$sp1_runtime" >/dev/null
 forge build --root "$product_runtime" >/dev/null
-# Adopt the existing real SP1 verifier: code present, typed VERSION readback
-# (JSON-parsed, never raw quoted stdout) and exact verifier hash.
-sp1_verifier="$adopted_sp1_verifier"
+nonce_before_sp1=$(cast nonce "$deployer" --rpc-url "$rpc_url")
+[[ "$nonce_before_sp1" == "0" ]]
+sp1_verifier=$(create_contract sp1 "$sp1_runtime" "src/groth16/SP1VerifierGroth16.sol:SP1Verifier")
+capture_receipt sp1
+require_nonce 1
 sp1_code_hash=$(code_hash "$sp1_verifier")
+# Typed VERSION readback: JSON-parsed value, never raw quoted stdout.
 sp1_version=$(cast call "$sp1_verifier" "VERSION()(string)" --rpc-url "$rpc_url" --json | jq -er '.[0]')
 [[ "$sp1_version" == "$expected_sp1_version" ]]
 [[ "$(cast call "$sp1_verifier" "VERIFIER_HASH()(bytes32)" --rpc-url "$rpc_url")" == "$expected_verifier_hash" ]]
@@ -151,6 +167,7 @@ require_nonce 6
 
 receipt_controller=$(cast call "$receipt_verifier" "controller()(address)" --rpc-url "$rpc_url")
 receipt_wrapped_token=$(cast call "$receipt_verifier" "wrappedToken()(address)" --rpc-url "$rpc_url")
+receipt_program_vkey=$(cast call "$receipt_verifier" "programVKey()(bytes32)" --rpc-url "$rpc_url")
 receipt_max_public_values=$(cast call "$receipt_verifier" "maxPublicValuesBytes()(uint256)" --rpc-url "$rpc_url")
 receipt_destination_chain=$(cast call "$receipt_verifier" "destinationChainId()(uint256)" --rpc-url "$rpc_url")
 primary_wrapped_token=$(cast call "$primary_market" "wrappedToken()(address)" --rpc-url "$rpc_url")
@@ -158,6 +175,8 @@ primary_receipt_verifier=$(cast call "$primary_market" "receiptVerifier()(addres
 primary_destination_chain=$(cast call "$primary_market" "destinationChainId()(uint256)" --rpc-url "$rpc_url")
 wrapped_controller=$(cast call "$wrapped_token" "controller()(address)" --rpc-url "$rpc_url")
 wrapped_controller_locked=$(cast call "$wrapped_token" "controller_locked()(bool)" --rpc-url "$rpc_url")
+# The on-chain immutable vkey MUST equal the archived proof report vkey.
+[[ "$receipt_program_vkey" == "$program_vkey" ]]
 addresses_match=$(jq -n \
     --arg predicted "$predicted_primary" --arg actual "$primary_market" \
     --arg receipt_controller "$receipt_controller" --arg receipt_wrapped_token "$receipt_wrapped_token" \
@@ -176,7 +195,7 @@ addresses_match=$(jq -n \
 [[ "$primary_destination_chain" == "1" ]]
 [[ "$wrapped_controller_locked" == "true" ]]
 
-sp1_tx="$sp1_adoption_tx"
+sp1_tx=$(jq -er '.transactionHash' "$runtime/sp1.create.json")
 wrapped_tx=$(jq -er '.transactionHash' "$runtime/wrapped.create.json")
 receipt_tx=$(jq -er '.transactionHash' "$runtime/receipt.create.json")
 primary_tx=$(jq -er '.transactionHash' "$runtime/primary.create.json")
@@ -186,7 +205,7 @@ receipt_source_sha256=$(sha256sum "$receipt_source" | awk '{print $1}')
 primary_source_sha256=$(sha256sum "$primary_source" | awk '{print $1}')
 token_source_sha256=$(sha256sum "$token_source" | awk '{print $1}')
 deployment_green=$(jq -n \
-    --arg sp1_status "$(jq -er '.status' "$runtime/sp1.adoption-receipt.json")" \
+    --arg sp1_status "$(jq -er '.status' "$runtime/sp1.receipt.json")" \
     --arg wrapped_status "$(jq -er '.status' "$runtime/wrapped.receipt.json")" \
     --arg receipt_status "$(jq -er '.status' "$runtime/receipt.receipt.json")" \
     --arg primary_status "$(jq -er '.status' "$runtime/primary.receipt.json")" \
@@ -205,6 +224,9 @@ jq -n \
     --arg sp1_verifier "$sp1_verifier" --arg wrapped_token "$wrapped_token" \
     --arg receipt_verifier "$receipt_verifier" --arg primary_market "$primary_market" \
     --arg predicted_primary "$predicted_primary" --arg program_vkey "$program_vkey" \
+    --arg receipt_program_vkey "$receipt_program_vkey" \
+    --arg expected_proof_vkey "$expected_proof_vkey" \
+    --arg candidate_revision "$candidate_revision" --arg proof_terminal_commit "$proof_terminal_commit" \
     --arg sp1_tx "$sp1_tx" --arg wrapped_tx "$wrapped_tx" --arg receipt_tx "$receipt_tx" \
     --arg primary_tx "$primary_tx" --arg token_controller_tx "$token_controller_tx" --arg token_lock_tx "$token_lock_tx" \
     --arg sp1_code_hash "$sp1_code_hash" --arg wrapped_code_hash "$wrapped_code_hash" \
@@ -216,29 +238,54 @@ jq -n \
     --arg vendor_sha256 "$expected_vendor_sha256" --arg sp1_source_sha256 "$expected_sp1_sha256" \
     --arg receipt_source_sha256 "$receipt_source_sha256" --arg primary_source_sha256 "$primary_source_sha256" \
     --arg token_source_sha256 "$token_source_sha256" \
-    --argjson anvil_pid "$anvil_pid" \
+    --argjson anvil_pid "$anvil_pid" --argjson nonce_before_sp1 "$nonce_before_sp1" \
     --argjson nonce_before_product "$nonce_before_product" --argjson primary_nonce "$primary_nonce" \
     --argjson deployment_green "$deployment_green" \
     '{
       runtime: $runtime,
+      corrective_deployment: {
+        reason: "rehearsal stack 38ba6dd pinned stale program vkey 0x004e44ac...; this fresh stack pins the archived candidate proof vkey",
+        supersedes_stage_commits: ["38ba6dd", "be67543"],
+        history_preserved: true,
+        proof_terminal_commit: $proof_terminal_commit,
+        candidate_revision: $candidate_revision
+      },
       anvil: {
         pid: $anvil_pid, endpoint: $rpc_url, loopback: true, chain_id: 1,
         genesis_hash: $genesis_hash, deployer_public_address: $deployer,
-        adopted_existing: true, history_tx_count: 1, block_number_at_adoption: 1,
-        deployer_nonce_at_adoption: 1
+        fresh: true, block_number_at_stage: 0, deployer_nonce_at_stage: 0
       },
       nonce_sequence: {
-        adoption: 1, before_product: $nonce_before_product,
-        primary_prediction_nonce: $primary_nonce, after_wrapped: 2, after_receipt: 3,
-        after_primary: 4, after_controller_and_lock: 6
+        before_sp1: $nonce_before_sp1, before_product: $nonce_before_product,
+        primary_prediction_nonce: $primary_nonce, after_sp1: 1, after_wrapped: 2,
+        after_receipt: 3, after_primary: 4, after_controller_and_lock: 6
+      },
+      vkey_provenance: {
+        deployed_program_vkey: $receipt_program_vkey,
+        proof_report_program_vkey: $program_vkey,
+        expected: $expected_proof_vkey,
+        equality: true,
+        candidate_origin: {
+          guest_elf: "programs/pftl-uniswap-receipt/elf/pftl-uniswap-receipt-program",
+          guest_elf_sha256: "f85348688a463877f7e7f0539b7427a0af8847d3ef0eff2085db0c3746ad77a7",
+          embedded_at: "tools/pftl-uniswap-prover/src/main.rs:12-14 (include_bytes!)",
+          program_info_derivation: "pftl-uniswap-prover program-info on the embedded ELF yields vkey 0x003af40e... and elf_sha256 f8534868... (schema postfiat-pftl-uniswap-program-info-v1)",
+          candidate_revision: $candidate_revision
+        },
+        stale_origin_history: {
+          value: "0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9",
+          entered_harness_at: "scripts/a666-r4-ethereum-contract-stage:18 hard-coded pin (commit 38ba6dd)",
+          documented_at: "docs/plans/A666-END-TO-END-MAINNET-PRIMARY-ISSUANCE-SPEC-20260727.md:260 (production 2026-07-27 era verifier pin)",
+          archived_legacy_elf: "deployments/a666-mainnet-20260727/13-opening-export-proof/deployed-program-004e44.elf"
+        },
+        r7_linkage: "open R7 reproduction blocker (docs/plans/A666-RECOVERY-EXECUTION-TRACKER-20260804.md#r7): guest-ELF pin must be repository-relative/archived-by-hash in identity-and-public-value-pins.json with source_commit vs candidate_revision reconciliation; this stage uses the candidate proof vkey honestly and does NOT reconcile or change the product pin"
       },
       deployment: {
         green: $deployment_green, mocks: 0,
         contracts: {
-          sp1_verifier: {address: $sp1_verifier, transaction: $sp1_tx, status: "0x1", runtime_code_hash: $sp1_code_hash,
-            adopted_existing: true, version: $sp1_version, version_readback: "typed_json"},
+          sp1_verifier: {address: $sp1_verifier, transaction: $sp1_tx, status: "0x1", runtime_code_hash: $sp1_code_hash, version: $sp1_version, version_readback: "typed_json"},
           wrapped_venue_navcoin: {address: $wrapped_token, transaction: $wrapped_tx, status: "0x1", runtime_code_hash: $wrapped_code_hash},
-          pftl_receipt_finality_verifier_v1: {address: $receipt_verifier, transaction: $receipt_tx, status: "0x1", runtime_code_hash: $receipt_code_hash},
+          pftl_receipt_finality_verifier_v1: {address: $receipt_verifier, transaction: $receipt_tx, status: "0x1", runtime_code_hash: $receipt_code_hash, program_vkey: $receipt_program_vkey},
           pftl_uniswap_primary_market_v2: {address: $primary_market, transaction: $primary_tx, status: "0x1", runtime_code_hash: $primary_code_hash}
         },
         primary_prediction: {nonce: $primary_nonce, predicted: $predicted_primary, actual: $primary_market},
@@ -262,8 +309,15 @@ jq -n \
         }
       },
       verifier_acceptance: {
-        ready: false, first_blocker: "real_receipt_proof_artifact_pending_docker_capable_refire",
-        verify_and_accept_called: false
+        ready: false,
+        status: "pending_single_verify_transaction",
+        transaction_allowed: true,
+        vkey_equality: true,
+        verify_and_accept_called: false,
+        prior_blockers_closed: [
+          "real_receipt_proof_artifact_pending_docker_capable_refire",
+          "program_vkey_mismatch_requires_fresh_stack_redeploy"
+        ]
       },
       business_value: 0,
       credentials_redacted: true
