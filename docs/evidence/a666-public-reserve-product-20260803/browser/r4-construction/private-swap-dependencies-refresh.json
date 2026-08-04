@@ -14,13 +14,13 @@
     },
     "route_current_state": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/route-current-state.json",
-      "sha256": "5aa6a03c56f3ff245e128d5222eb48bea3898a35e742db8c0bcb208e2f61d036"
+      "sha256": "10886b11920e07e08a8caa9eaeebf1e9f7b400336cb14949e963953715421714"
     }
   },
   "expected_fleet_tuple": {
-    "height": 831,
-    "tip": "ed8dacf6722a082ba753a04ce86c125ed7331f45057a258d1087509e966df45177eb6711fdd801a7125573866b3d56b2",
-    "state_root": "3840a383378c8f287677d12efb940af7d8a1e656a37651cf52e6360dd8ab305e8736c1e7252513e09293c517727c8ee1"
+    "height": 833,
+    "tip": "569d64e178273b0bff2c935afaef9fea7ba94d04c2af3b7f0611ec9743a6197e8864364ba435aa5ee21b8c61d3fc12aa",
+    "state_root": "e06949b6066150d2b7703bffec3f0e091cc617922452e19a0933df0c728e23060b91dfbfa1d521634f5809ecc2315d89"
   },
   "route": {
     "route_id": "pftl-a666-r4-offline-rehearsal-v1",
@@ -34,8 +34,8 @@
     "observed_equal_count": 6
   },
   "supervisor": {
-    "systemd_unit": "a666-r4-private-swap-dependencies-pathb-v2.service",
-    "pid": 871537,
+    "systemd_unit": "a666-r4-private-swap-dependencies-pathb-v3.service",
+    "pid": 1361267,
     "live": true
   },
   "asset_service": {
@@ -44,9 +44,9 @@
     "build_action": "reused",
     "build_exit": 0,
     "build_runtime_ms": 0,
-    "pid": 871624,
+    "pid": 1361356,
     "endpoint": "127.0.0.1:8799",
-    "ready_file": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T202516Z-871537/ready/asset-orchard-prewarm.json",
+    "ready_file": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T220123Z-1361267/ready/asset-orchard-prewarm.json",
     "ready_schema": "postfiat-asset-orchard-local-service-prewarm-ready-v1",
     "circuits": {
       "ingress_notes": {
@@ -65,12 +65,12 @@
     "ready": true
   },
   "certified_round_driver": {
-    "pid": 871625,
+    "pid": 1361357,
     "ready_file": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/certified-round-driver-ready.json",
-    "heartbeat_unix_ms": 1785875440415,
-    "local_height": 831,
-    "start_height": 832,
-    "next_height": 832,
+    "heartbeat_unix_ms": 1785881207751,
+    "local_height": 833,
+    "start_height": 834,
+    "next_height": 834,
     "authenticated_peer_count": 5,
     "authenticated_quorum": true,
     "persistent_vote_streams": true,
@@ -80,13 +80,13 @@
     "ready": true
   },
   "paths": {
-    "runtime_root": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T202516Z-871537",
-    "asset_vault": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T202516Z-871537/asset-vault",
+    "runtime_root": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T220123Z-1361267",
+    "asset_vault": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T220123Z-1361267/asset-vault",
     "batch_outbox": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/batch-outbox",
     "processed_batches": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/processed-batches",
-    "round_artifacts": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T202516Z-871537/round-artifacts",
-    "pid_state": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T202516Z-871537/pids.json",
-    "teardown_control": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T202516Z-871537/teardown.request"
+    "round_artifacts": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T220123Z-1361267/round-artifacts",
+    "pid_state": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T220123Z-1361267/pids.json",
+    "teardown_control": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T220123Z-1361267/teardown.request"
   },
   "checks": {
     "construction_fleet_12_live_six_equal": true,
@@ -96,7 +96,7 @@
     "asset_tcp_loopback_8799": true,
     "asset_prewarm_terminal_ready": true,
     "round_driver_live": true,
-    "round_driver_height_831_next_832": true,
+    "round_driver_current_height_next_incremented": true,
     "five_authenticated_peers_and_quorum": true,
     "exact_pftl_swap_batch_paths": true,
     "empty_batch_and_processed_dirs": true,
@@ -106,7 +106,7 @@
   "business_operations": 0,
   "stakehub_interaction": false,
   "live_chain": false,
-  "runtime_ms": 324189,
+  "runtime_ms": 324231,
   "ready": true,
   "state": "ready"
 }

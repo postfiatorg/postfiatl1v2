@@ -8,7 +8,7 @@ PRESERVED_ROOT="/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349"
 FLEET_COMMIT="ee23d58822e89df5a24a10ecea42ed0bd985653a"
 FLEET_DIR="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet"
 ROUTE_STATE="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/route-current-state.json"
-ROUTE_STATE_SHA256="5aa6a03c56f3ff245e128d5222eb48bea3898a35e742db8c0bcb208e2f61d036"
+ROUTE_STATE_SHA256="10886b11920e07e08a8caa9eaeebf1e9f7b400336cb14949e963953715421714"
 FLEET_ARTIFACT_SHA256="3be9d4169f9a761b7aa83a457d237896a7155e22ab143fdad9dcbbbf275772bb"
 ROUTE_ID="pftl-a666-r4-offline-rehearsal-v1"
 ROUTE_DIGEST="$(printf 'b2%.0s' {1..48})"
@@ -67,7 +67,7 @@ validate_fleet() {
   [[ -d "$DATA_DIR" && -s "$KEY_FILE" && -s "$TOPOLOGY" ]]
   [[ "$(sha256sum "$ROUTE_STATE" | awk '{print $1}')" == "$ROUTE_STATE_SHA256" ]]
   [[ "$(sha256sum "$FLEET_DIR/construction-fleet.json" | awk '{print $1}')" == "$FLEET_ARTIFACT_SHA256" ]]
-  jq -e '.accepted==true and .six_rpc_tuple.height==831 and .six_rpc_route.route_epoch==2 and .six_rpc_route.policy_epoch==2 and .six_rpc_route.live_value_enabled==true' "$ROUTE_STATE" >/dev/null
+  jq -e '.accepted==true and (.six_rpc_tuple.height|type)=="number" and .six_rpc_route.route_epoch==2 and .six_rpc_route.policy_epoch==2 and .six_rpc_route.live_value_enabled==true' "$ROUTE_STATE" >/dev/null
   jq -e '.construction_ready == true and .ready_for_one_shot_pass_1 == false and .checks.stakehub_interaction == false' "$FLEET_DIR/construction-fleet.json" >/dev/null
   [[ "$(jq '.processes|length' "$FLEET_DIR/construction-pids.json")" -eq 12 ]]
   while read -r pid; do kill -0 "$pid"; done < <(jq -r '.processes[].pid' "$FLEET_DIR/construction-pids.json")
@@ -249,7 +249,7 @@ jq -n \
     asset_service:{binary_path:$asset_binary,binary_sha256:$asset_sha256,build_action:$build_action,build_exit:$build_exit,build_runtime_ms:$build_runtime_ms,pid:$asset_pid,endpoint:"127.0.0.1:8799",ready_file:$asset_ready,ready_schema:$asset_schema,circuits:$asset_circuits,ready:true},
     certified_round_driver:{pid:$round_pid,ready_file:$round_ready,heartbeat_unix_ms:$round_heartbeat,local_height:$round_height,start_height:$round_start_height,next_height:$round_next_height,authenticated_peer_count:$round_peers,authenticated_quorum:true,persistent_vote_streams:true,remote_proposal_routing:true,local_apply_before_certified_send:true,processed_round_count:0,ready:true},
     paths:{runtime_root:$runtime_root,asset_vault:$asset_vault,batch_outbox:$batch_dir,processed_batches:$processed_dir,round_artifacts:$artifact_dir,pid_state:$pid_state,teardown_control:$control_file},
-    checks:{construction_fleet_12_live_six_equal:true,route_live_epoch_2_on_six:true,supervisor_live:true,asset_service_live:true,asset_tcp_loopback_8799:true,asset_prewarm_terminal_ready:true,round_driver_live:true,round_driver_height_831_next_832:($round_height==831 and $round_start_height==832 and $round_next_height==832),five_authenticated_peers_and_quorum:($round_peers==5),exact_pftl_swap_batch_paths:true,empty_batch_and_processed_dirs:true,business_operations_zero:true,stakehub_interaction_zero:true},
+    checks:{construction_fleet_12_live_six_equal:true,route_live_epoch_2_on_six:true,supervisor_live:true,asset_service_live:true,asset_tcp_loopback_8799:true,asset_prewarm_terminal_ready:true,round_driver_live:true,round_driver_current_height_next_incremented:($round_height==$expected_height and $round_start_height==($expected_height+1) and $round_next_height==($expected_height+1)),five_authenticated_peers_and_quorum:($round_peers==5),exact_pftl_swap_batch_paths:true,empty_batch_and_processed_dirs:true,business_operations_zero:true,stakehub_interaction_zero:true},
     business_operations:0,stakehub_interaction:false,live_chain:false,runtime_ms:$runtime_ms
   } | .ready=([.checks[]]|all) | .state=(if .ready then "ready" else "red" end)
   ' > "$EVIDENCE"

@@ -1,7 +1,7 @@
 {
   "schema": "postfiat.a666.r4.route-current-state.v1",
   "accepted": true,
-  "observed_utc": "2026-08-04T20:19:19Z",
+  "observed_utc": "2026-08-04T22:00:16Z",
   "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
   "bindings": {
     "accepted_fleet_artifact": {
@@ -33,9 +33,9 @@
   },
   "six_rpc_tuple": {
     "equal": true,
-    "height": 831,
-    "block_tip_hash": "ed8dacf6722a082ba753a04ce86c125ed7331f45057a258d1087509e966df45177eb6711fdd801a7125573866b3d56b2",
-    "state_root": "3840a383378c8f287677d12efb940af7d8a1e656a37651cf52e6360dd8ab305e8736c1e7252513e09293c517727c8ee1"
+    "height": 833,
+    "block_tip_hash": "569d64e178273b0bff2c935afaef9fea7ba94d04c2af3b7f0611ec9743a6197e8864364ba435aa5ee21b8c61d3fc12aa",
+    "state_root": "e06949b6066150d2b7703bffec3f0e091cc617922452e19a0933df0c728e23060b91dfbfa1d521634f5809ecc2315d89"
   },
   "six_rpc_route": {
     "equal": true,

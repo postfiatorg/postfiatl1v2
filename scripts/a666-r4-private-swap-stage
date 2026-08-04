@@ -7,9 +7,9 @@ MAIN_WORKTREE="/home/postfiat/repos/a666-eth-fast-lane-combined-20260724"
 EVIDENCE="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/private-swap-stage.json"
 CONSTRUCTION_DIR="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction"
 ROUTE_STATE="$CONSTRUCTION_DIR/route-current-state.json"
-ROUTE_STATE_SHA256="5aa6a03c56f3ff245e128d5222eb48bea3898a35e742db8c0bcb208e2f61d036"
+ROUTE_STATE_SHA256="10886b11920e07e08a8caa9eaeebf1e9f7b400336cb14949e963953715421714"
 DEPENDENCY_EVIDENCE="$CONSTRUCTION_DIR/private-swap-dependencies-refresh.json"
-DEPENDENCY_EVIDENCE_SHA256="2c1fac08179a0df4606f3ca1cd35e3105235b77b7e5f5c710bd7faf2f3be4d95"
+DEPENDENCY_EVIDENCE_SHA256="f9414e57edd7ff28e1acc38a7e1de3146287a85ca2f59b63d9f74438946ff50e"
 WITNESS_STAGE="$CONSTRUCTION_DIR/path-b-witness-stage.json"
 WITNESS="$CONSTRUCTION_DIR/path-b-receipt-witness.json"
 WITNESS_SHA256="8c2c7ee6d3209bfb21e5d442de7e80cb2ab4affabe06a0008527717eaae13ef4"
@@ -213,7 +213,7 @@ response_compatible=true
 [[ "$(sha256sum "$ROUTE_STATE" | awk '{print $1}')" == "$ROUTE_STATE_SHA256" ]]
 [[ "$(sha256sum "$DEPENDENCY_EVIDENCE" | awk '{print $1}')" == "$DEPENDENCY_EVIDENCE_SHA256" ]]
 jq -e --arg route "$ROUTE_ID" --arg digest "$ROUTE_DIGEST" --arg policy "$ROUTE_POLICY_HASH" '
-  .accepted==true and .six_rpc_tuple.height==831 and .six_rpc_route.route_id==$route
+  .accepted==true and (.six_rpc_tuple.height|type)=="number" and .six_rpc_route.route_id==$route
   and .six_rpc_route.route_epoch==2 and .six_rpc_route.policy_epoch==2
   and .six_rpc_route.route_config_digest==$digest and .six_rpc_route.policy_hash==$policy
   and .six_rpc_route.live_value_enabled==true and .six_rpc_route.paused==false and .six_rpc_route.invariant_holds==true
@@ -223,7 +223,7 @@ jq -e --arg witness "$WITNESS_SHA256" '.accepted==true and .artifacts.witness_sh
 jq -e --arg wallet "$CONTROLLED_WALLET_ID" --arg recipient "$ISSUE_ETHEREUM_RECIPIENT" '.receipt.wallet==$wallet and .mint_packet.ethereum_recipient==$recipient' "$WITNESS" >/dev/null
 route_profile=true
 wallet_match=true
-jq -e '.state=="ready" and .ready==true and .certified_round_driver.local_height==831 and .certified_round_driver.start_height==832 and .certified_round_driver.next_height==832 and .certified_round_driver.authenticated_peer_count==5 and .certified_round_driver.processed_round_count==0 and .business_operations==0 and .stakehub_interaction==false and .live_chain==false' "$DEPENDENCY_EVIDENCE" >/dev/null
+jq -e '.state=="ready" and .ready==true and (.certified_round_driver.local_height==.expected_fleet_tuple.height) and (.certified_round_driver.start_height==(.expected_fleet_tuple.height+1)) and (.certified_round_driver.next_height==(.expected_fleet_tuple.height+1)) and .certified_round_driver.authenticated_peer_count==5 and .certified_round_driver.processed_round_count==0 and .business_operations==0 and .stakehub_interaction==false and .live_chain==false' "$DEPENDENCY_EVIDENCE" >/dev/null
 for dependency_pid in $(jq -r '.supervisor.pid,.asset_service.pid,.certified_round_driver.pid' "$DEPENDENCY_EVIDENCE"); do kill -0 "$dependency_pid"; done
 [[ -f "$TRANSPARENT_KEY_FILE" ]]
 
@@ -296,7 +296,7 @@ fi
 [[ "$ASSET_SERVICE_ADDRESS" == "$(jq -r '.asset_service.endpoint' "$DEPENDENCY_EVIDENCE")" ]]
 [[ "$ASSET_SERVICE_VAULT_DIR" == "$(jq -r '.paths.asset_vault' "$DEPENDENCY_EVIDENCE")" ]]
 [[ "$(systemctl --user is-active "$(jq -r '.supervisor.systemd_unit' "$DEPENDENCY_EVIDENCE")")" == active ]]
-jq -e '(.local_state.block_height==831) and (.start_height==832) and (.processed_round_count==0) and (.authenticated_peer_count==5) and .authenticated_quorum==true and (((now*1000)-.heartbeat_unix_ms)>=0) and (((now*1000)-.heartbeat_unix_ms)<=10000)' "$ROUND_DRIVER_READY_FILE" >/dev/null
+jq -e --argjson height "$(jq -r '.expected_fleet_tuple.height' "$DEPENDENCY_EVIDENCE")" '(.local_state.block_height==$height) and (.start_height==($height+1)) and (.processed_round_count==0) and (.authenticated_peer_count==5) and .authenticated_quorum==true and (((now*1000)-.heartbeat_unix_ms)>=0) and (((now*1000)-.heartbeat_unix_ms)<=10000)' "$ROUND_DRIVER_READY_FILE" >/dev/null
 python3 - <<'PY'
 import socket
 with socket.create_connection(('127.0.0.1',8799),timeout=3): pass
