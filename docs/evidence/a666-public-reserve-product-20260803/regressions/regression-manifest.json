@@ -139,6 +139,23 @@
       "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar02-tests.txt"
     },
     {
+      "id": "AR-05",
+      "contract": "an active export entitlement prevents route-epoch advancement until destination consumption and return complete",
+      "status": "passed",
+      "source_file": "crates/execution/src/market_nav_execution_tests.rs",
+      "canonical_input": "A production-shaped V2 route holds one active export entitlement. Epoch advance rejects without mutation; real destination consume, return import, and order release close the entitlement before the same typed epoch advance succeeds.",
+      "first_passing_commit": "f4d4115ed083dff4806920d77a17220578094869",
+      "tests": [
+        {
+          "name": "tests::ar05_active_export_entitlement_blocks_route_epoch_advance_until_closed",
+          "runtime_milliseconds": 796,
+          "matched_test_count": 1,
+          "command": "cargo test -p postfiat-execution tests::ar05_active_export_entitlement_blocks_route_epoch_advance_until_closed -- --exact --nocapture"
+        }
+      ],
+      "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar05-test.txt"
+    },
+    {
       "id": "AR-08",
       "contract": "snapshot import verifies publisher signature, content hash, chain ID, height, tip, and state root before startup",
       "status": "passed",
@@ -217,10 +234,6 @@
     {
       "id": "AR-04",
       "status": "implementation_pending"
-    },
-    {
-      "id": "AR-05",
-      "status": "implementation_in_progress"
     },
     {
       "id": "AR-06",
