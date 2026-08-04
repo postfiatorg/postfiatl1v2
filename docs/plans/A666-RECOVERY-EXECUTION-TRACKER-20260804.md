@@ -46,13 +46,24 @@ Observed-defect regressions (defect -> test, fix committed):
 
 - [x] Defect 7: sub-minimum redemption order — **AR-09**
   `pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09`
-  (`81bacfc`, ~7s)
+  (`81bacfc`, 1 matched, 7.616s). Evidence:
+  `docs/evidence/a666-public-reserve-product-20260803/regressions/ar09-ar11-tests.txt`;
+  manifest:
+  `docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest.json`.
 - [x] Defect 8: private-primary archive replay rejection — **AR-10**
-  `ar10_private_primary_*_replay_matches_live_execution_path` (`f059bdb`,
-  fails pre-fix, 262/262 suite green)
+  `ar10_private_primary_*_replay_matches_live_execution_path` plus the
+  exact historical allowlist (`f059bdb`, three 1-test passes, 6.980-7.950s
+  wall-clock; 262/262 first-passing suite green). Evidence:
+  `docs/evidence/a666-public-reserve-product-20260803/regressions/ar09-ar11-tests.txt`;
+  manifest:
+  `docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest.json`.
 - [x] Defect 9: spread custody dropped from supply inventory — **AR-11**
-  `ar11_issued_asset_supply_counts_non_nav_spread_custody` (`83ac75d`,
-  178/178 suite green)
+  `ar11_issued_asset_supply_counts_non_nav_spread_custody`
+  (`83ac75d`, 1 matched, 176ms; 178/178 first-passing suite green).
+  Evidence:
+  `docs/evidence/a666-public-reserve-product-20260803/regressions/ar09-ar11-tests.txt`;
+  manifest:
+  `docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest.json`.
 
 Mandatory set still to extract as standalone <2-minute tests:
 
@@ -114,8 +125,10 @@ Mandatory set still to extract as standalone <2-minute tests:
   actual proxy SIGTERM/restart and durable Chromium reload. Evidence:
   `docs/evidence/a666-public-reserve-product-20260803/browser/journey-step-9-e2e.txt`
   (`5e81a910`, `test:public-browser` 2/2, 8.236s).
-- [ ] `npm test`, `test:custody-browser`, `test:public-browser`, `build`
-  green on the candidate
+- [x] `npm test`, `test:custody-browser`, `test:public-browser`, `build`
+  green on the candidate. Evidence:
+  `docs/evidence/a666-public-reserve-product-20260803/browser/wallet-web-four-command-matrix.txt`
+  (`68b9aeb`; 233/233, 1/1, 2/2, build 1,805 modules).
 - [ ] Full §8 browser journey pass #1 against checkpoint-restored rehearsal
   environment, StakeHub absent, receipts captured
 - [ ] Full §8 browser journey pass #2 (same candidate, fresh run)

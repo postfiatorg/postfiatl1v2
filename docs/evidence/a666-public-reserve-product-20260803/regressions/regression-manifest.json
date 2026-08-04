@@ -1,7 +1,7 @@
 {
   "schema": "postfiat.a666.recovery.regression_manifest.v1",
   "status": "partial",
-  "generated_at_utc": "2026-08-04T01:31:00Z",
+  "generated_at_utc": "2026-08-04T01:40:00Z",
   "evidence_root": "docs/evidence/a666-public-reserve-product-20260803",
   "contracts": [
     "docs/plans/A666-PRODUCT-RECOVERY-AND-DEMO-RELAUNCH-SPEC-20260803.md#61-layer-a-targeted-regressions",
@@ -345,6 +345,69 @@
         }
       ],
       "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar08-tests.txt"
+    },
+    {
+      "id": "AR-09",
+      "contract": "a production-shaped private-primary redemption reaches the intended policy path rather than failing admission on malformed retry input",
+      "status": "passed",
+      "source_file": "crates/execution/src/market_nav_execution_tests.rs",
+      "canonical_input": "A production-shaped redemption binds the live route policy, expiry, amounts, and nonce and exercises the real private-primary execution path.",
+      "first_passing_commit": "81bacfc63b2d01bf28ca6304e4856d759156fec9",
+      "tests": [
+        {
+          "name": "tests::pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09",
+          "runtime_milliseconds": 7616,
+          "matched_test_count": 1,
+          "command": "cargo test -p postfiat-execution tests::pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09 -- --exact --nocapture"
+        }
+      ],
+      "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar09-ar11-tests.txt"
+    },
+    {
+      "id": "AR-10",
+      "contract": "private-primary issue and redeem archive replay use the same accepted execution path as live application while the historical allowlist remains exact",
+      "status": "passed",
+      "source_file": "crates/node/src/tests/private_primary_replay_gate_tests.rs",
+      "canonical_input": "Deterministic private-primary issue and redeem payloads execute once as live actions and once as archive replay, then compare accepted receipts; a separate test pins the complete historical replay allowlist.",
+      "first_passing_commit": "f059bdba8768e130aab2178fb313af8e7786b71e",
+      "tests": [
+        {
+          "name": "tests::private_primary_replay_gate_tests::ar10_private_primary_issue_replay_matches_live_execution_path",
+          "runtime_milliseconds": 7950,
+          "matched_test_count": 1,
+          "command": "cargo test -p postfiat-node --lib tests::private_primary_replay_gate_tests::ar10_private_primary_issue_replay_matches_live_execution_path -- --exact --nocapture"
+        },
+        {
+          "name": "tests::private_primary_replay_gate_tests::ar10_private_primary_redeem_replay_matches_live_execution_path",
+          "runtime_milliseconds": 6980,
+          "matched_test_count": 1,
+          "command": "cargo test -p postfiat-node --lib tests::private_primary_replay_gate_tests::ar10_private_primary_redeem_replay_matches_live_execution_path -- --exact --nocapture"
+        },
+        {
+          "name": "tests::private_primary_replay_gate_tests::ar10_historical_private_primary_allowlist_stays_exact",
+          "runtime_milliseconds": 7102,
+          "matched_test_count": 1,
+          "command": "cargo test -p postfiat-node --lib tests::private_primary_replay_gate_tests::ar10_historical_private_primary_allowlist_stays_exact -- --exact --nocapture"
+        }
+      ],
+      "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar09-ar11-tests.txt"
+    },
+    {
+      "id": "AR-11",
+      "contract": "global issued pfUSDC supply includes non-NAV spread custody rather than dropping it from the settlement inventory",
+      "status": "passed",
+      "source_file": "crates/execution/src/market_nav_execution_tests.rs",
+      "canonical_input": "A deterministic private-primary issuance leaves non-NAV spread in settlement custody and asserts that issued-asset supply accounts for the custody balance in the global pfUSDC inventory.",
+      "first_passing_commit": "83ac75de9575bedbab8062272281e0ab3feedbd2",
+      "tests": [
+        {
+          "name": "tests::ar11_issued_asset_supply_counts_non_nav_spread_custody",
+          "runtime_milliseconds": 176,
+          "matched_test_count": 1,
+          "command": "cargo test -p postfiat-execution tests::ar11_issued_asset_supply_counts_non_nav_spread_custody -- --exact --nocapture"
+        }
+      ],
+      "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar09-ar11-tests.txt"
     }
   ],
   "remaining_acceptance_work": [
@@ -355,18 +418,6 @@
     {
       "id": "AR-04",
       "status": "implementation_pending"
-    },
-    {
-      "id": "AR-09",
-      "status": "passed_row_pending"
-    },
-    {
-      "id": "AR-10",
-      "status": "passed_row_pending"
-    },
-    {
-      "id": "AR-11",
-      "status": "passed_row_pending"
     },
     {
       "id": "CI",
