@@ -1,0 +1,55 @@
+{
+ "schema": "postfiat.a666.r4.receipt-prover-pathb-v3-terminal.v1",
+ "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+ "run_id": "a666-r4-receipt-prover-pathb-20260804-v3",
+ "unit": "a666-r4-receipt-prover-pathb-20260804-v3.service",
+ "unit_result": "success",
+ "exec_main_status": 0,
+ "terminal_journal_line": "Aug 04 19:16:29 postfiatfoundationv2 systemd[45263]: a666-r4-receipt-prover-pathb-20260804-v3.service: Consumed 5h 19min 49.439s CPU time, 34.5G memory peak, 0B memory swap peak.",
+ "wall_seconds": 5420.33,
+ "setup_and_prove_ms": 5367135,
+ "artifacts": {
+  "proof_bin": {
+   "path": "/tmp/a666-r4-receipt-prover-pathb-v3-Cmm861lA/proof/proof.bin",
+   "sha256": "c5a5b8199cfac4fa16271ff334fc43e57bd3ed78c51da75d5a8f40353f9b5200",
+   "bytes": 2815
+  },
+  "proof_calldata_bin": {
+   "path": "/tmp/a666-r4-receipt-prover-pathb-v3-Cmm861lA/proof/proof-calldata.bin",
+   "sha256": "ce5f1868447c004d358b25a8e5b08da66f320c4157ee5e2e53d65be7ba2e20d3",
+   "bytes": 356,
+   "archived_copy": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/receipt-verifier-spike/pathb-v3-proof-calldata.bin"
+  },
+  "proof_report_json": {
+   "path": "/tmp/a666-r4-receipt-prover-pathb-v3-Cmm861lA/proof/proof-report.json",
+   "sha256": "be0a115be517cac5207494adbb009a0bad47fd5ff16c07f46c5751627bb3f08f",
+   "bytes": 361,
+   "archived_copy": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/receipt-verifier-spike/pathb-v3-proof-report.json"
+  },
+  "public_values_bin": {
+   "path": "/tmp/a666-r4-receipt-prover-pathb-v3-Cmm861lA/proof/public-values.bin",
+   "sha256": "da53b72bf6f27a93a5cb9a0de2d607755c1d3e885353d7223a3a3c0ed9e5cb43",
+   "bytes": 1120
+  }
+ },
+ "pin_checks": {
+  "program_vkey_equals_pin": true,
+  "program_vkey": "0x003af40eafdbc1873f7e5b8f02da0ccd668f65930797c8e20c4f19234a5ef02f",
+  "public_values_sha256_equals_pin": true,
+  "public_values_pin": "da53b72bf6f27a93a5cb9a0de2d607755c1d3e885353d7223a3a3c0ed9e5cb43"
+ },
+ "proof_report": {
+  "proof_mode": "groth16",
+  "prover_backend": "cpu",
+  "proof_kind": "receipt",
+  "proof_bytes": 356,
+  "host_execute_skipped": true
+ },
+ "out_dir": "/tmp/a666-r4-receipt-prover-pathb-v3-Cmm861lA",
+ "out_dir_mode": "700",
+ "verifyAndAccept_invocations": 0,
+ "anvil_transactions": 0,
+ "stakehub_interaction": false,
+ "business_mutation": 0,
+ "live_chain": false
+}
