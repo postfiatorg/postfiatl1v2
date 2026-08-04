@@ -1,30 +1,25 @@
 {
-  "schema": "postfiat.a666.r4.ethereum-contract-stage.v3",
+  "schema": "postfiat.a666.r4.ethereum-contract-stage.v4",
   "outcome": "named_technical_wall",
-  "first_failing_check": "forge_create_sp1_requires_no_constructor_args_flag_when_constructor_is_empty",
+  "first_failing_check": "sp1_version_readback_is_json_quoted_v6_1_0_but_script_compares_unquoted_string",
   "commands": [
     {
-      "command": "systemd-run --user --unit=a666-r4-contract-stage-anvil-20260804T081440Z-1841723 --collect --same-dir --property=Type=exec --property=StandardOutput=null --property=StandardError=null anvil --host 127.0.0.1 --port 8547 --chain-id 1 --silent",
-      "exit_code": 0,
-      "result": "fresh durable loopback Anvil active"
+      "command": "A666_ANVIL_PID=1841731 /usr/bin/time -f 'wall_seconds=%e' scripts/a666-r4-ethereum-contract-stage",
+      "exit_code": 1,
+      "elapsed_ms": 2647,
+      "terminal_line": "Command exited with non-zero status 1"
     },
     {
-      "command": "A666_ANVIL_PID=1841731 /usr/bin/time -f 'wall_seconds=%e' scripts/a666-r4-ethereum-contract-stage",
-      "exit_code": 4,
-      "elapsed_ms": 3015,
-      "terminal_line": "error: a value is required for '--constructor-args <ARGS>...' but none was supplied"
+      "command": "cast call 0x5fbdb2315678afecb367f032d93f642f64180aa3 'VERSION()(string)' --rpc-url http://127.0.0.1:8547",
+      "exit_code": 0,
+      "observed_stdout": "\"v6.1.0\""
     }
   ],
   "source_identity": {
     "installed_sp1_verifier": {
       "path": "/home/postfiat/.sp1/circuits/groth16/v6.1.0/SP1VerifierGroth16.sol",
       "release": "v6.1.0",
-      "sha256": "48e1db5baca3b102242ebd88280b3689a088076688146cd0d98876f5dacb76d0",
-      "import": "../ISP1Verifier.sol",
-      "required_interfaces": [
-        "ISP1Verifier",
-        "ISP1VerifierWithHash"
-      ]
+      "sha256": "48e1db5baca3b102242ebd88280b3689a088076688146cd0d98876f5dacb76d0"
     },
     "official_interface": {
       "url": "https://raw.githubusercontent.com/succinctlabs/sp1-contracts/v6.1.0/contracts/src/ISP1Verifier.sol",
@@ -32,10 +27,6 @@
       "commit": "2ac5ecbbe473421a963d67e55f182e9a36576f7c",
       "vendored_path": "scripts/a666-r4-ethereum-contract-vendor/sp1-contracts-v6.1.0/ISP1Verifier.sol",
       "sha256": "9e918032a5aa799c1319b14b013154d6a40ca6e5f2267c9f540560abd7fd7689"
-    },
-    "compile_split": {
-      "sp1_verifier_solc": "0.8.20",
-      "product_contracts_solc": "0.8.24"
     }
   },
   "anvil": {
@@ -47,33 +38,33 @@
     "chain_id": 1,
     "genesis_hash": "0x0187cae28841e75a231bbbf8658650f7c5d7a7ad3c4a270907380d59c696c9fe",
     "deployer_public_address": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
-    "deployer_nonce_after_wall": 0
+    "block_number_after_wall": 1,
+    "deployer_nonce_after_wall": 1
   },
   "deployment": {
     "green": false,
     "mocks": 0,
     "external_create_prediction": {
       "implemented": true,
-      "scope": "The script contains only cast compute-address for the future primary receipt.controller binding.",
       "used": false,
-      "reason": "The empty SP1 constructor failed before the first forge create transaction."
+      "reason": "The stage stopped after SP1 verification and before product nonce capture."
     },
-    "contracts": {
-      "sp1_verifier": {
-        "deployed": false,
-        "reason": "forge create was invoked with an empty --constructor-args list"
-      },
-      "wrapped_venue_navcoin": {
-        "deployed": false
-      },
-      "pftl_receipt_finality_verifier_v1": {
-        "deployed": false
-      },
-      "pftl_uniswap_primary_market_v2": {
-        "deployed": false
-      }
+    "sp1_verifier": {
+      "address": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+      "transaction": "0xa2251e0f008b4e57c6fb06ac6f6401f9c97d33cc40e02d9fdf7f707551cb884d",
+      "receipt_status": "0x1",
+      "version_observed": "\"v6.1.0\"",
+      "result": "real SP1 verifier deployed; script assertion format failed"
     },
-    "transaction_count": 0
+    "wrapped_venue_navcoin": {
+      "deployed": false
+    },
+    "pftl_receipt_finality_verifier_v1": {
+      "deployed": false
+    },
+    "pftl_uniswap_primary_market_v2": {
+      "deployed": false
+    }
   },
   "verifier_acceptance": {
     "ready": false,

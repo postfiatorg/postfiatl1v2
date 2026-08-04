@@ -35,8 +35,13 @@ create_contract() {
     local root="$2"
     local target="$3"
     shift 3
-    forge create "$target" --root "$root" --rpc-url "$rpc_url" --broadcast --unlocked --from "$deployer" --json \
-        --constructor-args "$@" >"$runtime/$name.create.json"
+    if (( $# > 0 )); then
+        forge create "$target" --root "$root" --rpc-url "$rpc_url" --broadcast --unlocked --from "$deployer" --json \
+            --constructor-args "$@" >"$runtime/$name.create.json"
+    else
+        forge create "$target" --root "$root" --rpc-url "$rpc_url" --broadcast --unlocked --from "$deployer" --json \
+            >"$runtime/$name.create.json"
+    fi
     jq -er '.deployedTo' "$runtime/$name.create.json"
 }
 
