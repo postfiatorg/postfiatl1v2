@@ -19,6 +19,29 @@ pftl_stage="$construction/private-swap-stage.json"
 d_runner="$construction/journey-runner-dry-run.json"
 async_proof_slot="$construction/async-proof-slot.json"
 stakehub_inventory="$pass1/stakehub-restart-proof.json"
+preprove_binding="$construction/pre-prove-binding-check.json"
+path_b_schema="postfiat.a666.r4.path-b-pre-prove-binding-check.v1"
+path_b_candidate="39f7fae3191aa34c376ae1657650a9ec2444f421"
+path_b_decoder_sha256="6fb2fb9ac693e5cea787eeb4a80701de562d3b12ce47d837d121d8dc361f6d4a"
+
+binding_json() {
+    local path="$1"
+    if [[ ! -r "$path" ]] || ! jq -e . "$path" >/dev/null 2>&1; then
+        printf '%s' '{"candidate_revision":null,"rehearsal_root":null,"run_id":null}'
+        return
+    fi
+    jq -c '
+        . as $raw
+        | (if ($raw | type) == "object" then $raw else {} end) as $o
+        | (if ($o.bindings | type) == "object" then $o.bindings elif ($o.binding | type) == "object" then $o.binding else {} end) as $binding
+        | (if ($o.candidate | type) == "object" then $o.candidate else {} end) as $candidate
+        | {
+            candidate_revision: ($binding.candidate_revision // $candidate.revision_observed // $o.candidate_revision // null),
+            rehearsal_root: ($binding.rehearsal_root // (if ($o.rehearsal_root | type) == "string" then $o.rehearsal_root elif ($o.preserved_root | type) == "string" then $o.preserved_root elif ($o.preserved_root | type) == "object" then $o.preserved_root.path else null end)),
+            run_id: ($binding.run_id // $o.run_id // $o.setup_run_id // null)
+        }
+    ' "$path"
+}
 
 input_summary() {
     local path="$1"
@@ -30,18 +53,24 @@ input_summary() {
         jq -cn --arg path "$path" '{path: $path, exists: true, valid_json: false, observed_status: "invalid_json", observed_reason: "evidence_invalid_json", bindings: {candidate_revision: null, rehearsal_root: null, run_id: null}}'
         return
     fi
-    jq -c --arg path "$path" '{
-        path: $path,
-        exists: true,
-        valid_json: true,
-        observed_status: (.assessment // .outcome // .status // .ready // .accepted // .construction_ready // .probe2.verdict // null),
-        observed_reason: (.first_failing_check // .first_blocker // .required_next_action // .post_activation_dependency.wall // .probe1.root_cause // null),
-        bindings: {
-            candidate_revision: (.bindings.candidate_revision // .binding.candidate_revision // .candidate.revision_observed // .candidate_revision // null),
-            rehearsal_root: (.bindings.rehearsal_root // .binding.rehearsal_root // .rehearsal_root // .preserved_root.path // null),
-            run_id: (.bindings.run_id // .binding.run_id // .run_id // .setup_run_id // null)
+    jq -c --arg path "$path" '
+        . as $raw
+        | (if ($raw | type) == "object" then $raw else {} end) as $o
+        | (if ($o.bindings | type) == "object" then $o.bindings elif ($o.binding | type) == "object" then $o.binding else {} end) as $binding
+        | (if ($o.candidate | type) == "object" then $o.candidate else {} end) as $candidate
+        | {
+            path: $path,
+            exists: true,
+            valid_json: true,
+            observed_status: ($o.assessment // $o.outcome // $o.status // $o.ready // $o.accepted // $o.construction_ready // $o.probe2.verdict // null),
+            observed_reason: ($o.first_failing_check // $o.first_blocker // $o.required_next_action // $o.post_activation_dependency.wall // $o.probe1.root_cause // null),
+            bindings: {
+                candidate_revision: ($binding.candidate_revision // $candidate.revision_observed // $o.candidate_revision // null),
+                rehearsal_root: ($binding.rehearsal_root // (if ($o.rehearsal_root | type) == "string" then $o.rehearsal_root elif ($o.preserved_root | type) == "string" then $o.preserved_root elif ($o.preserved_root | type) == "object" then $o.preserved_root.path else null end)),
+                run_id: ($binding.run_id // $o.run_id // $o.setup_run_id // null)
+            }
         }
-    }' "$path"
+    ' "$path"
 }
 
 json_true() {
@@ -50,22 +79,101 @@ json_true() {
     [[ -r "$path" ]] && jq -e "$filter" "$path" >/dev/null 2>&1
 }
 
+preprove_ok_for_file() {
+    local path="$1"
+    [[ -r "$path" ]] || return 1
+    jq -e --arg schema "$path_b_schema" --arg candidate "$path_b_candidate" --arg decoder "$path_b_decoder_sha256" '
+        .schema == $schema
+        and .candidate_revision == $candidate
+        and (.witness_sha256 | type == "string" and length > 0)
+        and (.deployment_evidence_path | type == "string" and length > 0)
+        and (.deployment_commit | type == "string" and length > 0)
+        and .decoder_sha256 == $decoder
+        and .decoded_field_count == 35
+        and .conjunction_field_count == 35
+        and .exact_mismatch_count == 0
+        and .all_match == true
+        and (.prior_checkpoint_commitment | type == "string" and length > 0)
+        and (.initial_checkpoint_commitment | type == "string" and length > 0)
+        and .prior_checkpoint_matches_initial == true
+        and .route_matches == true
+        and .controller_matches == true
+        and .wrapped_matches == true
+        and .chain_matches == true
+        and .genesis_matches == true
+        and .protocol_matches == true
+        and .program_vkey_matches == true
+        and .live_chain == false
+        and .business_value == 0
+        and .stakehub == false
+    ' "$path" >/dev/null 2>&1
+}
+
+run_preprove_self_test() {
+    local test_root
+    test_root=$(mktemp -d /tmp/a666-r4-preprove-binding-self-test.XXXXXX)
+    chmod 700 "$test_root"
+    cat >"$test_root/green.json" <<'JSON'
+{
+  "schema": "postfiat.a666.r4.path-b-pre-prove-binding-check.v1",
+  "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+  "witness_sha256": "self-test-witness",
+  "deployment_evidence_path": "self-test-deployment",
+  "deployment_commit": "self-test-commit",
+  "decoder_sha256": "6fb2fb9ac693e5cea787eeb4a80701de562d3b12ce47d837d121d8dc361f6d4a",
+  "decoded_field_count": 35,
+  "conjunction_field_count": 35,
+  "exact_mismatch_count": 0,
+  "all_match": true,
+  "prior_checkpoint_commitment": "self-test-prior",
+  "initial_checkpoint_commitment": "self-test-initial",
+  "prior_checkpoint_matches_initial": true,
+  "route_matches": true,
+  "controller_matches": true,
+  "wrapped_matches": true,
+  "chain_matches": true,
+  "genesis_matches": true,
+  "protocol_matches": true,
+  "program_vkey_matches": true,
+  "live_chain": false,
+  "business_value": 0,
+  "stakehub": false
+}
+JSON
+    jq '.prior_checkpoint_matches_initial = false' "$test_root/green.json" >"$test_root/prior-checkpoint-mismatch.json"
+    preprove_ok_for_file "$test_root/green.json"
+    if preprove_ok_for_file "$test_root/prior-checkpoint-mismatch.json"; then
+        printf '%s\n' "pre_prove_binding_self_test=FAIL fixture_root=$test_root"
+        return 1
+    fi
+    printf '%s\n' "pre_prove_binding_self_test=PASS green=true prior_checkpoint_mismatch=false fixture_root=$test_root"
+}
+
+if [[ $# -gt 0 ]]; then
+    if [[ "$1" == "--self-test" && $# == 1 ]]; then
+        run_preprove_self_test
+        exit 0
+    fi
+    printf '%s\n' "usage: $0 [--self-test]" >&2
+    exit 2
+fi
+
 bound_and() {
     local path="$1"
     local filter="$2"
     [[ -n "$candidate_revision" && -n "$fresh_root" && -n "$fresh_run" ]] || return 1
     [[ -r "$path" ]] || return 1
     jq -e --arg candidate "$candidate_revision" --arg root "$fresh_root" --arg run "$fresh_run" '
-        (.bindings // .binding // null) as $binding
-        | ($binding | type == "object")
-        and ($binding.candidate_revision == $candidate)
+        . as $raw
+        | (if ($raw | type) == "object" then $raw else {} end) as $o
+        | (if ($o.bindings | type) == "object" then $o.bindings elif ($o.binding | type) == "object" then $o.binding else {} end) as $binding
+        | ($binding.candidate_revision == $candidate)
         and ($binding.rehearsal_root == $root)
         and ($binding.run_id == $run)
     ' "$path" >/dev/null 2>&1 || return 1
     jq -e "$filter" "$path" >/dev/null 2>&1
 }
 
-bool=false
 refire_prepared_ok=false
 refire_probe_ok=false
 refire_fired_ok=false
@@ -83,20 +191,18 @@ stakehub_inventory_ok=false
 stakehub_official_absent_ok=false
 candidate_provenance_ok=false
 no_live_chain_ok=false
+preprove_bindings_ok=false
 
 candidate_revision=""
 if [[ -r "$candidate_proxy" ]]; then
-    candidate_revision=$(jq -r '.candidate.revision_observed // .candidate_revision // empty' "$candidate_proxy")
+    candidate_revision=$(jq -r 'if (.candidate | type) == "object" then .candidate.revision_observed // empty else .candidate_revision // empty end' "$candidate_proxy")
 fi
 if [[ -z "$candidate_revision" && -r "$preflight" ]]; then
-    candidate_revision=$(jq -r '.candidate_revision // empty' "$preflight")
+    candidate_revision=$(jq -r '.aggregation.current_binding.candidate_revision // empty' "$preflight")
 fi
-fresh_root=""
-fresh_run=""
-if [[ -r "$fresh_fleet" ]] && jq -e . "$fresh_fleet" >/dev/null 2>&1; then
-    fresh_root=$(jq -r '.bindings.rehearsal_root // .binding.rehearsal_root // .rehearsal_root // .preserved_root.path // empty' "$fresh_fleet")
-    fresh_run=$(jq -r '.bindings.run_id // .binding.run_id // .run_id // .setup_run_id // empty' "$fresh_fleet")
-fi
+fresh_binding=$(binding_json "$fresh_fleet")
+fresh_root=$(jq -r '.rehearsal_root // empty' <<<"$fresh_binding")
+fresh_run=$(jq -r '.run_id // empty' <<<"$fresh_binding")
 
 if json_true "$refire_prepared" '.prepared == true and (.run_id | type == "string" and length > 0)'; then
     refire_prepared_ok=true
@@ -121,8 +227,7 @@ fi
 if bound_and "$b_stage" '.verifier_acceptance.ready == true and (.verifier_acceptance.accepted == true or .verifier_acceptance.outcome == "accepted")'; then
     b_verifier_acceptance_ok=true
 fi
-
-if json_true "$fresh_fleet" '.construction_ready == true and (.checks.fleet_12_live_six_equal == true or .checks.construction_fleet_12_live_six_equal == true) and (.bindings.candidate_revision | type == "string" and length > 0) and (.bindings.rehearsal_root | type == "string" and length > 0) and (.bindings.run_id | type == "string" and length > 0)'; then
+if json_true "$fresh_fleet" '.construction_ready == true and (.checks.fleet_12_live_six_equal == true or .checks.construction_fleet_12_live_six_equal == true or .checks.six_way_equal == true) and (.bindings.candidate_revision | type == "string" and length > 0) and (.bindings.rehearsal_root | type == "string" and length > 0) and (.bindings.run_id | type == "string" and length > 0)'; then
     fresh_fleet_ok=true
 fi
 if bound_and "$route_stage" '.accepted == true and .activation_checks.route_live == true and .activation_checks.six_way_convergence == true'; then
@@ -142,6 +247,9 @@ if bound_and "$d_runner" '.dry_run == true and .checks.steps_1_6_9_10_dry_run ==
 fi
 if bound_and "$async_proof_slot" '.checks.steps_7_8_async_proof_slot == true and .contract.mode == "asynchronous_content_addressed_artifact_consumption" and .contract.inline_proving_forbidden == true'; then
     async_proof_slot_ok=true
+fi
+if preprove_ok_for_file "$preprove_binding"; then
+    preprove_bindings_ok=true
 fi
 
 proof_contract='null'
@@ -168,6 +276,46 @@ if bound_and "$d_runner" '.checks.no_live_chain == true and .checks.loopback_onl
     no_live_chain_ok=true
 fi
 
+check_records=$(jq -cn \
+    --argjson refire_prepared_ok "$refire_prepared_ok" \
+    --argjson refire_probe_ok "$refire_probe_ok" \
+    --argjson refire_fired_ok "$refire_fired_ok" \
+    --argjson refire_unit_or_terminal_ok "$refire_unit_or_terminal_ok" \
+    --argjson b_contract_stage_ok "$b_contract_stage_ok" \
+    --argjson b_verifier_acceptance_ok "$b_verifier_acceptance_ok" \
+    --argjson fresh_fleet_ok "$fresh_fleet_ok" \
+    --argjson fresh_route_ok "$fresh_route_ok" \
+    --argjson candidate_proxy_ok "$candidate_proxy_ok" \
+    --argjson dependencies_ok "$dependencies_ok" \
+    --argjson pftl_ok "$pftl_ok" \
+    --argjson d_runner_dry_ok "$d_runner_dry_ok" \
+    --argjson async_proof_slot_ok "$async_proof_slot_ok" \
+    --argjson stakehub_inventory_ok "$stakehub_inventory_ok" \
+    --argjson stakehub_official_absent_ok "$stakehub_official_absent_ok" \
+    --argjson candidate_provenance_ok "$candidate_provenance_ok" \
+    --argjson no_live_chain_ok "$no_live_chain_ok" \
+    --argjson preprove_bindings_ok "$preprove_bindings_ok" \
+    '[
+        {id: "docker_refire_prepared", ok: $refire_prepared_ok, input: "refire_prepared"},
+        {id: "docker_refire_probe", ok: $refire_probe_ok, input: "refire_probe"},
+        {id: "docker_refire_fired", ok: $refire_fired_ok, input: "refire_fired"},
+        {id: "docker_refire_unit_live_or_terminal_proof_success", ok: $refire_unit_or_terminal_ok, input: "refire_fired"},
+        {id: "b_full_real_contract_stage_green", ok: $b_contract_stage_ok, input: "b_contract_stage"},
+        {id: "b_real_verifier_acceptance", ok: $b_verifier_acceptance_ok, input: "b_contract_stage"},
+        {id: "fresh_fleet_12_of_12_six_equal", ok: $fresh_fleet_ok, input: "fresh_fleet"},
+        {id: "fresh_route_live", ok: $fresh_route_ok, input: "fresh_route"},
+        {id: "candidate_proxy_ready", ok: $candidate_proxy_ok, input: "candidate_proxy"},
+        {id: "private_dependencies_ready", ok: $dependencies_ok, input: "dependencies"},
+        {id: "pftl_private_swap_ready", ok: $pftl_ok, input: "pftl"},
+        {id: "d_runner_steps_1_6_9_10_dry_run", ok: $d_runner_dry_ok, input: "d_runner"},
+        {id: "async_proof_slot_steps_7_8", ok: $async_proof_slot_ok, input: "async_proof_slot"},
+        {id: "stakehub_restart_inventory_present", ok: $stakehub_inventory_ok, input: "stakehub_restart_inventory"},
+        {id: "stakehub_official_absent", ok: $stakehub_official_absent_ok, input: "stakehub_official_scan"},
+        {id: "candidate_revision_and_provenance", ok: $candidate_provenance_ok, input: "candidate_proxy"},
+        {id: "no_live_chain_dependency", ok: $no_live_chain_ok, input: "d_runner"},
+        {id: "pre_prove_all_35_bindings", ok: $preprove_bindings_ok, input: "pre_prove_binding"}
+    ]')
+
 jq -n \
     --arg candidate_revision "$candidate_revision" \
     --arg fresh_root "$fresh_root" \
@@ -186,27 +334,12 @@ jq -n \
     --argjson d_runner_input "$(input_summary "$d_runner")" \
     --argjson async_slot_input "$(input_summary "$async_proof_slot")" \
     --argjson stakehub_input "$(input_summary "$stakehub_inventory")" \
+    --argjson preprove_input "$(input_summary "$preprove_binding")" \
     --argjson stakehub_scan_ok "$stakehub_scan_ok" \
     --argjson stakehub_active_units "$stakehub_active_units" \
-    --argjson refire_prepared_ok "$refire_prepared_ok" \
-    --argjson refire_probe_ok "$refire_probe_ok" \
-    --argjson refire_fired_ok "$refire_fired_ok" \
-    --argjson refire_unit_or_terminal_ok "$refire_unit_or_terminal_ok" \
-    --argjson b_contract_stage_ok "$b_contract_stage_ok" \
-    --argjson b_verifier_acceptance_ok "$b_verifier_acceptance_ok" \
-    --argjson fresh_fleet_ok "$fresh_fleet_ok" \
-    --argjson fresh_route_ok "$fresh_route_ok" \
-    --argjson candidate_proxy_ok "$candidate_proxy_ok" \
-    --argjson dependencies_ok "$dependencies_ok" \
-    --argjson pftl_ok "$pftl_ok" \
-    --argjson d_runner_dry_ok "$d_runner_dry_ok" \
-    --argjson async_proof_slot_ok "$async_proof_slot_ok" \
-    --argjson stakehub_inventory_ok "$stakehub_inventory_ok" \
-    --argjson stakehub_official_absent_ok "$stakehub_official_absent_ok" \
-    --argjson candidate_provenance_ok "$candidate_provenance_ok" \
-    --argjson no_live_chain_ok "$no_live_chain_ok" \
+    --argjson check_records "$check_records" \
     '{
-        schema: "postfiat.a666.r4.journey-fire-control-preflight.v2",
+        schema: "postfiat.a666.r4.journey-fire-control-preflight.v3",
         aggregation: {
             mode: "fail_closed_current_evidence",
             binding_contract: {
@@ -233,37 +366,20 @@ jq -n \
             d_runner: $d_runner_input,
             async_proof_slot: $async_slot_input,
             stakehub_restart_inventory: $stakehub_input,
+            pre_prove_binding: $preprove_input,
             stakehub_official_scan: {
                 command_succeeded: $stakehub_scan_ok,
                 active_units: $stakehub_active_units
             }
         },
         proof_artifact_consumption_contract: $proof_contract,
-        checks: {
-            docker_refire_prepared: $refire_prepared_ok,
-            docker_refire_probe: $refire_probe_ok,
-            docker_refire_fired: $refire_fired_ok,
-            docker_refire_unit_live_or_terminal_proof_success: $refire_unit_or_terminal_ok,
-            b_full_real_contract_stage_green: $b_contract_stage_ok,
-            b_real_verifier_acceptance: $b_verifier_acceptance_ok,
-            fresh_fleet_12_of_12_six_equal: $fresh_fleet_ok,
-            fresh_route_live: $fresh_route_ok,
-            candidate_proxy_ready: $candidate_proxy_ok,
-            private_dependencies_ready: $dependencies_ok,
-            pftl_private_swap_ready: $pftl_ok,
-            d_runner_steps_1_6_9_10_dry_run: $d_runner_dry_ok,
-            async_proof_slot_steps_7_8: $async_proof_slot_ok,
-            stakehub_restart_inventory_present: $stakehub_inventory_ok,
-            stakehub_official_absent: $stakehub_official_absent_ok,
-            candidate_revision_and_provenance: $candidate_provenance_ok,
-            no_live_chain_dependency: $no_live_chain_ok
-        }
+        checks: $check_records
     }
     | .checks as $checks
     | . + {
         check_count: ($checks | length),
-        blocker_names: [$checks | to_entries[] | select(.value | not) | .key],
-        ready_to_fire: ([$checks[]] | all),
-        ready_to_fire_computation: "all values in checks must be true",
+        blocker_names: [$checks[] | select(.ok | not) | .id],
+        ready_to_fire: ([$checks[].ok] | all),
+        ready_to_fire_computation: "all checks[].ok values must be true",
         mutations_executed: false
     }'

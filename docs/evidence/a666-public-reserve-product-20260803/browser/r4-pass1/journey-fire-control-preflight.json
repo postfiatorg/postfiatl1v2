@@ -1,5 +1,5 @@
 {
-  "schema": "postfiat.a666.r4.journey-fire-control-preflight.v2",
+  "schema": "postfiat.a666.r4.journey-fire-control-preflight.v3",
   "aggregation": {
     "mode": "fail_closed_current_evidence",
     "binding_contract": {
@@ -43,22 +43,22 @@
     },
     "refire_fired": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/receipt-verifier-spike/docker-refire-fired.json",
-      "exists": false,
-      "valid_json": false,
-      "observed_status": "absent",
-      "observed_reason": "evidence_absent",
+      "exists": true,
+      "valid_json": true,
+      "observed_status": null,
+      "observed_reason": null,
       "bindings": {
         "candidate_revision": null,
         "rehearsal_root": null,
-        "run_id": null
+        "run_id": "a666-r4-receipt-prover-docker-refire-20260804-v2"
       }
     },
     "b_contract_stage": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/ethereum-contract-stage.json",
       "exists": true,
       "valid_json": true,
-      "observed_status": "named_technical_wall",
-      "observed_reason": "sp1_version_readback_is_json_quoted_v6_1_0_but_script_compares_unquoted_string",
+      "observed_status": null,
+      "observed_reason": null,
       "bindings": {
         "candidate_revision": null,
         "rehearsal_root": null,
@@ -69,11 +69,11 @@
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-fleet.json",
       "exists": true,
       "valid_json": true,
-      "observed_status": null,
-      "observed_reason": "preserved_root_not_post_rollback_height_827",
+      "observed_status": true,
+      "observed_reason": null,
       "bindings": {
         "candidate_revision": null,
-        "rehearsal_root": "/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959",
+        "rehearsal_root": "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349",
         "run_id": null
       }
     },
@@ -173,6 +173,18 @@
         "run_id": null
       }
     },
+    "pre_prove_binding": {
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/pre-prove-binding-check.json",
+      "exists": false,
+      "valid_json": false,
+      "observed_status": "absent",
+      "observed_reason": "evidence_absent",
+      "bindings": {
+        "candidate_revision": null,
+        "rehearsal_root": null,
+        "run_id": null
+      }
+    },
     "stakehub_official_scan": {
       "command_succeeded": true,
       "active_units": [
@@ -224,28 +236,100 @@
     "restart_contract": "proxy restart and browser reload resume polling the same durable job id and never launch or duplicate proof generation",
     "status": "binding design; implementation readiness remains false"
   },
-  "checks": {
-    "docker_refire_prepared": true,
-    "docker_refire_probe": true,
-    "docker_refire_fired": false,
-    "docker_refire_unit_live_or_terminal_proof_success": false,
-    "b_full_real_contract_stage_green": false,
-    "b_real_verifier_acceptance": false,
-    "fresh_fleet_12_of_12_six_equal": false,
-    "fresh_route_live": false,
-    "candidate_proxy_ready": false,
-    "private_dependencies_ready": false,
-    "pftl_private_swap_ready": false,
-    "d_runner_steps_1_6_9_10_dry_run": false,
-    "async_proof_slot_steps_7_8": false,
-    "stakehub_restart_inventory_present": false,
-    "stakehub_official_absent": false,
-    "candidate_revision_and_provenance": false,
-    "no_live_chain_dependency": false
-  },
-  "check_count": 17,
+  "checks": [
+    {
+      "id": "docker_refire_prepared",
+      "ok": true,
+      "input": "refire_prepared"
+    },
+    {
+      "id": "docker_refire_probe",
+      "ok": true,
+      "input": "refire_probe"
+    },
+    {
+      "id": "docker_refire_fired",
+      "ok": true,
+      "input": "refire_fired"
+    },
+    {
+      "id": "docker_refire_unit_live_or_terminal_proof_success",
+      "ok": false,
+      "input": "refire_fired"
+    },
+    {
+      "id": "b_full_real_contract_stage_green",
+      "ok": false,
+      "input": "b_contract_stage"
+    },
+    {
+      "id": "b_real_verifier_acceptance",
+      "ok": false,
+      "input": "b_contract_stage"
+    },
+    {
+      "id": "fresh_fleet_12_of_12_six_equal",
+      "ok": false,
+      "input": "fresh_fleet"
+    },
+    {
+      "id": "fresh_route_live",
+      "ok": false,
+      "input": "fresh_route"
+    },
+    {
+      "id": "candidate_proxy_ready",
+      "ok": false,
+      "input": "candidate_proxy"
+    },
+    {
+      "id": "private_dependencies_ready",
+      "ok": false,
+      "input": "dependencies"
+    },
+    {
+      "id": "pftl_private_swap_ready",
+      "ok": false,
+      "input": "pftl"
+    },
+    {
+      "id": "d_runner_steps_1_6_9_10_dry_run",
+      "ok": false,
+      "input": "d_runner"
+    },
+    {
+      "id": "async_proof_slot_steps_7_8",
+      "ok": false,
+      "input": "async_proof_slot"
+    },
+    {
+      "id": "stakehub_restart_inventory_present",
+      "ok": false,
+      "input": "stakehub_restart_inventory"
+    },
+    {
+      "id": "stakehub_official_absent",
+      "ok": false,
+      "input": "stakehub_official_scan"
+    },
+    {
+      "id": "candidate_revision_and_provenance",
+      "ok": false,
+      "input": "candidate_proxy"
+    },
+    {
+      "id": "no_live_chain_dependency",
+      "ok": false,
+      "input": "d_runner"
+    },
+    {
+      "id": "pre_prove_all_35_bindings",
+      "ok": false,
+      "input": "pre_prove_binding"
+    }
+  ],
+  "check_count": 18,
   "blocker_names": [
-    "docker_refire_fired",
     "docker_refire_unit_live_or_terminal_proof_success",
     "b_full_real_contract_stage_green",
     "b_real_verifier_acceptance",
@@ -259,9 +343,10 @@
     "stakehub_restart_inventory_present",
     "stakehub_official_absent",
     "candidate_revision_and_provenance",
-    "no_live_chain_dependency"
+    "no_live_chain_dependency",
+    "pre_prove_all_35_bindings"
   ],
   "ready_to_fire": false,
-  "ready_to_fire_computation": "all values in checks must be true",
+  "ready_to_fire_computation": "all checks[].ok values must be true",
   "mutations_executed": false
 }
