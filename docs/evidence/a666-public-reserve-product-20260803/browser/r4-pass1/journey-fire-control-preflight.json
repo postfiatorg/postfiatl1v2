@@ -292,7 +292,7 @@
       }
     },
     "restart_watcher_validation": {
-      "ok": false
+      "ok": true
     },
     "no_live_validation": {
       "ok": true
@@ -325,7 +325,7 @@
       }
     },
     "stakehub_absence_validation": {
-      "ok": true
+      "ok": false
     },
     "pre_prove_binding": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/pre-prove-binding-check.json",
@@ -366,7 +366,9 @@
     },
     "stakehub_official_scan": {
       "command_succeeded": true,
-      "active_units": []
+      "active_units": [
+        "stakehub-private-swap-dashboard.service"
+      ]
     }
   },
   "proof_artifact_consumption_contract": {
@@ -414,7 +416,7 @@
     "status": "binding design; implementation readiness remains false"
   },
   "official_invocation_count": 0,
-  "official_run_id": "a666-r4-official-journey-pass1-20260804-v1",
+  "official_run_id": "a666-r4-official-journey-pass1-20260804-v2",
   "checks": [
     {
       "id": "docker_refire_prepared",
@@ -458,7 +460,7 @@
     },
     {
       "id": "candidate_proxy_ready",
-      "ok": false,
+      "ok": true,
       "input": "candidate_proxy"
     },
     {
@@ -488,12 +490,12 @@
     },
     {
       "id": "stakehub_official_absent",
-      "ok": true,
+      "ok": false,
       "input": "stakehub_official_scan"
     },
     {
       "id": "candidate_revision_and_provenance",
-      "ok": false,
+      "ok": true,
       "input": "candidate_proxy"
     },
     {
@@ -509,8 +511,7 @@
   ],
   "check_count": 18,
   "blocker_names": [
-    "candidate_proxy_ready",
-    "candidate_revision_and_provenance"
+    "stakehub_official_absent"
   ],
   "ready_to_fire": false,
   "ready_to_fire_computation": "all checks[].ok values must be true",
