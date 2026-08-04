@@ -7,7 +7,7 @@ CANDIDATE_REVISION="39f7fae3191aa34c376ae1657650a9ec2444f421"
 PROXY_TREE_HASH="5919ae695d910cfbe3b41c9783ef79354784b4ee"
 SERVER_SHA256="6aebb3576bde511ce99f8b69a36fe502d3ddffad23275c5761f380fd3675bf41"
 LOCK_SHA256="6ed3d70403dabf69a3b4dde632c6a2926bcb554e4b774d8c1336689fc1e48c3a"
-AUTHORIZED_RUN_ID="a666-r4-official-journey-pass1-20260804-v2"
+AUTHORIZED_RUN_ID="a666-r4-official-journey-pass1-20260804-v3"
 RUN_ID="${POSTFIAT_R4_PROXY_RESTART_RUN_ID:-$AUTHORIZED_RUN_ID}"
 NONCE="${POSTFIAT_R4_PROXY_RESTART_NONCE:-}"
 READY="$RUN_DIR/proxy.ready.json"
@@ -144,6 +144,7 @@ self_test() {
   run="$AUTHORIZED_RUN_ID"; nonce=0123456789abcdef; start="$(date +%s)"
   authorized_run_id "$run"
   ! authorized_run_id "a666-r4-official-journey-pass1-20260804-v1"
+  ! authorized_run_id "a666-r4-official-journey-pass1-20260804-v2"
   ! authorized_run_id ""
   ! authorized_run_id "a666-r4-official-journey-pass1-unknown"
   request="$root/restart-$run-$nonce.request"; response="$root/response.json"
@@ -164,7 +165,7 @@ self_test() {
   ! jq -e --arg expected "$CANDIDATE_REVISION" '.candidate_revision==$expected' "$root/wrong-candidate.json" >/dev/null
   kill -TERM "$new"; wait "$new" 2>/dev/null || true
   rm -rf "$root"
-  echo 'proxy_restart_watcher_self_test=ok vectors=8 valid_fake_restart=true exact_v2_contract_accepted=true v1_rejected_no_mutation=true missing_run_id_rejected=true unknown_run_id_rejected=true wrong_candidate_rejected=true stale_rejected=true duplicate_rejected=true'
+  echo 'proxy_restart_watcher_self_test=ok vectors=9 valid_fake_restart=true exact_v3_contract_accepted=true v1_rejected_no_mutation=true v2_rejected_no_mutation=true missing_run_id_rejected=true unknown_run_id_rejected=true wrong_candidate_rejected=true stale_rejected=true duplicate_rejected=true one_request_one_restart=true'
 }
 
 watch() {
