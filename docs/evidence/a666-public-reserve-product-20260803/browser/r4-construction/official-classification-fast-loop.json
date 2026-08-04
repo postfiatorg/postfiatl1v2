@@ -1,0 +1,62 @@
+{
+  "schema": "postfiat.a666.r4.official-classification-fast-loop.v1",
+  "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+  "runner_path": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+  "root_cause": {
+    "failure_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/official-journey-pass1-failure.json",
+    "verdict_observed": "fire_refused_precondition",
+    "old_predicate": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:638 assert.equal(runClassification, 'construction', 'this increment cannot produce an official pass')",
+    "explanation": "a single construction-only classification assertion refused the official classification before browser launch regardless of input completeness, so pass #1 could never reach ready_to_launch even with computed-green fire control"
+  },
+  "new_computed_contract": {
+    "resolveRunContract": "two-mode classification: preflight branch (POSTFIAT_R4_PREFLIGHT_ONLY=1) requires construction; full branch requires explicit POSTFIAT_R4_RUN_CLASSIFICATION=official; every other combination throws before launch",
+    "officialLaunchContract": "pure deterministic complete-input gate evaluated before any browser launch; requires fire-control/setup/deployment paths plus pinned sha256 shape, loopback wallet/proxy origins, bounded async budget (<= 12h), distinct export and return artifact slot paths, proxy restart request path, proxy PID/ready source path, report path, and fireControlReadyToFire === true; official branch additionally asserts the report path does not already exist and re-verifies manifest hash equality and loopback manifests",
+    "async_slot_split": "POSTFIAT_R4_ASYNC_PROOF_SLOT remains required only in the preflight branch; official execution never consumes it and relies on the distinct accepted export/return artifact slots"
+  },
+  "vectors": {
+    "negative_missing_input": {
+      "test": "A666 R4 official launch contract refuses with one required input missing (no browser, no mutation)",
+      "result": "pass",
+      "observed": "returnSlotPath removed -> ready_to_launch=false, missing_inputs=[returnSlotPath]; fireControlReadyToFire=false -> ready_to_launch=false, failed_checks=[fire_control_ready_to_fire]",
+      "browser_launched": false,
+      "business_mutations": 0
+    },
+    "negative_mode_mismatch": {
+      "test": "A666 R4 two-mode classification contract refuses mismatched and unknown modes",
+      "result": "pass",
+      "observed": "preflight+official, full+construction, and unknown classifications all refuse before launch"
+    },
+    "positive_complete_inputs": {
+      "test": "A666 R4 official launch contract accepts a complete synthetic input map (ready_to_launch, no Chromium)",
+      "result": "pass",
+      "observed": "ready_to_launch=true, missing_inputs=[], failed_checks=[]; no Chromium launched"
+    },
+    "construction_preflight_regression": {
+      "command": "POSTFIAT_R4_PREFLIGHT_ONLY=1 npm run test:r4-construction (named manifests, pinned hashes, accepted export/async slots)",
+      "exit_code": 0,
+      "matched_tests": 4,
+      "passed_tests": 4,
+      "failed_tests": 0,
+      "computed_checks": {
+        "steps_1_6_9_10_dry_run": true,
+        "async_proof_slot_steps_7_8": true,
+        "loopback_only": true,
+        "no_live_chain": true,
+        "zero_business_mutations": true
+      }
+    }
+  },
+  "syntax": {
+    "command": "node --check wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+    "exit_code": 0
+  },
+  "official_journey_invocations": 0,
+  "browser_launch_count": 0,
+  "business_operations": 0,
+  "business_mutations": 0,
+  "official_pass": false,
+  "stakehub_actions": 0,
+  "live_chain": false,
+  "service_mutations": 0,
+  "credentials_included": false
+}

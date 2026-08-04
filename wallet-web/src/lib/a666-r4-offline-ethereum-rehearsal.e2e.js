@@ -182,6 +182,67 @@ function loopbackEndpointsObservation(label, value) {
   }
 }
 
+function resolveRunContract(preflightOnly, classification) {
+  // Two-mode classification contract. The preflight branch accepts only
+  // construction; the full branch accepts only an explicit official
+  // classification. Every other combination refuses before any browser
+  // launch or business mutation.
+  if (preflightOnly) {
+    assert.equal(classification, 'construction',
+      'preflight-only mode requires construction classification');
+    return { mode: 'preflight_only', classification };
+  }
+  assert.equal(classification, 'official',
+    'full execution requires explicit official classification (POSTFIAT_R4_RUN_CLASSIFICATION=official)');
+  return { mode: 'official', classification };
+}
+
+function loopbackHref(value) {
+  try {
+    return ['127.0.0.1', 'localhost', '::1'].includes(new URL(String(value)).hostname);
+  } catch {
+    return false;
+  }
+}
+
+function officialLaunchContract(inputs) {
+  // Computed complete-input contract for official mode. Pure and
+  // deterministic: it inspects only the supplied input map, launches no
+  // browser, and issues no business mutation. Every official input must be
+  // present and well-shaped; nothing is inferred and no preflight-only
+  // default is reused.
+  const requiredInputs = [
+    'fireControlPath', 'fireControlSha256',
+    'setupPath', 'setupSha256',
+    'deploymentPath', 'deploymentSha256',
+    'walletOrigin', 'proxyOrigin', 'asyncMaxWaitMs',
+    'exportSlotPath', 'returnSlotPath',
+    'proxyRestartPath', 'proxyPidPath', 'reportPath',
+    'fireControlReadyToFire',
+  ];
+  const missingInputs = requiredInputs
+    .filter(name => inputs[name] === undefined || inputs[name] === null || inputs[name] === '');
+  const checks = {
+    fire_control_ready_to_fire: inputs.fireControlReadyToFire === true,
+    fire_control_hash_pinned: /^[0-9a-f]{64}$/.test(String(inputs.fireControlSha256 || '')),
+    setup_hash_pinned: /^[0-9a-f]{64}$/.test(String(inputs.setupSha256 || '')),
+    deployment_hash_pinned: /^[0-9a-f]{64}$/.test(String(inputs.deploymentSha256 || '')),
+    wallet_origin_loopback: loopbackHref(inputs.walletOrigin),
+    proxy_origin_loopback: loopbackHref(inputs.proxyOrigin),
+    async_budget_bounded: Number.isSafeInteger(inputs.asyncMaxWaitMs)
+      && inputs.asyncMaxWaitMs > 0 && inputs.asyncMaxWaitMs <= MAX_ASYNC_WAIT_MS,
+    distinct_artifact_slots: Boolean(inputs.exportSlotPath)
+      && Boolean(inputs.returnSlotPath)
+      && inputs.exportSlotPath !== inputs.returnSlotPath,
+  };
+  const failedChecks = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
+  return {
+    ready_to_launch: missingInputs.length === 0 && failedChecks.length === 0,
+    missing_inputs: missingInputs,
+    failed_checks: failedChecks,
+  };
+}
+
 function fallbackFields(label, value, path = label, output = []) {
   if (Array.isArray(value)) {
     value.forEach((item, index) => fallbackFields(label, item, `${path}[${index}]`, output));
@@ -635,7 +696,11 @@ test('A666 R4 offline Ethereum rehearsal drives the production rendered wallet j
   const proxyPidPath = requiredPath('POSTFIAT_R4_PROXY_PID_FILE');
   const reportPath = requiredPath('POSTFIAT_R4_JOURNEY_REPORT');
   const runClassification = String(process.env.POSTFIAT_R4_RUN_CLASSIFICATION || 'construction');
-  assert.equal(runClassification, 'construction', 'this increment cannot produce an official pass');
+  // Two-mode contract: preflight accepts only construction; full execution
+  // accepts only official. POSTFIAT_R4_ASYNC_PROOF_SLOT stays preflight-only;
+  // official execution consumes the distinct export/return artifact slots and
+  // never the async proof slot.
+  const runContract = resolveRunContract(preflightOnly, runClassification);
 
   const [fireControl, setup, deployment, productionGraph] = await Promise.all([
     readJson(fireControlPath, 'fire-control manifest'),
@@ -655,6 +720,28 @@ test('A666 R4 offline Ethereum rehearsal drives the production rendered wallet j
     });
     return;
   }
+  assert.equal(runContract.mode, 'official');
+  const launchContract = officialLaunchContract({
+    fireControlPath,
+    fireControlSha256: String(process.env.POSTFIAT_R4_FIRE_CONTROL_MANIFEST_SHA256 || '').trim(),
+    setupPath,
+    setupSha256: String(process.env.POSTFIAT_R4_SETUP_MANIFEST_SHA256 || '').trim(),
+    deploymentPath,
+    deploymentSha256: String(process.env.POSTFIAT_R4_DEPLOYMENT_MANIFEST_SHA256 || '').trim(),
+    walletOrigin: origin.href,
+    proxyOrigin: proxyOrigin.href,
+    asyncMaxWaitMs: asyncBudgetMs,
+    exportSlotPath,
+    returnSlotPath,
+    proxyRestartPath,
+    proxyPidPath,
+    reportPath,
+    fireControlReadyToFire: fireControl.ready_to_fire,
+  });
+  assert.ok(launchContract.ready_to_launch,
+    `official launch contract refused before browser launch: ${JSON.stringify(launchContract)}`);
+  const reportAlreadyExists = await stat(reportPath).then(() => true).catch(() => false);
+  assert.equal(reportAlreadyExists, false, 'official report path must be unique');
   assertLoopbackManifest('setup manifest', setup);
   assertLoopbackManifest('deployment manifest', deployment);
   assert.equal(fireControl.ready_to_fire, true, 'fire-control must be computed GREEN before execution');
@@ -869,4 +956,50 @@ test('A666 R4 offline Ethereum rehearsal drives the production rendered wallet j
   } finally {
     await context.close();
   }
+});
+
+function syntheticOfficialInputs() {
+  return {
+    fireControlPath: '/synthetic/fire-control.json',
+    fireControlSha256: 'a'.repeat(64),
+    setupPath: '/synthetic/setup.json',
+    setupSha256: 'b'.repeat(64),
+    deploymentPath: '/synthetic/deployment.json',
+    deploymentSha256: 'c'.repeat(64),
+    walletOrigin: 'http://127.0.0.1:8080/',
+    proxyOrigin: 'http://127.0.0.1:31021/',
+    asyncMaxWaitMs: 3_600_000,
+    exportSlotPath: '/synthetic/export-artifact-slot.json',
+    returnSlotPath: '/synthetic/return-artifact-slot.json',
+    proxyRestartPath: '/synthetic/proxy.restart-request',
+    proxyPidPath: '/synthetic/proxy.ready.json',
+    reportPath: '/synthetic/official-journey-report.json',
+    fireControlReadyToFire: true,
+  };
+}
+
+test('A666 R4 two-mode classification contract refuses mismatched and unknown modes', () => {
+  assert.throws(() => resolveRunContract(true, 'official'), /preflight-only mode requires construction classification/);
+  assert.throws(() => resolveRunContract(false, 'construction'), /full execution requires explicit official classification/);
+  assert.throws(() => resolveRunContract(false, 'bogus'), /full execution requires explicit official classification/);
+  assert.throws(() => resolveRunContract(true, 'bogus'), /preflight-only mode requires construction classification/);
+  assert.deepEqual(resolveRunContract(true, 'construction'), { mode: 'preflight_only', classification: 'construction' });
+  assert.deepEqual(resolveRunContract(false, 'official'), { mode: 'official', classification: 'official' });
+});
+
+test('A666 R4 official launch contract refuses with one required input missing (no browser, no mutation)', () => {
+  const inputs = syntheticOfficialInputs();
+  delete inputs.returnSlotPath;
+  const contract = officialLaunchContract(inputs);
+  assert.equal(contract.ready_to_launch, false);
+  assert.deepEqual(contract.missing_inputs, ['returnSlotPath']);
+  const unready = { ...syntheticOfficialInputs(), fireControlReadyToFire: false };
+  const refused = officialLaunchContract(unready);
+  assert.equal(refused.ready_to_launch, false);
+  assert.deepEqual(refused.failed_checks, ['fire_control_ready_to_fire']);
+});
+
+test('A666 R4 official launch contract accepts a complete synthetic input map (ready_to_launch, no Chromium)', () => {
+  const contract = officialLaunchContract(syntheticOfficialInputs());
+  assert.deepEqual(contract, { ready_to_launch: true, missing_inputs: [], failed_checks: [] });
 });
