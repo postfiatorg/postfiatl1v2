@@ -314,8 +314,292 @@ PY
     trap - ERR
     echo "RETURN IMPORT GREEN tx_id=$tx_id end_height=$EXPECTED_HEIGHT certified_import_count=1"
     ;;
+  destination-consume-existing-tx)
+    CONSUME_TX=0x66934513e535bd6636de30cc05447171951322735d46382234886155c77c7894
+    CONSUME_TX_HEX=66934513e535bd6636de30cc05447171951322735d46382234886155c77c7894
+    CONSUME_BLOCK=9
+    PACKET_DIGEST=0x6279f1d8d5674867653d1bb1a51bde557544fd7149dadc7d6ff963c644e05313
+    PACKET_HASH=8503a9734d27652289005a972a9e159bf76d5e6e5d2ee68bcc610272a03ee113b1bfd5bff273a064645c5a932a3f7d59
+    RUNTIME_ROOT="/tmp/a666-r4-destination-consume-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+    mkdir -m 700 "$RUNTIME_ROOT"
+    first_failure="internal_preflight"
+    EXEC_STARTED_MS="$(date +%s%3N)"
+    BLOCKS_MINED=0
+    write_red() {
+      local rc="$1" ended_ms
+      ended_ms="$(date +%s%3N)"
+      jq -n --arg ff "$first_failure" --arg rr "$RUNTIME_ROOT" --argjson rc "$rc" \
+        --argjson ms "$((ended_ms-EXEC_STARTED_MS))" --argjson mined "$BLOCKS_MINED" \
+        '{schema:"postfiat.a666.r4.return-artifact-stage-terminal.v6",outcome:"technical_wall",
+          first_failing_check:$ff,exit_code:$rc,runtime_root:$rr,runtime_preserved:true,runtime_ms:$ms,
+          stop_policy:"STOP-no-retry; single certified destination consume failed",
+          transactions:{certified_destination_consume_count:0,certified_import_count:0,
+            official_invocation_count:0,empty_loopback_blocks_mined:$mined},
+          environment:{loopback_only:true,live_chain:false,stakehub:false,credentials_accessed:false,business_value:0}}' \
+        > "$terminal"
+      jq -n --arg ev "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/return-stage-terminal.json" --arg ff "$first_failure" \
+        '{schema:"postfiat.a666.r4.return-artifact-slot.v1",status:"failed",accepted:false,
+          failure_code:$ff,failure_evidence:$ev,distinct_from_export_slot:true,
+          certified_destination_consume_count:0,certified_import_count:0,official_invocation_count:0,
+          live_chain:false,custody_material_present:false,stakehub_interaction:false}' > "$slot"
+    }
+    on_error() { local rc="$?"; trap - ERR; write_red "$rc"; echo "DESTINATION CONSUME RED first_failure=$first_failure runtime_root=$RUNTIME_ROOT" >&2; exit "$rc"; }
+    trap on_error ERR
+
+    # 1. The already-landed consumeMintOnly transaction only: assert status 1
+    #    and decode PacketConsumed (log index 1) from its receipt.
+    first_failure="consume_receipt_decode"
+    "$CAST" receipt "$CONSUME_TX" --rpc-url "$RPC" --json > "$RUNTIME_ROOT/consume-receipt.json"
+    python3 - "$RUNTIME_ROOT/consume-receipt.json" "$CONSUME_BLOCK" "$PACKET_DIGEST" "$CONTROLLER" "$AMOUNT" <<'PY'
+import json, sys
+receipt_path, block, digest, controller, amount = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4], int(sys.argv[5])
+r = json.load(open(receipt_path))
+assert r["status"] == "0x1", "consume receipt not successful"
+assert int(r["blockNumber"], 16) == block, "consume block must be 9"
+logs = r["logs"]
+assert len(logs) == 2, f"expected exactly 2 logs, observed {len(logs)}"
+event = logs[1]
+assert event["address"].lower() == controller.lower(), "PacketConsumed emitter mismatch"
+assert event["topics"][1].lower() == digest.lower(), "packet digest mismatch"
+data = bytes.fromhex(event["data"][2:])
+recipient = "0x" + data[12:32].hex()
+value = int.from_bytes(data[32:64], "big")
+assert recipient == "0x70997970c51812dc3a010c7d01b50e0d17dc79c8", f"recipient {recipient}"
+assert value == amount, f"consumed amount {value}"
+print(f"packet_consumed recipient={recipient} amount={value} log_index=1")
+PY
+
+    # 2. Governed depth: mine only the minimum empty loopback blocks if the
+    #    head is below consume_block + 12.
+    first_failure="confirmation_depth"
+    HEAD_BEFORE="$("$CAST" block-number --rpc-url "$RPC")"
+    REQUIRED=$((CONSUME_BLOCK + 12))
+    if (( HEAD_BEFORE < REQUIRED )); then
+      BLOCKS_MINED=$((REQUIRED - HEAD_BEFORE))
+      "$CAST" rpc anvil_mine "0x$(printf '%x' "$BLOCKS_MINED")" --rpc-url "$RPC" >/dev/null
+    fi
+    HEAD_AFTER="$("$CAST" block-number --rpc-url "$RPC")"
+    (( HEAD_AFTER >= REQUIRED ))
+
+    # 3. Build the consume receipt proof and observe the consume block.
+    first_failure="receipt_proof_build"
+    "$NODE" ethereum-receipt-proof-build --data-dir "$DATA_DIR_V2" --route-id "$ROUTE" \
+      --ethereum-rpc "$RPC" --transaction-hash "$CONSUME_TX" \
+      --proof-file "$RUNTIME_ROOT/consume-receipt-proof.json" \
+      > "$RUNTIME_ROOT/receipt-proof-build.log" 2>&1
+    jq -e '.schema=="postfiat-ethereum-receipt-proof-artifact-v1"
+      and .transaction_hash=="'"$CONSUME_TX"'" and .block_number=='"$CONSUME_BLOCK"'
+      and (.proof.transaction_index)==0' "$RUNTIME_ROOT/consume-receipt-proof.json" >/dev/null
+    PROOF_SHA256="$(sha256sum "$RUNTIME_ROOT/consume-receipt-proof.json" | awk '{print $1}')"
+    first_failure="checkpoint_observe"
+    "$NODE" ethereum-checkpoint-observe --data-dir "$DATA_DIR_V2" --route-id "$ROUTE" \
+      --ethereum-rpc "$RPC" --block-number "$CONSUME_BLOCK" \
+      --checkpoint-file "$RUNTIME_ROOT/checkpoint.json" \
+      > "$RUNTIME_ROOT/checkpoint-observe.log" 2>&1
+    CHECKPOINT_SHA256_NEW="$(sha256sum "$RUNTIME_ROOT/checkpoint.json" | awk '{print $1}')"
+
+    # 4. Six validator votes on the production .validator_id schema + certificate.
+    first_failure="vote_sign"
+    for i in 0 1 2 3 4 5; do
+      "$NODE" ethereum-checkpoint-vote-sign --data-dir "$FLEET/validator-$i" \
+        --checkpoint-file "$RUNTIME_ROOT/checkpoint.json" --ethereum-rpc "$RPC" \
+        --validator "validator-$i" \
+        --validator-key-file "$FLEET/validator-$i/validator-$i.validator_keys.json" \
+        --vote-file "$RUNTIME_ROOT/validator-$i.vote.json" \
+        > "$RUNTIME_ROOT/vote-$i.log" 2>&1
+      jq -e --arg validator "validator-$i" '.validator_id == $validator and (.signature|type)=="array" and (.signature|length)>0' \
+        "$RUNTIME_ROOT/validator-$i.vote.json" >/dev/null
+    done
+    jq -ne '[inputs.validator_id] as $ids | ($ids|length)==6 and ($ids|unique|length)==6' \
+      "$RUNTIME_ROOT"/validator-{0,1,2,3,4,5}.vote.json >/dev/null
+    first_failure="certificate_assemble"
+    "$NODE" ethereum-checkpoint-certificate-assemble --data-dir "$DATA_DIR_V2" \
+      --checkpoint-file "$RUNTIME_ROOT/checkpoint.json" \
+      --vote-files "$RUNTIME_ROOT/validator-0.vote.json,$RUNTIME_ROOT/validator-1.vote.json,$RUNTIME_ROOT/validator-2.vote.json,$RUNTIME_ROOT/validator-3.vote.json,$RUNTIME_ROOT/validator-4.vote.json,$RUNTIME_ROOT/validator-5.vote.json" \
+      --certificate-file "$RUNTIME_ROOT/checkpoint-certificate.json" \
+      > "$RUNTIME_ROOT/certificate-assemble.log" 2>&1
+    jq -e '.checkpoint.block_number=='"$CONSUME_BLOCK"' and .checkpoint.observed_head_number>='"$REQUIRED"'
+      and .checkpoint.ethereum_chain_id==1 and (.votes|length)==6
+      and .checkpoint.minimum_confirmations==12' "$RUNTIME_ROOT/checkpoint-certificate.json" >/dev/null
+    CERT_SHA256_NEW="$(sha256sum "$RUNTIME_ROOT/checkpoint-certificate.json" | awk '{print $1}')"
+
+    # 5. Fleet preflight + before snapshot.
+    first_failure="fleet_preflight"
+    [[ -s "$TOPOLOGY" && -d "$DATA_DIR_V2" && -s "$V2_KEY_FILE" && -s "$RESERVE_KEY_FILE" ]]
+    jq -e '(.peers|length)==6 and all(.peers[]; .host=="127.0.0.1" and (.rpc_port|type)=="number")' "$TOPOLOGY" >/dev/null
+    python3 - "$TOPOLOGY" "$ROUTE" "$RUNTIME_ROOT" <<'PY'
+import json, socket, sys
+topology_path, route, runtime = sys.argv[1], sys.argv[2], sys.argv[3]
+ports = [p["rpc_port"] for p in sorted(json.load(open(topology_path))["peers"], key=lambda x: x["node_id"])]
+def call(port, method, params):
+    req = {"version": "postfiat-local-rpc-v1", "id": method, "method": method, "params": params}
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as s:
+        s.sendall((json.dumps(req) + "\n").encode())
+        return json.loads(s.makefile("rb").readline())["result"]
+status = call(ports[0], "status", {})
+supply = call(ports[0], "navcoin_bridge_supply_status", {"route_id": route})
+assert supply["outstanding_bridge_claims_atoms"] == 1000000, supply
+assert supply["ethereum_spendable_supply_atoms"] == 0, supply
+assert supply["invariant_holds"] is True, supply
+with open(f"{runtime}/before.json", "w") as f:
+    json.dump({"height": status["block_height"], "supply": supply}, f, indent=2)
+print(f"before_height={status['block_height']} outstanding_claims={supply['outstanding_bridge_claims_atoms']}")
+PY
+    BEFORE_HEIGHT="$(jq -r '.height' "$RUNTIME_ROOT/before.json")"
+    EXPECTED_HEIGHT=$((BEFORE_HEIGHT + 1))
+
+    # 6. Build the single destination-consume ops request.
+    first_failure="ops_construction"
+    python3 - "$RUNTIME_ROOT" "$RESERVE_KEY_FILE" "$ROUTE" "$RESERVE" "$PACKET_HASH" \
+      "$CONSUME_TX_HEX" "$CONSUME_BLOCK" "$HEAD_AFTER" <<'PY'
+import json, os, sys
+(runtime, key_file, route, reserve, packet_hash, consume_tx,
+ consumed_height, finalized_height) = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], int(sys.argv[7]), int(sys.argv[8])
+cert = json.load(open(f"{runtime}/checkpoint-certificate.json"))
+artifact = json.load(open(f"{runtime}/consume-receipt-proof.json"))
+operation = {
+    "operation": "pftl_uniswap_destination_consume",
+    "operator": reserve,
+    "route_id": route,
+    "packet_hash": packet_hash,
+    "ethereum_consume_tx_hash": consume_tx,
+    "consumed_height": consumed_height,
+    "finalized_height": finalized_height,
+    "external_event_proof": {
+        "checkpoint_certificate": cert,
+        "receipt_proof": artifact["proof"],
+        "log_index": 1,
+    },
+}
+request = {"schema": "postfiat-certified-asset-ops-request-v1",
+           "operations": [{"label": "r4-path-b-destination-consume", "source": reserve,
+                           "key_file": key_file, "operation": operation, "dependencies": []}]}
+path = f"{runtime}/01-destination-consume.ops.json"
+with open(path, "w") as f:
+    json.dump(request, f, indent=2)
+    f.write("\n")
+os.chmod(path, 0o600)
+print(f"ops_file={path}")
+PY
+
+    # 7. Exactly one certified pftl_uniswap_destination_consume.
+    first_failure="submit_destination_consume"
+    adir="$RUNTIME_ROOT/artifacts-destination-consume"
+    mkdir -p "$adir"
+    "$NODE" pftl-submit-certified-asset-ops \
+      --data-dir "$DATA_DIR_V2" --topology "$TOPOLOGY" \
+      --key-file "$V2_KEY_FILE" --proposal-key-file "$V2_KEY_FILE" \
+      --ops-file "$RUNTIME_ROOT/01-destination-consume.ops.json" --artifact-dir "$adir" \
+      --max-transactions 1 --timeout-ms 90000 --send-retries 2 --retry-backoff-ms 50 \
+      --overwrite \
+      --local-apply-before-certified-send > "$RUNTIME_ROOT/destination-consume.command.log" 2>&1
+    jq -e --argjson h "$EXPECTED_HEIGHT" \
+      '.round_ok==true and .end_height==$h and (.operations[0].tx_id|type)=="string" and (.operations[0].tx_id|length)>0' \
+      "$adir/summary.json" >/dev/null
+    tx_id="$(jq -r '.operations[0].tx_id' "$adir/summary.json")"
+
+    # 8. Six-way convergence, accepted receipts, exact supply deltas with all
+    #    other conservation terms unchanged.
+    first_failure="convergence_destination_consume"
+    python3 - "$TOPOLOGY" "$EXPECTED_HEIGHT" "$tx_id" "$ROUTE" "$AMOUNT" "$RUNTIME_ROOT" <<'PY'
+import json, socket, sys, time
+topology_path, expected, tx_id, route, amount, runtime = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4], int(sys.argv[5]), sys.argv[6]
+ports = [p["rpc_port"] for p in sorted(json.load(open(topology_path))["peers"], key=lambda x: x["node_id"])]
+def call(port, method, params):
+    req = {"version": "postfiat-local-rpc-v1", "id": f"{method}-{port}", "method": method, "params": params}
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as s:
+        s.sendall((json.dumps(req) + "\n").encode())
+        return json.loads(s.makefile("rb").readline())["result"]
+deadline = time.time() + 90
+while True:
+    try:
+        statuses = [call(p, "status", {}) for p in ports]
+        if all(s["block_height"] == expected for s in statuses):
+            break
+    except (OSError, ValueError, KeyError):
+        pass
+    if time.time() >= deadline:
+        raise SystemExit(f"convergence timeout at height {expected}")
+    time.sleep(1)
+tuples = {(s["block_height"], s["block_tip_hash"], s["state_root"]) for s in statuses}
+assert len(tuples) == 1, f"six-way status tuple mismatch: {tuples}"
+for port in ports:
+    rows = [r for r in call(port, "receipts", {"tx_id": tx_id, "limit": 4}) if r.get("tx_id") == tx_id]
+    assert len(rows) == 1 and rows[0].get("accepted") is True and rows[0].get("code") == "accepted", \
+        f"consume receipt not accepted on port {port}: {rows[:1]}"
+before = json.load(open(f"{runtime}/before.json"))["supply"]
+after = call(ports[0], "navcoin_bridge_supply_status", {"route_id": route})
+assert after["outstanding_bridge_claims_atoms"] == before["outstanding_bridge_claims_atoms"] - amount, after
+assert after["ethereum_spendable_supply_atoms"] == before["ethereum_spendable_supply_atoms"] + amount, after
+unchanged = ["authorized_valid_supply_atoms", "live_supply_sum_atoms", "wrapped_exposure_atoms",
+             "committed_wrapped_exposure_atoms", "pftl_spendable_supply_atoms",
+             "pending_return_import_claims_atoms", "settlement_reserve_atoms",
+             "other_registered_venue_supply_atoms", "non_nav_spread_atoms"]
+for field in unchanged:
+    assert after[field] == before[field], f"conservation term {field} changed: {before[field]} -> {after[field]}"
+assert after["invariant_holds"] is True, after
+final = {"height": statuses[0]["block_height"], "tip": statuses[0]["block_tip_hash"],
+         "state_root": statuses[0]["state_root"], "six_way_equal": True}
+with open(f"{runtime}/after.json", "w") as f:
+    json.dump({"final": final, "supply_after": after}, f, indent=2)
+print(f"converged_height={final['height']} conservation=true")
+PY
+
+    # 9. Terminal v6 green + return slot updated (return import still pending).
+    first_failure="evidence_write"
+    ENDED_MS="$(date +%s%3N)"
+    FINAL_TIP="$(jq -r '.final.tip' "$RUNTIME_ROOT/after.json")"
+    FINAL_ROOT="$(jq -r '.final.state_root' "$RUNTIME_ROOT/after.json")"
+    SUMMARY_SHA256="$(sha256sum "$adir/summary.json" | awk '{print $1}')"
+    jq -n \
+      --arg rr "$RUNTIME_ROOT" --arg tx "$tx_id" --argjson ms "$((ENDED_MS-EXEC_STARTED_MS))" \
+      --argjson before_h "$BEFORE_HEIGHT" --argjson final_h "$EXPECTED_HEIGHT" \
+      --arg tip "$FINAL_TIP" --arg root "$FINAL_ROOT" --arg summary_sha "$SUMMARY_SHA256" \
+      --arg proof_sha "$PROOF_SHA256" --arg cp_sha "$CHECKPOINT_SHA256_NEW" --arg cert_sha "$CERT_SHA256_NEW" \
+      --argjson head_before "$HEAD_BEFORE" --argjson head_after "$HEAD_AFTER" --argjson mined "$BLOCKS_MINED" \
+      '{
+        schema: "postfiat.a666.r4.return-artifact-stage-terminal.v6",
+        outcome: "destination_consume_green_return_import_pending",
+        runtime_root: $rr, runtime_preserved: true, runtime_ms: $ms,
+        blocker_resolution_chain: [
+          "v4: checkpoint vote schema assertion field mismatch (.validator vs production .validator_id)",
+          "v5: destination_consume_not_staged_ethereum_spendable_zero (this action closes it)",
+          "v6: destination consume green; certified return import is now viable but not yet invoked"],
+        fast_loop_manifest_note: "official steps 7-8 require certified destination consume before return import (check id: official_steps_7_8_require_certified_destination_consume_before_return_import)",
+        consume_transaction: {hash: "0x66934513e535bd6636de30cc05447171951322735d46382234886155c77c7894",
+          block: 9, status: "0x1", packet_consumed_log_index: 1,
+          packet_digest: "0x6279f1d8d5674867653d1bb1a51bde557544fd7149dadc7d6ff963c644e05313",
+          recipient_decoded_from_log: true, amount_atoms: 1000000},
+        confirmation_depth: {governed_minimum_confirmations: 12, consume_block: 9,
+          head_before: $head_before, head_after: $head_after, empty_loopback_blocks_mined: $mined,
+          live_operation_rule: "live operation inherits a natural approximately 12-block confirmation wait; no block-mining action is used live"},
+        artifact_hashes: {consume_receipt_proof_sha256: $proof_sha, checkpoint_sha256: $cp_sha,
+          checkpoint_certificate_sha256: $cert_sha, round_summary_sha256: $summary_sha},
+        votes: {count: 6, signer_uniqueness: true, schema_field: "validator_id"},
+        certified_destination_consume: {
+          count: 1, tx_id: $tx, before_height: $before_h, end_height: $final_h,
+          receipt_accepted_six_of_six: true,
+          finalized: {height: $final_h, tip: $tip, state_root: $root, six_way_equal: true},
+          deltas: {outstanding_bridge_claims_atoms: "1000000->0",
+            ethereum_spendable_supply_atoms: "0->1000000",
+            other_conservation_terms_unchanged: true, invariant_holds: true}},
+        transactions: {certified_destination_consume_count: 1, certified_import_count: 0,
+          official_invocation_count: 0, upstream_local_anvil_count_unreplayed: 3},
+        environment: {loopback_only: true, live_chain: false, stakehub: false,
+          credentials_accessed: false, business_value: 0}
+      }' > "$terminal"
+    jq -n --arg ev "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/return-stage-terminal.json" \
+      '{schema:"postfiat.a666.r4.return-artifact-slot.v1",status:"failed",accepted:false,
+        failure_code:"return_import_pending_destination_consume_green",failure_evidence:$ev,
+        destination_consume:{certified_count:1,outstanding_bridge_claims_atoms:0,
+          ethereum_spendable_supply_atoms:1000000},
+        certified_import_count:0,official_invocation_count:0,distinct_from_export_slot:true,
+        live_chain:false,custody_material_present:false,stakehub_interaction:false}' > "$slot"
+    trap - ERR
+    echo "DESTINATION CONSUME GREEN tx_id=$tx_id end_height=$EXPECTED_HEIGHT certified_count=1"
+    ;;
   *)
-    printf '%s\n' "usage: $0 import-existing-certificate" >&2
+    printf '%s\n' "usage: $0 {import-existing-certificate|destination-consume-existing-tx}" >&2
     exit 2
     ;;
 esac

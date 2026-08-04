@@ -2,11 +2,16 @@
   "schema": "postfiat.a666.r4.return-artifact-slot.v1",
   "status": "failed",
   "accepted": false,
-  "failure_code": "destination_consume_not_staged_ethereum_spendable_zero",
+  "failure_code": "return_import_pending_destination_consume_green",
   "failure_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/return-stage-terminal.json",
-  "distinct_from_export_slot": true,
+  "destination_consume": {
+    "certified_count": 1,
+    "outstanding_bridge_claims_atoms": 0,
+    "ethereum_spendable_supply_atoms": 1000000
+  },
   "certified_import_count": 0,
   "official_invocation_count": 0,
+  "distinct_from_export_slot": true,
   "live_chain": false,
   "custody_material_present": false,
   "stakehub_interaction": false

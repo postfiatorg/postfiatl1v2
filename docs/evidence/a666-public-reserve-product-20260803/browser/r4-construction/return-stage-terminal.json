@@ -1,18 +1,67 @@
 {
-  "schema": "postfiat.a666.r4.return-artifact-stage-terminal.v5",
-  "outcome": "technical_wall",
-  "first_failing_check": "destination_consume_not_staged_ethereum_spendable_zero",
-  "exit_code": 1,
-  "runtime_root": "/tmp/a666-r4-return-import-20260804T214954Z-1304039",
+  "schema": "postfiat.a666.r4.return-artifact-stage-terminal.v6",
+  "outcome": "destination_consume_green_return_import_pending",
+  "runtime_root": "/tmp/a666-r4-destination-consume-20260804T215341Z-1322564",
   "runtime_preserved": true,
-  "runtime_ms": 282,
-  "assertion_repair_applied": "held assertion changed from .validator to production .validator_id; six existing votes and the existing certificate validated green before the blocker",
-  "burn_receipt_decode": "full pftl_recipient decoded from the existing burn receipt and asserted equal to the witness-stage holder account",
-  "blocker_detail": "route ethereum_spendable_supply_atoms is 0 with outstanding_bridge_claims_atoms 1000000: the pftl_uniswap_destination_consume import for the accepted consumeMintOnly was never staged, so apply_pftl_uniswap_return_import would reject with insufficient_pftl_uniswap_ethereum_supply (crates/execution/src/nav_vault_asset_execution.rs); no consume-side checkpoint/receipt-proof artifact exists and producing one is outside this closeout scope",
-  "stop_policy": "STOP-no-retry; the single certified import was not submitted because the computed preflight proved guaranteed rejection",
+  "runtime_ms": 12042,
+  "blocker_resolution_chain": [
+    "v4: checkpoint vote schema assertion field mismatch (.validator vs production .validator_id)",
+    "v5: destination_consume_not_staged_ethereum_spendable_zero (this action closes it)",
+    "v6: destination consume green; certified return import is now viable but not yet invoked"
+  ],
+  "fast_loop_manifest_note": "official steps 7-8 require certified destination consume before return import (check id: official_steps_7_8_require_certified_destination_consume_before_return_import)",
+  "consume_transaction": {
+    "hash": "0x66934513e535bd6636de30cc05447171951322735d46382234886155c77c7894",
+    "block": 9,
+    "status": "0x1",
+    "packet_consumed_log_index": 1,
+    "packet_digest": "0x6279f1d8d5674867653d1bb1a51bde557544fd7149dadc7d6ff963c644e05313",
+    "recipient_decoded_from_log": true,
+    "amount_atoms": 1000000
+  },
+  "confirmation_depth": {
+    "governed_minimum_confirmations": 12,
+    "consume_block": 9,
+    "head_before": 22,
+    "head_after": 22,
+    "empty_loopback_blocks_mined": 0,
+    "live_operation_rule": "live operation inherits a natural approximately 12-block confirmation wait; no block-mining action is used live"
+  },
+  "artifact_hashes": {
+    "consume_receipt_proof_sha256": "63081a34ec5a4340150a0a6a17625c00f4fedc9dbb3471bd60c8eb1d8fec9ae0",
+    "checkpoint_sha256": "c8082ef5d971f03f02a41fabb9b8e88e9b47fd137030fbf1087c57e0b5ac9d22",
+    "checkpoint_certificate_sha256": "24e17d4d34e99ed103dc624c93bd1a4ec6a99ad7f4d68396a437b168fff8d4a1",
+    "round_summary_sha256": "be82d159d9667467fc09b0b545ae20ab1310cd92c4c0f8395037d44b29123847"
+  },
+  "votes": {
+    "count": 6,
+    "signer_uniqueness": true,
+    "schema_field": "validator_id"
+  },
+  "certified_destination_consume": {
+    "count": 1,
+    "tx_id": "6226cdf03099d67878a836f04c6936c06ae4474484cb97b8c89127e2ce86122f2113d033a93acc66c0cfaefb8cc6fc5f",
+    "before_height": 831,
+    "end_height": 832,
+    "receipt_accepted_six_of_six": true,
+    "finalized": {
+      "height": 832,
+      "tip": "90d28347369b98ca500f945fea6405f6ac9f02fd1ad38dfb29becd6a9861aada96861b7b0b1a9f4bf8e602878ff32b77",
+      "state_root": "8da3c6f5536fb08dd037992c0ddca2c9816341fd849260e510393c383e3a9948d823acc4c3dc0ec242e5ecdaf665360b",
+      "six_way_equal": true
+    },
+    "deltas": {
+      "outstanding_bridge_claims_atoms": "1000000->0",
+      "ethereum_spendable_supply_atoms": "0->1000000",
+      "other_conservation_terms_unchanged": true,
+      "invariant_holds": true
+    }
+  },
   "transactions": {
+    "certified_destination_consume_count": 1,
     "certified_import_count": 0,
-    "official_invocation_count": 0
+    "official_invocation_count": 0,
+    "upstream_local_anvil_count_unreplayed": 3
   },
   "environment": {
     "loopback_only": true,
