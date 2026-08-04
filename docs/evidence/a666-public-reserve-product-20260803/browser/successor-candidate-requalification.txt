@@ -1,0 +1,63 @@
+A666 successor candidate requalification
+
+Candidate revision: 39f7fae3191aa34c376ae1657650a9ec2444f421
+Detached worktree: /tmp/a666-r4-successor-39f7fae
+Final tracked dirty count: 0
+Rust sources: unchanged from the accepted R2 candidate; the exact revision was used for every command.
+
+R2 regression validator
+Command: CARGO_TARGET_DIR=/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/target scripts/check-a666-recovery-regression-manifest --run
+Exit: 0
+Runtime: 203988 ms
+PASS AR lines: 26
+Final: A666 recovery manifest PASS: defects=11 regressions=11 browser_regressions=2 standalone_tests=26 run=true
+
+Locked dependency setup
+Command: npm ci
+Exit: 0
+Runtime: 1873 ms
+
+Wallet unit matrix
+Command: npm test
+Exit: 0
+Runtime: 30391 ms
+Matched/passed: 233/233
+Final: tests 233, pass 233, fail 0, duration_ms 30160.139589
+
+Custody browser
+Command: npm run test:custody-browser
+Exit: 0
+Runtime: 6435 ms
+Matched/passed: 1/1
+Final: tests 1, pass 1, fail 0, duration_ms 6191.94226
+Custody assertion: generated custody material absent from browser money boundaries.
+
+Execution-order correction
+The initial public-browser invocation matched two tests but failed before either executed because the fresh detached worktree had no wallet-web/dist. This ENOENT was an ordering defect in the qualification brief, not a product defect. The corrected sequence built the exact candidate before browser execution; the failed pre-execution invocation was not treated as a candidate result.
+
+Candidate build
+Command: npm run build
+Exit: 0
+Runtime: 783 ms
+Modules transformed: 1805
+Final: built in 379 ms
+
+Public browser after candidate build
+Command: npm run test:public-browser
+Exit: 0
+Runtime: 8214 ms
+Matched/passed: 2/2
+Final: tests 2, pass 2, fail 0, duration_ms 8034.475721
+
+Explicit shared recovery path
+Command: node --test src/lib/journey-step-9-recovery.e2e.js
+Exit: 0
+Runtime: 8098 ms
+Matched/passed: 1/1
+Named subtest: journey step 9 resumes the production private-primary recovery component after proxy restart and browser reload
+Permanent receipt assertion: passed real public-receipt download schema, operation identity, certificate identity, balance tuple, forbidden-field, and generated-value checks.
+Recovery-record custody assertion: passed.
+
+Final candidate verification
+HEAD: 39f7fae3191aa34c376ae1657650a9ec2444f421
+Tracked dirty count: 0
