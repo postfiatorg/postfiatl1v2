@@ -180,14 +180,14 @@
     },
     "async_proof_slot": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/async-proof-slot.json",
-      "exists": false,
-      "valid_json": false,
-      "observed_status": "absent",
-      "observed_reason": "evidence_absent",
+      "exists": true,
+      "valid_json": true,
+      "observed_status": "watching",
+      "observed_reason": "path_b_v3_proof_artifacts_pending",
       "bindings": {
         "candidate_revision": null,
         "rehearsal_root": null,
-        "run_id": null
+        "run_id": "a666-r4-receipt-prover-pathb-20260804-v3"
       }
     },
     "stakehub_restart_inventory": {
@@ -204,31 +204,40 @@
     },
     "pre_prove_binding": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/pre-prove-binding-check.json",
-      "exists": false,
-      "valid_json": false,
-      "observed_status": "absent",
-      "observed_reason": "evidence_absent",
+      "exists": true,
+      "valid_json": true,
+      "observed_status": null,
+      "observed_reason": null,
       "bindings": {
-        "candidate_revision": null,
+        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
         "rehearsal_root": null,
         "run_id": null
       }
     },
     "pre_prove_validation": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/pre-prove-binding-check.json",
-      "valid_json": false,
-      "ok": false,
-      "computed": {
-        "field_count": null,
-        "mismatch_count": null,
-        "binding_mismatch_count": null
-      },
+      "valid_json": true,
       "deployment_evidence": {
-        "path": null,
-        "path_valid": false,
-        "sha256": null,
-        "sha256_matches_declared": false
-      }
+        "path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/path-b-contract-stage.json",
+        "path_valid": true,
+        "sha256": "e8b6d2e13c56946cff24e50307bc43075fb8903e7368e74846e902d29e946cbc",
+        "sha256_matches_declared": true
+      },
+      "computed": {
+        "field_count": 35,
+        "canonical_field_names": true,
+        "field_table_complete": true,
+        "mismatch_count": 0,
+        "binding_mismatch_count": 0
+      },
+      "claimed_statuses_ignored": {
+        "decoded_field_count": 35,
+        "conjunction_field_count": 35,
+        "exact_mismatch_count": 0,
+        "all_match": true,
+        "prior_checkpoint_matches_initial": null
+      },
+      "ok": true
     },
     "stakehub_official_scan": {
       "command_succeeded": true,
@@ -369,7 +378,7 @@
     },
     {
       "id": "pre_prove_all_35_bindings",
-      "ok": false,
+      "ok": true,
       "input": "pre_prove_binding"
     }
   ],
@@ -384,8 +393,7 @@
     "async_proof_slot_steps_7_8",
     "stakehub_restart_inventory_present",
     "stakehub_official_absent",
-    "no_live_chain_dependency",
-    "pre_prove_all_35_bindings"
+    "no_live_chain_dependency"
   ],
   "ready_to_fire": false,
   "ready_to_fire_computation": "all checks[].ok values must be true",

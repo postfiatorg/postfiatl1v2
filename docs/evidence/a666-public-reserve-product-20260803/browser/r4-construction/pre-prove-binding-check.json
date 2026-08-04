@@ -1,0 +1,243 @@
+{
+ "schema": "postfiat.a666.r4.path-b-pre-prove-binding-check.v1",
+ "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+ "decoder_sha256": "6fb2fb9ac693e5cea787eeb4a80701de562d3b12ce47d837d121d8dc361f6d4a",
+ "witness_sha256": "8c2c7ee6d3209bfb21e5d442de7e80cb2ab4affabe06a0008527717eaae13ef4",
+ "public_values_sha256": "da53b72bf6f27a93a5cb9a0de2d607755c1d3e885353d7223a3a3c0ed9e5cb43",
+ "deployment_commit": "a01596abcc119222419783e487f0c5a9a8c61f35",
+ "deployment_evidence_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/path-b-contract-stage.json",
+ "deployment_evidence_sha256": "e8b6d2e13c56946cff24e50307bc43075fb8903e7368e74846e902d29e946cbc",
+ "fields": [
+  {
+   "name": "proofProgramVersion",
+   "expected_from_witness": 1,
+   "decoded": 1
+  },
+  {
+   "name": "pftlChainIdHash",
+   "expected_from_witness": "0xe61f64cfb4299057c29b1c1dbf031c81beeb1b016878f4a087824eaa14c2cc00",
+   "decoded": "0xe61f64cfb4299057c29b1c1dbf031c81beeb1b016878f4a087824eaa14c2cc00"
+  },
+  {
+   "name": "pftlGenesisHashCommitment",
+   "expected_from_witness": "0x396aceff4e14037223cc2781a3197c8eef78f44903b4e00d2e5441abec789418",
+   "decoded": "0x396aceff4e14037223cc2781a3197c8eef78f44903b4e00d2e5441abec789418"
+  },
+  {
+   "name": "pftlProtocolVersion",
+   "expected_from_witness": 1,
+   "decoded": 1
+  },
+  {
+   "name": "committeeRootCommitment",
+   "expected_from_witness": "0x2bd24c6df91761256c3280f9f5d4efb1992ee919c8655836e191597c37f25895",
+   "decoded": "0x2bd24c6df91761256c3280f9f5d4efb1992ee919c8655836e191597c37f25895"
+  },
+  {
+   "name": "committeeTransitionCommitment",
+   "expected_from_witness": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+   "decoded": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+  },
+  {
+   "name": "finalizedBlockCommitment",
+   "expected_from_witness": "0xc8cb9de45435718ce08381a1792026acd12acef612c66a2aedd3e17501580a58",
+   "decoded": "0xc8cb9de45435718ce08381a1792026acd12acef612c66a2aedd3e17501580a58"
+  },
+  {
+   "name": "finalizedStateRootCommitment",
+   "expected_from_witness": "0x1a394a376cb58930160260fcb6d8638a3254ac59597522b2b2697ca939f48ea9",
+   "decoded": "0x1a394a376cb58930160260fcb6d8638a3254ac59597522b2b2697ca939f48ea9"
+  },
+  {
+   "name": "routeEpoch",
+   "expected_from_witness": 2,
+   "decoded": 2
+  },
+  {
+   "name": "policyHashCommitment",
+   "expected_from_witness": "0xaf459740f84866989bbc388c0b7c53e8ad64375d7b80df3e2db4f72b3368883c",
+   "decoded": "0xaf459740f84866989bbc388c0b7c53e8ad64375d7b80df3e2db4f72b3368883c"
+  },
+  {
+   "name": "routeIdCommitment",
+   "expected_from_witness": "0xaf73e4fee3e9630d74a550a8677b2c2233f459c5b7b7a9633b1e49828554d70e",
+   "decoded": "0xaf73e4fee3e9630d74a550a8677b2c2233f459c5b7b7a9633b1e49828554d70e"
+  },
+  {
+   "name": "routeTrustClass",
+   "expected_from_witness": "0x1f6149d5691a86e66bea7f1b5b57e774e4a0151c426b93c6850ed24920df0bdf",
+   "decoded": "0x1f6149d5691a86e66bea7f1b5b57e774e4a0151c426b93c6850ed24920df0bdf"
+  },
+  {
+   "name": "routeConfigDigestCommitment",
+   "expected_from_witness": "0x3f6ff45f58110f881a483d4eaf16ad7e0c16316433ff459fc4bd7ad203c0d431",
+   "decoded": "0x3f6ff45f58110f881a483d4eaf16ad7e0c16316433ff459fc4bd7ad203c0d431"
+  },
+  {
+   "name": "nativeNavAssetIdCommitment",
+   "expected_from_witness": "0x78418dd616c454703b30dd4c633d1b49c62d97acf0ec59b606840a160561d294",
+   "decoded": "0x78418dd616c454703b30dd4c633d1b49c62d97acf0ec59b606840a160561d294"
+  },
+  {
+   "name": "settlementAssetIdCommitment",
+   "expected_from_witness": "0x24e5fe4c65497dff08ec93064e5eb76e23c61992e7ec2c946136334a28eab403",
+   "decoded": "0x24e5fe4c65497dff08ec93064e5eb76e23c61992e7ec2c946136334a28eab403"
+  },
+  {
+   "name": "pricingNavEpoch",
+   "expected_from_witness": 8,
+   "decoded": 8
+  },
+  {
+   "name": "pricingReservePacketHashCommitment",
+   "expected_from_witness": "0x5434e4765544cb1b4a962b84260e360e62550c8255de6942e10836e4cfc1e71c",
+   "decoded": "0x5434e4765544cb1b4a962b84260e360e62550c8255de6942e10836e4cfc1e71c"
+  },
+  {
+   "name": "sourceWalletCommitment",
+   "expected_from_witness": "0x13f03839b7fd67fe8d84d5a0d6e7bb3fef580e23d9872e0bd442d364cb0d4bb0",
+   "decoded": "0x13f03839b7fd67fe8d84d5a0d6e7bb3fef580e23d9872e0bd442d364cb0d4bb0"
+  },
+  {
+   "name": "sourceReceiptRootCommitment",
+   "expected_from_witness": "0x317f2729c57237ba2101e8574a99e29aa52cef67811ae6128b905728b2a5fac5",
+   "decoded": "0x317f2729c57237ba2101e8574a99e29aa52cef67811ae6128b905728b2a5fac5"
+  },
+  {
+   "name": "sourceReceiptHashCommitment",
+   "expected_from_witness": "0x49c51b824146353f5a04922c208667a786cf5cbaaa5b41a1f9302ccbc24f385d",
+   "decoded": "0x49c51b824146353f5a04922c208667a786cf5cbaaa5b41a1f9302ccbc24f385d"
+  },
+  {
+   "name": "acceptedReceiptCode",
+   "expected_from_witness": "0xc5469141f88f3c0a38d7c4171784383a581a36dc517e33abb5cee7563591bc16",
+   "decoded": "0xc5469141f88f3c0a38d7c4171784383a581a36dc517e33abb5cee7563591bc16"
+  },
+  {
+   "name": "packetDigest",
+   "expected_from_witness": "0x6279f1d8d5674867653d1bb1a51bde557544fd7149dadc7d6ff963c644e05313",
+   "decoded": "0x6279f1d8d5674867653d1bb1a51bde557544fd7149dadc7d6ff963c644e05313"
+  },
+  {
+   "name": "destinationChainId",
+   "expected_from_witness": 1,
+   "decoded": 1
+  },
+  {
+   "name": "controller",
+   "expected_from_witness": "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9",
+   "decoded": "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9"
+  },
+  {
+   "name": "wrappedToken",
+   "expected_from_witness": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+   "decoded": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512"
+  },
+  {
+   "name": "recipient",
+   "expected_from_witness": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+   "decoded": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
+  },
+  {
+   "name": "mintAmountAtoms",
+   "expected_from_witness": 1000000,
+   "decoded": 1000000
+  },
+  {
+   "name": "settlementValueAtoms",
+   "expected_from_witness": 903212,
+   "decoded": 903212
+  },
+  {
+   "name": "packetNonce",
+   "expected_from_witness": "0x896df6f2003ca1c67572db853c4005feea547e7ccb4dd21a08a968e7f9bed3ac",
+   "decoded": "0x896df6f2003ca1c67572db853c4005feea547e7ccb4dd21a08a968e7f9bed3ac"
+  },
+  {
+   "name": "deadline",
+   "expected_from_witness": 1785945259,
+   "decoded": 1785945259
+  },
+  {
+   "name": "sourceHeight",
+   "expected_from_witness": 831,
+   "decoded": 831
+  },
+  {
+   "name": "priorCheckpointCommitment",
+   "expected_from_witness": "0x6fcf3e6ca571433715febb339dc4785cb6f4211e3a67a1a18371c567bf594462",
+   "decoded": "0x6fcf3e6ca571433715febb339dc4785cb6f4211e3a67a1a18371c567bf594462"
+  },
+  {
+   "name": "resultingCheckpointCommitment",
+   "expected_from_witness": "0xc8cb9de45435718ce08381a1792026acd12acef612c66a2aedd3e17501580a58",
+   "decoded": "0xc8cb9de45435718ce08381a1792026acd12acef612c66a2aedd3e17501580a58"
+  },
+  {
+   "name": "finalizedHeight",
+   "expected_from_witness": 831,
+   "decoded": 831
+  },
+  {
+   "name": "proofNullifier",
+   "expected_from_witness": "0xbbdc9884f2b0d422765f37c118e81490528cda0d085012d35b9f4524ac366434",
+   "decoded": "0xbbdc9884f2b0d422765f37c118e81490528cda0d085012d35b9f4524ac366434"
+  }
+ ],
+ "deployment_bindings": {
+  "route": {
+   "decoded": "0xaf73e4fee3e9630d74a550a8677b2c2233f459c5b7b7a9633b1e49828554d70e",
+   "deployed": "0xaf73e4fee3e9630d74a550a8677b2c2233f459c5b7b7a9633b1e49828554d70e"
+  },
+  "controller": {
+   "decoded": "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9",
+   "deployed": "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9"
+  },
+  "wrapped": {
+   "decoded": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+   "deployed": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512"
+  },
+  "chain": {
+   "decoded": "0xe61f64cfb4299057c29b1c1dbf031c81beeb1b016878f4a087824eaa14c2cc00",
+   "deployed": "0xe61f64cfb4299057c29b1c1dbf031c81beeb1b016878f4a087824eaa14c2cc00"
+  },
+  "genesis": {
+   "decoded": "0x396aceff4e14037223cc2781a3197c8eef78f44903b4e00d2e5441abec789418",
+   "deployed": "0x396aceff4e14037223cc2781a3197c8eef78f44903b4e00d2e5441abec789418"
+  },
+  "protocol": {
+   "decoded": 1,
+   "deployed": 1
+  },
+  "program_vkey": {
+   "decoded": "0x003af40eafdbc1873f7e5b8f02da0ccd668f65930797c8e20c4f19234a5ef02f",
+   "deployed": "0x003af40eafdbc1873f7e5b8f02da0ccd668f65930797c8e20c4f19234a5ef02f"
+  },
+  "prior_checkpoint": {
+   "decoded": "0x6fcf3e6ca571433715febb339dc4785cb6f4211e3a67a1a18371c567bf594462",
+   "deployed": "0x6fcf3e6ca571433715febb339dc4785cb6f4211e3a67a1a18371c567bf594462"
+  }
+ },
+ "decoded_field_count": 35,
+ "conjunction_field_count": 35,
+ "exact_mismatch_count": 0,
+ "mismatch_fields": [],
+ "all_match": true,
+ "live_chain": false,
+ "business_value": 0,
+ "stakehub": false,
+ "fast_loop_catch": {
+  "field": "committeeRootCommitment",
+  "stale_expected": "0xa4b5cd2a90fc882b543938fa74bb67a1271cb936c88e8dc3fb0c96fa84a9c411",
+  "correct_expected": "0x2bd24c6df91761256c3280f9f5d4efb1992ee919c8655836e191597c37f25895",
+  "cause": "stale constant from July-era fleet committee; root now derived from committed witness.committee via ConsensusV2ValidatorSet::try_new + sha3_384 domain hash",
+  "catch_runtime_ms": 200,
+  "avoided_burn_seconds": 9360
+ },
+ "committee_root_derivation": {
+  "source": "witness.committee (6 ML-DSA-65 validators, sorted)",
+  "quorum": 5,
+  "domain": "postfiat.consensus.committee-root.v2",
+  "committee_root": "49683c775545dd3777f143a275b4836af68e4e8905d53f8496e9208c6ddc27dcf2a0b7bb53a5c033a6393348a23cec47"
+ }
+}
