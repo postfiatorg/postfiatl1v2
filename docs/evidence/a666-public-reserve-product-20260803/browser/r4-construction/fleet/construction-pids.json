@@ -5,84 +5,84 @@
     {
       "validator_index": 0,
       "kind": "transport",
-      "pid": 667841,
+      "pid": 1817417,
       "rpc_port": null,
       "ready_file": "/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959/validator-0.transport.ready.json"
     },
     {
       "validator_index": 0,
       "kind": "rpc",
-      "pid": 667842,
+      "pid": 1817418,
       "rpc_port": 31001,
       "ready_file": "/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959/validator-0.rpc.ready.json"
     },
     {
       "validator_index": 1,
       "kind": "transport",
-      "pid": 667845,
+      "pid": 1817421,
       "rpc_port": null,
       "ready_file": "/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959/validator-1.transport.ready.json"
     },
     {
       "validator_index": 1,
       "kind": "rpc",
-      "pid": 667846,
+      "pid": 1817422,
       "rpc_port": 31003,
       "ready_file": "/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959/validator-1.rpc.ready.json"
     },
     {
       "validator_index": 2,
       "kind": "transport",
-      "pid": 667849,
+      "pid": 1817425,
       "rpc_port": null,
       "ready_file": "/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959/validator-2.transport.ready.json"
     },
     {
       "validator_index": 2,
       "kind": "rpc",
-      "pid": 667850,
+      "pid": 1817426,
       "rpc_port": 31005,
       "ready_file": "/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959/validator-2.rpc.ready.json"
     },
     {
       "validator_index": 3,
       "kind": "transport",
-      "pid": 667853,
+      "pid": 1817429,
       "rpc_port": null,
       "ready_file": "/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959/validator-3.transport.ready.json"
     },
     {
       "validator_index": 3,
       "kind": "rpc",
-      "pid": 667854,
+      "pid": 1817430,
       "rpc_port": 31007,
       "ready_file": "/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959/validator-3.rpc.ready.json"
     },
     {
       "validator_index": 4,
       "kind": "transport",
-      "pid": 667857,
+      "pid": 1817433,
       "rpc_port": null,
       "ready_file": "/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959/validator-4.transport.ready.json"
     },
     {
       "validator_index": 4,
       "kind": "rpc",
-      "pid": 667858,
+      "pid": 1817434,
       "rpc_port": 31009,
       "ready_file": "/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959/validator-4.rpc.ready.json"
     },
     {
       "validator_index": 5,
       "kind": "transport",
-      "pid": 667861,
+      "pid": 1817437,
       "rpc_port": null,
       "ready_file": "/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959/validator-5.transport.ready.json"
     },
     {
       "validator_index": 5,
       "kind": "rpc",
-      "pid": 667862,
+      "pid": 1817438,
       "rpc_port": 31011,
       "ready_file": "/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959/validator-5.rpc.ready.json"
     }
