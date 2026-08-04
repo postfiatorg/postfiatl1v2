@@ -171,6 +171,7 @@ wallet_match=false
 route_live=false
 rpc_configured=false
 rpc_ready=false
+current_height=0
 daemon_ready=false
 response_compatible=false
 zero_dependency=false
@@ -196,8 +197,6 @@ response_compatible=true
 [[ "$(jq -r '.route_id' "$LIFECYCLE_REPORT")" == "$ROUTE_ID" ]]
 [[ "$(jq -r '.successor_profile_id' "$LIFECYCLE_REPORT")" == "$PROFILE_ID" ]]
 route_profile=true
-route_live="$(jq -r '.rollback.live_value_enabled' "$LIFECYCLE_REPORT")"
-[[ "$route_live" == true || "$route_live" == false ]]
 public_env="$CANDIDATE_WORKTREE/deployments/a666-mainnet-20260727/pftl-resident-swap-e55434c/services/pftl-swapd.env"
 [[ "$(sed -n 's/^PFTL_CONTROLLED_WALLET_ID=//p' "$public_env")" == "$CONTROLLED_WALLET_ID" ]]
 [[ "$(sed -n 's/^PFTL_ROUTE_ID=//p' "$public_env")" == "$ROUTE_ID" ]]
@@ -224,9 +223,11 @@ binary_built=true
 if jq -e '(.endpoints|length)==6 and all(.endpoints[]; .host=="127.0.0.1" and (.rpc_port|type)=="number")' "$RPC_ENDPOINTS_FILE" >/dev/null; then
   rpc_configured=true
 fi
-if [[ "$rpc_configured" == true ]] && python3 - "$RPC_ENDPOINTS_FILE" <<'PY'
+if [[ "$rpc_configured" == true ]]; then
+  live_tuple="$(python3 - "$RPC_ENDPOINTS_FILE" <<'PY'
 import json, socket, sys
 rows=json.load(open(sys.argv[1], encoding='utf-8'))['endpoints']
+observed=[]
 for row in rows:
     request={"version":"postfiat-local-rpc-v1","id":f"r4-private-stage-{row['validator_index']}","method":"status","params":{}}
     try:
@@ -236,18 +237,38 @@ for row in rows:
     except (OSError, ValueError, json.JSONDecodeError):
         raise SystemExit(1)
     value=response.get('result', {})
-    if response.get('ok') is not True or value.get('block_height') != row['block_height'] or value.get('block_tip_hash') != row['block_tip_hash'] or value.get('state_root') != row['state_root']:
+    if response.get('ok') is not True:
         raise SystemExit(1)
+    observed.append((value.get('block_height'),value.get('block_tip_hash'),value.get('state_root')))
+if len(observed)!=6 or len(set(observed))!=1 or not isinstance(observed[0][0],int):
+    raise SystemExit(1)
+print('\t'.join(map(str,observed[0])))
+PY
+)" && rpc_ready=true
+  if [[ "$rpc_ready" == true ]]; then IFS=$'\t' read -r current_height _ <<<"$live_tuple"; fi
+fi
+if [[ "$rpc_ready" == true ]] && python3 - "$RPC_ENDPOINTS_FILE" "$ROUTE_ID" <<'PY'
+import json,socket,sys
+rows=json.load(open(sys.argv[1],encoding='utf-8'))['endpoints']
+observed=[]
+for row in rows:
+    request={"version":"postfiat-local-rpc-v1","id":f"r4-private-route-{row['validator_index']}","method":"navcoin_bridge_supply_status","params":{"route_id":sys.argv[2]}}
+    with socket.create_connection((row['host'],row['rpc_port']),timeout=3) as connection:
+        connection.sendall((json.dumps(request,separators=(',',':'))+'\n').encode())
+        response=json.loads(connection.makefile('rb').readline())
+    value=response.get('result',{})
+    observed.append((value.get('route_id'),value.get('route_epoch'),value.get('policy_epoch'),value.get('live_value_enabled'),value.get('paused'),value.get('invariant_holds')))
+if len(observed)!=6 or len(set(observed))!=1 or observed[0]!=(sys.argv[2],5,5,True,False,True): raise SystemExit(1)
 PY
 then
-  rpc_ready=true
+  route_live=true
 fi
 
 if [[ "$ACTION" == self-check ]]; then
   exit 0
 fi
 if [[ "$route_live" == false ]]; then
-  write_evidence "pftl_swap_route_not_live_at_preserved_height_826" "$candidate_exact" "$binary_built" "$binary_hash" "$route_profile" "$wallet_match" "$rpc_configured" "$rpc_ready" "$daemon_ready" "$response_compatible" "$zero_dependency"
+  write_evidence "pftl_swap_route_not_live_on_current_fleet" "$candidate_exact" "$binary_built" "$binary_hash" "$route_profile" "$wallet_match" "$rpc_configured" "$rpc_ready" "$daemon_ready" "$response_compatible" "$zero_dependency"
   exit 1
 fi
 if [[ "$rpc_ready" == false ]]; then
@@ -305,9 +326,10 @@ printf '%s\n' "$daemon_pid" > "$DAEMON_PID_FILE"
 READY_PUBLIC_FILE="$RUNTIME_DIR/public-readiness.json"
 for _ in {1..180}; do
   kill -0 "$daemon_pid"
-  if python3 - "$BIND" "$READY_PUBLIC_FILE" <<'PY'
+  if python3 - "$BIND" "$READY_PUBLIC_FILE" "$current_height" <<'PY'
 import http.client, json, sys
 host, port=sys.argv[1].rsplit(':',1)
+height=int(sys.argv[3]); next_height=height+1
 try:
     connection=http.client.HTTPConnection(host,int(port),timeout=2)
     connection.request('GET','/v1/ready')
@@ -316,9 +338,9 @@ except (OSError,ValueError,json.JSONDecodeError): raise SystemExit(1)
 driver=value.get('checks',{}).get('certified_round_driver',{})
 asset=value.get('checks',{}).get('asset_service',{})
 if value.get('schema')!='postfiat.pftl_swap.readiness.v1' or value.get('ready') is not True or value.get('local_only') is not True: raise SystemExit(1)
-if asset.get('ok') is not True or asset.get('mirror_matches') is not True or asset.get('report',{}).get('ready') is not True or asset.get('report',{}).get('mirror',{}).get('height') != 826: raise SystemExit(1)
-if driver.get('ok') is not True or driver.get('local_height') != 826 or driver.get('next_round_height') != 827 or driver.get('authenticated_peer_count') != 5 or driver.get('persistent_vote_streams') is not True or driver.get('remote_proposal_routing') is not True or driver.get('local_apply_before_certified_send') is not True: raise SystemExit(1)
-public={"schema":value["schema"],"ready":True,"local_only":True,"route_id":value.get("route_id"),"controlled_wallet_id":value.get("controlled_wallet_id"),"asset_service":{"ready":True,"mirror_matches":True,"height":826},"certified_round_driver":{"ready":True,"local_height":826,"next_height":827,"authenticated_peer_count":5,"persistent_vote_streams":True,"remote_proposal_routing":True,"local_apply_before_certified_send":True}}
+if asset.get('ok') is not True or asset.get('mirror_matches') is not True or asset.get('report',{}).get('ready') is not True or asset.get('report',{}).get('mirror',{}).get('height') != height: raise SystemExit(1)
+if driver.get('ok') is not True or driver.get('local_height') != height or driver.get('next_round_height') != next_height or driver.get('authenticated_peer_count') != 5 or driver.get('persistent_vote_streams') is not True or driver.get('remote_proposal_routing') is not True or driver.get('local_apply_before_certified_send') is not True: raise SystemExit(1)
+public={"schema":value["schema"],"ready":True,"local_only":True,"route_id":value.get("route_id"),"controlled_wallet_id":value.get("controlled_wallet_id"),"asset_service":{"ready":True,"mirror_matches":True,"height":height},"certified_round_driver":{"ready":True,"local_height":height,"next_height":next_height,"authenticated_peer_count":5,"persistent_vote_streams":True,"remote_proposal_routing":True,"local_apply_before_certified_send":True}}
 with open(sys.argv[2],'w',encoding='utf-8') as stream: json.dump(public,stream,separators=(',',':'))
 PY
   then daemon_ready=true; break; fi

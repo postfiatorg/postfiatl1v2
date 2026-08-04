@@ -1,7 +1,7 @@
 {
   "schema": "postfiat.a666.r4.private-swap-dependencies-refresh.v1",
-  "state": "prepared",
-  "fired": false,
+  "state": "ready",
+  "fired": true,
   "route_activation_commit": "254042faa6d3c43c9919685413f5335911fabafa",
   "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
   "construction_fleet": {
@@ -22,7 +22,7 @@
     "observed_equal_count": 6
   },
   "corrections": {
-    "expected_fleet_tuple": "derive from six live equal RPC responses",
+    "expected_fleet_tuple": "derived from six live equal RPC responses",
     "expected_round_driver_start_and_next": "current height plus one",
     "batch_outbox": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/batch-outbox",
     "processed_batches": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/processed-batches",
@@ -33,15 +33,54 @@
     "asset_service_pid": 730500,
     "round_driver_pid": 730501,
     "teardown_control": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/teardown.request",
-    "teardown_requested": false
+    "teardown_requested": true,
+    "all_stopped": true
   },
   "replacement": {
-    "launched": false,
-    "session": null,
-    "supervisor_pid": null,
-    "runtime_root": null,
-    "ready": false
+    "launched": true,
+    "runtime_root": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T043154Z-869163",
+    "runtime_ms": 324470,
+    "supervisor_pid": 869163,
+    "asset_service": {
+      "pid": 869239,
+      "endpoint": "127.0.0.1:8799",
+      "ready": true,
+      "prewarm_ready": true,
+      "private_egress_ready": true,
+      "vault_path": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T043154Z-869163/asset-vault"
+    },
+    "certified_round_driver": {
+      "pid": 869240,
+      "local_height": 827,
+      "start_height": 828,
+      "next_height": 828,
+      "processed_round_count": 0,
+      "authenticated_peer_count": 5,
+      "authenticated_quorum": true,
+      "persistent_vote_streams": true,
+      "remote_proposal_routing": true,
+      "local_apply_before_certified_send": true,
+      "ready_file": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/certified-round-driver-ready.json"
+    },
+    "batch_outbox": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/batch-outbox",
+    "processed_batches": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/processed-batches",
+    "ready": true
+  },
+  "checks": {
+    "construction_fleet_12_live_six_equal": true,
+    "route_live_epoch_5_on_six": true,
+    "replacement_supervisor_live": true,
+    "asset_service_live": true,
+    "asset_prewarm_terminal_ready": true,
+    "round_driver_live": true,
+    "round_driver_height_827_next_828": true,
+    "five_authenticated_peers_and_quorum": true,
+    "exact_pftl_swap_batch_paths": true,
+    "empty_batch_and_processed_dirs": true,
+    "business_operations_zero": true,
+    "stakehub_interaction_zero": true
   },
   "business_operations": 0,
-  "stakehub_interaction": false
+  "stakehub_interaction": false,
+  "ready": true
 }

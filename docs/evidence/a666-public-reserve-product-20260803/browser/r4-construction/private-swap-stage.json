@@ -12,99 +12,137 @@
     "build_runtime_ms": 0,
     "built_from_exact_candidate": true
   },
-  "corrected_invocation": {
-    "rpc_endpoints_file": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-rpc-endpoints.json",
-    "round_driver_ready_file": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/ready/certified-round-driver.json",
-    "asset_service_vault_dir": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/asset-vault"
+  "endpoint": {
+    "url": "http://127.0.0.1:8798",
+    "loopback_only": true,
+    "pid": 911664,
+    "ready": true
   },
-  "observed_daemon": {
-    "pid": 776523,
-    "endpoint": "127.0.0.1:8798",
+  "public_readiness": {
     "schema": "postfiat.pftl_swap.readiness.v1",
+    "ready": true,
     "local_only": true,
-    "ready": false,
     "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
     "controlled_wallet_id": "pfab9b9228942e5c529633a13aa271d5297bec6353",
-    "issue_quote": {
-      "ok": false,
-      "error_kind": "permission denied"
-    },
-    "redeem_quote": {
-      "ok": false,
-      "error_kind": "permission denied"
-    },
     "asset_service": {
-      "ok": true,
       "ready": true,
-      "mirror_height": 826,
-      "mirror_matches_quote": false
+      "mirror_matches": true,
+      "height": 827
     },
     "certified_round_driver": {
-      "ok": false,
-      "error_kind": "operation would block"
-    },
-    "teardown_after_fail_closed_diagnosis": true
+      "ready": true,
+      "local_height": 827,
+      "next_height": 828,
+      "authenticated_peer_count": 5,
+      "persistent_vote_streams": true,
+      "remote_proposal_routing": true,
+      "local_apply_before_certified_send": true
+    }
   },
   "governed_identity": {
     "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
     "successor_profile_id": "f8784629ff7338002d836c1988b8e2c0f19caf448429e0eb7fdc39fa2b08f7d9a44171fc1e7239bc25e06ad833c14e91",
     "route_profile_match": true,
-    "live_value_enabled": false,
-    "source": "controlled lifecycle final state at height 826"
-  },
-  "dependencies": {
-    "supervisor_pid": 730455,
-    "asset_service_pid": 730500,
-    "round_driver_pid": 730501,
-    "all_live": true,
-    "asset_endpoint": "127.0.0.1:8799",
-    "asset_ready": true,
-    "round_driver_height": 826,
-    "round_driver_next_height": 827,
-    "round_driver_processed_rounds": 0
-  },
-  "rpc_fleet": {
-    "configured_count": 6,
-    "live_equal": true,
-    "height": 826
+    "live_value_enabled": true
   },
   "controlled_wallet": {
     "id": "pfab9b9228942e5c529633a13aa271d5297bec6353",
-    "public_deployment_match": true,
-    "key_file": "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json",
-    "key_contents_read": false
+    "public_deployment_match": true
   },
-  "checks": {
-    "candidate_revision_and_binary_hash": true,
-    "loopback_only_endpoint": true,
-    "governed_route_profile_identity": true,
-    "governed_route_live": false,
-    "controlled_wallet_public_match": true,
-    "six_rpc_configuration": true,
-    "construction_rpc_fleet_live": true,
-    "asset_service_ready": true,
-    "certified_round_driver_staged": true,
-    "daemon_readiness": false,
-    "proxy_compatible_response_schema": true,
-    "empty_batch_dirs": true,
-    "round_driver_processed_rounds_zero": true,
-    "zero_stakehub_dependency": true,
-    "zero_business_mutation": true
+  "rpc_fleet": {
+    "endpoints_file": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-rpc-endpoints.json",
+    "configured_count": 6,
+    "configured": true,
+    "live_equal": true
+  },
+  "rpc_wiring": {
+    "daemon_model": "local validator data plus certified round-driver readiness",
+    "six_rpc_endpoints_consumed_by": "certified round driver",
+    "direct_rpc_arguments_to_daemon": false
+  },
+  "daemon_inputs": {
+    "data_dir": "/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959/validator-2",
+    "round_driver_ready_file": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/certified-round-driver-ready.json",
+    "asset_service_address": "127.0.0.1:8799",
+    "asset_service_vault_dir": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T043154Z-869163/asset-vault",
+    "transparent_key_file": "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json"
+  },
+  "daemon_command_shape": [
+    "/tmp/a666-r4-private-swap-target-39f7fae/release/pftl_swapd",
+    "--bind",
+    "127.0.0.1:8798",
+    "--data-dir",
+    "/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959/validator-2",
+    "--private-dir",
+    "/tmp/a666-r4-private-swap-runtime-39f7fae/private",
+    "--batch-dir",
+    "/tmp/a666-r4-private-swap-runtime-39f7fae/private/batch-outbox",
+    "--processed-batch-dir",
+    "/tmp/a666-r4-private-swap-runtime-39f7fae/private/processed-batches",
+    "--round-driver-ready-file",
+    "${POSTFIAT_R4_ROUND_DRIVER_READY_FILE}",
+    "--transparent-key-file",
+    "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json",
+    "--asset-service-address",
+    "127.0.0.1:8799",
+    "--asset-service-vault-dir",
+    "${POSTFIAT_R4_ASSET_SERVICE_VAULT_DIR}",
+    "--route-id",
+    "pftl-a666-ethereum-wA666-usdc-v1",
+    "--controlled-wallet-id",
+    "pfab9b9228942e5c529633a13aa271d5297bec6353",
+    "--issue-ethereum-recipient",
+    "public deployment identity",
+    "--egress-policy-id",
+    "public governed identity"
+  ],
+  "persistence": {
+    "supervisor_pid_file": "/tmp/a666-r4-private-swap-runtime-39f7fae/supervisor.pid",
+    "daemon_pid_file": "/tmp/a666-r4-private-swap-runtime-39f7fae/daemon.pid",
+    "teardown_command": "scripts/a666-r4-private-swap-stage teardown"
+  },
+  "product_trace": {
+    "browser": "wallet-web/src/components/PftlPrivatePrimary.jsx",
+    "browser_library": "wallet-web/src/lib/pftl-private-primary.js",
+    "proxy_adapter": "wallet-proxy/pftl-private-swap.js",
+    "proxy_routes": "wallet-proxy/navswap-persistence-http.js",
+    "daemon": "crates/node/src/bin/pftl_swapd.rs",
+    "response_schema": "postfiat.pftl_swap.readiness.v1",
+    "proxy_compatible": true
+  },
+  "dependency_verdict": {
+    "stakehub_dependency": false,
+    "static_import_path_env_hits": 0,
+    "process_dependency": false,
+    "check": true
+  },
+  "product_change_verdict": {
+    "required": false,
+    "files": []
   },
   "business_mutation": {
     "submitted_private_operations": 0,
     "post_requests_sent": 0,
     "zero_business_mutation": true
   },
-  "dependency_verdict": {
-    "stakehub_dependency": false,
-    "stakehub_interaction": false
+  "effort_to_green_after_rpc_restoration": {
+    "estimate": "2-4 hours",
+    "work": "stage the existing asset-orchard service and certified round driver, supply their path-only readiness inputs, then run this stage once"
   },
-  "product_change_verdict": {
-    "required": false,
-    "external_state_change_required": "governed route activation before private quotes can be issued"
+  "checks": {
+    "candidate_revision_and_binary_hash": true,
+    "loopback_only_endpoint": true,
+    "governed_route_profile_identity": true,
+    "governed_route_live": true,
+    "controlled_wallet_public_match": true,
+    "six_rpc_configuration": true,
+    "rehearsal_rpc_fleet_live": true,
+    "daemon_readiness": true,
+    "proxy_compatible_response_schema": true,
+    "zero_stakehub_dependency": true,
+    "zero_business_mutation": true
   },
-  "first_blocker": "pftl_swap_route_not_live_at_preserved_height_826",
-  "ready": false,
-  "ready_computation": "all values in checks must be true"
+  "first_blocker": null,
+  "runtime_ms": 115,
+  "ready": true
 }
