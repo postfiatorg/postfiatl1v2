@@ -5,22 +5,30 @@ CANDIDATE_REVISION="39f7fae3191aa34c376ae1657650a9ec2444f421"
 CANDIDATE_WORKTREE="/tmp/a666-r4-successor-39f7fae"
 MAIN_WORKTREE="/home/postfiat/repos/a666-eth-fast-lane-combined-20260724"
 EVIDENCE="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/private-swap-stage.json"
-LIFECYCLE_REPORT="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/controlled-lifecycle-report.json"
-RPC_ENDPOINTS_FILE="${POSTFIAT_R4_RPC_ENDPOINTS_FILE:-$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/rpc-endpoints.json}"
-PRESERVED_ROOT="${POSTFIAT_R4_PRESERVED_ROOT:-/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959}"
+CONSTRUCTION_DIR="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction"
+ROUTE_STATE="$CONSTRUCTION_DIR/route-current-state.json"
+ROUTE_STATE_SHA256="5aa6a03c56f3ff245e128d5222eb48bea3898a35e742db8c0bcb208e2f61d036"
+DEPENDENCY_EVIDENCE="$CONSTRUCTION_DIR/private-swap-dependencies-refresh.json"
+DEPENDENCY_EVIDENCE_SHA256="2c1fac08179a0df4606f3ca1cd35e3105235b77b7e5f5c710bd7faf2f3be4d95"
+WITNESS_STAGE="$CONSTRUCTION_DIR/path-b-witness-stage.json"
+WITNESS="$CONSTRUCTION_DIR/path-b-receipt-witness.json"
+WITNESS_SHA256="8c2c7ee6d3209bfb21e5d442de7e80cb2ab4affabe06a0008527717eaae13ef4"
+RPC_ENDPOINTS_FILE="${POSTFIAT_R4_RPC_ENDPOINTS_FILE:-$CONSTRUCTION_DIR/fleet/construction-rpc-endpoints.json}"
+PRESERVED_ROOT="${POSTFIAT_R4_PRESERVED_ROOT:-/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349}"
 TARGET_DIR="${POSTFIAT_R4_PRIVATE_SWAP_TARGET_DIR:-/tmp/a666-r4-private-swap-target-39f7fae}"
 RUNTIME_DIR="${POSTFIAT_R4_PRIVATE_SWAP_RUNTIME_DIR:-/tmp/a666-r4-private-swap-runtime-39f7fae}"
 BIND="${POSTFIAT_R4_PRIVATE_SWAP_BIND:-127.0.0.1:8798}"
-ROUTE_ID="pftl-a666-ethereum-wA666-usdc-v1"
-PROFILE_ID="f8784629ff7338002d836c1988b8e2c0f19caf448429e0eb7fdc39fa2b08f7d9a44171fc1e7239bc25e06ad833c14e91"
+ROUTE_ID="pftl-a666-r4-offline-rehearsal-v1"
+ROUTE_DIGEST="$(printf 'b2%.0s' {1..48})"
+ROUTE_POLICY_HASH="5dcc28ea82872d05716dbb94af480f6dd1355dde8a931633a01dfdec309c4bbd5e5ee16e104afba75913eb0100123044"
 CONTROLLED_WALLET_ID="pfab9b9228942e5c529633a13aa271d5297bec6353"
-ISSUE_ETHEREUM_RECIPIENT="0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0"
+ISSUE_ETHEREUM_RECIPIENT="0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
 EGRESS_POLICY_ID="77e8d7b093335a9391c7aa7ed940308c055e432fd804b4b8b15eff983a0edbdb"
 TRANSPARENT_KEY_FILE="${POSTFIAT_R4_PRIVATE_SWAP_KEY_FILE:-/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json}"
 DATA_DIR="${POSTFIAT_R4_PRIVATE_SWAP_DATA_DIR:-$PRESERVED_ROOT/validator-2}"
-ROUND_DRIVER_READY_FILE="${POSTFIAT_R4_ROUND_DRIVER_READY_FILE:-}"
-ASSET_SERVICE_ADDRESS="${POSTFIAT_R4_ASSET_SERVICE_ADDRESS:-127.0.0.1:8799}"
-ASSET_SERVICE_VAULT_DIR="${POSTFIAT_R4_ASSET_SERVICE_VAULT_DIR:-}"
+ROUND_DRIVER_READY_FILE="${POSTFIAT_R4_ROUND_DRIVER_READY_FILE:-$(jq -r '.certified_round_driver.ready_file' "$DEPENDENCY_EVIDENCE")}"
+ASSET_SERVICE_ADDRESS="${POSTFIAT_R4_ASSET_SERVICE_ADDRESS:-$(jq -r '.asset_service.endpoint' "$DEPENDENCY_EVIDENCE")}"
+ASSET_SERVICE_VAULT_DIR="${POSTFIAT_R4_ASSET_SERVICE_VAULT_DIR:-$(jq -r '.paths.asset_vault' "$DEPENDENCY_EVIDENCE")}"
 BINARY="$TARGET_DIR/release/pftl_swapd"
 EXPECTED_BINARY_SHA256="c200a3584189269c1e29a8249eca4ff5cbd1ec7dbc5540ae4f13a0c0d7c5a2d6"
 SUPERVISOR_PID_FILE="$RUNTIME_DIR/supervisor.pid"
@@ -28,6 +36,7 @@ DAEMON_PID_FILE="$RUNTIME_DIR/daemon.pid"
 DAEMON_LOG="$RUNTIME_DIR/pftl-swapd.log"
 BUILD_LOG="$RUNTIME_DIR/cargo-build.log"
 ACTION="${1:-stage}"
+SYSTEMD_UNIT="${POSTFIAT_R4_PFTL_SWAPD_UNIT:-a666-r4-pftl-swapd-pathb-v1.service}"
 build_action="unknown"
 build_runtime_ms=0
 daemon_pid=0
@@ -49,7 +58,7 @@ write_evidence() {
     ready=true
   fi
   jq -n \
-    --arg schema "postfiat.a666.r4.private-swap-stage.v1" \
+    --arg schema "postfiat.a666.r4.private-swap-stage.v2" \
     --arg candidate_revision "$CANDIDATE_REVISION" \
     --arg candidate_worktree "$CANDIDATE_WORKTREE" \
     --arg binary_path "$BINARY" \
@@ -57,9 +66,11 @@ write_evidence() {
     --arg build_action "$build_action" \
     --argjson build_runtime_ms "$build_runtime_ms" \
     --arg bind "$BIND" \
-    --arg route_id "$ROUTE_ID" \
-    --arg profile_id "$PROFILE_ID" \
-    --arg controlled_wallet_id "$CONTROLLED_WALLET_ID" \
+    --arg route_id "$ROUTE_ID" --arg route_digest "$ROUTE_DIGEST" --arg route_policy_hash "$ROUTE_POLICY_HASH" \
+    --arg controlled_wallet_id "$CONTROLLED_WALLET_ID" --arg ethereum_recipient "$ISSUE_ETHEREUM_RECIPIENT" --arg egress_policy_id "$EGRESS_POLICY_ID" \
+    --arg root "$PRESERVED_ROOT" --arg route_state "$ROUTE_STATE" --arg route_state_sha "$ROUTE_STATE_SHA256" \
+    --arg dependency_evidence "$DEPENDENCY_EVIDENCE" --arg dependency_sha "$DEPENDENCY_EVIDENCE_SHA256" \
+    --arg witness_stage "$WITNESS_STAGE" --arg witness_sha "$WITNESS_SHA256" --arg systemd_unit "$SYSTEMD_UNIT" \
     --arg rpc_endpoints_file "$RPC_ENDPOINTS_FILE" \
     --arg data_dir "$DATA_DIR" \
     --arg round_driver_ready_file "$ROUND_DRIVER_READY_FILE" \
@@ -80,8 +91,8 @@ write_evidence() {
     --argjson daemon_ready "$daemon_ready" \
     --argjson response_compatible "$response_compatible" \
     --argjson zero_dependency "$zero_dependency" \
-    --argjson daemon_pid "$daemon_pid" \
-    --argjson runtime_ms "$runtime_ms" \
+    --argjson supervisor_pid "$$" --argjson daemon_pid "$daemon_pid" \
+    --argjson runtime_ms "$runtime_ms" --argjson current_height "$current_height" --arg current_tip "$current_tip" --arg current_root "$current_root" \
     --argjson ready_public "$ready_public" \
     --argjson ready "$ready" '
     {
@@ -90,9 +101,11 @@ write_evidence() {
       binary:{path:$binary_path,sha256:(if ($binary_sha256|length)>0 then $binary_sha256 else null end),build_action:$build_action,build_runtime_ms:$build_runtime_ms,built_from_exact_candidate:$binary_built},
       endpoint:{url:("http://"+$bind),loopback_only:true,pid:(if $daemon_pid>0 then $daemon_pid else null end),ready:$daemon_ready},
       public_readiness:$ready_public,
-      governed_identity:{route_id:$route_id,successor_profile_id:$profile_id,route_profile_match:$route_profile,live_value_enabled:$route_live},
-      controlled_wallet:{id:$controlled_wallet_id,public_deployment_match:$wallet_match},
-      rpc_fleet:{endpoints_file:$rpc_endpoints_file,configured_count:6,configured:$rpc_configured,live_equal:$rpc_ready},
+      bindings:{preserved_root:$root,route_current_state:{path:$route_state,sha256:$route_state_sha},dependency_evidence:{path:$dependency_evidence,sha256:$dependency_sha},witness_stage:{path:$witness_stage,witness_sha256:$witness_sha}},
+      governed_identity:{route_id:$route_id,route_epoch:2,policy_epoch:2,route_config_digest:$route_digest,policy_hash:$route_policy_hash,route_profile_match:$route_profile,live_value_enabled:$route_live,paused:false,invariant_holds:true},
+      controlled_wallet:{id:$controlled_wallet_id,ethereum_recipient:$ethereum_recipient,witness_match:$wallet_match},
+      supervisor:{systemd_unit:$systemd_unit,pid:$supervisor_pid,live:($daemon_pid>0)},
+      rpc_fleet:{endpoints_file:$rpc_endpoints_file,configured_count:6,configured:$rpc_configured,live_equal:$rpc_ready,tuple:{height:$current_height,tip:$current_tip,state_root:$current_root}},
       rpc_wiring:{daemon_model:"local validator data plus certified round-driver readiness",six_rpc_endpoints_consumed_by:"certified round driver",direct_rpc_arguments_to_daemon:false},
       daemon_inputs:{
         data_dir:$data_dir,
@@ -111,8 +124,8 @@ write_evidence() {
         "--asset-service-address",$asset_service_address,
         "--asset-service-vault-dir","${POSTFIAT_R4_ASSET_SERVICE_VAULT_DIR}",
         "--route-id",$route_id,"--controlled-wallet-id",$controlled_wallet_id,
-        "--issue-ethereum-recipient","public deployment identity",
-        "--egress-policy-id","public governed identity"
+        "--issue-ethereum-recipient",$ethereum_recipient,
+        "--egress-policy-id",$egress_policy_id
       ],
       persistence:{supervisor_pid_file:$supervisor_pid_file,daemon_pid_file:$daemon_pid_file,teardown_command:"scripts/a666-r4-private-swap-stage teardown"},
       product_trace:{
@@ -127,7 +140,7 @@ write_evidence() {
       dependency_verdict:{stakehub_dependency:false,static_import_path_env_hits:0,process_dependency:false,check:$zero_dependency},
       product_change_verdict:{required:false,files:[]},
       business_mutation:{submitted_private_operations:0,post_requests_sent:0,zero_business_mutation:true},
-      effort_to_green_after_rpc_restoration:{estimate:"2-4 hours",work:"stage the existing asset-orchard service and certified round driver, supply their path-only readiness inputs, then run this stage once"},
+      submitted_private_operations:0,live_chain:false,stakehub_interaction:false,credentials_included:false,
       checks:{
         candidate_revision_and_binary_hash:($candidate_exact and $binary_built),
         loopback_only_endpoint:true,
@@ -143,7 +156,8 @@ write_evidence() {
       },
       first_blocker:(if ($first_blocker|length)>0 then $first_blocker else null end),
       runtime_ms:$runtime_ms,
-      ready:$ready
+      ready:$ready,
+      state:(if $ready then "ready" else "red" end)
     }' > "$EVIDENCE"
 }
 
@@ -172,6 +186,8 @@ route_live=false
 rpc_configured=false
 rpc_ready=false
 current_height=0
+current_tip=""
+current_root=""
 daemon_ready=false
 response_compatible=false
 zero_dependency=false
@@ -194,13 +210,21 @@ rg -q '/v1/ready' "$CANDIDATE_WORKTREE/wallet-proxy/pftl-private-swap.js"
 rg -q 'postfiat.wallet.pftl_private_swap_readiness.v1' "$CANDIDATE_WORKTREE/wallet-proxy/navswap-persistence-http.js"
 response_compatible=true
 
-[[ "$(jq -r '.route_id' "$LIFECYCLE_REPORT")" == "$ROUTE_ID" ]]
-[[ "$(jq -r '.successor_profile_id' "$LIFECYCLE_REPORT")" == "$PROFILE_ID" ]]
+[[ "$(sha256sum "$ROUTE_STATE" | awk '{print $1}')" == "$ROUTE_STATE_SHA256" ]]
+[[ "$(sha256sum "$DEPENDENCY_EVIDENCE" | awk '{print $1}')" == "$DEPENDENCY_EVIDENCE_SHA256" ]]
+jq -e --arg route "$ROUTE_ID" --arg digest "$ROUTE_DIGEST" --arg policy "$ROUTE_POLICY_HASH" '
+  .accepted==true and .six_rpc_tuple.height==831 and .six_rpc_route.route_id==$route
+  and .six_rpc_route.route_epoch==2 and .six_rpc_route.policy_epoch==2
+  and .six_rpc_route.route_config_digest==$digest and .six_rpc_route.policy_hash==$policy
+  and .six_rpc_route.live_value_enabled==true and .six_rpc_route.paused==false and .six_rpc_route.invariant_holds==true
+' "$ROUTE_STATE" >/dev/null
+jq -e --arg witness "$WITNESS_SHA256" '.accepted==true and .artifacts.witness_sha256==$witness' "$WITNESS_STAGE" >/dev/null
+[[ "$(sha256sum "$WITNESS" | awk '{print $1}')" == "$WITNESS_SHA256" ]]
+jq -e --arg wallet "$CONTROLLED_WALLET_ID" --arg recipient "$ISSUE_ETHEREUM_RECIPIENT" '.receipt.wallet==$wallet and .mint_packet.ethereum_recipient==$recipient' "$WITNESS" >/dev/null
 route_profile=true
-public_env="$CANDIDATE_WORKTREE/deployments/a666-mainnet-20260727/pftl-resident-swap-e55434c/services/pftl-swapd.env"
-[[ "$(sed -n 's/^PFTL_CONTROLLED_WALLET_ID=//p' "$public_env")" == "$CONTROLLED_WALLET_ID" ]]
-[[ "$(sed -n 's/^PFTL_ROUTE_ID=//p' "$public_env")" == "$ROUTE_ID" ]]
 wallet_match=true
+jq -e '.state=="ready" and .ready==true and .certified_round_driver.local_height==831 and .certified_round_driver.start_height==832 and .certified_round_driver.next_height==832 and .certified_round_driver.authenticated_peer_count==5 and .certified_round_driver.processed_round_count==0 and .business_operations==0 and .stakehub_interaction==false and .live_chain==false' "$DEPENDENCY_EVIDENCE" >/dev/null
+for dependency_pid in $(jq -r '.supervisor.pid,.asset_service.pid,.certified_round_driver.pid' "$DEPENDENCY_EVIDENCE"); do kill -0 "$dependency_pid"; done
 [[ -f "$TRANSPARENT_KEY_FILE" ]]
 
 if [[ -e "$BINARY" ]]; then
@@ -224,9 +248,10 @@ if jq -e '(.endpoints|length)==6 and all(.endpoints[]; .host=="127.0.0.1" and (.
   rpc_configured=true
 fi
 if [[ "$rpc_configured" == true ]]; then
-  live_tuple="$(python3 - "$RPC_ENDPOINTS_FILE" <<'PY'
+  live_tuple="$(python3 - "$RPC_ENDPOINTS_FILE" "$ROUTE_STATE" <<'PY'
 import json, socket, sys
 rows=json.load(open(sys.argv[1], encoding='utf-8'))['endpoints']
+truth=json.load(open(sys.argv[2], encoding='utf-8'))['six_rpc_tuple']
 observed=[]
 for row in rows:
     request={"version":"postfiat-local-rpc-v1","id":f"r4-private-stage-{row['validator_index']}","method":"status","params":{}}
@@ -240,29 +265,48 @@ for row in rows:
     if response.get('ok') is not True:
         raise SystemExit(1)
     observed.append((value.get('block_height'),value.get('block_tip_hash'),value.get('state_root')))
-if len(observed)!=6 or len(set(observed))!=1 or not isinstance(observed[0][0],int):
+expected=(truth['height'],truth['block_tip_hash'],truth['state_root'])
+if len(observed)!=6 or set(observed)!={expected}:
     raise SystemExit(1)
-print('\t'.join(map(str,observed[0])))
+print('\t'.join(map(str,expected)))
 PY
 )" && rpc_ready=true
-  if [[ "$rpc_ready" == true ]]; then IFS=$'\t' read -r current_height _ <<<"$live_tuple"; fi
+  if [[ "$rpc_ready" == true ]]; then IFS=$'\t' read -r current_height current_tip current_root <<<"$live_tuple"; fi
 fi
-if [[ "$rpc_ready" == true ]] && python3 - "$RPC_ENDPOINTS_FILE" "$ROUTE_ID" <<'PY'
+if [[ "$rpc_ready" == true ]] && python3 - "$RPC_ENDPOINTS_FILE" "$ROUTE_ID" "$ROUTE_DIGEST" "$ROUTE_POLICY_HASH" <<'PY'
 import json,socket,sys
 rows=json.load(open(sys.argv[1],encoding='utf-8'))['endpoints']
+route_id,digest,policy_hash=sys.argv[2:]
 observed=[]
 for row in rows:
-    request={"version":"postfiat-local-rpc-v1","id":f"r4-private-route-{row['validator_index']}","method":"navcoin_bridge_supply_status","params":{"route_id":sys.argv[2]}}
+    request={"version":"postfiat-local-rpc-v1","id":f"r4-private-route-{row['validator_index']}","method":"navcoin_bridge_supply_status","params":{"route_id":route_id}}
     with socket.create_connection((row['host'],row['rpc_port']),timeout=3) as connection:
         connection.sendall((json.dumps(request,separators=(',',':'))+'\n').encode())
         response=json.loads(connection.makefile('rb').readline())
     value=response.get('result',{})
-    observed.append((value.get('route_id'),value.get('route_epoch'),value.get('policy_epoch'),value.get('live_value_enabled'),value.get('paused'),value.get('invariant_holds')))
-if len(observed)!=6 or len(set(observed))!=1 or observed[0]!=(sys.argv[2],5,5,True,False,True): raise SystemExit(1)
+    observed.append((value.get('route_id'),value.get('route_epoch'),value.get('policy_epoch'),value.get('route_config_digest'),value.get('policy_hash'),value.get('live_value_enabled'),value.get('paused'),value.get('invariant_holds')))
+expected=(route_id,2,2,digest,policy_hash,True,False,True)
+if len(observed)!=6 or set(observed)!={expected}: raise SystemExit(1)
 PY
 then
   route_live=true
 fi
+
+[[ "$ROUND_DRIVER_READY_FILE" == "$(jq -r '.certified_round_driver.ready_file' "$DEPENDENCY_EVIDENCE")" ]]
+[[ "$ASSET_SERVICE_ADDRESS" == "$(jq -r '.asset_service.endpoint' "$DEPENDENCY_EVIDENCE")" ]]
+[[ "$ASSET_SERVICE_VAULT_DIR" == "$(jq -r '.paths.asset_vault' "$DEPENDENCY_EVIDENCE")" ]]
+[[ "$(systemctl --user is-active "$(jq -r '.supervisor.systemd_unit' "$DEPENDENCY_EVIDENCE")")" == active ]]
+jq -e '(.local_state.block_height==831) and (.start_height==832) and (.processed_round_count==0) and (.authenticated_peer_count==5) and .authenticated_quorum==true and (((now*1000)-.heartbeat_unix_ms)>=0) and (((now*1000)-.heartbeat_unix_ms)<=10000)' "$ROUND_DRIVER_READY_FILE" >/dev/null
+python3 - <<'PY'
+import socket
+with socket.create_connection(('127.0.0.1',8799),timeout=3): pass
+try:
+ with socket.create_connection(('127.0.0.1',8798),timeout=1): pass
+except OSError: raise SystemExit(0)
+raise SystemExit(1)
+PY
+[[ -z "$(find "$RUNTIME_DIR/private/batch-outbox" -mindepth 1 -print -quit)" ]]
+[[ -z "$(find "$RUNTIME_DIR/private/processed-batches" -mindepth 1 -print -quit)" ]]
 
 if [[ "$ACTION" == self-check ]]; then
   exit 0
@@ -326,10 +370,10 @@ printf '%s\n' "$daemon_pid" > "$DAEMON_PID_FILE"
 READY_PUBLIC_FILE="$RUNTIME_DIR/public-readiness.json"
 for _ in {1..180}; do
   kill -0 "$daemon_pid"
-  if python3 - "$BIND" "$READY_PUBLIC_FILE" "$current_height" <<'PY'
+  if python3 - "$BIND" "$READY_PUBLIC_FILE" "$current_height" "$ROUTE_ID" "$CONTROLLED_WALLET_ID" <<'PY'
 import http.client, json, sys
 host, port=sys.argv[1].rsplit(':',1)
-height=int(sys.argv[3]); next_height=height+1
+height=int(sys.argv[3]); next_height=height+1; route_id=sys.argv[4]; wallet_id=sys.argv[5]
 try:
     connection=http.client.HTTPConnection(host,int(port),timeout=2)
     connection.request('GET','/v1/ready')
@@ -338,6 +382,7 @@ except (OSError,ValueError,json.JSONDecodeError): raise SystemExit(1)
 driver=value.get('checks',{}).get('certified_round_driver',{})
 asset=value.get('checks',{}).get('asset_service',{})
 if value.get('schema')!='postfiat.pftl_swap.readiness.v1' or value.get('ready') is not True or value.get('local_only') is not True: raise SystemExit(1)
+if value.get('route_id')!=route_id or value.get('controlled_wallet_id')!=wallet_id: raise SystemExit(1)
 if asset.get('ok') is not True or asset.get('mirror_matches') is not True or asset.get('report',{}).get('ready') is not True or asset.get('report',{}).get('mirror',{}).get('height') != height: raise SystemExit(1)
 if driver.get('ok') is not True or driver.get('local_height') != height or driver.get('next_round_height') != next_height or driver.get('authenticated_peer_count') != 5 or driver.get('persistent_vote_streams') is not True or driver.get('remote_proposal_routing') is not True or driver.get('local_apply_before_certified_send') is not True: raise SystemExit(1)
 public={"schema":value["schema"],"ready":True,"local_only":True,"route_id":value.get("route_id"),"controlled_wallet_id":value.get("controlled_wallet_id"),"asset_service":{"ready":True,"mirror_matches":True,"height":height},"certified_round_driver":{"ready":True,"local_height":height,"next_height":next_height,"authenticated_peer_count":5,"persistent_vote_streams":True,"remote_proposal_routing":True,"local_apply_before_certified_send":True}}
