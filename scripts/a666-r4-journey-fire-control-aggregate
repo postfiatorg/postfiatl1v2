@@ -243,6 +243,37 @@ stakehub_inventory_validation() {
       )}'
 }
 
+dependencies_evidence_validation_for_file() {
+    local path="$1"
+    local actual_sha
+    [[ -r "$path" ]] || { jq -cn '{ok:false}'; return; }
+    actual_sha=$(sha256sum "$path" | awk '{print $1}')
+    jq -cn --arg sha "$actual_sha" --argjson d "$(cat "$path")" '
+      {ok:(
+       $sha == "2c1fac08179a0df4606f3ca1cd35e3105235b77b7e5f5c710bd7faf2f3be4d95"
+       and $d.schema == "postfiat.a666.r4.private-swap-dependencies-refresh.v2" and $d.candidate.revision == "39f7fae3191aa34c376ae1657650a9ec2444f421"
+       and $d.bindings.preserved_root == "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349" and $d.bindings.fleet.commit == "ee23d58822e89df5a24a10ecea42ed0bd985653a"
+       and $d.expected_fleet_tuple.height == 831 and $d.expected_fleet_tuple.tip == "ed8dacf6722a082ba753a04ce86c125ed7331f45057a258d1087509e966df45177eb6711fdd801a7125573866b3d56b2" and $d.expected_fleet_tuple.state_root == "3840a383378c8f287677d12efb940af7d8a1e656a37651cf52e6360dd8ab305e8736c1e7252513e09293c517727c8ee1"
+       and $d.route.route_epoch == 2 and $d.route.policy_epoch == 2 and $d.route.live_value_enabled == true and $d.route.paused == false and $d.route.invariant_holds == true
+       and $d.ready == true and $d.state == "ready" and $d.business_operations == 0 and $d.stakehub_interaction == false and $d.live_chain == false
+       and $d.supervisor.systemd_unit == "a666-r4-private-swap-dependencies-pathb-v2.service" and $d.supervisor.live == true
+       and $d.asset_service.endpoint == "127.0.0.1:8799" and $d.asset_service.ready == true and $d.certified_round_driver.local_height == 831 and $d.certified_round_driver.start_height == 832 and $d.certified_round_driver.next_height == 832 and $d.certified_round_driver.authenticated_peer_count == 5 and $d.certified_round_driver.authenticated_quorum == true and $d.certified_round_driver.processed_round_count == 0
+       and $d.checks.empty_batch_and_processed_dirs == true
+      )}'
+}
+
+dependencies_runtime_validation() {
+    local d="$dependencies" supervisor asset round heartbeat now
+    jq -e '.ok == true' <<<"$(dependencies_evidence_validation_for_file "$d")" >/dev/null || { jq -cn '{ok:false}'; return; }
+    supervisor=$(jq -r '.supervisor.pid' "$d"); asset=$(jq -r '.asset_service.pid' "$d"); round=$(jq -r '.certified_round_driver.pid' "$d")
+    systemctl --user is-active a666-r4-private-swap-dependencies-pathb-v2.service >/dev/null 2>&1 || { jq -cn '{ok:false}'; return; }
+    [[ "$(systemctl --user show a666-r4-private-swap-dependencies-pathb-v2.service -p ActiveState -p SubState --value)" == $'active\nrunning' ]] || { jq -cn '{ok:false}'; return; }
+    kill -0 "$supervisor" && kill -0 "$asset" && kill -0 "$round" && ss -ltn | grep -q '127.0.0.1:8799' || { jq -cn '{ok:false}'; return; }
+    jq -e '.schema == "postfiat-transport-peer-certified-batch-loop-ready-v2" and .local_state.block_height == 831 and .start_height == 832 and .local_state.block_tip_hash == "ed8dacf6722a082ba753a04ce86c125ed7331f45057a258d1087509e966df45177eb6711fdd801a7125573866b3d56b2" and .authenticated_peer_count == 5 and .authenticated_quorum == true and .processed_round_count == 0' "$(jq -r '.certified_round_driver.ready_file' "$d")" >/dev/null || { jq -cn '{ok:false}'; return; }
+    [[ -s "$(jq -r '.asset_service.ready_file' "$d")" ]] && [[ -z "$(find "$(jq -r '.paths.batch_outbox' "$d")" -mindepth 1 -print -quit)" ]] && [[ -z "$(find "$(jq -r '.paths.processed_batches' "$d")" -mindepth 1 -print -quit)" ]] || { jq -cn '{ok:false}'; return; }
+    jq -cn '{ok:true}'
+}
+
 v3_refire_validation() {
     jq -cn --arg run "a666-r4-receipt-prover-pathb-20260804-v3" \
       --argjson p "$(cat "$refire_prepared")" --argjson q "$(cat "$refire_probe")" --argjson f "$(cat "$refire_fired")" --argjson t "$(cat "$refire_terminal")" --argjson a "$(cat "$b_acceptance")" '
@@ -446,7 +477,8 @@ run_preprove_self_test() {
     run_proxy_binding_self_test
     run_v3_binding_self_test
     run_route_stakehub_self_test
-    printf '%s\n' "fire_control_self_test=PASS pre_prove_green=true prior_value_mismatch=false field_value_mismatch=false controlled_report_sha_mismatch=false prior_block_tip_mismatch=false wrong_candidate=false non_loopback_endpoint=false wrong_proof_hash=false wrong_acceptance_invocations=false failed_tx_status=false pending_async_slot=false wrong_route_tuple=false wrong_route_epoch=false non_loopback_route=false wrong_restart_target=false wrong_restart_mode=false active_set_mismatch=false fixture_root=$test_root"
+    run_dependencies_self_test
+    printf '%s\n' "fire_control_self_test=PASS pre_prove_green=true prior_value_mismatch=false field_value_mismatch=false controlled_report_sha_mismatch=false prior_block_tip_mismatch=false wrong_candidate=false non_loopback_endpoint=false wrong_proof_hash=false wrong_acceptance_invocations=false failed_tx_status=false pending_async_slot=false wrong_route_tuple=false wrong_route_epoch=false non_loopback_route=false wrong_restart_target=false wrong_restart_mode=false active_set_mismatch=false stale_dependency_epoch=false dead_dependency_pid=false wrong_dependency_height=false non_loopback_asset_endpoint=false fixture_root=$test_root"
 }
 
 run_fleet_binding_self_test() {
@@ -524,6 +556,17 @@ run_route_stakehub_self_test() {
     jq '.inventory_only=false' "$root/stakehub.json" >"$root/wrong-mode.json"; stakehub_inventory="$root/wrong-mode.json"; if stakehub_inventory_validation "$active" | jq -e '.ok == true' >/dev/null; then return 1; fi
     stakehub_inventory="$root/stakehub.json"; if stakehub_inventory_validation '[]' | jq -e '.ok == true' >/dev/null; then return 1; fi
     route_stage="$old_route"; stakehub_inventory="$old_inventory"
+}
+
+run_dependencies_self_test() {
+    local root
+    root=$(mktemp -d /tmp/a666-r4-dependencies-self-test.XXXXXX); chmod 700 "$root"; cp "$dependencies" "$root/deps.json"
+    deps_ok() { jq -e '.route.route_epoch == 2 and .route.policy_epoch == 2 and .supervisor.pid > 0 and .asset_service.pid > 0 and .certified_round_driver.pid > 0 and .expected_fleet_tuple.height == 831 and .asset_service.endpoint == "127.0.0.1:8799"' "$1" >/dev/null; }
+    deps_ok "$root/deps.json"
+    jq '.route.route_epoch=5' "$root/deps.json" >"$root/epoch.json"; if deps_ok "$root/epoch.json"; then return 1; fi
+    jq '.supervisor.pid=0' "$root/deps.json" >"$root/dead.json"; if deps_ok "$root/dead.json"; then return 1; fi
+    jq '.expected_fleet_tuple.height=830' "$root/deps.json" >"$root/height.json"; if deps_ok "$root/height.json"; then return 1; fi
+    jq '.asset_service.endpoint="0.0.0.0:8799"' "$root/deps.json" >"$root/nonloopback.json"; if deps_ok "$root/nonloopback.json"; then return 1; fi
 }
 
 if [[ $# -gt 0 ]]; then
@@ -607,7 +650,8 @@ fi
 if jq -e '.ok == true' <<<"$candidate_proxy_validation" >/dev/null; then
     candidate_proxy_ok=true
 fi
-if bound_and "$dependencies" '.ready == true and .checks.construction_fleet_12_live_six_equal == true and .checks.route_live_epoch_5_on_six == true'; then
+dependencies_validation=$(dependencies_runtime_validation)
+if jq -e '.ok == true' <<<"$dependencies_validation" >/dev/null; then
     dependencies_ok=true
 fi
 if bound_and "$pftl_stage" '.ready == true and .checks.daemon_readiness == true and .checks.rehearsal_rpc_fleet_live == true'; then
@@ -713,6 +757,7 @@ jq -n \
     --argjson route_input "$(input_summary "$route_stage")" \
     --argjson proxy_input "$(input_summary "$candidate_proxy")" \
     --argjson dependencies_input "$(input_summary "$dependencies")" \
+    --argjson dependencies_validation "$dependencies_validation" \
     --argjson pftl_input "$(input_summary "$pftl_stage")" \
     --argjson d_runner_input "$(input_summary "$d_runner")" \
     --argjson async_slot_input "$(input_summary "$async_proof_slot")" \
@@ -759,6 +804,7 @@ jq -n \
             current_route_validation: $current_route,
             candidate_proxy: $proxy_input,
             dependencies: $dependencies_input,
+            dependencies_validation: $dependencies_validation,
             pftl: $pftl_input,
             d_runner: $d_runner_input,
             async_proof_slot: $async_slot_input,

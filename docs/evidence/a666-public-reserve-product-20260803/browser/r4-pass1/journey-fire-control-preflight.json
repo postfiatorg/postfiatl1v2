@@ -181,13 +181,16 @@
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/private-swap-dependencies-refresh.json",
       "exists": true,
       "valid_json": true,
-      "observed_status": null,
-      "observed_reason": "systemd_stage_working_directory_not_git_repo",
+      "observed_status": true,
+      "observed_reason": null,
       "bindings": {
         "candidate_revision": null,
         "rehearsal_root": null,
         "run_id": null
       }
+    },
+    "dependencies_validation": {
+      "ok": true
     },
     "pftl": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/private-swap-stage.json",
@@ -391,7 +394,7 @@
     },
     {
       "id": "private_dependencies_ready",
-      "ok": false,
+      "ok": true,
       "input": "dependencies"
     },
     {
@@ -437,7 +440,6 @@
   ],
   "check_count": 18,
   "blocker_names": [
-    "private_dependencies_ready",
     "pftl_private_swap_ready",
     "d_runner_steps_1_6_9_10_dry_run",
     "stakehub_official_absent",
