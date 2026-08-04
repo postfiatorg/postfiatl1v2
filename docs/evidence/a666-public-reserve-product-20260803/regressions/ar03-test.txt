@@ -1,0 +1,94 @@
+AR-03 regression evidence: quorum-first commit with offline validator converges after recovery
+================================================================================================
+
+Test
+----
+tests::a666_recovery_regression_tests::ar03_quorum_first_commit_with_offline_validator_converges_after_recovery
+File: crates/node/src/tests/a666_recovery_regression_tests.rs
+Module registration: crates/node/src/lib_tests.rs (`mod a666_recovery_regression_tests;`)
+
+Contract (recovery spec section 6.1, AR-03): quorum-first commit does not
+require an intentionally offline validator, while later propagation converges
+after recovery.
+
+Design note (Troll-authorized deviation from the path doc's three-validator
+suggestion): production BFT quorum is `(2n / 3) + 1`
+(crates/ordering_fast/src/lib.rs:336), so three registered validators require
+3-of-3 and cannot tolerate any offline validator. The test therefore uses the
+smallest production-valid topology: four registered ACTIVE validators, quorum
+3, with validator-3 active but intentionally offline/non-voting for the first
+commit. The test asserts this arithmetic explicitly so threshold drift fails
+the test.
+
+Canonical input vector: chain_id "postfiat-local", validator ids
+validator-0..3, offline validator-3, block-one transfer amount 41, block-two
+transfer amount 42, view 0, transparent batches. Validator keys are generated
+by `init` per run; the state-machine flow is deterministic and all
+cross-validator equality assertions hold for any generated key set.
+
+What the test proves
+--------------------
+1. Block 1 certificate: 4 registered validators, quorum 3, exactly 3 votes,
+   no vote from validator-3; source commits block 1 with that certificate.
+   (Fails if the commit waits on validator-3.)
+2. Propagation/recovery: validator-1, validator-2, and the recovered
+   validator-3 each apply block 1 through the real authenticated certified
+   path (archived batch payload + external certificate reconstructed from the
+   archived block + canonical replay block record, staged exactly like
+   rpc_catch_up_preflight_blocks at crates/node/src/rpc_cli.rs:4386).
+3. Block 2 certificate: 4-of-4 votes, including validator-3 voting from its
+   own restored directory; committed and propagated the same way.
+4. Terminal convergence: all four validator directories report identical
+   (height=2, tip, state root) and verify_blocks passes on each.
+   (Fails if catch-up is skipped.)
+
+Initial red run (pre-fix staging defect, 2026-08-04)
+----------------------------------------------------
+Command:
+  cargo test -p postfiat-node --lib tests::a666_recovery_regression_tests::ar03_quorum_first_commit_with_offline_validator_converges_after_recovery -- --exact --nocapture
+Result: exit 101, `running 1 test`, FAILED in 1.16s:
+  certified propagation of block one to .../validator-1 failed:
+  external block certificate proposal hash mismatch
+  (rejection raised at crates/node/src/consensus_artifacts.rs:354)
+
+Root cause (field-by-field against the preserved fixture)
+---------------------------------------------------------
+First divergent input: payload_hash, one of the proposal-hash inputs
+(block_proposal_hash_from_evidence, crates/node/src/block_finality.rs:4643;
+recomputed during apply at crates/node/src/storage_commit.rs:2157).
+- Source proposal.payload_hash:  f6bf44c5ecd1a90e674fea120cfe9f919d547c7cba0294a6595879381c0bab12073bad6141dc57757c1ef3ccd59d899a
+- Source batch_archive payload_hash for block 1: identical (f6bf44...) —
+  hash of the canonical archived payload text (11149 bytes).
+- The test had staged the transfer-builder batch.json raw text (11321
+  bytes), whose archival payload hash differs, so the destination's
+  recomputed expected proposal hash diverged from the certificate's
+  proposal hash (646bfbdab51eec586570ed1556efe82b20d07fe75c80583c861ded94c4b1c11c8eee298709ac4e8c19ef20fb60ca9e97).
+Production code is internally consistent: the live commit hashes the
+canonical payload, and production catch-up stages the archived payload text.
+This was a test-staging defect only; zero product-code changes.
+
+Fix (test staging only)
+-----------------------
+stage_certified_catch_up_artifacts now mirrors rpc_catch_up_preflight_blocks:
+reads the source batch_archive entry payload_json for the block's
+(batch_kind, batch_id), writes that exact text as batch.json, reconstructs
+the external certificate via reconstruct_block_certificate_from_archive
+against the destination data dir, and writes the canonical replay block JSON.
+
+Green run (2026-08-04T01:08:51Z, source revision df050cd3f67d63fad494f8afa2c81ee72c2ee739 plus this change)
+----------------------------------------------------------------------------------------------------------
+Command:
+  cargo test -p postfiat-node --lib tests::a666_recovery_regression_tests::ar03_quorum_first_commit_with_offline_validator_converges_after_recovery -- --exact --nocapture
+Exit code: 0
+Wall-clock elapsed: 11439 ms (including 6.98s incremental compile)
+Matched count line: `running 1 test`
+Final lines:
+  test tests::a666_recovery_regression_tests::ar03_quorum_first_commit_with_offline_validator_converges_after_recovery ... ok
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 264 filtered out; finished in 4.35s
+Test runtime: 4.35s (< 120s budget)
+
+Hygiene
+-------
+  cargo fmt --all -- --check: exit 0
+  git diff --check -- <owned paths>: exit 0
+No secrets, key material, or live-chain data recorded.
