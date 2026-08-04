@@ -113,6 +113,22 @@
         "AR-11"
       ],
       "regression_status": "passed"
+    },
+    {
+      "id": "DEFECT-10",
+      "description": "browser journey step 10 had no product control for downloading a completed operation's redacted public receipt",
+      "regression_ids": [
+        "R4-STEP10-DOWNLOAD"
+      ],
+      "regression_status": "passed"
+    },
+    {
+      "id": "DEFECT-11",
+      "description": "production recovery serialization discarded finalized receipt identity and final balance evidence across browser reload",
+      "regression_ids": [
+        "R4-RECOVERED-RECEIPT"
+      ],
+      "regression_status": "passed"
     }
   ],
   "regressions": [
@@ -455,6 +471,53 @@
         }
       ],
       "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/ar09-ar11-tests.txt"
+    }
+  ],
+  "browser_regressions": [
+    {
+      "id": "R4-STEP10-DOWNLOAD",
+      "contract": "a user can download a completed operation's versioned public receipt through the production wallet control with no custody material",
+      "status": "passed",
+      "source_files": [
+        "wallet-web/src/components/PftlPrivatePrimary.jsx",
+        "wallet-web/src/lib/journey-step-9-recovery.e2e.js"
+      ],
+      "root_cause": "wallet-web/src/components/PftlPrivatePrimary.jsx:63-96 and 391-401 lacked a completed-operation public-receipt projection and download control",
+      "first_passing_commit": "85bfa01ceed8e331a241988f58edb9e8f735bbfd",
+      "tests": [
+        {
+          "name": "journey step 9 resumes the production private-primary recovery component after proxy restart and browser reload",
+          "runtime_milliseconds": 8173,
+          "matched_test_count": 2,
+          "command": "npm run test:public-browser",
+          "working_directory": "wallet-web"
+        }
+      ],
+      "evidence": [
+        "docs/evidence/a666-public-reserve-product-20260803/browser/step10-public-receipt-red.txt",
+        "docs/evidence/a666-public-reserve-product-20260803/browser/step10-public-receipt-green.txt"
+      ]
+    },
+    {
+      "id": "R4-RECOVERED-RECEIPT",
+      "contract": "the production recovery serializer preserves finalized receipt identity and the redacted final balance tuple across reload while excluding custody material",
+      "status": "passed",
+      "source_files": [
+        "wallet-web/src/lib/pftl-private-primary.js",
+        "wallet-web/src/lib/journey-step-9-recovery.e2e.js"
+      ],
+      "root_cause": "wallet-web/src/lib/pftl-private-primary.js:262-307 publicRecoveryRecord previously omitted receipt.receipt_identity and final_balance_tuple",
+      "first_passing_commit": "85bfa01ceed8e331a241988f58edb9e8f735bbfd",
+      "tests": [
+        {
+          "name": "journey step 9 resumes the production private-primary recovery component after proxy restart and browser reload",
+          "runtime_milliseconds": 8173,
+          "matched_test_count": 2,
+          "command": "npm run test:public-browser",
+          "working_directory": "wallet-web"
+        }
+      ],
+      "evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/step10-public-receipt-green.txt"
     }
   ],
   "remaining_acceptance_work": []
