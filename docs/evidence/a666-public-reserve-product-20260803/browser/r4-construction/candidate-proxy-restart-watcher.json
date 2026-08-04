@@ -1,0 +1,79 @@
+{
+  "schema": "postfiat.a666.r4.candidate-proxy-restart-watcher.v1",
+  "ready": true,
+  "unit": {
+    "name": "a666-r4-candidate-proxy-restart-watch-v1.service",
+    "pid": 1141288,
+    "active": true,
+    "running": true
+  },
+  "request_contract": {
+    "run_id": "a666-r4-official-journey-pass1-20260804-v1",
+    "nonce": "6c7eca67c0ab3a8f",
+    "path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260804-v1-6c7eca67c0ab3a8f.request",
+    "payload_bytes_description": "restart followed by newline",
+    "payload_matches_runner": true,
+    "required_mode": "600",
+    "currently_absent": true,
+    "stale_after_seconds": 300,
+    "single_use": true
+  },
+  "control": {
+    "path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260804-v1-6c7eca67c0ab3a8f.control.json",
+    "mode": "600",
+    "response_path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260804-v1-6c7eca67c0ab3a8f.response.json",
+    "response_currently_absent": true,
+    "pid_file": "/home/postfiat/.pft/a666-r4-candidate-proxy/proxy.pid",
+    "pid_file_mode": "600",
+    "ready_file": "/home/postfiat/.pft/a666-r4-candidate-proxy/proxy.ready.json",
+    "ready_file_mode": "600",
+    "parent_directory_mode": "700"
+  },
+  "candidate_pins": {
+    "revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+    "proxy_tree_hash": "5919ae695d910cfbe3b41c9783ef79354784b4ee",
+    "server_js_sha256": "6aebb3576bde511ce99f8b69a36fe502d3ddffad23275c5761f380fd3675bf41",
+    "package_lock_sha256": "6ed3d70403dabf69a3b4dde632c6a2926bcb554e4b774d8c1336689fc1e48c3",
+    "wallet_origin": "http://127.0.0.1:8080",
+    "proxy_origin": "http://127.0.0.1:31021",
+    "proxy_health": "http://127.0.0.1:31021/healthz"
+  },
+  "restart_choreography": {
+    "old_pid_signal": "SIGTERM",
+    "old_pid_exit_bounded": true,
+    "port_release_bounded": true,
+    "relaunch_environment_source": "scripts/a666-r4-candidate-proxy-stage",
+    "health_wait_bounded": true,
+    "ready_and_numeric_pid_files_updated_atomically": true,
+    "new_pid_must_differ": true,
+    "source_and_candidate_hashes_revalidated": true
+  },
+  "self_test": {
+    "valid_fake_restart": true,
+    "wrong_candidate_rejected": true,
+    "stale_rejected": true,
+    "duplicate_rejected": true
+  },
+  "real_proxy": {
+    "pid_before": 3766731,
+    "pid_after_construction": 3766731,
+    "unchanged": true,
+    "process_identity_exact": true,
+    "health_http_status": 200
+  },
+  "checks": {
+    "watcher_unit_live": true,
+    "control_mode_600": true,
+    "request_identity_unique": true,
+    "request_payload_runner_exact": true,
+    "candidate_and_source_pinned": true,
+    "self_tests_all_green": true,
+    "real_proxy_unchanged": true,
+    "real_proxy_healthy": true
+  },
+  "business_operations": 0,
+  "live_chain": false,
+  "stakehub_interaction": false,
+  "credentials_included": false,
+  "official_run_invocations": 0
+}

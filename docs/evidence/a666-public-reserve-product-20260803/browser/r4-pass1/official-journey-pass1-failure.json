@@ -6,6 +6,10 @@
   "official_pass": false,
   "official_runner_invoked": false,
   "browser_launch_count": 0,
+  "refusal_before_browser_launch": true,
+  "journey_invocations": 0,
+  "one_shot_consumed": false,
+  "retryable_fast_loop": true,
   "first_failure": {
     "phase": "pre_fire_static_contract",
     "step": null,

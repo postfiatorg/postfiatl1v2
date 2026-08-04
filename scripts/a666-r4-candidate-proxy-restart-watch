@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+RUN_DIR="/home/postfiat/.pft/a666-r4-candidate-proxy"
+CANDIDATE="/tmp/a666-r4-successor-39f7fae"
+CANDIDATE_REVISION="39f7fae3191aa34c376ae1657650a9ec2444f421"
+PROXY_TREE_HASH="5919ae695d910cfbe3b41c9783ef79354784b4ee"
+SERVER_SHA256="6aebb3576bde511ce99f8b69a36fe502d3ddffad23275c5761f380fd3675bf41"
+LOCK_SHA256="6ed3d70403dabf69a3b4dde632c6a2926bcb554e4b774d8c1336689fc1e48c3a"
+RUN_ID="${POSTFIAT_R4_PROXY_RESTART_RUN_ID:-a666-r4-official-journey-pass1-20260804-v1}"
+NONCE="${POSTFIAT_R4_PROXY_RESTART_NONCE:-}"
+READY="$RUN_DIR/proxy.ready.json"
+PID_FILE="$RUN_DIR/proxy.pid"
+TOKEN_FILE="$RUN_DIR/api-tokens.json"
+LOG_FILE="$RUN_DIR/proxy.stdout.log"
+ENDPOINTS="/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-rpc-endpoints.json"
+WALLET_DIST="$CANDIDATE/wallet-web/dist"
+REQUEST=""
+RESPONSE=""
+CONTROL=""
+START_EPOCH="$(date +%s)"
+ACTION="${1:-watch}"
+
+atomic_write() {
+  local destination="$1" mode="$2" temporary
+  temporary="$(mktemp "$RUN_DIR/.restart-write.XXXXXXXX")"
+  cat >"$temporary"
+  chmod "$mode" "$temporary"
+  mv -f "$temporary" "$destination"
+}
+
+set_paths() {
+  [[ "$RUN_ID" =~ ^[a-z0-9][a-z0-9-]{15,95}$ ]]
+  [[ "$NONCE" =~ ^[0-9a-f]{16}$ ]]
+  REQUEST="$RUN_DIR/restart-$RUN_ID-$NONCE.request"
+  RESPONSE="$RUN_DIR/restart-$RUN_ID-$NONCE.response.json"
+  CONTROL="$RUN_DIR/restart-$RUN_ID-$NONCE.control.json"
+}
+
+process_identity() {
+  python3 - "$1" "$CANDIDATE" <<'PY'
+import os,sys
+pid,candidate=sys.argv[1:]
+try:
+ exe=os.path.realpath(f'/proc/{pid}/exe'); cwd=os.path.realpath(f'/proc/{pid}/cwd')
+ argv=open(f'/proc/{pid}/cmdline','rb').read().split(b'\0')
+except OSError: raise SystemExit(1)
+ok=exe.endswith('/node') and cwd==candidate and any(value.endswith(b'wallet-proxy/server.js') for value in argv)
+raise SystemExit(0 if ok else 1)
+PY
+}
+
+health_green() {
+  curl -fsS --max-time 3 http://127.0.0.1:31021/healthz >/dev/null
+}
+
+static_contract() {
+  [[ "$(git -C "$CANDIDATE" rev-parse HEAD)" == "$CANDIDATE_REVISION" ]]
+  [[ -z "$(git -C "$CANDIDATE" status --porcelain --untracked-files=no)" ]]
+  [[ "$(git -C "$CANDIDATE" rev-parse HEAD:wallet-proxy)" == "$PROXY_TREE_HASH" ]]
+  [[ "$(sha256sum "$CANDIDATE/wallet-proxy/server.js"|awk '{print $1}')" == "$SERVER_SHA256" ]]
+  [[ "$(sha256sum "$CANDIDATE/wallet-proxy/package-lock.json"|awk '{print $1}')" == "$LOCK_SHA256" ]]
+  [[ -f "$TOKEN_FILE" && "$(stat -c '%a' "$TOKEN_FILE")" == 600 ]]
+  jq -e '.schema=="postfiat.a666.r4.candidate-proxy-ready.v1" and .listen_host=="127.0.0.1" and .listen_port==31021 and .business_operations_submitted==0 and (.pid|type)=="number"' "$READY" >/dev/null
+  local pid; pid="$(jq -r .pid "$READY")"
+  kill -0 "$pid"; process_identity "$pid"; health_green
+  jq -e '(.endpoints|length)==6 and all(.endpoints[];.host=="127.0.0.1" and (.rpc_port|type)=="number")' "$ENDPOINTS" >/dev/null
+}
+
+validate_request_shape() {
+  local request="$1" expected_run="$2" expected_nonce="$3" started="$4" response="$5"
+  [[ "$(basename "$request")" == "restart-$expected_run-$expected_nonce.request" ]]
+  [[ -f "$request" && "$(stat -c '%a' "$request")" == 600 ]]
+  [[ ! -e "$response" ]]
+  local mtime now; mtime="$(stat -c '%Y' "$request")"; now="$(date +%s)"
+  ((mtime>=started && mtime<=now && now-mtime<=300))
+  python3 - "$request" <<'PY'
+import sys
+raise SystemExit(0 if open(sys.argv[1],'rb').read()==b'restart\n' else 1)
+PY
+}
+
+write_response() {
+  local status="$1" reason="$2" old_pid="$3" new_pid="$4"
+  jq -n --arg schema postfiat.a666.r4.candidate-proxy-restart-response.v1 \
+    --arg run "$RUN_ID" --arg nonce "$NONCE" --arg status "$status" --arg reason "$reason" \
+    --argjson old_pid "$old_pid" --argjson new_pid "$new_pid" \
+    --arg revision "$CANDIDATE_REVISION" --arg tree "$PROXY_TREE_HASH" --arg server "$SERVER_SHA256" \
+    '{schema:$schema,run_id:$run,nonce:$nonce,status:$status,reason:(if $reason=="" then null else $reason end),old_pid:$old_pid,new_pid:(if $new_pid>0 then $new_pid else null end),candidate_revision:$revision,proxy_tree_hash:$tree,server_sha256:$server,business_operations_submitted:0,live_chain:false,stakehub_interaction:false}' \
+    | atomic_write "$RESPONSE" 600
+}
+
+restart_proxy() {
+  local old_pid="$1" new_pid deadline rpc_fleet first_port temporary_pid
+  kill -TERM "$old_pid"
+  deadline=$((SECONDS+30))
+  while kill -0 "$old_pid" 2>/dev/null && ((SECONDS<deadline)); do sleep 0.1; done
+  ! kill -0 "$old_pid" 2>/dev/null
+  while python3 - <<'PY'
+import socket
+try:
+ socket.create_connection(('127.0.0.1',31021),timeout=.2).close()
+except OSError: raise SystemExit(1)
+PY
+  do
+    ((SECONDS<deadline)); sleep 0.1
+  done
+  rpc_fleet="$(python3 - "$ENDPOINTS" <<'PY'
+import json,sys
+rows=json.load(open(sys.argv[1]))['endpoints']
+print(','.join(f"validator-{row['validator_index']}={row['host']}:{row['rpc_port']}" for row in rows))
+PY
+)"
+  first_port="$(jq -r '.endpoints[0].rpc_port' "$ENDPOINTS")"
+  temporary_pid="$(mktemp "$RUN_DIR/.proxy-pid.XXXXXXXX")"
+  (
+    cd "$CANDIDATE"
+    setsid nohup env LISTEN_HOST=127.0.0.1 LISTEN_PORT=31021 RPC_HOST=127.0.0.1 RPC_PORT="$first_port" RPC_FLEET="$rpc_fleet" \
+      WALLET_STATIC_DIR="$WALLET_DIST" WALLET_PROXY_API_TOKENS_FILE="$TOKEN_FILE" \
+      node wallet-proxy/server.js >"$LOG_FILE" 2>&1 &
+    echo "$!" >"$temporary_pid"
+  )
+  new_pid="$(cat "$temporary_pid")"; rm -f "$temporary_pid"
+  [[ "$new_pid" =~ ^[0-9]+$ && "$new_pid" != "$old_pid" ]]
+  deadline=$((SECONDS+30))
+  until kill -0 "$new_pid" 2>/dev/null && process_identity "$new_pid" && health_green; do
+    ((SECONDS<deadline)); sleep 0.25
+  done
+  printf '%s\n' "$new_pid" | atomic_write "$PID_FILE" 600
+  jq -n --argjson pid "$new_pid" '{schema:"postfiat.a666.r4.candidate-proxy-ready.v1",pid:$pid,listen_host:"127.0.0.1",listen_port:31021,started_utc:(now|todateiso8601),business_operations_submitted:0}' | atomic_write "$READY" 600
+  write_response accepted "" "$old_pid" "$new_pid"
+  mv "$REQUEST" "$REQUEST.consumed"; chmod 600 "$REQUEST.consumed"
+}
+
+self_test() {
+  local root run nonce request response start old new
+  root="$(mktemp -d /tmp/a666-r4-proxy-restart-selftest-XXXXXXXX)"; chmod 700 "$root"
+  run=a666-r4-official-journey-pass1-selftest; nonce=0123456789abcdef; start="$(date +%s)"
+  request="$root/restart-$run-$nonce.request"; response="$root/response.json"
+  sleep 60 & old="$!"
+  printf 'restart\n' >"$request"; chmod 600 "$request"
+  validate_request_shape "$request" "$run" "$nonce" "$start" "$response"
+  kill -TERM "$old"; wait "$old" 2>/dev/null || true
+  sleep 60 & new="$!"; [[ "$new" != "$old" && ! -e "/proc/$old" && -e "/proc/$new" ]]
+  printf '{}\n' >"$response"; chmod 600 "$response"
+  ! validate_request_shape "$request" "$run" "$nonce" "$start" "$response" 2>/dev/null
+  rm -f "$response"
+  ! validate_request_shape "$request" wrong-run "$nonce" "$start" "$response" 2>/dev/null
+  touch -d '10 minutes ago' "$request"
+  ! validate_request_shape "$request" "$run" "$nonce" "$start" "$response" 2>/dev/null
+  printf '{"candidate_revision":"wrong"}\n' >"$root/wrong-candidate.json"
+  ! jq -e --arg expected "$CANDIDATE_REVISION" '.candidate_revision==$expected' "$root/wrong-candidate.json" >/dev/null
+  kill -TERM "$new"; wait "$new" 2>/dev/null || true
+  rm -rf "$root"
+  echo 'proxy_restart_watcher_self_test=ok valid_fake_restart=true wrong_candidate_rejected=true stale_rejected=true duplicate_rejected=true'
+}
+
+watch() {
+  set_paths; static_contract
+  [[ ! -e "$REQUEST" && ! -e "$RESPONSE" && ! -e "$REQUEST.consumed" ]]
+  jq -n --arg schema postfiat.a666.r4.candidate-proxy-restart-control.v1 --arg run "$RUN_ID" --arg nonce "$NONCE" --arg request "$REQUEST" --arg response "$RESPONSE" --arg pid_file "$PID_FILE" \
+    '{schema:$schema,run_id:$run,nonce:$nonce,request_path:$request,request_payload:"restart newline",required_request_mode:"600",response_path:$response,pid_file:$pid_file,watching:true}' | atomic_write "$CONTROL" 600
+  while true; do
+    if [[ -e "$REQUEST" ]]; then
+      if validate_request_shape "$REQUEST" "$RUN_ID" "$NONCE" "$START_EPOCH" "$RESPONSE" && static_contract; then
+        old_pid="$(jq -r .pid "$READY")"; restart_proxy "$old_pid"
+      else
+        write_response rejected malformed_stale_duplicate_or_wrong_binding 0 0
+        mv "$REQUEST" "$REQUEST.rejected"; chmod 600 "$REQUEST.rejected"
+      fi
+    fi
+    sleep 0.25
+  done
+}
+
+case "$ACTION" in
+  --self-test) self_test ;;
+  watch) [[ -n "$NONCE" ]]; watch ;;
+  *) echo 'usage: a666-r4-candidate-proxy-restart-watch [watch|--self-test]' >&2; exit 2 ;;
+esac
