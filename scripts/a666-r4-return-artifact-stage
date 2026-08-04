@@ -2,19 +2,22 @@
 set -Eeuo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
-action=${1:-stage}
+action=${1:-resume-after-confirmations}
 terminal="$repo/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/return-stage-terminal.json"
 slot="$repo/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/return-artifact-slot.json"
 
 case "$action" in
-  stage)
+  resume-after-confirmations)
     jq -e '
-      .schema == "postfiat.a666.r4.return-artifact-stage-terminal.v3"
+      .schema == "postfiat.a666.r4.return-artifact-stage-terminal.v4"
       and .outcome == "technical_wall"
-      and .first_failing_check == "ethereum_checkpoint_observe_confirmation_depth_unmet"
+      and .first_failing_check == "checkpoint_vote_schema_assertion_field_mismatch"
+      and .confirmation_depth.observed_ethereum_head_block == 22
+      and .confirmation_depth.governed_minimum_confirmations == 12
       and .transactions.local_anvil_count == 3
       and .transactions.official_invocation_count == 0
       and .transactions.certified_import_count == 0
+      and .harness_repair.applied_to_script == false
       and .environment.live_chain == false
       and .environment.stakehub == false
       and .environment.credentials_accessed == false
@@ -23,13 +26,13 @@ case "$action" in
       .schema == "postfiat.a666.r4.return-artifact-slot.v1"
       and .status == "failed"
       and .accepted == false
-      and .failure_code == "ethereum_checkpoint_observe_confirmation_depth_unmet"
+      and .failure_code == "checkpoint_vote_schema_assertion_field_mismatch"
     ' "$slot" >/dev/null
-    printf '%s\n' "return stage terminal: ethereum-checkpoint-observe confirmation depth unmet; STOP-no-retry" >&2
+    printf '%s\n' "return stage terminal: checkpoint vote schema assertion mismatch; STOP-no-retry" >&2
     exit 1
     ;;
   *)
-    printf '%s\n' "usage: $0 stage" >&2
+    printf '%s\n' "usage: $0 resume-after-confirmations" >&2
     exit 2
     ;;
 esac

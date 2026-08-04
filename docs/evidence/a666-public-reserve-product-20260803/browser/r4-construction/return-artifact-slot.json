@@ -3,7 +3,7 @@
   "status": "failed",
   "ok": false,
   "accepted": false,
-  "failure_code": "ethereum_checkpoint_observe_confirmation_depth_unmet",
+  "failure_code": "checkpoint_vote_schema_assertion_field_mismatch",
   "failure_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/return-stage-terminal.json",
   "distinct_from_export_slot": true,
   "return_receipt_identity": "0xf624efd3c8b9acc7bac184e5ff4067f8163872f1b07eca97a9442c0185d3709a",
@@ -12,11 +12,12 @@
   "finalized_observed_chain_state": null,
   "conservation": {
     "equal": false,
-    "reason": "certified_import_not_available_after_confirmation_depth_failure"
+    "reason": "certified_import_not_invoked_after_checkpoint_vote_schema_assertion_failure"
   },
   "transactions": {
     "local_anvil": 3,
-    "certified_import": 0
+    "certified_import": 0,
+    "official_invocations": 0
   },
   "proofs_generated": 1,
   "sp1_invocations": 0,

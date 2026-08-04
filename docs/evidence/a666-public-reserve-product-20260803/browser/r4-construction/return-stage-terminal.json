@@ -1,17 +1,15 @@
 {
-  "schema": "postfiat.a666.r4.return-artifact-stage-terminal.v3",
+  "schema": "postfiat.a666.r4.return-artifact-stage-terminal.v4",
   "outcome": "technical_wall",
-  "first_failing_check": "ethereum_checkpoint_observe_confirmation_depth_unmet",
-  "terminal_command": "/tmp/a666-r4-candidate-target/release/postfiat-node ethereum-checkpoint-observe --data-dir /tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349/validator-2 --route-id pftl-a666-r4-offline-rehearsal-v1 --ethereum-rpc http://127.0.0.1:8547 --block-number 10 --checkpoint-file /tmp/a666-r4-return-proof.TaSXsC/checkpoint.json",
-  "terminal_error": "ethereum-checkpoint-observe failed: Ethereum head is below the governed confirmation depth",
-  "confirmation_depth": {
-    "governed_minimum_confirmations": 12,
-    "observed_ethereum_head_block": 10,
-    "requested_checkpoint_block": 10,
-    "required_head_block_for_requested_checkpoint": 22,
-    "source": "path-b-receipt-witness.json route policy minimum_confirmations; ethereum_checkpoint_signing.rs subtracts this value from the observed head before accepting the requested checkpoint"
+  "first_failing_check": "checkpoint_vote_schema_assertion_field_mismatch",
+  "terminal_command": "jq -e --arg validator validator-0 '.validator == $validator' /tmp/a666-r4-return-resume-20260804T213734Z-1243117/validator-0.vote.json",
+  "terminal_error": "checkpoint vote production schema exposes validator_id, not validator",
+  "stop_policy": "STOP-no-retry; no certified pftl_uniswap_return_import was invoked after the assertion failure",
+  "harness_repair": {
+    "proposed_one_line_assertion": "jq -e --arg validator \"$validator\" '.validator_id == $validator and (.signature|type)==\"array\" and (.signature|length)>0' \"$vote_file\" >/dev/null",
+    "applied_to_script": false,
+    "status": "held_for_follow_up"
   },
-  "stop_policy": "STOP-no-retry; no checkpoint certificate or certified import was attempted after this failure",
   "authorization": {
     "r9_decision": "reopen bounded admission on EVM side",
     "rehearsal_only": true,
@@ -29,6 +27,14 @@
     "stakehub": false,
     "credentials_accessed": false,
     "business_value": 0
+  },
+  "confirmation_depth": {
+    "governed_minimum_confirmations": 12,
+    "burn_block": 10,
+    "head_before_empty_mining": 10,
+    "empty_loopback_blocks_mined": 12,
+    "head_after_empty_mining": 22,
+    "live_operation_rule": "live operation inherits a natural approximately 12-block confirmation wait; no block-mining action is used live"
   },
   "contracts": {
     "primary_market": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
@@ -83,32 +89,44 @@
       "after_claim": 1000000,
       "after_return_burn": 0,
       "matched": true
-    },
-    "return_burned_event": {
-      "receipt_status": "0x1",
-      "matched": true
     }
   },
+  "checkpoint_observation": {
+    "command_exit_code": 0,
+    "checkpoint_path": "/tmp/a666-r4-return-resume-20260804T213734Z-1243117/checkpoint.json",
+    "checkpoint_sha256": "a7b50b6f4b4695d7bac5938e3c1d1ee2b1613880c20e46383e231b636a3b7bf0",
+    "checkpoint_block_number": 10,
+    "observed_head_number": 22,
+    "minimum_confirmations": 12
+  },
+  "checkpoint_votes": {
+    "first_successful_vote": "validator-0",
+    "first_vote_schema_fields": ["signature", "validator_id"],
+    "assertion_failure_before_follow_up": true,
+    "post_failure_local_artifacts": {
+      "additional_validator_votes_written": 5,
+      "assembled_certificate_present": true,
+      "certificate_sha256": "02c9c7cdab135d72716163db2c5617ca1e51ad6dbec306fbd3106d84d7482857"
+    },
+    "ledger_or_business_mutations": 0
+  },
   "receipt_proof_build": {
-    "command": "/tmp/a666-r4-candidate-target/release/postfiat-node ethereum-receipt-proof-build --data-dir /tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349/validator-2 --route-id pftl-a666-r4-offline-rehearsal-v1 --ethereum-rpc http://127.0.0.1:8547 --transaction-hash 0xf624efd3c8b9acc7bac184e5ff4067f8163872f1b07eca97a9442c0185d3709a --proof-file /tmp/a666-r4-return-proof.TaSXsC/receipt-proof.json",
-    "exit_code": 0,
+    "command_exit_code": 0,
     "artifact_path": "/tmp/a666-r4-return-proof.TaSXsC/receipt-proof.json",
     "artifact_sha256": "1cd1bcfd5d181cb471e3e3431f2ff18d5a222b8a17449492746bedf72c7d2dfa",
     "artifact_size_bytes": 16529,
     "sp1_invocations": 0
   },
   "checkpoint_certificate": {
-    "produced": false,
-    "checkpoint_file_present": false,
-    "certificate_present": false,
+    "assembled": true,
+    "certificate_path": "/tmp/a666-r4-return-resume-20260804T213734Z-1243117/checkpoint-certificate.json",
+    "certificate_sha256": "02c9c7cdab135d72716163db2c5617ca1e51ad6dbec306fbd3106d84d7482857",
     "certified_import_attempted": false,
-    "fleet_finalized_tuple": null
-  },
-  "proof_files_absent": [
-    "proof.bin",
-    "proof-calldata.bin",
-    "proof-report.json",
-    "checkpoint.json",
-    "certificate.json"
-  ]
+    "fleet_finalized_tuple": {
+      "height": 831,
+      "tip": "ed8dacf6722a082ba753a04ce86c125ed7331f45057a258d1087509e966df45177eb6711fdd801a7125573866b3d56b2",
+      "state_root": "3840a383378c8f287677d12efb940af7d8a1e656a37651cf52e6360dd8ab305e8736c1e7252513e09293c517727c8ee1",
+      "six_way_equal": true
+    }
+  }
 }
