@@ -1,0 +1,96 @@
+{
+  "schema": "postfiat.a666.r4.return-artifact-slot-diagnosis.v1",
+  "verdict": "certified_cli_minutes",
+  "binary_decision": {
+    "second_sp1_proof_required": false,
+    "reason": "The production return import builds an Ethereum receipt proof, obtains a BFT checkpoint certificate, and submits pftl_uniswap_return_import. The named return script contains no SP1 proving invocation."
+  },
+  "runner_required_return_slot_schema": {
+    "minimum_fields": {
+      "status": "accepted",
+      "artifact_path": "readable absolute path to the return artifact",
+      "artifact_sha256": "SHA-256 of artifact_path, exactly 64 lowercase hexadecimal characters",
+      "receipt_identity": "nonempty stable identity, 8 to 256 [A-Za-z0-9._:-] characters",
+      "observed_chain_state": {
+        "finalized": true
+      },
+      "conservation": {
+        "equal": true
+      }
+    },
+    "content_addressing_rule": "The runner resolves artifact_path and requires sha256(file bytes) == artifact_sha256 before accepting the slot.",
+    "receipt_rule": "The return receipt identity must be stable across restart/reload and be included with export/private receipt identities.",
+    "finality_rule": "observed_chain_state.finalized must be true.",
+    "conservation_rule": "Step 8 requires conservation.equal == true."
+  },
+  "production_component_graph": [
+    {
+      "component": "browser return relay",
+      "path": "wallet-web/src/lib/navcoin-return-relay.js:74-128",
+      "contract": "load readiness; POST a custody-free return job; poll durable job to accepted"
+    },
+    {
+      "component": "browser journey slot consumer",
+      "path": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:234-258,790-801",
+      "contract": "poll content-addressed return slot; hash artifact; require receipt/finalized state/conservation"
+    },
+    {
+      "component": "Anvil return burn calldata",
+      "path": "wallet-web/src/lib/navcoin-return-relay.js:17-30",
+      "contract": "build NAVCoin return-burn calldata from amount, recipient, native asset, and nonce"
+    },
+    {
+      "component": "production return import",
+      "path": "scripts/a666-mainnet-return-import.sh:56-205",
+      "contract": "read burn receipt/event; build Ethereum receipt proof; collect BFT checkpoint certificate; submit certified return import; verify accepted summary and recipient balance"
+    }
+  ],
+  "exact_next_step_blueprint": [
+    "Create a loopback Anvil return burn through the existing browser/proxy return-job path using generated in-memory/local rehearsal credentials only.",
+    "Run scripts/a666-mainnet-return-import.sh adapted only by existing loopback inputs: phase dir, burn report, validator-2 remote-node CLI endpoint, checkpoint fanout configuration, expected PFTL height, and certified submission artifact dir.",
+    "Build the return slot from the script outputs: artifact_path points to the accepted import summary/certificate artifact; artifact_sha256 is its SHA-256; receipt_identity derives from the accepted return-import receipt/burn-event identity; observed_chain_state records finalized fleet tuple; conservation.equal compares before/after route supply and recipient balance according to the accepted import summary.",
+    "Run the browser runner only after the slot is accepted and content-addressed."
+  ],
+  "existing_cli_commands": [
+    "cast receipt <burn_tx> --json --rpc-url <loopback_anvil>",
+    "postfiat-node ethereum-receipt-proof-build --transaction-hash <burn_tx> --proof-file <receipt-proof>",
+    "scripts/a666-checkpoint-vote-fanout.sh --checkpoint-file <checkpoint> --proof-dir <proof-dir> --remote-suffix return-import",
+    "pftl-submit-certified-asset-ops --ops-file <return-import.ops.json> --artifact-dir <import-finality-artifact-dir>"
+  ],
+  "prerequisites": {
+    "required": [
+      "accepted browser/proxy return job and its Anvil ReturnBurned event",
+      "burn report fields consumed at scripts/a666-mainnet-return-import.sh:56-63",
+      "loopback checkpoint observer and six-validator BFT fanout/certificate",
+      "candidate-node ethereum-receipt-proof-build CLI",
+      "certified asset-op submitter and expected finalized height"
+    ],
+    "not_required": [
+      "second SP1 Groth16 receipt proof",
+      "reuse of the 90-minute export proving pipeline",
+      "substitution of the export proof or export artifact slot"
+    ]
+  },
+  "missing_capability": {
+    "present": false,
+    "description": "No producer currently emits the accepted return-artifact slot from the return-import outputs. This is harness/evidence plumbing only; the production return relay and certified import choreography already exist."
+  },
+  "estimated_wall_clock": {
+    "classification": "certified_cli_minutes",
+    "estimate_minutes": 15,
+    "basis": "Ethereum receipt proof build plus checkpoint observation, six-validator BFT certificate fanout, and one certified import; no SP1 proving stage."
+  },
+  "candidate_impact": {
+    "product_change_required": false,
+    "harness_or_evidence_producer_required": true,
+    "requalification_required_if_producer_changes": true
+  },
+  "mutations": {
+    "business_operations": 0,
+    "live_chain": false,
+    "stakehub": false,
+    "services": 0,
+    "proofs_generated": 0,
+    "transactions": 0
+  }
+}
