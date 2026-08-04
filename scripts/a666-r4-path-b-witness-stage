@@ -6,8 +6,13 @@
 # and holder funding probes, then writes a mode-600 JSON report under /tmp.
 set -uo pipefail
 
-usage() { echo "usage: $0 --preflight-only" >&2; exit 2; }
-[[ $# -eq 1 && "$1" == "--preflight-only" ]] || usage
+usage() { echo "usage: $0 --preflight-only|--execute-witness" >&2; exit 2; }
+[[ $# -eq 1 ]] || usage
+case "$1" in
+  --preflight-only) MODE="preflight" ;;
+  --execute-witness) MODE="execute" ;;
+  *) usage ;;
+esac
 
 # ---- Pinned constants -------------------------------------------------------
 CANDIDATE_REVISION="39f7fae3191aa34c376ae1657650a9ec2444f421"
@@ -74,6 +79,384 @@ trap 'rm -f "$CHECKS" "$FUNDING_JSON"' EXIT
 check() { # name ok detail
   printf '%s\t%s\t%s\n' "$1" "$2" "$3" >> "$CHECKS"
 }
+
+# ============================================================================
+# Execution mode: certified Path-B route init -> epoch advance -> reserve ->
+# subscribe -> export -> receipt witness -> native (no-prove) verification.
+# Fail-closed: any first failure stops the pipeline, preserves the runtime
+# root and fleet, and writes RED durable evidence. Never retries.
+# ============================================================================
+if [[ "$MODE" == "execute" ]]; then
+set -Eeuo pipefail
+
+CONSTRUCTION_DIR="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction"
+EXEC_EVIDENCE="$CONSTRUCTION_DIR/path-b-witness-stage.json"
+WITNESS_EVIDENCE="$CONSTRUCTION_DIR/path-b-receipt-witness.json"
+DATA_DIR_V2="$FLEET_ROOT/validator-2"
+V2_KEY_FILE="$DATA_DIR_V2/validator-2.validator_keys.json"
+EXEC_STARTED_MS="$(date +%s%3N)"
+first_failure="internal_preflight"
+
+RUNTIME_ROOT="/tmp/a666-r4-path-b-witness-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+mkdir -m 700 "$RUNTIME_ROOT"
+
+write_exec_red() {
+  local rc="$1" ended_ms
+  ended_ms="$(date +%s%3N)"
+  jq -n --arg schema "postfiat.a666.r4.path-b-witness-stage.v1" --arg first_failure "$first_failure" \
+    --arg runtime_root "$RUNTIME_ROOT" --argjson exit_code "$rc" \
+    --argjson runtime_ms "$((ended_ms-EXEC_STARTED_MS))" \
+    '{schema:$schema,accepted:false,first_failure:$first_failure,exit_code:$exit_code,runtime_root:$runtime_root,runtime_preserved:true,runtime_ms:$runtime_ms,live_chain:false,stakehub:false,mutations:0}' > "$EXEC_EVIDENCE"
+}
+on_error() { local rc="$?"; trap - ERR; write_exec_red "$rc"; echo "EXECUTION RED first_failure=$first_failure runtime_root=$RUNTIME_ROOT" >&2; exit "$rc"; }
+trap on_error ERR
+
+# 1. Internal full preflight; refuse unless GREEN at the pinned height.
+set +e
+preflight_line="$(bash "$0" --preflight-only 2>&1)"
+preflight_rc=$?
+set -e
+pf_report_path="${preflight_line##*report=}"
+[[ $preflight_rc -eq 0 ]]
+jq -e --arg tip "$EXPECTED_TIP" '.verdict=="GREEN" and .pinned.expected_height==826 and .pinned.expected_tip==$tip' "$pf_report_path" >/dev/null
+
+# 2. Static input gates (defense in depth on top of preflight).
+first_failure="execute_input_contract"
+[[ -s "$TOPOLOGY" && -d "$DATA_DIR_V2" && -s "$V2_KEY_FILE" && -s "$RESERVE_KEY_FILE" && -s "$HOLDER_KEY_FILE" ]]
+jq -e '(.peers|length)==6 and all(.peers[]; .host=="127.0.0.1" and (.rpc_port|type)=="number")' "$TOPOLOGY" >/dev/null
+
+# 3. Build route_init_v2 + epoch_advance ops (all IDs/digests generated here,
+#    recorded as public hashes only; key material referenced by path only).
+first_failure="ops_construction_route"
+python3 - "$RUNTIME_ROOT" "$RESERVE_KEY_FILE" "$HOLDER_KEY_FILE" <<'PY'
+import hashlib, json, sys
+from web3 import Web3
+
+runtime, reserve_key, holder_key = sys.argv[1], sys.argv[2], sys.argv[3]
+RESERVE = "pfd0c86d9084915e1fefd22eab891806397d5a5937"
+ROUTE = "pftl-a666-r4-offline-rehearsal-v1"
+NATIVE = "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c"
+PFUSDC = "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b"
+CONTROLLER = "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9"
+WRAPPED = "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512"
+CONTROLLER_CODE = bytes.fromhex("60e72af15ab92eb9d99e5419edb6c4b633307fa6bbea5c4086f3e13fc109c524")
+WRAPPED_CODE = bytes.fromhex("671ee905050e2969995a8c6db8b05e4c2f30bd690eeff55093c03f9722be66b0")
+COMMITTEE_ROOT = [132,87,14,5,251,56,1,205,244,223,29,72,233,210,180,5,150,43,49,178,249,236,112,133,132,13,219,213,200,76,42,253,34,179,61,103,243,182,21,198,160,182,106,98,36,125,166,208]
+PACKET_HASH_PRICING = "a7" * 48
+
+def policy_hash(policy_epoch, valid_from_height):
+    preimage = (f"policy_epoch={policy_epoch}\nissue_multiplier_bps=10050\nredeem_multiplier_bps=9995\n"
+                f"issue_capacity_atoms=2000000000000\nredeem_capacity_atoms=2000000000000\n"
+                f"max_order_atoms=1000000000000\nmin_order_atoms=1000000\n"
+                f"valid_from_height={valid_from_height}\nexpires_at_height=5809\nmax_nav_age_blocks=5000\n"
+                f"pricing_nav_epoch=8\npricing_reserve_packet_hash={PACKET_HASH_PRICING}\n").encode()
+    return hashlib.sha3_384(b"postfiat.pftl_uniswap.primary_market_policy.v2\x00" + preimage).hexdigest()
+
+def policy(policy_epoch, valid_from_height):
+    return {"policy_hash": policy_hash(policy_epoch, valid_from_height), "policy_epoch": policy_epoch,
+            "issue_multiplier_bps": 10050, "redeem_multiplier_bps": 9995,
+            "issue_capacity_atoms": 2000000000000, "redeem_capacity_atoms": 2000000000000,
+            "max_order_atoms": 1000000000000, "min_order_atoms": 1000000,
+            "valid_from_height": valid_from_height, "expires_at_height": 5809,
+            "max_nav_age_blocks": 5000, "pricing_nav_epoch": 8,
+            "pricing_reserve_packet_hash": PACKET_HASH_PRICING}
+
+init_op = {"operation": "pftl_uniswap_route_init_v2", "operator": RESERVE, "route_id": ROUTE,
+           "route_config_digest": "b1" * 48, "native_nav_asset_id": NATIVE, "settlement_asset_id": PFUSDC,
+           "opening_inventory_atoms": 0, "opening_inventory_holder": "",
+           "handoff_controller": CONTROLLER, "settlement_adapter": CONTROLLER,
+           "wrapped_navcoin_token": WRAPPED, "ethereum_chain_id": 1,
+           "route_supply_cap_atoms": 2000000000000, "packet_notional_cap_atoms": 250000000000,
+           "latest_finalized_nav_epoch": 8, "return_finality_blocks": 12, "route_epoch": 1,
+           "outbound_verification_class": "TRUSTLESS_FINALITY", "return_verification_class": "BFT_CHECKPOINT",
+           "live_value_enabled": False,
+           "ethereum_verification_policy": {"authority_epoch": 1, "committee_root": COMMITTEE_ROOT,
+                                            "minimum_confirmations": 12,
+                                            "handoff_controller_code_hash": list(CONTROLLER_CODE),
+                                            "wrapped_navcoin_code_hash": list(WRAPPED_CODE)},
+           "primary_market_policy": policy(1, 827)}
+advance_op = {"operation": "pftl_uniswap_route_epoch_advance", "operator": RESERVE, "route_id": ROUTE,
+              "prior_route_epoch": 1, "next_route_epoch": 2, "next_route_config_digest": "b2" * 48,
+              "live_value_enabled": True, "next_primary_market_policy": policy(2, 828)}
+
+def request(label, key_file, op):
+    return {"schema": "postfiat-certified-asset-ops-request-v1",
+            "operations": [{"label": label, "source": op.get("operator", op.get("subscriber", op.get("owner"))),
+                            "key_file": key_file, "operation": op, "dependencies": []}]}
+
+for name, req in [("01-route-init", request("r4-path-b-route-init", reserve_key, init_op)),
+                  ("02-epoch-advance", request("r4-path-b-epoch-advance", reserve_key, advance_op))]:
+    path = f"{runtime}/{name}.ops.json"
+    with open(path, "w") as f:
+        json.dump(req, f, indent=2)
+        f.write("\n")
+    import os
+    os.chmod(path, 0o600)
+with open(f"{runtime}/policy-hashes.json", "w") as f:
+    json.dump({"policy_epoch_1": policy(1, 827)["policy_hash"], "policy_epoch_2": policy(2, 828)["policy_hash"]}, f)
+PY
+
+submit_op() { # label ops_file expected_height -> prints tx_id
+  local label="$1" ops_file="$2" expected="$3" tx_id
+  local adir="$RUNTIME_ROOT/artifacts-$label"
+  mkdir -p "$adir"
+  first_failure="submit_$label"
+  "$NODE_BINARY" pftl-submit-certified-asset-ops \
+    --data-dir "$DATA_DIR_V2" --topology "$TOPOLOGY" \
+    --key-file "$V2_KEY_FILE" --proposal-key-file "$V2_KEY_FILE" \
+    --ops-file "$ops_file" --artifact-dir "$adir" \
+    --max-transactions 1 --timeout-ms 90000 --send-retries 2 --retry-backoff-ms 50 \
+    --local-apply-before-certified-send >"$RUNTIME_ROOT/$label.command.log" 2>&1
+  jq -e --argjson h "$expected" \
+    '.round_ok==true and .end_height==$h and (.operations[0].tx_id|type)=="string" and (.operations[0].tx_id|length)>0' \
+    "$adir/summary.json" >/dev/null
+  tx_id="$(jq -r '.operations[0].tx_id' "$adir/summary.json")"
+  first_failure="convergence_$label"
+  python3 - "$TOPOLOGY" "$expected" <<'PY'
+import json, socket, sys, time
+ports = [p["rpc_port"] for p in sorted(json.load(open(sys.argv[1]))["peers"], key=lambda x: x["node_id"])]
+expected = int(sys.argv[2])
+def call(port):
+    req = {"version": "postfiat-local-rpc-v1", "id": f"conv-{port}", "method": "status", "params": {}}
+    with socket.create_connection(("127.0.0.1", port), timeout=3) as s:
+        s.sendall((json.dumps(req) + "\n").encode())
+        return json.loads(s.makefile("rb").readline())["result"]
+deadline = time.time() + 90
+while True:
+    try:
+        statuses = [call(p) for p in ports]
+        if all(s["block_height"] == expected for s in statuses):
+            break
+    except (OSError, ValueError, KeyError):
+        pass
+    if time.time() >= deadline:
+        raise SystemExit(f"convergence timeout at height {expected}")
+    time.sleep(1)
+tuples = {(s["block_height"], s["block_tip_hash"], s["state_root"]) for s in statuses}
+if len(tuples) != 1:
+    raise SystemExit("six-way status tuple mismatch")
+PY
+  first_failure="receipt_$label"
+  python3 - "$TOPOLOGY" "$tx_id" <<'PY'
+import json, socket, sys
+ports = [p["rpc_port"] for p in sorted(json.load(open(sys.argv[1]))["peers"], key=lambda x: x["node_id"])]
+tx_id = sys.argv[2]
+def call(port):
+    req = {"version": "postfiat-local-rpc-v1", "id": f"rcpt-{port}", "method": "receipts",
+           "params": {"tx_id": tx_id, "limit": 4}}
+    with socket.create_connection(("127.0.0.1", port), timeout=3) as s:
+        s.sendall((json.dumps(req) + "\n").encode())
+        return json.loads(s.makefile("rb").readline())["result"]
+for port in ports:
+    rows = [r for r in call(port) if r.get("tx_id") == tx_id]
+    if len(rows) != 1 or rows[0].get("accepted") is not True or rows[0].get("code") != "accepted":
+        raise SystemExit(f"receipt not accepted on port {port}: {rows[:1]}")
+PY
+  echo "$tx_id"
+}
+
+tx_init="$(submit_op route-init "$RUNTIME_ROOT/01-route-init.ops.json" 827)"
+tx_advance="$(submit_op epoch-advance "$RUNTIME_ROOT/02-epoch-advance.ops.json" 828)"
+
+# 4. Read the freshly advanced route, build reserve/subscribe/export + mint
+#    packet, assert digest round-trip.
+first_failure="ops_construction_export"
+python3 - "$RUNTIME_ROOT" "$TOPOLOGY" "$HOLDER_KEY_FILE" <<'PY'
+import json, secrets, socket, sys, time, os
+from web3 import Web3
+
+runtime, topology_path, holder_key = sys.argv[1], sys.argv[2], sys.argv[3]
+HOLDER = "pfab9b9228942e5c529633a13aa271d5297bec6353"
+EVM_RECIPIENT = "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
+ROUTE = "pftl-a666-r4-offline-rehearsal-v1"
+PFUSDC = "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b"
+ZERO48 = "00" * 48
+MINT = 1000000
+SETTLEMENT = 903212
+
+ports = [p["rpc_port"] for p in sorted(json.load(open(topology_path))["peers"], key=lambda x: x["node_id"])]
+req = {"version": "postfiat-local-rpc-v1", "id": "export-build", "method": "navcoin_bridge_supply_status",
+       "params": {"route_id": ROUTE}}
+with socket.create_connection(("127.0.0.1", ports[0]), timeout=5) as s:
+    s.sendall((json.dumps(req) + "\n").encode())
+    status = json.loads(s.makefile("rb").readline())["result"]
+
+policies = json.load(open(f"{runtime}/policy-hashes.json"))
+expected = {"route_epoch": 2, "policy_epoch": 2, "policy_hash": policies["policy_epoch_2"],
+            "live_value_enabled": True, "paused": False, "invariant_holds": True,
+            "handoff_controller": "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9",
+            "wrapped_navcoin_token": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+            "settlement_asset_id": PFUSDC, "ethereum_chain_id": 1,
+            "pricing_nav_epoch": 8, "pricing_reserve_packet_hash": "a7" * 48}
+for field, want in expected.items():
+    got = status.get(field)
+    if isinstance(want, str) and isinstance(got, str):
+        got = got.lower()
+    if got != want:
+        raise SystemExit(f"post-advance route {field}: want {want!r} got {status.get(field)!r}")
+
+ids = {"reservation_id": secrets.token_hex(48), "subscription_nonce": secrets.token_hex(32),
+       "packet_hash": secrets.token_hex(48), "export_nonce": secrets.token_hex(32)}
+deadline = int(time.time()) + 86400
+policy_hash = status["policy_hash"]
+policy_commitment = Web3.keccak(hexstr=policy_hash).hex()
+
+reserve_op = {"operation": "pftl_uniswap_order_reserve", "subscriber": HOLDER, "route_id": ROUTE,
+              "reservation_id": ids["reservation_id"], "ethereum_recipient": EVM_RECIPIENT,
+              "route_epoch": 2, "policy_epoch": 2, "policy_hash": policy_hash,
+              "mint_amount_atoms": MINT, "max_settlement_value_atoms": SETTLEMENT,
+              "expires_at_height": 5809}
+subscribe_op = {"operation": "pftl_uniswap_primary_subscribe_v2", "subscriber": HOLDER, "route_id": ROUTE,
+                "reservation_id": ids["reservation_id"], "subscription_nonce": ids["subscription_nonce"],
+                "settlement_asset_id": PFUSDC, "settlement_value_atoms": SETTLEMENT,
+                "pricing_nav_epoch": 8, "pricing_reserve_packet_hash": "a7" * 48}
+packet = {"route_config_digest": "b2" * 48, "source_packet_hash": ids["packet_hash"],
+          "reservation_id": ids["reservation_id"], "source_receipt_hash": ZERO48,
+          "source_receipt_root": ZERO48, "settlement_asset_id": PFUSDC,
+          "native_nav_asset_id": status["native_nav_asset_id"],
+          "pricing_reserve_packet_hash": "a7" * 48, "policy_hash_commitment": policy_commitment,
+          "route_epoch": 2, "pricing_nav_epoch": 8, "deadline_seconds": deadline,
+          "nonce": ids["export_nonce"], "destination_chain_id": 1,
+          "destination_controller": status["handoff_controller"],
+          "wrapped_token": status["wrapped_navcoin_token"], "ethereum_recipient": EVM_RECIPIENT,
+          "mint_amount_atoms": MINT, "settlement_value_atoms": SETTLEMENT}
+
+def request(label, op):
+    return {"schema": "postfiat-certified-asset-ops-request-v1",
+            "operations": [{"label": label, "source": HOLDER, "key_file": holder_key,
+                            "operation": op, "dependencies": []}]}
+
+with open(f"{runtime}/03-reserve.ops.json", "w") as f:
+    json.dump(request("r4-path-b-reserve", reserve_op), f, indent=2); f.write("\n")
+with open(f"{runtime}/04-subscribe.ops.json", "w") as f:
+    json.dump(request("r4-path-b-subscribe", subscribe_op), f, indent=2); f.write("\n")
+with open(f"{runtime}/05-mint-packet.json", "w") as f:
+    json.dump(packet, f, indent=2); f.write("\n")
+with open(f"{runtime}/ids.json", "w") as f:
+    json.dump({**ids, "deadline_seconds": deadline, "policy_hash_commitment": policy_commitment}, f, indent=2)
+for name in ("03-reserve.ops.json", "04-subscribe.ops.json", "05-mint-packet.json", "ids.json"):
+    os.chmod(f"{runtime}/{name}", 0o600)
+PY
+
+first_failure="mint_packet_digest_roundtrip"
+"$NODE_BINARY" pftl-uniswap-mint-packet-digest --packet-file "$RUNTIME_ROOT/05-mint-packet.json" \
+  > "$RUNTIME_ROOT/05-mint-packet-digest.json"
+python3 - "$RUNTIME_ROOT" <<'PY'
+import json, sys
+runtime = sys.argv[1]
+packet = json.load(open(f"{runtime}/05-mint-packet.json"))
+report = json.load(open(f"{runtime}/05-mint-packet-digest.json"))
+if report.get("packet") != packet:
+    raise SystemExit("digest tool did not round-trip the exact mint packet")
+digest = report.get("packet_digest")
+if not isinstance(digest, str) or len(digest) != 96:
+    raise SystemExit("packet_digest missing or malformed")
+ids = json.load(open(f"{runtime}/ids.json"))
+ids["ethereum_packet_digest"] = digest
+HOLDER = "pfab9b9228942e5c529633a13aa271d5297bec6353"
+EVM_RECIPIENT = "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
+export_op = {"operation": "pftl_uniswap_export_debit", "owner": HOLDER,
+             "route_id": "pftl-a666-r4-offline-rehearsal-v1", "packet_hash": ids["packet_hash"],
+             "export_nonce": ids["export_nonce"], "ethereum_recipient": EVM_RECIPIENT,
+             "amount_atoms": 1000000, "reservation_id": ids["reservation_id"],
+             "settlement_value_atoms": 903212, "destination_deadline_seconds": ids["deadline_seconds"],
+             "refund_delay_blocks": 12, "ethereum_packet_digest": digest,
+             "ethereum_packet_schema_version": 2}
+holder_key = sys.argv[2] if len(sys.argv) > 2 else None
+with open(f"{runtime}/ids.json", "w") as f:
+    json.dump(ids, f, indent=2)
+with open(f"{runtime}/export-op.json", "w") as f:
+    json.dump(export_op, f)
+PY
+python3 - "$RUNTIME_ROOT" "$HOLDER_KEY_FILE" <<'PY'
+import json, sys, os
+runtime, holder_key = sys.argv[1], sys.argv[2]
+op = json.load(open(f"{runtime}/export-op.json"))
+req = {"schema": "postfiat-certified-asset-ops-request-v1",
+       "operations": [{"label": "r4-path-b-export", "source": op["owner"], "key_file": holder_key,
+                       "operation": op, "dependencies": []}]}
+with open(f"{runtime}/05-export.ops.json", "w") as f:
+    json.dump(req, f, indent=2); f.write("\n")
+os.chmod(f"{runtime}/05-export.ops.json", 0o600)
+PY
+
+tx_reserve="$(submit_op reserve "$RUNTIME_ROOT/03-reserve.ops.json" 829)"
+tx_subscribe="$(submit_op subscribe "$RUNTIME_ROOT/04-subscribe.ops.json" 830)"
+tx_export="$(submit_op export "$RUNTIME_ROOT/05-export.ops.json" 831)"
+
+# 5. Witness from validator-2, then native no-prove verification.
+first_failure="witness_generation"
+packet_hash="$(jq -r '.packet_hash' "$RUNTIME_ROOT/ids.json")"
+"$NODE_BINARY" pftl-uniswap-receipt-witness --data-dir "$DATA_DIR_V2" \
+  --packet-hash "$packet_hash" --prior-checkpoint "$EXPECTED_TIP" > "$RUNTIME_ROOT/witness.json"
+jq -e 'type=="object"' "$RUNTIME_ROOT/witness.json" >/dev/null
+cp "$RUNTIME_ROOT/witness.json" "$WITNESS_EVIDENCE"
+
+first_failure="witness_native_verify"
+mkdir -p "$RUNTIME_ROOT/prover-out"
+"$PROVER_BINARY" receipt --witness "$RUNTIME_ROOT/witness.json" \
+  --output-dir "$RUNTIME_ROOT/prover-out" --require-prover cpu --skip-redundant-execute \
+  > "$RUNTIME_ROOT/prover.log" 2>&1
+[[ -f "$RUNTIME_ROOT/prover-out/public-values.bin" ]]
+[[ "$(stat -c %s "$RUNTIME_ROOT/prover-out/public-values.bin")" == "1120" ]]
+
+# 6. Final six-way tuple + durable evidence.
+first_failure="final_six_way"
+python3 - "$TOPOLOGY" "$RUNTIME_ROOT/final-status.json" <<'PY'
+import json, socket, sys
+ports = [p["rpc_port"] for p in sorted(json.load(open(sys.argv[1]))["peers"], key=lambda x: x["node_id"])]
+def call(port):
+    req = {"version": "postfiat-local-rpc-v1", "id": f"final-{port}", "method": "status", "params": {}}
+    with socket.create_connection(("127.0.0.1", port), timeout=3) as s:
+        s.sendall((json.dumps(req) + "\n").encode())
+        return json.loads(s.makefile("rb").readline())["result"]
+statuses = [call(p) for p in ports]
+tuples = {(s["block_height"], s["block_tip_hash"], s["state_root"]) for s in statuses}
+if len(tuples) != 1 or statuses[0]["block_height"] != 831:
+    raise SystemExit("final six-way tuple mismatch")
+with open(sys.argv[2], "w") as f:
+    json.dump({"height": statuses[0]["block_height"], "block_tip_hash": statuses[0]["block_tip_hash"],
+               "state_root": statuses[0]["state_root"], "tuple_equal": True}, f, indent=2)
+PY
+
+first_failure="success_evidence"
+witness_sha256="$(sha256sum "$WITNESS_EVIDENCE" | awk '{print $1}')"
+pv_sha256="$(sha256sum "$RUNTIME_ROOT/prover-out/public-values.bin" | awk '{print $1}')"
+packet_digest="$(jq -r '.ethereum_packet_digest' "$RUNTIME_ROOT/ids.json")"
+policy_hash_2="$(jq -r '.policy_epoch_2' "$RUNTIME_ROOT/policy-hashes.json")"
+EXEC_ENDED_MS="$(date +%s%3N)"
+jq -n --arg schema "postfiat.a666.r4.path-b-witness-stage.v1" \
+  --arg route_id "$ROUTE_ID" --arg runtime_root "$RUNTIME_ROOT" \
+  --arg tx_init "$tx_init" --arg tx_advance "$tx_advance" --arg tx_reserve "$tx_reserve" \
+  --arg tx_subscribe "$tx_subscribe" --arg tx_export "$tx_export" \
+  --arg packet_hash "$packet_hash" --arg packet_digest "$packet_digest" \
+  --arg policy_hash "$policy_hash_2" --arg witness_sha256 "$witness_sha256" --arg pv_sha256 "$pv_sha256" \
+  --argjson runtime_ms "$((EXEC_ENDED_MS-EXEC_STARTED_MS))" \
+  --slurpfile final "$RUNTIME_ROOT/final-status.json" '
+  {schema:$schema,accepted:true,live_chain:false,stakehub:false,mutations:5,loopback_only:true,
+   route_id:$route_id,
+   operations:[
+     {label:"route_init_v2",height:827,tx_id:$tx_init,receipt_code:"accepted"},
+     {label:"route_epoch_advance",height:828,tx_id:$tx_advance,receipt_code:"accepted",live_value_enabled:true},
+     {label:"order_reserve",height:829,tx_id:$tx_reserve,receipt_code:"accepted"},
+     {label:"primary_subscribe_v2",height:830,tx_id:$tx_subscribe,receipt_code:"accepted"},
+     {label:"export_debit",height:831,tx_id:$tx_export,receipt_code:"accepted"}],
+   bindings:{route_id:$route_id,handoff_controller:"0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9",
+     wrapped_navcoin_token:"0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",ethereum_chain_id:1,
+     policy_hash_epoch2:$policy_hash,route_config_digest:("b2"*48),
+     prior_checkpoint:"63f81fb5f56acc0b9eddd0eaf068f65feaf1d28169035c9de096e4b7cd6888836aa85fedeaa25d1dd42d07a46e8a9369"},
+   amounts:{mint_amount_atoms:1000000,settlement_value_atoms:903212},
+   packet:{packet_hash:$packet_hash,ethereum_packet_digest:$packet_digest},
+   artifacts:{witness_path:"docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/path-b-receipt-witness.json",
+     witness_sha256:$witness_sha256,public_values_bytes:1120,public_values_sha256:$pv_sha256,
+     prover_mode:"cpu execute only, no --prove"},
+   final_six_way:$final[0],runtime_root:$runtime_root,runtime_ms:$runtime_ms}' > "$EXEC_EVIDENCE"
+jq -e '.accepted==true and (.operations|length)==5 and .final_six_way.tuple_equal==true' "$EXEC_EVIDENCE" >/dev/null
+trap - ERR
+echo "EXECUTION GREEN heights=827,828,829,830,831 witness_sha256=$witness_sha256 public_values_sha256=$pv_sha256 runtime_ms=$((EXEC_ENDED_MS-EXEC_STARTED_MS)) evidence=$EXEC_EVIDENCE"
+exit 0
+fi
+
 
 # ---- Static checks ----------------------------------------------------------
 rev="$(git -C "$CANDIDATE_WORKTREE" rev-parse HEAD 2>/dev/null)"

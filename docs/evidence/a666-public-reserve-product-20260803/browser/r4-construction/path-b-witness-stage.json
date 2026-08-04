@@ -1,0 +1,12 @@
+{
+  "schema": "postfiat.a666.r4.path-b-witness-stage.v1",
+  "accepted": false,
+  "first_failure": "mint_packet_digest_roundtrip",
+  "exit_code": 1,
+  "runtime_root": "/tmp/a666-r4-path-b-witness-20260804T155357Z-3870582",
+  "runtime_preserved": true,
+  "runtime_ms": 21967,
+  "live_chain": false,
+  "stakehub": false,
+  "mutations": 0
+}
