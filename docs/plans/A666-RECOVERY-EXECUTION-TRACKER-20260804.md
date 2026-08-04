@@ -236,8 +236,9 @@ Each step requires prior-step evidence plus principal confirmation:
 
 | Gate | R0 | R1 | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10 |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| State | ✅ | ✅ | 3/12 | ✅ | 0/5 | 0/2 | 0/3 | 0/6 | 🔒 | 🔒 | 🔒 |
+| State | ✅ | ✅ | 12/12 ✅ | ✅ | 2/5 | 0/2 | 0/3 | 0/6 | 🔒 | 🔒 | 🔒 |
 
-Next action: AR-01..AR-08 extraction (R2). Critical path to a schedulable
-date: R2 -> R4 -> R5 -> R6 -> R7, estimated 2-4 working days at the current
-17-minute loop cadence.
+Next action: restore the six-validator rehearsal environment from the signed
+checkpoint, prove StakeHub absence and exact R2 wallet revision, then execute
+full browser journey pass #1 once under STOP-no-retry. Pass #2 remains gated
+on acceptance of pass #1.
