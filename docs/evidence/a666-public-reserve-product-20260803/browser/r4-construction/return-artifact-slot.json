@@ -1,7 +1,7 @@
 {
   "schema": "postfiat.a666.r4.return-artifact-slot.v1",
   "status": "failed",
-  "failure_code": "construction_return_import_harness_missing_loopback_parameterization",
+  "failure_code": "production_claim_mint_not_staged_before_return_burn",
   "failure_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/return-stage-terminal.json",
   "distinct_from_export_slot": true,
   "transactions": 0,

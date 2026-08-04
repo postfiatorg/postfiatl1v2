@@ -2,27 +2,41 @@
 set -Eeuo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
-output=${1:-"$repo/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/return-stage-terminal.json"}
-return_import="$repo/scripts/a666-mainnet-return-import.sh"
+action=${1:-stage}
+[[ "$action" == stage ]] || { printf "%s\n" "usage: $0 stage" >&2; exit 2; }
+output="$repo/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/return-stage-terminal.json"
+slot="$repo/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/return-artifact-slot.json"
+rpc=http://127.0.0.1:8547
+primary=0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9
+wrapped=0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
 
-[[ -r "$return_import" ]]
-[[ ! -e "$output" ]]
+[[ "$(cast chain-id --rpc-url "$rpc")" == 1 ]]
+deployer=$(cast rpc eth_accounts --rpc-url "$rpc" | jq -er ".[0]")
+outstanding=$(cast call "$primary" "outstandingMintedAtoms()(uint256)" --rpc-url "$rpc")
+balance=$(cast call "$wrapped" "balanceOf(address)(uint256)" "$deployer" --rpc-url "$rpc")
+[[ "$outstanding" =~ ^[0-9]+$ && "$balance" =~ ^[0-9]+$ ]]
 
-# Construction is loopback only. Reject the production mainnet/remote harness
-# before any burn, proof, checkpoint vote, SSH, or credential read.
-if sed -n '1,55p' "$return_import" | grep -q 'https://ethereum-rpc.publicnode.com\|root@\|operator_key='; then
-  jq -n --arg script "scripts/a666-mainnet-return-import.sh" '{
-    schema:"postfiat.a666.r4.return-artifact-stage-terminal.v1",
+# ReturnBurned may only burn an existing production-minted wrapped position.
+# The accepted receipt verifier does not itself invoke the primary-market claim.
+if [[ "$outstanding" == 0 && "$balance" == 0 ]]; then
+  jq -n --arg rpc "$rpc" --arg primary "$primary" --arg wrapped "$wrapped" --arg deployer "$deployer" --argjson outstanding "$outstanding" --argjson balance "$balance" '{
+    schema:"postfiat.a666.r4.return-artifact-stage-terminal.v2",
     outcome:"technical_wall",
-    first_failing_check:"construction_return_import_harness_missing_loopback_parameterization",
-    source_script:$script,
-    required_production_steps:["browser/proxy return job and ReturnBurned event","ethereum-receipt-proof-build","BFT checkpoint certificate","certified pftl_uniswap_return_import"],
-    blocking_production_assumptions:["external Ethereum RPC default","remote validator SSH topology","operator key-file submission"],
-    attempted_command:"scripts/a666-r4-return-artifact-stage",
+    first_failing_check:"production_claim_mint_not_staged_before_return_burn",
+    attempted_command:"scripts/a666-r4-return-artifact-stage stage",
+    loopback_rpc:$rpc, primary_market:$primary, wrapped_token:$wrapped, public_deployer:$deployer,
+    outstanding_minted_atoms:$outstanding, deployer_wrapped_balance_atoms:$balance,
+    required_next_production_step:"consumeMintOnly claim using the accepted export receipt and exact mint packet before burnForPftlReturn",
+    blocked_return_steps:["ReturnBurned","ethereum-receipt-proof-build","checkpoint certificate","certified pftl_uniswap_return_import"],
     transactions:0, proofs_generated:0, business_operations:0, live_chain:false, stakehub:false, credentials_accessed:false
   }' >"$output"
+  jq -n --arg evidence "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/return-stage-terminal.json" '{
+    schema:"postfiat.a666.r4.return-artifact-slot.v1", status:"failed",
+    failure_code:"production_claim_mint_not_staged_before_return_burn", failure_evidence:$evidence,
+    distinct_from_export_slot:true, transactions:0, proofs_generated:0, business_mutations:0, live_chain:false, custody_material_present:false, stakehub_interaction:false
+  }' >"$slot"
   exit 1
 fi
 
-printf "%s\n" "unexpectedly compatible return import harness; construction execution requires explicit review" >&2
+printf "%s\n" "unexpected staged return position; explicit claim/import choreography review required" >&2
 exit 2
