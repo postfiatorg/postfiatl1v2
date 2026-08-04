@@ -10,8 +10,8 @@ refire_prepared="$construction/receipt-verifier-spike/docker-refire-prepared.jso
 refire_probe="$construction/receipt-verifier-spike/docker-refire-probe.json"
 refire_fired="$construction/receipt-verifier-spike/docker-refire-fired.json"
 b_stage="$construction/ethereum-contract-stage.json"
-historical_fleet="$construction/fleet/construction-fleet.json"
-fresh_fleet="$construction/fleet/fresh-restore.json"
+accepted_fleet="$construction/fleet/construction-fleet.json"
+checkpoint_staging="$construction/fleet/checkpoint-lifecycle-staging-20260804.json"
 route_stage="$construction/route-activation.json"
 candidate_proxy="$construction/candidate-proxy-provenance.json"
 dependencies="$construction/private-swap-dependencies-refresh.json"
@@ -83,6 +83,93 @@ json_true() {
 repository_relative_readable_path() {
     local path="$1"
     [[ -n "$path" && "$path" != /* && "$path" != *".."* && "$path" =~ ^[A-Za-z0-9._/-]+$ && -r "$repo/$path" ]]
+}
+
+resolve_under() {
+    local root="$1"
+    local path="$2"
+    local candidate="$path"
+    [[ "$candidate" == /* ]] || candidate="$root/$candidate"
+    local resolved
+    resolved=$(realpath -m "$candidate") || return 1
+    [[ "$resolved" == "$root/"* && -r "$resolved" ]] || return 1
+    printf '%s\n' "$resolved"
+}
+
+fleet_validation_for_files() {
+    local fleet_path="$1" staging_path="$2" allowed_root="$3"
+    local report_ref report_path staging_ref staging_path_resolved declared_sha actual_sha root tip
+    if [[ ! -r "$fleet_path" || ! -r "$staging_path" ]] || ! jq -e . "$fleet_path" >/dev/null 2>&1 || ! jq -e . "$staging_path" >/dev/null 2>&1; then
+        jq -cn --arg path "$fleet_path" '{path:$path,ok:false,reason:"fleet_or_staging_evidence_absent_or_invalid",binding_identifier:null,rehearsal_root:null,tip:null}'
+        return
+    fi
+    report_ref=$(jq -r '.controlled_report.path // empty' "$fleet_path")
+    staging_ref=$(jq -r '.lifecycle.report_path // empty' "$staging_path")
+    report_path=$(resolve_under "$allowed_root" "$report_ref" 2>/dev/null || true)
+    staging_path_resolved=$(resolve_under "$allowed_root" "$staging_ref" 2>/dev/null || true)
+    declared_sha=$(jq -r '.controlled_report.sha256 // empty' "$fleet_path")
+    actual_sha=""
+    [[ -n "$report_path" ]] && actual_sha=$(sha256sum "$report_path" | awk '{print $1}')
+    root=$(jq -r '.preserved_root // empty' "$fleet_path")
+    tip=$(jq -r '.post_rollback.tip // empty' "$staging_path")
+    jq -cn \
+        --arg fleet "$fleet_path" --arg report "$report_path" --arg staging_report "$staging_path_resolved" \
+        --arg declared "$declared_sha" --arg actual "$actual_sha" --arg root "$root" --arg tip "$tip" \
+        --arg candidate "$path_b_candidate" \
+        --argjson fleet_doc "$(cat "$fleet_path")" --argjson staging_doc "$(cat "$staging_path")" \
+        --argjson report_doc "$(if [[ -n "$report_path" ]]; then cat "$report_path"; else printf '{}'; fi)" \
+        '{
+            path:$fleet, controlled_report_path:(if $report=="" then null else $report end),
+            controlled_report_sha256:(if $actual=="" then null else $actual end),
+            binding_identifier:(if $actual=="" then null else $actual end), rehearsal_root:(if $root=="" then null else $root end), tip:(if $tip=="" then null else $tip end),
+            ok:(
+                $fleet_doc.schema == "postfiat.a666.r4.construction-fleet.v1"
+                and $fleet_doc.construction_ready == true
+                and $fleet_doc.candidate.revision == $candidate
+                and ($root | type == "string" and length > 0)
+                and $fleet_doc.checks.processes_live == true and $fleet_doc.checks.ready_files == true and $fleet_doc.checks.six_way_equal == true
+                and $fleet_doc.checks.stakehub_interaction == false and $fleet_doc.checks.business_operations_submitted == 0
+                and ($report | type == "string" and length > 0) and $report == $staging_report
+                and ($declared | test("^[0-9a-f]{64}$")) and $declared == $actual and $staging_doc.lifecycle.report_sha256 == $actual
+                and $fleet_doc.controlled_report.final_height == 826
+                and $report_doc.ok == true and $report_doc.validator_count == 6 and $report_doc.final_state.height == 826
+                and $report_doc.final_state.all_six_equal == true and $report_doc.final_state.verify_state_all_six == true and $report_doc.final_state.tip == $tip
+                and $report_doc.final_state.state_root == $staging_doc.post_rollback.state_root
+                and $staging_doc.schema == "postfiat.a666.r4.fresh-fleet-staging.v1" and $staging_doc.state == "ready"
+                and $staging_doc.candidate.revision == $candidate and $staging_doc.post_rollback.preserved_root == $root
+                and $staging_doc.post_rollback.height == 826 and ($tip | test("^[0-9a-f]{96}$")) and $staging_doc.post_rollback.six_way_equal == true
+                and $staging_doc.fleet.children_live == 12 and $staging_doc.fleet.ready_files == 12 and $staging_doc.fleet.validator_count == 6 and $staging_doc.fleet.six_way_equal == true
+                and $staging_doc.checks.stakehub_untouched == true and $staging_doc.checks.business_operations_outside_controlled_lifecycle == 0
+            )
+        }'
+}
+
+path_b_stage_validation() {
+    local path="$1" fleet_json="$2"
+    local tip root expected_checkpoint
+    tip=$(jq -r '.tip // empty' <<<"$fleet_json")
+    root=$(jq -r '.rehearsal_root // empty' <<<"$fleet_json")
+    expected_checkpoint=""
+    [[ "$tip" =~ ^[0-9a-f]{96}$ ]] && expected_checkpoint=$(cast keccak "0x$tip")
+    if [[ ! -r "$path" ]] || ! jq -e . "$path" >/dev/null 2>&1; then
+        jq -cn '{ok:false,reason:"b_stage_evidence_absent_or_invalid"}'
+        return
+    fi
+    jq -cn --arg tip "$tip" --arg root "$root" --arg checkpoint "$expected_checkpoint" --arg candidate "$path_b_candidate" --argjson doc "$(cat "$path")" '
+        {
+          expected:{candidate_revision:$candidate,prior_block_id:$tip,initial_checkpoint_commitment:$checkpoint,initial_height:826,rehearsal_root:$root},
+          ok:(
+            $doc.corrective_deployment.candidate_revision == "39f7fae"
+            and $doc.bindings.candidate_revision == $candidate and $doc.bindings.rehearsal_root == $root
+            and $doc.path_b.initial_finalized_height == 826 and $doc.path_b.prior_block_id == $tip
+            and ($checkpoint | test("^0x[0-9a-f]{64}$")) and ($doc.path_b.initial_checkpoint_commitment | ascii_downcase) == ($checkpoint | ascii_downcase)
+            and $doc.deployment.green == true and $doc.deployment.mocks == 0
+            and ($doc.deployment.contracts.sp1_verifier.address | type == "string" and length > 0)
+            and ($doc.deployment.contracts.wrapped_venue_navcoin.address | type == "string" and length > 0)
+            and ($doc.deployment.contracts.pftl_receipt_finality_verifier_v1.address | type == "string" and length > 0)
+            and ($doc.deployment.contracts.pftl_uniswap_primary_market_v2.address | type == "string" and length > 0)
+          )
+        }'
 }
 
 preprove_validation_for_file() {
@@ -237,7 +324,35 @@ run_preprove_self_test() {
         printf '%s\n' "pre_prove_binding_self_test=FAIL fixture_root=$test_root"
         return 1
     fi
-    printf '%s\n' "pre_prove_binding_self_test=PASS green=true prior_value_mismatch=false field_value_mismatch=false fixture_root=$test_root"
+    run_fleet_binding_self_test
+    printf '%s\n' "fire_control_self_test=PASS pre_prove_green=true prior_value_mismatch=false field_value_mismatch=false controlled_report_sha_mismatch=false prior_block_tip_mismatch=false fixture_root=$test_root"
+}
+
+run_fleet_binding_self_test() {
+    local test_root report_sha fleet_ok b_ok
+    test_root=$(mktemp -d /tmp/a666-r4-fleet-binding-self-test.XXXXXX)
+    chmod 700 "$test_root"
+    cp "$accepted_fleet" "$test_root/fleet.json"
+    cp "$checkpoint_staging" "$test_root/staging.json"
+    cp "$b_stage" "$test_root/b-stage.json"
+    cp "$(jq -r '.controlled_report.path' "$accepted_fleet")" "$test_root/report.json"
+    report_sha=$(sha256sum "$test_root/report.json" | awk '{print $1}')
+    jq --arg path "$test_root/report.json" --arg sha "$report_sha" '.controlled_report.path=$path | .controlled_report.sha256=$sha' "$test_root/fleet.json" >"$test_root/fleet.tmp" && mv "$test_root/fleet.tmp" "$test_root/fleet.json"
+    jq --arg path "$test_root/report.json" --arg sha "$report_sha" '.lifecycle.report_path=$path | .lifecycle.report_sha256=$sha' "$test_root/staging.json" >"$test_root/staging.tmp" && mv "$test_root/staging.tmp" "$test_root/staging.json"
+    fleet_ok=$(fleet_validation_for_files "$test_root/fleet.json" "$test_root/staging.json" "$test_root")
+    jq -e '.ok == true' <<<"$fleet_ok" >/dev/null
+    b_ok=$(path_b_stage_validation "$test_root/b-stage.json" "$fleet_ok")
+    jq -e '.ok == true' <<<"$b_ok" >/dev/null
+    jq '.controlled_report.sha256 = "0000000000000000000000000000000000000000000000000000000000000000"' "$test_root/fleet.json" >"$test_root/fleet-sha-mismatch.json"
+    if fleet_validation_for_files "$test_root/fleet-sha-mismatch.json" "$test_root/staging.json" "$test_root" | jq -e '.ok == true' >/dev/null; then
+        printf '%s\n' "fleet_binding_self_test=FAIL controlled_report_sha_mismatch=true fixture_root=$test_root"
+        return 1
+    fi
+    jq '.path_b.prior_block_id = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"' "$test_root/b-stage.json" >"$test_root/b-prior-tip-mismatch.json"
+    if path_b_stage_validation "$test_root/b-prior-tip-mismatch.json" "$fleet_ok" | jq -e '.ok == true' >/dev/null; then
+        printf '%s\n' "fleet_binding_self_test=FAIL prior_block_tip_mismatch=true fixture_root=$test_root"
+        return 1
+    fi
 }
 
 if [[ $# -gt 0 ]]; then
@@ -291,9 +406,11 @@ fi
 if [[ -z "$candidate_revision" && -r "$preflight" ]]; then
     candidate_revision=$(jq -r '.aggregation.current_binding.candidate_revision // empty' "$preflight")
 fi
-fresh_binding=$(binding_json "$fresh_fleet")
-fresh_root=$(jq -r '.rehearsal_root // empty' <<<"$fresh_binding")
-fresh_run=$(jq -r '.run_id // empty' <<<"$fresh_binding")
+fleet_validation=$(fleet_validation_for_files "$accepted_fleet" "$checkpoint_staging" "$repo")
+fresh_root=$(jq -r '.rehearsal_root // empty' <<<"$fleet_validation")
+# The accepted fleet deliberately binds by controlled-report digest, not a fabricated generic run ID.
+fresh_run=""
+fleet_binding_identifier=$(jq -r '.binding_identifier // empty' <<<"$fleet_validation")
 
 if json_true "$refire_prepared" '.prepared == true and (.run_id | type == "string" and length > 0)'; then
     refire_prepared_ok=true
@@ -312,13 +429,14 @@ if [[ "$refire_fired_ok" == true ]] && json_true "$refire_fired" '(.unit.active_
     refire_unit_or_terminal_ok=true
 fi
 
-if bound_and "$b_stage" '.deployment.green == true and (.deployment.contracts.sp1_verifier.address | type == "string") and (.deployment.contracts.wrapped_venue_navcoin.address | type == "string") and (.deployment.contracts.pftl_receipt_finality_verifier_v1.address | type == "string") and (.deployment.contracts.pftl_uniswap_primary_market_v2.address | type == "string")'; then
+b_path_b_validation=$(path_b_stage_validation "$b_stage" "$fleet_validation")
+if jq -e '.ok == true' <<<"$b_path_b_validation" >/dev/null; then
     b_contract_stage_ok=true
 fi
-if bound_and "$b_stage" '.verifier_acceptance.ready == true and (.verifier_acceptance.accepted == true or .verifier_acceptance.outcome == "accepted")'; then
+if jq -e '.verifier_acceptance.ready == true and (.verifier_acceptance.accepted == true or .verifier_acceptance.outcome == "accepted")' "$b_stage" >/dev/null 2>&1; then
     b_verifier_acceptance_ok=true
 fi
-if json_true "$fresh_fleet" '.construction_ready == true and (.checks.fleet_12_live_six_equal == true or .checks.construction_fleet_12_live_six_equal == true or .checks.six_way_equal == true) and (.bindings.candidate_revision | type == "string" and length > 0) and (.bindings.rehearsal_root | type == "string" and length > 0) and (.bindings.run_id | type == "string" and length > 0)'; then
+if jq -e '.ok == true' <<<"$fleet_validation" >/dev/null; then
     fresh_fleet_ok=true
 fi
 if bound_and "$route_stage" '.accepted == true and .activation_checks.route_live == true and .activation_checks.six_way_convergence == true'; then
@@ -394,7 +512,7 @@ check_records=$(jq -cn \
         {id: "docker_refire_unit_live_or_terminal_proof_success", ok: $refire_unit_or_terminal_ok, input: "refire_fired"},
         {id: "b_full_real_contract_stage_green", ok: $b_contract_stage_ok, input: "b_contract_stage"},
         {id: "b_real_verifier_acceptance", ok: $b_verifier_acceptance_ok, input: "b_contract_stage"},
-        {id: "fresh_fleet_12_of_12_six_equal", ok: $fresh_fleet_ok, input: "fresh_fleet"},
+        {id: "fresh_fleet_12_of_12_six_equal", ok: $fresh_fleet_ok, input: "accepted_construction_fleet"},
         {id: "fresh_route_live", ok: $fresh_route_ok, input: "fresh_route"},
         {id: "candidate_proxy_ready", ok: $candidate_proxy_ok, input: "candidate_proxy"},
         {id: "private_dependencies_ready", ok: $dependencies_ok, input: "dependencies"},
@@ -412,13 +530,16 @@ jq -n \
     --arg candidate_revision "$candidate_revision" \
     --arg fresh_root "$fresh_root" \
     --arg fresh_run "$fresh_run" \
+    --arg fleet_binding_identifier "$fleet_binding_identifier" \
     --argjson proof_contract "$proof_contract" \
     --argjson refire_prepared_input "$(input_summary "$refire_prepared")" \
     --argjson refire_probe_input "$(input_summary "$refire_probe")" \
     --argjson refire_fired_input "$(input_summary "$refire_fired")" \
     --argjson b_stage_input "$(input_summary "$b_stage")" \
-    --argjson historical_fleet_input "$(input_summary "$historical_fleet")" \
-    --argjson fresh_fleet_input "$(input_summary "$fresh_fleet")" \
+    --argjson accepted_fleet_input "$(input_summary "$accepted_fleet")" \
+    --argjson checkpoint_staging_input "$(input_summary "$checkpoint_staging")" \
+    --argjson fleet_validation "$fleet_validation" \
+    --argjson b_path_b_validation "$b_path_b_validation" \
     --argjson route_input "$(input_summary "$route_stage")" \
     --argjson proxy_input "$(input_summary "$candidate_proxy")" \
     --argjson dependencies_input "$(input_summary "$dependencies")" \
@@ -437,12 +558,14 @@ jq -n \
             mode: "fail_closed_current_evidence",
             binding_contract: {
                 required_fields: ["bindings.candidate_revision", "bindings.rehearsal_root", "bindings.run_id"],
-                historical_evidence_rejected_without_matching_binding: true
+                historical_evidence_rejected_without_matching_binding: true,
+                accepted_fleet_binding: "full controlled_report sha256; generic run_id is not fabricated"
             },
             current_binding: {
                 candidate_revision: (if $candidate_revision == "" then null else $candidate_revision end),
                 rehearsal_root: (if $fresh_root == "" then null else $fresh_root end),
-                run_id: (if $fresh_run == "" then null else $fresh_run end)
+                run_id: (if $fresh_run == "" then null else $fresh_run end),
+                fleet_binding_identifier: (if $fleet_binding_identifier == "" then null else $fleet_binding_identifier end)
             }
         },
         inputs: {
@@ -450,8 +573,10 @@ jq -n \
             refire_probe: $refire_probe_input,
             refire_fired: $refire_fired_input,
             b_contract_stage: $b_stage_input,
-            historical_fleet_rejected: $historical_fleet_input,
-            fresh_fleet: $fresh_fleet_input,
+            b_path_b_validation: $b_path_b_validation,
+            accepted_construction_fleet: $accepted_fleet_input,
+            checkpoint_lifecycle_staging: $checkpoint_staging_input,
+            fleet_validation: $fleet_validation,
             fresh_route: $route_input,
             candidate_proxy: $proxy_input,
             dependencies: $dependencies_input,

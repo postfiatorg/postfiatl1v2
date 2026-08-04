@@ -8,12 +8,14 @@
         "bindings.rehearsal_root",
         "bindings.run_id"
       ],
-      "historical_evidence_rejected_without_matching_binding": true
+      "historical_evidence_rejected_without_matching_binding": true,
+      "accepted_fleet_binding": "full controlled_report sha256; generic run_id is not fabricated"
     },
     "current_binding": {
       "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
-      "rehearsal_root": null,
-      "run_id": null
+      "rehearsal_root": "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349",
+      "run_id": null,
+      "fleet_binding_identifier": "c2fb973f284d92cf3b866c4abe86aca237f8e4bd753cbf03075ab71702810cf2"
     }
   },
   "inputs": {
@@ -60,12 +62,22 @@
       "observed_status": null,
       "observed_reason": null,
       "bindings": {
-        "candidate_revision": null,
-        "rehearsal_root": null,
+        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "rehearsal_root": "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349",
         "run_id": null
       }
     },
-    "historical_fleet_rejected": {
+    "b_path_b_validation": {
+      "expected": {
+        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "prior_block_id": "63f81fb5f56acc0b9eddd0eaf068f65feaf1d28169035c9de096e4b7cd6888836aa85fedeaa25d1dd42d07a46e8a9369",
+        "initial_checkpoint_commitment": "0x6fcf3e6ca571433715febb339dc4785cb6f4211e3a67a1a18371c567bf594462",
+        "initial_height": 826,
+        "rehearsal_root": "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349"
+      },
+      "ok": true
+    },
+    "accepted_construction_fleet": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-fleet.json",
       "exists": true,
       "valid_json": true,
@@ -77,17 +89,26 @@
         "run_id": null
       }
     },
-    "fresh_fleet": {
-      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/fresh-restore.json",
-      "exists": false,
-      "valid_json": false,
-      "observed_status": "absent",
-      "observed_reason": "evidence_absent",
+    "checkpoint_lifecycle_staging": {
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/checkpoint-lifecycle-staging-20260804.json",
+      "exists": true,
+      "valid_json": true,
+      "observed_status": true,
+      "observed_reason": null,
       "bindings": {
         "candidate_revision": null,
         "rehearsal_root": null,
         "run_id": null
       }
+    },
+    "fleet_validation": {
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-fleet.json",
+      "controlled_report_path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/controlled-lifecycle-report-20260804.json",
+      "controlled_report_sha256": "c2fb973f284d92cf3b866c4abe86aca237f8e4bd753cbf03075ab71702810cf2",
+      "binding_identifier": "c2fb973f284d92cf3b866c4abe86aca237f8e4bd753cbf03075ab71702810cf2",
+      "rehearsal_root": "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349",
+      "tip": "63f81fb5f56acc0b9eddd0eaf068f65feaf1d28169035c9de096e4b7cd6888836aa85fedeaa25d1dd42d07a46e8a9369",
+      "ok": true
     },
     "fresh_route": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/route-activation.json",
@@ -275,7 +296,7 @@
     },
     {
       "id": "b_full_real_contract_stage_green",
-      "ok": false,
+      "ok": true,
       "input": "b_contract_stage"
     },
     {
@@ -285,8 +306,8 @@
     },
     {
       "id": "fresh_fleet_12_of_12_six_equal",
-      "ok": false,
-      "input": "fresh_fleet"
+      "ok": true,
+      "input": "accepted_construction_fleet"
     },
     {
       "id": "fresh_route_live",
@@ -347,9 +368,7 @@
   "check_count": 18,
   "blocker_names": [
     "docker_refire_unit_live_or_terminal_proof_success",
-    "b_full_real_contract_stage_green",
     "b_real_verifier_acceptance",
-    "fresh_fleet_12_of_12_six_equal",
     "fresh_route_live",
     "candidate_proxy_ready",
     "private_dependencies_ready",
