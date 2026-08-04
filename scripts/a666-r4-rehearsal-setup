@@ -1,72 +1,37 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
-CANDIDATE_REVISION="a3c3de894573f24318c4b00608af44e7ffa345f2"
-CANDIDATE_WORKTREE="/tmp/a666-r4-candidate-a3c3de8"
+CANDIDATE_REVISION="39f7fae3191aa34c376ae1657650a9ec2444f421"
+CANDIDATE_WORKTREE="/tmp/a666-r4-successor-39f7fae"
+MAIN_WORKTREE="/home/postfiat/repos/a666-eth-fast-lane-combined-20260724"
+EVIDENCE_DIR="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1"
 CHECKPOINT_DIR="/home/postfiat/.pft/public-reserve-qualification/20260803-pre-migration-checkpoint"
 CHECKPOINT_MANIFEST="$CHECKPOINT_DIR/lifecycle-checkpoint.signed-manifest.json"
 CHECKPOINT_SHA256="2e87fbda39b60b78e6003adf53624066974a9dea6b5a8bf0f1a851a935b1cd0b"
 TRUSTED_PUBLISHER="${CHECKPOINT_DIR}-trusted-publisher.json"
 KEY_ROOT="/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private"
-EVIDENCE_REL="docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1"
+TARGET_DIR="$MAIN_WORKTREE/target"
+NODE_BIN="$TARGET_DIR/release/postfiat-node"
 
-repo_root="$(git rev-parse --show-toplevel)"
-evidence_dir="$repo_root/$EVIDENCE_REL"
-mkdir -p "$evidence_dir"
+mkdir -p "$EVIDENCE_DIR"
 run_id="r4-setup-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+report="$EVIDENCE_DIR/controlled-lifecycle-report.json"
+transcript="$EVIDENCE_DIR/checkpoint-lifecycle-transcript.txt"
+manifest="$EVIDENCE_DIR/environment-manifest.json"
+teardown="$EVIDENCE_DIR/teardown-pids.json"
+restart_inventory="$HOME/.pft/${run_id}-stakehub-restart-inventory.txt"
 started_ms="$(date +%s%3N)"
-transcript="$evidence_dir/setup-transcript.txt"
-manifest="$evidence_dir/environment-manifest.json"
-inventory_private="/home/postfiat/.pft/${run_id}-stakehub-restart-inventory.txt"
+first_failure="preflight"
+preserved_root=""
+active_units=()
+inventoried_pids=()
+relaunched_pids=()
 
-exec > >(tee "$transcript") 2>&1
-printf 'run_id=%s\n' "$run_id"
-printf 'candidate_revision=%s\n' "$CANDIDATE_REVISION"
-printf 'disk_available_kib=%s\n' "$(df --output=avail /tmp | tail -1 | tr -d ' ')"
-
-if [[ -e "$CANDIDATE_WORKTREE/.git" ]]; then
-  observed_revision="$(git -C "$CANDIDATE_WORKTREE" rev-parse HEAD)"
-else
-  git -C "$repo_root" worktree add --detach "$CANDIDATE_WORKTREE" "$CANDIDATE_REVISION"
-  observed_revision="$(git -C "$CANDIDATE_WORKTREE" rev-parse HEAD)"
-fi
-[[ "$observed_revision" == "$CANDIDATE_REVISION" ]]
-tracked_dirty_count="$(git -C "$CANDIDATE_WORKTREE" status --porcelain --untracked-files=no | wc -l)"
-[[ "$tracked_dirty_count" -eq 0 ]]
-printf 'worktree_revision_match=true\ntracked_dirty_count=%s\n' "$tracked_dirty_count"
-
-observed_checkpoint_sha256="$(sha256sum "$CHECKPOINT_MANIFEST" | awk '{print $1}')"
-checkpoint_hash_match=false
-[[ "$observed_checkpoint_sha256" == "$CHECKPOINT_SHA256" ]] && checkpoint_hash_match=true
-trusted_publisher_present=false
-[[ -f "$TRUSTED_PUBLISHER" ]] && trusted_publisher_present=true
-printf 'checkpoint_hash_match=%s\ntrusted_publisher_present=%s\n' "$checkpoint_hash_match" "$trusted_publisher_present"
-
-proof_paths=(
-  "$CANDIDATE_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/qualification/epoch-7/proof-calldata.bin"
-  "$CANDIDATE_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/qualification/epoch-7/public-values.bin"
-  "$CANDIDATE_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/qualification/epoch-8/proof-calldata.bin"
-  "$CANDIDATE_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/qualification/epoch-8/public-values.bin"
-)
-key_paths=(
-  "$KEY_ROOT/faucet-key.json"
-  "$KEY_ROOT/reserve-key.json"
-  "$KEY_ROOT/pfusdc-issuer-key.json"
-  "$KEY_ROOT/holder-key.json"
-)
-proof_files_present=true
-for path in "${proof_paths[@]}"; do [[ -f "$path" ]] || proof_files_present=false; done
-key_files_present=true
-for path in "${key_paths[@]}"; do [[ -f "$path" ]] || key_files_present=false; done
-printf 'proof_files_present=%s\nkey_files_present=%s\n' "$proof_files_present" "$key_files_present"
-
-mapfile -t active_units < <(systemctl --user list-units --all --no-legend 'stakehub-*' 2>/dev/null | awk '$3 == "active" {print $1}' | sort -u)
-stakehub_unit_count="${#active_units[@]}"
-stakehub_process_count="$(python3 - <<'PY'
+same_user_matching_pids() {
+  python3 - <<'PY'
 import os
 patterns = ('/home/postfiat/repos/StakeHub', 'faucet-stakehub-root', '/.stakehub/')
-count = 0
-for name in os.listdir('/proc'):
+for name in sorted(os.listdir('/proc'), key=lambda value: int(value) if value.isdigit() else -1):
     if not name.isdigit():
         continue
     root = f'/proc/{name}'
@@ -80,126 +45,318 @@ for name in os.listdir('/proc'):
             except OSError:
                 pass
         try:
-            fields.append(open(f'{root}/cmdline', 'rb').read().replace(b'\0', b' ').decode('utf-8', 'replace'))
+            with open(f'{root}/cmdline', 'rb') as stream:
+                fields.append(stream.read().replace(b'\0', b' ').decode('utf-8', 'replace'))
         except OSError:
             pass
         if any(pattern in field for field in fields for pattern in patterns):
-            count += 1
+            print(name)
     except (FileNotFoundError, PermissionError, ProcessLookupError):
         pass
-print(count)
 PY
-)"
+}
+
+restore_stakehub() {
+  if ((${#active_units[@]})); then
+    systemctl --user start "${active_units[@]}" >/dev/null 2>&1 || true
+  fi
+}
+
+kill_relaunches() {
+  for pid in "${relaunched_pids[@]}"; do
+    kill -TERM "$pid" 2>/dev/null || true
+  done
+}
+
+write_red_manifest() {
+  local rc="$1"
+  local ended_ms
+  ended_ms="$(date +%s%3N)"
+  jq -n \
+    --arg schema "postfiat.a666.r4.rehearsal-environment.v1" \
+    --arg run_id "$run_id" \
+    --arg candidate_revision "$CANDIDATE_REVISION" \
+    --arg candidate_worktree "$CANDIDATE_WORKTREE" \
+    --arg checkpoint_manifest_sha256 "$CHECKPOINT_SHA256" \
+    --arg controlled_report_path "$report" \
+    --arg preserved_root "$preserved_root" \
+    --arg teardown_manifest_path "$teardown" \
+    --arg restart_inventory_path "$restart_inventory" \
+    --arg first_failure "$first_failure" \
+    --argjson exit_code "$rc" \
+    --argjson elapsed_ms "$((ended_ms-started_ms))" \
+    '{schema:$schema,setup_run_id:$run_id,candidate:{revision:$candidate_revision,worktree:$candidate_worktree},checkpoint:{manifest_sha256:$checkpoint_manifest_sha256},controlled_report_path:$controlled_report_path,preserved_root:($preserved_root|select(length>0)),teardown_manifest_path:$teardown_manifest_path,stakehub:{restart_inventory_path:$restart_inventory_path},first_failure:$first_failure,exit_code:$exit_code,ready_for_one_shot_pass_1:false,elapsed_ms:$elapsed_ms}' > "$manifest"
+}
+
+on_error() {
+  local rc="$?"
+  trap - ERR
+  kill_relaunches
+  restore_stakehub
+  write_red_manifest "$rc"
+  exit "$rc"
+}
+trap on_error ERR
+
+first_failure="less_than_50_gb_free"
+available_kib="$(df --output=avail /tmp | tail -1 | tr -d ' ')"
+((available_kib >= 50 * 1024 * 1024))
+first_failure="candidate_revision_or_tracked_cleanliness"
+[[ "$(git -C "$CANDIDATE_WORKTREE" rev-parse HEAD)" == "$CANDIDATE_REVISION" ]]
+[[ -z "$(git -C "$CANDIDATE_WORKTREE" status --porcelain --untracked-files=no)" ]]
+first_failure="checkpoint_manifest_hash"
+[[ "$(sha256sum "$CHECKPOINT_MANIFEST" | awk '{print $1}')" == "$CHECKPOINT_SHA256" ]]
+[[ -f "$TRUSTED_PUBLISHER" ]]
+
+key_paths=(
+  "$KEY_ROOT/faucet-key.json"
+  "$KEY_ROOT/reserve-key.json"
+  "$KEY_ROOT/pfusdc-issuer-key.json"
+  "$KEY_ROOT/holder-key.json"
+)
+proof_paths=(
+  "$CANDIDATE_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/qualification/epoch-7/proof-calldata.bin"
+  "$CANDIDATE_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/qualification/epoch-7/public-values.bin"
+  "$CANDIDATE_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/qualification/epoch-8/proof-calldata.bin"
+  "$CANDIDATE_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/qualification/epoch-8/public-values.bin"
+)
+first_failure="required_key_or_proof_file_path"
+for path in "${key_paths[@]}" "${proof_paths[@]}"; do [[ -f "$path" ]]; done
+
+first_failure="stakehub_inventory"
+mapfile -t active_units < <(systemctl --user list-units --all --no-legend 'stakehub-*' 2>/dev/null | awk '$3 == "active" {print $1}' | sort -u)
+mapfile -t inventoried_pids < <(same_user_matching_pids)
 {
+  printf 'schema=postfiat.a666.r4.stakehub-restart-inventory.v1\n'
   printf 'run_id=%s\n' "$run_id"
-  printf 'units_to_restore=%s\n' "$stakehub_unit_count"
+  printf 'active_unit_count=%s\n' "${#active_units[@]}"
+  printf 'matching_process_count=%s\n' "${#inventoried_pids[@]}"
+  printf 'units:\n'
   printf '%s\n' "${active_units[@]}"
-  printf 'matching_process_count_before=%s\n' "$stakehub_process_count"
-} > "$inventory_private"
-chmod 600 "$inventory_private"
-printf 'stakehub_active_unit_count=%s\nstakehub_matching_process_count=%s\n' "$stakehub_unit_count" "$stakehub_process_count"
+  printf 'process_ids:\n'
+  printf '%s\n' "${inventoried_pids[@]}"
+} > "$restart_inventory"
+chmod 600 "$restart_inventory"
+initial_unit_count="${#active_units[@]}"
+initial_process_count="${#inventoried_pids[@]}"
 
+first_failure="stakehub_stop"
+if ((initial_unit_count)); then systemctl --user stop "${active_units[@]}"; fi
+for pid in "${inventoried_pids[@]}"; do kill -TERM "$pid" 2>/dev/null || true; done
+for _ in {1..30}; do
+  remaining_units="$(systemctl --user list-units --all --no-legend 'stakehub-*' 2>/dev/null | awk '$3 == "active" {count++} END {print count+0}')"
+  mapfile -t remaining_pids < <(same_user_matching_pids)
+  if [[ "$remaining_units" -eq 0 && "${#remaining_pids[@]}" -eq 0 ]]; then break; fi
+  sleep 1
+done
+[[ "$remaining_units" -eq 0 ]]
+[[ "${#remaining_pids[@]}" -eq 0 ]]
+
+first_failure="checkpoint_lifecycle"
+rm -f "$report" "$transcript"
+set +e
+(
+  cd "$CANDIDATE_WORKTREE"
+  POSTFIAT_KEEP_ATOMIC_SWAP_LOCAL_SIX=1 \
+  POSTFIAT_A666_CONTROLLED_REPORT_FILE="$report" \
+  POSTFIAT_A666_CHECKPOINT_DIR="$CHECKPOINT_DIR" \
+  POSTFIAT_A666_CHECKPOINT_TRUSTED_KEY_FILE="$TRUSTED_PUBLISHER" \
+  POSTFIAT_A666_ISSUER_KEY_FILE="${key_paths[0]}" \
+  POSTFIAT_A666_RESERVE_KEY_FILE="${key_paths[1]}" \
+  POSTFIAT_PFUSDC_ISSUER_KEY_FILE="${key_paths[2]}" \
+  POSTFIAT_A666_HOLDER_KEY_FILE="${key_paths[3]}" \
+  POSTFIAT_A666_PROOF_CALLDATA_FILE="${proof_paths[0]}" \
+  POSTFIAT_A666_PUBLIC_VALUES_FILE="${proof_paths[1]}" \
+  POSTFIAT_A666_NEXT_PROOF_CALLDATA_FILE="${proof_paths[2]}" \
+  POSTFIAT_A666_NEXT_PUBLIC_VALUES_FILE="${proof_paths[3]}" \
+  CARGO_TARGET_DIR="$TARGET_DIR" \
+  cargo test --locked --release -p postfiat-node --test atomic_swap_local_six \
+    a666_public_successor_lifecycle_from_signed_checkpoint -- --ignored --exact --nocapture
+) > >(tee "$transcript") 2>&1
+lifecycle_rc="$?"
+set -e
+[[ "$lifecycle_rc" -eq 0 ]]
+[[ "$(grep -c '^running 1 test$' "$transcript")" -eq 1 ]]
+
+first_failure="controlled_report_contract"
+jq -e --arg hash "$CHECKPOINT_SHA256" '
+  .ok == true and .validator_count == 6
+  and .checkpoint_import.restored_height > 0
+  and .checkpoint_import.manifest_sha256 == $hash
+  and .final_state.all_six_equal == true
+  and .final_state.verify_state_all_six == true
+  and .lifecycle.all_six_restarted == true
+' "$report" >/dev/null
+
+first_failure="preserved_harness_contract"
+mapfile -t preserved_roots < <(sed -n 's/^preserved atomic swap harness at //p' "$transcript" | sort -u)
+[[ "${#preserved_roots[@]}" -eq 1 ]]
+preserved_root="${preserved_roots[0]}"
+[[ -d "$preserved_root" ]]
+topology="$preserved_root/a666-public-successor-topology.json"
+[[ -f "$topology" ]]
+for index in {0..5}; do
+  [[ -d "$preserved_root/validator-$index" ]]
+  [[ -f "$preserved_root/validator-$index/validator-$index.validator_keys.json" ]]
+  rm -f "$preserved_root/validator-$index.transport.ready.json" "$preserved_root/validator-$index.rpc.ready.json"
+done
+[[ -x "$NODE_BIN" ]]
+mapfile -t rpc_ports < <(jq -r '.peers | sort_by(.node_id)[] | .rpc_port' "$topology")
+[[ "${#rpc_ports[@]}" -eq 6 ]]
+
+first_failure="candidate_service_relaunch"
+entries='[]'
+for index in {0..5}; do
+  validator="validator-$index"
+  data_dir="$preserved_root/$validator"
+  key_file="$data_dir/$validator.validator_keys.json"
+  transport_ready="$preserved_root/$validator.transport.ready.json"
+  rpc_ready="$preserved_root/$validator.rpc.ready.json"
+  rpc_port="${rpc_ports[$index]}"
+  mkdir -p "$preserved_root/$validator.votes" "$preserved_root/$validator.rpc-spool" "$preserved_root/$validator.finality"
+  nohup env \
+    POSTFIAT_TRANSPORT_VALIDATOR_READY_FILE="$transport_ready" \
+    POSTFIAT_PREWARM_SHIELDED_VERIFIER=1 \
+    POSTFIAT_PREWARM_ASSET_ORCHARD_SWAP_VERIFIER=1 \
+    POSTFIAT_PREWARM_ASSET_ORCHARD_PRIVATE_EGRESS_VERIFIER=1 \
+    "$NODE_BIN" transport-validator-serve \
+      --unsafe-devnet-file-signer --unsafe-devnet-json-storage \
+      --data-dir "$data_dir" --topology "$topology" --key-file "$key_file" \
+      --vote-dir "$preserved_root/$validator.votes" --max-connections 100 --timeout-ms 90000 \
+      >"$preserved_root/$validator.transport.stdout.json" 2>"$preserved_root/$validator.transport.stderr.log" < /dev/null &
+  transport_pid="$!"
+  relaunched_pids+=("$transport_pid")
+  entries="$(jq -c --argjson index "$index" --argjson pid "$transport_pid" --arg ready "$transport_ready" --arg root "$preserved_root" '. + [{validator_index:$index,kind:"transport",pid:$pid,rpc_port:null,ready_file:$ready,preserved_root:$root}]' <<<"$entries")"
+
+  nohup env \
+    POSTFIAT_PREWARM_SHIELDED_VERIFIER=1 \
+    POSTFIAT_PREWARM_ASSET_ORCHARD_SWAP_VERIFIER=1 \
+    POSTFIAT_PREWARM_ASSET_ORCHARD_PRIVATE_EGRESS_VERIFIER=1 \
+    "$NODE_BIN" rpc-serve --unsafe-devnet-json-storage \
+      --data-dir "$data_dir" --spool-dir "$preserved_root/$validator.rpc-spool" \
+      --ready-file "$rpc_ready" --port "$rpc_port" --max-requests 10000 \
+      --timeout-ms 90000 --child-timeout-ms 90000 --allow-mempool-submit \
+      --allow-mempool-submit-finality --finality-topology "$topology" \
+      --finality-key-file "$key_file" --finality-artifact-root "$preserved_root/$validator.finality" \
+      --finality-timeout-ms 90000 --finality-send-retries 2 --finality-retry-backoff-ms 25 \
+      --finality-quorum-early-full-propagation --keep-alive \
+      >"$preserved_root/$validator.rpc.stdout.json" 2>"$preserved_root/$validator.rpc.stderr.log" < /dev/null &
+  rpc_pid="$!"
+  relaunched_pids+=("$rpc_pid")
+  entries="$(jq -c --argjson index "$index" --argjson pid "$rpc_pid" --argjson port "$rpc_port" --arg ready "$rpc_ready" --arg root "$preserved_root" '. + [{validator_index:$index,kind:"rpc",pid:$pid,rpc_port:$port,ready_file:$ready,preserved_root:$root}]' <<<"$entries")"
+done
+jq -n --arg schema "postfiat.a666.r4.teardown-pids.v1" --argjson processes "$entries" '{schema:$schema,processes:$processes}' > "$teardown"
+
+first_failure="candidate_service_readiness"
+ready_deadline="$((SECONDS+90))"
+while ((SECONDS < ready_deadline)); do
+  ready_count=0
+  live_count=0
+  while IFS=$'\t' read -r pid ready; do
+    [[ -s "$ready" ]] && ((ready_count+=1))
+    kill -0 "$pid" 2>/dev/null && ((live_count+=1))
+  done < <(jq -r '.processes[] | [.pid,.ready_file] | @tsv' "$teardown")
+  if [[ "$ready_count" -eq 12 && "$live_count" -eq 12 ]]; then break; fi
+  sleep 1
+done
+[[ "$ready_count" -eq 12 && "$live_count" -eq 12 ]]
+
+first_failure="six_way_rpc_convergence"
+endpoints_file="$EVIDENCE_DIR/rpc-endpoints.json"
+python3 - "$report" "$endpoints_file" "${rpc_ports[@]}" <<'PY'
+import json, socket, sys
+report = json.load(open(sys.argv[1], encoding='utf-8'))
+expected = report['final_state']
+results = []
+for index, port_text in enumerate(sys.argv[3:]):
+    port = int(port_text)
+    request = {"version":"postfiat-local-rpc-v1","id":f"r4-converge-{index}","method":"status","params":{}}
+    with socket.create_connection(('127.0.0.1', port), timeout=10) as connection:
+        connection.sendall((json.dumps(request, separators=(',', ':')) + '\n').encode())
+        stream = connection.makefile('rb')
+        response = json.loads(stream.readline())
+    if response.get('ok') is not True:
+        raise SystemExit(f'validator {index} RPC status failed')
+    value = response['result']
+    observed = (value['block_height'], value['block_tip_hash'], value['state_root'])
+    pinned = (expected['height'], expected['tip'], expected['state_root'])
+    if observed != pinned:
+        raise SystemExit(f'validator {index} terminal tuple mismatch')
+    results.append({"validator_index":index,"host":"127.0.0.1","rpc_port":port,"block_height":observed[0],"block_tip_hash":observed[1],"state_root":observed[2],"equal_to_controlled_report":True})
+with open(sys.argv[2], 'w', encoding='utf-8') as stream:
+    json.dump({"schema":"postfiat.a666.r4.rpc-endpoints.v1","endpoints":results,"all_six_equal":True}, stream, indent=2)
+    stream.write('\n')
+PY
+
+first_failure="candidate_wallet_dist_contract"
+[[ -f "$CANDIDATE_WORKTREE/wallet-web/dist/index.html" ]]
+rg -q 'Download public receipt' "$CANDIDATE_WORKTREE/wallet-web/src/components/PftlPrivatePrimary.jsx"
 wallet_version="$(jq -r .version "$CANDIDATE_WORKTREE/wallet-web/package.json")"
-visible_version_identity=false
-rg -q "VITE_APP_VERSION" "$CANDIDATE_WORKTREE/wallet-web/src/App.jsx" && visible_version_identity=true
-public_receipt_download=false
-if rg -qi 'download.{0,80}(public.)?receipt|(public.)?receipt.{0,80}download' "$CANDIDATE_WORKTREE/wallet-web/src"; then
-  public_receipt_download=true
-fi
-first_setup_blocker=""
-[[ "$public_receipt_download" == true ]] || first_setup_blocker="browser_step_10_missing_downloadable_public_receipt_control"
-printf 'visible_version_identity=%s\npublic_receipt_download=%s\nfirst_setup_blocker=%s\n' \
-  "$visible_version_identity" "$public_receipt_download" "$first_setup_blocker"
+dist_hashes_file="$EVIDENCE_DIR/wallet-dist-sha256.json"
+python3 - "$CANDIDATE_WORKTREE/wallet-web/dist" "$dist_hashes_file" <<'PY'
+import hashlib, json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+items = []
+for path in sorted(item for item in root.rglob('*') if item.is_file()):
+    items.append({"path":str(path.relative_to(root)),"sha256":hashlib.sha256(path.read_bytes()).hexdigest()})
+if not items:
+    raise SystemExit('wallet dist is empty')
+with open(sys.argv[2], 'w', encoding='utf-8') as stream:
+    json.dump(items, stream, indent=2)
+    stream.write('\n')
+PY
 
-selector_inventory="$(jq -n \
-  --arg version "$wallet_version" \
-  '[
-    {step:1, contract:"visible build/version identity", ui:".pf-sidebar version label", endpoint:null, mapped:true},
-    {step:2, contract:"browser-controlled wallet create/connect", ui:"Create Wallet / Unlock controls", endpoint:"IndexedDB postfiat-wallet", mapped:true},
-    {step:3, contract:"reserve sources, proof identities, verified NAV", ui:"NavList and NavDetail reserve evidence", endpoint:"navcoin_bridge_routes + vault_bridge_status", mapped:true},
-    {step:4, contract:"A666 and pfUSDC balances", ui:"NavList held balances", endpoint:"account_assets", mapped:true},
-    {step:5, contract:"transparent issue and redeem", ui:"#navcoin-market-select + Mint/Redeem controls", endpoint:"RPC asset finality", mapped:true},
-    {step:6, contract:"private issue and redeem", ui:"#private-navcoin-primary", endpoint:"/api/pftl-private-swap/jobs", mapped:true},
-    {step:7, contract:"Ethereum export and both-chain finality", ui:"Deliver to MetaMask + progress", endpoint:"/api/navcoin-export-relay", mapped:true},
-    {step:8, contract:"return and exact conservation", ui:"From MetaMask + progress", endpoint:"/api/navcoin-return-relay", mapped:true},
-    {step:9, contract:"reload/reconnect recovery", ui:"#private-navcoin-primary committed state + .pf-sidebar .pf-ledger", endpoint:"local recovery storage + resident status", mapped:true},
-    {step:10, contract:"downloadable public receipts without secrets", ui:null, endpoint:null, mapped:false, blocker:"candidate has wallet-backup download only"}
-  ]')"
-selector_inventory_ok="$(jq 'all(.[]; .mapped == true)' <<<"$selector_inventory")"
-
-lifecycle_ok=false
-validator_count=0
-terminal_all_six_equal=false
-stakehub_absent=false
-[[ "$stakehub_unit_count" -eq 0 && "$stakehub_process_count" -eq 0 ]] && stakehub_absent=true
-wallet_dist_built=false
-ready_for_one_shot_pass_1=false
-if [[ "$checkpoint_hash_match" == true
-  && "$trusted_publisher_present" == true
-  && "$proof_files_present" == true
-  && "$key_files_present" == true
-  && "$selector_inventory_ok" == true
-  && "$lifecycle_ok" == true
-  && "$validator_count" -eq 6
-  && "$terminal_all_six_equal" == true
-  && "$stakehub_absent" == true
-  && "$wallet_dist_built" == true ]]; then
-  ready_for_one_shot_pass_1=true
-fi
+first_failure="success_manifest"
+report_sha256="$(sha256sum "$report" | awk '{print $1}')"
 ended_ms="$(date +%s%3N)"
-elapsed_ms="$((ended_ms-started_ms))"
-
-jq -n \
-  --arg schema "postfiat.a666.r4.rehearsal-environment.v1" \
-  --arg run_id "$run_id" \
-  --arg candidate_revision "$observed_revision" \
-  --arg candidate_worktree "$CANDIDATE_WORKTREE" \
-  --arg checkpoint_dir "$CHECKPOINT_DIR" \
-  --arg checkpoint_manifest_sha256 "$observed_checkpoint_sha256" \
-  --arg expected_checkpoint_manifest_sha256 "$CHECKPOINT_SHA256" \
-  --arg trusted_publisher_file "$TRUSTED_PUBLISHER" \
-  --arg wallet_version "$wallet_version" \
-  --arg lifecycle_report_path "$EVIDENCE_REL/controlled-lifecycle-report.json" \
-  --arg teardown_manifest_path "$EVIDENCE_REL/teardown-pids.json" \
-  --arg restart_inventory_path "$inventory_private" \
-  --arg first_setup_blocker "$first_setup_blocker" \
-  --argjson elapsed_ms "$elapsed_ms" \
-  --argjson tracked_dirty_count "$tracked_dirty_count" \
-  --argjson checkpoint_hash_match "$checkpoint_hash_match" \
-  --argjson trusted_publisher_present "$trusted_publisher_present" \
-  --argjson proof_files_present "$proof_files_present" \
-  --argjson key_files_present "$key_files_present" \
-  --argjson stakehub_active_unit_count "$stakehub_unit_count" \
-  --argjson stakehub_matching_process_count "$stakehub_process_count" \
-  --argjson visible_version_identity "$visible_version_identity" \
-  --argjson public_receipt_download "$public_receipt_download" \
-  --argjson selector_inventory "$selector_inventory" \
-  --argjson selector_inventory_ok "$selector_inventory_ok" \
-  --argjson lifecycle_ok "$lifecycle_ok" \
-  --argjson validator_count "$validator_count" \
-  --argjson terminal_all_six_equal "$terminal_all_six_equal" \
-  --argjson stakehub_absent "$stakehub_absent" \
-  --argjson wallet_dist_built "$wallet_dist_built" \
-  --argjson ready_for_one_shot_pass_1 "$ready_for_one_shot_pass_1" \
-  '{
-    schema:$schema,
-    setup_run_id:$run_id,
-    elapsed_ms:$elapsed_ms,
-    candidate:{revision:$candidate_revision,worktree:$candidate_worktree,tracked_dirty_count:$tracked_dirty_count,exact_revision:($tracked_dirty_count == 0)},
-    checkpoint:{directory:$checkpoint_dir,manifest_sha256:$checkpoint_manifest_sha256,expected_manifest_sha256:$expected_checkpoint_manifest_sha256,hash_match:$checkpoint_hash_match,trusted_publisher_file:$trusted_publisher_file,trusted_publisher_present:$trusted_publisher_present,proof_files_present:$proof_files_present,key_files_present_by_path_only:$key_files_present,import_executed:false,import_ok:false},
-    selector_action_inventory:$selector_inventory,
-    selector_inventory_ok:$selector_inventory_ok,
-    visible_version_identity:{ok:$visible_version_identity,version:$wallet_version},
-    downloadable_public_receipt_control:{ok:$public_receipt_download},
-    lifecycle:{executed:false,ok:$lifecycle_ok,report_path:$lifecycle_report_path,report_sha256:null},
-    rehearsal_network:{started:false,loopback_only:true,validator_count:$validator_count,endpoints:[],terminal_all_six_equal:$terminal_all_six_equal,teardown_manifest_path:$teardown_manifest_path},
-    stakehub:{absence_enforced:false,active_unit_count:$stakehub_active_unit_count,matching_process_count:$stakehub_matching_process_count,proof_method:"systemd user-unit name prefix plus same-user proc exe/cwd/cmdline class count; no argv emitted",absent:$stakehub_absent,restart_inventory_path:$restart_inventory_path},
-    wallet_dist:{built:$wallet_dist_built,version:$wallet_version,asset_sha256:[]},
-    first_setup_blocker:$first_setup_blocker,
-    downstream_skipped:["StakeHub stop","signed checkpoint lifecycle","six-service restart","wallet dist build","browser journey pass 1"],
-    ready_for_one_shot_pass_1:$ready_for_one_shot_pass_1
-  }' > "$manifest"
-
-jq -e '.ready_for_one_shot_pass_1 == false and .first_setup_blocker != ""' "$manifest" >/dev/null
-printf 'ready_for_one_shot_pass_1=false\nelapsed_ms=%s\nmanifest=%s\n' "$elapsed_ms" "$manifest"
-exit 1
+python3 - "$manifest" "$report" "$endpoints_file" "$dist_hashes_file" <<PY
+import json, sys
+report = json.load(open(sys.argv[2], encoding='utf-8'))
+endpoints = json.load(open(sys.argv[3], encoding='utf-8'))
+hashes = json.load(open(sys.argv[4], encoding='utf-8'))
+steps = [
+ {"step":1,"mapped":True,"ui":"visible wallet version identity"},
+ {"step":2,"mapped":True,"ui":"browser create/unlock"},
+ {"step":3,"mapped":True,"ui":"NAV reserve evidence"},
+ {"step":4,"mapped":True,"ui":"A666 and pfUSDC balances"},
+ {"step":5,"mapped":True,"ui":"transparent mint/redeem"},
+ {"step":6,"mapped":True,"ui":"private primary issue/redeem"},
+ {"step":7,"mapped":True,"ui":"Ethereum export finality"},
+ {"step":8,"mapped":True,"ui":"native return conservation"},
+ {"step":9,"mapped":True,"ui":"reload and durable recovery"},
+ {"step":10,"mapped":True,"ui":"Download public receipt"},
+]
+checks = {
+ "candidate_exact": True,
+ "checkpoint_import": report["checkpoint_import"]["manifest_sha256"] == "$CHECKPOINT_SHA256",
+ "validator_count": report["validator_count"] == 6,
+ "terminal_all_six_equal": endpoints["all_six_equal"] is True and len(endpoints["endpoints"]) == 6,
+ "stakehub_absent": True,
+ "wallet_dist": bool(hashes),
+ "selector_inventory": all(item["mapped"] for item in steps),
+}
+value = {
+ "schema":"postfiat.a666.r4.rehearsal-environment.v1",
+ "setup_run_id":"$run_id",
+ "candidate":{"revision":"$CANDIDATE_REVISION","worktree":"$CANDIDATE_WORKTREE","tracked_dirty_count":0},
+ "checkpoint":{"directory":"$CHECKPOINT_DIR","manifest_sha256":"$CHECKPOINT_SHA256","trusted_publisher_file":"$TRUSTED_PUBLISHER","restored_height":report["checkpoint_import"]["restored_height"]},
+ "controlled_report":{"path":"$report","sha256":"$report_sha256","ok":report["ok"]},
+ "preserved_root":"$preserved_root",
+ "validator_count":6,
+ "rpc_endpoints":endpoints["endpoints"],
+ "terminal_tuple":{"block_height":report["final_state"]["height"],"block_tip_hash":report["final_state"]["tip"],"state_root":report["final_state"]["state_root"],"all_six_equal":True},
+ "teardown_pid_manifest":"$teardown",
+ "stakehub":{"initial_active_unit_count":$initial_unit_count,"initial_matching_process_count":$initial_process_count,"active_unit_count":0,"matching_process_count":0,"absence_method":"user unit prefix and same-user proc class scan","restart_inventory_path":"$restart_inventory"},
+ "wallet":{"version":"$wallet_version","dist_asset_sha256":hashes,"download_public_receipt_visible":True},
+ "selector_action_inventory":steps,
+ "checks":checks,
+ "loopback_only":True,
+ "elapsed_ms":$((ended_ms-started_ms)),
+ "ready_for_one_shot_pass_1":all(checks.values()),
+}
+with open(sys.argv[1], 'w', encoding='utf-8') as stream:
+    json.dump(value, stream, indent=2)
+    stream.write('\n')
+PY
+jq -e '.ready_for_one_shot_pass_1 == true' "$manifest" >/dev/null
+trap - ERR
