@@ -4,14 +4,19 @@ Working directory: wallet-web/
 Candidate: git merge-base --is-ancestor 5e81a910 HEAD exited 0.
 Disk preflight: df -h . reported 111G available (80% used); safe to proceed.
 
-1. npm test
+1. cd wallet-web && npm test > /tmp/wallet-npm-test.log 2>&1
    exit: 0
-   wall-clock_ms: 28000 (controller-observed elapsed time)
+   runtime_ms: 30142.037141 (terminal TAP duration)
    matched/pass count: 233/233
-   count basis: 233 top-level Node test definitions in src/lib/*.test.js; the zero exit
-   requires all executed tests to pass.
-   terminal evidence: TAP output reached test 120 without failure; the command's final
-   TAP summary and timing wrapper were truncated by the terminal output cap.
+   terminal lines:
+   1..233
+   # tests 233
+   # pass 233
+   # fail 0
+   # cancelled 0
+   # skipped 0
+   # todo 0
+   # duration_ms 30142.037141
 
 2. npm run test:custody-browser
    exit: 0
