@@ -1,22 +1,75 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Deploys only real source-derived contracts through Anvil's unlocked public account.
-# It intentionally does not launch Anvil, read a startup log, inspect a key, or call verifyAndAccept.
+# Stages only real contracts against a freshly launched loopback Anvil.
+# The caller supplies the public PID of that Anvil; this script never reads keys or startup logs.
 repo=$(cd "$(dirname "$0")/.." && pwd)
 rpc_url="http://127.0.0.1:8547"
-anvil_pid="${A666_ANVIL_PID:?set A666_ANVIL_PID to the adopted loopback Anvil PID}"
+anvil_pid="$A666_ANVIL_PID"
 vendor="$repo/scripts/a666-r4-ethereum-contract-vendor/sp1-contracts-v6.1.0/ISP1Verifier.sol"
 sp1_source="/home/postfiat/.sp1/circuits/groth16/v6.1.0/SP1VerifierGroth16.sol"
 groth16_source="/home/postfiat/.sp1/circuits/groth16/v6.1.0/Groth16Verifier.sol"
+receipt_source="$repo/crates/ethereum-contracts/src/PFTLReceiptFinalityVerifierV1.sol"
+primary_source="$repo/crates/ethereum-contracts/src/PFTLUniswapPrimaryMarketV2.sol"
+token_source="$repo/crates/ethereum-contracts/src/PFTLUniswapHandoffController.sol"
 expected_vendor_sha256="9e918032a5aa799c1319b14b013154d6a40ca6e5f2267c9f540560abd7fd7689"
 expected_sp1_sha256="48e1db5baca3b102242ebd88280b3689a088076688146cd0d98876f5dacb76d0"
 expected_verifier_hash="0x4388a21c687fdd5f218d7e3d13190cac4c5355818d3605fd5fb811df468ee696"
 program_vkey="0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9"
+pftl_chain_id_hash="0xe61f64cfb4299057c29b1c1dbf031c81beeb1b016878f4a087824eaa14c2cc00"
+pftl_genesis_hash_commitment="0x396aceff4e14037223cc2781a3197c8eef78f44903b4e00d2e5441abec789418"
+route_id_commitment="0xf23b7c6f67e6cd37e9fbff55e90a46580f7af095c2c22ca42cfe52d0c68efce4"
+native_asset_commitment="0x78418dd616c454703b30dd4c633d1b49c62d97acf0ec59b606840a160561d294"
+settlement_asset_commitment="0x24e5fe4c65497dff08ec93064e5eb76e23c61992e7ec2c946136334a28eab403"
+initial_checkpoint_commitment="0xebb09f3675e427c2b6f36cabc7e7dd8aa972e59058974dc53e1dfa6b1546d827"
+pool_id="0x64c9ce388649100fb1370e406689c258247625608464014383a3f1df8ec8bd2d"
+native_asset_id="0x521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c"
+settlement_asset_id="0x02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b"
+
+require_nonce() {
+    [[ "$(cast nonce "$deployer" --rpc-url "$rpc_url")" == "$1" ]]
+}
+
+create_contract() {
+    local name="$1"
+    local root="$2"
+    local target="$3"
+    shift 3
+    forge create "$target" --root "$root" --rpc-url "$rpc_url" --broadcast --unlocked --from "$deployer" --json \
+        --constructor-args "$@" >"$runtime/$name.create.json"
+    jq -er '.deployedTo' "$runtime/$name.create.json"
+}
+
+capture_receipt() {
+    local name="$1"
+    local transaction_hash
+    transaction_hash=$(jq -er '.transactionHash' "$runtime/$name.create.json")
+    cast receipt "$transaction_hash" --json --rpc-url "$rpc_url" >"$runtime/$name.receipt.json"
+    [[ "$(jq -er '.status' "$runtime/$name.receipt.json")" == "0x1" ]]
+}
+
+capture_call_receipt() {
+    local name="$1"
+    shift
+    cast send --unlocked --from "$deployer" --rpc-url "$rpc_url" --json "$@" >"$runtime/$name.call.json"
+    local transaction_hash
+    transaction_hash=$(jq -er '.transactionHash' "$runtime/$name.call.json")
+    cast receipt "$transaction_hash" --json --rpc-url "$rpc_url" >"$runtime/$name.receipt.json"
+    [[ "$(jq -er '.status' "$runtime/$name.receipt.json")" == "0x1" ]]
+}
+
+code_hash() {
+    local address="$1"
+    local code
+    code=$(cast code "$address" --rpc-url "$rpc_url")
+    [[ "$code" != "0x" ]]
+    cast keccak "$code"
+}
 
 [[ "$(ps -p "$anvil_pid" -o comm= | tr -d '[:space:]')" == "anvil" ]]
 ss -ltnp | grep -F "127.0.0.1:8547" | grep -F "pid=$anvil_pid,"
 [[ "$(cast chain-id --rpc-url "$rpc_url")" == "1" ]]
+[[ "$(cast block-number --rpc-url "$rpc_url")" == "0" ]]
 genesis_hash=$(cast block 0 --json --rpc-url "$rpc_url" | jq -er '.hash')
 deployer=$(cast rpc eth_accounts --rpc-url "$rpc_url" | jq -er '.[0]')
 [[ "$deployer" =~ ^0x[0-9a-fA-F]{40}$ ]]
@@ -27,7 +80,7 @@ runtime=$(mktemp -d /tmp/a666-r4-contract-stage.XXXXXX)
 chmod 700 "$runtime"
 sp1_runtime="$runtime/sp1"
 product_runtime="$runtime/product"
-mkdir -p "$sp1_runtime/src/groth16" "$product_runtime/src" "$product_runtime/script"
+mkdir -p "$sp1_runtime/src/groth16" "$product_runtime/src"
 install -m 600 "$vendor" "$sp1_runtime/src/ISP1Verifier.sol"
 install -m 600 "$sp1_source" "$sp1_runtime/src/groth16/SP1VerifierGroth16.sol"
 install -m 600 "$groth16_source" "$sp1_runtime/src/groth16/Groth16Verifier.sol"
@@ -40,203 +93,158 @@ solc_version = "0.8.20"
 optimizer = true
 optimizer_runs = 200
 TOML
-install -m 600 "$repo/crates/ethereum-contracts/src/PFTLReceiptFinalityVerifierV1.sol" "$product_runtime/src/PFTLReceiptFinalityVerifierV1.sol"
-install -m 600 "$repo/crates/ethereum-contracts/src/PFTLUniswapPrimaryMarketV2.sol" "$product_runtime/src/PFTLUniswapPrimaryMarketV2.sol"
-install -m 600 "$repo/crates/ethereum-contracts/src/PFTLUniswapHandoffController.sol" "$product_runtime/src/PFTLUniswapHandoffController.sol"
+install -m 600 "$receipt_source" "$product_runtime/src/PFTLReceiptFinalityVerifierV1.sol"
+install -m 600 "$primary_source" "$product_runtime/src/PFTLUniswapPrimaryMarketV2.sol"
+install -m 600 "$token_source" "$product_runtime/src/PFTLUniswapHandoffController.sol"
 cat >"$product_runtime/foundry.toml" <<'TOML'
 [profile.default]
 src = "src"
-script = "script"
 out = "out"
 cache_path = "cache"
 solc_version = "0.8.24"
 optimizer = true
 optimizer_runs = 200
 TOML
-cat >"$product_runtime/script/StageRealA666.s.sol" <<'SOL'
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
-
-import {WrappedVenueNAVCoin} from "../src/PFTLUniswapHandoffController.sol";
-import {
-    IPFTLReceiptSP1Verifier,
-    PFTLReceiptFinalityVerifierV1
-} from "../src/PFTLReceiptFinalityVerifierV1.sol";
-import {
-    IA666WrappedToken,
-    IPFTLReceiptFinalityVerifierV1,
-    PFTLUniswapPrimaryMarketV2
-} from "../src/PFTLUniswapPrimaryMarketV2.sol";
-
-interface Vm {
-    function envAddress(string calldata name) external returns (address);
-    function getNonce(address account) external returns (uint64);
-    function computeCreateAddress(uint256 nonce, address deployer) external returns (address);
-    function startBroadcast(address signer) external;
-    function stopBroadcast() external;
-}
-
-/// @dev A Foundry-only deployment driver. Every deployed contract below is unmodified real source.
-contract StageRealA666 {
-    Vm private constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
-
-    bytes32 private constant PROGRAM_VKEY =
-        0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9;
-    bytes32 private constant PFTL_CHAIN_ID_HASH =
-        0xe61f64cfb4299057c29b1c1dbf031c81beeb1b016878f4a087824eaa14c2cc00;
-    bytes32 private constant PFTL_GENESIS_HASH_COMMITMENT =
-        0x396aceff4e14037223cc2781a3197c8eef78f44903b4e00d2e5441abec789418;
-    bytes32 private constant ROUTE_ID_COMMITMENT =
-        0xf23b7c6f67e6cd37e9fbff55e90a46580f7af095c2c22ca42cfe52d0c68efce4;
-    bytes32 private constant NATIVE_NAV_ASSET_ID_COMMITMENT =
-        0x78418dd616c454703b30dd4c633d1b49c62d97acf0ec59b606840a160561d294;
-    bytes32 private constant SETTLEMENT_ASSET_ID_COMMITMENT =
-        0x24e5fe4c65497dff08ec93064e5eb76e23c61992e7ec2c946136334a28eab403;
-    bytes32 private constant INITIAL_CHECKPOINT_COMMITMENT =
-        0xebb09f3675e427c2b6f36cabc7e7dd8aa972e59058974dc53e1dfa6b1546d827;
-    bytes32 private constant POOL_ID =
-        0x64c9ce388649100fb1370e406689c258247625608464014383a3f1df8ec8bd2d;
-
-    function run()
-        external
-        returns (address wrappedToken, address receiptVerifier, address primaryMarket)
-    {
-        address deployer = vm.envAddress("A666_DEPLOYER");
-        address sp1Verifier = vm.envAddress("A666_SP1_VERIFIER");
-        uint64 nonce = vm.getNonce(deployer);
-        address predictedPrimaryMarket = vm.computeCreateAddress(uint256(nonce) + 2, deployer);
-        bytes memory nativeAssetId =
-            hex"521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c";
-        bytes memory settlementAssetId =
-            hex"02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b";
-
-        vm.startBroadcast(deployer);
-        WrappedVenueNAVCoin wrapped =
-            new WrappedVenueNAVCoin("Post Fiat a666 rehearsal", "wA666", 6, deployer);
-        PFTLReceiptFinalityVerifierV1 receipt = new PFTLReceiptFinalityVerifierV1(
-            PFTLReceiptFinalityVerifierV1.Config({
-                sp1Verifier: IPFTLReceiptSP1Verifier(sp1Verifier),
-                programVKey: PROGRAM_VKEY,
-                pftlChainIdHash: PFTL_CHAIN_ID_HASH,
-                pftlGenesisHashCommitment: PFTL_GENESIS_HASH_COMMITMENT,
-                pftlProtocolVersion: 1,
-                routeIdCommitment: ROUTE_ID_COMMITMENT,
-                nativeNavAssetIdCommitment: NATIVE_NAV_ASSET_ID_COMMITMENT,
-                settlementAssetIdCommitment: SETTLEMENT_ASSET_ID_COMMITMENT,
-                destinationChainId: block.chainid,
-                controller: predictedPrimaryMarket,
-                wrappedToken: address(wrapped),
-                wrappedTokenRuntimeCodeHash: address(wrapped).codehash,
-                maxProofBytes: 356,
-                maxPublicValuesBytes: 1120,
-                initialCheckpointCommitment: INITIAL_CHECKPOINT_COMMITMENT,
-                initialFinalizedHeight: 415
-            })
-        );
-        PFTLUniswapPrimaryMarketV2 primary = new PFTLUniswapPrimaryMarketV2(
-            IA666WrappedToken(address(wrapped)),
-            IPFTLReceiptFinalityVerifierV1(address(receipt)),
-            PFTLUniswapPrimaryMarketV2.Config({
-                destinationChainId: block.chainid,
-                settlementAssetId: settlementAssetId,
-                nativeNavAssetId: nativeAssetId,
-                uniswapPoolId: POOL_ID,
-                routeSupplyCapAtoms: 2_000_000e6,
-                packetNotionalCapAtoms: 250_000e6,
-                governance: deployer
-            })
-        );
-        wrapped.setController(address(primary));
-        wrapped.lockController();
-        vm.stopBroadcast();
-
-        return (address(wrapped), address(receipt), address(primary));
-    }
-}
-SOL
 
 forge build --root "$sp1_runtime" >/dev/null
 forge build --root "$product_runtime" >/dev/null
-nonce_before=$(cast nonce "$deployer" --rpc-url "$rpc_url")
-block_before=$(cast block-number --rpc-url "$rpc_url")
-forge create "src/groth16/SP1VerifierGroth16.sol:SP1Verifier" \
-    --root "$sp1_runtime" --rpc-url "$rpc_url" --broadcast --unlocked --from "$deployer" --json \
-    >"$runtime/forge-sp1-create.json"
-sp1_verifier=$(cast compute-address "$deployer" --nonce "$nonce_before" | awk '/Computed Address:/ {print $3}')
-[[ "$(cast code "$sp1_verifier" --rpc-url "$rpc_url")" != "0x" ]]
-A666_DEPLOYER="$deployer" A666_SP1_VERIFIER="$sp1_verifier" \
-    forge script "$product_runtime/script/StageRealA666.s.sol:StageRealA666" \
-    --root "$product_runtime" --rpc-url "$rpc_url" --broadcast --unlocked --sender "$deployer" --json \
-    >"$runtime/forge-product-script.json"
-wrapped_token=$(cast compute-address "$deployer" --nonce "$((nonce_before + 1))" | awk '/Computed Address:/ {print $3}')
-receipt_verifier=$(cast compute-address "$deployer" --nonce "$((nonce_before + 2))" | awk '/Computed Address:/ {print $3}')
-primary_market=$(cast compute-address "$deployer" --nonce "$((nonce_before + 3))" | awk '/Computed Address:/ {print $3}')
-block_after=$(cast block-number --rpc-url "$rpc_url")
-
-for address in "$sp1_verifier" "$wrapped_token" "$receipt_verifier" "$primary_market"; do
-    [[ "$(cast code "$address" --rpc-url "$rpc_url")" != "0x" ]]
-done
+nonce_before_sp1=$(cast nonce "$deployer" --rpc-url "$rpc_url")
+[[ "$nonce_before_sp1" == "0" ]]
+sp1_verifier=$(create_contract sp1 "$sp1_runtime" "src/groth16/SP1VerifierGroth16.sol:SP1Verifier")
+capture_receipt sp1
+require_nonce 1
+sp1_code_hash=$(code_hash "$sp1_verifier")
 [[ "$(cast call "$sp1_verifier" "VERSION()(string)" --rpc-url "$rpc_url")" == "v6.1.0" ]]
 [[ "$(cast call "$sp1_verifier" "VERIFIER_HASH()(bytes32)" --rpc-url "$rpc_url")" == "$expected_verifier_hash" ]]
-[[ "$(cast call "$receipt_verifier" "maxPublicValuesBytes()(uint256)" --rpc-url "$rpc_url")" == "1120" ]]
-[[ "$(cast call "$receipt_verifier" "destinationChainId()(uint256)" --rpc-url "$rpc_url")" == "1" ]]
-[[ "$(cast call "$receipt_verifier" "controller()(address)" --rpc-url "$rpc_url" | tr '[:upper:]' '[:lower:]')" == "${primary_market,,}" ]]
-[[ "$(cast call "$receipt_verifier" "wrappedToken()(address)" --rpc-url "$rpc_url" | tr '[:upper:]' '[:lower:]')" == "${wrapped_token,,}" ]]
-[[ "$(cast call "$wrapped_token" "controller()(address)" --rpc-url "$rpc_url" | tr '[:upper:]' '[:lower:]')" == "${primary_market,,}" ]]
-[[ "$(cast call "$wrapped_token" "controller_locked()(bool)" --rpc-url "$rpc_url")" == "true" ]]
+
+nonce_before_product=$(cast nonce "$deployer" --rpc-url "$rpc_url")
+[[ "$nonce_before_product" == "1" ]]
+require_nonce "$nonce_before_product"
+primary_nonce=$((nonce_before_product + 2))
+predicted_primary=$(cast compute-address "$deployer" --nonce "$primary_nonce" | awk '/Computed Address:/ {print $3}')
+wrapped_token=$(create_contract wrapped "$product_runtime" "src/PFTLUniswapHandoffController.sol:WrappedVenueNAVCoin" \
+    "Post Fiat a666 rehearsal" "wA666" 6 "$deployer")
+capture_receipt wrapped
+require_nonce 2
+wrapped_code_hash=$(code_hash "$wrapped_token")
+receipt_config="($sp1_verifier,$program_vkey,$pftl_chain_id_hash,$pftl_genesis_hash_commitment,1,$route_id_commitment,$native_asset_commitment,$settlement_asset_commitment,1,$predicted_primary,$wrapped_token,$wrapped_code_hash,356,1120,$initial_checkpoint_commitment,415)"
+receipt_verifier=$(create_contract receipt "$product_runtime" "src/PFTLReceiptFinalityVerifierV1.sol:PFTLReceiptFinalityVerifierV1" "$receipt_config")
+capture_receipt receipt
+require_nonce 3
+receipt_code_hash=$(code_hash "$receipt_verifier")
+primary_config="(1,$settlement_asset_id,$native_asset_id,$pool_id,2000000000000,250000000000,$deployer)"
+primary_market=$(create_contract primary "$product_runtime" "src/PFTLUniswapPrimaryMarketV2.sol:PFTLUniswapPrimaryMarketV2" \
+    "$wrapped_token" "$receipt_verifier" "$primary_config")
+capture_receipt primary
+require_nonce 4
+primary_code_hash=$(code_hash "$primary_market")
+[[ "$(tr '[:upper:]' '[:lower:]' <<<"$primary_market")" == "$(tr '[:upper:]' '[:lower:]' <<<"$predicted_primary")" ]]
+capture_call_receipt token_controller "$wrapped_token" "setController(address)" "$primary_market"
+capture_call_receipt token_lock "$wrapped_token" "lockController()"
+require_nonce 6
+
+receipt_controller=$(cast call "$receipt_verifier" "controller()(address)" --rpc-url "$rpc_url")
+receipt_wrapped_token=$(cast call "$receipt_verifier" "wrappedToken()(address)" --rpc-url "$rpc_url")
+receipt_max_public_values=$(cast call "$receipt_verifier" "maxPublicValuesBytes()(uint256)" --rpc-url "$rpc_url")
+receipt_destination_chain=$(cast call "$receipt_verifier" "destinationChainId()(uint256)" --rpc-url "$rpc_url")
+primary_wrapped_token=$(cast call "$primary_market" "wrappedToken()(address)" --rpc-url "$rpc_url")
+primary_receipt_verifier=$(cast call "$primary_market" "receiptVerifier()(address)" --rpc-url "$rpc_url")
+primary_destination_chain=$(cast call "$primary_market" "destinationChainId()(uint256)" --rpc-url "$rpc_url")
+wrapped_controller=$(cast call "$wrapped_token" "controller()(address)" --rpc-url "$rpc_url")
+wrapped_controller_locked=$(cast call "$wrapped_token" "controller_locked()(bool)" --rpc-url "$rpc_url")
+addresses_match=$(jq -n \
+    --arg predicted "$predicted_primary" --arg actual "$primary_market" \
+    --arg receipt_controller "$receipt_controller" --arg receipt_wrapped_token "$receipt_wrapped_token" \
+    --arg primary_wrapped_token "$primary_wrapped_token" --arg primary_receipt_verifier "$primary_receipt_verifier" \
+    --arg wrapped_controller "$wrapped_controller" --arg expected_wrapped "$wrapped_token" \
+    --arg expected_receipt "$receipt_verifier" \
+    '($predicted | ascii_downcase) == ($actual | ascii_downcase)
+      and ($receipt_controller | ascii_downcase) == ($actual | ascii_downcase)
+      and ($receipt_wrapped_token | ascii_downcase) == ($expected_wrapped | ascii_downcase)
+      and ($primary_wrapped_token | ascii_downcase) == ($expected_wrapped | ascii_downcase)
+      and ($primary_receipt_verifier | ascii_downcase) == ($expected_receipt | ascii_downcase)
+      and ($wrapped_controller | ascii_downcase) == ($actual | ascii_downcase)')
+[[ "$addresses_match" == "true" ]]
+[[ "$receipt_max_public_values" == "1120" ]]
+[[ "$receipt_destination_chain" == "1" ]]
+[[ "$primary_destination_chain" == "1" ]]
+[[ "$wrapped_controller_locked" == "true" ]]
+
+sp1_tx=$(jq -er '.transactionHash' "$runtime/sp1.create.json")
+wrapped_tx=$(jq -er '.transactionHash' "$runtime/wrapped.create.json")
+receipt_tx=$(jq -er '.transactionHash' "$runtime/receipt.create.json")
+primary_tx=$(jq -er '.transactionHash' "$runtime/primary.create.json")
+token_controller_tx=$(jq -er '.transactionHash' "$runtime/token_controller.call.json")
+token_lock_tx=$(jq -er '.transactionHash' "$runtime/token_lock.call.json")
+deployment_green=$(jq -n \
+    --arg sp1_status "$(jq -er '.status' "$runtime/sp1.receipt.json")" \
+    --arg wrapped_status "$(jq -er '.status' "$runtime/wrapped.receipt.json")" \
+    --arg receipt_status "$(jq -er '.status' "$runtime/receipt.receipt.json")" \
+    --arg primary_status "$(jq -er '.status' "$runtime/primary.receipt.json")" \
+    --arg controller_status "$(jq -er '.status' "$runtime/token_controller.receipt.json")" \
+    --arg lock_status "$(jq -er '.status' "$runtime/token_lock.receipt.json")" \
+    --argjson addresses_match "$addresses_match" \
+    --arg controller_locked "$wrapped_controller_locked" \
+    '($sp1_status == "0x1" and $wrapped_status == "0x1" and $receipt_status == "0x1"
+      and $primary_status == "0x1" and $controller_status == "0x1" and $lock_status == "0x1"
+      and $addresses_match and $controller_locked == "true")')
+[[ "$deployment_green" == "true" ]]
 
 jq -n \
     --arg runtime "$runtime" \
-    --arg rpc_url "$rpc_url" \
-    --arg genesis_hash "$genesis_hash" \
-    --arg deployer "$deployer" \
-    --arg sp1_verifier "$sp1_verifier" \
-    --arg wrapped_token "$wrapped_token" \
-    --arg receipt_verifier "$receipt_verifier" \
-    --arg primary_market "$primary_market" \
+    --arg rpc_url "$rpc_url" --arg genesis_hash "$genesis_hash" --arg deployer "$deployer" \
+    --arg sp1_verifier "$sp1_verifier" --arg wrapped_token "$wrapped_token" \
+    --arg receipt_verifier "$receipt_verifier" --arg primary_market "$primary_market" \
+    --arg predicted_primary "$predicted_primary" --arg program_vkey "$program_vkey" \
+    --arg sp1_tx "$sp1_tx" --arg wrapped_tx "$wrapped_tx" --arg receipt_tx "$receipt_tx" \
+    --arg primary_tx "$primary_tx" --arg token_controller_tx "$token_controller_tx" --arg token_lock_tx "$token_lock_tx" \
+    --arg sp1_code_hash "$sp1_code_hash" --arg wrapped_code_hash "$wrapped_code_hash" \
+    --arg receipt_code_hash "$receipt_code_hash" --arg primary_code_hash "$primary_code_hash" \
+    --arg receipt_controller "$receipt_controller" --arg receipt_wrapped_token "$receipt_wrapped_token" \
+    --arg primary_wrapped_token "$primary_wrapped_token" --arg primary_receipt_verifier "$primary_receipt_verifier" \
+    --arg wrapped_controller "$wrapped_controller" --arg wrapped_controller_locked "$wrapped_controller_locked" \
     --arg verifier_hash "$expected_verifier_hash" \
-    --arg program_vkey "$program_vkey" \
-    --argjson anvil_pid "$anvil_pid" \
-    --argjson nonce_before "$nonce_before" \
-    --argjson block_before "$block_before" \
-    --argjson block_after "$block_after" \
+    --argjson anvil_pid "$anvil_pid" --argjson nonce_before_sp1 "$nonce_before_sp1" \
+    --argjson nonce_before_product "$nonce_before_product" --argjson primary_nonce "$primary_nonce" \
+    --argjson deployment_green "$deployment_green" \
     '{
       runtime: $runtime,
       anvil: {
-        pid: $anvil_pid, endpoint: $rpc_url, chain_id: 1,
+        pid: $anvil_pid, endpoint: $rpc_url, loopback: true, chain_id: 1,
         genesis_hash: $genesis_hash, deployer_public_address: $deployer
       },
+      nonce_sequence: {
+        before_sp1: $nonce_before_sp1, before_product: $nonce_before_product,
+        primary_prediction_nonce: $primary_nonce, after_wrapped: 2, after_receipt: 3,
+        after_primary: 4, after_controller_and_lock: 6
+      },
       deployment: {
-        real_contracts_deployed: true, mocks: 0, nonce_before: $nonce_before,
-        block_before: $block_before, block_after: $block_after,
+        green: $deployment_green, mocks: 0,
         contracts: {
-          sp1_verifier: $sp1_verifier,
-          wrapped_venue_navcoin: $wrapped_token,
-          pftl_receipt_finality_verifier_v1: $receipt_verifier,
-          pftl_uniswap_primary_market_v2: $primary_market
-        }
+          sp1_verifier: {address: $sp1_verifier, transaction: $sp1_tx, status: "0x1", runtime_code_hash: $sp1_code_hash},
+          wrapped_venue_navcoin: {address: $wrapped_token, transaction: $wrapped_tx, status: "0x1", runtime_code_hash: $wrapped_code_hash},
+          pftl_receipt_finality_verifier_v1: {address: $receipt_verifier, transaction: $receipt_tx, status: "0x1", runtime_code_hash: $receipt_code_hash},
+          pftl_uniswap_primary_market_v2: {address: $primary_market, transaction: $primary_tx, status: "0x1", runtime_code_hash: $primary_code_hash}
+        },
+        primary_prediction: {nonce: $primary_nonce, predicted: $predicted_primary, actual: $primary_market},
+        token_controller_transaction: $token_controller_tx,
+        token_lock_transaction: $token_lock_tx
       },
       checks: {
-        sp1_version: "v6.1.0",
-        sp1_verifier_hash: $verifier_hash,
-        receipt_max_public_values_bytes: 1120,
-        receipt_destination_chain_id: 1,
-        receipt_controller_bound: true,
-        receipt_wrapped_token_bound: true,
-        wrapped_token_controller_bound: true,
-        wrapped_token_controller_locked: true
+        sp1_version: "v6.1.0", sp1_verifier_hash: $verifier_hash,
+        receipt_controller: $receipt_controller, receipt_wrapped_token: $receipt_wrapped_token,
+        primary_wrapped_token: $primary_wrapped_token, primary_receipt_verifier: $primary_receipt_verifier,
+        wrapped_controller: $wrapped_controller, wrapped_controller_locked: $wrapped_controller_locked,
+        receipt_max_public_values_bytes: 1120, deployment_wiring_green: $deployment_green
       },
       immutable_inputs: {
-        receipt_program_vkey: $program_vkey,
-        public_values_bytes: 1120,
-        proof_calldata_bytes: 356
+        receipt_program_vkey: $program_vkey, public_values_bytes: 1120, proof_calldata_bytes: 356
       },
       verifier_acceptance: {
-        ready: false,
-        first_blocker: "real_receipt_proof_artifact_unavailable_after_local_cpu_oom"
+        ready: false, first_blocker: "real_receipt_proof_artifact_pending_docker_capable_refire",
+        verify_and_accept_called: false
       },
       business_value: 0,
-      credentials_redacted: true,
-      verify_and_accept_called: false
+      credentials_redacted: true
     }' >"$runtime/stage-result.json"
 printf '%s\n' "$runtime/stage-result.json"
