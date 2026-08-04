@@ -448,7 +448,11 @@ while true; do
     case "$request" in
       restart-stakehub-keep-rehearsal)
         first_failure="stakehub_restart_keep_rehearsal"
-        restore_stakehub "restart-stakehub-keep-rehearsal"
+        if restore_stakehub "restart-stakehub-keep-rehearsal"; then
+          first_failure="held_rehearsal_pid_liveness"
+        else
+          first_failure="stakehub_restart_keep_rehearsal_held"
+        fi
         rm -f "$control_request"
         all_rehearsal_pids_live
         first_failure="held_rehearsal_pid_liveness"

@@ -1,0 +1,15 @@
+R4 StakeHub hold decoupling
+
+Commands:
+1. bash -n scripts/a666-r4-rehearsal-setup scripts/test-a666-r4-rehearsal-stakehub-hold-decoupling
+   exit: 0
+2. bash scripts/test-a666-r4-rehearsal-stakehub-hold-decoupling
+   exit: 0
+   final: PASS: restore failure is consumed; fleet hold continues; teardown alone kills relaunches
+
+Assertions:
+- simulated restore nonzero is consumed by the explicit conditional;
+- control acknowledgement and fleet liveness run after the failed restore;
+- no cleanup/kill action occurs in the hold branch;
+- teardown remains the sole post-green control branch invoking kill_relaunches;
+- no setup, systemctl, StakeHub, or process command was executed.

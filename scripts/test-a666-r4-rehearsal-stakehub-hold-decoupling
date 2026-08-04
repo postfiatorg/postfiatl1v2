@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+repo=$(cd "$(dirname "$0")/.." && pwd)
+python3 - "$repo/scripts/a666-r4-rehearsal-setup" <<'PY'
+import sys
+from pathlib import Path
+
+source = Path(sys.argv[1]).read_text()
+start = source.index('      restart-stakehub-keep-rehearsal)')
+end = source.index('      teardown)', start)
+branch = source[start:end]
+assert 'if restore_stakehub "restart-stakehub-keep-rehearsal"; then' in branch
+assert 'stakehub_restart_keep_rehearsal_held' in branch
+assert 'rm -f "$control_request"' in branch
+assert 'all_rehearsal_pids_live' in branch
+assert 'first_failure="held_rehearsal_pid_liveness"' in branch
+assert 'kill_relaunches' not in branch
+
+events = []
+def restore():
+    events.append('restore')
+    return False
+def acknowledge():
+    events.append('acknowledge')
+def live():
+    events.append('fleet_live')
+    return True
+def hold_branch():
+    first_failure = 'stakehub_restart_keep_rehearsal'
+    if restore():
+        first_failure = 'held_rehearsal_pid_liveness'
+    else:
+        first_failure = 'stakehub_restart_keep_rehearsal_held'
+    acknowledge()
+    assert live()
+    first_failure = 'held_rehearsal_pid_liveness'
+    return first_failure
+
+assert hold_branch() == 'held_rehearsal_pid_liveness'
+assert events == ['restore', 'acknowledge', 'fleet_live']
+assert 'kill' not in events
+teardown = source[source.index('      teardown)'):source.index('      *)', source.index('      teardown)'))]
+assert 'kill_relaunches' in teardown
+print('PASS: restore failure is consumed; fleet hold continues; teardown alone kills relaunches')
+PY
