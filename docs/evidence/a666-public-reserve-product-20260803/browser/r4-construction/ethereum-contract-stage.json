@@ -1,69 +1,88 @@
 {
-  "schema": "postfiat.a666.r4.ethereum-contract-stage.v4",
-  "outcome": "named_technical_wall",
-  "first_failing_check": "sp1_version_readback_is_json_quoted_v6_1_0_but_script_compares_unquoted_string",
-  "commands": [
-    {
-      "command": "A666_ANVIL_PID=1841731 /usr/bin/time -f 'wall_seconds=%e' scripts/a666-r4-ethereum-contract-stage",
-      "exit_code": 1,
-      "elapsed_ms": 2647,
-      "terminal_line": "Command exited with non-zero status 1"
-    },
-    {
-      "command": "cast call 0x5fbdb2315678afecb367f032d93f642f64180aa3 'VERSION()(string)' --rpc-url http://127.0.0.1:8547",
-      "exit_code": 0,
-      "observed_stdout": "\"v6.1.0\""
-    }
-  ],
-  "source_identity": {
-    "installed_sp1_verifier": {
-      "path": "/home/postfiat/.sp1/circuits/groth16/v6.1.0/SP1VerifierGroth16.sol",
-      "release": "v6.1.0",
-      "sha256": "48e1db5baca3b102242ebd88280b3689a088076688146cd0d98876f5dacb76d0"
-    },
-    "official_interface": {
-      "url": "https://raw.githubusercontent.com/succinctlabs/sp1-contracts/v6.1.0/contracts/src/ISP1Verifier.sol",
-      "tag": "v6.1.0",
-      "commit": "2ac5ecbbe473421a963d67e55f182e9a36576f7c",
-      "vendored_path": "scripts/a666-r4-ethereum-contract-vendor/sp1-contracts-v6.1.0/ISP1Verifier.sol",
-      "sha256": "9e918032a5aa799c1319b14b013154d6a40ca6e5f2267c9f540560abd7fd7689"
-    }
-  },
+  "runtime": "/tmp/a666-r4-contract-stage.U4Xk3N",
   "anvil": {
-    "unit": "a666-r4-contract-stage-anvil-20260804T081440Z-1841723.service",
     "pid": 1841731,
-    "state": "active",
-    "loopback": true,
     "endpoint": "http://127.0.0.1:8547",
+    "loopback": true,
     "chain_id": 1,
     "genesis_hash": "0x0187cae28841e75a231bbbf8658650f7c5d7a7ad3c4a270907380d59c696c9fe",
     "deployer_public_address": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
-    "block_number_after_wall": 1,
-    "deployer_nonce_after_wall": 1
+    "adopted_existing": true,
+    "history_tx_count": 1,
+    "block_number_at_adoption": 1,
+    "deployer_nonce_at_adoption": 1
+  },
+  "nonce_sequence": {
+    "adoption": 1,
+    "before_product": 1,
+    "primary_prediction_nonce": 3,
+    "after_wrapped": 2,
+    "after_receipt": 3,
+    "after_primary": 4,
+    "after_controller_and_lock": 6
   },
   "deployment": {
-    "green": false,
+    "green": true,
     "mocks": 0,
-    "external_create_prediction": {
-      "implemented": true,
-      "used": false,
-      "reason": "The stage stopped after SP1 verification and before product nonce capture."
+    "contracts": {
+      "sp1_verifier": {
+        "address": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+        "transaction": "0xa2251e0f008b4e57c6fb06ac6f6401f9c97d33cc40e02d9fdf7f707551cb884d",
+        "status": "0x1",
+        "runtime_code_hash": "0xbfe2a6bbccfce90cadf9e8f1e9c7c672eafb0ac2727ad597b5d798c487d71517",
+        "adopted_existing": true,
+        "version": "v6.1.0",
+        "version_readback": "typed_json"
+      },
+      "wrapped_venue_navcoin": {
+        "address": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+        "transaction": "0x482e346d73463ff3c266431d44086a87d102f84103651af8e4f8062b638461c9",
+        "status": "0x1",
+        "runtime_code_hash": "0x671ee905050e2969995a8c6db8b05e4c2f30bd690eeff55093c03f9722be66b0"
+      },
+      "pftl_receipt_finality_verifier_v1": {
+        "address": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+        "transaction": "0x8f4f76bb768dd6ae7542a0ecbe3155739f20e50edf983b9d34b1009f864f74a4",
+        "status": "0x1",
+        "runtime_code_hash": "0x23ae1250bec8cf73aa163ee00b7217da90de8eed9cb22eff498e17d27a7cb063"
+      },
+      "pftl_uniswap_primary_market_v2": {
+        "address": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+        "transaction": "0x32f49ed32081a9f467784db0cd4e8373b62d4e2ee60ccb2635f9ac23558e9eaf",
+        "status": "0x1",
+        "runtime_code_hash": "0x60e72af15ab92eb9d99e5419edb6c4b633307fa6bbea5c4086f3e13fc109c524"
+      }
     },
-    "sp1_verifier": {
-      "address": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
-      "transaction": "0xa2251e0f008b4e57c6fb06ac6f6401f9c97d33cc40e02d9fdf7f707551cb884d",
-      "receipt_status": "0x1",
-      "version_observed": "\"v6.1.0\"",
-      "result": "real SP1 verifier deployed; script assertion format failed"
+    "primary_prediction": {
+      "nonce": 3,
+      "predicted": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+      "actual": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
     },
-    "wrapped_venue_navcoin": {
-      "deployed": false
-    },
-    "pftl_receipt_finality_verifier_v1": {
-      "deployed": false
-    },
-    "pftl_uniswap_primary_market_v2": {
-      "deployed": false
+    "token_controller_transaction": "0x2227038ef1153d8789b5a5a63203e644c0319eeab12b7768e33e58d6efcc7016",
+    "token_lock_transaction": "0x89a023a57524a3c15683b42f03a202fd43932aa243dd485798d7bb29d331b6ec"
+  },
+  "checks": {
+    "sp1_version": "v6.1.0",
+    "sp1_verifier_hash": "0x4388a21c687fdd5f218d7e3d13190cac4c5355818d3605fd5fb811df468ee696",
+    "receipt_controller": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+    "receipt_wrapped_token": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+    "primary_wrapped_token": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+    "primary_receipt_verifier": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+    "wrapped_controller": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+    "wrapped_controller_locked": "true",
+    "receipt_max_public_values_bytes": 1120,
+    "deployment_wiring_green": true
+  },
+  "immutable_inputs": {
+    "receipt_program_vkey": "0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9",
+    "public_values_bytes": 1120,
+    "proof_calldata_bytes": 356,
+    "source_sha256": {
+      "isp1_verifier_vendor": "9e918032a5aa799c1319b14b013154d6a40ca6e5f2267c9f540560abd7fd7689",
+      "sp1_verifier_groth16": "48e1db5baca3b102242ebd88280b3689a088076688146cd0d98876f5dacb76d0",
+      "pftl_receipt_finality_verifier_v1": "8f502a799908a0e796302b9bc11c4be0a06426e65448222dc505cc96601719b0",
+      "pftl_uniswap_primary_market_v2": "5c91fdb4d19f66cb81d9077d31363c49e720927fc182fbb42af60dbad94826e4",
+      "pftl_uniswap_handoff_controller": "f37f99a489cd9651d0e4ede5cf2192861f2b8312fe8a1d13bcff297304904342"
     }
   },
   "verifier_acceptance": {
