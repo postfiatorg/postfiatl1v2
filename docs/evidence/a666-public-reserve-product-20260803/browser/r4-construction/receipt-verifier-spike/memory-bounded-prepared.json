@@ -54,13 +54,20 @@
   "required_content": "a666-r4-receipt-prover-memory-bounded-20260804-overnight-v1"
  },
  "pause_sequence_before_proving": [
+  "resolve and record the full pause PID set BEFORE any mutation into $OUT_DIR/pause-pid-manifest.json: fleet supervisor (/tmp/a666-r4-construction-fleet-stage.pid) + 12 validator children (fleet/construction-pids.json .processes[].pid), candidate proxy (proxy.ready.json .pid), dependency supervisor (numeric suffix of the resolved runtime root) + asset-service and round-driver children (pids.json), pftl supervisor/daemon (/tmp/a666-r4-private-swap-runtime-39f7fae/{supervisor,daemon}.pid, only when the files exist and processes are live at fire time; pftl may be unstaged), and the evidence-verified Anvil PID; any required component unresolved: refuse exit 8",
   "scripts/a666-r4-candidate-proxy-stage --teardown",
   "write 'teardown' to fleet construction-teardown.request",
   "resolve current dependency teardown control via resolve_deps_control (committed private-swap-dependencies.json paths.teardown_control first, then validated /tmp runtime manifests; a candidate is valid only with live asset-service and round-driver PIDs and a live loopback 127.0.0.1:8799 answer; never falls back to a stale path) and write 'teardown' to it",
   "scripts/a666-r4-private-swap-stage teardown",
   "stop only the exact Anvil PID recorded in ethereum-contract-stage.json after verifying live process identity (anvil executable, --port 8547, 127.0.0.1) via /proc cmdline; no pattern kills",
-  "assert ports 31001-31011, 31021, 8798, 8799, 8547 absent before proving"
+  "bounded 120s wait: every PID captured in pause-pid-manifest.json must fail kill -0; any survivor: refuse exit 7 naming the surviving PIDs",
+  "assert ports 31001-31012, 31021, 8798, 8799, 8547 absent before proving; any port still answering: refuse exit 4"
  ],
+ "pause_absence_contract": {
+  "pid_manifest": "$OUT_DIR/pause-pid-manifest.json (schema postfiat.a666.r4.receipt-prover-pause-pid-manifest.v1, captured before any mutation)",
+  "pid_absence": "every captured PID must fail kill -0 within 120 seconds after the stop sequence or fire refuses with exit 7 naming survivors; proving never starts while any captured process lives",
+  "port_absence": "loopback TCP connect to each of 31001-31012, 31021, 8798, 8799, 8547 must fail or fire refuses with exit 4; proving never starts while any paused port answers"
+ },
  "restart_inventory_after_terminal_proof": [
   "scripts/a666-r4-construction-fleet-stage stage",
   "scripts/a666-r4-private-swap-dependencies-stage stage",
@@ -84,7 +91,7 @@
   "success_claimed": false
  },
  "authorization_status": "pending_nazgul_sequencing",
- "correction": "pause contract resolves the current dependency teardown control dynamically and stops only the evidence-verified Anvil PID; the hard-coded obsolete dependency runtime path was removed",
+ "correction": "pause contract now captures the full live PID set (fleet, proxy, dependencies, pftl, anvil) into pause-pid-manifest.json before any mutation and refuses to prove unless every captured PID is dead (120s bounded wait, exit 7 naming survivors) and every paused port (31001-31012, 31021, 8798, 8799, 8547) refuses loopback connections; the dependency teardown control is resolved dynamically and only the evidence-verified Anvil PID is stopped",
  "prepared": true,
  "fired": false,
  "fire_authorized": false,
