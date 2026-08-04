@@ -22,11 +22,17 @@ ROUND_DRIVER_READY_FILE="${POSTFIAT_R4_ROUND_DRIVER_READY_FILE:-}"
 ASSET_SERVICE_ADDRESS="${POSTFIAT_R4_ASSET_SERVICE_ADDRESS:-127.0.0.1:8799}"
 ASSET_SERVICE_VAULT_DIR="${POSTFIAT_R4_ASSET_SERVICE_VAULT_DIR:-}"
 BINARY="$TARGET_DIR/release/pftl_swapd"
+EXPECTED_BINARY_SHA256="c200a3584189269c1e29a8249eca4ff5cbd1ec7dbc5540ae4f13a0c0d7c5a2d6"
 SUPERVISOR_PID_FILE="$RUNTIME_DIR/supervisor.pid"
 DAEMON_PID_FILE="$RUNTIME_DIR/daemon.pid"
 DAEMON_LOG="$RUNTIME_DIR/pftl-swapd.log"
 BUILD_LOG="$RUNTIME_DIR/cargo-build.log"
 ACTION="${1:-stage}"
+build_action="unknown"
+build_runtime_ms=0
+daemon_pid=0
+runtime_ms=0
+ready_public='{}'
 
 mkdir -p "$(dirname "$EVIDENCE")" "$RUNTIME_DIR" "$TARGET_DIR"
 chmod 700 "$RUNTIME_DIR"
@@ -38,7 +44,7 @@ write_evidence() {
   local ready
   ready=false
   if [[ "$candidate_exact" == true && "$binary_built" == true && "$route_profile" == true \
-    && "$wallet_match" == true && "$rpc_configured" == true && "$rpc_ready" == true \
+    && "$wallet_match" == true && "$route_live" == true && "$rpc_configured" == true && "$rpc_ready" == true \
     && "$daemon_ready" == true && "$response_compatible" == true && "$zero_dependency" == true ]]; then
     ready=true
   fi
@@ -48,6 +54,8 @@ write_evidence() {
     --arg candidate_worktree "$CANDIDATE_WORKTREE" \
     --arg binary_path "$BINARY" \
     --arg binary_sha256 "$binary_hash" \
+    --arg build_action "$build_action" \
+    --argjson build_runtime_ms "$build_runtime_ms" \
     --arg bind "$BIND" \
     --arg route_id "$ROUTE_ID" \
     --arg profile_id "$PROFILE_ID" \
@@ -66,18 +74,23 @@ write_evidence() {
     --argjson binary_built "$binary_built" \
     --argjson route_profile "$route_profile" \
     --argjson wallet_match "$wallet_match" \
+    --argjson route_live "$route_live" \
     --argjson rpc_configured "$rpc_configured" \
     --argjson rpc_ready "$rpc_ready" \
     --argjson daemon_ready "$daemon_ready" \
     --argjson response_compatible "$response_compatible" \
     --argjson zero_dependency "$zero_dependency" \
+    --argjson daemon_pid "$daemon_pid" \
+    --argjson runtime_ms "$runtime_ms" \
+    --argjson ready_public "$ready_public" \
     --argjson ready "$ready" '
     {
       schema:$schema,
       candidate:{revision:$candidate_revision,worktree:$candidate_worktree,exact_revision:$candidate_exact},
-      binary:{path:$binary_path,sha256:(if ($binary_sha256|length)>0 then $binary_sha256 else null end),built_from_exact_candidate:$binary_built},
-      endpoint:{url:("http://"+$bind),loopback_only:true,ready:$daemon_ready},
-      governed_identity:{route_id:$route_id,successor_profile_id:$profile_id,route_profile_match:$route_profile},
+      binary:{path:$binary_path,sha256:(if ($binary_sha256|length)>0 then $binary_sha256 else null end),build_action:$build_action,build_runtime_ms:$build_runtime_ms,built_from_exact_candidate:$binary_built},
+      endpoint:{url:("http://"+$bind),loopback_only:true,pid:(if $daemon_pid>0 then $daemon_pid else null end),ready:$daemon_ready},
+      public_readiness:$ready_public,
+      governed_identity:{route_id:$route_id,successor_profile_id:$profile_id,route_profile_match:$route_profile,live_value_enabled:$route_live},
       controlled_wallet:{id:$controlled_wallet_id,public_deployment_match:$wallet_match},
       rpc_fleet:{endpoints_file:$rpc_endpoints_file,configured_count:6,configured:$rpc_configured,live_equal:$rpc_ready},
       rpc_wiring:{daemon_model:"local validator data plus certified round-driver readiness",six_rpc_endpoints_consumed_by:"certified round driver",direct_rpc_arguments_to_daemon:false},
@@ -119,6 +132,7 @@ write_evidence() {
         candidate_revision_and_binary_hash:($candidate_exact and $binary_built),
         loopback_only_endpoint:true,
         governed_route_profile_identity:$route_profile,
+        governed_route_live:$route_live,
         controlled_wallet_public_match:$wallet_match,
         six_rpc_configuration:$rpc_configured,
         rehearsal_rpc_fleet_live:$rpc_ready,
@@ -128,6 +142,7 @@ write_evidence() {
         zero_business_mutation:true
       },
       first_blocker:(if ($first_blocker|length)>0 then $first_blocker else null end),
+      runtime_ms:$runtime_ms,
       ready:$ready
     }' > "$EVIDENCE"
 }
@@ -153,6 +168,7 @@ binary_built=false
 binary_hash=""
 route_profile=false
 wallet_match=false
+route_live=false
 rpc_configured=false
 rpc_ready=false
 daemon_ready=false
@@ -180,16 +196,29 @@ response_compatible=true
 [[ "$(jq -r '.route_id' "$LIFECYCLE_REPORT")" == "$ROUTE_ID" ]]
 [[ "$(jq -r '.successor_profile_id' "$LIFECYCLE_REPORT")" == "$PROFILE_ID" ]]
 route_profile=true
+route_live="$(jq -r '.rollback.live_value_enabled' "$LIFECYCLE_REPORT")"
+[[ "$route_live" == true || "$route_live" == false ]]
 public_env="$CANDIDATE_WORKTREE/deployments/a666-mainnet-20260727/pftl-resident-swap-e55434c/services/pftl-swapd.env"
 [[ "$(sed -n 's/^PFTL_CONTROLLED_WALLET_ID=//p' "$public_env")" == "$CONTROLLED_WALLET_ID" ]]
 [[ "$(sed -n 's/^PFTL_ROUTE_ID=//p' "$public_env")" == "$ROUTE_ID" ]]
 wallet_match=true
 [[ -f "$TRANSPARENT_KEY_FILE" ]]
 
-CARGO_TARGET_DIR="$TARGET_DIR" cargo build --locked --release -p postfiat-node --bin pftl_swapd \
-  --manifest-path "$CANDIDATE_WORKTREE/Cargo.toml" >"$BUILD_LOG" 2>&1
-[[ -x "$BINARY" ]]
-binary_hash="$(sha256sum "$BINARY" | awk '{print $1}')"
+if [[ -e "$BINARY" ]]; then
+  [[ -x "$BINARY" ]]
+  binary_hash="$(sha256sum "$BINARY" | awk '{print $1}')"
+  [[ "$binary_hash" == "$EXPECTED_BINARY_SHA256" ]]
+  build_action="reused"
+else
+  build_started_ms="$(date +%s%3N)"
+  CARGO_TARGET_DIR="$TARGET_DIR" cargo build --locked --release -p postfiat-node --bin pftl_swapd \
+    --manifest-path "$CANDIDATE_WORKTREE/Cargo.toml" >"$BUILD_LOG" 2>&1
+  build_runtime_ms="$(($(date +%s%3N)-build_started_ms))"
+  [[ -x "$BINARY" ]]
+  binary_hash="$(sha256sum "$BINARY" | awk '{print $1}')"
+  [[ "$binary_hash" == "$EXPECTED_BINARY_SHA256" ]]
+  build_action="built"
+fi
 binary_built=true
 
 if jq -e '(.endpoints|length)==6 and all(.endpoints[]; .host=="127.0.0.1" and (.rpc_port|type)=="number")' "$RPC_ENDPOINTS_FILE" >/dev/null; then
@@ -214,7 +243,14 @@ then
   rpc_ready=true
 fi
 
-if [[ "$ACTION" == self-check || "$rpc_ready" == false ]]; then
+if [[ "$ACTION" == self-check ]]; then
+  exit 0
+fi
+if [[ "$route_live" == false ]]; then
+  write_evidence "pftl_swap_route_not_live_at_preserved_height_826" "$candidate_exact" "$binary_built" "$binary_hash" "$route_profile" "$wallet_match" "$rpc_configured" "$rpc_ready" "$daemon_ready" "$response_compatible" "$zero_dependency"
+  exit 1
+fi
+if [[ "$rpc_ready" == false ]]; then
   blocker=""
   [[ "$rpc_ready" == true ]] || blocker="rehearsal_rpc_fleet_unavailable"
   write_evidence "$blocker" "$candidate_exact" "$binary_built" "$binary_hash" "$route_profile" "$wallet_match" "$rpc_configured" "$rpc_ready" "$daemon_ready" "$response_compatible" "$zero_dependency"
@@ -227,6 +263,9 @@ fi
 [[ -n "$ROUND_DRIVER_READY_FILE" && -f "$ROUND_DRIVER_READY_FILE" ]]
 [[ -n "$ASSET_SERVICE_VAULT_DIR" && -d "$ASSET_SERVICE_VAULT_DIR" ]]
 mkdir -p "$RUNTIME_DIR/private/batch-outbox" "$RUNTIME_DIR/private/processed-batches"
+[[ -z "$(find "$RUNTIME_DIR/private/batch-outbox" -mindepth 1 -print -quit)" ]]
+[[ -z "$(find "$RUNTIME_DIR/private/processed-batches" -mindepth 1 -print -quit)" ]]
+stage_started_ms="$(date +%s%3N)"
 printf '%s\n' "$$" > "$SUPERVISOR_PID_FILE"
 cleanup() {
   trap - ERR TERM INT
@@ -263,9 +302,10 @@ trap cleanup EXIT TERM INT ERR
 daemon_pid="$!"
 printf '%s\n' "$daemon_pid" > "$DAEMON_PID_FILE"
 
+READY_PUBLIC_FILE="$RUNTIME_DIR/public-readiness.json"
 for _ in {1..180}; do
   kill -0 "$daemon_pid"
-  if python3 - "$BIND" <<'PY'
+  if python3 - "$BIND" "$READY_PUBLIC_FILE" <<'PY'
 import http.client, json, sys
 host, port=sys.argv[1].rsplit(':',1)
 try:
@@ -273,11 +313,27 @@ try:
     connection.request('GET','/v1/ready')
     response=connection.getresponse(); value=json.loads(response.read())
 except (OSError,ValueError,json.JSONDecodeError): raise SystemExit(1)
+driver=value.get('checks',{}).get('certified_round_driver',{})
+asset=value.get('checks',{}).get('asset_service',{})
 if value.get('schema')!='postfiat.pftl_swap.readiness.v1' or value.get('ready') is not True or value.get('local_only') is not True: raise SystemExit(1)
+if asset.get('ok') is not True or asset.get('mirror_matches') is not True or asset.get('report',{}).get('ready') is not True or asset.get('report',{}).get('mirror',{}).get('height') != 826: raise SystemExit(1)
+if driver.get('ok') is not True or driver.get('local_height') != 826 or driver.get('next_round_height') != 827 or driver.get('authenticated_peer_count') != 5 or driver.get('persistent_vote_streams') is not True or driver.get('remote_proposal_routing') is not True or driver.get('local_apply_before_certified_send') is not True: raise SystemExit(1)
+public={"schema":value["schema"],"ready":True,"local_only":True,"route_id":value.get("route_id"),"controlled_wallet_id":value.get("controlled_wallet_id"),"asset_service":{"ready":True,"mirror_matches":True,"height":826},"certified_round_driver":{"ready":True,"local_height":826,"next_height":827,"authenticated_peer_count":5,"persistent_vote_streams":True,"remote_proposal_routing":True,"local_apply_before_certified_send":True}}
+with open(sys.argv[2],'w',encoding='utf-8') as stream: json.dump(public,stream,separators=(',',':'))
 PY
   then daemon_ready=true; break; fi
   sleep 1
 done
+[[ -z "$(find "$RUNTIME_DIR/private/batch-outbox" -mindepth 1 -print -quit)" ]]
+[[ -z "$(find "$RUNTIME_DIR/private/processed-batches" -mindepth 1 -print -quit)" ]]
+[[ "$(jq -r '.processed_round_count' "$ROUND_DRIVER_READY_FILE")" -eq 0 ]]
+ready_public="$(jq -c . "$READY_PUBLIC_FILE")"
+runtime_ms="$(($(date +%s%3N)-stage_started_ms))"
 write_evidence "" "$candidate_exact" "$binary_built" "$binary_hash" "$route_profile" "$wallet_match" "$rpc_configured" "$rpc_ready" "$daemon_ready" "$response_compatible" "$zero_dependency"
 [[ "$daemon_ready" == true ]]
-while true; do kill -0 "$daemon_pid"; sleep 5; done
+while true; do
+  kill -0 "$daemon_pid"
+  [[ -z "$(find "$RUNTIME_DIR/private/batch-outbox" -mindepth 1 -print -quit)" ]]
+  [[ -z "$(find "$RUNTIME_DIR/private/processed-batches" -mindepth 1 -print -quit)" ]]
+  sleep 5
+done
