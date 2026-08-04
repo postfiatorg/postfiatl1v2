@@ -1030,15 +1030,24 @@ test('A666 R4 official input contract matches the runner accessor surface exactl
   assert.ok(result.accessor_count > 0);
 });
 
-function setupProvenanceGate(setup) {
+function setupProvenanceGate(setup, expectedWallet) {
   // Required fire-control behavior for candidate_revision_and_provenance:
-  // the candidate-bound setup manifest must also pin the wallet package
-  // version the official journey asserts at step 1. Pure and deterministic;
-  // invokes nothing.
+  // the candidate-bound setup manifest pins the exact package object that
+  // the official journey hashes at step 1. Pure and deterministic; invokes
+  // nothing.
   const missingInputs = [];
   if (manifestCandidateRevision(setup) !== CANDIDATE_REVISION) missingInputs.push('candidate_revision');
   const version = String(setup?.wallet?.package_version ?? setup?.wallet_package_version ?? '');
-  if (!/^\d+\.\d+\.\d+$/.test(version)) missingInputs.push('wallet.package_version');
+  const packageJsonSha256 = String(
+    setup?.wallet?.package_json_sha256 ?? setup?.wallet_package_json_sha256 ?? '',
+  ).trim().toLowerCase();
+  if (!/^\d+\.\d+\.\d+$/.test(version) || version !== expectedWallet.version) {
+    missingInputs.push('wallet.package_version');
+  }
+  if (!/^[0-9a-f]{64}$/.test(packageJsonSha256)
+      || packageJsonSha256 !== expectedWallet.packageJsonSha256) {
+    missingInputs.push('wallet.package_json_sha256');
+  }
   const ok = missingInputs.length === 0;
   return {
     candidate_revision_and_provenance: ok,
@@ -1048,28 +1057,93 @@ function setupProvenanceGate(setup) {
   };
 }
 
-test('A666 R4 RED-FIRST gate refuses a setup manifest missing wallet package version (official v2 step 1, c7602be)', {
-  todo: 'RED-first reproduction: the current aggregator accepts the committed failed-run setup manifest without wallet package version (candidate_revision_and_provenance=true false-green). Convert to a strict assertion with the green gate fix.',
-}, async () => {
-  const { execFileSync } = await import('node:child_process');
+function officialInputContractGate(accessors, expectedAccessorIds, targetStatuses) {
+  const ids = accessors.map(entry => entry?.id);
+  const runtimeKinds = new Set(['runtime_observe', 'runtime_slot_read']);
+  const expectedIds = new Set(expectedAccessorIds);
+  const uniqueIds = new Set(ids);
+  const invalid = [];
+  for (const entry of accessors) {
+    const runtime = runtimeKinds.has(entry?.access_kind);
+    const expectedInputClass = runtime ? 'runtime_derived' : 'prelaunch_external';
+    const target = entry?.fire_control_target;
+    const binding = entry?.enforcement?.producer_binding;
+    const targetOk = Object.prototype.hasOwnProperty.call(targetStatuses, target)
+      && targetStatuses[target] === true;
+    const bindingOk = runtime
+      ? typeof binding === 'string' && binding.startsWith('runner:')
+      : typeof binding === 'string' && binding.startsWith('fire_control:');
+    if (!entry?.id || !expectedIds.has(entry.id)
+        || !entry.validation_predicate || !target
+        || entry.enforcement?.validation_target !== target
+        || entry.enforcement?.input_class !== expectedInputClass
+        || !bindingOk || entry.currently_enforced_in_fire_control !== true || !targetOk) {
+      invalid.push(entry?.id ?? '<missing-id>');
+    }
+  }
+  const exactSet = ids.length === expectedAccessorIds.length
+    && uniqueIds.size === expectedAccessorIds.length
+    && expectedAccessorIds.every(id => uniqueIds.has(id));
+  const ready = exactSet && invalid.length === 0;
+  return {
+    ready_to_fire: ready,
+    official_journey_invocations: 0,
+    invalid_accessor_ids: invalid,
+  };
+}
+
+test('A666 R4 fire-control input gate rejects missing wallet identity pins before official launch', async () => {
   const repoRoot = resolve(WALLET_ROOT, '..');
-  const setupPath = join(repoRoot, 'docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/setup-endpoints-manifest.json');
-  // Fixture: the actual committed setup-manifest shape from the failed
-  // official v2 run, with any wallet package version omitted.
+  const setupPath = join(repoRoot, 'docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/setup-endpoints-manifest.json');
   const fixture = JSON.parse(await readFile(setupPath, 'utf8'));
-  if (fixture.wallet) delete fixture.wallet.package_version;
-  delete fixture.wallet_package_version;
+  const expectedWallet = {
+    version: fixture.wallet.package_version,
+    packageJsonSha256: fixture.wallet.package_json_sha256,
+  };
 
-  const required = setupProvenanceGate(fixture);
-  assert.equal(required.candidate_revision_and_provenance, false, 'required gate must refuse the incomplete setup manifest');
-  assert.equal(required.ready_to_fire, false);
-  assert.equal(required.official_journey_invocations, 0);
-  assert.ok(required.missing_inputs.includes('wallet.package_version'));
+  const missingVersion = structuredClone(fixture);
+  delete missingVersion.wallet.package_version;
+  const versionGate = setupProvenanceGate(missingVersion, expectedWallet);
+  assert.equal(versionGate.ready_to_fire, false);
+  assert.equal(versionGate.official_journey_invocations, 0);
+  assert.ok(versionGate.missing_inputs.includes('wallet.package_version'));
 
-  const aggregate = JSON.parse(execFileSync(
-    join(repoRoot, 'scripts/a666-r4-journey-fire-control-aggregate'), [], { encoding: 'utf8' },
-  ));
-  const current = aggregate.checks.find(check => check.id === 'candidate_revision_and_provenance');
-  assert.equal(current.ok, false,
-    'FALSE-GREEN: current aggregator reports candidate_revision_and_provenance=true for a setup manifest that omits wallet package version; official v2 failed at step 1 (c7602be) after consuming invocation 1 with 0 business mutations');
+  const hashMismatch = structuredClone(fixture);
+  hashMismatch.wallet.package_json_sha256 = '0'.repeat(64);
+  const hashGate = setupProvenanceGate(hashMismatch, expectedWallet);
+  assert.equal(hashGate.ready_to_fire, false);
+  assert.equal(hashGate.official_journey_invocations, 0);
+  assert.ok(hashGate.missing_inputs.includes('wallet.package_json_sha256'));
+});
+
+test('A666 R4 120-entry official input contract rejects every incomplete enforcement shape', async () => {
+  const repoRoot = resolve(WALLET_ROOT, '..');
+  const contractPath = join(repoRoot, 'docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-input-contract.json');
+  const contract = JSON.parse(await readFile(contractPath, 'utf8'));
+  const entries = contract.accessors;
+  const ids = entries.map(entry => entry.id);
+  const targets = Object.fromEntries(ids.map(id => {
+    const target = entries.find(entry => entry.id === id).fire_control_target;
+    return [target, true];
+  }));
+  const green = officialInputContractGate(entries, ids, targets);
+  assert.equal(entries.length, 120);
+  assert.equal(green.ready_to_fire, true);
+  assert.equal(green.official_journey_invocations, 0);
+
+  const vectors = [
+    ['missing_contract_entry', entries.slice(1)],
+    ['stale_contract_entry', entries.map((entry, index) => index === 0 ? { ...entry, id: 'stale:entry' } : entry)],
+    ['required_entry_without_predicate', entries.map((entry, index) => index === 0 ? { ...entry, validation_predicate: '' } : entry)],
+    ['required_entry_without_target', entries.map((entry, index) => index === 0 ? { ...entry, fire_control_target: '', enforcement: { ...entry.enforcement, validation_target: '' } } : entry)],
+    ['runtime_entry_without_producer_binding', entries.map(entry => entry.access_kind === 'runtime_observe'
+      ? { ...entry, enforcement: { ...entry.enforcement, producer_binding: '' } }
+      : entry)],
+  ];
+  for (const [label, mutated] of vectors) {
+    const gate = officialInputContractGate(mutated, ids, targets);
+    assert.equal(gate.ready_to_fire, false, label);
+    assert.equal(gate.official_journey_invocations, 0, label);
+    assert.ok(gate.invalid_accessor_ids.length > 0 || label === 'missing_contract_entry', label);
+  }
 });

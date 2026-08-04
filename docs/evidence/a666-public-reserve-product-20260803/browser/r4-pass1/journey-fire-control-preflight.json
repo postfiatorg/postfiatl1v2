@@ -279,6 +279,2309 @@
     "official_runner_validation": {
       "ok": true
     },
+    "setup_manifest": {
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/setup-endpoints-manifest.json",
+      "exists": true,
+      "valid_json": true,
+      "observed_status": true,
+      "observed_reason": null,
+      "bindings": {
+        "candidate_revision": null,
+        "rehearsal_root": null,
+        "run_id": null
+      }
+    },
+    "setup_wallet_identity_validation": {
+      "expected": {
+        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "git_object": "68c5372bafe50b9c5a71ed3106f889a304821a0c",
+        "package_json_sha256": "6bd5869e589b9bec47e6e8cc6efe243e09f09ad78cc81d06e8751cd4a6d0f0fb",
+        "package_version": "0.1.2"
+      },
+      "observed": {
+        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "package_json_sha256": "6bd5869e589b9bec47e6e8cc6efe243e09f09ad78cc81d06e8751cd4a6d0f0fb",
+        "package_version": "0.1.2"
+      },
+      "ok": true
+    },
+    "official_input_contract": {
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-input-contract.json",
+      "exists": true,
+      "valid_json": true,
+      "observed_status": null,
+      "observed_reason": null,
+      "bindings": {
+        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "rehearsal_root": null,
+        "run_id": null
+      }
+    },
+    "official_input_contract_enforcement": {
+      "ok": true,
+      "contract_sha256": "31d71ee2bdfe07f6d90c274111385cf7d2051f694b0b28ee08d9e5e462f8037d",
+      "accessor_count": 120,
+      "extractor": {
+        "ok": true,
+        "accessor_count": 120,
+        "mismatch_count": 0
+      },
+      "enforced_count": 120,
+      "invalid_count": 0,
+      "unmapped_count": 0,
+      "invalid_accessor_ids": [],
+      "unmapped_accessor_ids": [],
+      "counts_by_access_kind": {
+        "endpoint_read": 2,
+        "env": 17,
+        "file_read": 12,
+        "manifest_field": 23,
+        "runtime_observe": 4,
+        "runtime_slot_read": 17,
+        "slot_field": 39,
+        "slot_state": 6
+      },
+      "counts_by_step": {
+        "1": 33,
+        "10": 30,
+        "2": 23,
+        "3": 24,
+        "4": 24,
+        "5": 25,
+        "6": 26,
+        "7": 52,
+        "8": 49,
+        "9": 27,
+        "pre-launch": 9,
+        "preflight": 94
+      },
+      "table": [
+        {
+          "accessor_id": "env:POSTFIAT_R4_ASYNC_MAX_WAIT_MS",
+          "source": "POSTFIAT_R4_ASYNC_MAX_WAIT_MS",
+          "required_condition": "safe integer > 0 and <= 43200000 (12h cap)",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            7,
+            8
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "env:POSTFIAT_R4_ASYNC_PROOF_SLOT",
+          "source": "POSTFIAT_R4_ASYNC_PROOF_SLOT",
+          "required_condition": "non-empty value; resolves to the named artifact path",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "env:POSTFIAT_R4_DEPLOYMENT_MANIFEST",
+          "source": "POSTFIAT_R4_DEPLOYMENT_MANIFEST",
+          "required_condition": "non-empty value; resolves to the named artifact path",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "env:POSTFIAT_R4_DEPLOYMENT_MANIFEST_SHA256",
+          "source": "POSTFIAT_R4_DEPLOYMENT_MANIFEST_SHA256",
+          "required_condition": "^[0-9a-f]{64}$ and equals sha256 of the named manifest file",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "env:POSTFIAT_R4_EXPORT_ARTIFACT_SLOT",
+          "source": "POSTFIAT_R4_EXPORT_ARTIFACT_SLOT",
+          "required_condition": "non-empty value; resolves to the named artifact path",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "env:POSTFIAT_R4_FIRE_CONTROL_MANIFEST",
+          "source": "POSTFIAT_R4_FIRE_CONTROL_MANIFEST",
+          "required_condition": "non-empty value; resolves to the named artifact path",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "env:POSTFIAT_R4_FIRE_CONTROL_MANIFEST_SHA256",
+          "source": "POSTFIAT_R4_FIRE_CONTROL_MANIFEST_SHA256",
+          "required_condition": "^[0-9a-f]{64}$ and equals sha256 of the named manifest file",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "env:POSTFIAT_R4_JOURNEY_REPORT",
+          "source": "POSTFIAT_R4_JOURNEY_REPORT",
+          "required_condition": "non-empty value; resolves to the named artifact path",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            10
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "env:POSTFIAT_R4_PREFLIGHT_ONLY",
+          "source": "POSTFIAT_R4_PREFLIGHT_ONLY",
+          "required_condition": "exactly '1' selects the preflight branch; anything else selects full branch",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "env:POSTFIAT_R4_PROXY_ORIGIN",
+          "source": "POSTFIAT_R4_PROXY_ORIGIN",
+          "required_condition": "http URL on 127.0.0.1/localhost/::1 with explicit port and no credentials",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "candidate_proxy_ready"
+        },
+        {
+          "accessor_id": "env:POSTFIAT_R4_PROXY_PID_FILE",
+          "source": "POSTFIAT_R4_PROXY_PID_FILE",
+          "required_condition": "non-empty value; resolves to the named artifact path",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            9
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "env:POSTFIAT_R4_PROXY_RESTART_REQUEST",
+          "source": "POSTFIAT_R4_PROXY_RESTART_REQUEST",
+          "required_condition": "non-empty value; resolves to the named artifact path",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            9
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "env:POSTFIAT_R4_RETURN_ARTIFACT_SLOT",
+          "source": "POSTFIAT_R4_RETURN_ARTIFACT_SLOT",
+          "required_condition": "non-empty value; resolves to the named artifact path",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "env:POSTFIAT_R4_RUN_CLASSIFICATION",
+          "source": "POSTFIAT_R4_RUN_CLASSIFICATION",
+          "required_condition": "preflight branch requires 'construction'; full branch requires explicit 'official'",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "candidate_revision_and_provenance"
+        },
+        {
+          "accessor_id": "env:POSTFIAT_R4_SETUP_MANIFEST",
+          "source": "POSTFIAT_R4_SETUP_MANIFEST",
+          "required_condition": "non-empty value; resolves to the named artifact path",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "env:POSTFIAT_R4_SETUP_MANIFEST_SHA256",
+          "source": "POSTFIAT_R4_SETUP_MANIFEST_SHA256",
+          "required_condition": "^[0-9a-f]{64}$ and equals sha256 of the named manifest file",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "env:POSTFIAT_R4_WALLET_ORIGIN",
+          "source": "POSTFIAT_R4_WALLET_ORIGIN",
+          "required_condition": "http URL on 127.0.0.1/localhost/::1 with explicit port and no credentials",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "candidate_proxy_ready"
+        },
+        {
+          "accessor_id": "manifest:fire_control.candidate.revision",
+          "source": "fire_control manifest",
+          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            "pre-launch"
+          ],
+          "fire_control_predicate": "candidate_revision_and_provenance"
+        },
+        {
+          "accessor_id": "manifest:fire_control.candidate_revision",
+          "source": "fire_control manifest",
+          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            "pre-launch"
+          ],
+          "fire_control_predicate": "candidate_revision_and_provenance"
+        },
+        {
+          "accessor_id": "manifest:fire_control.aggregation.current_binding.candidate_revision",
+          "source": "fire_control manifest",
+          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            "pre-launch"
+          ],
+          "fire_control_predicate": "candidate_revision_and_provenance"
+        },
+        {
+          "accessor_id": "manifest:fire_control.bindings.candidate_revision",
+          "source": "fire_control manifest",
+          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            "pre-launch"
+          ],
+          "fire_control_predicate": "candidate_revision_and_provenance"
+        },
+        {
+          "accessor_id": "manifest:setup.candidate.revision",
+          "source": "setup manifest",
+          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "candidate_revision_and_provenance"
+        },
+        {
+          "accessor_id": "manifest:setup.candidate_revision",
+          "source": "setup manifest",
+          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "candidate_revision_and_provenance"
+        },
+        {
+          "accessor_id": "manifest:setup.aggregation.current_binding.candidate_revision",
+          "source": "setup manifest",
+          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "candidate_revision_and_provenance"
+        },
+        {
+          "accessor_id": "manifest:setup.bindings.candidate_revision",
+          "source": "setup manifest",
+          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "candidate_revision_and_provenance"
+        },
+        {
+          "accessor_id": "manifest:deployment.candidate.revision",
+          "source": "deployment manifest",
+          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "candidate_revision_and_provenance"
+        },
+        {
+          "accessor_id": "manifest:deployment.candidate_revision",
+          "source": "deployment manifest",
+          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "candidate_revision_and_provenance"
+        },
+        {
+          "accessor_id": "manifest:deployment.aggregation.current_binding.candidate_revision",
+          "source": "deployment manifest",
+          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "candidate_revision_and_provenance"
+        },
+        {
+          "accessor_id": "manifest:deployment.bindings.candidate_revision",
+          "source": "deployment manifest",
+          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "candidate_revision_and_provenance"
+        },
+        {
+          "accessor_id": "slot_state:async_slot.path",
+          "source": "async_slot artifact",
+          "required_condition": "path resolves; JSON object readable",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight"
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot_state:async_slot.readable",
+          "source": "async_slot artifact",
+          "required_condition": "path resolves; JSON object readable",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight"
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:async_slot.value",
+          "source": "async_slot artifact",
+          "required_condition": "endpointStrings scan: every endpoint loopback, no credentials",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight"
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:async_slot.business_mutations",
+          "source": "async_slot artifact",
+          "required_condition": "=== 0",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight"
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:async_slot.export_slot_accepted",
+          "source": "async_slot artifact",
+          "required_condition": "=== true",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight"
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:async_slot.first_blocker",
+          "source": "async_slot artifact",
+          "required_condition": "=== null",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight"
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:async_slot.inline_proving_forbidden",
+          "source": "async_slot artifact",
+          "required_condition": "=== true",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight"
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:async_slot.live_chain",
+          "source": "async_slot artifact",
+          "required_condition": "!== true",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight"
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:async_slot.prover_invocations",
+          "source": "async_slot artifact",
+          "required_condition": "=== 0",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight"
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:async_slot.run_id",
+          "source": "async_slot artifact",
+          "required_condition": "== 'a666-r4-receipt-prover-pathb-20260804-v3'",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight"
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:async_slot.schema",
+          "source": "async_slot artifact",
+          "required_condition": "versioned postfiat schema string for the artifact class",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight"
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:async_slot.status",
+          "source": "async_slot artifact",
+          "required_condition": "== 'accepted'",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight"
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:export_runtime.artifact_path",
+          "source": "export_runtime artifact",
+          "required_condition": "resolves to a readable artifact whose sha256 equals artifact_sha256",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            7
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:export_runtime.artifact_sha256",
+          "source": "export_runtime artifact",
+          "required_condition": "^[0-9a-f]{64}$ and equals sha256 of the referenced artifact_path",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            7
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:export_runtime.observed_chain_state",
+          "source": "export_runtime artifact",
+          "required_condition": "present and well-formed",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            7
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:export_runtime.observed_chain_state.finalized",
+          "source": "export_runtime artifact",
+          "required_condition": "=== true",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            7
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:export_runtime.receipt_identity",
+          "source": "export_runtime artifact",
+          "required_condition": "^[A-Za-z0-9._:-]{8,256}$",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            7
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot_state:export_slot.path",
+          "source": "export_slot artifact",
+          "required_condition": "path resolves; JSON object readable",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            7
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot_state:export_slot.readable",
+          "source": "export_slot artifact",
+          "required_condition": "path resolves; JSON object readable",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            7
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:export_slot.value",
+          "source": "export_slot artifact",
+          "required_condition": "endpointStrings scan: every endpoint loopback, no credentials",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            7
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:export_slot.artifact_path",
+          "source": "export_slot artifact",
+          "required_condition": "resolves to a readable artifact whose sha256 equals artifact_sha256",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            7
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:export_slot.artifact_sha256",
+          "source": "export_slot artifact",
+          "required_condition": "^[0-9a-f]{64}$ and equals sha256 of the referenced artifact_path",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            7
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:export_slot.business_mutations",
+          "source": "export_slot artifact",
+          "required_condition": "=== 0",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            7
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:export_slot.live_chain",
+          "source": "export_slot artifact",
+          "required_condition": "!== true",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            7
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:export_slot.stakehub_interaction",
+          "source": "export_slot artifact",
+          "required_condition": "!== true",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            7
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "manifest:fire_control.blocker_names",
+          "source": "fire_control artifact",
+          "required_condition": "surfaced into preflight blockers when ready_to_fire is not true",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            "pre-launch"
+          ],
+          "fire_control_predicate": "ready_to_fire_computation"
+        },
+        {
+          "accessor_id": "manifest:fire_control.checks",
+          "source": "fire_control artifact",
+          "required_condition": "check id no_live_chain_dependency present with boolean ok",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            "pre-launch"
+          ],
+          "fire_control_predicate": "ready_to_fire_computation"
+        },
+        {
+          "accessor_id": "manifest:fire_control.checks.find",
+          "source": "fire_control artifact",
+          "required_condition": "check id no_live_chain_dependency present with boolean ok",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            "pre-launch"
+          ],
+          "fire_control_predicate": "ready_to_fire_computation"
+        },
+        {
+          "accessor_id": "manifest:fire_control.ready_to_fire",
+          "source": "fire_control artifact",
+          "required_condition": "=== true before official launch",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            "pre-launch"
+          ],
+          "fire_control_predicate": "ready_to_fire_computation"
+        },
+        {
+          "accessor_id": "slot:receipt_runtime.certificate_ref",
+          "source": "receipt_runtime artifact",
+          "required_condition": "bound to a journey receipt identity",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            10
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:receipt_runtime.final_balance_tuple",
+          "source": "receipt_runtime artifact",
+          "required_condition": "array of finalized balance tuples",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            10
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:receipt_runtime.receipt_identity",
+          "source": "receipt_runtime artifact",
+          "required_condition": "^[A-Za-z0-9._:-]{8,256}$",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            10
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:receipt_runtime.schema",
+          "source": "receipt_runtime artifact",
+          "required_condition": "versioned postfiat schema string for the artifact class",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            10
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:return_runtime.artifact_path",
+          "source": "return_runtime artifact",
+          "required_condition": "resolves to a readable artifact whose sha256 equals artifact_sha256",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            8
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:return_runtime.artifact_sha256",
+          "source": "return_runtime artifact",
+          "required_condition": "^[0-9a-f]{64}$ and equals sha256 of the referenced artifact_path",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            8
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:return_runtime.conservation",
+          "source": "return_runtime artifact",
+          "required_condition": "conservation.equal === true",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            8
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:return_runtime.conservation.equal",
+          "source": "return_runtime artifact",
+          "required_condition": "conservation.equal === true",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            8
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:return_runtime.observed_chain_state",
+          "source": "return_runtime artifact",
+          "required_condition": "present and well-formed",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            8
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:return_runtime.observed_chain_state.finalized",
+          "source": "return_runtime artifact",
+          "required_condition": "=== true",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            8
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:return_runtime.receipt_identity",
+          "source": "return_runtime artifact",
+          "required_condition": "^[A-Za-z0-9._:-]{8,256}$",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            8
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot_state:return_slot.path",
+          "source": "return_slot artifact",
+          "required_condition": "path resolves; JSON object readable",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            8
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot_state:return_slot.readable",
+          "source": "return_slot artifact",
+          "required_condition": "path resolves; JSON object readable",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            8
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "manifest:setup.wallet.package_json_sha256",
+          "source": "setup artifact",
+          "required_condition": "^[0-9a-f]{64}$ and equals sha256 of the served wallet-web/package.json when pinned",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1
+          ],
+          "fire_control_predicate": "candidate_revision_and_provenance"
+        },
+        {
+          "accessor_id": "manifest:setup.wallet.package_version",
+          "source": "setup artifact",
+          "required_condition": "^\\d+\\.\\d+\\.\\d+$ pinned in the candidate-bound setup manifest",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1
+          ],
+          "fire_control_predicate": "candidate_revision_and_provenance"
+        },
+        {
+          "accessor_id": "manifest:setup.wallet_package_json_sha256",
+          "source": "setup artifact",
+          "required_condition": "^[0-9a-f]{64}$ and equals sha256 of the served wallet-web/package.json when pinned",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1
+          ],
+          "fire_control_predicate": "candidate_revision_and_provenance"
+        },
+        {
+          "accessor_id": "manifest:setup.wallet_package_version",
+          "source": "setup artifact",
+          "required_condition": "^\\d+\\.\\d+\\.\\d+$ pinned in the candidate-bound setup manifest",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1
+          ],
+          "fire_control_predicate": "candidate_revision_and_provenance"
+        },
+        {
+          "accessor_id": "slot:export_slot.status",
+          "source": "export_slot artifact",
+          "required_condition": "== 'accepted'",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            7
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:export_slot.receipt_identity",
+          "source": "export_slot artifact",
+          "required_condition": "^[A-Za-z0-9._:-]{8,256}$",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            7
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:export_slot.observed_chain_state.finalized",
+          "source": "export_slot artifact",
+          "required_condition": "=== true",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            7
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:return_slot.status",
+          "source": "return_slot artifact",
+          "required_condition": "== 'accepted'",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            8
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:return_slot.artifact_sha256",
+          "source": "return_slot artifact",
+          "required_condition": "^[0-9a-f]{64}$ and equals sha256 of the referenced artifact_path",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            8
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:return_slot.receipt_identity",
+          "source": "return_slot artifact",
+          "required_condition": "^[A-Za-z0-9._:-]{8,256}$",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            8
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "slot:return_slot.observed_chain_state.finalized",
+          "source": "return_slot artifact",
+          "required_condition": "=== true",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            8
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "runtime:export_runtime.status",
+          "source": "export_runtime artifact",
+          "required_condition": "== 'accepted'",
+          "observed_bound_status": {
+            "classification": "runtime_derived",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            7
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "runtime:export_runtime.artifact_sha256",
+          "source": "export_runtime artifact",
+          "required_condition": "^[0-9a-f]{64}$ and equals sha256 of the referenced artifact_path",
+          "observed_bound_status": {
+            "classification": "runtime_derived",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            7
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "runtime:export_runtime.receipt_identity",
+          "source": "export_runtime artifact",
+          "required_condition": "^[A-Za-z0-9._:-]{8,256}$",
+          "observed_bound_status": {
+            "classification": "runtime_derived",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            7
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "runtime:export_runtime.artifact_path",
+          "source": "export_runtime artifact",
+          "required_condition": "resolves to a readable artifact whose sha256 equals artifact_sha256",
+          "observed_bound_status": {
+            "classification": "runtime_derived",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            7
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "runtime:export_runtime.observed_chain_state.height",
+          "source": "export_runtime artifact",
+          "required_condition": "safe integer",
+          "observed_bound_status": {
+            "classification": "runtime_derived",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            7
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "runtime:export_runtime.observed_chain_state.tip",
+          "source": "export_runtime artifact",
+          "required_condition": "^[0-9a-f]{64,96}$",
+          "observed_bound_status": {
+            "classification": "runtime_derived",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            7
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "runtime:export_runtime.observed_chain_state.state_root",
+          "source": "export_runtime artifact",
+          "required_condition": "^[0-9a-f]{64,96}$",
+          "observed_bound_status": {
+            "classification": "runtime_derived",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            7
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "runtime:export_runtime.observed_chain_state.finalized",
+          "source": "export_runtime artifact",
+          "required_condition": "=== true",
+          "observed_bound_status": {
+            "classification": "runtime_derived",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            7
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "runtime:return_runtime.status",
+          "source": "return_runtime artifact",
+          "required_condition": "== 'accepted'",
+          "observed_bound_status": {
+            "classification": "runtime_derived",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            8
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "runtime:return_runtime.artifact_sha256",
+          "source": "return_runtime artifact",
+          "required_condition": "^[0-9a-f]{64}$ and equals sha256 of the referenced artifact_path",
+          "observed_bound_status": {
+            "classification": "runtime_derived",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            8
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "runtime:return_runtime.receipt_identity",
+          "source": "return_runtime artifact",
+          "required_condition": "^[A-Za-z0-9._:-]{8,256}$",
+          "observed_bound_status": {
+            "classification": "runtime_derived",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            8
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "runtime:return_runtime.artifact_path",
+          "source": "return_runtime artifact",
+          "required_condition": "resolves to a readable artifact whose sha256 equals artifact_sha256",
+          "observed_bound_status": {
+            "classification": "runtime_derived",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            8
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "runtime:return_runtime.observed_chain_state.height",
+          "source": "return_runtime artifact",
+          "required_condition": "safe integer",
+          "observed_bound_status": {
+            "classification": "runtime_derived",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            8
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "runtime:return_runtime.observed_chain_state.tip",
+          "source": "return_runtime artifact",
+          "required_condition": "^[0-9a-f]{64,96}$",
+          "observed_bound_status": {
+            "classification": "runtime_derived",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            8
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "runtime:return_runtime.observed_chain_state.state_root",
+          "source": "return_runtime artifact",
+          "required_condition": "^[0-9a-f]{64,96}$",
+          "observed_bound_status": {
+            "classification": "runtime_derived",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            8
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "runtime:return_runtime.observed_chain_state.finalized",
+          "source": "return_runtime artifact",
+          "required_condition": "=== true",
+          "observed_bound_status": {
+            "classification": "runtime_derived",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            8
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "runtime:return_runtime.conservation.equal",
+          "source": "return slot artifact",
+          "required_condition": "conservation.equal === true",
+          "observed_bound_status": {
+            "classification": "runtime_derived",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            8
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "manifest:setup.endpoints",
+          "source": "setup manifest",
+          "required_condition": "endpointStrings non-empty; every endpoint loopback with no credentials",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            5,
+            6,
+            7,
+            8
+          ],
+          "fire_control_predicate": "no_live_chain_dependency"
+        },
+        {
+          "accessor_id": "manifest:deployment.endpoints",
+          "source": "deployment manifest",
+          "required_condition": "endpointStrings non-empty; every endpoint loopback with no credentials",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            5,
+            6,
+            7,
+            8
+          ],
+          "fire_control_predicate": "no_live_chain_dependency"
+        },
+        {
+          "accessor_id": "manifest:fire_control.checks[no_live_chain_dependency].ok",
+          "source": "fire-control manifest",
+          "required_condition": "check id no_live_chain_dependency present with boolean ok",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            "pre-launch"
+          ],
+          "fire_control_predicate": "no_live_chain_dependency"
+        },
+        {
+          "accessor_id": "file:src/App.jsx",
+          "source": "src/App.jsx",
+          "required_condition": "contents contain the expected production import marker",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "file:src/components/Swap.jsx",
+          "source": "src/components/Swap.jsx",
+          "required_condition": "contents contain the expected production import marker",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "file:src/components/NavcoinMarket.jsx",
+          "source": "src/components/NavcoinMarket.jsx",
+          "required_condition": "contents contain the expected production import marker",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "file:src/components/NavcoinPrimaryMarket.jsx",
+          "source": "src/components/NavcoinPrimaryMarket.jsx",
+          "required_condition": "contents contain the expected production import marker",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "file:src/components/PftlPrivatePrimary.jsx",
+          "source": "src/components/PftlPrivatePrimary.jsx",
+          "required_condition": "contents contain the expected production import marker",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "file:package.json",
+          "source": "wallet-web/package.json",
+          "required_condition": "sha256 equals setup manifest wallet.package_json_sha256 when pinned",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1
+          ],
+          "fire_control_predicate": "candidate_revision_and_provenance"
+        },
+        {
+          "accessor_id": "file:proxy_pid_or_ready",
+          "source": "POSTFIAT_R4_PROXY_PID_FILE",
+          "required_condition": "numeric pid or JSON.pid safe integer > 0",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            9
+          ],
+          "fire_control_predicate": "candidate_proxy_ready"
+        },
+        {
+          "accessor_id": "file:proxy_restart_request",
+          "source": "POSTFIAT_R4_PROXY_RESTART_REQUEST",
+          "required_condition": "parent directory readable; official write uses flag 'wx'",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            9
+          ],
+          "fire_control_predicate": "candidate_proxy_ready"
+        },
+        {
+          "accessor_id": "file:journey_report",
+          "source": "POSTFIAT_R4_JOURNEY_REPORT",
+          "required_condition": "unique path: write flag 'wx' mode 600",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            10
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "file:export_slot_artifact",
+          "source": "export slot artifact_path",
+          "required_condition": "sha256 equals the slot artifact_sha256",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            7
+          ],
+          "fire_control_predicate": "async_proof_slot_steps_7_8"
+        },
+        {
+          "accessor_id": "file:export_runtime_artifact",
+          "source": "export slot artifact_path",
+          "required_condition": "sha256 equals the slot artifact_sha256",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            7
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "file:return_runtime_artifact",
+          "source": "return slot artifact_path",
+          "required_condition": "sha256 equals the slot artifact_sha256",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            8
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "endpoint:wallet_origin",
+          "source": "POSTFIAT_R4_WALLET_ORIGIN",
+          "required_condition": "HTTP 200",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "candidate_proxy_ready"
+        },
+        {
+          "accessor_id": "endpoint:proxy_healthz",
+          "source": "POSTFIAT_R4_PROXY_ORIGIN",
+          "required_condition": "HTTP 200",
+          "observed_bound_status": {
+            "classification": "prelaunch_external",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            "preflight",
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fire_control_predicate": "candidate_proxy_ready"
+        },
+        {
+          "accessor_id": "runtime:reserve_proof_frame.packets",
+          "source": "wallet proxy websocket",
+          "required_condition": "six distinct source identities and >=2 distinct proof identities",
+          "observed_bound_status": {
+            "classification": "runtime_derived",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            3
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "runtime:market_balances",
+          "source": "rendered wallet DOM",
+          "required_condition": "A666 and pfUSDC rows visible with finalized marker",
+          "observed_bound_status": {
+            "classification": "runtime_derived",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            4
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "runtime:private_primary_records",
+          "source": "browser localStorage",
+          "required_condition": ">=2 COMMITTED records with >=2 distinct receipt identities",
+          "observed_bound_status": {
+            "classification": "runtime_derived",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            6
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        },
+        {
+          "accessor_id": "runtime:downloaded_public_receipt",
+          "source": "browser download",
+          "required_condition": "non-empty download; versioned public-receipt schema; no custody fields",
+          "observed_bound_status": {
+            "classification": "runtime_derived",
+            "target_present": true,
+            "target_ok_now": true,
+            "producer_bound": true
+          },
+          "validation_result": true,
+          "consuming_steps": [
+            10
+          ],
+          "fire_control_predicate": "d_runner_steps_1_6_9_10_dry_run"
+        }
+      ]
+    },
+    "official_input_target_statuses": {
+      "candidate_revision_and_provenance": true,
+      "candidate_proxy_ready": true,
+      "d_runner_steps_1_6_9_10_dry_run": true,
+      "async_proof_slot_steps_7_8": true,
+      "no_live_chain_dependency": true,
+      "ready_to_fire_computation": true
+    },
     "candidate_proxy_restart_watcher": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/candidate-proxy-restart-watcher.json",
       "exists": true,
@@ -325,7 +2628,7 @@
       }
     },
     "stakehub_absence_validation": {
-      "ok": true
+      "ok": false
     },
     "pre_prove_binding": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/pre-prove-binding-check.json",
@@ -366,7 +2669,9 @@
     },
     "stakehub_official_scan": {
       "command_succeeded": true,
-      "active_units": []
+      "active_units": [
+        "stakehub-private-swap-dashboard.service"
+      ]
     }
   },
   "proof_artifact_consumption_contract": {
@@ -414,7 +2719,7 @@
     "status": "binding design; implementation readiness remains false"
   },
   "official_invocation_count": 0,
-  "official_run_id": "a666-r4-official-journey-pass1-20260804-v2",
+  "official_run_id": "a666-r4-official-journey-pass1-20260804-v3",
   "checks": [
     {
       "id": "docker_refire_prepared",
@@ -488,7 +2793,7 @@
     },
     {
       "id": "stakehub_official_absent",
-      "ok": true,
+      "ok": false,
       "input": "stakehub_official_scan"
     },
     {
@@ -508,8 +2813,10 @@
     }
   ],
   "check_count": 18,
-  "blocker_names": [],
-  "ready_to_fire": true,
+  "blocker_names": [
+    "stakehub_official_absent"
+  ],
+  "ready_to_fire": false,
   "ready_to_fire_computation": "all checks[].ok values must be true",
   "mutations_executed": false
 }

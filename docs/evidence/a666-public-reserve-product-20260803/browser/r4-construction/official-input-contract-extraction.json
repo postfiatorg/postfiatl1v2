@@ -4,7 +4,7 @@
   "extractor": "scripts/a666-r4-official-input-contract-extract",
   "runner": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
   "contract_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-input-contract.json",
-  "contract_sha256": "ff4ea13e8c1f3a11bf70af8b19ecf8a3af0ac044869f3dbfef0b7e64ab59dfc9",
+  "contract_sha256": "31d71ee2bdfe07f6d90c274111385cf7d2051f694b0b28ee08d9e5e462f8037d",
   "accessor_total": 120,
   "counts_by_access_kind": {
     "endpoint_read": 2,
@@ -43,9 +43,18 @@
     {
       "cmd": "npm run test:r4-construction (POSTFIAT_R4_PREFLIGHT_ONLY=1, standard manifest/slot env block)",
       "exit": 0,
-      "summary": "tests 6, pass 5, todo 1 (RED-first aggregator vector, expected), fail 0"
+      "summary": "tests 7, pass 7, todo 0, fail 0"
     }
   ],
   "completeness_test": "runner test 'A666 R4 official input contract matches the runner accessor surface exactly (strict 1:1)' executes extractor check mode and asserts ok:true / mismatch_count:0",
-  "notes": "Extraction is read-only and static. currently_enforced_in_fire_control=false for the 4 wallet package version/hash entries (aggregator gate hole, RED vector 884e6ed)."
+  "fire_control_enforcement": {
+    "aggregate_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/journey-fire-control-preflight.json",
+    "table_path": "inputs.official_input_contract_enforcement.table",
+    "accessor_count": 120,
+    "enforced_count": 120,
+    "invalid_count": 0,
+    "unmapped_count": 0,
+    "candidate_provenance_requires_enforcement": true
+  },
+  "notes": "Extraction is read-only and static. All 120 entries carry a fire-control enforcement class, producer binding, and validation target; the aggregate records per-entry current enforcement."
 }

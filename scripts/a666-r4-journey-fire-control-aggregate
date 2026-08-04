@@ -24,6 +24,9 @@ export_artifact_slot="$construction/export-artifact-slot.json"
 return_artifact_slot="$construction/return-artifact-slot.json"
 official_runner_contract="$construction/official-classification-fast-loop.json"
 restart_watcher="$construction/candidate-proxy-restart-watcher.json"
+official_input_contract="$construction/official-input-contract.json"
+official_input_extractor="$repo/scripts/a666-r4-official-input-contract-extract"
+setup_manifest="$pass1/setup-endpoints-manifest.json"
 stakehub_inventory="$pass1/stakehub-restart-proof.json"
 stakehub_absence="$pass1/stakehub-official-absence.json"
 preprove_binding="$construction/pre-prove-binding-check.json"
@@ -352,6 +355,130 @@ return_slot_validation() {
       )}'
 }
 
+setup_wallet_identity_validation() {
+    local candidate="$path_b_candidate" package_blob package_sha package_version
+    package_blob=$(git rev-parse "$candidate:wallet-web/package.json" 2>/dev/null || true)
+    package_sha=$(git show "$candidate:wallet-web/package.json" 2>/dev/null | sha256sum | awk '{print $1}')
+    package_version=$(git show "$candidate:wallet-web/package.json" 2>/dev/null | jq -r '.version // empty')
+    jq -cn --arg candidate "$candidate" --arg blob "$package_blob" --arg sha "$package_sha" --arg version "$package_version" --argjson setup "$(cat "$setup_manifest")" '
+      {
+        expected:{candidate_revision:$candidate,git_object:$blob,package_json_sha256:$sha,package_version:$version},
+        observed:{
+          candidate_revision:($setup.candidate.revision // null),
+          package_json_sha256:($setup.wallet.package_json_sha256 // $setup.wallet_package_json_sha256 // null),
+          package_version:($setup.wallet.package_version // $setup.wallet_package_version // null)
+        },
+        ok:(
+          ($blob | test("^[0-9a-f]{40}$"))
+          and ($sha | test("^[0-9a-f]{64}$"))
+          and ($version | test("^\\d+\\.\\d+\\.\\d+$"))
+          and $setup.schema == "postfiat.a666.r4.construction-setup-endpoints.v1"
+          and $setup.candidate.revision == $candidate and $setup.candidate.revision_exact == true and $setup.candidate.tracked_clean == true
+          and ($setup.wallet.package_version // $setup.wallet_package_version) == $version
+          and (($setup.wallet.package_json_sha256 // $setup.wallet_package_json_sha256) | ascii_downcase) == $sha
+          and $setup.wallet.loopback == true and $setup.wallet.reachable == true and $setup.wallet.http_status == 200
+          and $setup.business_mutations == 0 and $setup.official_pass == false
+        )
+      }'
+}
+
+official_input_contract_enforcement_validation() {
+    local targets="$1"
+    python3 - "$official_input_contract" "$official_input_extractor" "$repo" "$targets" <<'PY'
+import hashlib, json, subprocess, sys
+from pathlib import Path
+
+contract_path, extractor, repo = map(Path, sys.argv[1:4])
+targets = json.loads(sys.argv[4])
+raw = contract_path.read_bytes()
+contract = json.loads(raw)
+entries = contract.get("accessors", [])
+check = subprocess.run([str(extractor), "check"], cwd=repo, text=True, capture_output=True)
+try:
+    extracted = json.loads(check.stdout)
+except json.JSONDecodeError:
+    extracted = {"ok": False, "accessor_count": 0, "mismatch_count": None}
+runtime_kinds = {"runtime_observe", "runtime_slot_read"}
+valid_required = {"always", "official_only", "optional_defaults_construction_refused_full", "optional_mode_flag", "preflight_only"}
+table, invalid, unmapped = [], [], []
+ids = set()
+for entry in entries:
+    accessor_id = entry.get("id")
+    kind = entry.get("access_kind")
+    target = entry.get("fire_control_target")
+    runtime = kind in runtime_kinds
+    enforcement = entry.get("enforcement") if isinstance(entry.get("enforcement"), dict) else {}
+    expected_class = "runtime_derived" if runtime else "prelaunch_external"
+    target_known = isinstance(target, str) and target in targets
+    target_ok = bool(targets.get(target, False)) if target_known else False
+    predicate = entry.get("validation_predicate")
+    producer = enforcement.get("producer_binding")
+    class_ok = enforcement.get("input_class") == expected_class
+    producer_ok = (isinstance(producer, str) and producer.startswith("runner:")) if runtime else (isinstance(producer, str) and producer.startswith("fire_control:"))
+    shape_ok = (
+        isinstance(accessor_id, str) and bool(accessor_id) and accessor_id not in ids
+        and kind in {"env", "manifest_field", "slot_field", "slot_state", "runtime_slot_read", "runtime_observe", "file_read", "endpoint_read"}
+        and entry.get("required") in valid_required
+        and isinstance(predicate, str) and bool(predicate)
+        and target_known and enforcement.get("validation_target") == target
+        and class_ok and producer_ok and entry.get("currently_enforced_in_fire_control") is True
+    )
+    ids.add(accessor_id)
+    validation_result = bool(shape_ok and target_ok)
+    observed = {
+        "classification": expected_class,
+        "target_present": target_known,
+        "target_ok_now": target_ok,
+        "producer_bound": producer_ok,
+    }
+    row = {
+        "accessor_id": accessor_id,
+        "source": entry.get("source"),
+        "required_condition": predicate,
+        "observed_bound_status": observed,
+        "validation_result": validation_result,
+        "consuming_steps": entry.get("consuming_steps"),
+        "fire_control_predicate": target,
+    }
+    table.append(row)
+    if not target_known:
+        unmapped.append(accessor_id)
+    if not validation_result:
+        invalid.append(accessor_id)
+contract_hash = hashlib.sha256(raw).hexdigest()
+result = {
+    "ok": (
+        check.returncode == 0 and extracted.get("ok") is True
+        and extracted.get("accessor_count") == 120 and extracted.get("mismatch_count") == 0
+        and len(entries) == 120 and len(table) == 120
+        and len(ids) == 120 and not invalid and not unmapped
+    ),
+    "contract_sha256": contract_hash,
+    "accessor_count": len(entries),
+    "extractor": {
+        "ok": check.returncode == 0 and extracted.get("ok") is True,
+        "accessor_count": extracted.get("accessor_count"),
+        "mismatch_count": extracted.get("mismatch_count"),
+    },
+    "enforced_count": sum(1 for row in table if row["validation_result"]),
+    "invalid_count": len(invalid),
+    "unmapped_count": len(unmapped),
+    "invalid_accessor_ids": invalid,
+    "unmapped_accessor_ids": unmapped,
+    "counts_by_access_kind": {
+        kind: sum(1 for entry in entries if entry.get("access_kind") == kind)
+        for kind in sorted({entry.get("access_kind") for entry in entries})
+    },
+    "counts_by_step": {
+        str(step): sum(1 for entry in entries if step in entry.get("consuming_steps", []))
+        for step in sorted({step for entry in entries for step in entry.get("consuming_steps", [])}, key=str)
+    },
+    "table": table,
+}
+print(json.dumps(result, separators=(",", ":")))
+PY
+}
+
 official_runner_contract_validation() {
     jq -e '
       .schema == "postfiat.a666.r4.official-classification-fast-loop.v1"
@@ -370,7 +497,7 @@ restart_watcher_validation() {
     jq -e '
       .schema == "postfiat.a666.r4.candidate-proxy-restart-watcher.v1"
       and .ready == true and .unit.active == true and .unit.running == true
-      and .request_contract.run_id == "a666-r4-official-journey-pass1-20260804-v2"
+      and .request_contract.run_id == "a666-r4-official-journey-pass1-20260804-v3"
       and .request_contract.required_mode == "600" and .request_contract.currently_absent == true
       and .control.mode == "600" and .control.pid_file_mode == "600" and .control.ready_file_mode == "600"
       and .candidate_pins.revision == "39f7fae3191aa34c376ae1657650a9ec2444f421"
@@ -799,6 +926,7 @@ fi
 candidate_proxy_validation=$(candidate_proxy_validation_for_file "$candidate_proxy" "$fleet_validation")
 restart_watcher_validation=$(restart_watcher_validation)
 official_runner_validation=$(official_runner_contract_validation)
+setup_wallet_identity=$(setup_wallet_identity_validation)
 current_route=$(current_route_validation)
 if jq -e '.ok == true' <<<"$current_route" >/dev/null; then
     fresh_route_ok=true
@@ -849,12 +977,24 @@ stakehub_absence_validation=$(stakehub_official_absence_validation)
 if [[ "$stakehub_scan_ok" == true && "$stakehub_inventory_ok" == true ]] && jq -e '.ok == true' <<<"$stakehub_absence_validation" >/dev/null; then
     stakehub_official_absent_ok=true
 fi
-if jq -e '.ok == true' <<<"$candidate_proxy_validation" >/dev/null && jq -e '.ok == true' <<<"$restart_watcher_validation" >/dev/null; then
-    candidate_provenance_ok=true
-fi
 no_live_validation=$(no_live_validation)
 if jq -e '.ok == true' <<<"$no_live_validation" >/dev/null; then
     no_live_chain_ok=true
+fi
+candidate_base_ok=false
+if jq -e '.ok == true' <<<"$candidate_proxy_validation" >/dev/null && jq -e '.ok == true' <<<"$restart_watcher_validation" >/dev/null && jq -e '.ok == true' <<<"$setup_wallet_identity" >/dev/null; then
+    candidate_base_ok=true
+fi
+input_target_statuses=$(jq -cn \
+  --argjson candidate "$candidate_base_ok" \
+  --argjson proxy "$candidate_proxy_ok" \
+  --argjson d_runner "$d_runner_dry_ok" \
+  --argjson async "$async_proof_slot_ok" \
+  --argjson no_live "$no_live_chain_ok" \
+  '{candidate_revision_and_provenance:$candidate, candidate_proxy_ready:$proxy, d_runner_steps_1_6_9_10_dry_run:$d_runner, async_proof_slot_steps_7_8:$async, no_live_chain_dependency:$no_live, ready_to_fire_computation:([$candidate,$proxy,$d_runner,$async,$no_live]|all)}')
+official_input_contract_enforcement=$(official_input_contract_enforcement_validation "$input_target_statuses")
+if [[ "$candidate_base_ok" == true ]] && jq -e '.ok == true' <<<"$official_input_contract_enforcement" >/dev/null; then
+    candidate_provenance_ok=true
 fi
 
 check_records=$(jq -cn \
@@ -936,6 +1076,11 @@ jq -n \
     --argjson restart_watcher_input "$(input_summary "$restart_watcher")" \
     --argjson restart_watcher_validation "$restart_watcher_validation" \
     --argjson official_invocation_count "$official_invocation_count" \
+    --argjson setup_wallet_identity "$setup_wallet_identity" \
+    --argjson input_target_statuses "$input_target_statuses" \
+    --argjson official_input_contract_enforcement "$official_input_contract_enforcement" \
+    --argjson official_input_contract_input "$(input_summary "$official_input_contract")" \
+    --argjson setup_manifest_input "$(input_summary "$setup_manifest")" \
     --argjson no_live_validation "$no_live_validation" \
     --argjson stakehub_input "$(input_summary "$stakehub_inventory")" \
     --argjson stakehub_inventory_validation "$stakehub_inventory_validation" \
@@ -992,6 +1137,11 @@ jq -n \
             v3_async_validation: $v3_async,
             official_runner_contract: $official_runner_input,
             official_runner_validation: $official_runner_validation,
+            setup_manifest: $setup_manifest_input,
+            setup_wallet_identity_validation: $setup_wallet_identity,
+            official_input_contract: $official_input_contract_input,
+            official_input_contract_enforcement: $official_input_contract_enforcement,
+            official_input_target_statuses: $input_target_statuses,
             candidate_proxy_restart_watcher: $restart_watcher_input,
             restart_watcher_validation: $restart_watcher_validation,
             no_live_validation: $no_live_validation,
