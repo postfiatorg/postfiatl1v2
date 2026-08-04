@@ -1,0 +1,88 @@
+{
+ "schema": "postfiat.a666.r4.receipt-prover-memory-bounded-prepared.v1",
+ "run_id": "a666-r4-receipt-prover-memory-bounded-20260804-overnight-v1",
+ "terminal_wall": {
+  "commit": "df5192e",
+  "unit": "a666-r4-receipt-prover-spike-20260804T040925Z.service",
+  "first_failing_check": "local_cpu_groth16_prover_oom_killed_at_103_1_gb_peak",
+  "memory_peak_gb": 103.1,
+  "wall_clock_seconds": 525
+ },
+ "pins": {
+  "witness": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-acceptance-20260728/phase-9-private-redeem-hands-off-verify/export-proof/receipt-witness.json",
+  "witness_sha256": "995c25f6dbbaf92252473a513f2e6ea78175cce0fff1f971225d1bc3817f14d7",
+  "prover_binary": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/tools/pftl-uniswap-prover/target/release/pftl-uniswap-prover",
+  "prover_binary_sha256_observed": "66271a1e3444e90e450d102366a049ee13ea93f1cc227bab622a812b2bc05291",
+  "protoc_executable": "/tmp/postfiat-protoc-3.21.12/root/usr/bin/protoc",
+  "protoc_library_path": "/tmp/postfiat-protoc-3.21.12/root/usr/lib/x86_64-linux-gnu",
+  "sp1_sdk": "6.3.1 (=6.3.1 pin, tools/pftl-uniswap-prover/Cargo.toml:21)",
+  "groth16_selector_context": "SP1 6.x Groth16 mode via client.prove(...).groth16() (tools/pftl-uniswap-prover/src/main.rs:284); v6.1 verifier selector context as declared in the dispatch, not independently verifiable in-repo"
+ },
+ "tuned_environment": [
+  "SP1_PROVER=cpu",
+  "SHARD_BATCH_SIZE=1",
+  "RAYON_NUM_THREADS=4",
+  "MALLOC_ARENA_MAX=1",
+  "PROTOC=/tmp/postfiat-protoc-3.21.12/root/usr/bin/protoc",
+  "LD_LIBRARY_PATH=/tmp/postfiat-protoc-3.21.12/root/usr/lib/x86_64-linux-gnu",
+  "SP1_WORKER_NUM_SPLICING_WORKERS=1",
+  "SP1_WORKER_SPLICING_BUFFER_SIZE=1",
+  "SP1_WORKER_NUMBER_OF_SEND_SPLICE_WORKERS_PER_SPLICE=1",
+  "SP1_WORKER_SEND_SPLICE_INPUT_BUFFER_SIZE_PER_SPLICE=1",
+  "SP1_WORKER_GLOBAL_MEMORY_BUFFER_SIZE=1",
+  "SP1_WORKER_NUM_CORE_WORKERS=1",
+  "SP1_WORKER_CORE_BUFFER_SIZE=1",
+  "SP1_WORKER_NUM_SETUP_WORKERS=1",
+  "SP1_WORKER_SETUP_BUFFER_SIZE=1",
+  "SP1_WORKER_NORMALIZE_PROGRAM_CACHE_SIZE=1",
+  "SP1_WORKER_NUM_PREPARE_REDUCE_WORKERS=1",
+  "SP1_WORKER_PREPARE_REDUCE_BUFFER_SIZE=1",
+  "SP1_WORKER_NUM_RECURSION_EXECUTOR_WORKERS=1",
+  "SP1_WORKER_RECURSION_EXECUTOR_BUFFER_SIZE=1",
+  "SP1_WORKER_NUM_RECURSION_PROVER_WORKERS=1",
+  "SP1_WORKER_RECURSION_PROVER_BUFFER_SIZE=1",
+  "SP1_WORKER_NUM_DEFERRED_WORKERS=1",
+  "SP1_WORKER_DEFERRED_BUFFER_SIZE=1",
+  "SP1_WORKER_NUMBER_OF_GAS_EXECUTORS=1",
+  "SP1_WORKER_GAS_EXECUTOR_BUFFER_SIZE=1"
+ ],
+ "rendered_fire_command": "OUT_DIR=\"$(mktemp -d /tmp/a666-r4-receipt-prover-memory-bounded-XXXXXXXX)\" && chmod 700 \"$OUT_DIR\" && cd \"/home/postfiat/repos/a666-eth-fast-lane-combined-20260724\" && systemd-run --user --collect --same-dir --unit=\"a666-r4-receipt-prover-memory-bounded-20260804-overnight-v1\" -- bash -c 'exec /usr/bin/env SP1_PROVER=cpu SHARD_BATCH_SIZE=1 RAYON_NUM_THREADS=4 MALLOC_ARENA_MAX=1 PROTOC=/tmp/postfiat-protoc-3.21.12/root/usr/bin/protoc LD_LIBRARY_PATH=/tmp/postfiat-protoc-3.21.12/root/usr/lib/x86_64-linux-gnu SP1_WORKER_NUM_SPLICING_WORKERS=1 SP1_WORKER_SPLICING_BUFFER_SIZE=1 SP1_WORKER_NUMBER_OF_SEND_SPLICE_WORKERS_PER_SPLICE=1 SP1_WORKER_SEND_SPLICE_INPUT_BUFFER_SIZE_PER_SPLICE=1 SP1_WORKER_GLOBAL_MEMORY_BUFFER_SIZE=1 SP1_WORKER_NUM_CORE_WORKERS=1 SP1_WORKER_CORE_BUFFER_SIZE=1 SP1_WORKER_NUM_SETUP_WORKERS=1 SP1_WORKER_SETUP_BUFFER_SIZE=1 SP1_WORKER_NORMALIZE_PROGRAM_CACHE_SIZE=1 SP1_WORKER_NUM_PREPARE_REDUCE_WORKERS=1 SP1_WORKER_PREPARE_REDUCE_BUFFER_SIZE=1 SP1_WORKER_NUM_RECURSION_EXECUTOR_WORKERS=1 SP1_WORKER_RECURSION_EXECUTOR_BUFFER_SIZE=1 SP1_WORKER_NUM_RECURSION_PROVER_WORKERS=1 SP1_WORKER_RECURSION_PROVER_BUFFER_SIZE=1 SP1_WORKER_NUM_DEFERRED_WORKERS=1 SP1_WORKER_DEFERRED_BUFFER_SIZE=1 SP1_WORKER_NUMBER_OF_GAS_EXECUTORS=1 SP1_WORKER_GAS_EXECUTOR_BUFFER_SIZE=1 /usr/bin/time -f wall_seconds=%e \"/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/tools/pftl-uniswap-prover/target/release/pftl-uniswap-prover\" receipt --witness \"/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-acceptance-20260728/phase-9-private-redeem-hands-off-verify/export-proof/receipt-witness.json\" --output-dir \"$OUT_DIR/proof\" --prove --require-prover cpu --skip-redundant-execute >>\"$OUT_DIR/stdout.log\" 2>>\"$OUT_DIR/stderr.log\"'",
+ "approval_marker": {
+  "path": "/home/postfiat/.pft/a666-r4-receipt-prover-fire-approval",
+  "exists": false,
+  "created_by_prepare": false,
+  "required_content": "a666-r4-receipt-prover-memory-bounded-20260804-overnight-v1"
+ },
+ "pause_sequence_before_proving": [
+  "scripts/a666-r4-candidate-proxy-stage --teardown",
+  "write 'teardown' to fleet construction-teardown.request",
+  "write 'teardown' to private-swap-dependencies teardown.request",
+  "scripts/a666-r4-private-swap-stage teardown",
+  "assert ports 31001-31011, 31021, 8798 absent before proving"
+ ],
+ "restart_inventory_after_terminal_proof": [
+  "scripts/a666-r4-construction-fleet-stage stage",
+  "scripts/a666-r4-private-swap-dependencies-stage stage",
+  "scripts/a666-r4-private-swap-stage stage",
+  "scripts/a666-r4-candidate-proxy-stage"
+ ],
+ "host_decision_inputs": {
+  "ram_gb": 122,
+  "cores": 32,
+  "gpu": "none",
+  "swap_at_decision_observation": "15/15GB exhausted",
+  "prior_peak_gb": 103.1,
+  "disk_free_gb_minimum": 100,
+  "disk_free_gb_observed": 185,
+  "expected_duration": "multi-hour/overnight",
+  "output": "proof checkpoint and shards on disk under unique mode-700 /tmp output dir",
+  "no_memory_max": true,
+  "success_claimed": false
+ },
+ "prepared": true,
+ "fired": false,
+ "fire_authorized": false,
+ "stakehub_interaction": false,
+ "business_mutation": 0,
+ "default_path": "memory_tuned_overnight_cpu"
+}

@@ -1,0 +1,219 @@
+#!/usr/bin/env bash
+# Prepared-but-unfired memory-bounded receipt prover rerun packet.
+#
+# Default action `prepare` renders and validates the exact overnight CPU
+# proving command and emits the computed evidence artifact. Action `fire`
+# refuses unless the explicit Nazgul approval marker file exists and its
+# single line equals this packet's run ID. No marker exists at preparation
+# time and preparation never creates it. This script never touches StakeHub
+# and never submits a business operation.
+set -euo pipefail
+
+ACTION="${1:-prepare}"
+RUN_ID="a666-r4-receipt-prover-memory-bounded-20260804-overnight-v1"
+APPROVAL_MARKER="/home/postfiat/.pft/a666-r4-receipt-prover-fire-approval"
+MAIN_WORKTREE="$(git rev-parse --show-toplevel)"
+EVIDENCE_FILE="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/receipt-verifier-spike/memory-bounded-prepared.json"
+
+TERMINAL_WALL_COMMIT="df5192e"
+WITNESS="$MAIN_WORKTREE/docs/evidence/a666-acceptance-20260728/phase-9-private-redeem-hands-off-verify/export-proof/receipt-witness.json"
+WITNESS_SHA256="995c25f6dbbaf92252473a513f2e6ea78175cce0fff1f971225d1bc3817f14d7"
+PROVER="$MAIN_WORKTREE/tools/pftl-uniswap-prover/target/release/pftl-uniswap-prover"
+PROTOC_BIN="/tmp/postfiat-protoc-3.21.12/root/usr/bin/protoc"
+PROTOC_LIBDIR="/tmp/postfiat-protoc-3.21.12/root/usr/lib/x86_64-linux-gnu"
+
+TUNED_ENV=(
+  "SP1_PROVER=cpu"
+  "SHARD_BATCH_SIZE=1"
+  "RAYON_NUM_THREADS=4"
+  "MALLOC_ARENA_MAX=1"
+  "PROTOC=$PROTOC_BIN"
+  "LD_LIBRARY_PATH=$PROTOC_LIBDIR"
+  "SP1_WORKER_NUM_SPLICING_WORKERS=1"
+  "SP1_WORKER_SPLICING_BUFFER_SIZE=1"
+  "SP1_WORKER_NUMBER_OF_SEND_SPLICE_WORKERS_PER_SPLICE=1"
+  "SP1_WORKER_SEND_SPLICE_INPUT_BUFFER_SIZE_PER_SPLICE=1"
+  "SP1_WORKER_GLOBAL_MEMORY_BUFFER_SIZE=1"
+  "SP1_WORKER_NUM_CORE_WORKERS=1"
+  "SP1_WORKER_CORE_BUFFER_SIZE=1"
+  "SP1_WORKER_NUM_SETUP_WORKERS=1"
+  "SP1_WORKER_SETUP_BUFFER_SIZE=1"
+  "SP1_WORKER_NORMALIZE_PROGRAM_CACHE_SIZE=1"
+  "SP1_WORKER_NUM_PREPARE_REDUCE_WORKERS=1"
+  "SP1_WORKER_PREPARE_REDUCE_BUFFER_SIZE=1"
+  "SP1_WORKER_NUM_RECURSION_EXECUTOR_WORKERS=1"
+  "SP1_WORKER_RECURSION_EXECUTOR_BUFFER_SIZE=1"
+  "SP1_WORKER_NUM_RECURSION_PROVER_WORKERS=1"
+  "SP1_WORKER_RECURSION_PROVER_BUFFER_SIZE=1"
+  "SP1_WORKER_NUM_DEFERRED_WORKERS=1"
+  "SP1_WORKER_DEFERRED_BUFFER_SIZE=1"
+  "SP1_WORKER_NUMBER_OF_GAS_EXECUTORS=1"
+  "SP1_WORKER_GAS_EXECUTOR_BUFFER_SIZE=1"
+)
+
+FLEET_CONTROL_REQUEST="$MAIN_WORKTREE/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-teardown.request"
+DEPS_CONTROL_REQUEST="/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/teardown.request"
+PAUSE_COMMANDS=(
+  "scripts/a666-r4-candidate-proxy-stage --teardown"
+  "printf 'teardown\\n' > $FLEET_CONTROL_REQUEST"
+  "printf 'teardown\\n' > $DEPS_CONTROL_REQUEST"
+  "scripts/a666-r4-private-swap-stage teardown"
+)
+RESTART_COMMANDS=(
+  "scripts/a666-r4-construction-fleet-stage stage"
+  "scripts/a666-r4-private-swap-dependencies-stage stage"
+  "scripts/a666-r4-private-swap-stage stage"
+  "scripts/a666-r4-candidate-proxy-stage"
+)
+PAUSED_PORTS=(31001 31003 31005 31007 31009 31011 31021 8798)
+
+render_fire_command() {
+  cat <<CMD
+OUT_DIR="\$(mktemp -d /tmp/a666-r4-receipt-prover-memory-bounded-XXXXXXXX)" && chmod 700 "\$OUT_DIR" && cd "$MAIN_WORKTREE" && systemd-run --user --collect --same-dir --unit="$RUN_ID" -- bash -c 'exec /usr/bin/env ${TUNED_ENV[*]} /usr/bin/time -f wall_seconds=%e "$PROVER" receipt --witness "$WITNESS" --output-dir "\$OUT_DIR/proof" --prove --require-prover cpu --skip-redundant-execute >>"\$OUT_DIR/stdout.log" 2>>"\$OUT_DIR/stderr.log"'
+CMD
+}
+
+case "$ACTION" in
+  prepare) ;;
+  fire) ;;
+  *) echo "unknown action: $ACTION" >&2; exit 2 ;;
+esac
+
+if [[ "$ACTION" == "fire" ]]; then
+  # Gate first: no process or service action may precede this check.
+  if [[ ! -f "$APPROVAL_MARKER" ]] || [[ "$(head -n 1 "$APPROVAL_MARKER")" != "$RUN_ID" ]]; then
+    echo "a666_r4_receipt_prover_fire=refused reason=approval_marker_absent_or_run_id_mismatch run_id=$RUN_ID" >&2
+    exit 3
+  fi
+  for pause in "${PAUSE_COMMANDS[@]}"; do
+    (cd "$MAIN_WORKTREE" && eval "$pause")
+  done
+  for port in "${PAUSED_PORTS[@]}"; do
+    deadline=$((SECONDS + 90))
+    while timeout 3 bash -c "echo > /dev/tcp/127.0.0.1/$port" 2>/dev/null; do
+      if (( SECONDS >= deadline )); then
+        echo "a666_r4_receipt_prover_fire=refused reason=port_${port}_still_live_after_pause" >&2
+        exit 4
+      fi
+      sleep 2
+    done
+  done
+  OUT_DIR="$(mktemp -d /tmp/a666-r4-receipt-prover-memory-bounded-XXXXXXXX)"
+  chmod 700 "$OUT_DIR"
+  python3 - "$OUT_DIR/restart-inventory.json" <<PY
+import json, sys
+with open(sys.argv[1], "w", encoding="utf-8") as handle:
+    json.dump({
+        "schema": "postfiat.a666.r4.receipt-prover-restart-inventory.v1",
+        "run_id": "$RUN_ID",
+        "restart_after_terminal_proof": [
+            "scripts/a666-r4-construction-fleet-stage stage",
+            "scripts/a666-r4-private-swap-dependencies-stage stage",
+            "scripts/a666-r4-private-swap-stage stage",
+            "scripts/a666-r4-candidate-proxy-stage",
+        ],
+    }, handle, indent=1)
+    handle.write("\n")
+PY
+  cd "$MAIN_WORKTREE"
+  systemd-run --user --collect --same-dir --unit="$RUN_ID" -- \
+    bash -c "exec /usr/bin/env ${TUNED_ENV[*]} /usr/bin/time -f wall_seconds=%e '$PROVER' receipt --witness '$WITNESS' --output-dir '$OUT_DIR/proof' --prove --require-prover cpu --skip-redundant-execute >>'$OUT_DIR/stdout.log' 2>>'$OUT_DIR/stderr.log'"
+  echo "a666_r4_receipt_prover_fire=submitted unit=$RUN_ID out_dir=$OUT_DIR"
+  exit 0
+fi
+
+# prepare: validate every pin, render the exact command, emit evidence.
+observed_witness_sha256="$(sha256sum "$WITNESS" | awk '{print $1}')"
+[[ "$observed_witness_sha256" == "$WITNESS_SHA256" ]]
+observed_prover_sha256="$(sha256sum "$PROVER" | awk '{print $1}')"
+[[ -x "$PROTOC_BIN" ]]
+[[ -d "$PROTOC_LIBDIR" ]]
+[[ ! -e "$APPROVAL_MARKER" ]]
+mkdir -p "$(dirname "$EVIDENCE_FILE")"
+fire_authorized=false
+rendered_command="$(render_fire_command)"
+
+python3 - "$EVIDENCE_FILE" <<PY
+import json, sys
+artifact = {
+    "schema": "postfiat.a666.r4.receipt-prover-memory-bounded-prepared.v1",
+    "run_id": "$RUN_ID",
+    "terminal_wall": {
+        "commit": "$TERMINAL_WALL_COMMIT",
+        "unit": "a666-r4-receipt-prover-spike-20260804T040925Z.service",
+        "first_failing_check": "local_cpu_groth16_prover_oom_killed_at_103_1_gb_peak",
+        "memory_peak_gb": 103.1,
+        "wall_clock_seconds": 525,
+    },
+    "pins": {
+        "witness": "$WITNESS",
+        "witness_sha256": "$observed_witness_sha256",
+        "prover_binary": "$PROVER",
+        "prover_binary_sha256_observed": "$observed_prover_sha256",
+        "protoc_executable": "$PROTOC_BIN",
+        "protoc_library_path": "$PROTOC_LIBDIR",
+        "sp1_sdk": "6.3.1 (=6.3.1 pin, tools/pftl-uniswap-prover/Cargo.toml:21)",
+        "groth16_selector_context": "SP1 6.x Groth16 mode via client.prove(...).groth16() (tools/pftl-uniswap-prover/src/main.rs:284); v6.1 verifier selector context as declared in the dispatch, not independently verifiable in-repo",
+    },
+    "tuned_environment": [
+        "SP1_PROVER=cpu", "SHARD_BATCH_SIZE=1", "RAYON_NUM_THREADS=4", "MALLOC_ARENA_MAX=1",
+        "PROTOC=$PROTOC_BIN", "LD_LIBRARY_PATH=$PROTOC_LIBDIR",
+        "SP1_WORKER_NUM_SPLICING_WORKERS=1", "SP1_WORKER_SPLICING_BUFFER_SIZE=1",
+        "SP1_WORKER_NUMBER_OF_SEND_SPLICE_WORKERS_PER_SPLICE=1",
+        "SP1_WORKER_SEND_SPLICE_INPUT_BUFFER_SIZE_PER_SPLICE=1",
+        "SP1_WORKER_GLOBAL_MEMORY_BUFFER_SIZE=1", "SP1_WORKER_NUM_CORE_WORKERS=1",
+        "SP1_WORKER_CORE_BUFFER_SIZE=1", "SP1_WORKER_NUM_SETUP_WORKERS=1",
+        "SP1_WORKER_SETUP_BUFFER_SIZE=1", "SP1_WORKER_NORMALIZE_PROGRAM_CACHE_SIZE=1",
+        "SP1_WORKER_NUM_PREPARE_REDUCE_WORKERS=1", "SP1_WORKER_PREPARE_REDUCE_BUFFER_SIZE=1",
+        "SP1_WORKER_NUM_RECURSION_EXECUTOR_WORKERS=1", "SP1_WORKER_RECURSION_EXECUTOR_BUFFER_SIZE=1",
+        "SP1_WORKER_NUM_RECURSION_PROVER_WORKERS=1", "SP1_WORKER_RECURSION_PROVER_BUFFER_SIZE=1",
+        "SP1_WORKER_NUM_DEFERRED_WORKERS=1", "SP1_WORKER_DEFERRED_BUFFER_SIZE=1",
+        "SP1_WORKER_NUMBER_OF_GAS_EXECUTORS=1", "SP1_WORKER_GAS_EXECUTOR_BUFFER_SIZE=1",
+    ],
+    "rendered_fire_command": """$rendered_command""",
+    "approval_marker": {
+        "path": "$APPROVAL_MARKER",
+        "exists": False,
+        "created_by_prepare": False,
+        "required_content": "$RUN_ID",
+    },
+    "pause_sequence_before_proving": [
+        "scripts/a666-r4-candidate-proxy-stage --teardown",
+        "write 'teardown' to fleet construction-teardown.request",
+        "write 'teardown' to private-swap-dependencies teardown.request",
+        "scripts/a666-r4-private-swap-stage teardown",
+        "assert ports 31001-31011, 31021, 8798 absent before proving",
+    ],
+    "restart_inventory_after_terminal_proof": [
+        "scripts/a666-r4-construction-fleet-stage stage",
+        "scripts/a666-r4-private-swap-dependencies-stage stage",
+        "scripts/a666-r4-private-swap-stage stage",
+        "scripts/a666-r4-candidate-proxy-stage",
+    ],
+    "host_decision_inputs": {
+        "ram_gb": 122,
+        "cores": 32,
+        "gpu": "none",
+        "swap_at_decision_observation": "15/15GB exhausted",
+        "prior_peak_gb": 103.1,
+        "disk_free_gb_minimum": 100,
+        "disk_free_gb_observed": 185,
+        "expected_duration": "multi-hour/overnight",
+        "output": "proof checkpoint and shards on disk under unique mode-700 /tmp output dir",
+        "no_memory_max": True,
+        "success_claimed": False,
+    },
+    "prepared": True,
+    "fired": False,
+    "fire_authorized": False,
+    "stakehub_interaction": False,
+    "business_mutation": 0,
+    "default_path": "memory_tuned_overnight_cpu",
+}
+with open(sys.argv[1], "w", encoding="utf-8") as handle:
+    json.dump(artifact, handle, indent=1)
+    handle.write("\n")
+PY
+
+printf 'a666_r4_receipt_prover_memory_bounded=prepared run_id=%s\n' "$RUN_ID"
+printf 'rendered_fire_command:\n%s\n' "$rendered_command"
