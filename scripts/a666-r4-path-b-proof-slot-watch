@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT="/home/postfiat/repos/a666-eth-fast-lane-combined-20260724"
+E="$ROOT/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction"
+FIRED_DIR="$E/receipt-verifier-spike"
+WITNESS="$E/path-b-witness-stage.json"
+PREPROVE="$E/pre-prove-binding-check.json"
+EXPORT_SLOT="$E/export-artifact-slot.json"
+ASYNC_SLOT="$E/async-proof-slot.json"
+RUN_ID="a666-r4-receipt-prover-pathb-20260804-v3"
+WITNESS_SHA="8c2c7ee6d3209bfb21e5d442de7e80cb2ab4affabe06a0008527717eaae13ef4"
+PUBLIC_SHA="da53b72bf6f27a93a5cb9a0de2d607755c1d3e885353d7223a3a3c0ed9e5cb43"
+VKEY="0x003af40eafdbc1873f7e5b8f02da0ccd668f65930797c8e20c4f19234a5ef02f"
+MAX_WAIT_MS="${POSTFIAT_R4_PROOF_SLOT_MAX_WAIT_MS:-43200000}"
+MODE="${1:-watch}"
+
+atomic_json() {
+  local destination="$1" temporary
+  temporary="$(mktemp "$(dirname "$destination")/.proof-slot.XXXXXXXX")"
+  cat >"$temporary"
+  chmod 600 "$temporary"
+  mv -f "$temporary" "$destination"
+}
+
+sources_green() {
+  jq -e --arg witness "$WITNESS_SHA" --arg public "$PUBLIC_SHA" '
+    .accepted==true and .artifacts.witness_sha256==$witness
+    and .artifacts.public_values_sha256==$public
+    and .final_six_way.height==831 and .final_six_way.tuple_equal==true
+  ' "$WITNESS" >/dev/null 2>&1 &&
+  jq -e --arg witness "$WITNESS_SHA" --arg public "$PUBLIC_SHA" --arg vkey "$VKEY" '
+    .witness_sha256==$witness and .public_values_sha256==$public
+    and .all_match==true and .exact_mismatch_count==0
+    and .deployment_bindings.program_vkey.decoded==$vkey
+    and .deployment_bindings.program_vkey.deployed==$vkey
+  ' "$PREPROVE" >/dev/null 2>&1
+}
+
+find_fired() {
+  python3 - "$FIRED_DIR" "$RUN_ID" <<'PY'
+import glob,json,os,sys
+directory,run_id=sys.argv[1:]; matches=[]
+for path in glob.glob(os.path.join(directory,"*fired*.json")):
+ try: value=json.load(open(path,encoding="utf-8"))
+ except (OSError,ValueError): continue
+ if value.get("run_id")!=run_id or value.get("fired") is not True or value.get("fire_exit_code")!=0: continue
+ out=value.get("out_dir"); out=out.get("path") if isinstance(out,dict) else out
+ unit=value.get("systemd_unit",{}).get("unit") or f"{run_id}.service"
+ if isinstance(out,str) and out: matches.append((path,out,unit))
+if len(matches)!=1: raise SystemExit(1)
+print("\t".join(matches[0]))
+PY
+}
+
+unit_success() {
+  local unit="$1" active result status
+  active="$(systemctl --user show "$unit" -p ActiveState --value 2>/dev/null)" || return 1
+  result="$(systemctl --user show "$unit" -p Result --value 2>/dev/null)" || return 1
+  status="$(systemctl --user show "$unit" -p ExecMainStatus --value 2>/dev/null)" || return 1
+  [[ "$active" == inactive && "$result" == success && "$status" == 0 ]]
+}
+
+artifacts_green() {
+  local proof_dir="$1"
+  [[ -s "$proof_dir/proof.bin" && -s "$proof_dir/proof-calldata.bin" &&
+     -s "$proof_dir/public-values.bin" && -s "$proof_dir/proof-report.json" ]]
+  [[ "$(sha256sum "$proof_dir/public-values.bin" | awk '{print $1}')" == "$PUBLIC_SHA" ]]
+  jq -e --arg vkey "$VKEY" '
+    .schema=="postfiat-pftl-uniswap-proof-report-v1"
+    and .program_vkey==$vkey and .proof_mode=="groth16"
+    and (.proof_bytes|type=="number" and .>0)
+  ' "$proof_dir/proof-report.json" >/dev/null
+}
+
+self_test() {
+  local root
+  root="$(mktemp -d /tmp/a666-r4-proof-slot-selftest-XXXXXXXX)"; chmod 700 "$root"
+  printf '{"artifacts":{"witness_sha256":"wrong"}}\n' >"$root/witness.json"
+  ! jq -e --arg expected "$WITNESS_SHA" '.artifacts.witness_sha256==$expected' "$root/witness.json" >/dev/null
+  mkdir "$root/wrong-vkey" "$root/missing-proof"
+  printf '{"program_vkey":"wrong"}\n' >"$root/wrong-vkey/proof-report.json"
+  ! jq -e --arg expected "$VKEY" '.program_vkey==$expected' "$root/wrong-vkey/proof-report.json" >/dev/null
+  [[ ! -s "$root/missing-proof/proof.bin" ]]
+  rm -rf "$root"
+  echo 'a666_r4_path_b_proof_slot_self_test=ok wrong_witness_rejected=true wrong_vkey_rejected=true missing_proof_rejected=true'
+}
+
+publish() {
+  local fired="$1" out="$2" unit="$3" proof="$out/proof"
+  local proof_sha calldata_sha report_sha receipt packet_digest packet_hash height tip state
+  proof_sha="$(sha256sum "$proof/proof.bin"|awk '{print $1}')"
+  calldata_sha="$(sha256sum "$proof/proof-calldata.bin"|awk '{print $1}')"
+  report_sha="$(sha256sum "$proof/proof-report.json"|awk '{print $1}')"
+  receipt="$(jq -r '.operations[]|select(.label=="export_debit")|.tx_id' "$WITNESS")"
+  packet_digest="$(jq -r '.packet.ethereum_packet_digest' "$WITNESS")"
+  packet_hash="$(jq -r '.packet.packet_hash' "$WITNESS")"
+  height="$(jq -r '.final_six_way.height' "$WITNESS")"
+  tip="$(jq -r '.final_six_way.block_tip_hash' "$WITNESS")"
+  state="$(jq -r '.final_six_way.state_root' "$WITNESS")"
+  [[ "$receipt" =~ ^[0-9a-f]{96}$ && "$packet_digest" =~ ^[0-9a-f]{64}$ && "$packet_hash" =~ ^[0-9a-f]{96}$ ]]
+  jq -n --arg run "$RUN_ID" --arg fired "$fired" --arg out "$out"     --arg artifact "$proof/proof.bin" --arg artifact_sha "$proof_sha"     --arg calldata "$proof/proof-calldata.bin" --arg calldata_sha "$calldata_sha"     --arg public "$proof/public-values.bin" --arg public_sha "$PUBLIC_SHA"     --arg report "$proof/proof-report.json" --arg report_sha "$report_sha"     --arg vkey "$VKEY" --arg receipt "$receipt" --arg digest "$packet_digest"     --arg packet "$packet_hash" --argjson height "$height" --arg tip "$tip"     --arg state "$state" --arg unit "$unit" '
+    {schema:"postfiat.a666.r4.export-artifact-slot.v1",status:"accepted",run_id:$run,
+     fired_evidence_path:$fired,out_dir:{path:$out,mode:"700"},
+     artifact_path:$artifact,artifact_sha256:$artifact_sha,
+     proof_calldata:{path:$calldata,sha256:$calldata_sha},
+     public_values:{path:$public,sha256:$public_sha},
+     proof_report:{path:$report,sha256:$report_sha,proof_mode:"groth16",program_vkey:$vkey},
+     receipt_identity:$receipt,packet_digest:$digest,packet_hash:$packet,
+     observed_chain_state:{height:$height,tip:$tip,state_root:$state,finalized:true},
+     unit_terminal:{unit:$unit,success:true},custody_material_present:false,
+     live_chain:false,stakehub_interaction:false,business_mutations:0,
+     accepted:(($artifact_sha|test("^[0-9a-f]{64}$")) and ($receipt|test("^[0-9a-f]{96}$")) and $height==831)}
+  ' | atomic_json "$EXPORT_SLOT"
+  jq -n --arg run "$RUN_ID" --arg unit "$unit" --arg slot "$EXPORT_SLOT" --arg fired "$fired" '
+    {schema:"postfiat.a666.r4.async-proof-slot.v1",status:"accepted",run_id:$run,
+     watcher_unit:$unit,export_slot_path:$slot,fired_evidence_path:$fired,
+     poll_interval_ms:5000,maximum_wait_ms:43200000,inline_proving_forbidden:true,
+     prover_invocations:0,official_pass:false,business_mutations:0,
+     export_slot_accepted:true,first_blocker:null}
+  ' | atomic_json "$ASYNC_SLOT"
+  echo "a666_r4_path_b_proof_slot_watch=accepted run_id=$RUN_ID artifact_sha256=$proof_sha"
+}
+
+watch() {
+  [[ "$MAX_WAIT_MS" =~ ^[0-9]+$ ]]; ((MAX_WAIT_MS>0 && MAX_WAIT_MS<=43200000))
+  local deadline=$(( $(date +%s%3N)+MAX_WAIT_MS ))
+  while (( $(date +%s%3N)<deadline )); do
+    if sources_green; then
+      local line fired out unit
+      if line="$(find_fired 2>/dev/null)"; then
+        IFS=$'\t' read -r fired out unit <<<"$line"
+        if [[ "$out" == /tmp/a666-r4-receipt-prover-pathb-* && -d "$out" &&
+              "$(stat -c '%a' "$out")" == 700 ]] &&
+           unit_success "$unit" && artifacts_green "$out/proof"; then
+          publish "$fired" "$out" "$unit"; return 0
+        fi
+      fi
+    fi
+    sleep 5
+  done
+  echo "a666_r4_path_b_proof_slot_watch=timeout run_id=$RUN_ID" >&2; return 124
+}
+
+case "$MODE" in
+ --self-test) self_test ;;
+ watch) watch ;;
+ *) echo "usage: $0 [watch|--self-test]" >&2; exit 2 ;;
+esac
