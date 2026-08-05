@@ -1,43 +1,48 @@
 {
-  "schema": "postfiat.a666.r4.pass1-v6-successor-requalification.v1",
-  "recorded_at_utc": "2026-08-05T02:12:22Z",
+  "schema": "postfiat.a666.r4.pass1-v6-successor-requalification.v2",
+  "recorded_at_utc": "2026-08-05T02:18:17Z",
   "verdict": "red",
   "stop_rule_applied": true,
   "retry_performed": false,
   "candidate": {
     "revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
-    "current_head": "e64c0d2501ab198b755325d6f07eb426f3711e92",
-    "wallet_tree_identical": true,
     "package_version": "0.1.2",
     "package_json_sha256": "fe6209c5219a583e0f55f8ca0c93244e14ae569288ee46af910bbaa97e1989b3"
   },
+  "bindings": {
+    "validator_commit": "34cfa1a9c8b7adb5d0927785b91e23624470b4fe",
+    "validator_evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest-ci.txt",
+    "validator_exit_code": 0,
+    "validator_defects": 12,
+    "validator_wallet_unit_regressions": 1,
+    "validator_wallet_tests": 237,
+    "extractor_accessor_count": 120,
+    "extractor_mismatch_count": 0,
+    "dom_green_commit": "e64c0d2501ab198b755325d6f07eb426f3711e92",
+    "dom_green_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/navcoin-market-dom-identity-green.json",
+    "public_browser_fixture_green_commit": "2d14aa4bf35428412390d0a73482e140a50c7b50",
+    "public_browser_fixture_green_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/pass1-v6-step9-route-live-fixture-green.json"
+  },
   "staged_candidate": {
-    "green_dom_evidence_commit": "e64c0d2501ab198b755325d6f07eb426f3711e92",
-    "green_dom_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/navcoin-market-dom-identity-green.json",
     "proxy_pid": 2602285,
-    "proxy_live_after_failure": true,
     "proxy_origin": "http://127.0.0.1:31021",
-    "proxy_health_http_status": 200,
+    "proxy_health_http_status_before_construction": 200,
     "proxy_provenance_path": "/tmp/a666-r4-v7-23b9bff-proxy-provenance.json",
     "proxy_provenance_sha256": "b2979da549a25f48d5fe4d4ecac52ef00a268c836b97386809588cc07c6a4e16"
   },
-  "bound_validator": {
-    "commit": "34cfa1a9c8b7adb5d0927785b91e23624470b4fe",
-    "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest-ci.txt",
-    "evidence_sha256": "e94c4a5a04e3adf4ee6dc4cb4e7ac8c4c0f310e358f136880a77dc3067257bf7",
-    "run_exit_code": 0,
-    "runtime_ms": 172958,
-    "defects": 12,
-    "wallet_unit_regressions": 1,
-    "wallet_tests": 237,
-    "extractor_accessor_count": 120,
-    "extractor_mismatch_count": 0,
-    "coverage_valid": true,
-    "rerun": false
-  },
+  "historical_attempts": [
+    {
+      "commit": "aa29efec65254f767e166d72a99b1b1dfaac2791",
+      "failure": "public-browser step-9 fixture lacked route_live",
+      "public_browser_exit_code": 1,
+      "fixed_by": "2d14aa4bf35428412390d0a73482e140a50c7b50",
+      "preserved": true
+    }
+  ],
   "matrix": [
     {
       "command": "cd wallet-web && npm test",
+      "evidence_source": "aa29efec65254f767e166d72a99b1b1dfaac2791",
       "exit_code": 0,
       "runtime_ms": 30392,
       "tests": 237,
@@ -47,12 +52,14 @@
     },
     {
       "command": "cd wallet-web && npm run build",
+      "evidence_source": "aa29efec65254f767e166d72a99b1b1dfaac2791",
       "exit_code": 0,
       "runtime_ms": 750,
       "modules_transformed": 1805
     },
     {
       "command": "cd wallet-web && npm run test:custody-browser",
+      "evidence_source": "aa29efec65254f767e166d72a99b1b1dfaac2791",
       "exit_code": 0,
       "runtime_ms": 6331,
       "tests": 1,
@@ -62,48 +69,62 @@
     },
     {
       "command": "cd wallet-web && npm run test:public-browser",
-      "exit_code": 1,
-      "runtime_ms": 22118,
+      "evidence_source": "2d14aa4bf35428412390d0a73482e140a50c7b50",
+      "exit_code": 0,
+      "runtime_ms": 8153,
       "tests": 2,
-      "passed": 1,
-      "failed": 1,
-      "todo": 0,
-      "log_path": "/tmp/a666-r4-v6-23b9bff-public.log",
-      "log_sha256": "76e670df41d5ef290121802ed67a8accacb2c0f4744d6a737933b93b42e4031c"
+      "passed": 2,
+      "failed": 0,
+      "todo": 0
     },
     {
       "command": "cd wallet-web && npm run test:r4-construction with exact committed 31021 environment contract",
-      "executed": false,
-      "reason": "STOP on the preceding public-browser failure"
+      "exit_code": 0,
+      "runtime_ms": 34762,
+      "runner_duration_ms": 34539.975733,
+      "tests": 25,
+      "passed": 25,
+      "failed": 0,
+      "todo": 0,
+      "semantic_acceptance": false,
+      "steps_1_4_all_green": false,
+      "report_path": "/tmp/a666-r4-v6-23b9bff-construction-closeout.json",
+      "report_sha256": "ff3928fa5e693d04de9d57adae35a938dc36a2f4cecc05a01680704496ee3fb1"
     }
   ],
   "first_failure": {
-    "command": "npm run test:public-browser",
-    "test": "journey step 9 resumes the production private-primary recovery component after proxy restart and browser reload",
-    "failure_type": "TimeoutError",
-    "exact_error": "locator.waitFor: Timeout 15000ms exceeded.",
-    "locator": "#private-navcoin-primary",
-    "source": "wallet-web/src/lib/journey-step-9-recovery.e2e.js:446",
-    "test_location": "wallet-web/src/lib/journey-step-9-recovery.e2e.js:494",
-    "construction_skipped": true
+    "command": "npm run test:r4-construction",
+    "test_process_exit_code": 0,
+    "semantic_step": 3,
+    "exact_finding": "locator.selectOption: Timeout 30000ms exceeded.",
+    "classification": "construction display predicate red",
+    "step_4": "skipped: step 3 reserve-proof observation was not green in construction",
+    "official_invocations": 0,
+    "business_mutations": 0
   },
   "step_1_to_4_predicates": [
-    {"id": "step1_served", "executed": false, "status": "skipped_after_matrix_failure"},
-    {"id": "step1_wallet_created_and_unlocked", "executed": false, "status": "skipped_after_matrix_failure"},
-    {"id": "step1_version_visible_exact", "executed": false, "status": "skipped_after_matrix_failure"},
-    {"id": "step1_package_json_sha256_match", "executed": false, "status": "skipped_after_matrix_failure"},
-    {"id": "step1_candidate_bound", "executed": false, "status": "skipped_after_matrix_failure"},
-    {"id": "step1_production_graph", "executed": false, "status": "skipped_after_matrix_failure"},
-    {"id": "step2_browser_address", "executed": false, "status": "skipped_after_matrix_failure"},
-    {"id": "step2_rendered_wallet", "executed": false, "status": "skipped_after_matrix_failure"},
-    {"id": "step3_exact_one_dom_identity", "executed": false, "status": "skipped_after_matrix_failure", "prior_green_evidence": "e64c0d2"},
-    {"id": "step3_selector_mounted", "executed": false, "status": "skipped_after_matrix_failure", "prior_green_evidence": "e64c0d2"},
-    {"id": "step3_path_b_resolved", "executed": false, "status": "skipped_after_matrix_failure", "prior_green_evidence": "e64c0d2"},
-    {"id": "step3_request_id_bound_proof_and_packet_contract", "executed": false, "status": "skipped_after_matrix_failure"},
-    {"id": "step3_verified_nav_and_finalized_proof_text", "executed": false, "status": "skipped_after_matrix_failure"},
-    {"id": "step4_a666_and_pfusdc_balances", "executed": false, "status": "skipped_after_matrix_failure"},
-    {"id": "step4_finalized_balance_text", "executed": false, "status": "skipped_after_matrix_failure"}
+    {"id": "step1_served", "ok": true, "observed": true},
+    {"id": "step1_wallet_created_and_unlocked", "ok": true, "observed": true},
+    {"id": "step1_version_visible_exact", "ok": true, "observed": true},
+    {"id": "step1_package_json_sha256_match", "ok": true, "observed": true},
+    {"id": "step1_candidate_bound", "ok": true, "observed": true},
+    {"id": "step1_production_graph", "ok": true, "observed": true},
+    {"id": "step2_browser_address", "ok": true, "observed": true},
+    {"id": "step2_rendered_wallet", "ok": true, "observed": true},
+    {"id": "step3_exact_one_dom_identity", "ok": true, "observed": true},
+    {"id": "step3_selector_mounted", "ok": true, "observed": true},
+    {"id": "step3_path_b_resolved", "ok": false, "observed": false, "wall": "selectOption timed out"},
+    {"id": "step3_request_id_bound_proof_and_packet_contract", "ok": false, "observed": false, "skipped_after_first_wall": true},
+    {"id": "step3_verified_nav_and_finalized_proof_text", "ok": false, "observed": false, "skipped_after_first_wall": true},
+    {"id": "step4_a666_and_pfusdc_balances", "ok": false, "observed": false, "skipped_after_first_wall": true},
+    {"id": "step4_finalized_balance_text", "ok": false, "observed": false, "skipped_after_first_wall": true}
   ],
+  "predicate_summary": {
+    "total": 15,
+    "green": 10,
+    "red_or_skipped": 5,
+    "all_green": false
+  },
   "scope": {
     "official_invocations": 0,
     "business_mutations": 0,
