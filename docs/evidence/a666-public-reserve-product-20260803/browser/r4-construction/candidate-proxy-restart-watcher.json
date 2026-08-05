@@ -2,15 +2,16 @@
   "schema": "postfiat.a666.r4.candidate-proxy-restart-watcher.v1",
   "ready": true,
   "unit": {
-    "name": "a666-r4-candidate-proxy-restart-watch-v5.service",
-    "pid": 2015980,
+    "name": "a666-r4-candidate-proxy-restart-watch-v6.service",
+    "pid": 2626882,
     "active": true,
-    "running": true
+    "running": true,
+    "supersedes": "a666-r4-candidate-proxy-restart-watch-v5.service (stopped, inactive)"
   },
   "request_contract": {
-    "run_id": "a666-r4-official-journey-pass1-20260805-v5",
-    "nonce": "da9e081e97e72a07",
-    "path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260805-v5-da9e081e97e72a07.request",
+    "run_id": "a666-r4-official-journey-pass1-20260805-v6",
+    "nonce": "1218053d452fc2a5",
+    "path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260805-v6-1218053d452fc2a5.request",
     "payload_bytes_description": "restart followed by newline",
     "payload_matches_runner": true,
     "required_mode": "600",
@@ -19,9 +20,9 @@
     "single_use": true
   },
   "control": {
-    "path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260805-v5-da9e081e97e72a07.control.json",
+    "path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260805-v6-1218053d452fc2a5.control.json",
     "mode": "600",
-    "response_path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260805-v5-da9e081e97e72a07.response.json",
+    "response_path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260805-v6-1218053d452fc2a5.response.json",
     "response_currently_absent": true,
     "pid_file": "/home/postfiat/.pft/a666-r4-candidate-proxy/proxy.pid",
     "pid_file_mode": "600",
@@ -30,10 +31,13 @@
     "parent_directory_mode": "700"
   },
   "candidate_pins": {
-    "revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
-    "proxy_tree_hash": "5919ae695d910cfbe3b41c9783ef79354784b4ee",
-    "server_js_sha256": "6aebb3576bde511ce99f8b69a36fe502d3ddffad23275c5761f380fd3675bf41",
+    "revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
+    "worktree": "/tmp/a666-r4-successor-23b9bff",
+    "proxy_tree_hash": "6149e38e0d959bf14145843c1ed010b10690597a",
+    "server_js_sha256": "0458f721c06783f8f4095259b932e554426e3b35af77bce9a25405ebde434a26",
     "package_lock_sha256": "6ed3d70403dabf69a3b4dde632c6a2926bcb554e4b774d8c1336689fc1e48c3",
+    "stage_provenance": "/tmp/a666-r4-v7-23b9bff-proxy-provenance.json",
+    "stage_provenance_record": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/navcoin-market-dom-identity-green.json (e64c0d2)",
     "wallet_origin": "http://127.0.0.1:8080",
     "proxy_origin": "http://127.0.0.1:31021",
     "proxy_health": "http://127.0.0.1:31021/healthz"
@@ -49,13 +53,14 @@
     "source_and_candidate_hashes_revalidated": true
   },
   "self_test": {
-    "vector_count": 11,
+    "vector_count": 12,
     "valid_fake_restart": true,
-    "exact_v5_contract_accepted_dry_run": true,
+    "exact_v6_contract_accepted_dry_run": true,
     "v1_request_rejected_without_mutation": true,
     "v2_request_rejected_without_mutation": true,
     "v3_request_rejected_without_mutation": true,
     "v4_request_rejected_without_mutation": true,
+    "v5_request_rejected_without_mutation": true,
     "missing_run_id_rejected": true,
     "unknown_run_id_rejected": true,
     "wrong_candidate_rejected": true,
@@ -64,8 +69,8 @@
     "one_request_maps_to_one_restart": true
   },
   "real_proxy": {
-    "pid_before": 3766731,
-    "pid_after_construction": 3766731,
+    "pid_before": 2602285,
+    "pid_after_construction": 2602285,
     "unchanged": true,
     "process_identity_exact": true,
     "health_http_status": 200
@@ -103,6 +108,12 @@
       "invocation_count": 1,
       "verdict": "failed",
       "failure_step": 1
+    },
+    {
+      "run_id": "a666-r4-official-journey-pass1-20260805-v5",
+      "invocation_count": 0,
+      "verdict": "not_invoked",
+      "note": "v5 watcher staged and superseded by v6 candidate restage before any official invocation"
     }
   ],
   "official_run_invocations": 0
