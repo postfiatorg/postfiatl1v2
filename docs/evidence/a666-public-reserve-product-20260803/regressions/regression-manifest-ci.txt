@@ -1,22 +1,43 @@
 A666 recovery regression manifest and tracker traceability validation
-Validated source revision: 8cb97bed8fe646c1b03400873791ea5a54eddfce
 
-Tracker interpretation note
+Traceability closure
+- Source base revision: a34f0c3.
+- Scope: manifest/tracker traceability only; no runtime, harness, proxy, product, staging, browser, service, or official-journey action occurred.
+
+Tracker interpretation remains authoritative
 - Path: docs/plans/A666-RECOVERY-EXECUTION-TRACKER-20260804.md:138-145.
 - Label: [SPEC-INTERPRETATION] §8 step 3 — subject to Sauron veto.
-- Approved interpretation: six source identities are represented by finalized packets attesting source_count=6 and two distinct aggregate proof/packet identities. Provider names remain deliberately withheld by provider-neutral policy.
+- Interpretation: finalized packets attest source_count=6 and two distinct aggregate proof/packet identities; named provider identities remain deliberately withheld by deliberate provider-neutral policy.
 - Sources: crates/node/src/tests/nav_reserve_proof_status_tests.rs:7; crates/node/src/lifecycle_queries.rs:1886-1959.
 
-Command: scripts/check-a666-recovery-regression-manifest
-Exit code: 0
-Execution scope: schema validation only; the 26 standalone Rust tests were not run.
-Terminal: A666 recovery manifest PASS: defects=11 regressions=11 browser_regressions=2 standalone_tests=26 run=false
+HARNESS-07 closure
+- Class: public_proof_status_rpc_omitted_from_browser_proxy_allowlist.
+- Staging diagnosis: 8cb97bed8fe646c1b03400873791ea5a54eddfce; browser-origin request was refused proxy_auth_required while six loopback validators exposed ledger-backed provider-neutral status.
+- RED-first: f45f6e7a7edcc2f2f8bf74ca46956a21df339bc8; node wallet-proxy/test_public_auth_boundary_regression.js; matched 1; 195ms; exact refusal proxy_auth_required.
+- Product green: e73690c472dd8f1fb5575766e0c45364b0810230; wallet-proxy/server.js:312 adds nav_reserve_proof_status to the public-read allowlist; node wallet-proxy/test_public_auth_boundary_regression.js matched 1, pass 1, fail 0, todo 0 in 260ms.
+- Choreography/request-ID green: 293abbc4425a0dd96a7b57bddbb8a09de02e850f; step3-shared-choreography-green.json; matched 1 in 605ms; rejects unrelated packet-shaped frames and wrong request IDs.
+- Status: regression_status=passed; enforcement_status=ci_enforced.
 
-Command: scripts/a666-r4-official-input-contract-extract check
-Exit code: 1
-Execution scope: static extraction only; no browser, service, or official journey invocation.
-Terminal: {"ok": false, "problems": ["stale contract entries (no runner read): ['runtime:reserve_proof_frame.packets']"], "emitted": 119, "contract": 120}.
-Current-tree CI status: RED. The extractor finding is preserved; no runner, proxy, product, or contract edit is in this increment.
+R7 transport-tightness follow-up
+- R7-reserve-proof-websocket-frame-request-binding is implemented/load-bearing for V6, not pending.
+- Implementation: 293abbc4425a0dd96a7b57bddbb8a09de02e850f; step3-shared-choreography-green.json.
+- Completion: complete. The shared construction/official observer captures nav_reserve_proof_status with selected-route asset_id and accepts only response ID equal to request ID.
+
+Historical extractor finding retained
+- Previous a34f0c3 traceability run: extractor exit 1; stale contract entry runtime:reserve_proof_frame.packets; emitted 119, contract 120. This historical RED is retained rather than erased.
+
+Current validation
+- Command: scripts/check-a666-recovery-regression-manifest
+- Exit code: 0
+- Elapsed milliseconds: 76
+- Execution scope: schema validation only; standalone Rust tests were not run.
+- Terminal: A666 recovery manifest PASS: defects=11 regressions=11 browser_regressions=2 standalone_tests=26 run=false
+
+- Command: scripts/a666-r4-official-input-contract-extract check
+- Exit code: 0
+- Elapsed milliseconds: 74
+- Execution scope: static extraction only; no browser, service, or official journey invocation.
+- Terminal: {"ok":true,"accessor_count":120,"mismatch_count":0}
 
 Manifest totals
 - Observed product/browser defect classes: 11
@@ -26,17 +47,3 @@ Manifest totals
 - Browser regression rows: 2
 - Total manifest regression-test records: 28
 - Status: complete
-
-New harness/product class
-- HARNESS-07: public_proof_status_rpc_omitted_from_browser_proxy_allowlist.
-- Staging RED: 8cb97bed8fe646c1b03400873791ea5a54eddfce, candidate-proxy-v6-data-plane.json; browser-origin proof-status request was refused proxy_auth_required while six loopback validators serve ledger-backed provider-neutral status.
-- Corrective rule: before allowlisting, a browser-origin unauthenticated regression must prove nav_reserve_proof_status returns provider-neutral ledger status and an unauthenticated non-public method remains rejected.
-- Status: required before allowlist; no runtime/product/harness change was made by this traceability increment.
-
-R7 follow-up state
-- R7-reserve-proof-websocket-frame-request-binding is now implemented/load-bearing for V6 with pending_commit=null and completion_status=not_complete_pending_choreography_commit.
-- The choreography commit is intentionally not invented.
-
-Final validation
-- Manifest schema validator: exit 0.
-- Accessor extractor: exit 1; stale contract entry runtime:reserve_proof_frame.packets, emitted 119 versus contract 120. Current-tree CI remains RED pending an out-of-scope runner/contract reconciliation.

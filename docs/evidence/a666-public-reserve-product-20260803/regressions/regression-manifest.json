@@ -355,12 +355,23 @@
       ],
       "non_blocking_follow_up": {
         "id": "R7-reserve-proof-websocket-frame-request-binding",
-        "status": "implemented_load_bearing_v6_pending_commit",
-        "scope": "Reserve-proof acceptance must bind every WebSocket packet frame to its producing RPC method and request ID rather than accept any packet-shaped frame.",
+        "status": "implemented_load_bearing_v6",
+        "scope": "Reserve-proof acceptance binds every WebSocket packet frame to its producing RPC method and request ID rather than accepting any packet-shaped frame.",
         "v6_blocking": true,
-        "pending_commit": null,
-        "completion_status": "not_complete_pending_choreography_commit",
-        "rationale": "The transport-tightness rule is load-bearing for V6; its choreography commit is not yet known and must not be fabricated."
+        "implementation_commit": "293abbc4425a0dd96a7b57bddbb8a09de02e850f",
+        "completion_status": "complete",
+        "evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/step3-shared-choreography-green.json",
+        "verification": {
+          "test": "A666 R4 step-3 choreography rejects wrapper-only readiness and binds proof method/request identity",
+          "command": "cd wallet-web && node --test --test-name-pattern='step-3 choreography rejects wrapper-only' src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+          "matched_test_count": 1,
+          "runtime_milliseconds": 605,
+          "rejections": [
+            "unrelated packet-shaped frame",
+            "wrong request ID"
+          ]
+        },
+        "rationale": "The transport-tightness rule is implemented and load-bearing for V6 through the shared construction/official step-3 choreography."
       },
       "restart_evidence": {
         "commit": "3b9c4a93e016f77a5bfbd41219cf5a4210d5c519",
@@ -390,9 +401,42 @@
         },
         "six_validator_context": "All six staged loopback validators serve the same ledger-backed provider-neutral status contract."
       },
-      "corrective_rule": "Before nav_reserve_proof_status is allowlisted for browser-origin unauthenticated access, a browser-origin public-read regression must prove the allowed request returns the ledger-backed provider-neutral status and rejects any unauthenticated non-public method.",
-      "regression_status": "required_before_allowlist",
-      "enforcement_status": "pending_browser_origin_unauthenticated_regression"
+      "red_first": {
+        "commit": "f45f6e7a7edcc2f2f8bf74ca46956a21df339bc8",
+        "evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/proxy-allowlist-nav-reserve-proof-red.json",
+        "command": "node wallet-proxy/test_public_auth_boundary_regression.js",
+        "matched_test_count": 1,
+        "runtime_milliseconds": 195,
+        "exact_refusal": "proxy_auth_required"
+      },
+      "product_green": {
+        "commit": "e73690c472dd8f1fb5575766e0c45364b0810230",
+        "evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/proxy-allowlist-nav-reserve-proof-green.json",
+        "source": "wallet-proxy/server.js:312",
+        "command": "node wallet-proxy/test_public_auth_boundary_regression.js",
+        "matched_test_count": 1,
+        "runtime_milliseconds": 260,
+        "result": "browser-origin unauthenticated nav_reserve_proof_status is classified public and is not refused as auth, origin, or internal"
+      },
+      "choreography_request_id_green": {
+        "commit": "293abbc4425a0dd96a7b57bddbb8a09de02e850f",
+        "evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/step3-shared-choreography-green.json",
+        "contract": "The shared construction/official step-3 observer captures nav_reserve_proof_status with the selected-route asset_id and accepts only a response whose ID matches that request.",
+        "negative_vectors": [
+          "unrelated packet-shaped frame",
+          "wrong request ID"
+        ],
+        "matched_test_count": 1,
+        "runtime_milliseconds": 605
+      },
+      "provider_neutral_interpretation": {
+        "tracker_note": "docs/plans/A666-RECOVERY-EXECUTION-TRACKER-20260804.md:138-145",
+        "subject_to_sauron_veto": true,
+        "rule": "Six source identities are satisfied by finalized packets attesting source_count=6 plus two distinct aggregate proof or packet identities; named provider identities remain deliberately withheld."
+      },
+      "corrective_rule": "The RED-first browser-origin unauthenticated regression is converted to a mandatory public-read classification regression before allowlisting; shared step-3 choreography additionally binds every accepted proof response to its producing nav_reserve_proof_status request ID and rejects unrelated packet-shaped frames.",
+      "regression_status": "passed",
+      "enforcement_status": "ci_enforced"
     }
   ],
   "budget_outliers": [
