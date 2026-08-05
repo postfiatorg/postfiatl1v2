@@ -149,7 +149,7 @@ try{const page=context.pages()[0]??await context.newPage();page.setDefaultTimeou
 page.on('websocket',ws=>{ws.on('framesent',e=>{try{sent.push(JSON.parse(e.payload))}catch{}});ws.on('framereceived',e=>{try{received.push(JSON.parse(e.payload))}catch{}})});
 await page.goto(origin,{waitUntil:'domcontentloaded'});const passInput=page.locator('input[placeholder="Passphrase"]'),shell=page.locator('.pf-shell');const unlockState=await Promise.race([passInput.waitFor({state:'visible'}).then(()=> 'locked'),shell.waitFor({state:'visible'}).then(()=> 'unlocked')]);if(unlockState==='locked'){const pass=readFileSync(passFile,'utf8').trim();await passInput.fill(pass);await page.getByRole('button',{name:'Unlock',exact:true}).click();await shell.waitFor({state:'visible'})}else if(unlockState!=='unlocked'){throw new Error('wallet unlock state unavailable')}
 const sendNav=page.locator('.pf-sidebar .pf-nav').filter({hasText:'Send'});if(await sendNav.count()!==1)throw new Error('send navigation cardinality');await sendNav.click();const idInput=page.locator('[data-testid="add-asset-id"]'),limitInput=page.locator('[data-testid="add-asset-limit"]'),addButton=page.locator('[data-testid="add-asset"]');await idInput.waitFor({state:'visible'});if(await idInput.count()!==1||await limitInput.count()!==1||await addButton.count()!==1)throw new Error('add asset control cardinality');if(await page.locator('[data-testid="issuer-authorize"],[data-testid="issuer-freeze"]').count()!==0)throw new Error('issuer control exposed');
-for(const asset of[pf,a6]){const start=sent.length;const c=page.locator('[data-testid="add-asset"][data-asset-id="'+asset+'"]');await c.waitFor({state:'visible'});await c.click();const end=Date.now()+30000;let request,response;while(Date.now()<end){request=sent.slice(start).find(x=>x?.method==='mempool_submit_signed_asset_transaction_finality');if(request)response=received.find(x=>x?.id===request.id);if(response)break;await new Promise(r=>setTimeout(r,100))}if(!response?.ok)throw new Error('add-asset finality response missing');const receipt=response.result?.receipt??response.result?.finality?.receipt;if(receipt?.accepted!==true)throw new Error('add-asset finalized receipt not accepted');receipts.push({asset_id:asset,tx_id:response.result?.tx_id??receipt.tx_id,fee_charged:receipt.fee_charged,code:receipt.code})}
+for(const asset of[pf,a6]){const start=sent.length;await idInput.fill(asset);await limitInput.fill('1000000');if(await idInput.inputValue()!==asset)throw new Error('add-asset-id input did not bind the staged asset');if(await limitInput.inputValue()!=='1000000')throw new Error('add-asset-limit input did not bind the approved 1000000 atom limit');if(await addButton.count()!==1)throw new Error('add asset button cardinality');await page.waitForFunction(()=>{const b=document.querySelector('[data-testid="add-asset"]');return Boolean(b&&!b.disabled)});await addButton.click();const end=Date.now()+30000;let request,response;while(Date.now()<end){request=sent.slice(start).find(x=>x?.method==='mempool_submit_signed_asset_transaction_finality');if(request)response=received.find(x=>x?.id===request.id);if(response)break;await new Promise(r=>setTimeout(r,100))}if(!response?.ok)throw new Error('add-asset finality response missing');const receipt=response.result?.receipt??response.result?.finality?.receipt;if(receipt?.accepted!==true)throw new Error('add-asset finalized receipt not accepted');await page.locator('.pf-success').filter({hasText:'Trustline accepted'}).waitFor({state:'visible'});receipts.push({asset_id:asset,tx_id:response.result?.tx_id??receipt.tx_id,fee_charged:receipt.fee_charged,code:receipt.code})}
 console.log(JSON.stringify({receipts}));}finally{await context.close()}
 MJS
   result=$(node "$driver" "$(jq -r .origin <<<"$before")" "$PROFILE" "$PASSPHRASE" "$pf" "$a6" "$ROOT/wallet-web");rm -f "$driver"
@@ -223,6 +223,50 @@ if (exactControls({ ...controls, addAsset: 2 })) throw new Error('duplicate cont
 JS
 }
 
+add_asset_driver_choreography_self_test(){
+ node <<'JS'
+const LIMIT = '1000000';
+const makeControls = () => ({ addAsset: 1, assetId: 1, limit: 1, disabled: true, clicks: 0 });
+const fill = (controls, asset, limit) => {
+  if (controls.assetId !== 1 || controls.limit !== 1) throw new Error('input cardinality');
+  if (limit !== LIMIT) throw new Error('approved limit');
+  controls.asset = asset;
+  controls.disabled = false;
+};
+const click = (controls, operations, asset) => {
+  if (controls.addAsset !== 1) throw new Error('button cardinality');
+  if (controls.disabled) throw new Error('click before enabled');
+  if (operations.some(operation => operation.asset === asset)) throw new Error('duplicate click for asset');
+  controls.clicks += 1;
+  if (controls.clicks !== 1) throw new Error('exactly one click per asset');
+  operations.push({ asset, limit: LIMIT });
+  controls.disabled = true;
+  controls.clicks = 0;
+  controls.asset = '';
+};
+const operations = [];
+const controls = makeControls();
+let disabledRefused = false;
+try { click(controls, operations, 'pfusdc'); } catch { disabledRefused = true; }
+if (!disabledRefused || operations.length !== 0) throw new Error('disabled click accepted');
+for (const asset of ['pfusdc', 'a666']) { fill(controls, asset, LIMIT); click(controls, operations, asset); }
+if (operations.length !== 2 || operations.some(operation => operation.limit !== LIMIT)) throw new Error('operation limit drift');
+if (operations[0].asset !== 'pfusdc' || operations[1].asset !== 'a666') throw new Error('asset order drift');
+let duplicateRefused = false;
+try { click(controls, operations, 'pfusdc'); } catch { duplicateRefused = true; }
+if (!duplicateRefused) throw new Error('duplicate asset click accepted');
+let missingRefused = false;
+try { const c = { ...makeControls(), addAsset: 0 }; fill(c, 'pfusdc', LIMIT); click(c, [], 'pfusdc'); } catch { missingRefused = true; }
+if (!missingRefused) throw new Error('missing button accepted');
+let duplicateButtonRefused = false;
+try { const c = { ...makeControls(), addAsset: 2 }; fill(c, 'pfusdc', LIMIT); click(c, [], 'pfusdc'); } catch { duplicateButtonRefused = true; }
+if (!duplicateButtonRefused) throw new Error('duplicate button accepted');
+let limitDriftRefused = false;
+try { fill(makeControls(), 'pfusdc', '999999'); } catch { limitDriftRefused = true; }
+if (!limitDriftRefused) throw new Error('unapproved limit accepted');
+JS
+}
+
 self_test(){
  local t f=0 n=0 candidate=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa other=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb app_path="$ROOT/wallet-web/src/App.jsx" send_path="$ROOT/wallet-web/src/components/Send.jsx" builder_path="$ROOT/wallet-web/src/lib/tx-builder.js"
  t=$(mktemp -d /tmp/a666-r4-tl-selftest-XXXXXX); chmod 700 "$t"
@@ -260,8 +304,10 @@ self_test(){
  bad candidate_revisions_match "$candidate" "$candidate" "$candidate" "$other"
  good unlock_choreography_self_test
  good send_tab_choreography_self_test
- rm -rf "$t";[[ $f == 0 && $n == 29 ]]||refuse "self_test failures=$f vectors=$n"
- echo "trustline_stage_self_test=ok vectors=29 negative_vectors=20 candidate_mismatch_refusals=3 missing_send_selector_refusals=3 issuer_control_refusals=1 holder_builder_refusals=1 holder_without_issuer_path=1 issuer_missing_path_refusals=1 issuer_mode_refusals=1 holder_rejects_issuer_operations=1 issuer_rejects_holder_operations=1 bare_stage_refusal=1 delayed_lock_vector=1 send_tab_vector=1 unlocks=1 navigations=1 business_mutations=0"
+ good add_asset_driver_choreography_self_test
+ bad grep -Fq 'data-asset'"-id" "$ROOT/scripts/a666-r4-fresh-wallet-trustline-stage"
+ rm -rf "$t";[[ $f == 0 && $n == 31 ]]||refuse "self_test failures=$f vectors=$n"
+ echo "trustline_stage_self_test=ok vectors=31 negative_vectors=21 candidate_mismatch_refusals=3 missing_send_selector_refusals=3 issuer_control_refusals=1 holder_builder_refusals=1 holder_without_issuer_path=1 issuer_missing_path_refusals=1 issuer_mode_refusals=1 holder_rejects_issuer_operations=1 issuer_rejects_holder_operations=1 bare_stage_refusal=1 delayed_lock_vector=1 send_tab_vector=1 unlocks=1 navigations=1 business_mutations=0"
 }
 
 case ${1:-check} in
