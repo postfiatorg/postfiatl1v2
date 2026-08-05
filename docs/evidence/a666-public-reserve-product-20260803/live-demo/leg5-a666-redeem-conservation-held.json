@@ -1,11 +1,15 @@
 {
+  "packet_version": 2,
   "packet_id": "a666-live-loop-leg5-a666-redeem-conservation-20260805",
   "classification": "HELD",
+  "wiring_status": "PARTIAL",
   "route": "pftl-a666-ethereum-wA666-usdc-v1",
   "chain_ids": {
     "ethereum_mainnet": 1,
     "arbitrum": 42161
   },
+  "leg": 5,
+  "leg_name": "A666 redeem conservation",
   "amount_atoms": 10000000,
   "amount_usdc": "10.000000",
   "cap_arithmetic": {
@@ -14,15 +18,6 @@
     "projected_usdc": "511.024845",
     "headroom_usdc": "18.975155"
   },
-  "credential_references": [],
-  "requires": [
-    "gap closed + regression green",
-    "principal packet-hash confirmation",
-    "prior leg committed evidence"
-  ],
-  "self_executable": false,
-  "leg": 5,
-  "leg_name": "A666 redeem conservation",
   "preconditions": [
     {
       "name": "Literal A666 route binding",
@@ -39,10 +34,6 @@
     {
       "name": "StakeHub preservation",
       "how_verified_read_only": "Read service state and account balances; verify all five StakeHub services and funds remain preserved before any leg."
-    },
-    {
-      "name": "Redeem and conservation surface",
-      "how_verified_read_only": "Read the candidate runner and regression evidence; require an audited literal-A666 external-USDC redeem surface and conservation report path."
     }
   ],
   "abort_conditions": [
@@ -61,11 +52,37 @@
     "proof/VK/program identity differs",
     "NAV, supply, packet, overlay, or profile is stale or mismatched"
   ],
-  "command_template": "/usr/bin/python3 -m stakehub.cli wallet demo run --execute-leg 5 --held-packet PATH_TO_HELD_PACKET --confirm-packet-sha256 HEX_SHA256_OF_HELD_PACKET --live",
+  "command_template": "/usr/bin/python3 -m stakehub.cli wallet demo run --profile data/wallet-demo-a666-mainnet-fire.json --run-dir <RUN_DIR> --amount-atoms 10000000 --execute-leg 5 --held-packet <THIS_PACKET_PATH> --confirm-packet-sha256 <HASH> --live",
+  "credential_references": [],
   "evidence_output_paths": [
     "docs/evidence/a666-public-reserve-product-20260803/live-demo/leg5-a666-redeem-conservation-execution.json",
     "docs/evidence/a666-public-reserve-product-20260803/live-demo/leg5-a666-redeem-conservation-before-after.json",
     "docs/evidence/a666-public-reserve-product-20260803/live-demo/leg5-a666-redeem-conservation-stdout-stderr.txt"
   ],
-  "known_gap": "a666_redeem_external_usdc_surface"
+  "surfaces": [
+    {
+      "substep": "A: governed A666 primary redeem operation",
+      "status": "PARTIAL",
+      "surface": "stakehub/live_loop_leg5_redeem.py wraps scripts/a666-build-transparent-redeem-op.py"
+    },
+    {
+      "substep": "B: literal-route redeem quote/controller binding",
+      "status": "PARTIAL",
+      "surface": "stakehub/live_loop_leg5_redeem.py typed quoteRedeem/redeem call specification",
+      "gap": "literal_route_controller_binding"
+    },
+    {
+      "substep": "C: pfUSDC to external USDC",
+      "status": "ABSENT",
+      "surface": "No audited invoker exists",
+      "gap": "a666_redeem_external_usdc_surface"
+    }
+  ],
+  "requires": [
+    "remaining gap closed + regression green",
+    "principal packet-hash confirmation",
+    "prior leg committed evidence"
+  ],
+  "supersedes_packet_sha256": "9bcc1453697f8f64ac5f737669d4a69f45f47f785646afc9fb96bf3539f5ab5a",
+  "self_executable": false
 }

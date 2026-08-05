@@ -1,11 +1,15 @@
 {
+  "packet_version": 2,
   "packet_id": "a666-live-loop-leg4-a666-return-burn-import-20260805",
   "classification": "HELD",
+  "wiring_status": "WIRED",
   "route": "pftl-a666-ethereum-wA666-usdc-v1",
   "chain_ids": {
     "ethereum_mainnet": 1,
     "arbitrum": 42161
   },
+  "leg": 4,
+  "leg_name": "A666 return burn import",
   "amount_atoms": 10000000,
   "amount_usdc": "10.000000",
   "cap_arithmetic": {
@@ -14,15 +18,6 @@
     "projected_usdc": "511.024845",
     "headroom_usdc": "18.975155"
   },
-  "credential_references": [],
-  "requires": [
-    "gap closed + regression green",
-    "principal packet-hash confirmation",
-    "prior leg committed evidence"
-  ],
-  "self_executable": false,
-  "leg": 4,
-  "leg_name": "A666 return burn import",
   "preconditions": [
     {
       "name": "Literal A666 route binding",
@@ -39,10 +34,6 @@
     {
       "name": "StakeHub preservation",
       "how_verified_read_only": "Read service state and account balances; verify all five StakeHub services and funds remain preserved before any leg."
-    },
-    {
-      "name": "Return/import invoker",
-      "how_verified_read_only": "Read the StakeHub runner and regression evidence; require an audited invoker for the existing Rust-node return-burn import path."
     }
   ],
   "abort_conditions": [
@@ -61,11 +52,25 @@
     "proof/VK/program identity differs",
     "NAV, supply, packet, overlay, or profile is stale or mismatched"
   ],
-  "command_template": "/usr/bin/python3 -m stakehub.cli wallet demo run --execute-leg 4 --held-packet PATH_TO_HELD_PACKET --confirm-packet-sha256 HEX_SHA256_OF_HELD_PACKET --live",
+  "command_template": "/usr/bin/python3 -m stakehub.cli wallet demo run --profile data/wallet-demo-a666-mainnet-fire.json --run-dir <RUN_DIR> --amount-atoms 10000000 --execute-leg 4 --held-packet <THIS_PACKET_PATH> --confirm-packet-sha256 <HASH> --live",
+  "credential_references": [],
   "evidence_output_paths": [
     "docs/evidence/a666-public-reserve-product-20260803/live-demo/leg4-a666-return-burn-import-execution.json",
     "docs/evidence/a666-public-reserve-product-20260803/live-demo/leg4-a666-return-burn-import-before-after.json",
     "docs/evidence/a666-public-reserve-product-20260803/live-demo/leg4-a666-return-burn-import-stdout-stderr.txt"
   ],
-  "known_gap": "pftl_uniswap_return_import_invoker"
+  "surfaces": [
+    {
+      "substep": "Ethereum return burn and certified PFTL import",
+      "status": "WIRED",
+      "surface": "stakehub/live_loop_leg4_return.py (66c6de5): scripts/a666-mainnet-burn-for-return.py plus certified import with checkpoint certificate and receipt proof"
+    }
+  ],
+  "requires": [
+    "surface regression green",
+    "principal packet-hash confirmation",
+    "prior leg committed evidence"
+  ],
+  "supersedes_packet_sha256": "b6e41ed59b2ce2fc78e13fd1716d2f1d3cef7ea7641c5f1ddb57f6bccd6623ba",
+  "self_executable": false
 }

@@ -1,11 +1,15 @@
 {
+  "packet_version": 2,
   "packet_id": "a666-live-loop-leg3-a666-mainnet-export-20260805",
   "classification": "HELD",
+  "wiring_status": "WIRED",
   "route": "pftl-a666-ethereum-wA666-usdc-v1",
   "chain_ids": {
     "ethereum_mainnet": 1,
     "arbitrum": 42161
   },
+  "leg": 3,
+  "leg_name": "A666 mainnet export",
   "amount_atoms": 10000000,
   "amount_usdc": "10.000000",
   "cap_arithmetic": {
@@ -14,15 +18,6 @@
     "projected_usdc": "511.024845",
     "headroom_usdc": "18.975155"
   },
-  "credential_references": [],
-  "requires": [
-    "gap closed + regression green",
-    "principal packet-hash confirmation",
-    "prior leg committed evidence"
-  ],
-  "self_executable": false,
-  "leg": 3,
-  "leg_name": "A666 mainnet export",
   "preconditions": [
     {
       "name": "Literal A666 route binding",
@@ -39,10 +34,6 @@
     {
       "name": "StakeHub preservation",
       "how_verified_read_only": "Read service state and account balances; verify all five StakeHub services and funds remain preserved before any leg."
-    },
-    {
-      "name": "A666 mainnet export surface",
-      "how_verified_read_only": "Read the candidate runner and regression evidence; require an audited literal-A666 mainnet export surface before packet confirmation."
     }
   ],
   "abort_conditions": [
@@ -61,11 +52,25 @@
     "proof/VK/program identity differs",
     "NAV, supply, packet, overlay, or profile is stale or mismatched"
   ],
-  "command_template": "/usr/bin/python3 -m stakehub.cli wallet demo run --execute-leg 3 --held-packet PATH_TO_HELD_PACKET --confirm-packet-sha256 HEX_SHA256_OF_HELD_PACKET --live",
+  "command_template": "/usr/bin/python3 -m stakehub.cli wallet demo run --profile data/wallet-demo-a666-mainnet-fire.json --run-dir <RUN_DIR> --amount-atoms 10000000 --execute-leg 3 --held-packet <THIS_PACKET_PATH> --confirm-packet-sha256 <HASH> --live",
+  "credential_references": [],
   "evidence_output_paths": [
     "docs/evidence/a666-public-reserve-product-20260803/live-demo/leg3-a666-mainnet-export-execution.json",
     "docs/evidence/a666-public-reserve-product-20260803/live-demo/leg3-a666-mainnet-export-before-after.json",
     "docs/evidence/a666-public-reserve-product-20260803/live-demo/leg3-a666-mainnet-export-stdout-stderr.txt"
   ],
-  "known_gap": "a666_mainnet_export_surface"
+  "surfaces": [
+    {
+      "substep": "wallet export preparation and Ethereum acceptance",
+      "status": "WIRED",
+      "surface": "stakehub/live_loop_leg3_export.py (66c6de5): wallet-proxy prepare-batch/sign boundary/export-jobs/relay plus scripts/a666-mainnet-accept-and-mint.py"
+    }
+  ],
+  "requires": [
+    "surface regression green",
+    "principal packet-hash confirmation",
+    "prior leg committed evidence"
+  ],
+  "supersedes_packet_sha256": "d54d2649c37200c40deefbbd40679913f939947b3841b914722ffad977568df6",
+  "self_executable": false
 }

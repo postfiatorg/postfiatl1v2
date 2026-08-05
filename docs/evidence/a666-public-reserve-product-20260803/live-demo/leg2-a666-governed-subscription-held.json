@@ -1,11 +1,15 @@
 {
+  "packet_version": 2,
   "packet_id": "a666-live-loop-leg2-a666-governed-subscription-20260805",
   "classification": "HELD",
+  "wiring_status": "WIRED",
   "route": "pftl-a666-ethereum-wA666-usdc-v1",
   "chain_ids": {
     "ethereum_mainnet": 1,
     "arbitrum": 42161
   },
+  "leg": 2,
+  "leg_name": "A666 governed subscription",
   "amount_atoms": 10000000,
   "amount_usdc": "10.000000",
   "cap_arithmetic": {
@@ -14,15 +18,6 @@
     "projected_usdc": "511.024845",
     "headroom_usdc": "18.975155"
   },
-  "credential_references": [],
-  "requires": [
-    "gap closed + regression green",
-    "principal packet-hash confirmation",
-    "prior leg committed evidence"
-  ],
-  "self_executable": false,
-  "leg": 2,
-  "leg_name": "A666 governed subscription",
   "preconditions": [
     {
       "name": "Literal A666 route binding",
@@ -39,10 +34,6 @@
     {
       "name": "StakeHub preservation",
       "how_verified_read_only": "Read service state and account balances; verify all five StakeHub services and funds remain preserved before any leg."
-    },
-    {
-      "name": "Governed subscription surface",
-      "how_verified_read_only": "Read the candidate CLI and regression evidence; require a literal-A666 governed subscription surface, never transparent-navswap pfUSDC-to-a651 behavior."
     }
   ],
   "abort_conditions": [
@@ -61,11 +52,25 @@
     "proof/VK/program identity differs",
     "NAV, supply, packet, overlay, or profile is stale or mismatched"
   ],
-  "command_template": "/usr/bin/python3 -m stakehub.cli wallet demo run --execute-leg 2 --held-packet PATH_TO_HELD_PACKET --confirm-packet-sha256 HEX_SHA256_OF_HELD_PACKET --live",
+  "command_template": "/usr/bin/python3 -m stakehub.cli wallet demo run --profile data/wallet-demo-a666-mainnet-fire.json --run-dir <RUN_DIR> --amount-atoms 10000000 --execute-leg 2 --held-packet <THIS_PACKET_PATH> --confirm-packet-sha256 <HASH> --live",
+  "credential_references": [],
   "evidence_output_paths": [
     "docs/evidence/a666-public-reserve-product-20260803/live-demo/leg2-a666-governed-subscription-execution.json",
     "docs/evidence/a666-public-reserve-product-20260803/live-demo/leg2-a666-governed-subscription-before-after.json",
     "docs/evidence/a666-public-reserve-product-20260803/live-demo/leg2-a666-governed-subscription-stdout-stderr.txt"
   ],
-  "known_gap": "governed_a666_subscription_surface"
+  "surfaces": [
+    {
+      "substep": "governed subscription six-op sequence",
+      "status": "WIRED",
+      "surface": "stakehub/live_loop_leg2_governed_subscription.py (dc0938a): postfiat-node pftl-submit-certified-asset-ops for vault_bridge_receipt_submit, vault_bridge_receipt_count, nav_subscription_allocate, nav_mint_at_nav, nav_reserve_submit, nav_epoch_finalize; idempotent resume"
+    }
+  ],
+  "requires": [
+    "surface regression green",
+    "principal packet-hash confirmation",
+    "prior leg committed evidence"
+  ],
+  "supersedes_packet_sha256": "ec35b3d46e6be16fe251e69a2e37e74b8525fa27a589283d45be1651defe3c84",
+  "self_executable": false
 }
