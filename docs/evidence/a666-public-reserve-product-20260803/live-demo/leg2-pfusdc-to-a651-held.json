@@ -1,0 +1,173 @@
+{
+  "schema": "postfiat.a666.live-demo.leg2-pfusdc-to-a651-held.v1",
+  "created_utc": "2026-08-05",
+  "classification": "held_red_missing_current_primary_subscription_cli_builder_and_signer_surface",
+  "fire_authorized": false,
+  "ready_to_fire": false,
+  "live_reads_this_turn": 0,
+  "business_mutations": 0,
+  "scope": {
+    "input_asset_literal": "pfUSDC",
+    "governed_output_asset_literal": "a651",
+    "purpose": "consume finalized pfUSDC vault-bridge value and mint governed a651 at the current certified NAV"
+  },
+  "authority": {
+    "profile": "/home/postfiat/repos/StakeHub-repeat-demo/data/wallet-demo-devnet2.json",
+    "leg1_held_packet_commit": "4210e1cf3a6fc09a4cba6a38f47f667a4173c60b",
+    "leg1_held_packet": "docs/evidence/a666-public-reserve-product-20260803/live-demo/leg1-mainnet-cctp-pftl-held.json",
+    "route_identity_commit": "8a84adaa1784c25fb994f50d20996390debcc271",
+    "route_identity": "docs/evidence/a666-public-reserve-product-20260803/live-demo/route-identity-a651-not-a666.json",
+    "control_trio_root": "/home/postfiat/repos/orc_directives/cli_demo_campaign_20260706",
+    "interpreter": {
+      "path": "/usr/bin/python3",
+      "mode": "-m stakehub.cli"
+    }
+  },
+  "exact_production_sequence": [
+    "vault_bridge_receipt_submit",
+    "vault_bridge_receipt_count",
+    "vault_bridge_nav_subscription_allocate",
+    "nav_mint_at_nav",
+    "nav_reserve_submit",
+    "nav_epoch_finalize"
+  ],
+  "static_arithmetic": {
+    "pfusdc_settlement_atoms": 10000000,
+    "pfusdc_precision": 6,
+    "pfusdc_display_amount": "10.000000",
+    "reserve_delta_usd_1e8": 1000000000,
+    "reserve_delta_formula": "pfusdc_settlement_atoms * 100",
+    "minted_a651_atoms": null,
+    "minted_a651_reason": "must be derived from the fresh certified NAV numerator, denominator, epoch, and unit scale at fire-time",
+    "fees_atoms": null,
+    "spread_atoms": null
+  },
+  "required_fresh_preconditions": [
+    {
+      "id": "leg1_finality",
+      "required": "Leg1 is committed and proves exactly +10000000 pfUSDC atoms with finalized receipt identities",
+      "observed_this_turn": null
+    },
+    {
+      "id": "six_way_convergence",
+      "required": "six validators agree on height, tip, state root, and empty mempool before every signed operation",
+      "observed_this_turn": null
+    },
+    {
+      "id": "fresh_nav_reserve",
+      "required": "a651 route is live and carries a fresh certified NAV-reserve packet bound to the current route and proof identifiers",
+      "observed_this_turn": null
+    },
+    {
+      "id": "fee_payer",
+      "required": "signing fee payer has at least 1000000 PFT atoms before each operation",
+      "observed_this_turn": null
+    },
+    {
+      "id": "supply_and_vault_capacity",
+      "required": "pfUSDC counted receipt allocation, a651 supply limits, and vault capacity all cover 10000000 settlement atoms",
+      "observed_this_turn": null
+    },
+    {
+      "id": "profile_preflight",
+      "required": "matching-profile service and fleet preflight is green immediately before fire",
+      "observed_this_turn": null
+    },
+    {
+      "id": "campaign_cap",
+      "required": "spend ledger remains consistent with its cap and the packet names any incremental fee or cost class before signature",
+      "observed_this_turn": null
+    }
+  ],
+  "required_fire_evidence": {
+    "before_after_atoms": [
+      "fee_payer_pft",
+      "subscriber_pfusdc",
+      "subscriber_a651",
+      "pfusdc_supply",
+      "a651_supply",
+      "vault_bridge_outstanding",
+      "vault_bridge_nav_subscription_allocation"
+    ],
+    "quoted_minted_binding": [
+      "settlement_pfUSDC_atoms",
+      "minted_a651_atoms",
+      "nav_numerator",
+      "nav_denominator",
+      "nav_unit_scale",
+      "nav_epoch",
+      "certified_height",
+      "reserve_packet_id",
+      "reserve_packet_hash",
+      "proof_identifiers",
+      "fees_atoms",
+      "spread_atoms"
+    ],
+    "finality": [
+      "per-operation transaction hash and accepted receipt",
+      "six-way height tip root equality after each certified operation",
+      "pfUSDC settlement delta exactly -10000000 atoms",
+      "a651 minted delta exactly equals the certified NAV quote",
+      "supply and vault allocation deltas equal their typed operation receipts",
+      "post-mint nav_reserve_submit and nav_epoch_finalize bind the settlement value into the a651 reserve packet"
+    ],
+    "stop_rule": "Any deviation anywhere: STOP-no-retry. Preserve the last accepted receipt, do not submit a replacement operation, and require a separately authorized resume packet."
+  },
+  "command_shape": {
+    "available": false,
+    "required_exact_form": "/usr/bin/python3 -m stakehub.cli <current-primary-subscription-command> --profile data/wallet-demo-devnet2.json --run-dir <unique-mode-700-leg2-run-dir> --settlement-asset pfUSDC --settlement-atoms 10000000 --nav-asset a651",
+    "reason_unavailable": "The current default profile has no atomic_swap authority, no current primary-subscription builder, and no CLI subcommand that constructs the required receipt-count/allocation/nav_mint_at_nav/reserve-finalize sequence.",
+    "forbidden_substitutes": [
+      "wallet swap --mode transparent --pair pfusdc->a651: requires absent atomic_swap authority and is a dual-wallet DvP swap, not governed primary issue",
+      "wallet get-navcoin: direct issuer-issued a651 transfer and does not consume pfUSDC vault-bridge value"
+    ]
+  },
+  "missing_surfaces": [
+    {
+      "id": "CLI-PRIMARY-SUBSCRIPTION",
+      "missing": "No stakehub.cli subcommand constructs the six-operation governed primary subscription sequence for the default profile.",
+      "evidence": [
+        "StakeHub-repeat-demo/stakehub/cli.py:243-320 exposes wallet commands but no primary-subscription command",
+        "StakeHub-repeat-demo/stakehub/cli.py:883-939 dispatches wallet-demo commands; transparent-navswap loads atomic_swap rather than the primary subscription sequence",
+        "StakeHub-repeat-demo/docs/pfusdc-bridge-runbook.md:252-280 names the required six production operations"
+      ]
+    },
+    {
+      "id": "PROFILE-PRIMARY-BUILDER",
+      "missing": "data/wallet-demo-devnet2.json has no atomic_swap object and no typed current primary subscription operation-builder configuration.",
+      "evidence": [
+        "StakeHub-repeat-demo/data/wallet-demo-devnet2.json top-level fields inspected this turn",
+        "StakeHub-repeat-demo/stakehub/atomic_swap_config.py:147-154 requires atomic_swap and rejects its absence"
+      ]
+    },
+    {
+      "id": "SIGNER-SURFACE",
+      "missing": "No safe path-only signer interface exists for the current receipt submit, count, allocation, mint, reserve submit, and epoch finalize operations.",
+      "evidence": [
+        "StakeHub-repeat-demo/docs/pfusdc-bridge-runbook.md:261-280 requires normal PFTL quote/sign/submit for each operation",
+        "StakeHub-repeat-demo/stakehub/generalized_wallet.py:1111-1205 proves get-navcoin is issuer-only transfer rather than the required signer-separated subscription flow"
+      ]
+    }
+  ],
+  "minimum_safe_implementation": {
+    "builder": "Add one non-mutating current-primary-subscription prepare command that consumes only path-based Leg1 finality evidence and fresh six-validator reads, builds the six typed operation artifacts, records hashes, and refuses absent or stale receipt, route, NAV, capacity, or fee-payer predicates.",
+    "signers": "Take signer file paths only at fire-time; never embed credential values in source, packet, logs, or public evidence.",
+    "fire": "A separate explicitly authorized fire command must quote, sign, submit, and prove finality one typed operation at a time, with no automatic replacement on any failure.",
+    "post_mint": "Require nav_reserve_submit then nav_epoch_finalize in the same held sequence; the a651 reserve proof must include the +1000000000 usd_1e8 settlement value."
+  },
+  "source_contract": {
+    "primary_sequence": "StakeHub-repeat-demo/docs/pfusdc-bridge-runbook.md:252-280",
+    "default_profile_literal_a651": "StakeHub-repeat-demo/data/wallet-demo-devnet2.json assets.a651",
+    "issuer_only_non_substitute": "StakeHub-repeat-demo/stakehub/generalized_wallet.py:1111-1205",
+    "atomic_swap_non_substitute": "StakeHub-repeat-demo/stakehub/generalized_wallet.py:1265-1358",
+    "atomic_swap_config_requirement": "StakeHub-repeat-demo/stakehub/atomic_swap_config.py:147-154"
+  },
+  "validation": {
+    "static_sequence_complete": true,
+    "literal_a651_only": true,
+    "no_live_reads": true,
+    "no_mutations": true,
+    "stop_no_retry": true,
+    "held_until_missing_surfaces_close": true
+  }
+}
