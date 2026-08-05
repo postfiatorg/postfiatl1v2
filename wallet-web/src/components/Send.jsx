@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { isValidAddress, formatBalance, formatAssetBalance, pftToAtoms, shortenAssetId } from '../lib/utils.js';
 import { displayAssetSymbol } from '../lib/navcoin-markets.js';
-import { encodePaymentMemoFields, hasMemoFields, PAYMENT_MEMO_LIMITS } from '../lib/tx-builder.js';
+import { buildTrustSetOperation, encodePaymentMemoFields, hasMemoFields, PAYMENT_MEMO_LIMITS } from '../lib/tx-builder.js';
 import {
   FASTPAY_OWNED_OBJECT_LOOKUP_LIMIT,
   fetchOwnedObjectsSnapshot,
@@ -32,6 +32,9 @@ export default function Send({ markets = [], rpc, txBuilder, backupJson, address
   const [fastpayStatus, setFastpayStatus] = useState('loading');
   const [fastpayError, setFastpayError] = useState('');
   const [fastpayRefreshing, setFastpayRefreshing] = useState(false);
+  const [addAssetId, setAddAssetId] = useState('');
+  const [addAssetLimit, setAddAssetLimit] = useState('');
+  const [addAssetBusy, setAddAssetBusy] = useState(false);
   const [quote, setQuote] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -432,6 +435,44 @@ export default function Send({ markets = [], rpc, txBuilder, backupJson, address
     }
   };
 
+  const addAssetIdNorm = addAssetId.trim();
+  const addAssetIdValid = /^[0-9a-f]{96}$/.test(addAssetIdNorm);
+  const addAssetLimitNum = Number(addAssetLimit.trim());
+  const addAssetLimitValid = addAssetLimit.trim() !== '' && Number.isSafeInteger(addAssetLimitNum) && addAssetLimitNum > 0;
+
+  const handleAddAsset = async () => {
+    setError('');
+    setSuccess('');
+    if (!rpc || !txBuilder || !backupJson || !address) { setError('Wallet not unlocked'); return; }
+    if (!addAssetIdValid) { setError('Asset ID must be exactly 96 lowercase hex characters'); return; }
+    if (!addAssetLimitValid) { setError('Trust limit must be a positive whole number'); return; }
+    setAddAssetBusy(true);
+    try {
+      const infoResp = await rpc.assetInfo(addAssetIdNorm);
+      const asset = infoResp?.ok && infoResp.result?.found === true ? infoResp.result.asset : null;
+      if (!asset || asset.asset_id !== addAssetIdNorm) { setError('Asset not found, or the node returned info for a different asset ID'); return; }
+      const issuer = typeof asset.issuer === 'string' ? asset.issuer.trim() : '';
+      if (!issuer) { setError('Asset issuer is unavailable for the provided ID'); return; }
+      const operation = buildTrustSetOperation({ account: address, issuer, assetId: addAssetIdNorm, limit: addAssetLimitNum });
+      const result = await txBuilder.sendAssetTransfer(backupJson, address, { operation });
+      if (result.receipt?.accepted === true) {
+        setSuccess(`Trustline accepted. TX ID: ${result.txId}`);
+        onToast('Trustline created');
+        setAddAssetId('');
+        setAddAssetLimit('');
+        fetchAccountBalance();
+      } else if (result.receipt?.accepted === false) {
+        setError(`Trustline rejected: ${result.receipt.code || ''} ${result.receipt.message || ''}`);
+      } else {
+        setError(`Trustline was submitted but no final receipt was returned. TX ID: ${result.txId}. Do not treat it as final.`);
+      }
+    } catch (e) {
+      setError('Add asset failed: ' + e.message);
+    } finally {
+      setAddAssetBusy(false);
+    }
+  };
+
   const laneLabel = lane === 'account' ? 'Account lane' : lane === 'fastpay' ? 'FastPay lane' : 'Asset lane';
   const settleLabel = lane === 'account' ? 'Cobalt finality · ~1.5s' : lane === 'fastpay' ? 'Sub-second' : 'Cobalt finality · ~1.5s';
   const accountBalanceLabel = accountStatus === 'loading'
@@ -610,6 +651,34 @@ export default function Send({ markets = [], rpc, txBuilder, backupJson, address
             <button className="pf-primary" disabled={!amt || !to || (lane === 'asset' && !selectedAsset)} onClick={handleQuote}>
               {busy ? 'Getting quote…' : 'Review send'}
             </button>
+
+            {/* add asset trustline */}
+            <div className="pf-card" style={{ display: 'grid', gap: 10 }}>
+              <div className="pf-eyebrow">Add asset</div>
+              <input
+                className="pf-input"
+                data-testid="add-asset-id"
+                value={addAssetId}
+                onChange={e => setAddAssetId(e.target.value)}
+                placeholder="Asset ID (96 hex)"
+              />
+              <input
+                className="pf-input"
+                data-testid="add-asset-limit"
+                value={addAssetLimit}
+                onChange={e => setAddAssetLimit(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="Trust limit"
+                inputMode="numeric"
+              />
+              <button
+                className="pf-ghost"
+                data-testid="add-asset"
+                onClick={handleAddAsset}
+                disabled={!backupJson || busy || signing || addAssetBusy || !addAssetIdValid || !addAssetLimitValid}
+              >
+                {addAssetBusy ? 'Adding asset…' : 'Add asset'}
+              </button>
+            </div>
           </div>
 
           {/* what happens panel */}
