@@ -1,0 +1,118 @@
+{
+  "schema": "postfiat.a666.r4.pass1-v6-successor-requalification.v1",
+  "recorded_at_utc": "2026-08-05T02:12:22Z",
+  "verdict": "red",
+  "stop_rule_applied": true,
+  "retry_performed": false,
+  "candidate": {
+    "revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
+    "current_head": "e64c0d2501ab198b755325d6f07eb426f3711e92",
+    "wallet_tree_identical": true,
+    "package_version": "0.1.2",
+    "package_json_sha256": "fe6209c5219a583e0f55f8ca0c93244e14ae569288ee46af910bbaa97e1989b3"
+  },
+  "staged_candidate": {
+    "green_dom_evidence_commit": "e64c0d2501ab198b755325d6f07eb426f3711e92",
+    "green_dom_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/navcoin-market-dom-identity-green.json",
+    "proxy_pid": 2602285,
+    "proxy_live_after_failure": true,
+    "proxy_origin": "http://127.0.0.1:31021",
+    "proxy_health_http_status": 200,
+    "proxy_provenance_path": "/tmp/a666-r4-v7-23b9bff-proxy-provenance.json",
+    "proxy_provenance_sha256": "b2979da549a25f48d5fe4d4ecac52ef00a268c836b97386809588cc07c6a4e16"
+  },
+  "bound_validator": {
+    "commit": "34cfa1a9c8b7adb5d0927785b91e23624470b4fe",
+    "evidence": "docs/evidence/a666-public-reserve-product-20260803/regressions/regression-manifest-ci.txt",
+    "evidence_sha256": "e94c4a5a04e3adf4ee6dc4cb4e7ac8c4c0f310e358f136880a77dc3067257bf7",
+    "run_exit_code": 0,
+    "runtime_ms": 172958,
+    "defects": 12,
+    "wallet_unit_regressions": 1,
+    "wallet_tests": 237,
+    "extractor_accessor_count": 120,
+    "extractor_mismatch_count": 0,
+    "coverage_valid": true,
+    "rerun": false
+  },
+  "matrix": [
+    {
+      "command": "cd wallet-web && npm test",
+      "exit_code": 0,
+      "runtime_ms": 30392,
+      "tests": 237,
+      "passed": 237,
+      "failed": 0,
+      "todo": 0
+    },
+    {
+      "command": "cd wallet-web && npm run build",
+      "exit_code": 0,
+      "runtime_ms": 750,
+      "modules_transformed": 1805
+    },
+    {
+      "command": "cd wallet-web && npm run test:custody-browser",
+      "exit_code": 0,
+      "runtime_ms": 6331,
+      "tests": 1,
+      "passed": 1,
+      "failed": 0,
+      "todo": 0
+    },
+    {
+      "command": "cd wallet-web && npm run test:public-browser",
+      "exit_code": 1,
+      "runtime_ms": 22118,
+      "tests": 2,
+      "passed": 1,
+      "failed": 1,
+      "todo": 0,
+      "log_path": "/tmp/a666-r4-v6-23b9bff-public.log",
+      "log_sha256": "76e670df41d5ef290121802ed67a8accacb2c0f4744d6a737933b93b42e4031c"
+    },
+    {
+      "command": "cd wallet-web && npm run test:r4-construction with exact committed 31021 environment contract",
+      "executed": false,
+      "reason": "STOP on the preceding public-browser failure"
+    }
+  ],
+  "first_failure": {
+    "command": "npm run test:public-browser",
+    "test": "journey step 9 resumes the production private-primary recovery component after proxy restart and browser reload",
+    "failure_type": "TimeoutError",
+    "exact_error": "locator.waitFor: Timeout 15000ms exceeded.",
+    "locator": "#private-navcoin-primary",
+    "source": "wallet-web/src/lib/journey-step-9-recovery.e2e.js:446",
+    "test_location": "wallet-web/src/lib/journey-step-9-recovery.e2e.js:494",
+    "construction_skipped": true
+  },
+  "step_1_to_4_predicates": [
+    {"id": "step1_served", "executed": false, "status": "skipped_after_matrix_failure"},
+    {"id": "step1_wallet_created_and_unlocked", "executed": false, "status": "skipped_after_matrix_failure"},
+    {"id": "step1_version_visible_exact", "executed": false, "status": "skipped_after_matrix_failure"},
+    {"id": "step1_package_json_sha256_match", "executed": false, "status": "skipped_after_matrix_failure"},
+    {"id": "step1_candidate_bound", "executed": false, "status": "skipped_after_matrix_failure"},
+    {"id": "step1_production_graph", "executed": false, "status": "skipped_after_matrix_failure"},
+    {"id": "step2_browser_address", "executed": false, "status": "skipped_after_matrix_failure"},
+    {"id": "step2_rendered_wallet", "executed": false, "status": "skipped_after_matrix_failure"},
+    {"id": "step3_exact_one_dom_identity", "executed": false, "status": "skipped_after_matrix_failure", "prior_green_evidence": "e64c0d2"},
+    {"id": "step3_selector_mounted", "executed": false, "status": "skipped_after_matrix_failure", "prior_green_evidence": "e64c0d2"},
+    {"id": "step3_path_b_resolved", "executed": false, "status": "skipped_after_matrix_failure", "prior_green_evidence": "e64c0d2"},
+    {"id": "step3_request_id_bound_proof_and_packet_contract", "executed": false, "status": "skipped_after_matrix_failure"},
+    {"id": "step3_verified_nav_and_finalized_proof_text", "executed": false, "status": "skipped_after_matrix_failure"},
+    {"id": "step4_a666_and_pfusdc_balances", "executed": false, "status": "skipped_after_matrix_failure"},
+    {"id": "step4_finalized_balance_text", "executed": false, "status": "skipped_after_matrix_failure"}
+  ],
+  "scope": {
+    "official_invocations": 0,
+    "business_mutations": 0,
+    "product_changes": 0,
+    "runner_changes": 0,
+    "manifest_changes": 0,
+    "staging_changes": 0,
+    "live_chain": false,
+    "stakehub_interaction": false,
+    "credentials_included": false
+  }
+}
