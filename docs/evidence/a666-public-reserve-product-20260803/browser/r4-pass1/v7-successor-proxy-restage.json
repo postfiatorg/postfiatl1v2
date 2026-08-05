@@ -1,0 +1,78 @@
+{
+  "schema": "postfiat.a666.r4.v7-successor-proxy-restage.v1",
+  "recorded_at_utc": "2026-08-05T04:45:00Z",
+  "verdict": "green",
+  "candidate": {
+    "revision": "1bc25ac7384de8837a14b8150863ea1bc0e883eb",
+    "worktree": "/tmp/a666-r4-successor-1bc25ac",
+    "detached": true,
+    "tracked_dirty_count": 0,
+    "package_version": "0.1.2",
+    "package_git_object": "5204c9154be74da3cff0545dd9628e3166e0c49b",
+    "package_json_sha256": "a3a62ecf5161caa733c42de5158b4b464bedc7d5c75faf31a3f521661c6b3bba"
+  },
+  "build": {
+    "commands": [
+      "cd /tmp/a666-r4-successor-1bc25ac/wallet-web && npm ci",
+      "cd /tmp/a666-r4-successor-1bc25ac/wallet-web && npm run build"
+    ],
+    "npm_ci_exit_code": 0,
+    "npm_ci_runtime_seconds": 1.83,
+    "build_exit_code": 0,
+    "build_runtime_seconds": 0.74,
+    "candidate_scoped_dist": "/tmp/a666-r4-successor-1bc25ac/wallet-web/dist",
+    "asset_count": 4,
+    "asset_manifest": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/v7-wallet-dist-sha256.json",
+    "asset_manifest_sha256": "eabf71305229f76d6fa03c7edf0a8dd307f61e4ac2e01b6a6f933b0a0094a98d",
+    "canonical_bundle_manifest_sha256": "670e633a97917bd4e57bd63630699ef7beb0ec0f40edc8e274cdb2533c9554ba"
+  },
+  "stage": {
+    "command": "POSTFIAT_R4_CANDIDATE_REVISION=1bc25ac7384de8837a14b8150863ea1bc0e883eb POSTFIAT_R4_CANDIDATE_WORKTREE=/tmp/a666-r4-successor-1bc25ac POSTFIAT_R4_WALLET_DIST_EVIDENCE=docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/v7-wallet-dist-sha256.json POSTFIAT_R4_CANDIDATE_PROXY_EVIDENCE=docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/v7-candidate-proxy-provenance.json scripts/a666-r4-candidate-proxy-stage --wait-rpc-seconds 30",
+    "exit_code": 0,
+    "runtime_seconds": 3.25,
+    "provenance": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/v7-candidate-proxy-provenance.json",
+    "provenance_sha256": "d78464ee258703927c505255953a71507af805b2e98e676279fc2b81046391bb",
+    "old_proxy_pid": 2602285,
+    "old_proxy_stopped": true,
+    "new_proxy_pid": 3318900,
+    "new_proxy_live": true,
+    "process_identity_exact": true,
+    "origin": "http://127.0.0.1:31021",
+    "listen": "127.0.0.1:31021",
+    "loopback_only": true,
+    "health_http_status": 200,
+    "same_origin_rpc": true,
+    "six_rpc_live_equal": true
+  },
+  "browser_read_only": {
+    "successful_command": "node /tmp/a666-r4-v7-selector-check.mjs",
+    "successful_exit_code": 0,
+    "successful_runtime_seconds": 0.98,
+    "persistent_profile": "/home/postfiat/.pft/a666-r4-fresh-wallet-v7/browser-profile",
+    "passphrase_read_only_at_browser_fill": true,
+    "passphrase_value_recorded": false,
+    "add_asset_count": 1,
+    "add_asset_id_count": 1,
+    "add_asset_limit_count": 1,
+    "issuer_authorize_control_count": 0,
+    "freeze_control_count": 0,
+    "submission_controls_clicked": 0,
+    "business_mutations": 0
+  },
+  "setup_binding": {
+    "candidate_revision_exact": true,
+    "package_hash_exact": true,
+    "bundle_hashes_exact": true,
+    "proxy_provenance_exact": true,
+    "origin_exact": true
+  },
+  "scope": {
+    "trustlines_created": 0,
+    "issuer_authorizations": 0,
+    "funding_transfers": 0,
+    "business_mutations": 0,
+    "live_chain": false,
+    "stakehub_interaction": false,
+    "credentials_included": false
+  }
+}
