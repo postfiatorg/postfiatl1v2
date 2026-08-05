@@ -1,0 +1,68 @@
+{
+  "schema": "postfiat.a666.r4.v7-trustline-unlock-choreography.v1",
+  "recorded_at_utc": "2026-08-05T05:46:00Z",
+  "verdict": "red_after_unlock_fix",
+  "change": {
+    "owned_script": "scripts/a666-r4-fresh-wallet-trustline-stage",
+    "old_behavior": "Immediate isVisible check could run before the delayed lock screen rendered.",
+    "new_behavior": "Promise.race waits for the production passphrase input or wallet shell; the locked branch unlocks once and then waits for the shell.",
+    "product_files_changed": false
+  },
+  "validation": {
+    "bash_syntax": {
+      "exit_code": 0,
+      "runtime_ms": 6
+    },
+    "self_test": {
+      "command": "scripts/a666-r4-fresh-wallet-trustline-stage --self-test",
+      "exit_code": 0,
+      "runtime_ms": 205,
+      "vectors": 14,
+      "negative_vectors": 11,
+      "delayed_lock_vector": 1,
+      "old_observer_failed": true,
+      "new_observer_unlock_count": 1
+    },
+    "read_only_check": {
+      "command": "scripts/a666-r4-fresh-wallet-trustline-stage check",
+      "exit_code": 0,
+      "candidate_revision": "1bc25ac7384de8837a14b8150863ea1bc0e883eb",
+      "four_way_candidate_binding_green": true,
+      "fleet_six_way_equal": true,
+      "block_height": 834,
+      "fresh_pft_atoms": 74,
+      "pfusdc_trustline_absent": true,
+      "a666_trustline_absent": true
+    }
+  },
+  "production_ui_preflight": {
+    "origin": "http://127.0.0.1:31021",
+    "persistent_profile": "/home/postfiat/.pft/a666-r4-fresh-wallet-v7/browser-profile",
+    "passphrase_read_at_fill_time": true,
+    "passphrase_value_recorded": false,
+    "unlock_state_observed": "locked",
+    "unlock_count": 1,
+    "wallet_shell_visible": true,
+    "add_asset_expected_cardinality": {
+      "add-asset": 1,
+      "add-asset-id": 1,
+      "add-asset-limit": 1
+    },
+    "add_asset_cardinality_exact": false,
+    "exit_code": 1,
+    "first_blocker": "add_asset_selector_cardinality_not_ready_at_observation",
+    "error_class": "preflight assertion",
+    "add_asset_clicked": false
+  },
+  "stage": {
+    "invoked": false,
+    "trust_set_operations": 0,
+    "receipts": []
+  },
+  "scope": {
+    "business_mutations": 0,
+    "live_chain": false,
+    "stakehub_interaction": false,
+    "credential_values_included": false
+  }
+}

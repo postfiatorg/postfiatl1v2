@@ -126,7 +126,7 @@ const [origin,profile,passFile,pf,a6,walletRoot]=process.argv.slice(2);const{chr
 const context=await chromium.launchPersistentContext(profile,{headless:true});const receipts=[];
 try{const page=context.pages()[0]??await context.newPage();page.setDefaultTimeout(30000);const sent=[],received=[];
 page.on('websocket',ws=>{ws.on('framesent',e=>{try{sent.push(JSON.parse(e.payload))}catch{}});ws.on('framereceived',e=>{try{received.push(JSON.parse(e.payload))}catch{}})});
-await page.goto(origin,{waitUntil:'domcontentloaded'});const lock=page.getByText('Wallet locked',{exact:true});if(await lock.isVisible().catch(()=>false)){const pass=readFileSync(passFile,'utf8').trim();await page.locator('input[placeholder="Passphrase"]').fill(pass);await page.getByRole('button',{name:'Unlock',exact:true}).click()}await page.locator('.pf-shell').waitFor();
+await page.goto(origin,{waitUntil:'domcontentloaded'});const passInput=page.locator('input[placeholder="Passphrase"]'),shell=page.locator('.pf-shell');const unlockState=await Promise.race([passInput.waitFor({state:'visible'}).then(()=> 'locked'),shell.waitFor({state:'visible'}).then(()=> 'unlocked')]);if(unlockState==='locked'){const pass=readFileSync(passFile,'utf8').trim();await passInput.fill(pass);await page.getByRole('button',{name:'Unlock',exact:true}).click();await shell.waitFor({state:'visible'})}else if(unlockState!=='unlocked'){throw new Error('wallet unlock state unavailable')}
 for(const asset of[pf,a6]){const start=sent.length;const c=page.locator('[data-testid="add-asset"][data-asset-id="'+asset+'"]');await c.waitFor({state:'visible'});await c.click();const end=Date.now()+30000;let request,response;while(Date.now()<end){request=sent.slice(start).find(x=>x?.method==='mempool_submit_signed_asset_transaction_finality');if(request)response=received.find(x=>x?.id===request.id);if(response)break;await new Promise(r=>setTimeout(r,100))}if(!response?.ok)throw new Error('add-asset finality response missing');const receipt=response.result?.receipt??response.result?.finality?.receipt;if(receipt?.accepted!==true)throw new Error('add-asset finalized receipt not accepted');receipts.push({asset_id:asset,tx_id:response.result?.tx_id??receipt.tx_id,fee_charged:receipt.fee_charged,code:receipt.code})}
 console.log(JSON.stringify({receipts}));}finally{await context.close()}
 MJS
@@ -137,6 +137,39 @@ MJS
   seq_after=$(jq -r '.account.sequence_values|if length==1 then .[0] else error("sequence divergence") end' <<<"$after");pft_after=$(jq -r '.account.pft_balance_values|if length==1 then .[0] else error("balance divergence") end' <<<"$after")
   [[ $seq_after -eq $((seq_before+2)) && $pft_after -eq $((pft_before-fee_sum)) ]]||refuse fee_or_sequence_delta
   jq -c '{finalized_receipts:.receipts,business_mutations:2}' <<<"$result"
+}
+
+unlock_choreography_self_test(){
+ node <<'JS'
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+let lockVisible = false, shellVisible = false, unlocks = 0;
+setTimeout(() => { lockVisible = true; }, 10);
+const oldObserver = async () => {
+  if (lockVisible) unlocks += 1;
+  await delay(25);
+  return shellVisible;
+};
+if (await oldObserver()) throw new Error('old immediate observer unexpectedly succeeded');
+unlocks = 0; lockVisible = false; shellVisible = false;
+setTimeout(() => { lockVisible = true; }, 10);
+const waitVisible = async predicate => {
+  for (let elapsed = 0; elapsed < 100; elapsed += 2) {
+    if (predicate()) return;
+    await delay(2);
+  }
+  throw new Error('visibility timeout');
+};
+const state = await Promise.race([
+  waitVisible(() => lockVisible).then(() => 'locked'),
+  waitVisible(() => shellVisible).then(() => 'unlocked'),
+]);
+if (state === 'locked') {
+  unlocks += 1;
+  shellVisible = true;
+  await waitVisible(() => shellVisible);
+}
+if (!shellVisible || unlocks !== 1) throw new Error('new unlock observer failed');
+JS
 }
 
 self_test(){
@@ -157,8 +190,9 @@ self_test(){
  bad candidate_revisions_match "$candidate" "$other" "$candidate" "$candidate"
  bad candidate_revisions_match "$candidate" "$candidate" "$other" "$candidate"
  bad candidate_revisions_match "$candidate" "$candidate" "$candidate" "$other"
- rm -rf "$t";[[ $f == 0 && $n == 13 ]]||refuse "self_test failures=$f vectors=$n"
- echo "trustline_stage_self_test=ok vectors=13 negative_vectors=11 candidate_mismatch_refusals=3 business_mutations=0"
+ good unlock_choreography_self_test
+ rm -rf "$t";[[ $f == 0 && $n == 14 ]]||refuse "self_test failures=$f vectors=$n"
+ echo "trustline_stage_self_test=ok vectors=14 negative_vectors=11 candidate_mismatch_refusals=3 delayed_lock_vector=1 unlocks=1 business_mutations=0"
 }
 
 case ${1:-check} in check)check;;stage)stage;;--self-test)self_test;;*)refuse 'usage [check|stage|--self-test]';;esac
