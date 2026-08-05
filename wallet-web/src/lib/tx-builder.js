@@ -133,6 +133,34 @@ export function encodePaymentMemoFields(memos = {}) {
   return encoded;
 }
 
+export function buildTrustSetOperation({ account, issuer, assetId, limit } = {}) {
+  if (typeof account !== 'string' || account.length === 0) {
+    throw new TypeError('trust_set account must be a nonempty string');
+  }
+  if (typeof issuer !== 'string' || issuer.length === 0) {
+    throw new TypeError('trust_set issuer must be a nonempty string');
+  }
+  if (account === issuer) {
+    throw new Error('trust_set account must differ from issuer');
+  }
+  if (typeof assetId !== 'string' || !/^[0-9a-f]{96}$/.test(assetId)) {
+    throw new TypeError('trust_set assetId must be exactly 96 lowercase hex characters');
+  }
+  if (typeof limit !== 'number' || !Number.isSafeInteger(limit) || limit <= 0) {
+    throw new TypeError('trust_set limit must be a positive safe integer');
+  }
+  return {
+    operation: 'trust_set',
+    account,
+    issuer,
+    asset_id: assetId,
+    limit,
+    authorized: false,
+    frozen: false,
+    reserve_paid: 10,
+  };
+}
+
 export class FastPayRecoveryPendingError extends Error {
   constructor(message, recovery) {
     super(message);

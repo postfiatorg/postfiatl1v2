@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { TxBuilder } from './tx-builder.js';
+import { TxBuilder, buildTrustSetOperation } from './tx-builder.js';
 
 const quote = {
   chain_id: 'postfiat-wan-devnet',
@@ -1925,4 +1925,67 @@ test('ensurePublicKeyPublished throws if the publish self-transfer is rejected',
     () => builder.ensurePublicKeyPublished('backup-json', 'pf-self', false),
     /explicit accepted receipt code/,
   );
+});
+
+test('buildTrustSetOperation returns the exact holder trust_set JSON', () => {
+  const operation = buildTrustSetOperation({
+    account: 'pf' + '1'.repeat(40),
+    issuer: 'pf' + '2'.repeat(40),
+    assetId: 'ab'.repeat(48),
+    limit: 1000000,
+  });
+  assert.deepEqual(operation, {
+    operation: 'trust_set',
+    account: 'pf' + '1'.repeat(40),
+    issuer: 'pf' + '2'.repeat(40),
+    asset_id: 'ab'.repeat(48),
+    limit: 1000000,
+    authorized: false,
+    frozen: false,
+    reserve_paid: 10,
+  });
+  assert.deepEqual(Object.keys(operation), [
+    'operation', 'account', 'issuer', 'asset_id', 'limit', 'authorized', 'frozen', 'reserve_paid',
+  ]);
+});
+
+test('buildTrustSetOperation serializes zero custody fields', () => {
+  const operation = buildTrustSetOperation({
+    account: 'pf' + '1'.repeat(40),
+    issuer: 'pf' + '2'.repeat(40),
+    assetId: 'cd'.repeat(48),
+    limit: 7,
+  });
+  assert.doesNotMatch(JSON.stringify(operation), /seed|mnemonic|private|secret|passphrase|spend_auth|owner_key/i);
+});
+
+test('buildTrustSetOperation rejects malformed and uppercase asset ids', () => {
+  const base = { account: 'pf' + '1'.repeat(40), issuer: 'pf' + '2'.repeat(40), limit: 5 };
+  assert.throws(() => buildTrustSetOperation({ ...base, assetId: 'AB'.repeat(48) }),
+    /exactly 96 lowercase hex/);
+  assert.throws(() => buildTrustSetOperation({ ...base, assetId: 'ab'.repeat(47) }),
+    /exactly 96 lowercase hex/);
+  assert.throws(() => buildTrustSetOperation({ ...base, assetId: 'gh'.repeat(48) }),
+    /exactly 96 lowercase hex/);
+  assert.throws(() => buildTrustSetOperation({ ...base, assetId: 123 }),
+    /exactly 96 lowercase hex/);
+  assert.throws(() => buildTrustSetOperation({ ...base }),
+    /exactly 96 lowercase hex/);
+});
+
+test('buildTrustSetOperation rejects missing or equal account and issuer', () => {
+  const base = { account: 'pf' + '1'.repeat(40), issuer: 'pf' + '2'.repeat(40), assetId: 'ab'.repeat(48), limit: 5 };
+  assert.throws(() => buildTrustSetOperation({ ...base, account: '' }), /account must be a nonempty string/);
+  assert.throws(() => buildTrustSetOperation({ ...base, account: undefined }), /account must be a nonempty string/);
+  assert.throws(() => buildTrustSetOperation({ ...base, issuer: '' }), /issuer must be a nonempty string/);
+  assert.throws(() => buildTrustSetOperation({ ...base, issuer: base.account }), /must differ from issuer/);
+  assert.throws(() => buildTrustSetOperation(), /account must be a nonempty string/);
+});
+
+test('buildTrustSetOperation rejects zero, negative, unsafe, and fractional limits', () => {
+  const base = { account: 'pf' + '1'.repeat(40), issuer: 'pf' + '2'.repeat(40), assetId: 'ab'.repeat(48) };
+  for (const limit of [0, -1, Number.MAX_SAFE_INTEGER + 1, 1.5, Number.NaN, Infinity, '100']) {
+    assert.throws(() => buildTrustSetOperation({ ...base, limit }), /positive safe integer/);
+  }
+  assert.throws(() => buildTrustSetOperation({ ...base }), /positive safe integer/);
 });
