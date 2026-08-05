@@ -561,6 +561,14 @@
         "R4-RECOVERED-RECEIPT"
       ],
       "regression_status": "passed"
+    },
+    {
+      "id": "DEFECT-12",
+      "description": "wallet market discovery consumed inactive append-only route rows before enforcing live-route duplicate identity constraints",
+      "regression_ids": [
+        "R4-ROUTE-LIVE-FILTER"
+      ],
+      "regression_status": "passed"
     }
   ],
   "regressions": [
@@ -950,6 +958,30 @@
         }
       ],
       "evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/step10-public-receipt-green.txt"
+    }
+  ],
+  "wallet_unit_regressions": [
+    {
+      "id": "R4-ROUTE-LIVE-FILTER",
+      "contract": "the wallet validates boolean route_live on every registry row, consumes only live rows, and retains duplicate-identity rejection among live routes",
+      "status": "passed",
+      "source_file": "wallet-web/src/lib/navcoin-markets.test.js",
+      "root_cause": "wallet-web/src/lib/navcoin-markets.js:73-95 parsed inactive append-only route rows before duplicate-identity validation",
+      "red_commit": "b9b7231b2dd89efe19b668f5af28d4513dc4cb5d",
+      "first_passing_commit": "0a9e55293304f44d00d3cebb508a4492459bf82d",
+      "tests": [
+        {
+          "name": "governed NAVCoin markets consume only route_live registry rows",
+          "runtime_milliseconds": 30172,
+          "matched_test_count": 237,
+          "command": "npm test",
+          "working_directory": "wallet-web"
+        }
+      ],
+      "evidence": [
+        "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/route-live-filter-red.json",
+        "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/route-live-filter-green.json"
+      ]
     }
   ],
   "stakehub_scope_constraint": {

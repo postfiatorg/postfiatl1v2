@@ -20,12 +20,22 @@ REQUIRED_BROWSER_REGRESSION_IDS = {
     "R4-STEP10-DOWNLOAD",
     "R4-RECOVERED-RECEIPT",
 }
+REQUIRED_WALLET_UNIT_REGRESSIONS = {
+    "R4-ROUTE-LIVE-FILTER": {
+        "source_file": "wallet-web/src/lib/navcoin-markets.test.js",
+        "test_name": "governed NAVCoin markets consume only route_live registry rows",
+    },
+}
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 RUNNING_RE = re.compile(r"^running (\d+) tests?$", re.MULTILINE)
 RESULT_RE = re.compile(
     r"^test result: ok\. (\d+) passed; (\d+) failed; .*?finished in ([0-9.]+)s$",
     re.MULTILINE,
 )
+NODE_TESTS_RE = re.compile(r"^# tests (\d+)$", re.MULTILINE)
+NODE_PASS_RE = re.compile(r"^# pass (\d+)$", re.MULTILINE)
+NODE_FAIL_RE = re.compile(r"^# fail (\d+)$", re.MULTILINE)
+NODE_TODO_RE = re.compile(r"^# todo (\d+)$", re.MULTILINE)
 
 
 class ManifestError(RuntimeError):
@@ -111,10 +121,10 @@ def validate_manifest(repo: Path, manifest: dict[str, Any]) -> list[dict[str, An
             "successor candidate exact step-9 count must be 1")
 
     defects = manifest.get("observed_defect_classes")
-    require(isinstance(defects, list) and len(defects) == 11,
-            "exactly eleven observed defect classes are required")
+    require(isinstance(defects, list) and len(defects) == 12,
+            "exactly twelve observed defect classes are required")
     defect_ids = [item.get("id") for item in defects if isinstance(item, dict)]
-    require(len(defect_ids) == len(set(defect_ids)) == 11,
+    require(len(defect_ids) == len(set(defect_ids)) == 12,
             "observed defect IDs must be unique")
 
     regressions = manifest.get("regressions")
@@ -150,7 +160,26 @@ def validate_manifest(repo: Path, manifest: dict[str, Any]) -> list[dict[str, An
     require(not unexpected_browser,
             f"unexpected browser regression rows: {', '.join(unexpected_browser)}")
 
-    all_regression_ids = rows.keys() | browser_rows.keys()
+    wallet_unit_regressions = manifest.get("wallet_unit_regressions")
+    require(isinstance(wallet_unit_regressions, list),
+            "wallet_unit_regressions must be an array")
+    wallet_unit_rows: dict[str, dict[str, Any]] = {}
+    for row in wallet_unit_regressions:
+        require(isinstance(row, dict),
+                "every wallet unit regression row must be an object")
+        regression_id = row.get("id")
+        require(isinstance(regression_id, str) and regression_id not in wallet_unit_rows,
+                f"duplicate or invalid wallet unit regression id: {regression_id!r}")
+        wallet_unit_rows[regression_id] = row
+    expected_wallet_unit_ids = set(REQUIRED_WALLET_UNIT_REGRESSIONS)
+    missing_wallet_unit = sorted(expected_wallet_unit_ids - wallet_unit_rows.keys())
+    unexpected_wallet_unit = sorted(wallet_unit_rows.keys() - expected_wallet_unit_ids)
+    require(not missing_wallet_unit,
+            f"missing wallet unit regression rows: {', '.join(missing_wallet_unit)}")
+    require(not unexpected_wallet_unit,
+            f"unexpected wallet unit regression rows: {', '.join(unexpected_wallet_unit)}")
+
+    all_regression_ids = rows.keys() | browser_rows.keys() | wallet_unit_rows.keys()
     for defect in defects:
         require(defect.get("regression_status") == "passed",
                 f"{defect.get('id')}: regression_status must be passed")
@@ -198,7 +227,7 @@ def validate_manifest(repo: Path, manifest: dict[str, Any]) -> list[dict[str, An
                     f"{ar_id}/{name}: recorded runtime exceeds the fast-loop budget")
             require(isinstance(matched, int) and matched >= 1,
                     f"{ar_id}/{name}: recorded matched-test count must be positive")
-            tests.append({"ar_id": ar_id, **test})
+            tests.append({"regression_id": ar_id, "runner": "rust", **test})
 
     for regression_id in sorted(browser_rows):
         row = browser_rows[regression_id]
@@ -241,20 +270,64 @@ def validate_manifest(repo: Path, manifest: dict[str, Any]) -> list[dict[str, An
             require(isinstance(matched, int) and matched >= 1,
                     f"{regression_id}/{name}: matched-test count must be positive")
 
+    for regression_id in sorted(wallet_unit_rows):
+        row = wallet_unit_rows[regression_id]
+        expected = REQUIRED_WALLET_UNIT_REGRESSIONS[regression_id]
+        require(row.get("status") == "passed",
+                f"{regression_id}: status must be passed")
+        require(COMMIT_RE.fullmatch(str(row.get("red_commit", ""))) is not None,
+                f"{regression_id}: red_commit must be a 40-character lowercase SHA")
+        require(COMMIT_RE.fullmatch(str(row.get("first_passing_commit", ""))) is not None,
+                f"{regression_id}: first_passing_commit must be a 40-character lowercase SHA")
+        require(row.get("source_file") == expected["source_file"]
+                and (repo / expected["source_file"]).is_file(),
+                f"{regression_id}: source_file must be {expected['source_file']}")
+        root_cause = row.get("root_cause")
+        require(isinstance(root_cause, str) and re.search(r":\d+", root_cause) is not None,
+                f"{regression_id}: root_cause must contain a file:line anchor")
+        for evidence in evidence_paths(row):
+            require((repo / evidence).is_file(),
+                    f"{regression_id}: missing evidence {evidence}")
+        row_tests = row.get("tests")
+        require(isinstance(row_tests, list) and len(row_tests) == 1,
+                f"{regression_id}: exactly one wallet unit suite entry is required")
+        test = row_tests[0]
+        require(isinstance(test, dict),
+                f"{regression_id}: test entry must be an object")
+        name = test.get("name")
+        command = test.get("command")
+        working_directory = test.get("working_directory")
+        runtime_ms = test.get("runtime_milliseconds")
+        matched = test.get("matched_test_count")
+        require(name == expected["test_name"],
+                f"{regression_id}: named test must be {expected['test_name']}")
+        require(command == "npm test",
+                f"{regression_id}/{name}: command must run the wallet unit suite")
+        require(working_directory == "wallet-web"
+                and (repo / working_directory).is_dir(),
+                f"{regression_id}/{name}: working_directory must be wallet-web")
+        require(isinstance(runtime_ms, int) and 0 <= runtime_ms < maximum_ms,
+                f"{regression_id}/{name}: recorded runtime exceeds the fast-loop budget")
+        require(isinstance(matched, int) and matched >= 1,
+                f"{regression_id}/{name}: matched-test count must be positive")
+        tests.append({"regression_id": regression_id, "runner": "node_tap", **test})
+
     return tests
 
 
 def run_tests(repo: Path, tests: list[dict[str, Any]], maximum_ms: int) -> None:
     for test in tests:
-        label = f"{test['ar_id']}/{test['name']}"
+        label = f"{test['regression_id']}/{test['name']}"
         command = shlex.split(test["command"])
+        working_directory = test.get("working_directory")
+        cwd = repo / working_directory if isinstance(working_directory, str) else repo
         started = time.monotonic()
         try:
             environment = os.environ.copy()
             environment["CARGO_TERM_COLOR"] = "never"
             result = subprocess.run(
                 command,
-                cwd=repo,
+                cwd=cwd,
                 env=environment,
                 text=True,
                 stdout=subprocess.PIPE,
@@ -266,15 +339,29 @@ def run_tests(repo: Path, tests: list[dict[str, Any]], maximum_ms: int) -> None:
             raise ManifestError(f"{label}: exceeded {maximum_ms}ms") from error
         elapsed_ms = round((time.monotonic() - started) * 1000)
         output = result.stdout or ""
-        running_counts = [int(value) for value in RUNNING_RE.findall(output)]
-        results = [(int(passed), int(failed), float(seconds))
-                   for passed, failed, seconds in RESULT_RE.findall(output)]
-        matched = max(running_counts, default=0)
-        passed = max((item[0] for item in results if item[1] == 0), default=0)
-        if result.returncode != 0 or matched < 1 or passed < 1:
+        runner = test["runner"]
+        if runner == "rust":
+            running_counts = [int(value) for value in RUNNING_RE.findall(output)]
+            results = [(int(passed), int(failed), float(seconds))
+                       for passed, failed, seconds in RESULT_RE.findall(output)]
+            matched = max(running_counts, default=0)
+            passed = max((item[0] for item in results if item[1] == 0), default=0)
+            failed = min((item[1] for item in results), default=1)
+            todo = 0
+        elif runner == "node_tap":
+            matched = max((int(value) for value in NODE_TESTS_RE.findall(output)), default=0)
+            passed = max((int(value) for value in NODE_PASS_RE.findall(output)), default=0)
+            failed = max((int(value) for value in NODE_FAIL_RE.findall(output)), default=1)
+            todo = max((int(value) for value in NODE_TODO_RE.findall(output)), default=1)
+            require(test["name"] in output,
+                    f"{label}: named wallet unit test was absent from npm test output")
+        else:
+            raise ManifestError(f"{label}: unsupported test runner {runner!r}")
+        if result.returncode != 0 or matched < 1 or passed < 1 or failed != 0 or todo != 0:
             tail = "\n".join(output.splitlines()[-30:])
             raise ManifestError(
-                f"{label}: exit={result.returncode} matched={matched} passed={passed}\n{tail}"
+                f"{label}: exit={result.returncode} matched={matched} passed={passed} "
+                f"failed={failed} todo={todo}\n{tail}"
             )
         require(elapsed_ms < maximum_ms,
                 f"{label}: wall clock {elapsed_ms}ms exceeds {maximum_ms}ms")
@@ -302,10 +389,12 @@ def main() -> int:
         print(f"A666 recovery manifest FAIL: {error}", file=sys.stderr)
         return 1
 
+    rust_test_count = sum(test["runner"] == "rust" for test in tests)
     print(
-        f"A666 recovery manifest PASS: defects=11 regressions={len(REQUIRED_AR_IDS)} "
+        f"A666 recovery manifest PASS: defects=12 regressions={len(REQUIRED_AR_IDS)} "
         f"browser_regressions={len(REQUIRED_BROWSER_REGRESSION_IDS)} "
-        f"standalone_tests={len(tests)} run={str(args.run).lower()}"
+        f"wallet_unit_regressions={len(REQUIRED_WALLET_UNIT_REGRESSIONS)} "
+        f"standalone_tests={rust_test_count} run={str(args.run).lower()}"
     )
     return 0
 

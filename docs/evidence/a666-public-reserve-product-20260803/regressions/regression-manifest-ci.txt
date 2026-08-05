@@ -1,7 +1,7 @@
 A666 recovery regression manifest and tracker traceability validation
 
 Traceability closure
-- Source base revision: a34f0c3.
+- Source base revision: 85ff7a2.
 - Scope: manifest/tracker traceability only; no runtime, harness, proxy, product, staging, browser, service, or official-journey action occurred.
 
 Tracker interpretation remains authoritative
@@ -18,6 +18,13 @@ HARNESS-07 closure
 - Choreography/request-ID green: 293abbc4425a0dd96a7b57bddbb8a09de02e850f; step3-shared-choreography-green.json; matched 1 in 605ms; rejects unrelated packet-shaped frames and wrong request IDs.
 - Status: regression_status=passed; enforcement_status=ci_enforced.
 
+DEFECT-12 closure
+- Class: inactive append-only route rows were consumed before wallet live-route filtering and duplicate validation.
+- RED-first: b9b7231b2dd89efe19b668f5af28d4513dc4cb5d; governed NAVCoin markets consume only route_live registry rows; inactive+active shared identity reached duplicate rejection.
+- Product green: 0a9e55293304f44d00d3cebb508a4492459bf82d; wallet-web/src/lib/navcoin-markets.js:73-101 validates boolean route_live, filters inactive rows, and retains live-row duplicate rejection.
+- Collection: wallet_unit_regressions/R4-ROUTE-LIVE-FILTER; command npm test; source wallet-web/src/lib/navcoin-markets.test.js.
+- Status: regression_status=passed; wallet unit suite 237/237.
+
 R7 transport-tightness follow-up
 - R7-reserve-proof-websocket-frame-request-binding is implemented/load-bearing for V6, not pending.
 - Implementation: 293abbc4425a0dd96a7b57bddbb8a09de02e850f; step3-shared-choreography-green.json.
@@ -27,11 +34,12 @@ Historical extractor finding retained
 - Previous a34f0c3 traceability run: extractor exit 1; stale contract entry runtime:reserve_proof_frame.packets; emitted 119, contract 120. This historical RED is retained rather than erased.
 
 Current validation
-- Command: scripts/check-a666-recovery-regression-manifest
+- Command: scripts/check-a666-recovery-regression-manifest --run
 - Exit code: 0
-- Elapsed milliseconds: 76
-- Execution scope: schema validation only; standalone Rust tests were not run.
-- Terminal: A666 recovery manifest PASS: defects=11 regressions=11 browser_regressions=2 standalone_tests=26 run=false
+- Elapsed milliseconds: 172958
+- Execution scope: 26 standalone Rust tests plus the wallet unit regression suite.
+- Wallet unit terminal: PASS R4-ROUTE-LIVE-FILTER/governed NAVCoin markets consume only route_live registry rows matched=237 passed=237 elapsed_ms=30376
+- Terminal: A666 recovery manifest PASS: defects=12 regressions=11 browser_regressions=2 wallet_unit_regressions=1 standalone_tests=26 run=true
 
 - Command: scripts/a666-r4-official-input-contract-extract check
 - Exit code: 0
@@ -40,10 +48,11 @@ Current validation
 - Terminal: {"ok":true,"accessor_count":120,"mismatch_count":0}
 
 Manifest totals
-- Observed product/browser defect classes: 11
+- Observed product/browser/wallet defect classes: 12
 - Harness defect classes: 7
-- Total named defect classes: 18
+- Total named defect classes: 19
 - Rust standalone regression tests: 26
 - Browser regression rows: 2
-- Total manifest regression-test records: 28
+- Wallet unit regression rows: 1
+- Total manifest regression-test records: 29
 - Status: complete
