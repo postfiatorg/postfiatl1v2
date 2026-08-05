@@ -1,0 +1,80 @@
+{
+  "schema": "postfiat.a666.live-demo.live-balances-sizing-nav-red.v1",
+  "recorded_at_utc": "2026-08-05T14:50:00Z",
+  "verdict": "red",
+  "stop_no_retry": true,
+  "read_only_snapshot": {
+    "stakehub_evm_balances": {
+      "command": "python3 -m stakehub.cli evm-balances",
+      "exit_code": 0,
+      "ethereum_mainnet": {
+        "usdc_units": "84.161443",
+        "eth_units": "0.289781906358769172"
+      },
+      "arbitrum": {
+        "usdc_units": "0.000000",
+        "eth_units": "0.005556809103608"
+      }
+    },
+    "campaign_spend": {
+      "source": "/home/postfiat/repos/orc_directives/cli_demo_campaign_20260706/spend-ledger.json",
+      "total_spent_usdc": "501.024845",
+      "campaign_spend_cap_usdc": "530",
+      "headroom_usdc": "28.975155",
+      "arithmetic": "530 - 501.024845 = 28.975155"
+    },
+    "stakehub_portfolio_nav": {
+      "command": "python3 -m stakehub.cli nav",
+      "exit_code": 0,
+      "nav_usd": "10341.69",
+      "classification": "aggregate_portfolio_only",
+      "is_route_nav": false
+    },
+    "active_dashboard": {
+      "read_only_status_endpoint": "loopback",
+      "mirror_height": 598,
+      "active_bfinal_profile_sha256": "91aa6c9d94f95a343346a961122529b99f26c2bb403800a351dc80dc9d058fd0"
+    },
+    "interpreter": {
+      "path": "/usr/bin/python3",
+      "sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118",
+      "module_invocation_only": true
+    }
+  },
+  "preflight": {
+    "command": "python3 -m stakehub.cli wallet demo preflight --out-dir /tmp/a666-leg0a-preflight-20260805T1300Z",
+    "exit_code": 1,
+    "gate_elapsed_ms": 18,
+    "failed_gate": "P0_READONLY_DEVNET2_PREFLIGHT",
+    "blocker": "service_profile_identity_mismatch",
+    "service": "dashboard",
+    "expected_profile_sha256": "bfb3d0439adabd4ee4995fcbdba488fa68ba9859037181be83a48d7885a12a12",
+    "observed_active_bfinal_profile_sha256": "91aa6c9d94f95a343346a961122529b99f26c2bb403800a351dc80dc9d058fd0",
+    "retried": false
+  },
+  "not_established": {
+    "pftl_controlled_holder_pft_balance": null,
+    "pftl_controlled_holder_pfusdc_balance": null,
+    "pftl_controlled_holder_a666_balance": null,
+    "pftl_operator_balances": null,
+    "bridge_custody_and_relay_balances": null,
+    "ethereum_uniswap_asset_balance": null,
+    "ethereum_return_recipient_balance": null,
+    "ethereum_chain_id": null,
+    "route_minimums": null,
+    "finalized_reserve_nav": null,
+    "route_valid_initial_usdc_atoms": null,
+    "route_valid_initial_usdc_units": null,
+    "reason": "The fail-closed profile-identity gate refused before current fleet, route, balance, and NAV reads."
+  },
+  "scope": {
+    "transactions": 0,
+    "signing_actions": 0,
+    "service_actions": 0,
+    "ledger_mutations": 0,
+    "balance_mutations": 0,
+    "live_chain_mutations": 0,
+    "stakehub_funds_mutations": 0,
+    "credential_values_included": false
+  }
+}
