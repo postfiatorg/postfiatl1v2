@@ -2626,7 +2626,7 @@
       }
     },
     "stakehub_absence_validation": {
-      "ok": false
+      "ok": true
     },
     "pre_prove_binding": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/pre-prove-binding-check.json",
@@ -2667,9 +2667,7 @@
     },
     "stakehub_official_scan": {
       "command_succeeded": true,
-      "active_units": [
-        "stakehub-private-swap-dashboard.service"
-      ]
+      "active_units": []
     }
   },
   "proof_artifact_consumption_contract": {
@@ -2791,7 +2789,7 @@
     },
     {
       "id": "stakehub_official_absent",
-      "ok": false,
+      "ok": true,
       "input": "stakehub_official_scan"
     },
     {
@@ -2811,10 +2809,8 @@
     }
   ],
   "check_count": 18,
-  "blocker_names": [
-    "stakehub_official_absent"
-  ],
-  "ready_to_fire": false,
+  "blocker_names": [],
+  "ready_to_fire": true,
   "ready_to_fire_computation": "all checks[].ok values must be true",
   "mutations_executed": false
 }
