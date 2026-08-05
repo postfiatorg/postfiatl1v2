@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+# Rehearsal-only, fail-closed fresh-wallet trustline stage.
+set -Eeuo pipefail
+
+ROOT=/home/postfiat/repos/a666-eth-fast-lane-combined-20260724
+SETUP=${POSTFIAT_R4_SETUP_MANIFEST:-$ROOT/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/setup-endpoints-manifest.json}
+READY=${POSTFIAT_R4_FRESH_WALLET_READY:-/home/postfiat/.pft/a666-r4-fresh-wallet-v7/fresh-wallet-ready.json}
+PROFILE=${POSTFIAT_R4_FRESH_WALLET_PROFILE:-/home/postfiat/.pft/a666-r4-fresh-wallet-v7/browser-profile}
+PASSPHRASE=${POSTFIAT_R4_FRESH_WALLET_PASSPHRASE:-/home/postfiat/.pft/a666-r4-fresh-wallet-v7/wallet-passphrase.local}
+FLEET=${POSTFIAT_R4_RPC_ENDPOINTS_FILE:-$ROOT/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-rpc-endpoints.json}
+PROVENANCE=${POSTFIAT_R4_PROXY_PROVENANCE:-/tmp/a666-r4-v7-23b9bff-proxy-provenance.json}
+ISSUER_REQUEST=${POSTFIAT_R4_ISSUER_AUTH_REQUEST:-}
+CHECK_OUT=${POSTFIAT_R4_TRUSTLINE_CHECK_OUT:-/tmp/a666-r4-v7-trustline-check.json}
+CANDIDATE=23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f
+ADDRESS_SHA=2f58eb97683596c676c06da165c3e8011ff9860827acb9b30355a2a83638f4a6
+ROUTE=pftl-a666-r4-offline-rehearsal-v1
+
+refuse(){ echo "trustline_stage_refuse: $*" >&2; return 2; }
+loopback(){ [[ $1 =~ ^(http://)?127\.0\.0\.1:[0-9]+$ ]] || refuse non_loopback_endpoint; }
+mode(){ [[ -e $1 && $(stat -c %a "$1") == "$2" ]] || refuse "mode_unsafe_or_missing_$3"; }
+selector(){ grep -q 'data-testid="add-asset"' "$1" || refuse missing_add_asset_selector; }
+absent(){ [[ $1 == false && $2 == false ]] || refuse unexpected_preexisting_line; }
+supply_equal(){ [[ $1 == "$2" ]] || refuse supply_changed; }
+no_bundle(){ [[ $1 != *from-bundle* && $1 != *bundle_dir* ]] || refuse bundle_helper_forbidden; }
+public_guard(){ python3 - "$1" <<'PY'
+import json,re,sys
+d=json.load(open(sys.argv[1]))
+def w(x):
+ if isinstance(x,dict):
+  for k,v in x.items():
+   if k.lower() in {'address','wallet_address','seed','mnemonic','passphrase','private_key','owner_key','secret'}: raise SystemExit(1)
+   w(v)
+ elif isinstance(x,list):
+  for v in x:w(v)
+ elif isinstance(x,str) and re.fullmatch(r'pf[0-9a-f]{40}',x):raise SystemExit(1)
+w(d)
+PY
+}
+issuer_request(){
+ [[ -n $1 && -f $1 ]] || refuse missing_issuer_authorization_request
+ no_bundle "$(cat "$1")"
+ jq -e '.schema=="postfiat-certified-asset-ops-request-v1" and (.operations|length)==1
+  and .operations[0].operation.operation=="trust_set"
+  and .operations[0].operation.authorized==true
+  and .operations[0].operation.frozen==false
+  and .operations[0].source==.operations[0].operation.issuer
+  and .operations[0].source!=.operations[0].operation.account
+  and (.operations[0].key_file|type)=="string"' "$1" >/dev/null || refuse issuer_authorization_schema
+}
+
+check(){
+ mode "$READY" 600 ready; mode "$PROFILE" 700 profile; mode "$PASSPHRASE" 600 passphrase
+ [[ -f $SETUP && -f $FLEET && -f $PROVENANCE ]] || refuse missing_path_input
+ python3 - "$SETUP" "$READY" "$FLEET" "$PROVENANCE" "$CHECK_OUT" "$CANDIDATE" "$ADDRESS_SHA" "$ROUTE" <<'PY'
+import hashlib,json,socket,sys,time
+from pathlib import Path
+sp,rp,fp,pp,out=map(Path,sys.argv[1:6]); candidate,ah,route_id=sys.argv[6:9]; started=time.time()
+s=json.load(open(sp)); r=json.load(open(rp)); f=json.load(open(fp)); p=json.load(open(pp)); address=r.get('address','')
+if hashlib.sha256(address.encode()).hexdigest()!=ah:raise SystemExit('address_hash_mismatch')
+origin=s.get('proxy',{}).get('origin_url') or s.get('wallet',{}).get('origin_url') or s.get('wallet_origin')
+if origin!='http://127.0.0.1:31021' or s.get('candidate',{}).get('revision')!=candidate or r.get('candidate_revision')!=candidate:raise SystemExit('candidate_or_origin')
+if p.get('ready') is not True or p.get('candidate',{}).get('revision_observed')!=candidate:raise SystemExit('provenance')
+eps=[(x.get('host'),x.get('rpc_port')) for x in f.get('endpoints',[])]
+if len(eps)!=6 or len(set(eps))!=6 or any(h!='127.0.0.1' or not isinstance(q,int) for h,q in eps):raise SystemExit('fleet')
+def call(ep,i,m,params):
+ sk=socket.create_connection(ep,5)
+ try:sk.sendall((json.dumps({'version':'postfiat-local-rpc-v1','id':i,'method':m,'params':params},separators=(',',':'))+'\n').encode());v=json.loads(sk.makefile('rb').readline())
+ finally:sk.close()
+ if v.get('id')!=i:return {'ok':False}
+ return v
+st=[];rr=[];aa=[];accounts=[]
+for n,e in enumerate(eps):
+ st.append(call(e,f'v7-tl-{n}-status','status',{}));rr.append(call(e,f'v7-tl-{n}-routes','navcoin_bridge_routes',{}));aa.append(call(e,f'v7-tl-{n}-assets','account_assets',{'account':address}));accounts.append(call(e,f'v7-tl-{n}-account','account',{'address':address}))
+tuples={(x.get('result',{}).get('block_height'),x.get('result',{}).get('block_tip_hash'),x.get('result',{}).get('state_root')) for x in st if x.get('ok')}
+rows=[]
+for x in rr:
+ q=[v for v in x.get('result',{}).get('routes',[]) if v.get('route_id')==route_id and v.get('route_live') is True]
+ if len(q)!=1:raise SystemExit('route');rows+=q
+ if q:rows+=q
+pairs={(x.get('settlement_asset_id'),x.get('native_nav_asset_id')) for x in rows}
+if len(pairs)!=1:raise SystemExit('asset_pair')
+pf,a6=next(iter(pairs));sup=[]
+for n,e in enumerate(eps):sup.append(call(e,f'v7-tl-{n}-supply','navcoin_bridge_supply_status',{'route_id':route_id}))
+def line(x,aid):
+ q=next((v for v in x.get('result',{}).get('assets',[]) if v.get('asset_id')==aid),None)
+ return {'present':q is not None,'authorized':q.get('authorized') if q else None,'frozen':q.get('frozen') if q else None}
+pl=[line(x,pf) for x in aa];al=[line(x,a6) for x in aa]
+bs={(x.get('result',{}).get('issued_supply_atoms'),x.get('result',{}).get('authorized_valid_supply_atoms'),x.get('result',{}).get('settlement_reserve_atoms')) for x in sup if x.get('ok')}
+d={'schema':'postfiat.a666.r4.fresh-wallet-trustline-check.v1','candidate_revision':candidate,'origin':origin,'address_sha256':ah,
+'fleet':{'endpoint_count':6,'loopback_only':True,'six_way_tuple_equal':len(tuples)==1 and all(x.get('ok') for x in st),'tuple':list(next(iter(tuples))) if len(tuples)==1 else None},
+'assets':{'pfusdc_asset_id':pf,'a666_asset_id':a6,'pfusdc':{'present_on_six':all(x['present'] for x in pl),'authorized_on_six':all(x['authorized'] is True for x in pl),'unfrozen_on_six':all(x['frozen'] is False for x in pl)},'a666':{'present_on_six':all(x['present'] for x in al),'authorized_on_six':all(x['authorized'] is True for x in al),'unfrozen_on_six':all(x['frozen'] is False for x in al)}},
+'account':{'sequence_values':sorted({x.get('result',{}).get('sequence') for x in accounts if x.get('ok')}),'pft_balance_values':sorted({x.get('result',{}).get('balance') for x in accounts if x.get('ok')})},
+'supply_baseline':{'six_equal':len(bs)==1,'tuple':list(next(iter(bs))) if len(bs)==1 else None},'provenance_exact':True,'stakehub_dependency':False,'business_mutations':0,'runtime_ms':round((time.time()-started)*1000,3)}
+Path(out).write_text(json.dumps(d,indent=2)+'\n')
+PY
+ public_guard "$CHECK_OUT" || refuse raw_address_in_public_evidence
+ jq -e '.fleet.loopback_only and .fleet.six_way_tuple_equal and .supply_baseline.six_equal and .provenance_exact and (.stakehub_dependency|not) and .business_mutations==0' "$CHECK_OUT" >/dev/null || refuse check_failed
+ echo "trustline_stage_check=ok output=$CHECK_OUT business_mutations=0"
+}
+
+stage(){
+ check; loopback "$(jq -r .origin "$CHECK_OUT")"
+ selector "$ROOT/wallet-web/src/App.jsx"
+  absent "$(jq -r .assets.pfusdc.present_on_six "$CHECK_OUT")" "$(jq -r .assets.a666.present_on_six "$CHECK_OUT")"
+  issuer_request "$ISSUER_REQUEST"
+  local before supply_before pf a6 driver result after fee_sum seq_before seq_after pft_before pft_after
+  before=$(cat "$CHECK_OUT"); supply_before=$(jq -c .supply_baseline.tuple <<<"$before")
+  seq_before=$(jq -r '.account.sequence_values|if length==1 then .[0] else error("sequence divergence") end' <<<"$before")
+  pft_before=$(jq -r '.account.pft_balance_values|if length==1 then .[0] else error("balance divergence") end' <<<"$before")
+  pf=$(jq -r .assets.pfusdc_asset_id <<<"$before"); a6=$(jq -r .assets.a666_asset_id <<<"$before")
+  driver=$(mktemp /tmp/a666-r4-v7-add-asset-XXXXXX.mjs);chmod 600 "$driver"
+  cat >"$driver" <<'MJS'
+import{createRequire}from'node:module';import{readFileSync}from'node:fs';
+const [origin,profile,passFile,pf,a6,walletRoot]=process.argv.slice(2);const{chromium}=createRequire(walletRoot+'/package.json')('playwright');
+const context=await chromium.launchPersistentContext(profile,{headless:true});const receipts=[];
+try{const page=context.pages()[0]??await context.newPage();page.setDefaultTimeout(30000);const sent=[],received=[];
+page.on('websocket',ws=>{ws.on('framesent',e=>{try{sent.push(JSON.parse(e.payload))}catch{}});ws.on('framereceived',e=>{try{received.push(JSON.parse(e.payload))}catch{}})});
+await page.goto(origin,{waitUntil:'domcontentloaded'});const lock=page.getByText('Wallet locked',{exact:true});if(await lock.isVisible().catch(()=>false)){const pass=readFileSync(passFile,'utf8').trim();await page.locator('input[placeholder="Passphrase"]').fill(pass);await page.getByRole('button',{name:'Unlock',exact:true}).click()}await page.locator('.pf-shell').waitFor();
+for(const asset of[pf,a6]){const start=sent.length;const c=page.locator('[data-testid="add-asset"][data-asset-id="'+asset+'"]');await c.waitFor({state:'visible'});await c.click();const end=Date.now()+30000;let request,response;while(Date.now()<end){request=sent.slice(start).find(x=>x?.method==='mempool_submit_signed_asset_transaction_finality');if(request)response=received.find(x=>x?.id===request.id);if(response)break;await new Promise(r=>setTimeout(r,100))}if(!response?.ok)throw new Error('add-asset finality response missing');const receipt=response.result?.receipt??response.result?.finality?.receipt;if(receipt?.accepted!==true)throw new Error('add-asset finalized receipt not accepted');receipts.push({asset_id:asset,tx_id:response.result?.tx_id??receipt.tx_id,fee_charged:receipt.fee_charged,code:receipt.code})}
+console.log(JSON.stringify({receipts}));}finally{await context.close()}
+MJS
+  result=$(node "$driver" "$(jq -r .origin <<<"$before")" "$PROFILE" "$PASSPHRASE" "$pf" "$a6" "$ROOT/wallet-web");rm -f "$driver"
+  fee_sum=$(jq '[.receipts[].fee_charged]|add' <<<"$result");check;after=$(cat "$CHECK_OUT")
+  jq -e '.assets.pfusdc.present_on_six and .assets.pfusdc.authorized_on_six and .assets.pfusdc.unfrozen_on_six and .assets.a666.present_on_six and (.assets.a666.authorized_on_six|not) and .assets.a666.unfrozen_on_six and .fleet.six_way_tuple_equal' <<<"$after" >/dev/null
+  supply_equal "$supply_before" "$(jq -c .supply_baseline.tuple <<<"$after")"
+  seq_after=$(jq -r '.account.sequence_values|if length==1 then .[0] else error("sequence divergence") end' <<<"$after");pft_after=$(jq -r '.account.pft_balance_values|if length==1 then .[0] else error("balance divergence") end' <<<"$after")
+  [[ $seq_after -eq $((seq_before+2)) && $pft_after -eq $((pft_before-fee_sum)) ]]||refuse fee_or_sequence_delta
+  jq -c '{finalized_receipts:.receipts,business_mutations:2}' <<<"$result"
+}
+
+self_test(){
+ local t f=0 n=0; t=$(mktemp -d /tmp/a666-r4-tl-selftest-XXXXXX); chmod 700 "$t"
+ bad(){ n=$((n+1)); if "$@" >/dev/null 2>&1;then f=$((f+1));fi; }
+ good(){ n=$((n+1)); if ! "$@" >/dev/null 2>&1;then f=$((f+1));fi; }
+ bad loopback https://example.invalid
+ touch "$t/f";chmod 644 "$t/f";bad mode "$t/f" 600 ready
+ printf wrong >"$t/c";bad grep -q "$CANDIDATE" "$t/c"
+  python3 -c 'import json,sys;json.dump({"address":"pf"+"0"*40},sys.stdout)' >"$t/raw";bad public_guard "$t/raw"
+ printf x >"$t/src";bad selector "$t/src"
+ bad absent true false
+ bad supply_equal 1 2
+ bad no_bundle from-bundle
+ good loopback http://127.0.0.1:31021
+ rm -rf "$t";[[ $f == 0 && $n == 9 ]]||refuse "self_test failures=$f vectors=$n"
+ echo "trustline_stage_self_test=ok vectors=9 negative_vectors=8 business_mutations=0"
+}
+
+case ${1:-check} in check)check;;stage)stage;;--self-test)self_test;;*)refuse 'usage [check|stage|--self-test]';;esac
