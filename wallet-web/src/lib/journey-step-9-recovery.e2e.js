@@ -243,6 +243,7 @@ function rpcResult(method) {
         ethereum_chain_id: 1,
         route_trust_class: 'CONTROLLED',
         live_value_enabled: true,
+        route_live: true,
         paused: false,
       }],
     };
@@ -494,6 +495,11 @@ function assertNoSensitiveMaterial(label, content, values) {
 test('journey step 9 resumes the production private-primary recovery component after proxy restart and browser reload', {
   timeout: 120_000,
 }, async () => {
+  const routeRegistry = rpcResult('navcoin_bridge_routes');
+  assert.ok(
+    routeRegistry.routes.every(row => typeof row.route_live === 'boolean'),
+    'public-browser route fixture must bind boolean route_live before browser launch',
+  );
   await readFile(join(DIST_ROOT, 'index.html'), 'utf8');
 
   const tempRoot = await mkdtemp(join(tmpdir(), 'postfiat-journey-step-9-'));
