@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# Executable A666 R4 construction preflight template behind
+# `npm run test:r4-construction`.
+#
+# Same-origin contract: the construction browser journey runs against ONE
+# same-origin candidate stage (static wallet + authenticated rpc/websocket on
+# a single loopback listener, default http://127.0.0.1:31021). The template
+# exports POSTFIAT_R4_WALLET_ORIGIN and POSTFIAT_R4_PROXY_ORIGIN to that exact
+# value and refuses before launch if separately provided origins differ.
+#
+# Origin resolution (single input, first one wins, all must agree):
+#   1. POSTFIAT_R4_CANDIDATE_ORIGIN
+#   2. POSTFIAT_R4_WALLET_ORIGIN
+#   3. POSTFIAT_R4_PROXY_ORIGIN
+#   4. default http://127.0.0.1:31021
+#
+# Usage:
+#   scripts/run-r4-construction [--self-test]
+# Remaining manifest/slot env (fire-control/setup/deployment manifests, hash
+# pins, artifact slots, proxy restart/pid files, journey report) is supplied
+# by the caller exactly as before.
+set -euo pipefail
+
+DEFAULT_ORIGIN="http://127.0.0.1:31021"
+
+resolve_origin() {
+  local origin="" candidate
+  for candidate in \
+    "${POSTFIAT_R4_CANDIDATE_ORIGIN:-}" \
+    "${POSTFIAT_R4_WALLET_ORIGIN:-}" \
+    "${POSTFIAT_R4_PROXY_ORIGIN:-}"; do
+    if [[ -n "$candidate" ]]; then
+      if [[ -z "$origin" ]]; then
+        origin="$candidate"
+      elif [[ "$candidate" != "$origin" ]]; then
+        echo "r4_construction_origin_refuse split_origins wallet=${POSTFIAT_R4_WALLET_ORIGIN:-unset} proxy=${POSTFIAT_R4_PROXY_ORIGIN:-unset} candidate=${POSTFIAT_R4_CANDIDATE_ORIGIN:-unset}" >&2
+        return 2
+      fi
+    fi
+  done
+  origin="${origin:-$DEFAULT_ORIGIN}"
+  [[ "$origin" =~ ^http://127\.0\.0\.1:[0-9]+$ ]] || {
+    echo "r4_construction_origin_refuse non_loopback origin=$origin" >&2
+    return 2
+  }
+  printf '%s\n' "$origin"
+}
+
+self_test() {
+  local failures=0
+  check() { # <name> <expected_exit> <expected_origin_or_empty> <env...>
+    local name="$1" want_exit="$2" want_origin="$3"
+    shift 3
+    local out rc
+    out="$(env -i "$@" bash -c 'source "'"$0"'"; resolve_origin' 2>/dev/null)" && rc=0 || rc=$?
+    if [[ "$rc" == "$want_exit" && ( -z "$want_origin" || "$out" == "$want_origin" ) ]]; then
+      printf 'self_test_vector name=%s ok=true\n' "$name"
+    else
+      printf 'self_test_vector name=%s ok=false rc=%s out=%s\n' "$name" "$rc" "$out"
+      failures=$((failures + 1))
+    fi
+  }
+  check default_equality 0 "$DEFAULT_ORIGIN"
+  check explicit_candidate_origin 0 "$DEFAULT_ORIGIN" POSTFIAT_R4_CANDIDATE_ORIGIN="$DEFAULT_ORIGIN"
+  check explicit_single_wallet_origin 0 "$DEFAULT_ORIGIN" POSTFIAT_R4_WALLET_ORIGIN="$DEFAULT_ORIGIN"
+  check explicit_single_proxy_origin 0 "$DEFAULT_ORIGIN" POSTFIAT_R4_PROXY_ORIGIN="$DEFAULT_ORIGIN"
+  check explicit_both_equal 0 "$DEFAULT_ORIGIN" POSTFIAT_R4_WALLET_ORIGIN="$DEFAULT_ORIGIN" POSTFIAT_R4_PROXY_ORIGIN="$DEFAULT_ORIGIN"
+  check explicit_candidate_plus_wallet_equal 0 "http://127.0.0.1:31099" POSTFIAT_R4_CANDIDATE_ORIGIN="http://127.0.0.1:31099" POSTFIAT_R4_WALLET_ORIGIN="http://127.0.0.1:31099"
+  check split_origin_refusal 2 "" POSTFIAT_R4_WALLET_ORIGIN="http://127.0.0.1:8080" POSTFIAT_R4_PROXY_ORIGIN="$DEFAULT_ORIGIN"
+  check candidate_conflicts_proxy_refusal 2 "" POSTFIAT_R4_CANDIDATE_ORIGIN="http://127.0.0.1:31099" POSTFIAT_R4_PROXY_ORIGIN="$DEFAULT_ORIGIN"
+  check non_loopback_refusal 2 "" POSTFIAT_R4_WALLET_ORIGIN="https://example.invalid"
+  [[ "$failures" == 0 ]] || {
+    echo "r4_construction_template_self_test=fail failures=$failures" >&2
+    return 1
+  }
+  echo 'r4_construction_template_self_test=ok vectors=9 default_equality=true explicit_single_origin_equality=true explicit_both_equal=true split_origin_refusal=true candidate_conflict_refusal=true non_loopback_refusal=true'
+}
+
+main() {
+  local origin
+  origin="$(resolve_origin)"
+  export POSTFIAT_R4_WALLET_ORIGIN="$origin"
+  export POSTFIAT_R4_PROXY_ORIGIN="$origin"
+  export POSTFIAT_R4_PREFLIGHT_ONLY=1
+  printf 'r4_construction_origin=%s wallet_proxy_same_origin=true\n' "$origin"
+  cd "$(dirname "$0")/.."
+  exec node --test src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js "$@"
+}
+
+# Dispatch only when executed directly; sourcing (self-test) must not launch.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  case "${1:-run}" in
+    --self-test) self_test ;;
+    *) main "$@" ;;
+  esac
+fi
