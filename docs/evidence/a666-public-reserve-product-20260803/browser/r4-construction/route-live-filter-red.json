@@ -1,0 +1,72 @@
+{
+  "schema": "postfiat.a666.r4.route-live-filter-red.v1",
+  "recorded_at_utc": "2026-08-05T01:42:14Z",
+  "verdict": "expected_red",
+  "links": {
+    "live_staging_diagnosis_commit": "c0106d25ffdfdf8c4f2b932e10ffedfb5a030938",
+    "observed_failure_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/candidate-proxy-v6-data-plane.json",
+    "append_only_route_handler": "crates/execution/src/nav_vault_asset_execution.rs:3919",
+    "unfiltered_route_listing": "crates/node/src/market_bridge.rs:922-932",
+    "current_duplicate_guard": "wallet-web/src/lib/navcoin-markets.js:82-94"
+  },
+  "owned_test": {
+    "path": "wallet-web/src/lib/navcoin-markets.test.js",
+    "primary_name": "governed NAVCoin markets consume only route_live registry rows",
+    "fixture": {
+      "schema": "postfiat-pftl-uniswap-routes-status-v2",
+      "route_count": 2,
+      "shared_native_and_settlement_identities": true,
+      "journey_route_id": "pftl-a666-r4-offline-rehearsal-v1",
+      "journey_route_live": true,
+      "epoch_route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+      "epoch_route_live": false
+    },
+    "expected_contract": "consume exactly the one route_live=true journey row before duplicate-identity validation",
+    "observed_current_failure": "governed NAVCoin route registry contains a duplicate identity",
+    "observed_failure_source": "wallet-web/src/lib/navcoin-markets.js:89:13",
+    "expected_fail_mechanism": "node:test TODO",
+    "anti_deletion_guard": "route_live filter regression vector is structurally retained"
+  },
+  "negative_contracts": {
+    "two_live_routes_sharing_identity": {
+      "expected": "duplicate-identity rejection",
+      "observed": "passed"
+    },
+    "missing_route_live": {
+      "expected": "fail closed",
+      "observed": "Missing expected exception.",
+      "status": "expected_red"
+    },
+    "non_boolean_route_live": {
+      "expected": "fail closed",
+      "status": "covered after missing-field assertion in the same TODO vector"
+    }
+  },
+  "targeted_run": {
+    "command": "cd wallet-web && node --test --test-name-pattern='route_live|duplicate live route' src/lib/navcoin-markets.test.js",
+    "exit_code": 0,
+    "runtime_ms": 219,
+    "runner_duration_ms": 103.912258,
+    "total_tests": 6,
+    "matched_tests": 4,
+    "passed": 2,
+    "failed": 0,
+    "todo": 2,
+    "skipped_by_filter": 2,
+    "primary_vector_executed": true,
+    "primary_vector_failed_as_expected": true
+  },
+  "syntax": {
+    "command": "node --check wallet-web/src/lib/navcoin-markets.test.js",
+    "exit_code": 0
+  },
+  "scope": {
+    "product_parser_changes": 0,
+    "proxy_or_service_actions": 0,
+    "official_invocations": 0,
+    "business_mutations": 0,
+    "live_chain": false,
+    "stakehub_interaction": false,
+    "credentials_included": false
+  }
+}
