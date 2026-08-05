@@ -26,6 +26,8 @@ official_runner_contract="$construction/official-classification-fast-loop.json"
 restart_watcher="$construction/candidate-proxy-restart-watcher.json"
 official_input_contract="$construction/official-input-contract.json"
 official_input_extractor="$repo/scripts/a666-r4-official-input-contract-extract"
+dynamic_readiness_binding="$construction/official-readiness-dynamic-binding.json"
+v5_wallet_requalification="$pass1/pass1-v5-wallet-requalification.json"
 setup_manifest="$pass1/setup-endpoints-manifest.json"
 stakehub_inventory="$pass1/stakehub-restart-proof.json"
 stakehub_absence="$pass1/stakehub-official-absence.json"
@@ -382,6 +384,37 @@ setup_wallet_identity_validation() {
       }'
 }
 
+v5_dynamic_readiness_binding_validation() {
+    jq -e '
+      .schema == "postfiat.a666.r4.official-readiness-dynamic-binding.v1"
+      and ([.dynamic_artifacts[].role] | sort) == ["deployment", "fire_control", "setup"]
+      and ([.dynamic_artifacts[] | select((.path | type == "string" and length > 0) and (.sha256_at_test_time | type == "string" and test("^[0-9a-f]{64}$")))] | length) == 3
+      and .browser_step1_predicates.count == 6
+      and (.browser_step1_predicates.ids | sort) == ["candidate_bound", "package_json_sha256_match", "production_graph", "served", "version_visible_exact", "wallet_created_and_unlocked"]
+      and .browser_step1_predicates.construction_preflight_executes_all == true
+      and (.browser_step1_predicates.observer | startswith("observeStepOneBuildIdentity"))
+      and ([.commands[] | select((.cmd | startswith("npm run test:r4-construction")) and .exit == 0 and (.summary | contains("tests 19, pass 19, fail 0, todo 0")))] | length) == 1
+      and ([.commands[] | select(.cmd == "scripts/a666-r4-official-input-contract-extract check" and .exit == 0 and (.stdout | contains("\"accessor_count\": 120")) and (.stdout | contains("\"mismatch_count\": 0")))] | length) == 1
+      and .official_journey_invocations == 0 and .business_mutations == 0 and .credentials_included == false
+    ' "$dynamic_readiness_binding" >/dev/null && jq -cn '{ok:true}' || jq -cn '{ok:false}'
+}
+
+v5_wallet_requalification_validation() {
+    jq -e '
+      .schema == "postfiat.a666.r4.pass1-v5-wallet-requalification.v2"
+      and .verdict == "green" and .composite == true and .code_unchanged_after_matrix == true
+      and .product_candidate_revision == "39f7fae3191aa34c376ae1657650a9ec2444f421"
+      and ([.results[] | select(.name == "npm-test" and .exit_code == 0 and .matched == 233 and .passed == 233 and .failed == 0 and .todo == 0)] | length) == 1
+      and ([.results[] | select(.name == "build" and .exit_code == 0)] | length) == 1
+      and ([.results[] | select(.name == "custody-browser" and .exit_code == 0 and .matched == 1 and .passed == 1 and .failed == 0 and .todo == 0)] | length) == 1
+      and ([.results[] | select(.name == "public-browser" and .exit_code == 0 and .matched == 2 and .passed == 2 and .failed == 0 and .todo == 0)] | length) == 1
+      and ([.results[] | select(.name == "r4-construction" and .exit_code == 0 and .matched == 19 and .passed == 19 and .failed == 0 and .todo == 0 and .skipped == 0 and .extractor_accessor_count == 120 and .extractor_mismatch_count == 0)] | length) == 1
+      and .step_1_browser_predicates.executed == true and .step_1_browser_predicates.step_1_browser_identity_green == true and .step_1_browser_predicates.count == 6
+      and .step_1_browser_predicates.served == true and .step_1_browser_predicates.wallet_created_and_unlocked == true and .step_1_browser_predicates.version_visible_exact == true and .step_1_browser_predicates.package_json_sha256_match == true and .step_1_browser_predicates.candidate_bound == true and .step_1_browser_predicates.production_graph == true
+      and .official_journey_invocations == 0 and .business_mutations == 0 and .browser_official_invocations == 0 and .credentials_included == false
+    ' "$v5_wallet_requalification" >/dev/null && jq -cn '{ok:true}' || jq -cn '{ok:false}'
+}
+
 official_input_contract_enforcement_validation() {
     local targets="$1"
     python3 - "$official_input_contract" "$official_input_extractor" "$repo" "$targets" <<'PY'
@@ -498,9 +531,9 @@ restart_watcher_validation() {
       .request_contract as $request
       | .control as $control
       | .schema == "postfiat.a666.r4.candidate-proxy-restart-watcher.v1"
-      and .ready == true and .unit.name == "a666-r4-candidate-proxy-restart-watch-v4.service"
+      and .ready == true and .unit.name == "a666-r4-candidate-proxy-restart-watch-v5.service"
       and .unit.active == true and .unit.running == true
-      and $request.run_id == "a666-r4-official-journey-pass1-20260804-v4"
+      and $request.run_id == "a666-r4-official-journey-pass1-20260805-v5"
       and ($request.nonce | type == "string" and test("^[0-9a-f]{16}$"))
       and ($request.path | type == "string" and endswith("/restart-" + $request.run_id + "-" + $request.nonce + ".request"))
       and ($control.path | type == "string" and endswith("/restart-" + $request.run_id + "-" + $request.nonce + ".control.json"))
@@ -936,6 +969,8 @@ candidate_proxy_validation=$(candidate_proxy_validation_for_file "$candidate_pro
 restart_watcher_validation=$(restart_watcher_validation)
 official_runner_validation=$(official_runner_contract_validation)
 setup_wallet_identity=$(setup_wallet_identity_validation)
+v5_dynamic_readiness_binding=$(v5_dynamic_readiness_binding_validation)
+v5_wallet_requalification=$(v5_wallet_requalification_validation)
 current_route=$(current_route_validation)
 if jq -e '.ok == true' <<<"$current_route" >/dev/null; then
     fresh_route_ok=true
@@ -991,7 +1026,7 @@ if jq -e '.ok == true' <<<"$no_live_validation" >/dev/null; then
     no_live_chain_ok=true
 fi
 candidate_base_ok=false
-if jq -e '.ok == true' <<<"$candidate_proxy_validation" >/dev/null && jq -e '.ok == true' <<<"$restart_watcher_validation" >/dev/null && jq -e '.ok == true' <<<"$setup_wallet_identity" >/dev/null; then
+if jq -e '.ok == true' <<<"$candidate_proxy_validation" >/dev/null && jq -e '.ok == true' <<<"$restart_watcher_validation" >/dev/null && jq -e '.ok == true' <<<"$setup_wallet_identity" >/dev/null && jq -e '.ok == true' <<<"$v5_dynamic_readiness_binding" >/dev/null && jq -e '.ok == true' <<<"$v5_wallet_requalification" >/dev/null; then
     candidate_base_ok=true
 fi
 input_target_statuses=$(jq -cn \
@@ -1086,6 +1121,10 @@ jq -n \
     --argjson restart_watcher_validation "$restart_watcher_validation" \
     --argjson official_invocation_count "$official_invocation_count" \
     --argjson setup_wallet_identity "$setup_wallet_identity" \
+    --argjson dynamic_readiness_binding_input "$(input_summary "$dynamic_readiness_binding")" \
+    --argjson dynamic_readiness_binding_validation "$v5_dynamic_readiness_binding" \
+    --argjson v5_wallet_requalification_input "$(input_summary "$v5_wallet_requalification")" \
+    --argjson v5_wallet_requalification_validation "$v5_wallet_requalification" \
     --argjson input_target_statuses "$input_target_statuses" \
     --argjson official_input_contract_enforcement "$official_input_contract_enforcement" \
     --argjson official_input_contract_input "$(input_summary "$official_input_contract")" \
@@ -1148,6 +1187,10 @@ jq -n \
             official_runner_validation: $official_runner_validation,
             setup_manifest: $setup_manifest_input,
             setup_wallet_identity_validation: $setup_wallet_identity,
+            dynamic_readiness_binding: $dynamic_readiness_binding_input,
+            dynamic_readiness_binding_validation: $dynamic_readiness_binding_validation,
+            v5_wallet_requalification: $v5_wallet_requalification_input,
+            v5_wallet_requalification_validation: $v5_wallet_requalification_validation,
             official_input_contract: $official_input_contract_input,
             official_input_contract_enforcement: $official_input_contract_enforcement,
             official_input_target_statuses: $input_target_statuses,

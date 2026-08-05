@@ -305,6 +305,36 @@
       },
       "ok": true
     },
+    "dynamic_readiness_binding": {
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-readiness-dynamic-binding.json",
+      "exists": true,
+      "valid_json": true,
+      "observed_status": null,
+      "observed_reason": null,
+      "bindings": {
+        "candidate_revision": null,
+        "rehearsal_root": null,
+        "run_id": null
+      }
+    },
+    "dynamic_readiness_binding_validation": {
+      "ok": true
+    },
+    "v5_wallet_requalification": {
+      "path": "{\"ok\":true}",
+      "exists": false,
+      "valid_json": false,
+      "observed_status": "absent",
+      "observed_reason": "evidence_absent",
+      "bindings": {
+        "candidate_revision": null,
+        "rehearsal_root": null,
+        "run_id": null
+      }
+    },
+    "v5_wallet_requalification_validation": {
+      "ok": true
+    },
     "official_input_contract": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-input-contract.json",
       "exists": true,
@@ -2628,7 +2658,7 @@
       }
     },
     "stakehub_absence_validation": {
-      "ok": true
+      "ok": false
     },
     "pre_prove_binding": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/pre-prove-binding-check.json",
@@ -2669,7 +2699,9 @@
     },
     "stakehub_official_scan": {
       "command_succeeded": true,
-      "active_units": []
+      "active_units": [
+        "stakehub-private-swap-dashboard.service"
+      ]
     }
   },
   "proof_artifact_consumption_contract": {
@@ -2717,7 +2749,7 @@
     "status": "binding design; implementation readiness remains false"
   },
   "official_invocation_count": 0,
-  "official_run_id": "a666-r4-official-journey-pass1-20260804-v4",
+  "official_run_id": "a666-r4-official-journey-pass1-20260805-v5",
   "checks": [
     {
       "id": "docker_refire_prepared",
@@ -2791,7 +2823,7 @@
     },
     {
       "id": "stakehub_official_absent",
-      "ok": true,
+      "ok": false,
       "input": "stakehub_official_scan"
     },
     {
@@ -2811,8 +2843,10 @@
     }
   ],
   "check_count": 18,
-  "blocker_names": [],
-  "ready_to_fire": true,
+  "blocker_names": [
+    "stakehub_official_absent"
+  ],
+  "ready_to_fire": false,
   "ready_to_fire_computation": "all checks[].ok values must be true",
   "mutations_executed": false
 }
