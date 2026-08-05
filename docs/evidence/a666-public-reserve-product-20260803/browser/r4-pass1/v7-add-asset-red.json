@@ -1,0 +1,65 @@
+{
+  "schema": "postfiat.a666.r4.v7-add-asset-red.v1",
+  "recorded_utc": "2026-08-05T04:20:00Z",
+  "defect": "DEFECT-13",
+  "test": {
+    "file": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+    "name": "DEFECT-13 RED-FIRST: fresh self-custody wallet creates pfUSDC and A666 trustlines through production UI",
+    "gate_env": "POSTFIAT_REQUIRE_ADD_ASSET=1",
+    "origin": "http://127.0.0.1:31021",
+    "profile": "/home/postfiat/.pft/a666-r4-fresh-wallet-v7/browser-profile",
+    "staged_assets": [
+      { "symbol": "pfUSDC", "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b" },
+      { "symbol": "A666", "asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c" }
+    ]
+  },
+  "failing_assertion": "DEFECT-13: [data-testid=\"add-asset\"] control is absent on the production wallet UI; pfUSDC trustline creation is unreachable for the fresh self-custody wallet",
+  "runs": [
+    {
+      "mode": "gated",
+      "command": "POSTFIAT_REQUIRE_ADD_ASSET=1 node --test --test-name-pattern='DEFECT-13 RED-FIRST: fresh self-custody wallet creates pfUSDC and A666 trustlines through production UI' src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+      "workdir": "wallet-web",
+      "exit_code": 1,
+      "matched_tests": 1,
+      "fail": 1,
+      "todo": 0,
+      "test_duration_ms": 5531,
+      "total_duration_ms": 6341,
+      "failure_type": "ERR_ASSERTION",
+      "failure_is_absent_control": true
+    },
+    {
+      "mode": "ungated",
+      "command": "node --test --test-name-pattern='DEFECT-13 RED-FIRST: fresh self-custody wallet creates pfUSDC and A666 trustlines through production UI' src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+      "workdir": "wallet-web",
+      "exit_code": 0,
+      "matched_tests": 1,
+      "fail": 0,
+      "todo": 1,
+      "total_duration_ms": 6424,
+      "failure_type": "ERR_ASSERTION",
+      "failure_is_absent_control": true
+    }
+  ],
+  "linked_stages": {
+    "fresh_wallet_stage_commit": "3d548d5",
+    "funding_red_commit": "e16406e",
+    "funding_evidence": "docs/evidence/a666-public-reserve-product-20260803/r4-construction/fresh-wallet-funding-v7.json",
+    "production_profile_create_trustline_supported": false,
+    "production_profile_authorize_trustline_supported": false,
+    "authorized_funding_atoms": 1000000
+  },
+  "counters": {
+    "official_invocations": 0,
+    "business_mutations": 0
+  },
+  "negative_facts": {
+    "server_side_signing": false,
+    "credential_egress": false,
+    "transaction_submission": false,
+    "ledger_mutation": false,
+    "seed_material_read_or_logged": false,
+    "raw_address_printed": false
+  },
+  "notes": "RED-first browser regression for DEFECT-13. The fresh self-custody wallet (v7 profile) unlocks through the production candidate UI and reaches the asset area, but no [data-testid=\"add-asset\"] control exists, so pfUSDC and A666 trustline creation is unreachable. The test stops at the bounded 5s control wait with zero submissions; the post-fix flow (click control, stage both asset ids, observe trustlines) is recorded in the test comment and intentionally not implemented in this commit. Product fix is a separate step."
+}

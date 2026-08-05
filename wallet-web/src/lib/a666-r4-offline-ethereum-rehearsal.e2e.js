@@ -2073,6 +2073,81 @@ test('A666 R4 selection helper single-live-route contract: disabled exact Path-B
   assert.equal(opened.proofRequest.method, 'nav_reserve_proof_status');
 });
 
+test('DEFECT-13 RED-FIRST: fresh self-custody wallet creates pfUSDC and A666 trustlines through production UI', {
+  todo: process.env.POSTFIAT_REQUIRE_ADD_ASSET === '1'
+    ? false
+    : 'gated RED: [data-testid="add-asset"] control is absent on the current candidate; set POSTFIAT_REQUIRE_ADD_ASSET=1 to enforce',
+}, async () => {
+  // Bindings taken from the committed construction launcher contract: the
+  // same-origin candidate stage (template default 127.0.0.1:31021) and the
+  // persistent fresh-wallet profile staged by scripts/a666-r4-fresh-wallet-stage
+  // (3d548d5). Seed material is never exported, read, or logged; the raw
+  // address is asserted by equality and never printed.
+  const origin = new URL(process.env.POSTFIAT_R4_WALLET_ORIGIN || 'http://127.0.0.1:31021');
+  assert.ok(['127.0.0.1', 'localhost', '::1'].includes(origin.hostname), 'DEFECT-13 origin must be loopback');
+  assert.ok(origin.port, 'DEFECT-13 origin must include an explicit port');
+  const runDir = '/home/postfiat/.pft/a666-r4-fresh-wallet-v7';
+  const ready = JSON.parse(await readFile(join(runDir, 'fresh-wallet-ready.json'), 'utf8'));
+  const passphrase = (await readFile(join(runDir, 'wallet-passphrase.local'), 'utf8')).trim();
+  assert.match(String(ready.address || ''), /^pf[0-9a-f]{40}$/,
+    'funding-target ready file must carry the staged wallet address');
+  // Exact staged assets of the rehearsal route registry
+  // (pftl-a666-r4-offline-rehearsal-v1; values cross-checked against the
+  // committed fleet/route evidence): settlement pfUSDC then native A666.
+  const stagedAssets = [
+    { symbol: 'pfUSDC', assetId: '02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b' },
+    { symbol: 'A666', assetId: '521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c' },
+  ];
+  for (const asset of stagedAssets) {
+    assert.match(asset.assetId, /^[0-9a-f]{96}$/, `staged ${asset.symbol} asset id is malformed`);
+  }
+  const context = await chromium.launchPersistentContext(join(runDir, 'browser-profile'), { headless: true });
+  try {
+    const page = context.pages()[0] ?? await context.newPage();
+    page.setDefaultTimeout(15_000);
+    const response = await page.goto(origin.href, { waitUntil: 'domcontentloaded' });
+    assert.equal(response?.status(), 200, 'staged candidate wallet origin must return HTTP 200');
+    // domcontentloaded resolves before the React lock screen renders; unlock()
+    // would otherwise observe a not-yet-visible lock node and skip the
+    // passphrase step. Wait for either terminal state first.
+    await Promise.race([
+      page.locator('input[placeholder="Passphrase"]').waitFor({ state: 'visible' }).catch(() => {}),
+      page.locator('.pf-shell').waitFor({ state: 'visible' }).catch(() => {}),
+    ]);
+    await unlock(page, passphrase);
+    const recovered = await page.evaluate(() => new Promise((resolveAddress, rejectAddress) => {
+      const request = indexedDB.open('postfiat-wallet');
+      request.onerror = () => rejectAddress(request.error);
+      request.onsuccess = () => {
+        const database = request.result;
+        const transaction = database.transaction('vaults', 'readonly');
+        const record = transaction.objectStore('vaults').get('default');
+        record.onerror = () => rejectAddress(record.error);
+        record.onsuccess = () => {
+          const result = record.result?.metadata?.address || '';
+          database.close();
+          resolveAddress(result);
+        };
+      };
+    }));
+    assert.equal(String(recovered), String(ready.address),
+      'persisted profile must recover the staged wallet identity (hash-compared, never printed)');
+    for (const asset of stagedAssets) {
+      const control = page.locator('[data-testid="add-asset"]');
+      const controlVisible = await control.first()
+        .waitFor({ state: 'visible', timeout: 5_000 }).then(() => true).catch(() => false);
+      assert.ok(controlVisible,
+        `DEFECT-13: [data-testid="add-asset"] control is absent on the production wallet UI; ${asset.symbol} trustline creation is unreachable for the fresh self-custody wallet`);
+      // Future (post product fix): select the exact staged asset by assetId,
+      // submit the user-signed trustline through the browser wallet, and
+      // observe a finalized trustline receipt. Unreachable on the current
+      // candidate; zero submissions and zero ledger mutations today.
+    }
+  } finally {
+    await context.close();
+  }
+});
+
 test('A666 R4 step-3 choreography rejects wrapper-only readiness and binds proof method/request identity', async () => {
   const historical = execFileSync(
     'git',
