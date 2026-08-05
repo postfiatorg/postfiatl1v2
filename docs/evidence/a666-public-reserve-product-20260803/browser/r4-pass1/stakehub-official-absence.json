@@ -24,12 +24,11 @@
   "software_actions": 0,
   "credentials_included": false,
   "teardown_contract": "after the official run passes, fails, or freezes, action restart must restore exactly the inventory active set (stakehub-private-swap-dashboard.service only) and prove active count==1 with name equality; the only exception is an explicit active-investigation freeze",
-  "fire_control_gate_commit": "34a4682",
-  "structural_fix_commit": "9c85173",
-  "requalification_commit": "0cdb65e",
-  "watcher_commit": "151649d",
-  "official_run_id": "a666-r4-official-journey-pass1-20260804-v4",
-  "window_attempt": 4,
+  "fire_control_gate_commit": "2378776",
+  "requalification_commit": "5125b0c",
+  "watcher_commit": "3469235",
+  "official_run_id": "a666-r4-official-journey-pass1-20260805-v5",
+  "window_attempt": 5,
   "mandatory_restart_armed": true,
-  "official_run_note": "pass 1 v4 fire window after mode-symmetric validation structural fix 9c85173; prior v3 window closed by mandatory restart d78676f after step-1 failure d9871ce"
+  "official_run_note": "pass 1 v5 fire window after dynamic-binding readiness f4a70fe and mandatory browser preflight; prior v4 window closed by mandatory restart 3b3d82d after step-1 failure 0e2cce3"
 }
