@@ -1,0 +1,74 @@
+{
+  "recorded_at_utc": "2026-08-05T18:20:28Z",
+  "authorization_artifact": {
+    "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/sauron-live-fire-authorization-20260805.json",
+    "git_commit": "98e8747b149cf0ff50971944c642b482c91825c4"
+  },
+  "verdict": "STOP",
+  "stop_no_retry_in_force": true,
+  "red_gates": [
+    {
+      "name": "warm_prover",
+      "verdict": "RED",
+      "finding": "127.0.0.1:18793 is not listening",
+      "evidence": "ss listener check; no listener row returned"
+    },
+    {
+      "name": "bfinal_service_identity",
+      "verdict": "RED",
+      "finding": "service identity 91aa6c9d is stale; canonical identity is bfb3d043"
+    },
+    {
+      "name": "fleet_convergence",
+      "verdict": "RED",
+      "finding": "not verifiable without credentials"
+    }
+  ],
+  "green_gates": [
+    {
+      "name": "service_activity",
+      "verdict": "GREEN",
+      "finding": "5/5 services active"
+    },
+    {
+      "name": "approved_packet_hashes",
+      "verdict": "GREEN",
+      "finding": "5/5 packet hashes byte-exact against the authorization artifact"
+    },
+    {
+      "name": "replay_scan",
+      "verdict": "GREEN",
+      "finding": "clean except pytest fixtures under /tmp/pytest-of-postfiat, classified as non-chain test artifacts"
+    },
+    {
+      "name": "spend_ledger_and_cap",
+      "verdict": "GREEN",
+      "total_spent_usdc": "501.024845",
+      "cap_usdc": "530.000000",
+      "projected_usdc": "511.024845"
+    },
+    {
+      "name": "route_endpoints_balances_nav",
+      "verdict": "GREEN",
+      "nav_per_unit": "8.20102177",
+      "epoch": 59,
+      "freshness": "31/900"
+    },
+    {
+      "name": "runner_preflight",
+      "verdict": "GREEN",
+      "finding": "GREEN; all five leg surfaces WIRED"
+    }
+  ],
+  "evidence_pointers": [
+    "/tmp/krimp-prefire/",
+    "/tmp/snaga-prefire/",
+    "/tmp/ghash-prefire/"
+  ],
+  "zero_mutations": {
+    "live_fire": false,
+    "signing": false,
+    "transactions": false,
+    "service_actions": false
+  }
+}
