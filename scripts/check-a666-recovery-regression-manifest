@@ -19,6 +19,7 @@ REQUIRED_AR_IDS = {f"AR-{index:02d}" for index in range(1, 12)}
 REQUIRED_BROWSER_REGRESSION_IDS = {
     "R4-STEP10-DOWNLOAD",
     "R4-RECOVERED-RECEIPT",
+    "R4-SELF-CUSTODY-TRUSTLINES",
 }
 REQUIRED_WALLET_UNIT_REGRESSIONS = {
     "R4-ROUTE-LIVE-FILTER": {
@@ -115,16 +116,16 @@ def validate_manifest(repo: Path, manifest: dict[str, Any]) -> list[dict[str, An
             "successor candidate wallet unit count must be 233")
     require(successor.get("custody_browser_tests") == 1,
             "successor candidate custody browser count must be 1")
-    require(successor.get("public_browser_tests") == 2,
-            "successor candidate public browser count must be 2")
+    require(successor.get("public_browser_tests") == 3,
+            "successor candidate public browser count must be 3")
     require(successor.get("exact_step_9_tests") == 1,
             "successor candidate exact step-9 count must be 1")
 
     defects = manifest.get("observed_defect_classes")
-    require(isinstance(defects, list) and len(defects) == 12,
-            "exactly twelve observed defect classes are required")
+    require(isinstance(defects, list) and len(defects) == 13,
+            "exactly thirteen observed defect classes are required")
     defect_ids = [item.get("id") for item in defects if isinstance(item, dict)]
-    require(len(defect_ids) == len(set(defect_ids)) == 12,
+    require(len(defect_ids) == len(set(defect_ids)) == 13,
             "observed defect IDs must be unique")
 
     regressions = manifest.get("regressions")
@@ -391,7 +392,7 @@ def main() -> int:
 
     rust_test_count = sum(test["runner"] == "rust" for test in tests)
     print(
-        f"A666 recovery manifest PASS: defects=12 regressions={len(REQUIRED_AR_IDS)} "
+        f"A666 recovery manifest PASS: defects=13 regressions={len(REQUIRED_AR_IDS)} "
         f"browser_regressions={len(REQUIRED_BROWSER_REGRESSION_IDS)} "
         f"wallet_unit_regressions={len(REQUIRED_WALLET_UNIT_REGRESSIONS)} "
         f"standalone_tests={rust_test_count} run={str(args.run).lower()}"

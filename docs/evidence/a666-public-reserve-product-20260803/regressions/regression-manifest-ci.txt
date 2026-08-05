@@ -25,6 +25,16 @@ DEFECT-12 closure
 - Collection: wallet_unit_regressions/R4-ROUTE-LIVE-FILTER; command npm test; source wallet-web/src/lib/navcoin-markets.test.js.
 - Status: regression_status=passed; wallet unit suite 237/237.
 
+DEFECT-13 closure
+- Class: fresh generated self-custody wallets lacked holder trustline creation for pfUSDC/A666 onboarding assets.
+- RED: 9db2f521ff7e4cc5d3b46d5d7de9aab8f4bb0503.
+- Green browser evidence: docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/v7-add-asset-product.json.
+- First passing commit: 11c142ff591a122a59a751d492ddef84e4d72091.
+- Product sources: wallet-web/src/components/Send.jsx; wallet-web/src/lib/tx-builder.js; wallet-web/src/lib/public-route-smoke.e2e.js.
+- Scope: holder UI is product; A666 issuer authorization remains staging/operator-only; no issuer key/tool is in the wallet.
+- Fixture chain-ID correction is test-harness evidence, not a product defect.
+- Browser suite evidence: fresh self-custody wallet adds pfUSDC with a holder-signed trust_set; matched=3, passed=3, failed=0, todo=0, full suite runtime=8290ms. Targeted standalone runtime=5120ms, matched=1.
+
 R7 transport-tightness follow-up
 - R7-reserve-proof-websocket-frame-request-binding is implemented/load-bearing for V6, not pending.
 - Implementation: 293abbc4425a0dd96a7b57bddbb8a09de02e850f; step3-shared-choreography-green.json.
@@ -36,10 +46,15 @@ Historical extractor finding retained
 Current validation
 - Command: scripts/check-a666-recovery-regression-manifest --run
 - Exit code: 0
-- Elapsed milliseconds: 172958
-- Execution scope: 26 standalone Rust tests plus the wallet unit regression suite.
-- Wallet unit terminal: PASS R4-ROUTE-LIVE-FILTER/governed NAVCoin markets consume only route_live registry rows matched=237 passed=237 elapsed_ms=30376
-- Terminal: A666 recovery manifest PASS: defects=12 regressions=11 browser_regressions=2 wallet_unit_regressions=1 standalone_tests=26 run=true
+- Elapsed milliseconds: 172280
+- Execution scope: 26 standalone Rust tests and the wallet-unit regression suite; browser-row metadata validates the recorded 3/3 public-browser result above.
+- Wallet-unit terminal: PASS R4-ROUTE-LIVE-FILTER/governed NAVCoin markets consume only route_live registry rows matched=242 passed=242 elapsed_ms=30398
+- Terminal: A666 recovery manifest PASS: defects=13 regressions=11 browser_regressions=3 wallet_unit_regressions=1 standalone_tests=26 run=true
+
+- Command: scripts/check-a666-recovery-regression-manifest
+- Exit code: 0
+- Elapsed milliseconds: 72
+- Terminal: A666 recovery manifest PASS: defects=13 regressions=11 browser_regressions=3 wallet_unit_regressions=1 standalone_tests=26 run=false
 
 - Command: scripts/a666-r4-official-input-contract-extract check
 - Exit code: 0
@@ -48,11 +63,11 @@ Current validation
 - Terminal: {"ok":true,"accessor_count":120,"mismatch_count":0}
 
 Manifest totals
-- Observed product/browser/wallet defect classes: 12
+- Observed product/browser/wallet defect classes: 13
 - Harness defect classes: 7
-- Total named defect classes: 19
+- Total named defect classes: 20
 - Rust standalone regression tests: 26
-- Browser regression rows: 2
+- Browser regression rows: 3
 - Wallet unit regression rows: 1
-- Total manifest regression-test records: 29
+- Total manifest regression-test records: 30
 - Status: complete

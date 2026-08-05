@@ -569,6 +569,16 @@
         "R4-ROUTE-LIVE-FILTER"
       ],
       "regression_status": "passed"
+    },
+    {
+      "id": "DEFECT-13",
+      "description": "a fresh generated self-custody wallet lacked holder trustline creation for pfUSDC and A666 onboarding assets",
+      "classification": "observed_user_facing_product_defect",
+      "scope_fence": "holder UI is product; pfUSDC auto-authorizes; A666 issuer authorization remains staging/operator-only; no issuer key/tool in wallet",
+      "regression_ids": [
+        "R4-SELF-CUSTODY-TRUSTLINES"
+      ],
+      "regression_status": "passed"
     }
   ],
   "regressions": [
@@ -958,6 +968,47 @@
         }
       ],
       "evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/step10-public-receipt-green.txt"
+    },
+    {
+      "id": "R4-SELF-CUSTODY-TRUSTLINES",
+      "contract": "a fresh generated self-custody wallet creates pfUSDC and A666 holder trustlines through a holder-signed trust_set; pfUSDC auto-authorizes and issuer authorization remains outside the wallet",
+      "status": "passed",
+      "source_files": [
+        "wallet-web/src/components/Send.jsx",
+        "wallet-web/src/lib/tx-builder.js",
+        "wallet-web/src/lib/public-route-smoke.e2e.js"
+      ],
+      "root_cause": "wallet-web/src/components/Send.jsx:435-470 and 655-679 were absent before the fix, leaving no holder add-asset trustline UI; wallet-web/src/lib/tx-builder.js:136-158 builds the holder-signed trust_set; browser coverage is wallet-web/src/lib/public-route-smoke.e2e.js:311-414",
+      "red_commit": "9db2f521ff7e4cc5d3b46d5d7de9aab8f4bb0503",
+      "first_passing_commit": "11c142ff591a122a59a751d492ddef84e4d72091",
+      "targeted_red_to_green": {
+        "command": "cd wallet-web && node --test src/lib/public-route-smoke.e2e.js",
+        "runtime_milliseconds": 5120,
+        "matched_test_count": 1,
+        "passed_test_count": 1,
+        "failed_test_count": 0,
+        "test_name": "fresh self-custody wallet adds pfUSDC with a holder-signed trust_set"
+      },
+      "fixture_chain_identity_correction": {
+        "classification": "test_harness_evidence_not_product_defect",
+        "prior_fixture_chain_id": "postfiat-wan-devnet",
+        "corrected_fixture_chain_id": "postfiat-wan-devnet-2",
+        "production_wallet_backup_chain": "postfiat-wan-devnet-2"
+      },
+      "scope_fence": "holder UI is product; A666 issuer authorization is staging/operator-only; no issuer key/tool in wallet",
+      "tests": [
+        {
+          "name": "fresh self-custody wallet adds pfUSDC with a holder-signed trust_set",
+          "runtime_milliseconds": 8290,
+          "matched_test_count": 3,
+          "command": "npm run test:public-browser",
+          "working_directory": "wallet-web"
+        }
+      ],
+      "evidence": [
+        "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/v7-add-asset-red.json",
+        "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/v7-add-asset-product.json"
+      ]
     }
   ],
   "wallet_unit_regressions": [
@@ -1002,7 +1053,7 @@
     "rust_validator_runtime_milliseconds": 203988,
     "wallet_unit_tests": 233,
     "custody_browser_tests": 1,
-    "public_browser_tests": 2,
+    "public_browser_tests": 3,
     "exact_step_9_tests": 1
   },
   "remaining_acceptance_work": []
