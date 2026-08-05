@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# RED-first staging regression: candidate proxy stage requires a local-session
+# principal before wallet mutation methods are enabled.
+#
+# Vector: candidate proxy stage requires a local-session principal before
+# wallet mutation methods are enabled.
+#
+# Contract under test (static launcher inspection only; this test never
+# executes the live stage, never stops/starts services, and never reads or
+# prints the ready-file address, principal, or token values):
+#   1. The launcher sources WALLET_PROXY_LOCAL_SESSION_PRINCIPAL from a
+#      mode-600 ready-file PATH (never an inline literal).
+#   2. The launcher refuses a missing/empty principal BEFORE any service
+#      change (the guard precedes the first proxy stop in source order).
+#   3. The launcher readiness gate proves GET /api/bridge/local-session
+#      succeeds (ok == true and a token of length >= 32) without displaying
+#      the token value.
+# The current launcher has no principal guard, so every property fails and
+# this test exits nonzero with: missing local-session principal guard.
+set -Eeuo pipefail
+
+ROOT=/home/postfiat/repos/a666-eth-fast-lane-combined-20260724
+LAUNCHER=${POSTFIAT_R4_CANDIDATE_PROXY_LAUNCHER:-$ROOT/scripts/a666-r4-candidate-proxy-stage}
+VECTOR='candidate proxy stage requires a local-session principal before wallet mutation methods are enabled'
+
+refuse(){ echo "candidate_proxy_local_session_red: $*" >&2; exit 2; }
+
+[[ -f $LAUNCHER ]] || refuse "launcher_missing_$LAUNCHER"
+
+# Property 1: principal exists and is file-sourced with a mode-600 guard.
+grep -q 'WALLET_PROXY_LOCAL_SESSION_PRINCIPAL' "$LAUNCHER" \
+  || refuse 'missing local-session principal guard'
+grep -Eq 'LOCAL_SESSION_PRINCIPAL_FILE|PRINCIPAL_FILE' "$LAUNCHER" \
+  || refuse 'missing local-session principal guard'
+grep -Eq 'stat -c %a.*600|mode.*600.*principal|principal.*600' "$LAUNCHER" \
+  || refuse 'missing local-session principal guard'
+
+# Property 2: principal refusal precedes the first service change in source
+# order. The guard line must sit above the first proxy stop invocation.
+guard_line=$(grep -n 'WALLET_PROXY_LOCAL_SESSION_PRINCIPAL' "$LAUNCHER" | head -1 | cut -d: -f1)
+stop_line=$(grep -nE 'stop|kill' "$LAUNCHER" | head -1 | cut -d: -f1)
+[[ -n $guard_line && -n $stop_line && $guard_line -lt $stop_line ]] \
+  || refuse 'missing local-session principal guard'
+
+# Property 3: readiness proves the local-session endpoint without displaying
+# the token (ok check plus a token length assertion, no token echo).
+grep -q '/api/bridge/local-session' "$LAUNCHER" \
+  || refuse 'missing local-session principal guard'
+grep -Eq 'token.*length|length.*token' "$LAUNCHER" \
+  || refuse 'missing local-session principal guard'
+
+echo "candidate_proxy_local_session_test=ok vector='$VECTOR'"
