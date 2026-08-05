@@ -1,0 +1,75 @@
+{
+  "schema": "postfiat.a666.r4.v7-trustline-send-tab-choreography.v1",
+  "recorded_at_utc": "2026-08-05T05:55:00Z",
+  "verdict": "green",
+  "source_regression": {
+    "commit": "11c142ff591a122a59a751d492ddef84e4d72091",
+    "test": "wallet-web/src/lib/public-route-smoke.e2e.js",
+    "production_navigation_locator": ".pf-sidebar .pf-nav filtered by hasText Send"
+  },
+  "change": {
+    "script": "scripts/a666-r4-fresh-wallet-trustline-stage",
+    "send_navigation_count": 1,
+    "add_asset_clicked": false,
+    "product_files_changed": false
+  },
+  "validation": {
+    "syntax": {
+      "exit_code": 0,
+      "runtime_ms": 9
+    },
+    "self_test": {
+      "command": "scripts/a666-r4-fresh-wallet-trustline-stage --self-test",
+      "exit_code": 0,
+      "runtime_ms": 232,
+      "vectors": 15,
+      "negative_vectors": 11,
+      "delayed_lock_vector": 1,
+      "send_tab_vector": 1,
+      "selectors_absent_before_navigation": true,
+      "selectors_exact_after_one_navigation": true,
+      "duplicate_navigation_refused": true,
+      "duplicate_control_refused": true
+    },
+    "read_only_check": {
+      "command": "scripts/a666-r4-fresh-wallet-trustline-stage check",
+      "exit_code": 0,
+      "runtime_ms": 381,
+      "candidate_revision": "1bc25ac7384de8837a14b8150863ea1bc0e883eb",
+      "four_way_candidate_binding_green": true,
+      "fleet_six_way_equal": true,
+      "block_height": 834,
+      "fresh_pft_atoms": 74,
+      "fresh_sequence": 0,
+      "pfusdc_trustline_absent": true,
+      "a666_trustline_absent": true
+    }
+  },
+  "production_ui_preflight": {
+    "origin": "http://127.0.0.1:31021",
+    "exit_code": 0,
+    "runtime_ms": 1005,
+    "wallet_shell_visible": true,
+    "unlock_state": "locked",
+    "unlock_count": 1,
+    "send_navigation_count": 1,
+    "controls": {
+      "add-asset": 1,
+      "add-asset-id": 1,
+      "add-asset-limit": 1,
+      "issuer-authorize": 0,
+      "issuer-freeze": 0
+    },
+    "add_asset_clicked": false,
+    "passphrase_read_at_fill_time": true,
+    "passphrase_value_recorded": false
+  },
+  "scope": {
+    "stage_invocations": 0,
+    "trust_set_operations": 0,
+    "business_mutations": 0,
+    "live_chain": false,
+    "stakehub_interaction": false,
+    "credential_values_included": false
+  }
+}

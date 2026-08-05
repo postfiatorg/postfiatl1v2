@@ -127,6 +127,7 @@ const context=await chromium.launchPersistentContext(profile,{headless:true});co
 try{const page=context.pages()[0]??await context.newPage();page.setDefaultTimeout(30000);const sent=[],received=[];
 page.on('websocket',ws=>{ws.on('framesent',e=>{try{sent.push(JSON.parse(e.payload))}catch{}});ws.on('framereceived',e=>{try{received.push(JSON.parse(e.payload))}catch{}})});
 await page.goto(origin,{waitUntil:'domcontentloaded'});const passInput=page.locator('input[placeholder="Passphrase"]'),shell=page.locator('.pf-shell');const unlockState=await Promise.race([passInput.waitFor({state:'visible'}).then(()=> 'locked'),shell.waitFor({state:'visible'}).then(()=> 'unlocked')]);if(unlockState==='locked'){const pass=readFileSync(passFile,'utf8').trim();await passInput.fill(pass);await page.getByRole('button',{name:'Unlock',exact:true}).click();await shell.waitFor({state:'visible'})}else if(unlockState!=='unlocked'){throw new Error('wallet unlock state unavailable')}
+const sendNav=page.locator('.pf-sidebar .pf-nav').filter({hasText:'Send'});if(await sendNav.count()!==1)throw new Error('send navigation cardinality');await sendNav.click();const idInput=page.locator('[data-testid="add-asset-id"]'),limitInput=page.locator('[data-testid="add-asset-limit"]'),addButton=page.locator('[data-testid="add-asset"]');await idInput.waitFor({state:'visible'});if(await idInput.count()!==1||await limitInput.count()!==1||await addButton.count()!==1)throw new Error('add asset control cardinality');if(await page.locator('[data-testid="issuer-authorize"],[data-testid="issuer-freeze"]').count()!==0)throw new Error('issuer control exposed');
 for(const asset of[pf,a6]){const start=sent.length;const c=page.locator('[data-testid="add-asset"][data-asset-id="'+asset+'"]');await c.waitFor({state:'visible'});await c.click();const end=Date.now()+30000;let request,response;while(Date.now()<end){request=sent.slice(start).find(x=>x?.method==='mempool_submit_signed_asset_transaction_finality');if(request)response=received.find(x=>x?.id===request.id);if(response)break;await new Promise(r=>setTimeout(r,100))}if(!response?.ok)throw new Error('add-asset finality response missing');const receipt=response.result?.receipt??response.result?.finality?.receipt;if(receipt?.accepted!==true)throw new Error('add-asset finalized receipt not accepted');receipts.push({asset_id:asset,tx_id:response.result?.tx_id??receipt.tx_id,fee_charged:receipt.fee_charged,code:receipt.code})}
 console.log(JSON.stringify({receipts}));}finally{await context.close()}
 MJS
@@ -172,6 +173,26 @@ if (!shellVisible || unlocks !== 1) throw new Error('new unlock observer failed'
 JS
 }
 
+send_tab_choreography_self_test(){
+ node <<'JS'
+const exactControls = value => value.addAsset === 1 && value.assetId === 1 && value.limit === 1 && value.issuer === 0 && value.freeze === 0;
+let navigations = 0;
+let controls = { addAsset: 0, assetId: 0, limit: 0, issuer: 0, freeze: 0 };
+if (exactControls(controls)) throw new Error('controls unexpectedly mounted before navigation');
+const navigate = next => {
+  if (navigations !== 0) throw new Error('duplicate Send navigation');
+  navigations += 1;
+  controls = next;
+};
+navigate({ addAsset: 1, assetId: 1, limit: 1, issuer: 0, freeze: 0 });
+if (navigations !== 1 || !exactControls(controls)) throw new Error('Send controls did not mount exactly once');
+let duplicateNavigationRefused = false;
+try { navigate(controls); } catch { duplicateNavigationRefused = true; }
+if (!duplicateNavigationRefused) throw new Error('duplicate navigation accepted');
+if (exactControls({ ...controls, addAsset: 2 })) throw new Error('duplicate control accepted');
+JS
+}
+
 self_test(){
  local t f=0 n=0 candidate=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa other=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
  t=$(mktemp -d /tmp/a666-r4-tl-selftest-XXXXXX); chmod 700 "$t"
@@ -191,8 +212,9 @@ self_test(){
  bad candidate_revisions_match "$candidate" "$candidate" "$other" "$candidate"
  bad candidate_revisions_match "$candidate" "$candidate" "$candidate" "$other"
  good unlock_choreography_self_test
- rm -rf "$t";[[ $f == 0 && $n == 14 ]]||refuse "self_test failures=$f vectors=$n"
- echo "trustline_stage_self_test=ok vectors=14 negative_vectors=11 candidate_mismatch_refusals=3 delayed_lock_vector=1 unlocks=1 business_mutations=0"
+ good send_tab_choreography_self_test
+ rm -rf "$t";[[ $f == 0 && $n == 15 ]]||refuse "self_test failures=$f vectors=$n"
+ echo "trustline_stage_self_test=ok vectors=15 negative_vectors=11 candidate_mismatch_refusals=3 delayed_lock_vector=1 send_tab_vector=1 unlocks=1 navigations=1 business_mutations=0"
 }
 
 case ${1:-check} in check)check;;stage)stage;;--self-test)self_test;;*)refuse 'usage [check|stage|--self-test]';;esac
