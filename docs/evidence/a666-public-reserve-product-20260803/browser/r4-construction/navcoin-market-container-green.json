@@ -1,0 +1,57 @@
+{
+  "schema": "postfiat.a666.r4.navcoin-market-container-green.v1",
+  "generated_utc": "2026-08-05",
+  "links": {
+    "red_vector": "e405a9c",
+    "shared_coverage": "84fa197",
+    "v5_terminal": "20e0ee8"
+  },
+  "product_fix": {
+    "file": "wallet-web/src/components/NavcoinMarket.jsx",
+    "summary": "the conditional render (fallback error branch + MarketAdapter branch) is wrapped in exactly one <div data-testid=\"navcoin-market\">; zero logic/text/state/style/dependency change; both branches covered",
+    "lines": "NavcoinMarket.jsx:9-20 (export default function body)"
+  },
+  "test_conversion": "e405a9c expected-fail todo vector converted to mandatory passing test; anti-deletion guard preserved (vector registration, no skip, shared observer reuse, production NAV Markets click, exact container wait)",
+  "build": {
+    "cmd": "npm run build",
+    "exit": 0,
+    "bundle": "dist/assets/index-BdqnjDXP.js",
+    "wrapper_in_bundle": "{\"data-testid\":`navcoin-market`,children:n?...} present"
+  },
+  "preview_run": {
+    "server": "python3 -m http.server 8199 --bind 127.0.0.1 --directory dist (temporary, isolated; 31021 untouched)",
+    "cmd": "POSTFIAT_R4_WALLET_ORIGIN=http://127.0.0.1:8199 node --test --test-name-pattern \"served candidate NAV Markets\" src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+    "exit": 0,
+    "matched": 1,
+    "passed": 1,
+    "failed": 0,
+    "todo": 0,
+    "runtime_ms": 1314,
+    "visible_testid": true,
+    "teardown": {
+      "pid_file": "/tmp/r4-preview-8199.pid",
+      "killed_pid": 2225789,
+      "port_8199_listeners_after_kill": 0
+    }
+  },
+  "served_8080_note": "127.0.0.1:8080 serves the live wallet-web/dist build; after npm run build it serves bundle index-BdqnjDXP.js containing the wrapper (verified by byte pattern in the served bundle)",
+  "full_suite": {
+    "cmd": "npm run test:r4-construction with the f4a70fe rerun_contract env block",
+    "exit": 0,
+    "tests": 21,
+    "pass": 21,
+    "fail": 0,
+    "todo": 0,
+    "runtime_ms": 32289,
+    "step_3_construction_finding": "production wallet did not observe the reserve-proof RPC response (container now renders; the reserve-proof RPC frame is not observed - preserved staged-stack RED one layer deeper, non-blocking until its diagnosis fix lands)",
+    "steps_1_4_display_all_green": false
+  },
+  "extractor": {
+    "exit": 0,
+    "accessor_count": 120,
+    "mismatch_count": 0
+  },
+  "official_journey_invocations": 0,
+  "business_mutations": 0,
+  "credentials_included": false
+}

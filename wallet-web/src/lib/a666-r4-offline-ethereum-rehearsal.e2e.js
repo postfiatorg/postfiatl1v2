@@ -1562,9 +1562,7 @@ function normalizeValidationInputs(mode, fixture) {
   };
 }
 
-test('A666 R4 RED-FIRST served candidate NAV Markets exposes visible navcoin market container', {
-  todo: 'RED-first product vector: the existing candidate renders no visible [data-testid="navcoin-market"] after create/unlock and the production NAV Markets click. Convert to strict when App supplies the production render container.',
-}, async () => {
+test('A666 R4 RED-FIRST served candidate NAV Markets exposes visible navcoin market container', async () => {
   const walletOrigin = requiredLoopbackOrigin('POSTFIAT_R4_WALLET_ORIGIN', 'served candidate wallet origin');
   const setup = await readJson(
     join(REPO_ROOT, 'docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/setup-endpoints-manifest.json'),
