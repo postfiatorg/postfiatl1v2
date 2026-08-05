@@ -1,0 +1,260 @@
+#!/usr/bin/env bash
+# V7 loopback-only fresh-wallet funding stage.
+# Fails closed before signing whenever the destination account/trustline cannot
+# be provisioned through the persistent production wallet profile.
+set -Eeuo pipefail
+
+REPO_ROOT="/home/postfiat/repos/a666-eth-fast-lane-combined-20260724"
+READY_FILE="/home/postfiat/.pft/a666-r4-fresh-wallet-v7/fresh-wallet-ready.json"
+FLEET_FILE="$REPO_ROOT/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-rpc-endpoints.json"
+HOLDER_EVIDENCE="$REPO_ROOT/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/private-swap-stage.json"
+EVIDENCE="$REPO_ROOT/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fresh-wallet-funding-v7.json"
+EXPECTED_ADDRESS_SHA256="2f58eb97683596c676c06da165c3e8011ff9860827acb9b30355a2a83638f4a6"
+EXPECTED_CANDIDATE="23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f"
+FUNDING_ATOMS=1000000
+ISSUE_REQUIREMENT_ATOMS=903212
+MARGIN_ATOMS=96788
+
+[[ "$(stat -c '%a' "$READY_FILE")" == 600 ]] || {
+  echo "fresh_wallet_funding_refuse ready_file_mode" >&2
+  exit 2
+}
+umask 077
+
+set +e
+python3 - "$READY_FILE" "$FLEET_FILE" "$HOLDER_EVIDENCE" "$EVIDENCE"   "$EXPECTED_ADDRESS_SHA256" "$EXPECTED_CANDIDATE" "$FUNDING_ATOMS"   "$ISSUE_REQUIREMENT_ATOMS" "$MARGIN_ATOMS" "$REPO_ROOT" <<'PY'
+import hashlib, json, socket, sys, time
+from pathlib import Path
+
+ready_path, fleet_path, holder_path, evidence_path = map(Path, sys.argv[1:5])
+expected_hash, expected_candidate = sys.argv[5:7]
+funding, requirement, margin = map(int, sys.argv[7:10])
+repo = Path(sys.argv[10])
+started = time.time()
+
+ready = json.loads(ready_path.read_text())
+address = ready.get("address", "")
+if not isinstance(address, str) or not address.startswith("pf") or len(address) != 42:
+    raise SystemExit("fresh_wallet_funding_refuse malformed_private_target")
+address_hash = hashlib.sha256(address.encode()).hexdigest()
+if address_hash != expected_hash:
+    raise SystemExit("fresh_wallet_funding_refuse address_hash_mismatch")
+if ready.get("candidate_revision") != expected_candidate:
+    raise SystemExit("fresh_wallet_funding_refuse candidate_mismatch")
+
+fleet = json.loads(fleet_path.read_text())
+endpoints = [(row.get("host"), row.get("rpc_port")) for row in fleet.get("endpoints", [])]
+if len(endpoints) != 6 or len(set(endpoints)) != 6:
+    raise SystemExit("fresh_wallet_funding_refuse fleet_cardinality")
+if any(host != "127.0.0.1" or not isinstance(port, int) for host, port in endpoints):
+    raise SystemExit("fresh_wallet_funding_refuse non_loopback_fleet")
+
+holder_doc = json.loads(holder_path.read_text())
+holder = holder_doc.get("controlled_wallet", {}).get("id", "")
+if not isinstance(holder, str) or not holder.startswith("pf") or len(holder) != 42:
+    raise SystemExit("fresh_wallet_funding_refuse holder_reference")
+
+def call(endpoint, request_id, method, params):
+    sock = socket.create_connection(endpoint, timeout=5)
+    try:
+        wire = {"version": "postfiat-local-rpc-v1", "id": request_id,
+                "method": method, "params": params}
+        sock.sendall((json.dumps(wire, separators=(",", ":")) + "\n").encode())
+        response = json.loads(sock.makefile("rb").readline())
+    finally:
+        sock.close()
+    if response.get("id") != request_id:
+        raise RuntimeError(f"{method}: response id mismatch")
+    return response
+
+statuses, routes, fresh_accounts, fresh_assets = [], [], [], []
+for index, endpoint in enumerate(endpoints):
+    prefix = f"v7-funding-preflight-{index}"
+    statuses.append(call(endpoint, prefix + "-status", "status", {}))
+    routes.append(call(endpoint, prefix + "-routes", "navcoin_bridge_routes", {}))
+    fresh_accounts.append(call(endpoint, prefix + "-fresh-account", "account", {"address": address}))
+    fresh_assets.append(call(endpoint, prefix + "-fresh-assets", "account_assets", {"account": address}))
+
+status_results = [row.get("result", {}) for row in statuses if row.get("ok") is True]
+tuples = {(row.get("block_height"), row.get("block_tip_hash"), row.get("state_root"))
+          for row in status_results}
+six_converged = len(status_results) == 6 and len(tuples) == 1
+if not six_converged:
+    raise SystemExit("fresh_wallet_funding_refuse six_way_convergence")
+
+route_rows = []
+for response in routes:
+    if response.get("ok") is not True:
+        raise SystemExit("fresh_wallet_funding_refuse route_query")
+    matches = [row for row in response.get("result", {}).get("routes", [])
+               if row.get("route_id") == "pftl-a666-r4-offline-rehearsal-v1"
+               and row.get("route_live") is True]
+    if len(matches) != 1:
+        raise SystemExit("fresh_wallet_funding_refuse live_route")
+    route_rows.append(matches[0])
+route_ids = {(row.get("settlement_asset_id"), row.get("native_nav_asset_id"))
+             for row in route_rows}
+if len(route_ids) != 1:
+    raise SystemExit("fresh_wallet_funding_refuse route_asset_mismatch")
+settlement_asset, native_asset = next(iter(route_ids))
+
+fresh_exists = [response.get("ok") is True for response in fresh_accounts]
+fresh_asset_rows = []
+for response in fresh_assets:
+    rows = response.get("result", {}).get("assets", []) if response.get("ok") is True else []
+    fresh_asset_rows.append(rows)
+
+def public_asset(rows, asset_id):
+    row = next((item for item in rows if item.get("asset_id") == asset_id), None)
+    if row is None:
+        return {"present": False, "balance": 0, "authorized": False, "frozen": None}
+    return {
+        "present": True,
+        "balance": int(row.get("balance", 0)),
+        "authorized": row.get("authorized") is True,
+        "frozen": row.get("frozen"),
+    }
+
+fresh_settlement = [public_asset(rows, settlement_asset) for rows in fresh_asset_rows]
+fresh_native = [public_asset(rows, native_asset) for rows in fresh_asset_rows]
+
+# Read holder funding capacity only after the destination preflight; no key file
+# is opened because no signing is authorized past the fail-closed wall.
+holder_accounts, holder_assets = [], []
+for index, endpoint in enumerate(endpoints):
+    prefix = f"v7-funding-holder-{index}"
+    holder_accounts.append(call(endpoint, prefix + "-account", "account", {"address": holder}))
+    holder_assets.append(call(endpoint, prefix + "-assets", "account_assets", {"account": holder}))
+holder_account_results = [row.get("result", {}) for row in holder_accounts if row.get("ok") is True]
+holder_rows = [row.get("result", {}).get("assets", []) for row in holder_assets if row.get("ok") is True]
+holder_settlement = [public_asset(rows, settlement_asset) for rows in holder_rows]
+holder_native = [public_asset(rows, native_asset) for rows in holder_rows]
+holder_pft = [int(row.get("balance", 0)) for row in holder_account_results]
+
+wallet_sources = [
+    repo / "wallet-web/src/App.jsx",
+    repo / "wallet-web/src/components/Send.jsx",
+    repo / "wallet-web/src/lib/tx-builder.js",
+]
+source_text = "\n".join(path.read_text() for path in wallet_sources)
+production_profile_can_create_trustline = "trustline" in source_text.lower()
+production_profile_can_authorize_trustline = (
+    "authorize_trustline" in source_text.lower()
+    or "trustline_authorization" in source_text.lower()
+)
+provisioning_supported = (
+    production_profile_can_create_trustline
+    and production_profile_can_authorize_trustline
+)
+
+destination_ready = (
+    all(fresh_exists)
+    and all(row["present"] and row["authorized"] and row["frozen"] is False
+            for row in fresh_settlement)
+)
+holder_ready = (
+    len(holder_settlement) == 6
+    and all(row["balance"] == 17287905 and row["authorized"]
+            and row["frozen"] is False for row in holder_settlement)
+    and len(holder_native) == 6
+    and all(row["balance"] == 2000000 and row["authorized"]
+            and row["frozen"] is False for row in holder_native)
+    and len(holder_pft) == 6 and min(holder_pft) > 0
+)
+
+first_blocker = None
+if not all(fresh_exists):
+    first_blocker = "fresh_account_absent"
+elif not all(row["present"] for row in fresh_settlement):
+    first_blocker = "fresh_pfusdc_trustline_absent"
+elif not all(row["authorized"] and row["frozen"] is False for row in fresh_settlement):
+    first_blocker = "fresh_pfusdc_trustline_not_transfer_eligible"
+if first_blocker and not provisioning_supported:
+    first_blocker = "custody_preserving_provision_path_unavailable"
+
+evidence = {
+    "schema": "postfiat.a666.r4.fresh-wallet-funding-stage.v1",
+    "recorded_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    "verdict": "green" if destination_ready and holder_ready else "red",
+    "candidate_revision": expected_candidate,
+    "fresh_wallet": {
+        "address_sha256": address_hash,
+        "raw_address_included": False,
+        "ready_file": str(ready_path),
+        "ready_file_mode": "600",
+        "account_exists_on_six": all(fresh_exists),
+        "pfusdc": {
+            "present_on_six": all(row["present"] for row in fresh_settlement),
+            "authorized_on_six": all(row["authorized"] for row in fresh_settlement),
+            "unfrozen_on_six": all(row["frozen"] is False for row in fresh_settlement),
+            "balance_atoms": sorted({row["balance"] for row in fresh_settlement}),
+        },
+        "a666": {
+            "present_on_six": all(row["present"] for row in fresh_native),
+            "balance_atoms": sorted({row["balance"] for row in fresh_native}),
+        },
+    },
+    "holder": {
+        "identity": "committed controlled-wallet label; raw value omitted",
+        "pfusdc_balance_atoms": sorted({row["balance"] for row in holder_settlement}),
+        "pfusdc_authorized_unfrozen": all(
+            row["authorized"] and row["frozen"] is False for row in holder_settlement),
+        "a666_balance_atoms": sorted({row["balance"] for row in holder_native}),
+        "pft_balance_atoms": sorted(set(holder_pft)),
+        "key_file_read": False,
+    },
+    "arithmetic": {
+        "authorized_funding_atoms": funding,
+        "issue_requirement_atoms": requirement,
+        "margin_atoms": margin,
+        "sum_exact": requirement + margin == funding,
+    },
+    "fleet": {
+        "endpoint_count": len(endpoints),
+        "loopback_only": True,
+        "six_way_converged": six_converged,
+        "tuple": {
+            "block_height": next(iter(tuples))[0],
+            "block_tip_hash": next(iter(tuples))[1],
+            "state_root": next(iter(tuples))[2],
+        },
+    },
+    "provisioning": {
+        "fresh_account_or_trustline_missing": not destination_ready,
+        "production_profile_create_trustline_supported": production_profile_can_create_trustline,
+        "production_profile_authorize_trustline_supported": production_profile_can_authorize_trustline,
+        "custody_preserving_provision_path_supported": provisioning_supported,
+        "first_blocker": first_blocker,
+    },
+    "execution": {
+        "pfusdc_submissions": 0,
+        "pft_submissions": 0,
+        "business_mutations": 0,
+        "fee_quotes_requested": 0,
+        "receipts": [],
+        "stop_no_retry": True,
+    },
+    "scope": {
+        "live_chain": False,
+        "stakehub_interaction": False,
+        "credential_values_included": False,
+    },
+    "runtime_ms": round((time.time() - started) * 1000, 3),
+}
+Path(evidence_path).write_text(json.dumps(evidence, indent=2) + "\n")
+raise SystemExit(0 if evidence["verdict"] == "green" else 2)
+PY
+rc=$?
+set -e
+
+if [[ "$rc" -eq 0 ]]; then
+  echo "fresh_wallet_funding_stage=green"
+  exit 0
+fi
+if [[ "$rc" -eq 2 ]]; then
+  blocker="$(jq -r '.provisioning.first_blocker' "$EVIDENCE")"
+  echo "fresh_wallet_funding_stage=red first_blocker=$blocker submissions=0"
+  exit 2
+fi
+echo "fresh_wallet_funding_stage=error exit=$rc" >&2
+exit "$rc"
