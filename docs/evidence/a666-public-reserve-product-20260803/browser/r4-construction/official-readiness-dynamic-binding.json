@@ -67,5 +67,59 @@
   ],
   "credentials_included": false,
   "official_journey_invocations": 0,
-  "business_mutations": 0
+  "business_mutations": 0,
+  "rerun_contract": {
+    "working_directory": "wallet-web (i.e. /home/postfiat/repos/a666-eth-fast-lane-combined-20260724/wallet-web)",
+    "env": [
+      "POSTFIAT_R4_PREFLIGHT_ONLY=1",
+      "POSTFIAT_R4_WALLET_ORIGIN=http://127.0.0.1:8080",
+      "POSTFIAT_R4_PROXY_ORIGIN=http://127.0.0.1:31021",
+      "POSTFIAT_R4_FIRE_CONTROL_MANIFEST=../docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/journey-fire-control-preflight.json",
+      "POSTFIAT_R4_SETUP_MANIFEST=../docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/setup-endpoints-manifest.json",
+      "POSTFIAT_R4_DEPLOYMENT_MANIFEST=../docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/ethereum-contract-stage.json",
+      "POSTFIAT_R4_EXPORT_ARTIFACT_SLOT=../docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/export-artifact-slot.json",
+      "POSTFIAT_R4_RETURN_ARTIFACT_SLOT=../docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/return-artifact-slot.json",
+      "POSTFIAT_R4_ASYNC_PROOF_SLOT=../docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/async-proof-slot.json",
+      "POSTFIAT_R4_PROXY_RESTART_REQUEST=/home/postfiat/.pft/a666-r4-candidate-proxy/proxy.restart-request",
+      "POSTFIAT_R4_PROXY_PID_FILE=/home/postfiat/.pft/a666-r4-candidate-proxy/proxy.ready.json"
+    ],
+    "env_computed_at_invocation": [
+      "POSTFIAT_R4_FIRE_CONTROL_MANIFEST_SHA256=$(sha256sum of POSTFIAT_R4_FIRE_CONTROL_MANIFEST file)",
+      "POSTFIAT_R4_SETUP_MANIFEST_SHA256=$(sha256sum of POSTFIAT_R4_SETUP_MANIFEST file)",
+      "POSTFIAT_R4_DEPLOYMENT_MANIFEST_SHA256=$(sha256sum of POSTFIAT_R4_DEPLOYMENT_MANIFEST file)",
+      "POSTFIAT_R4_JOURNEY_REPORT=$(mktemp -u /tmp/r4-preflight-XXXXXX.json) (must not pre-exist; runner writes with flag wx)"
+    ],
+    "argv": [
+      "npm",
+      "run",
+      "test:r4-construction"
+    ],
+    "shell_template": "cd /home/postfiat/repos/a666-eth-fast-lane-combined-20260724/wallet-web && EV=../docs/evidence/a666-public-reserve-product-20260803/browser && POSTFIAT_R4_PREFLIGHT_ONLY=1 POSTFIAT_R4_WALLET_ORIGIN=http://127.0.0.1:8080 POSTFIAT_R4_PROXY_ORIGIN=http://127.0.0.1:31021 POSTFIAT_R4_FIRE_CONTROL_MANIFEST=$EV/r4-pass1/journey-fire-control-preflight.json POSTFIAT_R4_FIRE_CONTROL_MANIFEST_SHA256=$(sha256sum $EV/r4-pass1/journey-fire-control-preflight.json | cut -d' ' -f1) POSTFIAT_R4_SETUP_MANIFEST=$EV/r4-pass1/setup-endpoints-manifest.json POSTFIAT_R4_SETUP_MANIFEST_SHA256=$(sha256sum $EV/r4-pass1/setup-endpoints-manifest.json | cut -d' ' -f1) POSTFIAT_R4_DEPLOYMENT_MANIFEST=$EV/r4-construction/ethereum-contract-stage.json POSTFIAT_R4_DEPLOYMENT_MANIFEST_SHA256=$(sha256sum $EV/r4-construction/ethereum-contract-stage.json | cut -d' ' -f1) POSTFIAT_R4_EXPORT_ARTIFACT_SLOT=$EV/r4-construction/export-artifact-slot.json POSTFIAT_R4_RETURN_ARTIFACT_SLOT=$EV/r4-construction/return-artifact-slot.json POSTFIAT_R4_ASYNC_PROOF_SLOT=$EV/r4-construction/async-proof-slot.json POSTFIAT_R4_PROXY_RESTART_REQUEST=/home/postfiat/.pft/a666-r4-candidate-proxy/proxy.restart-request POSTFIAT_R4_PROXY_PID_FILE=/home/postfiat/.pft/a666-r4-candidate-proxy/proxy.ready.json POSTFIAT_R4_JOURNEY_REPORT=$(mktemp -u /tmp/r4-preflight-XXXXXX.json) npm run test:r4-construction",
+    "prerequisites": [
+      "candidate wallet served at http://127.0.0.1:8080 (HTTP 200)",
+      "candidate proxy at http://127.0.0.1:31021",
+      "playwright chromium installed in wallet-web"
+    ],
+    "credential_class_inputs": "none; every value is a loopback URL or a repo/.pft path recorded literally; proxy control files are referenced by path only, never opened",
+    "note": "POSTFIAT_R4_WALLET_ORIGIN (omitted from the bfe07d2 evidence) is mandatory; without it the runner refuses with 'POSTFIAT_R4_WALLET_ORIGIN is required' at 18/19"
+  },
+  "rerun_verification": {
+    "command_executed": "rerun_contract.shell_template verbatim",
+    "exit": 0,
+    "terminal_counts": {
+      "tests": 19,
+      "pass": 19,
+      "fail": 0,
+      "todo": 0,
+      "skipped": 0
+    },
+    "runtime_ms": 1413,
+    "step1_browser_predicates_green": 6,
+    "step1_predicate_proof": "observeStepOneBuildIdentity hard-asserts step.ok (all six checks) inside the preflight journey test; 19/19 pass proves served, wallet_created_and_unlocked, version_visible_exact, package_json_sha256_match, candidate_bound, production_graph all green",
+    "extractor_check": {
+      "exit": 0,
+      "stdout": "{\"ok\": true, \"accessor_count\": 120, \"mismatch_count\": 0}"
+    },
+    "official_journey_invocations": 0
+  }
 }
