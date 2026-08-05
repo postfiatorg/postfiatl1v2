@@ -1,0 +1,26 @@
+[Unit]
+Description=StakeHub private swap asset orchard
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=simple
+WorkingDirectory=/home/postfiat/repos/postfiatl1v2
+EnvironmentFile=/home/postfiat/repos/orc_directives/solid_e2e_stage3_supervised_services_20260710/private-swap.env
+ExecStart=/home/postfiat/repos/postfiatl1v2/target/release/asset-orchard-local-service --bind 127.0.0.1:18792 --data-dir /home/postfiat/tmp/private_swap_stage5_snapshot_20260711/validator-0 --vault-dir /home/postfiat/.stakehub/asset-orchard-vault-stage5 --prewarm-ready-file /home/postfiat/.stakehub/asset-orchard-prewarm-stage5.json
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillMode=control-group
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/postfiat/.stakehub /home/postfiat/repos/orc_directives /home/postfiat/tmp
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

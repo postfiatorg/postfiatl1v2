@@ -1,0 +1,14 @@
+# This is a transient unit file, created programmatically via the systemd API. Do not edit.
+[Unit]
+Description=/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/target/release/asset-orchard-local-service --bind 127.0.0.1:18799 --data-dir /home/postfiat/.local/share/postfiat/pftl-high-core/validator-2 --logical-data-dir /var/lib/postfiat/validator-2 --vault-dir /home/postfiat/.local/share/postfiat/pftl-high-core/validator-2/asset-orchard-local-vault --prewarm-ready-file /home/postfiat/.local/share/postfiat/pftl-high-core/validator-2/asset-orchard-local-vault/prewarm-ready-high-core.json
+
+[Service]
+Restart=on-failure
+RestartSec=10s
+MemoryMax=8589934592
+TasksMax=192
+LimitNOFILE=4096
+LimitNOFILE=4096
+Environment="STAKEHUB_PRODUCT_PROFILE_SHA256=ab04db6d0d610f6b354d0860c00fa745c93ed4faf173c1829edfb0cbd699e552" "ASSET_ORCHARD_LOCAL_SERVICE_PREWARM=1" "ASSET_ORCHARD_LOCAL_SERVICE_PREWARM_SWAP=0" "ASSET_ORCHARD_LOCAL_SERVICE_PREWARM_PRIVATE_EGRESS=1" "RAYON_NUM_THREADS=32"
+ExecStart=
+ExecStart="/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/target/release/asset-orchard-local-service" "--bind" "127.0.0.1:18799" "--data-dir" "/home/postfiat/.local/share/postfiat/pftl-high-core/validator-2" "--logical-data-dir" "/var/lib/postfiat/validator-2" "--vault-dir" "/home/postfiat/.local/share/postfiat/pftl-high-core/validator-2/asset-orchard-local-vault" "--prewarm-ready-file" "/home/postfiat/.local/share/postfiat/pftl-high-core/validator-2/asset-orchard-local-vault/prewarm-ready-high-core.json"

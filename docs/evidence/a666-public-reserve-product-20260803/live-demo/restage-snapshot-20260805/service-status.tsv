@@ -1,0 +1,8 @@
+unit	is_active	MainPID
+stakehub-pfusdc-wallet-agent.service	active	1895112
+stakehub-private-swap-asset-orchard.service	active	1895104
+stakehub-private-swap-dashboard-bfinal.service	active	2193828
+stakehub-private-swap-dashboard.service	active	3002164
+stakehub-private-swap-wallet-agent.service	active	1895107
+postfiat-pftl-pnok-prover.service	active	2496233
+postfiat-pftl-high-core-prover.service	inactive	0

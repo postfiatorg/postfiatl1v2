@@ -1,0 +1,176 @@
+# /home/postfiat/.config/systemd/user/stakehub-pfusdc-wallet-agent.service
+[Unit]
+Description=StakeHub pfUSDC production wallet agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/postfiat/repos/StakeHub
+ExecStart=/home/postfiat/repos/StakeHub/.venv/bin/python -m stakehub.cli agent run
+Restart=always
+RestartSec=3s
+MemoryMax=2G
+
+[Install]
+WantedBy=default.target
+
+# /home/postfiat/.config/systemd/user/stakehub-private-swap-asset-orchard.service
+[Unit]
+Description=StakeHub private swap asset orchard
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=simple
+WorkingDirectory=/home/postfiat/repos/postfiatl1v2
+EnvironmentFile=/home/postfiat/repos/orc_directives/solid_e2e_stage3_supervised_services_20260710/private-swap.env
+ExecStart=/home/postfiat/repos/postfiatl1v2/target/release/asset-orchard-local-service --bind 127.0.0.1:18792 --data-dir /home/postfiat/tmp/private_swap_stage5_snapshot_20260711/validator-0 --vault-dir /home/postfiat/.stakehub/asset-orchard-vault-stage5 --prewarm-ready-file /home/postfiat/.stakehub/asset-orchard-prewarm-stage5.json
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillMode=control-group
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/postfiat/.stakehub /home/postfiat/repos/orc_directives /home/postfiat/tmp
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+
+# /run/user/1000/systemd/transient/stakehub-private-swap-dashboard-bfinal.service
+# This is a transient unit file, created programmatically via the systemd API. Do not edit.
+[Unit]
+Description=StakeHub private swap dashboard bfinal
+
+[Service]
+EnvironmentFile=
+EnvironmentFile=/home/postfiat/repos/orc_directives/solid_e2e_stage3_supervised_services_20260710/private-swap.env
+Environment="STAKEHUB_PRODUCT_PROFILE_SHA256=91aa6c9d94f95a343346a961122529b99f26c2bb403800a351dc80dc9d058fd0"
+WorkingDirectory=/home/postfiat/repos/StakeHub-repeat-demo
+ExecStart=
+ExecStart="/home/postfiat/repos/StakeHub/.venv/bin/python" "-m" "stakehub.cli" "dashboard" "--port" "8788"
+
+# /home/postfiat/.config/systemd/user/stakehub-private-swap-dashboard.service
+[Unit]
+Description=StakeHub private swap dashboard
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=simple
+WorkingDirectory=/home/postfiat/repos/StakeHub-repeat-demo
+EnvironmentFile=/home/postfiat/repos/orc_directives/solid_e2e_stage3_supervised_services_20260710/private-swap.env
+ExecStart=/home/postfiat/repos/StakeHub/.venv/bin/python -m stakehub.cli dashboard --port 8787
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillMode=control-group
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/postfiat/.stakehub /home/postfiat/repos/orc_directives /home/postfiat/tmp
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+
+# /home/postfiat/.config/systemd/user/stakehub-private-swap-wallet-agent.service
+[Unit]
+Description=StakeHub private swap wallet agent
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=simple
+WorkingDirectory=/home/postfiat/repos/StakeHub-repeat-demo
+EnvironmentFile=/home/postfiat/repos/orc_directives/solid_e2e_stage3_supervised_services_20260710/private-swap.env
+ExecStart=/home/postfiat/repos/StakeHub/.venv/bin/python -m stakehub.cli --home /home/postfiat/.stakehub agent run
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillMode=control-group
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/postfiat/.stakehub /home/postfiat/repos/orc_directives /home/postfiat/tmp
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+
+# /home/postfiat/.config/systemd/user/postfiat-pftl-pnok-prover.service
+[Unit]
+Description=PostFiat pNOK private FIX resident AssetOrchard prover
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=STAKEHUB_PRODUCT_PROFILE_SHA256=ab04db6d0d610f6b354d0860c00fa745c93ed4faf173c1829edfb0cbd699e552
+Environment=ASSET_ORCHARD_LOCAL_SERVICE_PREWARM=1
+Environment=ASSET_ORCHARD_LOCAL_SERVICE_PREWARM_SWAP=1
+Environment=ASSET_ORCHARD_LOCAL_SERVICE_PREWARM_PRIVATE_EGRESS=1
+Environment=RAYON_NUM_THREADS=32
+ExecStartPre=/usr/bin/mountpoint -q /home/postfiat/.local/share/postfiat/pftl-high-core/validator-2
+ExecStartPre=/usr/bin/test -f /home/postfiat/.local/share/postfiat/pftl-high-core/validator-2/chain_tip.json
+ExecStart=/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/pnok-private-fix-20260801/pnok-private-fix-service-ebfa872/asset-orchard-local-service \
+  --bind 127.0.0.1:18799 \
+  --data-dir /home/postfiat/.local/share/postfiat/pftl-high-core/validator-2 \
+  --logical-data-dir /var/lib/postfiat/validator-2 \
+  --vault-dir /home/postfiat/.local/share/postfiat/pftl-high-core/validator-2/asset-orchard-local-vault \
+  --prewarm-ready-file /home/postfiat/.local/share/postfiat/pftl-high-core/validator-2/asset-orchard-local-vault/prewarm-ready-high-core.json
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+KillMode=control-group
+Nice=0
+CPUWeight=100
+MemoryMax=8G
+TasksMax=192
+LimitNOFILE=4096
+LimitCORE=0
+OOMScoreAdjust=500
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/postfiat/.local/share/postfiat/pftl-high-core/validator-2
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+
+[Install]
+WantedBy=default.target
+
+# /run/user/1000/systemd/transient/postfiat-pftl-high-core-prover.service
+# This is a transient unit file, created programmatically via the systemd API. Do not edit.
+[Unit]
+Description=/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/target/release/asset-orchard-local-service --bind 127.0.0.1:18799 --data-dir /home/postfiat/.local/share/postfiat/pftl-high-core/validator-2 --logical-data-dir /var/lib/postfiat/validator-2 --vault-dir /home/postfiat/.local/share/postfiat/pftl-high-core/validator-2/asset-orchard-local-vault --prewarm-ready-file /home/postfiat/.local/share/postfiat/pftl-high-core/validator-2/asset-orchard-local-vault/prewarm-ready-high-core.json
+
+[Service]
+Restart=on-failure
+RestartSec=10s
+MemoryMax=8589934592
+TasksMax=192
+LimitNOFILE=4096
+LimitNOFILE=4096
+Environment="STAKEHUB_PRODUCT_PROFILE_SHA256=ab04db6d0d610f6b354d0860c00fa745c93ed4faf173c1829edfb0cbd699e552" "ASSET_ORCHARD_LOCAL_SERVICE_PREWARM=1" "ASSET_ORCHARD_LOCAL_SERVICE_PREWARM_SWAP=0" "ASSET_ORCHARD_LOCAL_SERVICE_PREWARM_PRIVATE_EGRESS=1" "RAYON_NUM_THREADS=32"
+ExecStart=
+ExecStart="/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/target/release/asset-orchard-local-service" "--bind" "127.0.0.1:18799" "--data-dir" "/home/postfiat/.local/share/postfiat/pftl-high-core/validator-2" "--logical-data-dir" "/var/lib/postfiat/validator-2" "--vault-dir" "/home/postfiat/.local/share/postfiat/pftl-high-core/validator-2/asset-orchard-local-vault" "--prewarm-ready-file" "/home/postfiat/.local/share/postfiat/pftl-high-core/validator-2/asset-orchard-local-vault/prewarm-ready-high-core.json"
