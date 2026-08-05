@@ -1243,6 +1243,39 @@ test('A666 R4 v3 build identity hashes the pinned candidate package object, neve
     'no runner implementation path may hash mutable WALLET_ROOT/package.json for candidate identity');
 });
 
+test('A666 R4 RED-FIRST official step 1 creates and unlocks the wallet before observing the production sidebar version (v4 0e2cce3)', {
+  todo: 'RED-first choreography vector: current official step 1 waits for .pf-sidebar before createBrowserControlledWallet. Convert to a strict assertion with the green shared-observer fix.',
+}, async () => {
+  const source = await readFile(fileURLToPath(import.meta.url), 'utf8');
+  const officialStart = source.indexOf("assert.equal(runContract.mode, 'official');");
+  const stepTwoRecord = source.indexOf("label: 'browser-controlled connect/create'", officialStart);
+  assert.ok(officialStart > -1 && stepTwoRecord > officialStart,
+    'official step-1 source region must be present');
+  const officialStepOne = source.slice(officialStart, stepTwoRecord);
+  const createComplete = officialStepOne.indexOf('await createBrowserControlledWallet(page, passphrase)');
+  const sidebarVersionWait = officialStepOne.indexOf("page.locator('.pf-sidebar')");
+  assert.ok(createComplete > -1, 'official step 1 must complete browser-controlled wallet creation/unlock');
+  assert.ok(sidebarVersionWait > -1, 'official step 1 must observe the production sidebar identity');
+  assert.ok(createComplete < sidebarVersionWait,
+    'v4 0e2cce3 regression: createBrowserControlledWallet must complete before the exact .pf-sidebar v0.1.2 visibility wait');
+});
+
+test('A666 R4 RED-FIRST construction browser preflight executes the shared production step-1 observer', {
+  todo: 'RED-first parity vector: construction preflight does not invoke the shared browser step-1 observer. Convert to a strict assertion when both modes use it.',
+}, async () => {
+  const source = await readFile(fileURLToPath(import.meta.url), 'utf8');
+  const implementation = source.slice(0, source.indexOf("test('A666 R4 offline Ethereum rehearsal"));
+  assert.ok(/async function observeStepOneBuildIdentity\s*\(/.test(implementation),
+    'a shared production step-1 observer must own create/unlock then exact sidebar version observation');
+  const preflightStart = implementation.indexOf('async function runConstructionPreflight(');
+  const preflightEnd = source.indexOf('\nasync function createBrowserControlledWallet(', preflightStart);
+  assert.ok(preflightStart > -1 && preflightEnd > preflightStart,
+    'construction preflight source region must be present');
+  const preflight = source.slice(preflightStart, preflightEnd);
+  assert.ok(preflight.includes('await observeStepOneBuildIdentity('),
+    'construction browser preflight must execute the same shared step-1 observer as official execution');
+});
+
 function syntheticValidationFixture() {
   // Committed synthetic loopback fixture data for the pure validation suite;
   // no external env block is required.
