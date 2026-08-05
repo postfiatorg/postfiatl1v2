@@ -16,7 +16,17 @@ ROUTE=pftl-a666-r4-offline-rehearsal-v1
 refuse(){ echo "trustline_stage_refuse: $*" >&2; return 2; }
 loopback(){ [[ $1 =~ ^(http://)?127\.0\.0\.1:[0-9]+$ ]] || refuse non_loopback_endpoint; }
 mode(){ [[ -e $1 && $(stat -c %a "$1") == "$2" ]] || refuse "mode_unsafe_or_missing_$3"; }
-selector(){ grep -q 'data-testid="add-asset"' "$1" || refuse missing_add_asset_selector; }
+add_asset_source_guard(){
+ local app_path="${1:-$ROOT/wallet-web/src/App.jsx}" send_path="${2:-$ROOT/wallet-web/src/components/Send.jsx}" builder_path="${3:-$ROOT/wallet-web/src/lib/tx-builder.js}" selector_name
+ [[ -r "$app_path" && -r "$send_path" && -r "$builder_path" ]] || refuse add_asset_source_unreadable
+ for selector_name in add-asset add-asset-id add-asset-limit; do
+  if grep -Fq "data-testid=\"$selector_name\"" "$app_path"; then refuse stale_add_asset_selector_source; return $?; fi
+  grep -Fq "data-testid=\"$selector_name\"" "$send_path" || { refuse "missing_$selector_name"; return $?; }
+ done
+ grep -Fq 'buildTrustSetOperation' "$builder_path" || { refuse missing_holder_trust_set_builder; return $?; }
+ if grep -Eq 'data-testid="(issuer-authorize|issuer-freeze|authorize-issuer|freeze-issuer)"' "$send_path"; then refuse issuer_control_exposed; return $?; fi
+ return 0
+}
 absent(){ [[ $1 == false && $2 == false ]] || refuse unexpected_preexisting_line; }
 supply_equal(){ [[ $1 == "$2" ]] || refuse supply_changed; }
 no_bundle(){ [[ $1 != *from-bundle* && $1 != *bundle_dir* ]] || refuse bundle_helper_forbidden; }
@@ -52,6 +62,7 @@ issuer_request(){
 check(){
  local setup_candidate requested_candidate provenance_ref provenance_path ready_candidate provenance_candidate
  mode "$READY" 600 ready; mode "$PROFILE" 700 profile; mode "$PASSPHRASE" 600 passphrase
+ add_asset_source_guard
  [[ -f $SETUP && -f $FLEET ]] || refuse missing_path_input
  setup_candidate=$(jq -r '.candidate.revision // empty' "$SETUP") || refuse setup_candidate_read
  requested_candidate=${POSTFIAT_R4_CANDIDATE_REVISION:-$setup_candidate}
@@ -111,7 +122,7 @@ PY
 
 stage(){
  check; loopback "$(jq -r .origin "$CHECK_OUT")"
- selector "$ROOT/wallet-web/src/App.jsx"
+ add_asset_source_guard
   absent "$(jq -r .assets.pfusdc.present_on_six "$CHECK_OUT")" "$(jq -r .assets.a666.present_on_six "$CHECK_OUT")"
   issuer_request "$ISSUER_REQUEST"
   local before supply_before pf a6 driver result after fee_sum seq_before seq_after pft_before pft_after
@@ -194,7 +205,7 @@ JS
 }
 
 self_test(){
- local t f=0 n=0 candidate=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa other=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+ local t f=0 n=0 candidate=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa other=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb app_path="$ROOT/wallet-web/src/App.jsx" send_path="$ROOT/wallet-web/src/components/Send.jsx" builder_path="$ROOT/wallet-web/src/lib/tx-builder.js"
  t=$(mktemp -d /tmp/a666-r4-tl-selftest-XXXXXX); chmod 700 "$t"
  bad(){ n=$((n+1)); if "$@" >/dev/null 2>&1;then f=$((f+1));fi; }
  good(){ n=$((n+1)); if ! "$@" >/dev/null 2>&1;then f=$((f+1));fi; }
@@ -202,7 +213,14 @@ self_test(){
  touch "$t/f";chmod 644 "$t/f";bad mode "$t/f" 600 ready
  printf wrong >"$t/c";bad grep -q "$candidate" "$t/c"
   python3 -c 'import json,sys;json.dump({"address":"pf"+"0"*40},sys.stdout)' >"$t/raw";bad public_guard "$t/raw"
- printf x >"$t/src";bad selector "$t/src"
+ good add_asset_source_guard "$app_path" "$send_path" "$builder_path"
+ for selector_name in add-asset add-asset-id add-asset-limit; do
+  sed "s/data-testid=\"$selector_name\"/data-testid=\"missing-$selector_name\"/" "$send_path" >"$t/missing-$selector_name.jsx"
+  bad add_asset_source_guard "$app_path" "$t/missing-$selector_name.jsx" "$builder_path"
+ done
+ cp "$send_path" "$t/issuer-control.jsx"; printf '\ndata-testid="issuer-authorize"\n' >>"$t/issuer-control.jsx"
+ bad add_asset_source_guard "$app_path" "$t/issuer-control.jsx" "$builder_path"
+ printf x >"$t/no-builder.js";bad add_asset_source_guard "$app_path" "$send_path" "$t/no-builder.js"
  bad absent true false
  bad supply_equal 1 2
  bad no_bundle from-bundle
@@ -213,8 +231,8 @@ self_test(){
  bad candidate_revisions_match "$candidate" "$candidate" "$candidate" "$other"
  good unlock_choreography_self_test
  good send_tab_choreography_self_test
- rm -rf "$t";[[ $f == 0 && $n == 15 ]]||refuse "self_test failures=$f vectors=$n"
- echo "trustline_stage_self_test=ok vectors=15 negative_vectors=11 candidate_mismatch_refusals=3 delayed_lock_vector=1 send_tab_vector=1 unlocks=1 navigations=1 business_mutations=0"
+ rm -rf "$t";[[ $f == 0 && $n == 20 ]]||refuse "self_test failures=$f vectors=$n"
+ echo "trustline_stage_self_test=ok vectors=20 negative_vectors=15 candidate_mismatch_refusals=3 missing_send_selector_refusals=3 issuer_control_refusals=1 holder_builder_refusals=1 delayed_lock_vector=1 send_tab_vector=1 unlocks=1 navigations=1 business_mutations=0"
 }
 
 case ${1:-check} in check)check;;stage)stage;;--self-test)self_test;;*)refuse 'usage [check|stage|--self-test]';;esac

@@ -1,0 +1,50 @@
+{
+  "schema": "postfiat.a666.r4.v7-stager-source-guard.v1",
+  "source_guard": {
+    "selector_owner_file": "wallet-web/src/components/Send.jsx",
+    "holder_builder_file": "wallet-web/src/lib/tx-builder.js",
+    "holder_builder_symbol": "buildTrustSetOperation",
+    "required_selectors": [
+      "add-asset",
+      "add-asset-id",
+      "add-asset-limit"
+    ],
+    "issuer_controls_rejected": [
+      "issuer-authorize",
+      "issuer-freeze"
+    ]
+  },
+  "validation": {
+    "syntax": {
+      "command": "bash -n scripts/a666-r4-fresh-wallet-trustline-stage",
+      "exit_code": 0
+    },
+    "self_test": {
+      "command": "scripts/a666-r4-fresh-wallet-trustline-stage --self-test",
+      "exit_code": 0,
+      "vectors": 20,
+      "negative_vectors": 15,
+      "candidate_mismatch_refusals": 3,
+      "missing_send_selector_refusals": 3,
+      "issuer_control_refusals": 1,
+      "holder_builder_refusals": 1,
+      "business_mutations": 0
+    },
+    "preflight": {
+      "command": "POSTFIAT_R4_TRUSTLINE_CHECK_OUT=/tmp/a666-v7-source-guard-preflight.json scripts/a666-r4-fresh-wallet-trustline-stage check",
+      "exit_code": 0,
+      "terminal_line": "trustline_stage_check=ok",
+      "pft_balance": 74,
+      "sequence": 0,
+      "asset_lines_absent": true,
+      "business_mutations": 0
+    }
+  },
+  "scope": {
+    "add_asset_clicks": 0,
+    "stakehub_actions": 0,
+    "live_chain": false,
+    "credentials_accessed": false,
+    "business_mutations": 0
+  }
+}
