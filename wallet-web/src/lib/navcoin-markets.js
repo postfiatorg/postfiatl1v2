@@ -77,7 +77,13 @@ export function navcoinMarketsFromRoutes(report) {
     || report.route_count !== report.routes.length) {
     throw new Error('governed NAVCoin route registry response is malformed');
   }
-  const markets = report.routes.map(navcoinMarketFromRoute);
+  if (!report.routes.every(row => row && typeof row === 'object'
+    && !Array.isArray(row) && typeof row.route_live === 'boolean')) {
+    throw new Error('governed NAVCoin route registry route_live must be boolean');
+  }
+  const markets = report.routes
+    .filter(row => row.route_live === true)
+    .map(navcoinMarketFromRoute);
   markets.sort((left, right) => (left.routeId < right.routeId ? -1 : left.routeId > right.routeId ? 1 : 0));
   const routeIds = new Set();
   const navAssetIds = new Set();

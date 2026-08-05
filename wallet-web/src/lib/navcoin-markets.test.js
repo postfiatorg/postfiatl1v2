@@ -69,7 +69,7 @@ const inactiveEpochRoute = {
   route_live: false,
 };
 
-test(ROUTE_LIVE_FILTER_VECTOR_NAME, { todo: 'RED: inactive route_live rows are still consumed before duplicate validation' }, () => {
+test(ROUTE_LIVE_FILTER_VECTOR_NAME, () => {
   const markets = navcoinMarketsFromRoutes({
     schema: 'postfiat-pftl-uniswap-routes-status-v2',
     route_count: 2,
@@ -96,9 +96,7 @@ test('governed NAVCoin markets reject duplicate live route identities', () => {
   }), /duplicate identity/);
 });
 
-test('governed NAVCoin markets fail closed on missing or non-boolean route_live', {
-  todo: 'RED: route_live type is not validated yet',
-}, () => {
+test('governed NAVCoin markets fail closed on missing or non-boolean route_live', () => {
   const missing = { ...journeyRoute };
   delete missing.route_live;
   assert.throws(() => navcoinMarketsFromRoutes({
@@ -115,7 +113,8 @@ test('route_live filter regression vector is structurally retained', () => {
   assert.match(source, /const ROUTE_LIVE_FILTER_VECTOR_NAME = 'governed NAVCoin markets consume only route_live registry rows'/);
   assert.match(source, /route_live: false/);
   assert.match(source, /route_live: true/);
-  assert.match(source, /inactive route_live rows are still consumed before duplicate validation/);
+  assert.match(source, /test\(ROUTE_LIVE_FILTER_VECTOR_NAME, \(\) =>/);
+  assert.doesNotMatch(source, /test\(ROUTE_LIVE_FILTER_VECTOR_NAME, \{ todo:/);
 });
 
 test('governed NAVCoin registry rejects malformed and duplicate identities', () => {
