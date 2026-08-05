@@ -3,182 +3,19 @@
   "setup_run_id": "r4-setup-20260804T031632Z-498374",
   "candidate": {
     "revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
-    "worktree": "/tmp/a666-r4-successor-39f7fae",
-    "tracked_dirty_count": 0
+    "worktree": "/tmp/a666-r4-successor-39f7fae"
   },
   "checkpoint": {
-    "directory": "/home/postfiat/.pft/public-reserve-qualification/20260803-pre-migration-checkpoint",
-    "manifest_sha256": "2e87fbda39b60b78e6003adf53624066974a9dea6b5a8bf0f1a851a935b1cd0b",
-    "trusted_publisher_file": "/home/postfiat/.pft/public-reserve-qualification/20260803-pre-migration-checkpoint-trusted-publisher.json",
-    "restored_height": 792
+    "manifest_sha256": "2e87fbda39b60b78e6003adf53624066974a9dea6b5a8bf0f1a851a935b1cd0b"
   },
-  "controlled_report": {
-    "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/controlled-lifecycle-report.json",
-    "sha256": "f26f1cf65862362ac956c6dc6f1d961f52ff32a79838eb860849067f98f92075",
-    "ok": true
-  },
-  "lifecycle_transcript": {
-    "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/checkpoint-lifecycle-transcript.txt",
-    "sha256": "19e82215deacd0bacdb1d0585d2a4f17f48b68632c7aa801efa966d453eb1a86"
-  },
-  "lifecycle_reused_from_green_run": true,
+  "controlled_report_path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/controlled-lifecycle-report.json",
   "preserved_root": "/tmp/postfiat-atomic-swap-local-six-396025-1785812067660099959",
-  "validator_count": 6,
-  "rpc_endpoints": [
-    {
-      "validator_index": 0,
-      "host": "127.0.0.1",
-      "rpc_port": 31001,
-      "block_height": 826,
-      "block_tip_hash": "1dec5de364c2338db5493c102cd0695d2885b4c2ff7a22edae7fd360f6497f757d0a72b7fb1a2289c590f38757798c02",
-      "state_root": "9eba6d3c7643e161b2fcf640c3569b4a735a23b1c6eaaedeca0b69e51cafbf5b03a1a1d328a2a133db1d32b8685f1a2c",
-      "equal_to_controlled_report": true
-    },
-    {
-      "validator_index": 1,
-      "host": "127.0.0.1",
-      "rpc_port": 31003,
-      "block_height": 826,
-      "block_tip_hash": "1dec5de364c2338db5493c102cd0695d2885b4c2ff7a22edae7fd360f6497f757d0a72b7fb1a2289c590f38757798c02",
-      "state_root": "9eba6d3c7643e161b2fcf640c3569b4a735a23b1c6eaaedeca0b69e51cafbf5b03a1a1d328a2a133db1d32b8685f1a2c",
-      "equal_to_controlled_report": true
-    },
-    {
-      "validator_index": 2,
-      "host": "127.0.0.1",
-      "rpc_port": 31005,
-      "block_height": 826,
-      "block_tip_hash": "1dec5de364c2338db5493c102cd0695d2885b4c2ff7a22edae7fd360f6497f757d0a72b7fb1a2289c590f38757798c02",
-      "state_root": "9eba6d3c7643e161b2fcf640c3569b4a735a23b1c6eaaedeca0b69e51cafbf5b03a1a1d328a2a133db1d32b8685f1a2c",
-      "equal_to_controlled_report": true
-    },
-    {
-      "validator_index": 3,
-      "host": "127.0.0.1",
-      "rpc_port": 31007,
-      "block_height": 826,
-      "block_tip_hash": "1dec5de364c2338db5493c102cd0695d2885b4c2ff7a22edae7fd360f6497f757d0a72b7fb1a2289c590f38757798c02",
-      "state_root": "9eba6d3c7643e161b2fcf640c3569b4a735a23b1c6eaaedeca0b69e51cafbf5b03a1a1d328a2a133db1d32b8685f1a2c",
-      "equal_to_controlled_report": true
-    },
-    {
-      "validator_index": 4,
-      "host": "127.0.0.1",
-      "rpc_port": 31009,
-      "block_height": 826,
-      "block_tip_hash": "1dec5de364c2338db5493c102cd0695d2885b4c2ff7a22edae7fd360f6497f757d0a72b7fb1a2289c590f38757798c02",
-      "state_root": "9eba6d3c7643e161b2fcf640c3569b4a735a23b1c6eaaedeca0b69e51cafbf5b03a1a1d328a2a133db1d32b8685f1a2c",
-      "equal_to_controlled_report": true
-    },
-    {
-      "validator_index": 5,
-      "host": "127.0.0.1",
-      "rpc_port": 31011,
-      "block_height": 826,
-      "block_tip_hash": "1dec5de364c2338db5493c102cd0695d2885b4c2ff7a22edae7fd360f6497f757d0a72b7fb1a2289c590f38757798c02",
-      "state_root": "9eba6d3c7643e161b2fcf640c3569b4a735a23b1c6eaaedeca0b69e51cafbf5b03a1a1d328a2a133db1d32b8685f1a2c",
-      "equal_to_controlled_report": true
-    }
-  ],
-  "terminal_tuple": {
-    "block_height": 826,
-    "block_tip_hash": "1dec5de364c2338db5493c102cd0695d2885b4c2ff7a22edae7fd360f6497f757d0a72b7fb1a2289c590f38757798c02",
-    "state_root": "9eba6d3c7643e161b2fcf640c3569b4a735a23b1c6eaaedeca0b69e51cafbf5b03a1a1d328a2a133db1d32b8685f1a2c",
-    "all_six_equal": true
-  },
-  "teardown_pid_manifest": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/teardown-pids.json",
+  "teardown_manifest_path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/teardown-pids.json",
   "stakehub": {
-    "initial_active_unit_count": 5,
-    "initial_matching_process_count": 9,
-    "active_unit_count": 0,
-    "matching_process_count": 0,
-    "absence_method": "user unit prefix and same-user proc class scan",
     "restart_inventory_path": "/home/postfiat/.pft/r4-setup-20260804T024859Z-368197-stakehub-restart-inventory.txt"
   },
-  "wallet": {
-    "version": "0.1.2",
-    "dist_asset_sha256": [
-      {
-        "path": "assets/index-ByxtZHcl.css",
-        "sha256": "a0662f24f608d1dbb014a3a618d8b0857bd589fd87078538354574a8381e5264"
-      },
-      {
-        "path": "assets/index-Ccm6CvFJ.js",
-        "sha256": "95d18d79a063947ed125c3e4ac4287e761bfe00b30899a50118c214c28efa755"
-      },
-      {
-        "path": "assets/postfiat_wallet_wasm_bg-BCMxG3_Q.wasm",
-        "sha256": "affd340817788d45a313e60ec512493c6c56c3acbf81a4d4159636279ea0c882"
-      },
-      {
-        "path": "index.html",
-        "sha256": "b92a409341d4d783efe176b69eddfbd2343cb5be9318acf99a0baede38778f3e"
-      }
-    ],
-    "download_public_receipt_visible": true
-  },
-  "selector_action_inventory": [
-    {
-      "step": 1,
-      "mapped": true,
-      "ui": "visible wallet version identity"
-    },
-    {
-      "step": 2,
-      "mapped": true,
-      "ui": "browser create/unlock"
-    },
-    {
-      "step": 3,
-      "mapped": true,
-      "ui": "NAV reserve evidence"
-    },
-    {
-      "step": 4,
-      "mapped": true,
-      "ui": "A666 and pfUSDC balances"
-    },
-    {
-      "step": 5,
-      "mapped": true,
-      "ui": "transparent mint/redeem"
-    },
-    {
-      "step": 6,
-      "mapped": true,
-      "ui": "private primary issue/redeem"
-    },
-    {
-      "step": 7,
-      "mapped": true,
-      "ui": "Ethereum export finality"
-    },
-    {
-      "step": 8,
-      "mapped": true,
-      "ui": "native return conservation"
-    },
-    {
-      "step": 9,
-      "mapped": true,
-      "ui": "reload and durable recovery"
-    },
-    {
-      "step": 10,
-      "mapped": true,
-      "ui": "Download public receipt"
-    }
-  ],
-  "checks": {
-    "candidate_exact": true,
-    "checkpoint_import": true,
-    "validator_count": true,
-    "terminal_all_six_equal": true,
-    "stakehub_absent": true,
-    "wallet_dist": true,
-    "selector_inventory": true
-  },
-  "loopback_only": true,
-  "elapsed_ms": 1385,
-  "ready_for_one_shot_pass_1": true
+  "first_failure": "stakehub_restart_keep_rehearsal",
+  "exit_code": 1,
+  "ready_for_one_shot_pass_1": false,
+  "elapsed_ms": 655502
 }

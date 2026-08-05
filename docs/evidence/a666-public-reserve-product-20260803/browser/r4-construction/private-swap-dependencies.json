@@ -11,9 +11,9 @@
     "build_action": "reused",
     "build_exit": 0,
     "build_runtime_ms": 0,
-    "pid": 730500,
+    "pid": 869239,
     "endpoint": "127.0.0.1:8799",
-    "ready_file": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/ready/asset-orchard-prewarm.json",
+    "ready_file": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T043154Z-869163/ready/asset-orchard-prewarm.json",
     "ready_schema": "postfiat-asset-orchard-local-service-prewarm-ready-v1",
     "circuits": {
       "ingress_notes": {
@@ -32,11 +32,11 @@
     "ready": true
   },
   "certified_round_driver": {
-    "pid": 730501,
-    "ready_file": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/ready/certified-round-driver.json",
-    "heartbeat_unix_ms": 1785816481878,
-    "local_height": 826,
-    "next_height": 827,
+    "pid": 869240,
+    "ready_file": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/certified-round-driver-ready.json",
+    "heartbeat_unix_ms": 1785818238744,
+    "local_height": 827,
+    "next_height": 828,
     "authenticated_peer_count": 5,
     "authenticated_quorum": true,
     "persistent_vote_streams": true,
@@ -46,25 +46,31 @@
     "ready": true
   },
   "paths": {
-    "runtime_root": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455",
-    "asset_vault": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/asset-vault",
-    "batch_outbox": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/batch-outbox",
-    "processed_batches": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/processed-batches",
-    "round_artifacts": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/round-artifacts",
-    "pid_state": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/pids.json",
-    "teardown_control": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T040239Z-730455/teardown.request"
+    "runtime_root": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T043154Z-869163",
+    "asset_vault": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T043154Z-869163/asset-vault",
+    "batch_outbox": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/batch-outbox",
+    "processed_batches": "/tmp/a666-r4-private-swap-runtime-39f7fae/private/processed-batches",
+    "round_artifacts": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T043154Z-869163/round-artifacts",
+    "pid_state": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T043154Z-869163/pids.json",
+    "teardown_control": "/tmp/a666-r4-private-swap-dependencies-39f7fae/run-20260804T043154Z-869163/teardown.request"
+  },
+  "expected_fleet_tuple": {
+    "height": 827,
+    "tip": "fb7237c4eaa74fe6a98c302eee0b6e77f92bc696b887e2e2afc27b33a884b56eb4410b1a3b3f162c1ef296bd17efed26",
+    "state_root": "7dad98b7152590f9a0999229f4a24a27b0462cd88fe0245b9b75a565aab158571d3d510d80e9bc2bf4f4612861e26544"
   },
   "checks": {
     "construction_fleet_12_live_six_equal": true,
     "asset_tcp_reachable": true,
     "asset_prewarm_ready": true,
     "round_report_fresh": true,
-    "round_height_826_next_827": true,
+    "round_height_current_next_incremented": true,
     "five_authenticated_peers": true,
+    "exact_pftl_swap_batch_paths": true,
     "empty_batch_dirs": true,
     "business_operations": 0,
     "stakehub_interaction": false
   },
-  "runtime_ms": 323400,
+  "runtime_ms": 324470,
   "ready": true
 }
